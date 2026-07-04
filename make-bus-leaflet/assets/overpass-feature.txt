@@ -1,0 +1,22 @@
+[out:json][timeout:60];
+// ── TEMPLATED PER-FEATURE LINEAR-GEOMETRY PULL (S2) ────────────────────────
+// One run per linear feature in routes.json "features"[]. Fill the {{...}}
+// placeholders, run, and write the returned way geometry into features_geo.json
+// under that feature's "key":  { "<key>": [ [ [lat,lon], … ], … ] }.
+// 'out geom;' returns full vertex geometry (curl is the reliable path for this;
+// the bbox MCP may not return way geometry — see SKILL Tooling).
+//
+//   {{BBOX}} = south,west,north,east covering the town's stop spread, padded
+//              ~0.01° (e.g. 52.310,-0.110,52.350,-0.040).
+//   {{NAME}} = a name regex (river/canal/road by-name).   {{REF}} = road ref, e.g. A1123.
+//
+// Pick ONE selector block matching the feature "type", delete the rest:
+(
+  // river   →  way["waterway"="river"]["name"~"{{NAME}}"]({{BBOX}});
+  // canal   →  way["waterway"="canal"]["name"~"{{NAME}}"]({{BBOX}});
+  // railway →  way["railway"="rail"]({{BBOX}});          // add ["name"~"{{NAME}}"] to narrow
+  // road    →  way["ref"="{{REF}}"]({{BBOX}});           // or way["name"~"{{NAME}}"]({{BBOX}});
+  // generic →  way["{{KEY}}"="{{VALUE}}"]({{BBOX}});
+  way["waterway"="river"]["name"~"{{NAME}}"]({{BBOX}});
+);
+out geom;

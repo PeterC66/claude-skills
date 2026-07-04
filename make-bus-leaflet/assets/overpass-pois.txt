@@ -1,0 +1,12 @@
+[out:json][timeout:90];
+(
+  node["highway"="bus_stop"](52.308,-0.100,52.345,-0.045);
+  node["amenity"~"^(pharmacy|doctors|hospital|library|school|museum|community_centre|theatre|townhall)$"](52.308,-0.100,52.345,-0.045);
+  way["amenity"~"^(pharmacy|doctors|hospital|library|school|museum|community_centre|theatre|townhall)$"](52.308,-0.100,52.345,-0.045);
+  node["shop"="supermarket"](52.308,-0.100,52.345,-0.045);
+  way["shop"="supermarket"](52.308,-0.100,52.345,-0.045);
+  node["leisure"~"^(sports_centre|fitness_centre|park|recreation_ground)$"](52.308,-0.100,52.345,-0.045);
+  way["leisure"~"^(sports_centre|fitness_centre|park|recreation_ground)$"](52.308,-0.100,52.345,-0.045);
+)
+;
+out center tags;

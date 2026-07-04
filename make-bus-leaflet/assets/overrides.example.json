@@ -1,0 +1,43 @@
+{
+  "_comment": "Tier-1 manual layout overrides. Optional: delete or use {} for pure auto layout. All distances are millimetres on the page (viewBox 0 0 297 210). Keys: stops by ATCO, POIs by 'cat:name', linear features by their routes.json feature 'key', external branches by route (or route#n). Author by dragging in the editor (node edit-server.js) or by hand. Re-applied on every regenerate, so it survives data refreshes.",
+  "_routeColors_comment": "TOP-LEVEL (applies to BOTH maps): recolour a route everywhere, e.g. when two route colours are too similar. Overrides the routes.json palette for that route on the internal and external maps together.",
+  "routeColors": { "69": "#117733" },
+  "internal": {
+    "rotationDeg": null,
+    "_stops_comment": "stops[ATCO].pos moves the PHYSICAL stop for EVERY route through it.",
+    "stops": {
+      "0500EXAMPLE01": { "pos": { "x": 120, "y": 80 } }
+    },
+    "_routeStops_comment": "PER-ROUTE stop positions: routeStops[route][ATCO].pos moves the stop ONLY on that route's drawn line, so editing one route never drags another that shares the stop. Where a route diverges, that shared stop shows as a tick on each line.",
+    "routeStops": {
+      "B": { "0500EXAMPLE02": { "pos": { "x": 100, "y": 90 } } }
+    },
+    "_routeOffsets_comment": "Lateral spread: nudge a whole route's line sideways (page mm) off a shared corridor; stop dots stay put.",
+    "routeOffsets": {
+      "9": { "dx": 1.5, "dy": -1.5 }
+    },
+    "_align_comment": "Straighten a run of stops on ONE route (per-route, never global). stops[]: the exact stops to straighten (route order). mode 'project' (default) keeps natural spacing; 'even' distributes equally. snap: octolinear angle. Legacy {from,to} (no stops[]) straightens the whole span between them.",
+    "align": [
+      { "route": "B", "stops": ["0500EXAMPLE02", "0500EXAMPLE03", "0500EXAMPLE04"], "mode": "project", "snap": 45 }
+    ],
+    "pois": {
+      "shop:Tesco": { "hide": true },
+      "gp:Health Centre": { "move": { "dx": 2, "dy": -1 }, "label": { "offset": { "dx": 3, "dy": 0 }, "anchor": "start" }, "force": true }
+    },
+    "_features_comment": "Hand-adjust linear features by their routes.json 'key'. hide: drop the whole feature. move{dx,dy}: nudge feature+label together. segments: array of page-mm polylines that REPLACE the projected geometry (the Tube-map straighten — lay a run dead-straight); points: a single such polyline. style: merged over the per-type default (e.g. recolour). label{pos|offset,anchor,text,hide}: reposition/retitle/suppress just the label.",
+    "features": {
+      "river":   { "label": { "offset": { "dx": 4, "dy": 0 } } },
+      "railway": { "segments": [ [ [60, 40], [200, 40] ] ], "label": { "text": "Cambridge line", "pos": { "x": 130, "y": 38 }, "anchor": "middle" } },
+      "a1096":   { "move": { "dx": 2, "dy": -1 } },
+      "canal":   { "hide": true, "style": { "stroke": "#003a6b" } }
+    },
+    "panel": { "x": 200, "y": 14 }
+  },
+  "external": {
+    "branches": {
+      "302": { "bearing": 210, "side": "left", "terminus": { "x": 40, "y": 150 } }
+    },
+    "hub": { "x": 152, "y": 116 },
+    "note": { "x": 10, "y": 150 }
+  }
+}

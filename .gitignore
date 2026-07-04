@@ -1,0 +1,6 @@
+# Dependencies - regenerate with: cd make-bus-leaflet && npm install
+node_modules/
+
+# Python bytecode cache
+__pycache__/
+*.pyc

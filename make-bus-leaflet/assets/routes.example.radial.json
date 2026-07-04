@@ -1,0 +1,66 @@
+{
+  "town": "March",
+  "validFrom": "June 2026",
+  "version": "March v1",
+  "anchor": "0500FMARC032",
+  "anchorLabel": "March Town Centre",
+  "titleColor": "#EE6677",
+  "internalZoom": { "corePct": 0.55, "comp": 0.22 },
+  "_configdriven_comment": "These keys make gen_internal.js fully config-driven (no per-town code edits). routeOrder=internal draw order; panelOrder=Services-panel order; orientationRoute=route used to orient road-name labels (the town circular, or the longest route); atcoPrefix (optional)=in-town stop ATCO prefix for road labels (defaults to anchor minus trailing digits); internalDesc=Services-panel text {route:[title,subtitle]}; poi=POI rules (industrialKeep: array of names to keep | 'none' | omit=keep any named; excludeName: drop POIs whose name matches any (case-insensitive); tidy: ordered [regex,replacement] suffix tidies; canon: ordered [regex,replacement] whole-name canonicalisations).",
+  "routeOrder": ["33A","302","ZIP2","46","56","32","X32"],
+  "panelOrder": ["33A","32","X32","46","56","302","ZIP2"],
+  "orientationRoute": "33A",
+  "internalDesc": {
+    "33A":["March Town Service","Mon–Sat circular"],
+    "32":["March – Ramsey","Mon–Sat, via Whittlesey & Pondersbridge"],
+    "X32":["March – Whittlesey","Mon–Sat, fast via Coates & Eastrea"],
+    "46":["March – Wisbech","Mon–Sat, via Guyhirn & Murrow"],
+    "56":["March – Manea / Wisbech","Mon–Sat, via Wimblington / Friday Bridge"],
+    "302":["March – St Ives","Mon–Sat, via Chatteris & Warboys"],
+    "ZIP2":["March – Ely (Ely Zipper 2)","Mon–Fri, via Chatteris & Mepal"]
+  },
+  "poi": {
+    "industrialKeep": "none",
+    "excludeName": ["Crematorium","Auction Field","Gardens of Remembrance"],
+    "tidy": [[" Primary Academy$"," Primary"],[" Primary School.*$"," Primary"],[" Interchurch Academy$",""],[" Academy$",""],[" School$",""]],
+    "canon": [["George Campbell","George Campbell Leisure"],["Co-?op","Co-op"]]
+  },
+  "_features_comment": "1–3 key linear features for the internal map. Geometry comes from S2's features_geo.json keyed by these 'key' values (one Overpass pull per feature, templated from overpass-feature.txt). type sets the default style (river/canal/railway/road/generic). Each is straightenable/nudgeable via overrides.json internal.features[key]. Identify candidates from OSM and ASK the user which to include, then lock them here.",
+  "features": [
+    { "key": "river",   "type": "river",   "label": "River Nene (old course)", "labelPos": { "x": 40, "y": 200 }, "labelColor": "#7fb0d8", "labelItalic": true, "labelSize": 4, "labelReserve": [34, 193, 112, 203] },
+    { "key": "railway", "type": "railway", "label": "Ely–Peterborough line",    "labelPos": { "x": 150, "y": 40 }, "labelColor": "#666" },
+    { "key": "a141",    "type": "road",    "label": "A141",                     "labelPos": { "x": 215, "y": 120 }, "labelColor": "#b07a10" }
+  ],
+  "palette": {
+    "32":  "#EE7733",
+    "X32": "#66CCEE",
+    "33A": "#228833",
+    "46":  "#CCBB44",
+    "56":  "#EE6677",
+    "302": "#AA3377",
+    "ZIP2":"#BBBBBB"
+  },
+  "textOn": { "32":"#fff","X32":"#111","33A":"#fff","46":"#111","56":"#fff","302":"#fff","ZIP2":"#111" },
+  "operators": [
+    { "name": "Dews Coaches", "routes": ["32","X32","302","ZIP2"] },
+    { "name": "Stagecoach East", "routes": ["46"] },
+    { "name": "Stagecoach East Midlands", "routes": ["56"] },
+    { "name": "Fenland Assoc. for Community Transport", "routes": ["33A"] }
+  ],
+  "external": [
+    { "route":"56", "label":"Manea", "days":"Mon–Sat", "bearing":2, "side":"right",
+      "stops":["Wimblington","Doddington","Benwick","Manea"] },
+    { "route":"46", "label":"Wisbech", "days":"Mon–Sat", "bearing":44, "side":"up",
+      "stops":["Westry","Ring's End","Guyhirn","Murrow","Parson Drove","Wisbech"] },
+    { "route":"56", "label":"Wisbech", "days":"Mon–Sat", "bearing":74, "side":"down",
+      "stops":["Chainbridge","Coldham","Friday Bridge","Elm","Wisbech"] },
+    { "route":"X32", "label":"Whittlesey", "days":"Mon–Sat", "bearing":110, "side":"up",
+      "stops":["Westry","Coates","Eastrea","Whittlesey"] },
+    { "route":"ZIP2", "label":"Ely", "days":"Mon–Fri", "bearing":150, "side":"up",
+      "stops":["Wimblington","Doddington","Chatteris","Mepal","Sutton","Witchford","Ely"] },
+    { "route":"302", "label":"St Ives", "days":"Mon–Sat", "bearing":186, "side":"left",
+      "stops":["Wimblington","Doddington","Chatteris","Warboys","Pidley","St Ives"] },
+    { "route":"32", "label":"Ramsey", "days":"Mon–Sat", "bearing":222, "side":"left",
+      "stops":["Coates","Eastrea","Whittlesey","Pondersbridge","Ramsey"] }
+  ]
+}

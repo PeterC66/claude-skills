@@ -1,0 +1,269 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Bus leaflet override editor</title>
+<style>
+  body{margin:0;font:13px system-ui,Arial;display:flex;height:100vh;overflow:hidden}
+  #stage{flex:1;overflow:auto;background:#f3f4f6;position:relative}
+  #stage svg{width:1180px;height:auto;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.2);margin:16px;display:block}
+  #panel{width:300px;background:#1f2430;color:#e6e6e6;padding:14px;box-sizing:border-box;overflow:auto}
+  #panel h1{font-size:15px;margin:0 0 4px} #panel h2{font-size:12px;color:#9aa;margin:13px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+  button{background:#3b82f6;color:#fff;border:0;border-radius:5px;padding:7px 10px;font-size:13px;cursor:pointer;margin:3px 0;width:100%}
+  button.sec{background:#374151} button.warn{background:#b45309} button.danger{background:#7f1d1d} button:disabled{opacity:.4;cursor:default}
+  label{display:flex;align-items:center;gap:6px;margin:5px 0}
+  select,input[type=text]{width:100%;box-sizing:border-box;background:#11151c;color:#e6e6e6;border:1px solid #374151;border-radius:4px;padding:5px}
+  input[type=color]{width:100%;height:30px;background:#11151c;border:1px solid #374151;border-radius:4px}
+  .row{display:flex;gap:6px} .row button{width:auto;flex:1}
+  #readout{font-family:monospace;background:#11151c;border-radius:5px;padding:6px;min-height:16px;color:#7dd3fc;font-size:11px}
+  .hint{color:#9aa;font-size:11px;line-height:1.4}
+  [data-key]{cursor:grab} .sel{outline:2px solid #f59e0b;outline-offset:1px}
+  #status{font-size:11px;color:#86efac;min-height:14px;margin-top:4px}
+  #dirty{font-size:11px;color:#fbbf24;min-height:14px}
+  .sec-box{border-top:1px solid #374151;margin-top:6px;padding-top:4px}
+  .zbar{position:absolute;top:8px;left:8px;display:flex;gap:4px;z-index:5}
+  .zbar button{width:32px;height:30px;padding:0;font-size:16px;background:#374151;opacity:.9}
+</style></head>
+<body>
+<div id="stage"><div class="zbar">
+  <button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">&minus;</button><button id="zfit" title="Fit" style="font-size:11px">fit</button>
+</div><div id="canvas">loading…</div></div>
+<div id="panel">
+  <h1>Override editor</h1>
+  <div class="hint" id="maplabel"></div>
+
+  <h2>Active route</h2>
+  <select id="routesel"><option value="">— none —</option></select>
+  <label id="perroutewrap" style="display:none"><input type="checkbox" id="perroute" checked> move stops for this route only</label>
+  <div id="routecolwrap" style="display:none"><h2>Route colour</h2><input type="color" id="routecol"></div>
+  <div class="hint" id="routehint" style="display:none">Drag the route line to spread it sideways off a shared corridor.</div>
+
+  <h2>Selection</h2>
+  <div id="readout">—</div>
+  <div id="selinfo" class="hint">Click an element to select. Shift-click stops to multi-select a run on one route.</div>
+
+  <div id="straightenwrap"><h2>Straighten run (stops)</h2>
+    <button id="between" class="sec" disabled>Select all between</button>
+    <div class="row"><label><input type="radio" name="smode" value="project" checked> project</label>
+      <label><input type="radio" name="smode" value="even"> even</label></div>
+    <label><input type="checkbox" id="snap" checked> snap to 45° (octolinear)</label>
+    <button id="straighten" class="sec" disabled>Straighten selected run</button>
+  </div>
+
+  <div id="featwrap" style="display:none"><h2>Feature</h2>
+    <input type="color" id="featcol" title="feature colour">
+    <input type="text" id="featlabel" placeholder="label text">
+    <button id="featlabelbtn" class="sec">Set label text</button>
+    <button id="feathide" class="sec">Toggle hide feature</button>
+  </div>
+
+  <h2>Element</h2>
+  <button id="hide" class="sec" disabled>Toggle hide (POI)</button>
+  <button id="reset" class="sec" disabled>Reset selected element</button>
+
+  <div id="rotwrap"><h2>Rotation (whole map)</h2>
+    <div class="row"><input type="range" id="rot" min="-180" max="180" step="1" style="flex:1"><span id="rotv" style="width:42px;text-align:right"></span></div>
+  </div>
+
+  <div class="sec-box"></div>
+  <div class="row"><button id="undo" class="sec" disabled>Undo</button><button id="redo" class="sec" disabled>Redo</button></div>
+  <h2>Save</h2>
+  <button id="save">Save overrides.json</button>
+  <div class="row"><button id="discard" class="warn">Discard changes</button><button id="clearall" class="danger">Clear all</button></div>
+  <div id="dirty"></div>
+  <div id="status"></div>
+  <div class="hint" style="margin-top:6px">Edits preview live but are not written until <b>Save</b>. Save writes <code>overrides.json</code> in the run folder; copy it to your <b>S3-config</b> and re-run S4/S5 for the final image. <b>Clear all</b> returns to the clean auto layout (recovers a bad saved state).</div>
+</div>
+<script>
+let DATA=null, SEC={}, RC={}, MAP='internal', VP=null, PAL={}, sel=[], svg=null, activeRoute='';
+let undoStack=[], redoStack=[], savedSnap='', zoom=1; const BASEW=1180;
+const $=id=>document.getElementById(id);
+const readout=$('readout'), status=$('status');
+const round=v=>Math.round(v*10)/10;
+function api(p,opt){ return fetch(p,opt).then(r=>r.json()); }
+function snap(){ return JSON.stringify({SEC,RC}); }
+
+function center(el){ // base point in mm (svg user units) of a keyed group
+  const kind=el.getAttribute('data-kind');
+  if(kind==='stop'){ const c=el.querySelector('circle'); if(c) return {x:+c.getAttribute('cx'),y:+c.getAttribute('cy')};
+    const r=el.querySelector('rect'); if(r) return {x:+r.getAttribute('x')+(+r.getAttribute('width'))/2,y:+r.getAttribute('y')+(+r.getAttribute('height'))/2}; }
+  if(kind==='branch'){ const r=[...el.querySelectorAll('rect')].find(r=>(r.getAttribute('fill')||'').toLowerCase()==='#2e8b57'); if(r) return {x:+r.getAttribute('x')+(+r.getAttribute('width'))/2,y:+r.getAttribute('y')+(+r.getAttribute('height'))/2}; }
+  if(kind==='hub'){ const r=el.querySelector('rect'); if(r) return {x:+r.getAttribute('x')+(+r.getAttribute('width'))/2,y:+r.getAttribute('y')+(+r.getAttribute('height'))/2}; }
+  const b=el.getBBox(); return {x:b.x+b.width/2,y:b.y+b.height/2};
+}
+function toMM(evt){ const p=svg.createSVGPoint(); p.x=evt.clientX; p.y=evt.clientY; const m=p.matrixTransform(svg.getScreenCTM().inverse()); return {x:m.x,y:m.y}; }
+const baseAtco=k=> k && k.includes(':') ? k.split(':')[1] : k;
+
+function load(d){
+  DATA=d; MAP=d.map; SEC=(d.overrides&&d.overrides[MAP])?JSON.parse(JSON.stringify(d.overrides[MAP])):{};
+  RC=(d.overrides&&d.overrides.routeColors)?JSON.parse(JSON.stringify(d.overrides.routeColors)):{};
+  VP=d.viewport; PAL=d.palette||{};
+  $('maplabel').textContent = MAP.toUpperCase()+' map — '+Object.keys(d.routes||{}).length+' routes';
+  $('rotwrap').style.display = $('straightenwrap').style.display = MAP==='internal' ? '' : 'none';
+  // route picker
+  const rs=$('routesel'); rs.innerHTML='<option value="">— none —</option>';
+  for(const r of Object.keys(d.routes||{})){ const o=document.createElement('option'); o.value=r; o.textContent=r; rs.appendChild(o); }
+  undoStack=[]; redoStack=[]; savedSnap=snap();
+  render(d.svg);
+  if(MAP==='internal'){ const r=$('rot'); r.value=SEC.rotationDeg!=null?SEC.rotationDeg:0; $('rotv').textContent=r.value+'°'; }
+  refreshButtons(); updateDirty();
+}
+function render(svgStr){ $('canvas').innerHTML=svgStr; svg=document.querySelector('#stage svg'); applyZoom(); wire(); clearSelDom(); }
+function applyZoom(){ if(svg) svg.style.width=(BASEW*zoom)+'px'; }
+
+function clearSelDom(){ sel.forEach(e=>{}); sel=[]; refreshButtons(); }
+function clearSel(){ if(svg) svg.querySelectorAll('.sel').forEach(e=>e.classList.remove('sel')); sel=[]; refreshButtons(); }
+function selStops(){ return sel.filter(e=>e.getAttribute('data-kind')==='stop').map(e=>baseAtco(e.getAttribute('data-key'))); }
+function routeOfSelection(){ const keys=selStops(); if(!keys.length) return null;
+  if(activeRoute && keys.every(k=>(DATA.routes[activeRoute]||[]).includes(k))) return activeRoute;
+  for(const r in DATA.routes){ if(keys.every(k=>DATA.routes[r].includes(k))) return r; } return null; }
+
+function refreshButtons(){
+  const one = sel.length===1, k0=one?sel[0].getAttribute('data-kind'):null;
+  $('straighten').disabled = !(MAP==='internal' && sel.length>=2 && routeOfSelection());
+  $('between').disabled = !(MAP==='internal' && sel.length>=1 && (activeRoute||routeOfSelection()));
+  $('hide').disabled = !(one && k0==='poi');
+  $('reset').disabled = !one;
+  $('featwrap').style.display = (one && k0==='feature') ? '' : 'none';
+  if(one && k0==='feature'){ const p=sel[0].querySelector('path'); if(p) $('featcol').value=toHex(p.getAttribute('stroke'));
+    const fk=sel[0].getAttribute('data-key'); $('featlabel').value=(SEC.features&&SEC.features[fk]&&SEC.features[fk].label&&SEC.features[fk].label.text)||''; }
+  $('selinfo').textContent = sel.length? sel.map(e=>e.getAttribute('data-key')).join(', ') : 'Click an element to select. Shift-click stops to multi-select a run on one route.';
+  $('undo').disabled=!undoStack.length; $('redo').disabled=!redoStack.length;
+}
+function toHex(c){ if(!c) return '#888888'; if(c[0]==='#'){ if(c.length===4) return '#'+c[1]+c[1]+c[2]+c[2]+c[3]+c[3]; return c; } return '#888888'; }
+
+function wire(){
+  svg.querySelectorAll('[data-key]').forEach(el=>{
+    el.addEventListener('pointerdown',e=>{
+      e.preventDefault(); e.stopPropagation();
+      const kind=el.getAttribute('data-kind'), key=el.getAttribute('data-key');
+      // selection
+      if(e.shiftKey && kind==='stop'){
+        const atco=baseAtco(key);
+        const okRoute = activeRoute ? (DATA.routes[activeRoute]||[]).includes(atco)
+          : (!selStops().length || Object.values(DATA.routes).some(seq=>seq.includes(atco) && selStops().every(s=>seq.includes(s))));
+        if(!okRoute){ status.textContent = activeRoute? 'that stop is not on route '+activeRoute : 'selected stops must share one route'; return; }
+        if(sel.includes(el)){el.classList.remove('sel');sel=sel.filter(x=>x!==el);} else {el.classList.add('sel');sel.push(el);}
+        refreshButtons(); return;
+      }
+      if(!e.shiftKey){ clearSel(); el.classList.add('sel'); sel=[el]; refreshButtons();
+        if(kind==='route'){ $('routesel').value=key; activeRoute=key; onRouteContext(); } }
+      // drag
+      const start=toMM(e); const base=center(el); let moved=false;
+      el.setPointerCapture(e.pointerId); el.style.cursor='grabbing';
+      function mv(ev){ const p=toMM(ev); const dx=p.x-start.x, dy=p.y-start.y; moved=true;
+        el.setAttribute('transform','translate('+dx.toFixed(2)+' '+dy.toFixed(2)+')');
+        readout.textContent=kind+' '+key+'  Δ '+dx.toFixed(1)+', '+dy.toFixed(1)+' mm'; }
+      function up(ev){ try{el.releasePointerCapture(e.pointerId);}catch(_){}
+        el.removeEventListener('pointermove',mv); el.removeEventListener('pointerup',up); el.style.cursor='grab';
+        if(!moved) return; const p=toMM(ev); const dx=p.x-start.x, dy=p.y-start.y;
+        act(()=>applyDrag(kind,key,base,dx,dy)); }
+      el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
+    });
+  });
+}
+
+function setRouteStop(r,a,x,y){ if(!r) return false; SEC.routeStops=SEC.routeStops||{}; SEC.routeStops[r]=SEC.routeStops[r]||{};
+  SEC.routeStops[r][a]={pos:{x:round(x),y:round(y)}}; return true; }
+function applyDrag(kind,key,base,dx,dy){
+  if(kind==='stop'){
+    const atco=baseAtco(key);
+    if(key.includes(':')){ const r=key.split(':')[0]; setRouteStop(r,atco,base.x+dx,base.y+dy); }
+    else if(activeRoute && $('perroute').checked && (DATA.routes[activeRoute]||[]).includes(atco)){ setRouteStop(activeRoute,atco,base.x+dx,base.y+dy); }
+    else { SEC.stops=SEC.stops||{}; SEC.stops[atco]={...(SEC.stops[atco]||{}),pos:{x:round(base.x+dx),y:round(base.y+dy)}}; }
+  }
+  else if(kind==='poi'){ SEC.pois=SEC.pois||{}; const prev=(SEC.pois[key]&&SEC.pois[key].move)||{dx:0,dy:0}; SEC.pois[key]={...(SEC.pois[key]||{}),move:{dx:round(prev.dx+dx),dy:round(prev.dy+dy)}}; }
+  else if(kind==='feature'){ SEC.features=SEC.features||{}; const prev=(SEC.features[key]&&SEC.features[key].move)||{dx:0,dy:0}; SEC.features[key]={...(SEC.features[key]||{}),move:{dx:round(prev.dx+dx),dy:round(prev.dy+dy)}}; }
+  else if(kind==='route'){ SEC.routeOffsets=SEC.routeOffsets||{}; const prev=SEC.routeOffsets[key]||{dx:0,dy:0}; SEC.routeOffsets[key]={dx:round(prev.dx+dx),dy:round(prev.dy+dy)}; }
+  else if(kind==='branch'){ SEC.branches=SEC.branches||{}; SEC.branches[key]={...(SEC.branches[key]||{}),terminus:{x:round(base.x+dx),y:round(base.y+dy)}}; }
+  else if(kind==='hub'){ SEC.hub={x:round(base.x+dx),y:round(base.y+dy)}; }
+  status.textContent='changed ('+kind+' '+key+')';
+}
+
+// ---- action wrapper: snapshot for undo, mutate, preview ----
+function act(fn){ undoStack.push(snap()); redoStack=[]; fn(); preview(); }
+function preview(){ status.textContent='…';
+  api('/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({section:SEC,routeColors:RC})})
+   .then(r=>{ render(r.svg); if(r.viewport)VP=r.viewport; status.textContent='preview updated'; updateDirty(); refreshButtons(); }); }
+function updateDirty(){ const d=snap()!==savedSnap; $('dirty').textContent = d? '● unsaved changes' : ''; }
+
+function onRouteContext(){ const r=$('routesel').value; activeRoute=r;
+  $('perroutewrap').style.display = r? '' : 'none';
+  $('routecolwrap').style.display = r? '' : 'none';
+  $('routehint').style.display = r? '' : 'none';
+  if(r) $('routecol').value = toHex(RC[r]||PAL[r]||'#888888');
+  refreshButtons();
+}
+$('routesel').onchange=onRouteContext;
+$('routecol').onchange=()=>{ if(!activeRoute) return; act(()=>{ RC[activeRoute]=$('routecol').value; status.textContent='route '+activeRoute+' colour '+RC[activeRoute]; }); };
+
+$('between').onclick=()=>{ const r=activeRoute||routeOfSelection(); if(!r){ status.textContent='pick an active route first'; return; }
+  const seq=DATA.routes[r]; const idx=selStops().map(k=>seq.indexOf(k)).filter(i=>i>=0); if(!idx.length){ status.textContent='select at least one stop on '+r; return; }
+  const lo=Math.min(...idx), hi=Math.max(...idx); clearSel();
+  for(let i=lo;i<=hi;i++){ const a=seq[i]; const el=svg.querySelector('[data-kind="stop"][data-key="'+a+'"]')||svg.querySelector('[data-kind="stop"][data-key="'+r+':'+a+'"]');
+    if(el){ el.classList.add('sel'); sel.push(el); } }
+  status.textContent='selected '+sel.length+' stops on '+r+' ('+seq[lo]+'→'+seq[hi]+')'; refreshButtons(); };
+
+$('straighten').onclick=()=>{
+  const r=routeOfSelection(); if(!r){ status.textContent='selected stops are not all on one route'; return; }
+  const seq=DATA.routes[r]; const stops=selStops().filter(k=>seq.includes(k)).sort((a,b)=>seq.indexOf(a)-seq.indexOf(b));
+  if(stops.length<2){ status.textContent='select at least two stops'; return; }
+  const mode=document.querySelector('input[name=smode]:checked').value;
+  const snap45=$('snap').checked;
+  act(()=>{ SEC.align=SEC.align||[]; SEC.align.push({route:r,stops,mode,...(snap45?{snap:45}:{})});
+    status.textContent='straighten '+r+' ['+stops.length+' stops] '+mode+(snap45?' 45°':''); });
+};
+
+$('hide').onclick=()=>{ const key=sel[0].getAttribute('data-key'); act(()=>{ SEC.pois=SEC.pois||{}; SEC.pois[key]={...(SEC.pois[key]||{}),hide:!(SEC.pois[key]&&SEC.pois[key].hide)}; }); };
+$('feathide').onclick=()=>{ if(!(sel.length===1)) return; const key=sel[0].getAttribute('data-key'); act(()=>{ SEC.features=SEC.features||{}; SEC.features[key]={...(SEC.features[key]||{}),hide:!(SEC.features[key]&&SEC.features[key].hide)}; }); };
+$('featcol').onchange=()=>{ if(!(sel.length===1)) return; const key=sel[0].getAttribute('data-key'); act(()=>{ SEC.features=SEC.features||{}; const f=SEC.features[key]||{}; f.style=Object.assign({},f.style,{stroke:$('featcol').value}); SEC.features[key]=f; }); };
+$('featlabelbtn').onclick=()=>{ if(!(sel.length===1)) return; const key=sel[0].getAttribute('data-key'); act(()=>{ SEC.features=SEC.features||{}; const f=SEC.features[key]||{}; f.label=Object.assign({},f.label,{text:$('featlabel').value}); SEC.features[key]=f; }); };
+
+$('reset').onclick=()=>{ const el=sel[0],kind=el.getAttribute('data-kind'),key=el.getAttribute('data-key'),atco=baseAtco(key);
+  act(()=>{
+    if(kind==='stop'){ if(key.includes(':')){ const r=key.split(':')[0]; if(SEC.routeStops&&SEC.routeStops[r]) delete SEC.routeStops[r][atco]; }
+      else { if(SEC.stops) delete SEC.stops[atco]; if(SEC.routeStops) for(const r in SEC.routeStops) delete SEC.routeStops[r][atco]; }
+      if(SEC.align) SEC.align=SEC.align.filter(a=>!(a.stops||[]).includes(atco) && a.from!==atco && a.to!==atco); }
+    if(kind==='poi'&&SEC.pois) delete SEC.pois[key];
+    if(kind==='feature'&&SEC.features) delete SEC.features[key];
+    if(kind==='route'){ if(SEC.routeOffsets) delete SEC.routeOffsets[key]; if(RC) delete RC[key]; if(SEC.align) SEC.align=SEC.align.filter(a=>a.route!==key); }
+    if(kind==='branch'&&SEC.branches) delete SEC.branches[key];
+    if(kind==='hub') delete SEC.hub;
+    status.textContent='reset '+kind+' '+key;
+  });
+};
+
+const rot=$('rot');
+if(rot) rot.addEventListener('change',()=>{ act(()=>{ SEC.rotationDeg=+rot.value; $('rotv').textContent=rot.value+'°'; }); });
+if(rot) rot.addEventListener('input',()=>{ $('rotv').textContent=rot.value+'°'; });
+
+// ---- undo / redo ----
+function undo(){ if(!undoStack.length) return; redoStack.push(snap()); const s=JSON.parse(undoStack.pop()); SEC=s.SEC; RC=s.RC; preview(); status.textContent='undo'; }
+function redo(){ if(!redoStack.length) return; undoStack.push(snap()); const s=JSON.parse(redoStack.pop()); SEC=s.SEC; RC=s.RC; preview(); status.textContent='redo'; }
+$('undo').onclick=undo; $('redo').onclick=redo;
+window.addEventListener('keydown',e=>{ if(!(e.ctrlKey||e.metaKey)) return;
+  if(e.key==='z'&&!e.shiftKey){ e.preventDefault(); undo(); }
+  else if((e.key==='y')||(e.key==='z'&&e.shiftKey)){ e.preventDefault(); redo(); } });
+
+// ---- save / discard / clear ----
+function save(){ status.textContent='saving…';
+  api('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({section:SEC,routeColors:RC,viewport:VP})})
+   .then(r=>{ render(r.svg); if(r.viewport)VP=r.viewport; undoStack=[];redoStack=[]; savedSnap=snap(); status.textContent='saved ✓'; updateDirty(); refreshButtons(); }); }
+$('save').onclick=save;
+$('discard').onclick=()=>{ if(snap()!==savedSnap && !confirm('Discard unsaved changes and reload the last saved state?')) return;
+  status.textContent='reloading…'; api('/data').then(load); };
+$('clearall').onclick=()=>{ if(!confirm('Clear ALL overrides and preview the clean auto layout? (writes nothing until you Save)')) return;
+  act(()=>{ SEC={}; RC={}; activeRoute=''; $('routesel').value=''; onRouteContext(); status.textContent='cleared (preview) — Save to persist'; }); };
+window.addEventListener('beforeunload',e=>{ if(snap()!==savedSnap){ e.preventDefault(); e.returnValue=''; } });
+
+// ---- zoom + pan ----
+function setZoom(z,cx,cy){ const stage=$('stage'); const old=zoom; zoom=Math.max(0.3,Math.min(8,z)); applyZoom();
+  if(cx!=null){ const k=zoom/old; stage.scrollLeft=(stage.scrollLeft+cx)*k-cx; stage.scrollTop=(stage.scrollTop+cy)*k-cy; } }
+$('zin').onclick=()=>setZoom(zoom*1.25); $('zout').onclick=()=>setZoom(zoom/1.25); $('zfit').onclick=()=>{ zoom=1; applyZoom(); };
+$('stage').addEventListener('wheel',e=>{ e.preventDefault(); const rect=$('stage').getBoundingClientRect();
+  setZoom(zoom*(e.deltaY<0?1.1:1/1.1), e.clientX-rect.left, e.clientY-rect.top); },{passive:false});
+// pan on empty-canvas drag
+$('stage').addEventListener('pointerdown',e=>{ if(e.target.closest('[data-key]')) return; const stage=$('stage');
+  const sx=e.clientX, sy=e.clientY, l0=stage.scrollLeft, t0=stage.scrollTop;
+  function mv(ev){ stage.scrollLeft=l0-(ev.clientX-sx); stage.scrollTop=t0-(ev.clientY-sy); }
+  function up(){ window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up); }
+  window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up); });
+
+api('/data').then(load);
+</script></body></html>

@@ -1,0 +1,83 @@
+{
+  "town": "St Ives",
+  "validFrom": "June 2026",
+  "version": "Rebuild v1",
+  "_configdriven_comment": "These keys make gen_internal.js fully config-driven (no per-town code edits). routeOrder=internal draw order; panelOrder=Services-panel order; orientationRoute=route used to orient road-name labels (the town circular, or the longest route); atcoPrefix (optional)=in-town stop ATCO prefix for road labels (defaults to anchor minus trailing digits); internalDesc=Services-panel text {route:[title,subtitle]}; poi=POI rules (industrialKeep: array of names to keep | 'none' | omit=keep any named; excludeName: drop POIs whose name matches any (case-insensitive); tidy: ordered [regex,replacement] suffix tidies; canon: ordered [regex,replacement] whole-name canonicalisations).",
+  "routeOrder": ["B","A","9","302","301","VL14","300"],
+  "panelOrder": ["A","B","9","300","301","302","VL14"],
+  "orientationRoute": "300",
+  "internalDesc": {
+    "300":["St Ives Town Circular","Mon–Fri"],
+    "9":["St Ives – Huntingdon","Mon & Fri, via Hemingfords & Godmanchester"],
+    "301":["St Ives – Ramsey","via Needingworth, Somersham & Warboys"],
+    "302":["St Ives – March","via Warboys, Chatteris & Doddington"],
+    "A":["St Ives – Trumpington P&R","daily, via Busway, Cambridge & Addenbrooke’s"],
+    "B":["St Ives – Cambridge / Huntingdon","daily, via the Busway"],
+    "VL14":["St Ives – Huntingdon – Felmersham","limited community minibus"]
+  },
+  "poi": {
+    "industrialKeep": ["Somersham Road Industrial Estate","Needingworth Industrial Estate"],
+    "excludeName": ["Hemingford"],
+    "tidy": [[" Primary School$"," Primary"],[" Junior School$"," Junior"],[" Infant and Nursery School$"," Infant"],[" School$",""]],
+    "canon": [["One Leisure","One Leisure"],["St\\.? ?Ivo Outdoor","St Ivo Outdoor"]]
+  },
+  "_features_comment": "1–3 key linear features for the internal map. Geometry comes from S2's features_geo.json keyed by these 'key' values (one Overpass pull per feature, templated from overpass-feature.txt). type sets the default style (river/canal/railway/road/generic). Each is straightenable/nudgeable via overrides.json internal.features[key]. OMITTING 'features' entirely falls back to a single auto river feature (legacy behaviour) — these towns then stay byte-identical.",
+  "features": [
+    { "key": "river", "type": "river", "label": "River Great Ouse", "labelPos": { "x": 40, "y": 200 }, "labelColor": "#7fb0d8", "labelItalic": true, "labelSize": 4, "labelReserve": [34, 193, 86, 203] },
+    { "key": "a1096", "type": "road",  "label": "A1096 Harrison Way", "labelPos": { "x": 150, "y": 45 }, "labelColor": "#b07a10" }
+  ],
+  "palette": {
+    "A":   "#AA3377",
+    "B":   "#4477AA",
+    "9":   "#66CCEE",
+    "300": "#228833",
+    "301": "#EE6677",
+    "302": "#CCBB44",
+    "VL14":"#BBBBBB"
+  },
+  "textOn": { "A":"#fff","B":"#fff","9":"#111","300":"#fff","301":"#fff","302":"#111","VL14":"#111" },
+  "operators": [
+    { "name": "Stagecoach East", "routes": ["A","B"] },
+    { "name": "Dews Coaches",    "routes": ["9","300","301","302"] },
+    { "name": "Villager Minibus","routes": ["VL14"] }
+  ],
+  "_internal_options_comment": "All opt-in; omit ⇒ byte-identical to the legacy layout. internalBundle fans co-running routes into closely-parallel lines (gap mm). internalTermini + terminiLabels draw a route badge + 'to <dest>' at each route's out-of-town end.",
+  "internalBundle": { "gap": 0.9 },
+  "internalTermini": true,
+  "terminiLabels": { "9":"Huntingdon", "301":"Ramsey", "302":"March", "A":"Cambridge", "B":"Cambridge" },
+  "_external_options_comment": "servicesPanel = right description panel (omit ⇒ bottom-left operators legend only). serviceDesc = panel text per route. externalLozenges = true (auto: places on ≥2 arms) or an explicit list. busStationNote = note by the Bus Station hub. A route may have two arms: repeat the route with a distinct 'id'.",
+  "servicesPanel": { "x": 240 },
+  "serviceDesc": {
+    "A":["St Ives – Trumpington P&R","daily · busway via Cambridge"],
+    "B":["St Ives – Cambridge / Huntingdon","daily · busway + Hinchingbrooke arm"],
+    "9":["St Ives – Huntingdon","Mon & Fri · plus Hilton/Elsworth villages"],
+    "300":["St Ives Town Circular","Mon–Fri · catch at the Bus Station"],
+    "301":["St Ives – Ramsey","Mon–Sat · via Needingworth & Warboys"],
+    "302":["St Ives – March","Mon–Sat · via Warboys & Chatteris"],
+    "VL14":["St Ives – Huntingdon – Felmersham","limited pre-book minibus"]
+  },
+  "externalLozenges": ["Huntingdon","Warboys","Swavesey","Fenstanton","Godmanchester"],
+  "busStationNote": "300 Town Circular departs here (Mon–Fri)",
+  "external": [
+    { "route":"301", "id":"301", "label":"Ramsey", "days":"Mon–Sat",
+      "stops":["St Ives","Needingworth","Bluntisham","Earith","Colne","Somersham","Pidley","Warboys","Bury","Ramsey"] },
+    { "route":"301", "id":"301o", "label":"Ramsey (via Old Hurst)", "days":"301V Mon–Fri / 301S Sat", "limited":true,
+      "stops":["St Ives","Needingworth","Bluntisham","Earith","Colne","Somersham","Woodhurst","Old Hurst","Pidley","Warboys","Bury","Ramsey"] },
+    { "route":"302", "label":"March", "days":"Mon–Sat",
+      "stops":["St Ives","Warboys","Chatteris","Doddington","Wimblington","March"] },
+    { "route":"9", "id":"9", "label":"Huntingdon", "days":"Mon & Fri",
+      "stops":["St Ives","Hemingford Grey","Hemingford Abbots","Godmanchester","Huntingdon"] },
+    { "route":"9", "id":"9v", "label":"Hilton & Elsworth", "days":"Mon & Fri", "limited":true,
+      "stops":["St Ives","Fenstanton","Conington","Boxworth","Knapwell","Elsworth","Hilton"] },
+    { "route":"VL14", "label":"Felmersham", "days":"limited days", "limited":true,
+      "stops":["St Ives","Huntingdon","Brampton","Kimbolton","Sharnbrook","Felmersham"] },
+    { "route":"B", "label":"Hinchingbrooke", "days":"daily",
+      "stops":["St Ives","Wyton","Hartford","Huntingdon","Hinchingbrooke Hospital"] }
+  ],
+  "busway": [
+    { "route":"A", "label":"Trumpington P&R", "days":"daily",
+      "stops":["St Ives P&R","Fen Drayton Lakes","Swavesey","Longstanton P&R","Oakington","Histon & Impington","Orchard Park","Central Cambridge","Cambridge Rail Stn","Addenbrooke's","Trumpington P&R"] },
+    { "route":"B", "label":"Cambridge", "days":"daily",
+      "stops":["St Ives P&R","Fen Drayton Lakes","Swavesey","Longstanton P&R","Oakington","Histon & Impington","Cambridge North","Cambridge (Drummer St)"] }
+  ]
+}

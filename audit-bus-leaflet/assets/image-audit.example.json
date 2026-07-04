@@ -1,0 +1,48 @@
+{
+  "town": "Exampleton",
+  "auditedOn": "2026-06-05",
+  "dataUsed": {
+    "verifiedOn": "2026-06-05",
+    "leafletVersion": "v1.0_2026-06-05",
+    "files": ["verified-services.json", "disagreements.json", "routes.json", "pois.json", "atco2name.json"]
+  },
+  "images": [
+    { "role": "internal", "title": "Buses within Exampleton (from 1st June 2026) — Version 1, Summer 2026", "source": "pasted" },
+    { "role": "external", "title": "Buses from Exampleton to nearby towns — Version 2, Summer 2026", "source": "pasted" }
+  ],
+  "findings": [
+    {
+      "image": "external",
+      "category": "Service content",
+      "item": "Route 5A (Stephensons)",
+      "image_shows": "5A 'Exampleton to Bar Hill' drawn as a full service with a legend entry",
+      "data_says": "verified-services.json lists 5A under notOnLeaflet — 'live, serves the bus station; candidate for inclusion at next refresh'",
+      "verdict": "leaflet-newer",
+      "severity": "Medium",
+      "justification": "The leaflet is ahead of our v1.0 data, which already earmarked 5A for inclusion. Re-run make-bus-leaflet S1 to refresh and confirm.",
+      "source": "verified-services.json -> notOnLeaflet[5A]"
+    },
+    {
+      "image": "external",
+      "category": "Service content",
+      "item": "Route VL14 (Villager Minibus)",
+      "image_shows": "Not shown on the external map",
+      "data_says": "verified-services.json lists VL14 as a live (pre-book) service; routes.json external[] includes it",
+      "verdict": "leaflet-error",
+      "severity": "Low",
+      "justification": "VL14 is in our data but absent from the leaflet. May be a deliberate omission of a limited pre-book service, or an oversight — confirm with the producer.",
+      "source": "routes.json -> external[VL14]; verified-services.json -> services[VL14]"
+    },
+    {
+      "image": "both",
+      "category": "Spelling / consistency / design",
+      "item": "Spelling: 'Needingwoth'",
+      "image_shows": "Stop labelled 'Needingwoth' on the 301 arm",
+      "data_says": "atco2name.json / routes.json spell it 'Needingworth'",
+      "verdict": "comment",
+      "severity": "Low",
+      "justification": "Typo — missing 'r'. Correct to 'Needingworth'.",
+      "source": "atco2name.json"
+    }
+  ]
+}

@@ -124,3 +124,21 @@ the Cambridgeshire GTFS region):
   is 2.6 km (the A355/M40 services), so it's correctly absent from the 0.8 km service radius.
   Before dismissing a "missing" route as a data gap, compute its nearest-stop distance to
   the place — if it's genuinely far, the exclusion is real.
+
+- **Routes that exit toward the panel side (east) collide with the Services/Key panel —
+  fix with `internalRoads.rotationDeg`, decisively.** The panel is reserved at x=197–297mm
+  (map region is x=6–196). When a place sits on a corridor whose routes run off-frame to the
+  **east** (e.g. the Simpson Centre on the A40 Wycombe End, routes continuing to the Old Town
+  core / Gerrards Cross), the eastern route fan + terminus badges land at x≈197–202 and
+  overprint the panel/Key. `fitMargin` barely helps (the tails are pulled to the frame edge,
+  not fitted to stops). The lever is **rotation**: swing the fan up-and-left clear of the
+  panel. Be decisive — mild values just *smear* the fan vertically along the panel edge
+  (Simpson Centre: -8° and -20° both still overlapped; **-35° cleared it** to top-centre,
+  x<180). Set it in `routes.json` `internalRoads.rotationDeg` (0 = north up; the auto PCA
+  value is printed as `rotation°` on build). Diagonal corridors read fine.
+
+- **Never rewrite `routes.json` with `python … json.dump` under Git-Bash on Windows.**
+  Python opens the file with the platform default codepage (cp1252), so UTF-8 en-dashes
+  (`–`, `·`, `—` in route descriptions) are read as `â€"`/`Â·` and written back as mojibake
+  that then bakes into the SVG/JPG panel text. Edit config with the Edit/Write tools (UTF-8),
+  or if scripting, pass `encoding='utf-8'` on BOTH open() calls and `ensure_ascii=False`.

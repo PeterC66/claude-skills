@@ -324,9 +324,12 @@ if (redteam) {
   // "301" if we model it as a variant/arm subService. Don't flag those as
   // missing — they're the same branded corridor.
   const aliasOf = {};                       // normRoute(sub) -> normRoute(parent)
+  // `variants`/`arms` may be written as a single object {subServices,note} (the
+  // schema example + St Neots) OR as an array of such groups — accept both.
+  const asGroups = x => Array.isArray(x) ? x : (x && typeof x === 'object' ? [x] : []);
   for (const vs of (verified.services || [])) {
     const parent = normRoute(vs.route);
-    for (const grp of [...(vs.variants || []), ...(vs.arms || [])]) {
+    for (const grp of [...asGroups(vs.variants), ...asGroups(vs.arms)]) {
       for (const sub of (grp.subServices || [])) aliasOf[normRoute(sub)] = parent;
     }
   }

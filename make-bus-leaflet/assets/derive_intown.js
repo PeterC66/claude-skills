@@ -29,12 +29,19 @@ const cfg=JSON.parse(fs.readFileSync(process.argv[4],'utf8'));
 const OUT=process.argv[5];
 const PREFIX=cfg.prefix, EXTRA=new Set(cfg.extraCore||[]), BUF=cfg.buf==null?1:cfg.buf;
 const CIRC=new Set(cfg.circular||[]);
-const isCore=a=> a.startsWith(PREFIX) || EXTRA.has(a);
 // optional town-edge distance cap for buffer stops
 const ANC=cfg.anchor&&ll[cfg.anchor], MAXM=(cfg.maxEdgeKm||0)*1000;
 const kc=ANC?Math.cos(ANC[0]*Math.PI/180):1;
-const farFromTown=a=>{ if(!ANC||!MAXM||!ll[a]) return false;
-  return Math.hypot((ll[a][0]-ANC[0])*111320,(ll[a][1]-ANC[1])*111320*kc) > MAXM; };
+const distM=a=>(!ANC||!ll[a])?0:Math.hypot((ll[a][0]-ANC[0])*111320,(ll[a][1]-ANC[1])*111320*kc);
+// optional GEOGRAPHIC cap on the CORE: a prefix-matched stop farther than
+// coreMaxKm from the anchor is NOT treated as core (it may still be kept as a
+// buffer/edge stop, subject to maxEdgeKm). Needed where the town's NaPTAN ATCO
+// block is geographically large and covers neighbouring places (e.g. Bucks
+// 040000001 spans Beaconsfield + Gerrards Cross + Denham). Absent ⇒ inert
+// (prefix alone defines core), so pre-existing towns stay byte-identical.
+const COREM=(cfg.coreMaxKm||0)*1000;
+const isCore=a=> EXTRA.has(a) || (a.startsWith(PREFIX) && (!COREM || !ANC || distM(a)<=COREM));
+const farFromTown=a=>{ if(!ANC||!MAXM||!ll[a]) return false; return distM(a) > MAXM; };
 
 function clipDir(stops){               // core stops + buf-neighborhood, in chain order
   const chain=stops.filter(a=>ll[a]); const n=chain.length;

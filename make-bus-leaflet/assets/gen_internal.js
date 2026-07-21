@@ -109,7 +109,10 @@ const routes  = (function(){
   }
   throw new Error('no routes_intown_atco.json or routes_atco.json in '+DIR);
 })();
-const river   = JSON.parse(fs.readFileSync(DIR+'/river_geo.json','utf8'));
+// river_geo.json is the legacy single-river feature; a town with no river (common
+// outside Cambridgeshire) simply has no such file — tolerate its absence (=> []).
+// features[] in routes.json supplies the real linear features either way.
+const river   = (function(){ try{ return JSON.parse(fs.readFileSync(DIR+'/river_geo.json','utf8')); }catch(e){ return []; } })();
 // ---- internalRoads config + data (null/absent => classic model, byte-identical)
 const IR = RJ.internalRoads ? (function(){
   const u = (RJ.internalRoads===true)?{}:RJ.internalRoads;

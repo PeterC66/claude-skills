@@ -68,7 +68,13 @@ def in_town_stops(cur, lat, lon, km):
 
 def dominant_prefixes(stops):
     from collections import Counter
-    c=Counter(s[0][:9] for s in stops if s[0].startswith("0500") or s[0].startswith("0570"))
+    # Region-agnostic: pick the dominant NaPTAN ATCO AREA (first 4 chars) among the
+    # in-radius stops, then the dominant 9-char block within it — so a town in ANY
+    # county works (Cambs 0500/0570, Bucks 0400, …) and a few cross-border minority
+    # stops don't skew the prefix. (Was hardcoded to 0500/0570 with an all-stops
+    # fallback; that only worked out-of-county by luck of the fallback.)
+    top_area=Counter(s[0][:4] for s in stops).most_common(1)[0][0]
+    c=Counter(s[0][:9] for s in stops if s[0].startswith(top_area))
     if not c: c=Counter(s[0][:9] for s in stops)
     tot=sum(c.values()); keep=[p for p,n in c.most_common() if n/tot>=0.12]
     return keep or [c.most_common(1)[0][0]], c.most_common(8)

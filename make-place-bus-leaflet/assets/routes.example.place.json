@@ -1,0 +1,47 @@
+{
+  "place": "Tesco Extra, St Neots",
+  "placeShort": "Tesco Extra",
+  "placeTitle": "Buses serving Tesco Extra (St Neots)",
+  "town": "Tesco Extra area",
+  "validFrom": "July 2026",
+  "version": "v1.0",
+  "titleColor": "#4477AA",
+  "anchor": "0500HEYNE001",
+  "anchorLabel": "Tesco Extra",
+  "palette": {
+    "18": "#4477AA", "18A": "#EE6677", "C2": "#228833",
+    "150": "#EE7733", "61EY": "#AA3377", "69": "#CCBB44"
+  },
+  "textOn": {
+    "18": "#fff", "18A": "#fff", "C2": "#fff",
+    "150": "#111", "61EY": "#fff", "69": "#111"
+  },
+  "badgeLabels": { "61EY": "61" },
+  "routeOrder": ["18", "18A", "C2", "150", "61EY", "69"],
+  "panelOrder": ["18", "18A", "C2", "150", "61EY", "69"],
+  "orientationRoute": "61EY",
+  "internalDesc": {
+    "18": ["Cambridge - St Neots", "Mon-Sat, via Papworth"],
+    "18A": ["Cambridge - St Neots", "Mon-Sat"],
+    "C2": ["St Neots town service", "Thu - to Newlands Cottages"],
+    "150": ["Tesco - The White Horse", "Mon-Sat, Dews Coaches"],
+    "61EY": ["Eynesbury circular", "Mon-Sat, calls at Tesco"],
+    "69": ["Tesco - St Ives direction", "limited"]
+  },
+  "poi": { "industrialKeep": "none", "excludeName": [], "tidy": [], "canon": [] },
+  "operators": [
+    { "name": "Whippet Coaches", "routes": ["18", "18A"] },
+    { "name": "C G Myall & Son", "routes": ["C2"] },
+    { "name": "Dews Coaches", "routes": ["150"] },
+    { "name": "Stephensons of Essex", "routes": ["61EY", "69"] }
+  ],
+  "destinations": [
+    { "name": "Cambridge", "sub": "Drummer St", "bearing": 91, "routes": ["18", "18A"], "distKm": 27 },
+    { "name": "St Neots town centre", "sub": "Market Square", "bearing": 359, "routes": ["18", "C2"], "distKm": 1.9 },
+    { "name": "Newlands Cottages", "sub": "Thu only", "bearing": 130, "routes": ["C2"], "distKm": 11 },
+    { "name": "The White Horse", "sub": "via 150", "bearing": 317, "routes": ["150"], "distKm": 15 },
+    { "name": "St Ives direction", "sub": "limited", "bearing": 47, "routes": ["69"], "limited": true, "distKm": 18 }
+  ],
+  "localLoops": [{ "route": "61EY", "label": "Eynesbury local circular (calls at Tesco)" }],
+  "note": "Spokes show where you can get to; small badges are the buses that take you there."
+}

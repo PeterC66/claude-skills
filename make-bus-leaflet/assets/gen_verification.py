@@ -202,6 +202,11 @@ def main():
         doc.add_paragraph("No findings — the independent pass and the sanity checks all agreed "
                           "with the stored data.")
 
+    # Stamp real created/modified dates (python-docx's blank template otherwise
+    # leaves its 2013-12-23 date, which Explorer shows and reads as wrong).
+    _now = datetime.now()
+    doc.core_properties.created = _now
+    doc.core_properties.modified = _now
     doc.save(out)
     print(f"wrote {out}  ({n_hard} hard, {n_soft} soft, {'PASS' if passed else 'BLOCKED'})")
 

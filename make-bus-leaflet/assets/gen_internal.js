@@ -47,6 +47,9 @@
 //                                      // (true<coreKm, moderate comp out to midKm, strong
 //                                      // outerComp beyond) to magnify the core while keeping the
 //                                      // mid-town moderate; absent => single-band (byte-identical).
+//     lenses:[{center:[lat,lon],radiusKm,mag}], // extra local fisheye lens(es): magnify a
+//                                      // congested cluster (bounded Sarkar–Brown, boundary fixed)
+//                                      // on top of the always-on centre focus. Absent => none.
 //     fitExtra:["ATCO"...],           // extra stops in the fit set (default intown_cfg extraCore)
 //     roadLabelMax:12, roadLabelInclude:["OSM name"...], roadRename:[["OSM name","Display name"]...],
 //     keyRoads:["OSM name"...],       // drawn at skeleton weight even if no route uses them
@@ -58,7 +61,9 @@
 //                                      // centroid, which can land spuriously inside the town
 //                                      // where no such road exists. Drops the label only, not
 //                                      // any drawn road line.
-//     northArrow:{x,y,len?,angle?},   // small compass for the rotated map. Direction is the
+//     northArrow:false|{x,y,len?,angle?}, // compass for the rotated map — DRAWN BY DEFAULT on
+//                                      // every internalRoads map; set false to suppress, or pass
+//                                      // {x,y,len,angle} to position. Direction is the
 //                                      // screen bearing of north under the active rotation
 //                                      // (auto from theta); the schematic passes an explicit
 //                                      // `angle` deg since its coords are pre-rotated at
@@ -88,6 +93,12 @@ const { icon } = require(_ICONS);
 const atco2name = JSON.parse(fs.readFileSync(DIR+'/atco2name.json','utf8'));
 const RJ  = JSON.parse(fs.readFileSync(DIR+'/routes.json','utf8'));
 const C = RJ.palette, TXT = RJ.textOn;
+// badgeLabels: optional map { <route key> : <text drawn in the badge> }. Lets a
+// route keep a distinct internal key (matching the S2 data) while the badge
+// shows something else — e.g. two different routes both numbered "46", or a
+// lettered/branded service. Absent/empty => badge shows the key (byte-identical).
+const BL = RJ.badgeLabels || {};
+const blab = r => (BL[r] != null ? BL[r] : r);
 const atco2ll = JSON.parse(fs.readFileSync(DIR+'/atco2ll.json','utf8'));
 // Routes to DRAW = the in-town DISPLAY subset (each route traced to the town EDGE,
 // derived in S2 from the full both-direction chains). Prefer routes_intown_atco.json;
@@ -107,6 +118,15 @@ const IR = RJ.internalRoads ? (function(){
     roadLabelMax:12, badgeEvery:70 }, u);       // gap>=stroke+~1mm so bundled lanes read separately (see header)
   o.focus = Object.assign({ coreKm:1.1, comp:0.5 }, u.focus||{});
   return o; })() : null;
+// ---- internalDiagram render extensions (tube-map diagram, 2026-07-10) ------
+// Keyed off internalDiagramRENDER, which ONLY diagram_internal.js writes into
+// its workspace routes.json (curated stop ticks, interchange lozenges, one-way
+// loop arrows). Deliberately NOT the town's own `internalDiagram{}` key — that
+// is the diagram engine's config and is present in the town routes.json, which
+// the geographic and schematic builds also read; keying off it would leak the
+// diagram's curated-stops filter into those maps (it did — caught by the v6.6
+// S4 size check). Absent => zero effect, gate-safe.
+const ID = RJ.internalDiagramRender || null;
 let RG=null, RP=null, ICFG={};
 if(IR){
   RG = JSON.parse(fs.readFileSync(DIR+'/roads_geo.json','utf8'));
@@ -128,7 +148,16 @@ if(IR){
 const FEATURE_STYLES = {
   river:   { stroke:'#9ec9e8', width:3.4, dash:null },
   canal:   { stroke:'#7fb0d8', width:2.4, dash:'3 1.6' },
-  railway: { stroke:'#888888', width:1.6, dash:null, ties:true },
+  // Ordnance-Survey-style railway (Peter's ask 2026-07-20): a black casing line
+  // with regular, bolder perpendicular "sleeper" crossbars — reads unmistakably
+  // as a railway, unlike the old thin grey line. tieEvery/tieLen/tieWidth are
+  // honoured by drawFeature(); a town can still override any of them per feature.
+  // minSegLen (page mm): drop polyline segments shorter than this before drawing.
+  // A multi-track railway (ECML through a station) is mapped as many parallel ways
+  // plus short crossover/point stubs; the stubs' perpendicular ties splay every
+  // direction into a mess at the junction throat. Filtering out the short stubs
+  // leaves the clean OS through-line. Harmless where a railway has no such clutter.
+  railway: { stroke:'#333333', width:1.5, dash:null, ties:true, tieEvery:2.6, tieLen:1.6, tieWidth:0.7, minSegLen:3.5 },
   road:    { stroke:'#e6a532', width:2.8, dash:null },
   generic: { stroke:'#999999', width:2.2, dash:null }
 };
@@ -299,7 +328,30 @@ function compress([x,y]){ if(CPF>=1 && R1===null) return [x,y];
   if(r<=R0 || r===0) return [x,y];
   const nr = (R1!==null && r>R1) ? R0+(R1-R0)*CPF+(r-R1)*CPF2 : R0+(r-R0)*CPF;
   return [O[0]+dx/r*nr, O[1]+dy/r*nr]; }
-const tform=ll=>compress(tform0(ll));
+// ---- optional local DETAIL LENSES (item 7, 2026-07-20): magnify one or more
+//   congested clusters (e.g. St Neots' One Leisure / Eynesbury knot) WITHOUT
+//   disturbing the rest of the map. Bounded Sarkar–Brown graphical fisheye: inside
+//   radiusKm the centre is magnified `mag`×, compressing toward a FIXED boundary,
+//   so the map's overall extent (hence fit-to-frame scale) and everything outside
+//   each lens are unchanged. Applied after the primary focus fisheye, to
+//   stops/roads/river/POIs alike (all go through tform). This is the "second
+//   fisheye" the geographic map can carry on top of the always-on centre focus.
+//   Config: internalRoads.lenses:[{center:[lat,lon],radiusKm,mag}]. Absent => none
+//   => tform is byte-identical to before, so gate towns are unaffected.
+const LENSES = (IR && Array.isArray(IR.lenses)) ? IR.lenses.map(z=>({
+    c: compress(tform0(z.center)),
+    R: (z.radiusKm!=null?z.radiusKm:0.5)/111.32,
+    mag: z.mag!=null?z.mag:1.8 })) : [];
+function lens(p){
+  for(const z of LENSES){
+    const dx=p[0]-z.c[0], dy=p[1]-z.c[1], r=Math.hypot(dx,dy);
+    if(r===0 || r>=z.R) continue;
+    const d=z.mag-1, rho=r/z.R, g=((d+1)*rho)/(d*rho+1), nr=z.R*g;
+    p=[z.c[0]+dx/r*nr, z.c[1]+dy/r*nr];
+  }
+  return p;
+}
+const tform=ll=>lens(compress(tform0(ll)));
 // viewport (map left/centre; right reserved for panel)
 const MX0=6, MX1=196, MY0=30, MY1=205;
 const allT=stopPts.map(tform);
@@ -358,7 +410,7 @@ const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'
 // editor-only element keys (no-op unless EDITOR_KEYS=1, so normal output is unchanged)
 const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>` : inner;
 function badge(x,y,r,rad=4.6){out(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(r)}</text>`);}
+  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(r))}</text>`);}
 function cross(x,y,col){const a=1.0,b=2.6;out(`<rect x="${x-a/2}" y="${y-b/2}" width="${a}" height="${b}" fill="${col}"/><rect x="${x-b/2}" y="${y-a/2}" width="${b}" height="${a}" fill="${col}"/>`);}
 
 // ---- linear features: paths + labels (honour overrides.features[key]) ----
@@ -376,7 +428,11 @@ function featSegs(f){              // page-mm polylines, honouring straighten/mo
 }
 function drawFeature(f){
   if(featOv(f).hide) return;
-  const st=featStyle(f), segs=featSegs(f);
+  const st=featStyle(f); let segs=featSegs(f);
+  if(st.minSegLen){                              // drop short stubs (e.g. rail crossovers) — see FEATURE_STYLES
+    const segLen=s=>{ let L=0; for(let i=1;i<s.length;i++) L+=Math.hypot(s[i][0]-s[i-1][0],s[i][1]-s[i-1][1]); return L; };
+    segs = segs.filter(s=>s.length>1 && segLen(s)>=st.minSegLen);
+  }
   const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : '';
   const lines=[];
   for(const seg of segs){
@@ -384,11 +440,14 @@ function drawFeature(f){
     lines.push(`<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash} stroke-linecap="round" stroke-linejoin="round"/>`);
   }
   if(st.ties){                     // railway cross-ties (perpendicular ticks)
+    const t = st.tieLen!=null ? st.tieLen : st.width*0.9;   // OS-style: longer, bolder,
+    const step = st.tieEvery!=null ? st.tieEvery : 2.2;     // evenly-spaced crossbars.
+    const tw = st.tieWidth!=null ? st.tieWidth : 0.5;       // (defaults = legacy behaviour)
     for(const seg of segs) for(let i=0;i<seg.length-1;i++){
       const [x0,y0]=seg[i],[x1,y1]=seg[i+1], L=Math.hypot(x1-x0,y1-y0); if(!L) continue;
-      const nx=-(y1-y0)/L, ny=(x1-x0)/L, t=st.width*0.9;
-      for(let dd=1.1; dd<L; dd+=2.2){ const cx=x0+(x1-x0)*dd/L, cy=y0+(y1-y0)*dd/L;
-        lines.push(`<path d="M${(cx-nx*t).toFixed(2)} ${(cy-ny*t).toFixed(2)}L${(cx+nx*t).toFixed(2)} ${(cy+ny*t).toFixed(2)}" stroke="${st.stroke}" stroke-width="0.5"/>`); }
+      const nx=-(y1-y0)/L, ny=(x1-x0)/L;
+      for(let dd=step*0.5; dd<L; dd+=step){ const cx=x0+(x1-x0)*dd/L, cy=y0+(y1-y0)*dd/L;
+        lines.push(`<path d="M${(cx-nx*t).toFixed(2)} ${(cy-ny*t).toFixed(2)}L${(cx+nx*t).toFixed(2)} ${(cy+ny*t).toFixed(2)}" stroke="${st.stroke}" stroke-width="${tw}"/>`); }
     }
   }
   out(gk('feature', f.key, lines.join('\n')));
@@ -659,10 +718,18 @@ if(IR){
   // -- stop ticks ON the route lines (one per physical stop, first route wins;
   //    stops[ATCO].pos override moves the tick)
   const tickSeen=new Set();
+  // internalDiagram: curated stops — only keepStops + stops near a drawn POI
+  // (the hand-drawn convention: "only main stops or stops near places of
+  // interest are shown"). ID absent => filter never engages (gate-safe).
+  const IDKEEP = ID ? new Set(ID.keepStops||[]) : null;
+  const IDPOI = ID ? pois.map(pp=>{ const o2=((OV.pois||{})[pp.cat+':'+pp.name]||{}); if(o2.hide)return null;
+    const q=XY(pp.ll); if(o2.pos){q[0]=o2.pos.x;q[1]=o2.pos.y;} else if(o2.move){q[0]+=o2.move.dx;q[1]+=o2.move.dy;} return q; }).filter(Boolean) : null;
+  const IDPD = (ID && ID.poiStopDist!=null) ? ID.poiStopDist : 8;
   for(const r of order){ const tr=TRIM[r]; if(!tr||!tr.sh)continue;
     for(const a in tr.st){ if(tickSeen.has(a))continue; const o=tr.st[a]; if(o.i>=tr.sh.length-1)continue;
       let p=baseOv[a] || [tr.sh[o.i][0]+(tr.sh[o.i+1][0]-tr.sh[o.i][0])*o.t, tr.sh[o.i][1]+(tr.sh[o.i+1][1]-tr.sh[o.i][1])*o.t];
       if(!inFrame(p))continue; tickSeen.add(a);
+      if(IDKEEP && !IDKEEP.has(a) && !IDPOI.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<=IDPD)) continue;
       out(gk('stop',a,`<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>`)); } }
 } else {
 // route lines.  Default = original per-route diagonal nudge (byte-identical when
@@ -716,7 +783,8 @@ for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label 
   if(ov.hide || (ov.label&&ov.label.hide)) continue;
   if(f.labelReserve) reserve(...f.labelReserve); }
 // Central interchange / bus-station label (the ANCHOR) drawn + reserved first
-if(atco2ll[ANCHOR]||baseOv[ANCHOR]){const[x,y]=XYS(ANCHOR);
+// (suppressed when internalDiagram draws a lozenge for the anchor instead)
+if((atco2ll[ANCHOR]||baseOv[ANCHOR]) && !(ID && (ID.interchanges||[]).some(ic=>ic.atco===ANCHOR))){const[x,y]=XYS(ANCHOR);
   const _a=[`<rect x="${x-1.7}" y="${y-1.7}" width="3.4" height="3.4" rx="0.5" fill="#111"/>`,
     `<rect x="${x-1.0}" y="${y-1.0}" width="2.0" height="2.0" rx="0.3" fill="#fff"/>`,
     `<text x="${x+2.6}" y="${y+1.0}" font-family="Arial" font-weight="bold" font-size="3.0" fill="#111" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(ANCHOR_LABEL)}</text>`].join('\n');
@@ -749,8 +817,25 @@ if(IR && TRIM){
   const events=[];
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const lt=((IR.termini||{})[r])||{};
-    const endLab   = (lt.end  !==undefined) ? lt.end   : ((tr.endCut && !tr.startCut) ? TL[r] : null);
-    const startLab = (lt.start!==undefined) ? lt.start : ((tr.startCut && !tr.endCut) ? TL[r] : null);
+    const eDef=lt.end!==undefined, sDef=lt.start!==undefined;
+    let endLab, startLab;
+    if(tr.endCut && tr.startCut){                 // both tails cut the frame: honour each side literally
+      endLab   = eDef ? lt.end   : null;
+      startLab = sDef ? lt.start : null;
+    } else {
+      // Single tail (the usual case). A town configures a destination as end:"X"
+      // or start:"X", but which chain-end becomes the frame-cut depends on the
+      // map-matcher's canonical direction — unpredictable to the config author.
+      // If the one configured single-ended label sits on the OTHER end from the
+      // actual cut, route it to whichever cut exists so the "to X" still draws
+      // (Peter's item 2, 2026-07-20: 66/C2/193 reached the edge but their label
+      // was pinned to the missing opposite cut). Explicit false still suppresses.
+      const only = (eDef && lt.end!==false)   ? lt.end
+                 : (sDef && lt.start!==false) ? lt.start
+                 : (TL[r]||null);
+      endLab   = tr.endCut   ? (lt.end===false   ? null : only) : null;
+      startLab = tr.startCut ? (lt.start===false ? null : only) : null;
+    }
     if(tr.endCut   && lt.end  !==false) events.push({r,cut:tr.endCut,  label:endLab});
     if(tr.startCut && lt.start!==false) events.push({r,cut:tr.startCut,label:startLab});
   }
@@ -773,6 +858,10 @@ if(IR && TRIM){
     out(`<path d="M${(px+dx*2.6).toFixed(2)} ${(py+dy*2.6).toFixed(2)} L${(px-dx*0.5+nx*1.6).toFixed(2)} ${(py-dy*0.5+ny*1.6).toFixed(2)} L${(px-dx*0.5-nx*1.6).toFixed(2)} ${(py-dy*0.5-ny*1.6).toFixed(2)} Z" fill="${col}"/>`);
     let bx=px-dx*5, by=py-dy*5, tries=0;
     while(aplaced.some(q=>Math.hypot(q[0]-bx,q[1]-by)<7) && tries<5){ bx-=dx*6; by-=dy*6; tries++; }
+    // The cut point sits ON the frame, so a badge centred near it straddles the edge and
+    // renders half-clipped ("905" printed as "05" at the right edge in St Neots v1.1).
+    // Keep the whole 3.0 mm badge inside the drawing frame.
+    bx=Math.min(Math.max(bx,MX0+3.4),MX1-3.4); by=Math.min(Math.max(by,MY0+3.4),MY1-3.4);
     aplaced.push([bx,by]);
     const groups=[], gi2={};                   // same "to X" text -> one shared row
     for(const m of ms){ const k=m.label||''; if(!(k in gi2)){ gi2[k]=groups.length; groups.push({label:m.label,ms:[]}); } groups[gi2[k]].ms.push(m); }
@@ -783,8 +872,18 @@ if(IR && TRIM){
       g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BS; badge(bxi,ry,m.r,3.0); lastX=bxi;
         bxMin=Math.min(bxMin,bxi); bxMax=Math.max(bxMax,bxi); byMin=Math.min(byMin,ry); byMax=Math.max(byMax,ry); });
       if(!g.label) return;
-      const col=g.ms.length===1?(C[g.ms[0].r]||'#333'):'#333';
-      if(g.ms.length>1){
+      // A "to X" shared by 2+ differently-coloured routes (e.g. 18 + 905 both to
+      // Cambridge) is drawn in BLACK so it clearly applies to every route in the
+      // cluster, not just one (Peter's ask 2026-07-20). A solo route keeps its
+      // own colour.
+      const col=g.ms.length===1?(C[g.ms[0].r]||'#333'):'#111';
+      // SOLO rows used to go through placeLabel anchored ON the badge centre, which
+      // printed the text straight over its own badge ("65to Buckden", "905to Bedford",
+      // and at the frame edge a clipped "05to Cambridge") because the badge was not
+      // reserved until after the label was placed. St Neots, with five solo terminus
+      // badges, made it obvious. Solo and multi rows now share the same path: reserve
+      // the row's badges first, then pick a row-level spot beside/above/below them.
+      {
         // MULTI-badge row: the legacy anchor-on-last-badge placement either
         // runs off the page (right candidate at the frame edge) or prints the
         // text straight over a sibling badge (the left 'end' candidate --
@@ -807,7 +906,7 @@ if(IR && TRIM){
           out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" fill="${col}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(text)}</text>`);
           break;
         }
-      } else placeLabel(lastX,ry,'to '+g.label,2.7, col, false, null); // label BEFORE the badge
+      }
     });
     reserve(bxMin-3.5,byMin-3.5,bxMax+3.5,byMax+3.5);                    // reserve, or it can't place
   }
@@ -835,6 +934,40 @@ if(IR && TRIM){
       }
       acc+=L;
     }
+  }
+}
+
+// ---- internalDiagram: one-way loop arrows + interchange lozenges (ID-gated) --
+if(ID && IR && TRIM){
+  // direction-of-travel arrowheads along a one-way loop route (e.g. a town
+  // circular): the diagram abstracts geography away, so travel direction must
+  // be shown explicitly — the hand-drawn leaflet does exactly this.
+  const AEV = ID.loopArrowEvery!=null ? ID.loopArrowEvery : 34;
+  for(const r of (ID.loopArrows||[])){ const tr=TRIM[r]; if(!tr||tr.pts.length<2)continue;
+    let acc=0, next=AEV*0.5;
+    for(let i=0;i<tr.pts.length-1;i++){
+      const a2=tr.pts[i], b2=tr.pts[i+1];
+      const L=Math.hypot(b2[0]-a2[0],b2[1]-a2[1]); if(!L){continue;}
+      while(acc+L>=next){
+        const t=(next-acc)/L; next+=AEV;
+        const p=[a2[0]+(b2[0]-a2[0])*t, a2[1]+(b2[1]-a2[1])*t];
+        if(!inFrame(p)) continue;
+        const ux=(b2[0]-a2[0])/L, uy=(b2[1]-a2[1])/L, px2=-uy, py2=ux, ah=2.0, aw=1.35;
+        out(`<path d="M${(p[0]+ux*ah).toFixed(2)} ${(p[1]+uy*ah).toFixed(2)}L${(p[0]-ux*ah*0.45+px2*aw).toFixed(2)} ${(p[1]-uy*ah*0.45+py2*aw).toFixed(2)}L${(p[0]-ux*ah*0.45-px2*aw).toFixed(2)} ${(p[1]-uy*ah*0.45-py2*aw).toFixed(2)}Z" fill="${C[r]||'#333'}" stroke="#fff" stroke-width="0.35"/>`);
+      }
+      acc+=L;
+    }
+  }
+  // interchange lozenges — tube-style station boxes (Bus Station, Park & Ride)
+  for(const ic of (ID.interchanges||[])){
+    const a2=ic.atco; if(!(atco2ll[a2]||baseOv[a2]))continue;
+    const [x,y]=XYS(a2);
+    const label=ic.label||atco2name[a2]||'';
+    const sz=ic.size||3.0, w=(ic.w!=null?ic.w:label.length*sz*0.58+5), h=ic.h!=null?ic.h:5.4;
+    const fill=ic.fill||'#1e7a46';
+    out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-h/2).toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${(h/2).toFixed(2)}" fill="${fill}" stroke="#fff" stroke-width="0.7"/>`);
+    out(`<text x="${x.toFixed(2)}" y="${(y+sz*0.36).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${sz}" fill="#fff" text-anchor="middle">${esc(label)}</text>`);
+    reserve(x-w/2-0.5,y-h/2-0.5,x+w/2+0.5,y+h/2+0.5);
   }
 }
 
@@ -1018,15 +1151,18 @@ if(RJ.fareNote){
   lines.forEach((ln,i)=>out(`<text x="${PX}" y="${fy+i*3.6}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#333">${esc(ln)}</text>`));
 }
 
-// ---- north arrow (opt-in: internalRoads.northArrow) -------------------------
+// ---- north arrow (DEFAULT ON for internalRoads; disable with northArrow:false)
 // The internal map is rotated (rotationDeg / PCA) to fill the page, so "up" is
-// not north — a small arrow shows which way north actually is. Gated by IR so
-// the non-internalRoads gate towns stay byte-identical. Direction: the SCREEN
-// bearing of increasing latitude under the active rotation (theta); the
-// schematic passes a precomputed `angle` (deg) because its coords are pre-
-// rotated and run at rotationDeg 0, so it can't re-derive north from theta.
-if (IR && IR.northArrow) {
-  const na = IR.northArrow===true ? {} : IR.northArrow;
+// not north — a small arrow shows which way north actually is. Drawn on EVERY
+// internalRoads map by default (Peter's ask 2026-07-20, "north arrow on every
+// map"); set internalRoads.northArrow:false to suppress, or pass {x,y,len,angle}
+// to position it. Still gated by IR so non-internalRoads gate towns are
+// unaffected. Direction: the SCREEN bearing of increasing latitude under the
+// active rotation (theta); the schematic passes a precomputed `angle` (deg)
+// because its coords are pre-rotated and run at rotationDeg 0, so it can't
+// re-derive north from theta.
+if (IR && IR.northArrow!==false) {
+  const na = (IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};
   const bx = na.x!=null?na.x:14, by = na.y!=null?na.y:150, L = na.len||8;
   // north planar step (0,-1) through the same rot() the projection uses:
   // rot(0,-1) = [sin(-theta), -cos(-theta)] in screen space (y down).
@@ -1042,6 +1178,23 @@ if (IR && IR.northArrow) {
 // source note (+ build version stamp when internalRoads — gate towns unaffected)
 const _ver = IR ? (process.env.LEAFLET_VERSION || RJ.version) : null;
 out(`<text x="6" y="208" font-family="Arial" font-size="2.7" fill="#888">Routes &amp; stops: bustimes.org (operator-verified, June 2026). Places: OpenStreetMap. Stop names in italics are approximate; check live times at bustimes.org.${_ver?' · Map v'+esc(_ver):''}</text>`);
+
+// Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).
+function stampNote(cfg,x,y,align){
+  if(!cfg) return;
+  const notes=Array.isArray(cfg.notes)?cfg.notes:(cfg.notes?[cfg.notes]:[]);
+  if(!notes.length && !cfg.asOf) return;
+  const HS=3.4,NS=3.0,AS=2.6,lh=3.7,pad=1.8;
+  const rows=[]; if(notes.length) rows.push([cfg.heading||'Coming soon',HS,'#b30000',true]);
+  notes.forEach(n=>rows.push([n,NS,'#222',false]));
+  if(cfg.asOf) rows.push(['Timetable correct as at '+cfg.asOf,AS,'#666',false]);
+  const wmm=Math.max(...rows.map(r=>r[0].length*(r[1]*0.56)))+pad*2, hmm=pad*2+lh*rows.length;
+  const bx=align==='end'?x-wmm:x, anc=align==='end'?'end':'start', tx=align==='end'?x-pad:x+pad;
+  out(`<rect x="${bx.toFixed(2)}" y="${(y-HS-pad+0.3).toFixed(2)}" width="${wmm.toFixed(2)}" height="${hmm.toFixed(2)}" rx="1.4" fill="#fff" fill-opacity="0.9" stroke="#b30000" stroke-width="0.4"/>`);
+  let cy=y;
+  rows.forEach((r,i)=>{ if(i) cy+=lh; out(`<text x="${tx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial"${r[3]?' font-weight="bold"':''} font-size="${r[1]}" fill="${r[2]}" text-anchor="${anc}">${esc(r[0])}</text>`); });
+}
+{ const at=(RJ.stamp&&RJ.stamp.internalAt)||[6,196]; stampNote(RJ.stamp, at[0], at[1], 'start'); }
 
 out('</svg>');
 fs.writeFileSync(DIR+'/internal.svg', s);

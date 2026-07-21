@@ -146,6 +146,12 @@ def main():
     else:
         doc.add_paragraph("No disagreements found — bustimes.org and every operator site agreed.")
 
+    # Stamp real created/modified dates — python-docx's blank template otherwise
+    # leaves its baked-in 2013-12-23 date, which Windows Explorer shows in its
+    # "Date" column and reads as "clearly wrong".
+    _now = datetime.now()
+    doc.core_properties.created = _now
+    doc.core_properties.modified = _now
     doc.save(out)
     print(f"wrote {out}  ({len(rows)} rows, {len(conflicts)} disagreement(s))")
 

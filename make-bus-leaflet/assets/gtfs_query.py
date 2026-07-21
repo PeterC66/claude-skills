@@ -11,7 +11,7 @@ Emits the facts the make-bus-leaflet S1 stage needs (routes / operators / days /
 termini), straight from BODS open data. Geometry and community/pre-book (DRT)
 services are NOT covered here -- keep the bustimes/OSM pass for those.
 """
-import sqlite3, sys, json, argparse, os
+import sqlite3, sys, json, argparse, os, datetime
 
 DOW=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
@@ -47,16 +47,34 @@ def _make_town_stops(cur, prefixes=None, near=None):
             except ValueError: pass
         cur.executemany("INSERT OR IGNORE INTO town_stops VALUES (?)",hit)
 
-def query(db, prefixes=None, near=None, town=None):
+def _make_active_svc(cur, asof):
+    """Populate temp table active_svc(service_id) with services in effect on date `asof`
+    (YYYYMMDD): a calendar row whose [start,end] window spans it, or a calendar_dates
+    addition span that does. Used only when --asof is given."""
+    cur.execute("DROP TABLE IF EXISTS active_svc")
+    cur.execute("CREATE TEMP TABLE active_svc(service_id TEXT PRIMARY KEY)")
+    cur.execute("INSERT OR IGNORE INTO active_svc SELECT service_id FROM calendar "
+                "WHERE start_date<=? AND end_date>=?", (asof, asof))
+    cur.execute("INSERT OR IGNORE INTO active_svc SELECT service_id FROM calendar_dates "
+                "WHERE exception_type='1' GROUP BY service_id HAVING MIN(date)<=? AND MAX(date)>=?",
+                (asof, asof))
+
+
+def query(db, prefixes=None, near=None, town=None, asof=None):
     con=sqlite3.connect(db); con.row_factory=sqlite3.Row; cur=con.cursor()
     _make_town_stops(cur, prefixes, near)
     IN="st.stop_id IN (SELECT stop_id FROM town_stops)"
+    # When rendering a future/other date, restrict to services in effect then. Empty when
+    # asof is None, so every query below is identical to the legacy behaviour (gates safe).
+    if asof:
+        _make_active_svc(cur, asof)
+    SVCF = " AND t.service_id IN (SELECT service_id FROM active_svc)" if asof else ""
     # all (route, agency) calling at the town
     routes=list(cur.execute(f"""
       SELECT DISTINCT r.route_id, r.route_short_name sn, r.route_long_name ln, a.agency_name op
       FROM stop_times st JOIN trips t ON t.trip_id=st.trip_id
       JOIN routes r ON r.route_id=t.route_id JOIN agency a ON a.agency_id=r.agency_id
-      WHERE {IN}"""))
+      WHERE {IN}{SVCF}"""))
     # group by short_name (a short_name may span >1 route_id)
     by={}
     for r in routes:
@@ -70,23 +88,34 @@ def query(db, prefixes=None, near=None, town=None):
         svc=[x[0] for x in cur.execute(f"""
           SELECT DISTINCT t.service_id FROM trips t
           JOIN stop_times st ON st.trip_id=t.trip_id
-          WHERE t.route_id IN ({ph}) AND {IN}""", rids)]
+          WHERE t.route_id IN ({ph}) AND {IN}{SVCF}""", rids)]
         flags=[0]*7; sd=set(); ed=set()
         for s in svc:
-            for c in cur.execute("SELECT * FROM calendar WHERE service_id=?",(s,)):
+            rows=list(cur.execute("SELECT * FROM calendar WHERE service_id=?",(s,)))
+            for c in rows:
                 for i,dn in enumerate(DOW):
                     if c[dn]=="1": flags[i]=1
                 sd.add(c["start_date"]); ed.add(c["end_date"])
+            if not rows and asof:
+                # calendar_dates-only service (common for future/new routes): derive the running
+                # weekdays + window from its added dates. Only in --asof mode, to keep the default
+                # output byte-identical for the gated towns.
+                adds=[x[0] for x in cur.execute(
+                    "SELECT date FROM calendar_dates WHERE service_id=? AND exception_type='1'",(s,))]
+                for dt in adds:
+                    try: flags[datetime.datetime.strptime(dt,"%Y%m%d").weekday()]=1
+                    except ValueError: pass
+                if adds: sd.add(min(adds)); ed.add(max(adds))
         # headsigns (operator destination labels) of town-serving trips
         heads=[x[0] for x in cur.execute(f"""
           SELECT t.trip_headsign FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id
-          WHERE t.route_id IN ({ph}) AND {IN} AND t.trip_headsign<>''
+          WHERE t.route_id IN ({ph}) AND {IN}{SVCF} AND t.trip_headsign<>''
           GROUP BY t.trip_headsign ORDER BY COUNT(*) DESC""", rids)]
         # geographic termini: first & last stop names of town-serving trips
         ends=set()
         for tid in [x[0] for x in cur.execute(f"""
             SELECT DISTINCT t.trip_id FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id
-            WHERE t.route_id IN ({ph}) AND {IN} LIMIT 60""", rids)]:
+            WHERE t.route_id IN ({ph}) AND {IN}{SVCF} LIMIT 60""", rids)]:
             seq=list(cur.execute("""SELECT s.stop_name FROM stop_times st JOIN stops s ON s.stop_id=st.stop_id
               WHERE st.trip_id=? ORDER BY CAST(st.stop_sequence AS INT)""",(tid,)))
             if seq: ends.add(seq[0]["stop_name"]); ends.add(seq[-1]["stop_name"])
@@ -95,7 +124,7 @@ def query(db, prefixes=None, near=None, town=None):
           WHERE t.route_id IN ({ph}) AND t.shape_id IN (SELECT shape_id FROM shapes)""",rids))[0][0]>0
         ntrips=list(cur.execute(f"""SELECT COUNT(DISTINCT t.trip_id) FROM trips t
           JOIN stop_times st ON st.trip_id=t.trip_id
-          WHERE t.route_id IN ({ph}) AND {IN}""", rids))[0][0]
+          WHERE t.route_id IN ({ph}) AND {IN}{SVCF}""", rids))[0][0]
         out.append({"route":sn,"operator":" / ".join(sorted(d["ops"])),
           "days":fmt_days(flags),"daysFlags":flags,
           "validFrom":min(sd) if sd else None,"validTo":max(ed) if ed else None,
@@ -109,13 +138,17 @@ def query(db, prefixes=None, near=None, town=None):
         s["possibleVariantOf"]=base[0] if base else None
     out.sort(key=lambda s:(len(s["route"]),s["route"]))
     con.close()
-    return {"town":town,"atcoPrefixes":prefixes,"near":near,"source":"BODS GTFS (east_anglia)","services":out}
+    res={"town":town,"atcoPrefixes":prefixes,"near":near,"source":"BODS GTFS (east_anglia)","services":out}
+    if asof: res["asOf"]=asof
+    return res
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description="Bus services serving a town, from BODS GTFS.")
     ap.add_argument("prefixes",nargs="*",help="ATCO locality prefix(es), e.g. 0500HSTIV (St Ives)")
     ap.add_argument("--town")
     ap.add_argument("--near",help="geographic radius instead of/with prefixes: 'lat,lon,km' e.g. 52.3231,-0.0709,1.2")
+    ap.add_argument("--asof",help="render the network as it will be on this date (YYYYMMDD or YYYY-MM-DD): "
+                                  "only services in effect then are returned. Omit for today's live network.")
     DEFAULT_DB=os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
     ap.add_argument("--db",default=DEFAULT_DB)
     ap.add_argument("--out")
@@ -125,7 +158,10 @@ if __name__=="__main__":
         la,lo,km=[float(x) for x in a.near.split(",")]; near=(la,lo,km)
     if not a.prefixes and not near:
         ap.error("give one or more ATCO prefixes, or --near lat,lon,km")
-    res=query(a.db, a.prefixes or None, near, a.town)
+    asof=a.asof.replace("-","") if a.asof else None
+    if asof and (len(asof)!=8 or not asof.isdigit()):
+        ap.error("--asof must be YYYYMMDD or YYYY-MM-DD")
+    res=query(a.db, a.prefixes or None, near, a.town, asof)
     for s in res["services"]:
         v=f"  (variant of {s['possibleVariantOf']})" if s["possibleVariantOf"] else ""
         sh="shape" if s["hasGtfsShape"] else "no-shape"

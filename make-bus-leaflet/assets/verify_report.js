@@ -223,10 +223,16 @@ for (const r of displayed) {
   if (!vs || !fe || !Array.isArray(vs.termini) || vs.termini.length === 0) continue;
   const dirs = fullDirections(fe);
   // collect locality tokens at both ends of every direction
-  const endTokens = new Set();
+  // Chain ends OUTSIDE the NaPTAN "0500H<LLLL>nnn" locality-coded style yield no token
+  // (a cross-border town has them: St Neots' 905 ends at Bedford Bus Station 020035035).
+  // Count those as UNVERIFIABLE rather than as a mismatch, or an entirely correct route
+  // gets a false HARD just for leaving the county.
+  const endTokens = new Set(); let untokenisedEnds = 0;
   for (const d of dirs) {
-    endTokens.add(localityToken(d.stops[0]));
-    endTokens.add(localityToken(d.stops[d.stops.length - 1]));
+    for (const a of [d.stops[0], d.stops[d.stops.length - 1]]) {
+      const t = localityToken(a);
+      if (t) endTokens.add(t); else untokenisedEnds++;
+    }
   }
   endTokens.delete(null);
   const results = vs.termini.map(t => {
@@ -235,7 +241,11 @@ for (const r of displayed) {
     return { terminus: t, token: pt, matched: !!matched };
   });
   const nMatched = results.filter(x => x.matched).length;
-  if (nMatched === 0) {
+  if (nMatched === 0 && untokenisedEnds) {
+    add('soft', 'terminus',
+      `Route ${r}: could not verify either declared terminus (${vs.termini.join(', ')}) — ${untokenisedEnds} chain end(s) are not NaPTAN locality-coded (cross-border stops), so there is nothing to match against. Confirm by hand.`,
+      { route: r, termini: vs.termini, chainEndTokens: [...endTokens], untokenisedEnds, results }, r);
+  } else if (nMatched === 0) {
     add('hard', 'terminus',
       `Route ${r}: neither declared terminus (${vs.termini.join(', ')}) appears at the ends of its full chain (chain ends: ${[...endTokens].join(', ')}).`,
       { route: r, termini: vs.termini, chainEndTokens: [...endTokens], results }, r);
@@ -253,16 +263,40 @@ if (anchorLL) {
     const seq = intownByNorm(r);
     const fe = fullEntry(r);
     if (!seq || seq.length < 2 || !fe) continue;
-    // edge stop = drawn stop farthest from anchor
+    // Edge stop = the route's OUT-OF-TOWN continuation, i.e. a derive_intown BUFFER stop
+    // (outside the town prefix / extraCore), not merely the farthest drawn stop. In an
+    // elongated town the farthest drawn stop can be a core stop on the opposite side from
+    // the exit: St Neots' 66 exits north via Little Paxton toward Huntingdon but its
+    // farthest drawn stop is Eaton Socon, 2.35 km to the SOUTH-WEST — which read as
+    // "drawn the wrong way" (175° out) when the map was entirely correct.
+    const corePrefix = intownCfg.prefix || null;
+    const extraCore = new Set(intownCfg.extraCore || []);
+    const isCore = a => (corePrefix && a.startsWith(corePrefix)) || extraCore.has(a);
+    const edgeCands = corePrefix ? seq.filter(a => !isCore(a)) : [];
+    const cands = edgeCands.length ? edgeCands : seq;
     let edge = null, edgeD = -1;
-    for (const a of seq) { if (!ll[a]) continue; const d = haversineKm(anchorLL, ll[a]); if (d > edgeD) { edgeD = d; edge = a; } }
-    // terminus direction = full-chain stop farthest from anchor
+    for (const a of cands) { if (!ll[a]) continue; const d = haversineKm(anchorLL, ll[a]); if (d > edgeD) { edgeD = d; edge = a; } }
+    // A route can have TWO out-of-town ends (St Neots' 905: Cambridge east, Bedford
+    // west; a two-arm route likewise). Comparing the drawn edge stop against only the
+    // single farthest chain stop flagged 905 as "drawn the wrong way" when its edge stop
+    // was correctly heading for the OTHER terminus. Compare against every chain end and
+    // keep the closest match — a genuinely reversed route still misses them all.
+    const termCands = [];
+    for (const d of fullDirections(fe)) {
+      for (const a of [d.stops[0], d.stops[d.stops.length - 1]]) {
+        if (ll[a] && haversineKm(anchorLL, ll[a]) > 0.5) termCands.push(a);
+      }
+    }
     let term = null, termD = -1;
     for (const a of fullAllStops(fe)) { if (!ll[a]) continue; const d = haversineKm(anchorLL, ll[a]); if (d > termD) { termD = d; term = a; } }
-    if (!edge || !term || edgeD < 0.2) continue; // no meaningful buffer
+    if (term && !termCands.includes(term)) termCands.push(term);
+    if (!edge || !termCands.length || edgeD < 0.2) continue; // no meaningful buffer
     const bEdge = bearing(anchorLL, ll[edge]);
-    const bTerm = bearing(anchorLL, ll[term]);
-    const diff = angleDiff(bEdge, bTerm);
+    let bTerm = null, diff = Infinity;
+    for (const a of termCands) {
+      const b = bearing(anchorLL, ll[a]), dd = angleDiff(bEdge, b);
+      if (dd < diff) { diff = dd; bTerm = b; term = a; }
+    }
     if (diff > 90) {
       add('hard', 'direction',
         `Route ${r} appears drawn the wrong way: its edge stop leaves town on bearing ${bEdge.toFixed(0)}° but the terminus lies at ${bTerm.toFixed(0)}° (${diff.toFixed(0)}° apart).`,

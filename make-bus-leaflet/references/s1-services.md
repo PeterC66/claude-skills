@@ -5,11 +5,26 @@ model, the manifest, and `stage.js`. `%SK%` = the skill's `assets` folder. `$S1`
 S1 run folder created by `stage.js new S1`.
 
 1. `stage.js init` the town folder if it doesn't exist; `S1=stage.js new S1`.
+   - **Pre-print gate — check what's changing *soon* before you build.** Run
+     `python "%SK%\gtfs_upcoming.py" --root "…\Buses" --town "<Town>"` (ad-hoc, writes nothing). It
+     mines the BODS feed for changes registered to take effect in the near future ([NEW]/[CHANGE]/[ENDS?])
+     plus a month-over-month diff — because operators must publish ≥42 days ahead, this is genuine advance
+     notice. Use it to decide, **per town, this build** (there is no fixed rule):
+     - *Nothing upcoming* → build today's network normally.
+     - *A firm dated change within the leaflet's useful life* → either **(a)** build today's network and add a
+       dated call-out via `routes.json` `stamp.notes` (see [s3-config.md](s3-config.md)); or **(b) hold and
+       build the post-change network** by passing `--asof <YYYY-MM-DD>` to `gtfs_query.py` in step 2 so the
+       facts reflect the network as it will be on the change date; or **(c)** do both (render future, stamp
+       "valid from <date>"). `[ENDS?]` items are low-confidence — verify on bustimes before dropping a route.
 2. **GTFS facts pull (primary, deterministic).** Get the town's NaPTAN ATCO locality prefix (e.g. `0500HSTIV` St Ives, `0500FMARC` March — from the bustimes locality page's `/stops/<ATCO>` links, or the town's existing S2 data). Then:
    ```
    python "%SK%\gtfs_query.py" <ATCO_PREFIX> --town "<Town>" --out "$S1\gtfs-services.json"
    ```
-   (Don't know the prefix? Use `--near "lat,lon,km"` for a geographic radius around the town centre instead.) This reads the shared county dataset `…\Buses\_gtfs\cambridgeshire.sqlite` (BODS open data) and returns, **per route that calls at the town**: `operator`, `days` (computed only from trips that stop in the town — never region-wide), `validFrom`/`validTo`, `headsigns` + `termini`, `possibleVariantOf` (e.g. 301S/V/X → 301), and `hasGtfsShape` (whether road-following geometry exists — true mostly for big operators like Stagecoach). This is the **candidate service set**; it reproduced St Ives' hand-verified facts exactly. If the dataset is stale/missing, rebuild it (`gtfs_build.py`, see its header) or fall back to the bustimes-only flow below.
+   (Don't know the prefix? Use `--near "lat,lon,km"` for a geographic radius around the town centre instead.)
+   To build the leaflet for a **future** date (option (b) from the pre-print gate), add **`--asof YYYY-MM-DD`**:
+   only services in effect on that date are returned, so a route starting/ending then appears/disappears and
+   re-registered timetables show their new pattern (it also reads `calendar_dates`, so new calendar-only routes
+   like Wisbech 52 get their days). Omit `--asof` for today's live network — the default output is unchanged. This reads the shared county dataset `…\Buses\_gtfs\cambridgeshire.sqlite` (BODS open data) and returns, **per route that calls at the town**: `operator`, `days` (computed only from trips that stop in the town — never region-wide), `validFrom`/`validTo`, `headsigns` + `termini`, `possibleVariantOf` (e.g. 301S/V/X → 301), and `hasGtfsShape` (whether road-following geometry exists — true mostly for big operators like Stagecoach). This is the **candidate service set**; it reproduced St Ives' hand-verified facts exactly. If the dataset is stale/missing, rebuild it (`gtfs_build.py`, see its header) or fall back to the bustimes-only flow below.
    - **Collapse the variant suffixes** (301S/V/X → 301) into the base route per `possibleVariantOf`, but **record the variants** (the pipeline already supports `variants[].subServices`) so S6 doesn't re-flag them.
 3. **bustimes pass — catch what BODS omits, and cross-check.** GTFS covers **registered local services only**; **community / demand-responsive / pre-book minibus** services are missing (e.g. St Ives **VL14** Villager, March **33A** FACT). `WebFetch https://bustimes.org/search?q=<Town>+<County>` → locality slug; `WebFetch`/`curl` the locality page and **(a) merge in any serving service the GTFS pull didn't list** (these are usually the community/DRT ones — verify they actually serve the town), and **(b) cross-check** the GTFS facts (operator, days, status, whether the route really enters town — the locality page is **padded** with expired and non-serving routes). For each service open its bustimes page (operator, days, ordered stops/towns, status) and the **operator's own timetable** and compare. Save the raw `locality_*.html` / `svc_*.html` into `$S1`. If a page resists curl/WebFetch (JS-rendered, consent/cookie wall, interactive widget), load it with **Claude in Chrome**.
    - **Operator timetables are nearly always PDFs.** Find the PDF links via `curl -sA UA "<operator page>" | grep -oiE 'href="[^"]+\.pdf"'`; URL-encode spaces (`%20`). **Read each PDF with the `pdf` skill** — it OCRs scanned timetables and extracts the multi-column day-type tables, which is what stops the "front-page heading only" false disagreement. **Fallback:** `WebFetch` can't parse a PDF but *saves the binary* and prints the path — **Read that path** (its text extraction works well; on this box the `pages` param fails — read with no `pages` param).

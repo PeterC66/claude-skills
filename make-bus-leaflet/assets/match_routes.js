@@ -104,6 +104,13 @@ function dijkstra(src, dst) {
 // ---- match each drawn route ------------------------------------------------
 const OUT = { routes: {}, edgeWay: {} };
 for (const r in INTOWN) {
+  // Explicit no-line list: a service that only touches the town at one stop
+  // (e.g. St Neots 69 = Eynesbury Tesco stop only, then a long non-stop run) or
+  // an express with no in-town street presence should appear in the Services
+  // panel but draw NO route line. match_routes normally auto-skips these when
+  // they have <2 in-bbox stops, but a bbox that grew for a neighbour's
+  // reachExtend can re-enable them — skipRoutes keeps them off regardless.
+  if ((MCFG.skipRoutes || []).includes(r)) { console.log(r + ': in skipRoutes, no line drawn'); continue; }
   const full = FULL[r];
   const can = (full && ((full.canonical && full.canonical[0]) || full.directions[0])) || null;
   if (!can) { console.log(r + ': no full chain, skipped'); continue; }

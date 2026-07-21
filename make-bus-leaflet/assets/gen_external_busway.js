@@ -22,6 +22,9 @@ const fs = require('fs');
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
+// badgeLabels: optional { <route key>:<badge text> } (see gen_internal.js). Absent => key.
+const BL = D.badgeLabels || {};
+const blab = r => (BL[r] != null ? BL[r] : r);
 const OVF = process.env.OVERRIDES_FILE || (DIR+'/overrides.json');
 const ALLOV = (function(){ try{ return JSON.parse(fs.readFileSync(OVF,'utf8')); }catch(e){ return {}; } })();
 const OV = ALLOV.external || {};
@@ -52,7 +55,7 @@ function line(pts, color, w=3.4, dashed=false){
 function tick(x,y,color){ out(`<circle cx="${x}" cy="${y}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 function badge(x,y,route,r=4.6){
   out(`<circle cx="${x}" cy="${y}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(r*1.0).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(route)}</text>`);
+  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(r*1.0).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
 }
 function townNode(x,y,label,h=12,reserveBox=true){
   const lines = wrap(label);
@@ -218,6 +221,23 @@ if(PANX==null){
 // source notes (bottom)
 out(`<text x="10" y="200" font-family="Arial" font-size="3.1" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators, June 2026.</text>`);
 out(`<text x="10" y="204" font-family="Arial" font-size="3.1" fill="#666">${esc(D.externalNote||'Always confirm live times & fares at bustimes.org or operator apps.')}</text>`);
+
+// Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).
+function stampNote(cfg,x,y,align){
+  if(!cfg) return;
+  const notes=Array.isArray(cfg.notes)?cfg.notes:(cfg.notes?[cfg.notes]:[]);
+  if(!notes.length && !cfg.asOf) return;
+  const HS=3.4,NS=3.0,AS=2.6,lh=3.7,pad=1.8;
+  const rows=[]; if(notes.length) rows.push([cfg.heading||'Coming soon',HS,'#b30000',true]);
+  notes.forEach(n=>rows.push([n,NS,'#222',false]));
+  if(cfg.asOf) rows.push(['Timetable correct as at '+cfg.asOf,AS,'#666',false]);
+  const wmm=Math.max(...rows.map(r=>r[0].length*(r[1]*0.56)))+pad*2, hmm=pad*2+lh*rows.length;
+  const bx=align==='end'?x-wmm:x, anc=align==='end'?'end':'start', tx=align==='end'?x-pad:x+pad;
+  out(`<rect x="${bx.toFixed(2)}" y="${(y-HS-pad+0.3).toFixed(2)}" width="${wmm.toFixed(2)}" height="${hmm.toFixed(2)}" rx="1.4" fill="#fff" fill-opacity="0.9" stroke="#b30000" stroke-width="0.4"/>`);
+  let cy=y;
+  rows.forEach((r,i)=>{ if(i) cy+=lh; out(`<text x="${tx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial"${r[3]?' font-weight="bold"':''} font-size="${r[1]}" fill="${r[2]}" text-anchor="${anc}">${esc(r[0])}</text>`); });
+}
+{ const at=(D.stamp&&D.stamp.externalAt)||[10,188]; stampNote(D.stamp, at[0], at[1], 'start'); }
 
 out('</svg>');
 fs.writeFileSync(DIR+'/external.svg', s);

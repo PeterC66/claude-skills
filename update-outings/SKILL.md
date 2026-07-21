@@ -18,7 +18,9 @@ Each item usually links to its own **detail page** (e.g. `…/u3a_events/<slug>/
 
 ## The rules (do not break)
 1. **Cut-off = the meeting date** (the folder/file date, `YYYYMMDD` → e.g. 11 June 2026). **Delete every entry dated on or before that date**, in all three sections. Then **append** any item on the website dated after the cut-off that isn't already present.
-2. **"Waiting list only" entries get the lesser treatment:** compact — title, date, a short line, "(Waiting list only)", **no image**. Two compact entries can sit side by side (one per cell of a row). Items that are *not* full get a **full** treatment: a downloaded **image** + title + date (with cost) + a couple of short lines.
+2. **Any outing/trip/event that is waiting-list-only must say so** — the text must include "(Waiting list only)" somewhere in its entry. This is mandatory regardless of layout.
+   - The **image is optional** for a waiting-list entry: drop it to save space if you need to (typically paired as a compact two-per-row entry, no image), but you don't have to — a waiting-list item can keep its full image treatment (image + title + date/cost + short lines) with "(Waiting list only)" simply appended as an extra line, if there's room.
+   - **Status is per-item and can change month to month independently of layout.** An item that had a full image treatment last month may have gone waiting-list-only this month (or vice versa) — its current status must always come from a fresh check of the live site this run, never carried over from how the existing doc presents it.
 3. **Combine repeat items into one entry with one image** (e.g. the AI workshops on different dates → a single entry listing both dates, one picture).
 4. **Cancelled items are excluded** (don't list them).
 5. **Maximum two pages.** Verify in Word. **If adding everything would exceed two pages, stop and present the user options** (drop images, compress entries, drop an item) and let them choose — never decide silently. (Adding images is the user's stated preference, but two pages wins.)
@@ -36,12 +38,13 @@ Each item usually links to its own **detail page** (e.g. `…/u3a_events/<slug>/
 1. **Locate the target doc:** `…\By month\<YYYYMMDD> Members Open Meeting\TODO\<YYYYMMDD> MOM Outings etc.docx`. If unsure, ask for the path / meeting date.
 2. **Check it isn't open in Word** — a `~$…docx` lock file next to it means it's open → ask the user to close it (the final overwrite fails otherwise).
 3. **Ask clarifying questions one by one** until ~95% sure (images yes/no, how to handle multi-date or borderline items), then **read the current doc** (the three tables, each row's title/date/status, which rows have images, the rIds in `word\_rels\document.xml.rels`).
-4. **Scrape the three list pages**; for each new/changed item fetch its detail page for full text + the image URL.
-5. **Reconcile:** mark each entry remove / keep / append per the cut-off and rules; decide full vs compact (waiting-list) and which items combine.
-6. **Build a proposed-changes table and pause for confirmation. Never edit before the user approves.** Surface judgement calls (cost TBA, cancelled, combined entries, anything that risks the two-page limit).
-7. **Edit the XML in place** (see Mechanics): remove rows, append new full rows with images, tweak kept rows.
-8. **Verify in Word: exactly ≤ 2 pages, and the file actually opens** (see the 8-hex-digit trap below). Produce a PNG/PDF proof and eyeball that images sit neatly.
-9. **Overwrite the original** `.docx`. Clean up scratch files.
+4. **Scrape the three list pages**; for each new item fetch its detail page for full text + the image URL.
+5. **Reconcile — check the status of every item still in scope, not just new ones.** For every entry that will remain after the cut-off (kept items *and* new items), confirm from the live site whether it currently reads Waiting list only / Full / Cancelled / bookable. Don't infer an item's current status from how it's presented in the existing doc — a "full image" entry from last month may have flipped to waiting-list-only this month, and vice versa. WebFetch's summary of a list page can under-report how many items carry a status flag (e.g. it may surface only one "Waiting list only" and silently drop others) — when a list page mentions any waiting-list status, pull the raw HTML (`Invoke-WebRequest -OutFile`) and grep the text immediately around **each individual item's title**, not just a page-wide count, to see which ones actually carry it.
+6. **Decide layout:** mark each entry remove / keep / append per the cut-off; for anything waiting-list-only, add "(Waiting list only)" to its text (image optional, see rule 2) — for everything else, full treatment as usual. Decide which items combine.
+7. **Build a proposed-changes table and pause for confirmation. Never edit before the user approves.** Surface judgement calls (cost TBA, cancelled, combined entries, anything that risks the two-page limit).
+8. **Edit the XML in place** (see Mechanics): remove rows, append new full rows with images, tweak kept rows.
+9. **Verify in Word: exactly ≤ 2 pages, and the file actually opens** (see the 8-hex-digit trap below). Produce a PNG/PDF proof and eyeball that images sit neatly.
+10. **Overwrite the original** `.docx`. Clean up scratch files.
 
 ## Mechanics (Windows)
 Edit the raw XML (don't regenerate — that loses the header, footer, logo, borders and existing images). Use the `docx` skill's `unpack.py`/`pack.py`.

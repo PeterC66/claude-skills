@@ -4,3 +4,6 @@ node_modules/
 # Python bytecode cache
 __pycache__/
 *.pyc
+
+# Working backups (git history is the backup)
+*.bak

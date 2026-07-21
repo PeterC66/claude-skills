@@ -13,7 +13,7 @@ A town's internal map draws **1–3 key linear features**. They are **config-dri
   |---|---|---|
   | `river` | `#9ec9e8`, w3.4 | the protected blue — keep routes off it |
   | `canal` | `#7fb0d8`, w2.4, dashed `3 1.6` | |
-  | `railway` | `#888`, w1.6, **cross-ties** | ticks drawn perpendicular along the line |
+  | `railway` | **Ordnance-Survey style**: `#333` black casing w1.5 + bold `tieLen:1.6`/`tieEvery:2.6`/`tieWidth:0.7` **sleeper crossbars**; `minSegLen:3.5` | reads unmistakably as a railway (2026-07-20); `tieEvery`/`tieLen`/`tieWidth` overridable per feature. **`minSegLen`** (page mm) drops polyline segments shorter than that before drawing — a multi-track ECML through a station is mapped as parallel ways + short crossover/point stubs whose ties splay into a mess at the junction throat; dropping the stubs leaves the clean through-line (St Neots v2.1). Verified it doesn't gap Huntingdon's line (its rail is long segments). Set `minSegLen:0` to keep every segment. |
   | `road` | `#e6a532` amber, w2.8 | A-roads |
   | `generic` | `#999`, w2.2 | anything else |
 

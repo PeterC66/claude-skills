@@ -155,8 +155,16 @@ verbatim: `build_internal_place_roads.js` runs `pull_roads.js` + `match_routes.j
 the walkshed, then gen_internal draws road-following lines. **No new drawing code** — the
 place data was already the right shape (`match_routes` reads `full.canonical[0].stops`,
 exactly what `gtfs_chains.py` writes). Validated on **both** the sparse case (Tesco Extra
-v1.1 — night-and-day improvement) and the dense case (Town Centre v1.1 — also better, no
-regression), so road-following is now the **default** internal style. Classic
+— night-and-day improvement) and the dense case (Town Centre — also better, no
+regression), so road-following is now the **default** internal style.
+
+**Fit + framing (v1.2, automatic):** the wrapper injects `internalRoads.fitExtra` = all
+drawn stops so a **cross-locality** place (Tesco straddles Eynesbury + St Neots) frames the
+whole walkshed instead of one locality's stops (was clipping routes at the frame), and
+defaults `fitMargin` to 8 mm for road-tail clearance. It also auto-hides gen_internal's
+default "River Great Ouse" label when the walkshed has no river. To sit a map lower on the
+page, freeze an `overrides.json` viewport with a bumped `offY` (Tesco v1.2). See
+`references/gotchas.md`. Classic
 (`build_internal_place.js`) stays the fallback where map-matching yields no line
 (a place with a single served stop). *Remaining phases: one-page flyer (Phase 3); portal
 fold-in (Phase 4).*

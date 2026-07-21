@@ -41,14 +41,27 @@ function run(label, script, args, extraEnv) {
 
 // 1) ensure the config opts into road-following. Prefer a declared internalRoads
 //    block in routes.json (config-driven / portal-friendly); if the place config
-//    hasn't declared one, default it to true so the wrapper still works ad hoc.
+//    hasn't declared one, default it to {} so the wrapper still works ad hoc.
 const rjPath = path.join(DIR, 'routes.json');
 const RJ = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
-if (RJ.internalRoads == null) {
-  RJ.internalRoads = true;
-  fs.writeFileSync(rjPath, JSON.stringify(RJ, null, 2));
-  console.log('internalRoads not in routes.json -> defaulted to true (build dir copy).');
+const ir = (RJ.internalRoads == null || RJ.internalRoads === true) ? {} : RJ.internalRoads;
+// PLACE FIT FIX: gen_internal's internalRoads fit set is the stops sharing the
+// ANCHOR's ATCO locality prefix (town engine assumption: fit the town core, let
+// out-of-core tails run off the frame). A place walkshed routinely spans MORE than
+// one locality — St Neots Tesco sits on the Eynesbury/St Neots boundary
+// (0500HEYNE* + 0500HSTNS*) — so the prefix fit lands on a fraction of the drawn
+// stops and the map fits to that fraction (routes clip at the frame, composition
+// off-centre). The walkshed clip already scoped routes_intown to the close-up, so
+// the right fit for a place is ALL drawn stops: inject them as fitExtra.
+if (ir.fitExtra == null) {
+  const it = JSON.parse(fs.readFileSync(path.join(DIR, 'routes_intown_atco.json'), 'utf8'));
+  const s = new Set(); for (const r in it) for (const a of it[r]) s.add(a);
+  ir.fitExtra = [...s];
+  console.log('fitExtra <- all ' + ir.fitExtra.length + ' drawn stops (place spans localities).');
 }
+if (ir.fitMargin == null) ir.fitMargin = 8;   // room for road tails / terminus arrows
+RJ.internalRoads = ir;
+fs.writeFileSync(rjPath, JSON.stringify(RJ, null, 2));
 
 // 2) OSM road graph over the walkshed bbox (+margin), then map-match the routes.
 run('pull_roads', path.join(TSK, 'pull_roads.js'), [roadMarginKm]);

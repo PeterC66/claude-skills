@@ -61,6 +61,18 @@ Reuses the town skill's `internalRoads` model with **zero new drawing code**. Th
 place (`{directions, canonical:[{name,stops}], all}`). The town skill and the place skill
 share this full-chain format, so the map-matcher is drop-in.
 
+**Place fit fix (automatic):** the town engine fits internalRoads to stops sharing the
+anchor's ATCO locality prefix. A place walkshed routinely spans several localities, so
+`build_internal_place_roads.js` injects `internalRoads.fitExtra` = all drawn stops (from
+`routes_intown_atco.json`) and defaults `fitMargin` to 8 mm — the map then frames the whole
+close-up instead of one locality's stops. Both are overridable in the S3 config.
+
+**Orphan-river fix (automatic):** with no `features` config gen_internal draws a default
+"River Great Ouse" label. `build_internal_place.js` suppresses it via a merged
+`overrides.json` `features.river.hide` when the walkshed has no river geometry and no
+declared features. See `references/gotchas.md` for both, plus the `overrides.json` viewport
+nudge used to sit a map lower on the page.
+
 **Version-stamp gotcha:** gen_internal stamps `· Map v<version>` and prefixes its own `v`.
 The place `routes.json` stores `version:"v1.0"` (leading `v`), which would render `Map vv1.0`.
 The wrapper strips the leading `v` when passing `LEAFLET_VERSION`, so it reads `Map v1.0`.

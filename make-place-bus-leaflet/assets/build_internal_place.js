@@ -31,6 +31,27 @@ for (const [f, empty] of [['osm.json', '{"elements":[]}'], ['osm2.json', '{"elem
   if (!fs.existsSync(p)) fs.writeFileSync(p, empty);
 }
 
+// Orphan-river suppression. With NO `features` config, gen_internal falls back to a
+// default "River Great Ouse" feature (a St Ives inheritance) drawn from river_geo.json.
+// Most places have no river in their walkshed (river_geo.json = []), so only the
+// hardcoded LABEL renders — an orphan with no line. Hide it via overrides.json, unless
+// the place actually declared river/other features or has real river geometry. Merges
+// into any existing overrides (a hand-authored viewport/layout survives).
+(function suppressOrphanRiver() {
+  if (RJ.features && RJ.features.length) return;                 // place declared real features
+  let river = []; try { river = JSON.parse(fs.readFileSync(path.join(DIR, 'river_geo.json'), 'utf8')); } catch (e) {}
+  if (Array.isArray(river) && river.length) return;             // there IS a river to draw
+  const ovPath = path.join(DIR, 'overrides.json');
+  let ov = {}; try { ov = JSON.parse(fs.readFileSync(ovPath, 'utf8')); } catch (e) {}
+  ov.internal = ov.internal || {};
+  ov.internal.features = ov.internal.features || {};
+  if (!ov.internal.features.river) {
+    ov.internal.features.river = { hide: true };
+    fs.writeFileSync(ovPath, JSON.stringify(ov, null, 2));
+    console.log('no river in walkshed -> hid the default "River Great Ouse" label (overrides.json).');
+  }
+})();
+
 const gen = [path.join(DIR, 'gen_internal.js'), path.join(TSK, 'gen_internal.js')]
   .find(f => fs.existsSync(f));
 if (!gen) { console.error('build_internal_place: gen_internal.js not found (set env TSK)'); process.exit(1); }

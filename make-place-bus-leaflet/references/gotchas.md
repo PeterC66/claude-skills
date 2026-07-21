@@ -46,6 +46,34 @@ Root-caused during the Phase-1 build (St Neots Tesco Extra, 2026-07-21). Check h
   and Town Centre v1.1 (dense, no regression). Classic is now only a fallback for a place
   with a **single served stop** (match_routes draws no line, so chords are all you have).
 
+- **Cross-locality place → clipped, off-centre internal map (FIXED, automatic).** The
+  town engine's internalRoads fit set is "stops sharing the ANCHOR's ATCO locality
+  prefix" (fit the town core, let tails run off-frame). A place walkshed often spans
+  MORE than one locality — St Neots Tesco straddles Eynesbury + St Neots
+  (`0500HEYNE*` + `0500HSTNS*`), so the prefix fit landed on 3 of 11 drawn stops and the
+  map fitted to that fraction (routes clipped at the frame, whole map shoved high).
+  `build_internal_place_roads.js` now auto-injects `internalRoads.fitExtra` = **all**
+  drawn stops (routes_intown is already walkshed-clipped, so that's the right extent) and
+  defaults `fitMargin` to 8 mm for road-tail/arrow clearance. Override either in
+  `routes.json` `internalRoads` if you need to.
+
+- **Orphan "River Great Ouse" label (FIXED, automatic).** With NO `features` config,
+  gen_internal synthesises a default river feature (a St Ives inheritance) from
+  `river_geo.json`. Most places have no river in the walkshed (`river_geo.json = []`), so
+  only the hardcoded LABEL rendered — floating with no line. `build_internal_place.js`
+  now writes `overrides.json` `{internal:{features:{river:{hide:true}}}}` when there's no
+  `features` config and no river geometry (merges, so a hand viewport survives). A place
+  that DOES declare a river (Town Centre: `features:['river']` + real `features_geo.json`)
+  is untouched.
+
+- **Map sits too high / want it lower on the page.** After the fit fix the map auto-centres
+  in the map area, but road tails can make it read slightly high. Nudge it with an
+  `overrides.json` frozen viewport: capture the auto fit with `EDITOR_KEYS=1 node gen_internal.js`
+  (prints `VIEWPORT {…offY…}` on stderr), add ~12–16 mm to `offY`, and write
+  `{internal:{viewport:{…}}}` (commit it as an S3 output so `pull S3` carries it into S4).
+  Tesco Extra v1.2 uses `offY+16`. Frozen viewports don't re-fit on a data change — re-author
+  if the route network changes.
+
 - **Road-following version stamp = `Map vv1.0`.** gen_internal stamps `· Map v<version>`
   and adds its own leading `v`; the place `routes.json` `version` is `"v1.0"` (also with a
   `v`), so the naive result is a double-`v`. `build_internal_place_roads.js` strips the

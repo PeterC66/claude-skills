@@ -58,12 +58,18 @@ node "$TSK/stage.js" commit S3 "$S3" --outputs routes.json
 
 ## P4 — generate  (→ S4, versioned)
 ```bash
-S4=$(node "$TSK/stage.js" new S4 --bump major); cd "$S4"
+S4=$(node "$TSK/stage.js" new S4 --bump major); cd "$S4"   # --bump minor for a re-style, same data
 node "$TSK/stage.js" pull S2 .; node "$TSK/stage.js" pull S3 .
-TSK="$TSK" node "$PSK/build_internal_place.js"     # internal.svg (gen_internal unchanged + title fix)
-node "$PSK/gen_external_places.js"                 # external.svg (aggregated spokes)
-node "$TSK/stage.js" commit S4 "$S4" --outputs internal.svg,external.svg
+# internal — ROAD-FOLLOWING (default): pull_roads + match_routes + gen_internal + title fix
+TSK="$TSK" node "$PSK/build_internal_place_roads.js"   # -> roads_geo.json, routes_paths.json, internal.svg
+#   (needs routes_full_atco.json in the dir — comes from `pull S2`; routes.json must have internalRoads,
+#    which the wrapper defaults to true. For a genuinely single-stop place fall back to the classic
+#    build instead: `TSK="$TSK" node "$PSK/build_internal_place.js"` with NO internalRoads key.)
+node "$PSK/gen_external_places.js"                    # external.svg (aggregated spokes)
+node "$TSK/stage.js" commit S4 "$S4" --outputs internal.svg,external.svg,roads_geo.json,routes_paths.json
 ```
+Bump the `version` field in `routes.json` (P3) to match the S4 folder version so the
+internal map's `· Map vN.N` stamp agrees (the road-following build stamps the version).
 
 ## P5 — render  (→ S5)
 ```bash

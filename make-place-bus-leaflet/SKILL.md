@@ -20,8 +20,11 @@ v1.0). Plan of record: `…\Buses\place-bus-leaflet-plan_2026-07-21.md`.
    map of the **bus stops in the immediate walkshed** around the place (default 500 m),
    colour-coded per route, with POI pictograms, a **Services** panel and a **Key**.
    Drawn by the town skill's **`gen_internal.js` unchanged**, fed walkshed-clipped
-   geometry (the schematize-workspace pattern). Runs in **classic mode** (no
-   `internalRoads`) — route lines are straight stop-to-stop; no OSM road-matching.
+   geometry (the schematize-workspace pattern). **Default = road-following** (Phase 2):
+   route lines trace the real street network via the town skill's `internalRoads`
+   pipeline (`pull_roads.js` + `match_routes.js`), driven by `PSK/build_internal_place_roads.js`.
+   **Classic mode** (straight stop-to-stop chords, `PSK/build_internal_place.js`) remains
+   the fallback for places too sparse to map-match (e.g. a single served stop → no line).
 2. **External radial** — `external.jpg/.svg`, `Buses from <place>`: an **aggregated**
    tube-map. The place is the hub ("you are here"); each **spoke is a reachable
    destination** (town / interchange / village), and the small badges on it are
@@ -41,14 +44,16 @@ assets — the shared engine) and **`PSK` = this skill's `assets`**.
 | Piece | Where | Status |
 |---|---|---|
 | `stage.js`, `render.js`, `gtfs_query.py`, `icons.js`, the palettes | `TSK` | **reused verbatim** |
-| `gen_internal.js` (internal renderer) | `TSK` | **reused verbatim** (classic mode) via `PSK/build_internal_place.js` |
+| `gen_internal.js` (internal renderer) | `TSK` | **reused verbatim** — road-following via `PSK/build_internal_place_roads.js`, classic via `PSK/build_internal_place.js` |
+| `pull_roads.js` + `match_routes.js` (road skeleton + map-match) | `TSK` | **reused verbatim** for the road-following internal (Phase 2) |
 | `bbox` MCP (`search_overpass`) for POIs | — | **reused** |
 | Place resolution (geocode a point) | `PSK/resolve_place.py` | **new** (models `bootstrap_town.py`'s geocode) |
 | Standalone chain builder from GTFS | `PSK/gtfs_chains.py` | **new** (offline; no bustimes scrape) |
 | Walkshed clip (stops within radius) | `PSK/derive_walkshed.js` | **new** (models `derive_intown.js`) |
 | Destination aggregation | `PSK/aggregate_destinations.js` | **new** (the core new logic) |
 | External renderer (aggregated spokes) | `PSK/gen_external_places.js` | **new** (models `gen_external_radial.js`) |
-| Internal wrapper (run gen_internal + title) | `PSK/build_internal_place.js` | **new** (models `schematize_internal.js`) |
+| Internal wrapper — classic (gen_internal + title) | `PSK/build_internal_place.js` | **new** (models `schematize_internal.js`) |
+| Internal wrapper — road-following (pull_roads + match_routes + gen_internal) | `PSK/build_internal_place_roads.js` | **new** (Phase 2; wraps the classic wrapper) |
 
 **Never edit the town skill.** If the internal renderer needs a place-only behaviour,
 express it as a config key or in the wrapper, not a `gen_internal.js` edit.
@@ -108,10 +113,16 @@ Station" → "town centre"; relabel raw stop names to town names; mark `limited`
 Present the destination grouping for confirmation. Commit S3.
 
 ### P4 — Generate
-`new S4 --bump major`, pull S2+S3, then:
-`TSK=%TSK% node "%PSK%\build_internal_place.js"` (→ `internal.svg`, runs gen_internal
-unchanged + fixes the title) and `node "%PSK%\gen_external_places.js"` (→ `external.svg`).
-Commit S4.
+`new S4 --bump major` (or `--bump minor` for a re-style at the same data), pull S2+S3, then:
+- **Internal (road-following, default):** `TSK=%TSK% node "%PSK%\build_internal_place_roads.js"`
+  → runs `pull_roads.js` (→ `roads_geo.json`) + `match_routes.js` (→ `routes_paths.json`)
+  over the walkshed, then gen_internal + title fix (→ `internal.svg`). Needs
+  `routes_full_atco.json` in the dir (pulled from S2). Requires `internalRoads` in
+  `routes.json` (the wrapper defaults it to `true` if absent).
+- **Internal (classic fallback):** `TSK=%TSK% node "%PSK%\build_internal_place.js"` — only
+  for places too sparse to map-match; make sure `routes.json` has **no** `internalRoads` key.
+- **External:** `node "%PSK%\gen_external_places.js"` (→ `external.svg`).
+Commit S4 (`--outputs internal.svg,external.svg,roads_geo.json,routes_paths.json`).
 
 ### P5 — Render
 `new S5`, pull S4, `node "%TSK%\render.js" internal.svg internal.jpg` and the same for
@@ -127,22 +138,28 @@ external. **Inspect the JPGs** (open them). Refresh `<placeDir>\_latest\`. Commi
 - **External = reachable places, not routes.** One spoke per destination; all routes to
   it ride as badges. Cluster endpoints geographically, then **draft → human confirms**
   (same "suggest, then ask" rule the town skill uses for features/lenses).
-- **Internal = the town `gen_internal.js` unchanged, classic mode, tight-zoomed** by
-  feeding walkshed-clipped stops. Title fixed by the wrapper, not by editing the town gen.
+- **Internal = the town `gen_internal.js` unchanged, tight-zoomed** by feeding
+  walkshed-clipped stops. Title fixed by the wrapper, not by editing the town gen.
+  **Road-following is the default** (Phase 2, `internalRoads` in `routes.json`); classic
+  straight chords are the fallback for map-match-impossible places.
 - **Config-driven, portal-ready.** No per-place literals in any generator (matches the
   town skill's rule and the portal plan's central/self-serve split: P1/P2 central,
   P3–P5 self-serve). New behaviour → a `routes.json` key.
 - **Palettes:** Tol Bright default (see the town skill). One colour per route across both maps.
 
-## Known Phase-1 limitation (documented, deliberate)
-The classic **straight-line** internal map suits places in a **dense stop network** (a
-town-centre shop, a school in a residential grid — many stops close together). For a
-**sparse edge-of-town** place (a bypass superstore like the Tesco example — essentially
-one shared stop plus a couple of local loops) the straight chords zigzag and the
-composition is unbalanced. Phase 2 (per the plan's decision #3, "two variants") adds a
-**walking-detail / road-following** internal variant — reuse the town skill's
-`internalRoads` pipeline (`pull_roads.js` + `match_routes.js`) or a stops-emphasis
-renderer — to fix this. Ship the tight-zoom version now; note the place's stop density.
+## Phase 2 — road-following internal map (DONE 2026-07-21)
+The Phase-1 classic straight-line internal map zigzagged for **sparse edge-of-town**
+places (the Tesco bypass superstore — one shared stop plus a couple of loops drawn as
+straight chords). Phase 2 fixes this by reusing the town skill's `internalRoads` pipeline
+verbatim: `build_internal_place_roads.js` runs `pull_roads.js` + `match_routes.js` over
+the walkshed, then gen_internal draws road-following lines. **No new drawing code** — the
+place data was already the right shape (`match_routes` reads `full.canonical[0].stops`,
+exactly what `gtfs_chains.py` writes). Validated on **both** the sparse case (Tesco Extra
+v1.1 — night-and-day improvement) and the dense case (Town Centre v1.1 — also better, no
+regression), so road-following is now the **default** internal style. Classic
+(`build_internal_place.js`) stays the fallback where map-matching yields no line
+(a place with a single served stop). *Remaining phases: one-page flyer (Phase 3); portal
+fold-in (Phase 4).*
 
 ## Review (end of every session)
 Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the
@@ -152,5 +169,5 @@ items rather than silently fixing. This step is itself a standing rule.
 ## Reference files (load on demand)
 - **[references/pipeline.md](references/pipeline.md)** — the full P1–P5 command walkthrough with the St Neots Tesco Extra numbers.
 - **[references/aggregation.md](references/aggregation.md)** — the destination-aggregation algorithm, clustering, curation rules.
-- **[references/internal-reuse.md](references/internal-reuse.md)** — how `build_internal_place.js` reuses `gen_internal.js`, the classic-mode fit, the required stub files, and the Phase-2 road-following path.
+- **[references/internal-reuse.md](references/internal-reuse.md)** — how the internal wrappers reuse `gen_internal.js`: classic-mode fit, required stub files, and the shipped **road-following** build (`build_internal_place_roads.js`).
 - **[references/gotchas.md](references/gotchas.md)** — duplicate route numbers, sparse GTFS timing-point trips, radius/fit blow-out, badge-label clipping, Overpass timeouts.

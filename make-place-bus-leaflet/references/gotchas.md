@@ -39,10 +39,18 @@ Root-caused during the Phase-1 build (St Neots Tesco Extra, 2026-07-21). Check h
   time out under load, especially broad `shop`+`way` queries. Narrow the tag list and the
   bbox, or retry. POIs are non-blocking — an empty `osm.json` still renders the map.
 
-- **Edge-of-town superstore = single-stop place.** A bypass Tesco has essentially ONE
-  shared stop plus a couple of residential loops, so the classic internal map is weak
-  there (documented Phase-1 limitation; Phase-2 road-following fixes it — see
-  internal-reuse.md). Dense town-centre/school places render much better in classic mode.
+- **Edge-of-town superstore internal map — use road-following (Phase 2, default).** A
+  bypass Tesco is essentially ONE shared stop plus a couple of loops, so the *classic*
+  straight-chord internal map is weak there. `build_internal_place_roads.js` (the default)
+  makes the lines follow the streets and fixes it — validated on Tesco Extra v1.1 (sparse)
+  and Town Centre v1.1 (dense, no regression). Classic is now only a fallback for a place
+  with a **single served stop** (match_routes draws no line, so chords are all you have).
+
+- **Road-following version stamp = `Map vv1.0`.** gen_internal stamps `· Map v<version>`
+  and adds its own leading `v`; the place `routes.json` `version` is `"v1.0"` (also with a
+  `v`), so the naive result is a double-`v`. `build_internal_place_roads.js` strips the
+  leading `v` from `LEAFLET_VERSION`, giving `Map v1.0`. Also **bump the `version` field**
+  when you `--bump` the S4 folder, or the stamp (config version) and folder version drift.
 
 - **stage.js `--based-on` with spaced paths.** `$(stage.js latest S2 | xargs basename)`
   breaks on the space in `…\St Neots Tesco Extra\`. `--based-on` is optional metadata;

@@ -13,10 +13,16 @@ route). So feeding it a **walkshed-clipped** `routes_intown_atco.json` (from
 the renderer, and none is needed. This is exactly the mechanism the schematic/diagram
 engines rely on; we just clip by distance-from-a-point instead of by locality prefix.
 
-## Classic mode (no `internalRoads`)
-The place `routes.json` deliberately **omits `internalRoads`**, so route lines are drawn
-straight between stops from `atco2ll.json` — no `pull_roads.js`/`match_routes.js`/OSM
-road pipeline. Cheaper, offline, and fine where stops are dense.
+## Two internal styles
+**Road-following (default, `build_internal_place_roads.js`)** — the place `routes.json`
+carries `"internalRoads": true`, so gen_internal draws lines that trace the street
+network (see the road-following section below). This is now the standard build.
+
+**Classic (fallback, `build_internal_place.js`)** — the place `routes.json` **omits
+`internalRoads`**, so route lines are drawn straight between stops from `atco2ll.json` —
+no `pull_roads.js`/`match_routes.js`/OSM road pipeline. Cheaper, offline; keep it only for
+places too sparse to map-match (a single served stop → `match_routes` skips → no line, so
+straight chords are all you can draw).
 
 ## Files the wrapper needs in the run dir
 Required by `gen_internal.js` (hard-parsed): `routes.json`, `atco2ll.json`,
@@ -39,16 +45,43 @@ TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets" \
 Runs `gen_internal.js` with `cwd` = run dir and `LEAFLET_DIR`/`SKILL_ASSETS` set so it
 reads the run dir and resolves `icons.js`. Writes `internal.svg`.
 
-## Phase-2 road-following (the known limitation's fix)
-Classic straight lines zigzag for **sparse edge-of-town** places (few stops, far apart —
-the Tesco example). Two ways to lift the internal map to the town-map quality, per the
-plan's decision #3 ("two variants"):
-1. **Reuse `internalRoads`** — give the place a road-skeleton model: run the town skill's
-   `pull_roads.js` + `match_routes.js` over the walkshed bbox to produce
-   `roads_geo.json` + `routes_paths.json`, add an `internalRoads` block to the place
-   `routes.json`, and gen_internal draws road-following lines (still unchanged). This is
-   the biggest Phase-2 item and needs the OSM road pull the classic mode avoids.
-2. **Stops-emphasis renderer** — a new place-only generator that de-emphasises lines and
-   foregrounds each stop as a labelled marker with route badges ("stand here for the
-   18"). Better for single-stop places; more new code.
-Ship classic now; pick a Phase-2 route per how the place's stop density renders.
+## Road-following internal (Phase 2 — SHIPPED 2026-07-21, `build_internal_place_roads.js`)
+Reuses the town skill's `internalRoads` model with **zero new drawing code**. The wrapper:
+1. runs `%TSK%/pull_roads.js [marginKm]` → `roads_geo.json` (OSM road graph; bbox sized
+   from the walkshed-clipped `routes_intown_atco.json` + margin, default 0.6 km);
+2. runs `%TSK%/match_routes.js` → `routes_paths.json` (map-matches each route's canonical
+   chain onto the graph, Dijkstra between consecutive in-bbox stops);
+3. ensures `routes.json` has `internalRoads` (defaults it to `true` in the build-dir copy
+   if the config omitted it — prefer declaring it in the S3 config for reproducibility);
+4. delegates to `build_internal_place.js` for the gen_internal run + title fix, so the two
+   variants stay DRY.
+
+**Why the place data needs no reshaping:** `match_routes.js` reads
+`FULL[r].canonical[0].stops` (line ~115) — exactly the shape `gtfs_chains.py` writes for a
+place (`{directions, canonical:[{name,stops}], all}`). The town skill and the place skill
+share this full-chain format, so the map-matcher is drop-in.
+
+**Version-stamp gotcha:** gen_internal stamps `· Map v<version>` and prefixes its own `v`.
+The place `routes.json` stores `version:"v1.0"` (leading `v`), which would render `Map vv1.0`.
+The wrapper strips the leading `v` when passing `LEAFLET_VERSION`, so it reads `Map v1.0`.
+Bump the `version` field alongside the S4 folder version so folder and stamp agree.
+
+**Command**
+```bash
+TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets" \
+  node "C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets/build_internal_place_roads.js" [marginKm]
+```
+Needs in the run dir (pulled from S2): `routes.json`, `atco2ll.json`, `atco2name.json`,
+`routes_intown_atco.json`, **`routes_full_atco.json`**, and the osm/river stubs. Writes
+`roads_geo.json`, `routes_paths.json`, `internal.svg`.
+
+**Validated:** Tesco Extra v1.1 (sparse — dramatic improvement over classic chords) and
+St Neots Town Centre v1.1 (dense — also better, no regression). Both matched every route
+with **zero map-match fallbacks**; a single-stop route (69 at Tesco) is correctly skipped
+(no line, still listed in the Services panel).
+
+## Not pursued (Phase-2 alternative)
+A **stops-emphasis renderer** (de-emphasise lines, foreground each stop as a labelled
+marker with route badges — "stand here for the 18") was the other option for genuinely
+single-stop places. Road-following covered the real cases, so this stays unbuilt; revisit
+only if a place has one stop and road-following therefore draws no line.

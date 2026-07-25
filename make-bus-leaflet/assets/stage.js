@@ -27,6 +27,13 @@
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
  *   status                             print a manifest summary
  *   nextver [--bump major|minor]       print the version `new S4` would assign (no side effects)
+ *   stampver [runDir]                  force routes.json "version" to match the run dir's v<N.N>
+ *
+ * THE VERSION STAMP (see "version stamp" section below): the version PRINTED ON
+ * THE MAP comes from routes.json's "version" field, which is separate from the
+ * v<N.N>_<ts> run-dir name. `pull` now keeps them in step automatically and
+ * `commit` refuses a mismatch, so a branched build can no longer ship stamped
+ * with the previous version.
  */
 const fs = require('fs');
 const path = require('path');
@@ -109,6 +116,62 @@ function computeVersion(m, bump) {
   return `${cur[0]}.${cur[1] + 1}`;             // default: minor
 }
 
+/* ---------------------------------------------------------------- version stamp
+ * The version PRINTED ON THE MAP is a data field — routes.json "version", read by
+ * gen_internal.js (RJ.version, unless LEAFLET_VERSION overrides) and by
+ * gen_external_*.js (D.version). The v<N.N>_<ts> run-dir name is manifest
+ * metadata. Nothing tied the two together, so branching a new version from an
+ * older routes.json shipped maps stamped with the PREVIOUS version (Beaconsfield
+ * v1.1 printed "v1.0"; corrected by hand at the time).
+ *
+ * The fix lives here, not in a generator: the generators must keep reading a data
+ * field (the portal renders from a data folder whose name carries no version, and
+ * changing how they read it would alter every town's output). stage.js owns the
+ * folder name, so stage.js is what can keep the field honest.
+ *
+ * Formatting is PRESERVED, never normalised — only the numeric part is rewritten:
+ *   towns store "1.1"   ·  places store "v1.0"  ·  a suffix (" · Summer 2026") is possible
+ * and the file is edited surgically so the S3 and S4 copies stay byte-comparable.
+ */
+const VER_DIR_RE = /^v(\d+\.\d+)_/;
+const VER_FIELD_RE = /^(v?)(\d+\.\d+)(.*)$/s;
+
+function versionOfRunDir(dir) {
+  const m = VER_DIR_RE.exec(path.basename(path.resolve(dir)));
+  return m ? m[1] : null;
+}
+
+// Set routes.json's "version" numeric part to `want`, keeping any v-prefix/suffix.
+// Returns { status, from, to, file }:
+//   no-dir-version | no-file | no-field | ok | updated | mismatch (check mode only)
+function syncVersionField(runDir, { check = false } = {}) {
+  const want = versionOfRunDir(runDir);
+  if (!want) return { status: 'no-dir-version' };
+  const file = path.join(path.resolve(runDir), 'routes.json');
+  if (!fs.existsSync(file)) return { status: 'no-file', want, file };
+
+  const raw = fs.readFileSync(file, 'utf8');
+  let obj;
+  try { obj = JSON.parse(raw); } catch (e) { die(`routes.json in ${runDir} is not valid JSON — ${e.message}`); }
+  const from = obj.version;
+  if (from === undefined || from === null || from === '') return { status: 'no-field', want, file };
+
+  const m = VER_FIELD_RE.exec(String(from));
+  const to = m ? `${m[1]}${want}${m[3]}` : want;   // unparseable ⇒ replace wholesale
+  if (String(from) === to) return { status: 'ok', from, to, want, file };
+  if (check) return { status: 'mismatch', from, to, want, file };
+
+  // Surgical replacement of the first "version": "..." pair — keeps the rest of
+  // the file byte-for-byte, so a diff against the S3 copy shows only this line.
+  const patched = raw.replace(/"version"(\s*):(\s*)"(?:[^"\\]|\\.)*"/, (mm, s1, s2) =>
+    `"version"${s1}:${s2}${JSON.stringify(to)}`);
+  let ok = false;
+  try { ok = JSON.parse(patched).version === to; } catch { ok = false; }
+  // Fall back to a full re-serialise if the surgical edit didn't land cleanly.
+  fs.writeFileSync(file, ok ? patched : JSON.stringify({ ...obj, version: to }, null, 2) + '\n');
+  return { status: 'updated', from, to, want, file };
+}
+
 function main() {
   const [cmd, ...rest0] = process.argv.slice(2);
   const { f, rest } = parseFlags(rest0);
@@ -162,6 +225,24 @@ function main() {
     const dest = path.resolve(rest[1] || process.cwd());
     copyInto(path.join(townDir, r.dir), dest);
     console.log(`pulled ${st} (${r.id}) -> ${dest}`);
+    // Keep the on-map version stamp in step with the run dir it just landed in.
+    // Silent when there is nothing to do (unversioned dest, no routes.json, or
+    // already correct) — it should only speak when it changed something.
+    const sv = syncVersionField(dest);
+    if (sv.status === 'updated') console.log(`  version stamp: "${sv.from}" -> "${sv.to}" (from run dir v${sv.want})`);
+    else if (sv.status === 'no-field') console.log(`  note: routes.json has no "version" field — the map will print no version stamp`);
+    return;
+  }
+
+  if (cmd === 'stampver') {
+    const dir = path.resolve(rest[0] || process.cwd());
+    const sv = syncVersionField(dir);
+    if (sv.status === 'no-dir-version') die(`${path.basename(dir)} is not a versioned run dir (expected v<N.N>_<ts>)`);
+    if (sv.status === 'no-file') die('no routes.json in ' + dir);
+    if (sv.status === 'no-field') die('routes.json has no "version" field to stamp — add one, then re-run');
+    console.log(sv.status === 'updated'
+      ? `version stamp: "${sv.from}" -> "${sv.to}"`
+      : `version stamp already correct ("${sv.to}")`);
     return;
   }
 
@@ -175,6 +256,21 @@ function main() {
     if (f['based-on']) for (const pair of String(f['based-on']).split(';')) { const [k, v] = pair.split('='); if (k) basedOn[k.trim()] = (v || '').trim(); }
     const rec = { id, dir: relDir, at: isoNow(), outputs };
     if (VERSIONED.has(st)) { const v = id.match(/^v(\d+\.\d+)_/); rec.version = v ? v[1] : null; }
+
+    // Guard: never record a build whose printed version stamp disagrees with its
+    // version. By commit time the SVGs are already drawn, so this is a stop sign,
+    // not a repair — fix routes.json and re-run the generators.
+    if (VERSIONED.has(st)) {
+      const sv = syncVersionField(runDir, { check: true });
+      if (sv.status === 'mismatch' && !f['force-version']) {
+        die(`version stamp mismatch in ${id}\n`
+          + `  routes.json "version" = ${JSON.stringify(sv.from)} but this run is v${sv.want}\n`
+          + `  The maps in this folder are stamped ${JSON.stringify(sv.from)} — regenerating them is the fix:\n`
+          + `    node "%SK%\\stage.js" stampver "${runDir}"   then re-run the generators (and re-render for S5)\n`
+          + `  Override with --force-version only if the stamp is deliberately different.`);
+      }
+      if (sv.status === 'no-field') console.log(`  note: routes.json has no "version" field — maps carry no version stamp`);
+    }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;
     if (f.note) rec.note = String(f.note);
     sx.runs = sx.runs.filter(r => r.id !== id); // replace if re-committing same dir

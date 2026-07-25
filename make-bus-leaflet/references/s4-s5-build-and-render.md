@@ -7,11 +7,11 @@ versioning, and the resume-routing table. `%SK%` = the skill's `assets` folder.
 ## Stage 4 — Generate (versioned)
 1. Decide the bump: **`--bump major`** if you produced a new S1/S2/S3 run this time (data changed), else **`--bump minor`** (visual-only re-gen). First ever build → 1.0 automatically.
 2. `S4=stage.js new S4 --bump <major|minor>`; `cd "$S4"`.
-3. Assemble inputs: `stage.js pull S2 .` then `stage.js pull S3 .` (brings the data jsons + routes.json + the edited generators into `$S4`).
+3. Assemble inputs: `stage.js pull S2 .` then `stage.js pull S3 .` (brings the data jsons + routes.json + the edited generators into `$S4`). **`pull` also re-stamps `routes.json`'s `"version"` to this run's version** — it prints `version stamp: "1.0" -> "1.1"` when it changes something. Do the pulls *before* generating, or the maps carry the previous version (`commit` will then refuse the run — see step 7).
 4. `node gen_internal.js` → `internal.svg`; `node gen_external.js` → `external.svg`.
 5. **If `routes.json` has `internalSchematic{}`** (the opt-in tube-map-style third image): `node "%SK%\schematize_internal.js"` → `internal-schematic.svg` (+ a `schematic/` workspace subfolder with `debug-skeleton.svg`). Skip entirely when the key is absent. See [schematic-engine.md](schematic-engine.md).
 6. **If `routes.json` has `internalDiagram{}`** (the opt-in fully-abstract tube-map DIAGRAM): `node "%SK%\diagram_internal.js"` → `internal-diagram.svg` (+ a `diagram/` workspace with `debug-skeleton.svg` + `solved-nodes.json`). Honours S3's `diagram-layout.json` (pins) and `diagram-overrides.json` when present. Skip when the key is absent. See [diagram-engine.md](diagram-engine.md).
-7. `stage.js commit S4 "$S4" --outputs internal.svg,external.svg[,internal-schematic.svg][,internal-diagram.svg] --based-on "S2=$(basename $S2dir);S3=$(basename $S3dir)"`.
+7. `stage.js commit S4 "$S4" --outputs internal.svg,external.svg[,internal-schematic.svg][,internal-diagram.svg] --based-on "S2=$(basename $S2dir);S3=$(basename $S3dir)"`. It **refuses a version-stamp mismatch** (`routes.json` `"version"` ≠ the run's `v<N.N>`), because the SVGs are already drawn by this point: run `stage.js stampver "$S4"`, re-run the generators, then commit. `--force-version` overrides only if the stamp is deliberately different.
 
 ## Stage 5 — Render (same version as S4)
 1. `S5=stage.js new S5` (inherits S4's version); `cd "$S5"`.

@@ -43,6 +43,9 @@ Let `SK=C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`. Run `node "%SK%\
 - `latest <S1..S6>` — print the latest run dir of a stage (for resuming).
 - `commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]` — record the run in the manifest and mark it latest. For S4/S5 the version is parsed from the dir name.
 - `status` / `nextver [--bump …]` — summarise the manifest / preview the next version.
+- `stampver [runDir]` — force that run's `routes.json` `"version"` to match its `v<N.N>_<ts>` folder name. Rarely needed by hand (see below).
+
+**The version stamp is kept honest automatically** (2026-07-25). The version *printed on the map* is a data field — `routes.json` `"version"` — separate from the folder name, and branching a new build from an older `routes.json` used to ship maps stamped with the previous version (Beaconsfield v1.1 printed v1.0). Now: **`pull` rewrites the field to match the versioned run dir it lands in** (reporting when it changes something), and **`commit S4`/`S5` refuses a mismatch** rather than recording a build whose maps print the wrong number. Existing formatting is preserved, not normalised — towns store `"1.1"`, places store `"v1.0"`, and any suffix survives; only the numeric part is rewritten. Override with `--force-version` only if a stamp is deliberately different.
 
 **Resuming from any stage:** read `manifest.json` (or `stage.js status`), then start at the stage you want — `pull` the prior stages' outputs into the new run dir and proceed. E.g. a visual-only re-render: `new S4 --bump minor`, `pull S2`, `pull S3`, run generators, `commit`; then `new S5`, `pull S4`, render, `commit`.
 

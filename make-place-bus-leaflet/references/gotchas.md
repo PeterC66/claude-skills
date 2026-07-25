@@ -77,8 +77,18 @@ Root-caused during the Phase-1 build (St Neots Tesco Extra, 2026-07-21). Check h
 - **Road-following version stamp = `Map vv1.0`.** gen_internal stamps `· Map v<version>`
   and adds its own leading `v`; the place `routes.json` `version` is `"v1.0"` (also with a
   `v`), so the naive result is a double-`v`. `build_internal_place_roads.js` strips the
-  leading `v` from `LEAFLET_VERSION`, giving `Map v1.0`. Also **bump the `version` field**
-  when you `--bump` the S4 folder, or the stamp (config version) and folder version drift.
+  leading `v` from `LEAFLET_VERSION`, giving `Map v1.0`. ~~Also **bump the `version` field**
+  when you `--bump` the S4 folder~~ — **no longer manual (2026-07-25):** `stage.js pull` now
+  rewrites the field to match the versioned run dir, and `stage.js commit S4|S5` refuses a
+  mismatch. It preserves the place convention's leading `v` (`"v1.0"` → `"v1.2"`), so the
+  double-`v` fix above is unaffected. See the town skill's `references/s3-config.md`.
+
+- **`LEAFLET_VERSION` only reaches the INTERNAL map.** `build_internal_place_roads.js` passes it
+  to `gen_internal.js`, but `gen_external_places.js` reads `routes.json` `version` directly — so
+  using the env var as a version workaround stamps the two sheets **differently**. That is exactly
+  what happened to `St Neots Tesco Extra v1.1` (internal `Map v1.1`, external `v1.0 · Summer 2026`,
+  `routes.json` `"v1.0"`) — a superseded run, left as built. Since the field is now kept in step
+  automatically, **set the version in `routes.json`, not in the environment.**
 
 - **stage.js `--based-on` with spaced paths.** `$(stage.js latest S2 | xargs basename)`
   breaks on the space in `…\St Neots Tesco Extra\`. `--based-on` is optional metadata;

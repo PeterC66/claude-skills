@@ -142,3 +142,30 @@ the Cambridgeshire GTFS region):
   (`–`, `·`, `—` in route descriptions) are read as `â€"`/`Â·` and written back as mojibake
   that then bakes into the SVG/JPG panel text. Edit config with the Edit/Write tools (UTF-8),
   or if scripting, pass `encoding='utf-8'` on BOTH open() calls and `ensure_ascii=False`.
+
+---
+Added during the community-bus-maps **portal integration** of the place engine
+(2026-07-25 — the portal now vendors this engine; see below):
+
+- **Re-render after ANY `routes.json` edit, or the S5 SVG goes stale relative to its
+  config.** Several worked examples had **drifted**: their shipped `internal.svg`/`external.svg`
+  no longer matched the `routes.json` sitting beside them, because config was hand-tweaked
+  after the last render without re-running S4/S5. Beaconsfield Waitrose was the clearest —
+  the shipped SVG had a `mapNotes` school-services line, a `placeShort`-length title, and a
+  rail label at `y=20`, while its stored `routes.json` had **no `mapNotes`**, a *longer*
+  `placeTitle`, and `y=18`. This isn't cosmetic: anything that renders **from the stored
+  `routes.json`** (a re-render, an audit, or the portal importer below) reproduces the
+  **config**, not the stale picture. After editing config, re-run S4→S5 (`--bump`) so the
+  folder is internally self-consistent, then eyeball the JPG.
+
+- **The portal (`community-bus-maps`) vendors this engine and renders from `routes.json`.**
+  Place render dirs carry NO generators (the town skill copies its generators into each
+  town's render dir; this skill doesn't), so the portal keeps a vendored copy in
+  `engine/place/` (`gen_internal.js` + `gen_external_places.js` + a `gen_internal_place.js`
+  wrapper doing the title fix + `v`-strip) and copies it into each place map's `data/` at
+  import. A place's expert framing — the `overrides.json` this skill writes for river-hide
+  (and any frozen viewport) — becomes the portal map's `base-overrides.json`, merged UNDER
+  the customer's colour/POI edits. Consequence for THIS skill: the portal's `v1.0` baseline
+  is whatever the **current** `routes.json` produces — so a drifted payload (above) imports as
+  the *config's* map, not the stale shipped one. Keep them in sync. (`npm run verify:place`
+  proves the vendored engine reproduces a skill-rendered leaflet byte-for-byte.)

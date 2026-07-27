@@ -26,15 +26,15 @@ Scrape with WebFetch for the overview, but WebFetch truncates quotes to ~125 cha
 8. **Leave unchanged:** the header row (`Date` / `Subject and Speaker`), the page header/footer, and the "All Members Open Meetings are held at the Corn Exchange…" paragraph below the table.
 
 ## Process
-1. **Locate the target doc.** It's `…\By month\<YYYYMMDD> Members Open Meeting\TODO\<…> MOM Open Meetings .docx` (folder date = that month's meeting). If unsure, ask the user for the path or meeting date.
+1. **Locate the target doc.** It's `…\By month\<YYYYMMDD> Members Open Meeting\<YYYYMMDD> MOM Open Meetings .docx` — in the **meeting folder itself**, alongside the other two handouts (note the space before `.docx`). The folder's `TODO\` subfolder is the user's own "still outstanding" tray for *other* MOM documents (the Checklist, the Open-Close script); the handout is not in there. Folder date = that month's meeting. If unsure, ask the user for the path or meeting date.
 2. **Check it isn't open in Word** (a `~$…docx` lock file next to it means it's open → ask the user to close it, or the final overwrite fails).
 3. **Read the current doc**: the existing rows (dates, titles, bylines, summaries), each cell's `w:shd` fill, and which rows have images.
 4. **Scrape the website**: the list page for order + dates + image URLs, then each remaining/added meeting's detail page for full text and speaker.
 5. **Work out the four**: drop the held meeting; the next four by date become the table. Confirm which colour each row gets so shading still alternates.
 6. **Build a proposed-changes table** (remove / keep-refresh / append, with the trimmed summary wording for each) and **always pause for confirmation. Never edit before the user approves.** Surface judgement calls (e.g. how to phrase the AGM row, how aggressively to trim a long talk).
-7. **Edit the doc in place** (see Mechanics): remove the held row, refresh the kept rows, append the new row(s), embed any new image(s).
-8. **Pack and verify** the file re-opens cleanly; ask the user to eyeball it in Word (no local preview — see Mechanics).
-9. **Overwrite the original** `.docx`. Clean up scratch files.
+7. **Edit the XML in place** (see Mechanics): remove the held row, refresh the kept rows, append the new row(s), embed any new image(s).
+8. **Pack to a test file, then test-open it in Word** (see Mechanics). That open is what proves the added `w14:paraId`s are valid 8-hex and the file isn't corrupt — a clean re-unpack proves nothing.
+9. **Overwrite the original** `.docx` from the test file, once the `~$` lock is gone. Then ask the user to eyeball it in Word. Clean up scratch files.
 
 ## Mechanics (Windows)
 Edit the raw XML (don't regenerate the document — that would lose the header, footer, logo, borders and existing images). Use the `docx` skill's `unpack.py`/`pack.py`.
@@ -44,18 +44,20 @@ Edit the raw XML (don't regenerate the document — that would lose the header, 
 - **Unpack → edit → pack:**
   - `python "C:\Claude\docx_scripts\office\unpack.py" "<doc>" "C:\Claude\mom_unpacked"`
   - Edit `C:\Claude\mom_unpacked\word\document.xml`.
-  - `PYTHONUTF8=1` then `python "C:\Claude\docx_scripts\office\pack.py" "C:\Claude\mom_unpacked" "<doc>" --original "<doc>" --validate false`
+  - `PYTHONUTF8=1 python "C:\Claude\docx_scripts\office\pack.py" "C:\Claude\mom_unpacked" "C:\Claude\mom_test.docx" --original "<doc>" --validate false` — pack to a **test file first, never straight over the original**. The original is the only copy of a document you may have half-edited; overwrite it (process step 9) only once the test-open below succeeds.
   - **Use `--validate false`**: validation fails on a *pre-existing* broken `attachedTemplate` reference (`C:\Templates\Word\u3a\…dotx`) and on a cp1252 crash printing a "→" char. Both are harmless and unrelated to the edits. `PYTHONUTF8=1` avoids the encoding crash.
 - **Removing a row:** delete the whole `<w:tr …>…</w:tr>`. Each row carries a unique `w14:paraId`, so a regex like `\s*<w:tr [^>]*<paraId>.*?</w:tr>` (DOTALL) removes it cleanly via a one-line `python -c`.
 - **Date cell:** bold "Thursday N", then the ordinal ("th"/"st"/"rd") as a **superscript** `<w:r>` (`<w:vertAlign w:val="superscript"/>`), then " Month". The image follows as an inline `<w:drawing>` in the same paragraph.
 - **Images:** save to `word\media\imageN.jpeg` (or `.png`); add `<Relationship Id="rIdNN" Type="…/image" Target="media/imageN.jpeg"/>` to `word\_rels\document.xml.rels` (use a free rId, e.g. one past the highest); `jpeg`/`png` are already declared in `[Content_Types].xml`. Size the inline `<wp:extent>`/`<a:ext>` ~`cx="1856740"` (≈2") wide with `cy` = width × (imageHeight/imageWidth) to keep aspect. Download via PowerShell `Invoke-WebRequest -OutFile`.
 - **Cell shading:** `<w:shd w:val="clear" w:color="auto" w:fill="FFF4CC"/>` (cream) or `…fill="E6F2FF"/>` (blue), on both `<w:tc>` of a row.
 - **Quotes/ampersand:** match the existing rows' plain ASCII quotes; escape `&` as `&amp;` in `<w:t>`.
-- **No local preview:** LibreOffice isn't installed and the skill's `soffice` wrapper is Unix-only, so there's no PDF/image proof — re-unpack the packed file to confirm it parses, then ask the user to open it in Word and eyeball the layout (especially that images sit neatly in their cells).
+- **⚠️ The 8-hex-digit trap:** every `w14:paraId`, `wp14:anchorId` and `wp14:editId` you add **must be exactly 8 hex digits**. lxml/`unpack.py` parse longer values happily, so a clean re-unpack is **not** proof — but **Word will refuse to open the file** ("Word experienced an error trying to open the file"). This skill appends rows and embeds images on every run, which is exactly when it bites. (Same trap, same wording, in `update-outings`.)
+- **Test-open in Word is the real check.** LibreOffice isn't installed and the skill's `soffice` wrapper is Unix-only, so there's no PDF/image proof from the packed file alone. Open the **test** docx read-only over COM:
+  `$word = New-Object -ComObject Word.Application; $doc = $word.Documents.Open("C:\Claude\mom_test.docx",$false,$true)` — **a successful open is your proof the 8-hex IDs are valid**; `$doc.ComputeStatistics(2)` gives the page count. `$doc.Close()` then `$word.Quit()` afterwards, or the lock blocks the overwrite. Only then copy the test file over the original, and still ask the user to eyeball it in Word (especially that images sit neatly in their cells).
 
 ## What the user must do each month
 Tell the user these steps (they own them):
-1. **Create this month's file**: put the MOM Open Meetings `.docx` for the upcoming meeting in its `…\<YYYYMMDD> Members Open Meeting\TODO\` folder (or point Claude at the file to use).
+1. **Create this month's file**: put the MOM Open Meetings `.docx` for the upcoming meeting in its `…\<YYYYMMDD> Members Open Meeting\` folder, beside the other two handouts (or point Claude at the file to use).
 2. **Close it in Word** before starting — otherwise the final overwrite is blocked.
 3. **Run the Claude session from inside `C:\u3a St Ives\`** so this skill and the folder's `.claude/settings.json` load and file operations don't prompt as "outside the working folder".
 4. **Invoke** `/update-monthly-meetings` (or just ask to "update the monthly meetings handout").

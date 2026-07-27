@@ -17,6 +17,7 @@ Region-agnostic: --db / $CAMBS_GTFS_DB picks the dataset; --buses-root picks whe
 town folders live; --region only tunes the geocode + report.
 """
 import argparse, os, sys, subprocess, json, shutil
+import gtfs_regions as greg
 
 HERE=os.path.dirname(os.path.abspath(__file__))
 
@@ -69,7 +70,24 @@ def main():
     try:
         tp=json.load(open(tp_path,encoding="utf-8"))
         if a.town not in tp and prefix:
-            tp[a.town]={"prefixes":[prefix]}
+            entry={"prefixes":[prefix]}
+            # Record the region whenever this town's dataset is NOT the default one. Without it
+            # the monthly refresh diffs the town against the default region's data, matches
+            # nothing, and reports every one of its routes as withdrawn - which is exactly what
+            # happened to Beaconsfield for a month.
+            gdir=os.path.dirname(a.db)
+            regions,default=greg.load(gdir)
+            here=os.path.normcase(os.path.abspath(a.db))
+            match=[n for n,r in regions.items()
+                   if r.get("db") and os.path.normcase(os.path.abspath(r["db"]))==here]
+            if match and match[0]!=default:
+                entry["region"]=match[0]
+                print(f"  region: {match[0]} (non-default dataset)")
+            elif not match:
+                print(f"  WARNING: {os.path.basename(a.db)} is not registered in regions.json. "
+                      f"Add it there and set \"region\" on {a.town} in town_prefixes.json, or the "
+                      f"monthly refresh cannot check this town.")
+            tp[a.town]=entry
             json.dump(tp,open(tp_path,"w",encoding="utf-8"),indent=1,ensure_ascii=False)
             print(f"registered {a.town} in {tp_path}")
         else:

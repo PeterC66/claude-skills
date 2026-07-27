@@ -34,11 +34,18 @@ NOT covered (documented limitations):
   * Minute-level retimes with the same stops/days/trip-count aren't detected: the shared
     DB doesn't store departure times (add departure_time to gtfs_build to get that).
 
+Multi-region: each town is mined from its own region's dataset, resolved through
+`_gtfs/town_prefixes.json` -> `_gtfs/regions.json` (see gtfs_regions.py). A town
+whose dataset isn't built is reported as NOT CHECKED rather than mined from a
+dataset that cannot contain it.
+
 Usage:
-  python gtfs_upcoming.py [--db <cambridgeshire.sqlite>] [--root "<Buses folder>"] [--ahead 90]
+  python gtfs_upcoming.py [--root "<Buses folder>"] [--ahead 90] [--town "<Town>"]
+                          [--db <one dataset for every town>]
 Writes _gtfs/upcoming/snapshot_<date>.json, upcoming-report_<date>.md, upcoming-summary.txt.
 """
 import os, sys, json, glob, argparse, datetime, hashlib, sqlite3
+import gtfs_regions as greg
 
 DOW = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
@@ -273,30 +280,22 @@ def main():
     a = ap.parse_args()
     single = a.town
     gdir = os.path.join(a.root, "_gtfs")
-    db = a.db or os.path.join(gdir, "cambridgeshire.sqlite")
     updir = os.path.join(gdir, "upcoming"); os.makedirs(updir, exist_ok=True)
     prefixes_cfg = json.load(open(os.path.join(gdir, "town_prefixes.json"), encoding="utf-8"))
-    info = {}
-    try:
-        info = json.load(open(os.path.join(gdir, "feed_info.json"), encoding="utf-8"))
-    except Exception:
-        pass
-    fi = info.get("feed_info", {})
-    feed_start = fi.get("feed_start_date") or "00000000"
-    feed_end = fi.get("feed_end_date") or "99999999"
+    groups, skipped = greg.plan(gdir, prefixes_cfg, a.db)
     today = datetime.date.today().strftime("%Y%m%d")
     today_iso = datetime.date.today().isoformat()
 
-    con = sqlite3.connect(db); con.row_factory = sqlite3.Row; cur = con.cursor()
     prev_path, prev = prev_snapshot(updir, today_iso)
 
-    snapshot = {"generated": today_iso, "feed_built": info.get("built"), "feed_start": feed_start,
-                "feed_end": feed_end, "ahead_days": a.ahead, "towns": {}}
+    snapshot = {"generated": today_iso, "ahead_days": a.ahead, "regions": {}, "towns": {}}
     lines = ["# Upcoming bus changes — get ahead of the game",
-             f"_Feed built {info.get('built','?')} (valid {d2iso(feed_start)}–{d2iso(feed_end)}); "
-             f"report {today_iso}; look-ahead {a.ahead}d; "
-             f"{'compared with ' + os.path.basename(prev_path) if prev_path else 'first run — no previous snapshot to diff'}._",
-             "",
+             f"_Report {today_iso}; look-ahead {a.ahead}d; "
+             f"{'compared with ' + os.path.basename(prev_path) if prev_path else 'first run — no previous snapshot to diff'}. "
+             f"Datasets used:_", ""]
+    for g in groups:
+        lines.append(f"- {greg.feed_line(g)}")
+    lines += ["",
              "Mined from the BODS feed we already download. Operators must publish changes ≥42 days "
              "ahead, so future-dated services here are advance notice. Community/pre-book services "
              "(VL14, FACT…) are not in BODS. See the script header for what isn't detected.", ""]
@@ -304,48 +303,68 @@ def main():
     total = 0
     towns_hit = []
 
-    for town, cfg in prefixes_cfg.items():
-        if town.startswith("_"):
-            continue
-        if single and town.lower() != single.lower():
-            continue
-        town_dir = os.path.join(a.root, town)
-        if not os.path.isdir(town_dir):
-            continue
-        prefixes = cfg.get("prefixes")
-        near = tuple(cfg["near"]) if cfg.get("near") else None
-        routes = build_town(cur, feed_start, prefixes, near)
-        snapshot["towns"][town] = routes
-        prev_routes = (prev or {}).get("towns", {}).get(town) if prev else None
-        fwd = forward_findings(routes, prev_routes, feed_start, today, a.ahead)
-        dif = diff_findings(routes, prev_routes) if prev_routes is not None else []
-        # actionable = firm upcoming changes; ENDS? is lower-confidence "verify"
-        findings = fwd + dif
-        actionable = [f for f in findings if f[0] not in ("ENDS?",)]
-        if actionable:
-            towns_hit.append(town); total += len(actionable)
-        nverify = len([x for x in fwd if x[0] == "ENDS?"])
-        nact = len(actionable)
-        verdict = "nothing upcoming" if (nact == 0 and nverify == 0) else \
-            (", ".join(([f"{nact} upcoming"] if nact else []) + ([f"{nverify} to verify"] if nverify else [])))
-        summary.append(f"  {town}: {verdict}")
-        lines.append(f"## {town} — {verdict}")
-        if not findings:
-            lines.append("- No upcoming changes detected in the current feed.")
-        order = {"NEW": 0, "CHANGE": 1, "APPEARED": 2, "WITHDRAWN": 3,
-                 "OPERATOR": 4, "DAYS": 5, "TIMETABLE": 6, "ENDS?": 7}
-        for f in sorted(findings, key=lambda x: (order.get(x[0], 9), x[1])):
-            if len(f) == 4:
-                tag, sn, _dt, msg = f
-            else:
-                tag, sn, msg = f
-            lines.append(f"- **[{tag}] {sn}** — {msg}")
+    for g in groups:
+        gfi = (g["feed"] or {}).get("feed_info", {})
+        feed_start = gfi.get("feed_start_date") or "00000000"
+        snapshot["regions"][g["region"]] = {
+            "db": os.path.basename(g["db"]), "feed_built": (g["feed"] or {}).get("built"),
+            "feed_start": feed_start, "feed_end": gfi.get("feed_end_date") or "99999999"}
+        con = sqlite3.connect(g["db"]); con.row_factory = sqlite3.Row; cur = con.cursor()
+        try:
+            for town, cfg in g["towns"]:
+                if single and town.lower() != single.lower():
+                    continue
+                town_dir = os.path.join(a.root, town)
+                if not os.path.isdir(town_dir):
+                    continue
+                prefixes = cfg.get("prefixes")
+                near = tuple(cfg["near"]) if cfg.get("near") else None
+                routes = build_town(cur, feed_start, prefixes, near)
+                snapshot["towns"][town] = routes
+                prev_routes = (prev or {}).get("towns", {}).get(town) if prev else None
+                fwd = forward_findings(routes, prev_routes, feed_start, today, a.ahead)
+                dif = diff_findings(routes, prev_routes) if prev_routes is not None else []
+                # actionable = firm upcoming changes; ENDS? is lower-confidence "verify"
+                findings = fwd + dif
+                actionable = [f for f in findings if f[0] not in ("ENDS?",)]
+                if actionable:
+                    towns_hit.append(town); total += len(actionable)
+                nverify = len([x for x in fwd if x[0] == "ENDS?"])
+                nact = len(actionable)
+                verdict = "nothing upcoming" if (nact == 0 and nverify == 0) else \
+                    (", ".join(([f"{nact} upcoming"] if nact else []) + ([f"{nverify} to verify"] if nverify else [])))
+                summary.append(f"  {town}: {verdict}")
+                lines.append(f"## {town} — {verdict}")
+                lines.append(f"_region {g['region']}_")
+                if not findings:
+                    lines.append("- No upcoming changes detected in the current feed.")
+                order = {"NEW": 0, "CHANGE": 1, "APPEARED": 2, "WITHDRAWN": 3,
+                         "OPERATOR": 4, "DAYS": 5, "TIMETABLE": 6, "ENDS?": 7}
+                for f in sorted(findings, key=lambda x: (order.get(x[0], 9), x[1])):
+                    if len(f) == 4:
+                        tag, sn, _dt, msg = f
+                    else:
+                        tag, sn, msg = f
+                    lines.append(f"- **[{tag}] {sn}** — {msg}")
+                lines.append("")
+        finally:
+            con.close()
+
+    # Towns deliberately not mined, rather than mined from a dataset that cannot contain them.
+    if skipped and not single:
+        lines.append("## Not checked — dataset unavailable")
+        for town, reason in skipped:
+            lines.append(f"- **{town}** — {reason}")
+            summary.append(f"  {town}: NOT CHECKED ({reason})")
         lines.append("")
 
     if single:
         # Ad-hoc gate check: print this town's section, write nothing (don't disturb the monthly
         # snapshot cadence or the diff baseline).
-        con.close()
+        blocked = [r for t, r in skipped if t.lower() == single.lower()]
+        if blocked:
+            print(f"Town '{single}' could not be checked: {blocked[0]}")
+            return
         if not any(town.lower() == single.lower() for town in prefixes_cfg if not town.startswith("_")):
             print(f"Town '{single}' is not in town_prefixes.json - nothing to check.")
             return
@@ -361,9 +380,10 @@ def main():
         headline = "Upcoming bus changes: nothing to prepare."
     else:
         headline = f"Upcoming bus changes: {total} item(s) coming in {', '.join(towns_hit)}."
+    if skipped:
+        headline += f" {len(skipped)} town(s) NOT checked ({', '.join(t for t, _ in skipped)})."
     with open(os.path.join(updir, "upcoming-summary.txt"), "w", encoding="utf-8") as f:
         f.write(headline + "\n" + "\n".join(s.strip() for s in summary) + "\nREPORT=" + rep_path + "\n")
-    con.close()
     print("Upcoming changes per town:")
     print("\n".join(summary))
     print("\n" + headline)

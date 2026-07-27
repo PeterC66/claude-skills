@@ -34,7 +34,7 @@ The three jobs share the same context every month: the same **meeting date/folde
    2. `update-monthly-meetings`
    3. `update-outings`
 
-   **Run them sequentially, not in parallel** — they each scrape the website, unpack/edit/pack a docx, and use the shared `C:\Claude\_un` / `C:\Claude\_out.docx` scratch paths, which would collide. Finish one (through its overwrite + scratch cleanup) before starting the next.
+   **Run them sequentially, not in parallel.** Each child pauses for its own proposed-changes approval, and two approval gates cannot be open at once; each drives Microsoft Word over COM to page-count or test-open its docx; and each ends by overwriting a file in the shared meeting folder. (Their *scratch* paths are distinct — `_un`/`_out.docx`, `mom_unpacked`/`mom_test.docx`, `outings_unpacked`/`outings_test.docx` — so scratch collision is **not** the reason, and finding they don't collide is not grounds to parallelise.) Finish one (through its overwrite + scratch cleanup) before starting the next.
 
 4. **Honour each child skill's own confirmation gate.** Every child skill builds a proposed-changes table and **pauses for the user to approve before editing**. Do not suppress or auto-approve those pauses — the user reviews each handout's changes in turn. If a child skill offers overflow/two-page options, surface them and let the user choose.
 

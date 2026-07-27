@@ -35,7 +35,7 @@ Each item usually links to its own **detail page** (e.g. `…/u3a_events/<slug>/
 - No cell shading (`w:shd`) is used — borders only. Don't add shading.
 
 ## Process
-1. **Locate the target doc:** `…\By month\<YYYYMMDD> Members Open Meeting\TODO\<YYYYMMDD> MOM Outings etc.docx`. If unsure, ask for the path / meeting date.
+1. **Locate the target doc:** `…\By month\<YYYYMMDD> Members Open Meeting\<YYYYMMDD> MOM Outings etc.docx` — in the **meeting folder itself**, alongside the other two handouts. The folder's `TODO\` subfolder is the user's own "still outstanding" tray for *other* MOM documents (the Checklist, the Open-Close script); the handout is not in there. If unsure, ask for the path / meeting date.
 2. **Check it isn't open in Word** — a `~$…docx` lock file next to it means it's open → ask the user to close it (the final overwrite fails otherwise).
 3. **Ask clarifying questions one by one** until ~95% sure (images yes/no, how to handle multi-date or borderline items), then **read the current doc** (the three tables, each row's title/date/status, which rows have images, the rIds in `word\_rels\document.xml.rels`).
 4. **Scrape the three list pages**; for each new item fetch its detail page for full text + the image URL.
@@ -71,7 +71,7 @@ Edit the raw XML (don't regenerate — that loses the header, footer, logo, bord
 - **Overwrite** only after confirmation and once the `~$` lock is gone: `cp C:\Claude\outings_test.docx "<doc>"`. Clean up scratch files (keep the test docx as a backup if useful).
 
 ## What the user must do each month
-1. **Create this month's file**: put `<YYYYMMDD> MOM Outings etc.docx` in its `…\<YYYYMMDD> Members Open Meeting\TODO\` folder (usually a renamed copy of last month's).
+1. **Create this month's file**: put `<YYYYMMDD> MOM Outings etc.docx` in its `…\<YYYYMMDD> Members Open Meeting\` folder, beside the other two handouts (usually a renamed copy of last month's).
 2. **Close it in Word** before starting — otherwise the final overwrite is blocked.
 3. **Run the Claude session from inside `C:\u3a St Ives\`** so this skill and the folder's `.claude/settings.json` load.
 4. **Invoke** `/update-outings` (or ask to "update the outings handout").

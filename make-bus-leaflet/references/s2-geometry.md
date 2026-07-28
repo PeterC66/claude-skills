@@ -57,6 +57,17 @@ Three route files come out of S2:
    Full detail — the four metrics, the calibration across every built town, the remedy ladder, and
    why a town must never be split geographically — in [complexity-triage.md](complexity-triage.md).
 
+7b. **AMBER or RED only — apply the two mechanical rungs** (skip entirely on GREEN):
+   ```
+   node "%SK%\curate_services.js"            # what rungs 0 and 1 would do
+   node "%SK%\curate_services.js" --apply    # writes match_cfg.json skipRoutes (rung 0)
+   node "%SK%\match_routes.js"               # rung 0 changed the geometry — re-match
+   node "%SK%\complexity_score.js"           # re-score: did it do enough?
+   ```
+   It also prints a paste-ready `routes.json` `internalCorridors` block (rung 1) for S3 — those are
+   **candidates you must confirm**, so it never writes them. Note the ordering: `skipRoutes` lives in
+   `match_cfg.json`, so rung 0 invalidates `routes_paths.json` until `match_routes.js` re-runs.
+
 8. `stage.js commit S2 "$S2" --outputs atco2ll.json,atco2name.json,osm.json,osm2.json,features_geo.json,river_geo.json,routes_full_atco.json,routes_intown_atco.json,routes_atco.json,complexity.json`.
 
 ## Notes / gotchas

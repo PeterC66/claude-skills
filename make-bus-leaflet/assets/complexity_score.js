@@ -483,11 +483,15 @@ let curMembers = {};
 for (const k of Object.keys(paths)) curMembers[k] = [k];
 let curCore = 0;
 
-function pushRung(rung, action, detail) {
+// `data` carries the rung's proposal in MACHINE-READABLE form alongside the
+// prose. curate_services.js consumes it (rung 0 -> skipRoutes, rung 1 ->
+// internalCorridors), so no tool has to parse the printed sentence.
+function pushRung(rung, action, detail, data) {
   const m = scorePaths(cur, stopsFor(curMembers, curCore));
   const b = band(m);
   ladder.push({
     rung, action, detail,
+    data: data || null,
     after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5 },
     band: b.band,
     stillFailing: b.failed
@@ -502,7 +506,8 @@ if (cliff) {
     cur = kept; curMembers = keptMem;
     pushRung(0,
       'curate: move ' + cliff.below.length + ' infrequent services to the text list',
-      'frequency cliff at ' + cliff.at + ' -> ' + cliff.next + ' trips/week: ' + cliff.below.join(', '));
+      'frequency cliff at ' + cliff.at + ' -> ' + cliff.next + ' trips/week: ' + cliff.below.join(', '),
+      { below: cliff.below, cliffAt: cliff.at, cliffNext: cliff.next, ratio: round(cliff.ratio, 2) });
   }
 }
 
@@ -513,7 +518,9 @@ if (fams.length) {
   pushRung(1,
     'bundle ' + fams.length + ' co-running route famil' + (fams.length === 1 ? 'y' : 'ies') +
       ' into single lines (CANDIDATES - confirm each really co-runs)',
-    fams.map(f => f.join('/')).join('  |  '));
+    fams.map(f => f.join('/')).join('  |  '),
+    { families: fams, overlapMin,
+      internalCorridors: fams.reduce((o, f) => (o[f[0]] = f.slice(1), o), {}) });
 }
 
 if (anchorLL) {
@@ -559,6 +566,7 @@ if (intown && ladder.length && ladder[ladder.length - 1].after.S !== null &&
     rung: '2b',
     action: 'thin drawn stops to interchanges + termini',
     detail: 'keep stops served by 2+ drawn lines, plus each line\'s end stops',
+    data: null,
     after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5 },
     band: b.band,
     stillFailing: b.failed
@@ -571,6 +579,7 @@ if (finalBand !== 'GREEN' && metrics.R > PALETTE_HUES) {
     rung: 3,
     action: 'colour by corridor instead of by route (needs sign-off)',
     detail: 'R is still above the ~' + PALETTE_HUES + '-hue palette; badges carry route identity',
+    data: null,
     after: null,
     band: 'predicted GREEN on R'
   });

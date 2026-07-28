@@ -74,25 +74,29 @@ data or the committed SVG has been tampered with — a different and more seriou
 
 **Gate each town with the external generator it actually uses** — St Ives is the only **busway** town (`gen_external_busway.js`); every other town is **radial**. Gating St Ives against the radial file reports a meaningless DIFF.
 
-> ### ⚠ THREE INTERNAL GATES ARE CURRENTLY RED — this is pre-existing, not your change
-> Verified 2026-07-28. Run the internal gate today and **St Ives, March and Huntingdon DIFF against
-> the current `gen_internal.js`**. Establish this baseline **before** you edit anything, so you can
-> tell your diff from the standing one:
->
-> | Town | Standing diff |
-> |---|---|
-> | St Ives | terminus tail label `x` 42.13 → 43.23; a shared "to Cambridge" label `#333` → `#111` |
-> | March | terminus tail label `x` 189.14 → 188.04 |
-> | Huntingdon | ~1438 lines — road skeleton `#888888`/1.6 → `#333333`/1.5, plus road-segment split differences |
->
-> These look like the **deliberately accepted** St Neots v2.0/v2.1 improvements (black shared
-> terminus labels, `minSegLen` railway declutter, `reachExtend` tail handling) and the High Wycombe
-> work, with those three towns simply never re-rendered since. Wisbech, St Neots, Beaconsfield and
-> High Wycombe pass.
->
-> Per rule 5 in §4 below, the fix is to **re-render the three towns as minor bumps** so the shipped
-> fixture matches the intended output — never to edit the generator back. Until that happens, gate
-> those three by **diffing your change against this recorded baseline**, not against zero.
+> **RESOLVED 2026-07-28.** This box used to record three standing RED internal gates (St Ives,
+> March, Huntingdon), left behind by the accepted St Neots v2.x improvements. Those three towns were
+> re-rendered the same day, and the whole set has been **14/14 PASS** ever since — re-verified as the
+> before-baseline of the P2 corridor-bundling work. **Still take your own baseline before editing**;
+> that is the habit the box was really for, and the cost is one command.
+
+**The other four gates a `gen_internal.js` change must clear**, beyond the 14 above — it draws six
+outputs, not two (verified 2026-07-28 for P2):
+
+| Gate | How |
+|---|---|
+| 4 place fixtures | `gate.sh` against `…\Buses\Places\*\S4-generate\<latest>` |
+| St Ives schematic | run `schematize_internal.js` in a copy of the S4 dir, diff `internal-schematic.svg` |
+| St Ives diagram | run `diagram_internal.js` likewise, diff `internal-diagram.svg` |
+
+The place fixtures **legitimately differ on exactly two lines** — the title (`Buses within X` vs
+`Buses serving X`) and the `· Map v…` stamp — because `build_internal_place.js` post-edits both after
+running the generator. So the place gate is "**4 differing lines, 0 outside `y="16"` and `y="208"`**",
+not zero. Filter before judging, or you will chase a diff that has always been there:
+
+```
+diff new.svg shipped.svg | grep '^[<>]' | grep -v 'y="16"\|y="208"'   # must be empty
+```
 
 (The older docs say "the 4-way gate: St Ives + March". That was the gate set when there were two
 towns. It has grown with every town — gate them all; the whole point is that a template change is
@@ -187,6 +191,14 @@ the old code, and its gates will keep passing against the *old* shipped fixture 
    portal `CHANGELOG.md`. Never edit a gate's expectation to make it pass.
 6. Commit **both** repos in the same session — the skills repo (`C:\u3a St Ives\.claude\skills`) and
    the portal — and note the pairing in each commit message.
+
+> ### ⚠ OPEN DRIFT: `gen_internal.js` is skill-ahead of the portal (since 2026-07-28, P2)
+> The rung-1 `internalCorridors` change has **not** been re-vendored to
+> `community-bus-maps\engine\place\gen_internal.js`. That is deliberate — the complexity-triage plan
+> puts all portal work in its own phase (P6) — and it is safe, because the key is opt-in and the
+> skill's own 14-run gate proves the absent-key output is byte-identical, so the portal's shipped
+> fixtures are unaffected. But `cmp` **will** report this row as drifted until P6 copies the file
+> across and re-runs `npm run verify:place`. It is a pending step, not a discovery.
 
 **The `LEAFLET_DIR` trap.** `gen_internal.js` prefers `LEAFLET_DIR` over cwd. A pre-stage spawns it
 with cwd = the workspace and an inherited environment — so an inherited `LEAFLET_DIR` sends the

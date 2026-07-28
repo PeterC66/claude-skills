@@ -14,6 +14,9 @@
 //   internalDesc{}    {route:[title,subtitle]} for the Services panel
 //   poi{}             POI filter/tidy rules (industrialKeep, excludeName, tidy,
 //                     canon, include e.g. ["allotments"])
+//   internalCorridors bundle co-running services into ONE line with a badge
+//                     stack (rung 1 of the complexity ladder) — see the block
+//                     where it is parsed, below
 // (plus anchor/anchorLabel/internalZoom/features/internalBundle/internalTermini
 //  already documented below).
 //
@@ -217,6 +220,58 @@ const ZOOM = Object.assign({ corePct: 1.0, comp: 1.0 }, RJ.internalZoom || {});
 const order = RJ.routeOrder || Object.keys(C);
 // Services-panel list order. Default = draw order.
 const panelOrder = RJ.panelOrder || order;
+// ====== internalCorridors — RUNG 1 of the complexity ladder (P2, 2026-07-28) ==
+// routes.json "internalCorridors": { "<lead>": ["1","1A","1B"] }
+//                              or   { "<lead>": {routes:["1","1A","1B"]} }
+// Draw a family of CO-RUNNING services as ONE line carrying a STACK of badges
+// instead of one coloured line each. The internal twin of external[].routes.
+// Why: the colour-blind-safe palettes hold ~12 usable hues; past that the
+// palette repeats and colour stops identifying a route (High Wycombe v1.0 drew
+// 31 lines in 12 colours). See references/complexity-triage.md.
+//
+// HOW IT WORKS — and why the bundle cannot state something false:
+// every member KEEPS ITS OWN GEOMETRY. Bundling changes only two things:
+//   (a) COLOUR — every member takes the lead's colour (and text colour);
+//   (b) LANE — members count as ONE lane in the corridor offset maths, so where
+//       they co-run they land on the same centreline and overdraw into a single
+//       visible line, and where they DIVERGE they simply separate again, because
+//       nothing merged their coordinates.
+// So "the bundle must split back where the routes diverge" is satisfied BY
+// CONSTRUCTION rather than by a rule someone has to remember. What a divergence
+// does cost is identity — both branches are now the same colour — so the badge
+// logic below stacks the badges of the members actually co-running AT that point
+// and lets a member badge its own divergent branch alone. `corridors_report.json`
+// records the shared fraction per member so S6 can flag a weak family.
+//
+// Absent => every derived value is a no-op identity and output is byte-identical.
+const CORR = (function(){
+  const raw = RJ.internalCorridors; if(!raw) return null;
+  const fam = {}, lead = {};
+  for(const k of Object.keys(raw)){
+    const v = raw[k];
+    const members = Array.isArray(v) ? v : ((v && v.routes) || []);
+    // the config KEY is the lead: it keys the colour, the overrides and the
+    // badge-stack order, regardless of how the member list happens to be written
+    const list = [k].concat(members.filter(r=>r!==k));
+    if(list.length < 2) continue;
+    fam[k] = list;
+    for(const m of list) lead[m] = k;
+  }
+  return Object.keys(fam).length ? {fam, lead} : null;
+})();
+// lane identity: a family draws as ONE lane keyed by its lead. Identity map when
+// internalCorridors is absent, which is what keeps every existing town unchanged.
+const laneKey = CORR ? (r=>CORR.lead[r]||r) : (r=>r);
+if(CORR){
+  // colour aliasing. Only routes ALREADY in the palette are touched, so
+  // Object.keys(C) — and therefore the default `order` computed above — cannot
+  // change. Applied after routeColors, so recolouring the lead moves the family.
+  for(const l of Object.keys(CORR.fam)) for(const m of CORR.fam[l]){
+    if(m===l) continue;
+    if(m in C) C[m] = C[l];
+    if(TXT && (m in TXT)) TXT[m] = TXT[l];
+  }
+}
 // Internal Services-panel descriptions {route:[title,subtitle]}.
 const INTDESC = RJ.internalDesc || {};
 // Orientation route for road-name labels: the town circular if named, else the
@@ -423,6 +478,17 @@ const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'
 const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>` : inner;
 function badge(x,y,r,rad=4.6){out(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(r))}</text>`);}
+// A bundled corridor's badge is a vertical STACK of its members' badges (the
+// convention every operator's own big-town map uses: one line, many identities).
+// A one-element list reduces to exactly badge() at the same centre, so an
+// unbundled town is byte-identical. Returns the stack's half-height in mm so the
+// caller can reserve the right box.
+function badgeStack(x,y,list,rad){
+  if(list.length===1){ badge(x,y,list[0],rad); return rad; }
+  const pitch=rad*2+0.5, y0=y-(list.length-1)/2*pitch;
+  list.forEach((r,i)=>badge(x, y0+i*pitch, r, rad));
+  return (list.length-1)/2*pitch + rad;
+}
 function cross(x,y,col){const a=1.0,b=2.6;out(`<rect x="${x-a/2}" y="${y-b/2}" width="${a}" height="${b}" fill="${col}"/><rect x="${x-b/2}" y="${y-a/2}" width="${b}" height="${a}" fill="${col}"/>`);}
 
 // ---- linear features: paths + labels (honour overrides.features[key]) ----
@@ -526,7 +592,25 @@ for(const f of FEATURES) drawFeature(f);
 // ============================================================================
 let rseq={};                      // classic model's filtered sequences (old termini block)
 let TRIM=null, SKEL=null;         // internalRoads artefacts used later (arrows/badges/labels)
+let CORUN=null;                   // MEMR: r -> {segIdx:[routes physically co-running there]}
 const inFrame=p=>p[0]>=MX0&&p[0]<=MX1&&p[1]>=MY0&&p[1]<=MY1;
+// Map an index in TRIM[r].pts back to the SOURCE polyline segment index, so the
+// badge logic can ask CORUN who co-runs at that point. pts = sh.slice(s0,e+1)
+// with the frame-cut points spliced on, so the shift is s0 minus the leading cut.
+const segIdxOf=(tr,i)=>{ if(!tr||!tr.sh) return i;
+  const j=(tr.draw?tr.draw.s0:0) + i - (tr.startCut?1:0);
+  return Math.max(0, Math.min(tr.sh.length-2, j)); };
+// The internalCorridors members actually co-running with r at that segment, in
+// family order. Without the key this is always [r] — one badge, as before.
+const famAt=(r,si)=>{ if(!CORR || !CORR.lead[r]) return [r];
+  const fam=CORR.fam[CORR.lead[r]] || [r];
+  const here=(CORUN && CORUN[r] && CORUN[r][si]) || [r];
+  return fam.filter(m=>m===r || here.includes(m)); };
+// Which route draws the badge for a bundled group: the first family member
+// present. Every other member returns null there and stays silent, so the shared
+// line carries ONE stack — but a member alone on a divergent branch is its own
+// group leader and still badges its branch.
+const badgeGroup=(r,si)=>{ const g=famAt(r,si); return g[0]===r ? g : null; };
 if(IR){
   // -- project matched polylines to page space
   const RPP={};                                  // r -> {P:[[x,y]..], E:[token|null]}
@@ -561,14 +645,25 @@ if(IR){
       SEG.push({r,i,ax:a[0],ay:a[1],ux:dx/L,uy:dy/L,L,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2}); } }
   const pSeg=(px,py,s)=>{ let t=(px-s.ax)*s.ux+(py-s.ay)*s.uy; if(t<0)t=0; else if(t>s.L)t=s.L;
     const cx=s.ax+s.ux*t, cy=s.ay+s.uy*t; return Math.hypot(px-cx,py-cy); };
-  const MEM={};
+  // MEMR = ROUTE-level membership (who physically co-runs here).
+  // MEM  = LANE-level membership (MEMR with each internalCorridors family
+  //        collapsed to its lead) — this is what sizes the casing and picks the
+  //        lane offsets, so a bundled family occupies ONE lane. Without
+  //        internalCorridors laneList() is the identity and MEM === MEMR.
+  const laneList = CORR
+    ? (a=>[...new Set(a.map(laneKey))].sort((x,y)=>orderIdx[x]-orderIdx[y]))
+    : (a=>a);
+  const MEM={}, MEMR={};
   for(const s of SEG){ const set=new Set([s.r]);
     for(const u of SEG){ if(u.r===s.r)continue;
       if(Math.abs(s.ux*u.ux+s.uy*u.uy)<CA)continue;             // not near-parallel
       if(pSeg(s.mx,s.my,u)>CD)continue;                         // s mid far from u
       if(pSeg(u.mx,u.my,s)>CD)continue;                         // u mid far from s
       set.add(u.r); }
-    (MEM[s.r]=MEM[s.r]||{})[s.i]=[...set].sort((x,y)=>orderIdx[x]-orderIdx[y]); }
+    const here=[...set].sort((x,y)=>orderIdx[x]-orderIdx[y]);
+    (MEMR[s.r]=MEMR[s.r]||{})[s.i]=here;
+    (MEM[s.r]=MEM[s.r]||{})[s.i]=laneList(here); }
+  CORUN=MEMR;                    // published for the badge logic further below
   const segByRoute={};                             // r -> its own segments (for reference dir)
   for(const s of SEG){ (segByRoute[s.r]=segByRoute[s.r]||[]).push(s); }
   // reference direction for a lane-bundle at a point: the local heading of the
@@ -600,7 +695,10 @@ if(IR){
     const v=[];
     for(let i=0;i<Pp.length-1;i++){ let sx=0,sy=0;
       const arr=(MEM[r]&&MEM[r][i])||null;                      // geometric lane-bundle here
-      if(arr && arr.length>1){ const so=(arr.indexOf(r)-(arr.length-1)/2)*IR.gap;
+      // laneKey(r), not r: a bundled family shares ONE lane, so its members all
+      // take the same offset and overdraw into a single visible line here. Where
+      // they diverge this segment simply has no sibling and they separate again.
+      if(arr && arr.length>1){ const so=(arr.indexOf(laneKey(r))-(arr.length-1)/2)*IR.gap;
         const ox=Pp[i+1][0]-Pp[i][0], oy=Pp[i+1][1]-Pp[i][1];  // own heading (fallback)
         // normal from the bundle's reference route (arr[0]) local heading, so ALL
         // lanes share one smoothly-varying normal here -> no side-swaps on curves,
@@ -666,8 +764,14 @@ if(IR){
     let tt=L2?((M[0]-a[0])*dx+(M[1]-a[1])*dy)/L2:0; tt=tt<0?0:tt>1?1:tt;
     const cx=a[0]+dx*tt, cy=a[1]+dy*tt; return Math.hypot(M[0]-cx,M[1]-cy); };
   // does route s's DRAWN (trimmed, in-frame) centreline pass within CD of M?
-  const drawnCovers=(s,M)=>{ const o2=RPP[s], tr=TRIM[s]; if(!o2||!tr||!tr.draw)return false;
+  const drawnCovers1=(s,M)=>{ const o2=RPP[s], tr=TRIM[s]; if(!o2||!tr||!tr.draw)return false;
     const P=o2.P, dr=tr.draw; for(let j=dr.s0;j<dr.e && j<P.length-1;j++){ if(segDist(M,P[j],P[j+1])<=CD)return true; } return false; };
+  // MEM now holds LANE keys, so ask "is ANY member of this lane drawn here?" —
+  // a family whose lead has been trimmed away but whose sibling still runs must
+  // keep its casing. Identity when internalCorridors is absent.
+  const drawnCovers = CORR
+    ? ((s,M)=>((CORR.fam[s]||[s]).some(m=>drawnCovers1(m,M))))
+    : drawnCovers1;
   SKEL=[];                                       // [{c,p,q,name}] for road labels
   const eSeen=new Set();
   let _wmax=0;
@@ -683,7 +787,7 @@ if(IR){
       // showing only its outer lane would either overrun a centreline-anchored
       // casing or leave bare grey on the empty side. When every bundle route is
       // drawn, mid=0 and span=(nb-1)*gap, i.e. the old always-full casing exactly.
-      const bundle=(MEM[r]&&MEM[r][i])?MEM[r][i]:eRoutes[c], nb=bundle.length;
+      const bundle=(MEM[r]&&MEM[r][i])?MEM[r][i]:laneList(eRoutes[c]), nb=bundle.length;
       const M=[(Pp[i][0]+Pp[i+1][0])/2,(Pp[i][1]+Pp[i+1][1])/2];
       let loO=Infinity,hiO=-Infinity;
       for(let k2=0;k2<nb;k2++){ if(!drawnCovers(bundle[k2],M))continue;
@@ -754,7 +858,12 @@ for(const r of order){ if(!routes[r])continue;
 const segRoutes={};                                             // "a|b" -> [routes sharing the segment]
 if(BUNDLE){ for(const r of order){ const sq=rseq[r]||[];
   for(let i=0;i<sq.length-1;i++){ const a=sq[i],b=sq[i+1], key=a<b?a+'|'+b:b+'|'+a;
-    (segRoutes[key]=segRoutes[key]||[]).push(r); } } }
+    const lst=(segRoutes[key]=segRoutes[key]||[]);
+    // internalCorridors: one lane per family (deduped). Without it, keep the
+    // original unconditional push — a route that traverses the same stop pair
+    // twice legitimately claims two ranks, and deduping would move its line.
+    if(CORR){ const lk=laneKey(r); if(!lst.includes(lk)) lst.push(lk); }
+    else lst.push(r); } } }
 let idx=0;
 for(const r of order){ if(!routes[r])continue;
   const ro=(OV.routeOffsets||{})[r]||{dx:0,dy:0};                 // lateral spread off a shared corridor
@@ -764,7 +873,7 @@ for(const r of order){ if(!routes[r])continue;
   if(BUNDLE){                                                    // perpendicular fan-out of shared runs
     const v=[];                                                  // per-segment offset vector
     for(let i=0;i<sq.length-1;i++){ const a=sq[i],b=sq[i+1], key=a<b?a+'|'+b:b+'|'+a;
-      const list=segRoutes[key]||[r], cnt=list.length, rank=list.indexOf(r);
+      const list=segRoutes[key]||[r], cnt=list.length, rank=list.indexOf(CORR?laneKey(r):r);
       const so=(rank-(cnt-1)/2)*BGAP;
       const dx=seq[i+1][0]-seq[i][0], dy=seq[i+1][1]-seq[i][1], L=Math.hypot(dx,dy)||1;
       v.push([-dy/L*so, dx/L*so]); }
@@ -809,10 +918,11 @@ if(IR && TRIM){
   const TL=RJ.terminiLabels||{};
   const aplaced=[];
   // terminal badge where a route simply ENDS in town (not continuing, not circular)
-  const termBadge=(p,r)=>{
+  const termBadge=(p,r,grp)=>{
     const anc=(atco2ll[ANCHOR]||baseOv[ANCHOR])?XYS(ANCHOR):null;
     if(anc && Math.hypot(p[0]-anc[0],p[1]-anc[1])<8) return;   // not at the interchange knot
-    badge(p[0],p[1],r,2.6); reserve(p[0]-2.8,p[1]-2.8,p[0]+2.8,p[1]+2.8);
+    const hh=badgeStack(p[0],p[1],grp||[r],2.6);
+    reserve(p[0]-2.8,p[1]-hh-0.2,p[0]+2.8,p[1]+hh+0.2);
   };
   // -- consolidate frame-cut termini into ONE box per exit cluster (item 5,
   //    2026-07-04): nearby cut points used to each place an independent
@@ -925,8 +1035,12 @@ if(IR && TRIM){
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;
     if(!closed){
-      if(!tr.endCut   && tr.pts.length>=2 && inFrame(tr.pts[tr.pts.length-1])) termBadge(tr.pts[tr.pts.length-1],r);
-      if(!tr.startCut && tr.pts.length>=2 && inFrame(tr.pts[0])) termBadge(tr.pts[0],r);
+      if(!tr.endCut   && tr.pts.length>=2 && inFrame(tr.pts[tr.pts.length-1])){
+        const g=badgeGroup(r,segIdxOf(tr,tr.pts.length-2));
+        if(g) termBadge(tr.pts[tr.pts.length-1],r,g); }
+      if(!tr.startCut && tr.pts.length>=2 && inFrame(tr.pts[0])){
+        const g=badgeGroup(r,segIdxOf(tr,0));
+        if(g) termBadge(tr.pts[0],r,g); }
     }
   }
   // small route badges sprinkled along each visible line
@@ -940,13 +1054,77 @@ if(IR && TRIM){
         const p=[tr.pts[i][0]+(tr.pts[i+1][0]-tr.pts[i][0])*t, tr.pts[i][1]+(tr.pts[i+1][1]-tr.pts[i][1])*t];
         next+=IR.badgeEvery;
         if(!inFrame(p))continue;
+        // On a bundled corridor only the group leader badges, and it badges the
+        // WHOLE stack; a sibling that has left the bundle badges its own branch.
+        const grp=badgeGroup(r,segIdxOf(tr,i));
+        if(!grp)continue;
         if(bplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<9))continue;
-        if(overlaps([p[0]-2.3,p[1]-2.3,p[0]+2.3,p[1]+2.3]))continue;
-        bplaced.push(p); badge(p[0],p[1],r,2.4); reserve(p[0]-2.5,p[1]-2.5,p[0]+2.5,p[1]+2.5);
+        const gh=grp.length===1?2.3:(grp.length-1)/2*5.3+2.3;
+        if(overlaps([p[0]-2.3,p[1]-gh,p[0]+2.3,p[1]+gh]))continue;
+        bplaced.push(p); const hh=badgeStack(p[0],p[1],grp,2.4);
+        reserve(p[0]-2.5,p[1]-hh-0.1,p[0]+2.5,p[1]+hh+0.1);
       }
       acc+=L;
     }
   }
+}
+
+// ---- internalCorridors: divergence report (no SVG output; CORR-gated) -------
+// Bundling asserts that a family runs together. The geometry keeps that honest
+// by itself — members separate where they diverge, because nothing merged their
+// coordinates — but a family whose members only share half their length is a bad
+// bundle even so: most of the sheet is then two SAME-COLOURED lines going
+// different ways, which is worse than two colours. Measure it and say so.
+//
+// The measure is the SAME one complexity_score.js uses to PROPOSE a family:
+// mutual overlap of ~111 m cells on the raw matched lat/lon paths, warn below
+// 0.6 (its --overlap default). The tool that suggests a bundle and the tool that
+// draws it must not disagree about what "co-running" means.
+//
+// Two measures were tried first and are wrong; recording them so they are not
+// re-invented. (a) The lane-bundling test (CORUN / corridor.dist 2.4 mm ≈ 65 m
+// at map scale) is right for "should these share a casing" but far too generous
+// here — in a dense core it makes almost every route a neighbour of every other.
+// (b) Page-space coincidence of the DRAWN lines is circular: bundling is exactly
+// what removes the lane offset between members, so measuring after it inflates
+// every family towards 1.0 (two unrelated High Wycombe routes read 0.70).
+if(CORR && RP && RP.routes){
+  const CELL=0.001;                                   // ~111 m of latitude
+  let laMin=90, laMax=-90;
+  for(const k of Object.keys(RP.routes)) for(const p of (RP.routes[k].pts||[])){
+    if(p[0]<laMin)laMin=p[0]; if(p[0]>laMax)laMax=p[0]; }
+  const cellLo = CELL/Math.cos((laMin+laMax)/2*Math.PI/180);
+  const cellsOf = r => { const e=RP.routes[r]; if(!e||!e.pts||e.pts.length<2) return null;
+    const s=new Set(); for(const p of e.pts) s.add(Math.floor(p[0]/CELL)+','+Math.floor(p[1]/cellLo));
+    return s; };
+  const rep={ town:RJ.town, measure:'mutual 111m-cell overlap of the matched paths (as complexity_score.js --overlap)',
+    sharedMin:0.6, families:[] };
+  for(const lead of Object.keys(CORR.fam)){
+    const fam=CORR.fam[lead], cells={}, members=[];
+    for(const m of fam) cells[m]=cellsOf(m);
+    for(const m of fam){ const A=cells[m];
+      if(!A){ members.push({route:m, drawn:false}); continue; }
+      // worst pairwise overlap against the family: a member has to co-run with
+      // EVERY sibling, not just the one it happens to share a street with
+      let worst=1, worstWith=null;
+      for(const o of fam){ if(o===m||!cells[o])continue;
+        let inter=0; for(const c of A) if(cells[o].has(c)) inter++;
+        const f=inter/A.size; if(f<worst){ worst=f; worstWith=o; } }
+      members.push({ route:m, drawn:true, cells:A.size,
+        sharedFraction:+worst.toFixed(3), weakestAgainst:worstWith });
+    }
+    const weak=members.filter(x=>x.drawn && x.sharedFraction<rep.sharedMin).map(x=>x.route);
+    rep.families.push({ lead, routes:fam, members, weakMembers:weak });
+    console.log('  corridor '+fam.join('/')+'  '+members.map(x=>x.route+' '
+      +(x.drawn?Math.round(x.sharedFraction*100)+'%':'not drawn')).join('  '));
+    if(weak.length) console.error('CORRIDOR WARNING '+fam.join('/')+': '+weak.join(', ')
+      +' co-run with the family over <'+Math.round(rep.sharedMin*100)+'% of their route — the rest '
+      +'is now a second same-coloured line going somewhere else, which is worse than two colours. '
+      +'Reconsider this bundle.');
+  }
+  fs.writeFileSync(DIR+'/corridors_report.json', JSON.stringify(rep,null,2));
+  console.log('internalCorridors: '+rep.families.length+' famil'+(rep.families.length===1?'y':'ies')
+    +' bundled; corridors_report.json written');
 }
 
 // ---- internalDiagram: one-way loop arrows + interchange lozenges (ID-gated) --

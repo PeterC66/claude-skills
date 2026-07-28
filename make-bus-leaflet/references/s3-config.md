@@ -26,31 +26,64 @@ The config-driven keys the generators read (2026-06-07 — the per-town code edi
 - **`version`** — the version **printed on the map** (external via `D.version`; internal/diagram via `RJ.version`, unless `LEAFLET_VERSION` overrides). It is a *data* field and is **separate from the `v<N.N>_<ts>` run-folder name**, which is manifest metadata. **You no longer have to remember to bump it** (2026-07-25): `stage.js pull` rewrites it to match the versioned run dir it lands in, and `stage.js commit S4|S5` refuses to record a run whose field disagrees. Formatting is preserved — only the numeric part is rewritten, so a town's `"1.1"`, a place's `"v1.0"` and any suffix (`"1.1 · Summer 2026"`) all survive. Repair an odd one by hand with `stage.js stampver <runDir>`; keep a deliberately-different stamp with `commit --force-version`. Note the guard fires at **commit** time, when the SVGs are already drawn — so a mismatch means *regenerate*, not just edit the field.
 - The **external hub label** uses `routes.json` `town` (no longer hardcoded); the radial hub box auto-widens for long town names.
 
-### RESERVED — the complexity-remedy keys (P2/P3, not yet implemented by any generator)
+### The complexity-remedy keys
 
-The triage gate ([complexity-triage.md](complexity-triage.md)) recommends these; the generators do
-**not** honour them yet. The names and shapes are fixed here so the gate and the generator cannot
-drift apart when P2/P3 lands — `complexity_score.js` **already reads `internalCorridors`** and
-re-scores a bundled town with it, so a generator that implements a different shape would silently
-stop being scored correctly.
+From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-in;
+**absent ⇒ byte-identical**, like every other key here.
 
-- **`internalCorridors`** `{ "<lead route>": ["1","1A","1B"] }` — *(rung 1, P2)* draw the listed
-  routes as **one line carrying a stack of badges** instead of one line each. The lead route keys the
-  colour and the overrides. Also accepted: `{ "<lead>": { "routes": [...] } }`. **The bundle must
-  split back into separate lines where the routes diverge** — `102/103/104/105` share the A40 but not
-  their whole length, and a bundle kept merged past the divergence states something false. This is
-  the internal twin of `external[].routes`, which already solved the identical problem on the
-  external map — read that implementation first.
-- **`coreBox`** `{ "radius": 600, "label": "town centre", "at": [x,y] }` — *(rung 2, P3)* replace the
+#### `internalCorridors` — rung 1, LIVE since P2 (2026-07-28)
+
+```json
+"internalCorridors": { "1": ["1A","1B"], "102": ["103","104","105"], "32": ["32A"] }
+```
+*(also accepted: `{ "<lead>": { "routes": [...] } }`)*
+
+Draw a family of co-running services as **ONE line carrying a vertical stack of badges** instead of
+one coloured line each — the internal twin of `external[].routes`. Reach for it when the triage gate
+says **R > 12**: the colour-blind-safe palettes hold ~12 usable hues, and past that colour stops
+identifying a route at all. High Wycombe: 31 lines → 24 with four families.
+
+The **config key is the lead**. It keys the colour, the overrides and the badge-stack order.
+
+What the generator actually does — worth knowing, because it decides how you use it:
+
+- **Colour.** Every member takes the lead's colour (and `textOn`). Only routes already in `palette`
+  are touched, so the palette's key order — and therefore the default `routeOrder` — cannot shift.
+  Applied after `overrides.json` `routeColors`, so recolouring the lead moves the whole family.
+- **Lane.** The family counts as **one lane** in the corridor-offset maths. Where the members run the
+  same road they land on the same centreline and overdraw into a single visible line; where they
+  **diverge they simply separate again**, because nothing merged their coordinates. "The bundle must
+  split back where the routes diverge" is therefore satisfied *by construction*, not by a rule
+  someone has to remember.
+- **Badges.** At each badge point only the first family member present draws, and it draws the stack
+  of the members co-running *there*. A member alone on a divergent branch is its own group leader and
+  still badges that branch — which is what keeps identity on the split.
+- **Report.** `corridors_report.json` is written next to `internal.svg` with each member's overlap
+  against its weakest sibling, and the run **warns on stderr below 0.6** — the same bar
+  `complexity_score.js --overlap` uses to propose a family. **Read it. Drop any family that warns:**
+  below that, most of the sheet is two same-coloured lines going different ways, which is worse than
+  two colours.
+
+**Pick the same lead as `external[].routes`** for a family that is merged on both sheets, and the
+internal and external maps keep the same colour for it. Bundle internally *without* merging
+externally and that family's colour correspondence between the two maps is broken — a real cost,
+not a detail.
+
+Get the candidate list from `curate_services.js` (see [s2-geometry.md](s2-geometry.md)); it prints a
+paste-ready block. **They are candidates, never decisions.**
+
+#### RESERVED — still not implemented by any generator (P3)
+
+- **`coreBox`** `{ "radius": 600, "label": "town centre", "at": [x,y] }` — *(rung 2)* replace the
   congested centre with a labelled box; routes terminate at its edge instead of crossing the knot.
   `radius` in metres from `anchor`. Interacts with the existing fisheye `lenses[]` — decide which
   owns the centre.
-- **`corridorPalette`** `true` — *(rung 3, P3)* colour by corridor family rather than by route, with
+- **`corridorPalette`** `true` — *(rung 3)* colour by corridor family rather than by route, with
   badges carrying route identity. **Approved 2026-07-28 but bounded to towns drawing > 12 lines**,
   and it breaks the internal/external colour correspondence for bundled families, so it is a
   deliberate per-town decision, never a default.
 
-All three must be **opt-in and absent ⇒ byte-identical**, like every other key here.
+The names and shapes are fixed here so the gate and the generator cannot drift apart when P3 lands.
 
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
 A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the

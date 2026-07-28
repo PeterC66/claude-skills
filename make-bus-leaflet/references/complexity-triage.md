@@ -73,23 +73,49 @@ each; take them in order and stop at the first GREEN.
 
 | Rung | Remedy | Status |
 |---|---|---|
-| **0** | curate the service set at the **frequency cliff** | config today (`skipRoutes` + the "also serving" text block) |
-| **1** | **bundle co-running families** into one line with a badge stack | needs `internalCorridors` (P2) |
+| **0** | curate the service set at the **frequency cliff** | **built (P2)** — `curate_services.js` → `match_cfg.json skipRoutes` + a `mapNotes` line |
+| **1** | **bundle co-running families** into one line with a badge stack | **built (P2)** — `routes.json` `internalCorridors`, see [s3-config.md](s3-config.md) |
 | **2** | **suppress the core** — a "town centre" box routes terminate at | needs `coreBox` (P3) |
 | **2b** | thin drawn stops to interchanges + termini | curation |
-| **3** | colour by **corridor**, not by route | needs sign-off — see below |
+| **3** | colour by **corridor**, not by route | needs `corridorPalette` (P3); signed off in principle |
 | **4** | split into area sheets **by route family** | not built (P5, only if a town needs it) |
 | **5** | decline the whole-town internal map; ship place-centred leaflets instead | `make-place-bus-leaflet` |
+
+### Applying rungs 0 and 1 — `curate_services.js`
+
+```
+cd <S2 run dir>
+node "%SK%\curate_services.js"          # report only
+node "%SK%\curate_services.js" --apply  # + writes match_cfg.json skipRoutes
+```
+
+It spawns `complexity_score.js` rather than re-deriving anything, then turns the two mechanical
+rungs into the config they need:
+
+| Rung | It gives you | `--apply` writes it? |
+|---|---|---|
+| 0 | `match_cfg.json` `skipRoutes` for everything below the frequency cliff, **plus** a `routes.json` `mapNotes` line naming those services so the reader still knows they exist | yes (idempotent union) |
+| 1 | a paste-ready `routes.json` `internalCorridors` block from the detected families | **no — on purpose** |
+
+Rung 1 is not auto-applied because a family is a **claim about the real world**. skipRoutes is
+reversible and re-measurable; a wrong bundle makes the map assert something false. Confirm each one.
+
+**Rung 0 changes the geometry, so re-run S2 after it:**
+`curate_services.js --apply` → `match_routes.js` → `complexity_score.js`.
 
 ### Reading the ladder output
 
 - **Rung 0** finds the frequency cliff rather than imposing a fixed trips-per-week number. Most towns
   hand you a natural break: High Wycombe's services run 1–8 trips/week then jump straight to 46, and
   those below the cliff are exactly its school, works, match-day and market-day services.
-- **Rung 1 families are CANDIDATES, not decisions.** Bundling asserts the routes run together over
-  the drawn extent. `102/103/104/105` share the A40 but not their whole length — a bundled line that
-  keeps them merged past the point they diverge states something false. Confirm every family, and
-  split the bundle back into separate lines where they part.
+- **Rung 1 families are CANDIDATES, not decisions.** Bundling asserts the routes run together.
+  Confirm every family. Two safety nets now exist, and neither replaces looking at the sheet:
+  the generator keeps each member's own geometry, so a bundle **splits back apart wherever the
+  routes diverge** rather than drawing a false merged line; and it writes `corridors_report.json`
+  with each member's overlap against its **weakest** sibling, warning below 0.6. On High Wycombe
+  that check independently rejected the hand-picked `31 / 41` family (0.40 / 0.46) while confirming
+  `1/1A/1B`, `32/32A` and `102/103/104/105` at 1.00 — those three genuinely run identical streets
+  inside the town, and vary only outside the frame.
 - **Rung 3 retires a locked design decision** ("one colour per route, consistent across both maps")
   for big towns only. It also breaks the internal/external colour correspondence for bundled
   families. Approved in principle 2026-07-28, bounded to R > 12.

@@ -722,6 +722,15 @@ function coreEdge(outP,innP){
 // Split a polyline into the runs OUTSIDE the box, each ending exactly on the
 // boundary. A route that crosses the centre and comes out the other side yields
 // two runs — which is the point: it visibly runs TO the box from both sides.
+//
+// A run shorter than `coreBox.minRun` mm is DROPPED. Town-centre one-way loops
+// make a route's matched path poke a few millimetres back out of the box and in
+// again, and that orphan stub — a line fragment attached to nothing, with the
+// route's terminus badge stack planted on it — reads as a real branch (High
+// Wycombe v2.0 draft: 102/103/104/105 each left a 5 mm stub west of the box
+// carrying a six-badge stack). Only reachable when coreBox is set.
+const MINRUN = CBOX ? (CBOX.minRun!=null?CBOX.minRun:2.5) : 0;
+const runLen = rn => { let L=0; for(let i=1;i<rn.length;i++) L+=Math.hypot(rn[i][0]-rn[i-1][0], rn[i][1]-rn[i-1][1]); return L; };
 function clipOutCore(pts){
   if(!CORE) return [pts];
   const runs=[]; let cur=[];
@@ -735,8 +744,11 @@ function clipOutCore(pts){
     }
   }
   if(cur.length) runs.push(cur);
-  return runs.filter(rn=>rn.length>=2);
+  return runs.filter(rn=>rn.length>=2 && runLen(rn)>=MINRUN);
 }
+// r -> the endpoints of the runs actually DRAWN, so a terminus badge is never
+// planted on a stub that clipOutCore threw away. Null without a coreBox.
+const CORERUNS = CORE ? {} : null;
 // Map an index in TRIM[r].pts back to the SOURCE polyline segment index, so the
 // badge logic can ask CORUN who co-runs at that point. pts = sh.slice(s0,e+1)
 // with the frame-cut points spliced on, so the shift is s0 minus the leading cut.
@@ -975,6 +987,7 @@ if(IR){
     // coreBox: draw the runs OUTSIDE the box as subpaths of one path element, so
     // each end stops flush on the boundary. No box => one run, byte-identical.
     const runs=clipOutCore(tr.pts); if(!runs.length)continue;
+    if(CORERUNS) CORERUNS[r]=[].concat(...runs.map(rn=>[rn[0],rn[rn.length-1]]));
     const d=runs.map(rn=>rn.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ')).join(' ');
     out(gk('route',r,`<path d="${d}" fill="none" stroke="${C[r]}" stroke-width="${IR.stroke}" stroke-linecap="round" stroke-linejoin="round"/>`)); }
   // -- stop ticks ON the route lines (one per physical stop, first route wins;
@@ -1085,6 +1098,8 @@ if(IR && TRIM){
   // terminal badge where a route simply ENDS in town (not continuing, not circular)
   const termBadge=(p,r,grp)=>{
     if(inCore(p)) return;                                      // coreBox owns the centre
+    // and never on an end whose run was dropped as a stub (see clipOutCore)
+    if(CORERUNS && !(CORERUNS[r]||[]).some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<0.05)) return;
     const anc=(atco2ll[ANCHOR]||baseOv[ANCHOR])?XYS(ANCHOR):null;
     if(anc && Math.hypot(p[0]-anc[0],p[1]-anc[1])<8) return;   // not at the interchange knot
     const hh=badgeStack(p[0],p[1],grp||[r],2.6);
@@ -1149,10 +1164,18 @@ if(IR && TRIM){
     // The cut point sits ON the frame, so a badge centred near it straddles the edge and
     // renders half-clipped ("905" printed as "05" at the right edge in St Neots v1.1).
     // Keep the whole 3.0 mm badge inside the drawing frame.
-    bx=Math.min(Math.max(bx,MX0+3.4),MX1-3.4); by=Math.min(Math.max(by,MY0+3.4),MY1-3.4);
-    aplaced.push([bx,by]);
     const groups=[], gi2={};                   // same "to X" text -> one shared row
     for(const m of ms){ const k=m.label||''; if(!(k in gi2)){ gi2[k]=groups.length; groups.push({label:m.label,ms:[]}); } groups[gi2[k]].ms.push(m); }
+    // A row is centred on bx and spreads (n-1)/2*BS each way, so clamping the
+    // CENTRE to the frame is not enough once a bundled family puts 3+ badges in
+    // one row: High Wycombe's six-badge "to Loudwater & Beaconsfield" row ran
+    // 13 mm off the right edge and printed over the Services panel. Widen the
+    // clamp by the row's own half-width. A solo badge keeps the original 3.4 mm
+    // margin exactly; a multi-badge row is pulled fully inside the frame (St Ives'
+    // 2-badge "to Cambridge" row moves 2.1 mm — re-rendered at v6.8).
+    const rowHalf=Math.max(3.4, ((Math.max(...groups.map(g=>g.ms.length))-1)/2)*BS+3.4);
+    bx=Math.min(Math.max(bx,MX0+rowHalf),MX1-rowHalf); by=Math.min(Math.max(by,MY0+3.4),MY1-3.4);
+    aplaced.push([bx,by]);
     let bxMin=Infinity,bxMax=-Infinity,byMin=Infinity,byMax=-Infinity;
     groups.forEach((g,gidx)=>{
       const ry=by+(gidx-(groups.length-1)/2)*RH;
@@ -1527,7 +1550,12 @@ if(RJ.internalTermini && !IR){ const TL=RJ.terminiLabels||{};
 }
 
 // title
-out(`<text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fill="${C[ORI]}">Buses within ${esc(RJ.town)}</text>`);
+// Title colour defaults to the orientation route's colour, as it always has.
+// `internalTitleColor` overrides it — needed once a town colours by CORRIDOR
+// (rung 3), because the orientation route then wears a shared corridor hue that
+// has nothing to do with the sheet's identity (High Wycombe's title turned red
+// when 32A joined the Booker–Micklefield corridor). Absent => byte-identical.
+out(`<text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fill="${RJ.internalTitleColor||C[ORI]}">Buses within ${esc(RJ.town)}</text>`);
 out(`<text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from ${esc(RJ.validFrom||'June 2026')})</text>`);
 for(const f of FEATURES) drawFeatureLabel(f);
 

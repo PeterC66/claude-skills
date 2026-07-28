@@ -427,21 +427,35 @@ if (pathsFile && pathsFile.routes && Object.keys(pathsFile.routes).length) {
 //
 // The config KEY is always the lead route (it keys colour and overrides), so put
 // it first regardless of how the member list happens to be ordered.
-const cfgFamilies = key => {
+// The set of routes actually DRAWN — routes_paths.json is written after
+// match_cfg.json `skipRoutes`, so a service curated off the map (rung 0) is
+// already absent here. S must be measured over the same set, or a town that has
+// taken rung 0 keeps being charged for the stops of lines it no longer draws.
+const drawnSet = new Set(Object.keys(paths));
+// Bundling renames a family's lane to `<lead>+`, so anything asking "is this
+// route still drawn?" after rung 1 has to ask under that name.
+let bundleKeyOf = r => r;
+const cfgFamilies = (key, mapKey) => {
   if (!routesJson || !routesJson[key]) return [];
+  const k = mapKey || (r => r);
   return Object.keys(routesJson[key])
     .map(lead => {
       const v = routesJson[key][lead];
       const members = Array.isArray(v) ? v : (v && v.routes) || [];
       return [lead].concat(members.filter(r => r !== lead));
     })
-    .filter(g => g.length > 1 && g.every(r => paths[r]));
+    .filter(g => g.length > 1 && g.every(r => paths[k(r)]));
 };
 
 // rung 1 — internalCorridors: members become ONE drawn line.
 const cfgCorr = cfgFamilies('internalCorridors');
+let cfgCorrMembers = null;
 if (cfgCorr.length) {
-  paths = bundlePaths(paths, cfgCorr, null).paths;
+  const b = bundlePaths(paths, cfgCorr, null);
+  paths = b.paths; cfgCorrMembers = b.members;
+  const map = {};
+  for (const g of cfgCorr) for (const m of g) map[m] = g[0] + '+';
+  bundleKeyOf = r => map[r] || r;
   geomSource += ' + configured internalCorridors';
 }
 
@@ -450,11 +464,11 @@ if (cfgCorr.length) {
 // the honest R is the number of distinct COLOURS, not of lines. Recorded
 // separately below rather than folded into `paths`, because K5/D5 must still be
 // measured on every drawn line — the ink does not go away when the colour does.
-const cfgPal = cfgFamilies('corridorPalette');
+const cfgPal = cfgFamilies('corridorPalette', bundleKeyOf);
 let colourGroups = null;
 if (cfgPal.length) {
   const lead = {};
-  for (const g of cfgPal) for (const m of g) lead[m] = g[0];
+  for (const g of cfgPal) for (const m of g) lead[bundleKeyOf(m)] = bundleKeyOf(g[0]);
   colourGroups = new Set(Object.keys(paths).map(r => lead[r] || r)).size;
   geomSource += ' + configured corridorPalette';
 }
@@ -486,6 +500,7 @@ const thinKeep = (function () {
   for (const g of cfgCorr) for (const m of g) leadOf[m] = g[0];
   const lanes = {};
   for (const r of Object.keys(intown)) {
+    if (!drawnSet.has(r)) continue;                 // curated off the map (rung 0)
     const chain = intown[r] || [];
     if (!chain.length) continue;
     if (cfgThin.termini !== false) { keep.add(chain[0]); keep.add(chain[chain.length - 1]); }
@@ -498,7 +513,7 @@ const thinKeep = (function () {
 })();
 if (cfgThin) geomSource += ' + configured stopThinning';
 const stopCount = intown
-  ? new Set([].concat(...Object.values(intown))
+  ? new Set([].concat(...Object.keys(intown).filter(r => drawnSet.has(r)).map(r => intown[r]))
       .filter(a => !(cfgCore && anchorLL0 && atco2ll[a] && havKm(atco2ll[a], anchorLL0) <= cfgCore))
       .filter(a => !thinKeep || thinKeep.has(a))).size
   : null;
@@ -509,15 +524,24 @@ if (!metrics) die('no drawable routes found in ' + dir);
 if (colourGroups !== null) { metrics.linesDrawn = metrics.R; metrics.R = colourGroups; }
 const verdict = band(metrics);
 
-// colour ambiguity - the sharpest single fact about a big town
+// colour ambiguity - the sharpest single fact about a big town.
+// Measured on the SHIPPED palette (routes.json) where there is one, and only
+// over the routes actually drawn: S2's draft palette.json still carries every
+// service the town scoped, so scoring it charged a town for hues on services it
+// had already curated off the map, and reported "colour no longer identifies a
+// route" at a town that had just been fixed.
 let colours = null;
-if (palette && palette.palette) {
-  const distinct = new Set(Object.values(palette.palette)).size;
-  colours = {
-    routes: Object.keys(palette.palette).length,
-    distinct,
-    ambiguity: round(Object.keys(palette.palette).length / distinct, 2)
-  };
+{
+  const pal = (routesJson && routesJson.palette) || (palette && palette.palette);
+  if (pal) {
+    const keys = Object.keys(pal).filter(r => drawnSet.has(r));
+    const use = keys.length ? keys : Object.keys(pal);
+    const distinct = new Set(use.map(r => pal[r])).size;
+    colours = {
+      routes: use.length, distinct, ambiguity: round(use.length / distinct, 2),
+      byDesign: cfgPal.length > 0 || undefined
+    };
+  }
 }
 
 // ---- the remedy ladder, applied cumulatively, each rung re-scored for real
@@ -550,7 +574,9 @@ function stopsFor(members, coreKm) {
 const ladder = [];
 let cur = paths;
 let curMembers = {};
-for (const k of Object.keys(paths)) curMembers[k] = [k];
+// after an applied rung 1 the lane keys are `<lead>+`; their members are the
+// real route names, which is what stopsFor() has to look up in `intown`
+for (const k of Object.keys(paths)) curMembers[k] = (cfgCorrMembers && cfgCorrMembers[k]) || [k];
 let curCore = 0;
 
 // `data` carries the rung's proposal in MACHINE-READABLE form alongside the
@@ -586,13 +612,22 @@ if (cliff) {
 const fams = detectFamilies(cur, overlapMin);
 if (fams.length) {
   const b = bundlePaths(cur, fams, curMembers);
+  // A detected family can contain a lane the town has ALREADY bundled (`1+`).
+  // Report it in real route names, and keep that lane's existing lead as the
+  // family lead — the lead keys the colour, so re-seating it on the newcomer
+  // would silently recolour a family the town has already signed off.
+  const named = fams.map(f => {
+    const existing = f.find(k => (curMembers[k] || []).length > 1);
+    const ordered = existing ? [existing].concat(f.filter(k => k !== existing)) : f;
+    return [].concat(...ordered.map(k => curMembers[k] || [k]));
+  });
   cur = b.paths; curMembers = b.members;
   pushRung(1,
     'bundle ' + fams.length + ' co-running route famil' + (fams.length === 1 ? 'y' : 'ies') +
       ' into single lines (CANDIDATES - confirm each really co-runs)',
-    fams.map(f => f.join('/')).join('  |  '),
-    { families: fams, overlapMin,
-      internalCorridors: fams.reduce((o, f) => (o[f[0]] = f.slice(1), o), {}) });
+    named.map(f => f.join('/')).join('  |  '),
+    { families: named, overlapMin,
+      internalCorridors: named.reduce((o, f) => (o[f[0]] = f.slice(1), o), {}) });
 }
 
 // Skipped when the town already HAS a coreBox — re-proposing a remedy that is
@@ -736,7 +771,11 @@ if (jsonOnly) {
   if (colours) {
     console.log('  palette: ' + colours.distinct + ' distinct colours for ' + colours.routes +
                 ' routes (ambiguity ' + colours.ambiguity + 'x' +
-                (colours.ambiguity > 1 ? ' - COLOUR NO LONGER IDENTIFIES A ROUTE' : '') + ')');
+                (colours.ambiguity > 1
+                  ? (colours.byDesign
+                      ? ' - shared BY DESIGN, one hue per corridor; badges carry identity'
+                      : ' - COLOUR NO LONGER IDENTIFIES A ROUTE')
+                  : '') + ')');
   }
   if (out.band === 'GREEN') {
     console.log('');

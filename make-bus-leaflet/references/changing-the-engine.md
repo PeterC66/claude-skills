@@ -64,15 +64,25 @@ data or the committed SVG has been tampered with — a different and more seriou
 
 | Town | Latest S4 | External generator |
 |---|---|---|
-| St Ives | `v6.7_2026-07-28_0459` | busway |
+| St Ives | `v6.8_2026-07-28_1034` | busway |
 | March | `v2.1_2026-07-28_0457` | radial |
 | Huntingdon | `v3.1_2026-07-28_0457` | radial |
 | Wisbech | `v1.1_2026-07-28_0459` | radial |
 | St Neots | `v2.1_2026-07-20_2056` | radial |
 | Beaconsfield | `v1.1_2026-07-21_1614` | radial |
-| High Wycombe | `v1.0_2026-07-28_0051` | radial |
+| High Wycombe | `v2.1_2026-07-28_1026` | radial |
 
 **Gate each town with the external generator it actually uses** — St Ives is the only **busway** town (`gen_external_busway.js`); every other town is **radial**. Gating St Ives against the radial file reports a meaningless DIFF.
+
+> **2026-07-28 (P4).** Three `gen_internal.js` changes shipped with the High Wycombe v2.1 rebuild:
+> `coreBox.minRun` (drop orphan stubs), `internalTitleColor`, and a **terminus badge-row frame
+> clamp**. The first two are config-gated, so nothing else moved. The clamp is not: a terminus row
+> is centred on `bx` and spreads `(n-1)/2 × 6.6 mm` each way, and only the centre was being clamped,
+> so any multi-badge row near the frame ran off it — St Ives' 2-badge "to Cambridge" row by 1.7 mm,
+> the Beaconsfield Waitrose and St Neots Town Centre place rows by ~8 mm into the panel column.
+> Fixing it moved those three shipped outputs, so all three were re-rendered the same day
+> (**St Ives v6.8**, **Beaconsfield Waitrose v1.1**, **St Neots Town Centre v1.3**) and the whole
+> set is back to green: 14/14 towns, 4/4 place fixtures, St Ives schematic + diagram.
 
 > **RESOLVED 2026-07-28.** This box used to record three standing RED internal gates (St Ives,
 > March, Huntingdon), left behind by the accepted St Neots v2.x improvements. Those three towns were
@@ -85,7 +95,7 @@ outputs, not two (verified 2026-07-28 for P2):
 
 | Gate | How |
 |---|---|
-| 4 place fixtures | `gate.sh` against `…\Buses\Places\*\S4-generate\<latest>` |
+| 4 place fixtures | `gate.sh` against `…\Buses\Places\*\S4-generate\<latest>` — currently `Beaconsfield Simpson Centre v1.0`, `Beaconsfield Waitrose v1.1`, `St Neots Tesco Extra v1.2`, `St Neots Town Centre v1.3` |
 | St Ives schematic | run `schematize_internal.js` in a copy of the S4 dir, diff `internal-schematic.svg` |
 | St Ives diagram | run `diagram_internal.js` likewise, diff `internal-diagram.svg` |
 

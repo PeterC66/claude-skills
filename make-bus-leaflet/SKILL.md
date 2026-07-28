@@ -105,7 +105,12 @@ Badge text colour: white on dark fills, #111 on light fills (cyan/ochre/grey).
 - **`internalCorridors`** — bundle a family of co-running services into ONE line carrying a stack of badges, sharing the lead's colour. Use the same lead as `external[].routes` so both sheets agree. Candidates come from `curate_services.js`; **confirm each one** and read the `corridors_report.json` warning.
 - **`corridorPalette`** — colour by CORRIDOR, not by route, for routes that share a corridor but don't co-run closely enough to bundle. **This retires the locked "one colour per route" decision** for that town; approved 2026-07-28, bounded to towns drawing more than 12 lines, never a default. It doesn't use fewer colours — it makes the sharing mean something, and the generator warns about every hue still shared by unrelated corridors.
 
+A town that colours by corridor also needs **`internalTitleColor`**, or the sheet's title inherits the
+orientation route's shared corridor hue.
+
 See [references/s3-config.md](references/s3-config.md) — and `coreBox` / `stopThinning` beside them.
+**Worked example: High Wycombe v2.1** (2026-07-28) took rungs 0 → 1 → 2 → 2b → 3 and went
+RED (31 / 320 / 1.21 / 6.18) → **GREEN** (11 colour groups / 91 stops / 0 / 0) on config alone.
 
 ## Sources of truth
 - **Services facts (routes / operators / days / termini / variants) — PRIMARY:** the **structured GTFS dataset** (`_gtfs/cambridgeshire.sqlite`, built from BODS open data — the legal source of truth operators must publish to). Query it with `assets/gtfs_query.py` (see S1). This replaces hand-scraping the bustimes locality page for the *facts*; it's deterministic and reproduced the entire hand-verified St Ives v4.0 set exactly (operators, all days-of-week, and the 301S/V/X variants). See [references/s1-services.md](references/s1-services.md) and the dataset's own `_gtfs/README.md`.

@@ -58,7 +58,17 @@ which defeats it — the skill's "work autonomously, do not interview the user" 
 | Wisbech | 11 | 53 | 0.22 | 1.30 | GREEN |
 | St Neots | 9 | 94 | 0.15 | 0.46 | GREEN |
 | Beaconsfield | 7 | 49 | 0.54 | 1.34 | **AMBER** (K5) |
-| High Wycombe | 31 | 320 | 1.21 | 6.18 | **RED** (all four) |
+| High Wycombe v1.0 | 31 | 320 | 1.21 | 6.18 | **RED** (all four) |
+| **High Wycombe v2.1** (ladder applied) | **11** | **91** | **0** | **0** | **GREEN** |
+
+**The ladder was walked end to end on High Wycombe on 2026-07-28** (rungs 0 → 1 → 2 → 2b → 3, all
+config) and the town came out **GREEN**, inside the envelope of the six accepted towns. Measured at
+each rung on the real geometry: rung 0 (drop the 9 sub-cliff services) 31→22 lines; rung 1 (three
+confirmed families) →14 lanes; rung 2 (600 m core box) K5/D5 →0; rung 2b →91 stops; rung 3 (11
+corridor hues) R→11. **No split, no decline** — §1.3's prediction held. What it cost: three
+`gen_internal.js` fixes the rungs exposed (`coreBox.minRun`, the terminus-row frame clamp,
+`internalTitleColor`) and about two hours of config, most of it the palette re-assignment, exactly
+as P3 predicted.
 
 Beaconsfield reading amber is a **true positive**, not a mis-set threshold: its A40/Pyebush corridor
 is genuinely its most cluttered feature and it already carries a hand-added fisheye lens. Amber means
@@ -174,6 +184,23 @@ whichever sheet holds the centre keeps the entire knot. **Split by route family 
 | `--no-fail` | never exit non-zero (batch scoring) |
 | `--core-radius <m>` | rung-2 probe radius, default 600 |
 | `--overlap <0–1>` | rung-1 family mutual-overlap threshold, default 0.6 |
+
+## What the gate counts (and what it used to miscount)
+
+Three things the score has to agree with the *drawn sheet* about — all three were wrong until the
+first town actually walked the whole ladder (fixed 2026-07-28):
+
+- **S is measured over the DRAWN routes only.** `routes_intown_atco.json` still lists every service
+  S2 scoped, so a town that has taken rung 0 was being charged for the stops of lines it no longer
+  draws. High Wycombe read S=137 against a sheet with 91.
+- **A `corridorPalette` family whose lead is also an `internalCorridors` lead was silently ignored**,
+  because bundling renames the lane `<lead>+`. Two of High Wycombe's three corridors vanished and R
+  read 13 instead of 11 — the difference between AMBER and GREEN.
+- **The colour-ambiguity line reads the shipped `routes.json` palette**, not S2's draft
+  `palette.json`, and only over drawn routes; where `corridorPalette` is set it says the sharing is
+  **by design** instead of "COLOUR NO LONGER IDENTIFIES A ROUTE", which is the whole point of rung 3.
+
+Re-scoring all seven towns after these fixes reproduces the calibration table above exactly.
 
 ## Inputs and the fallback
 

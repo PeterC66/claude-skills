@@ -4,7 +4,8 @@
 // (robust — never a broken link, survives moving/zipping the town folder),
 // refreshed on every build. Run as the final step after S5 (and after S6/diagram
 // if present):   node refresh_latest.js "<townDir>"
-// Copies (whichever exist): internal.jpg, external.jpg, internal-diagram.jpg from
+// Copies (whichever exist): internal.jpg, external.jpg, internal-schematic.jpg,
+// internal-diagram.jpg from
 // the latest S5 render; the newest disagreements.docx and verification.docx found
 // anywhere under the town folder. Missing items are skipped silently.
 const fs = require('fs'), path = require('path');
@@ -53,7 +54,7 @@ function grab(src, destName) {
 }
 
 const s5 = latestS5();
-for (const img of ['internal.jpg', 'external.jpg', 'internal-diagram.jpg'])
+for (const img of ['internal.jpg', 'external.jpg', 'internal-schematic.jpg', 'internal-diagram.jpg'])
   grab(s5 ? path.join(s5, img) : null, img);
 grab(newestUnder('disagreements.docx'), 'disagreements.docx');
 grab(newestUnder('verification.docx'), 'verification.docx');

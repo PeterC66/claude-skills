@@ -5,7 +5,8 @@ together — one image version per build, both images. See SKILL.md for the stag
 versioning, and the resume-routing table. `%SK%` = the skill's `assets` folder.
 
 ## Stage 4 — Generate (versioned)
-1. Decide the bump: **`--bump major`** if you produced a new S1/S2/S3 run this time (data changed), else **`--bump minor`** (visual-only re-gen). First ever build → 1.0 automatically.
+1. Decide the bump: **`--bump major`** if the **data** changed (a new S1 or S2 run), else **`--bump minor`** — config-only, engine-only or visual-only re-gen. First ever build → 1.0 automatically.
+   **A new S3 run does not by itself mean major.** (This step used to say "new S1/S2/S3 run ⇒ major", which contradicts every build since v6.2: each minor bump has its own new S3 run, because S3 is where a town's `routes.json` *and its generator copy* live. Clarified 2026-07-28.) Re-rendering a town purely to pick up an engine improvement is **minor** — the recipe is in [changing-the-engine.md](changing-the-engine.md) §2a.
 2. `S4=stage.js new S4 --bump <major|minor>`; `cd "$S4"`.
 3. Assemble inputs: `stage.js pull S2 .` then `stage.js pull S3 .` (brings the data jsons + routes.json + the edited generators into `$S4`). **`pull` also re-stamps `routes.json`'s `"version"` to this run's version** — it prints `version stamp: "1.0" -> "1.1"` when it changes something. Do the pulls *before* generating, or the maps carry the previous version (`commit` will then refuse the run — see step 7).
 4. `node gen_internal.js` → `internal.svg`; `node gen_external.js` → `external.svg`.

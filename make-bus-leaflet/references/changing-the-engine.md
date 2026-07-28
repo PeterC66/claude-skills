@@ -49,20 +49,28 @@ diffs the SVG against the committed one. Exit 0 = PASS.
 Run it with **no `overrides.json` and no `EDITOR_KEYS`/`OVERRIDES_FILE`** — the gate proves the
 *baseline* is unchanged.
 
-Each town keeps **its own copy** of the generator (current template + that town's small deltas), so
-the gate is always *town's copy + town's S4 data + no overrides == that town's committed SVG*.
+**Gate the TEMPLATE, not the town's frozen copy.** Each town's `S3-config\<ts>\` and
+`S4-generate\<ver>\` folders hold a *copy* of the generator taken when that run was made. Gating a
+town against its own copy is circular — it passes by construction, because that copy is literally
+what drew the SVG. The gate that means something is **`%SK%\gen_internal.js` + the town's S4 data +
+no overrides == that town's committed SVG**, and that is what the table below asserts.
 
-**Current gate set** — every built town, internal *and* external (12 runs):
+(Both runs are worth doing when you are diagnosing: *own copy* PASS + *template* DIFF says
+"the shipped map is intact, the town is just behind the template". *Own copy* DIFF means the
+data or the committed SVG has been tampered with — a different and more serious problem.)
 
-| Town | Latest S4 |
-|---|---|
-| St Ives | `v6.6_2026-07-10_1523` |
-| March | `v2.0_2026-07-12_1926` |
-| Huntingdon | `v3.0_2026-07-12_2139` |
-| Wisbech | `v1.0_2026-07-13_1205` |
-| St Neots | `v2.1_2026-07-20_2056` |
-| Beaconsfield | `v1.1_2026-07-21_1614` |
-| High Wycombe | `v1.0_2026-07-28_0051` |
+**Current gate set** — every built town, internal *and* external (14 runs), all PASS as of
+2026-07-28:
+
+| Town | Latest S4 | External generator |
+|---|---|---|
+| St Ives | `v6.7_2026-07-28_0459` | busway |
+| March | `v2.1_2026-07-28_0457` | radial |
+| Huntingdon | `v3.1_2026-07-28_0457` | radial |
+| Wisbech | `v1.1_2026-07-28_0459` | radial |
+| St Neots | `v2.1_2026-07-20_2056` | radial |
+| Beaconsfield | `v1.1_2026-07-21_1614` | radial |
+| High Wycombe | `v1.0_2026-07-28_0051` | radial |
 
 **Gate each town with the external generator it actually uses** — St Ives is the only **busway** town (`gen_external_busway.js`); every other town is **radial**. Gating St Ives against the radial file reports a meaningless DIFF.
 
@@ -90,8 +98,51 @@ the gate is always *town's copy + town's S4 data + no overrides == that town's c
 towns. It has grown with every town — gate them all; the whole point is that a template change is
 invisible to towns that didn't ask for it.)
 
-**When you change the template you must also re-derive each town's copy** — re-apply that town's
-deltas onto the new template, then gate. Known deltas are listed in `overrides.md` §4.
+**No town carries functional generator deltas any more** (verified 2026-07-28). Every town-specific
+thing lives in `routes.json`, per invariant 1, so "re-deriving a town's copy" is now just *copy the
+current template in*. The delta list in `overrides.md` §4 describes an era before those literals
+migrated into config; treat it as history, not as a checklist.
+
+### 2a. A template improvement leaves already-built towns STALE — and that is the normal state
+
+The gate failing after a deliberate improvement does **not** mean the town is broken. It means the
+town has not been re-rendered since. A build pulls its generator from its **S3 run**, not from
+`%SK%`, so a town frozen at an old S3 keeps drawing with the old engine indefinitely — the shipped
+JPG and the code drift apart silently and nothing complains.
+
+So a template change has **two** halves, and the second is easy to forget:
+
+1. Prove the change (gate every town; the affected ones will legitimately DIFF).
+2. **Re-render every town the change affects** so code and shipped maps agree again.
+
+**How to re-render a town for an engine change only** (no data change) — worked four times on
+2026-07-28:
+
+```
+S3=$(stage.js new S3)                 # new S3 run, seeded from the previous one
+cp <prev S3>/routes.json  "$S3"/      # config unchanged...
+cp %SK%/gen_internal.js   "$S3"/      # ...generator = the CURRENT TEMPLATE
+cp %SK%/gen_external_{radial|busway}.js "$S3"/gen_external.js
+stage.js commit S3 "$S3" --outputs routes.json,gen_internal.js,gen_external.js --note "adopt current engine template: <what changes>"
+S4=$(stage.js new S4 --bump minor); cd "$S4"; stage.js pull S2 .; stage.js pull S3 .
+node gen_internal.js; node gen_external.js   # + schematize_internal.js / diagram_internal.js if configured
+stage.js commit S4 ... ; then S5 render ; then refresh_latest.js
+```
+
+**A new S3 run does NOT force a `--bump major`.** §"Stage 4" in `s4-s5-build-and-render.md` reads
+"major if you produced a new S1/S2/S3 run", but the rule that has actually been followed since v6.2
+is **major = new *data* (S1/S2); minor = config- or engine-only re-gen**, and every historical minor
+bump has its own new S3 run. Config-only re-renders are **minor**.
+
+**Before you re-render, diff the label sets, not just the byte count.** A placement change can
+silently drop or surface a label, which is a content change hiding inside a "cosmetic" diff:
+
+```
+grep -o '>[^<>]*</text>' old.svg | sed 's/^>//;s|</text>||' | sort > /tmp/a
+grep -o '>[^<>]*</text>' new.svg | sed 's/^>//;s|</text>||' | sort > /tmp/b
+comm -23 /tmp/a /tmp/b   # LOST     <- read every line before shipping
+comm -13 /tmp/a /tmp/b   # GAINED
+```
 
 For the schematic and diagram outputs, gate St Ives v6.6 (`internal-schematic.svg`,
 `internal-diagram.svg`) the same way — run the pre-stage, then diff.
@@ -153,9 +204,23 @@ Per the standing review step in `SKILL.md`:
 - Commit every repo you touched. Parts 1 and 2 have no remote — an uncommitted change is one disk
   failure from gone.
 
-## 6. Known rough edge
+## 6. Known rough edges
 
 The duplication in §4 is manual and has no automated drift check: nothing fails if the portal's
 vendored copy diverges from the skill's. A written proposal to fix it is at
 `…\Buses\engine-deduplication-proposal_2026-07-25.md`. Until it is actioned, §4 **is** the
 mechanism — follow it every time.
+
+A one-line drift check over the §4 table is worth running whenever you open this doc:
+
+```
+cmp -s "%SK%/<file>" "<portal dest>/<file>"   # per row; silence == in sync
+```
+
+**Live drift, found 2026-07-28 (portal AHEAD of the skill):**
+`engine/expert/diagram_internal.js` carries a `wll` field (workspace lat/lon per solved junction) in
+`solved-nodes.json` that the skill's copy does not. P7's admin pin editor (`src/expert/index.js`)
+needs it to line its handles up with the sheet. It is **additive and SVG-neutral** — the diagram
+gates pass on both sides — but the two files are no longer byte-identical, which is exactly the
+failure mode §4 exists to prevent. Back-port it to the skill (or make the portal wrapper compute it)
+rather than letting it sit. Everything else in the §4 table was verified in sync on 2026-07-28.

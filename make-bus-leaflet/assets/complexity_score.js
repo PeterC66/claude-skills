@@ -423,11 +423,17 @@ if (pathsFile && pathsFile.routes && Object.keys(pathsFile.routes).length) {
 // Honour configured corridor bundling if this town already has it (P2+); the
 // key does not exist yet, so today this is inert.
 if (routesJson && routesJson.internalCorridors) {
-  const fams = Object.values(routesJson.internalCorridors)
-    .map(v => Array.isArray(v) ? v : (v && v.routes) || [])
+  // The config KEY is the lead route (it keys colour and overrides), so put it
+  // first regardless of how the member list happens to be ordered.
+  const fams = Object.keys(routesJson.internalCorridors)
+    .map(lead => {
+      const v = routesJson.internalCorridors[lead];
+      const members = Array.isArray(v) ? v : (v && v.routes) || [];
+      return [lead].concat(members.filter(r => r !== lead));
+    })
     .filter(g => g.length > 1 && g.every(r => paths[r]));
   if (fams.length) {
-    paths = bundlePaths(paths, fams);
+    paths = bundlePaths(paths, fams, null).paths;
     geomSource += ' + configured internalCorridors';
   }
 }

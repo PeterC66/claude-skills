@@ -66,6 +66,26 @@ the gate is always *town's copy + town's S4 data + no overrides == that town's c
 
 **Gate each town with the external generator it actually uses** — St Ives is the only **busway** town (`gen_external_busway.js`); every other town is **radial**. Gating St Ives against the radial file reports a meaningless DIFF.
 
+> ### ⚠ THREE INTERNAL GATES ARE CURRENTLY RED — this is pre-existing, not your change
+> Verified 2026-07-28. Run the internal gate today and **St Ives, March and Huntingdon DIFF against
+> the current `gen_internal.js`**. Establish this baseline **before** you edit anything, so you can
+> tell your diff from the standing one:
+>
+> | Town | Standing diff |
+> |---|---|
+> | St Ives | terminus tail label `x` 42.13 → 43.23; a shared "to Cambridge" label `#333` → `#111` |
+> | March | terminus tail label `x` 189.14 → 188.04 |
+> | Huntingdon | ~1438 lines — road skeleton `#888888`/1.6 → `#333333`/1.5, plus road-segment split differences |
+>
+> These look like the **deliberately accepted** St Neots v2.0/v2.1 improvements (black shared
+> terminus labels, `minSegLen` railway declutter, `reachExtend` tail handling) and the High Wycombe
+> work, with those three towns simply never re-rendered since. Wisbech, St Neots, Beaconsfield and
+> High Wycombe pass.
+>
+> Per rule 5 in §4 below, the fix is to **re-render the three towns as minor bumps** so the shipped
+> fixture matches the intended output — never to edit the generator back. Until that happens, gate
+> those three by **diffing your change against this recorded baseline**, not against zero.
+
 (The older docs say "the 4-way gate: St Ives + March". That was the gate set when there were two
 towns. It has grown with every town — gate them all; the whole point is that a template change is
 invisible to towns that didn't ask for it.)

@@ -26,6 +26,32 @@ The config-driven keys the generators read (2026-06-07 — the per-town code edi
 - **`version`** — the version **printed on the map** (external via `D.version`; internal/diagram via `RJ.version`, unless `LEAFLET_VERSION` overrides). It is a *data* field and is **separate from the `v<N.N>_<ts>` run-folder name**, which is manifest metadata. **You no longer have to remember to bump it** (2026-07-25): `stage.js pull` rewrites it to match the versioned run dir it lands in, and `stage.js commit S4|S5` refuses to record a run whose field disagrees. Formatting is preserved — only the numeric part is rewritten, so a town's `"1.1"`, a place's `"v1.0"` and any suffix (`"1.1 · Summer 2026"`) all survive. Repair an odd one by hand with `stage.js stampver <runDir>`; keep a deliberately-different stamp with `commit --force-version`. Note the guard fires at **commit** time, when the SVGs are already drawn — so a mismatch means *regenerate*, not just edit the field.
 - The **external hub label** uses `routes.json` `town` (no longer hardcoded); the radial hub box auto-widens for long town names.
 
+### RESERVED — the complexity-remedy keys (P2/P3, not yet implemented by any generator)
+
+The triage gate ([complexity-triage.md](complexity-triage.md)) recommends these; the generators do
+**not** honour them yet. The names and shapes are fixed here so the gate and the generator cannot
+drift apart when P2/P3 lands — `complexity_score.js` **already reads `internalCorridors`** and
+re-scores a bundled town with it, so a generator that implements a different shape would silently
+stop being scored correctly.
+
+- **`internalCorridors`** `{ "<lead route>": ["1","1A","1B"] }` — *(rung 1, P2)* draw the listed
+  routes as **one line carrying a stack of badges** instead of one line each. The lead route keys the
+  colour and the overrides. Also accepted: `{ "<lead>": { "routes": [...] } }`. **The bundle must
+  split back into separate lines where the routes diverge** — `102/103/104/105` share the A40 but not
+  their whole length, and a bundle kept merged past the divergence states something false. This is
+  the internal twin of `external[].routes`, which already solved the identical problem on the
+  external map — read that implementation first.
+- **`coreBox`** `{ "radius": 600, "label": "town centre", "at": [x,y] }` — *(rung 2, P3)* replace the
+  congested centre with a labelled box; routes terminate at its edge instead of crossing the knot.
+  `radius` in metres from `anchor`. Interacts with the existing fisheye `lenses[]` — decide which
+  owns the centre.
+- **`corridorPalette`** `true` — *(rung 3, P3)* colour by corridor family rather than by route, with
+  badges carrying route identity. **Approved 2026-07-28 but bounded to towns drawing > 12 lines**,
+  and it breaks the internal/external colour correspondence for bundled families, so it is a
+  deliberate per-town decision, never a default.
+
+All three must be **opt-in and absent ⇒ byte-identical**, like every other key here.
+
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
 A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the
 **perimeter of the external frame**. Five keys buy the room back. All were gated on every existing

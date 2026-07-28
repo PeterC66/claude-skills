@@ -240,3 +240,16 @@ Two things that made the back-port safe to do by straight copy, and are worth re
 **A portal-ahead drift is the easy one to miss**, because the skill's own gates all pass — the
 skill is self-consistent, it is simply behind. Only the `cmp` over the §4 table catches it, so run
 that check whenever you open this doc, not just after you change something.
+
+> **Caveat on that `cmp` — the two repos disagree about line endings** (noted 2026-07-28, not fixed).
+> The skills repo has `core.autocrlf=true` and **no `.gitattributes`**; the portal has
+> `core.autocrlf=false` plus `.gitattributes` `* text=auto eol=lf`. Both *store* LF, and both
+> working copies are LF today, so `cmp` is honest right now. But a **fresh clone or checkout of the
+> skills repo writes CRLF** into the working tree (~970 CRs in this file alone) while the portal's
+> stays LF — after which `cmp` reports **every row of §4 as DRIFTED** when nothing has actually
+> diverged. Don't react to that by copying files around; confirm with
+> `diff <(tr -d '\r' < a) <(tr -d '\r' < b)` first. The clean fix is to give the skills repo the
+> same `.gitattributes` as the portal, but that renormalises every tracked file, so it is Peter's
+> call, not a side effect of an engine change. (Source line endings do **not** affect generator
+> output — the SVG writers emit `\n` from string literals — so the byte-identical gates are
+> unaffected either way.)

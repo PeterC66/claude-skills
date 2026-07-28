@@ -72,18 +72,72 @@ not a detail.
 Get the candidate list from `curate_services.js` (see [s2-geometry.md](s2-geometry.md)); it prints a
 paste-ready block. **They are candidates, never decisions.**
 
-#### RESERVED — still not implemented by any generator (P3)
+#### `coreBox` — rung 2, LIVE since P3 (2026-07-28)
 
-- **`coreBox`** `{ "radius": 600, "label": "town centre", "at": [x,y] }` — *(rung 2)* replace the
-  congested centre with a labelled box; routes terminate at its edge instead of crossing the knot.
-  `radius` in metres from `anchor`. Interacts with the existing fisheye `lenses[]` — decide which
-  owns the centre.
-- **`corridorPalette`** `true` — *(rung 3)* colour by corridor family rather than by route, with
-  badges carrying route identity. **Approved 2026-07-28 but bounded to towns drawing > 12 lines**,
-  and it breaks the internal/external colour correspondence for bundled families, so it is a
-  deliberate per-town decision, never a default.
+```json
+"coreBox": { "radius": 600, "label": "town centre", "sublabel": "all routes call here" }
+```
+*(optional: `at:[x,y]`, `w`, `h`, `fill`, `stroke`, `textSize`)*
 
-The names and shapes are fixed here so the gate and the generator cannot drift apart when P3 lands.
+Replace the congested town centre with a plain labelled box that routes run **to** and stop at. This
+is the single most decisive move on a commercial operator's own big-town map, and it is the **only**
+remedy for a trunk-corridor congestion (`D5 > 3 km`) — a fisheye lens cannot help there.
+
+- Route lines are **cut at the boundary**, not hidden under the box, so each visibly runs to it. A
+  route that crosses the centre and comes out the other side draws as two runs.
+- Stop ticks, POIs, road labels, the anchor label and route badges inside the box are dropped; the
+  road skeleton and any linear feature are covered by the opaque box.
+- `radius` is in **metres from `anchor`**, matching how `complexity_score.js` models rung 2, so the
+  predicted score and the drawn sheet mean the same thing. The page rectangle is derived by
+  projecting a real geographic circle of that radius and taking its bounding box — exact under any
+  fisheye or `lenses[]`, with no assumption about local scale.
+
+**Two things to check on the first draft.** The focus fisheye *magnifies* the core, so the drawn box
+comes out much larger than an unmagnified 600 m would look — cut `internalRoads.focus` (or the
+radius) if it swallows the map; decide which of the two owns the centre. And a `features[]`
+`labelPos` sited on the town centre will now sit inside the box: the generator **drops that label and
+says so on stderr** rather than printing it on the box, so move it.
+
+#### `stopThinning` — rung 2b, LIVE since P3 (2026-07-28)
+
+```json
+"stopThinning": true          // or { "minLines": 2, "termini": true, "keep": ["ATCO"], "drop": ["ATCO"] }
+```
+
+Draw only the stops that earn their place: those served by `minLines` or more **drawn lines**, plus
+every line's two end stops (and always the `anchor`). Counted **per lane**, so a stop served only by
+a bundled `1/1A/1B` counts once, not three times.
+
+Label load is independent of route count — a town can clear R, K5 and D5 and still be unreadable
+because 300 ticks fight for the same square centimetre — so **the ladder cannot finish without
+this**: High Wycombe stays RED on S alone however well rungs 0–2 do. Same rule the gate models, so
+prediction and sheet agree. High Wycombe: 320 stops → 164.
+
+#### `corridorPalette` — rung 3, LIVE since P3 (2026-07-28)
+
+```json
+"corridorPalette": { "31": ["41"], "34": ["36","37"] }
+```
+*(same shape as `internalCorridors`)*
+
+Colour by **corridor** rather than by route. Members keep their own line and their own lane — only
+the colour is shared — so this is the remedy for routes that follow the same corridor but do **not**
+co-run closely enough to bundle (High Wycombe's 31 and 41 overlap 0.40/0.46: one corridor, two real
+lines). Identity moves to the badges, so the badge pass **guarantees every colour-shared line at
+least one badge**, ignoring collision if it has to: an unidentifiable line is a worse defect than a
+crowded one.
+
+**This retires a locked design decision.** "One colour per route, consistent across both maps and
+across updates" no longer holds for a town that uses it. Approved 2026-07-28, **bounded to towns
+drawing more than 12 lines**, never a default and never inferred — the groups are declared, so a
+data refresh cannot silently reshuffle a town's colours.
+
+**Know what it does not do.** It does not reduce how many colours the town uses; it makes the sharing
+*mean something*. High Wycombe v1.0's real disease was 12 hues spread arbitrarily over 31 routes —
+colour repeated, but at random. So re-assign `palette` so each corridor gets one hue and no two
+corridors share one; the generator then **warns about every hue still shared by unrelated groups**,
+which is the defect being fixed. With this key set, `complexity_score.js` reports **R as distinct
+colour groups** (and `linesDrawn` alongside), because R exists to police the ~12-hue ceiling.
 
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
 A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the

@@ -168,7 +168,64 @@ if (!r1 || !r1.data || !r1.data.families || !r1.data.families.length) {
   console.log('  share of each member\'s DRAWN length that really is on the bundle, and');
   console.log('  warns below 60%. Drop any family that warns.');
 }
+// ---- rungs 2 / 2b / 3 -----------------------------------------------------
+const r2 = rung(2), r2b = rung('2b'), r3 = rung(3);
+const applied = score.applied || {};
+
 console.log('');
-console.log('  (rungs 2 / 2b / 3 are judgement calls, not config this script can');
-console.log('   propose — see references/complexity-triage.md)');
+console.log('RUNG 2 — suppress the town centre');
+if (applied.coreBox) {
+  console.log('  already configured (' + applied.coreBox.radiusM + ' m). Score above includes it.');
+} else if (!r2) {
+  console.log('  not modelled — no anchor coordinate in this run dir.');
+} else {
+  console.log('  predicted after:   R=' + r2.after.R + ' S=' + r2.after.S +
+    ' K5=' + r2.after.K5 + ' D5=' + r2.after.D5 + '   ' + r2.band);
+  console.log('');
+  console.log('  routes.json:');
+  console.log('    "coreBox": { "radius": 600, "label": "town centre" }');
+  console.log('');
+  console.log('  The focus fisheye MAGNIFIES the core, so the drawn box comes out much');
+  console.log('  bigger than 600 m looks on an unmagnified map. Check the S5 JPG and cut');
+  console.log('  internalRoads.focus (or the radius) if it swallows the map.');
+  console.log('  Move any features[] labelPos that now sits inside the box — the generator');
+  console.log('  drops such a label and says so rather than printing it on the box.');
+}
+
+console.log('');
+console.log('RUNG 2b — thin the drawn stops');
+if (applied.stopThinning) {
+  console.log('  already configured. Score above includes it.');
+} else if (!r2b) {
+  console.log('  not needed — stop load is not what is failing.');
+} else {
+  console.log('  predicted after:   R=' + r2b.after.R + ' S=' + r2b.after.S +
+    ' K5=' + r2b.after.K5 + ' D5=' + r2b.after.D5 + '   ' + r2b.band);
+  console.log('');
+  console.log('  routes.json:');
+  console.log('    "stopThinning": true       // or { "minLines":2, "keep":["ATCO",…] }');
+}
+
+console.log('');
+console.log('RUNG 3 — colour by corridor instead of by route');
+if (applied.corridorPalette) {
+  console.log('  already configured. R above counts COLOUR GROUPS, not lines.');
+} else if (!r3) {
+  console.log('  not needed — R is within the ~12-hue palette.');
+} else {
+  console.log('  ' + r3.detail);
+  console.log('');
+  console.log('  routes.json:');
+  console.log('    "corridorPalette": { "<lead>": ["<route>", …] }   // one hue per CORRIDOR');
+  console.log('');
+  console.log('  This retires a locked design decision ("one colour per route, consistent');
+  console.log('  across both maps") and is bounded to towns drawing more than 12 lines, so');
+  console.log('  it is a deliberate per-town call. And note what it does NOT do: it does');
+  console.log('  not reduce how many colours the town uses — it makes the sharing MEAN');
+  console.log('  something. Re-assign palette.json so each corridor gets one hue and no');
+  console.log('  two corridors share one; gen_internal.js then warns about every hue still');
+  console.log('  shared by unrelated groups, which is the actual defect being fixed.');
+}
+console.log('');
+console.log('  Full ladder and the reasoning: references/complexity-triage.md');
 console.log('');

@@ -420,27 +420,93 @@ if (pathsFile && pathsFile.routes && Object.keys(pathsFile.routes).length) {
   die('need routes_paths.json, or routes_intown_atco.json + atco2ll.json, in ' + dir);
 }
 
-// Honour configured corridor bundling if this town already has it (P2+); the
-// key does not exist yet, so today this is inert.
-if (routesJson && routesJson.internalCorridors) {
-  // The config KEY is the lead route (it keys colour and overrides), so put it
-  // first regardless of how the member list happens to be ordered.
-  const fams = Object.keys(routesJson.internalCorridors)
+// Honour the ladder remedies this town has ALREADY configured, so a town that
+// has been through the ladder re-scores as it is drawn rather than being
+// penalised for services it no longer draws separately. Each mirrors exactly
+// what gen_internal.js does with the same key.
+//
+// The config KEY is always the lead route (it keys colour and overrides), so put
+// it first regardless of how the member list happens to be ordered.
+const cfgFamilies = key => {
+  if (!routesJson || !routesJson[key]) return [];
+  return Object.keys(routesJson[key])
     .map(lead => {
-      const v = routesJson.internalCorridors[lead];
+      const v = routesJson[key][lead];
       const members = Array.isArray(v) ? v : (v && v.routes) || [];
       return [lead].concat(members.filter(r => r !== lead));
     })
     .filter(g => g.length > 1 && g.every(r => paths[r]));
-  if (fams.length) {
-    paths = bundlePaths(paths, fams, null).paths;
-    geomSource += ' + configured internalCorridors';
-  }
+};
+
+// rung 1 — internalCorridors: members become ONE drawn line.
+const cfgCorr = cfgFamilies('internalCorridors');
+if (cfgCorr.length) {
+  paths = bundlePaths(paths, cfgCorr, null).paths;
+  geomSource += ' + configured internalCorridors';
 }
 
-const stopCount = intown ? new Set([].concat(...Object.values(intown))).size : null;
+// rung 3 — corridorPalette: members keep separate lines but share ONE colour.
+// R exists to police the ~12-hue palette, so for a town that colours by corridor
+// the honest R is the number of distinct COLOURS, not of lines. Recorded
+// separately below rather than folded into `paths`, because K5/D5 must still be
+// measured on every drawn line — the ink does not go away when the colour does.
+const cfgPal = cfgFamilies('corridorPalette');
+let colourGroups = null;
+if (cfgPal.length) {
+  const lead = {};
+  for (const g of cfgPal) for (const m of g) lead[m] = g[0];
+  colourGroups = new Set(Object.keys(paths).map(r => lead[r] || r)).size;
+  geomSource += ' + configured corridorPalette';
+}
+
+// rung 2 — coreBox: the centre is not drawn at all, so nothing inside it counts
+// towards congestion. Same geographic circle the generator projects into a box.
+let cfgCore = 0;
+if (routesJson && routesJson.coreBox && cfg && cfg.anchor && atco2ll && atco2ll[cfg.anchor]) {
+  const cb = routesJson.coreBox === true ? {} : routesJson.coreBox;
+  cfgCore = (cb.radius != null ? cb.radius : 600) / 1000;
+  paths = suppressCore(paths, atco2ll[cfg.anchor], cfgCore);
+  geomSource += ' + configured coreBox';
+}
+
+// A configured coreBox does not draw the stops inside it either, so they must
+// not count towards the label-load metric.
+const anchorLL0 = (cfg && cfg.anchor && atco2ll && atco2ll[cfg.anchor]) ? atco2ll[cfg.anchor] : null;
+// rung 2b - a configured stopThinning draws only the stops that earn their
+// place. Same rule gen_internal.js applies: served by >= minLines DRAWN LINES
+// (a bundled family counts once), plus each line's two end stops.
+const cfgThin = (routesJson && routesJson.stopThinning)
+  ? (routesJson.stopThinning === true ? {} : routesJson.stopThinning) : null;
+const thinKeep = (function () {
+  if (!cfgThin || !intown) return null;
+  const minLines = cfgThin.minLines != null ? cfgThin.minLines : 2;
+  const keep = new Set(cfgThin.keep || []);
+  if (cfg && cfg.anchor) keep.add(cfg.anchor);
+  const leadOf = {};
+  for (const g of cfgCorr) for (const m of g) leadOf[m] = g[0];
+  const lanes = {};
+  for (const r of Object.keys(intown)) {
+    const chain = intown[r] || [];
+    if (!chain.length) continue;
+    if (cfgThin.termini !== false) { keep.add(chain[0]); keep.add(chain[chain.length - 1]); }
+    const lane = leadOf[r] || r;
+    for (const a of new Set(chain)) (lanes[a] = lanes[a] || new Set()).add(lane);
+  }
+  for (const a of Object.keys(lanes)) if (lanes[a].size >= minLines) keep.add(a);
+  for (const a of (cfgThin.drop || [])) keep.delete(a);
+  return keep;
+})();
+if (cfgThin) geomSource += ' + configured stopThinning';
+const stopCount = intown
+  ? new Set([].concat(...Object.values(intown))
+      .filter(a => !(cfgCore && anchorLL0 && atco2ll[a] && havKm(atco2ll[a], anchorLL0) <= cfgCore))
+      .filter(a => !thinKeep || thinKeep.has(a))).size
+  : null;
 const metrics = scorePaths(paths, stopCount);
 if (!metrics) die('no drawable routes found in ' + dir);
+// rung 3 redefines R as distinct colours (see cfgPal above). Do it after
+// scorePaths so K5/D5/ink stay measured on every drawn line.
+if (colourGroups !== null) { metrics.linesDrawn = metrics.R; metrics.R = colourGroups; }
 const verdict = band(metrics);
 
 // colour ambiguity - the sharpest single fact about a big town
@@ -465,11 +531,15 @@ if (cfg && cfg.anchor && atco2ll && atco2ll[cfg.anchor]) anchorLL = atco2ll[cfg.
 
 function stopsFor(members, coreKm) {
   if (!intown) return null;
+  // a coreBox / stopThinning the town has ALREADY configured is in force at
+  // every rung, or the ladder's S would contradict the headline S above
+  const core = coreKm || cfgCore;
   const s = new Set();
   for (const line of Object.keys(members)) {
     for (const orig of members[line]) {
       for (const a of (intown[orig] || [])) {
-        if (coreKm && anchorLL && atco2ll && atco2ll[a] && havKm(atco2ll[a], anchorLL) <= coreKm) continue;
+        if (core && anchorLL && atco2ll && atco2ll[a] && havKm(atco2ll[a], anchorLL) <= core) continue;
+        if (thinKeep && !thinKeep.has(a)) continue;
         s.add(a);
       }
     }
@@ -511,6 +581,8 @@ if (cliff) {
   }
 }
 
+// Detected on what is drawn NOW, so an already-bundled town is told what MORE
+// could be bundled rather than being re-told about the families it already has.
 const fams = detectFamilies(cur, overlapMin);
 if (fams.length) {
   const b = bundlePaths(cur, fams, curMembers);
@@ -523,7 +595,9 @@ if (fams.length) {
       internalCorridors: fams.reduce((o, f) => (o[f[0]] = f.slice(1), o), {}) });
 }
 
-if (anchorLL) {
+// Skipped when the town already HAS a coreBox — re-proposing a remedy that is
+// already in the config reads as "do it again" and hides what is really left.
+if (anchorLL && !cfgCore) {
   const sup = suppressCore(cur, anchorLL, coreRadiusKm);
   if (Object.keys(sup).length) {
     const supMem = {};
@@ -542,7 +616,9 @@ if (anchorLL) {
  * square centimetre. Modelled as "keep the stops that earn their place" -
  * interchanges (served by 2+ drawn lines) plus every line's two end stops.
  */
-if (intown && ladder.length && ladder[ladder.length - 1].after.S !== null &&
+// Skipped when the town already HAS stopThinning — S is then already measured
+// on the thinned set, so re-modelling it would predict a saving twice over.
+if (intown && !cfgThin && ladder.length && ladder[ladder.length - 1].after.S !== null &&
     ladder[ladder.length - 1].after.S > BANDS.amber.S) {
   const count = {};
   const enders = new Set();
@@ -565,8 +641,9 @@ if (intown && ladder.length && ladder[ladder.length - 1].after.S !== null &&
   ladder.push({
     rung: '2b',
     action: 'thin drawn stops to interchanges + termini',
-    detail: 'keep stops served by 2+ drawn lines, plus each line\'s end stops',
-    data: null,
+    detail: 'keep stops served by 2+ drawn lines, plus each line\'s end stops'
+          + ' — routes.json "stopThinning": true',
+    data: { stopThinning: true },
     after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5 },
     band: b.band,
     stillFailing: b.failed
@@ -574,12 +651,13 @@ if (intown && ladder.length && ladder[ladder.length - 1].after.S !== null &&
 }
 
 const finalBand = ladder.length ? ladder[ladder.length - 1].band : verdict.band;
-if (finalBand !== 'GREEN' && metrics.R > PALETTE_HUES) {
+if (finalBand !== 'GREEN' && metrics.R > PALETTE_HUES && !cfgPal.length) {
   ladder.push({
     rung: 3,
     action: 'colour by corridor instead of by route (needs sign-off)',
-    detail: 'R is still above the ~' + PALETTE_HUES + '-hue palette; badges carry route identity',
-    data: null,
+    detail: 'R is still above the ~' + PALETTE_HUES + '-hue palette; badges carry route identity'
+          + ' — routes.json "corridorPalette"',
+    data: { corridorPalette: true },
     after: null,
     band: 'predicted GREEN on R'
   });
@@ -592,6 +670,9 @@ const out = {
   geometryApproximate: /straight stop-to-stop/.test(geomSource),
   metrics: {
     R: metrics.R, S: metrics.S, K5: metrics.K5, D5: metrics.D5,
+    // present only when corridorPalette is configured: R is then distinct
+    // COLOURS, and this is how many separate lines are actually drawn
+    linesDrawn: metrics.linesDrawn !== undefined ? metrics.linesDrawn : undefined,
     maxRoutesPerCell: metrics.maxLoad,
     congestedClusters: metrics.congestedClusters,
     largestClusterCells: metrics.largestClusterCells,
@@ -602,6 +683,14 @@ const out = {
     routesOverHalfBuried: metrics.routesOverHalfBuried
   },
   bands: BANDS,
+  // ladder rungs this town has ALREADY configured — the score above is measured
+  // with them applied, and the ladder below does not re-propose them
+  applied: {
+    internalCorridors: cfgCorr.length ? cfgCorr : null,
+    corridorPalette: cfgPal.length ? cfgPal : null,
+    coreBox: cfgCore ? { radiusM: Math.round(cfgCore * 1000) } : null,
+    stopThinning: cfgThin || null
+  },
   band: verdict.band,
   failedThresholds: verdict.failed,
   colours,
@@ -623,6 +712,10 @@ if (jsonOnly) {
   console.log('');
   console.log('COMPLEXITY TRIAGE  ' + out.band + (out.band === 'GREEN' ? '' : '   <- ' + verdict.failed.join('; ')));
   console.log('  geometry: ' + geomSource);
+  {
+    const ap = Object.keys(out.applied).filter(k => out.applied[k]);
+    if (ap.length) console.log('  already applied: ' + ap.join(', ') + ' (not re-proposed below)');
+  }
   if (out.geometryApproximate) {
     console.log('  WARNING: straight stop-to-stop geometry samples far fewer points than');
     console.log('           road-matched paths, so K5 and D5 UNDER-report. The published');
@@ -630,7 +723,9 @@ if (jsonOnly) {
     console.log('           caution; run pull_roads/match_routes first for a real score.');
   }
   console.log('');
-  console.log('  R  drawn lines        ' + String(m.R).padStart(6) + mark(m.R, 'R') + '  green <=' + BANDS.amber.R + '  red >' + BANDS.red.R);
+  console.log('  R  ' + (m.linesDrawn !== undefined ? 'colour groups     ' : 'drawn lines       ') +
+              String(m.R).padStart(6) + mark(m.R, 'R') + '  green <=' + BANDS.amber.R + '  red >' + BANDS.red.R +
+              (m.linesDrawn !== undefined ? '   (corridorPalette: ' + m.linesDrawn + ' lines drawn)' : ''));
   console.log('  S  drawn stops        ' + String(m.S === null ? '-' : m.S).padStart(6) + mark(m.S, 'S') + '  green <=' + BANDS.amber.S + '  red >' + BANDS.red.S);
   console.log('  K5 congested km2      ' + String(m.K5).padStart(6) + mark(m.K5, 'K5') + '  green <=' + BANDS.amber.K5 + '  red >' + BANDS.red.K5);
   console.log('  D5 congestion extent  ' + String(m.D5).padStart(6) + mark(m.D5, 'D5') + '  green <=' + BANDS.amber.D5 + '  red >' + BANDS.red.D5);

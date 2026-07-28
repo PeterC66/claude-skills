@@ -75,9 +75,9 @@ each; take them in order and stop at the first GREEN.
 |---|---|---|
 | **0** | curate the service set at the **frequency cliff** | **built (P2)** — `curate_services.js` → `match_cfg.json skipRoutes` + a `mapNotes` line |
 | **1** | **bundle co-running families** into one line with a badge stack | **built (P2)** — `routes.json` `internalCorridors`, see [s3-config.md](s3-config.md) |
-| **2** | **suppress the core** — a "town centre" box routes terminate at | needs `coreBox` (P3) |
-| **2b** | thin drawn stops to interchanges + termini | curation |
-| **3** | colour by **corridor**, not by route | needs `corridorPalette` (P3); signed off in principle |
+| **2** | **suppress the core** — a "town centre" box routes terminate at | **built (P3)** — `routes.json` `coreBox` |
+| **2b** | thin drawn stops to interchanges + termini | **built (P3)** — `routes.json` `stopThinning` |
+| **3** | colour by **corridor**, not by route | **built (P3)** — `routes.json` `corridorPalette`; retires a locked decision, see below |
 | **4** | split into area sheets **by route family** | not built (P5, only if a town needs it) |
 | **5** | decline the whole-town internal map; ship place-centred leaflets instead | `make-place-bus-leaflet` |
 
@@ -96,9 +96,14 @@ rungs into the config they need:
 |---|---|---|
 | 0 | `match_cfg.json` `skipRoutes` for everything below the frequency cliff, **plus** a `routes.json` `mapNotes` line naming those services so the reader still knows they exist | yes (idempotent union) |
 | 1 | a paste-ready `routes.json` `internalCorridors` block from the detected families | **no — on purpose** |
+| 2 / 2b / 3 | the `coreBox`, `stopThinning` and `corridorPalette` blocks, with each rung's predicted score and the traps that go with it | no |
 
 Rung 1 is not auto-applied because a family is a **claim about the real world**. skipRoutes is
 reversible and re-measurable; a wrong bundle makes the map assert something false. Confirm each one.
+
+**Once a rung is in `routes.json`, the gate stops proposing it** and scores the town with it applied
+(`complexity.json` `applied`), so the report always reads "what is still wrong", never "do the thing
+you already did".
 
 **Rung 0 changes the geometry, so re-run S2 after it:**
 `curate_services.js --apply` → `match_routes.js` → `complexity_score.js`.
@@ -116,9 +121,22 @@ reversible and re-measurable; a wrong bundle makes the map assert something fals
   that check independently rejected the hand-picked `31 / 41` family (0.40 / 0.46) while confirming
   `1/1A/1B`, `32/32A` and `102/103/104/105` at 1.00 — those three genuinely run identical streets
   inside the town, and vary only outside the frame.
+- **Rung 2's box is sized by the FISHEYE, not by the radius.** `coreBox.radius` is honest metres, but
+  the always-on `internalRoads.focus` magnifies the core, so a 600 m box can come out enormous on the
+  page. Check the S5 JPG; cut `focus` or the radius. Decide which of the two owns the centre — they
+  are two answers to the same problem and a town rarely wants both at full strength.
 - **Rung 3 retires a locked design decision** ("one colour per route, consistent across both maps")
   for big towns only. It also breaks the internal/external colour correspondence for bundled
   families. Approved in principle 2026-07-28, bounded to R > 12.
+- **Rung 3 does not, by itself, use fewer colours** — it makes the sharing *mean something*. High
+  Wycombe v1.0 already had only 12 distinct hues; the defect was that they were spread over 31 routes
+  **at random**, so two unrelated lines looked like one corridor. The work is re-assigning `palette`
+  so each corridor gets one hue; the generator then warns about every hue still shared by unrelated
+  groups (nine of them on the first pass at High Wycombe). With `corridorPalette` set, the gate
+  reports **R as distinct colour groups**, because R exists to police the ~12-hue ceiling.
+- **Rung 2b is not optional on a big town.** Stop load is independent of route count, so a town can
+  clear R, K5 and D5 and still be unreadable. High Wycombe stays RED on S alone however well rungs
+  0–2 do; the ladder only completes with `stopThinning`.
 
 ### Which rung, by symptom
 

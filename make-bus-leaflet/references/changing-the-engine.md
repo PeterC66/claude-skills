@@ -62,6 +62,9 @@ the gate is always *town's copy + town's S4 data + no overrides == that town's c
 | Wisbech | `v1.0_2026-07-13_1205` |
 | St Neots | `v2.1_2026-07-20_2056` |
 | Beaconsfield | `v1.1_2026-07-21_1614` |
+| High Wycombe | `v1.0_2026-07-28_0051` |
+
+**Gate each town with the external generator it actually uses** — St Ives is the only **busway** town (`gen_external_busway.js`); every other town is **radial**. Gating St Ives against the radial file reports a meaningless DIFF.
 
 (The older docs say "the 4-way gate: St Ives + March". That was the gate set when there were two
 towns. It has grown with every town — gate them all; the whole point is that a template change is

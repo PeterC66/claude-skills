@@ -76,6 +76,15 @@
 // no stamp, so the non-internalRoads gate towns stay byte-identical.
 // Also additive (work in both models, no output when absent): mapNotes[],
 // panelGroups, panelRow, keyRow, panelBadge, fareNote.
+//   panelCols:{ cols:2, width:48, row:5.0, keyAt:{x,y} }
+//                                   // Multi-COLUMN Services panel, for a town with
+//                                   // more services than a single column fits on A4
+//                                   // (High Wycombe: 34). Entries fill column-major,
+//                                   // `cols` columns `width` mm apart starting at the
+//                                   // panel x; `row` overrides panelRow inside the
+//                                   // panel only; keyAt pins the Key block, which
+//                                   // would otherwise start below the tallest column.
+//                                   // Absent => single column, byte-identical.
 const fs = require('fs');
 const path = require('path');
 // All DATA files are read from, and SVG written to, the TOWN WORKING FOLDER
@@ -1113,6 +1122,8 @@ for(const f of FEATURES) drawFeatureLabel(f);
 // ---------- right service panel ----------
 const PX=(OV.panel&&OV.panel.x!=null)?OV.panel.x:200; let py=(OV.panel&&OV.panel.y!=null)?OV.panel.y:14;
 const PROW=RJ.panelRow||8, KROW=RJ.keyRow||4.4, PBR=RJ.panelBadge||4;
+// panelCols (optional) — multi-column Services panel. Absent => single column.
+const PCOLS=(RJ.panelCols&&(RJ.panelCols.cols|0)>1)?RJ.panelCols:null;
 out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="5" fill="#222">Services</text>`); py+=2;
 if(RJ.panelGroups){
   // group the panel by operator (operators[] from routes.json)
@@ -1128,6 +1139,20 @@ if(RJ.panelGroups){
       out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="2.8" fill="#555">${esc(d[1])}</text>`);
     }
   }
+} else if(PCOLS){
+  // multi-column panel: a town with more services than one column fits on A4.
+  // Column-major so a column reads top-to-bottom like the single-column panel.
+  const nCol=Math.max(1,PCOLS.cols|0), cw=PCOLS.width||48, crow=PCOLS.row||PROW;
+  const per=Math.ceil(panelOrder.length/nCol), top=py;
+  panelOrder.forEach((r,i)=>{
+    const col=Math.floor(i/per), row=i%per;
+    const cx=PX+col*cw, cy=top+(row+1)*crow;
+    const d=INTDESC[r]||[r,''];
+    badge(cx+3,cy,r,PBR-0.6);
+    out(`<text x="${cx+7.6}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#111">${esc(d[0])}</text>`);
+    out(`<text x="${cx+7.6}" y="${cy+2.5}" font-family="Arial" font-size="2.3" fill="#555">${esc(d[1])}</text>`);
+  });
+  py=top+per*crow;
 } else {
 for(const r of panelOrder){
   const d=INTDESC[r]||[r,''];
@@ -1137,7 +1162,9 @@ for(const r of panelOrder){
 }
 }
 // key (using the real pictograms)
-py+=10; out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Key</text>`);
+let KX=PX;
+if(PCOLS&&PCOLS.keyAt){ KX=PCOLS.keyAt.x!=null?PCOLS.keyAt.x:PX; py=(PCOLS.keyAt.y!=null?PCOLS.keyAt.y:py+10)-10; }
+py+=10; out(`<text x="${KX}" y="${py}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Key</text>`);
 const key=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
 if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
 key.forEach((kk,i)=>{const ky=py+5+i*KROW, kx=PX+3;

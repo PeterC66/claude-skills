@@ -26,6 +26,39 @@ The config-driven keys the generators read (2026-06-07 — the per-town code edi
 - **`version`** — the version **printed on the map** (external via `D.version`; internal/diagram via `RJ.version`, unless `LEAFLET_VERSION` overrides). It is a *data* field and is **separate from the `v<N.N>_<ts>` run-folder name**, which is manifest metadata. **You no longer have to remember to bump it** (2026-07-25): `stage.js pull` rewrites it to match the versioned run dir it lands in, and `stage.js commit S4|S5` refuses to record a run whose field disagrees. Formatting is preserved — only the numeric part is rewritten, so a town's `"1.1"`, a place's `"v1.0"` and any suffix (`"1.1 · Summer 2026"`) all survive. Repair an odd one by hand with `stage.js stampver <runDir>`; keep a deliberately-different stamp with `commit --force-version`. Note the guard fires at **commit** time, when the SVGs are already drawn — so a mismatch means *regenerate*, not just edit the field.
 - The **external hub label** uses `routes.json` `town` (no longer hardcoded); the radial hub box auto-widens for long town names.
 
+### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
+A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the
+**perimeter of the external frame**. Five keys buy the room back. All were gated on every existing
+town, internal *and* external, before use.
+
+- **`panelCols`** `{cols:2, width:48, row:5.0, keyAt:{x,y}}` (`gen_internal.js`) — multi-**column**
+  Services panel. Entries fill **column-major**, `cols` columns `width` mm apart from the panel `x`;
+  `row` is the row pitch inside the panel only; `keyAt` pins the Key block, which would otherwise
+  start below the tallest column and run off the page. Text is drawn smaller than the single-column
+  panel (2.9 bold / 2.3 grey), so **keep each title ≤ ~25 chars and each subtitle ≤ ~28** or it
+  clips — put the "via" detail on the map, not in the panel. High Wycombe: 34 services in 2 columns.
+- **`legendWrap`** `{perRow:N}` (`gen_external_radial.js`) — wrap an operator's badge run onto
+  further lines. Without it a big operator (Carousel runs 21 of High Wycombe's routes) draws a
+  single row straight off the page.
+- **`legendAt`** `{x, y, box:{w,h}}` (`gen_external_radial.js`) — move the operator legend, and give
+  it an **opaque backing panel**. A large town has a spoke in *every* sector, so there is no empty
+  corner for the legend; `box` lets it sit over the map legibly. Size `box` to clear the nearest
+  destination lozenge — check the S5 JPG, don't assume.
+- **`badgeOffset`** `N` (`gen_external_radial.js`) — mm back from the terminus for the first route
+  badge. Default **8**. Raise it (High Wycombe: 13) when wide destination lozenges cover the badge.
+  *(This one started life as a changed default and the gate caught it — see [gotchas.md](gotchas.md).)*
+- **`external[].routes`** `["104","M40"]` (`gen_external_radial.js`) — **several services sharing one
+  spoke** to a destination, badges stacked along the line. The radial runs out of frame perimeter
+  long before it runs out of services: ~18 lozenges is the practical A4 maximum, and High Wycombe had
+  23 spokes with five destinations reached by two routes each. Merging those five pairs (and keeping
+  destination labels to **one short line** — a two-line lozenge is nearly twice as wide) brought it to
+  19 spokes that fit. `route` stays the first/primary service; it still keys colour and overrides.
+
+**Sequence that works for a crowded radial:** merge co-terminating routes → shorten every label to one
+word → spread bearings by hand so no two lozenges touch → thin the intermediate `stops` on spokes that
+run close together → only then place the legend box. Bearings are schematic; bending a spoke 10–15°
+off true to open a gap is normal and expected.
+
 Older keys still apply:
 - `routes.json` keys read by the generators: `town`, `validFrom`, `version`, `palette`, `textOn`, `operators[]`, `external[]` (radial: each `{route,label,days,bearing,side,stops}`); **`features[]`** (1–3 linear features `{key,type,label,labelPos,labelColor,labelItalic,labelSize,labelReserve,style?}`); plus **`anchor`** (central-interchange ATCO — also the zoom origin), **`anchorLabel`**, **`internalZoom`** `{corePct,comp}`, optional **`titleColor`** / **`externalNote`** / **`riverLabel`** / **`badgeLabels`** (see above), and `busway[]` (busway layout only).
 - **Routes drawn = the in-town subset (v4):** `gen_internal.js` reads **`routes_intown_atco.json`** (S2's town-core + edge-buffer display subset) and falls back to `routes_atco.json` for older towns — so a pass-through route traces to the town edge instead of a stub. Adding edge-buffer stops usually means a previously-compact town now **needs `internalZoom`** to compress the out-of-town buffer stops (St Ives v4.0 = `{corePct:0.9, comp:0.18}`; without it the far stops blow the fit out). Tune `intown_cfg.json maxEdgeKm` (S2) first to drop absurdly-far buffers, then `internalZoom` for the rest. After the first draft, **check each `terminiLabels` badge landed on the arm whose destination it names** (a genuinely two-arm route can land it on the wrong arm).

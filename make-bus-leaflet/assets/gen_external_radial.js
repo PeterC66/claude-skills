@@ -101,8 +101,17 @@ for(const b of D.external){
     const lx=x+perpx*5.2, ly=y+perpy*5.2+0.9;
     out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="2.9" fill="#222" text-anchor="${labSide}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(stops[i])}</text>`);
   }
-  // route badge on the line just inside the terminus node
-  badge(tx-dx*8, ty-dy*8, b.route, 4.0);
+  // route badge(s) on the line just inside the terminus node.
+  // b.routes:[…] (optional) — several services sharing ONE spoke to a destination.
+  // A big town's radial runs out of frame perimeter long before it runs out of
+  // services (High Wycombe: 23 spokes, five destinations reached by two routes
+  // each), so co-terminating routes share a spoke and stack their badges along it.
+  // Absent => a single badge for b.route, exactly as before.
+  // badgeOffset (optional) — mm back from the terminus for the first badge; a town
+  // with wide destination lozenges needs more clearance. Default 8 = previous behaviour.
+  const _boff = (D.badgeOffset != null) ? D.badgeOffset : 8;
+  const _badges = (Array.isArray(b.routes) && b.routes.length) ? b.routes : [b.route];
+  _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*8.6), ty-dy*(_boff+i*8.6), r, 4.0));
   // terminus node
   townNode(tx,ty,b.label);
   if(EDK) out('</g>');
@@ -117,8 +126,32 @@ if(EDK) out('<g data-kind="hub" data-key="hub">');
 if(EDK) out('</g>');
 
 // ---- legend + notes (top-left, under title) ---------------------------------
+// legendAt:{x,y} (optional) — move the operator legend out of a sector the spokes
+// need. Absent => top-left under the title, exactly as before.
 let lx=10, ly=40;
+if(D.legendAt){ if(D.legendAt.x!=null) lx=D.legendAt.x; if(D.legendAt.y!=null) ly=D.legendAt.y; }
+// legendAt.box:{w,h} (optional) — opaque backing panel, drawn UNDER the legend so it
+// can sit over the spokes in a town where every sector carries one. Absent => nothing.
+if(D.legendAt && D.legendAt.box){ const bx=D.legendAt.box;
+  out(`<rect x="${(lx-4).toFixed(2)}" y="${(ly-10).toFixed(2)}" width="${bx.w}" height="${bx.h}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`); }
 out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
+// legendWrap:{perRow:N} (optional) — wrap an operator's badge run onto further
+// lines instead of letting it run off the page. Needed once a town has an
+// operator with many routes (High Wycombe: Carousel runs 17 of them). Absent =>
+// one line per operator exactly as before, so gated towns stay byte-identical.
+const LW = (D.legendWrap && (D.legendWrap.perRow|0) > 0) ? (D.legendWrap.perRow|0) : 0;
+if(LW){
+  let yy = ly;
+  D.operators.forEach(op=>{
+    const rs = op.routes.filter(r=>C[r]);
+    if(!rs.length) return;
+    const rows = Math.ceil(rs.length/LW);
+    rs.forEach((r,k)=>badge(lx+3+(k%LW)*7.0, yy+Math.floor(k/LW)*6.2, r, 2.9));
+    out(`<text x="${(lx+Math.min(rs.length,LW)*7.0+2).toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+    yy += rows*6.2 + 1.4;
+  });
+  ly = yy - 6.6*D.operators.length;   // keep the note's default offset sane
+} else
 D.operators.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
   op.routes.forEach(r=>{ badge(bx+3,yy,r,2.9); bx+=7.0; });
   out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`); });

@@ -1,0 +1,146 @@
+# Complexity triage — deciding whether a town can be drawn at all
+
+Run at the **end of S2**, before anything is styled. Answers the question the pipeline never used to
+ask: *should we be drawing this town, on one sheet, the standard way?*
+
+```
+cd <S2 run dir>
+node "%SK%\complexity_score.js"
+```
+
+Writes `complexity.json` into the run dir and prints a verdict plus a remedy ladder.
+**Exit 0** = GREEN or AMBER, **exit 2** = RED (suppress with `--no-fail`), exit 1 = could not score.
+
+## Why this exists
+
+High Wycombe (2026-07-28) passed every existing gate — S1 verified 46 services, S2 matched 31 routes
+to roads with 2 fallbacks, S6 passed — and produced an unusable internal map. The engine did exactly
+what it was told. Nothing measured whether it *should* have been told to.
+
+The full analysis, the research behind it and the strategy ladder are in
+`…\Buses\town-complexity-triage-plan_2026-07-28.md`.
+
+## The four metrics
+
+| | Metric | Definition | Why |
+|---|---|---|---|
+| **R** | drawn lines | lines the internal map will draw (after any bundling) | **the dominant term.** The colour-blind-safe palettes hold ~12 usable hues. Past ~12 the palette repeats and colour stops identifying a route — High Wycombe shipped 12 colours for 31 routes, each reused 2–3× |
+| **S** | drawn stops | distinct stops in `routes_intown_atco.json` | label load — ticks and names fighting for the same square centimetre |
+| **K5** | congested km² | area of ~111 m cells carrying ≥5 distinct routes | how much of the sheet is illegible |
+| **D5** | congestion extent | diagonal of the **largest connected** cluster of those cells | tells a knot from a trunk — see below |
+
+**D5 is the one that changes the remedy.** A compact knot (D5 < 1 km) is what a fisheye `lenses[]`
+was built for. A trunk corridor (D5 > 3 km) cannot be fixed by a lens at any strength — High
+Wycombe's congestion is a single 77-cell connected network spanning 6.2 km along the Wycombe valley,
+where 6–19 services share the same tarmac for kilometres.
+
+## The bands
+
+Any one metric trips the band — deliberately not a blended index, because *which* metric fails
+determines which remedy to reach for.
+
+| Band | Condition | What to do |
+|---|---|---|
+| **GREEN** | R ≤ 12 · S ≤ 120 · K5 ≤ 0.50 · D5 ≤ 1.6 | build normally |
+| **AMBER** | any one over the green line | apply the ladder, note it in the S2 commit, **continue without pausing** |
+| **RED** | R > 18 · S > 200 · K5 > 0.80 · D5 > 3.5 | **stop.** Choose a strategy before building |
+
+**Only RED pauses.** If AMBER ever starts interrupting an ordinary town the gate will be ignored,
+which defeats it — the skill's "work autonomously, do not interview the user" rule still holds.
+
+### Calibration (every town built to 2026-07-28)
+
+| Town | R | S | K5 | D5 | Band |
+|---|---|---|---|---|---|
+| St Ives | 8 | 69 | 0.04 | 0.11 | GREEN |
+| March | 7 | 70 | 0.27 | 1.35 | GREEN |
+| Huntingdon | 10 | 74 | 0.09 | 0.47 | GREEN |
+| Wisbech | 11 | 53 | 0.22 | 1.30 | GREEN |
+| St Neots | 9 | 94 | 0.15 | 0.46 | GREEN |
+| Beaconsfield | 7 | 49 | 0.54 | 1.34 | **AMBER** (K5) |
+| High Wycombe | 31 | 320 | 1.21 | 6.18 | **RED** (all four) |
+
+Beaconsfield reading amber is a **true positive**, not a mis-set threshold: its A40/Pyebush corridor
+is genuinely its most cluttered feature and it already carries a hand-added fisheye lens. Amber means
+"apply a remedy", which is what happened. The gate suggests bundling 104/105, which takes it green.
+
+**Re-calibrate as towns are added.** Each town's `complexity.json` makes that a data exercise.
+
+## The remedy ladder
+
+Cheapest first. The script models rungs 0–2b on the real geometry and prints the predicted score for
+each; take them in order and stop at the first GREEN.
+
+| Rung | Remedy | Status |
+|---|---|---|
+| **0** | curate the service set at the **frequency cliff** | config today (`skipRoutes` + the "also serving" text block) |
+| **1** | **bundle co-running families** into one line with a badge stack | needs `internalCorridors` (P2) |
+| **2** | **suppress the core** — a "town centre" box routes terminate at | needs `coreBox` (P3) |
+| **2b** | thin drawn stops to interchanges + termini | curation |
+| **3** | colour by **corridor**, not by route | needs sign-off — see below |
+| **4** | split into area sheets **by route family** | not built (P5, only if a town needs it) |
+| **5** | decline the whole-town internal map; ship place-centred leaflets instead | `make-place-bus-leaflet` |
+
+### Reading the ladder output
+
+- **Rung 0** finds the frequency cliff rather than imposing a fixed trips-per-week number. Most towns
+  hand you a natural break: High Wycombe's services run 1–8 trips/week then jump straight to 46, and
+  those below the cliff are exactly its school, works, match-day and market-day services.
+- **Rung 1 families are CANDIDATES, not decisions.** Bundling asserts the routes run together over
+  the drawn extent. `102/103/104/105` share the A40 but not their whole length — a bundled line that
+  keeps them merged past the point they diverge states something false. Confirm every family, and
+  split the bundle back into separate lines where they part.
+- **Rung 3 retires a locked design decision** ("one colour per route, consistent across both maps")
+  for big towns only. It also breaks the internal/external colour correspondence for bundled
+  families. Approved in principle 2026-07-28, bounded to R > 12.
+
+### Which rung, by symptom
+
+| Failing | Diagnosis | First remedy |
+|---|---|---|
+| R high, K5 low | too many routes, well spread | 0 → 1 |
+| K5 high, D5 < 1.5 km | one congested knot | fisheye `lenses[]` (exists today), then 2 |
+| K5 high, D5 > 3 km | trunk corridor | 1, then 3 — **a lens will not help** |
+| S high alone | label overload | 2b |
+| still RED after 0–3 | genuinely too dense | 4, then 5 |
+
+## Do not split a town geographically
+
+Measured on High Wycombe's real geometry, not assumed:
+
+| Split | Lines still present |
+|---|---|
+| whole town | 31 |
+| north half | **31** |
+| west half | **31** |
+| NW quadrant | **31** |
+| south half | 22 |
+| east half | 24 |
+
+Every geographic half still contains nearly every route, because a radial town's routes all pass
+through the centre. An area split cuts *extent*, not *colour count* — so it leaves R untouched, and
+whichever sheet holds the centre keeps the entire knot. **Split by route family / corridor group.**
+
+## Options
+
+| Flag | Effect |
+|---|---|
+| `--dir <path>` | score a directory other than the CWD |
+| `--json` | machine-readable output only |
+| `--no-fail` | never exit non-zero (batch scoring) |
+| `--core-radius <m>` | rung-2 probe radius, default 600 |
+| `--overlap <0–1>` | rung-1 family mutual-overlap threshold, default 0.6 |
+
+## Inputs and the fallback
+
+Reads `routes_paths.json`, `routes_intown_atco.json`, `atco2ll.json`, `intown_cfg.json` (anchor) and
+optionally `palette.json`. `verified-services.json` (S1) and `routes.json` (S3) are found
+automatically via the town manifest, so they don't have to be pulled first.
+
+If `routes_paths.json` is absent it falls back to **straight stop-to-stop lines** and says so.
+That geometry samples far fewer points, so **K5 and D5 under-report** — the calibration table above
+assumes road-matched paths. Treat a GREEN from the fallback with caution; run `pull_roads.js` +
+`match_routes.js` first for a real score.
+
+`internalCorridors` in `routes.json` is honoured when it exists, so a town that has already been
+bundled re-scores correctly rather than being penalised for services it no longer draws separately.

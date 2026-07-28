@@ -41,7 +41,23 @@ Three route files come out of S2:
 
 6. **POIs (OSM)** — unchanged: `bbox` MCP `search_overpass`, or `%SK%\overpass-pois.txt` → `osm.json` / `osm2.json` (the generator builds POIs from raw OSM via `classify()`, not from `pois.json`).
 
-7. `stage.js commit S2 "$S2" --outputs atco2ll.json,atco2name.json,osm.json,osm2.json,features_geo.json,river_geo.json,routes_full_atco.json,routes_intown_atco.json,routes_atco.json`.
+7. **Complexity triage — the "can we draw this?" gate.** Run it **last**, after the road match
+   (`pull_roads.js` + `match_routes.js`) so it scores the real drawn geometry rather than the
+   straight-line fallback:
+   ```
+   node "%SK%\complexity_score.js"
+   ```
+   It writes `complexity.json` and prints a band:
+   - **GREEN** — say so in one line and carry straight on to S3. Nothing changes.
+   - **AMBER** — apply the remedies it lists, record them in the S2 commit note, **keep going**.
+     Do not pause; an amber that interrupts an ordinary town will get ignored.
+   - **RED** — **stop and put the options to the user.** Exits 2 so it can't be missed. Do not build
+     the standard single sheet: pick a strategy from the ladder first.
+
+   Full detail — the four metrics, the calibration across every built town, the remedy ladder, and
+   why a town must never be split geographically — in [complexity-triage.md](complexity-triage.md).
+
+8. `stage.js commit S2 "$S2" --outputs atco2ll.json,atco2name.json,osm.json,osm2.json,features_geo.json,river_geo.json,routes_full_atco.json,routes_intown_atco.json,routes_atco.json,complexity.json`.
 
 ## Notes / gotchas
 - The far edge buffer stops can push the map fit out; enable/tune `routes.json` `internalZoom` (S3) to compress everything beyond the town core (St Ives v4.0 uses `{corePct:0.9, comp:0.18}`).

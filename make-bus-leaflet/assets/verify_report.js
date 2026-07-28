@@ -309,6 +309,37 @@ if (anchorLL) {
   }
 }
 
+// S-6: complexity-ladder remedies assert things about the real world, so check
+// what the generator measured about them. Both are SOFT: they are judgement
+// calls a human signed off, not data errors — but a bundle whose members barely
+// co-run, or a hue shared by unrelated corridors, makes the MAP say something
+// false, which is exactly what S6 exists to surface. Absent file => no findings
+// (a town with no corridorPalette / internalCorridors never writes one).
+{
+  const corr = readJSON('corridors_report.json', true);
+  if (corr) {
+    for (const fam of (corr.families || [])) {
+      if (!fam.weakMembers || !fam.weakMembers.length) continue;
+      const worst = (fam.members || []).filter(m => fam.weakMembers.includes(m.route));
+      add('soft', 'weak-corridor-bundle',
+        `internalCorridors bundles ${fam.routes.join('/')} as one drawn line, but ${fam.weakMembers.join(', ')} co-run with the family over less than ${Math.round((corr.sharedMin || 0.6) * 100)}% of their route. The rest draws as a second same-coloured line going elsewhere.`,
+        { lead: fam.lead, routes: fam.routes, weak: fam.weakMembers,
+          overlap: worst.map(m => `${m.route}=${m.sharedFraction}`) },
+        fam.lead, 'corridors_report');
+    }
+    for (const cl of (corr.colourClashes || [])) {
+      add('soft', 'colour-clash',
+        `Colour ${cl.colour} is shared by unrelated corridor groups (${cl.groups.join(', ')}). With corridorPalette in force a reader reads one colour as one corridor, so this asserts a corridor that does not exist.`,
+        { colour: cl.colour, groups: cl.groups }, null, 'corridors_report');
+    }
+    if (corr.colours && corr.colours.distinctColours > 12) {
+      add('soft', 'palette-exhausted',
+        `${corr.colours.drawnLines} lines are drawn in ${corr.colours.distinctColours} distinct colours (ambiguity ${corr.colours.ambiguity}x). The colour-blind-safe palettes hold about 12 usable hues, so colour no longer identifies a line.`,
+        corr.colours, null, 'corridors_report');
+    }
+  }
+}
+
 // =====================================================================
 // RED-TEAM DIFF (needs redteam.json)
 // =====================================================================

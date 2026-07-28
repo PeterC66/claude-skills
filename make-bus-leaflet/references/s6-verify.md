@@ -129,6 +129,17 @@ what `verify_report.js` parses):
 | `routes_full` termini align with S1 declared termini (locality-token match at chain ends) | **HARD** if *neither* terminus matches; **SOFT** if one matches, one is just a naming variant | chain that ends somewhere else entirely vs. "Cambridge"→`CITY` naming |
 | **Direction**: the drawn edge stop's bearing from the anchor vs. the terminus bearing | **HARD** > 90° apart (drawn the wrong way); **SOFT** 55–90° (arm worth a look) | a route drawn leaving town toward the wrong side |
 | **Counts plausible**: 0 drawn stops, > 80 drawn, or full chain < 2 | **HARD**; **SOFT** at 45–80 drawn | nothing to draw / accidentally drawing the whole chain |
+| **Complexity-ladder remedies** — read from S4's `corridors_report.json`, when the town has `internalCorridors` / `corridorPalette` | all **SOFT** | see below |
+
+**Why the ladder checks are SOFT.** They are judgement calls a human signed off, not data errors — but
+each one is a way the *map* can state something false, which is what S6 is for. Absent file (the
+normal case) ⇒ no findings.
+
+| Finding | What it means |
+|---|---|
+| `weak-corridor-bundle` | a bundled family's member co-runs with it over < 60% of its route, so the rest draws as a second same-coloured line going somewhere else. **Drop that family.** |
+| `colour-clash` | with `corridorPalette` in force, one hue is used by two unrelated corridor groups — a reader reads one colour as one corridor, so this asserts a corridor that does not exist |
+| `palette-exhausted` | more than ~12 distinct colours are drawn; colour no longer identifies a line at all |
 
 ### Red-team diff (needs `redteam.json`)
 | Diff | Severity | Notes |

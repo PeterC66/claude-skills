@@ -919,11 +919,20 @@ try { fs.copyFileSync(path.join(DIR, 'diagram-overrides.json'), path.join(WD, 'o
 }
 
 // ---- solved junction nodes (consumed by the diagram pin editor) ---------------
+// x/y are page-mm in THIS (pre-solve) frame — the frame a pin is stored in. They
+// are NOT where the junction lands on the finished sheet: gen_internal re-projects
+// the workspace below and applies its own fit, so the two frames differ by a
+// scale and an offset. `wll` is the workspace lat/lon this junction was written
+// out as (exactly as the stops in atco2ll.json are), which is what lets the pin
+// editor line its handles up with the sheet — see src/expert/index.js.
 {
   const out = {};
   for (const [id, n] of SN) {
     if (!id.startsWith('J:')) continue;
-    out[id.slice(2)] = { x: +n.mm[0].toFixed(2), y: +n.mm[1].toFixed(2), ll: n.ll };
+    out[id.slice(2)] = {
+      x: +n.mm[0].toFixed(2), y: +n.mm[1].toFixed(2), ll: n.ll,
+      wll: INV(n.mm).map(rll),
+    };
   }
   wjson('solved-nodes.json', out);
 }

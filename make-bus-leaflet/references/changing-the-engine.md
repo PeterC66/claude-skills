@@ -217,10 +217,26 @@ A one-line drift check over the §4 table is worth running whenever you open thi
 cmp -s "%SK%/<file>" "<portal dest>/<file>"   # per row; silence == in sync
 ```
 
-**Live drift, found 2026-07-28 (portal AHEAD of the skill):**
-`engine/expert/diagram_internal.js` carries a `wll` field (workspace lat/lon per solved junction) in
-`solved-nodes.json` that the skill's copy does not. P7's admin pin editor (`src/expert/index.js`)
-needs it to line its handles up with the sheet. It is **additive and SVG-neutral** — the diagram
-gates pass on both sides — but the two files are no longer byte-identical, which is exactly the
-failure mode §4 exists to prevent. Back-port it to the skill (or make the portal wrapper compute it)
-rather than letting it sit. Everything else in the §4 table was verified in sync on 2026-07-28.
+**Drift found and RESOLVED, 2026-07-28.** `engine/expert/diagram_internal.js` had gone *portal-ahead*:
+the portal's copy wrote a `wll` field (workspace lat/lon per solved junction) into
+`solved-nodes.json` that the skill's copy did not, added during P7 for the admin pin editor
+(`src/expert/index.js`), which needs it to line its handles up with the sheet. Back-ported to the
+skill; the two files are byte-identical again (46,996 bytes) and **all six rows of the §4 table were
+verified in sync**.
+
+Two things that made the back-port safe to do by straight copy, and are worth repeating next time:
+
+- **The change was confined to one block.** `diff` showed exactly two hunks, and both helpers it
+  calls (`INV`, `rll`) already existed in the skill's copy, so `cp portal skill` back-ported the
+  intended change and nothing else. Check that before copying a whole file in either direction.
+- **`solved-nodes.json` is an editor sidecar, not a drawing input.** The block writes it after the
+  SVG work is done, so the field is genuinely SVG-neutral. Proven rather than assumed: St Ives
+  v6.7's `internal-diagram.svg`, `internal-schematic.svg` **and** `internal.svg` all re-hashed
+  byte-identical, only `diagram/solved-nodes.json` changed (25/25 entries gained `wll`), and the
+  14-run gate set stayed 14/14. Sanity-check the values land in the **workspace** coordinate space,
+  not real lat/lon — St Ives' are ~±0.01, inside the workspace `atco2ll.json` range, which is the
+  point of the field.
+
+**A portal-ahead drift is the easy one to miss**, because the skill's own gates all pass — the
+skill is self-consistent, it is simply behind. Only the `cmp` over the §4 table catches it, so run
+that check whenever you open this doc, not just after you change something.

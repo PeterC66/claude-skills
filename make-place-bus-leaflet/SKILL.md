@@ -12,8 +12,11 @@ town has ever been leafleted (per the planning decision). It **reuses the town
 skill's engine** one level down and only adds the place-specific pieces, so nothing
 is duplicated and the town skill is **never touched**.
 
-Worked example on disk: `…\Buses\Places\St Neots Tesco Extra\` (built end-to-end,
-v1.0). Plan of record: `…\Buses\place-bus-leaflet-plan_2026-07-21.md`.
+Worked examples on disk (`…\Buses\Places\`): **St Neots Tesco Extra** (v1.2, sparse
+edge-of-town), **St Neots Town Centre** (v1.1, dense), **Beaconsfield Waitrose** and
+**Beaconsfield Simpson Centre** (first outside Cambridgeshire), **High Wycombe Aldi**
+(v1.1, the busy case — 11 drawn services, 14 external spokes, solved layout).
+Plan of record: `…\Buses\place-bus-leaflet-plan_2026-07-21.md`.
 
 ## What this produces (per place)
 1. **Internal close-up** — `internal.jpg/.svg`, `Buses serving <place>`: a tight-zoom
@@ -51,6 +54,7 @@ assets — the shared engine) and **`PSK` = this skill's `assets`**.
 | Standalone chain builder from GTFS | `PSK/gtfs_chains.py` | **new** (offline; no bustimes scrape) |
 | Walkshed clip (stops within radius) | `PSK/derive_walkshed.js` | **new** (models `derive_intown.js`) |
 | Destination aggregation | `PSK/aggregate_destinations.js` | **new** (the core new logic) |
+| External spoke layout solver (bearings + termini) | `PSK/solve_external_layout.py` | **new** (2026-07-30; needed once a place has >~8 spokes) |
 | External renderer (aggregated spokes) | `PSK/gen_external_places.js` | **new** (models `gen_external_radial.js`) |
 | Internal wrapper — classic (gen_internal + title) | `PSK/build_internal_place.js` | **new** (models `schematize_internal.js`) |
 | Internal wrapper — road-following (pull_roads + match_routes + gen_internal) | `PSK/build_internal_place_roads.js` | **new** (Phase 2; wraps the classic wrapper) |
@@ -84,6 +88,9 @@ data date current. Pause only for: an **ambiguous place** (two "Tesco Extra"), o
 → `place.json` (chosen feature: name, lat/lon, class/type, walkshedM) + `place-candidates.json`.
 **Review the candidate list**; if `ambiguous:true` or the pick is wrong, re-run with
 `--pick N`. Then commit S1. (Geocoder = Nominatim, same as the town bootstrap.)
+A **chain store is almost always ambiguous** (High Wycombe has three Aldis and the
+auto-pick took the wrong one) — confirm the **postcode / street in `place.json.display`**
+against the request, and record in the README which branch you built and which you didn't.
 
 ### P2 — Geometry (standalone, from GTFS)
 1. `python "%PSK%\gtfs_chains.py" --near "<lat,lon,0.8>" --town "<place>"` → builds, from
@@ -93,10 +100,18 @@ data date current. Pause only for: an **ambiguous place** (two "Tesco Extra"), o
    route_ids; the far one would corrupt the chain). **Sanity-check the printed route
    list** — a route whose chain looks too short (3 timing-point stops) or whose far end
    is implausibly distant is a GTFS artifact to verify against bustimes before printing.
+   Then **print each route's nearest-stop distance to the place** — it decides `radiusM`
+   below, proves a "missing" route really is far away, and feeds the README table.
+   Also join `stop_times → trips → calendar` at the place's own stop and group by day-flags:
+   `gtfs-services.json`'s `tripsAtTownPerWeekSample` is trips-per-**pattern**, so it will
+   mislead any frequency wording you write in P3 (High Wycombe Aldi: "7" meant 7 journeys
+   *every weekday*, and a "Daily" 32A was really a Sunday service).
 2. `walkshed_cfg.json = {center:[lat,lon], radiusM:500, buf:1, circular:[…], maxEdgeKm:1.0, skipRoutes:[]}`;
    `node "%PSK%\derive_walkshed.js" routes_full_atco.json atco2ll.json walkshed_cfg.json routes_intown_atco.json`
    → the walkshed-clipped display subset for the internal map. **Keep `maxEdgeKm` small
-   (~1 km)** or far buffer stops blow out the auto-fit and the close-up sprawls.
+   (~1 km)** or far buffer stops blow out the auto-fit and the close-up sprawls. Set
+   `radiusM` from the measured distances, not the default — the Aldi needed **550 m** to
+   keep three routes whose nearest stop is 507 m.
 3. POIs: `bbox` MCP `search_overpass` over the walkshed bbox → `osm.json`
    (`osm2.json={"elements":[]}`, `river_geo.json=[]` if none). gen_internal hard-requires
    these three files.
@@ -110,7 +125,24 @@ colour per route; **never pale-blue/cyan if a river is shown**), `operators`,
 `placeTitle`/`place`/`placeShort`, `badgeLabels` (for 3–4-char route ids like `61EY`→`61`),
 and the **curated `destinations[]`** (merge synonym clusters — "Market Square" + "Bus
 Station" → "town centre"; relabel raw stop names to town names; mark `limited`/`Thu only`).
-Present the destination grouping for confirmation. Commit S3.
+Present the destination grouping for confirmation.
+
+For a **busy place** (roughly >8 services or >8 destinations) three extra P3 steps:
+- **Bundle only what co-runs.** Set `internalCorridors` for routes sharing a corridor, then
+  read the `corridors_report.json` the build prints — a member under the 60 % gate must get
+  its **own colour** instead (32A looked identical to 32 in the walkshed but diverges on the
+  full chain). Six 100 %-co-running routes on one lane is what makes an 11-route close-up work.
+- **Drop school variants by omission** — leave e.g. `37M` out of `routeOrder`/`palette` and
+  `gen_internal` skips it; carry it as a `mapNotes` footnote. No S2 re-run needed.
+- **Solve the external layout, don't nudge it.** With `bearing` = each destination's TRUE
+  bearing, run
+  `python "%PSK%\solve_external_layout.py" routes.json --pin "<longest-badge-row dest>" --write`
+  → order-preserving bearings ≥19° apart, the long badge row pinned to a clear ray, and a
+  frozen `terminus{x,y}` per node that clears the page, the legend, the footnote and every
+  other node. `--check-only` audits a stored layout. Keep the TRUE bearings in the README —
+  `--write` overwrites `bearing` with the display value.
+
+Commit S3 (`--outputs routes.json,overrides.json` if you wrote overrides).
 
 ### P4 — Generate
 `new S4 --bump major` (or `--bump minor` for a re-style at the same data), pull S2+S3, then:

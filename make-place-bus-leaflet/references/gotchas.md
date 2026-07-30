@@ -179,3 +179,88 @@ Added during the community-bus-maps **portal integration** of the place engine
   is whatever the **current** `routes.json` produces — so a drifted payload (above) imports as
   the *config's* map, not the stale shipped one. Keep them in sync. (`npm run verify:place`
   proves the vendored engine reproduces a skill-rendered leaflet byte-for-byte.)
+
+---
+Added during the High Wycombe Aldi (Tannery Road) build (2026-07-30 — the first place
+with a **double-digit route count**, 11 drawn services, and 14 external spokes):
+
+- **A chain-store name is almost always ambiguous — always eyeball `place-candidates.json`.**
+  "Aldi, High Wycombe" returned three stores; `resolve_place.py`'s auto-pick (first
+  place-like class) took **Booker**, not the Tannery Road one asked for. `ambiguous:true`
+  fired correctly. Re-run with `--pick N` and then **confirm the postcode in
+  `place.json.display`** against the request — that is the cheapest proof you leafleted
+  the right branch. Put the "which branch, and which ones you did NOT pick" note in the
+  place README; a reader can't tell from the map.
+
+- **`derive_walkshed radiusM` is the in/out lever for a whole route group — set it from the
+  measured nearest-stop table, not the 500 m default.** At 500 m the Aldi lost 32/32A/34
+  (nearest stop 507 m); 550 m brought all three in for +0 sprawl (`maxEdgeKm` 1.0 still
+  caps the tails). Print the per-route nearest-stop distance BEFORE choosing `radiusM` —
+  a group sitting 5–10 m outside a round-number radius is the common case, and dropping
+  three routes for 7 m is indefensible.
+
+- **`tripsAtTownPerWeekSample` in `gtfs-services.json` is trips-per-PATTERN, not per week —
+  never paraphrase it as a frequency.** Route 27 showed `7` and the *town* leaflet calls it
+  "a few journeys a week"; the `calendar` table says that 7-trip pattern runs Mon–Fri, i.e.
+  **7 journeys every weekday**. Conversely 32A reads "Daily" from the day-flag union while
+  the real split is 24 Sunday trips vs 6 across all of Mon–Sat — a Sunday service. Join
+  `stop_times → trips → calendar` at the place's own stop and group by day-flags before
+  writing any `internalDesc` day/frequency text. (The slim BODS sqlite has no times, so
+  trips-per-day-pattern is as fine-grained as it gets — that's enough.)
+
+- **`internalCorridors` must be earned: read `corridors_report.json`, don't assume.** 32 and
+  32A have *identical* walkshed stop lists, so bundling them looked obvious — but
+  `match_routes` builds from `routes_full_atco.json` `canonical[0].stops`, where 32A adds a
+  Hennerton Way/Totteridge loop. The report scored 32A at **57 %** co-running and the engine
+  warned; the fix is a distinct colour, not a bundle. The 102/103/104/105/M40/X74 family
+  scored 100 % and bundling six routes into one lane is what makes an 11-route close-up
+  readable at all.
+
+- **A route absent from `routeOrder`/`palette` is silently NOT drawn — that is the clean way
+  to drop a school variant.** 37M map-matches and survives `derive_walkshed`, but omitting
+  it from `routeOrder` keeps it off the map without a second S2 run or a `skipRoutes` edit.
+  Say so in a `mapNotes` footnote.
+
+- **Name the place with a FORCED POI label, not the anchor label.** Two "Aldi"s 6 mm apart
+  (anchor label + POI) reads as a mistake. Use `overrides.json`
+  `internal.pois["shop:Aldi"] = {force:true, label:{offset:{dx,dy}, anchor:"start"}}` for the
+  store and give the anchor the plain stop name (`"Ford Street stops"`). A manual `offset`
+  **skips de-collision entirely**, so pick the offset off a cropped render — the auto
+  placement had dropped both the store and the industrial-estate labels as collisions.
+  Get the exact POI keys (`shop:Aldi`, `industrial:Tannery Road Ind Est` — post-`poi.tidy`)
+  by running `EDITOR_KEYS=1 node gen_internal.js` and grepping `data-kind="poi"`.
+  `placeLabel` ignores `label.text`, so the printed text is always the tidied OSM name.
+
+- **Never put "·" (U+00B7) in `anchorLabel`.** The anchor label is drawn with
+  `stroke="#fff" stroke-width="0.7" paint-order="stroke"`, and a 0.7 mm white outline around
+  a middle dot renders as a small filled **square** at 3.0 pt. Panel text (no halo) is fine.
+  Use a plain word, "/" or "(...)".
+
+- **Feature `labelPos` is absolute page mm with NO collision logic — site it off a render.**
+  Defaults left "River Wye" floating in empty space and "Chiltern Main Line" nowhere near
+  the line. Read the drawn line's position off the JPG (`mm = px/3508*297`, `px/2480*210`)
+  and pin the label beside it.
+
+- **Beyond ~8 external spokes, SOLVE the layout; don't nudge bearings.** 14 spokes on A4
+  collided every way at first (nodes overlapping each other, the legend and the footnote;
+  badge rings touching near the hub). What worked: a throwaway script that mirrors
+  `gen_external_places.js` geometry exactly — `wrap(label,13)`, node
+  `w=max(20,maxlen*1.95+5)`, `h=5.4+nlines*3.8`, badges at `r=24+i*7.2`, spoke from `r=16`
+  to `t-9` — then (1) keep the true-bearing clockwise ORDER but relax to a **min 19° gap**
+  (below that the `r=24` badges of adjacent spokes touch), (2) **pin the longest badge row
+  to the longest clear ray** (11 badges need ~108 mm, so due west; at its true 296° the
+  legend blocks it), (3) allocate each remaining spoke the largest radius whose node box
+  clears the page, the reserved blocks and every node placed so far (+2 mm daylight), and
+  (4) freeze the result as `terminus{x,y}`. Order-preserving + pinned cost the western trio
+  ~26–30° of fidelity, which is normal for a schematic. Node width is driven by the LONGEST
+  line, so trimming a `sub` ("Central Bus Station" → "Bus Station") is the cheapest way to
+  break a collision.
+
+- **Keep `placeShort` ≤ ~6 characters — the hub box overprints the innermost badges.** The
+  hub is `w = max(26, len*2.5+8)` mm wide but badges start at only `r=24`, so anything past
+  ~6 chars (`"Aldi Tannery Rd"` → 45.5 mm, half-width 22.8) swallows the first badge of every
+  horizontal spoke. `"Aldi"` (26 mm) clears them. The full name is already in the title.
+
+- **Don't set an external `note` (again) and don't fight the hardcoded legend.** `lx=10,
+  ly=42` and the footnote at `y=203` are not configurable — treat x 6–106 / y 34–54 and
+  y > 199 as no-go zones in the layout solver.

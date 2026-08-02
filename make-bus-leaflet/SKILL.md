@@ -16,7 +16,7 @@ Per town, up to four deliverables:
 
 Each map is an editable **SVG** rendered to a **300 dpi JPG** (3508×2480 px), **auto-versioned `vN.N`**.
 
-The St Ives, Cambridgeshire reference is in `C:\u3a St Ives\Using AI\Buses\` (`...Internal.jpg` / `...External.jpg`, and the editable-vector proof PDF). The St Ives staged baseline is in `...\Buses\St Ives\`; the original distillation build is in `...\Buses\Rebuild\`.
+The St Ives, Cambridgeshire reference is in `C:\u3a St Ives\Using AI\Buses\Inspiration\` (`...Internal.jpg` / `...External.jpg`, and the editable-vector proof PDF). The St Ives staged baseline is in `...\Buses\Areas\St Ives\`; the original distillation build is in `...\Buses\Development Docs\Rebuild\`.
 
 ## The stages, the manifest, and versioning (read this first)
 A run is **six resumable stages** (S1–S5 build the leaflet; **S6 verifies** it, on demand). Each stage writes into its **own dated subfolder** under the town folder, and a `manifest.json` indexes every run (date/time, outputs, and—for images—version). **Any process can resume from a completed stage** by reading the manifest and pulling that stage's latest outputs. Stages and the files each *owns*:
@@ -68,9 +68,9 @@ Rule of thumb for the S4 bump: **major** when you produced a new S1/S2/S3 run th
 ## Per-town working folder (required — everything lives here)
 Each town gets **one dedicated folder** holding `manifest.json` and the six stage folders:
 ```
-C:\u3a St Ives\Using AI\Buses\<Town>\
+C:\u3a St Ives\Using AI\Buses\Areas\<Town>\
 ```
-(e.g. `...\Buses\Huntingdon\`). **First step of any new town: `stage.js init`.** The generator scripts read every data file from, and write `internal.svg` / `external.svg` into, the **current working directory** — so within S4/S5 you `cd` into the run folder, `pull` the inputs, then run them. `icons.js` (shared code) always loads from the skill's `assets/`. **Never** put a town's data in the skill's `assets/` — that stays template-only.
+(e.g. `...\Buses\Areas\Huntingdon\`). **First step of any new town: `stage.js init`.** The generator scripts read every data file from, and write `internal.svg` / `external.svg` into, the **current working directory** — so within S4/S5 you `cd` into the run folder, `pull` the inputs, then run them. `icons.js` (shared code) always loads from the skill's `assets/`. **Never** put a town's data in the skill's `assets/` — that stays template-only.
 
 ## Locked design decisions (do not silently change)
 - **Build as SVG → render to A4 landscape JPG at 300 dpi.** SVG must declare `width="3508" height="2480" viewBox="0 0 297 210"` (1 unit = 1 mm) so the rasteriser renders natively and text stays crisp. Render with `assets/render.js` (uses `sharp`).
@@ -165,7 +165,7 @@ Before finishing, run a short retrospective and **feed what you learned back int
 This review is itself a lesson learned and is now a standing step.
 
 ## Worked example: March, Cambridgeshire (radial, zoomed)
-A complete non-busway build lives in `…\Buses\March\` in the staged layout — 7 routes, radial external, `internalZoom`, river-safe palette (route 32 = orange). Copy its `S3-config` `routes.json` + edited generators as the starting point for any ordinary town.
+A complete non-busway build lives in `…\Buses\Areas\March\` in the staged layout — 7 routes, radial external, `internalZoom`, river-safe palette (route 32 = orange). Copy its `S3-config` `routes.json` + edited generators as the starting point for any ordinary town.
 
 ## Reference files (load on demand)
 This SKILL.md is the orchestration spine; the deep detail lives in `references/` and is read when you reach that stage or feature:

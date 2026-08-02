@@ -95,7 +95,7 @@ outputs, not two (verified 2026-07-28 for P2):
 
 | Gate | How |
 |---|---|
-| 4 place fixtures | `gate.sh` against `…\Buses\Places\*\S4-generate\<latest>` — currently `Beaconsfield Simpson Centre v1.0`, `Beaconsfield Waitrose v1.1`, `St Neots Tesco Extra v1.2`, `St Neots Town Centre v1.3` |
+| 4 place fixtures | `gate.sh` against `…\Buses\Areas\*\Places\*\S4-generate\<latest>` — currently `Beaconsfield Simpson Centre v1.0`, `Beaconsfield Waitrose v1.1`, `St Neots Tesco Extra v1.2`, `St Neots Town Centre v1.3` |
 | St Ives schematic | run `schematize_internal.js` in a copy of the S4 dir, diff `internal-schematic.svg` |
 | St Ives diagram | run `diagram_internal.js` likewise, diff `internal-diagram.svg` |
 
@@ -165,7 +165,7 @@ For the schematic and diagram outputs, gate St Ives v6.6 (`internal-schematic.sv
 
 `make-place-bus-leaflet` reuses `gen_internal.js`, `render.js`, `stage.js`, `gtfs_query.py` and
 `icons.js` **unchanged**. If your change touches any of them, also rebuild a place fixture and diff.
-Worked places on disk: `…\Buses\Places\St Neots Tesco Extra`, `St Neots Town Centre`,
+Worked places on disk: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra`, `St Neots Town Centre`,
 `Beaconsfield Waitrose`, `Beaconsfield Simpson Centre`. The portal's fixture is
 `…\Buses\Places\_portal-fixture`.
 
@@ -222,7 +222,7 @@ map, this is why.
 Per the standing review step in `SKILL.md`:
 - Fold anything that tripped you up into `gotchas.md` (or the relevant stage reference).
 - If the change altered the duplication picture, update the duplication map in
-  `…\Buses\README - How to enhance the system.md` **and** this file's §4 table.
+  `…\Buses\Documentation\README - How to enhance the system.md` **and** this file's §4 table.
 - Commit every repo you touched. Parts 1 and 2 have no remote — an uncommitted change is one disk
   failure from gone.
 
@@ -230,7 +230,7 @@ Per the standing review step in `SKILL.md`:
 
 The duplication in §4 is manual and has no automated drift check: nothing fails if the portal's
 vendored copy diverges from the skill's. A written proposal to fix it is at
-`…\Buses\engine-deduplication-proposal_2026-07-25.md`. Until it is actioned, §4 **is** the
+`…\Buses\Development Docs\engine-deduplication-proposal_2026-07-25.md`. Until it is actioned, §4 **is** the
 mechanism — follow it every time.
 
 A one-line drift check over the §4 table is worth running whenever you open this doc:

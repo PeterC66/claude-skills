@@ -1,12 +1,12 @@
 # P1–P5 pipeline — full walkthrough (with the St Neots Tesco Extra numbers)
 
 `%TSK%` = town skill assets (shared engine). `%PSK%` = this skill's assets.
-Worked example folder: `…\Buses\Places\St Neots Tesco Extra\` (v1.0).
+Worked example folder: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra\` (v1.0).
 
 ```bash
 PSK="C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets"
 TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets"
-cd ".../Buses/Places"
+cd ".../Buses/Areas/St Neots/Places"   # or Places/_standalone if the town has no area map
 node "$TSK/stage.js" init "$PWD/St Neots Tesco Extra" "St Neots Tesco Extra"
 cd "St Neots Tesco Extra"
 ```

@@ -7,7 +7,7 @@ description: Audit one or two existing bus-leaflet IMAGES for a British town aga
 
 ## What this produces
 One deliverable per run: an **`image-audit_<date>.docx`** written into the town's folder
-(`C:\u3a St Ives\Using AI\Buses\<Town>\`), plus a short summary in chat. The DOCX is a full
+(`C:\u3a St Ives\Using AI\Buses\Areas\<Town>\`), plus a short summary in chat. The DOCX is a full
 checklist of every discrepancy found between the supplied leaflet image(s) and the town's
 **stored** bus data, each row carrying:
 
@@ -45,7 +45,7 @@ proceeding ("These look like the **St Ives** leaflets — correct?"). If you can
 name, **ask the user for it**. Do not guess silently.
 
 ### 2 · Find the town's stored data (offer to generate if missing)
-Look for `C:\u3a St Ives\Using AI\Buses\<Town>\manifest.json`. Watch for spelling/disambiguation
+Look for `C:\u3a St Ives\Using AI\Buses\Areas\<Town>\manifest.json`. Watch for spelling/disambiguation
 ("St Ives" vs "St. Ives"; two towns sharing a name). If found, read via the manifest the
 **latest** of each stage you need (see "What stored data to read" below). 
 
@@ -104,7 +104,7 @@ Assemble the findings into an **`image-audit.json`** (schema in
 `assets/image-audit.example.json`) and render it:
 
 ```
-python "<SK>\gen_image_audit.py" image-audit.json "C:\u3a St Ives\Using AI\Buses\<Town>\image-audit_<YYYY-MM-DD>.docx"
+python "<SK>\gen_image_audit.py" image-audit.json "C:\u3a St Ives\Using AI\Buses\Areas\<Town>\image-audit_<YYYY-MM-DD>.docx"
 ```
 where `<SK>` = `C:\u3a St Ives\.claude\skills\audit-bus-leaflet\assets`. The generator groups
 rows, colour-codes by verdict (red = leaflet-error, amber = leaflet-newer / data-stale, grey =
@@ -113,7 +113,7 @@ user a tight chat summary: counts by verdict, the headline discrepancies, and wh
 refresh is advised.
 
 ## What stored data to read (via the manifest)
-Let `T = C:\u3a St Ives\Using AI\Buses\<Town>`. Read `T\manifest.json`, then pull the latest:
+Let `T = C:\u3a St Ives\Using AI\Buses\Areas\<Town>`. Read `T\manifest.json`, then pull the latest:
 
 | Stage | File | Used for |
 |---|---|---|

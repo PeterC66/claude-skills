@@ -12,11 +12,11 @@ town has ever been leafleted (per the planning decision). It **reuses the town
 skill's engine** one level down and only adds the place-specific pieces, so nothing
 is duplicated and the town skill is **never touched**.
 
-Worked examples on disk (`…\Buses\Places\`): **St Neots Tesco Extra** (v1.2, sparse
+Worked examples on disk (each under its area, `…\Buses\Areas\<Town>\Places\`): **St Neots Tesco Extra** (v1.2, sparse
 edge-of-town), **St Neots Town Centre** (v1.1, dense), **Beaconsfield Waitrose** and
 **Beaconsfield Simpson Centre** (first outside Cambridgeshire), **High Wycombe Aldi**
 (v1.1, the busy case — 11 drawn services, 14 external spokes, solved layout).
-Plan of record: `…\Buses\place-bus-leaflet-plan_2026-07-21.md`.
+Plan of record: `…\Buses\Development Docs\place-bus-leaflet-plan_2026-07-21.md`.
 
 ## What this produces (per place)
 1. **Internal close-up** — `internal.jpg/.svg`, `Buses serving <place>`: a tight-zoom
@@ -63,7 +63,12 @@ assets — the shared engine) and **`PSK` = this skill's `assets`**.
 express it as a config key or in the wrapper, not a `gen_internal.js` edit.
 
 ## Stages, folder, versioning (shared `stage.js`)
-A place gets its **own folder** `…\Buses\Places\<Place Name>\` with a `manifest.json`.
+A place gets its **own folder** with a `manifest.json`, nested under the area it sits in:
+`…\Buses\Areas\<Town>\Places\<Place Name>\`. If that town has no area map of its own and
+probably never will (a rural school, an attraction outside any town we map, a one-off
+commission), use `…\Buses\Places\_standalone\<Place Name>\` instead. **Keep the town prefix
+in the folder name** — "High Wycombe Aldi", not "Aldi" — because the name has to stand alone
+in `manifest.json`'s `"town"` field, in render folder names and in the portal's `renderParent`.
 The place stages **map onto the shared `stage.js` S-slots** (so the versioned,
 resumable manifest machinery is reused unchanged):
 

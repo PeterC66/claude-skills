@@ -99,6 +99,20 @@ outputs, not two (verified 2026-07-28 for P2):
 | St Ives schematic | run `schematize_internal.js` in a copy of the S4 dir, diff `internal-schematic.svg` |
 | St Ives diagram | run `diagram_internal.js` likewise, diff `internal-diagram.svg` |
 
+**The portal's place fixture goes stale the same way a town does — and it is easier to miss.**
+`gate the TEMPLATE, not the town's frozen copy` (§ above) applies to `PLACE_FIXTURE_DIR` too. The
+portal reproduces a place leaflet using the generator **vendored into `engine/place/`**, and compares
+it against a **frozen fixture** in `…\Buses\Places\_portal-fixture\`. If the vendored engine and the
+fixture were frozen at the same moment, `npm run verify:place` passes **by construction** and keeps
+passing however far the skill moves on. That is exactly what happened: on 2026-08-02 the fixture was
+swapped from `Beaconsfield Simpson Centre` (v1.0, 2026-07-21) to `High Wycombe Aldi` (v1.1,
+2026-07-30) and the internal SVG missed by 189 bytes — `engine/place/gen_internal.js` turned out to be
+**445 lines behind**, predating the whole complexity-triage ladder. The gate had been green for weeks.
+
+So: **whenever you re-vendor, also refresh the fixture to the newest available build**, and treat a
+fixture swap as a test of the vendor chain rather than housekeeping. A fixture older than the last
+engine change proves nothing.
+
 The place fixtures **legitimately differ on exactly two lines** — the title (`Buses within X` vs
 `Buses serving X`) and the `· Map v…` stamp — because `build_internal_place.js` post-edits both after
 running the generator. So the place gate is "**4 differing lines, 0 outside `y="16"` and `y="208"`**",

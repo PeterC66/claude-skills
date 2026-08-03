@@ -196,6 +196,18 @@ the old code, and its gates will keep passing against the *old* shipped fixture 
 | `%PSK%\gen_external_places.js` | `engine\place\` |
 | `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
 
+**Area (town) generators are NOT in this table** — `gen_internal.js`/`gen_external_*.js` for an area
+map are copied straight into that map's own `data/maps/<id>/data/` by the portal's
+`scripts/import-map.mjs`, from whatever `--src` was used at import time, not from `engine/`. So an
+existing area map (St Ives, March, …) stays on whatever generator it was imported with, same as a
+town in this repo stays on whatever its own S3 run committed — re-importing (or manually refreshing
+that map's `data/maps/<id>/data/gen_*.js`) is the only way an already-built area map picks up a
+skill-side change. **If you're live-verifying a change by clicking through the portal against an
+existing demo area map, check that map's own generator copy first** — a stale one will silently no-op
+the new behaviour even though the sanitize/validation layer accepts it fine, which reads exactly like
+a bug in the new feature until you notice the file predates your change (caught 2026-08-03 verifying
+`hiddenOperators` against March's demo map).
+
 **Procedure after any change to a file in that table:**
 
 1. Pass all the town gates in §2 first. Don't propagate a change that hasn't been proved locally.

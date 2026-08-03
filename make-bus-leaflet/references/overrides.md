@@ -12,6 +12,11 @@ All distances are **millimetres on the page** (the SVG `viewBox` is `0 0 297 210
 ```jsonc
 {
   "routeColors": { "69":"#117733" },     // TOP-LEVEL: recolour a route on BOTH maps (e.g. two colours too alike); overrides the palette
+  "hiddenOperators": ["Villager Minibus"], // TOP-LEVEL: drop every route belonging to a named routes.json operators[].name
+                                          // from BOTH maps (line, badges, panel, legend row). Portal-only in practice — the
+                                          // customer's Map Tuning editor writes this key when their org has the operator-
+                                          // filter feature enabled (2026-08-03); it's a plain overrides.json key like any other,
+                                          // so it works from a hand-authored file too. Absent/empty ⇒ byte-identical.
   "internal": {
     "rotationDeg": -60,                 // override PCA auto-rotation (degrees)
     "viewport": { ... },                // frozen fit; the editor writes this once you hand-place — keeps absolute mm valid across refreshes (don't hand-edit)

@@ -47,12 +47,21 @@ function badge(x,y,route,r=4.6){
   out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r*0.95).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
 }
-function townNode(x,y,label,h=11){
+// timeLabel (optional, e.g. "~18 min") — an extra non-bold line under the
+// destination name, fed by routes.json external[].minutesToDestination.
+// Absent => box drawn exactly as before (byte-identical for gated towns).
+function townNode(x,y,label,h=11,timeLabel){
   const lines = wrap(label);
-  const w = Math.max(18, Math.max(...lines.map(l=>l.length))*1.95 + 4);
-  out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-h/2).toFixed(2)}" width="${w.toFixed(2)}" height="${h}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
-  const lh=4.0, y0=y-(lines.length-1)*lh/2;
+  const w = Math.max(18, Math.max(...lines.map(l=>l.length))*1.95 + 4, timeLabel ? timeLabel.length*1.7+4 : 0);
+  const extra = timeLabel ? 3.6 : 0;
+  const hh = h + extra;
+  out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
+  const lh=4.0, y0=y-((lines.length-1)*lh+extra)/2;
   lines.forEach((ln,i)=>out(`<text x="${x.toFixed(2)}" y="${(y0+i*lh).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(ln)}</text>`));
+  if(timeLabel){
+    const ty2 = y0 + lines.length*lh - (lh-3.6)/2 + 0.2;
+    out(`<text x="${x.toFixed(2)}" y="${ty2.toFixed(2)}" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">${esc(timeLabel)}</text>`);
+  }
   return w;
 }
 
@@ -121,7 +130,7 @@ for(const b of EXT){
   const _badges = (Array.isArray(b.routes) && b.routes.length) ? b.routes : [b.route];
   _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*8.6), ty-dy*(_boff+i*8.6), r, 4.0));
   // terminus node
-  townNode(tx,ty,b.label);
+  townNode(tx,ty,b.label,11,b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null);
   if(EDK) out('</g>');
 }
 // 56 serves two arms (Manea & Wisbech) — note it once
@@ -184,7 +193,8 @@ if(armNote===undefined){
 if(armNote){ const _nx=(OV.note&&OV.note.x!=null)?OV.note.x:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y:(ly+OPS.length*6.6+3);
   out(`<text x="${_nx}" y="${_ny}" font-family="Arial" font-size="2.9" fill="#666">${esc(armNote)}</text>`); }
 // source note
-out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times &amp; fares at bustimes.org or operator apps.</text>`);
+const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
+out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times &amp; fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}</text>`);
 
 // Optional "coming soon" / validity stamp. Opt-in via routes.json "stamp"
 // {heading?, notes:[...], asOf?, externalAt?:[x,y], internalAt?:[x,y]}. Absent => nothing

@@ -27,7 +27,7 @@ TABLES = {
     "stops":   ["stop_id","stop_code","stop_name","stop_lat","stop_lon"],
     "routes":  ["route_id","agency_id","route_short_name","route_long_name","route_type"],
     "trips":   ["route_id","service_id","trip_id","trip_headsign","direction_id","shape_id"],
-    "stop_times": ["trip_id","stop_id","stop_sequence"],
+    "stop_times": ["trip_id","stop_id","stop_sequence","arrival_time","departure_time"],
     "calendar": ["service_id","monday","tuesday","wednesday","thursday","friday","saturday","sunday","start_date","end_date"],
     "calendar_dates": ["service_id","date","exception_type"],
     "shapes": ["shape_id","shape_pt_lat","shape_pt_lon","shape_pt_sequence"],

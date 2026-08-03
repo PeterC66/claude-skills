@@ -25,6 +25,13 @@ The draft is a **starting point**, per the skill's "suggest, then confirm" rule.
 - **Relabel** raw stop names to reader-friendly place names ("Drummer St Bus Station" →
   `name:"Cambridge", sub:"Drummer St"`).
 - **Mark** infrequent/limited arms (`limited:true` → drawn dashed; `sub:"Thu only"`).
+- **Optionally add** `minutesToDestination` (a number, e.g. `26`) — an approximate scheduled
+  journey-time line drawn under the destination name (`gen_external_places.js`). Absent =>
+  byte-identical. Derive it with `%SK%\gtfs_duration.py <ATCO_PREFIX...> --route <n> --dest <name>`
+  (from the town skill's `assets/`, reused unchanged) — see `make-bus-leaflet`'s
+  `references/s3-config.md` `external[].minutesToDestination` for how it works and its gaps
+  (round-trip services, DRT). The place skill has no `--fill` batch mode of its own yet since
+  `destinations[]` is curated by hand; look up each spoke's minutes individually.
 - **Drop** implausible spokes (a GTFS timing-point artifact — see gotchas).
 - Keep bearings roughly true so the compass layout stays honest; hand-nudge via
   `overrides.json external.branches.<name>.bearing` or `.terminus{x,y}` if two collide.
@@ -44,7 +51,8 @@ Five clean spokes around the compass — a good aggregation from six routes.
 ```jsonc
 "destinations": [
   { "name":"Cambridge", "sub":"Drummer St", "bearing":91, "routes":["18","18A"],
-    "distKm":27, "side":"up"?, "limited":false?, "terminus":{x,y}? }
+    "distKm":27, "side":"up"?, "limited":false?, "terminus":{x,y}?,
+    "minutesToDestination":26? }
 ],
 "localLoops": [ { "route":"61EY", "label":"Eynesbury local circular (calls at Tesco)" } ]
 ```

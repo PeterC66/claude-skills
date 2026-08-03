@@ -50,14 +50,20 @@ function badge(x, y, route, r = 4.0) {
   out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r * 0.95).toFixed(2)}" fill="${TXT[route] || '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
 }
-function destNode(x, y, label, sub) {
+// timeLabel (optional, e.g. "~18 min") — an extra non-bold line appended after
+// any `sub` line, fed by routes.json destinations[].minutesToDestination.
+// Absent => box drawn exactly as before (byte-identical for gated places).
+function destNode(x, y, label, sub, timeLabel) {
   const lines = wrap(label);
   if (sub) lines.push(sub);
+  if (timeLabel) lines.push(timeLabel);
   const w = Math.max(20, Math.max(...lines.map(l => l.length)) * 1.95 + 5);
   const h = 5.4 + lines.length * 3.8;
   out(`<rect x="${(x - w / 2).toFixed(2)}" y="${(y - h / 2).toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh = 3.8, y0 = y - (lines.length - 1) * lh / 2;
-  lines.forEach((ln, i) => out(`<text x="${x.toFixed(2)}" y="${(y0 + i * lh).toFixed(2)}" font-family="Arial" font-weight="${i === lines.length - 1 && sub ? 'normal' : 'bold'}" font-size="${i === lines.length - 1 && sub ? 2.9 : 3.4}" fill="${i === lines.length - 1 && sub ? '#d7f0df' : '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(ln)}</text>`));
+  const lastPlain = lines.length - 1;
+  const smallFrom = sub && timeLabel ? lastPlain - 1 : lastPlain; // both sub+time are non-bold small lines
+  lines.forEach((ln, i) => out(`<text x="${x.toFixed(2)}" y="${(y0 + i * lh).toFixed(2)}" font-family="Arial" font-weight="${i >= smallFrom && (sub || timeLabel) ? 'normal' : 'bold'}" font-size="${i >= smallFrom && (sub || timeLabel) ? 2.9 : 3.4}" fill="${i >= smallFrom && (sub || timeLabel) ? '#d7f0df' : '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(ln)}</text>`));
   return w;
 }
 
@@ -98,7 +104,7 @@ for (const b of dests) {
   const rs = b.routes;
   rs.forEach((r, i) => { const rr = R0 + 4 + i * 7.2; badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
   // destination node
-  destNode(tx, ty, b.name, b.sub);
+  destNode(tx, ty, b.name, b.sub, b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null);
 }
 // hub node (the place) on top
 (function () {
@@ -124,7 +130,8 @@ let ny = ly + OPS.length * 6.6 + 4;
   ny += 6.0;
 });
 if (D.note) { out(`<text x="${lx}" y="${(ny + 2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(D.note)}</text>`); ny += 5; }
-out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Reachable destinations &amp; the routes serving them, from BODS open data cross-checked with operators. One spoke per place; a route may run to more. Confirm live times &amp; fares at bustimes.org or operator apps.</text>`);
+const _hasTimes = dests.some(b=>b.minutesToDestination!=null);
+out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Reachable destinations &amp; the routes serving them, from BODS open data cross-checked with operators. One spoke per place; a route may run to more. Confirm live times &amp; fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}</text>`);
 
 // Optional "coming soon" / validity stamp (shared shape with the town generators).
 function stampNote(cfg, x, y, align) {

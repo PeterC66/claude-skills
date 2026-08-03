@@ -10,14 +10,21 @@ Needs gtfs_build.py's stop_times table to include arrival_time/departure_time
 
 Usage (single lookup):
   python gtfs_duration.py <ATCO_PREFIX> [<ATCO_PREFIX> ...] --route 46 --dest Wisbech [--db PATH]
+  python gtfs_duration.py --near lat,lon,km --route 46 --dest Wisbech [--db PATH]
 
 Usage (fill every external[] spoke in a town's routes.json that has none yet):
   python gtfs_duration.py <ATCO_PREFIX> [<ATCO_PREFIX> ...] --fill routes.json [--db PATH]
+  python gtfs_duration.py --near lat,lon,km --fill routes.json [--db PATH]
   (matches each external[] entry's "route" + the LAST name in its "stops"
   list as the destination; only ever ADDS minutesToDestination, never
   overwrites a value already present -- re-run safely after edits)
+
+--near is for a town with no clean ATCO prefix (an over-broad NaPTAN block --
+same trap documented in s1-services.md / town_prefixes.json for Beaconsfield
+and High Wycombe): give the same lat,lon,km used for that town's S1 query.
 """
 import sqlite3, argparse, os, json, statistics
+from math import radians, sin, cos, asin, sqrt
 from collections import Counter
 
 def _to_seconds(hms):
@@ -28,7 +35,30 @@ def _to_seconds(hms):
     except ValueError:
         return None
 
-def journey_minutes(cur, prefixes, route_short_name, dest_substr, allow_majority_fallback=False, sample=300):
+def _haversine_km(la1, lo1, la2, lo2):
+    dla = radians(la2 - la1); dlo = radians(lo2 - lo1)
+    x = sin(dla / 2) ** 2 + cos(radians(la1)) * cos(radians(la2)) * sin(dlo / 2) ** 2
+    return 6371 * 2 * asin(sqrt(x))
+
+def resolve_origin_stop_ids(cur, prefixes=None, near=None):
+    """Exact stop_ids for the origin, from ATCO prefix(es) or a (lat,lon,km)
+    radius -- mirrors gtfs_query.py's _make_town_stops. Returns a set."""
+    ids = set()
+    if prefixes:
+        for p in prefixes:
+            ids.update(r[0] for r in cur.execute(
+                "SELECT stop_id FROM stops WHERE stop_id LIKE ?", (p + '%',)))
+    if near:
+        la, lo, km = near
+        for sid, slat, slon in cur.execute(
+                "SELECT stop_id, stop_lat, stop_lon FROM stops WHERE stop_lat<>'' AND stop_lon<>''"):
+            try:
+                if _haversine_km(la, lo, float(slat), float(slon)) <= km: ids.add(sid)
+            except ValueError:
+                pass
+    return ids
+
+def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_majority_fallback=False, sample=300):
     """Median scheduled minutes from the last stop matching `prefixes` to the
     destination, across up to `sample` trips of `route_short_name` that call
     at the origin. GTFS stop names are POI/street names ("Superstore"), not
@@ -55,11 +85,11 @@ def journey_minutes(cur, prefixes, route_short_name, dest_substr, allow_majority
     # route_short_name collides across operators/regions in national GTFS, so
     # restrict to trips of THIS short_name that actually call at the origin
     # (same discipline gtfs_query.py uses), not every trip on any same-named route.
-    origin_cond = ' OR '.join('st.stop_id LIKE ?' for _ in prefixes)
+    oph = ','.join('?' * len(origin_stop_ids))
     trip_rows = cur.execute(
         f"SELECT DISTINCT t.trip_id, t.trip_headsign FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id "
-        f"WHERE t.route_id IN ({ph}) AND ({origin_cond}) LIMIT ?",
-        route_ids + [p + '%' for p in prefixes] + [sample]).fetchall()
+        f"WHERE t.route_id IN ({ph}) AND st.stop_id IN ({oph}) LIMIT ?",
+        route_ids + list(origin_stop_ids) + [sample]).fetchall()
     dest_l = dest_substr.lower()
     trips = []  # (origin_i, rows, headsign) per trip that clears the origin stop
     terminus_counts = Counter()
@@ -71,7 +101,7 @@ def journey_minutes(cur, prefixes, route_short_name, dest_substr, allow_majority
         if not rows: continue
         origin_i = None
         for i, r in enumerate(rows):
-            if any(r['stop_id'].startswith(p) for p in prefixes):
+            if r['stop_id'] in origin_stop_ids:
                 origin_i = i  # keep the LAST matching stop (town may have several)
         if origin_i is None or origin_i >= len(rows) - 1: continue
         trips.append((origin_i, rows, headsign or ''))
@@ -111,14 +141,23 @@ def _clean_dest(label):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Approx GTFS journey minutes town/place -> named destination.")
-    ap.add_argument("prefixes", nargs="+", help="ATCO locality prefix(es) of the origin, e.g. 0500HSTIV")
+    ap.add_argument("prefixes", nargs="*", help="ATCO locality prefix(es) of the origin, e.g. 0500HSTIV (omit if using --near)")
+    ap.add_argument("--near", help="'lat,lon,km' instead of prefixes, for a town with no clean ATCO prefix (e.g. '51.601601,-0.637726,2.5')")
     ap.add_argument("--route", help="route_short_name, e.g. 46 (single-lookup mode)")
     ap.add_argument("--dest", help="destination name substring, e.g. Wisbech (single-lookup mode)")
     ap.add_argument("--fill", help="routes.json path: fill every external[] entry lacking minutesToDestination")
     DEFAULT_DB = os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
     ap.add_argument("--db", default=DEFAULT_DB)
     a = ap.parse_args()
+    if not a.prefixes and not a.near:
+        ap.error("give one or more ATCO prefixes, or --near lat,lon,km")
+    near = None
+    if a.near:
+        la, lo, km = [float(x) for x in a.near.split(',')]; near = (la, lo, km)
     con = sqlite3.connect(a.db); con.row_factory = sqlite3.Row; cur = con.cursor()
+    origin_stop_ids = resolve_origin_stop_ids(cur, a.prefixes or None, near)
+    if not origin_stop_ids:
+        ap.error("no stops matched the given prefixes/--near")
 
     if a.fill:
         with open(a.fill, encoding="utf-8") as f:
@@ -130,7 +169,7 @@ if __name__ == "__main__":
                 skipped += 1; continue
             dest_raw = b["stops"][-1] if b.get("stops") else b.get("label")
             single_arm = route_spoke_count[b["route"]] == 1
-            mins, n = journey_minutes(cur, a.prefixes, b["route"], _clean_dest(dest_raw), allow_majority_fallback=single_arm)
+            mins, n = journey_minutes(cur, origin_stop_ids, b["route"], _clean_dest(dest_raw), allow_majority_fallback=single_arm)
             if mins is not None:
                 b["minutesToDestination"] = mins
                 filled += 1
@@ -143,7 +182,7 @@ if __name__ == "__main__":
     else:
         if not a.route or not a.dest:
             ap.error("give --route and --dest, or --fill routes.json")
-        mins, n = journey_minutes(cur, a.prefixes, a.route, a.dest)
+        mins, n = journey_minutes(cur, origin_stop_ids, a.route, a.dest)
         if mins is None:
             print("no matching trips found")
         else:

@@ -30,6 +30,16 @@ const ALLOV = (function(){ try{ return JSON.parse(fs.readFileSync(OVF,'utf8')); 
 const OV = ALLOV.external || {};
 const RCOL = ALLOV.routeColors || {};            // top-level: recolour a route on BOTH maps
 for(const r in RCOL) C[r] = RCOL[r];
+// hiddenOperators (opt-in customer edit, top-level overrides.json array of
+// routes.json operators[].name) — drops a hidden operator's LEFT-FAN branches
+// (external[]) and legend row. Absent/empty => byte-identical. NOTE: the A/B
+// busway corridor itself is not filterable (it's drawn as a fixed structural
+// block, not a loop over routes) — no currently-built town needs that, since
+// no town uses both hiddenOperators and this generator yet.
+const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
+const HIDDEN_ROUTES = new Set();
+if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
+const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
 const EDK = process.env.EDITOR_KEYS==='1';
 const W = 297, H = 210;
 let s = '';
@@ -112,7 +122,7 @@ if(PANX!=null) reserve(PANX-3, 0, 297, 210);
 reserve(0,0,150,26);
 
 // ===== LEFT BRANCHES =========================================================
-const branches = D.external.map(b=>Object.assign({}, b, { id: b.id||b.route }));
+const branches = D.external.filter(b=>!HIDDEN_ROUTES.has(b.route)).map(b=>Object.assign({}, b, { id: b.id||b.route }));
 // row y: explicit yMap (by id) wins; else auto-distribute across [yTop,yBot]
 const yTop=40, yBot=182;
 const autoY = {}; branches.forEach((b,i)=>{ autoY[b.id] = branches.length>1 ? yTop+(yBot-yTop)*i/(branches.length-1) : (yTop+yBot)/2; });
@@ -198,7 +208,7 @@ if(PANX!=null){
     return [lbl, fromB&&fromB.days?fromB.days:'']; }
   let px=PANX, py=16;
   out(`<text x="${px}" y="${py}" font-family="Arial" font-weight="bold" font-size="5.5" fill="#222">Services</text>`); py+=3;
-  (D.operators||[]).forEach(op=>{
+  OPS.forEach(op=>{
     py+=5.4; out(`<text x="${px}" y="${py}" font-family="Arial" font-weight="bold" font-size="3.2" fill="#777">${esc(op.name)}</text>`);
     op.routes.forEach(r=>{ py+=7.2; badge(px+3.6,py,r,3.6);
       const dd=dfor(r), t1=wrap(dd[0],30), t2=wrap(dd[1]||'',34);
@@ -214,7 +224,7 @@ if(PANX!=null){
 if(PANX==null){
   let lx=10, ly=185;
   out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-size="4.2" fill="#222">Operators &amp; services</text>`);
-  D.operators.forEach((op,i)=>{ const yy=ly+i*6.2; let bx=lx;
+  OPS.forEach((op,i)=>{ const yy=ly+i*6.2; let bx=lx;
     op.routes.forEach(r=>{ badge(bx+3,yy,r,2.8); bx+=6.6; });
     out(`<text x="${bx+2}" y="${yy}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`); });
 }

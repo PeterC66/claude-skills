@@ -17,6 +17,14 @@ const ALLOV = (function(){ try{ return JSON.parse(fs.readFileSync(OVF,'utf8')); 
 const OV = ALLOV.external || {};
 const RCOL = ALLOV.routeColors || {};            // top-level: recolour a route on BOTH maps
 for(const r in RCOL) C[r] = RCOL[r];
+// hiddenOperators (opt-in customer edit, top-level overrides.json array of
+// routes.json operators[].name) — drop every spoke + legend row belonging to
+// a hidden operator. Absent/empty => byte-identical.
+const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
+const HIDDEN_ROUTES = new Set();
+if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
+const EXT = HIDDEN_ROUTES.size ? D.external.filter(b=>!HIDDEN_ROUTES.has(b.route)) : D.external;
+const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
 const EDK = process.env.EDITOR_KEYS==='1';
 const W = 297, H = 210;
 let s = '';
@@ -67,8 +75,8 @@ function rayToRect(dx,dy){             // distance from hub to inset rect along 
   return t;
 }
 // draw spokes first (under hub)
-const _cnt={}; D.external.forEach(b=>_cnt[b.route]=(_cnt[b.route]||0)+1); const _occ={};
-for(const b of D.external){
+const _cnt={}; EXT.forEach(b=>_cnt[b.route]=(_cnt[b.route]||0)+1); const _occ={};
+for(const b of EXT){
   _occ[b.route]=(_occ[b.route]||0)+1;
   const _key=_cnt[b.route]>1?b.route+'#'+_occ[b.route]:b.route;
   const _ov=(OV.branches||{})[_key]||{};
@@ -152,28 +160,28 @@ out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-siz
 const LW = (D.legendWrap && (D.legendWrap.perRow|0) > 0) ? (D.legendWrap.perRow|0) : 0;
 if(LW){
   let yy = ly;
-  D.operators.forEach(op=>{
-    const rs = op.routes.filter(r=>C[r]);
+  OPS.forEach(op=>{
+    const rs = op.routes.filter(r=>C[r] && !HIDDEN_ROUTES.has(r));
     if(!rs.length) return;
     const rows = Math.ceil(rs.length/LW);
     rs.forEach((r,k)=>badge(lx+3+(k%LW)*7.0, yy+Math.floor(k/LW)*6.2, r, 2.9));
     out(`<text x="${(lx+Math.min(rs.length,LW)*7.0+2).toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
     yy += rows*6.2 + 1.4;
   });
-  ly = yy - 6.6*D.operators.length;   // keep the note's default offset sane
+  ly = yy - 6.6*OPS.length;   // keep the note's default offset sane
 } else
-D.operators.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
-  op.routes.forEach(r=>{ badge(bx+3,yy,r,2.9); bx+=7.0; });
+OPS.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
+  op.routes.filter(r=>!HIDDEN_ROUTES.has(r)).forEach(r=>{ badge(bx+3,yy,r,2.9); bx+=7.0; });
   out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`); });
 // auto-note any route that leaves town on more than one arm (e.g. "56 runs as
 // two arms — to Manea and to Wisbech"), or use D.externalNote to override.
 let armNote = D.externalNote;
 if(armNote===undefined){
-  const arms={}; D.external.forEach(b=>{(arms[b.route]=arms[b.route]||[]).push(b.label);});
+  const arms={}; EXT.forEach(b=>{(arms[b.route]=arms[b.route]||[]).push(b.label);});
   armNote = Object.entries(arms).filter(([,v])=>v.length>1)
     .map(([r,v])=>`${r} runs as two arms — to ${v.slice(0,-1).join(', ')} and to ${v[v.length-1]}.`).join('  ');
 }
-if(armNote){ const _nx=(OV.note&&OV.note.x!=null)?OV.note.x:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y:(ly+D.operators.length*6.6+3);
+if(armNote){ const _nx=(OV.note&&OV.note.x!=null)?OV.note.x:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y:(ly+OPS.length*6.6+3);
   out(`<text x="${_nx}" y="${_ny}" font-family="Arial" font-size="2.9" fill="#666">${esc(armNote)}</text>`); }
 // source note
 out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times &amp; fares at bustimes.org or operator apps.</text>`);
@@ -199,4 +207,4 @@ function stampNote(cfg,x,y,align){
 
 out('</svg>');
 fs.writeFileSync(DIR+'/external.svg', s);
-console.log('external.svg', s.length, 'bytes;', D.external.length, 'spokes');
+console.log('external.svg', s.length, 'bytes;', EXT.length, 'spokes');

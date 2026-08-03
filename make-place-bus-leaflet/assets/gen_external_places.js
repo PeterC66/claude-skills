@@ -22,6 +22,14 @@ const ALLOV = (function () { try { return JSON.parse(fs.readFileSync(OVF, 'utf8'
 const OV = ALLOV.external || {};
 const RCOL = ALLOV.routeColors || {};
 for (const r in RCOL) C[r] = RCOL[r];
+// hiddenOperators (opt-in customer edit, top-level overrides.json array of
+// routes.json operators[].name) — drop a hidden operator's routes from every
+// destination spoke's badge row (dropping the spoke entirely if that empties
+// it) and its legend row. Absent/empty => byte-identical.
+const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
+const HIDDEN_ROUTES = new Set();
+if (HIDDEN_OPS.size) (D.operators || []).forEach(op => { if (HIDDEN_OPS.has(op.name)) (op.routes || []).forEach(r => HIDDEN_ROUTES.add(r)); });
+const OPS = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name)) : D.operators;
 const W = 297, H = 210;
 let s = '';
 const out = x => { s += x + '\n'; };
@@ -71,7 +79,9 @@ function rayToRect(dx, dy) {
   if (dy > 0) t = Math.min(t, (RECT.y1 - HY) / dy); else if (dy < 0) t = Math.min(t, (RECT.y0 - HY) / dy);
   return t;
 }
-const dests = D.destinations || [];
+const dests = HIDDEN_ROUTES.size
+  ? (D.destinations || []).map(b => Object.assign({}, b, { routes: (b.routes || []).filter(r => !HIDDEN_ROUTES.has(r)) })).filter(b => b.routes.length)
+  : (D.destinations || []);
 for (const b of dests) {
   const ov = (OV.branches || {})[b.name] || {};
   const bearing = ov.bearing != null ? ov.bearing : b.bearing;
@@ -102,12 +112,12 @@ for (const b of dests) {
 // ---- legend + notes (top-left) ----------------------------------------------
 let lx = 10, ly = 42;
 out(`<text x="${lx}" y="${ly - 4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
-(D.operators || []).forEach((op, i) => {
+OPS.forEach((op, i) => {
   const yy = ly + i * 6.6; let bx = lx;
-  op.routes.forEach(r => { badge(bx + 3, yy, r, 2.9); bx += 7.0; });
+  op.routes.filter(r => !HIDDEN_ROUTES.has(r)).forEach(r => { badge(bx + 3, yy, r, 2.9); bx += 7.0; });
   out(`<text x="${bx + 2}" y="${(yy + 0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
 });
-let ny = ly + (D.operators || []).length * 6.6 + 4;
+let ny = ly + OPS.length * 6.6 + 4;
 (D.localLoops || []).forEach(l => {
   badge(lx + 3, ny, l.route, 2.9);
   out(`<text x="${lx + 8}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(l.label || 'local circular')}</text>`);

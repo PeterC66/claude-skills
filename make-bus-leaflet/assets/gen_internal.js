@@ -219,10 +219,19 @@ const ANCHOR_LABEL = RJ.anchorLabel || 'St Ives Bus Station';
 // "comp":0.22} to enable. Defaults below = identity (no compression).
 // (Under internalRoads this is superseded by the focus fisheye.)
 const ZOOM = Object.assign({ corePct: 1.0, comp: 1.0 }, RJ.internalZoom || {});
+// hiddenOperators (opt-in customer edit, top-level overrides.json array of
+// routes.json operators[].name) — drop every route belonging to a hidden
+// operator from the draw order AND the Services panel (the panel's own
+// per-operator grouping then naturally omits that operator's now-empty
+// group). Absent/empty => byte-identical.
+const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
+const HIDDEN_ROUTES = new Set();
+if (HIDDEN_OPS.size) (RJ.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
+const dropHidden = arr => HIDDEN_ROUTES.size ? arr.filter(r=>!HIDDEN_ROUTES.has(r)) : arr;
 // Route draw order (internal). Default = palette key order.
-const order = RJ.routeOrder || Object.keys(C);
+const order = dropHidden(RJ.routeOrder || Object.keys(C));
 // Services-panel list order. Default = draw order.
-const panelOrder = RJ.panelOrder || order;
+const panelOrder = dropHidden(RJ.panelOrder || order);
 // ====== internalCorridors — RUNG 1 of the complexity ladder (P2, 2026-07-28) ==
 // routes.json "internalCorridors": { "<lead>": ["1","1A","1B"] }
 //                              or   { "<lead>": {routes:["1","1A","1B"]} }

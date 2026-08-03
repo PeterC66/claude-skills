@@ -18,6 +18,7 @@ Usage (fill every external[] spoke in a town's routes.json that has none yet):
   overwrites a value already present -- re-run safely after edits)
 """
 import sqlite3, argparse, os, json, statistics
+from collections import Counter
 
 def _to_seconds(hms):
     if not hms: return None
@@ -27,7 +28,7 @@ def _to_seconds(hms):
     except ValueError:
         return None
 
-def journey_minutes(cur, prefixes, route_short_name, dest_substr, sample=300):
+def journey_minutes(cur, prefixes, route_short_name, dest_substr, allow_majority_fallback=False, sample=300):
     """Median scheduled minutes from the last stop matching `prefixes` to the
     destination, across up to `sample` trips of `route_short_name` that call
     at the origin. GTFS stop names are POI/street names ("Superstore"), not
@@ -36,9 +37,16 @@ def journey_minutes(cur, prefixes, route_short_name, dest_substr, sample=300):
     terminus, matching what the external map draws a spoke to). Where a
     route has more than one arm (e.g. "56" splits to Manea and to Wisbech),
     disambiguate by preferring trips whose last-stop name contains
-    `dest_substr`; only fall back to using every trip's terminus regardless
-    of name when the route has just one distinct terminus overall (the
-    common single-arm case, where name-matching would usually fail anyway).
+    `dest_substr`. When `allow_majority_fallback` is True (the caller's
+    responsibility to set only when it KNOWS this route has just one spoke in
+    this town -- multiple external[] entries sharing a route number must
+    never set it, or two different arms silently blend into one wrong
+    number), also try every trip whose terminus matches the MAJORITY terminus
+    across all sampled trips (not literally every terminus -- one outlier
+    trip ending at a different timing point, e.g. an early-turnback working,
+    must not block the fallback that would otherwise correctly handle the
+    common single-arm case where name-matching fails because GTFS uses POI
+    names, not village names).
     Returns (minutes_or_None, n_trips_sampled)."""
     route_ids = [r[0] for r in cur.execute(
         "SELECT DISTINCT route_id FROM routes WHERE route_short_name=?", (route_short_name,))]
@@ -54,7 +62,7 @@ def journey_minutes(cur, prefixes, route_short_name, dest_substr, sample=300):
         route_ids + [p + '%' for p in prefixes] + [sample]).fetchall()
     dest_l = dest_substr.lower()
     trips = []  # (origin_i, rows, headsign) per trip that clears the origin stop
-    termini = set()
+    terminus_counts = Counter()
     for tid, headsign in trip_rows:
         rows = list(cur.execute(
             "SELECT st.stop_id, st.departure_time, st.arrival_time, s.stop_name "
@@ -67,7 +75,7 @@ def journey_minutes(cur, prefixes, route_short_name, dest_substr, sample=300):
                 origin_i = i  # keep the LAST matching stop (town may have several)
         if origin_i is None or origin_i >= len(rows) - 1: continue
         trips.append((origin_i, rows, headsign or ''))
-        termini.add((rows[-1]['stop_name'] or '').lower())
+        terminus_counts[(rows[-1]['stop_name'] or '').lower()] += 1
 
     def _matches(headsign, last_name):
         # trip_headsign usually names the destination TOWN literally ("Cambridge
@@ -75,23 +83,23 @@ def journey_minutes(cur, prefixes, route_short_name, dest_substr, sample=300):
         # POI ("Drummer St Bus Station") with no town in it, so check both.
         return dest_l in headsign.lower() or dest_l in (last_name or '').lower()
 
-    def _durations(use_name_match, single_arm_fallback):
+    def _durations(filter_fn):
         out = []
         for origin_i, rows, headsign in trips:
-            if use_name_match and not _matches(headsign, rows[-1]['stop_name']):
-                if not single_arm_fallback: continue
+            if filter_fn and not filter_fn(headsign, rows[-1]['stop_name']):
+                continue
             t0 = _to_seconds(rows[origin_i]['departure_time'] or rows[origin_i]['arrival_time'])
             t1 = _to_seconds(rows[-1]['arrival_time'] or rows[-1]['departure_time'])
             if t0 is None or t1 is None or t1 < t0: continue
             out.append((t1 - t0) / 60)
         return out
 
-    durations = _durations(use_name_match=True, single_arm_fallback=False)
-    if len(durations) < 3 and len(termini) <= 1:
-        # single-arm route: every trip ends at the same place regardless of
-        # whether its GTFS name happens to contain the village label
-        wider = _durations(use_name_match=False, single_arm_fallback=True)
-        if len(wider) > len(durations): durations = wider
+    durations = _durations(_matches)
+    if len(durations) < 3 and allow_majority_fallback and terminus_counts:
+        majority_terminus, majority_n = terminus_counts.most_common(1)[0]
+        if majority_n >= 3:
+            wider = _durations(lambda h, l: (l or '').lower() == majority_terminus)
+            if len(wider) > len(durations): durations = wider
     if len(durations) < 3: return None, len(durations)  # too thin a sample to trust
     return round(statistics.median(durations)), len(durations)
 
@@ -115,12 +123,14 @@ if __name__ == "__main__":
     if a.fill:
         with open(a.fill, encoding="utf-8") as f:
             D = json.load(f)
+        route_spoke_count = Counter(b["route"] for b in D.get("external", []))
         filled = 0; skipped = 0
         for b in D.get("external", []):
             if b.get("minutesToDestination") is not None:
                 skipped += 1; continue
             dest_raw = b["stops"][-1] if b.get("stops") else b.get("label")
-            mins, n = journey_minutes(cur, a.prefixes, b["route"], _clean_dest(dest_raw))
+            single_arm = route_spoke_count[b["route"]] == 1
+            mins, n = journey_minutes(cur, a.prefixes, b["route"], _clean_dest(dest_raw), allow_majority_fallback=single_arm)
             if mins is not None:
                 b["minutesToDestination"] = mins
                 filled += 1

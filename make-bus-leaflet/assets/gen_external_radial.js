@@ -118,10 +118,20 @@ for(const b of D.external){
 }
 // 56 serves two arms (Manea & Wisbech) — note it once
 // hub node on top
+// externalHubLabel (optional) — override the hub box text (supports \n for a
+// second line, e.g. a combined "Bus Station/Park and Ride" label for a town
+// with two departure points sharing one radial hub). Absent => D.town, drawn
+// exactly as before (byte-identical).
 if(EDK) out('<g data-kind="hub" data-key="hub">');
-(function(){const w=Math.max(22, D.town.length*2.6+6),h=12;   // box widens for longer town names (March=22, byte-identical)
+(function(){
+  const label = D.externalHubLabel || D.town;
+  const lines = wrap(label, Math.max(13, D.town.length));
+  const h = 12 + (lines.length-1)*4.0;
+  const w = Math.max(22, Math.max(...lines.map(l=>l.length))*2.6+6, D.town.length*2.6+6);
   out(`<rect x="${(HX-w/2).toFixed(2)}" y="${(HY-h/2).toFixed(2)}" width="${w}" height="${h}" rx="2.6" fill="#111" stroke="#000" stroke-width="0.5"/>`);
-  out(`<text x="${HX}" y="${HY}" font-family="Arial" font-weight="bold" font-size="5.2" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(D.town)}</text>`);
+  const lh=5.2, y0=HY-(lines.length-1)*lh/2;
+  lines.forEach((ln,i)=>{ const yy = lines.length>1 ? (y0+i*lh).toFixed(2) : HY;
+    out(`<text x="${HX}" y="${yy}" font-family="Arial" font-weight="bold" font-size="5.2" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(ln)}</text>`); });
 })();
 if(EDK) out('</g>');
 

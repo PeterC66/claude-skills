@@ -64,7 +64,7 @@ data or the committed SVG has been tampered with — a different and more seriou
 
 | Town | Latest S4 | External generator |
 |---|---|---|
-| St Ives | `v6.8_2026-07-28_1034` | busway |
+| St Ives | `v6.12_2026-08-03_1241` | **radial** (was busway through v6.8) |
 | March | `v2.1_2026-07-28_0457` | radial |
 | Huntingdon | `v3.1_2026-07-28_0457` | radial |
 | Wisbech | `v1.1_2026-07-28_0459` | radial |
@@ -72,7 +72,7 @@ data or the committed SVG has been tampered with — a different and more seriou
 | Beaconsfield | `v1.1_2026-07-21_1614` | radial |
 | High Wycombe | `v2.1_2026-07-28_1026` | radial |
 
-**Gate each town with the external generator it actually uses** — St Ives is the only **busway** town (`gen_external_busway.js`); every other town is **radial**. Gating St Ives against the radial file reports a meaningless DIFF.
+**Gate each town with the external generator it actually uses.** As of 2026-08-03 **no town uses `gen_external_busway.js` any more** — St Ives switched to radial (v6.9) with an `externalHubLabel` combining its Bus Station and Park & Ride into one hub, because Peter didn't want the two-hub busway layout. `gen_external_busway.js` is kept in `assets/` **unedited** and untested-by-gate for any future town that needs two genuinely separate, physically-distant hubs — re-add a row here if one adopts it.
 
 > **2026-07-28 (P4).** Three `gen_internal.js` changes shipped with the High Wycombe v2.1 rebuild:
 > `coreBox.minRun` (drop orphan stubs), `internalTitleColor`, and a **terminus badge-row frame

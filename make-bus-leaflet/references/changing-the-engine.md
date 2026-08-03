@@ -64,7 +64,7 @@ data or the committed SVG has been tampered with — a different and more seriou
 
 | Town | Latest S4 | External generator |
 |---|---|---|
-| St Ives | `v6.13_2026-08-03_1428` | **radial** (was busway through v6.8) |
+| St Ives | `v6.14_2026-08-03_1440` | **radial** (was busway through v6.8) |
 | March | `v2.1_2026-07-28_0457` | radial |
 | Huntingdon | `v3.1_2026-07-28_0457` | radial |
 | Wisbech | `v1.1_2026-07-28_0459` | radial |
@@ -76,8 +76,10 @@ data or the committed SVG has been tampered with — a different and more seriou
 > opt-in `minutesToDestination` time label under the destination box, plus `gtfs_build.py` gained
 > `arrival_time`/`departure_time` columns and a new `gtfs_duration.py` derives the minutes from them
 > (plan #3 of the 2026-08-03 five-feature plan). All 7 built towns' external + all 5 built places'
-> external gated PASS before shipping; St Ives was then re-rendered to v6.13 as the worked example
-> (B → Cambridge ~60 min, B → Hinchingbrooke ~36 min) — see [s3-config.md](s3-config.md)
+> external gated PASS before shipping; St Ives was then re-rendered to v6.13 (2 spokes via `--fill`)
+> and v6.14 (the other 8, hand-derived — `--fill`'s terminus heuristic can't place a round-trip
+> service, whose last GTFS stop lands back at the origin, not the destination) — 10 of 11 spokes
+> now carry a time, only the DRT-only VL14 stays absent — see [s3-config.md](s3-config.md)
 > `external[].minutesToDestination`.
 
 **Gate each town with the external generator it actually uses.** As of 2026-08-03 **no town uses `gen_external_busway.js` any more** — St Ives switched to radial (v6.9) with an `externalHubLabel` combining its Bus Station and Park & Ride into one hub, because Peter didn't want the two-hub busway layout. `gen_external_busway.js` is kept in `assets/` **unedited** and untested-by-gate for any future town that needs two genuinely separate, physically-distant hubs — re-add a row here if one adopts it.

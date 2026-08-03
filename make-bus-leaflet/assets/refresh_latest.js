@@ -6,8 +6,9 @@
 // if present):   node refresh_latest.js "<townDir>"
 // Copies (whichever exist): internal.jpg, external.jpg, internal-schematic.jpg,
 // internal-diagram.jpg from
-// the latest S5 render; the newest disagreements.docx and verification.docx found
-// anywhere under the town folder. Missing items are skipped silently.
+// the latest S5 render; the newest disagreements.docx + disagreements.pdf (the
+// customer-facing PDF conversion, see gen_disagreements.py) and verification.docx
+// found anywhere under the town folder. Missing items are skipped silently.
 const fs = require('fs'), path = require('path');
 const TOWN = process.argv[2] || process.cwd();
 const OUT = path.join(TOWN, '_latest');
@@ -57,6 +58,7 @@ const s5 = latestS5();
 for (const img of ['internal.jpg', 'external.jpg', 'internal-schematic.jpg', 'internal-diagram.jpg'])
   grab(s5 ? path.join(s5, img) : null, img);
 grab(newestUnder('disagreements.docx'), 'disagreements.docx');
+grab(newestUnder('disagreements.pdf'), 'disagreements.pdf');
 grab(newestUnder('verification.docx'), 'verification.docx');
 
 console.log('_latest refreshed: ' + copied.join(', ') + (missing.length ? '  (skipped: ' + missing.join(', ') + ')' : ''));

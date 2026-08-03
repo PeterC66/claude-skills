@@ -28,6 +28,9 @@ disagreements.json schema:
 }
 """
 import json
+import os
+import shutil
+import subprocess
 import sys
 from datetime import datetime
 
@@ -40,6 +43,38 @@ from docx.oxml import OxmlElement
 CONFLICT_FILL = "FCE4E4"   # pale red for conflict rows
 AGREE_FILL = "E8F4E8"      # pale green for agree rows
 HEADER_FILL = "2F2F2F"
+
+
+# The .docx is the internal editable source of truth (kept forever); customers
+# in the portal only ever see a converted PDF, so their copy is finalised and
+# non-editable. Call soffice DIRECTLY here — the office skills' soffice.py
+# wrapper is known to fail on Windows (see the Buses README "how to enhance").
+SOFFICE_CANDIDATES = [r"C:\Program Files\LibreOffice\program\soffice.exe", "soffice"]
+
+
+def convert_to_pdf(docx_path):
+    """Best-effort docx -> sibling PDF via LibreOffice headless. Never blocks:
+    if soffice isn't found or conversion fails, the .docx is still written and
+    we just skip the PDF (there is no customer-facing PDF this run)."""
+    soffice = next((p for p in SOFFICE_CANDIDATES if os.path.exists(p) or shutil.which(p)), None)
+    if not soffice:
+        print("note: soffice not found — skipped PDF conversion (docx still written)")
+        return None
+    outdir = os.path.dirname(os.path.abspath(docx_path))
+    try:
+        subprocess.run(
+            [soffice, "--headless", "--convert-to", "pdf", "--outdir", outdir, docx_path],
+            check=True, capture_output=True, timeout=60,
+        )
+    except Exception as e:
+        print(f"note: PDF conversion failed ({e}) — docx still written")
+        return None
+    pdf_path = os.path.splitext(docx_path)[0] + ".pdf"
+    if os.path.exists(pdf_path):
+        print(f"wrote {pdf_path}")
+        return pdf_path
+    print("note: soffice ran but no PDF appeared — skipped")
+    return None
 
 
 def shade(cell, hex_fill):
@@ -154,6 +189,7 @@ def main():
     doc.core_properties.modified = _now
     doc.save(out)
     print(f"wrote {out}  ({len(rows)} rows, {len(conflicts)} disagreement(s))")
+    convert_to_pdf(out)
 
 
 if __name__ == "__main__":

@@ -216,8 +216,13 @@ def main():
       "internalDesc":{r:[f"{a.town} - <dest>","<days, via ...>"] for r in order},
       "poi":{"industrialKeep":"none","excludeName":[],"tidy":[[" School$",""]],"canon":[]},
       "operators":operators,
+      # Stagger labelPos down the left margin: all three used to share {40,200},
+      # which overprints them into an unreadable smear the moment a town has more
+      # than one feature (Ramsey drew "Bevill's Leam" on top of "River Nene (Old
+      # Course)"). Still a draft position for a human to place properly.
       "features":[{"key":f["key"],"type":f["type"],"label":f["label"],
-                   "labelPos":{"x":40,"y":200},"labelColor":"#7fb0d8"} for f in feats[:3]],
+                   "labelPos":{"x":40,"y":200-i*7},"labelColor":"#7fb0d8"}
+                  for i,f in enumerate(feats[:3])],
       "external":ext
     }
     rp=os.path.join(a.out,"routes.draft.json")

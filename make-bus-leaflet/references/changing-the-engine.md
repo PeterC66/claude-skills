@@ -43,6 +43,20 @@ that does it, and what else has to be updated in the same session.
 > **deferred** — `engine_version.js` exists and could stamp a hash file in the portal's `engine/`
 > folder, but that repo hasn't been touched; §4's byte-diff `cmp` procedure is still how the portal side
 > is checked today.
+>
+> **Also 2026-08-04: `internalRoads` graduated from opt-in to default.** Every built town (8/8) and
+> place (5/5) had `internalRoads` set — the classic pre-road-skeleton stop-chord model had no live
+> user left, and `draft_town.py` had already been hardcoding the key on every new town for weeks. In
+> `gen_internal.js`, `IR` now defaults to the standard object when the key is **absent**; only an
+> explicit `internalRoads:false` still selects classic (kept as an escape hatch, not expected to be
+> used). This matches the pattern `make-place-bus-leaflet/assets/build_internal_place_roads.js` already
+> used (`RJ.internalRoads == null || === true` → `{}`). No functional change for any existing town/place
+> (all already set the key); `status.js` confirmed 8/8 towns, 5/5 places, and the portal fixture still
+> PASS. Header doc comment updated to match. **Not done:** the classic-model code paths themselves
+> (`if(IR)`/`IR?` branches, ~11 sites) are still in the file, just unreachable by default — a full
+> removal is a separate, larger change (see the option-2 discussion this was weighed against). This
+> edit drifts `gen_internal.js` from the portal's vendored copy (`engine/place/gen_internal.js`) —
+> re-vendor next time that repo is touched, per §4.
 
 ---
 

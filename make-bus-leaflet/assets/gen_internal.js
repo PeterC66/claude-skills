@@ -23,11 +23,15 @@
 // (plus anchor/anchorLabel/internalZoom/features/internalBundle/internalTermini
 //  already documented below).
 //
-// INTERNAL ROADS MODEL (2026-06-12, opt-in via routes.json "internalRoads"):
-// the road-skeleton drawing model that makes the map read like the hand-made
-// leaflet. Needs S2's roads_geo.json (pull_roads.js) + routes_paths.json
-// (match_routes.js). When the key is ABSENT everything below is skipped and
-// the classic stop-chord model runs byte-identical. Config (all optional):
+// INTERNAL ROADS MODEL (2026-06-12; DEFAULT since 2026-08-04): the road-
+// skeleton drawing model that makes the map read like the hand-made leaflet.
+// Needs S2's roads_geo.json (pull_roads.js) + routes_paths.json
+// (match_routes.js) — draft_town.py always writes both alongside the key.
+// Every built town/place has opted in (8/8 towns, 5/5 places, 2026-08-04),
+// so an ABSENT "internalRoads" key now defaults to the standard object below
+// rather than falling back to the old classic stop-chord model. Set
+// `internalRoads:false` explicitly to get the classic model (kept as an
+// escape hatch; no live town uses it). Config (all optional):
 //   internalRoads: {
 //     stroke:1.7, gap:2.8,            // route line width / parallel-lane centre spacing.
 //                                      // Visible daylight between adjacent bundled lines =
@@ -77,9 +81,9 @@
 //     badgeEvery:70,                  // route badge spacing along lines (mm)
 //     termini:{ r:{start:"X",end:"Y"} } // arrow labels per cut end (falls back to terminiLabels)
 //   }
-// When internalRoads is present the source note also gets a build-version stamp
-// (LEAFLET_VERSION env, else routes.json "version"); absent internalRoads =>
-// no stamp, so the non-internalRoads gate towns stay byte-identical.
+// When internalRoads is active the source note also gets a build-version stamp
+// (LEAFLET_VERSION env, else routes.json "version"); only `internalRoads:false`
+// (classic model) omits the stamp.
 // Also additive (work in both models, no output when absent): mapNotes[],
 // panelGroups, panelRow, keyRow, panelBadge, fareNote.
 //   panelCols:{ cols:2, width:48, row:5.0, keyAt:{x,y} }
@@ -128,14 +132,16 @@ const routes  = (function(){
 // outside Cambridgeshire) simply has no such file — tolerate its absence (=> []).
 // features[] in routes.json supplies the real linear features either way.
 const river   = (function(){ try{ return JSON.parse(fs.readFileSync(DIR+'/river_geo.json','utf8')); }catch(e){ return []; } })();
-// ---- internalRoads config + data (null/absent => classic model, byte-identical)
-const IR = RJ.internalRoads ? (function(){
-  const u = (RJ.internalRoads===true)?{}:RJ.internalRoads;
+// ---- internalRoads config + data (2026-08-04: DEFAULT ON; absent key = standard
+// object, same as internalRoads:true. Only explicit `internalRoads:false` => null
+// => classic model.)
+const IR = (RJ.internalRoads === false) ? null : (function(){
+  const u = (RJ.internalRoads && RJ.internalRoads !== true) ? RJ.internalRoads : {};
   const o = Object.assign({ stroke:1.7, gap:2.8, skeleton:'#e4e4e4', skeletonPad:1.3,
     contextRoads:true, contextColor:'#f0f0f0', contextWidth:0.45,
     roadLabelMax:12, badgeEvery:70 }, u);       // gap>=stroke+~1mm so bundled lanes read separately (see header)
   o.focus = Object.assign({ coreKm:1.1, comp:0.5 }, u.focus||{});
-  return o; })() : null;
+  return o; })();
 // ---- internalDiagram render extensions (tube-map diagram, 2026-07-10) ------
 // Keyed off internalDiagramRENDER, which ONLY diagram_internal.js writes into
 // its workspace routes.json (curated stop ticks, interchange lozenges, one-way

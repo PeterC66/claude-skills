@@ -133,7 +133,7 @@ if __name__=="__main__":
     summary=[]; total_actionable=0; towns_to_review=[]
     for g in groups:
         for town,cfg in g["towns"]:
-            town_dir=os.path.join(root,town)
+            town_dir=os.path.join(root,"Areas",town)
             if not os.path.isdir(town_dir): continue
             d=diff_town(g["db"],town,cfg,town_dir)
             if d is None:

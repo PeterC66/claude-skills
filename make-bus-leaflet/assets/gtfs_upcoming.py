@@ -314,7 +314,7 @@ def main():
             for town, cfg in g["towns"]:
                 if single and town.lower() != single.lower():
                     continue
-                town_dir = os.path.join(a.root, town)
+                town_dir = os.path.join(a.root, "Areas", town)
                 if not os.path.isdir(town_dir):
                     continue
                 prefixes = cfg.get("prefixes")

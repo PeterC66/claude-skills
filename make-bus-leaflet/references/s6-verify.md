@@ -10,20 +10,22 @@ the skill's `assets` folder; `$S6` = the run folder from `stage.js new S6`.
 
 ### How independent it actually is (state this honestly; don't oversell a PASS)
 The pass is **procedurally blind** (the agent never sees our data, re-derives from
-scratch) and **source-checked** (a second source is required). It is **not
-statistically independent**, on two axes that matter:
-- **Shared primary source.** The red-team's primary is bustimes.org — the *same*
-  primary our S1 uses. An error *in bustimes itself*, or a misreading both make, is
-  only caught if the agent's second source contradicts it.
-- **Shared substrate.** The red-team is another instance of the *same model* as the
-  orchestrator, so it shares blind spots and reasoning traps (e.g. the "Mon–Fri
-  heading hides a separate Saturday timetable" trap) — correlated errors survive.
+scratch), **source-checked** (a second source is required), runs on a **different
+model** than the orchestrator (step 3 below), and its **primary source is NOT
+bustimes.org** (the prompt now requires a non-bustimes primary; bustimes may only be
+used to cross-check, never as the sole or first source — see the prompt). That closes
+two of the three correlated-error risks this section used to flag as open. What's
+still true:
+- **Shared substrate family.** The red-team is a *different* model but still a Claude
+  model, so architecture-level blind spots (not model-specific ones) can still
+  correlate — a reasoning trap novel to the whole family, rather than one instance's
+  quirk, could still survive.
 - The diff and the HARD/SOFT thresholds are **our** code, not an outside standard.
 
-So report a PASS as **"no contradiction found by a blind, second-sourced re-check"**,
-**not** "independently proven correct". For genuinely independent assurance you'd need
-a disjoint source (Traveline/BODS only, no bustimes) and/or a different checker. Keep
-the user's expectations calibrated to this in any summary.
+So report a PASS as **"no contradiction found by a blind, second-sourced, different-
+primary-source, different-model re-check"** — stronger than before, still **not**
+"independently proven correct". For genuinely independent assurance you'd need a
+non-Claude checker. Keep the user's expectations calibrated to this in any summary.
 
 S6 is **dated, not versioned** — it verifies whatever the manifest currently points
 at; re-run it whenever S1–S3 data changes. It changes no drawn output, so it never
@@ -36,12 +38,24 @@ bumps an image version.
   the missing `S6` slot on first touch.
 
 ## The two design decisions (LOCKED — do not re-litigate)
-1. **Rigour = full blind red-team agent.** Spawn a *separate* sub-agent that
-   re-derives S1 from scratch — each service's operator, termini at **both** ends,
-   operating days, and whether it actually serves the town — using bustimes **plus a
-   second independent source**, with **no sight** of our stored
-   `verified-services.json` / `routes.json` / geometry. It returns structured JSON; we
-   diff. (Not self-consistency only; not a mere re-read of our own files.)
+1. **Rigour = full blind red-team agent, on a different model, with a non-bustimes
+   primary source.** Spawn a *separate* sub-agent that re-derives S1 from scratch —
+   each service's operator, termini at **both** ends, operating days, and whether it
+   actually serves the town — with **no sight** of our stored `verified-services.json`
+   / `routes.json` / geometry. It returns structured JSON; we diff. (Not
+   self-consistency only; not a mere re-read of our own files.) Two extra constraints
+   beyond the original design, added 2026-08-04 to convert the honesty caveat below
+   from a permanent disclaimer into an actual improvement:
+   - **Model:** pass `model:` in the `Agent` call and set it to a **different** Claude
+     model than the one currently orchestrating the build (see step 3). Never Haiku —
+     this pass needs real judgement (operator identity, day-trap reading), not
+     mechanical extraction.
+   - **Primary source is NOT bustimes.org.** The prompt below requires the red-team's
+     first/primary source to be something other than bustimes (operator site,
+     Traveline, BODS, council pages); bustimes may only be used as a cross-check,
+     never the sole or first source for a service. This is what removes the "shared
+     primary source" correlated-error risk, not just the "different agent instance"
+     one.
 2. **On mismatch = block hard / flag soft.** A finding is **HARD** (blocks the build
    loudly) only if the displayed leaflet would be *wrong or undrawable*; everything
    else is **SOFT** (logged for review, never blocks).
@@ -50,11 +64,15 @@ bumps an image version.
 1. `$S6 = stage.js new S6` (dated dir, no version). `cd "$S6"`.
 2. **Pull the inputs to diff against:** `stage.js pull S1`, `pull S2`, `pull S3` into
    `$S6`. (They join the run dir alongside the outputs, same as S4/S5.)
-3. **Spawn the blind red-team agent** (general-purpose sub-agent) with the *exact
-   prompt below*, substituting the town. It must NOT be given any of our data — only
-   the town name. It returns a single ```json block. Save that JSON verbatim as
-   `redteam.json` in `$S6`. (HTML entities like `&amp;` / `P&amp;R` are fine — the
-   engine unescapes them on load.)
+3. **Pick a different model, then spawn the blind red-team agent.** `Agent`
+   (`subagent_type: general-purpose`) with the *exact prompt below*, substituting the
+   town, and an explicit `model:` override that differs from whatever model is
+   currently running this build: orchestrating as **Sonnet** → red-team on **Opus**;
+   orchestrating as **Opus** → red-team on **Sonnet**. (If the orchestrator is
+   something else, pick whichever of Sonnet/Opus it *isn't*.) It must NOT be given any
+   of our data — only the town name. It returns a single ```json block. Save that JSON
+   verbatim as `redteam.json` in `$S6`. (HTML entities like `&amp;` / `P&amp;R` are
+   fine — the engine unescapes them on load.)
    - If the agent returns prose around the JSON, keep only the JSON object.
    - It is acceptable to run the engine **without** `redteam.json` (sanity-only mode,
      `redteamPresent:false`) for a quick structural check, but a real verification
@@ -95,14 +113,20 @@ what `verify_report.js` parses):
 > bustimes locality page associates with the town that does NOT actually serve it (with
 > the reason).
 >
-> **How (use at least TWO independent sources)** — Primary: bustimes.org; start at
-> `https://bustimes.org/localities/<slug>` and open each service page for stops/operator/
-> termini; watch for *expired* services and ones listed against the locality that don't
-> enter town. Second source (REQUIRED): confirm each a different way — the operator's own
-> site/timetable, Traveline, Bus Open Data, or the council bus pages. Where two sources
-> disagree, say so in `notes`. Watch operating-days traps (a "Mon-Fri" heading can hide a
-> separate Saturday timetable = Mon-Sat) and operator identity (a number can be run by
-> different operators in different areas).
+> **How (use at least TWO independent sources) — bustimes.org is NOT your primary
+> source.** Start from a **non-bustimes** source to establish which services serve the
+> town in the first place: the relevant council's bus pages, Traveline, Bus Open Data
+> (BODS), or operators' own network/timetable pages for the area. Only THEN use
+> bustimes.org (`https://bustimes.org/localities/<slug>` and each service's page) as a
+> **cross-check** — to fill in stop-level detail, catch anything your primary source
+> missed, or resolve an ambiguity — never as the source you start from or the one you
+> trust by default. Every service still needs a second, different source confirming it
+> (operator's own site/timetable, Traveline, BODS, council pages — bustimes counts as
+> one of these only if it was not also your primary). Where sources disagree, say so in
+> `notes`, and note in `sources` which one you treated as primary for that service.
+> Watch operating-days traps (a "Mon-Fri" heading can hide a separate Saturday
+> timetable = Mon-Sat) and operator identity (a number can be run by different
+> operators in different areas).
 >
 > **Output — STRICT JSON only.** Return ONLY a single fenced ```json code block, no prose,
 > exactly this shape:

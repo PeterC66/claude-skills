@@ -7,6 +7,17 @@ that does it, and what else has to be updated in the same session.
 `%SK%` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`
 `%PSK%` = `C:\u3a St Ives\.claude\skills\make-place-bus-leaflet\assets`
 
+> **2026-08-04.** The manual gate table in §2, the four-gate checklist in §2a, and the `cmp` loop
+> over the §4 vendoring table are now automated: `node "%SK%\status.js"` gates every town, place,
+> and portal fixture against the *current* template in one run (`--md` for a pasteable table,
+> `--json` for scripting, non-zero exit on anything needing attention), and
+> `node "%SK%\rollout.js" [--town "<Town>"|--all] [--apply]` does the §2a re-render sequence
+> per town (dry-run by default; stops before publishing if a label is lost vs the previous build).
+> Both are pure compute over data already on disk — no S1/S2 network fetch. The prose below still
+> describes *what* the gate proves and *why* the re-render is needed; treat the tables as history,
+> not as the thing to update by hand. Run `status.js` first — it already caught one real instance
+> of the drift class in the next paragraph (`gen_external_places.js`, fixed the same day).
+
 ---
 
 ## 0. First ask: does this need a code change at all?

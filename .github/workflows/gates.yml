@@ -1,0 +1,65 @@
+name: Bus leaflet gates
+
+# Mirror of buses-data's workflow of the same name, triggered from this side
+# (the engine repo) instead. Runs the same status.js gate suite so an engine
+# change gets checked immediately rather than waiting for the next buses-data
+# push or the nightly schedule over there.
+#
+# Requires the same CROSS_REPO_PAT secret as buses-data (a GitHub PAT with
+# read access to PeterC66/buses-data), added here as a repo secret.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout claude-skills (engine)
+        uses: actions/checkout@v4
+        with:
+          path: skills
+
+      - name: Checkout buses-data
+        uses: actions/checkout@v4
+        with:
+          repository: PeterC66/buses-data
+          token: ${{ secrets.CROSS_REPO_PAT }}
+          path: buses-data
+
+      - name: Checkout community-bus-maps (portal, public)
+        uses: actions/checkout@v4
+        with:
+          repository: PeterC66/community-bus-maps
+          path: community-bus-maps
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: skills/make-bus-leaflet/package-lock.json
+
+      - name: Install engine dependencies
+        working-directory: skills/make-bus-leaflet
+        run: npm ci
+
+      - name: Run gates (JSON)
+        working-directory: skills/make-bus-leaflet
+        run: |
+          node assets/status.js --buses "$GITHUB_WORKSPACE/buses-data" --portal "$GITHUB_WORKSPACE/community-bus-maps" --json > gate-results.json
+
+      - name: Gate summary
+        if: always()
+        working-directory: skills/make-bus-leaflet
+        run: node assets/status.js --buses "$GITHUB_WORKSPACE/buses-data" --portal "$GITHUB_WORKSPACE/community-bus-maps" --md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload gate results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-results
+          path: skills/make-bus-leaflet/gate-results.json

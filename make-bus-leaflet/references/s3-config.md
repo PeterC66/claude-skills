@@ -7,11 +7,30 @@ model and palettes, `references/linear-features.md` for `features[]`, and
 
 1. `S3=stage.js new S3`; `cd "$S3"`.
 2. Write **`routes.json`** — palette, textOn, operators[], external[] (radial: each `{route,label,days,bearing,side,stops}`), **`features[]`** (the 1–3 linear features chosen in S2 — each `{key,type,label,labelPos{x,y},labelColor,labelItalic,labelSize,labelReserve[x0,y0,x1,y1]}`, optional `style{stroke,width,dash}` to override the per-type default), plus `anchor`/`anchorLabel`/`internalZoom`/`titleColor`/`externalNote` as needed; `busway[]` only for a busway/P&R town. Start from `%SK%\routes.example.radial.json` (ordinary town = March) or `routes.example.busway.json` (St Ives). Feature `type` ∈ river/canal/railway/road/generic sets the default style; `key` must match a key in S2's `features_geo.json`.
-3. **Copy the two template generators into `$S3` VERBATIM — no edits.** The generators are **fully config-driven** (2026-06-07): they contain no town literals, so you copy them as-is. Pick the external layout: copy `gen_external_radial.js` (ordinary) or `gen_external_busway.js` (busway) **as `gen_external.js`**; copy `gen_internal.js`. **You do NOT edit them** — not even the `icons.js` require (it self-resolves: `__dirname/icons.js` when run in `%SK%`, else the skill path / `$SKILL_ASSETS`). Everything town-specific lives in `routes.json` (see the key list below). You can also run them **in place** from `%SK%` with the run dir as CWD (no copy) — the only reason to keep a local copy is so the drag editor has one to drive.
+3. **Do NOT copy the generators into `$S3` any more (item 3, 2026-08-04).** S3 owns only `routes.json`
+   (+ optional `overrides.json`) — pure per-town **data**. The generators are **fully config-driven**
+   (2026-06-07: no town literals) and are always copied fresh from the **live `%SK%` template** at S4
+   time, so a town can never freeze a stale copy of the code between builds. This means you no longer
+   pick a generator file here either: set `routes.json`'s **`externalLayout`** to `"radial"` (default,
+   omit for an ordinary town) or `"busway"` (only a P&R/guided-busway town) instead of copying
+   `gen_external_radial.js`/`gen_external_busway.js` in by hand. Everything else town-specific lives in
+   `routes.json` (see the key list below).
+   - Still want a local generator copy to drive the drag editor mid-session? Copy it in for that
+     purpose, but **don't commit it as an S3 output** — S4 supplies its own copy regardless.
    - The templates are **editor-capable** (emit `data-key` under `EDITOR_KEYS=1`, honour `overrides.json`, print the `VIEWPORT` line). After S4, the editor runs **in-place**: `cd` into the S4 run dir and `node "%SK%\edit-server.js" internal|external` (see `references/overrides.md`).
-   - **Whenever you change a template, re-run the byte-identical gate** (`%SK%\gate.sh <gen> <S4-datadir> internal|external <committed_svg>`) on **every built town, internal *and* external** — the current gate set is listed in [changing-the-engine.md](changing-the-engine.md) §2 (this line used to say "St Ives v4.0 + March v1.1", the set when there were only two towns) — before shipping — they must stay identical. **Never add a town literal back into a generator; add a `routes.json` key instead** (this is how the external hub label was generalised — see `references/gotchas.md`).
+   - **Whenever you change a template, re-run the byte-identical gate** (`node "%SK%\status.js"`, or `%SK%\gate.sh <gen> <S4-datadir> internal|external <committed_svg>` by hand) on **every built town, internal *and* external** — the current set is listed in [changing-the-engine.md](changing-the-engine.md) §2 — before shipping — they must stay identical. **Never add a town literal back into a generator; add a `routes.json` key instead** (this is how the external hub label was generalised — see `references/gotchas.md`).
 4. **Manual layout (optional):** if you want to straighten routes / nudge labels, create/keep **`overrides.json`** here (see `references/overrides.md`). It's read by the generators and is safe to omit (absent ⇒ pure auto layout). Author it after the first S4/S5 draft using the drag editor, then drop it back in S3.
-5. `stage.js commit S3 "$S3" --outputs routes.json,overrides.json,gen_internal.js,gen_external.js` (omit `overrides.json` if none).
+5. `stage.js commit S3 "$S3" --outputs routes.json,overrides.json` (omit `overrides.json` if none — no `gen_internal.js`/`gen_external.js` any more, see step 3).
+
+### The `engine` field — provenance, not control (item 3, 2026-08-04)
+S4 stamps `routes.json`'s **`engine`** field with a short content-hash of the generator files it just
+ran (`node "%SK%\engine_version.js"` — hashes `gen_internal.js` + both `gen_external_*.js` + `icons.js`),
+the same surgical-replace approach `stage.js` already uses for `"version"`. It's pure record-keeping —
+which engine build actually drew this map — not something you set by hand or that controls anything at
+generate time (S4 always runs whatever is currently in `%SK%`). `node "%SK%\status.js"` reads it back to
+flag at a glance which towns' *last build* predates the current template (`(none)` for any town built
+before this field existed — not an error, just no provenance recorded yet). See
+[changing-the-engine.md](changing-the-engine.md) §2a for how this changes the re-render recipe.
 
 ## Everything town-specific is a `routes.json` key (the generators have NO town literals)
 The config-driven keys the generators read (2026-06-07 — the per-town code edits were all lifted into config; `bootstrap_town.py` drafts most of them):

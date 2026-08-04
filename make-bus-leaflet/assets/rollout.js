@@ -5,13 +5,15 @@
  * ("A template improvement leaves already-built towns STALE — and that is the
  * normal state... re-render every town the change affects").
  *
- * A build takes its generator from its own S3 run, not from the skill's
- * assets/ folder, so an engine improvement never reaches a shipped map on its
- * own. This script does the whole documented sequence per town: new S3
- * (current template + unchanged routes.json/overrides.json) -> commit ->
- * new S4 (pull S2+S3, run generators [+schematic/diagram if configured]) ->
- * label-set diff against the previous S4 -> commit -> new S5 -> render -> pull
- * -> refresh _latest. Needs no S1/S2 network fetch: an engine change is pure
+ * A build's generator files are always copied fresh from the LIVE %SK%
+ * template at S4 time (item 3, 2026-08-04 — S3 no longer freezes its own copy,
+ * it only holds routes.json/overrides.json), and routes.json's "engine" field
+ * records the hash of the code that drew it (see engine_version.js). So a
+ * pure engine-only re-render needs only a **new S4**, not a new S3: pull S2+S3
+ * (data unchanged) -> copy the current generators in -> stamp the engine hash
+ * -> run generators [+schematic/diagram if configured] -> label-set diff
+ * against the previous S4 -> commit -> new S5 -> render -> pull -> refresh
+ * _latest. Needs no S1/S2 network fetch: an engine change is pure
  * deterministic compute over data already on disk.
  *
  * Usage:
@@ -21,7 +23,7 @@
  * Default is DRY RUN: builds each town in a scratch temp dir, reports the
  * label-set diff (gained/lost text vs the currently-shipped SVG) and whether
  * it would now gate PASS, and writes nothing under Areas/. Pass --apply to
- * actually commit S3/S4/S5 and refresh _latest.
+ * actually commit S4/S5 and refresh _latest (no S3 commit any more).
  *
  * Safety: if a town's rendered internal.svg or external.svg LOSES any label
  * versus its previous shipped version, --apply stops after committing S4
@@ -36,6 +38,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelSet, findTowns, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
+const { computeEngineVersion, stampEngine } = require('./engine_version');
 
 function parseArgs(argv) {
   const f = { town: [] };
@@ -101,20 +104,26 @@ function rolloutOne(t) {
   try { routesJson = readJson(path.join(prevS3.dir, 'routes.json')); } catch (e) {}
 
   // ---- build in a scratch workspace first (this is also the entire dry-run) ----
+  // Item 3 (2026-08-04): S3 no longer carries a frozen COPY of the generators —
+  // it only holds routes.json/overrides.json (real per-town data). S4 always
+  // copies the two generators fresh from the LIVE %SK% template and stamps the
+  // engine hash it just used into routes.json's "engine" field, so a pure
+  // engine-only re-render needs no new S3 run at all (routes.json/overrides.json
+  // are unchanged; only the generator + the stamp move).
   const scratch = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rollout-'));
-  fs.mkdirSync(path.join(scratch, 'S3'));
   fs.mkdirSync(path.join(scratch, 'S4'));
-  copyFile(path.join(prevS3.dir, 'routes.json'), path.join(scratch, 'S3'));
-  copyFile(path.join(prevS3.dir, 'overrides.json'), path.join(scratch, 'S3')); // optional
-  copyFile(path.join(SK, 'gen_internal.js'), path.join(scratch, 'S3'));
-  copyFile(path.join(SK, `gen_external_${style}.js`), path.join(scratch, 'S3'), 'gen_external.js');
-  // S4 workspace = S2 geometry jsons (from the previous S4, since S2 is unchanged) + the new S3
+  copyFile(path.join(prevS3.dir, 'routes.json'), path.join(scratch, 'S4'));
+  copyFile(path.join(prevS3.dir, 'overrides.json'), path.join(scratch, 'S4')); // optional
+  // S4 workspace = S2 geometry jsons (from the previous S4, since S2 is unchanged) + routes.json/overrides.json above
   for (const name of fs.readdirSync(prevS4.dir)) {
     const p = path.join(prevS4.dir, name);
     if (fs.statSync(p).isDirectory()) continue;
-    if (name.endsWith('.json') && name !== 'routes.json') fs.copyFileSync(p, path.join(scratch, 'S4', name));
+    if (name.endsWith('.json') && name !== 'routes.json' && name !== 'overrides.json') fs.copyFileSync(p, path.join(scratch, 'S4', name));
   }
-  for (const name of fs.readdirSync(path.join(scratch, 'S3'))) fs.copyFileSync(path.join(scratch, 'S3', name), path.join(scratch, 'S4', name));
+  copyFile(path.join(SK, 'gen_internal.js'), path.join(scratch, 'S4'));
+  copyFile(path.join(SK, `gen_external_${style}.js`), path.join(scratch, 'S4'), 'gen_external.js');
+  const engineHash = computeEngineVersion();
+  stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
 
   const s4 = path.join(scratch, 'S4');
   const outputs = [];
@@ -149,13 +158,16 @@ function rolloutOne(t) {
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
-  const s3Dir = stage(t.dir, 'new', 'S3');
-  for (const f of fs.readdirSync(path.join(scratch, 'S3'))) fs.copyFileSync(path.join(scratch, 'S3', f), path.join(s3Dir, f));
-  stage(t.dir, 'commit', 'S3', s3Dir, '--outputs', 'routes.json,gen_internal.js,gen_external.js', '--note', NOTE);
-
+  // No new S3 run: routes.json/overrides.json are unchanged for a pure engine
+  // rollout, and S3 no longer carries a generator copy to re-commit (item 3).
+  // S4 pulls S3's data as-is, then the generators are copied in fresh from the
+  // live template and the engine hash is stamped, same as the dry-run above.
   const s4Dir = stage(t.dir, 'new', 'S4', '--bump', BUMP);
   stage(t.dir, 'pull', 'S2', s4Dir);
   stage(t.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
+  copyFile(path.join(SK, 'gen_internal.js'), s4Dir);
+  copyFile(path.join(SK, `gen_external_${style}.js`), s4Dir, 'gen_external.js');
+  stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   let r = runNode(path.join(s4Dir, 'gen_internal.js'), s4Dir);
   if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_internal.js (real S4): ' + r.stderr.split('\n')[0] }; }
   r = runNode(path.join(s4Dir, 'gen_external.js'), s4Dir);

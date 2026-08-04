@@ -32,6 +32,17 @@ that does it, and what else has to be updated in the same session.
 > as a **local, unpushed commit** in `community-bus-maps` and CI will correctly fail until it's pushed
 > — that's CI doing its job, not a bug; and don't add `--no-verify` to a test commit even when no hook
 > is configured, since the rule against it is about intent, not about whether a hook happens to exist.
+>
+> **Also 2026-08-04 (item 3).** S3 no longer freezes a copy of the generators — see the rewritten §2a
+> below and [s3-config.md](s3-config.md)'s `engine` field. Verified in a throwaway sandbox copy of
+> March: a forced engine-only rollout produced a new S4 (v2.2→v2.3) with **no new S3 run**, stamped
+> `routes.json.engine` to the live template's hash, and `status.js` picked the stamp straight back up.
+> **Not yet applied to any live town** — every currently-built town still carries a pre-item-3 S3 with
+> its own generator copy (harmless dead weight, per §2a) and reads `engine: (none)` until its next real
+> S4 build. The portal-side half of "collapses the vendoring table into a version pin too" (§4) is
+> **deferred** — `engine_version.js` exists and could stamp a hash file in the portal's `engine/`
+> folder, but that repo hasn't been touched; §4's byte-diff `cmp` procedure is still how the portal side
+> is checked today.
 
 ---
 
@@ -181,33 +192,47 @@ migrated into config; treat it as history, not as a checklist.
 ### 2a. A template improvement leaves already-built towns STALE — and that is the normal state
 
 The gate failing after a deliberate improvement does **not** mean the town is broken. It means the
-town has not been re-rendered since. A build pulls its generator from its **S3 run**, not from
-`%SK%`, so a town frozen at an old S3 keeps drawing with the old engine indefinitely — the shipped
-JPG and the code drift apart silently and nothing complains.
+town has not been re-rendered since. Before item 3 (2026-08-04) a build pulled its generator from its
+**S3 run**, not from `%SK%`, so a town frozen at an old S3 kept drawing with the old engine
+indefinitely — the shipped JPG and the code drifted apart silently and nothing complained. **Item 3
+removed the freeze**: S3 no longer carries a generator copy at all, S4 always copies the two
+generators fresh from the live `%SK%` template and stamps the hash it used into `routes.json`'s
+`"engine"` field (`engine_version.js`, provenance only — see [s3-config.md](s3-config.md)). So a town's
+*next ordinary build* is automatically current; staleness now only describes a town that hasn't been
+**rebuilt at all** since an engine change, not one running old code by construction.
 
-So a template change has **two** halves, and the second is easy to forget:
+So a template change still has **two** halves, and the second is still easy to forget:
 
-1. Prove the change (gate every town; the affected ones will legitimately DIFF).
-2. **Re-render every town the change affects** so code and shipped maps agree again.
+1. Prove the change (`node "%SK%\status.js"` gates every town; the affected ones will legitimately DIFF).
+2. **Re-render every town the change affects** so code and shipped maps agree again — `node "%SK%\rollout.js" --all --apply` (or `--town "<Town>"` for one), or by hand below.
 
-**How to re-render a town for an engine change only** (no data change) — worked four times on
-2026-07-28:
+**How to re-render a town for an engine change only** (no data change) — the whole point of item 3 is
+that this needs only a **new S4**, not a new S3 (routes.json/overrides.json are unchanged, and S3 no
+longer holds anything to re-copy):
 
 ```
-S3=$(stage.js new S3)                 # new S3 run, seeded from the previous one
-cp <prev S3>/routes.json  "$S3"/      # config unchanged...
-cp %SK%/gen_internal.js   "$S3"/      # ...generator = the CURRENT TEMPLATE
-cp %SK%/gen_external_{radial|busway}.js "$S3"/gen_external.js
-stage.js commit S3 "$S3" --outputs routes.json,gen_internal.js,gen_external.js --note "adopt current engine template: <what changes>"
-S4=$(stage.js new S4 --bump minor); cd "$S4"; stage.js pull S2 .; stage.js pull S3 .
-node gen_internal.js; node gen_external.js   # + schematize_internal.js / diagram_internal.js if configured
-stage.js commit S4 ... ; then S5 render ; then refresh_latest.js
+S4=$(stage.js new S4 --bump minor); cd "$S4"
+stage.js pull S2 .; stage.js pull S3 .        # data unchanged; also syncs the version stamp
+cp %SK%/gen_internal.js .                     # generator = the CURRENT TEMPLATE, copied fresh
+cp %SK%/gen_external_{radial|busway}.js gen_external.js
+node %SK%/engine_version.js --stamp routes.json
+node gen_internal.js; node gen_external.js    # + schematize_internal.js / diagram_internal.js if configured
+stage.js commit S4 --outputs internal.svg,external.svg[,...] --note "adopt current engine template: <what changes>"
+# then S5 render, then refresh_latest.js
 ```
 
-**A new S3 run does NOT force a `--bump major`.** §"Stage 4" in `s4-s5-build-and-render.md` reads
-"major if you produced a new S1/S2/S3 run", but the rule that has actually been followed since v6.2
-is **major = new *data* (S1/S2); minor = config- or engine-only re-gen**, and every historical minor
-bump has its own new S3 run. Config-only re-renders are **minor**.
+(`rollout.js` does exactly this sequence automatically — prefer it over the manual steps above.)
+
+**A new S3 run does NOT force a `--bump major`, and after item 3 an engine-only rollout has no new S3
+run to force one anyway.** §"Stage 4" in `s4-s5-build-and-render.md` used to read "major if you
+produced a new S1/S2/S3 run" — the rule that has actually been followed since v6.2 is **major = new
+*data* (S1/S2); minor = config- or engine-only re-gen**. Config/engine-only re-renders are **minor**.
+
+**Pre-item-3 towns still work unchanged.** A town whose S3 predates 2026-08-04 still has a generator
+copy sitting in it; that copy is simply never read any more (S4 always copies fresh from `%SK%`
+regardless of what's in S3), so nothing breaks — it's just now dead weight in that folder. Its
+`routes.json` will read `engine: (none)` in `status.js` until its *next* S4 build stamps it, which is
+expected and not itself a problem to fix.
 
 **Before you re-render, diff the label sets, not just the byte count.** A placement change can
 silently drop or surface a label, which is a content change hiding inside a "cosmetic" diff:

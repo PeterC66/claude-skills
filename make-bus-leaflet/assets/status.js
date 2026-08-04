@@ -20,6 +20,9 @@
 const fs = require('fs');
 const path = require('path');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
+const { computeEngineVersion } = require('./engine_version');
+
+const CURRENT_ENGINE = computeEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
@@ -51,6 +54,16 @@ function gateTown(t) {
   const s4 = latestRunDir(m, t.dir, 'S4');
   const row = { name: t.name, version: s4 ? s4.rec.version : null };
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; return row; }
+
+  // Cheap fast-path (item 3, 2026-08-04): a town whose stamped "engine" hash
+  // already matches the live template's hash cannot need a rollout — the full
+  // regenerate-and-diff below still runs (it's the thing that actually proves
+  // PASS), but this is what lets a human skim "who's behind" without reading
+  // the PASS/DIFF columns town by town.
+  let routesJsonEarly = {};
+  try { routesJsonEarly = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
+  row.engine = routesJsonEarly.engine || '(none)';
+  row.engineCurrent = routesJsonEarly.engine === CURRENT_ENGINE;
 
   row.internal = gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg')).status;
 
@@ -156,14 +169,15 @@ if (AS_JSON) {
 function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
 function line(cells, widths) { return cells.map((c, i) => pad(c, widths[i])).join(AS_MD ? ' | ' : '  '); }
 
-console.log('=== Towns (' + towns.length + ') ===');
-if (AS_MD) console.log('| Town | Ver | Internal | External | Schematic | Diagram | S6 | S6 age |\n|---|---|---|---|---|---|---|---|');
-const tw = [16, 6, 9, 16, 10, 8, 20, 8];
-if (!AS_MD) console.log(line(['Town', 'Ver', 'Internal', 'External', 'Schematic', 'Diagram', 'S6 latest', 'S6 age'], tw));
+console.log('=== Towns (' + towns.length + ') === engine: current template = ' + CURRENT_ENGINE);
+if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|');
+const tw = [16, 6, 12, 9, 16, 10, 8, 20, 8];
+if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'S6 latest', 'S6 age'], tw));
 for (const r of townRows) {
   const ext = r.external + (r.externalStyle ? ` (${r.externalStyle})` : '');
   const s6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
-  const cells = [r.name, r.version || '-', r.internal, ext, r.schematic, r.diagram, r.s6, s6age];
+  const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
+  const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, r.s6, s6age];
   console.log(line(cells, tw));
 }
 

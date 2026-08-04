@@ -181,6 +181,9 @@ function rolloutOne(t) {
   }
   stage(t.dir, 'commit', 'S5', s5Dir, '--outputs', jpgOutputs.join(','), '--note', NOTE);
   spawnSync(process.execPath, [path.join(SK, 'refresh_latest.js'), t.dir], { encoding: 'utf8' });
+  // Keep the small tracked CI reference mirror (see sync_ci_reference.js) in
+  // step with what was just published, so CI's gate stays meaningful.
+  spawnSync(process.execPath, [path.join(SK, 'sync_ci_reference.js'), '--buses', BUSES, '--town', t.name], { encoding: 'utf8' });
 
   return { name: t.name, status: 'DONE', diffs, anyLost, s4Dir, s5Dir, version: BUMP };
 }

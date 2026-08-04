@@ -140,7 +140,17 @@ function latestRunDir(manifest, townDir, stage) {
   const s = manifest.stages && manifest.stages[stage];
   if (!s || !s.latest) return null;
   const r = s.runs.find(x => x.id === s.latest);
-  return r ? { dir: path.join(townDir, r.dir), rec: r } : null;
+  if (!r) return null;
+  let dir = path.join(townDir, r.dir);
+  // S4-generate is gitignored (rebuildable bulk); a fresh CI clone won't have
+  // it. Fall back to the small tracked ci-reference/ mirror of the latest S4
+  // run (see sync_ci_reference.js) — same files, just not the run history.
+  // Locally, where the real S4-generate dir exists, this branch never fires.
+  if (stage === 'S4' && !fs.existsSync(dir)) {
+    const ciRef = path.join(townDir, 'ci-reference');
+    if (fs.existsSync(ciRef)) dir = ciRef;
+  }
+  return { dir, rec: r };
 }
 
 // Detect which external generator template (radial vs busway) a town's own S3

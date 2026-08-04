@@ -17,6 +17,21 @@ that does it, and what else has to be updated in the same session.
 > describes *what* the gate proves and *why* the re-render is needed; treat the tables as history,
 > not as the thing to update by hand. Run `status.js` first — it already caught one real instance
 > of the drift class in the next paragraph (`gen_external_places.js`, fixed the same day).
+>
+> **CI runs the same gates on every push** (`.github/workflows/gates.yml` in both `claude-skills` and
+> `buses-data`, plus a daily schedule). It needed one extra piece: each town/place's `S4-generate`
+> output is gitignored (rebuildable bulk, not tracked), so a fresh CI clone has nothing for `status.js`
+> to diff a fresh regeneration against. `node "%SK%\sync_ci_reference.js"` mirrors just the
+> `*.json`/`*.svg` files from each town/place's **latest** S4 run into a small tracked `ci-reference/`
+> folder beside it (~19MB total, not covered by any gitignore rule); `gate_lib.js`'s `latestRunDir()`
+> falls back to that folder only when the real `S4-generate` dir is missing on disk, so local runs are
+> unaffected. `rollout.js --apply` calls the sync automatically, so it can't go stale — but if you ever
+> commit an S4 run **outside** `rollout.js` (a manual `stage.js commit S4`), run
+> `sync_ci_reference.js` yourself afterwards or CI will silently keep gating the *previous* published
+> version. Two other CI traps already hit once each (2026-08-04): a real portal-vendoring fix can exist
+> as a **local, unpushed commit** in `community-bus-maps` and CI will correctly fail until it's pushed
+> — that's CI doing its job, not a bug; and don't add `--no-verify` to a test commit even when no hook
+> is configured, since the rule against it is about intent, not about whether a hook happens to exist.
 
 ---
 

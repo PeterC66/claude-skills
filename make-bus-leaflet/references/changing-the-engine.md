@@ -57,6 +57,21 @@ that does it, and what else has to be updated in the same session.
 > removal is a separate, larger change (see the option-2 discussion this was weighed against). This
 > edit drifts `gen_internal.js` from the portal's vendored copy (`engine/place/gen_internal.js`) —
 > re-vendor next time that repo is touched, per §4.
+>
+> **2026-08-06 — ROLLOUT PENDING, do before the next unrelated engine push.**
+> `gen_external_radial.js`/`gen_external_places.js` changed (ellipse-fitted hub clear-zone
+> instead of a flat circle; place external map gained intermediate-stop ticks + a
+> `gtfs_duration.py --fill-place`/`derive_stops.py` P3 step). CI (`gates.yml`) is currently RED
+> and left that way on purpose — Peter wants to batch this rollout with further engine changes
+> still coming, rather than roll out now and again per change. `status.js` at commit `feb719a`
+> showed 6/8 towns DIFF (Beaconsfield, High Wycombe, Huntingdon, St Ives, St Neots, Wisbech —
+> March/Ramsey already PASS) and 4/5 places DIFF (all but High Wycombe Aldi) on `external` only,
+> content-only diffs (version-stamp text), nothing lost per `rollout.js --all` dry run. **Before
+> running the rollout:** `rollout.js` only handles towns — there is still no place equivalent, so
+> the 4 stale places need a manual S4/S5 re-render + `sync_ci_reference.js` (or a new
+> `rollout_places.js` mirroring `rollout.js`, worth writing if this recurs). Buses-data
+> (`buses-data` repo) also had unrelated uncommitted local changes sitting in the working tree as
+> of this note — stage/commit only the rollout's own touched files, don't sweep those in.
 
 ---
 

@@ -112,6 +112,22 @@ function rayToRect(dx,dy){             // distance from hub to inset rect along 
   if(dy>0) t=Math.min(t,(RECT.y1-HY)/dy); else if(dy<0) t=Math.min(t,(RECT.y0-HY)/dy);
   return t;
 }
+// Hub label box, measured FIRST (used to be measured only afterwards, purely to draw the
+// hub rectangle, while every spoke anchored to a flat 14mm circle regardless of the label's
+// real shape) so a long/thin label (Beaconsfield, Beaconsfield Simpson Centre) doesn't leave
+// an obvious gap on the spokes that pass its short axis while barely clearing its long axis.
+const HUB_LABEL_TXT = D.externalHubLabel || D.town;
+const HUB_LINES = wrap(HUB_LABEL_TXT, Math.max(13, D.town.length));
+const HUB_H = 12 + (HUB_LINES.length-1)*4.0;
+const HUB_W = Math.max(22, Math.max(...HUB_LINES.map(l=>l.length))*2.6+6, D.town.length*2.6+6);
+// hubEdge — fit an ellipse to the label's half-width/half-height and solve
+// r(theta) = 1/sqrt((cos/a)^2+(sin/b)^2) for each spoke's own bearing, so every spoke starts
+// just outside the label box regardless of angle, instead of all spokes sharing one radius.
+const HUB_A = HUB_W/2 + 3, HUB_B = HUB_H/2 + 3;
+function hubEdge(dx,dy){
+  const denom = Math.sqrt((dx*dx)/(HUB_A*HUB_A) + (dy*dy)/(HUB_B*HUB_B));
+  return denom>0 ? Math.max(14, 1/denom) : Math.max(14, HUB_A, HUB_B);
+}
 // draw spokes first (under hub)
 const _cnt={}; EXT.forEach(b=>_cnt[b.route]=(_cnt[b.route]||0)+1); const _occ={};
 for(const b of EXT){
@@ -127,7 +143,7 @@ for(const b of EXT){
   const px=-dy, py=dx;                      // unit perpendicular (left of travel)
   const stops=b.stops;                      // intermediate... terminus (last)
   const n=stops.length;
-  const R0=14;                              // clear zone around the hub
+  const R0=hubEdge(dx,dy);                  // this spoke's own clear-zone edge (ellipse-fitted)
   // node positions along the spoke (evenly), last = terminus
   const pts=[[HX+dx*R0, HY+dy*R0]];
   for(let i=0;i<n;i++){ const f=(i+1)/n; const r=R0+(t-R0)*f; pts.push([HX+dx*r, HY+dy*r]); }
@@ -174,10 +190,7 @@ for(const b of EXT){
 // exactly as before (byte-identical).
 if(EDK) out('<g data-kind="hub" data-key="hub">');
 (function(){
-  const label = D.externalHubLabel || D.town;
-  const lines = wrap(label, Math.max(13, D.town.length));
-  const h = 12 + (lines.length-1)*4.0;
-  const w = Math.max(22, Math.max(...lines.map(l=>l.length))*2.6+6, D.town.length*2.6+6);
+  const lines = HUB_LINES, h = HUB_H, w = HUB_W;   // measured up front, alongside hubEdge()
   out(`<rect x="${(HX-w/2).toFixed(2)}" y="${(HY-h/2).toFixed(2)}" width="${w}" height="${h}" rx="2.6" fill="#111" stroke="#000" stroke-width="0.5"/>`);
   const lh=5.2, y0=HY-(lines.length-1)*lh/2;
   lines.forEach((ln,i)=>{ const yy = lines.length>1 ? (y0+i*lh).toFixed(2) : HY;

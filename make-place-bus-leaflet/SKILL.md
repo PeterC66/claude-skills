@@ -130,7 +130,10 @@ colour per route; **never pale-blue/cyan if a river is shown**), `operators`,
 `placeTitle`/`place`/`placeShort`, `badgeLabels` (for 3–4-char route ids like `61EY`→`61`),
 and the **curated `destinations[]`** (merge synonym clusters — "Market Square" + "Bus
 Station" → "town centre"; relabel raw stop names to town names; mark `limited`/`Thu only`).
-Present the destination grouping for confirmation.
+Present the destination grouping for confirmation. Once settled, run both fillers (see
+`references/aggregation.md`) — `python "%TSK%\gtfs_duration.py" <prefixes> --fill-place
+routes.json` for `minutesToDestination`, then `python "%PSK%\derive_stops.py" routes.json
+--dir .` for `stops` on single-route spokes (`gen_external_places.js` already draws both).
 
 For a **busy place** (roughly >8 services or >8 destinations) three extra P3 steps:
 - **Bundle only what co-runs.** Set `internalCorridors` for routes sharing a corridor, then

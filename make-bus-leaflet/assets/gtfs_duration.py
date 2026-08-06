@@ -19,6 +19,16 @@ Usage (fill every external[] spoke in a town's routes.json that has none yet):
   list as the destination; only ever ADDS minutesToDestination, never
   overwrites a value already present -- re-run safely after edits)
 
+Usage (fill every destinations[] spoke in a PLACE's routes.json that has none
+yet -- the place skill's equivalent of --fill, run at P3):
+  python gtfs_duration.py <ATCO_PREFIX> [<ATCO_PREFIX> ...] --fill-place routes.json [--db PATH]
+  python gtfs_duration.py --near lat,lon,km --fill-place routes.json [--db PATH]
+  (a place destination can be reached by several routes at once -- tries every
+  route in that destination's "routes" list against the destination "name"
+  and keeps the FASTEST that returns a confident answer, since that's the
+  journey a rider would actually choose; only ever ADDS minutesToDestination,
+  never overwrites a value already present -- re-run safely after edits)
+
 --near is for a town with no clean ATCO prefix (an over-broad NaPTAN block --
 same trap documented in s1-services.md / town_prefixes.json for Beaconsfield
 and High Wycombe): give the same lat,lon,km used for that town's S1 query.
@@ -146,6 +156,7 @@ if __name__ == "__main__":
     ap.add_argument("--route", help="route_short_name, e.g. 46 (single-lookup mode)")
     ap.add_argument("--dest", help="destination name substring, e.g. Wisbech (single-lookup mode)")
     ap.add_argument("--fill", help="routes.json path: fill every external[] entry lacking minutesToDestination")
+    ap.add_argument("--fill-place", help="routes.json path (place skill): fill every destinations[] entry lacking minutesToDestination")
     DEFAULT_DB = os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
     ap.add_argument("--db", default=DEFAULT_DB)
     a = ap.parse_args()
@@ -179,9 +190,37 @@ if __name__ == "__main__":
         with open(a.fill, "w", encoding="utf-8") as f:
             json.dump(D, f, indent=1, ensure_ascii=False)
         print(f"filled {filled}, left {skipped} (already set), wrote {a.fill}")
+    elif a.fill_place:
+        with open(a.fill_place, encoding="utf-8") as f:
+            D = json.load(f)
+        dests = D.get("destinations", [])
+        # a route serving more than one destination spoke is ambiguous the same way a
+        # town's split route is (see journey_minutes' allow_majority_fallback doc) --
+        # only trust the terminus-name fallback when this route names exactly one spoke.
+        route_dest_count = Counter(r for b in dests for r in (b.get("routes") or []))
+        filled = 0; skipped = 0
+        for b in dests:
+            if b.get("minutesToDestination") is not None:
+                skipped += 1; continue
+            dest_clean = _clean_dest(b.get("name", ""))
+            best = None; best_n = 0
+            for r in (b.get("routes") or []):
+                single_arm = route_dest_count[r] == 1
+                mins, n = journey_minutes(cur, origin_stop_ids, r, dest_clean, allow_majority_fallback=single_arm)
+                if mins is not None and (best is None or mins < best):
+                    best = mins; best_n = n
+            if best is not None:
+                b["minutesToDestination"] = best
+                filled += 1
+                print(f"  {b.get('name',''):20s} ~{best} min  (n={best_n})")
+            else:
+                print(f"  {b.get('name',''):20s} no match found")
+        with open(a.fill_place, "w", encoding="utf-8") as f:
+            json.dump(D, f, indent=1, ensure_ascii=False)
+        print(f"filled {filled}, left {skipped} (already set), wrote {a.fill_place}")
     else:
         if not a.route or not a.dest:
-            ap.error("give --route and --dest, or --fill routes.json")
+            ap.error("give --route and --dest, or --fill routes.json, or --fill-place routes.json")
         mins, n = journey_minutes(cur, origin_stop_ids, a.route, a.dest)
         if mins is None:
             print("no matching trips found")

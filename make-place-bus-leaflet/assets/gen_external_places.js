@@ -9,7 +9,9 @@
 //   place, placeShort?, validFrom, version, palette{route:hex}, textOn{route:hex},
 //   operators:[{name,routes[]}], titleColor?,
 //   destinations:[{name, sub?, bearing, routes:[...], side?:'up|down|left|right',
-//                  terminus?:{x,y}, limited?:bool}],
+//                  terminus?:{x,y}, limited?:bool, minutesToDestination?:num,
+//                  stops?:[...intermediate,terminus] (single-route spokes only,
+//                  from derive_stops.py)}],
 //   localLoops?:[{route,label}], note?, stamp?
 const fs = require('fs');
 const DIR = process.env.LEAFLET_DIR || process.cwd();
@@ -72,6 +74,7 @@ function line(pts, color, w = 3.4, dashed = false) {
   const cap = dashed ? 'butt' : 'round';
   out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dashed ? ' stroke-dasharray="2.6 2.4"' : ''}/>`);
 }
+function tick(x, y, color) { out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 function badge(x, y, route, r = 4.0) {
   out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r * 0.95).toFixed(2)}" fill="${TXT[route] || '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
@@ -119,8 +122,18 @@ const RECT = { x0: 30, y0: 40, x1: 268, y1: 184 };
 // badges parked just outside it — the "bubbles overwritten by the central label" defect. Size
 // the hub box up front so the clear zone (and the first badge ring) always sits outside it.
 const HUB_LABEL = D.placeShort || D.place;
-const HUB_W = Math.max(26, HUB_LABEL.length * 2.5 + 8), HUB_H = 13;
-const R0 = Math.max(16, HUB_W / 2 + 3);         // clear zone around hub
+const HUB_W = Math.max(26, measureText(HUB_LABEL, 4.8) + 8), HUB_H = 13;
+// hubEdge — the earlier fixed-circle clear zone bound EVERY spoke to the same radius no
+// matter its bearing, so a long/thin label (e.g. two-word place names) left visible gaps
+// on spokes leaving from top/bottom while barely clearing the label on spokes leaving from
+// the sides. Fit an ellipse to the label's actual measured half-width/half-height instead,
+// and solve r(theta) = 1/sqrt((cos/a)^2+(sin/b)^2) for the direction each spoke actually
+// travels, so every spoke starts just outside the label box regardless of its angle.
+const HUB_A = HUB_W / 2 + 3, HUB_B = HUB_H / 2 + 3;
+function hubEdge(dx, dy) {
+  const denom = Math.sqrt((dx * dx) / (HUB_A * HUB_A) + (dy * dy) / (HUB_B * HUB_B));
+  return denom > 0 ? Math.max(16, 1 / denom) : Math.max(16, HUB_A, HUB_B);
+}
 function rayToRect(dx, dy) {
   let t = 1e9;
   if (dx > 0) t = Math.min(t, (RECT.x1 - HX) / dx); else if (dx < 0) t = Math.min(t, (RECT.x0 - HX) / dx);
@@ -148,14 +161,39 @@ for (const b of dests) {
   let t = rayToRect(dx, dy);
   let tx = HX + dx * t, ty = HY + dy * t;
   if (ov.terminus || b.terminus) { const T = ov.terminus || b.terminus; tx = T.x; ty = T.y; const l = Math.hypot(tx - HX, ty - HY) || 1; dx = (tx - HX) / l; dy = (ty - HY) / l; t = l; }
+  const r0 = hubEdge(dx, dy);   // this spoke's own clear-zone edge (ellipse-fitted, not a flat circle)
   // spoke line from hub edge to just short of the destination node
   const nodeGap = 9;
   const ex = HX + dx * (t - nodeGap), ey = HY + dy * (t - nodeGap);
-  spokeSegs.push({ x1: HX + dx * R0, y1: HY + dy * R0, x2: ex, y2: ey });
-  line([[HX + dx * R0, HY + dy * R0], [ex, ey]], C[b.routes[0]] || '#888', 3.0, b.limited);
+  spokeSegs.push({ x1: HX + dx * r0, y1: HY + dy * r0, x2: ex, y2: ey });
+  // intermediate-stop ticks (from gen_external_radial.js): only for a SINGLE-route
+  // spoke with a b.stops[] chain (derive_stops.py) -- a multi-route spoke has no one
+  // unambiguous stop sequence to hang labels off (see file-header comment).
+  const stops = (b.routes.length === 1 && Array.isArray(b.stops)) ? b.stops : null;
+  if (stops && stops.length) {
+    const n = stops.length;
+    const px = -dy, py = dx;   // unit perpendicular (left of travel)
+    let perpx = px, perpy = py;
+    const side = b.side;
+    if (side === 'up' && perpy > 0) { perpx *= -1; perpy *= -1; }
+    if (side === 'down' && perpy < 0) { perpx *= -1; perpy *= -1; }
+    if (side === 'left' && perpx > 0) { perpx *= -1; perpy *= -1; }
+    if (side === 'right' && perpx < 0) { perpx *= -1; perpy *= -1; }
+    const labSide = perpx < 0 ? 'end' : 'start';
+    const span = (t - nodeGap) - r0;
+    for (let i = 0; i < n; i++) {
+      const f = (i + 1) / n, r = r0 + span * f;
+      const x = HX + dx * r, y = HY + dy * r;
+      if (i === n - 1) continue;   // last entry is the terminus itself; node drawn separately
+      tick(x, y, C[b.routes[0]] || '#888');
+      const lx = x + perpx * 5.2, ly = y + perpy * 5.2 + 0.9;
+      out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="2.9" fill="#222" text-anchor="${labSide}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(stops[i])}</text>`);
+    }
+  }
+  line([[HX + dx * r0, HY + dy * r0], [ex, ey]], C[b.routes[0]] || '#888', 3.0, b.limited);
   // route badges: a row along the spoke just outside the hub
   const rs = b.routes;
-  rs.forEach((r, i) => { const rr = R0 + 4 + i * 7.2; badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
+  rs.forEach((r, i) => { const rr = r0 + 4 + i * 7.2; badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
   // destination node
   const _timeLabel = b.minutesToDestination != null ? ('~' + b.minutesToDestination + ' min') : null;
   const _size = destNodeSize(b.name, b.sub, _timeLabel);

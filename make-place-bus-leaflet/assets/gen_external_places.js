@@ -32,7 +32,9 @@ if (HIDDEN_OPS.size) (D.operators || []).forEach(op => { if (HIDDEN_OPS.has(op.n
 const OPS = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name)) : D.operators;
 const W = 297, H = 210;
 let s = '';
-const out = x => { s += x + '\n'; };
+let out = x => { s += x + '\n'; };   // `let`, not `const`: the legend section below
+                                      // redirects it into a buffer so its bounding box
+                                      // can be measured before the backing panel is drawn.
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 function wrap(label, max = 13) {
   if (label.length <= max || label.includes('\n')) return label.split('\n');
@@ -40,25 +42,55 @@ function wrap(label, max = 13) {
   for (const t of w) { if ((a + ' ' + t).trim().length <= max && !b) a = (a + ' ' + t).trim(); else b = (b + ' ' + t).trim(); }
   return b ? [a, b] : [a];
 }
+// wrapText — generic multi-line word wrap (from gen_external_radial.js), used for the
+// free-text note so a long sentence breaks onto further lines instead of running off
+// the panel as one unbounded line.
+function wrapText(text, maxChars) {
+  const words = String(text).split(' ');
+  const lines = []; let cur = '';
+  for (const w of words) {
+    const cand = cur ? cur + ' ' + w : w;
+    if (cand.length > maxChars && cur) { lines.push(cur); cur = w; }
+    else cur = cand;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+// measureText — generous Arial glyph-width estimate (mm), used only to size the auto
+// legend backing panel and to pick a word-wrap width; deliberately erring wide so the
+// panel never clips its own content.
+const measureText = (str, size) => String(str).length * size * 0.58;
 
 // ---- primitives (from gen_external_radial.js) -------------------------------
+// dashed (limited-service) spokes use a BUTT cap, not round: a round cap on a dash
+// shorter than the stroke width balloons each dash into a near-circle, so the whole
+// line reads as a string of blobs rather than a dash (Beaconsfield 380, St Neots 66).
+// Butt caps plus a dash length comfortably longer than the stroke width keep each
+// dash a crisp rectangle.
 function line(pts, color, w = 3.4, dashed = false) {
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' ');
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${dashed ? ' stroke-dasharray="1.6 2.2"' : ''}/>`);
+  const cap = dashed ? 'butt' : 'round';
+  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dashed ? ' stroke-dasharray="2.6 2.4"' : ''}/>`);
 }
 function badge(x, y, route, r = 4.0) {
   out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r * 0.95).toFixed(2)}" fill="${TXT[route] || '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
 }
-// timeLabel (optional, e.g. "~18 min") — an extra non-bold line appended after
-// any `sub` line, fed by routes.json destinations[].minutesToDestination.
-// Absent => box drawn exactly as before (byte-identical for gated places).
-function destNode(x, y, label, sub, timeLabel) {
+// destNodeSize — the terminus-box dimensions, factored out of destNode so the legend's
+// collision search (below) can know a node's footprint before anything is drawn.
+function destNodeSize(label, sub, timeLabel) {
   const lines = wrap(label);
   if (sub) lines.push(sub);
   if (timeLabel) lines.push(timeLabel);
   const w = Math.max(20, Math.max(...lines.map(l => l.length)) * 1.95 + 5);
   const h = 5.4 + lines.length * 3.8;
+  return { w, h, lines };
+}
+// timeLabel (optional, e.g. "~18 min") — an extra non-bold line appended after
+// any `sub` line, fed by routes.json destinations[].minutesToDestination.
+// Absent => box drawn exactly as before (byte-identical for gated places).
+function destNode(x, y, label, sub, timeLabel) {
+  const { w, h, lines } = destNodeSize(label, sub, timeLabel);
   out(`<rect x="${(x - w / 2).toFixed(2)}" y="${(y - h / 2).toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh = 3.8, y0 = y - (lines.length - 1) * lh / 2;
   const lastPlain = lines.length - 1;
@@ -73,12 +105,22 @@ out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.place)}</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">where you can get to, and which buses take you there (${esc(D.validFrom || 'Summer 2026')})</text>`);
-out(`<text x="294" y="150" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end" transform="rotate(-90 294 150)">${esc(D.version || '')} · Summer 2026</text>`);
+// Version stamp: bottom-right corner pocket, unrotated (matches gen_external_radial.js) —
+// used to sit rotated -90° mid-right-edge, exactly where an easterly/southerly spoke
+// terminates; moved below the frame into the corner alongside the source note.
+out(`<text x="294" y="200" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end">${esc(D.version || '')} · Summer 2026</text>`);
 
 // ---- hub + aggregated spokes ------------------------------------------------
 let HX = 150, HY = 118;
 if (OV.hub) { HX = OV.hub.x; HY = OV.hub.y; }
 const RECT = { x0: 30, y0: 40, x1: 268, y1: 184 };
+// Hub box is drawn LAST (on top of the spokes/badges) so it always reads cleanly, but that
+// means a long place name's box can grow past the fixed 16mm clear zone and cover the route
+// badges parked just outside it — the "bubbles overwritten by the central label" defect. Size
+// the hub box up front so the clear zone (and the first badge ring) always sits outside it.
+const HUB_LABEL = D.placeShort || D.place;
+const HUB_W = Math.max(26, HUB_LABEL.length * 2.5 + 8), HUB_H = 13;
+const R0 = Math.max(16, HUB_W / 2 + 3);         // clear zone around hub
 function rayToRect(dx, dy) {
   let t = 1e9;
   if (dx > 0) t = Math.min(t, (RECT.x1 - HX) / dx); else if (dx < 0) t = Math.min(t, (RECT.x0 - HX) / dx);
@@ -88,6 +130,17 @@ function rayToRect(dx, dy) {
 const dests = HIDDEN_ROUTES.size
   ? (D.destinations || []).map(b => Object.assign({}, b, { routes: (b.routes || []).filter(r => !HIDDEN_ROUTES.has(r)) })).filter(b => b.routes.length)
   : (D.destinations || []);
+// nodeBoxes — every destination node's + the hub's own footprint, gathered as the spokes
+// are laid out, so the legend panel (drawn later) can be placed somewhere that avoids all
+// of them instead of risking landing on top of one (see legend section below). spokeSegs —
+// each spoke's own line segment, gathered the same way: a panel is free to cross a spoke
+// (it's opaque, so a crossing line just gets tidied up, same as gen_external_radial.js),
+// but for a busy hub with spokes fanning in every direction that's a secondary concern —
+// prefer a placement with zero crossings, and only accept crossings when no clear spot
+// exists at all (a spoke line cut off mid-flight by the panel's edge reads worse than one
+// discreetly hidden behind it).
+const nodeBoxes = [{ x0: HX - HUB_W / 2, y0: HY - HUB_H / 2, x1: HX + HUB_W / 2, y1: HY + HUB_H / 2 }];
+const spokeSegs = [];
 for (const b of dests) {
   const ov = (OV.branches || {})[b.name] || {};
   const bearing = ov.bearing != null ? ov.bearing : b.bearing;
@@ -95,41 +148,122 @@ for (const b of dests) {
   let t = rayToRect(dx, dy);
   let tx = HX + dx * t, ty = HY + dy * t;
   if (ov.terminus || b.terminus) { const T = ov.terminus || b.terminus; tx = T.x; ty = T.y; const l = Math.hypot(tx - HX, ty - HY) || 1; dx = (tx - HX) / l; dy = (ty - HY) / l; t = l; }
-  const R0 = 16;                                  // clear zone around hub
   // spoke line from hub edge to just short of the destination node
   const nodeGap = 9;
   const ex = HX + dx * (t - nodeGap), ey = HY + dy * (t - nodeGap);
+  spokeSegs.push({ x1: HX + dx * R0, y1: HY + dy * R0, x2: ex, y2: ey });
   line([[HX + dx * R0, HY + dy * R0], [ex, ey]], C[b.routes[0]] || '#888', 3.0, b.limited);
   // route badges: a row along the spoke just outside the hub
   const rs = b.routes;
   rs.forEach((r, i) => { const rr = R0 + 4 + i * 7.2; badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
   // destination node
-  destNode(tx, ty, b.name, b.sub, b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null);
+  const _timeLabel = b.minutesToDestination != null ? ('~' + b.minutesToDestination + ' min') : null;
+  const _size = destNodeSize(b.name, b.sub, _timeLabel);
+  nodeBoxes.push({ x0: tx - _size.w / 2, y0: ty - _size.h / 2, x1: tx + _size.w / 2, y1: ty + _size.h / 2 });
+  destNode(tx, ty, b.name, b.sub, _timeLabel);
 }
 // hub node (the place) on top
 (function () {
-  const label = D.placeShort || D.place;
-  const w = Math.max(26, label.length * 2.5 + 8), h = 13;
+  const w = HUB_W, h = HUB_H;
   out(`<rect x="${(HX - w / 2).toFixed(2)}" y="${(HY - h / 2).toFixed(2)}" width="${w.toFixed(2)}" height="${h}" rx="2.8" fill="#111" stroke="#000" stroke-width="0.5"/>`);
-  out(`<text x="${HX}" y="${(HY - 1.2).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="4.8" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(label)}</text>`);
+  out(`<text x="${HX}" y="${(HY - 1.2).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="4.8" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(HUB_LABEL)}</text>`);
   out(`<text x="${HX}" y="${(HY + 3.4).toFixed(2)}" font-family="Arial" font-size="2.8" fill="#bbb" text-anchor="middle" dominant-baseline="central">you are here</text>`);
 })();
 
-// ---- legend + notes (top-left) ----------------------------------------------
+// ---- legend + notes -----------------------------------------------------------
+// Auto backing panel (from gen_external_radial.js): the legend + its note is drawn into
+// a buffer first so its bounding box can be measured, then an opaque panel is emitted
+// UNDER it and both are flushed on top of the spokes — otherwise a spoke that happens to
+// pass under the panel's sector shows through and the badges/route lines visually
+// collide with the text.
+// buildLegend(lx,ly) draws (into a buffer) the operators list + local loops + note at a
+// given top-left corner and reports the panel size it needed. The size is independent of
+// (lx,ly) — every offset inside is relative — so it can be called once to measure and
+// again, after a placement is chosen, to actually draw.
+function buildLegend(lx, ly) {
+  const buf = [];
+  const realOut = out;
+  out = x => buf.push(x);
+  let panelMaxX = lx, panelMaxY = ly - 4;
+  out(`<text x="${lx}" y="${ly - 4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
+  panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4));
+  OPS.forEach((op, i) => {
+    const yy = ly + i * 6.6; let bx = lx;
+    op.routes.filter(r => !HIDDEN_ROUTES.has(r)).forEach(r => { badge(bx + 3, yy, r, 2.9); bx += 7.0; });
+    out(`<text x="${bx + 2}" y="${(yy + 0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+    panelMaxX = Math.max(panelMaxX, bx + 2 + measureText(op.name, 3.4));
+    panelMaxY = Math.max(panelMaxY, yy + 3);
+  });
+  let ny = ly + OPS.length * 6.6 + 4;
+  (D.localLoops || []).forEach(l => {
+    badge(lx + 3, ny, l.route, 2.9);
+    const _loopLabel = l.label || 'local circular';
+    out(`<text x="${lx + 8}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(_loopLabel)}</text>`);
+    panelMaxX = Math.max(panelMaxX, lx + 8 + measureText(_loopLabel, 3.0));
+    panelMaxY = Math.max(panelMaxY, ny + 3);
+    ny += 6.0;
+  });
+  // D.note — word-wrapped to the legend panel's own content width, so a long note breaks
+  // onto further lines instead of running off the panel as one unbounded line.
+  if (D.note) {
+    const _panelW = Math.max(panelMaxX - lx, 100);
+    const _maxChars = Math.max(20, Math.floor(_panelW / (2.9 * 0.58)));
+    const _noteLines = wrapText(D.note, _maxChars);
+    _noteLines.forEach((ln, i) => out(`<text x="${lx}" y="${(ny + 2 + i * 3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
+    panelMaxX = Math.max(panelMaxX, lx + Math.max(..._noteLines.map(ln => measureText(ln, 2.9))));
+    panelMaxY = Math.max(panelMaxY, ny + 2 + (_noteLines.length - 1) * 3.6 + 2);
+  }
+  out = realOut;
+  return { buf, bw: panelMaxX - lx + 8, bh: panelMaxY - (ly - 10) + 4 };
+}
+const { bw, bh } = buildLegend(10, 42);   // measure only; discard this buffer
+// Placement search: legendAt is an explicit hand-tuned escape hatch (as in
+// gen_external_radial.js); absent that, walk a grid and score every candidate that clears
+// every destination/hub node (a hard constraint — the panel is opaque, so overlapping a
+// node would fully hide it, not just tidy up a crossing spoke) by how many spoke LINES it
+// crosses, and keep the lowest-scoring one (ties broken toward the default top-left). A
+// spoke is allowed to run under the panel — same as gen_external_radial.js — but for a busy
+// hub with spokes fanning in every direction, minimising crossings still matters: a line
+// clipped mid-flight by the panel's edge (High Wycombe Aldi, 14 spokes) reads worse than
+// one fully hidden behind it.
+function overlaps(a, b) { return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0; }
+function segRectHit(x1, y1, x2, y2, r) {
+  const inside = (x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+  if (inside(x1, y1) || inside(x2, y2)) return true;
+  const cross = (ax, ay, bx, by, cx, cy, dx, dy) => {
+    const d1 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx);
+    const d2 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
+    const d3 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    const d4 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  };
+  const edges = [[r.x0, r.y0, r.x1, r.y0], [r.x1, r.y0, r.x1, r.y1], [r.x1, r.y1, r.x0, r.y1], [r.x0, r.y1, r.x0, r.y0]];
+  return edges.some(([ax, ay, bx, by]) => cross(x1, y1, x2, y2, ax, ay, bx, by));
+}
+function legendCandidate(lx, ly) {
+  const box = { x0: lx - 4, y0: ly - 10, x1: lx - 4 + bw, y1: ly - 10 + bh };
+  if (box.x0 < 4 || box.y0 < 27 || box.x1 > W - 4 || box.y1 > 186) return null;
+  if (nodeBoxes.some(nb => overlaps(box, nb))) return null;
+  const crossings = spokeSegs.filter(s => segRectHit(s.x1, s.y1, s.x2, s.y2, box)).length;
+  return { lx, ly, crossings };
+}
 let lx = 10, ly = 42;
-out(`<text x="${lx}" y="${ly - 4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
-OPS.forEach((op, i) => {
-  const yy = ly + i * 6.6; let bx = lx;
-  op.routes.filter(r => !HIDDEN_ROUTES.has(r)).forEach(r => { badge(bx + 3, yy, r, 2.9); bx += 7.0; });
-  out(`<text x="${bx + 2}" y="${(yy + 0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
-});
-let ny = ly + OPS.length * 6.6 + 4;
-(D.localLoops || []).forEach(l => {
-  badge(lx + 3, ny, l.route, 2.9);
-  out(`<text x="${lx + 8}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(l.label || 'local circular')}</text>`);
-  ny += 6.0;
-});
-if (D.note) { out(`<text x="${lx}" y="${(ny + 2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(D.note)}</text>`); ny += 5; }
+if (D.legendAt && (D.legendAt.x != null || D.legendAt.y != null)) {
+  if (D.legendAt.x != null) lx = D.legendAt.x;
+  if (D.legendAt.y != null) ly = D.legendAt.y;
+} else {
+  let best = legendCandidate(lx, ly);
+  for (let cy = 42; cy <= 165 && (!best || best.crossings > 0); cy += 6) {
+    for (let cx = 10; cx <= 200 && (!best || best.crossings > 0); cx += 10) {
+      const cand = legendCandidate(cx, cy);
+      if (cand && (!best || cand.crossings < best.crossings)) best = cand;
+    }
+  }
+  if (best) { lx = best.lx; ly = best.ly; }
+}
+const legend = buildLegend(lx, ly);
+out(`<rect x="${(lx - 4).toFixed(2)}" y="${(ly - 10).toFixed(2)}" width="${legend.bw.toFixed(2)}" height="${legend.bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+legend.buf.forEach(out);
 const _hasTimes = dests.some(b=>b.minutesToDestination!=null);
 out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Reachable destinations &amp; the routes serving them, from BODS open data cross-checked with operators. One spoke per place; a route may run to more. Confirm live times &amp; fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}</text>`);
 

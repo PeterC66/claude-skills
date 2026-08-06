@@ -256,11 +256,71 @@ with a **double-digit route count**, 11 drawn services, and 14 external spokes):
   line, so trimming a `sub` ("Central Bus Station" → "Bus Station") is the cheapest way to
   break a collision.
 
-- **Keep `placeShort` ≤ ~6 characters — the hub box overprints the innermost badges.** The
-  hub is `w = max(26, len*2.5+8)` mm wide but badges start at only `r=24`, so anything past
-  ~6 chars (`"Aldi Tannery Rd"` → 45.5 mm, half-width 22.8) swallows the first badge of every
-  horizontal spoke. `"Aldi"` (26 mm) clears them. The full name is already in the title.
+- **Keep `placeShort` ≤ ~6 characters — the hub box overprints the innermost badges.**
+  ~~The hub is `w = max(26, len*2.5+8)` mm wide but badges start at only `r=24`~~ —
+  **SUPERSEDED 2026-08-06**: the engine now derives its badge clear-zone (`R0`) from the
+  actual hub box width, so a long `placeShort` no longer swallows a badge. Short names are
+  still tidier, but no longer load-bearing. See the 2026-08-06 section below.
 
-- **Don't set an external `note` (again) and don't fight the hardcoded legend.** `lx=10,
-  ly=42` and the footnote at `y=203` are not configurable — treat x 6–106 / y 34–54 and
-  y > 199 as no-go zones in the layout solver.
+- **Don't set an external `note` (again) and don't fight the hardcoded legend.**
+  ~~`lx=10, ly=42` and the footnote at `y=203` are not configurable~~ — **SUPERSEDED
+  2026-08-06**: the legend panel now auto-places itself (position AND, for `note`, its own
+  wrap width), searching for a spot clear of every node and, failing that, minimising spoke
+  crossings. `note` is safe to set again — it word-wraps to the panel's measured width
+  instead of running off the page. See the 2026-08-06 section below.
+
+---
+Added 2026-08-06 — bringing the external map up to the level of the recently-upgraded
+AREA external map (`gen_external_radial.js`), prompted by a review of all 5 places at once
+(Beaconsfield Simpson Centre/Waitrose, St Neots Tesco Extra/Town Centre, High Wycombe Aldi):
+
+- **Blobby dashed (limited-service) spokes — round line-caps on a short dash read as a
+  string of circles, not a dash.** `stroke-dasharray="1.6 2.2"` with `stroke-linecap="round"`
+  on a `stroke-width="3.0"` line balloons each dash past its own length (Beaconsfield 380,
+  St Neots 66). Fix: dashed spokes now use `stroke-linecap="butt"` with a longer dash
+  (`"2.6 2.4"`) — comfortably longer than the stroke width, so each dash renders as a crisp
+  rectangle. Non-dashed spokes are unaffected (still round-capped).
+
+- **Hub label width must be known BEFORE the spoke loop, not just before drawing the hub
+  box.** The hub box is drawn last (on top) so it always reads cleanly over crossing spokes
+  — but that also means, if its size is computed only at draw time, the badges parked just
+  outside a FIXED clear-zone radius can end up physically underneath a box that turned out
+  wider than expected. Fixed by hoisting the hub box width calc (`HUB_W`) above the spoke
+  loop and deriving the clear zone from it: `R0 = max(16, HUB_W/2 + 3)`. This is what let
+  the old "keep `placeShort` ≤ 6 chars" workaround above be retired.
+
+- **An opaque legend panel over a busy hub can hide a destination node it lands on, or (worse)
+  clip a spoke line mid-flight at its own edge — a plain first-fit search isn't enough.**
+  Porting the area engine's auto-sized backing panel verbatim (position fixed at `lx=10,
+  ly=42`) surfaced two distinct failure modes once tried against all 5 places: (1) a
+  destination only ~2 km away can have a bearing that lands its node box inside the legend's
+  top-left footprint — the panel, being opaque, then fully hides that node, which is worse
+  than the pre-panel state (a spoke merely showing through faint legend text). (2) for a busy
+  hub (High Wycombe Aldi, 14 spokes fanning in every direction) even a placement that clears
+  every node can still cut across one or more spoke LINES right at the panel's own edge,
+  which reads as a broken/interrupted route rather than a line tidily crossing under a panel.
+  Fix: the panel size (`bw,bh`) is position-independent (every offset inside is relative to
+  `lx,ly`), so it's measured once, then a grid search scores every candidate placement by (a)
+  hard-reject if it overlaps any destination/hub node box, (b) among the survivors, count
+  spoke-line segment crossings via a rect/segment intersection test, and keep the lowest.
+  Crossing a spoke is still allowed (matches the area engine's own philosophy — an opaque
+  panel tidies up a crossing line) but is now a minimised secondary cost, not an accident of
+  whichever position happened to be tried first. `D.legendAt:{x,y}` remains a manual escape
+  hatch (matches the area engine) for a case the auto-search doesn't have a good answer for.
+
+- **A generator's own drawing helpers (`destNodeSize`) should be reused for LAYOUT decisions
+  too, not just for drawing.** The legend collision-avoidance above needs every destination
+  node's real footprint before it decides where to put the panel. Rather than a second,
+  drifting copy of the box-sizing maths, `destNode()` was factored into `destNodeSize()` +
+  `destNode()`, and the main spoke loop now calls `destNodeSize()` once to build `nodeBoxes`
+  as it lays out each spoke (also feeding the same list into the hub-box entry).
+
+- **This IS a portal-vendored file (`%PSK%\gen_external_places.js` → `engine/place/` per
+  `changing-the-engine.md` §4) — the hand-off is not optional.** Re-vendored, the portal's
+  `High Wycombe Aldi` fixture (`…\Buses\Places\_portal-fixture\`) was then legitimately
+  stale (its shipped `external.svg`/`.jpg` predate the fix) — regenerated both from the
+  fixture's own `routes.json` + `base-overrides.json` through the fixed engine, then
+  `npm run verify` / `verify:place` / `test:p7` / `test` all pass. Also ran
+  `node stage.js commit S4` manually (not through `rollout.js`) for all 5 places, which
+  meant `sync_ci_reference.js` needed a manual run afterwards too — `status.js` catches
+  both classes of drift (portal vendoring AND CI reference) if you forget either.

@@ -28,7 +28,7 @@ const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) :
 const EDK = process.env.EDITOR_KEYS==='1';
 const W = 297, H = 210;
 let s = '';
-const out = (x) => { s += x + '\n'; };
+let out = (x) => { s += x + '\n'; };
 const esc = (t) => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function wrap(label, max=13){
   if (label.length<=max || label.includes('\n')) return label.split('\n');
@@ -36,6 +36,24 @@ function wrap(label, max=13){
   for(const t of w){ if((a+' '+t).trim().length<=max && !b) a=(a+' '+t).trim(); else b=(b+' '+t).trim(); }
   return b?[a,b]:[a];
 }
+// wrapText — generic multi-line word wrap (unlike wrap() above, no 2-line cap), used for
+// free-text notes (the "runs as two arms" note, etc.) so a long sentence fits a panel width
+// instead of running off it as one unbounded line.
+function wrapText(text, maxChars){
+  const words = String(text).split(' ');
+  const lines = []; let cur = '';
+  for(const w of words){
+    const cand = cur ? cur+' '+w : w;
+    if(cand.length > maxChars && cur){ lines.push(cur); cur = w; }
+    else cur = cand;
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+// measureText — generous Arial glyph-width estimate (mm), used only to size the auto legend
+// backing panel and to pick a word-wrap width; not exact typesetting, deliberately erring wide
+// so the panel never clips its own content.
+const measureText = (str, size) => String(str).length * size * 0.58;
 
 // ---- primitives -------------------------------------------------------------
 function line(pts, color, w=3.4, dashed=false){
@@ -47,12 +65,20 @@ function badge(x,y,route,r=4.6){
   out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r*0.95).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
 }
+// measureNodeWidth — the terminus-lozenge width formula, factored out of townNode() so the
+// badge-clearance calc below can know a box's width BEFORE it's drawn (badges are placed back
+// from the terminus point; the box is drawn afterwards, on top, so an offset shorter than the
+// box's half-width lets the box cover the badge).
+function measureNodeWidth(label, timeLabel){
+  const lines = wrap(label);
+  return Math.max(18, Math.max(...lines.map(l=>l.length))*1.95 + 4, timeLabel ? timeLabel.length*1.7+4 : 0);
+}
 // timeLabel (optional, e.g. "~18 min") — an extra non-bold line under the
 // destination name, fed by routes.json external[].minutesToDestination.
 // Absent => box drawn exactly as before (byte-identical for gated towns).
 function townNode(x,y,label,h=11,timeLabel){
   const lines = wrap(label);
-  const w = Math.max(18, Math.max(...lines.map(l=>l.length))*1.95 + 4, timeLabel ? timeLabel.length*1.7+4 : 0);
+  const w = measureNodeWidth(label, timeLabel);
   const extra = timeLabel ? 3.6 : 0;
   const hh = h + extra;
   out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
@@ -71,7 +97,10 @@ out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.town)} to nearby towns</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${esc(D.validFrom)})</text>`);
-out(`<text x="294" y="150" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end" transform="rotate(-90 294 150)">${esc(D.version)} · Summer 2026</text>`);
+// Version stamp: bottom-right corner pocket, unrotated. Used to sit mid-right-edge rotated
+// -90°, which is exactly where a busy town's easterly/southerly spokes terminate — moved below
+// the frame (RECT.y1) into the corner alongside the source note, where no terminus lands.
+out(`<text x="294" y="200" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end">${esc(D.version)} · Summer 2026</text>`);
 
 // ---- hub + radial spokes ----------------------------------------------------
 let HX=152, HY=116;                 // hub centre
@@ -124,13 +153,17 @@ for(const b of EXT){
   // services (High Wycombe: 23 spokes, five destinations reached by two routes
   // each), so co-terminating routes share a spoke and stack their badges along it.
   // Absent => a single badge for b.route, exactly as before.
-  // badgeOffset (optional) — mm back from the terminus for the first badge; a town
-  // with wide destination lozenges needs more clearance. Default 8 = previous behaviour.
-  const _boff = (D.badgeOffset != null) ? D.badgeOffset : 8;
+  // badgeOffset (optional) — mm back from the terminus for the first badge; a town with wide
+  // destination lozenges needs more clearance. Default 8, but ALWAYS raised to clear the actual
+  // terminus box for this spoke (half its width + a small margin) — the box is drawn on top of
+  // the badge afterwards, so a short flat default only worked for towns with short labels.
+  const _timeLabel = b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null;
+  const _autoOff = measureNodeWidth(b.label, _timeLabel)/2 + 4.5;
+  const _boff = Math.max((D.badgeOffset != null) ? D.badgeOffset : 8, _autoOff);
   const _badges = (Array.isArray(b.routes) && b.routes.length) ? b.routes : [b.route];
   _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*8.6), ty-dy*(_boff+i*8.6), r, 4.0));
   // terminus node
-  townNode(tx,ty,b.label,11,b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null);
+  townNode(tx,ty,b.label,11,_timeLabel);
   if(EDK) out('</g>');
 }
 // 56 serves two arms (Manea & Wisbech) — note it once
@@ -157,11 +190,17 @@ if(EDK) out('</g>');
 // need. Absent => top-left under the title, exactly as before.
 let lx=10, ly=40;
 if(D.legendAt){ if(D.legendAt.x!=null) lx=D.legendAt.x; if(D.legendAt.y!=null) ly=D.legendAt.y; }
-// legendAt.box:{w,h} (optional) — opaque backing panel, drawn UNDER the legend so it
-// can sit over the spokes in a town where every sector carries one. Absent => nothing.
-if(D.legendAt && D.legendAt.box){ const bx=D.legendAt.box;
-  out(`<rect x="${(lx-4).toFixed(2)}" y="${(ly-10).toFixed(2)}" width="${bx.w}" height="${bx.h}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`); }
+// Auto backing panel: the legend (+ its arm note, if any) is drawn into a buffer first so its
+// bounding box can be measured, then an opaque panel is emitted UNDER it. Used to be opt-in via
+// legendAt.box — now always drawn (every town's legend sits over the spokes at least once they
+// wrap around a busy hub), auto-sized to content. legendAt.box still wins when given explicitly,
+// as a hand-tuning escape hatch.
+const legendBuf = [];
+const realOut = out;
+out = (x) => legendBuf.push(x);
+let panelMaxX = lx, panelMaxY = ly - 4;
 out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
+panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4));
 // legendWrap:{perRow:N} (optional) — wrap an operator's badge run onto further
 // lines instead of letting it run off the page. Needed once a town has an
 // operator with many routes (High Wycombe: Carousel runs 17 of them). Absent =>
@@ -174,24 +213,52 @@ if(LW){
     if(!rs.length) return;
     const rows = Math.ceil(rs.length/LW);
     rs.forEach((r,k)=>badge(lx+3+(k%LW)*7.0, yy+Math.floor(k/LW)*6.2, r, 2.9));
-    out(`<text x="${(lx+Math.min(rs.length,LW)*7.0+2).toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+    const _textX = lx+Math.min(rs.length,LW)*7.0+2;
+    out(`<text x="${_textX.toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+    panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4));
+    panelMaxY = Math.max(panelMaxY, yy + (rows-1)*6.2 + 3);
     yy += rows*6.2 + 1.4;
   });
   ly = yy - 6.6*OPS.length;   // keep the note's default offset sane
 } else
 OPS.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
   op.routes.filter(r=>!HIDDEN_ROUTES.has(r)).forEach(r=>{ badge(bx+3,yy,r,2.9); bx+=7.0; });
-  out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`); });
+  out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+  panelMaxX = Math.max(panelMaxX, bx+2 + measureText(op.name,3.4));
+  panelMaxY = Math.max(panelMaxY, yy+3); });
 // auto-note any route that leaves town on more than one arm (e.g. "56 runs as
 // two arms — to Manea and to Wisbech"), or use D.externalNote to override.
+// Word-wrapped to the legend panel's own content width, so a long note (several
+// multi-arm routes, or long destination names) breaks onto further lines instead
+// of running off the page — it used to be one unbounded <text>.
 let armNote = D.externalNote;
 if(armNote===undefined){
   const arms={}; EXT.forEach(b=>{(arms[b.route]=arms[b.route]||[]).push(b.label);});
   armNote = Object.entries(arms).filter(([,v])=>v.length>1)
     .map(([r,v])=>`${r} runs as two arms — to ${v.slice(0,-1).join(', ')} and to ${v[v.length-1]}.`).join('  ');
 }
-if(armNote){ const _nx=(OV.note&&OV.note.x!=null)?OV.note.x:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y:(ly+OPS.length*6.6+3);
-  out(`<text x="${_nx}" y="${_ny}" font-family="Arial" font-size="2.9" fill="#666">${esc(armNote)}</text>`); }
+const _box = D.legendAt && D.legendAt.box;
+if(armNote){
+  const _nx=(OV.note&&OV.note.x!=null)?OV.note.x:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y:(ly+OPS.length*6.6+3);
+  // Wrap width: an explicit legendAt.box caps it to the box's own interior (so the note can
+  // never spill past a hand-tuned panel); otherwise prefer a wide-but-short wrap (110mm floor)
+  // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby
+  // terminus lozenge (St Ives: the default 60mm floor wrapped to 6 lines, reaching low enough
+  // to cover the Hinchingbrooke box; 110mm wraps the same note to 3).
+  const _panelW = _box ? (_box.w - 8) : Math.max(panelMaxX - lx, 100);
+  const _maxChars = Math.max(20, Math.floor(_panelW / (2.9*0.58)));
+  const _noteLines = wrapText(armNote, _maxChars);
+  _noteLines.forEach((ln,i)=>out(`<text x="${_nx}" y="${(_ny+i*3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
+  panelMaxX = Math.max(panelMaxX, _nx + Math.max(..._noteLines.map(ln=>measureText(ln,2.9))));
+  panelMaxY = Math.max(panelMaxY, _ny + (_noteLines.length-1)*3.6 + 2);
+}
+out = realOut;
+{
+  const bw = _box ? _box.w : (panelMaxX - lx + 8);
+  const bh = _box ? _box.h : (panelMaxY - (ly-10) + 4);
+  out(`<rect x="${(lx-4).toFixed(2)}" y="${(ly-10).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+}
+legendBuf.forEach(out);
 // source note
 const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times &amp; fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}</text>`);

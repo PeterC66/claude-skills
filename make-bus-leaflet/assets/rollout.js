@@ -173,8 +173,14 @@ function rolloutOne(t) {
   r = runNode(path.join(s4Dir, 'gen_external.js'), s4Dir);
   if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_external.js (real S4): ' + r.stderr.split('\n')[0] }; }
   const realOutputs = ['internal.svg', 'external.svg'];
-  if (routesJson.internalSchematic) { runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); if (fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
-  if (routesJson.internalDiagram) { runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK }); if (fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg'); }
+  // Bug fixed 2026-08-06: this block ran schematize_internal.js/diagram_internal.js straight out
+  // of s4Dir without ever copying them in (unlike the scratch dry-run above, which does) — the
+  // spawn silently failed (ENOENT), r.ok was never checked, and the town's schematic/diagram
+  // output just vanished from the commit with no error surfaced. Caught when High Wycombe,
+  // Beaconsfield, St Neots and St Ives all lost internal-diagram.svg (St Ives also
+  // internal-schematic.svg) across a rollout --all --apply.
+  if (routesJson.internalSchematic) { copyFile(path.join(SK, 'schematize_internal.js'), s4Dir); const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
+  if (routesJson.internalDiagram) { copyFile(path.join(SK, 'diagram_internal.js'), s4Dir); const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK }); if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg'); }
   stage(t.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE);
   fs.rmSync(scratch, { recursive: true, force: true });
 

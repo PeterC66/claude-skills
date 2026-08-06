@@ -181,14 +181,37 @@ town, internal *and* external, before use.
   clips — put the "via" detail on the map, not in the panel. High Wycombe: 34 services in 2 columns.
 - **`legendWrap`** `{perRow:N}` (`gen_external_radial.js`) — wrap an operator's badge run onto
   further lines. Without it a big operator (Carousel runs 21 of High Wycombe's routes) draws a
-  single row straight off the page.
-- **`legendAt`** `{x, y, box:{w,h}}` (`gen_external_radial.js`) — move the operator legend, and give
-  it an **opaque backing panel**. A large town has a spoke in *every* sector, so there is no empty
-  corner for the legend; `box` lets it sit over the map legibly. Size `box` to clear the nearest
-  destination lozenge — check the S5 JPG, don't assume.
+  single row straight off the page, WIDENING the auto legend panel (below) by the same amount —
+  on a town with several long operator names this is often what you actually need to stop the
+  panel reaching into a nearby spoke, not just cosmetic tidying (Wisbech, 2026-08-06: 6
+  operators incl. two long names pushed the auto panel to ~107mm wide, enough to fully cover the
+  "Sutton St James" lozenge; `perRow:2` brought it back to ~71mm).
+- **`legendAt`** `{x, y, box:{w,h}}` (`gen_external_radial.js`) — move the operator legend.
+  **The panel now ALWAYS gets an opaque backing box, auto-sized to its content (badges +
+  operator names + the wrapped arm-note) — this is no longer opt-in** (changed 2026-08-06; was
+  opt-in through High Wycombe's build, which is why it was the only town that looked right).
+  `x`/`y` moves the panel; explicit `box:{w,h}` overrides the auto size (a hand-tuning escape
+  hatch) when you need something the auto-size can't get right (also caps how wide the arm-note
+  below wraps). A large or lopsided town still has no guaranteed
+  empty corner for the legend, so **auto-sizing does not replace checking the S5 JPG against
+  every nearby spoke** — the panel can still land on top of a terminus lozenge sitting in the
+  same quadrant (Beaconsfield needed `legendAt:{x,y}` moved off the default top-left; Wisbech
+  needed both `legendWrap` and an explicit `box` — see gotchas.md's 2026-08-06 entry for both).
 - **`badgeOffset`** `N` (`gen_external_radial.js`) — mm back from the terminus for the first route
-  badge. Default **8**. Raise it (High Wycombe: 13) when wide destination lozenges cover the badge.
-  *(This one started life as a changed default and the gate caught it — see [gotchas.md](gotchas.md).)*
+  badge, **now a FLOOR, not the effective value**: the engine also computes the badge's actual
+  required clearance from the terminus lozenge's own width and takes whichever is larger (changed
+  2026-08-06 — previously a fixed default of 8 that only High Wycombe overrode). You will rarely
+  need to set this by hand any more; it still exists as an escape hatch to push clearance even
+  further than the auto minimum. *(This key started life as a changed default and the gate
+  caught it — see [gotchas.md](gotchas.md).)*
+- **`externalNote`** (`gen_external_radial.js`) — the free-text line under the legend (auto-built
+  from any route running >1 arm, e.g. "56 runs as two arms — to Manea and to March.", or set this
+  key to override/replace it). **Now word-wrapped** to the legend panel's width instead of one
+  unbounded `<text>` (changed 2026-08-06) — defaults to `max(panel content width, 100mm)`; an
+  explicit `legendAt.box` caps it to the box's own interior instead. Widening the wrap trades
+  panel HEIGHT for WIDTH, and either one can newly collide with whatever's next to the panel, so
+  after any explicit `legendAt`/`box` change, re-check the note doesn't now run under or past a
+  neighbouring spoke.
 - **`external[].routes`** `["104","M40"]` (`gen_external_radial.js`) — **several services sharing one
   spoke** to a destination, badges stacked along the line. The radial runs out of frame perimeter
   long before it runs out of services: ~18 lozenges is the practical A4 maximum, and High Wycombe had

@@ -192,11 +192,21 @@ town, internal *and* external, before use.
   opt-in through High Wycombe's build, which is why it was the only town that looked right).
   `x`/`y` moves the panel; explicit `box:{w,h}` overrides the auto size (a hand-tuning escape
   hatch) when you need something the auto-size can't get right (also caps how wide the arm-note
-  below wraps). A large or lopsided town still has no guaranteed
-  empty corner for the legend, so **auto-sizing does not replace checking the S5 JPG against
-  every nearby spoke** — the panel can still land on top of a terminus lozenge sitting in the
-  same quadrant (Beaconsfield needed `legendAt:{x,y}` moved off the default top-left; Wisbech
-  needed both `legendWrap` and an explicit `box` — see gotchas.md's 2026-08-06 entry for both).
+  below wraps). **`box.w` and `box.h` can be given independently** (changed 2026-08-06, second
+  fix) — the other dimension still auto-sizes, so a width hand-tuned to dodge a spoke label
+  (High Wycombe: `box:{w:92}`, no `h`, to stop the panel swallowing route 40's "Stokenchurch")
+  doesn't freeze the height too and go stale the next time an operator's added. **A frozen
+  `box:{w,h}` pair is itself a recurring bug, not just a one-off tuning value** — Wisbech and
+  High Wycombe both shipped with a full `w,h` override from an earlier, shorter operator list;
+  neither was revisited when routes were added, so the box silently stopped matching its own
+  content (see gotchas.md's 2026-08-06 "panel drifted from its content" entry). Prefer overriding
+  only the dimension you actually need to hand-tune. A large or lopsided town still has no
+  guaranteed empty corner for the legend, so **auto-sizing does not replace checking the S5 JPG
+  against every nearby spoke** — the panel can still land on top of a terminus lozenge sitting in
+  the same quadrant (Beaconsfield needed `legendAt:{x,y}` moved off the default top-left; Wisbech
+  needed `legendWrap` *and* a width cap; Ramsey needed `legendWrap` alone to stop one wide
+  8-badge operator row reaching under the Peterborough lozenge — see gotchas.md's 2026-08-06
+  entries for all three).
 - **`badgeOffset`** `N` (`gen_external_radial.js`) — mm back from the terminus for the first route
   badge, **now a FLOOR, not the effective value**: the engine also computes the badge's actual
   required clearance from the terminus lozenge's own width and takes whichever is larger (changed

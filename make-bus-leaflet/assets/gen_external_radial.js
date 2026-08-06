@@ -190,6 +190,11 @@ if(EDK) out('</g>');
 // need. Absent => top-left under the title, exactly as before.
 let lx=10, ly=40;
 if(D.legendAt){ if(D.legendAt.x!=null) lx=D.legendAt.x; if(D.legendAt.y!=null) ly=D.legendAt.y; }
+// legendWrap reassigns `ly` below (to keep the note's default offset sane) — the backing
+// panel's TOP must stay pinned to where the header was actually drawn, or the panel drifts
+// away from its own content (Wisbech/High Wycombe, 2026-08-06: box outline landed well below
+// the "Operators & services" header once legendWrap was in play).
+const legendTopY = ly;
 // Auto backing panel: the legend (+ its arm note, if any) is drawn into a buffer first so its
 // bounding box can be measured, then an opaque panel is emitted UNDER it. Used to be opt-in via
 // legendAt.box — now always drawn (every town's legend sits over the spokes at least once they
@@ -254,9 +259,11 @@ if(armNote){
 }
 out = realOut;
 {
-  const bw = _box ? _box.w : (panelMaxX - lx + 8);
-  const bh = _box ? _box.h : (panelMaxY - (ly-10) + 4);
-  out(`<rect x="${(lx-4).toFixed(2)}" y="${(ly-10).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+  // legendAt.box may override just one dimension (e.g. width, to steer clear of a spoke
+  // label) — the other stays auto-sized to content instead of freezing at a stale value.
+  const bw = (_box && _box.w!=null) ? _box.w : (panelMaxX - lx + 8);
+  const bh = (_box && _box.h!=null) ? _box.h : (panelMaxY - (legendTopY-10) + 4);
+  out(`<rect x="${(lx-4).toFixed(2)}" y="${(legendTopY-10).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
 }
 legendBuf.forEach(out);
 // source note

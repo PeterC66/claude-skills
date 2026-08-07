@@ -25,8 +25,8 @@
  *   --url    URL   BUSMAPS_URL      set => talk HTTP to a remote portal instead
  *                                   of opening the local SQLite
  *   --cookie TOK   BUSMAPS_COOKIE   the cbm_session cookie value for --url mode
- *                                   (the portal has no operator API token yet —
- *                                   see the note at the bottom of this file)
+ *                                   (the portal's admin API is cookie-authed;
+ *                                   there is no operator token yet)
  *
  * Zero dependencies (Node core only), matching stage.js / status.js convention.
  */
@@ -108,88 +108,53 @@ const daysSince = (v) => {
 };
 const appUrl = (p) => `${URL_BASE || process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${p}`;
 
-// ---- portal source: local SQLite -------------------------------------------
-// Import the portal's OWN db module rather than re-writing its SQL, so this
-// tool cannot drift from the schema. Same thing scripts/check-upcoming-
-// refreshes.mjs does. The DB is WAL, so reading while the dev server runs is
-// safe — this is why the worklist has no "stop the dev server first" step.
-async function fromLocalDb() {
-  const dbFile = path.join(PORTAL, 'src', 'db', 'index.js');
-  if (!existsSync(dbFile)) {
+// ---- portal source ---------------------------------------------------------
+// The portal's queues are ranked by the PORTAL, in src/worklist/index.js — this
+// tool does not have its own copy of that logic. Locally it imports that module
+// (and the db module it sits on) directly; remotely it GETs the endpoint the
+// admin console's To-do tab uses. Either way the console and this terminal show
+// the same list, because it is the same code.
+//
+// Reading is safe while the dev server runs (the portal DB is WAL), which is
+// why the worklist has no "stop the dev server first" step.
+async function fromLocalPortal() {
+  const wlFile = path.join(PORTAL, 'src', 'worklist', 'index.js');
+  if (!existsSync(wlFile)) {
     warnings.push(`Portal repo not found at ${PORTAL} — portal queues skipped. Pass --portal, or --url for a remote portal.`);
     return null;
   }
-  const db = await import(pathToFileURL(dbFile).href);
+  const { buildWorklist } = await import(pathToFileURL(wlFile).href);
+  const db = await import(pathToFileURL(path.join(PORTAL, 'src', 'db', 'index.js')).href);
   return {
-    publishQueue: db.listPendingPublishRequests().map((r) => ({
-      id: r.id, createdAt: r.created_at, note: r.note, mapId: r.map_id, mapName: r.map_name,
-      kind: r.map_kind, customerName: r.customer_name, versionKey: r.version_key, by: r.requested_by_email,
-    })),
-    applications: db.listApplications({ status: 'pending' }).map((a) => ({
-      id: a.id, createdAt: a.created_at, org: a.org_name || a.organisation || a.name, email: a.email, type: a.org_type,
-    })),
-    awaitingBuild: db.listAwaitingBuild().map((m) => ({
-      id: m.id, name: m.name, slug: m.slug, kind: m.kind, subject: m.subject,
-      note: m.request_note, customerName: m.customer_name, by: m.requested_by_email, createdAt: m.created_at,
-    })),
-    requested: db.listMapsByStatus(['requested']).map((m) => ({
-      id: m.id, name: m.name, slug: m.slug, kind: m.kind, subject: m.subject,
-      note: m.request_note, customerName: m.customer_name, by: m.requested_by_email, createdAt: m.created_at,
-    })),
-    proposed: db.listPendingProposedUpdates().map((p) => ({
-      id: p.id, createdAt: p.created_at, note: p.source_note, mapId: p.map_id,
-      mapName: p.map_name, customerName: p.customer_name,
-    })),
-    refreshFlags: db.listMessages().filter((m) => m.kind === 'refresh-flag')
-      .map((m) => ({ id: m.id, mapId: m.map_id, body: m.body, createdAt: m.created_at })),
+    items: buildWorklist({ baseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:3000' }).items,
+    // Only needed for the local-tree cross-reference below (which town has a map
+    // at all); every ranked portal item already arrived above.
     maps: db.listMaps().map((m) => ({
       id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
-      status: m.status, built: !!m.cur_key, customerName: m.customer_name,
+      built: !!m.cur_key, customerName: m.customer_name,
     })),
   };
 }
 
-// ---- portal source: remote HTTP --------------------------------------------
-async function fromRemote() {
+async function fromRemotePortal() {
   if (!COOKIE) {
     warnings.push('--url given but no --cookie / BUSMAPS_COOKIE — cannot authenticate to the remote portal.');
     return null;
   }
   const get = async (p) => {
     const res = await fetch(`${URL_BASE}${p}`, { headers: { cookie: `cbm_session=${COOKIE}` } });
-    if (res.status === 401 || res.status === 403) throw new Error(`${p} -> ${res.status} (session cookie expired or not an admin?)`);
+    if (res.status === 401 || res.status === 403) throw new Error(`${p} -> ${res.status} (session cookie expired, or not an admin account?)`);
+    if (res.status === 404 && p.startsWith('/api/admin/worklist')) throw new Error('this portal predates /api/admin/worklist — upgrade it');
     if (!res.ok) throw new Error(`${p} -> ${res.status}`);
     return res.json();
   };
   try {
-    const [review, apps, reqs, prop, msgs, maps] = await Promise.all([
-      get('/api/review/queue'), get('/api/admin/applications?status=pending'),
-      get('/api/admin/map-requests'), get('/api/admin/proposed-updates'),
-      get('/api/admin/messages'), get('/api/maps'),
-    ]);
-    const shapeReq = (m) => ({
-      id: m.id, name: m.name, slug: m.slug, kind: m.kind, subject: m.subject,
-      note: m.requestNote, customerName: m.customer && m.customer.name, by: m.requestedBy, createdAt: m.createdAt,
-    });
+    const [wl, maps] = await Promise.all([get('/api/admin/worklist'), get('/api/maps')]);
     return {
-      publishQueue: (review.requests || []).map((r) => ({
-        id: r.id, createdAt: r.created_at, note: r.note, mapId: r.map_id, mapName: r.map_name,
-        kind: r.map_kind, customerName: r.customer_name, versionKey: r.version_key, by: r.requested_by_email,
-      })),
-      applications: (apps.applications || []).map((a) => ({
-        id: a.id, createdAt: a.created_at, org: a.org_name || a.organisation || a.name, email: a.email, type: a.org_type,
-      })),
-      awaitingBuild: (reqs.awaitingBuild || []).map(shapeReq),
-      requested: (reqs.requests || []).map(shapeReq),
-      proposed: (prop.updates || []).map((p) => ({
-        id: p.id, createdAt: p.createdAt, note: p.sourceNote, mapId: p.map && p.map.id,
-        mapName: p.map && p.map.name, customerName: p.customer,
-      })),
-      refreshFlags: (msgs.messages || []).filter((m) => m.kind === 'refresh-flag')
-        .map((m) => ({ id: m.id, mapId: m.map_id, body: m.body, createdAt: m.created_at })),
+      items: (wl.worklist && wl.worklist.items) || [],
       maps: (maps.maps || []).map((m) => ({
         id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
-        status: m.status, built: !!m.currentVersion, customerName: m.customer && m.customer.name,
+        built: !!m.currentVersion, customerName: m.customer && m.customer.name,
       })),
     };
   } catch (e) {
@@ -241,7 +206,7 @@ function fromMapTree() {
 // Same report and same town->map matching rule as the portal's own
 // scripts/check-upcoming-refreshes.mjs, so the two never disagree about which
 // map a town section belongs to.
-function fromUpcomingReport(portal) {
+function fromUpcomingReport() {
   const dir = path.join(BUSES, '_gtfs', 'upcoming');
   if (!existsSync(dir)) return null;
   const files = readdirSync(dir).filter((f) => /^upcoming-report_\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort();
@@ -257,81 +222,26 @@ function fromUpcomingReport(portal) {
 }
 
 // ---- build the ranked item list --------------------------------------------
-const portal = REMOTE ? await fromRemote() : await fromLocalDb();
+const portal = REMOTE ? await fromRemotePortal() : await fromLocalPortal();
 const tree = fromMapTree();
-const upcoming = fromUpcomingReport(portal);
+const upcoming = fromUpcomingReport();
 
-// 1 — a customer submitted a map for review and is blocked until you look (R3).
-for (const r of (portal ? portal.publishQueue : [])) {
-  add({
-    key: `review-${r.id}`, rank: 1, type: 'review',
-    title: `Review "${r.mapName}" ${r.versionKey || ''} for publication`.trim(),
-    why: `${r.customerName || 'unowned'} submitted it${r.by ? ` (${r.by})` : ''} and cannot go public until you approve or reject it.`,
-    who: r.customerName || 'unowned', ageDays: daysSince(r.createdAt),
-    where: appUrl('/app/review'), runbook: 'R3',
-    do: [{ kind: 'portal-ui', what: `Open the review queue, work the checklist, approve or reject.`, url: appUrl('/app/review') }],
-  });
+// Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
+// steps name their working directory symbolically ("portal") because the server
+// cannot know where this laptop keeps the repo; resolve it here.
+for (const it of (portal ? portal.items : [])) {
+  add({ ...it, do: it.do.map((d) => (d.kind === 'shell' && d.cwd === 'portal' ? { ...d, cwd: PORTAL } : d)) });
 }
+const haveKey = (k) => items.some((i) => i.key === k);
 
-// 2 — an organisation applied to join and is waiting on a human (R2). These are
-// one visit to one tab, so a queue of them is one item, not N: the list should
-// answer "what do I do next", and "open Applications" is a single next thing.
-const apps = portal ? portal.applications : [];
-if (apps.length > 2) {
-  add({
-    key: 'applications', rank: 2, type: 'application',
-    title: `Decide ${apps.length} organisation applications`,
-    why: `Waiting: ${apps.map((a) => a.org || a.email).join(', ')}. Approving creates the customer, its first editor and an invite.`,
-    who: `${apps.length} organisations`, ageDays: Math.max(...apps.map((a) => daysSince(a.createdAt) ?? 0)),
-    where: appUrl('/app/admin'), runbook: 'R2',
-    do: [{ kind: 'portal-ui', what: 'Vet each against Pol1, then Approve or Reject on the Applications tab.', url: appUrl('/app/admin') }],
-  });
-} else for (const a of apps) {
-  add({
-    key: `application-${a.id}`, rank: 2, type: 'application',
-    title: `Decide the application from ${a.org || a.email}`,
-    why: `They applied${a.type ? ` as ${a.type}` : ''} and are waiting. Approving creates the customer, its first editor and an invite.`,
-    who: a.org || a.email, ageDays: daysSince(a.createdAt),
-    where: appUrl('/app/admin'), runbook: 'R2',
-    do: [{ kind: 'portal-ui', what: 'Vet against Pol1, then Approve or Reject on the Applications tab.', url: appUrl('/app/admin') }],
-  });
-}
-
-// 3 — a customer asked for a map; approval is the gate before any build.
-for (const m of (portal ? portal.requested : [])) {
-  add({
-    key: `request-${m.id}`, rank: 3, type: 'request-decision',
-    title: `Approve or reject the map request "${m.name}" (${m.kind})`,
-    why: `${m.customerName || 'unowned'} requested it${m.by ? ` (${m.by})` : ''}. Nothing can be built until it is approved — approval is the quota gate.`,
-    who: m.customerName || 'unowned', ageDays: daysSince(m.createdAt), note: m.note,
-    where: appUrl('/app/admin'), runbook: 'R1',
-    do: [{ kind: 'portal-ui', what: 'Admin → Map requests → Approve (or Reject).', url: appUrl('/app/admin') }],
-  });
-}
-
-// 4 — approved and waiting for you to actually make the map (R1).
-for (const m of (portal ? portal.awaitingBuild : [])) {
-  const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
-  add({
-    key: `build-${m.id}`, rank: 4, type: 'build',
-    title: `Build the ${m.kind} map "${m.name}"${m.subject && m.subject !== m.name ? ` (${m.subject})` : ''}`,
-    why: `Approved for ${m.customerName || 'unowned'}${m.by ? ` (${m.by})` : ''} and awaiting a build. The request row becomes the map — one row, quota counted once.`,
-    who: m.customerName || 'unowned', ageDays: daysSince(m.createdAt), note: m.note,
-    where: appUrl('/app/admin'), runbook: 'R1', skill, subject: m.subject || m.name, kind: m.kind,
-    do: [
-      { kind: 'skill', what: `Run the ${skill} skill for "${m.subject || m.name}" through S1–S6.` },
-      { kind: 'shell', cwd: PORTAL, cmd: `node scripts/import-map.mjs --request ${m.id} --src "<S5-render dir>"` },
-      // PowerShell form deliberately: R1 documents the bash `VAR=x cmd` prefix,
-      // which PowerShell does not support — it runs the command with the
-      // variable unset, and `npm run verify` SKIPS SILENTLY without a fixture
-      // dir, so the byte-identical check reports nothing and looks fine.
-      { kind: 'shell', cwd: PORTAL, cmd: `$env:${m.kind === 'place' ? 'PLACE_FIXTURE_DIR' : 'FIXTURE_DIR'} = "<S5-render dir>"; npm run verify:${m.kind === 'place' ? 'place' : 'area'}`, note: 'PowerShell; must print PASS with byte counts' },
-    ],
-  });
-}
 
 // 5 — BODS says services change soon and a portal map is drawing the old ones (R4).
-const flaggedFor = (mapId) => (portal ? portal.refreshFlags : []).some((f) => f.mapId === mapId && upcoming && f.body.includes(`report ${upcoming.date}`));
+//
+// The portal raises these too, but only for towns someone has already run
+// `npm run check-upcoming` for — it can only rank flags that exist. Reading the
+// scan report directly is what this side adds: the changes are visible here the
+// moment the report lands. Anything the portal has already flagged arrives above
+// with its own item, so skip it rather than print the town twice.
 const townMaps = (town) => {
   const lower = town.toLowerCase();
   return (portal ? portal.maps : []).filter((m) => m.built && (
@@ -343,12 +253,13 @@ if (upcoming) {
     const maps = townMaps(s.town);
     const localTown = tree.towns.find((t) => t.name.toLowerCase() === s.town.toLowerCase());
     for (const m of maps) {
+      if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
         title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}`,
-        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet.${flaggedFor(m.id) ? '' : ' (Not yet flagged in the portal — run check-upcoming to record it.)'}`,
-        who: m.customerName || 'unowned', ageDays: upcoming.ageDays, note: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
+        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.`,
+        who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,
         do: [
           { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
@@ -368,19 +279,8 @@ if (upcoming) {
   }
 }
 
-// 6 — staged for the customer; they are the blocker, but a stale one needs a nudge.
-for (const p of (portal ? portal.proposed : [])) {
-  const age = daysSince(p.createdAt);
-  add({
-    key: `proposed-${p.id}`, rank: age != null && age >= 14 ? 6 : 9, type: 'awaiting-customer',
-    title: `${age != null && age >= 14 ? 'Nudge' : 'Waiting on'} ${p.customerName || 'the customer'} — proposed update to "${p.mapName}"`,
-    why: age != null && age >= 14
-      ? `Staged ${age} days ago and still unaccepted; their published map is going stale.`
-      : 'Staged and waiting for the customer to accept or decline. No action from you unless it sits.',
-    who: p.customerName || 'unowned', ageDays: age, where: appUrl('/app/admin'), runbook: 'R4',
-    do: [{ kind: 'portal-ui', what: 'Admin → Proposed updates. Nudge by email if it has sat.', url: appUrl('/app/admin') }],
-  });
-}
+// (Rank 6 / 9 — proposed updates waiting on a customer — arrive from the portal
+// above, along with the review, application, request and build queues.)
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows
@@ -481,17 +381,16 @@ console.log(`\n${limited.length === items.length ? '' : `(${items.length - limit
 /*
  * REMOTE PORTAL — the honest state of it.
  *
- * Reading a remote portal works today with a session cookie (the same one your
- * browser holds after signing in as admin): the admin API is cookie-authed and
- * this tool only ever GETs. What does NOT work remotely yet is DELIVERY —
- * import-map.mjs and propose-update.mjs write straight to a local SQLite and
- * DATA_DIR, so they must run on the machine the portal runs on.
+ * READING a remote portal works today. The portal ranks its own queues in
+ * src/worklist/index.js and serves them at GET /api/admin/worklist — the same
+ * response its admin console's To-do tab renders — so this tool and the console
+ * cannot show two different lists. Locally that module is imported directly;
+ * remotely it is fetched with an admin session cookie.
  *
- * The portal-side pieces that would close that gap (neither built yet):
- *   1. GET /api/admin/worklist — this same ranking, server-side, so the admin
- *      console's landing page and this tool show one identical list.
- *   2. POST /api/admin/ingest — accept a packed S5-render dir + an operator
- *      token (the METRICS_TOKEN pattern already in .env), run the existing
- *      import/propose logic server-side, and run the byte-identical verify
- *      before accepting. That removes the last "which machine am I on?" step.
+ * DELIVERY does not. import-map.mjs and propose-update.mjs write straight to a
+ * local SQLite and DATA_DIR, so they must run on the machine the portal runs on.
+ * The remaining portal-side piece is POST /api/admin/ingest: accept a packed
+ * S5-render dir plus an operator token (the METRICS_TOKEN pattern already in
+ * .env), run the existing import/propose logic server-side, and run the
+ * byte-identical verify before accepting.
  */

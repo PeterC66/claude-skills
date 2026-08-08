@@ -31,6 +31,8 @@ Read-only, safe to run at any time, and safe while the dev server is running (th
 
 Against a **remote** portal, add `--url https://busmaps.uk --cookie <cbm_session value>` (or set `BUSMAPS_URL` / `BUSMAPS_COOKIE`). See "Remote portals" below — reading works, delivery does not yet.
 
+**Occasionally, push the gate results to the portal too:** `node "%BW%\push-status.mjs"` runs `status.js` (the full regenerate-and-diff — a minute or two) and sends the result to `POST /api/admin/status`, so the failing-gate and engine/S6-stale items show at ranks 0/8 of the portal's own To-do tab and `GET /api/admin/worklist`, not only in this terminal. Worth doing after an engine change or before a batch of deliveries — it's a separate, occasional step, not part of the routine "print the worklist" above. Add `--url` + `--token <STATUS_TOKEN>` for a remote portal.
+
 Present the result to Peter as a short numbered list — title, who's waiting, age. Do not paste the raw output wholesale; it is written for a terminal, and he wants the decision, not the dump. Lead with the bands in order: **BROKEN → SOMEONE IS BLOCKED → YOUR MOVE → HOUSEKEEPING → WAITING ON OTHERS**.
 
 ## Step 2 — Pick one
@@ -90,6 +92,8 @@ Nothing here is a new source of truth; it is a join over what already exists.
 | the portal's own `src/worklist/index.js` — **imported locally, fetched (`GET /api/admin/worklist`) when remote; never re-implemented** | ranks 1–6 and 9: publish reviews, applications, map requests, awaiting-build, refresh flags, proposed updates. The admin console's To-do tab renders the same call, so the two cannot show different lists |
 | `_gtfs/upcoming/upcoming-report_<date>.md` | which towns have service changes coming, matched to maps by the *same rule* `check-upcoming-refreshes.mjs` uses |
 | each town's `manifest.json` + `routes.json.engine` vs `engine_version.js` | which renders pre-date the current engine, and how stale S6 is |
-| `status.js --json` (only under `--gates`) | the expensive proof: regenerate everything and diff |
+| `status.js --json` (only under `--gates`, or as pushed by `push-status.mjs`) | the expensive proof: regenerate everything and diff |
+
+**Ranks 0 and 8 also reach the portal itself** (item 3, 2026-08-08): `push-status.mjs` POSTs the same `status.js --json` output to `POST /api/admin/status`, the portal stores the latest snapshot, and `src/worklist/index.js` folds it into ranks 0/8 there too — so a failing gate or a stale engine shows on the admin console's To-do tab and to a remote reader, not only to whoever last ran `--gates` on this laptop. It is a snapshot, not a stream: stale until the next push. Rank 7 (a BODS-flagged town with no portal map) is not pushed — it still only comes from this tool reading `_gtfs/upcoming` directly.
 
 If a queue is missing from the list, fix the source that owns it — **a portal queue is fixed in `community-bus-maps/src/worklist/index.js`** (which fixes the admin console at the same time), a local-tree signal in `worklist.mjs`. Do not work around a gap by reading the admin console separately; that is the habit this skill exists to end.

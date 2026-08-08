@@ -120,7 +120,11 @@ const appUrl = (p) => `${URL_BASE || process.env.PUBLIC_BASE_URL || 'http://loca
 async function fromLocalPortal() {
   const wlFile = path.join(PORTAL, 'src', 'worklist', 'index.js');
   if (!existsSync(wlFile)) {
-    warnings.push(`Portal repo not found at ${PORTAL} — portal queues skipped. Pass --portal, or --url for a remote portal.`);
+    // Two different problems, and saying the wrong one sends you hunting in the
+    // wrong place. The second is the live one until PR #5 lands on main.
+    warnings.push(existsSync(path.join(PORTAL, 'src', 'db', 'index.js'))
+      ? `The portal at ${PORTAL} has no src/worklist/index.js — it predates the worklist (community-bus-maps PR #5). Portal queues skipped; only local-tree items below.`
+      : `Portal repo not found at ${PORTAL} — portal queues skipped. Pass --portal, or --url for a remote portal.`);
     return null;
   }
   const { buildWorklist } = await import(pathToFileURL(wlFile).href);

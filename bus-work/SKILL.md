@@ -25,6 +25,8 @@ Let `BW=C:\u3a St Ives\.claude\skills\bus-work\assets` (this skill lives in the 
 node "%BW%\worklist.mjs"
 ```
 
+The same list is on the web at **`/app/admin` → To do** (the admin landing tab) — same ranking, same wording, because both call the portal's `src/worklist/index.js`. The terminal version adds what only this machine can see: failing gates, engine-stale renders, missing S6, and towns with a leaflet but no portal map.
+
 Read-only, safe to run at any time, and safe while the dev server is running (the portal DB is WAL). Add `--json` when you need to act on the fields, `--gates` to also run the full byte-identical gate sweep (slow — a minute or two; only worth it after an engine change or before a batch of deliveries).
 
 Against a **remote** portal, add `--url https://busmaps.uk --cookie <cbm_session value>` (or set `BUSMAPS_URL` / `BUSMAPS_COOKIE`). See "Remote portals" below — reading works, delivery does not yet.
@@ -77,10 +79,7 @@ Every time, without being asked:
 
 **Delivery does not.** `import-map.mjs` and `propose-update.mjs` write straight to a local SQLite and `DATA_DIR`; they must run on the machine the portal runs on. If the worklist is in remote mode and the chosen item needs a delivery command, **say so and stop before running it** — do not run a local delivery command and imply it reached the remote portal.
 
-The two portal-side pieces that would close the gap (neither built; both belong in the `community-bus-maps` repo):
-
-1. `GET /api/admin/worklist` — this same ranking computed server-side, so the admin console's landing page and this skill show one identical list instead of two implementations.
-2. `POST /api/admin/ingest` — accept a packed S5-render dir plus an operator token (the `METRICS_TOKEN` pattern already in `.env`), run the existing import/propose logic server-side, and run the byte-identical verify *before* accepting. That also retires the "stop the dev server", "which fixture env var" and "which machine am I on" traps in one go.
+The remaining portal-side piece is **`POST /api/admin/ingest`** (not built): accept a packed S5-render dir plus an operator token (the `METRICS_TOKEN` pattern already in `.env`), run the existing import/propose logic server-side, and run the byte-identical verify *before* accepting. That retires the "stop the dev server", "which fixture env var" and "which machine am I on" traps in one go. It is item 4 of `Buses\Development Docs\foolproofing-plan_2026-08-07.md`.
 
 ## What feeds the worklist
 
@@ -88,9 +87,9 @@ Nothing here is a new source of truth; it is a join over what already exists.
 
 | Source | Gives |
 |---|---|
-| the portal's own `src/db/index.js` (imported, never re-implemented) | publish queue, applications, map requests, proposed updates, refresh-flag messages, maps |
+| the portal's own `src/worklist/index.js` — **imported locally, fetched (`GET /api/admin/worklist`) when remote; never re-implemented** | ranks 1–6 and 9: publish reviews, applications, map requests, awaiting-build, refresh flags, proposed updates. The admin console's To-do tab renders the same call, so the two cannot show different lists |
 | `_gtfs/upcoming/upcoming-report_<date>.md` | which towns have service changes coming, matched to maps by the *same rule* `check-upcoming-refreshes.mjs` uses |
 | each town's `manifest.json` + `routes.json.engine` vs `engine_version.js` | which renders pre-date the current engine, and how stale S6 is |
 | `status.js --json` (only under `--gates`) | the expensive proof: regenerate everything and diff |
 
-If a queue is missing from the list, fix `worklist.mjs` — do not work around it by reading the admin console separately.
+If a queue is missing from the list, fix the source that owns it — **a portal queue is fixed in `community-bus-maps/src/worklist/index.js`** (which fixes the admin console at the same time), a local-tree signal in `worklist.mjs`. Do not work around a gap by reading the admin console separately; that is the habit this skill exists to end.

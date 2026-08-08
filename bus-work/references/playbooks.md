@@ -95,7 +95,7 @@ $env:FIXTURE_DIR = "<the S5-render dir>"; npm run verify:area
 
 (place maps: `$env:PLACE_FIXTURE_DIR = "…"; npm run verify:place`)
 
-**PowerShell form matters** — the runbook's `FIXTURE_DIR=… npm run …` is bash; in PowerShell the variable is never set, and `npm run verify` **skips silently** without one. A run that doesn't print PASS *with byte counts* has proved nothing. If it genuinely fails, stop and check the `sharp`/libvips version against the desktop pipeline before anything else.
+**PowerShell form matters.** `npm run verify` **skips silently** when its fixture dir is unset, and bash's `FIXTURE_DIR=… npm run …` prefix does not set one in PowerShell — so run the bash way on this machine, the byte-identical check never runs and looks like it passed. R1 documented the bash form until 2026-08-07 and is now corrected; if you ever see it back, that is a regression. A run that doesn't print PASS *with byte counts* has proved nothing. If it genuinely fails, stop and check the `sharp`/libvips version against the desktop pipeline before anything else.
 
 ### 4. Hand over
 

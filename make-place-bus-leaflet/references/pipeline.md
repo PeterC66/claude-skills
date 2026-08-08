@@ -42,8 +42,11 @@ node "$PSK/derive_walkshed.js" routes_full_atco.json atco2ll.json walkshed_cfg.j
 # 4. destination aggregation for the external map
 node "$PSK/aggregate_destinations.js" routes_full_atco.json atco2ll.json atco2name.json place.json 1.2
 #   -> destinations.draft.json + a printed table of reachable places
-node "$TSK/stage.js" commit S2 "$S2" --outputs routes_full_atco.json,atco2ll.json,atco2name.json,routes_intown_atco.json,osm.json,osm2.json,river_geo.json,walkshed_cfg.json,destinations.draft.json
+node "$TSK/stage.js" commit S2 "$S2" --outputs routes_full_atco.json,atco2ll.json,atco2name.json,routes_intown_atco.json,osm.json,osm2.json,river_geo.json,walkshed_cfg.json,destinations.draft.json,place.json
 ```
+**`place.json` must be in this `--outputs` list** (it's already physically copied into `$S2`
+above for `aggregate_destinations.js`). `pull` only copies files a stage *declared*, so
+leaving it off here is how the file dead-ends after S1 — see `references/gotchas.md`.
 
 **Radius tuning:** at 500 m the Tesco example draws only the 3 routes that stop AT Tesco
 (150/61EY/C2 + 69 stub); at 800 m the 18/18A (nearest stop 741 m) come in but the map
@@ -62,17 +65,22 @@ node "$TSK/stage.js" commit S3 "$S3" --outputs routes.json
 ## P4 — generate  (→ S4, versioned)
 ```bash
 S4=$(node "$TSK/stage.js" new S4 --bump major); cd "$S4"   # --bump minor for a re-style, same data
-node "$TSK/stage.js" pull S2 .; node "$TSK/stage.js" pull S3 .
+node "$TSK/stage.js" pull S1 .; node "$TSK/stage.js" pull S2 .; node "$TSK/stage.js" pull S3 .
+# pull S1 too, NOT just S2 — place.json is an S1 output; only pulling it in here (rather
+# than trusting it rode along inside S2) is what keeps this stage correct even if a future
+# S2 commit forgets to list it (see references/gotchas.md).
 # internal — ROAD-FOLLOWING (default): pull_roads + match_routes + gen_internal + title fix
 TSK="$TSK" node "$PSK/build_internal_place_roads.js"   # -> roads_geo.json, routes_paths.json, internal.svg
 #   (needs routes_full_atco.json in the dir — comes from `pull S2`; routes.json must have internalRoads,
 #    which the wrapper defaults to true. For a genuinely single-stop place fall back to the classic
 #    build instead: `TSK="$TSK" node "$PSK/build_internal_place.js"` with NO internalRoads key.)
 node "$PSK/gen_external_places.js"                    # external.svg (aggregated spokes)
-node "$TSK/stage.js" commit S4 "$S4" --outputs internal.svg,external.svg,roads_geo.json,routes_paths.json
+node "$TSK/stage.js" commit S4 "$S4" --outputs internal.svg,external.svg,roads_geo.json,routes_paths.json,place.json
 ```
 Bump the `version` field in `routes.json` (P3) to match the S4 folder version so the
 internal map's `· Map vN.N` stamp agrees (the road-following build stamps the version).
+**`place.json` must be in the S4 `--outputs` list too** — the portal's `import-map.mjs
+--kind place` requires it in `--src`, and `pull` never reaches back further than one stage.
 
 ## P5 — render  (→ S5)
 ```bash
@@ -80,7 +88,7 @@ S5=$(node "$TSK/stage.js" new S5); cd "$S5"
 node "$TSK/stage.js" pull S4 .
 node "$TSK/render.js" internal.svg internal.jpg
 node "$TSK/render.js" external.svg external.jpg
-node "$TSK/stage.js" commit S5 "$S5" --outputs internal.jpg,external.jpg,internal.svg,external.svg
+node "$TSK/stage.js" commit S5 "$S5" --outputs internal.jpg,external.jpg,internal.svg,external.svg,place.json
 # refresh _latest
 mkdir -p "../../St Neots Tesco Extra/_latest"; cp internal.jpg external.jpg "../../St Neots Tesco Extra/_latest/"
 ```

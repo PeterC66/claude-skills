@@ -14,6 +14,14 @@
 //                  from derive_stops.py)}],
 //   localLoops?:[{route,label}], note?, stamp?
 const fs = require('fs');
+const path = require('path');
+const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS,'footer.js');
+  const sibling = path.join(__dirname,'..','..','make-bus-leaflet','assets','footer.js');
+  try{ if(fs.existsSync(sibling)) return sibling; }catch(e){}
+  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
+const { footerBand } = require(_FOOTER);
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn || {};
@@ -108,10 +116,6 @@ out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.place)}</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">where you can get to, and which buses take you there (${esc(D.validFrom || 'Summer 2026')})</text>`);
-// Version stamp: bottom-right corner pocket, unrotated (matches gen_external_radial.js) —
-// used to sit rotated -90° mid-right-edge, exactly where an easterly/southerly spoke
-// terminates; moved below the frame into the corner alongside the source note.
-out(`<text x="294" y="200" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end">${esc(D.version || '')} · Summer 2026</text>`);
 
 // ---- hub + aggregated spokes ------------------------------------------------
 let HX = 150, HY = 118;
@@ -166,9 +170,12 @@ for (const b of dests) {
   const nodeGap = 9;
   const ex = HX + dx * (t - nodeGap), ey = HY + dy * (t - nodeGap);
   spokeSegs.push({ x1: HX + dx * r0, y1: HY + dy * r0, x2: ex, y2: ey });
+  line([[HX + dx * r0, HY + dy * r0], [ex, ey]], C[b.routes[0]] || '#888', 3.0, b.limited);
   // intermediate-stop ticks (from gen_external_radial.js): only for a SINGLE-route
   // spoke with a b.stops[] chain (derive_stops.py) -- a multi-route spoke has no one
   // unambiguous stop sequence to hang labels off (see file-header comment).
+  // Drawn AFTER the spoke line (not before) so the line doesn't paint over the
+  // ticks -- matches gen_external_radial.js's order.
   const stops = (b.routes.length === 1 && Array.isArray(b.stops)) ? b.stops : null;
   if (stops && stops.length) {
     const n = stops.length;
@@ -188,9 +195,15 @@ for (const b of dests) {
       tick(x, y, C[b.routes[0]] || '#888');
       const lx = x + perpx * 5.2, ly = y + perpy * 5.2 + 0.9;
       out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="2.9" fill="#222" text-anchor="${labSide}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(stops[i])}</text>`);
+      // Claim this label's footprint as a hard no-go for the legend panel (below), same as a
+      // destination node -- the panel is opaque, so landing on tick-label text makes it
+      // unreadable, not just "a line tidied up behind it" (which spokeSegs tolerates).
+      const lw = measureText(stops[i], 2.9);
+      nodeBoxes.push(labSide === 'end'
+        ? { x0: lx - lw, y0: ly - 2.6, x1: lx, y1: ly + 1.0 }
+        : { x0: lx, y0: ly - 2.6, x1: lx + lw, y1: ly + 1.0 });
     }
   }
-  line([[HX + dx * r0, HY + dy * r0], [ex, ey]], C[b.routes[0]] || '#888', 3.0, b.limited);
   // route badges: a row along the spoke just outside the hub
   const rs = b.routes;
   rs.forEach((r, i) => { const rr = r0 + 4 + i * 7.2; badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
@@ -303,7 +316,10 @@ const legend = buildLegend(lx, ly);
 out(`<rect x="${(lx - 4).toFixed(2)}" y="${(ly - 10).toFixed(2)}" width="${legend.bw.toFixed(2)}" height="${legend.bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
 legend.buf.forEach(out);
 const _hasTimes = dests.some(b=>b.minutesToDestination!=null);
-out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Reachable destinations &amp; the routes serving them, from BODS open data cross-checked with operators. One spoke per place; a route may run to more. Confirm live times &amp; fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}</text>`);
+out(footerBand({
+  notes: `Reachable destinations & routes serving them, from BODS open data cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`,
+  version: D.version, validFrom: D.validFrom || 'Summer 2026'
+}));
 
 // Optional "coming soon" / validity stamp (shared shape with the town generators).
 function stampNote(cfg, x, y, align) {

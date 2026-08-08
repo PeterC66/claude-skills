@@ -19,6 +19,12 @@
 //   busStationNote?   - string drawn by the Bus Station hub (E6, e.g. the 300 circular).
 //   externalNote?     - extra source note line.
 const fs = require('fs');
+const path = require('path');
+const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
+const { footerBand } = require(_FOOTER);
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -105,7 +111,6 @@ out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox=
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${C.B}">Buses from ${esc(D.town)} to nearby towns</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${esc(D.validFrom)})</text>`);
-out(`<text x="294" y="150" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end" transform="rotate(-90 294 150)">${esc(D.version)} · Summer 2026</text>`);
 
 // ---- layout anchors ---------------------------------------------------------
 const PANEL = D.servicesPanel || null;
@@ -229,8 +234,11 @@ if(PANX==null){
     out(`<text x="${bx+2}" y="${yy}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`); });
 }
 // source notes (bottom)
-out(`<text x="10" y="200" font-family="Arial" font-size="3.1" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators, June 2026.</text>`);
-out(`<text x="10" y="204" font-family="Arial" font-size="3.1" fill="#666">${esc(D.externalNote||'Always confirm live times & fares at bustimes.org or operator apps.')}</text>`);
+out(footerBand({
+  notes: ['Routes & stops from bustimes.org, cross-checked with operators, June 2026.',
+          D.externalNote || 'Always confirm live times & fares at bustimes.org or operator apps.'],
+  version: D.version, validFrom: D.validFrom || 'Summer 2026'
+}));
 
 // Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).
 function stampNote(cfg,x,y,align){

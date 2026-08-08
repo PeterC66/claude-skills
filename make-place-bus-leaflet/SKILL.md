@@ -75,10 +75,15 @@ resumable manifest machinery is reused unchanged):
 | Place stage | stage.js slot | Owns |
 |---|---|---|
 | **P1 place** | `S1` | `place.json`, `place-candidates.json`, `gtfs-services.json` |
-| **P2 geometry** | `S2` | `routes_full_atco.json`, `atco2ll.json`, `atco2name.json`, `routes_intown_atco.json`, `osm.json`, `osm2.json`, `river_geo.json`, `walkshed_cfg.json`, `destinations.draft.json` |
+| **P2 geometry** | `S2` | `routes_full_atco.json`, `atco2ll.json`, `atco2name.json`, `routes_intown_atco.json`, `osm.json`, `osm2.json`, `river_geo.json`, `walkshed_cfg.json`, `destinations.draft.json`, **`place.json`** (carried — copy in from S1, must be listed in `--outputs`) |
 | **P3 config** | `S3` | `routes.json` |
-| **P4 generate** | `S4` | `internal.svg`, `external.svg` (version `vN.N`) |
-| **P5 render** | `S5` | `internal.jpg`, `external.jpg` |
+| **P4 generate** | `S4` | `internal.svg`, `external.svg` (version `vN.N`), **`place.json`** (pull S1 explicitly, don't rely on it riding through S2) |
+| **P5 render** | `S5` | `internal.jpg`, `external.jpg`, **`place.json`** (required by the portal's `import-map.mjs --kind place`) |
+
+`place.json` is easy to lose: `pull` only copies files a stage *declared* in its own
+`--outputs`, so it must be re-declared at every stage above or it dead-ends silently
+(the S4/S5 SVGs/JPGs still render fine without it — the failure only shows up later, in
+the portal import). See `references/gotchas.md` for the incident this caused.
 
 `node "%TSK%\stage.js" <init|new|pull|commit|latest|status>` — same commands as the
 town skill (`references/…` there). After S5, copy the JPGs into `<placeDir>\_latest\`.

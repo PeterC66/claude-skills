@@ -3,6 +3,12 @@
 // straight spoke drawn to its terminus, with intermediate towns as ticks.
 // (March has no guided-busway / P&R corridor, so this replaces the St Ives layout.)
 const fs = require('fs');
+const path = require('path');
+const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
+const { footerBand } = require(_FOOTER);
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -97,10 +103,6 @@ out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.town)} to nearby towns</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${esc(D.validFrom)})</text>`);
-// Version stamp: bottom-right corner pocket, unrotated. Used to sit mid-right-edge rotated
-// -90°, which is exactly where a busy town's easterly/southerly spokes terminate — moved below
-// the frame (RECT.y1) into the corner alongside the source note, where no terminus lands.
-out(`<text x="294" y="200" font-family="Arial" font-size="3.3" fill="#999" text-anchor="end">${esc(D.version)} · Summer 2026</text>`);
 
 // ---- hub + radial spokes ----------------------------------------------------
 let HX=152, HY=116;                 // hub centre
@@ -281,7 +283,10 @@ out = realOut;
 legendBuf.forEach(out);
 // source note
 const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
-out(`<text x="10" y="203" font-family="Arial" font-size="3.0" fill="#666">Routes &amp; stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times &amp; fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}</text>`);
+out(footerBand({
+  notes: `Routes & stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`,
+  version: D.version, validFrom: D.validFrom || 'Summer 2026'
+}));
 
 // Optional "coming soon" / validity stamp. Opt-in via routes.json "stamp"
 // {heading?, notes:[...], asOf?, externalAt?:[x,y], internalAt?:[x,y]}. Absent => nothing

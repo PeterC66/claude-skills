@@ -109,6 +109,11 @@ const _ICONS = (()=>{ const local=path.join(__dirname,'icons.js');
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'icons.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/icons.js'; })();
 const { icon } = require(_ICONS);
+const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
+const { footerBand } = require(_FOOTER);
 const atco2name = JSON.parse(fs.readFileSync(DIR+'/atco2name.json','utf8'));
 const RJ  = JSON.parse(fs.readFileSync(DIR+'/routes.json','utf8'));
 const C = RJ.palette, TXT = RJ.textOn;
@@ -1660,9 +1665,12 @@ if (IR && IR.northArrow!==false) {
   out(`<text x="${(tx+c*3).toFixed(2)}" y="${(ty+s*3+1).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="3.4" fill="#666" text-anchor="middle">N</text>`);
 }
 
-// source note (+ build version stamp when internalRoads — gate towns unaffected)
-const _ver = IR ? (process.env.LEAFLET_VERSION || RJ.version) : null;
-out(`<text x="6" y="208" font-family="Arial" font-size="2.7" fill="#888">Routes &amp; stops: bustimes.org (operator-verified, June 2026). Places: OpenStreetMap. Stop names in italics are approximate; check live times at bustimes.org.${_ver?' · Map v'+esc(_ver):''}</text>`);
+// footer band: attribution note + version + BusMaps.uk (shared across all four map types — footer.js)
+const _ver = process.env.LEAFLET_VERSION || RJ.version;
+out(footerBand({
+  notes: 'Routes & stops: bustimes.org (operator-verified, June 2026). Places: OpenStreetMap. Stop names in italics are approximate; check live times at bustimes.org.',
+  version: _ver, validFrom: RJ.validFrom || 'Summer 2026'
+}));
 
 // Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).
 function stampNote(cfg,x,y,align){

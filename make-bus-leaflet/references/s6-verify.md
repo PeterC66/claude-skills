@@ -188,6 +188,35 @@ falsely block a good build.
 `redteam.json` (the blind agent's JSON), `verification.json` (classified findings +
 summary), `verification.docx` (the rendered reliability report).
 
+## Running S6 on a PLACE, not a town (added 2026-08-08 — St Neots Tesco Extra, first-ever place S6 run)
+This engine was built for towns and reads `verified-services.json` as a **required**
+input — places don't have one (their S1 output is `gtfs-services.json`, a different
+shape, no `servesTown` flag). Before this, S6 had literally never been run on any
+place. Two things to know:
+
+1. **Generate the required input first.** Run `node "%PSK%\place_verified_services.js"`
+   (from `make-place-bus-leaflet/assets`) in the S6 dir, after pulling S1 — it adapts
+   `gtfs-services.json` into a `verified-services.json` the engine can read, treating
+   every entry as `servesTown:true` (read as "calls at the place"), since P1's `--near`
+   radius already filtered to stops inside the walkshed.
+
+2. **The S-4 terminus check WILL false-positive HARD on every route, every place —
+   this is expected, not a real defect.** It compares `placeToken(declared terminus)`
+   against NaPTAN `localityToken`s at the chain ends. Town `verified-services.json` is
+   hand-curated to write termini as **settlement names** ("St Ives", "Ramsey") so this
+   matches. `gtfs-services.json`'s termini are raw GTFS **headsigns** — venue/stop names
+   ("Tesco", "The White Horse") — which structurally can never equal a locality token.
+   Read the HARD block from this check as "the adapter can't verify this", not "the
+   route is wrong" — cross-check the actual rendered JPGs and the red-team's own
+   termini instead of trusting this one check's verdict for a place. (A real fix would
+   need `place_verified_services.js` to map termini through curated locality-shaped
+   names — e.g. `routes.json`'s `destinations[]` — instead of the raw GTFS headsigns;
+   not done yet, flagged here for whoever picks it up next.)
+
+Everything else (red-team diff, direction/count sanity, the ladder checks) behaves
+normally and is genuinely informative for a place — treat SOFT findings (esp.
+`missing-service`) as real curation leads, same as for a town.
+
 ## Reusable notes
 - The red-team agent can be flaky on operating-days precision but is **excellent at
   operator identity and serves-town** — the two things hardest to self-check. Trust it

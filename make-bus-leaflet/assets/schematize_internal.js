@@ -790,6 +790,14 @@ console.log('workspace written: ' + WD);
 // gen_internal.js reads LEAFLET_DIR || cwd, so run it with cwd = the workspace;
 // the generator template itself is taken from the town run dir when present
 // (the S3/S4 convention — the committed copy), falling back to the skill assets.
+//
+// PLACE maps (DIR carries gen_internal_place.js) need the same two fixes that
+// wrapper applies for the ordinary geographic output: the version stamp (via
+// LEAFLET_VERSION, set BEFORE the run so it lands in the rendered SVG) and the
+// title token (a post-hoc swap, since gen_internal itself has no place concept).
+// We reproduce gen_internal_place.js's own logic here rather than running it,
+// because it resolves gen_internal.js and internal.svg relative to DIR/cwd —
+// assumptions that don't hold once the workspace subfolder is in play.
 if (process.env.SCHEMATIZE_ONLY !== '1') {
   const { spawnSync } = require('child_process');
   const cand = [path.join(DIR, 'gen_internal.js'),
@@ -797,8 +805,26 @@ if (process.env.SCHEMATIZE_ONLY !== '1') {
     path.join(__dirname, 'gen_internal.js')].filter(Boolean);
   const gen = cand.find(f => { try { return fs.existsSync(f); } catch (e) { return false; } });
   if (!gen) { console.error('gen_internal.js not found (looked in run dir / SKILL_ASSETS / script dir)'); process.exit(1); }
-  const res = spawnSync(process.execPath, [gen], { cwd: WD, env: process.env, stdio: 'inherit' });
+  const isPlace = fs.existsSync(path.join(DIR, 'gen_internal_place.js'));
+  const env = { ...process.env };
+  if (isPlace && env.LEAFLET_VERSION == null) env.LEAFLET_VERSION = String(RJ.version || '').replace(/^v/i, '');
+  const res = spawnSync(process.execPath, [gen], { cwd: WD, env, stdio: 'inherit' });
   if (res.status !== 0) process.exit(res.status || 1);
-  fs.copyFileSync(path.join(WD, 'internal.svg'), path.join(DIR, 'internal-schematic.svg'));
-  console.log('internal-schematic.svg written (render with render.js for the print JPG)');
+  const OUT = path.join(DIR, 'internal-schematic.svg');
+  fs.copyFileSync(path.join(WD, 'internal.svg'), OUT);
+  if (isPlace) {
+    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const emitted = 'Buses within ' + esc(RJ.town);
+    const title = RJ.internalTitle || RJ.placeTitle || ('Buses serving ' + (RJ.placeShort || RJ.place || RJ.town));
+    let svg = fs.readFileSync(OUT, 'utf8');
+    if (svg.includes('>' + emitted + '<')) {
+      svg = svg.replace('>' + emitted + '<', '>' + esc(title) + '<');
+      fs.writeFileSync(OUT, svg);
+      console.log('internal-schematic.svg title -> ' + JSON.stringify(title));
+    } else {
+      console.log('internal-schematic.svg written (title token not matched; RJ.town=' + JSON.stringify(RJ.town) + ').');
+    }
+  } else {
+    console.log('internal-schematic.svg written (render with render.js for the print JPG)');
+  }
 }

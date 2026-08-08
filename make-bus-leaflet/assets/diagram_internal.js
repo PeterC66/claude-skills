@@ -956,6 +956,11 @@ try { fs.copyFileSync(path.join(DIR, 'diagram-overrides.json'), path.join(WD, 'o
 console.log('workspace written: ' + WD);
 
 // ---- run the shared internal generator on the workspace ---------------------------
+// PLACE maps (DIR carries gen_internal_place.js) need the same version-stamp +
+// title fixes that wrapper applies for the ordinary geographic output — see the
+// matching comment in schematize_internal.js for why we reproduce its logic here
+// rather than running it (it resolves gen_internal.js/internal.svg relative to
+// DIR/cwd, which don't hold once the workspace subfolder is in play).
 if (process.env.DIAGRAM_ONLY !== '1') {
   const { spawnSync } = require('child_process');
   const cand = [path.join(DIR, 'gen_internal.js'),
@@ -963,8 +968,26 @@ if (process.env.DIAGRAM_ONLY !== '1') {
     path.join(__dirname, 'gen_internal.js')].filter(Boolean);
   const gen = cand.find(f => { try { return fs.existsSync(f); } catch (e) { return false; } });
   if (!gen) { console.error('gen_internal.js not found'); process.exit(1); }
-  const res = spawnSync(process.execPath, [gen], { cwd: WD, env: process.env, stdio: 'inherit' });
+  const isPlace = fs.existsSync(path.join(DIR, 'gen_internal_place.js'));
+  const env = { ...process.env };
+  if (isPlace && env.LEAFLET_VERSION == null) env.LEAFLET_VERSION = String(RJ.version || '').replace(/^v/i, '');
+  const res = spawnSync(process.execPath, [gen], { cwd: WD, env, stdio: 'inherit' });
   if (res.status !== 0) process.exit(res.status || 1);
-  fs.copyFileSync(path.join(WD, 'internal.svg'), path.join(DIR, 'internal-diagram.svg'));
-  console.log('internal-diagram.svg written (render with render.js for the print JPG)');
+  const OUT = path.join(DIR, 'internal-diagram.svg');
+  fs.copyFileSync(path.join(WD, 'internal.svg'), OUT);
+  if (isPlace) {
+    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const emitted = 'Buses within ' + esc(RJ.town);
+    const title = RJ.internalTitle || RJ.placeTitle || ('Buses serving ' + (RJ.placeShort || RJ.place || RJ.town));
+    let svg = fs.readFileSync(OUT, 'utf8');
+    if (svg.includes('>' + emitted + '<')) {
+      svg = svg.replace('>' + emitted + '<', '>' + esc(title) + '<');
+      fs.writeFileSync(OUT, svg);
+      console.log('internal-diagram.svg title -> ' + JSON.stringify(title));
+    } else {
+      console.log('internal-diagram.svg written (title token not matched; RJ.town=' + JSON.stringify(RJ.town) + ').');
+    }
+  } else {
+    console.log('internal-diagram.svg written (render with render.js for the print JPG)');
+  }
 }

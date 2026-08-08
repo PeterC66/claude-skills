@@ -109,6 +109,20 @@ the Cambridgeshire GTFS region):
   the S2 run dir you must **copy it in first** (`cp <S1>/place.json .`) or it throws ENOENT.
   (The pipeline commits it at S1; nothing auto-pulls it into S2.)
 
+- **`place.json` must be re-declared as an output at every stage that carries it, or it
+  dead-ends.** `pull` only copies files listed in the *source* stage's committed `--outputs`
+  — it does not walk back further than one stage, and it never copies a file that's merely
+  sitting in the run dir unlisted. So: S2's `commit S2 ... --outputs` must include
+  `place.json` (it's already physically copied in, per the point above — just remember to
+  list it); P4 must `pull S1 .` explicitly (S2→S4 alone won't reach an S1-only file if S2
+  ever forgets it) and its own `commit S4 ... --outputs` must include `place.json`; P5's
+  `commit S5 ... --outputs` must include it too. Miss any one link and every later stage —
+  and the portal's `import-map.mjs --kind place`, which requires `place.json` in `--src` —
+  breaks silently until someone notices. St Neots Tesco Extra shipped four versions (v1.0–v1.3)
+  without `place.json` past S1 because S2's commit never listed it; only a manual copy-forward
+  during the 2026-08-08 portal rollout got v1.4 working, and even that fixed the symptom, not
+  the pipeline. See `references/pipeline.md` for the corrected P2/P4/P5 commands.
+
 - **Keep `placeTitle` SHORT — it's a fixed 11 pt at x=6 and the Services panel is at
   x=200 mm.** gen_internal doesn't shrink the title to fit, so a long place title overruns
   the panel (and any top feature label). Place titles are naturally longer than the town's
@@ -324,3 +338,169 @@ AREA external map (`gen_external_radial.js`), prompted by a review of all 5 plac
   `node stage.js commit S4` manually (not through `rollout.js`) for all 5 places, which
   meant `sync_ci_reference.js` needed a manual run afterwards too — `status.js` catches
   both classes of drift (portal vendoring AND CI reference) if you forget either.
+
+---
+Added 2026-08-07 — filling `minutesToDestination`/`stops` on all 5 shipped places in one
+pass, plus the two bugs that turned up doing it:
+
+- **Tick draw-order bug (FIXED): the spoke LINE was drawn AFTER its ticks, painting over
+  them.** The intermediate-stop tick loop sat *before* `line(...)` in the per-destination
+  block — the opposite order from `gen_external_radial.js` (town engine draws the line
+  first, ticks on top). Every place's ticks were invisibly buried under the 3.0mm-wide
+  route line the whole time nobody had filled `stops[]` on more than one destination to
+  notice. Fixed by moving the tick/label block to after `line(...)`; matches the town
+  engine's order now. **Any future edit to this per-destination block must keep the line
+  before the ticks**, or the regression comes back silently (nothing errors — the ticks are
+  just invisible).
+
+- **Legend-vs-tick-label collision (FIXED): the auto legend-placement search only treated
+  destination/hub node boxes as hard no-go, never tick-label text.** `nodeBoxes` fed the
+  legend's `overlaps()` hard-reject; tick labels (added 2026-08-06, drawn separately in the
+  same loop) were never added to it, so the search could — and on St Neots Town Centre's
+  "Huntingdon / St Ives dir" spoke, did — plant the legend panel directly on top of tick
+  label text, rendering it as faint grey noise through the panel's 0.94-alpha white fill.
+  Fixed by pushing each tick label's estimated bounding box (`measureText` width, ~3.6mm
+  line height, anchored left/right per `labSide`) into `nodeBoxes` as it's drawn, same as a
+  destination node. **Any new per-spoke text element (a future annotation, say) needs the
+  same treatment** — `nodeBoxes` is the legend's only hard-constraint list, and it is NOT
+  populated automatically from whatever gets drawn.
+
+- **`gtfs_duration.py --fill-place` matches on `destinations[].name`, which is the curated
+  human label, not the GTFS terminus/stop name — expect it to whiff on every renamed
+  destination.** "Cambridge" (labelled) vs "Drummer St Bus Station" (actual GTFS terminus)
+  is the common case; `_clean_dest()` only strips a trailing `(...)`, it does nothing for a
+  wholesale rename. Recovery pattern used across all 5 places: read `sub` for a hint (often
+  the raw stop name, e.g. `"sub": "Drummer St"`), or dump the route's
+  `routes_full_atco.json` `directions[].name`/`stops` and eyeball the true terminus, then
+  re-run with `--route X --dest "<raw name>"` (single-lookup mode) instead of `--fill-place`.
+  Do this BEFORE assuming "no match found" means the route doesn't reach there.
+
+- **A destination can legitimately be an INTERMEDIATE stop, not the route's terminus (e.g.
+  "Gerrards Cross" on a route that actually terminates at "Uxbridge") — `gtfs_duration.py`
+  only ever measures duration to a trip's actual last stop, so single-lookup mode against an
+  intermediate name returns nothing.** Wrote a one-off variant (search every route/trip
+  calling at the origin, take the FIRST stop after the origin whose name contains the
+  target substring, not just the trip's final stop) to get Gerrards Cross (51 min via the
+  slow all-stops 104) and Totteridge (8 min via 34's "Hicks Farm Rise") right. Sanity-check
+  the result against a nearby faster/slower route before trusting it — a slow local service
+  legitimately can take longer to a NEARER intermediate stop than an express route takes to
+  a FARTHER terminus (Gerrards Cross 11 km/51 min on local 104 vs Uxbridge 18 km/23 min on
+  express M40/X74 — looked backwards at first glance, was correct on inspection).
+
+- **A route number can collide between two routes serving the SAME origin with the SAME
+  raw termini across two different places — verify by BEARING, not just by name, before
+  trusting which destination a terminus belongs to.** Beaconsfield's 380 ("Loudwater –
+  Beaconsfield – Jordans") has two destinations named for the human-recognisable places
+  ("Seer Green & Jordans", "Loudwater") but the GTFS chain's only two termini are POI names
+  ("Green East Road", "Tesco Store") that don't obviously map to either. Computed the true
+  compass bearing from the place to each terminus stop and matched it against each
+  destination's stored `bearing` (62°≈67.9°→Green East Road≈Seer Green&Jordans;
+  262°≈255°→Tesco Store≈Loudwater) — cheap, and turns an ambiguous name-guess into a
+  checked fact. Confirmed the same pairing held (Green East Road→Seer Green&Jordans,
+  Tesco Store→Loudwater) from BOTH Beaconsfield places despite different distances/bearings
+  from each origin, which is exactly the cross-check you want.
+
+- **`derive_stops.py`'s `pick_direction()` can grab the WRONG direction when both directions
+  of a route contain the destination name as a substring of each other's name (an
+  arrival-direction and departure-direction pair like `"X - Y"` / `"Y - X"`), silently
+  producing an empty or nonsensical `stops[]`.** Two confirmed cases: (1) route 69 at St
+  Ives Tesco Extra — `dest_clean="St Ives direction"` matches neither direction name, so it
+  fell back to `dirs[0]` = `"Bus Station - Tesco"`, which ENDS at the origin (no downstream
+  stops → `"no usable chain"`); needed `"Tesco - Bus Station"` instead. (2) route C2 at St
+  Neots Town Centre — `dest_clean="Newlands Cottages"` matches BOTH `"Newlands Cottages -
+  Market Square"` and `"Market Square - Newlands Cottages"` (both contain the substring);
+  `pick_direction` takes the first list match, which happened to be the arrival direction
+  (ends at the place itself → empty downstream again). Same failure, two different root
+  causes (no match vs. ambiguous match) — the fix in both cases is the same: read
+  `routes_full_atco.json` directly, pick the direction whose stop list actually runs
+  AWAY from the place, and set `stops[]` by hand (reusing `derive_stops.py`'s own
+  `sample_names()` window/step logic — first, evenly-spaced intermediates, terminus last —
+  keeps it visually consistent with the auto-filled spokes on the same map). **Always
+  sanity-read the printed fill line** (`route -> destination  stop / stop / ... `) —
+  `"no usable chain"` or a first stop that's obviously the wrong end of the route are both
+  visible in that one line, don't wait to see it wrong on the render.
+
+- **Thin/limited services (Tue-Fri or one-day-a-week routes) routinely fall under
+  `journey_minutes`'s hardcoded `len(durations) < 3` trust floor — that's not a bug, but it
+  means "no matching trips found" from the CLI does NOT mean no data exists.** Every
+  `limited:true` destination hit this (Beaconsfield 380 ×2 legs at n=1-2, St Neots C2 at
+  n=1-2). Recovery: query `stop_times` directly for the 1-2 actual trips that do call at the
+  origin on that route and compute the duration by hand — with only 1-2 samples there's no
+  median to take, just report the single trip's scheduled duration. Cross-checking the SAME
+  route/leg from two different places (the Beaconsfield 380 example above) that land on
+  consistent numbers is reasonable corroboration when you can't get 3 samples any other way.
+
+- **Region GTFS DB is a `--db` argument, not autodetected — passing the wrong region's
+  sqlite doesn't error, it just returns confident-looking wrong answers (or 0 trips) for
+  every route.** `gtfs_duration.py`'s default is `$CAMBS_GTFS_DB` /
+  `_gtfs\cambridgeshire.sqlite`; Beaconsfield and High Wycombe are Buckinghamshire and need
+  `--db …\_gtfs\buckinghamshire.sqlite` explicitly every call (or export the env var for the
+  whole session). Check `_gtfs\regions.json` / which sqlite the place's own S1
+  `gtfs-services.json` was built against before running any duration fill.
+
+- **`python3 -c "...open(r'/c/...)"` from Git-Bash silently `FileNotFoundError`s even
+  though the same `/c/...` path works fine for `cd`/`cp`/`ls`.** Bash resolves the
+  MSYS-style `/c/...` path; the Windows Python interpreter does not — it needs
+  `C:\...\...`. Cheapest fix: `cd` into the directory in bash first, then use a bare
+  relative filename in the Python one-liner (`open('routes.json', ...)` not
+  `open(r'/c/.../routes.json', ...)`), rather than fighting path-format conversion inline.
+
+---
+Added 2026-08-08 — the rollout's Phase 3 manual `stage.js` regen of High Wycombe Aldi
+(the first place ever to carry `internalSchematic`) silently lost both the place-title
+fix AND the forced-POI label overrides on the schematic output. Neither is documented
+anywhere in this skill because **there is no `build_schematic_place.js` wrapper** —
+whoever built the original v1.2 reference (commit `dbc0a57`) ran the town skill's
+`schematize_internal.js` directly, by hand, and evidently got both details right without
+leaving a reusable recipe. A later same-day mechanical re-render (adopting the current
+engine template) got both wrong, and the mistake wasn't visible until `community-bus-maps`'
+`npm run verify:place` byte-compared it against the portal's own generation:
+
+- **`schematize_internal.js`'s place-title fix depends on a sentinel file
+  (`gen_internal_place.js`) existing beside `routes.json` in the run dir — it is never
+  invoked, just checked with `fs.existsSync`.** The portal always has this (it's vendored
+  into `engine/place/` and copied into every place's payload at import). This skill did
+  **not** ship a copy at all, so any manual run direct against a place's S4 dir has
+  `isPlace = false` and silently emits the wrong title (`"Buses within <town>"` instead of
+  `"Buses serving <place>"`) — no error, no warning. **Fixed:** the skill now carries its
+  own `gen_internal_place.js` in `assets/` (copied verbatim from the portal's
+  `engine/place/gen_internal_place.js` — they must stay byte-identical, same as
+  `gen_internal.js`/`gen_external_places.js`/`footer.js`). Copy it into the run dir before
+  invoking `schematize_internal.js` for a place.
+
+- **`schematize_internal.js` reads `LEAFLET_DIR` at its own top level (`DIR = env.LEAFLET_DIR
+  || cwd()`) but then inherits the SAME env — including that same `LEAFLET_DIR` — into the
+  child `gen_internal.js` it spawns with `cwd: WD` (the `schematic/` workspace
+  subfolder).** `gen_internal.js` does its own `DIR = env.LEAFLET_DIR || cwd()` lookup, so
+  if the caller set `LEAFLET_DIR` as an env var (rather than relying on cwd), the child
+  reads that SAME value instead of falling back to its own cwd (`WD`) — it renders into
+  the **parent** run dir, not the workspace, and the subsequent `copyFileSync(WD +
+  '/internal.svg', ...)` throws `ENOENT` (or, worse, silently copies a stale leftover
+  `WD/internal.svg` from a previous run if one exists — that's what actually happened
+  here: the wrong-titled reference also carried STALE POI geometry from the very first,
+  pre-fix schematic build). **The portal's own wrapper (`engine/expert/gen_internal_schematic.js`)
+  documents and works around this by explicitly `delete env.LEAFLET_DIR` before spawning
+  the pre-stage.** Do the same by hand: `cd` into the run dir and do **not** export
+  `LEAFLET_DIR` at all (rely on cwd), rather than setting it as an env var.
+
+- **`schematize_internal.js`'s workspace-copy step (`WD`) does not carry `overrides.json`
+  into the schematic workspace, and `gen_internal.js` falls back to reading `overrides.json`
+  from its OWN cwd (`WD`) when `OVERRIDES_FILE` isn't set** — so a place's forced-POI label
+  overrides (`base-overrides.json` / `overrides.json` `internal.pois[...]`, e.g. Aldi's
+  label-offset/anchor and the Tannery Road Ind Est force) are silently dropped on the
+  schematic output specifically (the ordinary `internal.svg`/`internal-schematic` via
+  `build_internal_place.js` doesn't have this problem since it isn't affected by the `WD`
+  cwd change). **Always pass `OVERRIDES_FILE=<absolute path to the place's overrides.json>`
+  explicitly** when invoking `schematize_internal.js` for a place — don't rely on the
+  same-directory fallback, since the workspace it actually runs in isn't the directory
+  that file lives in.
+
+  **Command that actually reproduces the portal's byte-identical output** (from the
+  place's S4 run dir, with the sentinel copied in first):
+  ```bash
+  cp <SKILL_ASSETS>/gen_internal_place.js .
+  OVERRIDES_FILE="$(pwd)/overrides.json" SKILL_ASSETS=<town skill assets dir> \
+    node <town skill assets dir>/schematize_internal.js
+  ```
+  (deliberately no `LEAFLET_DIR` — let it default to cwd, matching the portal's own
+  `delete env.LEAFLET_DIR` workaround).

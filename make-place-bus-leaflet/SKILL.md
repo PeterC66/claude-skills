@@ -171,7 +171,12 @@ Commit S4 (`--outputs internal.svg,external.svg,roads_geo.json,routes_paths.json
 
 ### P5 — Render
 `new S5`, pull S4, `node "%TSK%\render.js" internal.svg internal.jpg` and the same for
-external. **Inspect the JPGs** (open them). Refresh `<placeDir>\_latest\`. Commit S5.
+external. **Inspect the JPGs** (open them). Commit S5, then
+`node "%TSK%\refresh_latest.js" "<placeDir>"` — **never** a manual `cp` into `_latest\`;
+the script also re-runs `collect-maps.ps1 -All` at the Buses root so
+`Collected_latests` can't drift. Run this same command as the **last step of any
+edit that touches an already-committed render**, even a hand-patch with no version
+bump — see the P5 note in `references/pipeline.md` for why this is mandatory.
 
 ## Locked design decisions (do not silently change)
 - **Standalone.** Never require a town build; pull the place's own data. (Consistency

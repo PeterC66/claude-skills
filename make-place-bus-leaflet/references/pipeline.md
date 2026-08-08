@@ -89,8 +89,15 @@ node "$TSK/stage.js" pull S4 .
 node "$TSK/render.js" internal.svg internal.jpg
 node "$TSK/render.js" external.svg external.jpg
 node "$TSK/stage.js" commit S5 "$S5" --outputs internal.jpg,external.jpg,internal.svg,external.svg,place.json
-# refresh _latest
-mkdir -p "../../St Neots Tesco Extra/_latest"; cp internal.jpg external.jpg "../../St Neots Tesco Extra/_latest/"
+# refresh _latest (also re-runs collect-maps.ps1 -All — do not replace with a raw cp)
+node "$TSK/refresh_latest.js" "../.."
 ```
 **Always open the JPGs** and eyeball them (the external map should read as a clean
 hub-and-spokes; the internal map should be a tight cluster, not sprawling).
+
+**Mandatory, no exceptions:** run `refresh_latest.js` on the place dir as the last
+step of *any* change that touches this place's rendered output — not just a fresh
+P5, but also a hand-patch to a JPG/SVG already sitting inside a committed S5-render
+folder (no version bump). Skipping it is exactly what left `_latest` and
+`Collected_latests` stale for High Wycombe Aldi and St Neots Town Centre on
+2026-08-08 — the render was correct on disk, but nothing downstream knew.

@@ -1,15 +1,25 @@
-// refresh_latest.js — copy a town's newest key deliverables into <townDir>/_latest/
-// so nobody has to dig through the dated S1–S6 stage folders for them (Peter's
-// ask 2026-07-20, item 9). Chosen mechanism: a _latest\ folder of COPIES
-// (robust — never a broken link, survives moving/zipping the town folder),
-// refreshed on every build. Run as the final step after S5 (and after S6/diagram
-// if present):   node refresh_latest.js "<townDir>"
+// refresh_latest.js — copy a town's (or place's) newest key deliverables into
+// <townDir>/_latest/ so nobody has to dig through the dated S1–S6 stage folders
+// for them (Peter's ask 2026-07-20, item 9). Chosen mechanism: a _latest\ folder
+// of COPIES (robust — never a broken link, survives moving/zipping the town
+// folder), refreshed on every build. Run as the final step after S5/P5 (and
+// after S6/diagram if present), AND after any in-place edit to an already-
+// committed S5/P5 render (a re-rendered JPG inside an existing version folder
+// is invisible to everything downstream until this runs):
+//   node refresh_latest.js "<townDir-or-placeDir>"
+// Works identically for a town dir or a place dir — both map onto the shared
+// stage.js S-slots, so "latest S5" means the same thing in either.
 // Copies (whichever exist): internal.jpg, external.jpg, internal-schematic.jpg,
 // internal-diagram.jpg from
 // the latest S5 render; the newest disagreements.docx + disagreements.pdf (the
 // customer-facing PDF conversion, see gen_disagreements.py) and verification.docx
 // found anywhere under the town folder. Missing items are skipped silently.
-const fs = require('fs'), path = require('path');
+// Final step, always: re-runs collect-maps.ps1 -All at the Buses root, so the
+// Collected_latests review folders never drift from _latest the way High
+// Wycombe Aldi / St Neots Town Centre did on 2026-08-08 (an in-place render
+// edit and a skipped refresh, each caught only because Collected_latests was
+// stale against the newest S5-render — see project_bus_foolproofing_plan.md).
+const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const TOWN = process.argv[2] || process.cwd();
 const OUT = path.join(TOWN, '_latest');
 fs.mkdirSync(OUT, { recursive: true });
@@ -62,3 +72,25 @@ grab(newestUnder('disagreements.pdf'), 'disagreements.pdf');
 grab(newestUnder('verification.docx'), 'verification.docx');
 
 console.log('_latest refreshed: ' + copied.join(', ') + (missing.length ? '  (skipped: ' + missing.join(', ') + ')' : ''));
+
+// Find the Buses root (the ancestor dir holding collect-maps.ps1) by walking
+// up from TOWN, then re-run it so Collected_latests never lags _latest.
+function findBusesRoot(dir) {
+  let cur = path.resolve(dir);
+  while (true) {
+    if (fs.existsSync(path.join(cur, 'collect-maps.ps1'))) return cur;
+    const parent = path.dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
+}
+const busesRoot = findBusesRoot(TOWN);
+if (busesRoot) {
+  try {
+    execFileSync('powershell', ['-File', path.join(busesRoot, 'collect-maps.ps1'), '-All'], { cwd: busesRoot, stdio: 'inherit' });
+  } catch (e) {
+    console.error('WARNING: collect-maps.ps1 -All failed to run — Collected_latests may now be stale: ' + e.message);
+  }
+} else {
+  console.error('WARNING: could not find collect-maps.ps1 above ' + TOWN + ' — Collected_latests was NOT refreshed.');
+}

@@ -19,7 +19,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
+const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, PLACE_IGNORE } = require('./gate_lib');
 const { computeEngineVersion } = require('./engine_version');
 
 const CURRENT_ENGINE = computeEngineVersion();
@@ -95,7 +95,7 @@ function gateTown(t) {
 }
 
 // ---- gate a single place ----------------------------------------------------
-const PLACE_IGNORE = /y="16"|y="208"/; // title + "· Map v…" stamp, post-edited by build_internal_place.js
+// PLACE_IGNORE (title + "· Map v…" stamp, post-edited by build_internal_place.js) now lives in gate_lib.js, shared with rollout_places.js.
 function gatePlace(p) {
   const m = readJson(path.join(p.dir, 'manifest.json'));
   const s4 = latestRunDir(m, p.dir, 'S4');

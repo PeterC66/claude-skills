@@ -59,6 +59,43 @@ function labelSet(svg) {
   return [...out].sort();
 }
 
+// The footer's "Map v<N.N> · <validFrom>" stamp (footer.js) changes on every
+// version bump by construction — every rollout (town or place) legitimately
+// ships a new version, so this label always differs and must never itself
+// count as a "lost"/"gained" label. Filtered out by labelDiff below.
+const VERSION_STAMP_RE = /^Map v[\d.]+(?: · .*)?$/;
+
+// Label-set diff, oriented old->new (matches changing-the-engine.md's
+// comm -23/-13 recipe): lost = present in old, gone in new; gained = present
+// in new, absent in old. Shared by rollout.js and rollout_places.js so the
+// version-stamp exclusion (and any future fix here) only needs to live once.
+//
+// Bug fixed 2026-08-09: rollout.js used to compute this straight off a
+// scratch build whose routes.json came directly from the previous S3 run,
+// never having gone through `stage.js pull`'s version-stamp sync (that only
+// fires when landing into a NAMED versioned run dir, which a scratch preview
+// isn't) — so the scratch build's version stamp was often one release behind
+// the real thing, and the diff reported a false-positive LOST/GAINED pair on
+// the stamp text alone. Filtering the stamp out here fixes it at the root:
+// the label is expected to change on every rollout, so it should never be
+// judged as content loss regardless of which version numbers land on which
+// side of the diff.
+function labelDiff(oldSvgPath, newSvgPath) {
+  if (!fs.existsSync(oldSvgPath) || !fs.existsSync(newSvgPath)) return { lost: [], gained: [] };
+  const oldLabels = labelSet(fs.readFileSync(oldSvgPath, 'utf8')).filter(x => !VERSION_STAMP_RE.test(x));
+  const newLabels = labelSet(fs.readFileSync(newSvgPath, 'utf8')).filter(x => !VERSION_STAMP_RE.test(x));
+  return {
+    lost: oldLabels.filter(x => !newLabels.includes(x)),
+    gained: newLabels.filter(x => !oldLabels.includes(x)),
+  };
+}
+
+// The place fixtures legitimately differ on exactly two lines — the title
+// ("Buses within X" vs "Buses serving X") and the "· Map v…" stamp — because
+// build_internal_place(_roads).js/gen_internal_place.js post-edit both after
+// running the shared town generator. Shared by status.js and rollout_places.js.
+const PLACE_IGNORE = /y="16"|y="208"/;
+
 // The generators emit one SVG element per line (writeFileSync of a big
 // template-literal string), so a line-based comparison is what
 // references/changing-the-engine.md itself uses for the byte-identical gate
@@ -169,6 +206,6 @@ function detectExternalStyle(s4Dir) {
 }
 
 module.exports = {
-  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, gate, sameIgnoringLineEndings,
-  findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
+  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, VERSION_STAMP_RE, PLACE_IGNORE,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
 };

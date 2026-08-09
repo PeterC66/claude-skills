@@ -67,11 +67,36 @@ that does it, and what else has to be updated in the same session.
 > showed 6/8 towns DIFF (Beaconsfield, High Wycombe, Huntingdon, St Ives, St Neots, Wisbech —
 > March/Ramsey already PASS) and 4/5 places DIFF (all but High Wycombe Aldi) on `external` only,
 > content-only diffs (version-stamp text), nothing lost per `rollout.js --all` dry run. **Before
-> running the rollout:** `rollout.js` only handles towns — there is still no place equivalent, so
-> the 4 stale places need a manual S4/S5 re-render + `sync_ci_reference.js` (or a new
-> `rollout_places.js` mirroring `rollout.js`, worth writing if this recurs). Buses-data
-> (`buses-data` repo) also had unrelated uncommitted local changes sitting in the working tree as
-> of this note — stage/commit only the rollout's own touched files, don't sweep those in.
+> running the rollout:** `rollout.js` only handles towns — the 4 stale places needed a manual
+> S4/S5 re-render + `sync_ci_reference.js` at the time. Buses-data (`buses-data` repo) also had
+> unrelated uncommitted local changes sitting in the working tree as of this note —
+> stage/commit only the rollout's own touched files, don't sweep those in.
+>
+> **2026-08-09 — place equivalent written.** `node "%SK%\rollout_places.js"
+> [--place "<Place>"|--all] [--apply]` now does for places what `rollout.js` does for towns:
+> same dry-run-by-default / `--apply` / `--force` / label-lost safety gate, discovering places
+> via `gate_lib.js`'s `findPlaces()` (the same enumeration `status.js` uses) rather than a
+> hardcoded list. It builds `internal.svg` via `build_internal_place.js` (not
+> `build_internal_place_roads.js` — an engine-only rollout reuses the existing
+> `roads_geo.json`/`routes_paths.json` on disk, so it needs no fresh OSM pull), `external.svg`
+> via `gen_external_places.js`, and — the reason it was worth writing carefully rather than
+> quickly — gets the schematic/diagram pre-stage invocation right for any place with
+> `internalSchematic`/`internalDiagram` configured (currently only High Wycombe Aldi, via
+> `internalSchematic`): it copies the `gen_internal_place.js` sentinel into the run dir so the
+> pre-stage's `isPlace` check fires, passes `OVERRIDES_FILE=<absolute path>` explicitly to
+> `schematize_internal.js` (the exact gotcha in `make-place-bus-leaflet/references/gotchas.md`
+> ~line 486 that silently dropped High Wycombe Aldi's "Tannery Road Ind Est" POI override during
+> the manual 2026-08-09 re-render), deliberately does NOT pass `OVERRIDES_FILE` to
+> `diagram_internal.js` (which copies its own `diagram-overrides.json` into the workspace —
+> forcing `OVERRIDES_FILE` there would shadow it), and never sets `LEAFLET_DIR` for either. It
+> also fixed the label-diff safety check at its source (`gate_lib.js`'s new `labelDiff()`,
+> shared by both tools): the previous per-tool diff computed its preview from a scratch build
+> whose `routes.json` never went through `stage.js pull`'s version-stamp sync, so the "· Map
+> v…" footer text could report a false-positive LOST/GAINED pair on every rollout; `labelDiff()`
+> now filters that label out entirely, since a version bump is expected on every rollout and
+> was never a real content loss. Dry-run verified against all 5 built places (all UP-TO-DATE,
+> since they'd just been manually re-rendered) and separately forced against High Wycombe Aldi
+> to prove the schematic branch reproduces byte-identical labels including the POI override.
 
 ---
 

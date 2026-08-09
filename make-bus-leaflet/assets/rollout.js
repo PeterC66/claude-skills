@@ -37,7 +37,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelSet, findTowns, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
+const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 
 function parseArgs(argv) {
@@ -74,17 +74,9 @@ function copyFile(src, destDir, name) {
   return true;
 }
 
-// Label-set diff, oriented old->new (matches the doc's comm -23/-13 recipe):
-// lost = present in old, gone in new. gained = present in new, absent in old.
-function labelDiff(oldSvgPath, newSvgPath) {
-  if (!fs.existsSync(oldSvgPath) || !fs.existsSync(newSvgPath)) return { lost: [], gained: [] };
-  const oldLabels = labelSet(fs.readFileSync(oldSvgPath, 'utf8'));
-  const newLabels = labelSet(fs.readFileSync(newSvgPath, 'utf8'));
-  return {
-    lost: oldLabels.filter(x => !newLabels.includes(x)),
-    gained: newLabels.filter(x => !oldLabels.includes(x)),
-  };
-}
+// labelDiff (label-set diff, oriented old->new, version-stamp-filtered) now
+// lives in gate_lib.js, shared with rollout_places.js — see its comment for
+// the 2026-08-09 false-positive fix.
 
 function rolloutOne(t) {
   const manifest = readJson(path.join(t.dir, 'manifest.json'));

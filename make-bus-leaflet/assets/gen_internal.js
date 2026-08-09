@@ -1668,7 +1668,8 @@ if (IR && IR.northArrow!==false) {
 // footer band: attribution note + version + BusMaps.uk (shared across all four map types — footer.js)
 const _ver = process.env.LEAFLET_VERSION || RJ.version;
 out(footerBand({
-  notes: 'Routes & stops: bustimes.org (operator-verified, June 2026). Places: OpenStreetMap. Stop names in italics are approximate; check live times at bustimes.org.',
+  notes: ['Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org (June 2026), Open Government Licence v3.0.',
+          'Places: © OpenStreetMap contributors (ODbL). Stop names in italics are approximate; check live times at bustimes.org.'],
   version: _ver, validFrom: RJ.validFrom || 'Summer 2026'
 }));
 

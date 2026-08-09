@@ -284,7 +284,8 @@ legendBuf.forEach(out);
 // source note
 const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 out(footerBand({
-  notes: `Routes & stops from bustimes.org, cross-checked with operators (June 2026). Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`,
+  notes: [`Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
+          `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`],
   version: D.version, validFrom: D.validFrom || 'Summer 2026'
 }));
 

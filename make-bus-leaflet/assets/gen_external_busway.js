@@ -235,7 +235,7 @@ if(PANX==null){
 }
 // source notes (bottom)
 out(footerBand({
-  notes: ['Routes & stops from bustimes.org, cross-checked with operators, June 2026.',
+  notes: ['Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org, June 2026.',
           D.externalNote || 'Always confirm live times & fares at bustimes.org or operator apps.'],
   version: D.version, validFrom: D.validFrom || 'Summer 2026'
 }));

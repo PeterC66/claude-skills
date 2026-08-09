@@ -317,7 +317,7 @@ out(`<rect x="${(lx - 4).toFixed(2)}" y="${(ly - 10).toFixed(2)}" width="${legen
 legend.buf.forEach(out);
 const _hasTimes = dests.some(b=>b.minutesToDestination!=null);
 out(footerBand({
-  notes: `Reachable destinations & routes serving them, from BODS open data cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`,
+  notes: `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`,
   version: D.version, validFrom: D.validFrom || 'Summer 2026'
 }));
 

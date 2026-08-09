@@ -26,7 +26,7 @@ function footerBand({ notes, version, validFrom = 'Summer 2026', x0 = 8, x1 = 29
   const verNum = version ? String(version).replace(/^v/i, '') : null;
   const left = [verNum ? `Map v${esc(verNum)}` : null, validFrom ? esc(validFrom) : null].filter(Boolean).join(' · ');
   if (left) out.push(`<text x="${x0}" y="${bottomY}" font-family="Arial" font-size="${size}" fill="#999">${left}</text>`);
-  out.push(`<text x="${x1}" y="${bottomY}" font-family="Arial" font-size="${size}" fill="#999" text-anchor="end">BusMaps.uk</text>`);
+  out.push(`<text x="${x1}" y="${bottomY}" font-family="Arial" font-size="${size}" fill="#999" text-anchor="end">Map design © BusMaps.uk</text>`);
   return out.join('\n');
 }
 

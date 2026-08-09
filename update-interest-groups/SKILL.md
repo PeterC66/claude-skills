@@ -81,3 +81,4 @@ Tell the user these steps (they own them):
 4. **Invoke** `/update-interest-groups` (or just ask to "update the interest groups handout").
 5. **Review the proposed-changes table** and confirm or redirect. If overflow options are offered, pick one.
 6. **Afterwards, open the updated doc in Word, make a tiny change (e.g. type a space and delete it) so the file is "dirty", then save** — this is what forces the footer "As at" `SAVEDATE` field to refresh to today. Simply opening and closing won't update it. Then give it a final eyeball.
+

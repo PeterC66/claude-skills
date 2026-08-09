@@ -1,36 +1,18 @@
 # Stage 3 — Config (+ town-specific generator edits)
 
-Detailed steps for S3 of the `make-bus-leaflet` workflow. See SKILL.md for the stage
-model and palettes, `references/linear-features.md` for `features[]`, and
-`references/overrides.md` for `overrides.json`. `%SK%` = the skill's `assets` folder.
-`$S3` = the S3 run folder.
+Detailed steps for S3 of the `make-bus-leaflet` workflow. See SKILL.md for the stage model and palettes, `references/linear-features.md` for `features[]`, and `references/overrides.md` for `overrides.json`. `%SK%` = the skill's `assets` folder. `$S3` = the S3 run folder.
 
 1. `S3=stage.js new S3`; `cd "$S3"`.
 2. Write **`routes.json`** — palette, textOn, operators[], external[] (radial: each `{route,label,days,bearing,side,stops}`), **`features[]`** (the 1–3 linear features chosen in S2 — each `{key,type,label,labelPos{x,y},labelColor,labelItalic,labelSize,labelReserve[x0,y0,x1,y1]}`, optional `style{stroke,width,dash}` to override the per-type default), plus `anchor`/`anchorLabel`/`internalZoom`/`titleColor`/`externalNote` as needed; `busway[]` only for a busway/P&R town. Start from `%SK%\routes.example.radial.json` (ordinary town = March) or `routes.example.busway.json` (St Ives). Feature `type` ∈ river/canal/railway/road/generic sets the default style; `key` must match a key in S2's `features_geo.json`.
-3. **Do NOT copy the generators into `$S3` any more (item 3, 2026-08-04).** S3 owns only `routes.json`
-   (+ optional `overrides.json`) — pure per-town **data**. The generators are **fully config-driven**
-   (2026-06-07: no town literals) and are always copied fresh from the **live `%SK%` template** at S4
-   time, so a town can never freeze a stale copy of the code between builds. This means you no longer
-   pick a generator file here either: set `routes.json`'s **`externalLayout`** to `"radial"` (default,
-   omit for an ordinary town) or `"busway"` (only a P&R/guided-busway town) instead of copying
-   `gen_external_radial.js`/`gen_external_busway.js` in by hand. Everything else town-specific lives in
-   `routes.json` (see the key list below).
-   - Still want a local generator copy to drive the drag editor mid-session? Copy it in for that
-     purpose, but **don't commit it as an S3 output** — S4 supplies its own copy regardless.
+3. **Do NOT copy the generators into `$S3` any more (item 3, 2026-08-04).** S3 owns only `routes.json` (+ optional `overrides.json`) — pure per-town **data**. The generators are **fully config-driven** (2026-06-07: no town literals) and are always copied fresh from the **live `%SK%` template** at S4 time, so a town can never freeze a stale copy of the code between builds. This means you no longer pick a generator file here either: set `routes.json`'s **`externalLayout`** to `"radial"` (default, omit for an ordinary town) or `"busway"` (only a P&R/guided-busway town) instead of copying `gen_external_radial.js`/`gen_external_busway.js` in by hand. Everything else town-specific lives in `routes.json` (see the key list below).
+   - Still want a local generator copy to drive the drag editor mid-session? Copy it in for that purpose, but **don't commit it as an S3 output** — S4 supplies its own copy regardless.
    - The templates are **editor-capable** (emit `data-key` under `EDITOR_KEYS=1`, honour `overrides.json`, print the `VIEWPORT` line). After S4, the editor runs **in-place**: `cd` into the S4 run dir and `node "%SK%\edit-server.js" internal|external` (see `references/overrides.md`).
    - **Whenever you change a template, re-run the byte-identical gate** (`node "%SK%\status.js"`, or `%SK%\gate.sh <gen> <S4-datadir> internal|external <committed_svg>` by hand) on **every built town, internal *and* external** — the current set is listed in [changing-the-engine.md](changing-the-engine.md) §2 — before shipping — they must stay identical. **Never add a town literal back into a generator; add a `routes.json` key instead** (this is how the external hub label was generalised — see `references/gotchas.md`).
 4. **Manual layout (optional):** if you want to straighten routes / nudge labels, create/keep **`overrides.json`** here (see `references/overrides.md`). It's read by the generators and is safe to omit (absent ⇒ pure auto layout). Author it after the first S4/S5 draft using the drag editor, then drop it back in S3.
 5. `stage.js commit S3 "$S3" --outputs routes.json,overrides.json` (omit `overrides.json` if none — no `gen_internal.js`/`gen_external.js` any more, see step 3).
 
 ### The `engine` field — provenance, not control (item 3, 2026-08-04)
-S4 stamps `routes.json`'s **`engine`** field with a short content-hash of the generator files it just
-ran (`node "%SK%\engine_version.js"` — hashes `gen_internal.js` + both `gen_external_*.js` + `icons.js`),
-the same surgical-replace approach `stage.js` already uses for `"version"`. It's pure record-keeping —
-which engine build actually drew this map — not something you set by hand or that controls anything at
-generate time (S4 always runs whatever is currently in `%SK%`). `node "%SK%\status.js"` reads it back to
-flag at a glance which towns' *last build* predates the current template (`(none)` for any town built
-before this field existed — not an error, just no provenance recorded yet). See
-[changing-the-engine.md](changing-the-engine.md) §2a for how this changes the re-render recipe.
+S4 stamps `routes.json`'s **`engine`** field with a short content-hash of the generator files it just ran (`node "%SK%\engine_version.js"` — hashes `gen_internal.js` + both `gen_external_*.js` + `icons.js`), the same surgical-replace approach `stage.js` already uses for `"version"`. It's pure record-keeping — which engine build actually drew this map — not something you set by hand or that controls anything at generate time (S4 always runs whatever is currently in `%SK%`). `node "%SK%\status.js"` reads it back to flag at a glance which towns' *last build* predates the current template (`(none)` for any town built before this field existed — not an error, just no provenance recorded yet). See [changing-the-engine.md](changing-the-engine.md) §2a for how this changes the re-render recipe.
 
 ## Everything town-specific is a `routes.json` key (the generators have NO town literals)
 The config-driven keys the generators read (2026-06-07 — the per-town code edits were all lifted into config; `bootstrap_town.py` drafts most of them):
@@ -53,8 +35,7 @@ The config-driven keys the generators read (2026-06-07 — the per-town code edi
 
 ### The complexity-remedy keys
 
-From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-in;
-**absent ⇒ byte-identical**, like every other key here.
+From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-in; **absent ⇒ byte-identical**, like every other key here.
 
 #### `internalCorridors` — rung 1, LIVE since P2 (2026-07-28)
 
@@ -63,39 +44,20 @@ From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-i
 ```
 *(also accepted: `{ "<lead>": { "routes": [...] } }`)*
 
-Draw a family of co-running services as **ONE line carrying a vertical stack of badges** instead of
-one coloured line each — the internal twin of `external[].routes`. Reach for it when the triage gate
-says **R > 12**: the colour-blind-safe palettes hold ~12 usable hues, and past that colour stops
-identifying a route at all. High Wycombe: 31 lines → 24 with four families.
+Draw a family of co-running services as **ONE line carrying a vertical stack of badges** instead of one coloured line each — the internal twin of `external[].routes`. Reach for it when the triage gate says **R > 12**: the colour-blind-safe palettes hold ~12 usable hues, and past that colour stops identifying a route at all. High Wycombe: 31 lines → 24 with four families.
 
 The **config key is the lead**. It keys the colour, the overrides and the badge-stack order.
 
 What the generator actually does — worth knowing, because it decides how you use it:
 
-- **Colour.** Every member takes the lead's colour (and `textOn`). Only routes already in `palette`
-  are touched, so the palette's key order — and therefore the default `routeOrder` — cannot shift.
-  Applied after `overrides.json` `routeColors`, so recolouring the lead moves the whole family.
-- **Lane.** The family counts as **one lane** in the corridor-offset maths. Where the members run the
-  same road they land on the same centreline and overdraw into a single visible line; where they
-  **diverge they simply separate again**, because nothing merged their coordinates. "The bundle must
-  split back where the routes diverge" is therefore satisfied *by construction*, not by a rule
-  someone has to remember.
-- **Badges.** At each badge point only the first family member present draws, and it draws the stack
-  of the members co-running *there*. A member alone on a divergent branch is its own group leader and
-  still badges that branch — which is what keeps identity on the split.
-- **Report.** `corridors_report.json` is written next to `internal.svg` with each member's overlap
-  against its weakest sibling, and the run **warns on stderr below 0.6** — the same bar
-  `complexity_score.js --overlap` uses to propose a family. **Read it. Drop any family that warns:**
-  below that, most of the sheet is two same-coloured lines going different ways, which is worse than
-  two colours.
+- **Colour.** Every member takes the lead's colour (and `textOn`). Only routes already in `palette` are touched, so the palette's key order — and therefore the default `routeOrder` — cannot shift. Applied after `overrides.json` `routeColors`, so recolouring the lead moves the whole family.
+- **Lane.** The family counts as **one lane** in the corridor-offset maths. Where the members run the same road they land on the same centreline and overdraw into a single visible line; where they **diverge they simply separate again**, because nothing merged their coordinates. "The bundle must split back where the routes diverge" is therefore satisfied *by construction*, not by a rule someone has to remember.
+- **Badges.** At each badge point only the first family member present draws, and it draws the stack of the members co-running *there*. A member alone on a divergent branch is its own group leader and still badges that branch — which is what keeps identity on the split.
+- **Report.** `corridors_report.json` is written next to `internal.svg` with each member's overlap against its weakest sibling, and the run **warns on stderr below 0.6** — the same bar `complexity_score.js --overlap` uses to propose a family. **Read it. Drop any family that warns:** below that, most of the sheet is two same-coloured lines going different ways, which is worse than two colours.
 
-**Pick the same lead as `external[].routes`** for a family that is merged on both sheets, and the
-internal and external maps keep the same colour for it. Bundle internally *without* merging
-externally and that family's colour correspondence between the two maps is broken — a real cost,
-not a detail.
+**Pick the same lead as `external[].routes`** for a family that is merged on both sheets, and the internal and external maps keep the same colour for it. Bundle internally *without* merging externally and that family's colour correspondence between the two maps is broken — a real cost, not a detail.
 
-Get the candidate list from `curate_services.js` (see [s2-geometry.md](s2-geometry.md)); it prints a
-paste-ready block. **They are candidates, never decisions.**
+Get the candidate list from `curate_services.js` (see [s2-geometry.md](s2-geometry.md)); it prints a paste-ready block. **They are candidates, never decisions.**
 
 #### `coreBox` — rung 2, LIVE since P3 (2026-07-28)
 
@@ -104,28 +66,13 @@ paste-ready block. **They are candidates, never decisions.**
 ```
 *(optional: `at:[x,y]`, `w`, `h`, `fill`, `stroke`, `textSize`, `minRun`)*
 
-Replace the congested town centre with a plain labelled box that routes run **to** and stop at. This
-is the single most decisive move on a commercial operator's own big-town map, and it is the **only**
-remedy for a trunk-corridor congestion (`D5 > 3 km`) — a fisheye lens cannot help there.
+Replace the congested town centre with a plain labelled box that routes run **to** and stop at. This is the single most decisive move on a commercial operator's own big-town map, and it is the **only** remedy for a trunk-corridor congestion (`D5 > 3 km`) — a fisheye lens cannot help there.
 
-- Route lines are **cut at the boundary**, not hidden under the box, so each visibly runs to it. A
-  route that crosses the centre and comes out the other side draws as two runs. A run shorter than
-  **`minRun`** mm (default 2.5) is dropped, and no terminus badge is planted on it: a town-centre
-  one-way loop makes a route's matched path poke a few millimetres back out of the box and in again,
-  and that orphan stub reads as a real branch (High Wycombe's first v2.0 draft grew a 5 mm stub west
-  of the box carrying a six-badge stack, attached to nothing).
-- Stop ticks, POIs, road labels, the anchor label and route badges inside the box are dropped; the
-  road skeleton and any linear feature are covered by the opaque box.
-- `radius` is in **metres from `anchor`**, matching how `complexity_score.js` models rung 2, so the
-  predicted score and the drawn sheet mean the same thing. The page rectangle is derived by
-  projecting a real geographic circle of that radius and taking its bounding box — exact under any
-  fisheye or `lenses[]`, with no assumption about local scale.
+- Route lines are **cut at the boundary**, not hidden under the box, so each visibly runs to it. A route that crosses the centre and comes out the other side draws as two runs. A run shorter than **`minRun`** mm (default 2.5) is dropped, and no terminus badge is planted on it: a town-centre one-way loop makes a route's matched path poke a few millimetres back out of the box and in again, and that orphan stub reads as a real branch (High Wycombe's first v2.0 draft grew a 5 mm stub west of the box carrying a six-badge stack, attached to nothing).
+- Stop ticks, POIs, road labels, the anchor label and route badges inside the box are dropped; the road skeleton and any linear feature are covered by the opaque box.
+- `radius` is in **metres from `anchor`**, matching how `complexity_score.js` models rung 2, so the predicted score and the drawn sheet mean the same thing. The page rectangle is derived by projecting a real geographic circle of that radius and taking its bounding box — exact under any fisheye or `lenses[]`, with no assumption about local scale.
 
-**Two things to check on the first draft.** The focus fisheye *magnifies* the core, so the drawn box
-comes out much larger than an unmagnified 600 m would look — cut `internalRoads.focus` (or the
-radius) if it swallows the map; decide which of the two owns the centre. And a `features[]`
-`labelPos` sited on the town centre will now sit inside the box: the generator **drops that label and
-says so on stderr** rather than printing it on the box, so move it.
+**Two things to check on the first draft.** The focus fisheye *magnifies* the core, so the drawn box comes out much larger than an unmagnified 600 m would look — cut `internalRoads.focus` (or the radius) if it swallows the map; decide which of the two owns the centre. And a `features[]` `labelPos` sited on the town centre will now sit inside the box: the generator **drops that label and says so on stderr** rather than printing it on the box, so move it.
 
 #### `stopThinning` — rung 2b, LIVE since P3 (2026-07-28)
 
@@ -133,14 +80,9 @@ says so on stderr** rather than printing it on the box, so move it.
 "stopThinning": true          // or { "minLines": 2, "termini": true, "keep": ["ATCO"], "drop": ["ATCO"] }
 ```
 
-Draw only the stops that earn their place: those served by `minLines` or more **drawn lines**, plus
-every line's two end stops (and always the `anchor`). Counted **per lane**, so a stop served only by
-a bundled `1/1A/1B` counts once, not three times.
+Draw only the stops that earn their place: those served by `minLines` or more **drawn lines**, plus every line's two end stops (and always the `anchor`). Counted **per lane**, so a stop served only by a bundled `1/1A/1B` counts once, not three times.
 
-Label load is independent of route count — a town can clear R, K5 and D5 and still be unreadable
-because 300 ticks fight for the same square centimetre — so **the ladder cannot finish without
-this**: High Wycombe stays RED on S alone however well rungs 0–2 do. Same rule the gate models, so
-prediction and sheet agree. High Wycombe: 320 stops → 164.
+Label load is independent of route count — a town can clear R, K5 and D5 and still be unreadable because 300 ticks fight for the same square centimetre — so **the ladder cannot finish without this**: High Wycombe stays RED on S alone however well rungs 0–2 do. Same rule the gate models, so prediction and sheet agree. High Wycombe: 320 stops → 164.
 
 #### `corridorPalette` — rung 3, LIVE since P3 (2026-07-28)
 
@@ -149,90 +91,23 @@ prediction and sheet agree. High Wycombe: 320 stops → 164.
 ```
 *(same shape as `internalCorridors`)*
 
-Colour by **corridor** rather than by route. Members keep their own line and their own lane — only
-the colour is shared — so this is the remedy for routes that follow the same corridor but do **not**
-co-run closely enough to bundle (High Wycombe's 31 and 41 overlap 0.40/0.46: one corridor, two real
-lines). Identity moves to the badges, so the badge pass **guarantees every colour-shared line at
-least one badge**, ignoring collision if it has to: an unidentifiable line is a worse defect than a
-crowded one.
+Colour by **corridor** rather than by route. Members keep their own line and their own lane — only the colour is shared — so this is the remedy for routes that follow the same corridor but do **not** co-run closely enough to bundle (High Wycombe's 31 and 41 overlap 0.40/0.46: one corridor, two real lines). Identity moves to the badges, so the badge pass **guarantees every colour-shared line at least one badge**, ignoring collision if it has to: an unidentifiable line is a worse defect than a crowded one.
 
-**This retires a locked design decision.** "One colour per route, consistent across both maps and
-across updates" no longer holds for a town that uses it. Approved 2026-07-28, **bounded to towns
-drawing more than 12 lines**, never a default and never inferred — the groups are declared, so a
-data refresh cannot silently reshuffle a town's colours.
+**This retires a locked design decision.** "One colour per route, consistent across both maps and across updates" no longer holds for a town that uses it. Approved 2026-07-28, **bounded to towns drawing more than 12 lines**, never a default and never inferred — the groups are declared, so a data refresh cannot silently reshuffle a town's colours.
 
-**Know what it does not do.** It does not reduce how many colours the town uses; it makes the sharing
-*mean something*. High Wycombe v1.0's real disease was 12 hues spread arbitrarily over 31 routes —
-colour repeated, but at random. So re-assign `palette` so each corridor gets one hue and no two
-corridors share one; the generator then **warns about every hue still shared by unrelated groups**,
-which is the defect being fixed. With this key set, `complexity_score.js` reports **R as distinct
-colour groups** (and `linesDrawn` alongside), because R exists to police the ~12-hue ceiling.
+**Know what it does not do.** It does not reduce how many colours the town uses; it makes the sharing *mean something*. High Wycombe v1.0's real disease was 12 hues spread arbitrarily over 31 routes — colour repeated, but at random. So re-assign `palette` so each corridor gets one hue and no two corridors share one; the generator then **warns about every hue still shared by unrelated groups**, which is the defect being fixed. With this key set, `complexity_score.js` reports **R as distinct colour groups** (and `linesDrawn` alongside), because R exists to police the ~12-hue ceiling.
 
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
-A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the
-**perimeter of the external frame**. Five keys buy the room back. All were gated on every existing
-town, internal *and* external, before use.
+A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the **perimeter of the external frame**. Five keys buy the room back. All were gated on every existing town, internal *and* external, before use.
 
-- **`panelCols`** `{cols:2, width:48, row:5.0, keyAt:{x,y}}` (`gen_internal.js`) — multi-**column**
-  Services panel. Entries fill **column-major**, `cols` columns `width` mm apart from the panel `x`;
-  `row` is the row pitch inside the panel only; `keyAt` pins the Key block, which would otherwise
-  start below the tallest column and run off the page. Text is drawn smaller than the single-column
-  panel (2.9 bold / 2.3 grey), so **keep each title ≤ ~25 chars and each subtitle ≤ ~28** or it
-  clips — put the "via" detail on the map, not in the panel. High Wycombe: 34 services in 2 columns.
-- **`legendWrap`** `{perRow:N}` (`gen_external_radial.js`) — wrap an operator's badge run onto
-  further lines. Without it a big operator (Carousel runs 21 of High Wycombe's routes) draws a
-  single row straight off the page, WIDENING the auto legend panel (below) by the same amount —
-  on a town with several long operator names this is often what you actually need to stop the
-  panel reaching into a nearby spoke, not just cosmetic tidying (Wisbech, 2026-08-06: 6
-  operators incl. two long names pushed the auto panel to ~107mm wide, enough to fully cover the
-  "Sutton St James" lozenge; `perRow:2` brought it back to ~71mm).
-- **`legendAt`** `{x, y, box:{w,h}}` (`gen_external_radial.js`) — move the operator legend.
-  **The panel now ALWAYS gets an opaque backing box, auto-sized to its content (badges +
-  operator names + the wrapped arm-note) — this is no longer opt-in** (changed 2026-08-06; was
-  opt-in through High Wycombe's build, which is why it was the only town that looked right).
-  `x`/`y` moves the panel; explicit `box:{w,h}` overrides the auto size (a hand-tuning escape
-  hatch) when you need something the auto-size can't get right (also caps how wide the arm-note
-  below wraps). **`box.w` and `box.h` can be given independently** (changed 2026-08-06, second
-  fix) — the other dimension still auto-sizes, so a width hand-tuned to dodge a spoke label
-  (High Wycombe: `box:{w:92}`, no `h`, to stop the panel swallowing route 40's "Stokenchurch")
-  doesn't freeze the height too and go stale the next time an operator's added. **A frozen
-  `box:{w,h}` pair is itself a recurring bug, not just a one-off tuning value** — Wisbech and
-  High Wycombe both shipped with a full `w,h` override from an earlier, shorter operator list;
-  neither was revisited when routes were added, so the box silently stopped matching its own
-  content (see gotchas.md's 2026-08-06 "panel drifted from its content" entry). Prefer overriding
-  only the dimension you actually need to hand-tune. A large or lopsided town still has no
-  guaranteed empty corner for the legend, so **auto-sizing does not replace checking the S5 JPG
-  against every nearby spoke** — the panel can still land on top of a terminus lozenge sitting in
-  the same quadrant (Beaconsfield needed `legendAt:{x,y}` moved off the default top-left; Wisbech
-  needed `legendWrap` *and* a width cap; Ramsey needed `legendWrap` alone to stop one wide
-  8-badge operator row reaching under the Peterborough lozenge — see gotchas.md's 2026-08-06
-  entries for all three).
-- **`badgeOffset`** `N` (`gen_external_radial.js`) — mm back from the terminus for the first route
-  badge, **now a FLOOR, not the effective value**: the engine also computes the badge's actual
-  required clearance from the terminus lozenge's own width and takes whichever is larger (changed
-  2026-08-06 — previously a fixed default of 8 that only High Wycombe overrode). You will rarely
-  need to set this by hand any more; it still exists as an escape hatch to push clearance even
-  further than the auto minimum. *(This key started life as a changed default and the gate
-  caught it — see [gotchas.md](gotchas.md).)*
-- **`externalNote`** (`gen_external_radial.js`) — the free-text line under the legend (auto-built
-  from any route running >1 arm, e.g. "56 runs as two arms — to Manea and to March.", or set this
-  key to override/replace it). **Now word-wrapped** to the legend panel's width instead of one
-  unbounded `<text>` (changed 2026-08-06) — defaults to `max(panel content width, 100mm)`; an
-  explicit `legendAt.box` caps it to the box's own interior instead. Widening the wrap trades
-  panel HEIGHT for WIDTH, and either one can newly collide with whatever's next to the panel, so
-  after any explicit `legendAt`/`box` change, re-check the note doesn't now run under or past a
-  neighbouring spoke.
-- **`external[].routes`** `["104","M40"]` (`gen_external_radial.js`) — **several services sharing one
-  spoke** to a destination, badges stacked along the line. The radial runs out of frame perimeter
-  long before it runs out of services: ~18 lozenges is the practical A4 maximum, and High Wycombe had
-  23 spokes with five destinations reached by two routes each. Merging those five pairs (and keeping
-  destination labels to **one short line** — a two-line lozenge is nearly twice as wide) brought it to
-  19 spokes that fit. `route` stays the first/primary service; it still keys colour and overrides.
+- **`panelCols`** `{cols:2, width:48, row:5.0, keyAt:{x,y}}` (`gen_internal.js`) — multi-**column** Services panel. Entries fill **column-major**, `cols` columns `width` mm apart from the panel `x`; `row` is the row pitch inside the panel only; `keyAt` pins the Key block, which would otherwise start below the tallest column and run off the page. Text is drawn smaller than the single-column panel (2.9 bold / 2.3 grey), so **keep each title ≤ ~25 chars and each subtitle ≤ ~28** or it clips — put the "via" detail on the map, not in the panel. High Wycombe: 34 services in 2 columns.
+- **`legendWrap`** `{perRow:N}` (`gen_external_radial.js`) — wrap an operator's badge run onto further lines. Without it a big operator (Carousel runs 21 of High Wycombe's routes) draws a single row straight off the page, WIDENING the auto legend panel (below) by the same amount — on a town with several long operator names this is often what you actually need to stop the panel reaching into a nearby spoke, not just cosmetic tidying (Wisbech, 2026-08-06: 6 operators incl. two long names pushed the auto panel to ~107mm wide, enough to fully cover the "Sutton St James" lozenge; `perRow:2` brought it back to ~71mm).
+- **`legendAt`** `{x, y, box:{w,h}}` (`gen_external_radial.js`) — move the operator legend. **The panel now ALWAYS gets an opaque backing box, auto-sized to its content (badges + operator names + the wrapped arm-note) — this is no longer opt-in** (changed 2026-08-06; was opt-in through High Wycombe's build, which is why it was the only town that looked right). `x`/`y` moves the panel; explicit `box:{w,h}` overrides the auto size (a hand-tuning escape hatch) when you need something the auto-size can't get right (also caps how wide the arm-note below wraps). **`box.w` and `box.h` can be given independently** (changed 2026-08-06, second fix) — the other dimension still auto-sizes, so a width hand-tuned to dodge a spoke label (High Wycombe: `box:{w:92}`, no `h`, to stop the panel swallowing route 40's "Stokenchurch") doesn't freeze the height too and go stale the next time an operator's added. **A frozen `box:{w,h}` pair is itself a recurring bug, not just a one-off tuning value** — Wisbech and High Wycombe both shipped with a full `w,h` override from an earlier, shorter operator list; neither was revisited when routes were added, so the box silently stopped matching its own content (see gotchas.md's 2026-08-06 "panel drifted from its content" entry). Prefer overriding only the dimension you actually need to hand-tune. A large or lopsided town still has no guaranteed empty corner for the legend, so **auto-sizing does not replace checking the S5 JPG against every nearby spoke** — the panel can still land on top of a terminus lozenge sitting in the same quadrant (Beaconsfield needed `legendAt:{x,y}` moved off the default top-left; Wisbech needed `legendWrap` *and* a width cap; Ramsey needed `legendWrap` alone to stop one wide 8-badge operator row reaching under the Peterborough lozenge — see gotchas.md's 2026-08-06 entries for all three).
+- **`badgeOffset`** `N` (`gen_external_radial.js`) — mm back from the terminus for the first route badge, **now a FLOOR, not the effective value**: the engine also computes the badge's actual required clearance from the terminus lozenge's own width and takes whichever is larger (changed 2026-08-06 — previously a fixed default of 8 that only High Wycombe overrode). You will rarely need to set this by hand any more; it still exists as an escape hatch to push clearance even further than the auto minimum. *(This key started life as a changed default and the gate caught it — see [gotchas.md](gotchas.md).)*
+- **`externalNote`** (`gen_external_radial.js`) — the free-text line under the legend (auto-built from any route running >1 arm, e.g. "56 runs as two arms — to Manea and to March.", or set this key to override/replace it). **Now word-wrapped** to the legend panel's width instead of one unbounded `<text>` (changed 2026-08-06) — defaults to `max(panel content width, 100mm)`; an explicit `legendAt.box` caps it to the box's own interior instead. Widening the wrap trades panel HEIGHT for WIDTH, and either one can newly collide with whatever's next to the panel, so after any explicit `legendAt`/`box` change, re-check the note doesn't now run under or past a neighbouring spoke.
+- **`external[].routes`** `["104","M40"]` (`gen_external_radial.js`) — **several services sharing one spoke** to a destination, badges stacked along the line. The radial runs out of frame perimeter long before it runs out of services: ~18 lozenges is the practical A4 maximum, and High Wycombe had 23 spokes with five destinations reached by two routes each. Merging those five pairs (and keeping destination labels to **one short line** — a two-line lozenge is nearly twice as wide) brought it to 19 spokes that fit. `route` stays the first/primary service; it still keys colour and overrides.
 
-**Sequence that works for a crowded radial:** merge co-terminating routes → shorten every label to one
-word → spread bearings by hand so no two lozenges touch → thin the intermediate `stops` on spokes that
-run close together → only then place the legend box. Bearings are schematic; bending a spoke 10–15°
-off true to open a gap is normal and expected.
+**Sequence that works for a crowded radial:** merge co-terminating routes → shorten every label to one word → spread bearings by hand so no two lozenges touch → thin the intermediate `stops` on spokes that run close together → only then place the legend box. Bearings are schematic; bending a spoke 10–15° off true to open a gap is normal and expected.
 
 Older keys still apply:
 - `routes.json` keys read by the generators: `town`, `validFrom`, `version`, `palette`, `textOn`, `operators[]`, `external[]` (radial: each `{route,label,days,bearing,side,stops}`); **`features[]`** (1–3 linear features `{key,type,label,labelPos,labelColor,labelItalic,labelSize,labelReserve,style?}`); plus **`anchor`** (central-interchange ATCO — also the zoom origin), **`anchorLabel`**, **`internalZoom`** `{corePct,comp}`, optional **`titleColor`** / **`externalNote`** / **`riverLabel`** / **`badgeLabels`** (see above), and `busway[]` (busway layout only).
@@ -248,3 +123,4 @@ Older keys still apply:
 - **Extra fisheye lens(es)** — `internalRoads.lenses:[{center:[lat,lon],radiusKm,mag}]` magnifies a congested cluster (bounded Sarkar–Brown fisheye, boundary fixed → the rest of the map is untouched) on top of the always-on centre `focus`. St Neots v2.0 uses one on the One Leisure/Eynesbury knot (`mag:1.7`). **Standing step:** after a first draft, if the map has a congested spot, *ask the user which area(s) to fish-eye* rather than guessing.
 - **`_latest\` folder** — after S5 (and the diagram/S6), run `node "%SK%\refresh_latest.js" "<townDir>"` to copy the newest `internal.jpg`/`external.jpg`/`internal-diagram.jpg`/`disagreements.docx`/`verification.docx` into `<townDir>\_latest\`, so the key deliverables are reachable without digging through dated stage folders. Copies (not links) — robust across moves/zips. It's part of the standard build.
 - External: choose **`gen_external_radial.js`** (default) — set `bearing`/`side`/`titleColor`; multi-arm routes (same number twice in `external[]`) get an auto note. Or **`gen_external_busway.js`** for a P&R/busway town — set `busway[]`; rows now auto-distribute (no `yMap` code edit) and the map carries a redesigned right Services panel, intermediate-place lozenges, two-arm support, a Bus Station ↔ P&R link, and built-in label de-collision. The busway generator is St-Ives-shaped; its additive features are config-gated so the only St Ives delta is now data, not code.
+

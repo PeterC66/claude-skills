@@ -1,8 +1,6 @@
 # Linear features (river / road / railway / canal)
 
-How the internal map draws its 1–3 key linear features in the `make-bus-leaflet`
-workflow. Chosen in S2, configured in S3 `routes.json`, overridable via
-`overrides.json` (see `references/overrides.md`).
+How the internal map draws its 1–3 key linear features in the `make-bus-leaflet` workflow. Chosen in S2, configured in S3 `routes.json`, overridable via `overrides.json` (see `references/overrides.md`).
 
 A town's internal map draws **1–3 key linear features**. They are **config-driven** (no hardcoded river): `routes.json` `features[]` chooses them, S2's `features_geo.json` supplies the geometry, and each is independently straightenable/nudgeable.
 
@@ -28,3 +26,4 @@ Features aren't only a first-build choice; you can add one to an existing town a
 3. **S4/S5** — rebuild; nudge the new feature's `labelPos`/`segments` via `overrides.json` if needed.
 
 Worked example: **St Ives v3.0** added `{key:"st-audreys", type:"road", label:"St Audrey's Lane"}` to a town that previously relied on the legacy single-river fallback. The river was promoted to an explicit `features[]` entry (matching the legacy style/label) at the same time, and `features_geo.json` now carries both `river` and `st-audreys`.
+

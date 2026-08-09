@@ -1,7 +1,6 @@
 # P1–P5 pipeline — full walkthrough (with the St Neots Tesco Extra numbers)
 
-`%TSK%` = town skill assets (shared engine). `%PSK%` = this skill's assets.
-Worked example folder: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra\` (v1.0).
+`%TSK%` = town skill assets (shared engine). `%PSK%` = this skill's assets. Worked example folder: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra\` (v1.0).
 
 ```bash
 PSK="C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets"
@@ -19,9 +18,7 @@ python "$PSK/resolve_place.py" "Tesco Extra" --town "St Neots" --radius-m 500
 #   review place-candidates.json; --pick N if the auto-pick is wrong
 node "$TSK/stage.js" commit S1 "$S1" --outputs place.json,place-candidates.json,gtfs-services.json
 ```
-`resolve_place.py` auto-picks the first candidate whose OSM class is place-like
-(shop/amenity/leisure/railway/…). It sets `ambiguous:true` if another candidate shares
-the name — then confirm with `--pick`.
+`resolve_place.py` auto-picks the first candidate whose OSM class is place-like (shop/amenity/leisure/railway/…). It sets `ambiguous:true` if another candidate shares the name — then confirm with `--pick`.
 
 ## P2 — geometry  (→ S2)
 ```bash
@@ -44,19 +41,12 @@ node "$PSK/aggregate_destinations.js" routes_full_atco.json atco2ll.json atco2na
 #   -> destinations.draft.json + a printed table of reachable places
 node "$TSK/stage.js" commit S2 "$S2" --outputs routes_full_atco.json,atco2ll.json,atco2name.json,routes_intown_atco.json,osm.json,osm2.json,river_geo.json,walkshed_cfg.json,destinations.draft.json,place.json
 ```
-**`place.json` must be in this `--outputs` list** (it's already physically copied into `$S2`
-above for `aggregate_destinations.js`). `pull` only copies files a stage *declared*, so
-leaving it off here is how the file dead-ends after S1 — see `references/gotchas.md`.
+**`place.json` must be in this `--outputs` list** (it's already physically copied into `$S2` above for `aggregate_destinations.js`). `pull` only copies files a stage *declared*, so leaving it off here is how the file dead-ends after S1 — see `references/gotchas.md`.
 
-**Radius tuning:** at 500 m the Tesco example draws only the 3 routes that stop AT Tesco
-(150/61EY/C2 + 69 stub); at 800 m the 18/18A (nearest stop 741 m) come in but the map
-sprawls. 600 m + `maxEdgeKm:1.0` is the shipped compromise. Choose per place by stop density.
+**Radius tuning:** at 500 m the Tesco example draws only the 3 routes that stop AT Tesco (150/61EY/C2 + 69 stub); at 800 m the 18/18A (nearest stop 741 m) come in but the map sprawls. 600 m + `maxEdgeKm:1.0` is the shipped compromise. Choose per place by stop density.
 
 ## P3 — config  (→ S3)
-Start from `%PSK%\routes.example.place.json` (this is the worked example's own
-`routes.json`). Fill palette/`textOn`, `operators`, `anchor` (`0500HEYNE001` = the Tesco
-stop), `placeTitle`, `badgeLabels` (`61EY`→`61`), and the **curated** `destinations[]`
-(from the draft — merge synonym clusters, relabel to town names, mark limited/day-only).
+Start from `%PSK%\routes.example.place.json` (this is the worked example's own `routes.json`). Fill palette/`textOn`, `operators`, `anchor` (`0500HEYNE001` = the Tesco stop), `placeTitle`, `badgeLabels` (`61EY`→`61`), and the **curated** `destinations[]` (from the draft — merge synonym clusters, relabel to town names, mark limited/day-only).
 ```bash
 S3=$(node "$TSK/stage.js" new S3); cp routes.json "$S3/"
 node "$TSK/stage.js" commit S3 "$S3" --outputs routes.json
@@ -77,10 +67,7 @@ TSK="$TSK" node "$PSK/build_internal_place_roads.js"   # -> roads_geo.json, rout
 node "$PSK/gen_external_places.js"                    # external.svg (aggregated spokes)
 node "$TSK/stage.js" commit S4 "$S4" --outputs internal.svg,external.svg,roads_geo.json,routes_paths.json,place.json
 ```
-Bump the `version` field in `routes.json` (P3) to match the S4 folder version so the
-internal map's `· Map vN.N` stamp agrees (the road-following build stamps the version).
-**`place.json` must be in the S4 `--outputs` list too** — the portal's `import-map.mjs
---kind place` requires it in `--src`, and `pull` never reaches back further than one stage.
+Bump the `version` field in `routes.json` (P3) to match the S4 folder version so the internal map's `· Map vN.N` stamp agrees (the road-following build stamps the version). **`place.json` must be in the S4 `--outputs` list too** — the portal's `import-map.mjs --kind place` requires it in `--src`, and `pull` never reaches back further than one stage.
 
 ## P5 — render  (→ S5)
 ```bash
@@ -92,12 +79,7 @@ node "$TSK/stage.js" commit S5 "$S5" --outputs internal.jpg,external.jpg,interna
 # refresh _latest (also re-runs collect-maps.ps1 -All — do not replace with a raw cp)
 node "$TSK/refresh_latest.js" "../.."
 ```
-**Always open the JPGs** and eyeball them (the external map should read as a clean
-hub-and-spokes; the internal map should be a tight cluster, not sprawling).
+**Always open the JPGs** and eyeball them (the external map should read as a clean hub-and-spokes; the internal map should be a tight cluster, not sprawling).
 
-**Mandatory, no exceptions:** run `refresh_latest.js` on the place dir as the last
-step of *any* change that touches this place's rendered output — not just a fresh
-P5, but also a hand-patch to a JPG/SVG already sitting inside a committed S5-render
-folder (no version bump). Skipping it is exactly what left `_latest` and
-`Collected_latests` stale for High Wycombe Aldi and St Neots Town Centre on
-2026-08-08 — the render was correct on disk, but nothing downstream knew.
+**Mandatory, no exceptions:** run `refresh_latest.js` on the place dir as the last step of *any* change that touches this place's rendered output — not just a fresh P5, but also a hand-patch to a JPG/SVG already sitting inside a committed S5-render folder (no version bump). Skipping it is exactly what left `_latest` and `Collected_latests` stale for High Wycombe Aldi and St Neots Town Centre on 2026-08-08 — the render was correct on disk, but nothing downstream knew.
+

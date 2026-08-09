@@ -77,3 +77,4 @@ Edit the raw XML (don't regenerate — that loses the header, footer, logo, bord
 4. **Invoke** `/update-outings` (or ask to "update the outings handout").
 5. **Review the proposed-changes table** and confirm or redirect; if two-page-overflow options are offered, pick one.
 6. **Afterwards, open the updated doc in Word and save once** (refreshes the footer date) and give it a final eyeball.
+

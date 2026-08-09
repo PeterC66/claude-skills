@@ -12,8 +12,7 @@ Runs the three single-handout skills in sequence for one Members' Open Meeting, 
 2. **`update-monthly-meetings`** → `<date> MOM Open Meetings .docx`
 3. **`update-outings`** → `<date> MOM Outings etc.docx`
 
-The three target files sit side by side in the meeting folder
-`C:\u3a St Ives\1 Open Meetings\Handouts etc for Open Meetings\By month\<YYYYMMDD> Members Open Meeting\`.
+The three target files sit side by side in the meeting folder `C:\u3a St Ives\1 Open Meetings\Handouts etc for Open Meetings\By month\<YYYYMMDD> Members Open Meeting\`.
 
 ## Why an orchestrator
 The three jobs share the same context every month: the same **meeting date/folder**, the same **live website** as source of truth, the same **docx unpack/pack mechanics**, and the same housekeeping (Word must be closed; run the session from inside `C:\u3a St Ives\`). This skill establishes that shared context **once**, then hands off to each child skill so the user doesn't repeat themselves three times.
@@ -21,8 +20,7 @@ The three jobs share the same context every month: the same **meeting date/folde
 ## Process
 1. **Establish the meeting date once.**
    - If the user gave a date or folder, use it.
-   - Otherwise default to the **next upcoming** meeting folder under
-     `C:\u3a St Ives\1 Open Meetings\Handouts etc for Open Meetings\By month\` — the earliest `<YYYYMMDD> Members Open Meeting` folder whose date is ≥ today. State which one you picked.
+   - Otherwise default to the **next upcoming** meeting folder under `C:\u3a St Ives\1 Open Meetings\Handouts etc for Open Meetings\By month\` — the earliest `<YYYYMMDD> Members Open Meeting` folder whose date is ≥ today. State which one you picked.
    - Confirm the three expected docx files exist in that folder. If any is missing, say so and offer to continue with the ones present.
 
 2. **Pre-flight once (covers all three).**
@@ -54,3 +52,4 @@ The three jobs share the same context every month: the same **meeting date/folde
 3. Invoke `/update-all-handouts` (or ask to "update all the handouts for the next Open Meeting").
 4. Review and confirm each handout's proposed-changes table as it comes up.
 5. Afterwards, for **each** updated doc: open in Word, make a tiny change and save (refreshes the footer date), then eyeball it.
+

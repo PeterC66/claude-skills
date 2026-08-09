@@ -2,505 +2,137 @@
 
 Root-caused during the Phase-1 build (St Neots Tesco Extra, 2026-07-21). Check here first.
 
-- **Duplicate route numbers corrupt a chain (FIXED in gtfs_chains).** A GTFS
-  `route_short_name` can span unrelated `route_id`s (two operators' "69"). Picking the
-  globally-longest trip can select a pattern that never comes near the place — route 69
-  first built as a St Ives-area chain with its nearest stop **13 km** away. Fix: build
-  chains **only from trips that stop within the service radius** (`longest_trip_per_direction`
-  takes the town-stop set). If a route still looks wrong, it's a different collision —
-  check its `route_id`s.
+- **Duplicate route numbers corrupt a chain (FIXED in gtfs_chains).** A GTFS `route_short_name` can span unrelated `route_id`s (two operators' "69"). Picking the globally-longest trip can select a pattern that never comes near the place — route 69 first built as a St Ives-area chain with its nearest stop **13 km** away. Fix: build chains **only from trips that stop within the service radius** (`longest_trip_per_direction` takes the town-stop set). If a route still looks wrong, it's a different collision — check its `route_id`s.
 
-- **Sparse GTFS timing-point trips.** Even restricted to place-serving trips, the fullest
-  trip can be a **timing-point-only** skeleton (69 came out as 3 stops: St Ives → Papworth
-  → Tesco, an 11 km gap with no stops). It renders as a long straight spoke to a distant,
-  ambiguously-named end ("Bus Station"). **Cross-check any long/odd external spoke against
-  bustimes before printing** — the town skill uses bustimes for stop order precisely to
-  avoid this; the place skill trades that for offline GTFS chains and inherits the risk.
+- **Sparse GTFS timing-point trips.** Even restricted to place-serving trips, the fullest trip can be a **timing-point-only** skeleton (69 came out as 3 stops: St Ives → Papworth → Tesco, an 11 km gap with no stops). It renders as a long straight spoke to a distant, ambiguously-named end ("Bus Station"). **Cross-check any long/odd external spoke against bustimes before printing** — the town skill uses bustimes for stop order precisely to avoid this; the place skill trades that for offline GTFS chains and inherits the risk.
 
-- **Two radii, don't conflate them.** `gtfs_chains --near <km>` (service radius, ~0.8) =
-  which routes count as serving the place. `derive_walkshed radiusM` (~500) = which stops
-  are DRAWN inside. A route can serve (stop 700 m away) without being drawn on the close-up.
+- **Two radii, don't conflate them.** `gtfs_chains --near <km>` (service radius, ~0.8) = which routes count as serving the place. `derive_walkshed radiusM` (~500) = which stops are DRAWN inside. A route can serve (stop 700 m away) without being drawn on the close-up.
 
-- **Fit blow-out / sprawling close-up.** `derive_walkshed maxEdgeKm` too large lets a
-  buffer stop sit 2+ km out; `gen_internal` auto-fits to the bbox of ALL drawn stops, so
-  the close-up zooms out and the lines sprawl. Keep `maxEdgeKm` ~1.0 and choose `radiusM`
-  by stop density. (Tesco: 500 m = 3 routes tight; 800 m = 18/18A in but sprawls; 600 m
-  shipped.)
+- **Fit blow-out / sprawling close-up.** `derive_walkshed maxEdgeKm` too large lets a buffer stop sit 2+ km out; `gen_internal` auto-fits to the bbox of ALL drawn stops, so the close-up zooms out and the lines sprawl. Keep `maxEdgeKm` ~1.0 and choose `radiusM` by stop density. (Tesco: 500 m = 3 routes tight; 800 m = 18/18A in but sprawls; 600 m shipped.)
 
-- **Badge-label clipping for 3–4-char route ids.** `61EY` overflows the small legend/panel
-  badge (renders "61E"). Use `routes.json` `badgeLabels` (`"61EY":"61"`) — the town skill's
-  own mechanism. Unambiguous where there's no plain "61".
+- **Badge-label clipping for 3–4-char route ids.** `61EY` overflows the small legend/panel badge (renders "61E"). Use `routes.json` `badgeLabels` (`"61EY":"61"`) — the town skill's own mechanism. Unambiguous where there's no plain "61".
 
-- **gen_internal hard-requires osm.json / osm2.json / river_geo.json.** They are parsed
-  without try/catch. `build_internal_place.js` writes empty stubs if missing, so a
-  POI-less place still renders. Don't delete them from the run dir.
+- **gen_internal hard-requires osm.json / osm2.json / river_geo.json.** They are parsed without try/catch. `build_internal_place.js` writes empty stubs if missing, so a POI-less place still renders. Don't delete them from the run dir.
 
-- **Overpass timeouts.** The public Overpass endpoints (and the `bbox` MCP over them)
-  time out under load, especially broad `shop`+`way` queries. Narrow the tag list and the
-  bbox, or retry. POIs are non-blocking — an empty `osm.json` still renders the map.
+- **Overpass timeouts.** The public Overpass endpoints (and the `bbox` MCP over them) time out under load, especially broad `shop`+`way` queries. Narrow the tag list and the bbox, or retry. POIs are non-blocking — an empty `osm.json` still renders the map.
 
-- **Edge-of-town superstore internal map — use road-following (Phase 2, default).** A
-  bypass Tesco is essentially ONE shared stop plus a couple of loops, so the *classic*
-  straight-chord internal map is weak there. `build_internal_place_roads.js` (the default)
-  makes the lines follow the streets and fixes it — validated on Tesco Extra v1.1 (sparse)
-  and Town Centre v1.1 (dense, no regression). Classic is now only a fallback for a place
-  with a **single served stop** (match_routes draws no line, so chords are all you have).
+- **Edge-of-town superstore internal map — use road-following (Phase 2, default).** A bypass Tesco is essentially ONE shared stop plus a couple of loops, so the *classic* straight-chord internal map is weak there. `build_internal_place_roads.js` (the default) makes the lines follow the streets and fixes it — validated on Tesco Extra v1.1 (sparse) and Town Centre v1.1 (dense, no regression). Classic is now only a fallback for a place with a **single served stop** (match_routes draws no line, so chords are all you have).
 
-- **Cross-locality place → clipped, off-centre internal map (FIXED, automatic).** The
-  town engine's internalRoads fit set is "stops sharing the ANCHOR's ATCO locality
-  prefix" (fit the town core, let tails run off-frame). A place walkshed often spans
-  MORE than one locality — St Neots Tesco straddles Eynesbury + St Neots
-  (`0500HEYNE*` + `0500HSTNS*`), so the prefix fit landed on 3 of 11 drawn stops and the
-  map fitted to that fraction (routes clipped at the frame, whole map shoved high).
-  `build_internal_place_roads.js` now auto-injects `internalRoads.fitExtra` = **all**
-  drawn stops (routes_intown is already walkshed-clipped, so that's the right extent) and
-  defaults `fitMargin` to 8 mm for road-tail/arrow clearance. Override either in
-  `routes.json` `internalRoads` if you need to.
+- **Cross-locality place → clipped, off-centre internal map (FIXED, automatic).** The town engine's internalRoads fit set is "stops sharing the ANCHOR's ATCO locality prefix" (fit the town core, let tails run off-frame). A place walkshed often spans MORE than one locality — St Neots Tesco straddles Eynesbury + St Neots (`0500HEYNE*` + `0500HSTNS*`), so the prefix fit landed on 3 of 11 drawn stops and the map fitted to that fraction (routes clipped at the frame, whole map shoved high). `build_internal_place_roads.js` now auto-injects `internalRoads.fitExtra` = **all** drawn stops (routes_intown is already walkshed-clipped, so that's the right extent) and defaults `fitMargin` to 8 mm for road-tail/arrow clearance. Override either in `routes.json` `internalRoads` if you need to.
 
-- **Orphan "River Great Ouse" label (FIXED, automatic).** With NO `features` config,
-  gen_internal synthesises a default river feature (a St Ives inheritance) from
-  `river_geo.json`. Most places have no river in the walkshed (`river_geo.json = []`), so
-  only the hardcoded LABEL rendered — floating with no line. `build_internal_place.js`
-  now writes `overrides.json` `{internal:{features:{river:{hide:true}}}}` when there's no
-  `features` config and no river geometry (merges, so a hand viewport survives). A place
-  that DOES declare a river (Town Centre: `features:['river']` + real `features_geo.json`)
-  is untouched.
+- **Orphan "River Great Ouse" label (FIXED, automatic).** With NO `features` config, gen_internal synthesises a default river feature (a St Ives inheritance) from `river_geo.json`. Most places have no river in the walkshed (`river_geo.json = []`), so only the hardcoded LABEL rendered — floating with no line. `build_internal_place.js` now writes `overrides.json` `{internal:{features:{river:{hide:true}}}}` when there's no `features` config and no river geometry (merges, so a hand viewport survives). A place that DOES declare a river (Town Centre: `features:['river']` + real `features_geo.json`) is untouched.
 
-- **Map sits too high / want it lower on the page.** After the fit fix the map auto-centres
-  in the map area, but road tails can make it read slightly high. Nudge it with an
-  `overrides.json` frozen viewport: capture the auto fit with `EDITOR_KEYS=1 node gen_internal.js`
-  (prints `VIEWPORT {…offY…}` on stderr), add ~12–16 mm to `offY`, and write
-  `{internal:{viewport:{…}}}` (commit it as an S3 output so `pull S3` carries it into S4).
-  Tesco Extra v1.2 uses `offY+16`. Frozen viewports don't re-fit on a data change — re-author
-  if the route network changes.
+- **Map sits too high / want it lower on the page.** After the fit fix the map auto-centres in the map area, but road tails can make it read slightly high. Nudge it with an `overrides.json` frozen viewport: capture the auto fit with `EDITOR_KEYS=1 node gen_internal.js` (prints `VIEWPORT {…offY…}` on stderr), add ~12–16 mm to `offY`, and write `{internal:{viewport:{…}}}` (commit it as an S3 output so `pull S3` carries it into S4). Tesco Extra v1.2 uses `offY+16`. Frozen viewports don't re-fit on a data change — re-author if the route network changes.
 
-- **Road-following version stamp = `Map vv1.0`.** gen_internal stamps `· Map v<version>`
-  and adds its own leading `v`; the place `routes.json` `version` is `"v1.0"` (also with a
-  `v`), so the naive result is a double-`v`. `build_internal_place_roads.js` strips the
-  leading `v` from `LEAFLET_VERSION`, giving `Map v1.0`. ~~Also **bump the `version` field**
-  when you `--bump` the S4 folder~~ — **no longer manual (2026-07-25):** `stage.js pull` now
-  rewrites the field to match the versioned run dir, and `stage.js commit S4|S5` refuses a
-  mismatch. It preserves the place convention's leading `v` (`"v1.0"` → `"v1.2"`), so the
-  double-`v` fix above is unaffected. See the town skill's `references/s3-config.md`.
+- **Road-following version stamp = `Map vv1.0`.** gen_internal stamps `· Map v<version>` and adds its own leading `v`; the place `routes.json` `version` is `"v1.0"` (also with a `v`), so the naive result is a double-`v`. `build_internal_place_roads.js` strips the leading `v` from `LEAFLET_VERSION`, giving `Map v1.0`. ~~Also **bump the `version` field** when you `--bump` the S4 folder~~ — **no longer manual (2026-07-25):** `stage.js pull` now rewrites the field to match the versioned run dir, and `stage.js commit S4|S5` refuses a mismatch. It preserves the place convention's leading `v` (`"v1.0"` → `"v1.2"`), so the double-`v` fix above is unaffected. See the town skill's `references/s3-config.md`.
 
-- **`LEAFLET_VERSION` only reaches the INTERNAL map.** `build_internal_place_roads.js` passes it
-  to `gen_internal.js`, but `gen_external_places.js` reads `routes.json` `version` directly — so
-  using the env var as a version workaround stamps the two sheets **differently**. That is exactly
-  what happened to `St Neots Tesco Extra v1.1` (internal `Map v1.1`, external `v1.0 · Summer 2026`,
-  `routes.json` `"v1.0"`) — a superseded run, left as built. Since the field is now kept in step
-  automatically, **set the version in `routes.json`, not in the environment.**
+- **`LEAFLET_VERSION` only reaches the INTERNAL map.** `build_internal_place_roads.js` passes it to `gen_internal.js`, but `gen_external_places.js` reads `routes.json` `version` directly — so using the env var as a version workaround stamps the two sheets **differently**. That is exactly what happened to `St Neots Tesco Extra v1.1` (internal `Map v1.1`, external `v1.0 · Summer 2026`, `routes.json` `"v1.0"`) — a superseded run, left as built. Since the field is now kept in step automatically, **set the version in `routes.json`, not in the environment.**
 
-- **stage.js `--based-on` with spaced paths.** `$(stage.js latest S2 | xargs basename)`
-  breaks on the space in `…\St Neots Tesco Extra\`. `--based-on` is optional metadata;
-  either quote properly or omit it — the commit still succeeds.
+- **stage.js `--based-on` with spaced paths.** `$(stage.js latest S2 | xargs basename)` breaks on the space in `…\St Neots Tesco Extra\`. `--based-on` is optional metadata; either quote properly or omit it — the commit still succeeds.
 
 ---
-Added during the Beaconsfield Waitrose build (2026-07-21 — first place leaflet OUTSIDE
-the Cambridgeshire GTFS region):
+Added during the Beaconsfield Waitrose build (2026-07-21 — first place leaflet OUTSIDE the Cambridgeshire GTFS region):
 
-- **A place in another GTFS region is a `--db` switch, not a setup.** `gtfs_chains.py` and
-  `gtfs_query.py` take `--db PATH` / `$CAMBS_GTFS_DB`. If the town has already been
-  leafletted (so its region sqlite exists — e.g. `_gtfs/buckinghamshire.sqlite`), just
-  `export CAMBS_GTFS_DB=<that sqlite>` for the whole session. No region registry / GTFS
-  build is needed here — that was the town skill's job. Beaconsfield Waitrose reused the
-  Bucks sqlite built for the Beaconsfield *town* leaflet with zero new data work.
+- **A place in another GTFS region is a `--db` switch, not a setup.** `gtfs_chains.py` and `gtfs_query.py` take `--db PATH` / `$CAMBS_GTFS_DB`. If the town has already been leafletted (so its region sqlite exists — e.g. `_gtfs/buckinghamshire.sqlite`), just `export CAMBS_GTFS_DB=<that sqlite>` for the whole session. No region registry / GTFS build is needed here — that was the town skill's job. Beaconsfield Waitrose reused the Bucks sqlite built for the Beaconsfield *town* leaflet with zero new data work.
 
-- **`aggregate_destinations.js` reads `place.json` from the CWD.** It's an S1 output, so in
-  the S2 run dir you must **copy it in first** (`cp <S1>/place.json .`) or it throws ENOENT.
-  (The pipeline commits it at S1; nothing auto-pulls it into S2.)
+- **`aggregate_destinations.js` reads `place.json` from the CWD.** It's an S1 output, so in the S2 run dir you must **copy it in first** (`cp <S1>/place.json .`) or it throws ENOENT. (The pipeline commits it at S1; nothing auto-pulls it into S2.)
 
-- **`place.json` must be re-declared as an output at every stage that carries it, or it
-  dead-ends.** `pull` only copies files listed in the *source* stage's committed `--outputs`
-  — it does not walk back further than one stage, and it never copies a file that's merely
-  sitting in the run dir unlisted. So: S2's `commit S2 ... --outputs` must include
-  `place.json` (it's already physically copied in, per the point above — just remember to
-  list it); P4 must `pull S1 .` explicitly (S2→S4 alone won't reach an S1-only file if S2
-  ever forgets it) and its own `commit S4 ... --outputs` must include `place.json`; P5's
-  `commit S5 ... --outputs` must include it too. Miss any one link and every later stage —
-  and the portal's `import-map.mjs --kind place`, which requires `place.json` in `--src` —
-  breaks silently until someone notices. St Neots Tesco Extra shipped four versions (v1.0–v1.3)
-  without `place.json` past S1 because S2's commit never listed it; only a manual copy-forward
-  during the 2026-08-08 portal rollout got v1.4 working, and even that fixed the symptom, not
-  the pipeline. See `references/pipeline.md` for the corrected P2/P4/P5 commands.
+- **`place.json` must be re-declared as an output at every stage that carries it, or it dead-ends.** `pull` only copies files listed in the *source* stage's committed `--outputs` — it does not walk back further than one stage, and it never copies a file that's merely sitting in the run dir unlisted. So: S2's `commit S2 ... --outputs` must include `place.json` (it's already physically copied in, per the point above — just remember to list it); P4 must `pull S1 .` explicitly (S2→S4 alone won't reach an S1-only file if S2 ever forgets it) and its own `commit S4 ... --outputs` must include `place.json`; P5's `commit S5 ... --outputs` must include it too. Miss any one link and every later stage — and the portal's `import-map.mjs --kind place`, which requires `place.json` in `--src` — breaks silently until someone notices. St Neots Tesco Extra shipped four versions (v1.0–v1.3) without `place.json` past S1 because S2's commit never listed it; only a manual copy-forward during the 2026-08-08 portal rollout got v1.4 working, and even that fixed the symptom, not the pipeline. See `references/pipeline.md` for the corrected P2/P4/P5 commands.
 
-- **Keep `placeTitle` SHORT — it's a fixed 11 pt at x=6 and the Services panel is at
-  x=200 mm.** gen_internal doesn't shrink the title to fit, so a long place title overruns
-  the panel (and any top feature label). Place titles are naturally longer than the town's
-  "Buses within X", so trim to e.g. `"Buses serving Waitrose"` (≈22 chars fits) and let the
-  POI labels + the external map carry the town name. Budget ≈ 34 chars before it hits x=200.
+- **Keep `placeTitle` SHORT — it's a fixed 11 pt at x=6 and the Services panel is at x=200 mm.** gen_internal doesn't shrink the title to fit, so a long place title overruns the panel (and any top feature label). Place titles are naturally longer than the town's "Buses within X", so trim to e.g. `"Buses serving Waitrose"` (≈22 chars fits) and let the POI labels + the external map carry the town name. Budget ≈ 34 chars before it hits x=200.
 
-- **Don't set the external `note` — it duplicates the subtitle and crosses a spoke.** The
-  external subtitle already says "where you can get to, and which buses take you there"; a
-  `D.note` repeating that renders as one long line from x=10 that cuts across a top/centre
-  spoke (Amersham). Omit `note`. Put any real caveat (e.g. "school services 604/624 also
-  call, closed-door — not shown") on the **internal** map via top-level `routes.json`
-  `mapNotes:[{text,x,y,size,color}]` in bottom-edge white space instead.
+- **Don't set the external `note` — it duplicates the subtitle and crosses a spoke.** The external subtitle already says "where you can get to, and which buses take you there"; a `D.note` repeating that renders as one long line from x=10 that cuts across a top/centre spoke (Amersham). Omit `note`. Put any real caveat (e.g. "school services 604/624 also call, closed-door — not shown") on the **internal** map via top-level `routes.json` `mapNotes:[{text,x,y,size,color}]` in bottom-edge white space instead.
 
-- **Borrow the town's `features_geo.json` instead of re-querying Overpass geometry.** When
-  the place is inside an already-built town, the town S2 already has `features_geo.json`
-  (river/railway/road polylines) and `roads_geo.json`. Overpass `return_geometry` queries
-  time out often; clip the town's feature polyline to ≤~0.9 km of the place point and write
-  a place `features_geo.json` (+ a `features` block in `routes.json`) rather than re-pulling.
-  Beaconsfield Waitrose reused the town's Chiltern Main Line this way.
+- **Borrow the town's `features_geo.json` instead of re-querying Overpass geometry.** When the place is inside an already-built town, the town S2 already has `features_geo.json` (river/railway/road polylines) and `roads_geo.json`. Overpass `return_geometry` queries time out often; clip the town's feature polyline to ≤~0.9 km of the place point and write a place `features_geo.json` (+ a `features` block in `routes.json`) rather than re-pulling. Beaconsfield Waitrose reused the town's Chiltern Main Line this way.
 
-- **A nearest-stop distance check is a cheap standalone sanity test.** A route can serve
-  the *town* but not the *place*: X74 serves Beaconsfield but its nearest stop to Waitrose
-  is 2.6 km (the A355/M40 services), so it's correctly absent from the 0.8 km service radius.
-  Before dismissing a "missing" route as a data gap, compute its nearest-stop distance to
-  the place — if it's genuinely far, the exclusion is real.
+- **A nearest-stop distance check is a cheap standalone sanity test.** A route can serve the *town* but not the *place*: X74 serves Beaconsfield but its nearest stop to Waitrose is 2.6 km (the A355/M40 services), so it's correctly absent from the 0.8 km service radius. Before dismissing a "missing" route as a data gap, compute its nearest-stop distance to the place — if it's genuinely far, the exclusion is real.
 
-- **Routes that exit toward the panel side (east) collide with the Services/Key panel —
-  fix with `internalRoads.rotationDeg`, decisively.** The panel is reserved at x=197–297mm
-  (map region is x=6–196). When a place sits on a corridor whose routes run off-frame to the
-  **east** (e.g. the Simpson Centre on the A40 Wycombe End, routes continuing to the Old Town
-  core / Gerrards Cross), the eastern route fan + terminus badges land at x≈197–202 and
-  overprint the panel/Key. `fitMargin` barely helps (the tails are pulled to the frame edge,
-  not fitted to stops). The lever is **rotation**: swing the fan up-and-left clear of the
-  panel. Be decisive — mild values just *smear* the fan vertically along the panel edge
-  (Simpson Centre: -8° and -20° both still overlapped; **-35° cleared it** to top-centre,
-  x<180). Set it in `routes.json` `internalRoads.rotationDeg` (0 = north up; the auto PCA
-  value is printed as `rotation°` on build). Diagonal corridors read fine.
+- **Routes that exit toward the panel side (east) collide with the Services/Key panel — fix with `internalRoads.rotationDeg`, decisively.** The panel is reserved at x=197–297mm (map region is x=6–196). When a place sits on a corridor whose routes run off-frame to the **east** (e.g. the Simpson Centre on the A40 Wycombe End, routes continuing to the Old Town core / Gerrards Cross), the eastern route fan + terminus badges land at x≈197–202 and overprint the panel/Key. `fitMargin` barely helps (the tails are pulled to the frame edge, not fitted to stops). The lever is **rotation**: swing the fan up-and-left clear of the panel. Be decisive — mild values just *smear* the fan vertically along the panel edge (Simpson Centre: -8° and -20° both still overlapped; **-35° cleared it** to top-centre, x<180). Set it in `routes.json` `internalRoads.rotationDeg` (0 = north up; the auto PCA value is printed as `rotation°` on build). Diagonal corridors read fine.
 
-- **Never rewrite `routes.json` with `python … json.dump` under Git-Bash on Windows.**
-  Python opens the file with the platform default codepage (cp1252), so UTF-8 en-dashes
-  (`–`, `·`, `—` in route descriptions) are read as `â€"`/`Â·` and written back as mojibake
-  that then bakes into the SVG/JPG panel text. Edit config with the Edit/Write tools (UTF-8),
-  or if scripting, pass `encoding='utf-8'` on BOTH open() calls and `ensure_ascii=False`.
+- **Never rewrite `routes.json` with `python … json.dump` under Git-Bash on Windows.** Python opens the file with the platform default codepage (cp1252), so UTF-8 en-dashes (`–`, `·`, `—` in route descriptions) are read as `â€"`/`Â·` and written back as mojibake that then bakes into the SVG/JPG panel text. Edit config with the Edit/Write tools (UTF-8), or if scripting, pass `encoding='utf-8'` on BOTH open() calls and `ensure_ascii=False`.
 
 ---
-Added during the community-bus-maps **portal integration** of the place engine
-(2026-07-25 — the portal now vendors this engine; see below):
+Added during the community-bus-maps **portal integration** of the place engine (2026-07-25 — the portal now vendors this engine; see below):
 
-- **Re-render after ANY `routes.json` edit, or the S5 SVG goes stale relative to its
-  config.** Several worked examples had **drifted**: their shipped `internal.svg`/`external.svg`
-  no longer matched the `routes.json` sitting beside them, because config was hand-tweaked
-  after the last render without re-running S4/S5. Beaconsfield Waitrose was the clearest —
-  the shipped SVG had a `mapNotes` school-services line, a `placeShort`-length title, and a
-  rail label at `y=20`, while its stored `routes.json` had **no `mapNotes`**, a *longer*
-  `placeTitle`, and `y=18`. This isn't cosmetic: anything that renders **from the stored
-  `routes.json`** (a re-render, an audit, or the portal importer below) reproduces the
-  **config**, not the stale picture. After editing config, re-run S4→S5 (`--bump`) so the
-  folder is internally self-consistent, then eyeball the JPG.
+- **Re-render after ANY `routes.json` edit, or the S5 SVG goes stale relative to its config.** Several worked examples had **drifted**: their shipped `internal.svg`/`external.svg` no longer matched the `routes.json` sitting beside them, because config was hand-tweaked after the last render without re-running S4/S5. Beaconsfield Waitrose was the clearest — the shipped SVG had a `mapNotes` school-services line, a `placeShort`-length title, and a rail label at `y=20`, while its stored `routes.json` had **no `mapNotes`**, a *longer* `placeTitle`, and `y=18`. This isn't cosmetic: anything that renders **from the stored `routes.json`** (a re-render, an audit, or the portal importer below) reproduces the **config**, not the stale picture. After editing config, re-run S4→S5 (`--bump`) so the folder is internally self-consistent, then eyeball the JPG.
 
-- **The portal (`community-bus-maps`) vendors this engine and renders from `routes.json`.**
-  Place render dirs carry NO generators (the town skill copies its generators into each
-  town's render dir; this skill doesn't), so the portal keeps a vendored copy in
-  `engine/place/` (`gen_internal.js` + `gen_external_places.js` + a `gen_internal_place.js`
-  wrapper doing the title fix + `v`-strip) and copies it into each place map's `data/` at
-  import. A place's expert framing — the `overrides.json` this skill writes for river-hide
-  (and any frozen viewport) — becomes the portal map's `base-overrides.json`, merged UNDER
-  the customer's colour/POI edits. Consequence for THIS skill: the portal's `v1.0` baseline
-  is whatever the **current** `routes.json` produces — so a drifted payload (above) imports as
-  the *config's* map, not the stale shipped one. Keep them in sync. (`npm run verify:place`
-  proves the vendored engine reproduces a skill-rendered leaflet byte-for-byte.)
+- **The portal (`community-bus-maps`) vendors this engine and renders from `routes.json`.** Place render dirs carry NO generators (the town skill copies its generators into each town's render dir; this skill doesn't), so the portal keeps a vendored copy in `engine/place/` (`gen_internal.js` + `gen_external_places.js` + a `gen_internal_place.js` wrapper doing the title fix + `v`-strip) and copies it into each place map's `data/` at import. A place's expert framing — the `overrides.json` this skill writes for river-hide (and any frozen viewport) — becomes the portal map's `base-overrides.json`, merged UNDER the customer's colour/POI edits. Consequence for THIS skill: the portal's `v1.0` baseline is whatever the **current** `routes.json` produces — so a drifted payload (above) imports as the *config's* map, not the stale shipped one. Keep them in sync. (`npm run verify:place` proves the vendored engine reproduces a skill-rendered leaflet byte-for-byte.)
 
 ---
-Added during the High Wycombe Aldi (Tannery Road) build (2026-07-30 — the first place
-with a **double-digit route count**, 11 drawn services, and 14 external spokes):
+Added during the High Wycombe Aldi (Tannery Road) build (2026-07-30 — the first place with a **double-digit route count**, 11 drawn services, and 14 external spokes):
 
-- **A chain-store name is almost always ambiguous — always eyeball `place-candidates.json`.**
-  "Aldi, High Wycombe" returned three stores; `resolve_place.py`'s auto-pick (first
-  place-like class) took **Booker**, not the Tannery Road one asked for. `ambiguous:true`
-  fired correctly. Re-run with `--pick N` and then **confirm the postcode in
-  `place.json.display`** against the request — that is the cheapest proof you leafleted
-  the right branch. Put the "which branch, and which ones you did NOT pick" note in the
-  place README; a reader can't tell from the map.
+- **A chain-store name is almost always ambiguous — always eyeball `place-candidates.json`.** "Aldi, High Wycombe" returned three stores; `resolve_place.py`'s auto-pick (first place-like class) took **Booker**, not the Tannery Road one asked for. `ambiguous:true` fired correctly. Re-run with `--pick N` and then **confirm the postcode in `place.json.display`** against the request — that is the cheapest proof you leafleted the right branch. Put the "which branch, and which ones you did NOT pick" note in the place README; a reader can't tell from the map.
 
-- **`derive_walkshed radiusM` is the in/out lever for a whole route group — set it from the
-  measured nearest-stop table, not the 500 m default.** At 500 m the Aldi lost 32/32A/34
-  (nearest stop 507 m); 550 m brought all three in for +0 sprawl (`maxEdgeKm` 1.0 still
-  caps the tails). Print the per-route nearest-stop distance BEFORE choosing `radiusM` —
-  a group sitting 5–10 m outside a round-number radius is the common case, and dropping
-  three routes for 7 m is indefensible.
+- **`derive_walkshed radiusM` is the in/out lever for a whole route group — set it from the measured nearest-stop table, not the 500 m default.** At 500 m the Aldi lost 32/32A/34 (nearest stop 507 m); 550 m brought all three in for +0 sprawl (`maxEdgeKm` 1.0 still caps the tails). Print the per-route nearest-stop distance BEFORE choosing `radiusM` — a group sitting 5–10 m outside a round-number radius is the common case, and dropping three routes for 7 m is indefensible.
 
-- **`tripsAtTownPerWeekSample` in `gtfs-services.json` is trips-per-PATTERN, not per week —
-  never paraphrase it as a frequency.** Route 27 showed `7` and the *town* leaflet calls it
-  "a few journeys a week"; the `calendar` table says that 7-trip pattern runs Mon–Fri, i.e.
-  **7 journeys every weekday**. Conversely 32A reads "Daily" from the day-flag union while
-  the real split is 24 Sunday trips vs 6 across all of Mon–Sat — a Sunday service. Join
-  `stop_times → trips → calendar` at the place's own stop and group by day-flags before
-  writing any `internalDesc` day/frequency text. (The slim BODS sqlite has no times, so
-  trips-per-day-pattern is as fine-grained as it gets — that's enough.)
+- **`tripsAtTownPerWeekSample` in `gtfs-services.json` is trips-per-PATTERN, not per week — never paraphrase it as a frequency.** Route 27 showed `7` and the *town* leaflet calls it "a few journeys a week"; the `calendar` table says that 7-trip pattern runs Mon–Fri, i.e. **7 journeys every weekday**. Conversely 32A reads "Daily" from the day-flag union while the real split is 24 Sunday trips vs 6 across all of Mon–Sat — a Sunday service. Join `stop_times → trips → calendar` at the place's own stop and group by day-flags before writing any `internalDesc` day/frequency text. (The slim BODS sqlite has no times, so trips-per-day-pattern is as fine-grained as it gets — that's enough.)
 
-- **`internalCorridors` must be earned: read `corridors_report.json`, don't assume.** 32 and
-  32A have *identical* walkshed stop lists, so bundling them looked obvious — but
-  `match_routes` builds from `routes_full_atco.json` `canonical[0].stops`, where 32A adds a
-  Hennerton Way/Totteridge loop. The report scored 32A at **57 %** co-running and the engine
-  warned; the fix is a distinct colour, not a bundle. The 102/103/104/105/M40/X74 family
-  scored 100 % and bundling six routes into one lane is what makes an 11-route close-up
-  readable at all.
+- **`internalCorridors` must be earned: read `corridors_report.json`, don't assume.** 32 and 32A have *identical* walkshed stop lists, so bundling them looked obvious — but `match_routes` builds from `routes_full_atco.json` `canonical[0].stops`, where 32A adds a Hennerton Way/Totteridge loop. The report scored 32A at **57 %** co-running and the engine warned; the fix is a distinct colour, not a bundle. The 102/103/104/105/M40/X74 family scored 100 % and bundling six routes into one lane is what makes an 11-route close-up readable at all.
 
-- **A route absent from `routeOrder`/`palette` is silently NOT drawn — that is the clean way
-  to drop a school variant.** 37M map-matches and survives `derive_walkshed`, but omitting
-  it from `routeOrder` keeps it off the map without a second S2 run or a `skipRoutes` edit.
-  Say so in a `mapNotes` footnote.
+- **A route absent from `routeOrder`/`palette` is silently NOT drawn — that is the clean way to drop a school variant.** 37M map-matches and survives `derive_walkshed`, but omitting it from `routeOrder` keeps it off the map without a second S2 run or a `skipRoutes` edit. Say so in a `mapNotes` footnote.
 
-- **Name the place with a FORCED POI label, not the anchor label.** Two "Aldi"s 6 mm apart
-  (anchor label + POI) reads as a mistake. Use `overrides.json`
-  `internal.pois["shop:Aldi"] = {force:true, label:{offset:{dx,dy}, anchor:"start"}}` for the
-  store and give the anchor the plain stop name (`"Ford Street stops"`). A manual `offset`
-  **skips de-collision entirely**, so pick the offset off a cropped render — the auto
-  placement had dropped both the store and the industrial-estate labels as collisions.
-  Get the exact POI keys (`shop:Aldi`, `industrial:Tannery Road Ind Est` — post-`poi.tidy`)
-  by running `EDITOR_KEYS=1 node gen_internal.js` and grepping `data-kind="poi"`.
-  `placeLabel` ignores `label.text`, so the printed text is always the tidied OSM name.
+- **Name the place with a FORCED POI label, not the anchor label.** Two "Aldi"s 6 mm apart (anchor label + POI) reads as a mistake. Use `overrides.json` `internal.pois["shop:Aldi"] = {force:true, label:{offset:{dx,dy}, anchor:"start"}}` for the store and give the anchor the plain stop name (`"Ford Street stops"`). A manual `offset` **skips de-collision entirely**, so pick the offset off a cropped render — the auto placement had dropped both the store and the industrial-estate labels as collisions. Get the exact POI keys (`shop:Aldi`, `industrial:Tannery Road Ind Est` — post-`poi.tidy`) by running `EDITOR_KEYS=1 node gen_internal.js` and grepping `data-kind="poi"`. `placeLabel` ignores `label.text`, so the printed text is always the tidied OSM name.
 
-- **Never put "·" (U+00B7) in `anchorLabel`.** The anchor label is drawn with
-  `stroke="#fff" stroke-width="0.7" paint-order="stroke"`, and a 0.7 mm white outline around
-  a middle dot renders as a small filled **square** at 3.0 pt. Panel text (no halo) is fine.
-  Use a plain word, "/" or "(...)".
+- **Never put "·" (U+00B7) in `anchorLabel`.** The anchor label is drawn with `stroke="#fff" stroke-width="0.7" paint-order="stroke"`, and a 0.7 mm white outline around a middle dot renders as a small filled **square** at 3.0 pt. Panel text (no halo) is fine. Use a plain word, "/" or "(...)".
 
-- **Feature `labelPos` is absolute page mm with NO collision logic — site it off a render.**
-  Defaults left "River Wye" floating in empty space and "Chiltern Main Line" nowhere near
-  the line. Read the drawn line's position off the JPG (`mm = px/3508*297`, `px/2480*210`)
-  and pin the label beside it.
+- **Feature `labelPos` is absolute page mm with NO collision logic — site it off a render.** Defaults left "River Wye" floating in empty space and "Chiltern Main Line" nowhere near the line. Read the drawn line's position off the JPG (`mm = px/3508*297`, `px/2480*210`) and pin the label beside it.
 
-- **Beyond ~8 external spokes, SOLVE the layout; don't nudge bearings.** 14 spokes on A4
-  collided every way at first (nodes overlapping each other, the legend and the footnote;
-  badge rings touching near the hub). What worked: a throwaway script that mirrors
-  `gen_external_places.js` geometry exactly — `wrap(label,13)`, node
-  `w=max(20,maxlen*1.95+5)`, `h=5.4+nlines*3.8`, badges at `r=24+i*7.2`, spoke from `r=16`
-  to `t-9` — then (1) keep the true-bearing clockwise ORDER but relax to a **min 19° gap**
-  (below that the `r=24` badges of adjacent spokes touch), (2) **pin the longest badge row
-  to the longest clear ray** (11 badges need ~108 mm, so due west; at its true 296° the
-  legend blocks it), (3) allocate each remaining spoke the largest radius whose node box
-  clears the page, the reserved blocks and every node placed so far (+2 mm daylight), and
-  (4) freeze the result as `terminus{x,y}`. Order-preserving + pinned cost the western trio
-  ~26–30° of fidelity, which is normal for a schematic. Node width is driven by the LONGEST
-  line, so trimming a `sub` ("Central Bus Station" → "Bus Station") is the cheapest way to
-  break a collision.
+- **Beyond ~8 external spokes, SOLVE the layout; don't nudge bearings.** 14 spokes on A4 collided every way at first (nodes overlapping each other, the legend and the footnote; badge rings touching near the hub). What worked: a throwaway script that mirrors `gen_external_places.js` geometry exactly — `wrap(label,13)`, node `w=max(20,maxlen*1.95+5)`, `h=5.4+nlines*3.8`, badges at `r=24+i*7.2`, spoke from `r=16` to `t-9` — then (1) keep the true-bearing clockwise ORDER but relax to a **min 19° gap** (below that the `r=24` badges of adjacent spokes touch), (2) **pin the longest badge row to the longest clear ray** (11 badges need ~108 mm, so due west; at its true 296° the legend blocks it), (3) allocate each remaining spoke the largest radius whose node box clears the page, the reserved blocks and every node placed so far (+2 mm daylight), and (4) freeze the result as `terminus{x,y}`. Order-preserving + pinned cost the western trio ~26–30° of fidelity, which is normal for a schematic. Node width is driven by the LONGEST line, so trimming a `sub` ("Central Bus Station" → "Bus Station") is the cheapest way to break a collision.
 
-- **Keep `placeShort` ≤ ~6 characters — the hub box overprints the innermost badges.**
-  ~~The hub is `w = max(26, len*2.5+8)` mm wide but badges start at only `r=24`~~ —
-  **SUPERSEDED 2026-08-06**: the engine now derives its badge clear-zone (`R0`) from the
-  actual hub box width, so a long `placeShort` no longer swallows a badge. Short names are
-  still tidier, but no longer load-bearing. See the 2026-08-06 section below.
+- **Keep `placeShort` ≤ ~6 characters — the hub box overprints the innermost badges.** ~~The hub is `w = max(26, len*2.5+8)` mm wide but badges start at only `r=24`~~ — **SUPERSEDED 2026-08-06**: the engine now derives its badge clear-zone (`R0`) from the actual hub box width, so a long `placeShort` no longer swallows a badge. Short names are still tidier, but no longer load-bearing. See the 2026-08-06 section below.
 
-- **Don't set an external `note` (again) and don't fight the hardcoded legend.**
-  ~~`lx=10, ly=42` and the footnote at `y=203` are not configurable~~ — **SUPERSEDED
-  2026-08-06**: the legend panel now auto-places itself (position AND, for `note`, its own
-  wrap width), searching for a spot clear of every node and, failing that, minimising spoke
-  crossings. `note` is safe to set again — it word-wraps to the panel's measured width
-  instead of running off the page. See the 2026-08-06 section below.
+- **Don't set an external `note` (again) and don't fight the hardcoded legend.** ~~`lx=10, ly=42` and the footnote at `y=203` are not configurable~~ — **SUPERSEDED 2026-08-06**: the legend panel now auto-places itself (position AND, for `note`, its own wrap width), searching for a spot clear of every node and, failing that, minimising spoke crossings. `note` is safe to set again — it word-wraps to the panel's measured width instead of running off the page. See the 2026-08-06 section below.
 
 ---
-Added 2026-08-06 — bringing the external map up to the level of the recently-upgraded
-AREA external map (`gen_external_radial.js`), prompted by a review of all 5 places at once
-(Beaconsfield Simpson Centre/Waitrose, St Neots Tesco Extra/Town Centre, High Wycombe Aldi):
+Added 2026-08-06 — bringing the external map up to the level of the recently-upgraded AREA external map (`gen_external_radial.js`), prompted by a review of all 5 places at once (Beaconsfield Simpson Centre/Waitrose, St Neots Tesco Extra/Town Centre, High Wycombe Aldi):
 
-- **Blobby dashed (limited-service) spokes — round line-caps on a short dash read as a
-  string of circles, not a dash.** `stroke-dasharray="1.6 2.2"` with `stroke-linecap="round"`
-  on a `stroke-width="3.0"` line balloons each dash past its own length (Beaconsfield 380,
-  St Neots 66). Fix: dashed spokes now use `stroke-linecap="butt"` with a longer dash
-  (`"2.6 2.4"`) — comfortably longer than the stroke width, so each dash renders as a crisp
-  rectangle. Non-dashed spokes are unaffected (still round-capped).
+- **Blobby dashed (limited-service) spokes — round line-caps on a short dash read as a string of circles, not a dash.** `stroke-dasharray="1.6 2.2"` with `stroke-linecap="round"` on a `stroke-width="3.0"` line balloons each dash past its own length (Beaconsfield 380, St Neots 66). Fix: dashed spokes now use `stroke-linecap="butt"` with a longer dash (`"2.6 2.4"`) — comfortably longer than the stroke width, so each dash renders as a crisp rectangle. Non-dashed spokes are unaffected (still round-capped).
 
-- **Hub label width must be known BEFORE the spoke loop, not just before drawing the hub
-  box.** The hub box is drawn last (on top) so it always reads cleanly over crossing spokes
-  — but that also means, if its size is computed only at draw time, the badges parked just
-  outside a FIXED clear-zone radius can end up physically underneath a box that turned out
-  wider than expected. Fixed by hoisting the hub box width calc (`HUB_W`) above the spoke
-  loop and deriving the clear zone from it: `R0 = max(16, HUB_W/2 + 3)`. This is what let
-  the old "keep `placeShort` ≤ 6 chars" workaround above be retired.
+- **Hub label width must be known BEFORE the spoke loop, not just before drawing the hub box.** The hub box is drawn last (on top) so it always reads cleanly over crossing spokes — but that also means, if its size is computed only at draw time, the badges parked just outside a FIXED clear-zone radius can end up physically underneath a box that turned out wider than expected. Fixed by hoisting the hub box width calc (`HUB_W`) above the spoke loop and deriving the clear zone from it: `R0 = max(16, HUB_W/2 + 3)`. This is what let the old "keep `placeShort` ≤ 6 chars" workaround above be retired.
 
-- **An opaque legend panel over a busy hub can hide a destination node it lands on, or (worse)
-  clip a spoke line mid-flight at its own edge — a plain first-fit search isn't enough.**
-  Porting the area engine's auto-sized backing panel verbatim (position fixed at `lx=10,
-  ly=42`) surfaced two distinct failure modes once tried against all 5 places: (1) a
-  destination only ~2 km away can have a bearing that lands its node box inside the legend's
-  top-left footprint — the panel, being opaque, then fully hides that node, which is worse
-  than the pre-panel state (a spoke merely showing through faint legend text). (2) for a busy
-  hub (High Wycombe Aldi, 14 spokes fanning in every direction) even a placement that clears
-  every node can still cut across one or more spoke LINES right at the panel's own edge,
-  which reads as a broken/interrupted route rather than a line tidily crossing under a panel.
-  Fix: the panel size (`bw,bh`) is position-independent (every offset inside is relative to
-  `lx,ly`), so it's measured once, then a grid search scores every candidate placement by (a)
-  hard-reject if it overlaps any destination/hub node box, (b) among the survivors, count
-  spoke-line segment crossings via a rect/segment intersection test, and keep the lowest.
-  Crossing a spoke is still allowed (matches the area engine's own philosophy — an opaque
-  panel tidies up a crossing line) but is now a minimised secondary cost, not an accident of
-  whichever position happened to be tried first. `D.legendAt:{x,y}` remains a manual escape
-  hatch (matches the area engine) for a case the auto-search doesn't have a good answer for.
+- **An opaque legend panel over a busy hub can hide a destination node it lands on, or (worse) clip a spoke line mid-flight at its own edge — a plain first-fit search isn't enough.** Porting the area engine's auto-sized backing panel verbatim (position fixed at `lx=10, ly=42`) surfaced two distinct failure modes once tried against all 5 places: (1) a destination only ~2 km away can have a bearing that lands its node box inside the legend's top-left footprint — the panel, being opaque, then fully hides that node, which is worse than the pre-panel state (a spoke merely showing through faint legend text). (2) for a busy hub (High Wycombe Aldi, 14 spokes fanning in every direction) even a placement that clears every node can still cut across one or more spoke LINES right at the panel's own edge, which reads as a broken/interrupted route rather than a line tidily crossing under a panel. Fix: the panel size (`bw,bh`) is position-independent (every offset inside is relative to `lx,ly`), so it's measured once, then a grid search scores every candidate placement by (a) hard-reject if it overlaps any destination/hub node box, (b) among the survivors, count spoke-line segment crossings via a rect/segment intersection test, and keep the lowest. Crossing a spoke is still allowed (matches the area engine's own philosophy — an opaque panel tidies up a crossing line) but is now a minimised secondary cost, not an accident of whichever position happened to be tried first. `D.legendAt:{x,y}` remains a manual escape hatch (matches the area engine) for a case the auto-search doesn't have a good answer for.
 
-- **A generator's own drawing helpers (`destNodeSize`) should be reused for LAYOUT decisions
-  too, not just for drawing.** The legend collision-avoidance above needs every destination
-  node's real footprint before it decides where to put the panel. Rather than a second,
-  drifting copy of the box-sizing maths, `destNode()` was factored into `destNodeSize()` +
-  `destNode()`, and the main spoke loop now calls `destNodeSize()` once to build `nodeBoxes`
-  as it lays out each spoke (also feeding the same list into the hub-box entry).
+- **A generator's own drawing helpers (`destNodeSize`) should be reused for LAYOUT decisions too, not just for drawing.** The legend collision-avoidance above needs every destination node's real footprint before it decides where to put the panel. Rather than a second, drifting copy of the box-sizing maths, `destNode()` was factored into `destNodeSize()` + `destNode()`, and the main spoke loop now calls `destNodeSize()` once to build `nodeBoxes` as it lays out each spoke (also feeding the same list into the hub-box entry).
 
-- **This IS a portal-vendored file (`%PSK%\gen_external_places.js` → `engine/place/` per
-  `changing-the-engine.md` §4) — the hand-off is not optional.** Re-vendored, the portal's
-  `High Wycombe Aldi` fixture (`…\Buses\Places\_portal-fixture\`) was then legitimately
-  stale (its shipped `external.svg`/`.jpg` predate the fix) — regenerated both from the
-  fixture's own `routes.json` + `base-overrides.json` through the fixed engine, then
-  `npm run verify` / `verify:place` / `test:p7` / `test` all pass. Also ran
-  `node stage.js commit S4` manually (not through `rollout.js`) for all 5 places, which
-  meant `sync_ci_reference.js` needed a manual run afterwards too — `status.js` catches
-  both classes of drift (portal vendoring AND CI reference) if you forget either.
+- **This IS a portal-vendored file (`%PSK%\gen_external_places.js` → `engine/place/` per `changing-the-engine.md` §4) — the hand-off is not optional.** Re-vendored, the portal's `High Wycombe Aldi` fixture (`…\Buses\Places\_portal-fixture\`) was then legitimately stale (its shipped `external.svg`/`.jpg` predate the fix) — regenerated both from the fixture's own `routes.json` + `base-overrides.json` through the fixed engine, then `npm run verify` / `verify:place` / `test:p7` / `test` all pass. Also ran `node stage.js commit S4` manually (not through `rollout.js`) for all 5 places, which meant `sync_ci_reference.js` needed a manual run afterwards too — `status.js` catches both classes of drift (portal vendoring AND CI reference) if you forget either.
 
 ---
-Added 2026-08-07 — filling `minutesToDestination`/`stops` on all 5 shipped places in one
-pass, plus the two bugs that turned up doing it:
+Added 2026-08-07 — filling `minutesToDestination`/`stops` on all 5 shipped places in one pass, plus the two bugs that turned up doing it:
 
-- **Tick draw-order bug (FIXED): the spoke LINE was drawn AFTER its ticks, painting over
-  them.** The intermediate-stop tick loop sat *before* `line(...)` in the per-destination
-  block — the opposite order from `gen_external_radial.js` (town engine draws the line
-  first, ticks on top). Every place's ticks were invisibly buried under the 3.0mm-wide
-  route line the whole time nobody had filled `stops[]` on more than one destination to
-  notice. Fixed by moving the tick/label block to after `line(...)`; matches the town
-  engine's order now. **Any future edit to this per-destination block must keep the line
-  before the ticks**, or the regression comes back silently (nothing errors — the ticks are
-  just invisible).
+- **Tick draw-order bug (FIXED): the spoke LINE was drawn AFTER its ticks, painting over them.** The intermediate-stop tick loop sat *before* `line(...)` in the per-destination block — the opposite order from `gen_external_radial.js` (town engine draws the line first, ticks on top). Every place's ticks were invisibly buried under the 3.0mm-wide route line the whole time nobody had filled `stops[]` on more than one destination to notice. Fixed by moving the tick/label block to after `line(...)`; matches the town engine's order now. **Any future edit to this per-destination block must keep the line before the ticks**, or the regression comes back silently (nothing errors — the ticks are just invisible).
 
-- **Legend-vs-tick-label collision (FIXED): the auto legend-placement search only treated
-  destination/hub node boxes as hard no-go, never tick-label text.** `nodeBoxes` fed the
-  legend's `overlaps()` hard-reject; tick labels (added 2026-08-06, drawn separately in the
-  same loop) were never added to it, so the search could — and on St Neots Town Centre's
-  "Huntingdon / St Ives dir" spoke, did — plant the legend panel directly on top of tick
-  label text, rendering it as faint grey noise through the panel's 0.94-alpha white fill.
-  Fixed by pushing each tick label's estimated bounding box (`measureText` width, ~3.6mm
-  line height, anchored left/right per `labSide`) into `nodeBoxes` as it's drawn, same as a
-  destination node. **Any new per-spoke text element (a future annotation, say) needs the
-  same treatment** — `nodeBoxes` is the legend's only hard-constraint list, and it is NOT
-  populated automatically from whatever gets drawn.
+- **Legend-vs-tick-label collision (FIXED): the auto legend-placement search only treated destination/hub node boxes as hard no-go, never tick-label text.** `nodeBoxes` fed the legend's `overlaps()` hard-reject; tick labels (added 2026-08-06, drawn separately in the same loop) were never added to it, so the search could — and on St Neots Town Centre's "Huntingdon / St Ives dir" spoke, did — plant the legend panel directly on top of tick label text, rendering it as faint grey noise through the panel's 0.94-alpha white fill. Fixed by pushing each tick label's estimated bounding box (`measureText` width, ~3.6mm line height, anchored left/right per `labSide`) into `nodeBoxes` as it's drawn, same as a destination node. **Any new per-spoke text element (a future annotation, say) needs the same treatment** — `nodeBoxes` is the legend's only hard-constraint list, and it is NOT populated automatically from whatever gets drawn.
 
-- **`gtfs_duration.py --fill-place` matches on `destinations[].name`, which is the curated
-  human label, not the GTFS terminus/stop name — expect it to whiff on every renamed
-  destination.** "Cambridge" (labelled) vs "Drummer St Bus Station" (actual GTFS terminus)
-  is the common case; `_clean_dest()` only strips a trailing `(...)`, it does nothing for a
-  wholesale rename. Recovery pattern used across all 5 places: read `sub` for a hint (often
-  the raw stop name, e.g. `"sub": "Drummer St"`), or dump the route's
-  `routes_full_atco.json` `directions[].name`/`stops` and eyeball the true terminus, then
-  re-run with `--route X --dest "<raw name>"` (single-lookup mode) instead of `--fill-place`.
-  Do this BEFORE assuming "no match found" means the route doesn't reach there.
+- **`gtfs_duration.py --fill-place` matches on `destinations[].name`, which is the curated human label, not the GTFS terminus/stop name — expect it to whiff on every renamed destination.** "Cambridge" (labelled) vs "Drummer St Bus Station" (actual GTFS terminus) is the common case; `_clean_dest()` only strips a trailing `(...)`, it does nothing for a wholesale rename. Recovery pattern used across all 5 places: read `sub` for a hint (often the raw stop name, e.g. `"sub": "Drummer St"`), or dump the route's `routes_full_atco.json` `directions[].name`/`stops` and eyeball the true terminus, then re-run with `--route X --dest "<raw name>"` (single-lookup mode) instead of `--fill-place`. Do this BEFORE assuming "no match found" means the route doesn't reach there.
 
-- **A destination can legitimately be an INTERMEDIATE stop, not the route's terminus (e.g.
-  "Gerrards Cross" on a route that actually terminates at "Uxbridge") — `gtfs_duration.py`
-  only ever measures duration to a trip's actual last stop, so single-lookup mode against an
-  intermediate name returns nothing.** Wrote a one-off variant (search every route/trip
-  calling at the origin, take the FIRST stop after the origin whose name contains the
-  target substring, not just the trip's final stop) to get Gerrards Cross (51 min via the
-  slow all-stops 104) and Totteridge (8 min via 34's "Hicks Farm Rise") right. Sanity-check
-  the result against a nearby faster/slower route before trusting it — a slow local service
-  legitimately can take longer to a NEARER intermediate stop than an express route takes to
-  a FARTHER terminus (Gerrards Cross 11 km/51 min on local 104 vs Uxbridge 18 km/23 min on
-  express M40/X74 — looked backwards at first glance, was correct on inspection).
+- **A destination can legitimately be an INTERMEDIATE stop, not the route's terminus (e.g. "Gerrards Cross" on a route that actually terminates at "Uxbridge") — `gtfs_duration.py` only ever measures duration to a trip's actual last stop, so single-lookup mode against an intermediate name returns nothing.** Wrote a one-off variant (search every route/trip calling at the origin, take the FIRST stop after the origin whose name contains the target substring, not just the trip's final stop) to get Gerrards Cross (51 min via the slow all-stops 104) and Totteridge (8 min via 34's "Hicks Farm Rise") right. Sanity-check the result against a nearby faster/slower route before trusting it — a slow local service legitimately can take longer to a NEARER intermediate stop than an express route takes to a FARTHER terminus (Gerrards Cross 11 km/51 min on local 104 vs Uxbridge 18 km/23 min on express M40/X74 — looked backwards at first glance, was correct on inspection).
 
-- **A route number can collide between two routes serving the SAME origin with the SAME
-  raw termini across two different places — verify by BEARING, not just by name, before
-  trusting which destination a terminus belongs to.** Beaconsfield's 380 ("Loudwater –
-  Beaconsfield – Jordans") has two destinations named for the human-recognisable places
-  ("Seer Green & Jordans", "Loudwater") but the GTFS chain's only two termini are POI names
-  ("Green East Road", "Tesco Store") that don't obviously map to either. Computed the true
-  compass bearing from the place to each terminus stop and matched it against each
-  destination's stored `bearing` (62°≈67.9°→Green East Road≈Seer Green&Jordans;
-  262°≈255°→Tesco Store≈Loudwater) — cheap, and turns an ambiguous name-guess into a
-  checked fact. Confirmed the same pairing held (Green East Road→Seer Green&Jordans,
-  Tesco Store→Loudwater) from BOTH Beaconsfield places despite different distances/bearings
-  from each origin, which is exactly the cross-check you want.
+- **A route number can collide between two routes serving the SAME origin with the SAME raw termini across two different places — verify by BEARING, not just by name, before trusting which destination a terminus belongs to.** Beaconsfield's 380 ("Loudwater – Beaconsfield – Jordans") has two destinations named for the human-recognisable places ("Seer Green & Jordans", "Loudwater") but the GTFS chain's only two termini are POI names ("Green East Road", "Tesco Store") that don't obviously map to either. Computed the true compass bearing from the place to each terminus stop and matched it against each destination's stored `bearing` (62°≈67.9°→Green East Road≈Seer Green&Jordans; 262°≈255°→Tesco Store≈Loudwater) — cheap, and turns an ambiguous name-guess into a checked fact. Confirmed the same pairing held (Green East Road→Seer Green&Jordans, Tesco Store→Loudwater) from BOTH Beaconsfield places despite different distances/bearings from each origin, which is exactly the cross-check you want.
 
-- **`derive_stops.py`'s `pick_direction()` can grab the WRONG direction when both directions
-  of a route contain the destination name as a substring of each other's name (an
-  arrival-direction and departure-direction pair like `"X - Y"` / `"Y - X"`), silently
-  producing an empty or nonsensical `stops[]`.** Two confirmed cases: (1) route 69 at St
-  Ives Tesco Extra — `dest_clean="St Ives direction"` matches neither direction name, so it
-  fell back to `dirs[0]` = `"Bus Station - Tesco"`, which ENDS at the origin (no downstream
-  stops → `"no usable chain"`); needed `"Tesco - Bus Station"` instead. (2) route C2 at St
-  Neots Town Centre — `dest_clean="Newlands Cottages"` matches BOTH `"Newlands Cottages -
-  Market Square"` and `"Market Square - Newlands Cottages"` (both contain the substring);
-  `pick_direction` takes the first list match, which happened to be the arrival direction
-  (ends at the place itself → empty downstream again). Same failure, two different root
-  causes (no match vs. ambiguous match) — the fix in both cases is the same: read
-  `routes_full_atco.json` directly, pick the direction whose stop list actually runs
-  AWAY from the place, and set `stops[]` by hand (reusing `derive_stops.py`'s own
-  `sample_names()` window/step logic — first, evenly-spaced intermediates, terminus last —
-  keeps it visually consistent with the auto-filled spokes on the same map). **Always
-  sanity-read the printed fill line** (`route -> destination  stop / stop / ... `) —
-  `"no usable chain"` or a first stop that's obviously the wrong end of the route are both
-  visible in that one line, don't wait to see it wrong on the render.
+- **`derive_stops.py`'s `pick_direction()` can grab the WRONG direction when both directions of a route contain the destination name as a substring of each other's name (an arrival-direction and departure-direction pair like `"X - Y"` / `"Y - X"`), silently producing an empty or nonsensical `stops[]`.** Two confirmed cases: (1) route 69 at St Ives Tesco Extra — `dest_clean="St Ives direction"` matches neither direction name, so it fell back to `dirs[0]` = `"Bus Station - Tesco"`, which ENDS at the origin (no downstream stops → `"no usable chain"`); needed `"Tesco - Bus Station"` instead. (2) route C2 at St Neots Town Centre — `dest_clean="Newlands Cottages"` matches BOTH `"Newlands Cottages - Market Square"` and `"Market Square - Newlands Cottages"` (both contain the substring); `pick_direction` takes the first list match, which happened to be the arrival direction (ends at the place itself → empty downstream again). Same failure, two different root causes (no match vs. ambiguous match) — the fix in both cases is the same: read `routes_full_atco.json` directly, pick the direction whose stop list actually runs AWAY from the place, and set `stops[]` by hand (reusing `derive_stops.py`'s own `sample_names()` window/step logic — first, evenly-spaced intermediates, terminus last — keeps it visually consistent with the auto-filled spokes on the same map). **Always sanity-read the printed fill line** (`route -> destination  stop / stop / ... `) — `"no usable chain"` or a first stop that's obviously the wrong end of the route are both visible in that one line, don't wait to see it wrong on the render.
 
-- **Thin/limited services (Tue-Fri or one-day-a-week routes) routinely fall under
-  `journey_minutes`'s hardcoded `len(durations) < 3` trust floor — that's not a bug, but it
-  means "no matching trips found" from the CLI does NOT mean no data exists.** Every
-  `limited:true` destination hit this (Beaconsfield 380 ×2 legs at n=1-2, St Neots C2 at
-  n=1-2). Recovery: query `stop_times` directly for the 1-2 actual trips that do call at the
-  origin on that route and compute the duration by hand — with only 1-2 samples there's no
-  median to take, just report the single trip's scheduled duration. Cross-checking the SAME
-  route/leg from two different places (the Beaconsfield 380 example above) that land on
-  consistent numbers is reasonable corroboration when you can't get 3 samples any other way.
+- **Thin/limited services (Tue-Fri or one-day-a-week routes) routinely fall under `journey_minutes`'s hardcoded `len(durations) < 3` trust floor — that's not a bug, but it means "no matching trips found" from the CLI does NOT mean no data exists.** Every `limited:true` destination hit this (Beaconsfield 380 ×2 legs at n=1-2, St Neots C2 at n=1-2). Recovery: query `stop_times` directly for the 1-2 actual trips that do call at the origin on that route and compute the duration by hand — with only 1-2 samples there's no median to take, just report the single trip's scheduled duration. Cross-checking the SAME route/leg from two different places (the Beaconsfield 380 example above) that land on consistent numbers is reasonable corroboration when you can't get 3 samples any other way.
 
-- **Region GTFS DB is a `--db` argument, not autodetected — passing the wrong region's
-  sqlite doesn't error, it just returns confident-looking wrong answers (or 0 trips) for
-  every route.** `gtfs_duration.py`'s default is `$CAMBS_GTFS_DB` /
-  `_gtfs\cambridgeshire.sqlite`; Beaconsfield and High Wycombe are Buckinghamshire and need
-  `--db …\_gtfs\buckinghamshire.sqlite` explicitly every call (or export the env var for the
-  whole session). Check `_gtfs\regions.json` / which sqlite the place's own S1
-  `gtfs-services.json` was built against before running any duration fill.
+- **Region GTFS DB is a `--db` argument, not autodetected — passing the wrong region's sqlite doesn't error, it just returns confident-looking wrong answers (or 0 trips) for every route.** `gtfs_duration.py`'s default is `$CAMBS_GTFS_DB` / `_gtfs\cambridgeshire.sqlite`; Beaconsfield and High Wycombe are Buckinghamshire and need `--db …\_gtfs\buckinghamshire.sqlite` explicitly every call (or export the env var for the whole session). Check `_gtfs\regions.json` / which sqlite the place's own S1 `gtfs-services.json` was built against before running any duration fill.
 
-- **`python3 -c "...open(r'/c/...)"` from Git-Bash silently `FileNotFoundError`s even
-  though the same `/c/...` path works fine for `cd`/`cp`/`ls`.** Bash resolves the
-  MSYS-style `/c/...` path; the Windows Python interpreter does not — it needs
-  `C:\...\...`. Cheapest fix: `cd` into the directory in bash first, then use a bare
-  relative filename in the Python one-liner (`open('routes.json', ...)` not
-  `open(r'/c/.../routes.json', ...)`), rather than fighting path-format conversion inline.
+- **`python3 -c "...open(r'/c/...)"` from Git-Bash silently `FileNotFoundError`s even though the same `/c/...` path works fine for `cd`/`cp`/`ls`.** Bash resolves the MSYS-style `/c/...` path; the Windows Python interpreter does not — it needs `C:\...\...`. Cheapest fix: `cd` into the directory in bash first, then use a bare relative filename in the Python one-liner (`open('routes.json', ...)` not `open(r'/c/.../routes.json', ...)`), rather than fighting path-format conversion inline.
 
 ---
-Added 2026-08-08 — the rollout's Phase 3 manual `stage.js` regen of High Wycombe Aldi
-(the first place ever to carry `internalSchematic`) silently lost both the place-title
-fix AND the forced-POI label overrides on the schematic output. Neither is documented
-anywhere in this skill because **there is no `build_schematic_place.js` wrapper** —
-whoever built the original v1.2 reference (commit `dbc0a57`) ran the town skill's
-`schematize_internal.js` directly, by hand, and evidently got both details right without
-leaving a reusable recipe. A later same-day mechanical re-render (adopting the current
-engine template) got both wrong, and the mistake wasn't visible until `community-bus-maps`'
-`npm run verify:place` byte-compared it against the portal's own generation:
+Added 2026-08-08 — the rollout's Phase 3 manual `stage.js` regen of High Wycombe Aldi (the first place ever to carry `internalSchematic`) silently lost both the place-title fix AND the forced-POI label overrides on the schematic output. Neither is documented anywhere in this skill because **there is no `build_schematic_place.js` wrapper** — whoever built the original v1.2 reference (commit `dbc0a57`) ran the town skill's `schematize_internal.js` directly, by hand, and evidently got both details right without leaving a reusable recipe. A later same-day mechanical re-render (adopting the current engine template) got both wrong, and the mistake wasn't visible until `community-bus-maps`' `npm run verify:place` byte-compared it against the portal's own generation:
 
-- **`schematize_internal.js`'s place-title fix depends on a sentinel file
-  (`gen_internal_place.js`) existing beside `routes.json` in the run dir — it is never
-  invoked, just checked with `fs.existsSync`.** The portal always has this (it's vendored
-  into `engine/place/` and copied into every place's payload at import). This skill did
-  **not** ship a copy at all, so any manual run direct against a place's S4 dir has
-  `isPlace = false` and silently emits the wrong title (`"Buses within <town>"` instead of
-  `"Buses serving <place>"`) — no error, no warning. **Fixed:** the skill now carries its
-  own `gen_internal_place.js` in `assets/` (copied verbatim from the portal's
-  `engine/place/gen_internal_place.js` — they must stay byte-identical, same as
-  `gen_internal.js`/`gen_external_places.js`/`footer.js`). Copy it into the run dir before
-  invoking `schematize_internal.js` for a place.
+- **`schematize_internal.js`'s place-title fix depends on a sentinel file (`gen_internal_place.js`) existing beside `routes.json` in the run dir — it is never invoked, just checked with `fs.existsSync`.** The portal always has this (it's vendored into `engine/place/` and copied into every place's payload at import). This skill did **not** ship a copy at all, so any manual run direct against a place's S4 dir has `isPlace = false` and silently emits the wrong title (`"Buses within <town>"` instead of `"Buses serving <place>"`) — no error, no warning. **Fixed:** the skill now carries its own `gen_internal_place.js` in `assets/` (copied verbatim from the portal's `engine/place/gen_internal_place.js` — they must stay byte-identical, same as `gen_internal.js`/`gen_external_places.js`/`footer.js`). Copy it into the run dir before invoking `schematize_internal.js` for a place.
 
 - **`schematize_internal.js` reads `LEAFLET_DIR` at its own top level (`DIR = env.LEAFLET_DIR
   || cwd()`) but then inherits the SAME env — including that same `LEAFLET_DIR` — into the
-  child `gen_internal.js` it spawns with `cwd: WD` (the `schematic/` workspace
-  subfolder).** `gen_internal.js` does its own `DIR = env.LEAFLET_DIR || cwd()` lookup, so
-  if the caller set `LEAFLET_DIR` as an env var (rather than relying on cwd), the child
-  reads that SAME value instead of falling back to its own cwd (`WD`) — it renders into
-  the **parent** run dir, not the workspace, and the subsequent `copyFileSync(WD +
-  '/internal.svg', ...)` throws `ENOENT` (or, worse, silently copies a stale leftover
-  `WD/internal.svg` from a previous run if one exists — that's what actually happened
-  here: the wrong-titled reference also carried STALE POI geometry from the very first,
-  pre-fix schematic build). **The portal's own wrapper (`engine/expert/gen_internal_schematic.js`)
-  documents and works around this by explicitly `delete env.LEAFLET_DIR` before spawning
-  the pre-stage.** Do the same by hand: `cd` into the run dir and do **not** export
-  `LEAFLET_DIR` at all (rely on cwd), rather than setting it as an env var.
+  child `gen_internal.js` it spawns with `cwd: WD` (the `schematic/` workspace subfolder).** `gen_internal.js` does its own `DIR = env.LEAFLET_DIR || cwd()` lookup, so if the caller set `LEAFLET_DIR` as an env var (rather than relying on cwd), the child reads that SAME value instead of falling back to its own cwd (`WD`) — it renders into the **parent** run dir, not the workspace, and the subsequent `copyFileSync(WD + '/internal.svg', ...)` throws `ENOENT` (or, worse, silently copies a stale leftover `WD/internal.svg` from a previous run if one exists — that's what actually happened here: the wrong-titled reference also carried STALE POI geometry from the very first, pre-fix schematic build). **The portal's own wrapper (`engine/expert/gen_internal_schematic.js`) documents and works around this by explicitly `delete env.LEAFLET_DIR` before spawning the pre-stage.** Do the same by hand: `cd` into the run dir and do **not** export `LEAFLET_DIR` at all (rely on cwd), rather than setting it as an env var.
 
-- **`schematize_internal.js`'s workspace-copy step (`WD`) does not carry `overrides.json`
-  into the schematic workspace, and `gen_internal.js` falls back to reading `overrides.json`
-  from its OWN cwd (`WD`) when `OVERRIDES_FILE` isn't set** — so a place's forced-POI label
-  overrides (`base-overrides.json` / `overrides.json` `internal.pois[...]`, e.g. Aldi's
-  label-offset/anchor and the Tannery Road Ind Est force) are silently dropped on the
-  schematic output specifically (the ordinary `internal.svg`/`internal-schematic` via
-  `build_internal_place.js` doesn't have this problem since it isn't affected by the `WD`
-  cwd change). **Always pass `OVERRIDES_FILE=<absolute path to the place's overrides.json>`
-  explicitly** when invoking `schematize_internal.js` for a place — don't rely on the
-  same-directory fallback, since the workspace it actually runs in isn't the directory
-  that file lives in.
+- **`schematize_internal.js`'s workspace-copy step (`WD`) does not carry `overrides.json` into the schematic workspace, and `gen_internal.js` falls back to reading `overrides.json` from its OWN cwd (`WD`) when `OVERRIDES_FILE` isn't set** — so a place's forced-POI label overrides (`base-overrides.json` / `overrides.json` `internal.pois[...]`, e.g. Aldi's label-offset/anchor and the Tannery Road Ind Est force) are silently dropped on the schematic output specifically (the ordinary `internal.svg`/`internal-schematic` via `build_internal_place.js` doesn't have this problem since it isn't affected by the `WD` cwd change). **Always pass `OVERRIDES_FILE=<absolute path to the place's overrides.json>` explicitly** when invoking `schematize_internal.js` for a place — don't rely on the same-directory fallback, since the workspace it actually runs in isn't the directory that file lives in.
 
-  **Command that actually reproduces the portal's byte-identical output** (from the
-  place's S4 run dir, with the sentinel copied in first):
+  **Command that actually reproduces the portal's byte-identical output** (from the place's S4 run dir, with the sentinel copied in first):
   ```bash
   cp <SKILL_ASSETS>/gen_internal_place.js .
   OVERRIDES_FILE="$(pwd)/overrides.json" SKILL_ASSETS=<town skill assets dir> \
     node <town skill assets dir>/schematize_internal.js
   ```
-  (deliberately no `LEAFLET_DIR` — let it default to cwd, matching the portal's own
-  `delete env.LEAFLET_DIR` workaround).
+  (deliberately no `LEAFLET_DIR` — let it default to cwd, matching the portal's own `delete env.LEAFLET_DIR` workaround).
+

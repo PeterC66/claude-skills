@@ -99,19 +99,13 @@ C:\u3a St Ives\Using AI\Buses\Areas\<Town>\
 ## Colour-blind-safe palettes (user picks; assign one colour per route)
 - **Tol Bright (default):** #4477AA blue · #66CCEE cyan · #228833 green · #CCBB44 ochre · #EE6677 red · #AA3377 purple · #BBBBBB grey
 - **Okabe–Ito:** #0072B2 · #56B4E9 · #009E73 · #E69F00 · #D55E00 · #CC79A7 · #555555
-- **Match the St Ives look:** #00A5E0 · #00B6CB · #1A3A8F · #E8740C · #1E7A46 · #E5007D · #8A8A8A
-Badge text colour: white on dark fills, #111 on light fills (cyan/ochre/grey).
-**River clash:** the river is drawn pale blue (`#9ec9e8`). If a town has a river through it, don't leave a route on a pale blue/cyan that blends into it — substitute a spare distinct hue (e.g. Tol-vibrant orange `#EE7733`).
-**The palette is the binding constraint, and it is ~12 hues.** "One colour per route" therefore has a hard ceiling: past ~12 drawn lines the palette repeats and colour stops identifying anything (High Wycombe v1.0 drew 31 lines in 12 colours). Two bounded exceptions, both opt-in per town and both from the complexity ladder:
+- **Match the St Ives look:** #00A5E0 · #00B6CB · #1A3A8F · #E8740C · #1E7A46 · #E5007D · #8A8A8A Badge text colour: white on dark fills, #111 on light fills (cyan/ochre/grey). **River clash:** the river is drawn pale blue (`#9ec9e8`). If a town has a river through it, don't leave a route on a pale blue/cyan that blends into it — substitute a spare distinct hue (e.g. Tol-vibrant orange `#EE7733`). **The palette is the binding constraint, and it is ~12 hues.** "One colour per route" therefore has a hard ceiling: past ~12 drawn lines the palette repeats and colour stops identifying anything (High Wycombe v1.0 drew 31 lines in 12 colours). Two bounded exceptions, both opt-in per town and both from the complexity ladder:
 - **`internalCorridors`** — bundle a family of co-running services into ONE line carrying a stack of badges, sharing the lead's colour. Use the same lead as `external[].routes` so both sheets agree. Candidates come from `curate_services.js`; **confirm each one** and read the `corridors_report.json` warning.
 - **`corridorPalette`** — colour by CORRIDOR, not by route, for routes that share a corridor but don't co-run closely enough to bundle. **This retires the locked "one colour per route" decision** for that town; approved 2026-07-28, bounded to towns drawing more than 12 lines, never a default. It doesn't use fewer colours — it makes the sharing mean something, and the generator warns about every hue still shared by unrelated corridors.
 
-A town that colours by corridor also needs **`internalTitleColor`**, or the sheet's title inherits the
-orientation route's shared corridor hue.
+A town that colours by corridor also needs **`internalTitleColor`**, or the sheet's title inherits the orientation route's shared corridor hue.
 
-See [references/s3-config.md](references/s3-config.md) — and `coreBox` / `stopThinning` beside them.
-**Worked example: High Wycombe v2.1** (2026-07-28) took rungs 0 → 1 → 2 → 2b → 3 and went
-RED (31 / 320 / 1.21 / 6.18) → **GREEN** (11 colour groups / 91 stops / 0 / 0) on config alone.
+See [references/s3-config.md](references/s3-config.md) — and `coreBox` / `stopThinning` beside them. **Worked example: High Wycombe v2.1** (2026-07-28) took rungs 0 → 1 → 2 → 2b → 3 and went RED (31 / 320 / 1.21 / 6.18) → **GREEN** (11 colour groups / 91 stops / 0 / 0) on config alone.
 
 ## Sources of truth
 - **Services facts (routes / operators / days / termini / variants) — PRIMARY:** the **structured GTFS dataset** (`_gtfs/cambridgeshire.sqlite`, built from BODS open data — the legal source of truth operators must publish to). Query it with `assets/gtfs_query.py` (see S1). This replaces hand-scraping the bustimes locality page for the *facts*; it's deterministic and reproduced the entire hand-verified St Ives v4.0 set exactly (operators, all days-of-week, and the 301S/V/X variants). See [references/s1-services.md](references/s1-services.md) and the dataset's own `_gtfs/README.md`.
@@ -143,8 +137,7 @@ The design is locked, so **do not interview the user**. Defaults: palette **Tol 
 
 **At every stage: `new` the stage folder, do the work inside it, then `commit` with its outputs.** This is what makes runs resumable and identified by date/time/version.
 
-Each stage's full procedure is in its own reference file — open it when you start that
-stage. The one-liners below are just the orchestration cue.
+Each stage's full procedure is in its own reference file — open it when you start that stage. The one-liners below are just the orchestration cue.
 
 ### Stage 1 — Services (+ the disagreement audit)
 `init` the town if new; **first run the pre-print gate** — `python "%SK%\gtfs_upcoming.py" --town "<Town>"` — to see changes registered to land soon (operators must publish ≥42 days ahead), and decide **per town, this build**: build today's network (optionally with a dated `routes.json` `stamp`), or **hold and build the future network** via `gtfs_query.py --asof <date>`. Then **pull the facts from the GTFS dataset** (`gtfs_query.py` → candidate routes/operators/days/termini/variants), then do a **bustimes pass** to catch community/DRT services GTFS omits (VL14/33A-type) and to cross-check; verify against the operator's own timetable; build the `disagreements` audit (full trail, both maps' inclusion candidates) and `verified-services.json`; commit. **Full steps: [references/s1-services.md](references/s1-services.md).**
@@ -168,8 +161,7 @@ Compare side-by-side with the St Ives reference for completeness and legibility.
 Before finishing, run a short retrospective and **feed what you learned back into this skill** — that is what keeps it sharp:
 1. **Capture lessons.** Note anything that tripped you up or that you'd do differently next time (a new operator quirk, a data-source gotcha, a generator/config fix, a layout trick). Fold the reusable ones into the skill — usually a line in **[references/gotchas.md](references/gotchas.md)**, or a tweak to the relevant stage reference (or this SKILL.md if it's an orchestration change) — so the next run benefits. Keep it concise and concrete; don't restate what's already here.
 2. **Record open issues, don't silently fix them.** If the audit surfaced something out of scope (a stale leaflet note, an inclusion candidate, a data conflict you didn't resolve), flag it for the user / a follow-up task rather than changing a reproduced baseline.
-3. **Update the project memory** (`project_bus_leaflets.md`) with anything durable about the project's state or decisions (new town done, version bumped, dependency installed) — but not things already recorded in code or this skill.
-This review is itself a lesson learned and is now a standing step.
+3. **Update the project memory** (`project_bus_leaflets.md`) with anything durable about the project's state or decisions (new town done, version bumped, dependency installed) — but not things already recorded in code or this skill. This review is itself a lesson learned and is now a standing step.
 
 ## Worked example: March, Cambridgeshire (radial, zoomed)
 A complete non-busway build lives in `…\Buses\Areas\March\` in the staged layout — 7 routes, radial external, `internalZoom`, river-safe palette (route 32 = orange). Copy its `S3-config` `routes.json` + edited generators as the starting point for any ordinary town.
@@ -188,3 +180,4 @@ This SKILL.md is the orchestration spine; the deep detail lives in `references/`
 - **[references/overrides.md](references/overrides.md)** — Tier-1 `overrides.json` (straighten/nudge/re-rotate), the drag editor, and the maintainer invariants for extending it.
 - **[references/changing-the-engine.md](references/changing-the-engine.md)** — **read before editing anything in `assets/`**: the invariants, the byte-identical gate set (gate the **template**, not a town's frozen copy), the shared-with-the-place-skill boundary, the obligation to **re-render every town the change affects** (§2a — a build takes its generator from its S3 run, so improvements do *not* reach shipped maps on their own), and the mandatory re-vendor hand-off into the portal (`C:\Claude\community-bus-maps`) that finishes a generator change.
 - **[references/gotchas.md](references/gotchas.md)** — troubleshooting: padded locality lists, operator PDFs, sharp/SVG scaling, label overlap, editor blanks, overrides/features not taking effect.
+

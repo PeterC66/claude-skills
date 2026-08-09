@@ -5,44 +5,19 @@ description: Create two A4 landscape bus-route leaflet images CENTRED ON A PLACE
 
 # Make the two bus-route leaflet images for a PLACE
 
-This is the **sibling** of `make-bus-leaflet`. That skill leaflets a whole **town**;
-this one leaflets a **point** — "the buses at/around this shop / school / station /
-park". It is **standalone**: it pulls its own data for any place, whether or not the
-town has ever been leafleted (per the planning decision). It **reuses the town
-skill's engine** one level down and only adds the place-specific pieces, so nothing
-is duplicated and the town skill is **never touched**.
+This is the **sibling** of `make-bus-leaflet`. That skill leaflets a whole **town**; this one leaflets a **point** — "the buses at/around this shop / school / station / park". It is **standalone**: it pulls its own data for any place, whether or not the town has ever been leafleted (per the planning decision). It **reuses the town skill's engine** one level down and only adds the place-specific pieces, so nothing is duplicated and the town skill is **never touched**.
 
-Worked examples on disk (each under its area, `…\Buses\Areas\<Town>\Places\`): **St Neots Tesco Extra** (v1.2, sparse
-edge-of-town), **St Neots Town Centre** (v1.1, dense), **Beaconsfield Waitrose** and
-**Beaconsfield Simpson Centre** (first outside Cambridgeshire), **High Wycombe Aldi**
-(v1.1, the busy case — 11 drawn services, 14 external spokes, solved layout).
-Plan of record: `…\Buses\Development Docs\place-bus-leaflet-plan_2026-07-21.md`.
+Worked examples on disk (each under its area, `…\Buses\Areas\<Town>\Places\`): **St Neots Tesco Extra** (v1.2, sparse edge-of-town), **St Neots Town Centre** (v1.1, dense), **Beaconsfield Waitrose** and **Beaconsfield Simpson Centre** (first outside Cambridgeshire), **High Wycombe Aldi** (v1.1, the busy case — 11 drawn services, 14 external spokes, solved layout). Plan of record: `…\Buses\Development Docs\place-bus-leaflet-plan_2026-07-21.md`.
 
 ## What this produces (per place)
-1. **Internal close-up** — `internal.jpg/.svg`, `Buses serving <place>`: a tight-zoom
-   map of the **bus stops in the immediate walkshed** around the place (default 500 m),
-   colour-coded per route, with POI pictograms, a **Services** panel and a **Key**.
-   Drawn by the town skill's **`gen_internal.js` unchanged**, fed walkshed-clipped
-   geometry (the schematize-workspace pattern). **Default = road-following** (Phase 2):
-   route lines trace the real street network via the town skill's `internalRoads`
-   pipeline (`pull_roads.js` + `match_routes.js`), driven by `PSK/build_internal_place_roads.js`.
-   **Classic mode** (straight stop-to-stop chords, `PSK/build_internal_place.js`) remains
-   the fallback for places too sparse to map-match (e.g. a single served stop → no line).
-2. **External radial** — `external.jpg/.svg`, `Buses from <place>`: an **aggregated**
-   tube-map. The place is the hub ("you are here"); each **spoke is a reachable
-   destination** (town / interchange / village), and the small badges on it are
-   **every route that gets you there**. This is the genuinely new idea vs the town
-   skill's one-spoke-per-route external map. Drawn by the new `gen_external_places.js`.
-3. **Service facts** — `gtfs-services.json` (operators / days / termini / headsigns),
-   straight from BODS. (A full disagreement audit like the town skill's is a later
-   add; for now cross-check odd spokes against bustimes by hand — see gotchas.)
+1. **Internal close-up** — `internal.jpg/.svg`, `Buses serving <place>`: a tight-zoom map of the **bus stops in the immediate walkshed** around the place (default 500 m), colour-coded per route, with POI pictograms, a **Services** panel and a **Key**. Drawn by the town skill's **`gen_internal.js` unchanged**, fed walkshed-clipped geometry (the schematize-workspace pattern). **Default = road-following** (Phase 2): route lines trace the real street network via the town skill's `internalRoads` pipeline (`pull_roads.js` + `match_routes.js`), driven by `PSK/build_internal_place_roads.js`. **Classic mode** (straight stop-to-stop chords, `PSK/build_internal_place.js`) remains the fallback for places too sparse to map-match (e.g. a single served stop → no line).
+2. **External radial** — `external.jpg/.svg`, `Buses from <place>`: an **aggregated** tube-map. The place is the hub ("you are here"); each **spoke is a reachable destination** (town / interchange / village), and the small badges on it are **every route that gets you there**. This is the genuinely new idea vs the town skill's one-spoke-per-route external map. Drawn by the new `gen_external_places.js`.
+3. **Service facts** — `gtfs-services.json` (operators / days / termini / headsigns), straight from BODS. (A full disagreement audit like the town skill's is a later add; for now cross-check odd spokes against bustimes by hand — see gotchas.)
 
-Each map is an editable **SVG** rendered to a **300 dpi JPG** (3508×2480), A4 landscape,
-auto-versioned `vN.N`, via the shared `render.js`.
+Each map is an editable **SVG** rendered to a **300 dpi JPG** (3508×2480), A4 landscape, auto-versioned `vN.N`, via the shared `render.js`.
 
 ## Reuse map — what is shared vs new (read this first)
-Let **`TSK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`** (the TOWN skill's
-assets — the shared engine) and **`PSK` = this skill's `assets`**.
+Let **`TSK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`** (the TOWN skill's assets — the shared engine) and **`PSK` = this skill's `assets`**.
 
 | Piece | Where | Status |
 |---|---|---|
@@ -59,18 +34,10 @@ assets — the shared engine) and **`PSK` = this skill's `assets`**.
 | Internal wrapper — classic (gen_internal + title) | `PSK/build_internal_place.js` | **new** (models `schematize_internal.js`) |
 | Internal wrapper — road-following (pull_roads + match_routes + gen_internal) | `PSK/build_internal_place_roads.js` | **new** (Phase 2; wraps the classic wrapper) |
 
-**Never edit the town skill.** If the internal renderer needs a place-only behaviour,
-express it as a config key or in the wrapper, not a `gen_internal.js` edit.
+**Never edit the town skill.** If the internal renderer needs a place-only behaviour, express it as a config key or in the wrapper, not a `gen_internal.js` edit.
 
 ## Stages, folder, versioning (shared `stage.js`)
-A place gets its **own folder** with a `manifest.json`, nested under the area it sits in:
-`…\Buses\Areas\<Town>\Places\<Place Name>\`. If that town has no area map of its own and
-probably never will (a rural school, an attraction outside any town we map, a one-off
-commission), use `…\Buses\Places\_standalone\<Place Name>\` instead. **Keep the town prefix
-in the folder name** — "High Wycombe Aldi", not "Aldi" — because the name has to stand alone
-in `manifest.json`'s `"town"` field, in render folder names and in the portal's `renderParent`.
-The place stages **map onto the shared `stage.js` S-slots** (so the versioned,
-resumable manifest machinery is reused unchanged):
+A place gets its **own folder** with a `manifest.json`, nested under the area it sits in: `…\Buses\Areas\<Town>\Places\<Place Name>\`. If that town has no area map of its own and probably never will (a rural school, an attraction outside any town we map, a one-off commission), use `…\Buses\Places\_standalone\<Place Name>\` instead. **Keep the town prefix in the folder name** — "High Wycombe Aldi", not "Aldi" — because the name has to stand alone in `manifest.json`'s `"town"` field, in render folder names and in the portal's `renderParent`. The place stages **map onto the shared `stage.js` S-slots** (so the versioned, resumable manifest machinery is reused unchanged):
 
 | Place stage | stage.js slot | Owns |
 |---|---|---|
@@ -80,149 +47,56 @@ resumable manifest machinery is reused unchanged):
 | **P4 generate** | `S4` | `internal.svg`, `external.svg` (version `vN.N`), **`place.json`** (pull S1 explicitly, don't rely on it riding through S2) |
 | **P5 render** | `S5` | `internal.jpg`, `external.jpg`, **`place.json`** (required by the portal's `import-map.mjs --kind place`) |
 
-`place.json` is easy to lose: `pull` only copies files a stage *declared* in its own
-`--outputs`, so it must be re-declared at every stage above or it dead-ends silently
-(the S4/S5 SVGs/JPGs still render fine without it — the failure only shows up later, in
-the portal import). See `references/gotchas.md` for the incident this caused.
+`place.json` is easy to lose: `pull` only copies files a stage *declared* in its own `--outputs`, so it must be re-declared at every stage above or it dead-ends silently (the S4/S5 SVGs/JPGs still render fine without it — the failure only shows up later, in the portal import). See `references/gotchas.md` for the incident this caused.
 
-`node "%TSK%\stage.js" <init|new|pull|commit|latest|status>` — same commands as the
-town skill (`references/…` there). After S5, copy the JPGs into `<placeDir>\_latest\`.
+`node "%TSK%\stage.js" <init|new|pull|commit|latest|status>` — same commands as the town skill (`references/…` there). After S5, copy the JPGs into `<placeDir>\_latest\`.
 
 ## Process — the five stages (autonomous; confirm only genuine blockers)
-Defaults: walkshed **500 m**; service radius **0.8 km**; palette **Tol Bright**;
-data date current. Pause only for: an **ambiguous place** (two "Tesco Extra"), or a
-**destination grouping** you can't settle (the draft is always shown for confirmation).
+Defaults: walkshed **500 m**; service radius **0.8 km**; palette **Tol Bright**; data date current. Pause only for: an **ambiguous place** (two "Tesco Extra"), or a **destination grouping** you can't settle (the draft is always shown for confirmation).
 
 ### P1 — Place (resolve the point)
-`python "%PSK%\resolve_place.py" "<place>" --town "<town/area>" [--radius-m 500] [--pick N]`
-→ `place.json` (chosen feature: name, lat/lon, class/type, walkshedM) + `place-candidates.json`.
-**Review the candidate list**; if `ambiguous:true` or the pick is wrong, re-run with
-`--pick N`. Then commit S1. (Geocoder = Nominatim, same as the town bootstrap.)
-A **chain store is almost always ambiguous** (High Wycombe has three Aldis and the
-auto-pick took the wrong one) — confirm the **postcode / street in `place.json.display`**
-against the request, and record in the README which branch you built and which you didn't.
+`python "%PSK%\resolve_place.py" "<place>" --town "<town/area>" [--radius-m 500] [--pick N]` → `place.json` (chosen feature: name, lat/lon, class/type, walkshedM) + `place-candidates.json`. **Review the candidate list**; if `ambiguous:true` or the pick is wrong, re-run with `--pick N`. Then commit S1. (Geocoder = Nominatim, same as the town bootstrap.) A **chain store is almost always ambiguous** (High Wycombe has three Aldis and the auto-pick took the wrong one) — confirm the **postcode / street in `place.json.display`** against the request, and record in the README which branch you built and which you didn't.
 
 ### P2 — Geometry (standalone, from GTFS)
-1. `python "%PSK%\gtfs_chains.py" --near "<lat,lon,0.8>" --town "<place>"` → builds, from
-   GTFS `stop_times` (offline, all-BODS-operators), `routes_full_atco.json` +
-   `atco2ll.json` + `atco2name.json` + `gtfs-services.json`. Only trips that actually
-   stop near the place are used (essential — a `route_short_name` can span unrelated
-   route_ids; the far one would corrupt the chain). **Sanity-check the printed route
-   list** — a route whose chain looks too short (3 timing-point stops) or whose far end
-   is implausibly distant is a GTFS artifact to verify against bustimes before printing.
-   Then **print each route's nearest-stop distance to the place** — it decides `radiusM`
-   below, proves a "missing" route really is far away, and feeds the README table.
-   Also join `stop_times → trips → calendar` at the place's own stop and group by day-flags:
-   `gtfs-services.json`'s `tripsAtTownPerWeekSample` is trips-per-**pattern**, so it will
-   mislead any frequency wording you write in P3 (High Wycombe Aldi: "7" meant 7 journeys
-   *every weekday*, and a "Daily" 32A was really a Sunday service).
-2. `walkshed_cfg.json = {center:[lat,lon], radiusM:500, buf:1, circular:[…], maxEdgeKm:1.0, skipRoutes:[]}`;
-   `node "%PSK%\derive_walkshed.js" routes_full_atco.json atco2ll.json walkshed_cfg.json routes_intown_atco.json`
-   → the walkshed-clipped display subset for the internal map. **Keep `maxEdgeKm` small
-   (~1 km)** or far buffer stops blow out the auto-fit and the close-up sprawls. Set
-   `radiusM` from the measured distances, not the default — the Aldi needed **550 m** to
-   keep three routes whose nearest stop is 507 m.
-3. POIs: `bbox` MCP `search_overpass` over the walkshed bbox → `osm.json`
-   (`osm2.json={"elements":[]}`, `river_geo.json=[]` if none). gen_internal hard-requires
-   these three files.
-4. `node "%PSK%\aggregate_destinations.js" routes_full_atco.json atco2ll.json atco2name.json place.json [clusterKm]`
-   → `destinations.draft.json` + a printed table of **reachable places**. Commit S2.
+1. `python "%PSK%\gtfs_chains.py" --near "<lat,lon,0.8>" --town "<place>"` → builds, from GTFS `stop_times` (offline, all-BODS-operators), `routes_full_atco.json` + `atco2ll.json` + `atco2name.json` + `gtfs-services.json`. Only trips that actually stop near the place are used (essential — a `route_short_name` can span unrelated route_ids; the far one would corrupt the chain). **Sanity-check the printed route list** — a route whose chain looks too short (3 timing-point stops) or whose far end is implausibly distant is a GTFS artifact to verify against bustimes before printing. Then **print each route's nearest-stop distance to the place** — it decides `radiusM` below, proves a "missing" route really is far away, and feeds the README table. Also join `stop_times → trips → calendar` at the place's own stop and group by day-flags: `gtfs-services.json`'s `tripsAtTownPerWeekSample` is trips-per-**pattern**, so it will mislead any frequency wording you write in P3 (High Wycombe Aldi: "7" meant 7 journeys *every weekday*, and a "Daily" 32A was really a Sunday service).
+2. `walkshed_cfg.json = {center:[lat,lon], radiusM:500, buf:1, circular:[…], maxEdgeKm:1.0, skipRoutes:[]}`; `node "%PSK%\derive_walkshed.js" routes_full_atco.json atco2ll.json walkshed_cfg.json routes_intown_atco.json` → the walkshed-clipped display subset for the internal map. **Keep `maxEdgeKm` small (~1 km)** or far buffer stops blow out the auto-fit and the close-up sprawls. Set `radiusM` from the measured distances, not the default — the Aldi needed **550 m** to keep three routes whose nearest stop is 507 m.
+3. POIs: `bbox` MCP `search_overpass` over the walkshed bbox → `osm.json` (`osm2.json={"elements":[]}`, `river_geo.json=[]` if none). gen_internal hard-requires these three files.
+4. `node "%PSK%\aggregate_destinations.js" routes_full_atco.json atco2ll.json atco2name.json place.json [clusterKm]` → `destinations.draft.json` + a printed table of **reachable places**. Commit S2.
 
 ### P3 — Config (curate + confirm)
-Assemble `routes.json` from `PSK/routes.example.place.json`: palette + `textOn` (one
-colour per route; **never pale-blue/cyan if a river is shown**), `operators`,
-`panelOrder`/`internalDesc`, `anchor` (the place's own stop) + `anchorLabel`,
-`placeTitle`/`place`/`placeShort`, `badgeLabels` (for 3–4-char route ids like `61EY`→`61`),
-and the **curated `destinations[]`** (merge synonym clusters — "Market Square" + "Bus
-Station" → "town centre"; relabel raw stop names to town names; mark `limited`/`Thu only`).
-Present the destination grouping for confirmation. Once settled, run both fillers (see
-`references/aggregation.md`) — `python "%TSK%\gtfs_duration.py" <prefixes> --fill-place
-routes.json` for `minutesToDestination`, then `python "%PSK%\derive_stops.py" routes.json
---dir .` for `stops` on single-route spokes (`gen_external_places.js` already draws both).
+Assemble `routes.json` from `PSK/routes.example.place.json`: palette + `textOn` (one colour per route; **never pale-blue/cyan if a river is shown**), `operators`, `panelOrder`/`internalDesc`, `anchor` (the place's own stop) + `anchorLabel`, `placeTitle`/`place`/`placeShort`, `badgeLabels` (for 3–4-char route ids like `61EY`→`61`), and the **curated `destinations[]`** (merge synonym clusters — "Market Square" + "Bus Station" → "town centre"; relabel raw stop names to town names; mark `limited`/`Thu only`). Present the destination grouping for confirmation. Once settled, run both fillers (see `references/aggregation.md`) — `python "%TSK%\gtfs_duration.py" <prefixes> --fill-place routes.json` for `minutesToDestination`, then `python "%PSK%\derive_stops.py" routes.json --dir .` for `stops` on single-route spokes (`gen_external_places.js` already draws both).
 
 For a **busy place** (roughly >8 services or >8 destinations) three extra P3 steps:
-- **Bundle only what co-runs.** Set `internalCorridors` for routes sharing a corridor, then
-  read the `corridors_report.json` the build prints — a member under the 60 % gate must get
-  its **own colour** instead (32A looked identical to 32 in the walkshed but diverges on the
-  full chain). Six 100 %-co-running routes on one lane is what makes an 11-route close-up work.
-- **Drop school variants by omission** — leave e.g. `37M` out of `routeOrder`/`palette` and
-  `gen_internal` skips it; carry it as a `mapNotes` footnote. No S2 re-run needed.
-- **Solve the external layout, don't nudge it.** With `bearing` = each destination's TRUE
-  bearing, run
-  `python "%PSK%\solve_external_layout.py" routes.json --pin "<longest-badge-row dest>" --write`
-  → order-preserving bearings ≥19° apart, the long badge row pinned to a clear ray, and a
-  frozen `terminus{x,y}` per node that clears the page, the legend, the footnote and every
-  other node. `--check-only` audits a stored layout. Keep the TRUE bearings in the README —
-  `--write` overwrites `bearing` with the display value.
+- **Bundle only what co-runs.** Set `internalCorridors` for routes sharing a corridor, then read the `corridors_report.json` the build prints — a member under the 60 % gate must get its **own colour** instead (32A looked identical to 32 in the walkshed but diverges on the full chain). Six 100 %-co-running routes on one lane is what makes an 11-route close-up work.
+- **Drop school variants by omission** — leave e.g. `37M` out of `routeOrder`/`palette` and `gen_internal` skips it; carry it as a `mapNotes` footnote. No S2 re-run needed.
+- **Solve the external layout, don't nudge it.** With `bearing` = each destination's TRUE bearing, run `python "%PSK%\solve_external_layout.py" routes.json --pin "<longest-badge-row dest>" --write` → order-preserving bearings ≥19° apart, the long badge row pinned to a clear ray, and a frozen `terminus{x,y}` per node that clears the page, the legend, the footnote and every other node. `--check-only` audits a stored layout. Keep the TRUE bearings in the README — `--write` overwrites `bearing` with the display value.
 
 Commit S3 (`--outputs routes.json,overrides.json` if you wrote overrides).
 
 ### P4 — Generate
 `new S4 --bump major` (or `--bump minor` for a re-style at the same data), pull S2+S3, then:
-- **Internal (road-following, default):** `TSK=%TSK% node "%PSK%\build_internal_place_roads.js"`
-  → runs `pull_roads.js` (→ `roads_geo.json`) + `match_routes.js` (→ `routes_paths.json`)
-  over the walkshed, then gen_internal + title fix (→ `internal.svg`). Needs
-  `routes_full_atco.json` in the dir (pulled from S2). Requires `internalRoads` in
-  `routes.json` (the wrapper defaults it to `true` if absent).
-- **Internal (classic fallback):** `TSK=%TSK% node "%PSK%\build_internal_place.js"` — only
-  for places too sparse to map-match; make sure `routes.json` has **no** `internalRoads` key.
-- **External:** `node "%PSK%\gen_external_places.js"` (→ `external.svg`).
-Commit S4 (`--outputs internal.svg,external.svg,roads_geo.json,routes_paths.json`).
+- **Internal (road-following, default):** `TSK=%TSK% node "%PSK%\build_internal_place_roads.js"` → runs `pull_roads.js` (→ `roads_geo.json`) + `match_routes.js` (→ `routes_paths.json`) over the walkshed, then gen_internal + title fix (→ `internal.svg`). Needs `routes_full_atco.json` in the dir (pulled from S2). Requires `internalRoads` in `routes.json` (the wrapper defaults it to `true` if absent).
+- **Internal (classic fallback):** `TSK=%TSK% node "%PSK%\build_internal_place.js"` — only for places too sparse to map-match; make sure `routes.json` has **no** `internalRoads` key.
+- **External:** `node "%PSK%\gen_external_places.js"` (→ `external.svg`). Commit S4 (`--outputs internal.svg,external.svg,roads_geo.json,routes_paths.json`).
 
 ### P5 — Render
-`new S5`, pull S4, `node "%TSK%\render.js" internal.svg internal.jpg` and the same for
-external. **Inspect the JPGs** (open them). Commit S5, then
-`node "%TSK%\refresh_latest.js" "<placeDir>"` — **never** a manual `cp` into `_latest\`;
-the script also re-runs `collect-maps.ps1 -All` at the Buses root so
-`Collected_latests` can't drift. Run this same command as the **last step of any
-edit that touches an already-committed render**, even a hand-patch with no version
-bump — see the P5 note in `references/pipeline.md` for why this is mandatory.
+`new S5`, pull S4, `node "%TSK%\render.js" internal.svg internal.jpg` and the same for external. **Inspect the JPGs** (open them). Commit S5, then `node "%TSK%\refresh_latest.js" "<placeDir>"` — **never** a manual `cp` into `_latest\`; the script also re-runs `collect-maps.ps1 -All` at the Buses root so `Collected_latests` can't drift. Run this same command as the **last step of any edit that touches an already-committed render**, even a hand-patch with no version bump — see the P5 note in `references/pipeline.md` for why this is mandatory.
 
 ## Locked design decisions (do not silently change)
-- **Standalone.** Never require a town build; pull the place's own data. (Consistency
-  with an existing town leaflet is not guaranteed and not required.)
-- **Two radii.** *Service radius* (~0.8 km, `gtfs_chains --near`) decides which routes
-  count as serving the place; *walkshed* (~500 m, `derive_walkshed`) decides which
-  stops are DRAWN on the close-up. They differ on purpose — a route may pass 700 m away
-  (reachable, shown on the external map) without stopping at the place (not drawn inside).
-- **External = reachable places, not routes.** One spoke per destination; all routes to
-  it ride as badges. Cluster endpoints geographically, then **draft → human confirms**
-  (same "suggest, then ask" rule the town skill uses for features/lenses).
-- **Internal = the town `gen_internal.js` unchanged, tight-zoomed** by feeding
-  walkshed-clipped stops. Title fixed by the wrapper, not by editing the town gen.
-  **Road-following is the default** (Phase 2, `internalRoads` in `routes.json`); classic
-  straight chords are the fallback for map-match-impossible places.
-- **Config-driven, portal-ready.** No per-place literals in any generator (matches the
-  town skill's rule and the portal plan's central/self-serve split: P1/P2 central,
-  P3–P5 self-serve). New behaviour → a `routes.json` key.
+- **Standalone.** Never require a town build; pull the place's own data. (Consistency with an existing town leaflet is not guaranteed and not required.)
+- **Two radii.** *Service radius* (~0.8 km, `gtfs_chains --near`) decides which routes count as serving the place; *walkshed* (~500 m, `derive_walkshed`) decides which stops are DRAWN on the close-up. They differ on purpose — a route may pass 700 m away (reachable, shown on the external map) without stopping at the place (not drawn inside).
+- **External = reachable places, not routes.** One spoke per destination; all routes to it ride as badges. Cluster endpoints geographically, then **draft → human confirms** (same "suggest, then ask" rule the town skill uses for features/lenses).
+- **Internal = the town `gen_internal.js` unchanged, tight-zoomed** by feeding walkshed-clipped stops. Title fixed by the wrapper, not by editing the town gen. **Road-following is the default** (Phase 2, `internalRoads` in `routes.json`); classic straight chords are the fallback for map-match-impossible places.
+- **Config-driven, portal-ready.** No per-place literals in any generator (matches the town skill's rule and the portal plan's central/self-serve split: P1/P2 central, P3–P5 self-serve). New behaviour → a `routes.json` key.
 - **Palettes:** Tol Bright default (see the town skill). One colour per route across both maps.
 
 ## Phase 2 — road-following internal map (DONE 2026-07-21)
-The Phase-1 classic straight-line internal map zigzagged for **sparse edge-of-town**
-places (the Tesco bypass superstore — one shared stop plus a couple of loops drawn as
-straight chords). Phase 2 fixes this by reusing the town skill's `internalRoads` pipeline
-verbatim: `build_internal_place_roads.js` runs `pull_roads.js` + `match_routes.js` over
-the walkshed, then gen_internal draws road-following lines. **No new drawing code** — the
-place data was already the right shape (`match_routes` reads `full.canonical[0].stops`,
-exactly what `gtfs_chains.py` writes). Validated on **both** the sparse case (Tesco Extra
-— night-and-day improvement) and the dense case (Town Centre — also better, no
-regression), so road-following is now the **default** internal style.
+The Phase-1 classic straight-line internal map zigzagged for **sparse edge-of-town** places (the Tesco bypass superstore — one shared stop plus a couple of loops drawn as straight chords). Phase 2 fixes this by reusing the town skill's `internalRoads` pipeline verbatim: `build_internal_place_roads.js` runs `pull_roads.js` + `match_routes.js` over the walkshed, then gen_internal draws road-following lines. **No new drawing code** — the place data was already the right shape (`match_routes` reads `full.canonical[0].stops`, exactly what `gtfs_chains.py` writes). Validated on **both** the sparse case (Tesco Extra — night-and-day improvement) and the dense case (Town Centre — also better, no regression), so road-following is now the **default** internal style.
 
-**Fit + framing (v1.2, automatic):** the wrapper injects `internalRoads.fitExtra` = all
-drawn stops so a **cross-locality** place (Tesco straddles Eynesbury + St Neots) frames the
-whole walkshed instead of one locality's stops (was clipping routes at the frame), and
-defaults `fitMargin` to 8 mm for road-tail clearance. It also auto-hides gen_internal's
-default "River Great Ouse" label when the walkshed has no river. To sit a map lower on the
-page, freeze an `overrides.json` viewport with a bumped `offY` (Tesco v1.2). See
-`references/gotchas.md`. Classic
-(`build_internal_place.js`) stays the fallback where map-matching yields no line
-(a place with a single served stop). *Remaining phases: one-page flyer (Phase 3); portal
-fold-in (Phase 4).*
+**Fit + framing (v1.2, automatic):** the wrapper injects `internalRoads.fitExtra` = all drawn stops so a **cross-locality** place (Tesco straddles Eynesbury + St Neots) frames the whole walkshed instead of one locality's stops (was clipping routes at the frame), and defaults `fitMargin` to 8 mm for road-tail clearance. It also auto-hides gen_internal's default "River Great Ouse" label when the walkshed has no river. To sit a map lower on the page, freeze an `overrides.json` viewport with a bumped `offY` (Tesco v1.2). See `references/gotchas.md`. Classic (`build_internal_place.js`) stays the fallback where map-matching yields no line (a place with a single served stop). *Remaining phases: one-page flyer (Phase 3); portal fold-in (Phase 4).*
 
 ## Review (end of every session)
-Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the
-project memory (`project_bus_leaflets.md` / the place-skill memory). Flag out-of-scope
-items rather than silently fixing. This step is itself a standing rule.
+Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the project memory (`project_bus_leaflets.md` / the place-skill memory). Flag out-of-scope items rather than silently fixing. This step is itself a standing rule.
 
 ## Reference files (load on demand)
 - **[references/pipeline.md](references/pipeline.md)** — the full P1–P5 command walkthrough with the St Neots Tesco Extra numbers.
@@ -230,3 +104,4 @@ items rather than silently fixing. This step is itself a standing rule.
 - **[references/internal-reuse.md](references/internal-reuse.md)** — how the internal wrappers reuse `gen_internal.js`: classic-mode fit, required stub files, and the shipped **road-following** build (`build_internal_place_roads.js`).
 - **[references/gotchas.md](references/gotchas.md)** — duplicate route numbers, sparse GTFS timing-point trips, radius/fit blow-out, badge-label clipping, Overpass timeouts.
 - **Changing engine CODE (either skill's `assets/`)** → the town skill's **`references/changing-the-engine.md`**. It covers both skills: the invariants, the byte-identical gate set, the shared-`gen_internal.js` boundary, and the mandatory re-vendor of `gen_external_places.js` + `gen_internal.js` into the portal's `engine/place/`. A place-engine change is not finished until that hand-off is done.
+

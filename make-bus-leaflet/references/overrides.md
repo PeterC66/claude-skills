@@ -1,9 +1,6 @@
 # Manual overrides (Tier 1) — straighten routes, nudge labels, re-rotate
 
-The `overrides.json` system for the `make-bus-leaflet` workflow: hand layout that
-survives data refreshes, the drag editor that authors it, and the maintainer
-invariants for extending it. `overrides.json` is owned by S3. `%SK%` = the skill's
-`assets` folder.
+The `overrides.json` system for the `make-bus-leaflet` workflow: hand layout that survives data refreshes, the drag editor that authors it, and the maintainer invariants for extending it. `overrides.json` is owned by S3. `%SK%` = the skill's `assets` folder.
 
 Hand adjustments live in **`overrides.json`** (S3-owned, optional). The generators read it and **re-apply it on every regenerate**, so your tuning survives data refreshes. Absent or `{}` ⇒ identical to pure auto layout (verified byte-identical on St Ives + March). **Never hand-edit the generated SVG** — it is overwritten on the next build; put the change in `overrides.json` instead.
 
@@ -69,3 +66,4 @@ When you add a new override knob or port the hooks to a new town generator, keep
 
 **The per-town delta list is HISTORY, not a checklist** (corrected 2026-07-28). It used to read: *St Ives internal = +`5A`/`69` in order/panel-desc/panel-list + absolute icons; St Ives external = 7-branch `yMap`; March = POI/name-tidy/order/ATCO-prefix/loop-`33A`/title/desc/panel*. Every one of those has since migrated into `routes.json` per invariant 1 ("no town literals in a generator"). Verified across all seven built towns: the only town-ish strings left in a town's generator copy are the shared template's own St Ives-derived *defaults* (`riverLabel`, `anchorLabel`, the skill path), identical to the template's. So re-deriving a town copy is now simply **copy the current template in** — then gate, then **re-render the town**, or the shipped map silently keeps the old engine.
 5. **Per-route layer & top-level `routeColors` are no-ops when absent.** Route lines draw through `rpos(r,a)` (per-route `routeStops`/`align` ‖ `baseXY`); the divergence-tick loop is guarded `for(const r in routeOv)` and skips ticks within 0.01 mm of base, so it emits nothing without overrides. `routeColors` is merged into palette `C` in **all three** generators (`for(const r in RCOL) C[r]=RCOL[r]`) — empty object ⇒ no change. Keep these guards or the gate breaks.
+

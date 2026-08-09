@@ -1,24 +1,14 @@
 # Stages 4 & 5 — Generate (versioned) and Render
 
-Detailed steps for S4 and S5 of the `make-bus-leaflet` workflow. They always run
-together — one image version per build, both images. See SKILL.md for the stage model,
-versioning, and the resume-routing table. `%SK%` = the skill's `assets` folder.
+Detailed steps for S4 and S5 of the `make-bus-leaflet` workflow. They always run together — one image version per build, both images. See SKILL.md for the stage model, versioning, and the resume-routing table. `%SK%` = the skill's `assets` folder.
 
 ## Stage 4 — Generate (versioned)
-1. Decide the bump: **`--bump major`** if the **data** changed (a new S1 or S2 run), else **`--bump minor`** — config-only, engine-only or visual-only re-gen. First ever build → 1.0 automatically.
-   **A new S3 run does not by itself mean major.** (This step used to say "new S1/S2/S3 run ⇒ major", which contradicts every build since v6.2: each minor bump has its own new S3 run, because S3 is where a town's `routes.json` *and its generator copy* live. Clarified 2026-07-28.) Re-rendering a town purely to pick up an engine improvement is **minor** — the recipe is in [changing-the-engine.md](changing-the-engine.md) §2a.
+1. Decide the bump: **`--bump major`** if the **data** changed (a new S1 or S2 run), else **`--bump minor`** — config-only, engine-only or visual-only re-gen. First ever build → 1.0 automatically. **A new S3 run does not by itself mean major.** (This step used to say "new S1/S2/S3 run ⇒ major", which contradicts every build since v6.2: each minor bump has its own new S3 run, because S3 is where a town's `routes.json` *and its generator copy* live. Clarified 2026-07-28.) Re-rendering a town purely to pick up an engine improvement is **minor** — the recipe is in [changing-the-engine.md](changing-the-engine.md) §2a.
 2. `S4=stage.js new S4 --bump <major|minor>`; `cd "$S4"`.
-3. Assemble inputs: `stage.js pull S2 .` then `stage.js pull S3 .` (brings the data jsons + `routes.json` into `$S4` — S3 no longer carries the generators, item 3, 2026-08-04). **`pull` also re-stamps `routes.json`'s `"version"` to this run's version** — it prints `version stamp: "1.0" -> "1.1"` when it changes something. Do the pulls *before* generating, or the maps carry the previous version (`commit` will then refuse the run — see step 7).
-3b. **Copy the generators in fresh from the live template, then stamp the engine hash**: `cp "%SK%\gen_internal.js" .` and `cp "%SK%\gen_external_${routes.json's externalLayout, default radial}.js" gen_external.js`, then `node "%SK%\engine_version.js" --stamp routes.json` (records which engine build is about to draw this map — pure provenance, doesn't affect the run). `rollout.js --apply` does all of step 3b automatically.
+3. Assemble inputs: `stage.js pull S2 .` then `stage.js pull S3 .` (brings the data jsons + `routes.json` into `$S4` — S3 no longer carries the generators, item 3, 2026-08-04). **`pull` also re-stamps `routes.json`'s `"version"` to this run's version** — it prints `version stamp: "1.0" -> "1.1"` when it changes something. Do the pulls *before* generating, or the maps carry the previous version (`commit` will then refuse the run — see step 7). 3b. **Copy the generators in fresh from the live template, then stamp the engine hash**: `cp "%SK%\gen_internal.js" .` and `cp "%SK%\gen_external_${routes.json's externalLayout, default radial}.js" gen_external.js`, then `node "%SK%\engine_version.js" --stamp routes.json` (records which engine build is about to draw this map — pure provenance, doesn't affect the run). `rollout.js --apply` does all of step 3b automatically.
 4. `node gen_internal.js` → `internal.svg`; `node gen_external.js` → `external.svg`.
 5. **If `routes.json` has `internalSchematic{}`** (the opt-in tube-map-style third image): `node "%SK%\schematize_internal.js"` → `internal-schematic.svg` (+ a `schematic/` workspace subfolder with `debug-skeleton.svg`). Skip entirely when the key is absent. See [schematic-engine.md](schematic-engine.md).
-6. **If `routes.json` has `internalDiagram{}`** (the opt-in fully-abstract tube-map DIAGRAM): `node "%SK%\diagram_internal.js"` → `internal-diagram.svg` (+ a `diagram/` workspace with `debug-skeleton.svg` + `solved-nodes.json`). Honours S3's `diagram-layout.json` (pins) and `diagram-overrides.json` when present. Skip when the key is absent. See [diagram-engine.md](diagram-engine.md).
-6b. **`corridors_report.json` (only when the town uses `internalCorridors` or `corridorPalette`).**
-   `gen_internal.js` writes it beside the SVG: how much of each bundled member's route really is on
-   the bundle (warning below 0.6), the colour groups, and every hue still shared by unrelated
-   corridors. **Read the stderr warnings before committing S4** — a family that warns should be
-   dropped, not shipped. S6's `verify_report.js` re-reads the file and raises each as a SOFT finding,
-   so it reaches `verification.docx` too. Commit it as an S4 output.
+6. **If `routes.json` has `internalDiagram{}`** (the opt-in fully-abstract tube-map DIAGRAM): `node "%SK%\diagram_internal.js"` → `internal-diagram.svg` (+ a `diagram/` workspace with `debug-skeleton.svg` + `solved-nodes.json`). Honours S3's `diagram-layout.json` (pins) and `diagram-overrides.json` when present. Skip when the key is absent. See [diagram-engine.md](diagram-engine.md). 6b. **`corridors_report.json` (only when the town uses `internalCorridors` or `corridorPalette`).** `gen_internal.js` writes it beside the SVG: how much of each bundled member's route really is on the bundle (warning below 0.6), the colour groups, and every hue still shared by unrelated corridors. **Read the stderr warnings before committing S4** — a family that warns should be dropped, not shipped. S6's `verify_report.js` re-reads the file and raises each as a SOFT finding, so it reaches `verification.docx` too. Commit it as an S4 output.
 
 7. `stage.js commit S4 "$S4" --outputs internal.svg,external.svg[,internal-schematic.svg][,internal-diagram.svg][,corridors_report.json] --based-on "S2=$(basename $S2dir);S3=$(basename $S3dir)"`. It **refuses a version-stamp mismatch** (`routes.json` `"version"` ≠ the run's `v<N.N>`), because the SVGs are already drawn by this point: run `stage.js stampver "$S4"`, re-run the generators, then commit. `--force-version` overrides only if the stamp is deliberately different.
 
@@ -29,3 +19,4 @@ versioning, and the resume-routing table. `%SK%` = the skill's `assets` folder.
 4. `stage.js commit S5 "$S5" --outputs internal.jpg,external.jpg[,internal-schematic.jpg][,internal-diagram.jpg]`.
 
 (Delivery and the end-of-session review step stay in SKILL.md.)
+

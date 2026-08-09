@@ -52,8 +52,7 @@ Edit the raw XML (don't regenerate the document — that would lose the header, 
 - **Cell shading:** `<w:shd w:val="clear" w:color="auto" w:fill="FFF4CC"/>` (cream) or `…fill="E6F2FF"/>` (blue), on both `<w:tc>` of a row.
 - **Quotes/ampersand:** match the existing rows' plain ASCII quotes; escape `&` as `&amp;` in `<w:t>`.
 - **⚠️ The 8-hex-digit trap:** every `w14:paraId`, `wp14:anchorId` and `wp14:editId` you add **must be exactly 8 hex digits**. lxml/`unpack.py` parse longer values happily, so a clean re-unpack is **not** proof — but **Word will refuse to open the file** ("Word experienced an error trying to open the file"). This skill appends rows and embeds images on every run, which is exactly when it bites. (Same trap, same wording, in `update-outings`.)
-- **Test-open in Word is the real check.** LibreOffice isn't installed and the skill's `soffice` wrapper is Unix-only, so there's no PDF/image proof from the packed file alone. Open the **test** docx read-only over COM:
-  `$word = New-Object -ComObject Word.Application; $doc = $word.Documents.Open("C:\Claude\mom_test.docx",$false,$true)` — **a successful open is your proof the 8-hex IDs are valid**; `$doc.ComputeStatistics(2)` gives the page count. `$doc.Close()` then `$word.Quit()` afterwards, or the lock blocks the overwrite. Only then copy the test file over the original, and still ask the user to eyeball it in Word (especially that images sit neatly in their cells).
+- **Test-open in Word is the real check.** LibreOffice isn't installed and the skill's `soffice` wrapper is Unix-only, so there's no PDF/image proof from the packed file alone. Open the **test** docx read-only over COM: `$word = New-Object -ComObject Word.Application; $doc = $word.Documents.Open("C:\Claude\mom_test.docx",$false,$true)` — **a successful open is your proof the 8-hex IDs are valid**; `$doc.ComputeStatistics(2)` gives the page count. `$doc.Close()` then `$word.Quit()` afterwards, or the lock blocks the overwrite. Only then copy the test file over the original, and still ask the user to eyeball it in Word (especially that images sit neatly in their cells).
 
 ## What the user must do each month
 Tell the user these steps (they own them):
@@ -63,3 +62,4 @@ Tell the user these steps (they own them):
 4. **Invoke** `/update-monthly-meetings` (or just ask to "update the monthly meetings handout").
 5. **Review the proposed-changes table** and confirm or redirect.
 6. **Afterwards, open the updated doc in Word**, eyeball the layout/images, and save.
+

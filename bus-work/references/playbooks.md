@@ -165,3 +165,4 @@ Not your work. Two cases:
 - **Sat for two weeks or more** — their published map is going stale while they don't act. A nudge by email, naming the map and what changed. Record that you nudged.
 
 If it stays unaccepted, it stays unaccepted: the customer owns their published map, and re-proposing next month is a normal outcome, not a failure.
+

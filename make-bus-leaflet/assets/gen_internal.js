@@ -1591,26 +1591,45 @@ if(RJ.panelGroups){
   const ungrouped=panelOrder.filter(r=>!groups.some(g=>g.rs.includes(r)));
   if(ungrouped.length) groups.push({name:'', rs:ungrouped});
   for(const g of groups){
-    if(g.name){ py+=5.4; out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">${esc(g.name.toUpperCase())}</text>`); }
-    for(const r of g.rs){
+    // Group-header spacing is deliberately asymmetric: more room ABOVE the
+    // header (to read as a break from the previous group) than BELOW it
+    // (the header sits right above its own routes, not floating between
+    // them) — was 5.4/PROW(8), i.e. backwards, until 2026-08-11.
+    if(g.name){ py+=7.5; out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">${esc(g.name.toUpperCase())}</text>`); }
+    g.rs.forEach((r,i)=>{
       const d=INTDESC[r]||[r,''];
-      py+=PROW; badge(PX+4,py,r,PBR);
+      py += (g.name && i===0) ? PROW-1.5 : PROW;
+      badge(PX+4,py,r,PBR);
       out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">${esc(d[0])}</text>`);
       out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="2.8" fill="#555">${esc(d[1])}</text>`);
-    }
+    });
   }
 } else if(PCOLS){
   // multi-column panel: a town with more services than one column fits on A4.
   // Column-major so a column reads top-to-bottom like the single-column panel.
   const nCol=Math.max(1,PCOLS.cols|0), cw=PCOLS.width||48, crow=PCOLS.row||PROW;
+  // Badge radius must fit inside whatever row pitch this town picked, or
+  // consecutive rows' bubbles overlap (High Wycombe: row 4.9 vs the old
+  // fixed PBR-0.6=3.4 radius/6.8 diameter — badges overlapped). Shrink to
+  // fit crow, down to a legibility floor of 1.8mm; if even that overlaps,
+  // the row pitch itself is too tight and needs widening/another column —
+  // warn rather than silently print unreadable or overlapping badges.
+  const pcolsBadgeR = Math.min(PBR-0.6, Math.max(1.8, crow/2-0.5));
+  if (2*pcolsBadgeR+0.3 > crow) process.stderr.write(`panelCols: row ${crow}mm is too tight even at the ${pcolsBadgeR.toFixed(1)}mm badge floor (needs >= ${(2*1.8+0.3).toFixed(1)}mm) — widen row or add a column.\n`);
   const per=Math.ceil(panelOrder.length/nCol), top=py;
   panelOrder.forEach((r,i)=>{
     const col=Math.floor(i/per), row=i%per;
     const cx=PX+col*cw, cy=top+(row+1)*crow;
     const d=INTDESC[r]||[r,''];
-    badge(cx+3,cy,r,PBR-0.6);
+    badge(cx+3,cy,r,pcolsBadgeR);
+    // Subtitle sits ~35% of the row pitch below its own title, not at a
+    // fixed +3.1mm offset or an even 50/50 split — a 50/50 split (2026-08-11)
+    // fixed the previous overlap but read as too close above the title/too
+    // loose below it once seen printed; skewing the split gives the title
+    // more clear air above (from the previous row's subtitle) while pulling
+    // its own subtitle in tighter underneath (2026-08-11, second pass).
     out(`<text x="${cx+7.6}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#111">${esc(d[0])}</text>`);
-    out(`<text x="${cx+7.6}" y="${cy+2.5}" font-family="Arial" font-size="2.3" fill="#555">${esc(d[1])}</text>`);
+    out(`<text x="${cx+7.6}" y="${(cy-0.6+crow*0.35+0.1).toFixed(2)}" font-family="Arial" font-size="2.3" fill="#555">${esc(d[1])}</text>`);
   });
   py=top+per*crow;
 } else {

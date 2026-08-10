@@ -59,11 +59,13 @@ function labelSet(svg) {
   return [...out].sort();
 }
 
-// The footer's "Map v<N.N> · <validFrom>" stamp (footer.js) changes on every
-// version bump by construction — every rollout (town or place) legitimately
-// ships a new version, so this label always differs and must never itself
-// count as a "lost"/"gained" label. Filtered out by labelDiff below.
-const VERSION_STAMP_RE = /^Map v[\d.]+(?: · .*)?$/;
+// The footer's validity stamp (footer.js) can legitimately change on a data
+// refresh (a new `validFrom`) independent of any real content change, so it
+// must never itself count as a "lost"/"gained" label. Matches both the
+// current "Valid from <date>" format and the pre-2026-08-10 "Map v<N.N> ·
+// <date>" format (old archived SVGs / mid-migration diffs still use it).
+// Filtered out by labelDiff below.
+const VERSION_STAMP_RE = /^(Valid from .*|Map v[\d.]+(?: · .*)?)$/;
 
 // Label-set diff, oriented old->new (matches changing-the-engine.md's
 // comm -23/-13 recipe): lost = present in old, gone in new; gained = present

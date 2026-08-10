@@ -142,6 +142,13 @@ function portalDrift() {
   const rows = [
     [path.join(SK, 'icons.js'), path.join(PORTAL, 'engine', 'icons.js')],
     [path.join(SK, 'render.js'), path.join(PORTAL, 'engine', 'render.js')],
+    // footer.js was missing from this table until 2026-08-10: gen_internal.js
+    // resolves it via SKILL_ASSETS just like icons.js (see its _FOOTER IIFE),
+    // so a footer-only skill change silently drifted the portal — the reproduce
+    // gate still "passed" locally (own-copy-vs-own-copy) and only failed when
+    // verify:area ran the portal's stale engine/footer.js against a fixture
+    // built with the new one.
+    [path.join(SK, 'footer.js'), path.join(PORTAL, 'engine', 'footer.js')],
     [path.join(SK, 'gen_internal.js'), path.join(PORTAL, 'engine', 'place', 'gen_internal.js')],
     [path.join(PSK, 'gen_external_places.js'), path.join(PORTAL, 'engine', 'place', 'gen_external_places.js')],
     [path.join(SK, 'schematize_internal.js'), path.join(PORTAL, 'engine', 'expert', 'schematize_internal.js')],

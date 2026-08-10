@@ -135,10 +135,12 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 
 | Skill file | Portal destination |
 |---|---|
-| `%SK%\icons.js`, `%SK%\render.js` | `engine\` |
+| `%SK%\icons.js`, `%SK%\render.js`, `%SK%\footer.js` | `engine\` |
 | `%SK%\gen_internal.js` | `engine\place\` |
 | `%PSK%\gen_external_places.js` | `engine\place\` |
 | `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
+
+> **`footer.js` was missing from this table until 2026-08-10.** `gen_internal.js` resolves it via `SKILL_ASSETS` exactly like `icons.js` (see its `_FOOTER` IIFE) — but because it wasn't a row here, a footer-only skill change (dropping the printed engine build number, see `s3-config.md`'s `version` key) silently left the portal's `engine\footer.js` stale. It didn't show up as a gate failure until `npm run verify:area` ran against a freshly re-rendered St Ives fixture — the shipped SVG (built with the new footer.js) no longer matched what the portal's *old* footer.js produced, a 2-byte diff (`Map v6.23 · …` vs `Valid from …`) that was easy to miss. `status.js`'s vendoring-drift table now includes this row so it can't happen silently again.
 
 **Area (town) generators are NOT in this table** — `gen_internal.js`/`gen_external_*.js` for an area map are copied straight into that map's own `data/maps/<id>/data/` by the portal's `scripts/import-map.mjs`, from whatever `--src` was used at import time, not from `engine/`. So an existing area map (St Ives, March, …) stays on whatever generator it was imported with, same as a town in this repo stays on whatever its own S3 run committed — re-importing (or manually refreshing that map's `data/maps/<id>/data/gen_*.js`) is the only way an already-built area map picks up a skill-side change. **If you're live-verifying a change by clicking through the portal against an existing demo area map, check that map's own generator copy first** — a stale one will silently no-op the new behaviour even though the sanitize/validation layer accepts it fine, which reads exactly like a bug in the new feature until you notice the file predates your change (caught 2026-08-03 verifying `hiddenOperators` against March's demo map).
 

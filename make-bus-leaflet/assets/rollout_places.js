@@ -205,6 +205,17 @@ function rolloutOnePlace(p) {
   stage(p.dir, 'pull', 'S1', s4Dir); // place.json is an S1 output (pipeline.md P4 note) — pull it explicitly, not just S2
   stage(p.dir, 'pull', 'S2', s4Dir);
   stage(p.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
+  // roads_geo.json/routes_paths.json (and anything else build_internal_place_roads.js
+  // wrote) are S4-GENERATED, not registered S2 outputs — `stage.js pull S2` never
+  // brings them in, so a real (non-scratch) apply run was missing them entirely
+  // and crashed reading roads_geo.json (found 2026-08-10 rolling out all 5
+  // places: the scratch/dry-run path above already carries these forward from
+  // prevS4, this real path didn't). Mirror that here.
+  for (const name of fs.readdirSync(prevS4.dir)) {
+    const fp = path.join(prevS4.dir, name);
+    if (fs.statSync(fp).isDirectory()) continue;
+    if (name.endsWith('.json') && !s3Carry.includes(name) && !fs.existsSync(path.join(s4Dir, name))) fs.copyFileSync(fp, path.join(s4Dir, name));
+  }
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   let r = buildInternal(s4Dir);
   if (!r.ok || !fs.existsSync(path.join(s4Dir, 'internal.svg'))) {

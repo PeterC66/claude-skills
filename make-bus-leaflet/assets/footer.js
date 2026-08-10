@@ -21,10 +21,13 @@ function footerBand({ notes, version, validFrom = 'Summer 2026', x0 = 8, x1 = 29
     const y = bottomY - lineGap * (n - i);
     out.push(`<text x="${x0}" y="${y.toFixed(2)}" font-family="Arial" font-size="${size}" fill="#666">${esc(t)}</text>`);
   });
-  // town-skill versions are bare numbers ("6.9"); place-skill versions already carry a
-  // leading "v" ("v1.4") — strip it so the "Map v…" prefix never doubles up.
-  const verNum = version ? String(version).replace(/^v/i, '') : null;
-  const left = [verNum ? `Map v${esc(verNum)}` : null, validFrom ? esc(validFrom) : null].filter(Boolean).join(' · ');
+  // The internal engine build number (`version`) is deliberately NOT printed on the
+  // public sheet any more (2026-08-10, Peter) — it's an internal build counter, not
+  // a fact about the map's content, and duplicated/confused with the portal's own
+  // customer-facing version pill. It stays available in routes.json's `version`/
+  // `engine` fields and the S4/S5 run-folder name for internal use; `version` is
+  // still accepted here (unused) so existing call sites don't need to change.
+  const left = validFrom ? `Valid from ${esc(validFrom)}` : null;
   if (left) out.push(`<text x="${x0}" y="${bottomY}" font-family="Arial" font-size="${size}" fill="#999">${left}</text>`);
   out.push(`<text x="${x1}" y="${bottomY}" font-family="Arial" font-size="${size}" fill="#999" text-anchor="end">Map design © BusMaps.uk</text>`);
   return out.join('\n');

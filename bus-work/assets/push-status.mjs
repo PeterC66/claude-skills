@@ -79,6 +79,12 @@ if (!SK) {
   process.exit(1);
 }
 
+const modeLabel = REMOTE ? `REMOTE — LIVE PORTAL (${URL_BASE})` : `LOCAL — dev checkout (${PORTAL})`;
+const bannerRule = '='.repeat(Math.max(modeLabel.length + 4, 40));
+console.log(`\n${bannerRule}`);
+console.log(`  ${modeLabel}`);
+console.log(bannerRule);
+
 console.log(`Running status.js --json (this regenerates + diffs every town/place — a minute or two)...`);
 const r = spawnSync(process.execPath, [path.join(SK, 'status.js'), '--json', '--buses', BUSES, '--portal', PORTAL],
   { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });

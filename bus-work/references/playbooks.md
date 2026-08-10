@@ -110,15 +110,14 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
 ## `refresh` — a portal map whose services are changing (R4)
 
 1. **Regenerate centrally.** Re-run the map's own skill for the town/place to produce a fresh S5-render dir. Same making step as a build, for an existing map. The worklist item's note carries the specific upcoming changes from the BODS scan — use them to check the regenerated data actually reflects them.
-2. **Stage it** (dev server stopped), in `PORTAL`:
+2. **Stage it**, in `PORTAL` (`C:\Claude\community-bus-maps`):
 
-```powershell
-node scripts/propose-update.mjs --map <slug> --src "<fresh S5-render dir>" --note "BODS <date> refresh"
-```
+   - **Against the live site** (item 4, 2026-08-10): `npm run deliver -- --map <slug> --kind area|place --src "<fresh S5-render dir>" --note "BODS <date> refresh"`. One laptop command — scp's the render to the VPS, verifies it byte-identical *before touching the live service*, stops the portal, runs `propose-update.mjs` inside a throwaway container, restarts, health-checks. Needs `DEPLOY_HOST`/`DEPLOY_SSH_KEY`/`DEPLOY_APP_DIR` in `.env`. `worklist.mjs` prints exactly this form when it's reading the live worklist (`--url`/`BUSMAPS_URL` set).
+   - **Against local dev** (dev server stopped): `node scripts/propose-update.mjs --map <slug> --src "<fresh S5-render dir>" --note "BODS <date> refresh"` — same script, run directly, no SSH round-trip.
 
-It stages *beside* the live map and never touches it, computes a plain-language service-facts diff (routes added/removed, descriptions, stops, operators, validity dates) and prints it. **Read that diff** — it is the sanity check that the regeneration did what the scan said it would.
+Either way it stages *beside* the live map and never touches it, computes a plain-language service-facts diff (routes added/removed, descriptions, stops, operators, validity dates) and prints it. **Read that diff** — it is the sanity check that the regeneration did what the scan said it would.
 
-3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. Accepting is blocked while a publication awaits review.
+3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. Accepting is blocked while a publication awaits review. An admin can also act on it directly — the admin console's **Refreshes** tab (`/app/admin`) carries a link to the map plus Accept/Decline buttons (added 2026-08-10; needs a VPS deploy to reach the live site, since it's frontend code).
 4. Refusals worth knowing: a newer refresh **supersedes** any still-pending one (one open per map); the script refuses if the map has no built data yet ("nothing to refresh" — build it first); don't stage a no-op if the diff says nothing changed.
 5. If the item said "not yet flagged in the portal", run `npm run check-upcoming` in `PORTAL` once so the refresh-flag is recorded in the admin Messages inbox.
 

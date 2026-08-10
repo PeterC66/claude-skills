@@ -265,7 +265,16 @@ if (upcoming) {
         why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.`,
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,
-        do: [
+        // REMOTE: the target is the live site, so deliver-map.mjs is the only
+        // command that actually gets a render there (SSH-based, item 4 of the
+        // fool-proofing plan, 2026-08-10) — the bare propose-update.mjs form
+        // below only ever writes to a LOCAL DATA_DIR and would silently do
+        // nothing useful against a live worklist. LOCAL: propose-update.mjs
+        // directly is still simpler/faster for testing against local dev.
+        do: REMOTE ? [
+          { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
+          { kind: 'shell', cwd: PORTAL, cmd: `npm run deliver -- --map ${m.slug} --kind ${m.kind} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
+        ] : [
           { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
           { kind: 'shell', cwd: PORTAL, cmd: `node scripts/propose-update.mjs --map ${m.slug} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
         ],
@@ -357,12 +366,21 @@ const meta = {
 };
 
 if (AS_JSON) {
-  console.log(JSON.stringify({ meta, items: limited, gates }, null, 2));
+  console.log(JSON.stringify({ meta: { ...meta, portalLabel: REMOTE ? `REMOTE — LIVE PORTAL (${URL_BASE})` : `LOCAL — dev checkout (${PORTAL})` }, items: limited, gates }, null, 2));
   process.exit(0);
 }
 
 const BAND = { 0: 'BROKEN', 1: 'SOMEONE IS BLOCKED', 2: 'SOMEONE IS BLOCKED', 3: 'SOMEONE IS BLOCKED', 4: 'YOUR MOVE', 5: 'YOUR MOVE', 6: 'YOUR MOVE', 7: 'YOUR MOVE', 8: 'HOUSEKEEPING', 9: 'WAITING ON OTHERS' };
-console.log(`\nBusMaps.uk worklist — ${meta.portal.mode} portal (${REMOTE ? URL_BASE : PORTAL})`);
+
+// Which portal this run actually looked at is the single easiest thing to
+// misread once a real live site exists alongside the dev checkout — a bare
+// mode word buried in a summary line is too easy to skim past. Bannerize it.
+const modeLabel = REMOTE ? `REMOTE — LIVE PORTAL (${URL_BASE})` : `LOCAL — dev checkout (${PORTAL})`;
+const bannerRule = '='.repeat(Math.max(modeLabel.length + 4, 40));
+console.log(`\n${bannerRule}`);
+console.log(`  ${modeLabel}`);
+console.log(bannerRule);
+console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
 console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${items.length} item(s)\n`);
 for (const w of warnings) console.log(`  ! ${w}`);
 if (warnings.length) console.log('');

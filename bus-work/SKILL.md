@@ -72,16 +72,18 @@ Every time, without being asked:
 - **Never relax a gate to make it pass.** A `verify` that says DIFF is information, not an obstacle.
 - **`npm run verify` skips silently** when its fixture dir is unset — a green run with no byte counts proves nothing. Require the word PASS *and* byte counts before calling an import verified.
 - **PowerShell is the shell.** `FIXTURE_DIR=… npm run …` is bash and silently does nothing here; use `$env:FIXTURE_DIR = "…"; npm run …`. The worklist already emits the PowerShell form.
-- **Stop the dev server before any command that writes** to the portal (`import-map.mjs`, `propose-update.mjs`, `seed-demo.mjs`). Reading — including this worklist — is fine either way.
-- **Deliver only from the machine that hosts the portal.** See below.
+- **Stop the dev server before any command that writes directly** to a *local* portal (`import-map.mjs`, `propose-update.mjs`, `seed-demo.mjs` run in place). Reading — including this worklist — is fine either way. `npm run deliver` (below) is different: it runs against the live VPS over SSH and stops *that* service itself, briefly, as part of its own sequence — it doesn't touch your local dev server at all.
+- **Delivering to the live site is `npm run deliver`, run from the laptop** (item 4, 2026-08-10 — see below). There is no longer a "must run on the machine that hosts the portal" restriction for this.
 
 ## Remote portals — the honest state
 
-**Reading a remote portal works now.** The admin API is cookie-authenticated and this tool only ever GETs, so `--url` + the `cbm_session` cookie from a signed-in admin browser session gives the same worklist from anywhere.
+**Reading a remote portal works.** The admin API is cookie-authenticated and this tool only ever GETs, so `--url` + the `cbm_session` cookie from a signed-in admin browser session gives the same worklist from anywhere.
 
-**Delivery does not.** `import-map.mjs` and `propose-update.mjs` write straight to a local SQLite and `DATA_DIR`; they must run on the machine the portal runs on. If the worklist is in remote mode and the chosen item needs a delivery command, **say so and stop before running it** — do not run a local delivery command and imply it reached the remote portal.
+**Delivery works too**, via `scripts/deliver-map.mjs` in `community-bus-maps` (`npm run deliver`), not an HTTP endpoint. This is item 4 of `Buses\Development Docs\foolproofing-plan_2026-08-07.md`, built 2026-08-10 — originally scoped there as `POST /api/admin/ingest`, built instead by extending the SSH-based delivery script that already existed for brand-new maps (GO-LIVE.md §2.1 Phase 1, shipped 2026-08-09): scp the render to the VPS, verify it byte-identical *before the live service is touched*, stop the portal, run the real script (`import-map.mjs` or, new, `propose-update.mjs` when `--map <slug>` is given) inside a throwaway container, restart, `/health?deep=1`. Needs `DEPLOY_HOST`/`DEPLOY_SSH_KEY`/`DEPLOY_APP_DIR` in `community-bus-maps/.env`.
 
-The remaining portal-side piece is **`POST /api/admin/ingest`** (not built): accept a packed S5-render dir plus an operator token (the `METRICS_TOKEN` pattern already in `.env`), run the existing import/propose logic server-side, and run the byte-identical verify *before* accepting. That retires the "stop the dev server", "which fixture env var" and "which machine am I on" traps in one go. It is item 4 of `Buses\Development Docs\foolproofing-plan_2026-08-07.md`.
+`worklist.mjs` itself already knows this: when it's reading the **live** worklist (`--url`/`BUSMAPS_URL` set), a `refresh` item's printed command is the `npm run deliver -- --map …` form; reading the **local** worklist, it's still the bare `propose-update.mjs` form (no SSH round-trip needed for local dev). If you ever see a bare `propose-update.mjs`/`import-map.mjs` command printed while the worklist is in remote mode, that's a regression — it would silently write to a local `DATA_DIR` and do nothing to the live site.
+
+An admin can also accept/decline a staged refresh straight from the admin console now (2026-08-10) — the **Refreshes** tab (`/app/admin`) carries a link to the map and Accept/Decline buttons, rather than requiring a trip to `/app/maps/:id` or signing in as the customer (unnecessary — an admin already has permission). This is frontend code, so it needs a VPS deploy to reach the live site; it isn't automatic the way `deliver-map.mjs` (laptop-only, no deploy needed) is.
 
 ## What feeds the worklist
 

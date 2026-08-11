@@ -1,0 +1,36 @@
+{
+  "_comment": "Worked example - the rules actually agreed for the 2026-08-11 update. 'categories' adds rows to the Categories sheet so these allocate themselves next time; 'byCategory' places every blank row with that Beacon category; 'byTransaction' is keyed tkey|category and overrides byCategory, because one transaction can be split across several Beacon categories.",
+  "categories": [
+    { "newcat": "9ADM Payment charges", "regexp": "PayPal commission|SumUp fee" },
+    { "newcat": "Particular Groups", "regexp": "Particular groups" }
+  ],
+  "byCategory": {
+    "PayPal commission": "9ADM Payment charges",
+    "SumUp fee": "9ADM Payment charges",
+    "Particular groups": "Particular Groups"
+  },
+  "byTransaction": {
+    "2862003|Room Hire": "3MOM Room Hire",
+    "2939025|Room Hire": "3MOM Room Hire",
+    "3021497|Room Hire": "3MOM Room Hire",
+    "3072463|Room Hire": "3MOM Room Hire",
+    "3108858|Room Hire": "3MOM Room Hire",
+    "3135506|Room Hire": "3MOM Room Hire",
+    "2880028|Newsletter Printing": "7NWL Magazine Printing",
+    "3108866|Newsletter Printing": "7NWL Magazine Printing",
+    "2957694|Newsletter Printing": "7NWL Newsletter Printing",
+    "3044106|Newsletter Printing": "7NWL Newsletter Printing",
+    "2957702|Meetings refreshments": "9ADM Committee Expenses",
+    "3146268|Meetings refreshments": "9ADM Committee Expenses",
+    "2957694|Meetings refreshments": "9ADM Committee Expenses",
+    "3044106|Meetings refreshments": "9ADM Committee Expenses",
+    "3018276|Meetings refreshments": "5ENG New Member Meetings",
+    "3046167|Meetings refreshments": "3MOM Refreshments etc",
+    "3146267|Meetings refreshments": "3MOM Refreshments etc",
+    "2997271|Misc Expense": "8SYS Software",
+    "3075923|Misc Expense": "9ADM Other Expenses",
+    "2957694|Misc Expense": "6MKT Other Expenses",
+    "3044106|Misc Expense": "9ADM Other Expenses",
+    "2957694|Admin General": "9ADM Other Expenses"
+  }
+}

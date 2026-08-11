@@ -113,7 +113,14 @@ const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
   try{ if(fs.existsSync(local)) return local; }catch(e){}
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
-const { footerBand } = require(_FOOTER);
+const { footerBand, footerPlateTop } = require(_FOOTER);
+// The internal map's own footer notes are fixed (not per-town), so the footer plate's
+// top edge is a known constant — computed once here and used both by the mapNotes
+// collision check below and the footerBand() call at the very end of this file. Keep
+// these two in sync: whichever notes array is passed to footerBand must match this one.
+const INTERNAL_FOOTER_NOTES = ['Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org (June 2026), Open Government Licence v3.0.',
+          'Places: © OpenStreetMap contributors (ODbL). Stop names in italics are approximate; check live times at bustimes.org.'];
+const FOOTER_PLATE_TOP = footerPlateTop({ notes: INTERNAL_FOOTER_NOTES });
 const atco2name = JSON.parse(fs.readFileSync(DIR+'/atco2name.json','utf8'));
 const RJ  = JSON.parse(fs.readFileSync(DIR+'/routes.json','utf8'));
 const C = RJ.palette, TXT = RJ.textOn;
@@ -1544,10 +1551,35 @@ for(const n of (RJ.mapNotes||[])){
   if(n.at && (atco2ll[n.at]||baseOv[n.at])){ const p=XYS(n.at); x=p[0]; y=p[1]; } else { x=n.x||0; y=n.y||0; }
   x+=(n.dx||0); y+=(n.dy||0);
   const sz=n.size||2.4, anc=n.anchor||'start';
-  const w=String(n.text).length*sz*0.52;
-  const bx = anc==='start'?x : anc==='end'?x-w : x-w/2;
-  reserve(bx-0.4,y-sz,bx+w+0.4,y+1);
-  out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-size="${sz}" font-style="italic" fill="${n.color||'#333'}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(n.text)}</text>`);
+  const charW=sz*0.52;
+  // Word-wrap long notes to the space actually available in the note's own direction
+  // (to the page edge on the open side of its anchor), instead of drawing one long line
+  // that runs off the page or gets clipped by the footer band. Short notes that already
+  // fit on one line are unaffected (lines.length===1, same output as before).
+  const avail = anc==='start' ? (294-6-x) : anc==='end' ? (x-6) : Math.min(x-6,294-6-x)*2;
+  const maxChars = Math.max(20, Math.floor(avail/charW));
+  const words=String(n.text).split(' '); const lines=[]; let cur='';
+  for(const wd of words){ if((cur+' '+wd).trim().length>maxChars){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }
+  if(cur.trim()) lines.push(cur.trim());
+  const lineGap=n.lineGap||sz*1.35;
+  // Catch the mistake that bit Beaconsfield Simpson Centre + Waitrose (2026-08-11): a
+  // mapNotes entry authored with a y so low it sits under the footer's backing plate,
+  // which is drawn on top later and visually swallows it. The engine can't know where
+  // it's SAFE to put a note (that depends on the town's route geometry), so it doesn't
+  // try to auto-relocate — it just warns loudly, the same way the panelCols row-pitch
+  // check does below, so the next occurrence is a build-time warning instead of a
+  // silent visual bug someone has to spot in a rendered JPG.
+  const lastLineY = y + (lines.length-1)*lineGap;
+  if (lastLineY > FOOTER_PLATE_TOP - 2) {
+    process.stderr.write(`mapNotes: "${String(n.text).slice(0,40)}${n.text.length>40?'…':''}" ends at y=${lastLineY.toFixed(1)}, inside/near the footer plate (top ${FOOTER_PLATE_TOP.toFixed(1)}) — it will be hidden or look clipped. Move its y up (see Beaconsfield Simpson Centre/Waitrose routes.json for the fix).\n`);
+  }
+  lines.forEach((ln,i)=>{
+    const ly=y+i*lineGap;
+    const w=ln.length*charW;
+    const bx = anc==='start'?x : anc==='end'?x-w : x-w/2;
+    reserve(bx-0.4,ly-sz,bx+w+0.4,ly+1);
+    out(`<text x="${x.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" font-style="italic" fill="${n.color||'#333'}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(ln)}</text>`);
+  });
 }
 
 // ---- terminus destination badges (opt-in: routes.json "internalTermini":true + "terminiLabels") ----
@@ -1687,8 +1719,7 @@ if (IR && IR.northArrow!==false) {
 // footer band: attribution note + version + BusMaps.uk (shared across all four map types — footer.js)
 const _ver = process.env.LEAFLET_VERSION || RJ.version;
 out(footerBand({
-  notes: ['Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org (June 2026), Open Government Licence v3.0.',
-          'Places: © OpenStreetMap contributors (ODbL). Stop names in italics are approximate; check live times at bustimes.org.'],
+  notes: INTERNAL_FOOTER_NOTES,
   version: _ver, validFrom: RJ.validFrom || 'Summer 2026'
 }));
 

@@ -9,8 +9,39 @@
 // map types keep an identical bottom-right corner regardless of how many note lines they need.
 const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Word-wrap each note to the available width (x1-x0) so a caller can hand over one long
+// string (e.g. place-external's concatenated attribution) without it running off the page
+// edge. Char width is estimated the same way gen_internal.js estimates label widths
+// (size*0.52/char). Already-short lines pass through unsplit, so hand-authored multi-line
+// notes render exactly as before. Shared by footerBand and footerPlateTop so the two can
+// never disagree on how many lines a given `notes` value will actually render as.
+function wrapNotes(notes, x0, x1, size) {
+  const rawLines = (Array.isArray(notes) ? notes : [notes]).filter(Boolean);
+  const maxChars = Math.max(20, Math.floor((x1 - x0) / (size * 0.52)));
+  const noteLines = [];
+  for (const raw of rawLines) {
+    const words = String(raw).split(' ');
+    let cur = '';
+    for (const wd of words) {
+      if ((cur + ' ' + wd).trim().length > maxChars) { noteLines.push(cur.trim()); cur = wd; }
+      else cur += ' ' + wd;
+    }
+    if (cur.trim()) noteLines.push(cur.trim());
+  }
+  return noteLines;
+}
+
+// The y (page mm) at which the footer's backing plate starts, for a given notes value —
+// exposed so a generator can check BEFORE drawing its own map content (e.g. gen_internal.js's
+// mapNotes) whether something is about to land underneath the footer and get visually lost.
+// Same defaults as footerBand; call with the same args you intend to pass footerBand with.
+function footerPlateTop({ notes, x0 = 8, x1 = 294, bottomY = 206, lineGap = 3.6, size = 2.8 } = {}) {
+  const n = wrapNotes(notes, x0, x1, size).length;
+  return bottomY - lineGap * n - size * 1.3;
+}
+
 function footerBand({ notes, version, validFrom = 'Summer 2026', x0 = 8, x1 = 294, bottomY = 206, lineGap = 3.6, size = 2.8, pageW = 297, pageH = 210 }) {
-  const noteLines = (Array.isArray(notes) ? notes : [notes]).filter(Boolean);
+  const noteLines = wrapNotes(notes, x0, x1, size);
   const n = noteLines.length;
   // Backing plate: map content (route lines, exit-arrow labels) is drawn earlier in the SVG
   // and its extent varies per town/place, so rather than chase a safe y for every geometry,
@@ -33,4 +64,4 @@ function footerBand({ notes, version, validFrom = 'Summer 2026', x0 = 8, x1 = 29
   return out.join('\n');
 }
 
-module.exports = { footerBand };
+module.exports = { footerBand, footerPlateTop };

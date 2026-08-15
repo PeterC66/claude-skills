@@ -7,3 +7,6 @@ __pycache__/
 
 # Working backups (git history is the backup)
 *.bak
+
+# preview_design.js scratch output (default --out dir)
+make-bus-leaflet/assets/design-preview/

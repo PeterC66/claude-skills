@@ -912,6 +912,11 @@ try { fs.copyFileSync(path.join(DIR, 'diagram-overrides.json'), path.join(WD, 'o
   if (DG.features && rj.features)
     rj.features = rj.features.map(f => DG.features[f.key] ? Object.assign({}, f, DG.features[f.key]) : f);
   if (DG.mapNotes) rj.mapNotes = (rj.mapNotes || []).concat(DG.mapNotes);
+  // These coordinates are solved onto a tube-map grid: they carry topology, not
+  // distance. Tell gen_internal so `design.scaleBar` prints the words rather than
+  // a bar — its projection maths would happily produce a confident, meaningless
+  // "500 m" from this workspace. Inert without that key, so nothing moves.
+  rj.notToScale = true;
   // render config under its own WORKSPACE-ONLY key (see gen_internal.js: the
   // town's `internalDiagram` key must stay inert in the other two builds)
   rj.internalDiagramRender = {

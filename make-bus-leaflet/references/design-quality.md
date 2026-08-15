@@ -75,6 +75,28 @@ Three details worth knowing:
 - **A corner, not the middle.** Among the positions completely clear of ink and of every reserved box, the one nearest a frame corner wins — a compass belongs at the edge of a sheet.
 - **A configured `{x,y}` is still honoured when it is clear**, and overruled with a note on stderr when it is not. `northArrow:false` still suppresses it, and an explicit `angle` is still required by the schematic and diagram pre-stages, whose coordinates are pre-rotated.
 
+That search is now a shared helper, `spotSearch(boxOf, wantX, wantY, tol)` — the scale bar is its second caller, and anything else free-floating should be its third rather than a fourth inline loop.
+
+## `design: { scaleBar: true }`
+
+A scale bar on the geographic sheets, and the words **`Diagram — not to scale`** on the schematic, diagram and external ones. Both go through `spotSearch`, so they take a blank corner and the labels work around them; both are reserved before the labels solve.
+
+**Read this before changing the bar, because measuring the projection moved the line between those two cases.** §4.6 of the plan assumed the geographic sheets were to a single scale. They are not. Every town runs the radial fisheye in `compress()`: true scale inside `internalRoads.focus.coreKm`, then `focus.comp` beyond it. Measured across all eight towns on 2026-08-15, `comp` is between **0.30 and 0.50** — the page scale steps by a factor of **2 to 3.3** at the core boundary, and Beaconsfield and St Neots carry a detail lens on top of that. An unqualified bar would be right in the middle of the sheet and wrong by 3× at the edges: the difference between a fifteen-minute walk and a forty-five-minute one, which is worse than no bar at all.
+
+What rescues the device is that the core is not a small disc. Fitted to the frame it is **34–71 mm in radius on a 190 × 162 mm map**, so the true-scale zone covers most of the *page*, even though most of the *content* lies outside it. So the bar is sized from the core scale and captioned **`town centre scale`** whenever the town is actually fisheyed; a town with `comp >= 1` and no lens would get the bar with no caption, because then it really is one scale.
+
+| | |
+|---|---|
+| distance | the largest of 50/100/200/250/500 m, 1/2/5 km whose bar is ≤ 32 mm and ≥ 14 mm. Today: 500 m on Beaconsfield, High Wycombe, March, Ramsey; 250 m on Huntingdon, St Ives, St Neots, Wisbech |
+| scale | `sc / 111320` mm per metre — `sc` is page mm per unit of `planar()`, whose unit is one degree of latitude (isotropic, since `planar()` scales longitude by `cos(lat0)`) |
+| position | `spotSearch`; `internalRoads.scaleBar:{x,y}` is honoured when clear |
+| not-to-scale | `routes.json` `notToScale`, set by `schematize_internal.js` and `diagram_internal.js` on their **workspace** routes.json. Never set it by hand on a town |
+| external sheets | a sentence appended to the second footer note, not a device — a radial spider can never carry a bar, and that sheet already keeps its caveats in the footer. **Keep it short**: a note long enough to wrap adds a line to the footer plate, which moves `FOOTER_PLATE_TOP` and refits every sheet derived from it |
+
+**Why the pre-stages have to say `notToScale` rather than the engine working it out.** The schematic workspace sets `focus:{coreKm:1.1, comp:1}`, so as far as `gen_internal.js` can tell the projection is perfectly uniform — it would compute a confident, meaningless "500 m" from coordinates that were solved onto a tube-map grid and carry topology, not distance. The flag is inert without `design.scaleBar`.
+
+**Needs `labels.engine:"v2"`** for the blank-space search, so the five place sheets ignore the key until Phase 8.
+
 ## `labels: { engine: "v2" }`
 
 Hands every point label to `%SK%\labeller.js` — one placer shared by `gen_internal.js` (town internal, place internal, the schematic and diagram pre-stages) and `gen_external_radial.js`. It implies `design.reserveIcons`.

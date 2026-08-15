@@ -1455,6 +1455,85 @@ function northBox(bx,by){                 // base, tip, arrowhead and the "N"
   return [Math.min(bx,tx)-3.4, Math.min(by,ty)-4.6, Math.max(bx,tx)+3.4, Math.max(by,ty)+4.6];
 }
 const NORTH = { x: NA.x!=null?NA.x:14, y: NA.y!=null?NA.y:150, auto:false };
+
+/* ---- design.scaleBar: a scale bar, or an honest refusal to draw one ---------
+ *
+ * §4.6 of the design-quality plan asked for "a scale bar on the geographic
+ * sheets and a 'diagram — not to scale' note on the diagram and schematic
+ * variants". Measuring the projection before building it moved the line between
+ * those two cases, so read this before changing anything here.
+ *
+ * THE GEOGRAPHIC SHEETS ARE NOT TO A SINGLE SCALE EITHER. Every town runs the
+ * radial fisheye in `compress()`: true scale inside `focus.coreKm`, then
+ * `focus.comp` beyond it. Measured across all eight towns on 2026-08-15, comp is
+ * between 0.30 and 0.50 — so the page scale STEPS BY A FACTOR OF 2 TO 3.3 at the
+ * core boundary, and two towns carry a detail lens on top of that. An
+ * unqualified bar would be right in the middle of the sheet and wrong by 3x at
+ * the edges, which is the difference between a fifteen-minute walk and a
+ * forty-five-minute one. It would be worse than no bar at all.
+ *
+ * What saves the device is that the core is not a small disc: fitted to the
+ * frame it is 34-71 mm in radius on a 190x162 mm map, so the true-scale zone
+ * covers most of the PAGE even though most of the CONTENT lies outside it. So
+ * the bar is drawn, sized from the core scale, and labelled `town centre scale`
+ * whenever the town is actually fisheyed. A town with comp >= 1 and no lens gets
+ * the bar with no qualifier, because then it really is one scale.
+ *
+ *   sc is page mm per unit of `planar()`, whose unit is one degree of latitude
+ *   (isotropic — planar() scales longitude by cos(lat0)), i.e. 111.32 km.
+ *
+ * On a schematic or diagram sheet the pre-stage sets `notToScale`, and no bar is
+ * drawn at any size: those coordinates are solved onto a tube-map grid and carry
+ * no real-world distance at all. They get the words instead.
+ *
+ * Opt-in, absent => byte-identical. Needs labels.engine:"v2" for the blank-space
+ * search, so the five place sheets (still on v1) ignore it until Phase 8.
+ */
+const SCALE_STEPS = [50,100,200,250,500,1000,2000,5000];   // metres
+const FISHEYED = !!(IR && (CPF<1 || R1!==null || LENSES.length));
+const NOT_TO_SCALE = !!RJ.notToScale;
+// The bar: the largest round distance whose bar is at most 32 mm, and at least
+// 14 mm so it is worth printing. Falls back to the shortest step.
+const SCALE_M = NOT_TO_SCALE ? null : (function(){
+  const mmPerM = sc/111320;
+  const fit = SCALE_STEPS.filter(m=>m*mmPerM<=32 && m*mmPerM>=14);
+  return fit.length ? fit[fit.length-1] : null;
+})();
+const SCALE_LEN  = SCALE_M ? SCALE_M*sc/111320 : 0;
+const SCALE_TEXT = SCALE_M ? (SCALE_M>=1000 ? (SCALE_M/1000)+' km' : SCALE_M+' m') : '';
+const SCALE_NOTE = NOT_TO_SCALE ? 'Diagram — not to scale' : (FISHEYED ? 'town centre scale' : '');
+const SCALE_ON   = !!(DESIGN.scaleBar && (SCALE_M || NOT_TO_SCALE));
+// Footprint: the distance above the bar, the bar, the qualifier below it. `bx,by`
+// is the bar's LEFT END, so the box is asymmetric — which is what lets the search
+// push the device right up against a frame corner.
+const scaleW = ()=> Math.max(SCALE_LEN, SCALE_NOTE.length*1.25, SCALE_TEXT.length*1.5);
+function scaleBox(bx,by){
+  const w = scaleW();
+  return [bx-1.5, by-(SCALE_M?5.2:3.6), bx+w+1.5, by+(SCALE_NOTE?4.4:1.6)];
+}
+function drawScaleDevice(spotSearch){
+  if(!SCALE_ON) return;
+  const got = spotSearch(scaleBox, (IR&&IR.scaleBar&&IR.scaleBar.x)!=null?IR.scaleBar.x:null,
+                                   (IR&&IR.scaleBar&&IR.scaleBar.y)!=null?IR.scaleBar.y:null, 0.02);
+  if(got.x===null){
+    process.stderr.write('scaleBar: no clear spot found on this sheet — not drawn. '
+      +'Set design.scaleBar:false on this town, or make room.\n');
+    return;
+  }
+  const bx=got.x, by=got.y;
+  if(SCALE_M){
+    // A plain bar with end serifs, in the footer's own grey so it reads as
+    // apparatus rather than as map content.
+    out(`<path d="M${bx.toFixed(2)} ${by.toFixed(2)}h${SCALE_LEN.toFixed(2)}" stroke="#666" stroke-width="0.5" fill="none"/>`);
+    for(const t of [0,SCALE_LEN]) out(`<path d="M${(bx+t).toFixed(2)} ${(by-1.6).toFixed(2)}v3.2" stroke="#666" stroke-width="0.5"/>`);
+    out(`<text x="${(bx+SCALE_LEN/2).toFixed(2)}" y="${(by-2.6).toFixed(2)}" font-family="Arial" font-size="2.8" fill="#666" text-anchor="middle">${esc(SCALE_TEXT)}</text>`);
+  }
+  // "Diagram — not to scale" is a statement about the whole sheet, so it takes the
+  // same grey as the towns' own map notes, which it usually sits beside. "town
+  // centre scale" is an annotation ON the bar and stays lighter than it.
+  if(SCALE_NOTE) out(`<text x="${(bx+(SCALE_M?SCALE_LEN/2:0)).toFixed(2)}" y="${(by+(SCALE_M?4.0:0)).toFixed(2)}" font-family="Arial" font-style="italic" font-size="2.4" fill="${SCALE_M?'#999':'#555'}"${SCALE_M?' text-anchor="middle"':''}>${esc(SCALE_NOTE)}</text>`);
+  reserve(...scaleBox(bx,by));
+}
 // The footer's backing plate is drawn LAST and covers whatever is beneath it, but no
 // placer knew it was there: 9 of the 31 sheets measured on 2026-08-15 had a label
 // printed and then erased by it. Shortening the frame (above) keeps the map out of the
@@ -2043,44 +2122,65 @@ if(LAB){
    * A configured {x,y} is honoured when it is clear — a town that has hand-placed
    * its arrow keeps it — and overruled, with a note, when it is not.
    */
-  if(NORTH_ON){
-    // A SECOND, broader occupancy just for this search. LAB.ink is deliberately
-    // narrow — route ribbons and dark features, the things a label must not sit
-    // on — and by that measure the River Great Ouse is empty space, which is how
-    // the first cut of this parked St Neots' compass in the middle of the river.
-    // For the arrow, anything drawn counts except the two pale road tiers, which
-    // cover the whole sheet and would leave nowhere at all.
+  // A SECOND, broader occupancy just for these searches. LAB.ink is deliberately
+  // narrow — route ribbons and dark features, the things a label must not sit
+  // on — and by that measure the River Great Ouse is empty space, which is how
+  // the first cut of this parked St Neots' compass in the middle of the river.
+  // For a page device, anything drawn counts except the two pale road tiers,
+  // which cover the whole sheet and would leave nowhere at all. Built lazily and
+  // shared, because stamping the whole SVG a second time is not free.
+  let NAV = null;
+  const nav = ()=>{
+    if(NAV) return NAV;
     const paleRoads = new Set([ (IR&&IR.skeleton)||'#e4e4e4', (IR&&IR.contextColor)||'#f0f0f0' ]
       .map(v=>String(v).toLowerCase()));
-    const NAV = new Labeller({ page:[297,210] });
+    NAV = new Labeller({ page:[297,210] });
     NAV.stampSvg(s, (stroke,w)=> w>=1.2 && stroke!=='none' && !paleRoads.has(stroke)
       && stroke!=='#fff' && stroke!=='#ffffff');
-    const clearAt = (bx,by)=>{ const b=northBox(bx,by);
+    return NAV;
+  };
+  /*
+   * The blank-space search, shared by every free-floating page device.
+   *
+   * `boxOf(x,y)` is the device's whole footprint at that anchor. Returns the
+   * clear position nearest a frame corner, or null if the sheet has none. A
+   * preferred {x,y} is honoured when it is clear enough (`tol`), so a town that
+   * has hand-placed a device keeps it, and is overruled otherwise.
+   *
+   * Written for the compass; the scale bar is the second caller, which is why it
+   * is a function rather than the inline loop it started as.
+   */
+  const spotSearch = (boxOf, wantX, wantY, tol)=>{
+    const clearAt = (bx,by)=>{ const b=boxOf(bx,by);
       if(b[0]<MX0+1||b[2]>MX1-1||b[1]<MY0+1||b[3]>MY1-1) return null;
       if(LAB.hard.any(b)) return null;
-      return NAV.ink.cover(b); };
-    const want = clearAt(NORTH.x, NORTH.y);
-    if(want === null || want > 0.02){
-      const cnr=[[MX0,MY0],[MX1,MY0],[MX0,MY1],[MX1,MY1]];
-      let best=null;
-      for(let by=MY0+2; by<=MY1-2; by+=1) for(let bx=MX0+2; bx<=MX1-2; bx+=1){
-        const cov = clearAt(bx,by);
-        if(cov===null || cov>0) continue;
-        const d = Math.min(...cnr.map(c=>Math.hypot(bx-c[0],by-c[1])));
-        if(!best || d<best.d-1e-9) best={bx,by,d};
-      }
-      if(best){
-        process.stderr.write('northArrow: '+(want===null?'the configured spot is blocked':
-          'the configured spot is '+(want*100).toFixed(0)+'% covered by ink')
-          +' — placed automatically at '+best.bx+','+best.by+' (nearest clear corner).\n');
-        NORTH.x=best.bx; NORTH.y=best.by; NORTH.auto=true;
-      } else {
-        process.stderr.write('northArrow: no clear spot found on this sheet; left at the configured '
-          +NORTH.x+','+NORTH.y+'. Set internalRoads.northArrow:false, or make room.\n');
-      }
+      return nav().ink.cover(b); };
+    const want = (wantX!=null) ? clearAt(wantX, wantY) : null;
+    if(wantX!=null && want!==null && want<=tol) return { x:wantX, y:wantY, auto:false, want };
+    const cnr=[[MX0,MY0],[MX1,MY0],[MX0,MY1],[MX1,MY1]];
+    let best=null;
+    for(let by=MY0+2; by<=MY1-2; by+=1) for(let bx=MX0+2; bx<=MX1-2; bx+=1){
+      const cov = clearAt(bx,by);
+      if(cov===null || cov>0) continue;
+      const d = Math.min(...cnr.map(c=>Math.hypot(bx-c[0],by-c[1])));
+      if(!best || d<best.d-1e-9) best={bx,by,d};
+    }
+    return best ? { x:best.bx, y:best.by, auto:true, want } : { x:null, y:null, auto:false, want };
+  };
+  if(NORTH_ON){
+    const got = spotSearch(northBox, NORTH.x, NORTH.y, 0.02);
+    if(got.auto){
+      process.stderr.write('northArrow: '+(got.want===null?'the configured spot is blocked':
+        'the configured spot is '+(got.want*100).toFixed(0)+'% covered by ink')
+        +' — placed automatically at '+got.x+','+got.y+' (nearest clear corner).\n');
+      NORTH.x=got.x; NORTH.y=got.y; NORTH.auto=true;
+    } else if(got.x===null){
+      process.stderr.write('northArrow: no clear spot found on this sheet; left at the configured '
+        +NORTH.x+','+NORTH.y+'. Set internalRoads.northArrow:false, or make room.\n');
     }
     reserve(...northBox(NORTH.x, NORTH.y));
   }
+  if(DESIGN.scaleBar) drawScaleDevice(spotSearch);
   if(process.env.DBG_LABELS) for(const r of LAB.solve()){
     console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
       +(r.placed?(r.pos||'fixed').padEnd(6)+(r.leader?'leader ':'       '):'      ')

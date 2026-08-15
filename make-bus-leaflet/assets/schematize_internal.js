@@ -771,6 +771,11 @@ for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json',
   // features = { "<key>": { labelPos, labelReserve, ... } } merged by key.
   if (SCH.features && rj.features)
     rj.features = rj.features.map(f => SCH.features[f.key] ? Object.assign({}, f, SCH.features[f.key]) : f);
+  // Schematized coordinates are solved onto a grid — topology, not distance. The
+  // workspace even sets focus.comp:1, so gen_internal's projection looks perfectly
+  // uniform and would print a confident, meaningless scale bar. Say so instead.
+  // Inert without design.scaleBar, so nothing moves.
+  rj.notToScale = true;
   wjson('routes.json', rj);
 }
 

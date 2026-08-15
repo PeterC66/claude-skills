@@ -362,9 +362,18 @@ if(V2){
 
 // source note
 const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
+// design.scaleBar reaches this sheet too, but as a sentence rather than a device.
+// A radial spider is a tube map — bearings are spread for legibility and spoke
+// length carries nothing — so it can never carry a bar, and it was the one sheet
+// type saying nothing at all about that. It goes in the footer rather than on the
+// map because that is where this sheet already keeps its caveats ("Journey times
+// shown are approximate"). Kept short on purpose: a note long enough to WRAP adds
+// a line to the footer plate, which moves FOOTER_PLATE_TOP and refits every sheet
+// derived from it.
 out(footerBand({
   notes: [`Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
-          `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`],
+          `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
+            + `${DESIGN.scaleBar?' Diagram — not to scale.':''}`],
   version: D.version, validFrom: D.validFrom || 'Summer 2026'
 }));
 

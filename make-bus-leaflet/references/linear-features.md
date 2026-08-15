@@ -25,7 +25,7 @@ Choosing it switches on three geometry passes and turns the ties off. Every key 
 
 | key | default under `chequer` | what it does |
 |---|---|---|
-| `width` / `coreWidth` / `coreColor` | 1.9 / 1.05 / `#ffffff` | casing, block width, block colour |
+| `width` / `coreWidth` / `coreColor` / `stroke` | 1.6 / 0.88 / `#ffffff` / `#4a4a4a` | casing, block width, block colour, casing colour |
 | `chequer` | `"2.3 2.3"` | the dash pattern — block, gap (page mm) |
 | `railStitch` | 0.5 | join polylines whose endpoints meet within this, so a line split across several OSM ways becomes one path (the dash phase restarts at each path, so an unstitched join can print a white block across it) |
 | `railStitchTurn` | 60 | **reject** a join that turns more than this many degrees — see the gotcha below |
@@ -37,7 +37,13 @@ Choosing it switches on three geometry passes and turns the ties off. Every key 
 
 **What the merge is for.** OSM maps a double-track line as two ways, plus loops, sidings and platform lines, and every one of them was being drawn with its own casing and its own ties. Measured on the shipped sheets before/after: St Neots `internal-diagram` 36 polylines and **1,434 tie strokes → 6 polylines**; Huntingdon 39/576 → 1; High Wycombe 40/180 → 1; Beaconsfield 20/232 → 1.
 
+**The weight was retuned on 2026-08-15** (design-quality plan Phase 6, §3.4): 1.9 mm of `#333` became **1.6 mm of `#4a4a4a`**, with `coreWidth` moving 1.05 → 0.88 to hold the dark edging either side of a white block at 55 % of the casing. The reason is relative, not absolute: the railway is *context* and the bus routes are the *subject*, and the routes are drawn at 1.7 mm — so at 1.9/`#333` the railway was the widest and darkest single line on the sheet. (Total ink was never the problem; clipped to the frame the railway is between 1:4 and 1:16 of the route ink, depending on the town.) The dash pitch was deliberately **not** scaled with the width: it sets the symbol's rhythm along the line, which is what makes it read as a railway at arm's length. Four candidates on all four railway towns, with 300 dpi crops and the ink table: `Development Docs\railway-weight-options_2026-08-15.html` (regenerate with its `.js`). The base `railway` `stroke` stays `#333333`, so towns and places still on the tie symbol are untouched.
+
 **Opting a town in** is a `routes.json` edit and a normal staged refresh (S3 → S4 → S5). Absent the key, output is byte-identical — verified across all 27 gates.
+
+### A label with no line under it
+
+`features_geo.json` is keyed by `key`, so two entries sharing a key silently draw the **same** geometry, and a key with no geometry draws **nothing** while still printing its label. Ramsey shipped both faults at once — two features keyed `canal` against a `features_geo.json` whose `canal` held zero polylines — so "Canal" and "Bevills Leam" floated in the bottom-left corner in italic blue, naming watercourses that are not on the map. `gen_internal.js` now reports both at build time. A label pointing at nothing is worse than no label: either re-run S2 for that feature or drop it from `features[]`.
   | `road` | `#e6a532` amber, w2.8 | A-roads |
   | `generic` | `#999`, w2.2 | anything else |
 

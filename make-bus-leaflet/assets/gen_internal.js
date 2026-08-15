@@ -248,17 +248,56 @@ const FEATURE_STYLES = {
 // the minSegLen stub hack (no longer needed, and it punched visible gaps in the
 // line), and switches on railStitch + railMerge below. Any key is still
 // overridable per feature via style{}.
-const RAIL_CHEQUER = { width:1.9, ties:false, dash:null, minSegLen:0,
-  coreWidth:1.05, coreColor:'#ffffff', chequer:'2.3 2.3',
+// WEIGHT (plan Phase 6, §3.4): 1.6 mm of #4a4a4a, not 1.9 mm of #333. The
+// railway is context; the bus routes are the subject, and they are drawn at
+// 1.7 mm. At 1.9/#333 the railway was the widest and darkest single line on the
+// sheet, so context out-shouted subject on every geographic town. coreWidth moves
+// with width to hold the dark edging either side of a white block at 55% of the
+// casing (1.05/1.9) — drop the width alone and the symbol goes pale and mushy
+// rather than lighter. The dash pitch is deliberately NOT scaled: it sets the
+// symbol's rhythm along the line, which is what makes it read as a railway at
+// arm's length. Comparison on all four railway towns, with 300 dpi crops:
+// Development Docs\railway-weight-options_2026-08-15.html.
+// NOTE the base railway `stroke` stays #333333, so the places — still on the tie
+// symbol until the Phase 8 re-vendor — are untouched by this.
+const RAIL_CHEQUER = { width:1.6, ties:false, dash:null, minSegLen:0, stroke:'#4a4a4a',
+  coreWidth:0.88, coreColor:'#ffffff', chequer:'2.3 2.3',
   railStitch:0.5, railStitchTurn:60, railMerge:1.5, railMinRun:6 };
 let FEATURES;
 if(RJ.features && RJ.features.length){
   let fgeo={}; try{ fgeo=JSON.parse(fs.readFileSync(DIR+'/features_geo.json','utf8')); }catch(e){}
   FEATURES = RJ.features.map(f=>Object.assign({}, f, { geo: fgeo[f.key]||[] }));
+  // A feature is looked up in features_geo.json BY KEY, so two entries sharing a
+  // key silently share one geometry, and a key with no geometry draws nothing at
+  // all while still printing its label. Ramsey shipped both faults together: two
+  // features keyed "canal" against a features_geo.json whose "canal" holds zero
+  // polylines, so "Canal" and "Bevills Leam" floated in the bottom-left corner as
+  // italic blue text naming watercourses that are not on the map. Say so at build
+  // time — a label pointing at nothing is worse than no label.
+  const seen={};
+  for(const f of FEATURES){
+    if(seen[f.key]) console.error('features: two entries share the key "'+f.key+'" ("'+seen[f.key]
+      +'" and "'+f.label+'") — features_geo.json is keyed by `key`, so they will draw the SAME geometry. Give them distinct keys.');
+    seen[f.key]=f.label;
+    if(f.label && !(f.geo||[]).length) console.error('features: "'+f.label+'" (key "'+f.key
+      +'") has NO geometry in features_geo.json — its label will print with no line under it. '
+      +'Re-run S2 for that feature, or drop it from routes.json features[].');
+  }
 } else {
+  // The legacy fallback's label has always sat at y=200 — which was fine against
+  // the old flat frame bottom of 205, and is 4.8 mm INSIDE the footer plate once
+  // design.footerSafe ends the frame at 192.16. March, the one town with no
+  // features[] of its own, was drawing "River Nene (old course)" and then painting
+  // the plate over it, so its river shipped unlabelled. Keep x (bottom-left is
+  // where this label has always gone) and lift y to just inside the frame.
+  // Gated on footerSafe so the five PLACE sheets, still on v1 until the Phase 8
+  // re-vendor, stay byte-identical.
+  const legacyY = DESIGN.footerSafe
+    ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0) - 6)*100)/100
+    : 200;
   FEATURES = [{ key:'river', type:'river', label:(RJ.riverLabel||'River Great Ouse'),
-    labelPos:{x:40,y:200}, labelColor:'#7fb0d8', labelItalic:true, labelSize:4,
-    labelReserve:[34,193,86,203], geo:river }];
+    labelPos:{x:40,y:legacyY}, labelColor:'#7fb0d8', labelItalic:true, labelSize:4,
+    labelReserve:[34,legacyY-7,86,legacyY+3], geo:river }];
 }
 
 // ====== TIER-1 MANUAL OVERRIDES (optional; absent/empty => byte-identical) ===
@@ -814,6 +853,18 @@ function drawFeatureLabel(f){
     console.error('panel: feature label "'+text+'" sits at x='+x.toFixed(0)+', right of the map frame '
       +'(x'+MX1+') and inside the Services panel — not drawn. Move its labelPos '
       +'(routes.json features[] / overrides internal.features).');
+    return;
+  }
+  // And the third edge, found 2026-08-15 the same way the Wisbech one was — by
+  // asking why a number would not move. Six sheets were shipping a river, canal
+  // or railway label sited BELOW the frame, at y=196..200 against a footer plate
+  // starting at 195.16: drawn, then covered, so those features went unlabelled
+  // and no-one could see why. footerSafe does not help, because a feature label
+  // is drawn outside the map's clip group. Refuse it and say so, as above.
+  if(DESIGN.footerSafe && y>FOOTER_PLATE_TOP-1.5){
+    console.error('footer: feature label "'+text+'" sits at y='+y.toFixed(0)+', under the footer plate '
+      +'(top y'+FOOTER_PLATE_TOP.toFixed(1)+') where it is painted and then covered — not drawn. '
+      +'Move its labelPos (routes.json features[] / overrides internal.features).');
     return;
   }
   const italic=f.labelItalic!==false, size=f.labelSize||4, anchor=lov.anchor||null;
@@ -1532,7 +1583,17 @@ if(IR && TRIM){
     // margin exactly; a multi-badge row is pulled fully inside the frame (St Ives'
     // 2-badge "to Cambridge" row moves 2.1 mm — re-rendered at v6.8).
     const rowHalf=Math.max(3.4, ((Math.max(...groups.map(g=>g.ms.length))-1)/2)*BS+3.4);
-    bx=Math.min(Math.max(bx,MX0+rowHalf),MX1-rowHalf); by=Math.min(Math.max(by,MY0+3.4),MY1-3.4);
+    // And the SAME argument vertically, which was missed: a cluster with several
+    // distinct "to X" texts draws one row per group at by ± (n-1)/2 * RH, so
+    // clamping the centre alone lets the outermost row escape the frame. It had
+    // happened — Huntingdon's 4-group cluster put route 9's badge at y=197.7 on a
+    // frame ending at 192.2, i.e. 5.5 mm INSIDE the footer plate, where it was
+    // painted and then covered. Nothing complained: badges are drawn outside the
+    // map's clip group, the byte gate is deterministic, and the footer-text metric
+    // skipped badge digits (dominant-baseline="central"). Clamp by the column's
+    // own half-height too.
+    const colHalf=Math.max(3.4, ((groups.length-1)/2)*RH+3.4);
+    bx=Math.min(Math.max(bx,MX0+rowHalf),MX1-rowHalf); by=Math.min(Math.max(by,MY0+colHalf),MY1-colHalf);
     aplaced.push([bx,by]);
     let bxMin=Infinity,bxMax=-Infinity,byMin=Infinity,byMax=-Infinity;
     const pendingTermini=[];

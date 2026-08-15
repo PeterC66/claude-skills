@@ -57,7 +57,11 @@ Badge text is not on the scale: `badge()` fits it to its disc, so it is a symbol
 
 `preview_design.js` and `adopt_config.js` both take `--feature-pos <key>=<x>,<y>` (page mm, repeatable). `features[]` is an array, so `--patch` / `--set` cannot reach `labelPos` — the same reason `--rail` exists.
 
-`drawFeatureLabel` refuses a label sited right of the map frame and reports it on stderr, because a feature label is drawn outside the map's clip group and such a label lands in the Services panel. Wisbech had two.
+Since 2026-08-15 both also take the general form, **`--set-path '<dotted.path>=<json>'`** (repeatable), where a numeric segment indexes an array — `--set-path 'internalDiagram.mapNotes.0.y=189'`, `--set-path 'features.1.style={"width":1.4}'`. It refuses to *create* a missing path, so a typo is an error rather than a new key nothing reads, and it is the same expression in both tools, so what you preview is what you commit. Reach for it instead of adding a fourth one-off flag.
+
+**`drawFeatureLabel` refuses a label sited outside the map, on any of three edges, and reports it on stderr** — inside `coreBox`, right of the frame (it would land in the Services panel: Wisbech had two), and below the frame (it would be buried under the footer plate: Huntingdon, March, Ramsey and St Neots each had one, St Neots on both its sheets). A feature label is drawn *outside* the map's clip group, which is why `design.footerSafe` does not protect it. The footer edge is itself gated on `design.footerSafe` so the five place sheets stay byte-identical until Phase 8.
+
+A per-sheet position for a town that has a diagram variant goes in `internalDiagram.features["<key>"].labelPos` — the geographic and diagram engines put the feature in quite different places, and one `labelPos` will not suit both (St Neots' "East Coast Main Line" needed 129,176 on the geographic sheet and 158,71 on the diagram).
 
 ### The north arrow places itself
 

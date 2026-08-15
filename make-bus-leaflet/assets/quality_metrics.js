@@ -92,7 +92,7 @@ function parseTransform(s) {
 // Walk the tags in document order, maintaining a transform + inherited-style stack.
 function parseSvg(svg) {
   const texts = [], icons = [], strokes = [], rects = [], circles = [];
-  let vb = [0, 0, 297, 210], mapFrame = null, footerTop = null;
+  let vb = [0, 0, 297, 210], mapFrame = null, footerTop = null, seenPlate = false;
 
   const mVb = svg.match(/viewBox="([^"]*)"/);
   if (mVb) vb = mVb[1].trim().split(/[\s,]+/).map(Number);
@@ -147,6 +147,14 @@ function parseSvg(svg) {
           ? (parseFloat(a.transform.match(/rotate\(([-\d.]+)/)[1]) || 0) : 0,
         fill: (style.fill || '#000').toLowerCase(),
         halo: !!a.stroke,
+        // Document order tells map content from footer chrome exactly. footer.js
+        // paints the plate and THEN its own lines, so anything emitted after the
+        // plate belongs to the footer and anything before it is map content the
+        // plate is about to bury. Matching the notes by their opening words
+        // instead does not work: the external sheets' second line begins
+        // "Confirm live times…", so a text-prefix rule reported every external
+        // footer as a buried label.
+        afterPlate: seenPlate,
       });
       continue;
     }
@@ -170,6 +178,7 @@ function parseSvg(svg) {
       // painted last over everything (footer.js footerBand()).
       if (r.x0 <= 0.5 && r.x1 >= vb[2] - 0.5 && r.y0 > vb[3] * 0.6 && /fff|white/.test(r.fill)) {
         footerTop = footerTop === null ? r.y0 : Math.min(footerTop, r.y0);
+        seenPlate = true;
       }
       continue;
     }
@@ -467,10 +476,22 @@ function analyse(svgPath) {
   }
 
   // Map content buried under the footer plate, which is painted last and opaque.
+  //
+  // MEASUREMENT BUG, found 2026-08-15 while checking the railway-weight rollout
+  // (plan Phase 6): this used to require `b.y0 < footerTop + 6 && t.y < footerTop
+  // + 2.5` as well, i.e. it only counted text STRADDLING the top edge of the
+  // plate. Text sited wholly inside the band scored zero — so six river/canal
+  // labels at y=200, the "Only main stops…" diagram note at y=196/198 and a
+  // stray badge digit at y=197.67 were all completely invisible on the sheet and
+  // completely invisible to the metric, while the scorecard read "content buried
+  // under the footer: 0". Any box that reaches the plate at all is buried; the
+  // plate is painted last, at 97% opacity, across the full page width. The
+  // footer's own lines are the only text that belongs there, and they are told
+  // apart by document order (t.afterPlate), not by their wording.
   for (const t of allText) {
-    if (t.central || t.x >= panelX0 - 1) continue;
+    if (t.central || t.x >= panelX0 - 1 || t.afterPlate) continue;
     const b = quadBox(textQuad(t));
-    if (b.y1 > footerTop && b.y0 < footerTop + 6 && t.y < footerTop + 2.5 && !/^(Routes|Places|Valid from|Map design)/.test(t.text))
+    if (b.y1 > footerTop)
       detail.inFooter.push({ text: t.text, y: +t.y.toFixed(1), footerTop: +footerTop.toFixed(1) });
   }
   // Route ink drawn into the band. Counting raw segments inflated this into the

@@ -207,7 +207,39 @@ function detectExternalStyle(s4Dir) {
   return 'radial';
 }
 
+// --set-path '<dotted>=<json>' — set ONE value in routes.json at a dotted path,
+// where a numeric segment indexes an array. The general form of --rail and
+// --feature-pos, and the answer to "features[]/mapNotes[] are arrays, which
+// --set/--patch cannot reach": shared by adopt_config.js and preview_design.js so
+// a config change can always be previewed with the same expression that commits
+// it. Refuses to create a missing path — a typo should be an error, not a new key
+// nothing reads. Returns a one-line change description, or null for a no-op.
+function parseSetPath(s) {
+  const i = s.indexOf('=');
+  if (i < 1) throw new Error("--set-path wants '<dotted.path>=<json>', got: " + s);
+  const raw = s.slice(i + 1);
+  let value;
+  try { value = JSON.parse(raw); } catch (e) { value = raw; }   // bare words/strings are fine
+  return { path: s.slice(0, i), value };
+}
+function applySetPath(obj, spec) {
+  const parts = spec.path.split('.');
+  let o = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = /^\d+$/.test(parts[i]) ? +parts[i] : parts[i];
+    if (o == null || typeof o !== 'object' || !(k in o)) throw new Error('--set-path: no such path: ' + parts.slice(0, i + 1).join('.'));
+    o = o[k];
+  }
+  const last = /^\d+$/.test(parts[parts.length - 1]) ? +parts[parts.length - 1] : parts[parts.length - 1];
+  if (o == null || typeof o !== 'object' || !(last in o)) throw new Error('--set-path: no such path: ' + spec.path);
+  if (JSON.stringify(o[last]) === JSON.stringify(spec.value)) return null;
+  const was = JSON.stringify(o[last]);
+  o[last] = spec.value;
+  return spec.path + ': ' + was + ' -> ' + JSON.stringify(spec.value);
+}
+
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, VERSION_STAMP_RE, PLACE_IGNORE,
   gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
+  parseSetPath, applySetPath,
 };

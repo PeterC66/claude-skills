@@ -20,6 +20,12 @@
  *   --feature-pos <key>=<x>,<y>   move a linear feature's LABEL, in page mm.
  *                     Repeatable. features[] is an array too, so --patch cannot
  *                     reach labelPos either.
+ *   --set-path <dotted>=<json>    set one value at a dotted path, where a numeric
+ *                     segment indexes an array — the general escape hatch for
+ *                     anything inside an array. Repeatable, and the same
+ *                     expression adopt_config.js takes, so what you preview is
+ *                     what you commit:
+ *                       --set-path 'internalDiagram.mapNotes.0.y=180'
  *   --unset <path>    dotted path to delete, repeatable (e.g. internalRoads.northArrow)
  *   --render          also write JPGs beside the SVGs
  *   --keep            leave the build workspace on disk and print its path, for
@@ -40,15 +46,16 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { SK, latestRunDir, readJson, findTowns, detectExternalStyle } = require(path.join(__dirname, 'gate_lib'));
+const { SK, latestRunDir, readJson, findTowns, detectExternalStyle, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
 function parseArgs(argv) {
-  const f = { town: [], unset: [], 'feature-pos': [] };
+  const f = { town: [], unset: [], 'feature-pos': [], 'set-path': [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--town') f.town.push(argv[++i]);
     else if (a === '--unset') f.unset.push(argv[++i]);
     else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
+    else if (a === '--set-path') f['set-path'].push(argv[++i]);
     else if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
   }
   return f;
@@ -60,6 +67,9 @@ const featurePos = args['feature-pos'].map(s => {
   if (!m) { console.error('--feature-pos wants <key>=<x>,<y> in page mm, got: ' + s); process.exit(2); }
   return { key: m[1], x: +m[2], y: +m[3] };
 });
+let SETPATH;
+try { SETPATH = args['set-path'].map(parseSetPath); }
+catch (e) { console.error(e.message); process.exit(2); }
 const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const PATCH = args.patch ? JSON.parse(args.patch) : {};
 const OUT = path.resolve(args.out || 'design-preview');
@@ -98,6 +108,7 @@ function build(t) {
   deepMerge(rj, PATCH);
   if (args.rail) for (const f of (rj.features || [])) if (f.type === 'railway') f.style = Object.assign({}, f.style, { rail: args.rail });
   for (const fp of featurePos) { const f = (rj.features || []).find(x => x.key === fp.key); if (f) f.labelPos = { x: fp.x, y: fp.y }; }
+  for (const sp of SETPATH) { try { applySetPath(rj, sp); } catch (e) { console.error('  [' + t.name + '] ' + e.message); } }
   for (const u of args.unset) unset(rj, u);
   fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
 

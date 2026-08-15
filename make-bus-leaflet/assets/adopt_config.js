@@ -23,6 +23,14 @@
  *   --feature-pos <key>=<x>,<y>   move a linear feature's LABEL, in page mm.
  *                   Repeatable. labelPos lives in that same array, so --set
  *                   cannot reach it either.
+ *   --set-path <dotted>=<json>   set one value at a dotted path, where a numeric
+ *                   segment indexes an ARRAY. Repeatable. This is the general
+ *                   form of --rail/--feature-pos and the escape hatch for
+ *                   anything else inside an array that --set cannot express:
+ *                     --set-path 'internalDiagram.mapNotes.0.y=180'
+ *                     --set-path 'features.1.style={"width":1.4}'
+ *                   Refuses to create a missing path, so a typo is an error
+ *                   rather than a new key nothing reads.
  *   --note "..."    the S3 commit note
  *   --apply         actually write and commit
  *
@@ -40,15 +48,16 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { SK, findTowns, readJson, latestRunDir } = require(path.join(__dirname, 'gate_lib'));
+const { SK, findTowns, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
 function parseArgs(argv) {
-  const f = { town: [], unset: [], 'feature-pos': [] };
+  const f = { town: [], unset: [], 'feature-pos': [], 'set-path': [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--town') f.town.push(argv[++i]);
     else if (a === '--unset') f.unset.push(argv[++i]);
     else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
+    else if (a === '--set-path') f['set-path'].push(argv[++i]);
     else if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
   }
   return f;
@@ -63,6 +72,9 @@ const FEATPOS = args['feature-pos'].map(s => {
   if (!m) { console.error('--feature-pos wants <key>=<x>,<y> in page mm, got: ' + s); process.exit(2); }
   return { key: m[1], x: +m[2], y: +m[3] };
 });
+let SETPATH;
+try { SETPATH = args['set-path'].map(parseSetPath); }
+catch (e) { console.error(e.message); process.exit(2); }
 
 const deepMerge = (a, b) => {
   for (const k of Object.keys(b)) {
@@ -87,7 +99,7 @@ function stage(cwd, ...a) {
 
 const towns = findTowns(BUSES).filter(t => args.all || args.town.includes(t.name));
 if (!towns.length) { console.error('--all, or --town from: ' + findTowns(BUSES).map(t => t.name).join(', ')); process.exit(2); }
-if (!SET && !args.unset.length && !args.rail && !FEATPOS.length) { console.error('nothing to do: pass --set, --unset, --rail or --feature-pos'); process.exit(2); }
+if (!SET && !args.unset.length && !args.rail && !FEATPOS.length && !SETPATH.length) { console.error('nothing to do: pass --set, --unset, --rail, --feature-pos or --set-path'); process.exit(2); }
 
 console.log((APPLY ? 'APPLYING' : 'DRY RUN') + ' over ' + towns.length + ' town(s)'
   + (APPLY ? '' : ' (pass --apply to commit)') + '\n');
@@ -112,6 +124,12 @@ for (const t of towns) {
     if (f.labelPos && f.labelPos.x === fp.x && f.labelPos.y === fp.y) continue;
     f.labelPos = { x: fp.x, y: fp.y };
     changes.push('labelPos ' + fp.key + '=' + fp.x + ',' + fp.y);
+  }
+  for (const sp of SETPATH) {
+    let d;
+    try { d = applySetPath(rj, sp); }
+    catch (e) { console.log(t.name + ': ' + e.message + ' — skipped'); continue; }
+    if (d) changes.push(d);
   }
 
   if (!changes.length) { console.log(t.name + ': already current'); continue; }

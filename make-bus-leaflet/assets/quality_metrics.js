@@ -122,7 +122,7 @@ function parseSvg(svg) {
     if (tag === 'g') {
       // An icon is emitted as exactly `<g transform="translate(x y) scale(s)">`
       // (icons.js). Badges translate but never scale, which is what separates them.
-      if (!selfClose) stack.push({ m, style });
+      if (!selfClose) stack.push({ m, style, clipped: top.clipped || /clip-path=/.test(raw) });
       if (/translate\([^)]*\)\s*scale\(/.test(a.transform || '')) {
         const [cx, cy] = apply(m, 0, 0);
         const sc = Math.abs(m[0]) || 1;
@@ -152,12 +152,12 @@ function parseSvg(svg) {
     }
 
     if (tag === 'path' && a.d) {
-      for (const seg of pathSegments(a.d, m)) strokes.push({ seg, w: sw * scaleOf, stroke });
+      for (const seg of pathSegments(a.d, m)) strokes.push({ seg, w: sw * scaleOf, stroke, clipped: top.clipped });
       continue;
     }
     if (tag === 'line') {
       const p0 = apply(m, +a.x1 || 0, +a.y1 || 0), p1 = apply(m, +a.x2 || 0, +a.y2 || 0);
-      strokes.push({ seg: [p0, p1], w: sw * scaleOf, stroke });
+      strokes.push({ seg: [p0, p1], w: sw * scaleOf, stroke, clipped: top.clipped });
       continue;
     }
     if (tag === 'rect') {
@@ -256,6 +256,22 @@ function makeGrid(vb) {
   const nx = Math.ceil(vb[2] / T.cell), ny = Math.ceil(vb[3] / T.cell);
   return { nx, ny, x0: vb[0], y0: vb[1], a: new Uint8Array(nx * ny) };
 }
+// Liang–Barsky: the part of a segment that survives the map frame, or null if none
+// of it does. The stroke is a WIDE line, so grow the rect by half the stroke width
+// before clipping — a line running along the frame edge really does paint a little
+// way outside it.
+function clipSegToRect([p0, p1], F, pad = 0) {
+  const x0 = F.x0 - pad, y0 = F.y0 - pad, x1 = F.x1 + pad, y1 = F.y1 + pad;
+  const dx = p1[0] - p0[0], dy = p1[1] - p0[1];
+  let t0 = 0, t1 = 1;
+  for (const [p, q] of [[-dx, p0[0] - x0], [dx, x1 - p0[0]], [-dy, p0[1] - y0], [dy, y1 - p0[1]]]) {
+    if (p === 0) { if (q < 0) return null; continue; }
+    const r = q / p;
+    if (p < 0) { if (r > t1) return null; if (r > t0) t0 = r; }
+    else { if (r < t0) return null; if (r < t1) t1 = r; }
+  }
+  return [[p0[0] + t0 * dx, p0[1] + t0 * dy], [p0[0] + t1 * dx, p0[1] + t1 * dy]];
+}
 function stampSeg(g, [p0, p1], w) {
   const half = Math.max(w, T.cell) / 2;
   const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
@@ -353,8 +369,19 @@ function analyse(svgPath) {
   // Ink that a label must not sit on: route ribbons, plus the river/railway.
   // The faint grey context road network is deliberately NOT included — labels
   // over it are the design working as intended.
+  // The map is drawn inside `<g clip-path="url(#map)">`, and a route polyline is
+  // clipped, not trimmed — its `d` still carries the vertices that fall outside the
+  // frame. Stamping the raw geometry therefore credits the sheet with ink that is
+  // never painted. It mattered from the moment the frame stopped being the full
+  // 30–205 band (design.footerSafe, 2026-08-15): the "route ink under the footer"
+  // measure barely moved on a sheet whose map genuinely no longer reached the band,
+  // because the clipped-away tails were still being counted. Clip to the frame first.
   const grid = makeGrid(vb);
-  for (const s of P.strokes) if (isRouteInk(s)) stampSeg(grid, s.seg, s.w);
+  for (const s of P.strokes) {
+    if (!isRouteInk(s)) continue;
+    const seg = (s.clipped && P.mapFrame) ? clipSegToRect(s.seg, P.mapFrame, s.w / 2) : s.seg;
+    if (seg) stampSeg(grid, seg, s.w);
+  }
 
   // Classify text. Badge glyphs (dominant-baseline="central") sit inside their
   // own roundel by construction and are not map labels; panel, title and
@@ -367,6 +394,13 @@ function analyse(svgPath) {
     if (t.size >= 4.5) continue;                              // title / hub / section heading
     if (t.x >= panelX0 - 1) continue;
     if (t.y >= footerTop) continue;
+    // An external sheet's operators legend is a floating box, not a reserved column,
+    // so its own contents were being read as map labels sitting "into the panel" —
+    // five on St Ives, every one of them the legend's own text inside its own box.
+    // A fabricated defect is worse than none, so exclude it, exactly as the internal
+    // sheets exclude everything right of the panel edge. (Found 2026-08-15 while
+    // checking why Phase 4 had not moved that number.)
+    if (legend && t.x >= legend.x0 - 1 && t.x <= legend.x1 + 1 && t.y >= legend.y0 - 1 && t.y <= legend.y1 + 1) continue;
     if (P.mapFrame && t.y < P.mapFrame.y0) continue;          // title block
     // Road names (grey, usually rotated, drawn ALONG the road they name) are a
     // different design problem from point labels: sitting on the line is what

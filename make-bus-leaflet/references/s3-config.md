@@ -97,6 +97,15 @@ Colour by **corridor** rather than by route. Members keep their own line and the
 
 **Know what it does not do.** It does not reduce how many colours the town uses; it makes the sharing *mean something*. High Wycombe v1.0's real disease was 12 hues spread arbitrarily over 31 routes — colour repeated, but at random. So re-assign `palette` so each corridor gets one hue and no two corridors share one; the generator then **warns about every hue still shared by unrelated groups**, which is the defect being fixed. With this key set, `complexity_score.js` reports **R as distinct colour groups** (and `linesDrawn` alongside), because R exists to police the ~12-hue ceiling.
 
+### Design-quality keys (added 2026-08-15 — opt-in, absent ⇒ byte-identical; every built TOWN carries them, places do not yet)
+
+```json
+"design": { "footerSafe": true, "spreadIcons": true },
+"labels": { "engine": "v2" }
+```
+
+`footerSafe` ends the map frame above the footer plate instead of drawing 9.84 mm of every sheet and then covering it; `spreadIcons` pulls fused POI symbols apart; `labels.engine:"v2"` hands every point label to the shared placer `%SK%\labeller.js` (occupancy grid, real Arial metrics, scored positions, relaxation, two-line wrapping, leader lines, and an `unplaced.json` report). They belong together — the shorter frame crowds a dense town, and the placer is what pays for it. Full key table, tuning weights and the measured before/after: **[design-quality.md](design-quality.md)**.
+
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
 A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the **perimeter of the external frame**. Five keys buy the room back. All were gated on every existing town, internal *and* external, before use.
 

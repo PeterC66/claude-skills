@@ -114,6 +114,13 @@ const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
 const { footerBand, footerPlateTop } = require(_FOOTER);
+const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'labeller.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
+const { Labeller } = require(_LABELLER);
+const _FONTM = path.join(path.dirname(_LABELLER), 'font_metrics.js');
+const FONT = require(_FONTM);
 // The internal map's own footer notes are fixed (not per-town), so the footer plate's
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep
@@ -130,6 +137,29 @@ const C = RJ.palette, TXT = RJ.textOn;
 // lettered/branded service. Absent/empty => badge shows the key (byte-identical).
 const BL = RJ.badgeLabels || {};
 const blab = r => (BL[r] != null ? BL[r] : r);
+// design{}: the opt-in cartographic-quality keys (design-quality plan, 2026-08-15).
+// Every key defaults to the pre-2026-08-15 behaviour, so an absent `design` block is
+// byte-identical and towns adopt them one at a time. See references/design-quality.md.
+//   footerSafe:true   end the map frame just above the footer plate instead of at a
+//                     flat y=205, which the plate then covered (Phase 1).
+//   footerGap:1.0     mm of clear air between the frame and the plate.
+//   reserveIcons:true POI icons reserve their box before any label is placed, so a
+//                     later symbol can no longer be painted over an earlier label
+//                     (Phase 1). Implied by labels.engine:"v2".
+//   spreadIcons:true  POI symbols closer than iconMinSep are pushed apart (capped at
+//                     spreadMax mm from their true position) so a cluster stops
+//                     reading as one blob. Hand-placed POIs are never moved.
+//   iconMinSep:3.2 / spreadMax:2.6   the two numbers that pass governs by.
+const DESIGN = RJ.design || {};
+// labels{}: which label placer to use.
+//   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
+//                occupancy grid that knows where the route ink is, scored candidate
+//                positions, a relaxation pass, two-line wrapping and leader lines,
+//                and a report of anything it still could not place. Absent => the
+//                original first-fit placer below, byte-identical.
+const LABELS = RJ.labels || {};
+const V2 = LABELS.engine === 'v2';
+if(V2 && DESIGN.reserveIcons === undefined) DESIGN.reserveIcons = true;
 const atco2ll = JSON.parse(fs.readFileSync(DIR+'/atco2ll.json','utf8'));
 // Routes to DRAW = the in-town DISPLAY subset (each route traced to the town EDGE,
 // derived in S2 from the full both-direction chains). Prefer routes_intown_atco.json;
@@ -526,7 +556,22 @@ function lens(p){
 }
 const tform=ll=>lens(compress(tform0(ll)));
 // viewport (map left/centre; right reserved for panel)
-const MX0=6, MX1=196, MY0=30, MY1=205;
+// MY1 (the frame's bottom edge) used to be a flat 205 mm on every sheet while the
+// footer's backing plate starts at FOOTER_PLATE_TOP — 195.16 mm for the two standard
+// notes — and is drawn ON TOP at the end of the file. So a 9.84 mm strip of every map
+// was drawn and then erased: measured across the 31 shipped sheets (2026-08-15), 12 had
+// real route ink under the plate (979 mm² in total) and 9 had erased *text*. The fit
+// below is derived from MY1, so shortening the frame refits the map into the space that
+// is actually visible rather than clipping content away. Opt-in per town while the
+// design-quality plan is in flight; absent `design.footerSafe` => 205, byte-identical.
+// footerGap defaults to 3.0 mm rather than hard against the plate because the terminus
+// exit ARROWS are drawn OUTSIDE the map's clip group and point 2.6 mm past the cut
+// point, i.e. past the frame — a 1 mm gap left their tips under the plate and the ink
+// measure barely moved. 3.0 mm clears the arrow with a hair to spare.
+const MX0=6, MX1=196, MY0=30;
+const MY1 = DESIGN.footerSafe
+  ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0))*100)/100
+  : 205;
 const allT=stopPts.map(tform);
 let minX=Math.min(...allT.map(p=>p[0])),maxX=Math.max(...allT.map(p=>p[0]));
 let minY=Math.min(...allT.map(p=>p[1])),maxY=Math.max(...allT.map(p=>p[1]));
@@ -755,9 +800,40 @@ function drawFeatureLabel(f){
 
 // ---- label de-collision: reserved boxes + greedy placement ----
 const placed=[];                 // [x0,y0,x1,y1]
-const overlaps=(b)=>placed.some(o=>!(b[2]<o[0]||b[0]>o[2]||b[3]<o[1]||b[1]>o[3]));
-function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]);}
-function placeLabel(x,y,text,sz=2.6,col='#222',italic=false,lov=null){
+// design.reserveIcons: boxes contributed by POI ICONS rather than by text. They are
+// ordinary members of `placed` for the first placement attempt, but a placer that
+// finds nowhere at all falls back to a second pass that ignores them — so a label
+// that could only ever have sat on a symbol still prints exactly where it used to.
+// That keeps the change strictly a GAIN: labels that can dodge a symbol now do, and
+// none is lost. (`rollout.js` refuses to publish a label loss, by design.)
+const iconBoxes=new Set();
+const hit=(b,o)=>!(b[2]<o[0]||b[0]>o[2]||b[3]<o[1]||b[1]>o[3]);
+const overlaps=(b,skip)=>placed.some(o=>o!==skip && hit(b,o));
+const overlapsNoIcons=(b)=>placed.some(o=>!iconBoxes.has(o) && hit(b,o));
+// labels.engine:"v2" — one shared placer for the point labels (labeller.js). It is fed
+// from the SAME reserve() calls the old placer uses, so nothing has to be remembered
+// twice, plus the route ink read straight off the SVG this file has already emitted.
+// Solved and drawn in one block near the end (the "two-phase draw"): every symbol,
+// badge, pill and tick has claimed its space before the first label is positioned,
+// which retires the whole class of "a later thing painted over an earlier label".
+// bounds repeat the old placer's own page test (`b[0]<1 || b[2]>MX1+2`) as a hard
+// limit — without it a name at the left edge of the map runs off the paper, because
+// straying outside the frame is only COSTED, and on a congested edge the cost is
+// sometimes the cheapest thing going (caught in the first St Ives v2 render).
+const LAB = V2 ? new Labeller({ page:[297,210], frame:{x0:MX0,y0:MY0,x1:MX1,y1:MY1},
+                                bounds:{x0:1, y0:1, x1:MX1+2, y1:FOOTER_PLATE_TOP-0.4} }) : null;
+function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]); if(LAB) LAB.block([x0,y0,x1,y1]);}
+// `self` = this label's OWN icon box, excluded from the collision test: placement puts a
+// label 2.6 mm from a 4.2 mm symbol by design, so its own symbol is not a defect (the
+// same exclusion quality_metrics.js makes when it counts "label over a foreign icon").
+function placeLabel(x,y,text,sz=2.6,col='#222',italic=false,lov=null,self=null,opt=null){
+  if(LAB){                                     // v2: queue it, solve them all together
+    LAB.add(Object.assign({ id:(opt&&opt.id)||('L'+text+'@'+x.toFixed(1)+','+y.toFixed(1)),
+      at:[x,y], text, size:sz, fill:col, italic, own:self||null,
+      fixed: (lov&&lov.offset) ? {x:x+lov.offset.dx, y:y+lov.offset.dy, anchor:lov.anchor||'start'} : null,
+    }, opt||{}));
+    return true;                               // the caller only uses this to decide whether
+  }                                            // to draw a fallback; v2 never silently drops
   const w=text.length*sz*0.52, h=sz;
   let chosen=null;
   if(lov && lov.offset){                       // manual label placement (skip de-collision)
@@ -765,11 +841,18 @@ function placeLabel(x,y,text,sz=2.6,col='#222',italic=false,lov=null){
   } else {
     const cands=[[x+2.6,y+0.9,'start'],[x-2.6,y+0.9,'end'],[x,y-2.6,'middle'],[x,y+3.6,'middle'],
                  [x+2.6,y-2.2,'start'],[x-2.6,y-2.2,'end'],[x+2.6,y+3.4,'start'],[x-2.6,y+3.4,'end']];
-    for(const [lx,ly,anc] of cands){
-      const bx = anc==='start'?lx : anc==='end'?lx-w : lx-w/2;
-      const b=[bx-0.4,ly-h,bx+w+0.4,ly+1];
-      if(IR && (b[0]<1 || b[2]>MX1+2)) continue;   // keep labels on the page / off the panel
-      if(!overlaps(b)){ placed.push(b); chosen=[lx,ly,anc]; break; }
+    const box=([lx,ly,anc])=>{ const bx = anc==='start'?lx : anc==='end'?lx-w : lx-w/2;
+      return [bx-0.4,ly-h,bx+w+0.4,ly+1]; };
+    const onPage=b=>!(IR && (b[0]<1 || b[2]>MX1+2));   // keep labels on the page / off the panel
+    for(const c of cands){ const b=box(c);
+      if(!onPage(b)) continue;
+      if(!overlaps(b,self)){ placed.push(b); chosen=c; break; }
+    }
+    if(!chosen && iconBoxes.size){             // nowhere clear of the symbols: fall back to
+      for(const c of cands){ const b=box(c);   // the pre-reserveIcons behaviour rather than drop
+        if(!onPage(b)) continue;
+        if(!overlapsNoIcons(b)){ placed.push(b); chosen=c; break; }
+      }
     }
   }
   if(!chosen){ return false; }                // give up rather than overlap
@@ -777,17 +860,83 @@ function placeLabel(x,y,text,sz=2.6,col='#222',italic=false,lov=null){
   out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" ${italic?'font-style="italic" ':''}fill="${col}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(text)}</text>`);
   return true;
 }
-function poiMark(p){
+// Where a POI's symbol lands, and whether it is drawn at all — split out of poiMark so
+// the icon-reservation pre-pass and the drawing pass cannot disagree about either.
+const POI_HALF=2.1;                             // icon(p.cat,x,y,2.1) => a 4.2 mm box
+function poiSite(p){
   const k=p.cat+':'+p.name; const o=(OV.pois||{})[k]||{};
-  if(o.hide) return;                            // suppress this POI entirely
+  if(o.hide) return null;                       // suppress this POI entirely
   let [x,y]=XY(p.ll);
   if(o.pos){ x=o.pos.x; y=o.pos.y; } else if(o.move){ x+=o.move.dx; y+=o.move.dy; }
-  if(IR && (x<MX0+1||x>MX1-1||y<MY0+1||y>MY1-1) && !o.pos && !o.move) return; // off-frame under roads model
-  if(inCore([x,y])) return;                     // coreBox: the centre is deliberately blank
+  if(IR && (x<MX0+1||x>MX1-1||y<MY0+1||y>MY1-1) && !o.pos && !o.move) return null; // off-frame under roads model
+  if(inCore([x,y])) return null;                // coreBox: the centre is deliberately blank
+  const n=poiNudge.get(k); if(n){ x+=n[0]; y+=n[1]; }   // design.spreadIcons displacement
+  return {k,o,x,y};
+}
+const poiBox=new Map();                         // poi key -> its reserved icon box (design.reserveIcons)
+const poiNudge=new Map();                       // poi key -> [dx,dy] from spreadIcons
+/*
+ * design.spreadIcons — pull fused symbols apart.
+ *
+ * Two 4.2 mm symbols whose centres are 1 mm apart read as one unidentifiable blob,
+ * and the reader loses both. The 2026-08-15 baseline counted 110 such pairs across
+ * the 31 sheets, 34 of them on High Wycombe's internal sheet alone. Nothing in the
+ * engine had ever tried to separate them: a POI is drawn exactly where OSM puts it,
+ * and in a town centre several land within a couple of metres of each other.
+ *
+ * This is the standard cartographic answer — displace, don't drop. A few rounds of
+ * mutual repulsion, capped so a symbol never strays more than `spreadMax` mm from
+ * its true position (default 2.6, about a block at these scales), and hand-placed
+ * POIs (overrides pos/move) are pinned and never moved. The label follows its
+ * symbol, because both read the same adjusted point.
+ */
+function spreadIcons(){
+  const S=[]; const cap=(DESIGN.spreadMax!=null?DESIGN.spreadMax:2.6);
+  const sep=(DESIGN.iconMinSep!=null?DESIGN.iconMinSep:3.2);
+  for(const p of pois){ const s=poiSite(p); if(!s) continue;
+    S.push({k:s.k, x0:s.x, y0:s.y, x:s.x, y:s.y, pinned:!!(s.o.pos||s.o.move)}); }
+  for(let it=0; it<24; it++){
+    let worst=0;
+    for(let i=0;i<S.length;i++) for(let j=i+1;j<S.length;j++){
+      const a=S[i], b=S[j];
+      let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+      if(d>=sep) continue;
+      worst=Math.max(worst, sep-d);
+      // A deterministic push direction when two symbols are exactly coincident:
+      // derive it from the pair's index, never from a random or hash.
+      if(d<1e-6){ const ang=(i*7+j)*0.7853981633974483; dx=Math.cos(ang); dy=Math.sin(ang); d=1; }
+      const push=(sep-d)/2*0.6, ux=dx/d, uy=dy/d;
+      if(!a.pinned){ a.x-=ux*push; a.y-=uy*push; }
+      if(!b.pinned){ b.x+=ux*push; b.y+=uy*push; }
+    }
+    if(worst<0.02) break;
+  }
+  for(const s of S){                             // never stray far from the truth
+    let dx=s.x-s.x0, dy=s.y-s.y0; const d=Math.hypot(dx,dy);
+    if(d>cap){ dx=dx/d*cap; dy=dy/d*cap; }
+    if(dx||dy) poiNudge.set(s.k,[dx,dy]);
+  }
+}
+function reserveIcons(){
+  for(const p of pois){ const s=poiSite(p); if(!s) continue;
+    const b=[s.x-POI_HALF, s.y-POI_HALF, s.x+POI_HALF, s.y+POI_HALF];
+    placed.push(b); iconBoxes.add(b); poiBox.set(s.k, b);
+    // v2 also wants every symbol as an ANCHOR, labelled or not: the placer costs a
+    // position that sits nearer someone else's symbol than its own, which is what
+    // stops a name reading as if it belongs to the thing next door.
+    // The anchor id must be the SAME id the label is queued under, or the placer
+    // reads a POI's own symbol as a foreign one sitting 0 mm away and charges the
+    // full ambiguity penalty to every candidate it has.
+    if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.k); }
+  }
+}
+function poiMark(p){
+  const s=poiSite(p); if(!s) return;
+  const {k,o,x,y}=s;
   out(gk('poi',k,icon(p.cat,x,y,2.1)));
   const auto = ['shop','leisure','school','park','community','allotments'].includes(p.cat) && p.name && p.name!=='Park';
   const showName = o.force===true || (auto && o.force!==false);
-  if(showName) placeLabel(x,y,p.name,2.5,'#222',false,o.label||null);
+  if(showName) placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,{id:'poi:'+k});
 }
 
 out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
@@ -1216,9 +1365,39 @@ out(`</g>`);
 // ---- reserve protected areas so labels avoid them ----
 reserve(197,0,297,210);                 // right service panel
 reserve(0,0,86,26);                     // title block
+// The footer's backing plate is drawn LAST and covers whatever is beneath it, but no
+// placer knew it was there: 9 of the 31 sheets measured on 2026-08-15 had a label
+// printed and then erased by it. Shortening the frame (above) keeps the map out of the
+// band; this keeps the placers — which work in page mm, outside the clip — out too.
+if(DESIGN.footerSafe) reserve(0,FOOTER_PLATE_TOP,297,210);
 for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label areas
   if(ov.hide || (ov.label&&ov.label.hide)) continue;
-  if(f.labelReserve) reserve(...f.labelReserve); }
+  if(f.labelReserve){ reserve(...f.labelReserve); continue; }
+  // A feature label is hand-placed (labelPos) and drawn at the very END of the
+  // file, so without labelReserve nothing knows it is there and a map label lands
+  // underneath it — High Wycombe printed "to Widmer End & Great Missenden" straight
+  // through "Chiltern Main Line". labelReserve is per-town config nobody remembers
+  // to write; with real font metrics the box can just be measured. v2 only, so no
+  // existing sheet moves without asking.
+  if(V2 && f.labelPos && (f.label || (ov.label&&ov.label.text))){
+    const lov=ov.label||{}; const txt=lov.text!=null?lov.text:f.label;
+    const sz=f.labelSize||4;
+    let lx=f.labelPos.x+((ov.move&&ov.move.dx)||0), ly=f.labelPos.y+((ov.move&&ov.move.dy)||0);
+    if(lov.pos){ lx=lov.pos.x; ly=lov.pos.y; } else if(lov.offset){ lx+=lov.offset.dx; ly+=lov.offset.dy; }
+    const w=FONT.textWidth(txt,sz,false), anc=lov.anchor||'start';
+    const x0 = anc==='start'?lx : anc==='end'?lx-w : lx-w/2;
+    reserve(x0-0.5, ly-sz*FONT.CAP_HEIGHT-0.5, x0+w+0.5, ly+sz*FONT.DESCENDER+0.5);
+  }
+}
+// design.reserveIcons: POI symbols are drawn LAST (`pois.forEach(poiMark)`, below the
+// road names and the terminus badges) but were never reserving a box, so a symbol
+// routinely landed on a label placed earlier in the file and painted over it — St Ives
+// printed "Waitrose" as "Wa▮▮se" under the library icon for months, and the 2026-08-15
+// baseline counted 190 labels sitting on a foreign symbol across the 31 shipped sheets.
+// Claiming the boxes here, before the first label is placed, is what stops it. Absent
+// the key nothing is reserved and every placer behaves exactly as it did.
+if(DESIGN.spreadIcons) spreadIcons();
+if(DESIGN.reserveIcons) reserveIcons();
 // Central interchange / bus-station label (the ANCHOR) drawn + reserved first
 // (suppressed when internalDiagram draws a lozenge for the anchor instead)
 // (also suppressed by coreBox — the box IS the interchange, and its own label
@@ -1317,6 +1496,7 @@ if(IR && TRIM){
     bx=Math.min(Math.max(bx,MX0+rowHalf),MX1-rowHalf); by=Math.min(Math.max(by,MY0+3.4),MY1-3.4);
     aplaced.push([bx,by]);
     let bxMin=Infinity,bxMax=-Infinity,byMin=Infinity,byMax=-Infinity;
+    const pendingTermini=[];
     groups.forEach((g,gidx)=>{
       const ry=by+(gidx-(groups.length-1)/2)*RH;
       let lastX=bx;
@@ -1347,6 +1527,18 @@ if(IR && TRIM){
         g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BS;
           reserve(bxi-3.2,ry-3.2,bxi+3.2,ry+3.2); });
         const text='to '+g.label, sz=2.7, w=text.length*sz*0.52;
+        if(LAB){
+          // v2: a destination label is the single most useful string on the sheet —
+          // it is the answer to "where does this bus go?" — so it is queued at the
+          // top priority and gets first pick of the space around its badge row.
+          // Queued, not added: the cluster reserves a box around ALL its rows after
+          // this loop, and a label whose `own` exemption is smaller than that box
+          // finds every candidate blocked by its own badges. St Ives' "to Boxworth"
+          // was dropped for exactly that reason on the first v2 run.
+          pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
+            at:[(rx0+rx1)/2, ry], text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true });
+          return;
+        }
         const rcands=[[rx1+3.7,ry+0.9,'start'],[rx0-3.7,ry+0.9,'end'],[bx,ry-4.4,'middle'],[bx,ry+5.4,'middle']];
         for(const [lx,ly,anc] of rcands){
           const tb = anc==='start'?lx : anc==='end'?lx-w : lx-w/2;
@@ -1360,6 +1552,8 @@ if(IR && TRIM){
       }
     });
     reserve(bxMin-3.5,byMin-3.5,bxMax+3.5,byMax+3.5);                    // reserve, or it can't place
+    if(LAB) for(const t of pendingTermini)
+      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6]}, t));
   }
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;
@@ -1609,6 +1803,12 @@ if(IR && SKEL){
       return [best.x,best.y]; };
     const cands=[[cx0,cy0]].concat([0.3,0.7,0.15,0.85,0.42,0.58].map(along));
     let ok=false, anyInFrame=false;
+    // Two sweeps when design.reserveIcons is on: honour the symbols first, and only if
+    // every candidate is blocked, repeat ignoring them — the same "gain, never lose"
+    // fallback placeLabel() uses, so no road name that printed before disappears now.
+    for(const pass of (iconBoxes.size?[0,1]:[0])){
+    if(ok) break;
+    const blocked = pass ? overlapsNoIcons : (b=>overlaps(b));
     for(const [cx,cy] of cands){
       if(!inFrame([cx,cy]))continue; if(inCore([cx,cy]))continue; anyInFrame=true;
       // reserve the ROTATED footprint (rect rotated by `ang`, then its axis-
@@ -1621,9 +1821,10 @@ if(IR && SKEL){
       const corners=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([lx,ly])=>[cx+lx*ca-ly*sa, cy+lx*sa+ly*ca]);
       const b=[Math.min(...corners.map(c=>c[0])), Math.min(...corners.map(c=>c[1])),
                 Math.max(...corners.map(c=>c[0])), Math.max(...corners.map(c=>c[1]))];
-      if(overlaps(b))continue; reserve(...b);
+      if(blocked(b))continue; reserve(...b);
       out(`<text x="${cx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(${ang.toFixed(1)} ${cx.toFixed(2)} ${cy.toFixed(2)})" stroke="#fff" stroke-width="0.8" paint-order="stroke">${esc(label)}</text>`);
       ok=true; break;
+    }
     }
     if(process.env.DBG_LABELS) console.error('  '+(ok?'placed  ':'SKIP('+(anyInFrame?'overlap':'off-frame')+')')+' '+n);
   }
@@ -1712,6 +1913,35 @@ if(RJ.internalTermini && !IR){ const TL=RJ.terminiLabels||{};
     let t=0; while(tplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<6.5) && t<8){ p=[p[0]+nx*4, p[1]+ny*4]; t++; }
     tplaced.push(p);
     badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],'to '+TL[r],2.7,C[r]||'#333',false,null); }
+}
+
+// ---- labels.engine:"v2": solve and draw every queued point label at once ------
+// This is the two-phase draw. Everything above has finished claiming space —
+// route ribbons, casings, the river and railway, POI symbols, route badges, stop
+// ticks, road names, map notes, the core box, the panel and the footer plate — so
+// the placer is working against the finished drawing rather than against a partial
+// list of text boxes. The ink comes off the SVG this file has already built, which
+// cannot drift from what is drawn the way a parallel bookkeeping list would.
+if(LAB){
+  const palette=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
+  const lum=h=>{ const m=/^#([0-9a-f]{6})$/i.exec(h); if(!m) return 1;
+    const n=parseInt(m[1],16); return (0.2126*((n>>16)&255)+0.7152*((n>>8)&255)+0.0722*(n&255))/255; };
+  LAB.stampSvg(s, (stroke,w)=> palette.has(stroke) || (w>=1.2 && lum(stroke)<0.62));
+  if(process.env.DBG_LABELS) for(const r of LAB.solve()){
+    console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
+      +(r.placed?(r.pos||'fixed').padEnd(6)+(r.leader?'leader ':'       '):'      ')
+      +'at '+(r.it.at?r.it.at.map(v=>v.toFixed(1)).join(','):'-').padEnd(14)
+      +(r.placed?'-> '+r.x.toFixed(1)+','+r.y.toFixed(1)+'  ':'')+r.it.text);
+  }
+  out(LAB.svg());
+  // A label the placer could not fit leaves NO trace in the SVG, which is why the
+  // Phase 0 baseline could not measure silent drops at all. Write them down.
+  const un=LAB.unplaced();
+  if(un.length){
+    try{ fs.writeFileSync(DIR+'/unplaced.json', JSON.stringify(un,null,2)); }catch(e){}
+    process.stderr.write('labels: '+un.length+' could not be placed -> unplaced.json ('
+      + un.slice(0,6).map(u=>'"'+u.text+'"').join(', ') + (un.length>6?', ...':'') + ')\n');
+  } else { try{ fs.unlinkSync(DIR+'/unplaced.json'); }catch(e){} }
 }
 
 // title

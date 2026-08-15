@@ -9,6 +9,11 @@ const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
 const { footerBand } = require(_FOOTER);
+const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'labeller.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
+const { Labeller } = require(_LABELLER);
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -32,6 +37,18 @@ if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name))
 const EXT = HIDDEN_ROUTES.size ? D.external.filter(b=>!HIDDEN_ROUTES.has(b.route)) : D.external;
 const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
 const EDK = process.env.EDITOR_KEYS==='1';
+/*
+ * labels.engine:"v2" (design-quality plan, Phase 4). This generator had NO collision
+ * detection at all: every intermediate stop name was printed at a flat 5.2 mm
+ * perpendicular offset, on a side chosen once for the whole spoke, whatever else was
+ * there. Two spokes serving the same village each labelled it independently, which is
+ * what produced Huntingdon's famous garbled "Fenstanton" — the same word printed
+ * twice, 15 mm apart, both across a grey spoke. v2 routes these labels through
+ * labeller.js and deduplicates the names first. Absent => byte-identical.
+ */
+const LABELS = D.labels || {};
+const V2 = LABELS.engine === 'v2';
+const DESIGN = D.design || {};
 const W = 297, H = 210;
 let s = '';
 let out = (x) => { s += x + '\n'; };
@@ -68,6 +85,7 @@ function line(pts, color, w=3.4, dashed=false){
 }
 function tick(x,y,color){ out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 function badge(x,y,route,r=4.6){
+  if(V2) HARD.push([x-r-0.4, y-r-0.4, x+r+0.4, y+r+0.4, 'badge']);
   out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r*0.95).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
 }
@@ -82,11 +100,18 @@ function measureNodeWidth(label, timeLabel){
 // timeLabel (optional, e.g. "~18 min") — an extra non-bold line under the
 // destination name, fed by routes.json external[].minutesToDestination.
 // Absent => box drawn exactly as before (byte-identical for gated towns).
+// v2 collects the boxes that must never be printed over, and the label requests, as
+// the sheet is drawn — the same "claim your space before anything is placed" order
+// gen_internal.js uses.
+const HARD = [];      // [x0,y0,x1,y1,tag]
+const ANCH = [];      // [x,y,id] every tick/lozenge, for the "nearer a foreign symbol" test
+const REQS = [];      // queued stop labels
 function townNode(x,y,label,h=11,timeLabel){
   const lines = wrap(label);
   const w = measureNodeWidth(label, timeLabel);
   const extra = timeLabel ? 3.6 : 0;
   const hh = h + extra;
+  if(V2){ HARD.push([x-w/2-0.6, y-hh/2-0.6, x+w/2+0.6, y+hh/2+0.6, 'terminus']); ANCH.push([x,y,'term:'+label]); }
   out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh=4.0, y0=y-((lines.length-1)*lh+extra)/2;
   lines.forEach((ln,i)=>out(`<text x="${x.toFixed(2)}" y="${(y0+i*lh).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(ln)}</text>`));
@@ -162,6 +187,13 @@ for(const b of EXT){
   for(let i=0;i<n-1;i++){
     const [x,y]=pts[i+1];
     tick(x,y,C[b.route]);
+    if(V2){
+      HARD.push([x-1.9,y-1.9,x+1.9,y+1.9,'tick']);
+      ANCH.push([x,y,'stop:'+stops[i]+'@'+_key+'#'+i]);
+      REQS.push({ id:'stop:'+stops[i]+'@'+_key+'#'+i, at:[x,y], text:stops[i], size:2.9,
+                  own:[x-1.9,y-1.9,x+1.9,y+1.9], prefer:[perpx,perpy] });
+      continue;
+    }
     const lx=x+perpx*5.2, ly=y+perpy*5.2+0.9;
     out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="2.9" fill="#222" text-anchor="${labSide}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(stops[i])}</text>`);
   }
@@ -193,6 +225,7 @@ for(const b of EXT){
 if(EDK) out('<g data-kind="hub" data-key="hub">');
 (function(){
   const lines = HUB_LINES, h = HUB_H, w = HUB_W;   // measured up front, alongside hubEdge()
+  if(V2){ HARD.push([HX-w/2-1, HY-h/2-1, HX+w/2+1, HY+h/2+1, 'hub']); ANCH.push([HX,HY,'hub']); }
   out(`<rect x="${(HX-w/2).toFixed(2)}" y="${(HY-h/2).toFixed(2)}" width="${w}" height="${h}" rx="2.6" fill="#111" stroke="#000" stroke-width="0.5"/>`);
   const lh=5.2, y0=HY-(lines.length-1)*lh/2;
   lines.forEach((ln,i)=>{ const yy = lines.length>1 ? (y0+i*lh).toFixed(2) : HY;
@@ -278,9 +311,55 @@ out = realOut;
   // label) — the other stays auto-sized to content instead of freezing at a stale value.
   const bw = (_box && _box.w!=null) ? _box.w : (panelMaxX - lx + 8);
   const bh = (_box && _box.h!=null) ? _box.h : (panelMaxY - (legendTopY-10) + 4);
+  if(V2) HARD.push([lx-4.6, legendTopY-10.6, lx-4+bw+0.6, legendTopY-10+bh+0.6, 'legend']);
   out(`<rect x="${(lx-4).toFixed(2)}" y="${(legendTopY-10).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
 }
 legendBuf.forEach(out);
+
+// ---- v2: deduplicate the stop names, then place them all at once ------------
+if(V2){
+  /*
+   * DEDUPLICATION FIRST, because this is not a placement problem.
+   *
+   * Two spokes that both call at a village each label it, independently. On
+   * Huntingdon's sheet "Fenstanton" is printed twice 15 mm apart, each copy across a
+   * grey spoke, the two white haloes eating into each other — which reads as garbled
+   * text and was originally mis-diagnosed as a collision between two DIFFERENT names.
+   * No placer can fix that: both labels are correct, and moving them apart just
+   * spreads the redundancy. Say it once. The copy kept is the one nearest the hub,
+   * so the name sits on the first spoke a reader traces outward.
+   */
+  const DEDUPE = DESIGN.dedupeStopsMm!=null ? DESIGN.dedupeStopsMm : 30;
+  // A village is often an intermediate stop on one spoke and the DESTINATION of
+  // another (St Ives prints "Boxworth" and "Elsworth" twice for exactly that
+  // reason). The lozenge is the stronger statement, so it wins and the tick label
+  // goes; the tick itself stays, so the fact that the spoke calls there is not lost.
+  const kept=ANCH.filter(a=>a[2].startsWith('term:')).map(a=>({text:a[2].slice(5),at:[a[0],a[1]],fixedNode:true}));
+  for(const q of REQS.slice().sort((a,b)=>
+      (Math.hypot(a.at[0]-HX,a.at[1]-HY)-Math.hypot(b.at[0]-HX,b.at[1]-HY)) || (a.id<b.id?-1:1))){
+    if(kept.some(k=>k.text===q.text && Math.hypot(k.at[0]-q.at[0],k.at[1]-q.at[1])<=DEDUPE)) continue;
+    kept.push(q);
+  }
+  const L = new Labeller({ page:[W,H], frame:{x0:6,y0:30,x1:291,y1:190},
+                           bounds:{x0:2,y0:28,x1:295,y1:191} });
+  const pal=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
+  L.stampSvg(s, (stroke,w)=> pal.has(stroke) && w>=1.2);
+  for(const h of HARD) L.block([h[0],h[1],h[2],h[3]], h[4]);
+  L.block([0,0,120,27],'title');
+  L.block([0,193,297,210],'footer');
+  for(const a of ANCH) L.anchor(a[0],a[1],a[2]);
+  // Keep REQS order (spoke order) so the solve is stable across runs.
+  for(const q of REQS) if(kept.includes(q)) L.add(q);
+  out(L.svg());
+  const un=L.unplaced();
+  if(un.length){
+    try{ fs.writeFileSync(DIR+'/unplaced-external.json', JSON.stringify(un,null,2)); }catch(e){}
+    process.stderr.write('external labels: '+un.length+' unplaced ('+un.map(u=>'"'+u.text+'"').join(', ')+')\n');
+  } else { try{ fs.unlinkSync(DIR+'/unplaced-external.json'); }catch(e){} }
+  const dropped=REQS.length-kept.length;
+  if(dropped) console.log('external: '+dropped+' duplicate stop label(s) merged');
+}
+
 // source note
 const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 out(footerBand({

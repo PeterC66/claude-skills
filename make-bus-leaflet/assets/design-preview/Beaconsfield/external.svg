@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 297 210">
+<rect width="297" height="210" fill="#ffffff"/>
+<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="#4477AA">Buses from Beaconsfield to nearby towns</text>
+<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from July 2026)</text>
+<path d="M150.29 102.10 L148.20 85.08 L146.11 68.05 L144.02 51.03 L141.93 34.00" fill="none" stroke="#AA3377" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="148.20" cy="85.08" r="1.5" fill="#fff" stroke="#AA3377" stroke-width="1.1"/>
+<circle cx="146.11" cy="68.05" r="1.5" fill="#fff" stroke="#AA3377" stroke-width="1.1"/>
+<circle cx="144.02" cy="51.03" r="1.5" fill="#fff" stroke="#AA3377" stroke-width="1.1"/>
+<circle cx="143.91" cy="50.13" r="4" fill="#AA3377" stroke="#fff" stroke-width="0.7"/>
+<text x="143.91" y="50.13" font-family="Arial" font-weight="bold" font-size="3.80" fill="#fff" text-anchor="middle" dominant-baseline="central">105</text>
+<rect x="130.18" y="26.70" width="23.50" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="141.93" y="30.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Amersham &amp;</text>
+<text x="141.93" y="34.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Chesham</text>
+<text x="141.93" y="38.20" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~50 min</text>
+<path d="M141.93 106.27 L123.22 88.21 L104.51 70.14 L85.80 52.07 L67.09 34.00" fill="none" stroke="#4477AA" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="123.22" cy="88.21" r="1.5" fill="#fff" stroke="#4477AA" stroke-width="1.1"/>
+<circle cx="104.51" cy="70.14" r="1.5" fill="#fff" stroke="#4477AA" stroke-width="1.1"/>
+<circle cx="85.80" cy="52.07" r="1.5" fill="#fff" stroke="#4477AA" stroke-width="1.1"/>
+<circle cx="80.18" cy="46.64" r="4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="80.18" y="46.64" font-family="Arial" font-weight="bold" font-size="3.80" fill="#fff" text-anchor="middle" dominant-baseline="central">31</text>
+<rect x="53.39" y="26.70" width="27.40" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="67.09" y="32.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">High Wycombe</text>
+<text x="67.09" y="36.20" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~35 min</text>
+<path d="M130.48 116.75 L94.98 117.99 L59.49 119.23 L24.00 120.47" fill="none" stroke="#EE7733" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="94.98" cy="117.99" r="1.5" fill="#fff" stroke="#EE7733" stroke-width="1.1"/>
+<circle cx="59.49" cy="119.23" r="1.5" fill="#fff" stroke="#EE7733" stroke-width="1.1"/>
+<circle cx="40.24" cy="119.90" r="4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="40.24" y="119.90" font-family="Arial" font-weight="bold" font-size="3.80" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
+<rect x="12.25" y="114.97" width="23.50" height="11" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="24.00" y="118.47" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Holtspur &amp;</text>
+<text x="24.00" y="122.47" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Loudwater</text>
+<path d="M166.03 122.84 L204.69 141.70 L243.34 160.55 L282.00 179.41" fill="none" stroke="#CCBB44" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="204.69" cy="141.70" r="1.5" fill="#fff" stroke="#CCBB44" stroke-width="1.1"/>
+<circle cx="243.34" cy="160.55" r="1.5" fill="#fff" stroke="#CCBB44" stroke-width="1.1"/>
+<circle cx="269.15" cy="173.14" r="4" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
+<text x="269.15" y="173.14" font-family="Arial" font-weight="bold" font-size="3.80" fill="#111" text-anchor="middle" dominant-baseline="central">104</text>
+<rect x="272.20" y="172.11" width="19.60" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="282.00" y="177.61" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Uxbridge</text>
+<text x="282.00" y="181.61" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~45 min</text>
+<path d="M162.07 125.73 L173.73 136.98 L185.38 148.24 L197.04 159.49 L208.69 170.75 L220.35 182.00" fill="none" stroke="#EE6677" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="173.73" cy="136.98" r="1.5" fill="#fff" stroke="#EE6677" stroke-width="1.1"/>
+<circle cx="185.38" cy="148.24" r="1.5" fill="#fff" stroke="#EE6677" stroke-width="1.1"/>
+<circle cx="197.04" cy="159.49" r="1.5" fill="#fff" stroke="#EE6677" stroke-width="1.1"/>
+<circle cx="208.69" cy="170.75" r="1.5" fill="#fff" stroke="#EE6677" stroke-width="1.1"/>
+<circle cx="210.06" cy="172.07" r="4" fill="#EE6677" stroke="#fff" stroke-width="0.7"/>
+<text x="210.06" y="172.07" font-family="Arial" font-weight="bold" font-size="3.80" fill="#fff" text-anchor="middle" dominant-baseline="central">102</text>
+<rect x="210.55" y="174.70" width="19.60" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="220.35" y="178.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Heathrow</text>
+<text x="220.35" y="182.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Airport</text>
+<text x="220.35" y="186.20" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~37 min</text>
+<path d="M157.69 128.79 L163.62 142.09 L169.54 155.39 L175.46 168.70 L181.39 182.00" fill="none" stroke="#228833" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="163.62" cy="142.09" r="1.5" fill="#fff" stroke="#228833" stroke-width="1.1"/>
+<circle cx="169.54" cy="155.39" r="1.5" fill="#fff" stroke="#228833" stroke-width="1.1"/>
+<circle cx="175.46" cy="168.70" r="1.5" fill="#fff" stroke="#228833" stroke-width="1.1"/>
+<circle cx="175.89" cy="169.67" r="4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="175.89" y="169.67" font-family="Arial" font-weight="bold" font-size="3.80" fill="#fff" text-anchor="middle" dominant-baseline="central">103</text>
+<rect x="172.39" y="174.70" width="18.00" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="181.39" y="180.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Windsor</text>
+<text x="181.39" y="184.20" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~44 min</text>
+<path d="M152.49 129.99 L153.40 156.00 L154.30 182.00" fill="none" stroke="#66CCEE" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="153.40" cy="156.00" r="1.5" fill="#fff" stroke="#66CCEE" stroke-width="1.1"/>
+<circle cx="153.83" cy="168.51" r="4" fill="#66CCEE" stroke="#fff" stroke-width="0.7"/>
+<text x="153.83" y="168.51" font-family="Arial" font-weight="bold" font-size="3.80" fill="#111" text-anchor="middle" dominant-baseline="central">X74</text>
+<rect x="145.30" y="174.70" width="18.00" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="154.30" y="180.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Slough</text>
+<text x="154.30" y="184.20" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~20 min</text>
+<path d="M163.03 107.38 L209.99 70.69 L256.96 34.00" fill="none" stroke="#EE7733" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="209.99" cy="70.69" r="1.5" fill="#fff" stroke="#EE7733" stroke-width="1.1"/>
+<circle cx="242.61" cy="45.21" r="4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="242.61" y="45.21" font-family="Arial" font-weight="bold" font-size="3.80" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
+<rect x="243.26" y="26.70" width="27.40" height="14.6" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>
+<text x="256.96" y="30.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Seer Green &amp;</text>
+<text x="256.96" y="34.20" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff" text-anchor="middle" dominant-baseline="central">Jordans</text>
+<text x="256.96" y="38.20" font-family="Arial" font-size="2.7" fill="#d7f0df" text-anchor="middle" dominant-baseline="central">~32 min</text>
+<rect x="133.40" y="110.00" width="37.2" height="12" rx="2.6" fill="#111" stroke="#000" stroke-width="0.5"/>
+<text x="152" y="116" font-family="Arial" font-weight="bold" font-size="5.2" fill="#fff" text-anchor="middle" dominant-baseline="central">Beaconsfield</text>
+<rect x="6.00" y="145.00" width="107.24" height="42.40" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>
+<text x="10" y="151" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>
+<circle cx="13.00" cy="155.00" r="2.9" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="13.00" y="155.00" font-family="Arial" font-weight="bold" font-size="2.75" fill="#fff" text-anchor="middle" dominant-baseline="central">31</text>
+<circle cx="20.00" cy="155.00" r="2.9" fill="#EE6677" stroke="#fff" stroke-width="0.7"/>
+<text x="20.00" y="155.00" font-family="Arial" font-weight="bold" font-size="2.75" fill="#fff" text-anchor="middle" dominant-baseline="central">102</text>
+<circle cx="27.00" cy="155.00" r="2.9" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="27.00" y="155.00" font-family="Arial" font-weight="bold" font-size="2.75" fill="#fff" text-anchor="middle" dominant-baseline="central">103</text>
+<circle cx="34.00" cy="155.00" r="2.9" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
+<text x="34.00" y="155.00" font-family="Arial" font-weight="bold" font-size="2.75" fill="#111" text-anchor="middle" dominant-baseline="central">104</text>
+<circle cx="41.00" cy="155.00" r="2.9" fill="#AA3377" stroke="#fff" stroke-width="0.7"/>
+<text x="41.00" y="155.00" font-family="Arial" font-weight="bold" font-size="2.75" fill="#fff" text-anchor="middle" dominant-baseline="central">105</text>
+<text x="47" y="155.20" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">Carousel Buses</text>
+<circle cx="13.00" cy="161.60" r="2.9" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="13.00" y="161.60" font-family="Arial" font-weight="bold" font-size="2.75" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
+<text x="19" y="161.80" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">Red Eagle</text>
+<circle cx="13.00" cy="168.20" r="2.9" fill="#66CCEE" stroke="#fff" stroke-width="0.7"/>
+<text x="13.00" y="168.20" font-family="Arial" font-weight="bold" font-size="2.75" fill="#111" text-anchor="middle" dominant-baseline="central">X74</text>
+<text x="19" y="168.40" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">First Berkshire &amp; The Thames Valley</text>
+<text x="10" y="177.80" font-family="Arial" font-size="2.9" fill="#666">102 / 103 / 104 / X74 also reach High Wycombe. 380 runs Tue</text>
+<text x="10" y="181.40" font-family="Arial" font-size="2.9" fill="#666">&amp; Fri only.</text>
+<text x="152.23" y="86.49" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Coleshill</text>
+<text x="150.14" y="69.46" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Amersham</text>
+<path d="M144.02 51.03L149.03 51.03" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="149.48" y="52.94" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Chesham</text>
+<text x="127.25" y="84.78" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Holtspur</text>
+<text x="108.54" y="66.71" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Tylers Green</text>
+<text x="89.83" y="48.64" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Penn</text>
+<text x="99.01" y="123.23" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Holtspur</text>
+<text x="63.52" y="124.47" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Wooburn</text>
+<text x="208.72" y="138.27" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Gerrards Cross</text>
+<text x="247.37" y="157.13" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Denham</text>
+<text x="177.76" y="138.39" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Gerrards Cross</text>
+<text x="189.41" y="144.81" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Denham</text>
+<text x="201.07" y="156.06" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Uxbridge</text>
+<path d="M208.69 170.75L216.04 165.18" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="216.49" y="164.12" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">West Drayton</text>
+<text x="159.59" y="143.50" font-family="Arial" font-size="2.9" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Farnham Common</text>
+<text x="173.57" y="156.81" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Slough</text>
+<path d="M175.46 168.70L170.45 168.70" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="170.00" y="170.61" font-family="Arial" font-size="2.9" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Eton</text>
+<text x="149.37" y="157.41" font-family="Arial" font-size="2.9" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Farnham Royal</text>
+<text x="214.02" y="72.10" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Seer Green</text>
+<rect x="0" y="195.16" width="297" height="14.84" fill="#fff" fill-opacity="0.97"/>
+<text x="8" y="198.80" font-family="Arial" font-size="2.8" fill="#666">Routes &amp; stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).</text>
+<text x="8" y="202.40" font-family="Arial" font-size="2.8" fill="#666">Confirm live times &amp; fares at bustimes.org or operator apps. Journey times shown are approximate. Diagram — not to scale.</text>
+<text x="8" y="206" font-family="Arial" font-size="2.8" fill="#999">Valid from July 2026</text>
+<text x="294" y="206" font-family="Arial" font-size="2.8" fill="#999" text-anchor="end">Map design © BusMaps.uk</text>
+</svg>

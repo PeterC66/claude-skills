@@ -1,0 +1,254 @@
+{
+  "engine": "ccd310a706",
+  "town": "Ramsey",
+  "validFrom": "August 2026",
+  "version": "1.19",
+  "_bootstrap": "Tier-2 auto-draft (process-efficiency-plan item 8, 2026-08-04): unattended, unreviewed. See DRAFT-REVIEW.md before treating this as a real leaflet.",
+  "anchor": "0500HRAMS006",
+  "anchorLabel": "New Road",
+  "atcoPrefix": "0500HRAMS",
+  "titleColor": "#4477AA",
+  "legendWrap": {
+    "perRow": 4
+  },
+  "internalZoom": {
+    "corePct": 0.55,
+    "comp": 0.22
+  },
+  "palette": {
+    "32": "#4477AA",
+    "301": "#EE6677",
+    "303": "#228833",
+    "305": "#CCBB44",
+    "X31": "#66CCEE",
+    "301S": "#AA3377",
+    "301V": "#EE7733",
+    "301X": "#BBBBBB"
+  },
+  "textOn": {
+    "32": "#fff",
+    "301": "#fff",
+    "303": "#fff",
+    "305": "#111",
+    "X31": "#111",
+    "301S": "#fff",
+    "301V": "#111",
+    "301X": "#111"
+  },
+  "routeOrder": [
+    "32",
+    "301",
+    "303",
+    "305",
+    "X31",
+    "301S",
+    "301V",
+    "301X"
+  ],
+  "panelOrder": [
+    "32",
+    "301",
+    "303",
+    "305",
+    "X31",
+    "301S",
+    "301V",
+    "301X"
+  ],
+  "orientationRoute": "32",
+  "internalDesc": {
+    "32": [
+      "Ramsey - March",
+      "Mon-Sat"
+    ],
+    "301": [
+      "Ramsey - St Ives",
+      "Mon-Sat"
+    ],
+    "303": [
+      "Ramsey - Huntingdon",
+      "Mon-Sat"
+    ],
+    "305": [
+      "Ramsey - Huntingdon",
+      "Mon-Fri"
+    ],
+    "X31": [
+      "Ramsey - Peterborough",
+      "Mon-Sat"
+    ],
+    "301S": [
+      "Ramsey - St Ives",
+      "Sat"
+    ],
+    "301V": [
+      "Ramsey - St Ives",
+      "Mon-Fri"
+    ],
+    "301X": [
+      "Ramsey - St Ives",
+      "Sat"
+    ]
+  },
+  "poi": {
+    "industrialKeep": "none",
+    "excludeName": [],
+    "tidy": [
+      [
+        " School$",
+        ""
+      ]
+    ],
+    "canon": []
+  },
+  "operators": [
+    {
+      "name": "Dews Coaches",
+      "routes": [
+        "32",
+        "301",
+        "303",
+        "305",
+        "X31",
+        "301S",
+        "301V",
+        "301X"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "key": "river",
+      "type": "river",
+      "label": "River Nene (Old Course)",
+      "labelPos": {
+        "x": 45.7,
+        "y": 75.1
+      },
+      "labelColor": "#7fb0d8"
+    }
+  ],
+  "external": [
+    {
+      "route": "32",
+      "label": "March",
+      "days": "Mon-Sat",
+      "bearing": 49,
+      "side": "up",
+      "stops": [
+        "Whittlesey",
+        "March"
+      ],
+      "minutesToDestination": 42
+    },
+    {
+      "route": "301",
+      "label": "St Ives",
+      "days": "Mon-Sat",
+      "bearing": 170,
+      "side": "up",
+      "stops": [
+        "Bury",
+        "Pidley cum Fenton",
+        "Colne",
+        "Bluntisham",
+        "St Ives"
+      ],
+      "routes": [
+        "301",
+        "301S",
+        "301V",
+        "301X"
+      ],
+      "minutesToDestination": 55
+    },
+    {
+      "route": "303",
+      "label": "Huntingdon",
+      "days": "Mon-Sat",
+      "bearing": 190,
+      "side": "up",
+      "stops": [
+        "Bury",
+        "Wistow",
+        "Warboys",
+        "Old Hurst",
+        "Huntingdon"
+      ],
+      "minutesToDestination": 50
+    },
+    {
+      "route": "305",
+      "label": "Huntingdon",
+      "days": "Mon-Fri",
+      "bearing": 212,
+      "side": "up",
+      "stops": [
+        "Bury",
+        "Wistow",
+        "Warboys",
+        "Old Hurst",
+        "Huntingdon"
+      ],
+      "minutesToDestination": 50
+    },
+    {
+      "route": "X31",
+      "label": "Peterborough",
+      "days": "Mon-Sat",
+      "bearing": 326,
+      "side": "up",
+      "stops": [
+        "Whittlesey",
+        "Peterborough"
+      ],
+      "minutesToDestination": 26
+    }
+  ],
+  "internalRoads": {
+    "focus": {
+      "coreKm": 0.9,
+      "comp": 0.3
+    },
+    "roadLabelMax": 16,
+    "badgeEvery": 70,
+    "termini": {
+      "32": {
+        "start": "March"
+      },
+      "301": {
+        "end": "St Ives"
+      },
+      "303": {
+        "start": "Chatteris",
+        "end": "Huntingdon"
+      },
+      "305": {
+        "end": "Huntingdon"
+      },
+      "X31": {
+        "start": "Peterborough"
+      }
+    }
+  },
+  "internalCorridors": {
+    "301": [
+      "301S",
+      "301V",
+      "301X"
+    ]
+  },
+  "design": {
+    "footerSafe": true,
+    "spreadIcons": true,
+    "iconInk": "charcoal",
+    "panelScale": true,
+    "scaleBar": true,
+    "routeCasing": true,
+    "cornerRadius": 2,
+    "badgeFit": true
+  },
+  "labels": {
+    "engine": "v2"
+  }
+}

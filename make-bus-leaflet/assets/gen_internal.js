@@ -719,18 +719,62 @@ const W=297,H=210; let s=''; const out=x=>{s+=x+'\n';};
 const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 // editor-only element keys (no-op unless EDITOR_KEYS=1, so normal output is unchanged)
 const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>` : inner;
-function badge(x,y,r,rad=4.6){out(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(r))}</text>`);}
+/* ---- design.badgeFit: a 4-character route key does not fit a disc ------------
+ * badge() has always drawn its text at font-size = the badge RADIUS. That is
+ * right for one to three characters and wrong for four: "301S" is 5.6mm of Arial
+ * Bold in a 4.8mm stop badge, 7.0mm in a 6.0mm terminus badge and 9.3mm in the
+ * 8.0mm Services-panel one, so it spilled over BOTH edges and the number read as
+ * sitting ON the disc rather than IN it. Found 2026-08-15 on Ramsey (301S / 301V
+ * / 301X); March (ZIP2) and St Ives (VL14) have it too, on their external sheets
+ * as well as their internal ones.
+ *
+ * The fix is the SHAPE, not the type. Shrinking the font to fit the disc is the
+ * smaller change and it fails exactly where it matters most: fitting "301S"
+ * inside a 2.4mm-radius stop badge needs 1.8mm type, well under the 2.4mm print
+ * legibility floor `quality_metrics.js` enforces. So the badge grows sideways
+ * into a stadium — what operator maps do with a lettered route number — and the
+ * type stays the size it was.
+ *
+ * `badgeHalfW(route, rad)` is the single source of truth for how wide a badge is,
+ * and `badgeXW` is the same thing as an EXTRA over the radius. Every pitch, clamp
+ * and reserve box below is expressed as `<the old literal> + <extra>`, never
+ * recomputed from the half-width, so a town with no long key adds a floating
+ * zero and stays bit-for-bit identical (invariant 2). Absent the key `badgeXW` is
+ * 0 everywhere and none of it runs at all.
+ */
+const BFIT = !!DESIGN.badgeFit;
+// Overflow is measured against the DIAMETER, not against a chord: "X31" pokes a
+// hair outside the circle at the corners of its cap band and has always looked
+// fine, and tightening the test to the chord would turn three-character keys
+// that ship today into pills. 0.3mm of inset keeps the widest shipped
+// three-character key (X31, 4.27mm in a 4.8mm disc) a disc.
+const badgeHalfW = (r,rad)=>{
+  if(!BFIT) return rad;
+  const w = FONT.textWidth(blab(r), rad, true);   // font-size == rad, Arial Bold
+  return (w <= 2*rad-0.3) ? rad : w/2 + 0.35*rad;
+};
+const badgeXW = (r,rad)=> BFIT ? badgeHalfW(r,rad)-rad : 0;
+// widest EXTRA over a set of routes drawn at one radius — needed before the draw,
+// because several call sites test for collisions and then decide whether to badge.
+const badgeXWs = (list,rad)=> BFIT ? Math.max(0,...list.map(r=>badgeXW(r,rad))) : 0;
+function badge(x,y,r,rad=4.6){
+  const hw=badgeHalfW(r,rad);
+  if(hw>rad) out(`<rect x="${(x-hw).toFixed(2)}" y="${(y-rad).toFixed(2)}" width="${(2*hw).toFixed(2)}" height="${(2*rad).toFixed(2)}" rx="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
+  else out(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
+  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(r))}</text>`);
+  return hw-rad;}
 // A bundled corridor's badge is a vertical STACK of its members' badges (the
 // convention every operator's own big-town map uses: one line, many identities).
 // A one-element list reduces to exactly badge() at the same centre, so an
-// unbundled town is byte-identical. Returns the stack's half-height in mm so the
-// caller can reserve the right box.
+// unbundled town is byte-identical. Returns the stack's half-height in mm, and
+// (under design.badgeFit) how much wider than the disc its widest member drew,
+// so the caller can reserve the right box.
 function badgeStack(x,y,list,rad){
-  if(list.length===1){ badge(x,y,list[0],rad); return rad; }
+  if(list.length===1){ const xw=badge(x,y,list[0],rad); return {h:rad, xw}; }
   const pitch=rad*2+0.5, y0=y-(list.length-1)/2*pitch;
-  list.forEach((r,i)=>badge(x, y0+i*pitch, r, rad));
-  return (list.length-1)/2*pitch + rad;
+  let xw=0;
+  list.forEach((r,i)=>{ xw=Math.max(xw, badge(x, y0+i*pitch, r, rad)); });
+  return {h:(list.length-1)/2*pitch + rad, xw};
 }
 function cross(x,y,col){const a=1.0,b=2.6;out(`<rect x="${x-a/2}" y="${y-b/2}" width="${a}" height="${b}" fill="${col}"/><rect x="${x-b/2}" y="${y-a/2}" width="${b}" height="${a}" fill="${col}"/>`);}
 
@@ -1388,14 +1432,75 @@ if(IR){
         out(`<path d="M${p[0].toFixed(2)} ${p[1].toFixed(2)}L${q[0].toFixed(2)} ${q[1].toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${kw.toFixed(2)}" stroke-linecap="round"/>`);
       } }
   }
+  /* design.cornerRadius (plan §3.2) — one corner radius on the route lines.
+   *
+   * §3.2 said "the internal-diagram engine mixes sharp and rounded corners on the
+   * same sheet". Measured, that is not what happens: EVERY route path in every
+   * model is drawn with stroke-linejoin="round", so every corner is rounded — but
+   * only by the stroke's own half-width, 0.85 mm on a 1.7 mm line. At a 60-90°
+   * turn that reads as a mitre, not as a drawn curve, which is what a tube map
+   * uses. So the item is real and the diagnosis of it was not.
+   *
+   * It is aimed at the diagram and the schematic, where the turn profile says
+   * corners are EVENTS: 76-78% of vertices turn less than 2° and 6-9% turn more
+   * than 45°. On a geographic sheet turning is continuous instead (the buckets
+   * are flat, ~20% each) because the line is following a real road, and there is
+   * no corner to round — which is why the fillet is clamped to half of each
+   * adjacent segment. On 1.2 mm road segments that clamp reduces it to almost
+   * nothing on its own, so the same key is safe on every model.
+   */
+  const CORNER = DESIGN.cornerRadius!=null ? (DESIGN.cornerRadius===true?2.0:DESIGN.cornerRadius) : 0;
+  const CORNER_MIN_TURN = DESIGN.cornerMinTurn!=null ? DESIGN.cornerMinTurn : 30;
+  function pathD(pts){
+    if(!(CORNER>0) || pts.length<3)
+      return pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
+    let d='M'+pts[0][0].toFixed(2)+' '+pts[0][1].toFixed(2);
+    for(let i=1;i<pts.length-1;i++){
+      const A=pts[i-1], B=pts[i], C=pts[i+1];
+      const ax=A[0]-B[0], ay=A[1]-B[1], cx=C[0]-B[0], cy=C[1]-B[1];
+      const la=Math.hypot(ax,ay), lc=Math.hypot(cx,cy);
+      if(!la||!lc){ d+='L'+B[0].toFixed(2)+' '+B[1].toFixed(2); continue; }
+      // turn = how far the direction changes AT B (0 = straight on)
+      const turn=Math.abs(((Math.atan2(cy,cx)-Math.atan2(-ay,-ax)+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI)*180/Math.PI;
+      if(turn<CORNER_MIN_TURN){ d+='L'+B[0].toFixed(2)+' '+B[1].toFixed(2); continue; }
+      const t=Math.min(CORNER, la/2, lc/2);
+      const p1=[B[0]+ax/la*t, B[1]+ay/la*t], p2=[B[0]+cx/lc*t, B[1]+cy/lc*t];
+      d+='L'+p1[0].toFixed(2)+' '+p1[1].toFixed(2)
+        +'Q'+B[0].toFixed(2)+' '+B[1].toFixed(2)+' '+p2[0].toFixed(2)+' '+p2[1].toFixed(2);
+    }
+    const L=pts[pts.length-1];
+    return d+'L'+L[0].toFixed(2)+' '+L[1].toFixed(2);
+  }
   // -- route lines
+  const RLINES=[];
   for(const r of order){ const tr=TRIM[r]; if(!tr||tr.pts.length<2)continue;
     // coreBox: draw the runs OUTSIDE the box as subpaths of one path element, so
     // each end stops flush on the boundary. No box => one run, byte-identical.
     const runs=clipOutCore(tr.pts); if(!runs.length)continue;
     if(CORERUNS) CORERUNS[r]=[].concat(...runs.map(rn=>[rn[0],rn[rn.length-1]]));
-    const d=runs.map(rn=>rn.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ')).join(' ');
-    out(gk('route',r,`<path d="${d}" fill="none" stroke="${C[r]}" stroke-width="${IR.stroke}" stroke-linecap="round" stroke-linejoin="round"/>`)); }
+    const d=runs.map(rn=>pathD(rn)).join(' ');
+    RLINES.push({r,d}); }
+  /* design.routeCasing (plan §3.1) — a white casing under every route line.
+   *
+   * It has to be its own PASS over the whole set, not a casing drawn with each
+   * route: per-route, the next route's casing erases the previous route's colour
+   * wherever they run close, which is most of a bundle. All the casings, then all
+   * the colours.
+   *
+   * What it does and does not fix, measured before building it: on a GEOGRAPHIC
+   * sheet the grey road skeleton (#e4e4e4) already separates a route from the
+   * white page, so the casing's job there is at crossings and against the icons
+   * and interchange bars drawn over the lines. On the DIAGRAM and SCHEMATIC the
+   * skeleton is deliberately near-white (the hand-made leaflet draws colours
+   * straight onto white), and the 2.4 mm lane pitch already leaves 0.7 mm of
+   * white between parallel lanes — so there the casing buys nothing BETWEEN
+   * lanes and everything where two routes cross.
+   */
+  const CASE = DESIGN.routeCasing ? ((DESIGN.routeCasing.mm!=null?DESIGN.routeCasing.mm:0.35)) : 0;
+  if(CASE>0) for(const L of RLINES)
+    out(`<path d="${L.d}" fill="none" stroke="${(DESIGN.routeCasing&&DESIGN.routeCasing.color)||'#ffffff'}" stroke-width="${(IR.stroke+CASE*2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+  for(const L of RLINES)
+    out(gk('route',L.r,`<path d="${L.d}" fill="none" stroke="${C[L.r]}" stroke-width="${IR.stroke}" stroke-linecap="round" stroke-linejoin="round"/>`));
   // -- stop ticks ON the route lines (one per physical stop, first route wins;
   //    stops[ATCO].pos override moves the tick)
   const tickSeen=new Set();
@@ -1634,8 +1739,8 @@ if(IR && TRIM){
     if(CORERUNS && !(CORERUNS[r]||[]).some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<0.05)) return;
     const anc=(atco2ll[ANCHOR]||baseOv[ANCHOR])?XYS(ANCHOR):null;
     if(anc && Math.hypot(p[0]-anc[0],p[1]-anc[1])<8) return;   // not at the interchange knot
-    const hh=badgeStack(p[0],p[1],grp||[r],2.6);
-    reserve(p[0]-2.8,p[1]-hh-0.2,p[0]+2.8,p[1]+hh+0.2);
+    const bs=badgeStack(p[0],p[1],grp||[r],2.6);
+    reserve(p[0]-2.8-bs.xw,p[1]-bs.h-0.2,p[0]+2.8+bs.xw,p[1]+bs.h+0.2);
   };
   // -- consolidate frame-cut termini into ONE box per exit cluster (item 5,
   //    2026-07-04): nearby cut points used to each place an independent
@@ -1705,7 +1810,12 @@ if(IR && TRIM){
     // clamp by the row's own half-width. A solo badge keeps the original 3.4 mm
     // margin exactly; a multi-badge row is pulled fully inside the frame (St Ives'
     // 2-badge "to Cambridge" row moves 2.1 mm — re-rendered at v6.8).
-    const rowHalf=Math.max(3.4, ((Math.max(...groups.map(g=>g.ms.length))-1)/2)*BS+3.4);
+    // design.badgeFit: a pill is wider than the 6.0mm disc BS was sized for, so a
+    // row of them at the 6.6mm pitch would overlap. Widen the pitch — and the
+    // clamps derived from it — by the widest extra in THIS cluster, so a cluster
+    // of ordinary discs keeps 6.6 and 3.4 exactly.
+    const CXW=badgeXWs(ms.map(m=>m.r),3.0), BSx=BS+2*CXW;
+    const rowHalf=Math.max(3.4, ((Math.max(...groups.map(g=>g.ms.length))-1)/2)*BSx+3.4+CXW);
     // And the SAME argument vertically, which was missed: a cluster with several
     // distinct "to X" texts draws one row per group at by ± (n-1)/2 * RH, so
     // clamping the centre alone lets the outermost row escape the frame. It had
@@ -1723,7 +1833,7 @@ if(IR && TRIM){
     groups.forEach((g,gidx)=>{
       const ry=by+(gidx-(groups.length-1)/2)*RH;
       let lastX=bx;
-      g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BS; badge(bxi,ry,m.r,3.0); lastX=bxi;
+      g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BSx; badge(bxi,ry,m.r,3.0); lastX=bxi;
         bxMin=Math.min(bxMin,bxi); bxMax=Math.max(bxMax,bxi); byMin=Math.min(byMin,ry); byMax=Math.max(byMax,ry); });
       if(!g.label) return;
       // A "to X" shared by 2+ differently-coloured routes (e.g. 18 + 905 both to
@@ -1746,9 +1856,9 @@ if(IR && TRIM){
         // the row's badges first, then try row-level spots (right / left /
         // above / below the WHOLE row) so text can never cover a badge.
         // Solo rows keep the legacy call below unchanged (byte-identical).
-        const rx0=bx+(0-(g.ms.length-1)/2)*BS, rx1=lastX;
-        g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BS;
-          reserve(bxi-3.2,ry-3.2,bxi+3.2,ry+3.2); });
+        const rx0=bx+(0-(g.ms.length-1)/2)*BSx, rx1=lastX;
+        g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BSx;
+          reserve(bxi-3.2-CXW,ry-3.2,bxi+3.2+CXW,ry+3.2); });
         const text='to '+g.label, sz=2.7, w=text.length*sz*0.52;
         if(LAB){
           // v2: a destination label is the single most useful string on the sheet —
@@ -1762,7 +1872,7 @@ if(IR && TRIM){
             at:[(rx0+rx1)/2, ry], text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true });
           return;
         }
-        const rcands=[[rx1+3.7,ry+0.9,'start'],[rx0-3.7,ry+0.9,'end'],[bx,ry-4.4,'middle'],[bx,ry+5.4,'middle']];
+        const rcands=[[rx1+3.7+CXW,ry+0.9,'start'],[rx0-3.7-CXW,ry+0.9,'end'],[bx,ry-4.4,'middle'],[bx,ry+5.4,'middle']];
         for(const [lx,ly,anc] of rcands){
           const tb = anc==='start'?lx : anc==='end'?lx-w : lx-w/2;
           const bb=[tb-0.4,ly-sz,tb+w+0.4,ly+1];
@@ -1774,9 +1884,9 @@ if(IR && TRIM){
         }
       }
     });
-    reserve(bxMin-3.5,byMin-3.5,bxMax+3.5,byMax+3.5);                    // reserve, or it can't place
+    reserve(bxMin-3.5-CXW,byMin-3.5,bxMax+3.5+CXW,byMax+3.5);            // reserve, or it can't place
     if(LAB) for(const t of pendingTermini)
-      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6]}, t));
+      LAB.add(Object.assign({own:[bxMin-3.6-CXW,byMin-3.6,bxMax+3.6+CXW,byMax+3.6]}, t));
   }
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;
@@ -1808,12 +1918,15 @@ if(IR && TRIM){
         const grp=badgeGroup(r,segIdxOf(tr,i));
         if(!grp)continue;
         if(grp.length===1) soloEligible.add(r);
-        if(bplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<9))continue;
+        // the group's extra width has to be known BEFORE the draw, because the two
+        // tests below decide whether this spot gets a badge at all.
+        const gxw=badgeXWs(grp,2.4);
+        if(bplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<9+gxw))continue;
         const gh=grp.length===1?2.3:(grp.length-1)/2*5.3+2.3;
-        if(overlaps([p[0]-2.3,p[1]-gh,p[0]+2.3,p[1]+gh]))continue;
-        bplaced.push(p); const hh=badgeStack(p[0],p[1],grp,2.4);
+        if(overlaps([p[0]-2.3-gxw,p[1]-gh,p[0]+2.3+gxw,p[1]+gh]))continue;
+        bplaced.push(p); const bs=badgeStack(p[0],p[1],grp,2.4);
         for(const g of grp) badged.add(g);
-        reserve(p[0]-2.5,p[1]-hh-0.1,p[0]+2.5,p[1]+hh+0.1);
+        reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
       }
       acc+=L;
     }
@@ -1843,9 +1956,9 @@ if(IR && TRIM){
         const p=[(tr.pts[s.i][0]+tr.pts[s.i+1][0])/2, (tr.pts[s.i][1]+tr.pts[s.i+1][1])/2];
         if(!inFrame(p)||inCore(p)) continue;
         const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
-        const hh=badgeStack(p[0],p[1],grp,2.4);
+        const bs=badgeStack(p[0],p[1],grp,2.4);
         for(const g of grp) badged.add(g);
-        bplaced.push(p); reserve(p[0]-2.5,p[1]-hh-0.1,p[0]+2.5,p[1]+hh+0.1);
+        bplaced.push(p); reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
         break;
       }
     }
@@ -2133,7 +2246,8 @@ if(RJ.internalTermini && !IR){ const TL=RJ.terminiLabels||{};
     // nudge off any nearby already-placed terminus, perpendicular to the last segment
     const adj = rpos(r, sq[k===0?1:sq.length-2]);
     const dx=p[0]-adj[0], dy=p[1]-adj[1], L=Math.hypot(dx,dy)||1, nx=-dy/L, ny=dx/L;
-    let t=0; while(tplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<6.5) && t<8){ p=[p[0]+nx*4, p[1]+ny*4]; t++; }
+    const txw=badgeXW(r,3.0);
+    let t=0; while(tplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<6.5+txw) && t<8){ p=[p[0]+nx*4, p[1]+ny*4]; t++; }
     tplaced.push(p);
     badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],'to '+TL[r],2.7,C[r]||'#333',false,null); }
 }
@@ -2255,6 +2369,14 @@ for(const f of FEATURES) drawFeatureLabel(f);
 // ---------- right service panel ----------
 const PX=(OV.panel&&OV.panel.x!=null)?OV.panel.x:200; let py=(OV.panel&&OV.panel.y!=null)?OV.panel.y:14;
 const PROW=RJ.panelRow||8, KROW=RJ.keyRow||4.4, PBR=RJ.panelBadge||4;
+// design.badgeFit: ONE badge-column width for the whole panel, not one per row.
+// Sizing each row to its own badge was the first cut and it looked worse than the
+// bug: three pills at the bottom of Ramsey's list pushed only their own titles
+// right, so the panel gained a ragged title column and a ragged badge column at
+// once. A panel is a table — the badges centre in one column and every title
+// starts at the same x. Zero when no route in the list needs a pill, so an
+// ungated panel is drawn exactly as before.
+const PXW = badgeXWs(panelOrder, PBR);
 // panelCols (optional) — multi-column Services panel. Absent => single column.
 const PCOLS=(RJ.panelCols&&(RJ.panelCols.cols|0)>1)?RJ.panelCols:null;
 
@@ -2351,9 +2473,9 @@ if(RJ.panelGroups){
         else if(g.name) py += gapDown(PS.sub,AIR_BELOW_GROUP,RISE_ROW) + 0.6;
         else py += gapDown(PS.head,AIR_BELOW_HEAD,RISE_ROW) + 0.6;
       } else py += (g.name && i===0) ? PROW-1.5 : PROW;
-      badge(PX+4,py,r,PBR);
-      out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
-      out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
+      badge(PX+4+PXW,py,r,PBR);
+      out(`<text x="${PX+10+2*PXW}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
+      out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
       lastSubY=py+3.0;
     });
     firstBlock=false;
@@ -2380,6 +2502,16 @@ if(RJ.panelGroups){
     const need = gapDown(PS.sub,0.15,PS.dense*CAP) + gapDown(PS.dense,0.8,riseDense);
     if (crow < need) process.stderr.write(`panelScale: panelCols row ${crow}mm cannot carry the type scale (needs >= ${need.toFixed(1)}mm for ${PS.sub}mm over ${PS.dense}mm) — the panel is over-stuffed. Add a column, widen the row, or drop the subtitles on this town.\n`);
   }
+  // design.badgeFit: one badge-column width across every column, same argument as
+  // PXW above — and here the row has a hard right edge (the next column), so say
+  // so rather than silently running a title into it. The remedy is a wider
+  // `panelCols.width`, which only the town knows whether it can afford.
+  const CXWP = badgeXWs(panelOrder, pcolsBadgeR);
+  if(CXWP>0 && nCol>1){
+    const widest = Math.max(...panelOrder.map(r=>FONT.textWidth((INTDESC[r]||[r,''])[0], PS?PS.sub:2.9, true)));
+    if(7.6+2*CXWP+widest > cw)
+      process.stderr.write(`badgeFit: the widened badge column pushes a panelCols title to ${(7.6+2*CXWP+widest).toFixed(1)}mm in a ${cw}mm column — widen panelCols.width.\n`);
+  }
   const per=Math.ceil(panelOrder.length/nCol);
   // First row's anchor comes from the heading rule; later rows step by `crow`.
   const top = PS ? py + gapDown(PS.head,AIR_BELOW_HEAD,riseDense) + 0.6 - crow : py;
@@ -2387,7 +2519,7 @@ if(RJ.panelGroups){
     const col=Math.floor(i/per), row=i%per;
     const cx=PX+col*cw, cy=top+(row+1)*crow;
     const d=INTDESC[r]||[r,''];
-    badge(cx+3,cy,r,pcolsBadgeR);
+    badge(cx+3+CXWP,cy,r,pcolsBadgeR);
     // Subtitle sits ~35% of the row pitch below its own title, not at a
     // fixed +3.1mm offset or an even 50/50 split — a 50/50 split (2026-08-11)
     // fixed the previous overlap but read as too close above the title/too
@@ -2395,8 +2527,8 @@ if(RJ.panelGroups){
     // more clear air above (from the previous row's subtitle) while pulling
     // its own subtitle in tighter underneath (2026-08-11, second pass).
     const subY=cy-0.6+crow*0.35+0.1;
-    out(`<text x="${cx+7.6}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#111">${esc(d[0])}</text>`);
-    out(`<text x="${cx+7.6}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(d[1])}</text>`);
+    out(`<text x="${cx+7.6+2*CXWP}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#111">${esc(d[0])}</text>`);
+    out(`<text x="${cx+7.6+2*CXWP}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(d[1])}</text>`);
     if(row===per-1) lastSubY=subY;
   });
   py=top+per*crow;
@@ -2407,9 +2539,9 @@ for(const r of panelOrder){
   // `py` is the badge CENTRE; the title baseline sits 0.6 mm above it.
   if(PS&&firstRow) py += gapDown(PS.head,AIR_BELOW_HEAD,RISE_ROW)+0.6; else py+=PROW;
   firstRow=false;
-  badge(PX+4,py,r,PBR);
-  out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
-  out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
+  badge(PX+4+PXW,py,r,PBR);
+  out(`<text x="${PX+10+2*PXW}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
+  out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
   lastSubY=py+3.0;
 }
 }

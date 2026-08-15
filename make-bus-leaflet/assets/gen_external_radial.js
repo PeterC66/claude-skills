@@ -14,6 +14,7 @@ const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'labeller.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
 const { Labeller } = require(_LABELLER);
+const FONT = require(path.join(path.dirname(_LABELLER),'font_metrics.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -84,10 +85,32 @@ function line(pts, color, w=3.4, dashed=false){
   out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${dashed?' stroke-dasharray="1.6 2.2"':''}/>`);
 }
 function tick(x,y,color){ out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
+/* design.badgeFit — the same defect and the same fix as gen_internal.js, which
+ * carries the full rationale. This sheet draws the SAME route keys, so a town
+ * whose stop badges overflow overflows here too: Ramsey's "301S" is 8.9mm of
+ * Arial Bold in the 8.0mm terminus badge and 6.4mm in the 5.8mm legend one. The
+ * only difference is that here the text is 0.95 × the radius, not the radius, so
+ * the fit test measures at that size.
+ *
+ * badgeXW returns the EXTRA over the radius — 0 whenever the text fits, and 0
+ * always when the key is absent — and every pitch below is written as the old
+ * literal plus that extra, so an ungated town stays byte-identical.
+ */
+const BFIT = !!(D.design && D.design.badgeFit);
+const badgeHalfW = (route,r)=>{
+  if(!BFIT) return r;
+  const w = FONT.textWidth(blab(route), r*0.95, true);
+  return (w <= 2*r-0.3) ? r : w/2 + 0.35*r;
+};
+const badgeXW = (route,r)=> BFIT ? badgeHalfW(route,r)-r : 0;
+const badgeXWs = (list,r)=> BFIT ? Math.max(0,...list.map(k=>badgeXW(k,r))) : 0;
 function badge(x,y,route,r=4.6){
-  if(V2) HARD.push([x-r-0.4, y-r-0.4, x+r+0.4, y+r+0.4, 'badge']);
-  out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
+  const hw=badgeHalfW(route,r);
+  if(V2) HARD.push([x-hw-0.4, y-r-0.4, x+hw+0.4, y+r+0.4, 'badge']);
+  if(hw>r) out(`<rect x="${(x-hw).toFixed(2)}" y="${(y-r).toFixed(2)}" width="${(2*hw).toFixed(2)}" height="${(2*r).toFixed(2)}" rx="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
+  else out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r*0.95).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
+  return hw-r;
 }
 // measureNodeWidth — the terminus-lozenge width formula, factored out of townNode() so the
 // badge-clearance calc below can know a box's width BEFORE it's drawn (badges are placed back
@@ -208,10 +231,15 @@ for(const b of EXT){
   // terminus box for this spoke (half its width + a small margin) — the box is drawn on top of
   // the badge afterwards, so a short flat default only worked for towns with short labels.
   const _timeLabel = b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null;
-  const _autoOff = measureNodeWidth(b.label, _timeLabel)/2 + 4.5;
-  const _boff = Math.max((D.badgeOffset != null) ? D.badgeOffset : 8, _autoOff);
   const _badges = (Array.isArray(b.routes) && b.routes.length) ? b.routes : [b.route];
-  _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*8.6), ty-dy*(_boff+i*8.6), r, 4.0));
+  // design.badgeFit: a pill on this spoke is wider than the 8.0mm disc that both
+  // the 8.6mm stacking pitch and the 4.5mm box clearance were sized for. Both
+  // grow by the widest extra on THIS spoke; an ungated spoke adds zero.
+  const _bxw = badgeXWs(_badges, 4.0);
+  const _autoOff = measureNodeWidth(b.label, _timeLabel)/2 + 4.5 + _bxw;
+  const _boff = Math.max((D.badgeOffset != null) ? D.badgeOffset : 8, _autoOff);
+  const _bpitch = 8.6 + 2*_bxw;
+  _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*_bpitch), ty-dy*(_boff+i*_bpitch), r, 4.0));
   // terminus node
   townNode(tx,ty,b.label,11,_timeLabel);
   if(EDK) out('</g>');
@@ -265,8 +293,11 @@ if(LW){
     const rs = op.routes.filter(r=>C[r] && !HIDDEN_ROUTES.has(r));
     if(!rs.length) return;
     const rows = Math.ceil(rs.length/LW);
-    rs.forEach((r,k)=>badge(lx+3+(k%LW)*7.0, yy+Math.floor(k/LW)*6.2, r, 2.9));
-    const _textX = lx+Math.min(rs.length,LW)*7.0+2;
+    // design.badgeFit: one column pitch for the whole grid, or the columns stop
+    // lining up. Widest extra in this operator's run, so a run of discs keeps 7.0.
+    const _oxw = badgeXWs(rs, 2.9), _col = 7.0 + 2*_oxw;
+    rs.forEach((r,k)=>badge(lx+3+_oxw+(k%LW)*_col, yy+Math.floor(k/LW)*6.2, r, 2.9));
+    const _textX = lx+Math.min(rs.length,LW)*_col+2;
     out(`<text x="${_textX.toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
     panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4));
     panelMaxY = Math.max(panelMaxY, yy + (rows-1)*6.2 + 3);
@@ -275,7 +306,9 @@ if(LW){
   ly = yy - 6.6*OPS.length;   // keep the note's default offset sane
 } else
 OPS.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
-  op.routes.filter(r=>!HIDDEN_ROUTES.has(r)).forEach(r=>{ badge(bx+3,yy,r,2.9); bx+=7.0; });
+  // design.badgeFit: bx already walks left-to-right, so each badge takes the room
+  // it actually needs and the next one starts after it (7.0 = 5.8mm disc + 1.2mm gap).
+  op.routes.filter(r=>!HIDDEN_ROUTES.has(r)).forEach(r=>{ const w=badgeXW(r,2.9); badge(bx+3+w,yy,r,2.9); bx+=7.0+2*w; });
   out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
   panelMaxX = Math.max(panelMaxX, bx+2 + measureText(op.name,3.4));
   panelMaxY = Math.max(panelMaxY, yy+3); });

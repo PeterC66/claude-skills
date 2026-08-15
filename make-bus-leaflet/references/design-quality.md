@@ -4,16 +4,19 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 
 ## The short version
 
-Three `routes.json` keys, all opt-in, all defaulting to the pre-2026-08-15 behaviour:
+`routes.json` keys, all opt-in, all defaulting to the pre-2026-08-15 behaviour:
 
 ```json
-"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true },
+"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
+            "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0 },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all four as of 2026-08-15. Places do not yet — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-15. Places do not — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
-Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (`node "%SK%\quality_metrics.js" --all`). Content buried under the footer band: 12 sheets → 0. Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 81 (the remainder is all place sheets, still on v1).
+Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (`node "%SK%\quality_metrics.js" --all`). Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 82 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Three of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
+
+**Not every key is judged by that number.** `panelScale`, `scaleBar`, `routeCasing` and `cornerRadius` all moved the artwork and moved the defect count by 0 or +1, because every metric in `quality_metrics.js` is about *labels and ink on the map* — none of them looks at the panel, at line separation, or at corner geometry. Render those and look.
 
 ## `design`
 
@@ -106,6 +109,27 @@ What rescues the device is that the core is not a small disc. Fitted to the fram
 **Why the pre-stages have to say `notToScale` rather than the engine working it out.** The schematic workspace sets `focus:{coreKm:1.1, comp:1}`, so as far as `gen_internal.js` can tell the projection is perfectly uniform — it would compute a confident, meaningless "500 m" from coordinates that were solved onto a tube-map grid and carry topology, not distance. The flag is inert without `design.scaleBar`.
 
 **Needs `labels.engine:"v2"`** for the blank-space search, so the five place sheets ignore the key until Phase 8.
+
+## `design: { routeCasing: true }` and `design: { cornerRadius: 2.0 }`
+
+The tube-map line work (plan §3.1/§3.2). Both opt-in, both on all 8 towns.
+
+**`routeCasing`** puts a white casing under every route line — `true` means 0.35 mm; `{mm, color}` to change it. It is drawn as **its own pass over the whole set**, before any colour. Per-route it does not work at all: the next route's casing erases the previous route's colour wherever they run close, which is most of a bundle. On a *geographic* sheet the grey road skeleton already separates a route from the page, so the casing's job there is at crossings and under the icons and interchange bars; on the *diagram and schematic* the skeleton is deliberately near-white and the casing is the only thing separating adjacent ribbons.
+
+**`cornerRadius`** fillets any corner turning more than `cornerMinTurn` (default 30°) with a quadratic of that radius, **clamped to half of each adjacent segment**. `true` means 2.0 mm.
+
+The clamp is the whole reason one key is safe on every model:
+
+| | vertices turning < 2° | > 45° |
+|---|---|---|
+| diagram, schematic | 76–78 % | 6–9 % |
+| geographic | 20–21 % | 15–16 % |
+
+On a diagram the line is straight runs punctuated by deliberate corners, worth drawing as curves. On a geographic sheet turning is *continuous* because the line follows a real road — there is no corner to round, and the clamp reduces the fillet to almost nothing on 1.2 mm segments.
+
+**What §3.2 got wrong, so nobody re-derives it:** it said the diagram engine "mixes sharp and rounded corners". It does not — every route path in every model is drawn with `stroke-linejoin="round"`. But that rounds a corner by only the stroke's own half-width, 0.85 mm on a 1.7 mm line, which at a 60–90° turn reads as a mitre.
+
+**If you change the radius, re-check the stop ticks.** The fillet moves the *line* but not the ticks, so a tick at a corner could be left off its own route. At 2.0 mm the worst tick-to-line distance across all three models is 0.36 mm against a 0.85 mm half-stroke; a much larger radius would not be free.
 
 ## `labels: { engine: "v2" }`
 

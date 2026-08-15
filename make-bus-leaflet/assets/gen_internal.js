@@ -1886,7 +1886,7 @@ if(IR && TRIM){
     });
     reserve(bxMin-3.5-CXW,byMin-3.5,bxMax+3.5+CXW,byMax+3.5);            // reserve, or it can't place
     if(LAB) for(const t of pendingTermini)
-      LAB.add(Object.assign({own:[bxMin-3.6-CXW,byMin-3.6,bxMax+3.6+CXW,byMax+3.6]}, t));
+      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6]}, t));
   }
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;

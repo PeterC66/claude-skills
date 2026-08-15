@@ -20,6 +20,9 @@
  *   --unset <path>  dotted path to delete, repeatable
  *   --rail <style>  set style.rail on every railway feature (features[] is an
  *                   array, so --set cannot reach it)
+ *   --feature-pos <key>=<x>,<y>   move a linear feature's LABEL, in page mm.
+ *                   Repeatable. labelPos lives in that same array, so --set
+ *                   cannot reach it either.
  *   --note "..."    the S3 commit note
  *   --apply         actually write and commit
  *
@@ -40,11 +43,12 @@ const { spawnSync } = require('child_process');
 const { SK, findTowns, readJson, latestRunDir } = require(path.join(__dirname, 'gate_lib'));
 
 function parseArgs(argv) {
-  const f = { town: [], unset: [] };
+  const f = { town: [], unset: [], 'feature-pos': [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--town') f.town.push(argv[++i]);
     else if (a === '--unset') f.unset.push(argv[++i]);
+    else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
     else if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
   }
   return f;
@@ -53,6 +57,12 @@ const args = parseArgs(process.argv.slice(2));
 const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const APPLY = !!args.apply;
 const SET = args.set ? JSON.parse(args.set) : null;
+// "<key>=<x>,<y>" -> {key,x,y}
+const FEATPOS = args['feature-pos'].map(s => {
+  const m = /^([^=]+)=([-\d.]+),([-\d.]+)$/.exec(s);
+  if (!m) { console.error('--feature-pos wants <key>=<x>,<y> in page mm, got: ' + s); process.exit(2); }
+  return { key: m[1], x: +m[2], y: +m[3] };
+});
 
 const deepMerge = (a, b) => {
   for (const k of Object.keys(b)) {
@@ -77,7 +87,7 @@ function stage(cwd, ...a) {
 
 const towns = findTowns(BUSES).filter(t => args.all || args.town.includes(t.name));
 if (!towns.length) { console.error('--all, or --town from: ' + findTowns(BUSES).map(t => t.name).join(', ')); process.exit(2); }
-if (!SET && !args.unset.length && !args.rail) { console.error('nothing to do: pass --set, --unset or --rail'); process.exit(2); }
+if (!SET && !args.unset.length && !args.rail && !FEATPOS.length) { console.error('nothing to do: pass --set, --unset, --rail or --feature-pos'); process.exit(2); }
 
 console.log((APPLY ? 'APPLYING' : 'DRY RUN') + ' over ' + towns.length + ' town(s)'
   + (APPLY ? '' : ' (pass --apply to commit)') + '\n');
@@ -95,6 +105,13 @@ for (const t of towns) {
     let n = 0;
     for (const f of (rj.features || [])) if (f.type === 'railway' && !(f.style && f.style.rail === args.rail)) { f.style = Object.assign({}, f.style, { rail: args.rail }); n++; }
     if (n) changes.push('rail:' + args.rail + '×' + n);
+  }
+  for (const fp of FEATPOS) {
+    const f = (rj.features || []).find(x => x.key === fp.key);
+    if (!f) { console.log(t.name + ': no feature "' + fp.key + '" — skipped'); continue; }
+    if (f.labelPos && f.labelPos.x === fp.x && f.labelPos.y === fp.y) continue;
+    f.labelPos = { x: fp.x, y: fp.y };
+    changes.push('labelPos ' + fp.key + '=' + fp.x + ',' + fp.y);
   }
 
   if (!changes.length) { console.log(t.name + ': already current'); continue; }

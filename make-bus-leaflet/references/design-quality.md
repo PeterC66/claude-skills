@@ -7,11 +7,11 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 Three `routes.json` keys, all opt-in, all defaulting to the pre-2026-08-15 behaviour:
 
 ```json
-"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal" },
+"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all three as of 2026-08-15. Places do not yet — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all four as of 2026-08-15. Places do not yet — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
 Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (`node "%SK%\quality_metrics.js" --all`). Content buried under the footer band: 12 sheets → 0. Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 81 (the remainder is all place sheets, still on v1).
 
@@ -25,7 +25,39 @@ Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (
 | `iconMinSep` | `3.2` | mm centre-to-centre below which two 4.2 mm symbols read as one blob. |
 | `spreadMax` | `2.6` | mm a symbol may be displaced. Displace, don't drop — but not so far that it stops being where the thing is. |
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
+| `panelScale` | off | One type scale and one heading rhythm for the Services/Key panel. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
+
+### `design.panelScale` — the panel's type scale and rhythm
+
+The Services/Key panel had accumulated **eleven text sizes with no relation between them** (5 / 4.4 / 4 / 3.5 / 3.2 / 3 / 2.9 / 2.8 / 2.5 / 2.3 / 1.95) and two hand-tuned leadings, `panelRow` for the services list and `keyRow` for the Key, that did not agree with each other or across towns. Its two section headings, which are peers, printed at different sizes with different amounts of air. Uneven panel rhythm is among the fastest amateur tells and is entirely arithmetic to fix (plan §4.4).
+
+**The scale** is a 1.2 ratio anchored on the route title and floored just above the 2.4 mm print-legibility threshold `quality_metrics.js` enforces — the dense two-column subtitle was 2.3 mm and failed it:
+
+| mm | Used for |
+|---|---|
+| **5.0** | section heading — `Services` and `Key`, now the same size |
+| *(4.2)* | a step nothing needs; listed so the 3.5 → 5.0 jump reads as skipping a step |
+| **3.5** | route title, single-column and grouped |
+| **2.9** | route subtitle, operator group header, Key item, fare note — and the route *title* in a dense `panelCols` panel, one step down |
+| **2.45** | subtitle in a dense `panelCols` panel |
+
+Badge text is not on the scale: `badge()` fits it to its disc, so it is a symbol, not type.
+
+**The rhythm** is one rule for every heading, stated as **clear air between real ink** rather than as a baseline step — so a 5 mm heading gets the same optical gap over 3.5 mm titles as over 2.9 mm Key items, which a fixed baseline step cannot give. Air above a section heading (5.0 mm) is deliberately larger than air below it (3.2 mm), so the heading reads as belonging to the list under it; the operator group header is a lesser break at 3.4 / 2.0. "Ink" means whatever stands highest in the row, which for a route row is the **badge**, not the text — see `gotchas.md`.
+
+`keyRow` is still honoured but no town sets it any more; the two that did (St Ives 3.8, High Wycombe 4.2) have had it dropped, so the Key runs at one pitch everywhere. St Ives' 3.8 was overlapping its own pictograms.
+
+**Two build-time warnings come with it**, because the scale exposes panels that were already over-stuffed rather than quietly shrinking type to fit:
+
+- `panelScale: panelRow Nmm leaves …` — a subtitle and the badge below it are touching. St Ives was at −0.01 mm and moved to `panelRow: 7.2`; the default 8.0 clears with 0.39 mm.
+- `panelScale: panelCols row Nmm cannot carry the type scale …` — **High Wycombe fires this and has not been fixed.** Its 24 services in two columns at a 4.9 mm pitch need 5.9 mm. The remedy is a third column or dropping the subtitles on that town, both config and both visible product changes; the type cannot shrink further because 2.45 mm is the legibility floor.
+
+### Moving a linear feature's label
+
+`preview_design.js` and `adopt_config.js` both take `--feature-pos <key>=<x>,<y>` (page mm, repeatable). `features[]` is an array, so `--patch` / `--set` cannot reach `labelPos` — the same reason `--rail` exists.
+
+`drawFeatureLabel` refuses a label sited right of the map frame and reports it on stderr, because a feature label is drawn outside the map's clip group and such a label lands in the Services panel. Wisbech had two.
 
 ### The north arrow places itself
 
@@ -70,6 +102,8 @@ Every weight is in one `DEFAULTS` object at the top of `labeller.js`, so a chang
 ## Measuring
 
 `node "%SK%\quality_metrics.js" --all [--detail|--json]` scores every `ci-reference` sheet. It is read-only and cannot break a gate. Thresholds live in one `T = {}` object; changing them invalidates the frozen baseline in `quality-baseline-scorecard_2026-08-15.md` and must be called out.
+
+**The scorecard does not measure the panel.** Every metric is about the map: ink, collisions, symbols, the frame. `design.panelScale` moved every size and gap in the panel on all eight towns and the total stayed at 271 — that is the tool working as specified, not the change doing nothing. Panel work is judged by rendering the panel and looking at it. (`minTextMm` is the one panel-adjacent measure, and on `panelCols` towns it reports the auto-fitted **badge** text, so it did not move either.)
 
 `node "%SK%\labeller_demo.js" <outdir>` draws a synthetic test page twice — once with the old first-fit placer, once with `labeller.js` — for judging a placer change without moving a real sheet.
 

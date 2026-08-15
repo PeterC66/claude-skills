@@ -7,6 +7,8 @@ A town's internal map draws **1–3 key linear features**. They are **config-dri
 - **Choosing (once per town).** For a new town, identify candidates from OSM (river/canal, the main A-road(s), the railway), **list them and ask the user which 1–3 to include**, then lock the choice in `features[]`. Don't re-ask on refreshes — an existing town already carries its list. (No `features[]` at all ⇒ one auto river feature, the legacy fallback.)
 - **Config (`routes.json` `features[]`).** Each entry: `{ "key", "type", "label", "labelPos":{x,y}, "labelColor", "labelItalic"?, "labelSize"?, "labelReserve":[x0,y0,x1,y1]?, "style"?:{stroke,width,dash} }`. `key` must match S2's `features_geo.json`. `type` picks the **default style** (override per feature with `style`):
 
+  **`labelPos` is in page mm and is not collision-checked.** Two guards, both of which drop the label and say so on stderr rather than print it in the wrong place: inside the town-centre box (`coreBox`), and **right of the map frame** (x > 196), where it lands in the Services panel — a feature label is drawn outside the map's clip group, so nothing stops it. Wisbech shipped for months with "River Nene" printed across its own route list this way. To move one on a built town, `preview_design.js` and `adopt_config.js` both take **`--feature-pos <key>=<x>,<y>`** (repeatable); `--patch`/`--set` cannot reach `labelPos`, because `features[]` is an array.
+
   | type | default | notes |
   |---|---|---|
   | `river` | `#9ec9e8`, w3.4 | the protected blue — keep routes off it |

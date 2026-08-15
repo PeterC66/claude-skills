@@ -154,6 +154,11 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     cross, so colour on the sheet means ROUTE and nothing else
 //                     (Peter's G3 answer, 2026-08-15 — option E of five rendered
 //                     at printed size). Absent => the original palette.
+//   panelScale:true   one 1.2-ratio type scale and one heading rhythm for the
+//                     Services/Key panel, replacing eleven unrelated text sizes and
+//                     two section headings that were different sizes with different
+//                     amounts of air (Phase 6, §4.4). Full rationale at the panel
+//                     code near the foot of this file.
 const DESIGN = RJ.design || {};
 // labels{}: which label placer to use.
 //   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
@@ -796,6 +801,19 @@ function drawFeatureLabel(f){
   if(inCore([x,y])){
     console.error('coreBox: feature label "'+text+'" sits inside the town-centre box and was not '
       +'drawn — move its labelPos (routes.json features[] / overrides internal.features).');
+    return;
+  }
+  // Same trap on the other side of the sheet, and it had actually happened: a
+  // feature label is drawn OUTSIDE the map's clip group, so a labelPos right of
+  // the frame lands in the Services panel and prints through the route list.
+  // Wisbech shipped for months with "River Nene" struck across "46 Wisbech –
+  // March" and "A47" adrift in the blank space under the Key. Neither the panel
+  // metric (which counts point labels) nor the byte gate can see it, so refuse
+  // to draw it and say why — as with coreBox, the fix is the labelPos.
+  if(x>MX1+2){
+    console.error('panel: feature label "'+text+'" sits at x='+x.toFixed(0)+', right of the map frame '
+      +'(x'+MX1+') and inside the Services panel — not drawn. Move its labelPos '
+      +'(routes.json features[] / overrides internal.features).');
     return;
   }
   const italic=f.labelItalic!==false, size=f.labelSize||4, anchor=lov.anchor||null;
@@ -2034,25 +2052,106 @@ const PX=(OV.panel&&OV.panel.x!=null)?OV.panel.x:200; let py=(OV.panel&&OV.panel
 const PROW=RJ.panelRow||8, KROW=RJ.keyRow||4.4, PBR=RJ.panelBadge||4;
 // panelCols (optional) — multi-column Services panel. Absent => single column.
 const PCOLS=(RJ.panelCols&&(RJ.panelCols.cols|0)>1)?RJ.panelCols:null;
-out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="5" fill="#222">Services</text>`); py+=2;
+
+/* design.panelScale — one type scale and one heading rhythm for the panel.
+ *
+ * Before this key the panel drew text at eleven unrelated sizes (5 / 4.4 / 4 /
+ * 3.5 / 3.2 / 3 / 2.9 / 2.8 / 2.5 / 2.3 / 1.95) and gave its two section
+ * headings, which are peers, different sizes AND different amounts of air:
+ * measured on Beaconsfield, `Services` had 5.9 mm of clear space beneath it and
+ * `Key` had 3.2 mm, while `Key` had barely more air above it (3.6 mm) than
+ * below — so the heading read as floating between the two lists rather than
+ * belonging to the one under it. Uneven panel rhythm is among the fastest
+ * amateur tells and is entirely arithmetic to fix (plan §4.4).
+ *
+ * The scale is a 1.2 ratio anchored on the route title and floored just above
+ * the 2.4 mm print-legibility threshold quality_metrics.js enforces — the dense
+ * two-column subtitle was 2.3 mm and failed it:
+ *
+ *     2.45  ·  2.9  ·  3.5  ·  (4.2)  ·  5.0
+ *
+ *   5.0   section heading — `Services` and `Key`, now the same size
+ *   3.5   route title (single column and grouped)
+ *   2.9   route subtitle, operator group header, Key item, fare note, and the
+ *         route title in a dense multi-column panel (one step down)
+ *   2.45  subtitle in a dense multi-column panel
+ *
+ * 4.2 is a step of the scale that nothing in the panel needs; it is listed so
+ * the 3.5 → 5.0 jump reads as skipping a step rather than as an arbitrary gap.
+ *
+ * The rhythm: one rule for every heading, expressed as CLEAR AIR between real
+ * ink (cap-top to descender) rather than between baselines — so a 5 mm heading
+ * gets the same optical gap over 3.5 mm titles as it does over 2.9 mm Key
+ * items, which a fixed baseline step cannot give. Air above a section heading
+ * is deliberately larger than air below it, the asymmetry panelGroups already
+ * discovered by hand on 2026-08-11 and got backwards on its first attempt.
+ *
+ * Absent => every size and every gap is exactly the hand-tuned value it was,
+ * byte for byte (invariant 2).
+ */
+const PS = DESIGN.panelScale ? { head:5.0, title:3.5, sub:2.9, dense:2.45 } : null;
+const CAP=0.72, DESC=0.21;      // Arial cap-height / descender, as a fraction of size
+const AIR_BELOW_HEAD=3.2, AIR_ABOVE_HEAD=5.0;    // section heading (Services, Key)
+const AIR_ABOVE_GROUP=3.4, AIR_BELOW_GROUP=2.0;  // operator group header, a lesser break
+// Baseline-to-baseline distance leaving `air` mm of clear space between the
+// descenders of one line and the topmost ink of the next. `rise` is how far that
+// ink stands above ITS baseline — cap-height for a plain line of text, but the
+// route badge and the Key pictogram both stand higher than the text beside them,
+// and they are what the eye reads as the top edge of the row. Measuring to the
+// cap-height instead put `Services` visibly tighter to its first badge than
+// `Key` was to its first symbol, even though the arithmetic said they matched.
+const gapDown=(from,air,rise)=>from*DESC+air+rise;
+// Topmost ink above the baseline, per row type.
+const RISE_ROW   = PS ? Math.max(PS.title*CAP, PBR-0.6) : 0;   // badge row, full size
+const RISE_HEAD  = PS ? PS.sub*CAP : 0;                        // operator group header
+const RISE_KEY   = PS ? Math.max(PS.sub*CAP, 2.0+1) : 0;       // 2.0 mm-radius pictogram
+// A single-column route block is a fixed 3.6 mm title-to-subtitle leading inside
+// a `panelRow` pitch, so the air between one row's subtitle and the NEXT row's
+// badge is whatever `panelRow` has left over. The test is simply that they must
+// not touch, with 0.3 mm of tolerance: the default 8.0 clears it with 0.39 mm,
+// and St Ives' 6.8 with a 3.2 mm badge does not — its badges and the subtitles
+// above them are in contact. Report it rather than change `panelRow` here; the
+// pitch is the town's, and widening it lengthens the whole panel.
+if(PS && !PCOLS){
+  const needRow = 3.6 + gapDown(PS.sub,0.3,RISE_ROW);
+  if(PROW < needRow) process.stderr.write(`panelScale: panelRow ${PROW}mm leaves ${(PROW-3.6-PS.sub*DESC-RISE_ROW).toFixed(2)}mm between a subtitle and the badge below it (wants >= ${needRow.toFixed(1)}mm at ${PS.title}/${PS.sub}mm with a ${PBR}mm badge).\n`);
+}
+
+out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.head:5}" fill="#222">Services</text>`);
+if(!PS) py+=2;
+let lastSubY=py;                // baseline of the last line drawn in the services list
 if(RJ.panelGroups){
   // group the panel by operator (operators[] from routes.json)
   const groups=(RJ.operators||[]).map(op=>({name:op.name, rs:panelOrder.filter(r=>(op.routes||[]).includes(r))})).filter(g=>g.rs.length);
   const ungrouped=panelOrder.filter(r=>!groups.some(g=>g.rs.includes(r)));
   if(ungrouped.length) groups.push({name:'', rs:ungrouped});
+  let firstBlock=true;
   for(const g of groups){
     // Group-header spacing is deliberately asymmetric: more room ABOVE the
     // header (to read as a break from the previous group) than BELOW it
     // (the header sits right above its own routes, not floating between
     // them) — was 5.4/PROW(8), i.e. backwards, until 2026-08-11.
-    if(g.name){ py+=7.5; out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">${esc(g.name.toUpperCase())}</text>`); }
+    if(g.name){
+      if(PS) py = (firstBlock ? py + gapDown(PS.head,AIR_BELOW_HEAD,RISE_HEAD)
+                              : lastSubY + gapDown(PS.sub,AIR_ABOVE_GROUP,RISE_HEAD));
+      else py+=7.5;
+      out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#777">${esc(g.name.toUpperCase())}</text>`);
+    }
     g.rs.forEach((r,i)=>{
       const d=INTDESC[r]||[r,''];
-      py += (g.name && i===0) ? PROW-1.5 : PROW;
+      // `py` is the badge CENTRE; the title baseline sits 0.6 mm above it, so the
+      // 0.6 converts a baseline-to-baseline gap into a row anchor.
+      if(PS){
+        if(i>0 || (!g.name && !firstBlock)) py += PROW;
+        else if(g.name) py += gapDown(PS.sub,AIR_BELOW_GROUP,RISE_ROW) + 0.6;
+        else py += gapDown(PS.head,AIR_BELOW_HEAD,RISE_ROW) + 0.6;
+      } else py += (g.name && i===0) ? PROW-1.5 : PROW;
       badge(PX+4,py,r,PBR);
-      out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">${esc(d[0])}</text>`);
-      out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="2.8" fill="#555">${esc(d[1])}</text>`);
+      out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
+      out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
+      lastSubY=py+3.0;
     });
+    firstBlock=false;
   }
 } else if(PCOLS){
   // multi-column panel: a town with more services than one column fits on A4.
@@ -2066,7 +2165,19 @@ if(RJ.panelGroups){
   // warn rather than silently print unreadable or overlapping badges.
   const pcolsBadgeR = Math.min(PBR-0.6, Math.max(1.8, crow/2-0.5));
   if (2*pcolsBadgeR+0.3 > crow) process.stderr.write(`panelCols: row ${crow}mm is too tight even at the ${pcolsBadgeR.toFixed(1)}mm badge floor (needs >= ${(2*1.8+0.3).toFixed(1)}mm) — widen row or add a column.\n`);
-  const per=Math.ceil(panelOrder.length/nCol), top=py;
+  // Under the type scale a dense row carries a 2.9 mm title over a 2.45 mm
+  // subtitle; if the row pitch cannot hold both with air between the blocks,
+  // say so rather than letting the subtitle silently crowd the title below it.
+  // The remedy is a column or a wider row (config), not a smaller type size —
+  // 2.45 mm is already the print-legibility floor.
+  const riseDense = PS ? Math.max(PS.sub*CAP, pcolsBadgeR-0.6) : 0;
+  if (PS){
+    const need = gapDown(PS.sub,0.15,PS.dense*CAP) + gapDown(PS.dense,0.8,riseDense);
+    if (crow < need) process.stderr.write(`panelScale: panelCols row ${crow}mm cannot carry the type scale (needs >= ${need.toFixed(1)}mm for ${PS.sub}mm over ${PS.dense}mm) — the panel is over-stuffed. Add a column, widen the row, or drop the subtitles on this town.\n`);
+  }
+  const per=Math.ceil(panelOrder.length/nCol);
+  // First row's anchor comes from the heading rule; later rows step by `crow`.
+  const top = PS ? py + gapDown(PS.head,AIR_BELOW_HEAD,riseDense) + 0.6 - crow : py;
   panelOrder.forEach((r,i)=>{
     const col=Math.floor(i/per), row=i%per;
     const cx=PX+col*cw, cy=top+(row+1)*crow;
@@ -2078,36 +2189,53 @@ if(RJ.panelGroups){
     // loose below it once seen printed; skewing the split gives the title
     // more clear air above (from the previous row's subtitle) while pulling
     // its own subtitle in tighter underneath (2026-08-11, second pass).
-    out(`<text x="${cx+7.6}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#111">${esc(d[0])}</text>`);
-    out(`<text x="${cx+7.6}" y="${(cy-0.6+crow*0.35+0.1).toFixed(2)}" font-family="Arial" font-size="2.3" fill="#555">${esc(d[1])}</text>`);
+    const subY=cy-0.6+crow*0.35+0.1;
+    out(`<text x="${cx+7.6}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#111">${esc(d[0])}</text>`);
+    out(`<text x="${cx+7.6}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(d[1])}</text>`);
+    if(row===per-1) lastSubY=subY;
   });
   py=top+per*crow;
 } else {
+let firstRow=true;
 for(const r of panelOrder){
   const d=INTDESC[r]||[r,''];
-  py+=PROW; badge(PX+4,py,r,PBR);
-  out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">${esc(d[0])}</text>`);
-  out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="2.8" fill="#555">${esc(d[1])}</text>`);
+  // `py` is the badge CENTRE; the title baseline sits 0.6 mm above it.
+  if(PS&&firstRow) py += gapDown(PS.head,AIR_BELOW_HEAD,RISE_ROW)+0.6; else py+=PROW;
+  firstRow=false;
+  badge(PX+4,py,r,PBR);
+  out(`<text x="${PX+10}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
+  out(`<text x="${PX+10}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
+  lastSubY=py+3.0;
 }
 }
 // key (using the real pictograms)
 let KX=PX;
 if(PCOLS&&PCOLS.keyAt){ KX=PCOLS.keyAt.x!=null?PCOLS.keyAt.x:PX; py=(PCOLS.keyAt.y!=null?PCOLS.keyAt.y:py+10)-10; }
-py+=10; out(`<text x="${KX}" y="${py}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Key</text>`);
+// A pinned keyAt.y still wins — the two-column towns place the Key beside the
+// map, not under the list, and only the town knows where that is.
+if(PS && !(PCOLS&&PCOLS.keyAt&&PCOLS.keyAt.y!=null)) py = lastSubY + gapDown(PS.sub,AIR_ABOVE_HEAD,PS.head*CAP) - 10;
+py+=10; out(`<text x="${KX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.head:4.4}" fill="#222">Key</text>`);
 const key=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
 if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
-key.forEach((kk,i)=>{const ky=py+5+i*KROW, kx=PX+3;
+// The label baseline is ky+1, so the heading rule is applied there and the icon
+// centre follows from it — the same clear air under `Key` as under `Services`.
+const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;
+key.forEach((kk,i)=>{const ky=py+KFIRST+i*KROW, kx=PX+3;
   out(icon(kk[0],kx,ky,2.0,DESIGN.iconInk));
-  out(`<text x="${kx+4.0}" y="${ky+1}" font-family="Arial" font-size="3.0" fill="#222">${esc(kk[1])}</text>`);});
+  // '3.0' as a STRING: the old code emitted the literal font-size="3.0", and
+  // JS renders the number 3.0 as "3" — a one-character diff that fails all 27
+  // byte-identical gates with the key absent.
+  out(`<text x="${kx+4.0}" y="${ky+1}" font-family="Arial" font-size="${PS?PS.sub:'3.0'}" fill="#222">${esc(kk[1])}</text>`);});
 
 // fare note (opt-in routes.json "fareNote") — highlighted box under the key
 if(RJ.fareNote){
-  let fy=py+5+key.length*KROW+9;
+  let fy=PS ? py+KFIRST+(key.length-1)*KROW+1+gapDown(PS.sub,AIR_ABOVE_HEAD,PS.sub*CAP)
+            : py+5+key.length*KROW+9;
   const words=String(RJ.fareNote).split(' '); const lines=[]; let cur='';
   for(const wd of words){ if((cur+' '+wd).trim().length>38){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }
   if(cur.trim()) lines.push(cur.trim());
   out(`<rect x="${PX-2}" y="${fy-4.4}" width="95" height="${(lines.length*3.6+6).toFixed(1)}" rx="1.2" fill="#fff4c2"/>`);
-  lines.forEach((ln,i)=>out(`<text x="${PX}" y="${fy+i*3.6}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#333">${esc(ln)}</text>`));
+  lines.forEach((ln,i)=>out(`<text x="${PX}" y="${fy+i*3.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#333">${esc(ln)}</text>`));
 }
 
 // ---- north arrow (DEFAULT ON for internalRoads; disable with northArrow:false)

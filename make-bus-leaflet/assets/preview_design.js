@@ -17,6 +17,9 @@
  *   --patch <json>    deep-merged into routes.json (objects merge, values replace)
  *   --rail chequer    also set style.rail on every railway feature (an array, so
  *                     --patch cannot reach it)
+ *   --feature-pos <key>=<x>,<y>   move a linear feature's LABEL, in page mm.
+ *                     Repeatable. features[] is an array too, so --patch cannot
+ *                     reach labelPos either.
  *   --unset <path>    dotted path to delete, repeatable (e.g. internalRoads.northArrow)
  *   --render          also write JPGs beside the SVGs
  *   --keep            leave the build workspace on disk and print its path, for
@@ -40,16 +43,23 @@ const { spawnSync } = require('child_process');
 const { SK, latestRunDir, readJson, findTowns, detectExternalStyle } = require(path.join(__dirname, 'gate_lib'));
 
 function parseArgs(argv) {
-  const f = { town: [], unset: [] };
+  const f = { town: [], unset: [], 'feature-pos': [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--town') f.town.push(argv[++i]);
     else if (a === '--unset') f.unset.push(argv[++i]);
+    else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
     else if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
   }
   return f;
 }
 const args = parseArgs(process.argv.slice(2));
+// "<key>=<x>,<y>" -> {key,x,y}
+const featurePos = args['feature-pos'].map(s => {
+  const m = /^([^=]+)=([-\d.]+),([-\d.]+)$/.exec(s);
+  if (!m) { console.error('--feature-pos wants <key>=<x>,<y> in page mm, got: ' + s); process.exit(2); }
+  return { key: m[1], x: +m[2], y: +m[3] };
+});
 const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const PATCH = args.patch ? JSON.parse(args.patch) : {};
 const OUT = path.resolve(args.out || 'design-preview');
@@ -87,6 +97,7 @@ function build(t) {
   const rj = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
   deepMerge(rj, PATCH);
   if (args.rail) for (const f of (rj.features || [])) if (f.type === 'railway') f.style = Object.assign({}, f.style, { rail: args.rail });
+  for (const fp of featurePos) { const f = (rj.features || []).find(x => x.key === fp.key); if (f) f.labelPos = { x: fp.x, y: fp.y }; }
   for (const u of args.unset) unset(rj, u);
   fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
 

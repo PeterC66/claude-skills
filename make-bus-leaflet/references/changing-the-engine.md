@@ -114,6 +114,23 @@ stage.js commit S4 --outputs internal.svg,external.svg[,...] --note "adopt curre
 
 **Pre-item-3 towns still work unchanged.** A town whose S3 predates 2026-08-04 still has a generator copy sitting in it; that copy is simply never read any more (S4 always copies fresh from `%SK%` regardless of what's in S3), so nothing breaks — it's just now dead weight in that folder. Its `routes.json` will read `engine: (none)` in `status.js` until its *next* S4 build stamps it, which is expected and not itself a problem to fix.
 
+### 2b. Rolling out a CONFIG change across towns (added 2026-08-15)
+
+§2a is for an engine-only change, which needs no new S3 because `routes.json` is unchanged. A **config** change does need one, and doing it by hand across eight towns is where the mistakes live. Two tools, in this order:
+
+```
+node "%SK%\preview_design.js" --all --patch '{"design":{"iconInk":"charcoal"}}'   # judge it first
+node "%SK%\adopt_config.js"   --all --set   '{"design":{"iconInk":"charcoal"}}' --apply
+node "%SK%\rollout.js" --all --apply --force --bump minor --note "..."
+```
+
+- **`preview_design.js`** rebuilds every sheet from the latest committed S4 data with the patch applied, measures the shipped sheet and the new one with `quality_metrics.js`, and reports the defect delta plus the gained/lost label strings — writing nothing under `Areas/`. Judge the change here, on all eight towns, before committing anything. It also has `--render`, and `--keep` to leave the build workspace on disk so you can re-run a generator by hand with `DBG_LABELS=1`.
+- **`adopt_config.js`** writes the patched `routes.json` into a new S3 run per town and commits it (`--set` deep-merges, `--unset` takes a dotted path, `--rail` reaches inside the `features[]` array which `--set` cannot). Dry-run by default.
+
+> **`rollout.js` needs `--force` after a config change, and it is not obvious why.** Its first act is to gate the town's **previous S4** against the current template, and report `UP-TO-DATE` if that passes. It does pass — because that S4 folder still contains the **old** `routes.json`. The new S3 is invisible to the check, so without `--force` a config rollout silently does nothing at all and reports success for every town.
+
+**A config change is a `--bump minor`**, same as an engine one; major is for new S1/S2 data (see §2a).
+
 **Before you re-render, diff the label sets, not just the byte count.** A placement change can silently drop or surface a label, which is a content change hiding inside a "cosmetic" diff:
 
 ```

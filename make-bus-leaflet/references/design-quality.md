@@ -72,3 +72,15 @@ Every weight is in one `DEFAULTS` object at the top of `labeller.js`, so a chang
 `node "%SK%\quality_metrics.js" --all [--detail|--json]` scores every `ci-reference` sheet. It is read-only and cannot break a gate. Thresholds live in one `T = {}` object; changing them invalidates the frozen baseline in `quality-baseline-scorecard_2026-08-15.md` and must be called out.
 
 `node "%SK%\labeller_demo.js" <outdir>` draws a synthetic test page twice — once with the old first-fit placer, once with `labeller.js` — for judging a placer change without moving a real sheet.
+
+## Changing any of this
+
+Never on one town. Every judgement in this document was made by rebuilding all eight and looking at the table:
+
+```bash
+node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/preview_design.js" --all --patch '{"design":{"iconInk":"charcoal"}}'
+```
+
+`preview_design.js` builds every sheet from the latest committed S4 data with a `routes.json` patch applied, measures before and after, and reports which label strings were gained and lost — writing nothing under `Areas/`. `--render` for JPGs, `--keep` to leave the workspace so a generator can be re-run by hand with `DBG_LABELS=1`. When the numbers look right, `adopt_config.js` commits the patch as a new S3 per town and `rollout.js --force` renders it; the full sequence, and the reason `--force` is not optional, is in [changing-the-engine.md](changing-the-engine.md) §2b.
+
+**One caution, learned the expensive way.** More candidate positions is not obviously better. A third leader ring at 3.9× the nominal gap was added on the theory that more reach means more placements; High Wycombe lost five more names, because the extra reach let low-priority labels claim distant space that higher-value ones then could not use. Any weight or candidate change gets measured across all eight towns, never on the one sheet that motivated it.

@@ -1369,24 +1369,23 @@ out(`</g>`);
 // ---- reserve protected areas so labels avoid them ----
 reserve(197,0,297,210);                 // right service panel
 reserve(0,0,86,26);                     // title block
-// The north arrow is drawn at the very END of the file, so nothing knew it was
-// there: on High Wycombe it printed straight through route 130's terminus badge
-// and across the railway (Peter, G2, 2026-08-15). Claim its box here, and say so
-// at build time when the spot it is pinned to is already occupied — the engine
-// cannot know where a town has room, but it can stop the collision being silent.
-const NORTH_BOX = (function(){
-  if(!(IR && IR.northArrow!==false)) return null;
-  const na = (IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};
-  const bx = na.x!=null?na.x:14, by = na.y!=null?na.y:150, L = na.len||8;
-  const ang = na.angle!=null ? na.angle*Math.PI/180
-            : Math.atan2(-Math.cos(-theta), Math.sin(-theta));
-  const tx = bx+Math.cos(ang)*L, ty = by+Math.sin(ang)*L;
-  // base, tip, arrowhead and the "N" — a generous box round the whole device
+// ---- the north arrow's home -------------------------------------------------
+// It is drawn at the very END of the file, so nothing used to know it was there:
+// on High Wycombe it printed straight through route 130's terminus badge and
+// across the railway (Peter, G2, 2026-08-15). It does not need a chosen spot,
+// only a blank one (Peter, same day), so under v2 the engine finds one — see the
+// search in the labels block below, which runs once the ink is known. `NORTH` is
+// the resolved base point; `northBox()` is the footprint of the whole device.
+const NORTH_ON = !!(IR && IR.northArrow!==false);
+const NA = (IR && IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};
+const NORTH_LEN = NA.len||8;
+const NORTH_ANG = NA.angle!=null ? NA.angle*Math.PI/180
+                : Math.atan2(-Math.cos(-theta), Math.sin(-theta));
+function northBox(bx,by){                 // base, tip, arrowhead and the "N"
+  const tx = bx+Math.cos(NORTH_ANG)*NORTH_LEN, ty = by+Math.sin(NORTH_ANG)*NORTH_LEN;
   return [Math.min(bx,tx)-3.4, Math.min(by,ty)-4.6, Math.max(bx,tx)+3.4, Math.max(by,ty)+4.6];
-})();
-// v2 only: claiming this box moves labels, so a v1 sheet (every place, until the
-// Phase 8 re-vendor) must not see it or absent config stops being byte-identical.
-if(NORTH_BOX && V2) reserve(...NORTH_BOX);
+}
+const NORTH = { x: NA.x!=null?NA.x:14, y: NA.y!=null?NA.y:150, auto:false };
 // The footer's backing plate is drawn LAST and covers whatever is beneath it, but no
 // placer knew it was there: 9 of the 31 sheets measured on 2026-08-15 had a label
 // printed and then erased by it. Shortening the frame (above) keeps the map out of the
@@ -1949,12 +1948,59 @@ if(LAB){
   const lum=h=>{ const m=/^#([0-9a-f]{6})$/i.exec(h); if(!m) return 1;
     const n=parseInt(m[1],16); return (0.2126*((n>>16)&255)+0.7152*((n>>8)&255)+0.0722*(n&255))/255; };
   LAB.stampSvg(s, (stroke,w)=> palette.has(stroke) || (w>=1.2 && lum(stroke)<0.62));
-  // Now that the ink is known, say whether the north arrow is sitting on any of it.
-  if(NORTH_BOX){
-    const cov = LAB.ink.cover(NORTH_BOX);
-    if(cov > 0.12) process.stderr.write('northArrow: its box at ['+NORTH_BOX.map(v=>v.toFixed(0)).join(',')
-      +'] is '+(cov*100).toFixed(0)+'% covered by route/feature ink — it will print over the map. '
-      +'Move internalRoads.northArrow {x,y} to a clear spot.\n');
+
+  /*
+   * Find the north arrow a blank corner.
+   *
+   * This has to happen HERE, between stamping the ink and solving the labels: any
+   * earlier and there is no ink to avoid, any later and the labels have already
+   * taken the blank space. So the arrow gets first pick of whatever is empty, and
+   * the labels then work around it — which is the right order, because the arrow
+   * can go anywhere and a label cannot.
+   *
+   * "Anywhere" is not quite true: a compass belongs at the edge of a sheet, not
+   * floating in the middle of it, so among the positions that are completely
+   * clear of ink and of every reserved box the one nearest a frame corner wins.
+   * A configured {x,y} is honoured when it is clear — a town that has hand-placed
+   * its arrow keeps it — and overruled, with a note, when it is not.
+   */
+  if(NORTH_ON){
+    // A SECOND, broader occupancy just for this search. LAB.ink is deliberately
+    // narrow — route ribbons and dark features, the things a label must not sit
+    // on — and by that measure the River Great Ouse is empty space, which is how
+    // the first cut of this parked St Neots' compass in the middle of the river.
+    // For the arrow, anything drawn counts except the two pale road tiers, which
+    // cover the whole sheet and would leave nowhere at all.
+    const paleRoads = new Set([ (IR&&IR.skeleton)||'#e4e4e4', (IR&&IR.contextColor)||'#f0f0f0' ]
+      .map(v=>String(v).toLowerCase()));
+    const NAV = new Labeller({ page:[297,210] });
+    NAV.stampSvg(s, (stroke,w)=> w>=1.2 && stroke!=='none' && !paleRoads.has(stroke)
+      && stroke!=='#fff' && stroke!=='#ffffff');
+    const clearAt = (bx,by)=>{ const b=northBox(bx,by);
+      if(b[0]<MX0+1||b[2]>MX1-1||b[1]<MY0+1||b[3]>MY1-1) return null;
+      if(LAB.hard.any(b)) return null;
+      return NAV.ink.cover(b); };
+    const want = clearAt(NORTH.x, NORTH.y);
+    if(want === null || want > 0.02){
+      const cnr=[[MX0,MY0],[MX1,MY0],[MX0,MY1],[MX1,MY1]];
+      let best=null;
+      for(let by=MY0+2; by<=MY1-2; by+=1) for(let bx=MX0+2; bx<=MX1-2; bx+=1){
+        const cov = clearAt(bx,by);
+        if(cov===null || cov>0) continue;
+        const d = Math.min(...cnr.map(c=>Math.hypot(bx-c[0],by-c[1])));
+        if(!best || d<best.d-1e-9) best={bx,by,d};
+      }
+      if(best){
+        process.stderr.write('northArrow: '+(want===null?'the configured spot is blocked':
+          'the configured spot is '+(want*100).toFixed(0)+'% covered by ink')
+          +' — placed automatically at '+best.bx+','+best.by+' (nearest clear corner).\n');
+        NORTH.x=best.bx; NORTH.y=best.by; NORTH.auto=true;
+      } else {
+        process.stderr.write('northArrow: no clear spot found on this sheet; left at the configured '
+          +NORTH.x+','+NORTH.y+'. Set internalRoads.northArrow:false, or make room.\n');
+      }
+    }
+    reserve(...northBox(NORTH.x, NORTH.y));
   }
   if(process.env.DBG_LABELS) for(const r of LAB.solve()){
     console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
@@ -2074,13 +2120,13 @@ if(RJ.fareNote){
 // active rotation (theta); the schematic passes a precomputed `angle` (deg)
 // because its coords are pre-rotated and run at rotationDeg 0, so it can't
 // re-derive north from theta.
-if (IR && IR.northArrow!==false) {
-  const na = (IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};
-  const bx = na.x!=null?na.x:14, by = na.y!=null?na.y:150, L = na.len||8;
+if (NORTH_ON) {
+  // Position resolved above: the configured {x,y} when it is clear, otherwise the
+  // nearest blank corner (v2 only — a v1 sheet never runs that search, so its
+  // arrow stays exactly where its config puts it and the output is byte-identical).
   // north planar step (0,-1) through the same rot() the projection uses:
   // rot(0,-1) = [sin(-theta), -cos(-theta)] in screen space (y down).
-  const ang = na.angle!=null ? na.angle*Math.PI/180
-            : Math.atan2(-Math.cos(-theta), Math.sin(-theta));
+  const bx = NORTH.x, by = NORTH.y, L = NORTH_LEN, ang = NORTH_ANG;
   const c=Math.cos(ang), s=Math.sin(ang), tx=bx+c*L, ty=by+s*L;
   const px=-s, py=c, ah=2.4, aw=1.4;                     // arrowhead
   out(`<line x1="${bx.toFixed(2)}" y1="${by.toFixed(2)}" x2="${tx.toFixed(2)}" y2="${ty.toFixed(2)}" stroke="#666" stroke-width="0.8"/>`);

@@ -754,9 +754,15 @@ for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json',
   // 0, so gen_internal can't re-derive north from theta — precompute the SCREEN
   // bearing of north here (same orientation as the geographic map, which the
   // schematic preserves) and pass it as an explicit `angle`.
-  const naCfg = (SCH.internalRoads && SCH.internalRoads.northArrow) || RJ.internalRoads.northArrow;
-  if (naCfg) {
-    const base = naCfg === true ? {} : naCfg;
+  const naCfg = (SCH.internalRoads && SCH.internalRoads.northArrow) || (RJ.internalRoads||{}).northArrow;
+  // `!== false`, not truthiness: the arrow is DRAWN BY DEFAULT when the town has
+  // no northArrow key at all, so the injection has to fire by default too. It used
+  // to test the key's truthiness, which meant a town that let the engine own the
+  // arrow (the norm since it started auto-placing itself, 2026-08-15) got no angle
+  // injected here and its schematic pointed north at the workspace's own rotation
+  // of zero — i.e. straight up, on a map that is not north-up.
+  if (naCfg !== false) {
+    const base = (!naCfg || naCfg === true) ? {} : naCfg;
     rj.internalRoads.northArrow = Object.assign({}, base,
       { angle: Math.atan2(-Math.cos(-theta), Math.sin(-theta)) * 180 / Math.PI });
   }

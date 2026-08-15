@@ -27,7 +27,17 @@ Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
 
-Also engine-side, and not a key: under `labels.engine:"v2"` the **north arrow reserves its box** before any label is placed, and the build **warns on stderr** when the position it is pinned to is more than 12% covered by route or feature ink. The arrow is drawn at the very end of the file, so nothing used to know it was there — on High Wycombe it printed straight through route 130's terminus badge and across the railway. The engine cannot know where a town has room, but it can stop the collision being silent.
+### The north arrow places itself
+
+Also engine-side, and not a key. The arrow is drawn at the very end of the file, so nothing used to know it was there — on High Wycombe it printed straight through route 130's terminus badge and across the railway. Under `labels.engine:"v2"` the engine now **finds it a blank corner** (Peter, 2026-08-15: *"it just needs any blank area"*), so no town needs a hand-pinned position any more and every one of them has had theirs removed.
+
+The search runs in exactly one place it can: **between stamping the ink and solving the labels**. Any earlier and there is no ink to avoid; any later and the labels have taken the blank space. So the arrow gets first pick and the labels work around it, which is the right order — the arrow can go anywhere and a label cannot.
+
+Three details worth knowing:
+
+- **It uses a second, broader occupancy than the labeller's.** `LAB.ink` is deliberately narrow — route ribbons and dark features, the things a *label* must not sit on — and by that measure the River Great Ouse is empty space. The first cut of this parked St Neots' compass in the middle of the river. The arrow's grid counts anything drawn except the two pale road tiers, which cover the whole sheet and would leave nowhere at all.
+- **A corner, not the middle.** Among the positions completely clear of ink and of every reserved box, the one nearest a frame corner wins — a compass belongs at the edge of a sheet.
+- **A configured `{x,y}` is still honoured when it is clear**, and overruled with a note on stderr when it is not. `northArrow:false` still suppresses it, and an explicit `angle` is still required by the schematic and diagram pre-stages, whose coordinates are pre-rotated.
 
 ## `labels: { engine: "v2" }`
 

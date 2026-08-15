@@ -897,9 +897,15 @@ try { fs.copyFileSync(path.join(DIR, 'diagram-overrides.json'), path.join(WD, 'o
     DG.internalRoads || {});
   rj.internalRoads.corridor = Object.assign({ dist: 0.6, angle: 12 },
     (DG.internalRoads || {}).corridor || {});
-  const naCfg = (DG.internalRoads && DG.internalRoads.northArrow) || RJ.internalRoads.northArrow;
-  if (naCfg) {
-    const base = naCfg === true ? {} : naCfg;
+  const naCfg = (DG.internalRoads && DG.internalRoads.northArrow) || (RJ.internalRoads||{}).northArrow;
+  // `!== false`, not truthiness: the arrow is DRAWN BY DEFAULT when the town has
+  // no northArrow key at all, so the injection has to fire by default too. It used
+  // to test the key's truthiness, which meant a town that let the engine own the
+  // arrow (the norm since it started auto-placing itself, 2026-08-15) got no angle
+  // injected here and its schematic pointed north at the workspace's own rotation
+  // of zero — i.e. straight up, on a map that is not north-up.
+  if (naCfg !== false) {
+    const base = (!naCfg || naCfg === true) ? {} : naCfg;
     rj.internalRoads.northArrow = Object.assign({}, base,
       { angle: Math.atan2(-Math.cos(-theta), Math.sin(-theta)) * 180 / Math.PI });
   }

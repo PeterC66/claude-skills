@@ -47,13 +47,16 @@ Scrape with WebFetch. Because WebFetch summarises, cross-check any group whose d
 1. **Locate the target doc.** It's `…\By month\<YYYYMMDD> <Month> Members Open Meeting\<YYYYMMDD> Interest Groups by interest area.docx` — usually a renamed copy of last month's file. If unsure, ask the user for the path or which meeting date.
 2. **Check it isn't open in Word.** A `~$…docx` lock file next to it means it's open → ask the user to close it (the final overwrite will fail otherwise).
 3. **Read the current doc**: group names, days/times, the `w:shd` fill of every cell, and the colour key in `header2.xml`.
-4. **Scrape the website** (groups page + both homepage boxes).
+4. **Scrape the website** (groups page + both homepage boxes). While scraping, separately note anything that looks like a genuine **site problem** rather than an ordinary month-to-month data change — a broken/stale link, a mismatched name, an editorial/internal-looking note published in visible text, inconsistent wording vs. the rest of the site. Keep a short list (or "nothing found") to report back at the end — see "Site-issue watch" below.
 5. **Diff** against the five checks. Build a proposed-changes table: colour changes, day/time corrections, additions/removals, placement, and the footer date → today.
 6. **Always pause and present the table for confirmation.** Never edit before the user approves. Surface judgement calls (e.g. stale date ranges, multi-area placement) explicitly.
 7. **If adding a group would push past two pages**, present condensation/removal **options** and let the user choose — don't decide silently.
 8. **Edit the doc in place** (see Mechanics) and update the footer date.
 9. **Verify exactly two pages** via Word. Produce a PDF proof **only if something looks risky** (large content change, possible overflow).
 10. **Overwrite the original** `.docx`.
+
+## Site-issue watch
+This handout is an extract of the live site, but scraping it also surfaces genuine site problems that have nothing to do with this month's data (a stale link, an internal note accidentally published, a naming mismatch). Don't fold these into the doc edit or silently ignore them — mention them in the final hand-off to the user (or, when running under `update-all-handouts`, hand them to the orchestrator so they end up in one combined note) so they can be passed on to the web manager. If nothing was found, say so explicitly rather than leaving it unstated — a clean pass is worth confirming, not just implying.
 
 ## Mechanics (Windows)
 Edit the raw XML (don't regenerate the document — that would lose the colours, header key, footer and logo). The `docx` skill's `unpack.py`/`pack.py` merge runs and pretty-print, which makes editing reliable.

@@ -29,12 +29,15 @@ Scrape with WebFetch for the overview, but WebFetch truncates quotes to ~125 cha
 1. **Locate the target doc.** It's `…\By month\<YYYYMMDD> Members Open Meeting\<YYYYMMDD> MOM Open Meetings .docx` — in the **meeting folder itself**, alongside the other two handouts (note the space before `.docx`). The folder's `TODO\` subfolder is the user's own "still outstanding" tray for *other* MOM documents (the Checklist, the Open-Close script); the handout is not in there. Folder date = that month's meeting. If unsure, ask the user for the path or meeting date.
 2. **Check it isn't open in Word** (a `~$…docx` lock file next to it means it's open → ask the user to close it, or the final overwrite fails).
 3. **Read the current doc**: the existing rows (dates, titles, bylines, summaries), each cell's `w:shd` fill, and which rows have images.
-4. **Scrape the website**: the list page for order + dates + image URLs, then each remaining/added meeting's detail page for full text and speaker.
+4. **Scrape the website**: the list page for order + dates + image URLs, then each remaining/added meeting's detail page for full text and speaker. While doing this, separately note anything that looks like a genuine **site problem** rather than an ordinary content update — a stale/placeholder URL slug, a name that doesn't match between the heading and the body text, an internal-looking note published in visible text. See "Site-issue watch" below.
 5. **Work out the four**: drop the held meeting; the next four by date become the table. Confirm which colour each row gets so shading still alternates.
 6. **Build a proposed-changes table** (remove / keep-refresh / append, with the trimmed summary wording for each) and **always pause for confirmation. Never edit before the user approves.** Surface judgement calls (e.g. how to phrase the AGM row, how aggressively to trim a long talk).
 7. **Edit the XML in place** (see Mechanics): remove the held row, refresh the kept rows, append the new row(s), embed any new image(s).
 8. **Pack to a test file, then test-open it in Word** (see Mechanics). That open is what proves the added `w14:paraId`s are valid 8-hex and the file isn't corrupt — a clean re-unpack proves nothing.
 9. **Overwrite the original** `.docx` from the test file, once the `~$` lock is gone. Then ask the user to eyeball it in Word. Clean up scratch files.
+
+## Site-issue watch
+This handout is an extract of the live site, but scraping the detail pages also surfaces genuine site problems that have nothing to do with this month's content (a stale/placeholder URL slug left over from cloning a page, a speaker name that's inconsistent between the heading and the body text, an internal note accidentally published). Don't fold these into the doc edit or silently ignore them — mention them in the final hand-off to the user (or, when running under `update-all-handouts`, hand them to the orchestrator so they end up in one combined note) so they can be passed on to the web manager. If nothing was found, say so explicitly.
 
 ## Mechanics (Windows)
 Edit the raw XML (don't regenerate the document — that would lose the header, footer, logo, borders and existing images). Use the `docx` skill's `unpack.py`/`pack.py`.

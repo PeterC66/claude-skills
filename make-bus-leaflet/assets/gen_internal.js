@@ -533,6 +533,50 @@ if(IR){
   const xc=new Set(IR.fitExtra||ICFG.extraCore||[]); const fseen=new Set();
   for(const r in routes) for(const a of routes[r]){ if(fseen.has(a)||!atco2ll[a])continue; fseen.add(a);
     if(a.startsWith(PREFIX)||xc.has(a)) stopPts.push(atco2ll[a]); }
+  // FIT TO WHAT YOU DRAW (plan §4.2, 2026-08-15). Membership of the fit set is
+  // decided by ATCO prefix, i.e. by which parish a stop is in — which is not the
+  // same question as "does this map draw anything there?". Under internalRoads the
+  // route line comes from the matched road graph, and where the graph stops the
+  // line stops; a served stop beyond that end is in the fit but has no ink.
+  //
+  // Ramsey shipped six of them — Middle Drove, Ugg Mere Court Road, Fisher Close,
+  // Ashbeach Drove, Lion Close and Daintree Road, all on X31 out to Ramsey St
+  // Mary's, all 2.7-3.6 km from any drawn line. They stretched the fit box from
+  // 75 mm wide to 141 mm, so the map was scaled down and pushed right: the whole
+  // LEFT THIRD of the frame held no route ink at all, and the town was drawn 8%
+  // smaller than it needed to be, to make room for six stops nobody can see.
+  //
+  // Measured on all eight towns, the separation is not close: six of them have
+  // every core stop within 79 m of a drawn line, High Wycombe's worst is 929 m
+  // (its corridor bundling and coreBox move lines away from stops ON PURPOSE —
+  // see complexity-triage.md, and do not "fix" that), and Ramsey's six sit at
+  // 2.7 km upwards with nothing in between. 1500 m is the middle of that gap.
+  const OFFPATH = IR.fitMaxOffPath!=null ? IR.fitMaxOffPath : 1500;
+  const psegs=[];
+  for(const r in ((RP&&RP.routes)||{})){ const p=RP.routes[r].pts||[];
+    for(let i=1;i<p.length;i++) psegs.push([p[i-1],p[i]]); }
+  if(OFFPATH>0 && psegs.length){
+    const offM=(p,a,b)=>{ const kx=111320*Math.cos(a[0]*Math.PI/180);
+      const bx=(b[1]-a[1])*kx, by=(b[0]-a[0])*111320, px=(p[1]-a[1])*kx, py=(p[0]-a[0])*111320;
+      const L2=bx*bx+by*by; if(!L2) return Math.hypot(px,py);
+      let t=(px*bx+py*by)/L2; t=Math.max(0,Math.min(1,t));
+      return Math.hypot(px-t*bx, py-t*by); };
+    const near=[], far=[];
+    for(const s of stopPts){
+      let d=Infinity;
+      for(const g of psegs){ const x=offM(s,g[0],g[1]); if(x<d){ d=x; if(d<=OFFPATH) break; } }
+      (d<=OFFPATH?near:far).push(s);
+    }
+    // Never let this empty the fit: if almost everything is off-path the road
+    // match is broken, and shrinking the fit to the survivors would hide that.
+    if(far.length && near.length>=3){
+      stopPts.length=0; stopPts.push(...near);
+      process.stderr.write('fit: '+far.length+' core stop'+(far.length>1?'s':'')+' more than '
+        +OFFPATH+' m from any drawn route line — excluded from the fit, which would otherwise '
+        +'scale the map down to make room for stops it does not draw. '
+        +'Set internalRoads.fitMaxOffPath to change the distance, or 0 to disable.\n');
+    }
+  }
 } else {
   for(const r in routes) for(const a of routes[r]) if(atco2ll[a]) stopPts.push(atco2ll[a]);
 }

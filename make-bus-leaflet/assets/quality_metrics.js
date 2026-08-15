@@ -524,15 +524,36 @@ function analyse(svgPath) {
   // What actually reads as unbalanced is a quadrant of the sheet with nothing
   // in it while another is jammed — so measure ink share over a 3x3 grid of
   // the map frame and count the near-empty cells.
-  const F = P.mapFrame || { x0: 0, y0: 0, x1: panelX0, y1: footerTop };
+  //
+  // TWO CORRECTIONS, 2026-08-15, made while acting on this measure for the first
+  // time (plan §4.2) — until then nothing had been done on its say-so, so nobody
+  // had checked it against a sheet that LOOKS fine.
+  //
+  // 1. An internal sheet's frame starts below the title at y=30; an external
+  //    sheet had no frame, so F started at y=0 and the whole title band counted
+  //    as empty map. Both sheet types reserve the same top strip, so use it.
+  // 2. The operators/services box on an external sheet is composition, not
+  //    emptiness, and it is not route ink — so a well-composed sheet reported
+  //    its legend column as bare. March external looks balanced and scored 3.
+  //    Count the legend's own footprint as occupied.
+  const TITLE_BAND = 30;
+  const F = P.mapFrame || { x0: 0, y0: TITLE_BAND, x1: panelX0, y1: footerTop };
   const cellW = (F.x1 - F.x0) / 3, cellH = (Math.min(F.y1, footerTop) - F.y0) / 3;
   const share = [];
   for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
     let n = 0, tot = 0;
-    const gx0 = Math.floor((F.x0 + c * cellW - grid.x0) / T.cell), gx1 = Math.floor((F.x0 + (c + 1) * cellW - grid.x0) / T.cell);
-    const gy0 = Math.floor((F.y0 + r * cellH - grid.y0) / T.cell), gy1 = Math.floor((F.y0 + (r + 1) * cellH - grid.y0) / T.cell);
+    const cx0 = F.x0 + c * cellW, cx1 = F.x0 + (c + 1) * cellW;
+    const cy0 = F.y0 + r * cellH, cy1 = F.y0 + (r + 1) * cellH;
+    const gx0 = Math.floor((cx0 - grid.x0) / T.cell), gx1 = Math.floor((cx1 - grid.x0) / T.cell);
+    const gy0 = Math.floor((cy0 - grid.y0) / T.cell), gy1 = Math.floor((cy1 - grid.y0) / T.cell);
     for (let y = gy0; y < gy1 && y < grid.ny; y++) for (let x = gx0; x < gx1 && x < grid.nx; x++) { tot++; if (grid.a[y * grid.nx + x]) n++; }
-    share.push(tot ? n / tot : 0);
+    let s = tot ? n / tot : 0;
+    if (legend) {                                    // the box occupies this cell too
+      const ow = Math.max(0, Math.min(cx1, legend.x1) - Math.max(cx0, legend.x0));
+      const oh = Math.max(0, Math.min(cy1, legend.y1) - Math.max(cy0, legend.y0));
+      s = Math.min(1, s + (ow * oh) / (cellW * cellH));
+    }
+    share.push(s);
   }
   const meanShare = share.reduce((a, b) => a + b, 0) / 9;
   const emptyCells = share.filter(s => s < meanShare * 0.15).length;   // 9ths with essentially nothing in them
@@ -632,7 +653,9 @@ function main() {
   if (!files.length) { console.error('no sheets found'); process.exit(2); }
 
   const results = files.map(analyse);
-  if (json) { console.log(JSON.stringify(results.map(r => ({ file: r.file, metrics: r.metrics, fails: r.fails, warns: r.warns })), null, 2)); return; }
+  // `share` is the 3x3 ink share behind emptyNinths, row-major. Emitted because
+  // "this sheet has 4 empty ninths" is not actionable without knowing WHICH four.
+  if (json) { console.log(JSON.stringify(results.map(r => ({ file: r.file, metrics: r.metrics, fails: r.fails, warns: r.warns, share: r.share })), null, 2)); return; }
 
   const cols = [
     ['sheet', r => label(r.file), 36],

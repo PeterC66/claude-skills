@@ -77,6 +77,16 @@ Three details worth knowing:
 
 That search is now a shared helper, `spotSearch(boxOf, wantX, wantY, tol)` — the scale bar is its second caller, and anything else free-floating should be its third rather than a fourth inline loop.
 
+## The fit set — `internalRoads.fitMaxOffPath`
+
+Not a `design` key, and not opt-in: engine behaviour, because it is a correctness fix rather than a taste one.
+
+Under `internalRoads` the map is fitted to the town's **core stops**, chosen by ATCO prefix so that out-of-town tails run off the frame edge instead of shrinking the town. But "which parish is this stop in" is not the same question as "does this map draw anything there": the route line comes from the matched road graph, and where the graph ends the line ends. A served stop beyond that end is in the fit and has no ink.
+
+So a core stop further than `fitMaxOffPath` (default **1500 m**) from every drawn path is dropped from the fit, with a note on stderr. Set it to `0` to disable. If fewer than three stops would survive the filter it is ignored entirely — that means the road match is broken, and shrinking the fit to the survivors would hide it.
+
+**The default is measured.** Worst core stop, distance to the nearest drawn line: Beaconsfield/Huntingdon/March/St Ives/St Neots/Wisbech **≤ 79 m**; High Wycombe **929 m**, which is correct — its corridor bundling and `coreBox` move lines away from stops on purpose, so do not "fix" that; Ramsey **2,701 m and up**, six stops on X31 out at Ramsey St Mary's. Nothing lies between 929 m and 2,701 m. Those six were stretching Ramsey's fit box from 75 mm wide to 141 mm: the town drawn 8 % smaller than it needed to be, pushed into the right two-thirds, with the whole left column of the frame holding no route ink at all.
+
 ## `design: { scaleBar: true }`
 
 A scale bar on the geographic sheets, and the words **`Diagram — not to scale`** on the schematic, diagram and external ones. Both go through `spotSearch`, so they take a blank corner and the labels work around them; both are reserved before the labels solve.

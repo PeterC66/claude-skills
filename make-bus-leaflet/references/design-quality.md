@@ -7,7 +7,7 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 Three `routes.json` keys, all opt-in, all defaulting to the pre-2026-08-15 behaviour:
 
 ```json
-"design": { "footerSafe": true, "spreadIcons": true },
+"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal" },
 "labels": { "engine": "v2" }
 ```
 
@@ -25,6 +25,9 @@ Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (
 | `iconMinSep` | `3.2` | mm centre-to-centre below which two 4.2 mm symbols read as one blob. |
 | `spreadMax` | `2.6` | mm a symbol may be displaced. Displace, don't drop — but not so far that it stops being where the thing is. |
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
+| `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
+
+Also engine-side, and not a key: under `labels.engine:"v2"` the **north arrow reserves its box** before any label is placed, and the build **warns on stderr** when the position it is pinned to is more than 12% covered by route or feature ink. The arrow is drawn at the very end of the file, so nothing used to know it was there — on High Wycombe it printed straight through route 130's terminus badge and across the railway. The engine cannot know where a town has room, but it can stop the collision being silent.
 
 ## `labels: { engine: "v2" }`
 

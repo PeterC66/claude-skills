@@ -1,6 +1,44 @@
 // Reusable POI pictograms. Each returns an SVG string centred at (x,y),
 // drawn to fit roughly a 5mm box (scale s = half-extent in mm, default 2.2).
-function icon(cat, x, y, s = 2.2) {
+//
+// `ink` (optional, 4th arg after s): "charcoal" recolours the whole set to one
+// neutral, keeping red for the GP cross. Peter's answer to G3 of the design-
+// quality plan, 2026-08-15, chosen from five options rendered at printed size
+// (Development Docs/icon-set-options_2026-08-15.html). The reasoning: on a sheet
+// where colour already means ROUTE, a bright red trolley and a green cross read
+// as route information and compete with the lines. Option E — these shapes with
+// the colour taken out and nothing else changed — was preferred over a redrawn
+// outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a
+// ribbon, while these solid glyphs hold their weight.
+//
+// Absent/any other value ⇒ the original palette, byte-identical.
+const CHARCOAL = '#33383d', CHARCOAL_ACCENT = '#c62828';
+function inkify(svg) {
+  return svg.replace(/(fill|stroke)="(#[0-9a-fA-F]{3,6})"/g, (m, k, c) => {
+    const h = c.length === 4 ? '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] : c;
+    const n = parseInt(h.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    // A PALE fill is a backing plate, not a mark — recolouring it charcoal turns
+    // the allotments glyph's bed into a solid black block. Send those to white.
+    if (lum > 0.75) return `${k}="#ffffff"`;
+    if (/^#d00+$/i.test(c)) return `${k}="${CHARCOAL_ACCENT}"`;
+    // A symbol that was ALREADY a neutral grey was drawn light on purpose — the
+    // industrial estate is context, not subject. Flattening every colour to one
+    // charcoal made a cluster of factories the heaviest ink on the sheet, which is
+    // the opposite of what taking the colour out is for. Neutralise those, keep
+    // their tone; send the genuinely COLOURED symbols to charcoal.
+    const neutral = (Math.max(r, g, b) - Math.min(r, g, b)) / 255 < 0.10;
+    if (neutral && lum > 0.32) {
+      const v = Math.round(lum * 255);
+      const hex = (x) => x.toString(16).padStart(2, '0');
+      return `${k}="#${hex(v - 2)}${hex(v + 1)}${hex(v + 4)}"`;   // a hair cool, to match CHARCOAL
+    }
+    return `${k}="${CHARCOAL}"`;
+  });
+}
+function icon(cat, x, y, s = 2.2, ink) {
+  if (ink === 'charcoal') return inkify(icon(cat, x, y, s));
   const T = (inner) => `<g transform="translate(${x} ${y}) scale(${s/2.2})">${inner}</g>`;
   const plus = (col) => `<rect x="-0.55" y="-1.5" width="1.1" height="3" fill="${col}"/><rect x="-1.5" y="-0.55" width="3" height="1.1" fill="${col}"/>`;
   switch (cat) {
@@ -54,4 +92,4 @@ function icon(cat, x, y, s = 2.2) {
       return `<circle cx="${x}" cy="${y}" r="${s*0.7}" fill="#888"/>`;
   }
 }
-module.exports = { icon };
+module.exports = { icon, inkify };

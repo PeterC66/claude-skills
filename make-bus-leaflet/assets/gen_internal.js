@@ -150,6 +150,10 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     spreadMax mm from their true position) so a cluster stops
 //                     reading as one blob. Hand-placed POIs are never moved.
 //   iconMinSep:3.2 / spreadMax:2.6   the two numbers that pass governs by.
+//   iconInk:"charcoal" one neutral for every POI symbol, red kept for the GP
+//                     cross, so colour on the sheet means ROUTE and nothing else
+//                     (Peter's G3 answer, 2026-08-15 — option E of five rendered
+//                     at printed size). Absent => the original palette.
 const DESIGN = RJ.design || {};
 // labels{}: which label placer to use.
 //   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
@@ -933,7 +937,7 @@ function reserveIcons(){
 function poiMark(p){
   const s=poiSite(p); if(!s) return;
   const {k,o,x,y}=s;
-  out(gk('poi',k,icon(p.cat,x,y,2.1)));
+  out(gk('poi',k,icon(p.cat,x,y,2.1,DESIGN.iconInk)));
   const auto = ['shop','leisure','school','park','community','allotments'].includes(p.cat) && p.name && p.name!=='Park';
   const showName = o.force===true || (auto && o.force!==false);
   if(showName) placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,{id:'poi:'+k});
@@ -1365,6 +1369,24 @@ out(`</g>`);
 // ---- reserve protected areas so labels avoid them ----
 reserve(197,0,297,210);                 // right service panel
 reserve(0,0,86,26);                     // title block
+// The north arrow is drawn at the very END of the file, so nothing knew it was
+// there: on High Wycombe it printed straight through route 130's terminus badge
+// and across the railway (Peter, G2, 2026-08-15). Claim its box here, and say so
+// at build time when the spot it is pinned to is already occupied — the engine
+// cannot know where a town has room, but it can stop the collision being silent.
+const NORTH_BOX = (function(){
+  if(!(IR && IR.northArrow!==false)) return null;
+  const na = (IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};
+  const bx = na.x!=null?na.x:14, by = na.y!=null?na.y:150, L = na.len||8;
+  const ang = na.angle!=null ? na.angle*Math.PI/180
+            : Math.atan2(-Math.cos(-theta), Math.sin(-theta));
+  const tx = bx+Math.cos(ang)*L, ty = by+Math.sin(ang)*L;
+  // base, tip, arrowhead and the "N" — a generous box round the whole device
+  return [Math.min(bx,tx)-3.4, Math.min(by,ty)-4.6, Math.max(bx,tx)+3.4, Math.max(by,ty)+4.6];
+})();
+// v2 only: claiming this box moves labels, so a v1 sheet (every place, until the
+// Phase 8 re-vendor) must not see it or absent config stops being byte-identical.
+if(NORTH_BOX && V2) reserve(...NORTH_BOX);
 // The footer's backing plate is drawn LAST and covers whatever is beneath it, but no
 // placer knew it was there: 9 of the 31 sheets measured on 2026-08-15 had a label
 // printed and then erased by it. Shortening the frame (above) keeps the map out of the
@@ -1927,6 +1949,13 @@ if(LAB){
   const lum=h=>{ const m=/^#([0-9a-f]{6})$/i.exec(h); if(!m) return 1;
     const n=parseInt(m[1],16); return (0.2126*((n>>16)&255)+0.7152*((n>>8)&255)+0.0722*(n&255))/255; };
   LAB.stampSvg(s, (stroke,w)=> palette.has(stroke) || (w>=1.2 && lum(stroke)<0.62));
+  // Now that the ink is known, say whether the north arrow is sitting on any of it.
+  if(NORTH_BOX){
+    const cov = LAB.ink.cover(NORTH_BOX);
+    if(cov > 0.12) process.stderr.write('northArrow: its box at ['+NORTH_BOX.map(v=>v.toFixed(0)).join(',')
+      +'] is '+(cov*100).toFixed(0)+'% covered by route/feature ink — it will print over the map. '
+      +'Move internalRoads.northArrow {x,y} to a clear spot.\n');
+  }
   if(process.env.DBG_LABELS) for(const r of LAB.solve()){
     console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
       +(r.placed?(r.pos||'fixed').padEnd(6)+(r.leader?'leader ':'       '):'      ')
@@ -2022,7 +2051,7 @@ py+=10; out(`<text x="${KX}" y="${py}" font-family="Arial" font-weight="bold" fo
 const key=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
 if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
 key.forEach((kk,i)=>{const ky=py+5+i*KROW, kx=PX+3;
-  out(icon(kk[0],kx,ky,2.0));
+  out(icon(kk[0],kx,ky,2.0,DESIGN.iconInk));
   out(`<text x="${kx+4.0}" y="${ky+1}" font-family="Arial" font-size="3.0" fill="#222">${esc(kk[1])}</text>`);});
 
 // fare note (opt-in routes.json "fareNote") — highlighted box under the key

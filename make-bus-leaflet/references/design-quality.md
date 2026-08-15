@@ -51,7 +51,7 @@ Badge text is not on the scale: `badge()` fits it to its disc, so it is a symbol
 **Two build-time warnings come with it**, because the scale exposes panels that were already over-stuffed rather than quietly shrinking type to fit:
 
 - `panelScale: panelRow Nmm leaves …` — a subtitle and the badge below it are touching. St Ives was at −0.01 mm and moved to `panelRow: 7.2`; the default 8.0 clears with 0.39 mm.
-- `panelScale: panelCols row Nmm cannot carry the type scale …` — **High Wycombe fires this and has not been fixed.** Its 24 services in two columns at a 4.9 mm pitch need 5.9 mm. The remedy is a third column or dropping the subtitles on that town, both config and both visible product changes; the type cannot shrink further because 2.45 mm is the legibility floor.
+- `panelScale: panelCols row Nmm cannot carry the type scale …` — **High Wycombe fires this and has not been fixed.** Its 22 services in two columns at a 4.9 mm pitch need 5.9 mm. **Do not reach for a third column or smaller type.** High Wycombe is the one triaged town: its map bundles those 22 services into **14 drawn lanes** via `internalCorridors` and colours them as **11 corridors** via `corridorPalette` (rungs 1 and 3, see [complexity-triage.md](complexity-triage.md)), and the panel is the only part of the sheet that ignores it. Fourteen corridor rows with badge stacks fit at the standard pitch; 22 individual rows never will. Tracked as `panelCorridors` in Phase 7 of the plan.
 
 ### Moving a linear feature's label
 

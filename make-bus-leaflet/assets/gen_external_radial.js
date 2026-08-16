@@ -50,6 +50,9 @@ const EDK = process.env.EDITOR_KEYS==='1';
 const LABELS = D.labels || {};
 const V2 = LABELS.engine === 'v2';
 const DESIGN = D.design || {};
+// printSafe: keep drawn content this many mm from the trim. Absent => today's
+// geometry exactly (byte-identical for ungated towns). See footer.js's header.
+const PSAFE = DESIGN.printSafe != null ? +DESIGN.printSafe : null;
 const W = 297, H = 210;
 let s = '';
 let out = (x) => { s += x + '\n'; };
@@ -134,6 +137,17 @@ function townNode(x,y,label,h=11,timeLabel){
   const w = measureNodeWidth(label, timeLabel);
   const extra = timeLabel ? 3.6 : 0;
   const hh = h + extra;
+  // design.printSafe: a terminus lozenge is drawn centred on the end of its
+  // spoke, and the spoke's end is chosen from a bearing and a radius that know
+  // nothing about the page edge — so Wisbech printed "King's Lynn –" 3.92mm from
+  // the trim and High Wycombe "Beaconsfield" at 4.42mm. Nudge the BOX back
+  // inside the margin rather than shorten the spoke: the shift is a millimetre
+  // or two and the box is at least 18mm wide, so it still covers the line end
+  // and still reads as that spoke's terminus.
+  if(PSAFE!=null){
+    x = Math.min(Math.max(x, PSAFE + w/2), W - PSAFE - w/2);
+    y = Math.min(Math.max(y, PSAFE + hh/2), H - PSAFE - hh/2);
+  }
   if(V2){ HARD.push([x-w/2-0.6, y-hh/2-0.6, x+w/2+0.6, y+hh/2+0.6, 'terminus']); ANCH.push([x,y,'term:'+label]); }
   out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh=4.0, y0=y-((lines.length-1)*lh+extra)/2;
@@ -630,7 +644,8 @@ out(footerBand({
   notes: [`Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
           `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
             + `${DESIGN.scaleBar?' Diagram — not to scale.':''}`],
-  version: D.version, validFrom: D.validFrom || 'Summer 2026'
+  version: D.version, validFrom: D.validFrom || 'Summer 2026',
+  safe: DESIGN.printSafe != null ? +DESIGN.printSafe : null
 }));
 
 // Optional "coming soon" / validity stamp. Opt-in via routes.json "stamp"

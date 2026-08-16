@@ -88,7 +88,7 @@ Judged on the sheets, not on the number: previewed across all eight towns (209 �
 
 ### `design.badgeFit` — a route number that does not fit its disc
 
-`badge()` draws its text at font-size = the badge **radius**, which is right for one to three narrow characters and wrong for anything wider. The text simply overflowed, on all three badge sizes and on both sheets, so the number read as sitting *on* the roundel rather than in it. Found 2026-08-15 on Ramsey, whose enlarged map made it obvious; it is pre-existing and affects **four of the eight towns** — High Wycombe (`M40` `WW1` `LGW` `LHR` `OXF`), Ramsey (`301S` `301V` `301X`), St Ives (`VL14`), March (`ZIP2`). Beaconsfield, Huntingdon, St Neots and Wisbech have no wide key, and their sheets do not move.
+`badge()` draws its text at font-size = the badge **radius**, which is right for one to three narrow characters and wrong for anything wider. The text simply overflowed, on all three badge sizes and on both sheets, so the number read as sitting *on* the roundel rather than in it. Found 2026-08-15 on Ramsey, whose enlarged map made it obvious; it is pre-existing and affects **four of the eight towns** — High Wycombe (`M40`; its `WW1` `LGW` `LHR` `OXF` are prose, not badges — see the correction below), Ramsey (`301S` `301V` `301X`), St Ives (`VL14`), March (`ZIP2`). Beaconsfield, Huntingdon, St Neots and Wisbech have no wide key, and their sheets do not move.
 
 **It is a width problem, not a length one** — which is the whole reason the fix measures with `font_metrics.js` rather than counting characters. High Wycombe's three-letter codes are *worse* than Ramsey's four-character keys:
 
@@ -334,6 +334,29 @@ On a diagram the line is straight runs punctuated by deliberate corners, worth d
 **What §3.2 got wrong, so nobody re-derives it:** it said the diagram engine "mixes sharp and rounded corners". It does not — every route path in every model is drawn with `stroke-linejoin="round"`. But that rounds a corner by only the stroke's own half-width, 0.85 mm on a 1.7 mm line, which at a 60–90° turn reads as a mitre.
 
 **If you change the radius, re-check the stop ticks.** The fillet moves the *line* but not the ticks, so a tick at a corner could be left off its own route. At 2.0 mm the worst tick-to-line distance across all three models is 0.36 mm against a 0.85 mm half-stroke; a much larger radius would not be free.
+
+## `design: { printSafe: 5 }` — the print check's key
+
+Built 2026-08-16 as Phase 8 item 2b. **It is one key because it is one printing**: Peter printed two sheets borderless and unscaled, and everything below came out of that half-hour. None of it is visible on screen, and no measure on the board could see most of it, which is the reason it is grouped rather than split into six keys nobody would set together.
+
+`5` is the margin in millimetres. **Absent ⇒ every sheet is byte-identical**, as with every other key here.
+
+What it does, in the order it was found:
+
+- **The footer comes inside the margin.** Every sheet ever built put its credit 3 mm from the right trim and its last baseline 4 mm from the bottom. Borderless printing over-scales by 2–3% — about 3 mm on A4 — so what survived was around 1 mm, and whether a given sheet looked right came down to feed tolerance. `footer.js` insets `x0`/`x1`/`bottomY`, **and subtracts the descender**, because a 5 mm margin is a claim about ink and the last line is "Valid from **J**ul**y**". Baseline-only insetting left it at 4.41 mm and the measure still warning.
+- **The placer comes inside the margin too**, as four reserved page-edge strips. Fixing the footer alone would have left the worse half: six sheets had a map label tighter than the credit, worst 1.54 mm.
+- **The panel is checked against the page.** High Wycombe sits its panel at `x=200` with two 49 mm columns — 298 mm on a 297 mm page — so its second column ran off the sheet, taking a badge with it. The existing row-fits-column warning could never see this: **the row did fit its column; the column did not fit the sheet.** The columns are narrowed to fit and it says so.
+- **An over-wide subtitle wraps, and only then shrinks.** "A lane takes as many subtitle lines as it needs" was already this row's design. Shrinking is the fallback for what wrapping cannot help. Title and subtitle are measured **separately** — the first cut took the max of the two, computed a shrink ratio from the bold title's width and applied it to the subtitle, which both fails to fix the overflow and makes the type smaller for nothing.
+- **A single-service corridor row stops repeating its own badge.** `internalDesc` titles carry the route number ("33  Totteridge–Desborough") because the ordinary panel is read row by row; in the corridor panel the badge is right beside the title, and the stacked rows — which use `corridorDesc` — never carry it. So the two kinds of row disagreed about what a title is. Dropping the prefix makes them agree, and took High Wycombe's widest title inside its column.
+- **The scale bar stops naming what the sheet does not draw.** "town centre scale" is right on a fisheyed town and wrong on a `coreBox` one, where rung 2 deliberately replaces the centre with a labelled box and draws no roads inside it. Such a town gets "scale outside the town centre box".
+- **A service badged in the panel with no line on the map says so.** The row's own subtitle gains "· not shown on this map" (`routes.json notShownNote` to change the words). The panel is the sheet's own index of itself, so a row with no line sends the reader hunting for something that is not there.
+
+Two guards ship **ungated**, because they only write to stderr and change no bytes:
+
+- **A feature label far from its own feature.** The three existing guards all refuse a label that lands somewhere it cannot be *read*; none asked whether it lands somewhere it *means* anything. Seven were stranded — Beaconsfield's `A355` 106 mm from the A355, Ramsey's "River Nene (Old Course)" 82 mm from the river **on the sheet whose write-up records it as having been moved onto the river it names**. It was moved out of the corner; nothing checked where it landed. 25 mm, matching `quality_metrics.js`'s `featureLabelMaxMm`, so the build and the gate agree.
+- **A panel badge with no drawn line.** Checked from `TRIM[route]`, keyed by route. `quality_metrics.js` asks the same question from the SVG and can only ask it by *colour*, so it misses a route that shares a colour with one that is drawn — it reports Ramsey clean, and the build finds `301X`. **Read the build's stderr for the authoritative list.**
+
+**Cost, measured across all eight towns before adoption:** defect total unchanged at 173, and **9 map labels net** — the footer moving 1 mm up costs that much map height. That is the trade: nine names against all 31 sheets clearing a 5 mm print margin, and High Wycombe's panel no longer running off the paper.
 
 ## `labels: { engine: "v2" }`
 

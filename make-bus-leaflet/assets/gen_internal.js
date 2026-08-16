@@ -132,7 +132,13 @@ const FONT = require(_FONTM);
 // these two in sync: whichever notes array is passed to footerBand must match this one.
 const INTERNAL_FOOTER_NOTES = ['Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org (June 2026), Open Government Licence v3.0.',
           'Places: © OpenStreetMap contributors (ODbL). Stop names in italics are approximate; check live times at bustimes.org.'];
-const FOOTER_PLATE_TOP = footerPlateTop({ notes: INTERNAL_FOOTER_NOTES });
+// FOOTER_PLATE_TOP is assigned just below DESIGN, not here: design.printSafe
+// moves the footer's bottom baseline, which moves the plate top, and every
+// consumer of this constant (the mapNotes check, the map frame's y1, the
+// footerSafe reservation) must see the same number the footer will actually
+// draw at. It was a plain const here until 2026-08-16 and could not stay one,
+// because routes.json has not been read yet at this line.
+let FOOTER_PLATE_TOP;
 const atco2name = JSON.parse(fs.readFileSync(DIR+'/atco2name.json','utf8'));
 const RJ  = JSON.parse(fs.readFileSync(DIR+'/routes.json','utf8'));
 const C = RJ.palette, TXT = RJ.textOn;
@@ -186,6 +192,11 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     the corridor rule on the sheet (Phase 7). Needs
 //                     internalCorridors; row words come from corridorDesc{}.
 const DESIGN = RJ.design || {};
+// printSafe: inset every edge the footer touches to this many millimetres from
+// the trim. Absent => today's 8/294/206 on a 297x210 page, byte-identical.
+// See the header of footer.js for why 5 and why it took a print to find.
+const PRINT_SAFE = DESIGN.printSafe != null ? +DESIGN.printSafe : null;
+FOOTER_PLATE_TOP = footerPlateTop({ notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE });
 // labels{}: which label placer to use.
 //   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
 //                occupancy grid that knows where the route ink is, scored candidate
@@ -1023,6 +1034,34 @@ function drawFeatureLabel(f){
       +'Move its labelPos (routes.json features[] / overrides internal.features).');
     return;
   }
+  // THE FOURTH QUESTION, and the one the three guards above never asked: is the
+  // label anywhere near the thing it names? Each of those refuses a label that
+  // lands somewhere it cannot be READ; none checks whether it lands somewhere it
+  // means anything. Seven were stranded across the board when the sheets were
+  // printed on 2026-08-16 — Beaconsfield's "A355" 106mm from the A355 on a 190mm
+  // frame, High Wycombe's "Chiltern Main Line" 78mm from its railway, and Ramsey's
+  // "River Nene (Old Course)" 82mm from the river on the very sheet whose write-up
+  // records the label as having been moved "onto the river it names". It was moved
+  // out of the corner; nothing checked where it landed. A guard on one edge wants
+  // all the edges enumerated, and a guard on legibility wants the question about
+  // meaning asked beside it.
+  //
+  // A warning, not a refusal: unlike the three above, the label is legible and
+  // the remedy is a judgement about where the feature reads best. 25mm matches
+  // quality_metrics.js's featureLabelMaxMm so the build and the gate agree.
+  {
+    let best = Infinity;
+    for(const seg of featSegs(f)) for(let i=0;i<seg.length-1;i++){
+      const a=seg[i], b=seg[i+1], vx=b[0]-a[0], vy=b[1]-a[1], l2=vx*vx+vy*vy;
+      let t = l2 ? ((x-a[0])*vx + (y-a[1])*vy)/l2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      best = Math.min(best, Math.hypot(a[0]+t*vx-x, a[1]+t*vy-y));
+    }
+    if(best === Infinity)
+      console.error('feature: label "'+text+'" has no geometry of its own on this sheet at all — check the features[] key against the drawn data.');
+    else if(best > 25)
+      console.error('feature: label "'+text+'" is '+best.toFixed(0)+'mm from the nearest '+(f.key||f.type)+' ink — it names nothing where it sits. Move its labelPos onto the feature (routes.json features[] / overrides internal.features).');
+  }
   const italic=f.labelItalic!==false, size=f.labelSize||4, anchor=lov.anchor||null;
   out(`<text x="${x}" y="${y}" font-family="Arial" ${italic?'font-style="italic" ':''}font-size="${size}"${anchor?` text-anchor="${anchor}"`:''} fill="${f.labelColor||'#7fb0d8'}">${esc(text)}</text>`);
 }
@@ -1718,7 +1757,16 @@ const SCALE_M = NOT_TO_SCALE ? null : (function(){
 })();
 const SCALE_LEN  = SCALE_M ? SCALE_M*sc/111320 : 0;
 const SCALE_TEXT = SCALE_M ? (SCALE_M>=1000 ? (SCALE_M/1000)+' km' : SCALE_M+' m') : '';
-const SCALE_NOTE = NOT_TO_SCALE ? 'Diagram — not to scale' : (FISHEYED ? 'town centre scale' : '');
+// "town centre scale" names the part of the sheet the bar is true at — EXCEPT on
+// a coreBox town, where the centre is precisely what is not drawn. High Wycombe
+// carries coreBox radius 600, so rung 2 replaces everything inside 600m with a
+// labelled box and there are no roads in there at all; the caption then points
+// at the one region of the page with no map on it. Found by printing the sheet
+// and reading the words (2026-08-16): §4.6 asked whether the bar was honest
+// about the fisheye and never asked whether the thing it names is on the page.
+// On such a town the bar is true of the ring OUTSIDE the box, so say that.
+const SCALE_NOTE = NOT_TO_SCALE ? 'Diagram — not to scale'
+  : (FISHEYED ? ((PRINT_SAFE!=null && CBOX) ? 'scale outside the town centre box' : 'town centre scale') : '');
 const SCALE_ON   = !!(DESIGN.scaleBar && (SCALE_M || NOT_TO_SCALE));
 // Footprint: the distance above the bar, the bar, the qualifier below it. `bx,by`
 // is the bar's LEFT END, so the box is asymmetric — which is what lets the search
@@ -1756,6 +1804,17 @@ function drawScaleDevice(spotSearch){
 // printed and then erased by it. Shortening the frame (above) keeps the map out of the
 // band; this keeps the placers — which work in page mm, outside the clip — out too.
 if(DESIGN.footerSafe) reserve(0,FOOTER_PLATE_TOP,297,210);
+// design.printSafe also keeps the PLACER out of the trim margin. Fixing the
+// footer alone would have left the worse half untouched: the print check found
+// the credit at 3mm on every sheet, but also six sheets with a map label tighter
+// still — High Wycombe's exit stack at 1.54mm, St Neots' wrapped fishery name at
+// 1.81mm — and those come from the placer, which has never known the page has
+// edges. Reserved as four strips rather than by clamping candidate boxes so it
+// costs one rule and works for leader lines and two-line wraps alike.
+if(PRINT_SAFE!=null){
+  reserve(0,0,PRINT_SAFE,210); reserve(297-PRINT_SAFE,0,297,210);
+  reserve(0,0,297,PRINT_SAFE); reserve(0,210-PRINT_SAFE,297,210);
+}
 for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label areas
   if(ov.hide || (ov.label&&ov.label.hide)) continue;
   if(f.labelReserve){ reserve(...f.labelReserve); continue; }
@@ -2633,6 +2692,30 @@ const PCORR = (DESIGN.panelCorridors && CORR)
 if(DESIGN.panelCorridors && !CORR)
   process.stderr.write('panelCorridors: this town has no internalCorridors, so its panel already lists one row per drawn lane — key ignored.\n');
 
+/*
+ * A SERVICE BADGED IN THE PANEL WITH NO LINE ON THE MAP.
+ *
+ * "VL14 has a service badge but I cannot see any route" — Peter, reading the
+ * printed St Ives sheet, 2026-08-16. He was right: VL14 appears exactly once in
+ * the whole SVG, as a panel badge, with zero paths in its colour. A sweep found
+ * St Neots' 69 doing the same. It happens legitimately — a service too infrequent
+ * or too far out of town for the geometry to survive trimming — but the panel is
+ * the sheet's own index of itself, so a row with no line sends the reader hunting
+ * for something that is not there. Either draw it, or say so.
+ *
+ * Saying so is the cheaper and more honest half, and it is what this does. The
+ * warning is unconditional (stderr changes no bytes); the words on the sheet are
+ * gated, like everything else here.
+ */
+const NOT_DRAWN = new Set(panelOrder.filter(r=>!(TRIM && TRIM[r] && TRIM[r].pts && TRIM[r].pts.length>=2)));
+for(const r of NOT_DRAWN)
+  process.stderr.write(`panel: service ${r} is badged in the Services panel but draws no line on the map — either its geometry is missing/trimmed away, or the row should say it is not shown.\n`);
+// Appended to the row's own subtitle so it inherits that row's size and colour
+// and needs no new furniture. RJ.notShownNote overrides the words.
+const NOT_SHOWN_NOTE = RJ.notShownNote || 'not shown on this map';
+const panelSub = (routeKey, sub) => (PRINT_SAFE!=null && NOT_DRAWN.has(routeKey))
+  ? (sub ? sub + ' · ' + NOT_SHOWN_NOTE : NOT_SHOWN_NOTE) : sub;
+
 out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.head:5}" fill="#222">Services</text>`);
 if(!PS) py+=2;
 let lastSubY=py;                // baseline of the last line drawn in the services list
@@ -2643,7 +2726,26 @@ if(PCORR){
     const mem=(CORR.fam[k]||[k]).filter(m=>panelOrder.includes(m));
     lanes.push({key:k, mem:mem.length?mem:[k]}); }
   const nCol = Math.max(1, (PCORR.cols|0) || (PCOLS?(PCOLS.cols|0):0) || 1);
-  const cw   = PCORR.width || (PCOLS&&PCOLS.width) || 96;
+  let cw     = PCORR.width || (PCOLS&&PCOLS.width) || 96;
+  // THE PANEL CAN RUN OFF THE PAGE, AND NOTHING SAID SO. High Wycombe sits its
+  // panel at x=200 with two 49mm columns: 200+98 = 298 on a 297mm page, so the
+  // second column's longest subtitle printed 1.54mm from the right trim — the
+  // worst measurement in the whole 2026-08-16 print check. The row-fits-column
+  // warning below could never catch it, because the row DID fit its column; it
+  // was the column that did not fit the sheet. A guard on one edge wants all the
+  // edges enumerated, again.
+  {
+    const edge = PRINT_SAFE!=null ? 297-PRINT_SAFE : 297;
+    if(PX+nCol*cw > edge+0.01){
+      const fit = Math.floor((edge-PX)/nCol*100)/100;
+      if(PRINT_SAFE!=null){
+        process.stderr.write(`panelCorridors: ${nCol} columns of ${cw}mm from x=${PX} reach ${(PX+nCol*cw).toFixed(1)}mm, past the ${PRINT_SAFE}mm print margin at ${edge}mm — narrowed to ${fit}mm each. Move the panel left (overrides.panel.x) to keep the configured width.\n`);
+        cw = fit;
+      } else {
+        process.stderr.write(`panelCorridors: ${nCol} columns of ${cw}mm from x=${PX} reach ${(PX+nCol*cw).toFixed(1)}mm on a 297mm page — the last column runs off the sheet. Set design.printSafe, narrow the column, or move the panel left.\n`);
+      }
+    }
+  }
   const dense= nCol>1;                       // a multi-column panel steps the type down
   const TS = PS ? (dense?PS.sub:PS.title) : (dense?2.9:3.5);
   const SS = PS ? (dense?PS.dense:PS.sub)  : (dense?2.3:2.8);
@@ -2658,7 +2760,21 @@ if(PCORR){
   const CD  = RJ.corridorDesc||{};
   const rows = lanes.map(L=>{
     const stacked = L.mem.length>1;
-    const d = (stacked && CD[L.key]) || INTDESC[L.key] || [L.key,''];
+    const d0 = (stacked && CD[L.key]) || INTDESC[L.key] || [L.key,''];
+    // A single-service lane falls back to internalDesc, whose titles carry the
+    // route number as a prefix ("33  Totteridge–Desborough") because the ordinary
+    // panel is read row by row. In the CORRIDOR panel the badge is drawn right
+    // beside the title, so the number is said twice — and the stacked lanes,
+    // which use corridorDesc, never say it at all ("Hazlemere & Amersham"). So
+    // the two kinds of row disagree about what a title is. Dropping the
+    // duplicated prefix makes them agree and takes High Wycombe's widest title
+    // from 47.0mm to inside its column, which is how it was noticed.
+    //
+    // Gated on printSafe rather than given a key of its own: it is one town's
+    // panel and the invariant is that absent config means byte-identical output.
+    const d = (PRINT_SAFE!=null && !stacked && d0[0])
+      ? [String(d0[0]).replace(new RegExp('^'+L.key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+'),'')].concat(d0.slice(1))
+      : d0;
     if(stacked && !CD[L.key]) process.stderr.write(`panelCorridors: no corridorDesc["${L.key}"] for the ${L.mem.join('/')} lane — the row is wearing ${L.key}'s own description, which names one service of ${L.mem.length}.\n`);
     const stackW = stacked ? L.mem.length*bw + (L.mem.length-1)*BGAP : bw;
     if(stackW>cw) process.stderr.write(`panelCorridors: the ${L.mem.join('/')} badge stack is ${stackW.toFixed(1)}mm across a ${cw}mm column — widen the column or lower design.panelCorridors.badgeR.\n`);
@@ -2666,15 +2782,60 @@ if(PCORR){
     // Six services sharing one road through the town still have six destinations
     // beyond it, and the 22-row panel did say all of them — grouping the rows must
     // not quietly drop that, so the row grows a line instead.
-    const sub = d.slice(1).filter(x=>x);
-    const wid = Math.max(FONT.textWidth(d[0],TS,true), ...sub.map(x=>FONT.textWidth(x,SS,false)));
-    if(TX+wid>cw) process.stderr.write(`panelCorridors: the ${L.key} row's text runs to ${(TX+wid).toFixed(1)}mm in a ${cw}mm column — shorten its corridorDesc/internalDesc or widen the column.\n`);
+    let sub = d.slice(1).filter(x=>x);
+    // A lane can carry several services and only some of them may be drawn, so
+    // the note names which — "69 not shown on this map" — rather than casting
+    // doubt on the whole row.
+    { const missing = L.mem.filter(m=>NOT_DRAWN.has(m));
+      if(PRINT_SAFE!=null && missing.length) sub = sub.concat(missing.join(', ')+' '+NOT_SHOWN_NOTE); }
+    // WRAP before shrinking. "a lane takes as many subtitle lines as it needs"
+    // is already this row's design — the six-service Loudwater corridor uses
+    // four — so a subtitle too wide for its column should take another line
+    // rather than a smaller size. Shrinking is the fallback for the case wrapping
+    // cannot help (a single long word), not the first move. Same wrap rule the
+    // corridor note below and footer.js's wrapNotes already use.
+    if(PRINT_SAFE!=null){
+      const avail = cw - TX, out2 = [];
+      for(const ln of sub){
+        if(FONT.textWidth(ln,SS,false)<=avail){ out2.push(ln); continue; }
+        let cur='';
+        for(const wd of String(ln).split(' ')){
+          const t = cur ? cur+' '+wd : wd;
+          if(cur && FONT.textWidth(t,SS,false)>avail){ out2.push(cur); cur=wd; } else cur=t;
+        }
+        if(cur) out2.push(cur);
+      }
+      sub = out2;
+    }
+    // Title and subtitles are measured SEPARATELY because they are set at
+    // different sizes and only one of them can be fitted. Taking the max of the
+    // two — as this did on its first cut — computes a shrink ratio from the
+    // BOLD TITLE's width and then applies it to the subtitle, which is both
+    // wrong and invisible: the row still overflows and the type is smaller for
+    // nothing. A title too wide for its column is a wording problem and says so.
+    const titleW = FONT.textWidth(d[0],TS,true);
+    const subW = sub.length ? Math.max(...sub.map(x=>FONT.textWidth(x,SS,false))) : 0;
+    const wid = Math.max(titleW, subW);
+    // Under printSafe an overflowing SUBTITLE is fitted rather than only
+    // complained about — the same move badgeFit made for a number too wide for
+    // its disc: measure the real Arial width and adapt the drawing. The 2.4mm
+    // floor is the print-legibility threshold and is not negotiable, so a row
+    // that cannot fit above it is left at size and reported.
+    let ss = SS;
+    if(PRINT_SAFE!=null && TX+subW>cw){
+      const want = SS*(cw-TX)/subW;
+      if(want>=2.4) ss = Math.floor(want*100)/100;
+      else process.stderr.write(`panelCorridors: the ${L.key} row's SUBTITLE needs ${want.toFixed(2)}mm type to fit a ${cw}mm column, below the 2.4mm print floor — shorten its corridorDesc/internalDesc or widen the column.\n`);
+    }
+    if(PRINT_SAFE!=null && TX+titleW>cw)
+      process.stderr.write(`panelCorridors: the ${L.key} row's TITLE "${d[0]}" runs to ${(TX+titleW).toFixed(1)}mm in a ${cw}mm column — a title is not fitted down, so shorten it.\n`);
+    else if(TX+wid>cw) process.stderr.write(`panelCorridors: the ${L.key} row's text runs to ${(TX+wid).toFixed(1)}mm in a ${cw}mm column${ss!==SS?` — subtitle fitted to ${ss}mm`:''}.\n`);
     // Title baseline measured from the TOP of the row: under the stack when the
     // badges take their own line, beside the badge when there is only one.
     const titleBase = stacked ? 2*BR + 1.0 + TS*CAP : BR - 0.6;
-    const textH = sub.length ? titleBase + SUBDROP + (sub.length-1)*SLEAD + SS*DESC
+    const textH = sub.length ? titleBase + SUBDROP + (sub.length-1)*SLEAD + ss*DESC
                              : titleBase + TS*DESC;
-    return {mem:L.mem, key:L.key, d:[d[0]].concat(sub), titleBase,
+    return {mem:L.mem, key:L.key, d:[d[0]].concat(sub), titleBase, ss,
             h: Math.max(stacked?0:2*BR, textH)};
   });
   // Balance the columns by HEIGHT, not by row count — a lane with a stacked badge
@@ -2702,7 +2863,7 @@ if(PCORR){
     r.mem.forEach((m,j)=> badge(cx+BR+BXW+j*(bw+BGAP), top+BR, m, BR));
     const tb=top+r.titleBase;
     out(`<text x="${(cx+TX).toFixed(2)}" y="${tb.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${TS}" fill="#111">${esc(r.d[0])}</text>`);
-    r.d.slice(1).forEach((ln,k)=>out(`<text x="${(cx+TX).toFixed(2)}" y="${(tb+SUBDROP+k*SLEAD).toFixed(2)}" font-family="Arial" font-size="${SS}" fill="#555">${esc(ln)}</text>`));
+    r.d.slice(1).forEach((ln,k)=>out(`<text x="${(cx+TX).toFixed(2)}" y="${(tb+SUBDROP+k*SLEAD).toFixed(2)}" font-family="Arial" font-size="${r.ss}" fill="#555">${esc(ln)}</text>`));
     colY[c]=top+r.h+RGAP; bottom=Math.max(bottom, colY[c]-RGAP);
   });
   lastSubY = bottom - SS*DESC;
@@ -2756,7 +2917,7 @@ if(PCORR){
       } else py += (g.name && i===0) ? PROW-1.5 : PROW;
       badge(PX+4+PXW,py,r,PBR);
       out(`<text x="${PX+10+2*PXW}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
-      out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
+      out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(panelSub(r,d[1]))}</text>`);
       lastSubY=py+3.0;
     });
     firstBlock=false;
@@ -2809,7 +2970,7 @@ if(PCORR){
     // its own subtitle in tighter underneath (2026-08-11, second pass).
     const subY=cy-0.6+crow*0.35+0.1;
     out(`<text x="${cx+7.6+2*CXWP}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#111">${esc(d[0])}</text>`);
-    out(`<text x="${cx+7.6+2*CXWP}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(d[1])}</text>`);
+    out(`<text x="${cx+7.6+2*CXWP}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(panelSub(r,d[1]))}</text>`);
     if(row===per-1) lastSubY=subY;
   });
   py=top+per*crow;
@@ -2822,7 +2983,7 @@ for(const r of panelOrder){
   firstRow=false;
   badge(PX+4+PXW,py,r,PBR);
   out(`<text x="${PX+10+2*PXW}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
-  out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(d[1])}</text>`);
+  out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(panelSub(r,d[1]))}</text>`);
   lastSubY=py+3.0;
 }
 }
@@ -2884,7 +3045,7 @@ if (NORTH_ON) {
 const _ver = process.env.LEAFLET_VERSION || RJ.version;
 out(footerBand({
   notes: INTERNAL_FOOTER_NOTES,
-  version: _ver, validFrom: RJ.validFrom || 'Summer 2026'
+  version: _ver, validFrom: RJ.validFrom || 'Summer 2026', safe: PRINT_SAFE
 }));
 
 // Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).

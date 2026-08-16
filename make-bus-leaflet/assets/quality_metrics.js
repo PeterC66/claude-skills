@@ -819,6 +819,17 @@ function analyse(svgPath) {
   }
 
   // --- 4. A SERVICE IN THE PANEL THAT THE MAP DOES NOT DRAW ------------
+  //
+  // KNOWN UNDER-REPORT, 2026-08-16. This works from the SVG, so it can only ask
+  // "is there any ink in this badge's colour", and a colour is not unique to a
+  // route — Ramsey's 301X and St Ives' VL14 both wear the limited-service grey
+  // #BBBBBB, so a sheet drawing either one hides the other. gen_internal.js now
+  // makes the same check from `TRIM[route]`, which is keyed by route rather than
+  // by colour and is therefore exact; it found Ramsey's 301X, which this measure
+  // reports as clean. Read the BUILD's stderr for the authoritative list; this
+  // count is a floor. Not fixed here on purpose: `solo` feeds defectsAll, and
+  // changing what it counts on the eve of gating the board would be a fifth
+  // baseline correction landing in the middle of one.
   // St Ives lists VL14 under "VILLAGER MINIBUS" with a badge and a description,
   // and draws not one millimetre of it: `#BBBBBB` appears as a stroke nowhere on
   // the sheet. St Neots does the same with 69. The reader is told to look for a

@@ -49,6 +49,17 @@ const T = {
   footerInkWarnMm2: 20,   // route ink drawn into the footer band
   haloPadMm: 0.35,        // half the 0.7mm white halo every label carries
   duplicateWithinMm: 30,  // same name printed twice this close = one confused reader
+  // --- added 2026-08-16, from the §5.3 print check (see the block above `const m`) ---
+  featureLabelMaxMm: 25,  // a feature label further than this from its own line names nothing
+  colourClashDE: 25,      // CIE-Lab distance below which two route hues read as one
+  colourNearMm: 6,        // ...and the gap at which two ribbons are compared side by side
+  edgeSafeMm: 5,          // print safe margin: text closer than this to the trim edge = warn
+  // ...and a fail below this. Two numbers because the 5mm breach is SYSTEMIC —
+  // every sheet puts the footer credit 3mm from the right trim — so failing on
+  // it would fail all 31 for one engine fix and make the verdict column useless.
+  // What deserves a fail is a sheet TIGHTER than that systemic floor, which is a
+  // placer or config problem on that sheet: today six sheets, worst 1.54mm.
+  edgeFailMm: 2.5,
 };
 
 // ------------------------------------------------------------------- parsing
@@ -348,6 +359,31 @@ function lum(col) {
 const isDark = (c) => lum(c) < 0.55;
 const isPale = (c) => lum(c) > 0.8;
 
+// CIE-Lab, for "do these two routes read as the same colour?". Luminance alone
+// is no use for that question — #CC3311 and #009988 have near-identical
+// luminance and could not look less alike. This is the same conversion
+// gen_internal.js uses for its route-vs-river warning (§5.2); the difference is
+// that this asks it of every PAIR of routes, which nothing has ever done.
+function toLab(hex) {
+  let c = String(hex || '').trim().toLowerCase();
+  if (c in NAMED) c = NAMED[c];
+  if (!c || c[0] !== '#') return null;
+  if (c.length === 4) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
+  if (c.length !== 7) return null;
+  const f = (i) => { const v = parseInt(c.substr(i, 2), 16) / 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; };
+  const r = f(1), g = f(3), b = f(5);
+  const X = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
+  const Y = r * 0.2126 + g * 0.7152 + b * 0.0722;
+  const Z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+  const t = (v) => (v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
+  return [116 * t(Y) - 16, 500 * (t(X) - t(Y)), 200 * (t(Y) - t(Z))];
+}
+function deltaE(a, b) {
+  const A = toLab(a), B = toLab(b);
+  if (!A || !B) return Infinity;
+  return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+}
+
 // ----------------------------------------------------------------- analysing
 function analyse(svgPath) {
   const svg = fs.readFileSync(svgPath, 'utf8');
@@ -356,10 +392,13 @@ function analyse(svgPath) {
 
   // Route palette: exact hexes from the sheet's own routes.json where present,
   // so "over a route line" is a colour match, not a guess about what a route is.
-  let palette = null;
+  let palette = null, RJ = null;
   const rj = path.join(path.dirname(svgPath), 'routes.json');
   if (fs.existsSync(rj)) {
-    try { palette = new Set(Object.values(JSON.parse(fs.readFileSync(rj, 'utf8')).palette || {}).map(c => String(c).toLowerCase())); }
+    try {
+      RJ = JSON.parse(fs.readFileSync(rj, 'utf8'));
+      palette = new Set(Object.values(RJ.palette || {}).map(c => String(c).toLowerCase()));
+    }
     catch { /* unreadable routes.json => fall back to the width/darkness rule below */ }
   }
   const isRouteInk = (s) => {
@@ -436,7 +475,7 @@ function analyse(svgPath) {
   }
 
   const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [],
-                   underLegend: [], routeUnderLegend: [] };
+                   underLegend: [], routeUnderLegend: [], unplaced: [], nearEdge: [] };
 
   /*
    * WHAT THE LEGEND IS BURYING.
@@ -649,19 +688,239 @@ function analyse(svgPath) {
     }
   }
 
-  // SILENT DROPS ARE NOT MEASURABLE FROM THE SVG, and that is itself a finding.
-  // placeLabel() returns false and emits nothing (gen_internal.js:662), so a
-  // dropped label leaves no trace in the output at all — there is nothing here
-  // to count. The obvious proxy, pois.json, does not work either: it is the raw
-  // OSM candidate list (categories "Supermarket"/"Sports/Leisure", not the
-  // engine's 'shop'/'leisure'), taken BEFORE excludeName/tidy/canon/hide, the
-  // core-box test and the off-frame test. Anything absent from the sheet is
-  // therefore usually deliberate curation, not a drop, and reporting the
-  // difference as a defect count would be a fabricated number.
+  /* ==================================================================
+   * SEVEN MEASURES ADDED 2026-08-16, all from ONE print of two sheets.
+   *
+   * Peter printed High Wycombe internal and St Ives internal at 300 dpi for
+   * the §5.3 palette check. Every defect he came back with was invisible to
+   * everything above: a service badged in the panel and never drawn, a
+   * railway label 78 mm from its railway, two route hues that read as one,
+   * a footer line 4 mm from the trim. Each is trivially computable and each
+   * had been reading zero — or reading nothing at all — since Phase 0.
+   *
+   * That is the standing lesson arriving from the other direction. The board
+   * has been driven 628 -> 225 against measures chosen in Phase 0 from an
+   * on-screen reading of the sheets, and the measures have been sharpened
+   * five times since by doubting them. None of that found these, because
+   * every one of them is a question nobody had thought to ask. A sheet that
+   * scores well on every question you asked is not a sheet without defects.
+   * ================================================================== */
+
+  // --- 1. LABELS THE PLACER GAVE UP ON -------------------------------
+  // Phase 0 recorded silent drops as "not measurable from the SVG" and it was
+  // right: placeLabel() returns false and emits nothing. But §1.9 shipped in
+  // Phase 2 and labeller.js now WRITES what it dropped, next to the sheet —
+  // and this file went on carrying Phase 0's note for four more sessions.
   //
-  // The real count needs the generator to say what it dropped — the unplaced.json
-  // report in §1.9 of the plan. Until Phase 2 ships that, this stays honestly
-  // unmeasured rather than confidently wrong.
+  // This matters more than its size. Every other measure here counts labels
+  // that ARE on the page, so a placer that drops a label to avoid a collision
+  // scores better for dropping it. Until this line existed the headline number
+  // could be improved by printing less, which is precisely the failure mode
+  // the legend occlusion taught in session 8 — a measure that cannot express a
+  // defect will certify it. Phase 8 wires this tool into the gate; wiring it in
+  // without this count would gate the board on a number you can game.
+  //
+  // gen_internal.js writes unplaced.json into its run dir, so the file beside a
+  // sheet belongs to internal.svg; the radial writes unplaced-external.json.
+  // The diagram and schematic run gen_internal inside their own workspace, so
+  // their drops stay there and are honestly reported as null rather than as 0.
+  const base = path.basename(svgPath, '.svg');
+  const dropFile = base === 'internal' ? 'unplaced.json'
+                 : base === 'external' ? 'unplaced-external.json' : null;
+  let unplaced = null;
+  if (dropFile) {
+    const dp = path.join(path.dirname(svgPath), dropFile);
+    if (fs.existsSync(dp)) {
+      try { unplaced = JSON.parse(fs.readFileSync(dp, 'utf8')); } catch { unplaced = null; }
+    } else if (base === 'internal') unplaced = [];      // engine unlinks it when nothing dropped
+  }
+  if (unplaced) for (const u of unplaced) detail.unplaced.push({ text: u.text, reason: u.reason, at: u.at });
+
+  // --- 2. THE EXIT TAILS ----------------------------------------------
+  // An off-map continuation is drawn as a badge 5 mm back from the frame cut
+  // (gen_internal.js: `bx = px - dx*5`), a "to X" beside it, and an arrowhead
+  // 2.6 mm PAST the cut — so the route line carries on underneath all of it.
+  // The "to X" therefore sits on route ink BY CONSTRUCTION, and pt/ink has been
+  // charging the engine a full defect for obeying its own design. This is the
+  // same argument that already makes road names warn-only: a road name follows
+  // its road by definition, and an exit label sits on its own continuation by
+  // definition. Reported as a subset, so pt/ink itself is unchanged and the
+  // board stays comparable; `pointLabelsOverInkNet` is the honest figure.
+  //
+  // Peter, 2026-08-16: "that maybe OK, but if so the engine and metric should
+  // recognise it." This is the metric half. The engine half — stopping the
+  // ribbon under the badge row, since the arrowhead and the "to X" already
+  // state the continuation twice — is a separate, gated change.
+  const exitTail = detail.overInk.filter(d => d.kind === 'point' && /^to\s/.test(d.text));
+
+  // --- 3. FEATURE LABELS THAT NAME NOTHING NEAR THEM -------------------
+  // §4.5 caught a label with NO geometry (Ramsey's phantom canals) and added an
+  // engine warning for it. It never asked the next question: is the label
+  // anywhere near the geometry that DOES exist? Three are not — High Wycombe's
+  // "Chiltern Main Line" is 78 mm from its railway on a 190 mm frame, and
+  // Ramsey's "River Nene (Old Course)" is 82 mm from the river, on the sheet
+  // whose write-up records it as having been moved "onto the river it names".
+  // It was moved out of the corner. Nothing checked where it landed.
+  const FEAT_STROKE = { river: '#9ec9e8', canal: '#7fb0d8', railway: '#333333', road: '#e6a532', generic: '#999999' };
+  const strandedFeatures = [];
+  // ONLY on sheets that draw features. `features[]` belongs to the town, but the
+  // radial spider draws no river and no railway, so measuring it there reported
+  // every feature as stranded — three fabricated defects on the first run, which
+  // is the failure this file's own comments keep warning about. A frame means an
+  // internal sheet (geographic, schematic or diagram); those three draw features.
+  if (RJ && Array.isArray(RJ.features) && hasPanel) {
+    // Which colour did the feature ACTUALLY get drawn in? Not derivable from
+    // config: `rail:"chequer"` declares #4a4a4a and the sheets emit #33383d, and
+    // the shipped SVG carries no feature grouping (gen_internal's gk() tags
+    // features only in edit-key mode). So match the sheet's own non-route ink to
+    // the colour the feature type EXPECTS, nearest in Lab — close enough to
+    // absorb a shade difference, far enough not to mistake a river for a railway.
+    const skeleton = new Set(['#e4e4e4', '#f0f0f0', '#ffffff', '#fff', 'none']);
+    const counts = {};
+    for (const s of P.strokes) {
+      if (s.stroke === 'none' || skeleton.has(s.stroke) || (palette && palette.has(s.stroke))) continue;
+      counts[s.stroke] = (counts[s.stroke] || 0) + 1;
+    }
+    const candidates = Object.keys(counts).filter(c => counts[c] >= 3);
+    for (const f of RJ.features) {
+      if (!f.labelPos) continue;
+      const own = f.style || {};
+      // EXACT first, Lab-nearest only as a fallback. Nearest-alone picks decoys:
+      // the chequer railway's casing is #4a4a4a and the sheets also carry a
+      // #33383d used 69 times for other furniture, which is nearer to the
+      // railway's #333333 default than its own casing is — so High Wycombe's
+      // "Chiltern Main Line" measured 115mm to the wrong ink instead of 78mm to
+      // the right ink, and Beaconsfield's measured 132mm. Both still stranded,
+      // both by the wrong number, which is the kind of right-for-the-wrong-reason
+      // that survives review.
+      const wants = [own.stroke, own.rail === 'chequer' ? '#4a4a4a' : null,
+                     FEAT_STROKE[f.type], FEAT_STROKE.generic]
+                    .filter(Boolean).map(c => String(c).toLowerCase());
+      let col = wants.find(c => candidates.includes(c)) || null, bestDE = col ? 0 : Infinity;
+      if (!col) for (const c of candidates) { const d = deltaE(wants[0], c); if (d < bestDE) { bestDE = d; col = c; } }
+      if (!col || bestDE > 30) {                       // nothing on the sheet looks like this feature
+        strandedFeatures.push({ label: f.label || f.key, mm: null, colour: want });
+        continue;
+      }
+      const L = [f.labelPos.x, f.labelPos.y];
+      let best = Infinity;
+      for (const s of P.strokes) {
+        if (s.stroke !== col) continue;
+        const [a, b] = s.seg;
+        const vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy || 1;
+        let t = ((L[0] - a[0]) * vx + (L[1] - a[1]) * vy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const d = Math.hypot(a[0] + t * vx - L[0], a[1] + t * vy - L[1]);
+        if (d < best) best = d;
+      }
+      if (best > T.featureLabelMaxMm)
+        strandedFeatures.push({ label: f.label || f.key, mm: +best.toFixed(1), colour: col });
+    }
+  }
+
+  // --- 4. A SERVICE IN THE PANEL THAT THE MAP DOES NOT DRAW ------------
+  // St Ives lists VL14 under "VILLAGER MINIBUS" with a badge and a description,
+  // and draws not one millimetre of it: `#BBBBBB` appears as a stroke nowhere on
+  // the sheet. St Neots does the same with 69. The reader is told to look for a
+  // line that is not there — which is worse than omitting the service, because
+  // the panel is the sheet's own index of itself.
+  //
+  // Corridor-aware: a bundled route rides its lead's colour (internalCorridors)
+  // or shares a corridor hue (corridorPalette), so it IS drawn. Only a route
+  // that is in panelOrder, has its own hue, and has no ink counts.
+  const panelOnly = [];
+  if (RJ && hasPanel && Array.isArray(RJ.panelOrder) && RJ.palette) {
+    const rides = {};
+    for (const [lead, ms] of Object.entries(RJ.internalCorridors || {})) for (const x of ms) rides[x] = lead;
+    for (const [lead, ms] of Object.entries(RJ.corridorPalette || {})) for (const x of ms) if (!rides[x]) rides[x] = lead;
+    const inked = new Set(P.strokes.filter(s => s.w >= 1.2).map(s => s.stroke));
+    for (const key of RJ.panelOrder) {
+      const c = String(RJ.palette[key] || '').toLowerCase();
+      if (!c || rides[key] || inked.has(c)) continue;
+      panelOnly.push({ route: key, colour: c });
+    }
+  }
+
+  // --- 5. TWO ROUTE HUES THAT READ AS ONE ------------------------------
+  // §5.2 built a route-vs-WATER colour check and stopped there, so nothing has
+  // ever compared two routes with each other. Peter found it on paper: High
+  // Wycombe's 30/32/36 are "different but similar". Measuring it turns up worse
+  // pairs on towns nobody printed — St Neots' 150/112 and Wisbech's 46L/43A are
+  // both dE 13.8 and run touching.
+  //
+  // TWO venues, because a reader confuses colours in two different places and
+  // only one of them is about the map. On the MAP, two hues matter when the
+  // lines run together — the pair is compared side by side, so proximity is the
+  // whole question. In the PANEL every badge is side by side with every other
+  // regardless of where the routes go, so any two hues in the list are compared
+  // whether or not they ever meet. Peter's 30/32/36 are the panel case: none of
+  // the three runs within 6 mm of another on the sheet.
+  const clashMap = [], clashPanel = [];
+  if (palette && palette.size && RJ && RJ.palette) {
+    const byCol = {};
+    for (const [k, c] of Object.entries(RJ.palette)) (byCol[String(c).toLowerCase()] ||= []).push(k);
+    // Panel venue: every pair of hues the panel lists.
+    const panelCols = [...new Set((RJ.panelOrder || Object.keys(RJ.palette))
+      .map(k => String(RJ.palette[k] || '').toLowerCase()).filter(Boolean))];
+    for (let i = 0; i < panelCols.length; i++) for (let j = i + 1; j < panelCols.length; j++) {
+      const d = deltaE(panelCols[i], panelCols[j]);
+      if (d < T.colourClashDE)
+        clashPanel.push({ a: byCol[panelCols[i]].join('/'), b: byCol[panelCols[j]].join('/'), dE: +d.toFixed(1) });
+    }
+    // Map venue: coarse occupancy per hue, dilated by colourNearMm, intersected.
+    const CC = 2, cnx = Math.ceil(W / CC), cny = Math.ceil(H / CC);
+    const occ = {};
+    for (const s of P.strokes) {
+      if (!byCol[s.stroke] || s.w < 1.2) continue;
+      const g = (occ[s.stroke] ||= new Uint8Array(cnx * cny));
+      const [p, q] = s.seg;
+      const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / CC));
+      for (let i = 0; i <= n; i++) {
+        const gx = Math.floor((p[0] + (q[0] - p[0]) * i / n) / CC), gy = Math.floor((p[1] + (q[1] - p[1]) * i / n) / CC);
+        if (gx >= 0 && gy >= 0 && gx < cnx && gy < cny) g[gy * cnx + gx] = 1;
+      }
+    }
+    const cols = Object.keys(occ), rad = Math.ceil(T.colourNearMm / CC);
+    const dil = {};
+    for (const c of cols) {
+      const g = occ[c], d2 = new Uint8Array(cnx * cny);
+      for (let y = 0; y < cny; y++) for (let x = 0; x < cnx; x++) {
+        if (!g[y * cnx + x]) continue;
+        for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+          const ix = x + dx, iy = y + dy;
+          if (ix >= 0 && iy >= 0 && ix < cnx && iy < cny) d2[iy * cnx + ix] = 1;
+        }
+      }
+      dil[c] = d2;
+    }
+    for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
+      const d = deltaE(cols[i], cols[j]);
+      if (d >= T.colourClashDE) continue;
+      const A = dil[cols[i]], B = occ[cols[j]];
+      let together = false;
+      for (let k = 0; k < B.length && !together; k++) if (B[k] && A[k]) together = true;
+      if (together) clashMap.push({ a: byCol[cols[i]].join('/'), b: byCol[cols[j]].join('/'), dE: +d.toFixed(1) });
+    }
+  }
+
+  // --- 6. HOW CLOSE THE TYPE COMES TO THE TRIM EDGE --------------------
+  // Every sheet puts its last footer line at y=206.00 on a 210 mm page: 4 mm,
+  // inside the conventional 5 mm safe margin. Borderless printing over-scales
+  // by 2-3% to guarantee bleed, which on this page is ~3 mm — so the margin
+  // that survives is about 1 mm, and whether a given sheet looks right is down
+  // to feed tolerance. Peter saw it on St Ives and not on High Wycombe; the two
+  // are byte-for-byte identical in this respect, which is the finding.
+  //
+  // Text only. Route ink is MEANT to run to the frame edge and be trimmed, so
+  // measuring ink here would report 0 on every sheet and mean nothing.
+  let textEdge = Infinity, edgeWorst = null;
+  for (const t of allText) {
+    if (!t.text.trim()) continue;
+    const b = quadBox(textQuad(t));
+    const d = Math.min(b.x0 - vb[0], b.y0 - vb[1], vb[0] + W - b.x1, vb[1] + H - b.y1);
+    if (d < textEdge) { textEdge = d; edgeWorst = t.text.slice(0, 40); }
+  }
+  if (edgeWorst && textEdge < T.edgeSafeMm) detail.nearEdge.push({ text: edgeWorst, mm: +textEdge.toFixed(2) });
 
   const m = {
     pointLabelsOverInk: detail.overInk.filter(d => d.kind === 'point').length,
@@ -680,13 +939,69 @@ function analyse(svgPath) {
     balance,
     peakInkDensity: +peak.toFixed(2),
     mapLabels: mapLabels.length,
+    // --- the seven added 2026-08-16 ---
+    unplacedLabels: unplaced ? unplaced.length : null,
+    exitTailOverInk: exitTail.length,
+    strandedFeatureLabels: strandedFeatures.length,
+    panelOnlyServices: hasPanel ? panelOnly.length : null,
+    colourClashOnMap: clashMap.length,
+    colourClashInPanel: clashPanel.length,
+    textEdgeMm: textEdge === Infinity ? null : +textEdge.toFixed(2),
   };
+  // A point label over its OWN continuation is the design, not a defect — see
+  // measure 2. pt/ink is left untouched so the board stays comparable with the
+  // frozen scorecard; this is the figure that means anything.
+  m.pointLabelsOverInkNet = m.pointLabelsOverInk - m.exitTailOverInk;
+
+  // Drops as a RATE, because the raw count is not comparable between sheets and
+  // reading it as one would libel the towns the triage deliberately thinned.
+  // High Wycombe drops 52 against 78 placed — 40% — and that is substantially
+  // the over-stuffed sheet behaving as `complexity-triage.md` says it should
+  // (rungs 2 and 2b exist to shed content). St Ives drops 2 against 42, 5%.
+  // A rate makes the two legible side by side; the raw count made the biggest
+  // town look like the worst engineering. What the THRESHOLD should be is a
+  // judgement about the product, not about the placer — see the plan.
+  m.dropRatePct = m.unplacedLabels === null ? null
+    : +(m.unplacedLabels * 100 / Math.max(1, m.unplacedLabels + m.mapLabels)).toFixed(0);
+
   // One trackable number. Every later phase should drive this down, and the
   // per-100-labels form stops a big town looking worse simply for being big.
+  //
+  // UNCHANGED, deliberately. Five of the seven new measures would belong in it
+  // on merit, and folding them in would move every figure on the frozen
+  // scorecard at once — a fifth baseline correction, on the same day the tool
+  // is being prepared for the gate. `defectsAll` below is the honest total;
+  // this stays the ledger the plan has tracked since Phase 0, so the two can be
+  // read against each other before either is adopted as the headline (G5).
   m.defects = m.pointLabelsOverInk + m.labelLabelCollisions + m.labelIconCollisions
     + m.duplicateLabels + m.iconBlobs + m.textUnderFooter + (m.labelsIntoPanel || 0)
     + (m.symbolsUnderLegend || 0);
   m.defectsPer100 = m.mapLabels ? +(m.defects * 100 / m.mapLabels).toFixed(0) : null;
+
+  /* HARD versus SOFT — session 8's lesson, applied to the total itself.
+   *
+   * "Rank the two harms before you combine them." Today a place name buried
+   * under the legend and a label grazing a ribbon both count 1, so the single
+   * number can be improved by trading the first for several of the second. The
+   * line is not severity-by-feel, it is a question about the reader:
+   *
+   *   HARD — the reader LOSES something or cannot read it. A label never drawn,
+   *          drawn under an opaque plate, drawn twice so both read as garble,
+   *          drawn below the legibility floor, or naming a thing that is not
+   *          there. No amount of soft improvement compensates: gate this at 0.
+   *   SOFT — the information survives, under pressure. A label on a ribbon
+   *          still reads through its halo; a crowded icon is still the right
+   *          icon. Worth driving down, never worth buying with a hard defect.
+   *
+   * Keep them as two numbers and a weighted sum can never quietly buy the
+   * unacceptable thing because it happened to be small.
+   */
+  m.hard = m.textUnderFooter + m.duplicateLabels + m.labelLabelCollisions
+    + (m.symbolsUnderLegend || 0) + (m.unplacedLabels || 0)
+    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels
+    + (m.minTextMm !== null && m.minTextMm < T.minTextMm ? detail.tiny.length : 0);
+  m.soft = m.pointLabelsOverInkNet + m.labelIconCollisions + m.iconBlobs + (m.labelsIntoPanel || 0);
+  m.defectsAll = m.hard + m.soft;
   const fails = [];
   const warns = [];
   if (m.pointLabelsOverInk > T.labelsOverInkFail) fails.push('point labels over route ink');
@@ -703,7 +1018,19 @@ function analyse(svgPath) {
   if (m.inkAreaUnderFooterMm2 > T.footerInkWarnMm2) warns.push('route ink under footer');
   if (m.roadLabelsOverInk > T.roadOverInkWarn) warns.push('road names over route ink');
   if (m.emptyNinths >= T.emptyNinthsWarn) warns.push('whitespace unbalanced');
+  // The seven added 2026-08-16. Four are hard and fail; three are reported.
+  if (m.unplacedLabels > 0) fails.push(m.unplacedLabels + ' labels the placer dropped');
+  if (m.panelOnlyServices > 0) fails.push('service in the panel with no line on the map');
+  if (m.strandedFeatureLabels > 0) fails.push('feature label far from its own feature');
+  if (m.textEdgeMm !== null && m.textEdgeMm < T.edgeFailMm) fails.push('text ' + m.textEdgeMm + 'mm from the trim edge');
+  else if (m.textEdgeMm !== null && m.textEdgeMm < T.edgeSafeMm) warns.push('text inside the ' + T.edgeSafeMm + 'mm print safe margin');
+  if (m.colourClashOnMap > 0) warns.push('route hues that read alike running together');
+  else if (m.colourClashInPanel > 0) warns.push('route hues that read alike in the panel');
 
+  detail.strandedFeatures = strandedFeatures;
+  detail.panelOnly = panelOnly;
+  detail.clashMap = clashMap;
+  detail.clashPanel = clashPanel;
   return { file: svgPath, metrics: m, fails, warns, detail, share };
 }
 
@@ -755,8 +1082,18 @@ function main() {
     ['pnl', r => r.metrics.labelsIntoPanel ?? '-', 4],
     ['min', r => r.metrics.minTextMm, 5],
     ['void', r => r.metrics.emptyNinths, 5],
-    ['dens', r => r.metrics.peakInkDensity, 5],
+    // The seven added 2026-08-16 (§5.3 print check). drop/pnlOnly/feat/edge are
+    // HARD — the reader loses something; exit and the two clash counts are
+    // reported rather than scored.
+    ['drop', r => (r.metrics.unplacedLabels ?? '-') + (r.metrics.dropRatePct === null ? '' : '/' + r.metrics.dropRatePct + '%'), 9],
+    ['exit', r => r.metrics.exitTailOverInk, 5],
+    ['solo', r => r.metrics.panelOnlyServices ?? '-', 5],
+    ['feat', r => r.metrics.strandedFeatureLabels, 5],
+    ['col~', r => r.metrics.colourClashOnMap + '/' + r.metrics.colourClashInPanel, 6],
+    ['edge', r => r.metrics.textEdgeMm ?? '-', 5],
     ['DEF', r => r.metrics.defects, 5],
+    ['HARD', r => r.metrics.hard, 5],
+    ['ALL', r => r.metrics.defectsAll, 5],
     ['/100', r => r.metrics.defectsPer100, 5],
     ['', r => (r.fails.length ? 'FAIL' : r.warns.length ? 'warn' : 'ok'), 5],
   ];
@@ -782,6 +1119,13 @@ ${results.length} sheets · ${results.filter(r => r.fails.length).length} FAIL �
     if (r.detail.inFooter.length) console.log('  under footer: ' + r.detail.inFooter.map(d => `"${d.text}" y=${d.y} (band from ${d.footerTop})`).join(', '));
     if (r.detail.intoPanel.length) console.log('  into panel: ' + r.detail.intoPanel.map(d => `"${d.text}" +${d.over}mm`).join(', '));
     if (r.detail.tiny.length) console.log('  tiny text: ' + r.detail.tiny.map(d => `"${d.text}" ${d.size}mm`).join(', '));
+    // The seven added 2026-08-16 (§5.3 print check).
+    if (r.detail.unplaced.length) console.log('  DROPPED by the placer: ' + r.detail.unplaced.map(d => `"${d.text}" (${d.reason})`).join(', '));
+    if (r.detail.panelOnly.length) console.log('  in the panel, not on the map: ' + r.detail.panelOnly.map(d => `${d.route} ${d.colour}`).join(', '));
+    if (r.detail.strandedFeatures.length) console.log('  feature label far from its feature: ' + r.detail.strandedFeatures.map(d => `"${d.label}" ${d.mm === null ? 'no ink of its colour at all' : d.mm + 'mm away'}`).join(', '));
+    if (r.detail.clashMap.length) console.log('  hues alike AND running together: ' + r.detail.clashMap.map(d => `${d.a} vs ${d.b} (dE ${d.dE})`).join(', '));
+    if (r.detail.clashPanel.length) console.log('  hues alike in the panel: ' + r.detail.clashPanel.map(d => `${d.a} vs ${d.b} (dE ${d.dE})`).join(', '));
+    if (r.detail.nearEdge.length) console.log('  inside the print safe margin: ' + r.detail.nearEdge.map(d => `"${d.text}" ${d.mm}mm from the trim`).join(', '));
     if (r.share) console.log('  ink share by 9th: ' + r.share.map(s=>(s*100).toFixed(0)+"%").join(" "));
   }
 }

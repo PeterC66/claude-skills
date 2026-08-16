@@ -92,6 +92,8 @@ Judged on the sheets, not on the number: previewed across all eight towns (209 �
 
 **It is a width problem, not a length one** — which is the whole reason the fix measures with `font_metrics.js` rather than counting characters. High Wycombe's three-letter codes are *worse* than Ramsey's four-character keys:
 
+> **CORRECTION, 2026-08-16, from the §5.3 print.** The table below is right about the type and wrong about which sheet shows it. **On High Wycombe's internal sheet only `M40` ever reaches a badge** — `WW1`, `LGW`, `LHR` and `OXF` appear solely inside prose map notes ("LGW / LHR / OXF (Oxford Bus 'Airline' coaches) call at Handy Cross…", "Speen and WW1 Adams Park (matchdays)"). So `WW1` at 5.87 mm in a 4.8 mm disc, quoted here as the worst case on the board, is a badge that sheet never draws. The feature is still right and still needed — `M40`, Ramsey's `301S`/`301V`/`301X`, St Ives' `VL14` and March's `ZIP2` are all drawn — but **check where a key is actually rendered before citing it as the example**. Measured widths are not evidence that anything on the sheet is that wide.
+
 | key | at r=2.4 (stop) | at r=3.0 (terminus) | at r=4.0 (panel) | disc |
 |---|---|---|---|---|
 | `WW1` (High Wycombe) | 5.87 | 7.33 | 9.78 | 4.8 / 6.0 / 8.0 |

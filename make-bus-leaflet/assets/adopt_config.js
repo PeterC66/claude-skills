@@ -14,8 +14,17 @@
  *
  * DRY RUN BY DEFAULT — prints what would change per town. Pass --apply to commit.
  *
+ * PLACES too, since 2026-08-16 (plan Phase 8 item 4). A place's S3 has exactly the
+ * same shape as a town's — `stage.js new/commit S3`, routes.json plus an optional
+ * overrides.json — and everything below the target list is target-agnostic, so this
+ * is `--place` / `--all-places` reusing the same body rather than a second tool.
+ * It exists for the same reason rollout_places.js does: the alternative is
+ * hand-editing a committed S3, which this project forbids for good reason.
+ *
  * Flags:
  *   --town <name>   repeatable; or --all
+ *   --place <name>  repeatable; or --all-places (a place's own name, e.g.
+ *                   "High Wycombe Aldi" — not its town's)
  *   --set <json>    deep-merged into routes.json (objects merge, values replace)
  *   --set-file <p>  the same JSON read from a UTF-8 file. USE THIS when the change
  *                   contains an en-dash or a middot: PowerShell mangles non-ASCII
@@ -52,13 +61,14 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { SK, findTowns, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
+const { SK, findTowns, findPlaces, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
 function parseArgs(argv) {
-  const f = { town: [], unset: [], 'feature-pos': [], 'set-path': [] };
+  const f = { town: [], place: [], unset: [], 'feature-pos': [], 'set-path': [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--town') f.town.push(argv[++i]);
+    else if (a === '--place') f.place.push(argv[++i]);
     else if (a === '--unset') f.unset.push(argv[++i]);
     else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
     else if (a === '--set-path') f['set-path'].push(argv[++i]);
@@ -112,14 +122,27 @@ function stage(cwd, ...a) {
   return r.stdout.trim();
 }
 
-const towns = findTowns(BUSES).filter(t => args.all || args.town.includes(t.name));
-if (!towns.length) { console.error('--all, or --town from: ' + findTowns(BUSES).map(t => t.name).join(', ')); process.exit(2); }
+// One list of targets, towns and places together. Everything below this point only
+// needs {name, dir}: a place's S3 has the same shape as a town's, so the body is the
+// same body. --all is towns only and --all-places is places only, deliberately —
+// adopting a key on 8 towns and 5 places in one command is a bigger blast radius than
+// anything else this tool does, and the two sets are judged on different sheets.
+const allTowns = findTowns(BUSES);
+const targets = [
+  ...allTowns.filter(t => args.all || args.town.includes(t.name)),
+  ...findPlaces(allTowns).filter(p => args['all-places'] || args.place.includes(p.name)),
+];
+if (!targets.length) {
+  console.error('--all / --town from: ' + allTowns.map(t => t.name).join(', '));
+  console.error('--all-places / --place from: ' + findPlaces(allTowns).map(p => p.name).join(', '));
+  process.exit(2);
+}
 if (!SET && !args.unset.length && !args.rail && !FEATPOS.length && !SETPATH.length) { console.error('nothing to do: pass --set, --unset, --rail, --feature-pos or --set-path'); process.exit(2); }
 
-console.log((APPLY ? 'APPLYING' : 'DRY RUN') + ' over ' + towns.length + ' town(s)'
+console.log((APPLY ? 'APPLYING' : 'DRY RUN') + ' over ' + targets.length + ' target(s)'
   + (APPLY ? '' : ' (pass --apply to commit)') + '\n');
 
-for (const t of towns) {
+for (const t of targets) {
   const prev = latestRunDir(readJson(path.join(t.dir, 'manifest.json')), t.dir, 'S3');
   if (!prev) { console.log(t.name + ': no committed S3 to roll forward from'); continue; }
   const before = fs.readFileSync(path.join(prev.dir, 'routes.json'), 'utf8');

@@ -35,8 +35,34 @@ Measured over the 31 shipped sheets, before → after: **628 → 225 defects** (
 | `spokeSpread` | off | External sheets: spreads the spider's spokes evenly around the hub in their own bearing order, clamped to `maxShift` (default 30°) of the true bearing. `strength` < 1 blends. Section below. |
 | `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
 | `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
+| `exitDevice` | off | **Built, measured, deliberately off.** One fixed design for every off-map continuation. It costs 15 defects to buy the consistency; see the section below before proposing it again. |
 | `iconSet` | off | `"grid"` swaps the twelve POI pictograms for the redrawn set: one 24 × 24 grid, one stroke weight, one corner radius, solid, each with a white casing. Pairs with `iconInk`, does not need it. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
+
+### `design.exitDevice` — built, measured, and deliberately OFF
+
+Plan §2.5 asked for one design for off-map continuations, on the observation that St Ives draws seven of them four different ways. **It is built and it is not switched on anywhere**, because measuring it showed the premise was wrong. Read this before proposing it again.
+
+**What the four arrangements actually are.** Not arbitrary variation — the placer routing around ink that differs at each exit. Two facts about the geometry decide it:
+
+- **Straight inboard along the line is on the route ribbon.** The line does not stop at the badge; it carries on to the frame cut. So the position that reads best on a diagram — destination, badge, arrowhead, off the page — is the one position guaranteed to be inked.
+- **The clearest space near a frame cut is OUTBOARD**, between the badge and the margin, because the map's content thins out at its edge. That is the one direction a device cannot use, since the text would then sit between the badge and the arrow and read backwards.
+
+**Measured across the eight internal sheets**, today = 173 defects:
+
+| device | defects | |
+|---|---|---|
+| today — placer free, leaders allowed | **173** | |
+| no leaders, direction still free | 178 | +5 |
+| inboard half only, either perpendicular first | 188 | +15 |
+| inboard half only, perpendicular-left first | 188 | +15 |
+| straight inboard first (§2.5's literal wording) | 194 | +21 |
+
+Almost all of the rise is `pt/ink`, labels over route ink. Rendered at 300 dpi the picture agrees with the number, which is worth noting because on this project it usually does not: the strict device puts St Ives' "to Bar Hill" across three ribbons and pushes "to Boxworth" onto the frame edge, where today both sit in clear white space on short leaders. It does improve the *uncrowded* exits — B and 9 both go to text-beside-badge with no leader — but a device is only a device if it holds at the crowded ones.
+
+**Decision, Peter, 2026-08-16: leave it alone.** Same shape as Phase 7's colour-group item — the plan expected to have to change something, and the measurement said not to.
+
+**What is in the engine, off:** `design.exitDevice:true` puts the "to X" text on the inboard half, square to the line, no leaders, preferring the perpendiculars; `labeller.js` gained `it.only` (an ordered shortlist of compass keys, with every other position kept as a last resort at `wOffDevice`, so a device can never *drop* a destination — the look is negotiable, the information is not); and `gen_internal.js` warns on stderr when an exit could not take an inboard position. Absent the key, output is byte-identical and all 27 gates pass. **If it is ever revived, the thing to fix first is the badge row, not the text** — every one of these positions is contested because the badge sits 5 mm back along a line that is still drawing.
 
 ### `design.iconSet` — the twelve pictograms on one grid
 

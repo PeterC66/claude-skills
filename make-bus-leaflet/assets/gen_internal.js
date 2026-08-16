@@ -167,6 +167,15 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     20-unit LIVE AREA is the 4.2 mm box POI_HALF below reserves,
 //                     which the shipped drawings overrun by ~18%. Pairs with
 //                     iconInk; absent => the original drawings, byte-identical.
+//   exitDevice:true   ONE design for every off-map continuation (Phase 5 §2.5):
+//                     arrowhead at the frame cut, badge row a fixed distance back
+//                     along the line, and the "to X" text INBOARD of the badges —
+//                     the side the route arrives from — so every exit reads
+//                     destination, badge, arrow, off the page. Needs
+//                     labels.engine:"v2"; the pre-v2 path already had a fixed
+//                     candidate order. Absent => the free placer picks per
+//                     instance, which is what made St Ives' seven exits look like
+//                     four devices.
 //   panelScale:true   one 1.2-ratio type scale and one heading rhythm for the
 //                     Services/Key panel, replacing eleven unrelated text sizes and
 //                     two section headings that were different sizes with different
@@ -1787,6 +1796,28 @@ if((atco2ll[ANCHOR]||baseOv[ANCHOR]) && !CORE && !(ID && (ID.interchanges||[]).s
   reserve(x-2,y-2,x+24,y+2);
 }
 
+// The eight compass keys labeller.js knows, 45° apart, anticlockwise from East in
+// PAGE coordinates (y points down, so North is -y). `inboardKeys` snaps a
+// direction to the nearest of them and returns the shortlist the exit device
+// uses: that point, then its ±45° neighbours, then its ±90° ones. The two
+// outboard positions and the opposite one are deliberately absent — see
+// design.exitDevice below.
+const COMPASS8=['E','NE','N','NW','W','SW','S','SE'];
+function inboardKeys(ox,oy){
+  // `ox,oy` is the OUTWARD direction of the exit. Index 0 is that direction; +2 is
+  // 90° anticlockwise from it, +4 straight back inboard, +6 90° clockwise.
+  const i=((Math.round(Math.atan2(-oy,ox)/(Math.PI/4))%8)+8)%8;
+  // The shortlist sweeps the inboard HALF, starting at the left of travel and
+  // ending at the right, and the three outboard positions are simply absent.
+  //
+  // Straight inboard (+4) is deliberately in the MIDDLE of that sweep, not at the
+  // front, and this is the whole lesson of §2.5: inboard along the axis is where
+  // the route line is. The line does not stop at the badge, it carries on to the
+  // frame, so the one position that reads best on a diagram — destination, badge,
+  // arrow — is the one position guaranteed to be on a ribbon. Tried first it cost
+  // 21 defects across the eight towns, nearly all of them "label over route ink".
+  return [2,6,3,5,4].map(k=>COMPASS8[(i+k)%8]);
+}
 // ---- internalRoads: terminus arrows at the frame cuts + badges along lines --
 if(IR && TRIM){
   const TL=RJ.terminiLabels||{};
@@ -1927,8 +1958,27 @@ if(IR && TRIM){
           // this loop, and a label whose `own` exemption is smaller than that box
           // finds every candidate blocked by its own badges. St Ives' "to Boxworth"
           // was dropped for exactly that reason on the first v2 run.
+          /* design.exitDevice (plan §2.5) — one off-map continuation, drawn the
+           * same way every time. The arrowhead and the badge row were already
+           * consistent; the DESTINATION was not, because the free placer picks
+           * whatever is cheapest per instance and "cheapest per instance" is
+           * exactly what makes seven instances look like seven designs. On St
+           * Ives the text sat right of the badge, left of it, above it and above-
+           * left, three of the seven on leader lines.
+           *
+           * The device: the text goes INBOARD — on the side the route arrives
+           * from, so the sheet reads destination, badge, arrowhead, off the page,
+           * every time. The direction is the cluster's own outward vector
+           * reversed and snapped to the nearest compass point, so it stays tied
+           * to the LINE rather than to the page, and the shortlist degrades
+           * ±45° then ±90° without ever crossing to the outboard side, where the
+           * text would sit between the badge and the frame and read backwards.
+           * No leaders: a leader on a device this short is a sign the text is in
+           * the wrong place, not a way of getting it to the right one. */
+          const only = DESIGN.exitDevice ? inboardKeys(-dx,-dy) : null;
           pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
-            at:[(rx0+rx1)/2, ry], text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true });
+            at:[(rx0+rx1)/2, ry], text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
+            ...(only?{only, leader:false}:{}) });
           return;
         }
         const rcands=[[rx1+3.7+CXW,ry+0.9,'start'],[rx0-3.7-CXW,ry+0.9,'end'],[bx,ry-4.4,'middle'],[bx,ry+5.4,'middle']];
@@ -2438,6 +2488,17 @@ if(LAB){
       +(r.placed?'-> '+r.x.toFixed(1)+','+r.y.toFixed(1)+'  ':'')+r.it.text);
   }
   out(LAB.svg());
+  // design.exitDevice: a continuation that could not take any of its five inboard
+  // positions took a foreign one instead, and that is the sheet quietly going back
+  // to seven designs. Nothing measures it — the text IS placed and it is not over
+  // ink — so say so, and name the remedy, which is space around the badge row
+  // (terminiClusterDist, or a shorter destination), never a per-town nudge.
+  if(DESIGN.exitDevice){
+    const off=LAB.solve().filter(r=>r.placed && r.offDevice && /^term:/.test(r.id));
+    if(off.length) process.stderr.write('exitDevice: '+off.length+' continuation'+(off.length>1?'s':'')
+      +' could not take an inboard position and sits outboard ('
+      + off.map(r=>'"'+r.it.text+'" '+r.pos).join(', ') + '). Make room by the badge row.\n');
+  }
   // A label the placer could not fit leaves NO trace in the SVG, which is why the
   // Phase 0 baseline could not measure silent drops at all. Write them down.
   const un=LAB.unplaced();

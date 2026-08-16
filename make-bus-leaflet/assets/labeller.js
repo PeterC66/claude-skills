@@ -61,6 +61,11 @@ const DEFAULTS = {
   relaxSweeps: 3,          // hill-climbing sweeps after the greedy pass
   inkFatal: 0.55,          // coverage above this is never acceptable, at any cost
   wHard: 120,              // cost of a mustPlace label overlapping a reserved symbol
+  wOffDevice: 40,          // cost of leaving an `only` shortlist. Deliberately above
+                           // the worst a shortlist position can cost (inkFatal 0.55
+                           // x wInk 34 = 18.7), so the device holds unless every one
+                           // of its positions is genuinely unusable — and below
+                           // wHard, because a destination is never dropped for it.
 };
 
 // Compass offsets, in the cartographic preference order the textbooks give:
@@ -324,6 +329,7 @@ class Labeller {
           + Math.max(0, cand.gap - this.o.gap) * this.o.wDist
           + (cand.form.n === 2 ? this.o.wWrap : 0)
           + (cand.leader ? this.o.wLeader + cand.leaderLen * 0.5 : 0)
+          + (cand.offDevice ? this.o.wOffDevice : 0)
           + this._frameCost(b)
           + this._ambiguity(it, b)
           + hardPenalty;
@@ -366,10 +372,33 @@ class Labeller {
     const forms = this._lines(it);
     const out = [];
     const gaps = [this.o.gap, this.o.gap * 1.55];      // and a little further out
-    for (const form of forms) for (let pi = 0; pi < POSITIONS.length; pi++) {
+    /* `only`: an ORDERED shortlist of compass keys, for a label that belongs to a
+     * repeated DEVICE rather than to a point on its own. The free placer is right
+     * for a POI name — wherever it fits best is where it should go — and wrong for
+     * a device drawn seven times on one sheet, because "best per instance" is what
+     * makes seven instances look like seven different designs. Restricting the
+     * list keeps the relationship to the line constant and lets it degrade in a
+     * stated order instead of a scored one. `pi` is the index within the
+     * SHORTLIST, so wPos still charges for stepping down it. See gen_internal.js's
+     * off-map continuations (plan §2.5). */
+    const list = it.only ? it.only.map(k => POSITIONS.find(p => p.k === k)).filter(Boolean) : POSITIONS;
+    for (const form of forms) for (let pi = 0; pi < list.length; pi++) {
       for (const g of gaps) {
-        const { b, lx, ly, lead } = this._box(it, form, POSITIONS[pi], g);
-        out.push({ form, pos: POSITIONS[pi], pi, gap: g, box: b, lx, ly, lead, leader: false, leaderLen: 0 });
+        const { b, lx, ly, lead } = this._box(it, form, list[pi], g);
+        out.push({ form, pos: list[pi], pi, gap: g, box: b, lx, ly, lead, leader: false, leaderLen: 0 });
+      }
+    }
+    // Every OTHER position, kept as a last resort at `wOffDevice`. A shortlist that
+    // can drop a label is worse than an inconsistent sheet: the device is a look,
+    // the destination is the information. Anything taken from here is reported by
+    // the caller rather than quietly absorbed.
+    if (it.only) {
+      const rest = POSITIONS.filter(p => !list.includes(p));
+      for (const form of forms) for (let pi = 0; pi < rest.length; pi++) {
+        for (const g of gaps) {
+          const { b, lx, ly, lead } = this._box(it, form, rest[pi], g);
+          out.push({ form, pos: rest[pi], pi, gap: g, box: b, lx, ly, lead, leader: false, leaderLen: 0, offDevice: true });
+        }
       }
     }
     if (it.leader !== false) {
@@ -381,15 +410,15 @@ class Labeller {
       // drawn without one. (The first High Wycombe v2 render had six labels
       // stranded in the left margin exactly that way: the position was accepted,
       // then the leader silently failed its own length test.)
-      for (const form of forms) for (let pi = 0; pi < POSITIONS.length; pi++) {
+      for (const form of forms) for (let pi = 0; pi < list.length; pi++) {
         // Two rings only. A third at 3.9x was tried and made things WORSE: the extra
         // reach let low-priority labels claim distant space that higher-value ones
         // then could not use, and High Wycombe lost five more names than with two.
         for (const g of [this.o.gap * 2.1, this.o.gap * 3.0]) {
-          const { b, lx, ly, lead } = this._box(it, form, POSITIONS[pi], g);
+          const { b, lx, ly, lead } = this._box(it, form, list[pi], g);
           const lead2 = this._leader(it.at, b);
           if (!lead2) continue;
-          out.push({ form, pos: POSITIONS[pi], pi, gap: g, box: b, lx, ly, lead,
+          out.push({ form, pos: list[pi], pi, gap: g, box: b, lx, ly, lead,
                      leader: true, leaderLen: lead2.len, leaderSeg: lead2.seg });
         }
       }
@@ -480,7 +509,7 @@ class Labeller {
     const c = best.cand;
     return { id: it.id, it, placed: true, x: c.lx, y: c.ly, anchor: c.pos.anc,
              lines: c.form.lines, lead: c.lead, leader: c.leaderSeg || null,
-             b: c.box, cost: best.cost, pos: c.pos.k };
+             b: c.box, cost: best.cost, pos: c.pos.k, offDevice: !!c.offDevice };
   }
 
   unplaced() { return this.solve().filter(r => !r.placed).map(r => ({ id: r.id, text: r.it.text, at: r.it.at, reason: r.reason })); }

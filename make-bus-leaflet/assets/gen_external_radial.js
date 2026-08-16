@@ -169,7 +169,36 @@ function rayToRect(dx,dy){             // distance from hub to inset rect along 
 const HUB_LABEL_TXT = D.externalHubLabel || D.town;
 const HUB_LINES = wrap(HUB_LABEL_TXT, Math.max(13, D.town.length));
 const HUB_H = 12 + (HUB_LINES.length-1)*4.0;
-const HUB_W = Math.max(22, Math.max(...HUB_LINES.map(l=>l.length))*2.6+6, D.town.length*2.6+6);
+/* design.hubFit — size the hub box from the text, not from a character count.
+ *
+ * The legacy width is `characters x 2.6mm + 6`, which is not a measurement of
+ * anything: at 5.2mm Arial Bold a real glyph runs 1.16mm ('I') to 4.91mm ('W'),
+ * so the constant is only ever right by luck. Measured across the eight towns on
+ * 2026-08-16 the padding it leaves ranges from **-0.18mm to +4.73mm a side** —
+ * "High Wycombe" overflowed its own box (37.56mm of text in 37.20mm) while
+ * "St Ives Bus Station/" sat in 4.73mm of slack. Same class of bug as the badge
+ * overflow, and the same cure: ask font_metrics.js.
+ *
+ * 2.2mm a side is the padding, near the middle of what the old formula happened
+ * to give, so no hub changes much: +4.8mm on High Wycombe (the overflow), -5.1mm
+ * on St Ives (the slack), under 2.4mm either way on the rest, and March is
+ * pinned by the 22mm floor and does not move at all.
+ *
+ * The TERMINUS lozenges deliberately keep their own character-count formula
+ * (`measureNodeWidth`). It was measured at the same time and it works: across
+ * 312 text lines in nodes on the eight shipped sheets, the tightest was Wisbech's
+ * "Downham" at 0.88mm a side and nothing overflowed — its 18mm floor and +4
+ * padding absorb the error the hub's does not. Changing it would move every
+ * lozenge AND every spoke's badge offset (`_autoOff` is derived from it) to fix
+ * nothing, so it stays until something actually overflows.
+ *
+ * The wrap width stays in characters too: where a two-line hub label BREAKS is a
+ * layout choice, not a fitting bug.
+ */
+const HUBFIT = !!(D.design && D.design.hubFit);
+const HUB_W = HUBFIT
+  ? Math.max(22, Math.max(...HUB_LINES.map(l=>FONT.textWidth(l,5.2,true)))+4.4, FONT.textWidth(D.town,5.2,true)+4.4)
+  : Math.max(22, Math.max(...HUB_LINES.map(l=>l.length))*2.6+6, D.town.length*2.6+6);
 // hubEdge — fit an ellipse to the label's half-width/half-height and solve
 // r(theta) = 1/sqrt((cos/a)^2+(sin/b)^2) for each spoke's own bearing, so every spoke starts
 // just outside the label box regardless of angle, instead of all spokes sharing one radius.

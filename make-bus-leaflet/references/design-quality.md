@@ -8,7 +8,8 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 
 ```json
 "design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
-            "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true },
+            "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true,
+            "hubFit": true },
 "labels": { "engine": "v2" }
 ```
 
@@ -30,6 +31,7 @@ Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
 | `panelScale` | off | One type scale and one heading rhythm for the Services/Key panel. Section below. |
 | `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
+| `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
 
 ### `design.badgeFit` — a route number that does not fit its disc
@@ -67,6 +69,18 @@ Two judgements worth knowing before changing it:
 | every other sheet | unchanged | unchanged |
 
 **Not done, deliberately: `gen_external_places.js`.** It is the one badge-drawing generator left on the old behaviour, because it is vendored to the portal's `engine/place/` and `font_metrics.js` is **not yet vendored there** — adding the require would throw at the portal's require time rather than fail a byte gate (the exact trap recorded in `changing-the-engine.md` §4). No place has a wide key today, and place *internal* sheets get the fix for free through `gen_internal.js`. Do it in Phase 8 alongside the re-vendor. `gen_external_busway.js` is likewise untouched, since §2 keeps it unedited and no town uses it.
+
+### `design.hubFit` — the external hub box, sized from its text
+
+Same defect class as `badgeFit`, found while verifying it. The hub's width was `characters × 2.6 mm + 6`, which measures nothing: at 5.2 mm Arial Bold a real glyph runs 1.16 mm (`I`) to 4.91 mm (`W`). Measured across the eight towns, the padding that formula happened to leave ranged from **−0.18 mm to +4.73 mm a side** — `High Wycombe` overflowed its own box (37.56 mm of text in 37.20 mm) while `St Ives Bus Station/` sat in 4.73 mm of slack.
+
+`hubFit` asks `font_metrics.js` and pads **2.2 mm a side**, near the middle of what the old formula gave, so no hub moves far: +4.8 mm on High Wycombe (the overflow), −5.1 mm on St Ives (the slack), under 2.4 mm either way on the rest, and March does not move at all because it is pinned by the 22 mm floor. The knock-on to watch is that `HUB_W` feeds `HUB_A`, the spoke clear-zone ellipse, so every spoke's start point shifts with the box.
+
+**The terminus lozenges deliberately keep their character-count formula** (`measureNodeWidth`). Measured at the same time, it works: across 312 text lines in nodes on the eight shipped sheets the tightest was Wisbech's `Downham` at 0.88 mm a side and nothing overflowed — its 18 mm floor and +4 padding absorb the error the hub's did not. Changing it would move every lozenge *and* every spoke's badge offset (`_autoOff` derives from it) to fix nothing, so it stays until something actually overflows. The wrap width stays in characters too: where a two-line hub label *breaks* is a layout choice, not a fitting bug.
+
+Previewed across all eight: **218 → 217 defects**, no label lost anywhere, High Wycombe external 6 → 5, St Ives external gains one label.
+
+**After this and `badgeFit`, nothing on any of the 31 shipped sheets overflows the shape that contains it** — 1,327 centred text lines checked against real Arial metrics, 0 overflowing. That check is worth re-running after any change to a badge, lozenge or hub; the trap when writing it is that a bare `width="…"` regex also matches `stroke-width`, and that consecutive `dominant-baseline="central"` text after a shape may be a *neighbour* (the operator legend draws a badge, then the operator's name beside it), so filter on `text-anchor="middle"` and on the text's x matching the shape's centre.
 
 ### `design.panelScale` — the panel's type scale and rhythm
 

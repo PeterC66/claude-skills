@@ -2,6 +2,8 @@
 
 What to read when a sheet looks amateur rather than wrong: labels sitting across route ribbons, symbols fused into blobs, names printed and then erased by the footer band. `%SK%` = the skill's `assets` folder. The plan this implements, with its measured before/after, is `…\Buses\Development Docs\label-and-design-quality-plan_2026-08-15.md`.
 
+> **The rules these keys implement are stated in [style-guide.md](style-guide.md)** (2026-08-16, Phase 8 item 2). That document says what a sheet must look like; this one says how each rule is implemented, what it is tuned to, and what it cost to learn. If the two ever disagree, the style guide is the intent and this file is the record — fix whichever is wrong, in the same session.
+
 ## The short version
 
 `routes.json` keys, all opt-in, all defaulting to the pre-2026-08-15 behaviour:

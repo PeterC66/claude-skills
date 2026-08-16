@@ -8,11 +8,11 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 
 ```json
 "design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
-            "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0 },
+            "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all of these as of 2026-08-15. Places do not — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-15 **except `badgeFit`, which is written but not yet adopted by any town** — see its section for the preview figures and why it is waiting. Places do not — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
 Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (`node "%SK%\quality_metrics.js" --all`). Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 82 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Three of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
 
@@ -29,7 +29,44 @@ Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (
 | `spreadMax` | `2.6` | mm a symbol may be displaced. Displace, don't drop — but not so far that it stops being where the thing is. |
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
 | `panelScale` | off | One type scale and one heading rhythm for the Services/Key panel. Section below. |
+| `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
+
+### `design.badgeFit` — a route number that does not fit its disc
+
+`badge()` draws its text at font-size = the badge **radius**, which is right for one to three narrow characters and wrong for anything wider. The text simply overflowed, on all three badge sizes and on both sheets, so the number read as sitting *on* the roundel rather than in it. Found 2026-08-15 on Ramsey, whose enlarged map made it obvious; it is pre-existing and affects **four of the eight towns** — High Wycombe (`M40` `WW1` `LGW` `LHR` `OXF`), Ramsey (`301S` `301V` `301X`), St Ives (`VL14`), March (`ZIP2`). Beaconsfield, Huntingdon, St Neots and Wisbech have no wide key, and their sheets do not move.
+
+**It is a width problem, not a length one** — which is the whole reason the fix measures with `font_metrics.js` rather than counting characters. High Wycombe's three-letter codes are *worse* than Ramsey's four-character keys:
+
+| key | at r=2.4 (stop) | at r=3.0 (terminus) | at r=4.0 (panel) | disc |
+|---|---|---|---|---|
+| `WW1` (High Wycombe) | 5.87 | 7.33 | 9.78 | 4.8 / 6.0 / 8.0 |
+| `VL14` (St Ives) | 5.74 | 7.17 | 9.56 | ” |
+| `301S` (Ramsey) | 5.61 | 7.01 | 9.34 | ” |
+| `LGW` `M40` `LHR` `OXF` (High Wycombe) | 4.67–5.60 | | | ” |
+| `ZIP2` (March) | 5.07 | 6.34 | 8.45 | ” |
+| `X31` — **fits, stays a disc** | 4.27 | 5.34 | 7.12 | ” |
+
+**The fix is the shape, not the type.** Shrinking the font to fit is the smaller change and it fails where it matters most: fitting `301S` inside a 2.4 mm-radius stop badge needs **1.8 mm** type, well under the 2.4 mm print-legibility floor `quality_metrics.js` enforces. So the badge grows sideways into a stadium — what operator maps do with a lettered route number — and the type keeps its size. Overflow is measured against the **diameter** with 0.3 mm of inset, not against a chord: `X31` pokes a hair outside the circle at the corners of its cap band and has always looked fine.
+
+`badgeHalfW(route, rad)` is the one place that decides how wide a badge is, and `badgeXW` is the same number as an **extra over the radius**. Every pitch, clamp and reserve box downstream is written as *the old literal plus that extra*, never recomputed — which is what keeps a town with no wide key bit-for-bit identical rather than merely close. Widened for it: the sprinkled-badge spacing and its two collision tests, the terminus cluster's badge pitch and both frame clamps, the panel and `panelCols` badge columns, and on the external sheet the spoke's badge stack, its terminus-box clearance and the operator legend's column pitch.
+
+Two judgements worth knowing before changing it:
+
+- **The panel gets ONE badge-column width, not one per row.** Sizing each row to its own badge was the first cut and it looked worse than the bug: three pills at the foot of Ramsey's list pushed only their own titles right, giving the panel a ragged title column *and* a ragged badge column at once. A panel is a table — badges centre in one column, every title starts at the same x. `panelCols` warns on stderr if the widened column pushes a title past `panelCols.width`.
+- **The terminus label's `own` box is deliberately NOT widened**, though the `reserve` beside it is. `own` is the label's *exemption* from its own badges, so widening it with the pills buys the label permission to sit on them. Measured on Ramsey: widened, `to St Ives` and `to Huntingdon` both came inside and printed over the ribbon (3 → 5 defects); left alone, one keeps a clean spot (3 → 4) and neither is dropped, because both are `mustPlace`.
+
+**What it costs**, previewed across all eight towns (218 → 218 defects, i.e. neutral — and see the note above about what this metric does not measure; badge text is skipped entirely by `quality_metrics.js`, so the fix itself is invisible to it and only the knock-on label movement shows):
+
+| sheet | defects | labels |
+|---|---|---|
+| High Wycombe internal | 33 → **31** | 80 → 78 — lost `Aldi`, `Hannah Ball`, `Totteridge Road`; gained `Beechview` |
+| High Wycombe external | 5 → 6 | — |
+| Ramsey internal | 3 → 4 | 32 → 32 |
+| Ramsey external | 3 → 3 | 7 → **8** — gained `Colne` |
+| every other sheet | unchanged | unchanged |
+
+**Not done, deliberately: `gen_external_places.js`.** It is the one badge-drawing generator left on the old behaviour, because it is vendored to the portal's `engine/place/` and `font_metrics.js` is **not yet vendored there** — adding the require would throw at the portal's require time rather than fail a byte gate (the exact trap recorded in `changing-the-engine.md` §4). No place has a wide key today, and place *internal* sheets get the fix for free through `gen_internal.js`. Do it in Phase 8 alongside the re-vendor. `gen_external_busway.js` is likewise untouched, since §2 keeps it unedited and no town uses it.
 
 ### `design.panelScale` — the panel's type scale and rhythm
 
@@ -45,7 +82,7 @@ The Services/Key panel had accumulated **eleven text sizes with no relation betw
 | **2.9** | route subtitle, operator group header, Key item, fare note — and the route *title* in a dense `panelCols` panel, one step down |
 | **2.45** | subtitle in a dense `panelCols` panel |
 
-Badge text is not on the scale: `badge()` fits it to its disc, so it is a symbol, not type.
+Badge text is not on the scale: it is sized from its badge, so it is a symbol, not type. (This line used to claim `badge()` *fitted* the text to its disc. It did not — see `design.badgeFit` below.)
 
 **The rhythm** is one rule for every heading, stated as **clear air between real ink** rather than as a baseline step — so a 5 mm heading gets the same optical gap over 3.5 mm titles as over 2.9 mm Key items, which a fixed baseline step cannot give. Air above a section heading (5.0 mm) is deliberately larger than air below it (3.2 mm), so the heading reads as belonging to the list under it; the operator group header is a lesser break at 3.4 / 2.0. "Ink" means whatever stands highest in the row, which for a route row is the **badge**, not the text — see `gotchas.md`.
 

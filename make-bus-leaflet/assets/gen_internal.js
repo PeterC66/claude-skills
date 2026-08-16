@@ -1885,6 +1885,12 @@ if(IR && TRIM){
       }
     });
     reserve(bxMin-3.5-CXW,byMin-3.5,bxMax+3.5+CXW,byMax+3.5);            // reserve, or it can't place
+    // NOTE the asymmetry with the reserve above, which IS widened by CXW: `own` is
+    // the label's EXEMPTION from its own badges, so widening it with the pills
+    // would buy the label permission to sit on them. Measured on Ramsey: widened,
+    // "to St Ives" and "to Huntingdon" both came inside and printed over the
+    // ribbon (3 -> 5 defects); left alone, one of them keeps a clean spot (3 -> 4)
+    // and neither is dropped, because both are mustPlace.
     if(LAB) for(const t of pendingTermini)
       LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6]}, t));
   }

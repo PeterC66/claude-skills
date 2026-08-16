@@ -1771,10 +1771,25 @@ const SCALE_ON   = !!(DESIGN.scaleBar && (SCALE_M || NOT_TO_SCALE));
 // Footprint: the distance above the bar, the bar, the qualifier below it. `bx,by`
 // is the bar's LEFT END, so the box is asymmetric — which is what lets the search
 // push the device right up against a frame corner.
-const scaleW = ()=> Math.max(SCALE_LEN, SCALE_NOTE.length*1.25, SCALE_TEXT.length*1.5);
+// Widths from real Arial metrics, and — the part that was wrong — from where the
+// text is actually ANCHORED. With a bar the caption is drawn CENTRED on the bar's
+// midpoint, so a caption wider than the bar sticks out on BOTH sides; the box
+// only ever grew rightwards from `bx`. It did not matter while the caption was
+// "town centre scale" and about as wide as the bar. It mattered the moment
+// printSafe replaced that with "scale outside the town centre box" on a coreBox
+// town: the search put the device against the left frame and High Wycombe printed
+// its caption 0.42mm OFF the page — a new instance of the exact defect this key
+// exists to fix, created by the fix. Character-count estimates (*1.25, *1.5) are
+// gone with it; font_metrics.js is right there.
+const scaleNoteW = ()=> SCALE_NOTE ? FONT.textWidth(SCALE_NOTE,2.4,false) : 0;
 function scaleBox(bx,by){
-  const w = scaleW();
-  return [bx-1.5, by-(SCALE_M?5.2:3.6), bx+w+1.5, by+(SCALE_NOTE?4.4:1.6)];
+  const top = by-(SCALE_M?5.2:3.6), bot = by+(SCALE_NOTE?4.4:1.6);
+  if(SCALE_M){
+    const cx = bx + SCALE_LEN/2;                      // both caption and distance are centred here
+    const half = Math.max(SCALE_LEN, scaleNoteW(), FONT.textWidth(SCALE_TEXT,2.8,false))/2;
+    return [cx-half-1.5, top, cx+half+1.5, bot];
+  }
+  return [bx-1.5, top, bx+Math.max(scaleNoteW(),FONT.textWidth(SCALE_TEXT,2.8,false))+1.5, bot];
 }
 function drawScaleDevice(spotSearch){
   if(!SCALE_ON) return;
@@ -2712,9 +2727,27 @@ for(const r of NOT_DRAWN)
   process.stderr.write(`panel: service ${r} is badged in the Services panel but draws no line on the map — either its geometry is missing/trimmed away, or the row should say it is not shown.\n`);
 // Appended to the row's own subtitle so it inherits that row's size and colour
 // and needs no new furniture. RJ.notShownNote overrides the words.
+//
+// IT MUST FIT THE ROW IT IS APPENDED TO. The plain panel row has no width
+// discipline at all — only the corridor branch measures — so the first cut of
+// this pushed St Neots' "Mon–Fri · Stephensons · Tesco stop only" out to 2.37mm
+// from the trim by adding to it. Adding text to fix a print-margin defect, and
+// creating a print-margin defect. So: measure, and fall back to a shorter form
+// before giving up. A row that cannot hold even "not shown" keeps its subtitle
+// intact and says so on stderr — the note is worth less than the words it would
+// push off the page, and the stderr line is what a build reader acts on.
 const NOT_SHOWN_NOTE = RJ.notShownNote || 'not shown on this map';
-const panelSub = (routeKey, sub) => (PRINT_SAFE!=null && NOT_DRAWN.has(routeKey))
-  ? (sub ? sub + ' · ' + NOT_SHOWN_NOTE : NOT_SHOWN_NOTE) : sub;
+const NOT_SHOWN_SHORT = RJ.notShownNoteShort || 'not shown';
+function panelSub(routeKey, sub, x, size){
+  if(PRINT_SAFE==null || !NOT_DRAWN.has(routeKey)) return sub;
+  const avail = (297-PRINT_SAFE) - x;
+  for(const note of [NOT_SHOWN_NOTE, NOT_SHOWN_SHORT]){
+    const t = sub ? sub+' · '+note : note;
+    if(FONT.textWidth(t,size,false) <= avail) return t;
+  }
+  process.stderr.write(`panel: service ${routeKey} draws no line, but its row has no room to say so — "${sub}" already fills the column. Shorten the subtitle, or set routes.json notShownNoteShort.\n`);
+  return sub;
+}
 
 out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.head:5}" fill="#222">Services</text>`);
 if(!PS) py+=2;
@@ -2917,7 +2950,7 @@ if(PCORR){
       } else py += (g.name && i===0) ? PROW-1.5 : PROW;
       badge(PX+4+PXW,py,r,PBR);
       out(`<text x="${PX+10+2*PXW}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
-      out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(panelSub(r,d[1]))}</text>`);
+      out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(panelSub(r,d[1],PX+10+2*PXW,PS?PS.sub:2.8))}</text>`);
       lastSubY=py+3.0;
     });
     firstBlock=false;
@@ -2970,7 +3003,7 @@ if(PCORR){
     // its own subtitle in tighter underneath (2026-08-11, second pass).
     const subY=cy-0.6+crow*0.35+0.1;
     out(`<text x="${cx+7.6+2*CXWP}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#111">${esc(d[0])}</text>`);
-    out(`<text x="${cx+7.6+2*CXWP}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(panelSub(r,d[1]))}</text>`);
+    out(`<text x="${cx+7.6+2*CXWP}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${PS?PS.dense:2.3}" fill="#555">${esc(panelSub(r,d[1],cx+7.6+2*CXWP,PS?PS.dense:2.3))}</text>`);
     if(row===per-1) lastSubY=subY;
   });
   py=top+per*crow;
@@ -2983,7 +3016,7 @@ for(const r of panelOrder){
   firstRow=false;
   badge(PX+4+PXW,py,r,PBR);
   out(`<text x="${PX+10+2*PXW}" y="${py-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.title:3.5}" fill="#111">${esc(d[0])}</text>`);
-  out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(panelSub(r,d[1]))}</text>`);
+  out(`<text x="${PX+10+2*PXW}" y="${py+3.0}" font-family="Arial" font-size="${PS?PS.sub:2.8}" fill="#555">${esc(panelSub(r,d[1],PX+10+2*PXW,PS?PS.sub:2.8))}</text>`);
   lastSubY=py+3.0;
 }
 }

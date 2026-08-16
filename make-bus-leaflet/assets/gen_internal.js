@@ -159,6 +159,14 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     cross, so colour on the sheet means ROUTE and nothing else
 //                     (Peter's G3 answer, 2026-08-15 — option E of five rendered
 //                     at printed size). Absent => the original palette.
+//   iconSet:"grid"    the twelve pictograms redrawn on ONE 24x24 grid — one stroke
+//                     weight, one corner radius, one detail level, solid rather
+//                     than outlined, each with a 0.34 mm white casing so it holds
+//                     against a dark route (Phase 5 craft, 2026-08-16; sheet at
+//                     Development Docs/icon-set-redraw_2026-08-16.html). The set's
+//                     20-unit LIVE AREA is the 4.2 mm box POI_HALF below reserves,
+//                     which the shipped drawings overrun by ~18%. Pairs with
+//                     iconInk; absent => the original drawings, byte-identical.
 //   panelScale:true   one 1.2-ratio type scale and one heading rhythm for the
 //                     Services/Key panel, replacing eleven unrelated text sizes and
 //                     two section headings that were different sizes with different
@@ -1145,7 +1153,7 @@ function reserveIcons(){
 function poiMark(p){
   const s=poiSite(p); if(!s) return;
   const {k,o,x,y}=s;
-  out(gk('poi',k,icon(p.cat,x,y,2.1,DESIGN.iconInk)));
+  out(gk('poi',k,icon(p.cat,x,y,2.1,DESIGN.iconInk,DESIGN.iconSet)));
   const auto = ['shop','leisure','school','park','community','allotments'].includes(p.cat) && p.name && p.name!=='Park';
   const showName = o.force===true || (auto && o.force!==false);
   if(showName) placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,{id:'poi:'+k});
@@ -2770,7 +2778,7 @@ if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
 // centre follows from it — the same clear air under `Key` as under `Services`.
 const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;
 key.forEach((kk,i)=>{const ky=py+KFIRST+i*KROW, kx=PX+3;
-  out(icon(kk[0],kx,ky,2.0,DESIGN.iconInk));
+  out(icon(kk[0],kx,ky,2.0,DESIGN.iconInk,DESIGN.iconSet));
   // '3.0' as a STRING: the old code emitted the literal font-size="3.0", and
   // JS renders the number 3.0 as "3" — a one-character diff that fails all 27
   // byte-identical gates with the key absent.

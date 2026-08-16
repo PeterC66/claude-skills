@@ -7,15 +7,16 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 `routes.json` keys, all opt-in, all defaulting to the pre-2026-08-15 behaviour:
 
 ```json
-"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
-            "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true,
-            "hubFit": true, "panelCorridors": true, "spokeSpread": true, "legendPlace": true },
+"design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "iconSet": "grid",
+            "panelScale": true, "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0,
+            "badgeFit": true, "hubFit": true, "panelCorridors": true, "spokeSpread": true,
+            "legendPlace": true },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all of these as of 2026-08-16, **except two, which are town-specific rather than universal**: `panelCorridors` only means anything on a town that declares `internalCorridors` (today just High Wycombe), and `spokeSpread` is carried by **Beaconsfield, Huntingdon, March and Ramsey** — the other four are blocked by legend size, not by the bearing rule. `panelCorridors` also needs `corridorDesc` (and optionally `corridorNote`) beside it. Places carry none of this — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-16 (towns at Beaconsfield v1.31, High Wycombe v2.35, Huntingdon v3.29, March v2.29, Ramsey v1.28, St Ives v6.42, St Neots v2.30, Wisbech v1.31, engine `4ad5534442`), **except two, which are town-specific rather than universal**: `panelCorridors` only means anything on a town that declares `internalCorridors` (today just High Wycombe), and `spokeSpread` is carried by **Beaconsfield, Huntingdon, March and Ramsey** — the other four are blocked by legend size, not by the bearing rule. `panelCorridors` also needs `corridorDesc` (and optionally `corridorNote`) beside it. Places carry none of this — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
-Measured over the 31 shipped sheets, before → after: **628 → 261 defects** (`node "%SK%\quality_metrics.js" --all`), plus **0 artwork buried under a legend**. Ramsey external was the first sheet to reach **0 defects**; Huntingdon external is the first to report **`ok` rather than `warn`**. Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 80 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Four of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
+Measured over the 31 shipped sheets, before → after: **628 → 225 defects** (`node "%SK%\quality_metrics.js" --all`), plus **0 artwork buried under a legend**. Ramsey external was the first sheet to reach **0 defects**; Huntingdon external is the first to report **`ok` rather than `warn`**. Fused icon pairs: 110 → 1, and that one is on a place sheet. Labels printed over a symbol that is not their own: 190 → 44. Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Four of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
 
 **Not every key is judged by that number.** `panelScale`, `scaleBar`, `routeCasing`, `cornerRadius`, `badgeFit`, `hubFit` and `panelCorridors` all moved the artwork and moved the defect count by 0 or ±1, because every metric in `quality_metrics.js` is about *labels and ink on the map* — none of them looks at the panel, at line separation, at corner geometry, or at the inside of a symbol. Render those and look.
 
@@ -34,7 +35,30 @@ Measured over the 31 shipped sheets, before → after: **628 → 261 defects** (
 | `spokeSpread` | off | External sheets: spreads the spider's spokes evenly around the hub in their own bearing order, clamped to `maxShift` (default 30°) of the true bearing. `strength` < 1 blends. Section below. |
 | `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
 | `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
+| `iconSet` | off | `"grid"` swaps the twelve POI pictograms for the redrawn set: one 24 × 24 grid, one stroke weight, one corner radius, solid, each with a white casing. Pairs with `iconInk`, does not need it. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
+
+### `design.iconSet` — the twelve pictograms on one grid
+
+Shipped 2026-08-16, all eight towns. `iconInk` answered G3's *colour* question in August and deliberately left the draughtsmanship; this is that half. The shipped drawings are three visual languages at three stroke weights and three levels of detail — flat glyphs (tree, mortarboard, factory), outlined boxes (GP, pharmacy, allotments) and small illustrations (a trolley with wheels *and* basket bars) — and they differ in size by a third. `gridGlyph` in `%SK%\icons.js` redraws all twelve to four rules, and the rules are the set:
+
+1. **24 × 24 units, 2 units of padding, live area 20 × 20**, keylines square 18 and circle 20 — so a square glyph and a round one look the same *size* rather than measuring the same.
+2. **One stroke weight (2.6u) and one corner radius (2u).** Nothing else.
+3. **Solid marks**, no limb or gap narrower than the stroke. A 0.5 mm outline at 4.2 mm goes faint against a ribbon; that is what the G3 sheet showed and why the outline first pass was rejected.
+4. **The LIVE AREA is the box the engine reserves.** 20u maps to 2·s mm, so at the map's `s = 2.1` a glyph fills the 4.2 mm box `POI_HALF` declares and no ink crosses it.
+
+**Rule 4 is the one with teeth, and it was a genuine pre-existing bug.** The shipped glyphs reach ±2.48 mm in a box the placer treats as ±2.1 — about 18% outside what `reserveIcons` blocks and `iconMinSep` separates — so two symbols the placer scored as clear could still touch, and a label placed against the box edge could still land on ink. Fixing it is where most of the measured gain came from: **labels over a foreign symbol 80 → 44** across the board, High Wycombe's diagram 35 → 20 on its own.
+
+**Every glyph carries a 0.34 mm white casing**, and it is the same device and the same weight as `design.routeCasing`, for the same reason: solid charcoal on a dark route is charcoal on navy. Four of the shipped twelve escaped that only by accident, because they happened to have a white fill. Two things about it:
+
+- **It must be a separate PASS** — a fattened white silhouette of the whole glyph, drawn before the glyph. `paint-order:stroke` per path looks equivalent and is not: a later part's casing eats an earlier part's fill, and the tree's trunk cuts a white notch out of its own canopy.
+- **It replaces option D's pale disc** and it also does `spreadIcons`' job at close quarters. At exactly `iconMinSep` the shipped tree and mortarboard fuse into one blob, as do the two figures and the runner, and the museum and the town hall; with a casing the second symbol knocks a clean edge out of the first and the pair still reads as two things.
+
+**`inkify` is not used on this set and must not be.** Its two exceptions are carried across as data instead: red on the GP cross, and a lighter neutral (`#7c7f82`) for the industrial estate, which is context rather than subject — a cluster of factories at full charcoal is the heaviest ink on the High Wycombe sheet. `inkify` infers both from the artwork's luminance, which is a workaround for artwork that was authored in colour; the new set takes one colour parameter.
+
+**One drawing decision worth knowing:** GP and pharmacy are the *same drawing* in charcoal today, two white boxes differing only in red versus green. They are now the same cross in different keylines — square and circle — so the pair survives losing its colour.
+
+Judged on the sheets, not on the number: previewed across all eight towns (209 → 173 on the town sheets, **no label lost anywhere**), then crops of St Ives and High Wycombe compared against the shipped renders at 300 dpi, then the Key panel checked at its own `s = 2.0`. Every rolled-out sheet is byte-identical to the preview it was judged from. The comparison sheet is `…\Buses\Development Docs\icon-set-redraw_2026-08-16.html`; regenerate it with the `.js` beside it.
 
 ### `design.badgeFit` — a route number that does not fit its disc
 

@@ -20,6 +20,11 @@
 //   coreBox           replace the congested centre with a labelled box that
 //                     routes are cut at (rung 2)
 //   corridorPalette   colour by corridor rather than by route (rung 3)
+//   corridorDesc{}    {lead:[title,subtitle]} — internalDesc's twin for a LANE,
+//                     used by design.panelCorridors (the badges carry the numbers,
+//                     so the row's words describe the corridor)
+//   corridorNote      overrides (or, false, suppresses) the sentence the sheet
+//                     prints to explain the corridor rule
 // (plus anchor/anchorLabel/internalZoom/features/internalBundle/internalTermini
 //  already documented below).
 //
@@ -159,6 +164,10 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     two section headings that were different sizes with different
 //                     amounts of air (Phase 6, §4.4). Full rationale at the panel
 //                     code near the foot of this file.
+//   panelCorridors:true  one Services row per DRAWN LANE rather than per service,
+//                     with the badge stack the map already draws, plus a note saying
+//                     the corridor rule on the sheet (Phase 7). Needs
+//                     internalCorridors; row words come from corridorDesc{}.
 const DESIGN = RJ.design || {};
 // labels{}: which label placer to use.
 //   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
@@ -420,6 +429,48 @@ aliasColours(CPAL);
 // A route whose colour is shared with another DRAWN LINE (rung 3, or a rung-1
 // family that has diverged). Used to guarantee a badge.
 const colourShared = r => !!(CPAL && CPAL.lead[r]);
+
+// ====== blue-cyan belongs to the water (plan §5.2) ===========================
+// Colour on this sheet is supposed to mean ROUTE and nothing else — the argument
+// that took the colour out of the POI symbols (design.iconInk). The river is the
+// one thing allowed to keep a hue regardless, because "the blue line is water" is
+// not a convention a map can opt out of. So the ROUTE palette has to stay off it.
+// St Ives draws route 9 in #66CCEE against a #9ec9e8 Great Ouse — dE 14.6, and
+// where the busway runs beside the river the two read as one object; Ramsey's X31
+// is the same hue against the same river.
+//
+// Reported, never fixed here: which hue a route wears is a config decision (and a
+// route's colour is meant to be stable across updates and across both sheets), so
+// the engine's job is to say that this town has put a bus in the water's colour.
+// Both terms are needed — plain dE flags the #BBBBBB limited-service grey at 21.3
+// purely on lightness, and a grey line is not mistakable for a river — so the test
+// is CLOSE IN Lab AND CLOSE IN HUE, with near-neutral colours excluded outright.
+{
+  const _srgb = h => [1,3,5].map(i=>parseInt(String(h).slice(i,i+2),16)/255)
+    .map(c => c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055,2.4));
+  const _f = t => t>0.008856 ? Math.cbrt(t) : (7.787*t+16/116);
+  const _lab = h => { const [r,g,b]=_srgb(h);
+    const X=(0.4124*r+0.3576*g+0.1805*b)/0.95047, Y=0.2126*r+0.7152*g+0.0722*b,
+          Z=(0.0193*r+0.1192*g+0.9505*b)/1.08883;
+    return [116*_f(Y)-16, 500*(_f(X)-_f(Y)), 200*(_f(Y)-_f(Z))]; };
+  const water=(FEATURES||[]).filter(f=>(f.type==='river'||f.type==='canal') && (f.geo||[]).length)
+    .map(f=>({key:f.key, colour:(f.style&&f.style.stroke) || (FEATURE_STYLES[f.type]||{}).stroke}));
+  for(const w of water){ if(!/^#[0-9a-f]{6}$/i.test(w.colour||'')) continue;
+    const W=_lab(w.colour);
+    for(const r of order){ const c=C[r];
+      if(!/^#[0-9a-f]{6}$/i.test(c||'')) continue;
+      const R=_lab(c), chroma=Math.hypot(R[1],R[2]);
+      if(chroma<8) continue;                                   // a grey is not a river
+      const dE=Math.hypot(R[0]-W[0],R[1]-W[1],R[2]-W[2]);
+      let dH=Math.abs(Math.atan2(R[2],R[1])-Math.atan2(W[2],W[1]))*180/Math.PI;
+      if(dH>180) dH=360-dH;
+      if(dE<25 && dH<40) console.error('PALETTE WARNING route '+r+' is drawn in '+c
+        +', which is the colour of the '+w.key+' ('+w.colour+') — dE '+dE.toFixed(1)+', hue '
+        +dH.toFixed(0)+'° apart. Blue-cyan is reserved for water on a town that draws a '
+        +'river: give this route another hue in the palette.');
+    }
+  }
+}
 
 // ====== coreBox — RUNG 2 of the complexity ladder (P3, 2026-07-28) ===========
 // routes.json "coreBox": { "radius": 600, "label": "town centre" }
@@ -2034,7 +2085,34 @@ if((CORR || CPAL) && RP && RP.routes){
     ambiguity:+(distinct?drawnRoutes.length/distinct:0).toFixed(2),
     corridorPalette:!!CPAL };
   if(CPAL){
-    rep.colourGroups=Object.keys(CPAL.fam).map(l=>({lead:l, routes:CPAL.fam[l]}));
+    // A colour group makes a WEAKER claim than a bundle — "these lines are the
+    // same corridor", not "these lines are one line" — so it is measured the same
+    // way and judged by a lower bar. Half is the bar with a meaning: below it,
+    // MOST of each line is going somewhere else, and a reader following the hue is
+    // wrong more often than right. Between 0.5 and the bundle's 0.6 the group is
+    // thin and worth looking at on the sheet, which is why the numbers print on
+    // every build rather than only when something trips (Phase 7, item 3).
+    // Nothing here draws: measured after the artwork, reported beside it.
+    rep.colourShareMin=0.5;
+    rep.colourGroups=Object.keys(CPAL.fam).map(lead=>{
+      const grp=CPAL.fam[lead], cells={};
+      for(const m of grp) cells[m]=cellsOf(m);
+      const members=grp.map(m=>{ const A=cells[m];
+        if(!A) return {route:m, drawn:false};
+        let worst=1, worstWith=null;
+        for(const o of grp){ if(o===m||!cells[o]) continue;
+          let inter=0; for(const c of A) if(cells[o].has(c)) inter++;
+          const f=inter/A.size; if(f<worst){ worst=f; worstWith=o; } }
+        return {route:m, drawn:true, cells:A.size, sharedFraction:+worst.toFixed(3), weakestAgainst:worstWith};
+      });
+      const weak=members.filter(x=>x.drawn && x.sharedFraction<rep.colourShareMin).map(x=>x.route);
+      console.log('  colour group '+grp.join('/')+'  '+members.map(x=>x.route+' '
+        +(x.drawn?Math.round(x.sharedFraction*100)+'%':'not drawn')).join('  '));
+      if(weak.length) console.error('CORRIDOR WARNING colour group '+grp.join('/')+': '+weak.join(', ')
+        +' share the corridor over less than half their length, so most of each line wears a hue that '
+        +'belongs to a route going somewhere else. Give it its own hue, or drop it from corridorPalette.');
+      return {lead, routes:grp, members, weakMembers:weak};
+    });
     // The check that matters most for rung 3. corridorPalette does not, on its
     // own, reduce how many colours a town uses — it makes the SHARING MEANINGFUL.
     // High Wycombe v1.0's real disease was 12 hues spread arbitrarily over 31
@@ -2450,10 +2528,138 @@ if(PS && !PCOLS){
   if(PROW < needRow) process.stderr.write(`panelScale: panelRow ${PROW}mm leaves ${(PROW-3.6-PS.sub*DESC-RISE_ROW).toFixed(2)}mm between a subtitle and the badge below it (wants >= ${needRow.toFixed(1)}mm at ${PS.title}/${PS.sub}mm with a ${PBR}mm badge).\n`);
 }
 
+/* ---- design.panelCorridors — the panel carries the structure the MAP draws ----
+ *
+ * Rung 1 of the complexity ladder (internalCorridors) draws a family of co-running
+ * services as ONE line carrying a stack of badges; rung 3 (corridorPalette) colours
+ * by corridor. The Services panel then listed every service as an equal,
+ * individually-badged row and silently undid both — High Wycombe printed 22 rows
+ * for the 14 lanes its own map draws, which is what forced the 4.9 mm row pitch
+ * that sits its subtitles on the descenders of the titles below them. So the panel,
+ * not the pitch, was the over-stuffing (plan Phase 7; §4.4 warned about it here).
+ *
+ * ONE ROW PER LANE, wearing the badge stack the map already draws. 22 rows become
+ * 14 at a pitch the type scale can carry, with no third column and no dropped
+ * subtitles. The external spider has always worked this way (external[].routes).
+ *
+ * A lane of one route draws exactly as a panel row always has: badge left, title
+ * and subtitle beside it. A lane of several puts its badge stack on its OWN line,
+ * left-aligned at the column edge, above the text — six 5.2 mm discs are 34 mm
+ * across and no title survives what is left of a 49 mm column. Either way EVERY
+ * TITLE STARTS AT THE SAME X: a panel is a table, the lesson design.badgeFit
+ * learned the expensive way (2026-08-16). The hanging stack then reads as the
+ * row's heading, which is what a corridor is.
+ *
+ * The words come from `corridorDesc: {"<lead>":[title,subtitle]}` — internalDesc's
+ * twin for a lane. The badges carry the numbers, so the row's words are about
+ * where the CORRIDOR goes, and "these services run together to there" is a claim
+ * about the real world: it is declared, never inferred (as internalCorridors
+ * itself is). Absent, the lead's own internalDesc is used and the engine says so
+ * on stderr rather than quietly labelling six services with one's destination.
+ *
+ * Absent the key ⇒ this branch never runs and the panel is byte-identical.
+ */
+const PCORR = (DESIGN.panelCorridors && CORR)
+  ? (DESIGN.panelCorridors===true ? {} : DESIGN.panelCorridors) : null;
+if(DESIGN.panelCorridors && !CORR)
+  process.stderr.write('panelCorridors: this town has no internalCorridors, so its panel already lists one row per drawn lane — key ignored.\n');
+
 out(`<text x="${PX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.head:5}" fill="#222">Services</text>`);
 if(!PS) py+=2;
 let lastSubY=py;                // baseline of the last line drawn in the services list
-if(RJ.panelGroups){
+if(PCORR){
+  // ---- one row per lane, in panelOrder order, deduped by lane key -------------
+  const lanes=[], seenLane=new Set();
+  for(const r of panelOrder){ const k=laneKey(r); if(seenLane.has(k)) continue; seenLane.add(k);
+    const mem=(CORR.fam[k]||[k]).filter(m=>panelOrder.includes(m));
+    lanes.push({key:k, mem:mem.length?mem:[k]}); }
+  const nCol = Math.max(1, (PCORR.cols|0) || (PCOLS?(PCOLS.cols|0):0) || 1);
+  const cw   = PCORR.width || (PCOLS&&PCOLS.width) || 96;
+  const dense= nCol>1;                       // a multi-column panel steps the type down
+  const TS = PS ? (dense?PS.sub:PS.title) : (dense?2.9:3.5);
+  const SS = PS ? (dense?PS.dense:PS.sub)  : (dense?2.3:2.8);
+  const BR = PCORR.badgeR || (dense?2.6:PBR-0.6);
+  const BGAP = PCORR.badgeGap!=null?PCORR.badgeGap:0.6;
+  const RGAP = PCORR.rowGap!=null?PCORR.rowGap:1.6;
+  const BXW = badgeXWs(panelOrder,BR);       // design.badgeFit: ONE badge column width
+  const bw  = 2*(BR+BXW);                    // one badge's drawn width
+  const SUBDROP = TS*DESC + 0.45 + SS*CAP;   // title baseline -> subtitle baseline
+  const SLEAD = SS*1.35;                     // subtitle line to subtitle line
+  const TX  = bw + 2.4;                      // title x, measured from the column edge
+  const CD  = RJ.corridorDesc||{};
+  const rows = lanes.map(L=>{
+    const stacked = L.mem.length>1;
+    const d = (stacked && CD[L.key]) || INTDESC[L.key] || [L.key,''];
+    if(stacked && !CD[L.key]) process.stderr.write(`panelCorridors: no corridorDesc["${L.key}"] for the ${L.mem.join('/')} lane — the row is wearing ${L.key}'s own description, which names one service of ${L.mem.length}.\n`);
+    const stackW = stacked ? L.mem.length*bw + (L.mem.length-1)*BGAP : bw;
+    if(stackW>cw) process.stderr.write(`panelCorridors: the ${L.mem.join('/')} badge stack is ${stackW.toFixed(1)}mm across a ${cw}mm column — widen the column or lower design.panelCorridors.badgeR.\n`);
+    // A lane may carry SEVERAL subtitle lines: corridorDesc is [title, ...lines].
+    // Six services sharing one road through the town still have six destinations
+    // beyond it, and the 22-row panel did say all of them — grouping the rows must
+    // not quietly drop that, so the row grows a line instead.
+    const sub = d.slice(1).filter(x=>x);
+    const wid = Math.max(FONT.textWidth(d[0],TS,true), ...sub.map(x=>FONT.textWidth(x,SS,false)));
+    if(TX+wid>cw) process.stderr.write(`panelCorridors: the ${L.key} row's text runs to ${(TX+wid).toFixed(1)}mm in a ${cw}mm column — shorten its corridorDesc/internalDesc or widen the column.\n`);
+    // Title baseline measured from the TOP of the row: under the stack when the
+    // badges take their own line, beside the badge when there is only one.
+    const titleBase = stacked ? 2*BR + 1.0 + TS*CAP : BR - 0.6;
+    const textH = sub.length ? titleBase + SUBDROP + (sub.length-1)*SLEAD + SS*DESC
+                             : titleBase + TS*DESC;
+    return {mem:L.mem, key:L.key, d:[d[0]].concat(sub), titleBase,
+            h: Math.max(stacked?0:2*BR, textH)};
+  });
+  // Balance the columns by HEIGHT, not by row count — a lane with a stacked badge
+  // line is twice the height of a plain one, so seven-and-seven would be lopsided.
+  // Contiguous runs, so a column still reads top-to-bottom (column-major, as the
+  // panelCols branch does).
+  const target = (rows.reduce((a,r)=>a+r.h+RGAP,0)-RGAP)/nCol;
+  const colOf = new Array(rows.length).fill(0);
+  { let c=0, acc=0;
+    for(let i=0;i<rows.length;i++){
+      const rem=rows.length-i, colsLeft=nCol-c;
+      // Break when carrying this row would take the column further past the target
+      // than stopping short of it does — and always when the rows left exactly fill
+      // the columns left, so no column can come out empty.
+      if(c<nCol-1 && acc>0 && (rem===colsLeft
+        || (rem>colsLeft && Math.abs(acc+rows[i].h+RGAP-target) > Math.abs(acc-target)))){ c++; acc=0; }
+      colOf[i]=c; acc+=rows[i].h+RGAP;
+    }
+  }
+  const top0 = PS ? py + PS.head*DESC + AIR_BELOW_HEAD : py + 4;
+  const colY = new Array(nCol).fill(top0);
+  let bottom = top0;
+  rows.forEach((r,i)=>{
+    const c=colOf[i], cx=PX+c*cw, top=colY[c];
+    r.mem.forEach((m,j)=> badge(cx+BR+BXW+j*(bw+BGAP), top+BR, m, BR));
+    const tb=top+r.titleBase;
+    out(`<text x="${(cx+TX).toFixed(2)}" y="${tb.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${TS}" fill="#111">${esc(r.d[0])}</text>`);
+    r.d.slice(1).forEach((ln,k)=>out(`<text x="${(cx+TX).toFixed(2)}" y="${(tb+SUBDROP+k*SLEAD).toFixed(2)}" font-family="Arial" font-size="${SS}" fill="#555">${esc(ln)}</text>`));
+    colY[c]=top+r.h+RGAP; bottom=Math.max(bottom, colY[c]-RGAP);
+  });
+  lastSubY = bottom - SS*DESC;
+  // ---- say the corridor rule on the sheet (Phase 7, item 1) -------------------
+  // The triage plan required rung 3 be "stated in the key" and it never was. A
+  // reader seeing 22 numbers in 11 hues, four of them shared, can only conclude
+  // that the palette ran out — which is precisely the impression the rung exists
+  // to prevent. It is one sentence, and it belongs under the list it explains.
+  if(RJ.corridorNote!==false){
+    const txt = RJ.corridorNote || (CPAL
+      ? 'Buses that run the same roads through the town are drawn as one line carrying every number, and routes along the same corridor share a colour.'
+      : 'Buses that run the same roads through the town are drawn as one line carrying every number.');
+    const noteW=nCol*cw-2, lines=[]; let cur='';
+    for(const wd of String(txt).split(' ')){ const t=cur?cur+' '+wd:wd;
+      if(cur && FONT.textWidth(t,SS,false)>noteW){ lines.push(cur); cur=wd; } else cur=t; }
+    if(cur) lines.push(cur);
+    const ny=bottom+2.6+SS*CAP, lead=SS*1.35;
+    lines.forEach((ln,i)=>out(`<text x="${PX}" y="${(ny+i*lead).toFixed(2)}" font-family="Arial" font-size="${SS}" fill="#555">${esc(ln)}</text>`));
+    lastSubY = ny+(lines.length-1)*lead;
+    bottom = lastSubY + SS*DESC;
+  }
+  // A pinned Key cannot move out of the way, so say when the list has grown into it.
+  if(PCOLS&&PCOLS.keyAt&&PCOLS.keyAt.y!=null && bottom > PCOLS.keyAt.y-(PS?PS.head*CAP:3.2))
+    process.stderr.write(`panelCorridors: the services list now ends at y=${bottom.toFixed(1)}mm and the pinned Key starts at ${(PCOLS.keyAt.y-(PS?PS.head*CAP:3.2)).toFixed(1)}mm — move panelCols.keyAt.y down or add a column.\n`);
+  py = bottom;
+} else if(RJ.panelGroups){
   // group the panel by operator (operators[] from routes.json)
   const groups=(RJ.operators||[]).map(op=>({name:op.name, rs:panelOrder.filter(r=>(op.routes||[]).includes(r))})).filter(g=>g.rs.length);
   const ungrouped=panelOrder.filter(r=>!groups.some(g=>g.rs.includes(r)));

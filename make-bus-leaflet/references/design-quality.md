@@ -9,13 +9,13 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 ```json
 "design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
             "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true,
-            "hubFit": true },
+            "hubFit": true, "panelCorridors": true },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all of these as of 2026-08-16 (`badgeFit` adopted and rolled out that day). Places do not — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-16 (`badgeFit` adopted and rolled out that day) **except `panelCorridors`, which only means anything on a town that declares `internalCorridors` — today just High Wycombe**. Places carry none of them — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
-Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (`node "%SK%\quality_metrics.js" --all`). Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 82 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Three of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
+Measured over the 31 shipped sheets, before → after: **628 → 269 defects** (`node "%SK%\quality_metrics.js" --all`). Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 82 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Three of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
 
 **Not every key is judged by that number.** `panelScale`, `scaleBar`, `routeCasing` and `cornerRadius` all moved the artwork and moved the defect count by 0 or +1, because every metric in `quality_metrics.js` is about *labels and ink on the map* — none of them looks at the panel, at line separation, or at corner geometry. Render those and look.
 
@@ -30,6 +30,7 @@ Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (
 | `spreadMax` | `2.6` | mm a symbol may be displaced. Displace, don't drop — but not so far that it stops being where the thing is. |
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
 | `panelScale` | off | One type scale and one heading rhythm for the Services/Key panel. Section below. |
+| `panelCorridors` | off | One Services row per **drawn lane** rather than per service, wearing the badge stack the map draws, plus a sentence stating the corridor rule. Needs `internalCorridors`; ignored (with a note on stderr) without it. Section below. |
 | `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
 | `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
@@ -105,7 +106,44 @@ Badge text is not on the scale: it is sized from its badge, so it is a symbol, n
 **Two build-time warnings come with it**, because the scale exposes panels that were already over-stuffed rather than quietly shrinking type to fit:
 
 - `panelScale: panelRow Nmm leaves …` — a subtitle and the badge below it are touching. St Ives was at −0.01 mm and moved to `panelRow: 7.2`; the default 8.0 clears with 0.39 mm.
-- `panelScale: panelCols row Nmm cannot carry the type scale …` — **High Wycombe fires this and has not been fixed.** Its 22 services in two columns at a 4.9 mm pitch need 5.9 mm. **Do not reach for a third column or smaller type.** High Wycombe is the one triaged town: its map bundles those 22 services into **14 drawn lanes** via `internalCorridors` and colours them as **11 corridors** via `corridorPalette` (rungs 1 and 3, see [complexity-triage.md](complexity-triage.md)), and the panel is the only part of the sheet that ignores it. Fourteen corridor rows with badge stacks fit at the standard pitch; 22 individual rows never will. Tracked as `panelCorridors` in Phase 7 of the plan.
+- `panelScale: panelCols row Nmm cannot carry the type scale …` — **High Wycombe used to fire this; `design.panelCorridors` is what fixed it** (2026-08-16), not a third column and not smaller type. The panel was over-stuffed because it listed 22 services that the map had already bundled into 14 lanes. Section below.
+
+### `design.panelCorridors` — the panel carries the map's lanes, not its services
+
+`internalCorridors` (rung 1) draws a family of co-running services as **one line with a stack of badges**, and `corridorPalette` (rung 3) colours by corridor. The Services panel then listed all 22 High Wycombe services as equal, individually-badged rows and silently undid both — which is what forced the 4.9 mm row pitch that sat its subtitles on the descenders of the titles below them. **The panel, not the pitch, was the over-stuffing.** One row per lane takes it to 14 rows at a pitch the type scale can carry, with no third column and no dropped subtitle. The external spider has always worked this way (`external[].routes`).
+
+The words come from **`corridorDesc: {"<lead>": [title, sub, sub…]}`**, `internalDesc`'s twin for a lane. The badges carry the numbers, so the row's words describe where the *corridor* goes — and "these services run together to there" is a claim about the real world, so it is declared, never inferred, exactly as `internalCorridors` itself is. Absent, the lead's own `internalDesc` is used and the engine says so on stderr rather than quietly labelling six services with one service's destination.
+
+**A lane may carry several subtitle lines, and on the big family it must.** Six buses sharing one road through the town still have six destinations beyond it, and the 22-row panel did print all of them; grouping the rows must not quietly drop that. High Wycombe's `102` row is a title plus four lines:
+
+```json
+"corridorDesc": {
+  "102": ["Loudwater & Beaconsfield", "102 Heathrow · 103 Windsor",
+          "104 & M40 Uxbridge · X74 Slough", "105 Amersham & Chesham",
+          "Daily; 104, 105, M40 Mon–Sat"]
+}
+```
+
+**Two layout decisions worth not re-deriving.**
+
+- **A stack of more than one badge takes its own line**, left-aligned at the column edge, with the text below it; a single badge stays beside its title as the panel has always drawn it. Six 5.2 mm discs are 34 mm across and no title survives what is left of a 49 mm column. The alternative — one fixed badge column wide enough for the widest stack — leaves eleven single-badge rows floating 13 mm from their titles.
+- **Every title starts at the same x either way.** A panel is a table; that is `badgeFit`'s lesson applied a second time. The hanging stack then reads as the row's heading, which is what a corridor is.
+
+Columns are balanced **by height, not by row count** (a stacked row is roughly twice a plain one, so seven-and-seven would be lopsided), in contiguous runs so a column still reads top to bottom.
+
+Optional sub-keys, all sensibly defaulted: `cols` / `width` (default: whatever `panelCols` says, else one 96 mm column), `badgeR` (2.6 mm in a multi-column panel), `badgeGap` 0.6, `rowGap` 1.6. Four build-time warnings: a stack too wide for its column, a row's text too wide for its column, a lane with no `corridorDesc`, and the list growing into a pinned `panelCols.keyAt`. High Wycombe's Key moved from `y:96` to `y:102` because of the last one.
+
+**Saying the rule on the sheet is part of the same key.** The triage required rung 3 be "stated in the key" and it never was: a reader seeing 22 numbers in 11 hues, four of them shared, can only conclude the palette ran out — which is precisely the impression the rung exists to prevent. The engine now prints one sentence under the services list, worded from what the town actually declares (`internalCorridors` alone, or with `corridorPalette`), overridable as `corridorNote: "…"` and suppressible with `corridorNote: false`.
+
+**What it costs: nothing the scorecard can see** — 269 → 269, because no metric in `quality_metrics.js` looks at the panel. The label-set diff is 14 old panel strings out, 13 new ones in, and every service's destination survives the regrouping. Judge it by rendering the panel.
+
+### Blue-cyan belongs to the water (plan §5.2)
+
+Colour on this sheet is supposed to mean **route** and nothing else — the argument that took the colour out of the POI symbols. The river is the one thing allowed to keep a hue anyway, because "the blue line is water" is not a convention a map can opt out of, so the route palette has to stay off it. Two towns had put a bus in the river's colour: **St Ives route 9** and **Ramsey X31**, both `#66CCEE` against a `#9ec9e8` Great Ouse / Nene — dE 14.6, and where route 9 runs beside the Ouse the two read as one object.
+
+`gen_internal.js` now says so at build time (`PALETTE WARNING route … is drawn in …, which is the colour of the …`) and stops there: which hue a route wears is a config decision, and a route's colour is meant to be stable across updates and across both sheets. **The test is close in Lab *and* close in hue, with near-neutrals excluded** — plain dE flags the `#BBBBBB` limited-service grey at 21.3 purely on lightness, and a grey line is not mistakable for a river.
+
+Fixed in config the same day: St Ives 9 → `#009988` teal (worst separation from anything else on that sheet 14.6 → **39.1**), Ramsey X31 → `#332288` indigo (14.6 → **49.3**). Ramsey took indigo rather than teal because its X31 runs *beside* the green 303 for the length of Wood Lane, and teal's worst neighbour there was exactly that green. Pick the replacement by scoring candidates against **every other colour on the sheet plus the water**, and take the one whose *worst* separation is largest; then render it, because "runs beside" is not in the numbers.
 
 ### Moving a linear feature's label
 

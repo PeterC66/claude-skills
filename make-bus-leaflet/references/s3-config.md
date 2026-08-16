@@ -97,6 +97,22 @@ Colour by **corridor** rather than by route. Members keep their own line and the
 
 **Know what it does not do.** It does not reduce how many colours the town uses; it makes the sharing *mean something*. High Wycombe v1.0's real disease was 12 hues spread arbitrarily over 31 routes — colour repeated, but at random. So re-assign `palette` so each corridor gets one hue and no two corridors share one; the generator then **warns about every hue still shared by unrelated groups**, which is the defect being fixed. With this key set, `complexity_score.js` reports **R as distinct colour groups** (and `linesDrawn` alongside), because R exists to police the ~12-hue ceiling.
 
+**Each group's overlap is measured too, and printed on every build** (2026-08-16). `corridors_report.json` carries a `colourGroups[]` beside `families[]`, same measure, but judged at **half** (`colourShareMin` 0.5) rather than the bundle's 0.6: sharing a hue is a weaker claim than sharing a line, and below half most of each line wears a colour that belongs to a route going somewhere else. High Wycombe's three groups read 41 **0.79**, 130 **0.55**, 37 **0.58**.
+
+#### `corridorDesc` and `corridorNote` — the panel half of rungs 1 and 3 (2026-08-16)
+
+```json
+"design": { "panelCorridors": true },
+"corridorDesc": { "1":   ["Hazlemere & Amersham", "then Chesham & Hemel Hempstead", "Daily (1B Mon–Sat) · Carousel"],
+                  "102": ["Loudwater & Beaconsfield", "102 Heathrow · 103 Windsor",
+                          "104 & M40 Uxbridge · X74 Slough", "105 Amersham & Chesham",
+                          "Daily; 104, 105, M40 Mon–Sat"] }
+```
+
+A triaged town's Services panel should list its **drawn lanes**, not its services, or rungs 1 and 3 are undone in the one place a reader looks a route up. `corridorDesc` is `internalDesc`'s twin, keyed by the corridor **lead** and taking as many subtitle lines as the lane needs — the badges carry the numbers, so the words describe where the corridor goes, and every member's own destination still has to appear somewhere in them. `corridorNote` overrides the sentence the sheet prints to explain the rule (`false` suppresses it). Full behaviour and the layout decisions: [design-quality.md](design-quality.md).
+
+**Blue-cyan is reserved for water.** On a town that draws a river or canal, the route palette must stay off it: `gen_internal.js` prints a `PALETTE WARNING` when a drawn route's colour is close to the water's in both Lab distance and hue. St Ives' 9 and Ramsey's X31 were both `#66CCEE` against a `#9ec9e8` river (dE 14.6) and moved to teal and indigo on 2026-08-16.
+
 ### Design-quality keys (added 2026-08-15 — opt-in, absent ⇒ byte-identical; every built TOWN carries them, places do not yet)
 
 ```json

@@ -1031,6 +1031,15 @@ function analyse(svgPath) {
   detail.panelOnly = panelOnly;
   detail.clashMap = clashMap;
   detail.clashPanel = clashPanel;
+  // The map-label TEXTS, not just the count. Exported for contact_sheet.js's
+  // old-vs-new diff (Phase 8 item 0b, 2026-08-16), which needs to separate a
+  // label the reader lost off the MAP from a panel row that was reworded — on
+  // High Wycombe a whole-sheet diff reports 36 lost, of which most are the
+  // panelCorridors regrouping doing exactly what it was built to do. Emitted
+  // here rather than re-derived there: the map/panel/footer/legend partition
+  // above is subtle (six exclusions, four of them fixes for wrong answers), and
+  // a second implementation of a rule is a second chance to get it wrong.
+  detail.mapLabelTexts = mapLabels.map(l => l.text);
   return { file: svgPath, metrics: m, fails, warns, detail, share };
 }
 

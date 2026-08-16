@@ -9,8 +9,15 @@
  * instead of asserting a date. Run it whenever you open that doc, and always
  * after an engine change, per its own advice.
  *
+ * Since 2026-08-16 (Phase 8 item 1 of the label-and-design-quality plan) it also
+ * carries a QUALITY row beside each byte-gate row. The byte gate proves the
+ * generator is deterministic; it says nothing at all about whether the sheet is
+ * any good, which is how six towns once shipped with their legends sitting on
+ * top of whole spokes with every number improving. quality_gate.js supplies the
+ * verdict; --no-quality skips it if you only want the reproduce gates.
+ *
  * Usage:
- *   node status.js [--buses "<Buses dir>"] [--portal "<portal repo dir>"] [--md] [--json]
+ *   node status.js [--buses "<Buses dir>"] [--portal "<portal repo dir>"] [--md] [--json] [--no-quality]
  *
  * Defaults (Peter's machine): --buses "C:\u3a St Ives\Using AI\Buses"
  *                              --portal "C:\Claude\community-bus-maps"
@@ -21,6 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, PLACE_IGNORE } = require('./gate_lib');
 const { computeEngineVersion } = require('./engine_version');
+const quality = require('./quality_gate');
 
 const CURRENT_ENGINE = computeEngineVersion();
 
@@ -38,6 +46,7 @@ const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const PORTAL = path.resolve(args.portal || 'C:/Claude/community-bus-maps');
 const AS_MD = !!args.md;
 const AS_JSON = !!args.json;
+const NO_QUALITY = !!args['no-quality'];
 
 function exists(p) { return fs.existsSync(p); }
 
@@ -168,8 +177,35 @@ const placeRows = places.map(gatePlace);
 const portalFixtureRows = gatePortalFixture();
 const driftRows = portalDrift();
 
+// The quality ratchet (Phase 8 item 1). Measured off the ci-reference copies —
+// what actually shipped — so a green byte gate and a green quality row are
+// statements about the same bytes.
+let qualityRows = [];
+if (!NO_QUALITY) {
+  try { qualityRows = quality.run(BUSES).rows; }
+  catch (e) { qualityRows = []; console.error('quality gate skipped: ' + e.message); }
+}
+// Sheets belonging to one town/place, so a row can sit beside its byte-gate row.
+const qualityFor = (name) => qualityRows.filter(r => r.key.startsWith(name + ' · '));
+const qualityCell = (name) => {
+  const rs = qualityFor(name);
+  if (!rs.length) return '-';
+  const bad = rs.filter(r => r.status === 'REGRESSED');
+  if (bad.length) return 'REGRESSED';
+  if (rs.some(r => r.status === 'NEW')) return 'unrecorded';
+  return rs.some(r => r.status === 'BETTER') ? 'better' : 'ok';
+};
+
 if (AS_JSON) {
-  console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows }, null, 2));
+  console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows }, null, 2));
+  // NOTE, 2026-08-16: this exits 0 whatever the gates said, while the human
+  // branch below exits 1 on anything needing attention — and `--json` is the
+  // form .github/workflows/gates.yml runs, so **CI is green regardless of the
+  // result**. Left as it is on purpose for now: the board carries 4 deliberate
+  // DRIFTED portal-vendoring rows until Phase 8 item 3 re-vendors, and flipping
+  // this first would turn CI red for a state that is expected. Change it to
+  // `process.exit(bad ? 1 : 0)` — moving the `bad` computation above this block
+  // — in the same commit as the re-vendor, not before.
   process.exit(0);
 }
 
@@ -177,21 +213,21 @@ function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.leng
 function line(cells, widths) { return cells.map((c, i) => pad(c, widths[i])).join(AS_MD ? ' | ' : '  '); }
 
 console.log('=== Towns (' + towns.length + ') === engine: current template = ' + CURRENT_ENGINE);
-if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|');
-const tw = [16, 6, 12, 9, 16, 10, 8, 20, 8];
-if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'S6 latest', 'S6 age'], tw));
+if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | Quality | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
+const tw = [16, 6, 12, 9, 16, 10, 8, 11, 20, 8];
+if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Quality', 'S6 latest', 'S6 age'], tw));
 for (const r of townRows) {
   const ext = r.external + (r.externalStyle ? ` (${r.externalStyle})` : '');
   const s6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
   const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
-  const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, r.s6, s6age];
+  const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, qualityCell(r.name), r.s6, s6age];
   console.log(line(cells, tw));
 }
 
 console.log('\n=== Places (' + places.length + ') ===');
-const pw = [24, 18, 6, 9, 9];
-if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External'], pw));
-for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external], pw));
+const pw = [24, 18, 6, 9, 9, 11];
+if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Quality'], pw));
+for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, qualityCell(r.name)], pw));
 
 if (portalFixtureRows.length) {
   console.log('\n=== Portal fixtures (vendored engine, ' + PORTAL + ') ===');
@@ -205,8 +241,21 @@ if (driftRows.length) {
   for (const r of driftRows) console.log('  ' + (r.same === null ? 'MISSING  ' : r.same ? 'in sync  ' : 'DRIFTED  ') + r.file);
 }
 
-// Exit non-zero if anything needs attention, so this can gate CI.
+if (qualityRows.length) {
+  const moved = qualityRows.filter(r => r.status !== 'ok');
+  console.log('\n=== Quality ratchet (' + qualityRows.length + ' sheets, ledger: ' + quality.LEDGER_NAME + ') ===');
+  if (!moved.length) console.log('  every sheet at or under its recorded ceiling, and none printing fewer labels');
+  for (const r of moved) console.log('  ' + r.status.padEnd(11) + r.key.padEnd(38) + r.why.join('; '));
+  console.log('  totals: ' + ['labels', 'hard', 'soft', 'drop']
+    .map(k => k + ' ' + qualityRows.reduce((s, r) => s + (r.now[k] || 0), 0)).join(' · ')
+    + '   (node quality_gate.js --accept to re-record)');
+}
+
+// Exit non-zero if anything needs attention, so this can gate CI. A quality
+// REGRESSION counts: that is the whole point of item 1 — the byte gate cannot
+// see a sheet getting worse, only a sheet getting different.
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL'))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || ['DIFF', 'FAIL'].includes(r.external))
-  || driftRows.some(r => r.same === false);
+  || driftRows.some(r => r.same === false)
+  || qualityRows.some(r => r.status === 'REGRESSED');
 process.exit(bad ? 1 : 0);

@@ -375,6 +375,26 @@ Every weight is in one `DEFAULTS` object at the top of `labeller.js`, so a chang
 
 `node "%SK%\labeller_demo.js" <outdir>` draws a synthetic test page twice — once with the old first-fit placer, once with `labeller.js` — for judging a placer change without moving a real sheet.
 
+## The quality ratchet — `quality_gate.js`, and why it is not a threshold
+
+`node "%SK%\quality_gate.js"` scores every `ci-reference` sheet and compares it with `Development Docs\quality-ledger.json`, which records what each sheet measured when it was last accepted. It exits 1 on any regression, and `status.js` runs it — so every town and place now carries a **Quality** column beside its byte-gate column, and a `REGRESSED` row fails the board. `--accept` re-records the ledger; `--json` for machine use; `status.js --no-quality` skips it.
+
+**Three numbers are gated, and the third is the one that matters.**
+
+| gated as | number | why |
+|---|---|---|
+| ceiling | `HARD` | the defects where a reader loses something |
+| ceiling | `drop` | labels the placer reported dropping, per sheet |
+| **floor** | `mapLabels` | **a sheet may not quietly print less** |
+
+`SOFT`, `DEF` and `ALL` are reported and not gated. `DEF` and `ALL` are deliberately excluded until G5 decides which is the headline — gating a number whose definition is under review would settle that question by accident.
+
+**The label FLOOR is the whole point.** Every other measure counts something wrong that is *on* the page, so a placer that drops a label to avoid a collision scores better for dropping it. That is not hypothetical: 94 dropped labels board-wide went uncounted for four sessions while this plan prepared to gate on the total. `drop` closes most of the hole and the floor closes the rest, because a config change can remove a POI outright without the placer ever reporting a drop.
+
+**Why a ledger rather than "gate HARD at 0".** Zero is the destination. The board carries 139 HARD defects, most of them on sheets whose density is an *approved* outcome of the complexity triage, so a flat zero would fail all 31 sheets on day one and be switched off within the hour. The ledger asks the question §6.1 actually asked — can quality get quietly worse — and the answer is no. It also solves the drop allowance for free: High Wycombe sheds 40% of its label candidates because rungs 2 and 2b say a RED town should, and a flat rate ceiling would either fail it or excuse everyone else. Its own recorded figure is the only honest allowance.
+
+**Lowering a ceiling is a commit.** After a change that improves things, `--accept` writes the new figures and the diff on `quality-ledger.json` is the record of what improved. Do it in the same commit as the rollout, never separately, or the ledger stops describing the shipped sheets.
+
 ## Changing any of this
 
 Never on one town. Every judgement in this document was made by rebuilding all eight and looking at the table:

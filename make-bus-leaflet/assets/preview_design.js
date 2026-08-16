@@ -15,6 +15,9 @@
  * Flags:
  *   --town <name>     repeatable; or --all
  *   --patch <json>    deep-merged into routes.json (objects merge, values replace)
+ *   --patch-file <p>  the same JSON read from a UTF-8 file. USE THIS when the patch
+ *                     contains an en-dash or a middot: PowerShell mangles non-ASCII
+ *                     in argv on the way to node.exe, silently.
  *   --rail chequer    also set style.rail on every railway feature (an array, so
  *                     --patch cannot reach it)
  *   --feature-pos <key>=<x>,<y>   move a linear feature's LABEL, in page mm.
@@ -71,7 +74,17 @@ let SETPATH;
 try { SETPATH = args['set-path'].map(parseSetPath); }
 catch (e) { console.error(e.message); process.exit(2); }
 const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
-const PATCH = args.patch ? JSON.parse(args.patch) : {};
+/* --patch-file <path> — the same JSON, read from a UTF-8 FILE.
+ *
+ * Use this, not --patch, for anything containing an en-dash or a middot — which
+ * is nearly every panel string in this system ("Mon–Sat", " · "). PowerShell 5.1
+ * converts argv to the system ANSI codepage on its way to node.exe, so those
+ * characters arrive corrupted, silently, and adopt_config.js will then commit the
+ * corruption into an S3. A file is read as UTF-8 by fs and cannot be mangled.
+ * (2026-08-16; the same flag exists on adopt_config.js as --set-file.)
+ */
+const PATCH = args['patch-file'] ? JSON.parse(fs.readFileSync(path.resolve(args['patch-file']), 'utf8'))
+            : args.patch ? JSON.parse(args.patch) : {};
 const OUT = path.resolve(args.out || 'design-preview');
 fs.mkdirSync(OUT, { recursive: true });
 

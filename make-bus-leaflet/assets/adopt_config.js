@@ -17,6 +17,10 @@
  * Flags:
  *   --town <name>   repeatable; or --all
  *   --set <json>    deep-merged into routes.json (objects merge, values replace)
+ *   --set-file <p>  the same JSON read from a UTF-8 file. USE THIS when the change
+ *                   contains an en-dash or a middot: PowerShell mangles non-ASCII
+ *                   in argv on the way to node.exe, silently, and this tool commits
+ *                   what it is handed.
  *   --unset <path>  dotted path to delete, repeatable
  *   --rail <style>  set style.rail on every railway feature (features[] is an
  *                   array, so --set cannot reach it)
@@ -65,7 +69,18 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const APPLY = !!args.apply;
-const SET = args.set ? JSON.parse(args.set) : null;
+/* --set-file <path> — the same JSON, read from a UTF-8 FILE.
+ *
+ * Use this, not --set, for anything containing an en-dash or a middot — which is
+ * nearly every panel string in this system ("Mon–Sat", " · "). PowerShell 5.1
+ * converts argv to the system ANSI codepage on its way to node.exe, so those
+ * characters arrive corrupted, silently, and this tool commits what it is given
+ * straight into a new S3. A file is read as UTF-8 by fs and cannot be mangled.
+ * (2026-08-16; the same flag exists on preview_design.js as --patch-file, so what
+ * you preview is what you commit.)
+ */
+const SET = args['set-file'] ? JSON.parse(fs.readFileSync(path.resolve(args['set-file']), 'utf8'))
+          : args.set ? JSON.parse(args.set) : null;
 // "<key>=<x>,<y>" -> {key,x,y}
 const FEATPOS = args['feature-pos'].map(s => {
   const m = /^([^=]+)=([-\d.]+),([-\d.]+)$/.exec(s);

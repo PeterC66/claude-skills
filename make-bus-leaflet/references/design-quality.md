@@ -9,15 +9,15 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 ```json
 "design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
             "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true,
-            "hubFit": true, "panelCorridors": true },
+            "hubFit": true, "panelCorridors": true, "spokeSpread": true },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all of these as of 2026-08-16 (`badgeFit` adopted and rolled out that day) **except `panelCorridors`, which only means anything on a town that declares `internalCorridors` — today just High Wycombe**. Places carry none of them — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-16, **except the last two, which are town-specific rather than universal**: `panelCorridors` only means anything on a town that declares `internalCorridors` (today just High Wycombe), and `spokeSpread` is adopted by **Ramsey only** — six of the other seven improve with it but a composition change should be seen before it is spent. `panelCorridors` also needs `corridorDesc` (and optionally `corridorNote`) beside it. Places carry none of this — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
-Measured over the 31 shipped sheets, before → after: **628 → 269 defects** (`node "%SK%\quality_metrics.js" --all`). Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 82 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Three of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
+Measured over the 31 shipped sheets, before → after: **628 → 266 defects** (`node "%SK%\quality_metrics.js" --all`), of which Ramsey external is the first sheet to reach **0**. Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 80 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Four of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
 
-**Not every key is judged by that number.** `panelScale`, `scaleBar`, `routeCasing` and `cornerRadius` all moved the artwork and moved the defect count by 0 or +1, because every metric in `quality_metrics.js` is about *labels and ink on the map* — none of them looks at the panel, at line separation, or at corner geometry. Render those and look.
+**Not every key is judged by that number.** `panelScale`, `scaleBar`, `routeCasing`, `cornerRadius`, `badgeFit`, `hubFit` and `panelCorridors` all moved the artwork and moved the defect count by 0 or ±1, because every metric in `quality_metrics.js` is about *labels and ink on the map* — none of them looks at the panel, at line separation, at corner geometry, or at the inside of a symbol. Render those and look.
 
 ## `design`
 
@@ -170,11 +170,15 @@ Not an engine feature: `external[].routes: ["303","305"]` has always put several
 
 ### Blue-cyan belongs to the water (plan §5.2)
 
-Colour on this sheet is supposed to mean **route** and nothing else — the argument that took the colour out of the POI symbols. The river is the one thing allowed to keep a hue anyway, because "the blue line is water" is not a convention a map can opt out of, so the route palette has to stay off it. Two towns had put a bus in the river's colour: **St Ives route 9** and **Ramsey X31**, both `#66CCEE` against a `#9ec9e8` Great Ouse / Nene — dE 14.6, and where route 9 runs beside the Ouse the two read as one object.
+Colour on this sheet is supposed to mean **route** and nothing else — the argument that took the colour out of the POI symbols. The river is the one thing allowed to keep a hue anyway, because "the blue line is water" is not a convention a map can opt out of, so the route palette has to stay off it. **Three** towns had put a bus in the river's colour, all three `#66CCEE` against a `#9ec9e8` river at dE 14.6: **St Ives 9**, **Ramsey X31** and **March X32**.
 
 `gen_internal.js` now says so at build time (`PALETTE WARNING route … is drawn in …, which is the colour of the …`) and stops there: which hue a route wears is a config decision, and a route's colour is meant to be stable across updates and across both sheets. **The test is close in Lab *and* close in hue, with near-neutrals excluded** — plain dE flags the `#BBBBBB` limited-service grey at 21.3 purely on lightness, and a grey line is not mistakable for a river.
 
-Fixed in config the same day: St Ives 9 → `#009988` teal (worst separation from anything else on that sheet 14.6 → **39.1**), Ramsey X31 → `#332288` indigo (14.6 → **49.3**). Ramsey took indigo rather than teal because its X31 runs *beside* the green 303 for the length of Wood Lane, and teal's worst neighbour there was exactly that green. Pick the replacement by scoring candidates against **every other colour on the sheet plus the water**, and take the one whose *worst* separation is largest; then render it, because "runs beside" is not in the numbers.
+Fixed in config the same day: St Ives 9 → `#009988` teal (worst separation from anything else on that sheet 14.6 → **39.1**), Ramsey X31 → `#332288` indigo (→ **49.3**), March X32 → `#004488` dark blue (→ **55.8**). Ramsey took indigo rather than teal because its X31 runs *beside* the green 303 for the length of Wood Lane, and teal's worst neighbour there was exactly that green.
+
+**`node "%SK%\pick_route_colour.js" --town "<Town>" --route <key>` does the scoring**: it ranks candidate hues by their **worst** separation against every other colour on that sheet *plus* the drawn water, which is the rule that matters — not distance from the colour being replaced. Then render it, because "runs beside" is not in the numbers.
+
+**How the third town was missed for an hour, which is the part worth remembering.** The sweep that found the first two read `routes.json` `features[]` — and **March has no `features[]`**: it draws its river through `gen_internal.js`'s legacy fallback from `river_geo.json`. The engine's own check reads the *built* feature list and so had been printing the warning on every March build since the check shipped; the scan script written to find the same thing had a hole the engine did not, and the scan was believed over the build output. **A warning is only worth adding if the build output is then read** — and a second implementation of a rule is a second chance to get it wrong. `pick_route_colour.js` carries the same fallback for the same reason.
 
 ### Moving a linear feature's label
 

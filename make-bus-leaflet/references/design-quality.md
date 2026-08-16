@@ -12,7 +12,7 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all of these as of 2026-08-15 **except `badgeFit`, which is written but not yet adopted by any town** — see its section for the preview figures and why it is waiting. Places do not — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-16 (`badgeFit` adopted and rolled out that day). Places do not — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
 Measured over the 31 shipped sheets, before → after: **628 → 270 defects** (`node "%SK%\quality_metrics.js" --all`). Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 82 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Three of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
 

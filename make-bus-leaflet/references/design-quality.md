@@ -369,6 +369,8 @@ Every weight is in one `DEFAULTS` object at the top of `labeller.js`, so a chang
 
 **The scorecard does not measure the panel.** Every metric is about the map: ink, collisions, symbols, the frame. `design.panelScale` moved every size and gap in the panel on all eight towns and the total stayed at 271 — that is the tool working as specified, not the change doing nothing. Panel work is judged by rendering the panel and looking at it. (`minTextMm` is the one panel-adjacent measure, and on `panelCols` towns it reports the auto-fitted **badge** text, so it did not move either.)
 
+**And the other half of measuring is looking, so there is a tool for that too.** `node "%SK%\crop_compare.js" old.svg new.svg out-prefix --at 134,129 --size 40 --label "before|after"` cuts the SAME page region out of two sheets at 300 dpi and stacks them with captions — `--poi 3` instead of `--at` finds the three densest symbol clusters in the new sheet and crops those. Every design key in this file was settled by a crop like that, and twice the crop overruled the numbers. It also holds the one raster trap worth knowing: **never pass `{density:300}` to sharp for these SVGs**, because they already declare their 300 dpi pixel size and a density makes the page 14617 px wide, so a crop silently returns blank paper.
+
 `node "%SK%\labeller_demo.js" <outdir>` draws a synthetic test page twice — once with the old first-fit placer, once with `labeller.js` — for judging a placer change without moving a real sheet.
 
 ## Changing any of this

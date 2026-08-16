@@ -9,11 +9,11 @@ What to read when a sheet looks amateur rather than wrong: labels sitting across
 ```json
 "design": { "footerSafe": true, "spreadIcons": true, "iconInk": "charcoal", "panelScale": true,
             "scaleBar": true, "routeCasing": true, "cornerRadius": 2.0, "badgeFit": true,
-            "hubFit": true, "panelCorridors": true, "spokeSpread": true },
+            "hubFit": true, "panelCorridors": true, "spokeSpread": true, "legendPlace": true },
 "labels": { "engine": "v2" }
 ```
 
-Every built town carries all of these as of 2026-08-16, **except the last two, which are town-specific rather than universal**: `panelCorridors` only means anything on a town that declares `internalCorridors` (today just High Wycombe), and `spokeSpread` is adopted by **Ramsey only** — six of the other seven improve with it but a composition change should be seen before it is spent. `panelCorridors` also needs `corridorDesc` (and optionally `corridorNote`) beside it. Places carry none of this — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
+Every built town carries all of these as of 2026-08-16, **except two, which are town-specific rather than universal**: `panelCorridors` only means anything on a town that declares `internalCorridors` (today just High Wycombe), and `spokeSpread` is carried by **Beaconsfield, Huntingdon, March and Ramsey** — the other four are blocked by legend size, not by the bearing rule. `panelCorridors` also needs `corridorDesc` (and optionally `corridorNote`) beside it. Places carry none of this — they are held to the portal re-vendor (see `changing-the-engine.md` §4).
 
 Measured over the 31 shipped sheets, before → after: **628 → 266 defects** (`node "%SK%\quality_metrics.js" --all`), of which Ramsey external is the first sheet to reach **0**. Fused icon pairs: 110 → 1. Labels printed over a symbol that is not their own: 190 → 80 (the remainder is all place sheets, still on v1). Content buried under the footer band: 12 sheets → 1, and that last one is a place sheet — but note the baseline moved from 271 to 276 when `textUnderFooter` was found to be counting only text *straddling* the plate's edge, so "12 → 0" as this file used to claim was never true. Four of the design keys add ink of their own (a scale bar, its caption, a not-to-scale note, a white casing), so the total is not monotonic and should not be read as one.
 
@@ -148,19 +148,47 @@ The target is an **even distribution around the circle in the spokes' own bearin
 
 The run prints every spoke's before → after, the smallest resulting gap and the largest shift, and warns when two spokes are still under 18° apart — which the clamp cannot fix and merging can.
 
-**Previewed across all eight towns** (`--patch '{"design":{"spokeSpread":true}}'`), external sheets only:
+**Previewed across all eight towns** (`--patch-file` with `{"design":{"spokeSpread":true}}`), external sheets only. The first preview read the defect column alone and concluded "adopt on six". **That conclusion was wrong, and the way it was wrong is the most useful thing on this page** — see `design.legendPlace` below. The table now carries both numbers:
 
-| town | defects | note |
-|---|---|---|
-| Huntingdon | 2 → **0** | the §4.2 example that started this |
-| Wisbech | 3 → **0** | |
-| March, St Neots | 1 → **0** | |
-| Beaconsfield | 3 → 2 | |
-| St Ives | 4 → 3 | +3 labels placed |
-| High Wycombe | 5 → 5 | **−2 labels; the one town to look at before adopting.** 21 spokes at hand-tuned bearings is already a spread; re-spreading them is a second opinion, not a fix |
-| Ramsey | 0 → 0 | adopted 2026-08-16, with the merge below |
+| town | defects | buried under the legend | verdict |
+|---|---|---|---|
+| Huntingdon | 2 → **0** | 0 → **0** | **adoptable** — the §4.2 example that started this |
+| March | 1 → **0** | 0 → **0** | **adoptable** — gains `Chatteris` |
+| Beaconsfield | 3 → **1** | 0 → **0** | **adoptable** — identical label set; its legend relocates 69 mm |
+| Wisbech | 3 → 0 | 0 → **12** | no — legend cannot be placed clear |
+| St Neots | 1 → 0 | 0 → **10** | no — and it drops `Great Staughton`, `Kimbolton` |
+| St Ives | 4 → 3 | 1 → **8** | no — the +3 labels are bought by burying the Hinchingbrooke spoke |
+| High Wycombe | 5 → 5 | 0 → **17** | no, twice over: −2 labels, no gain, and the worst occlusion of the eight |
+| Ramsey | 0 → 0 | 0 → 0 | adopted 2026-08-16, with the merge below |
 
-Only **Ramsey carries it today** — the rest is signed-off artwork and a composition change should be seen before it is spent.
+The four "no" towns all fail for the *same* reason and it is not the spread: their legends are 78–106 mm wide and cannot be placed clear of every symbol once the spokes fan out. Their remedy is a **smaller legend** (`legendWrap`, `legendAt.box`), not a different bearing rule.
+
+**Adopted 2026-08-16 on Beaconsfield, Huntingdon, March and Ramsey.** The other four stay as they are until their legends get smaller.
+
+### `design.legendPlace` — the legend finds its own clear ground
+
+**The bug this exists for, because it is a pattern and not an incident.** The operators legend is furniture: pinned in page coordinates, drawn *after* the spider, on an opaque panel. It is pushed into `HARD` so the **label placer** dodges it — but the spokes, terminus lozenges and route lines are laid out knowing nothing about it, and simply disappear underneath. The only defence was `legendAt`, a hand-tuned constant, carried by four of the eight towns; the other four sat at the default `10,40` and happened to be clear. **All eight positions were tuned against the current bearings**, so one composition change invalidated every one of them at once: previewing `spokeSpread` buried 62 pieces of artwork across six towns — whole spokes, their destination lozenges, the lot — while `quality_metrics.js` reported the defect totals *falling* on five of the six, because it measures the map and the legend is not the map.
+
+With the key on, the generator measures two occupancies of what it has already drawn and searches on a 1 mm grid (summed-area tables, so a candidate costs four reads rather than tens of thousands):
+
+- **symbols** — every box the artwork has claimed: lozenges, the hub, ticks, badges. Covering one is **disqualifying**, not merely expensive. A symbol is a *place*; bury it and the reader loses a destination with nothing to say it was ever there.
+- **route ink** — minimised among the clear positions, then nearest a frame corner, because a page device belongs at the edge of the sheet.
+
+**Scoring the two as one weighted number is the mistake to avoid, and it was made here first.** Ranking by "least symbol area covered" parked High Wycombe's 92×80 mm legend squarely on **the hub** — the town the sheet is about — because that scored better than the three spokes it had been covering. Hence the hard constraint.
+
+**When nothing qualifies, it does not move.** A legend that cannot be placed clear needs to be *smaller*, and shuffling an oversized box to a different bad spot costs the reader the one thing they had — knowing where the legend lives between versions. The run says so:
+
+```
+legend: no position on this sheet leaves a 92x81 mm legend clear of every symbol,
+and where it sits covers 15.1% of them. Left where it is — shrink it with
+legendWrap or legendAt.box, or make room.
+```
+
+**On today's board it is a no-op on seven towns and fixes one real defect nobody had seen**: St Ives' legend grazes a terminus lozenge by 0.6%, and the placer finds it clear ground at `188,43`. That agreement between the placer and the new `symbolsUnderLegend` metric, arrived at from opposite directions, is the reason to trust either.
+
+`legendAt` still wins where it is clear, so a town that has hand-placed its legend keeps it.
+
+**Adopted 2026-08-16 on all eight towns.** Board after the rollout: **261 defects across the 31 sheets and 0 buried under a legend**, with Huntingdon external the first sheet to come out `ok` rather than `warn`.
 
 ### Merging co-terminating spokes — `external[].routes` (plan §4.3)
 
@@ -286,6 +314,8 @@ Every weight is in one `DEFAULTS` object at the top of `labeller.js`, so a chang
 ## Measuring
 
 `node "%SK%\quality_metrics.js" --all [--detail|--json]` scores every `ci-reference` sheet. It is read-only and cannot break a gate. Thresholds live in one `T = {}` object; changing them invalidates the frozen baseline in `quality-baseline-scorecard_2026-08-15.md` and must be called out.
+
+**It now measures what the legend is burying** — `symbolsUnderLegend` (a defect: lozenges, the hub, ticks, badges and names the legend is drawn on top of) and `routeLinesUnderLegend` (a warning: a stroke is still legible either side of the box). This is the one measure here that is about *furniture over artwork* rather than about the map, and it was added on 2026-08-16 after `spokeSpread` hid 62 pieces of artwork with every existing number improving. It moved the frozen baseline **266 → 267** (St Ives external, the 0.6% graze). The same fix corrected the legend detector, which required the box to sit in the top half of the page and so had never seen Beaconsfield's legend at all.
 
 **The scorecard does not measure the panel.** Every metric is about the map: ink, collisions, symbols, the frame. `design.panelScale` moved every size and gap in the panel on all eight towns and the total stayed at 271 — that is the tool working as specified, not the change doing nothing. Panel work is judged by rendering the panel and looking at it. (`minTextMm` is the one panel-adjacent measure, and on `panelCols` towns it reports the auto-fitted **badge** text, so it did not move either.)
 

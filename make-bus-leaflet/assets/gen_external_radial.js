@@ -352,90 +352,225 @@ if(EDK) out('</g>');
 // ---- legend + notes (top-left, under title) ---------------------------------
 // legendAt:{x,y} (optional) — move the operator legend out of a sector the spokes
 // need. Absent => top-left under the title, exactly as before.
-let lx=10, ly=40;
-if(D.legendAt){ if(D.legendAt.x!=null) lx=D.legendAt.x; if(D.legendAt.y!=null) ly=D.legendAt.y; }
-// legendWrap reassigns `ly` below (to keep the note's default offset sane) — the backing
-// panel's TOP must stay pinned to where the header was actually drawn, or the panel drifts
-// away from its own content (Wisbech/High Wycombe, 2026-08-06: box outline landed well below
-// the "Operators & services" header once legendWrap was in play).
-const legendTopY = ly;
-// Auto backing panel: the legend (+ its arm note, if any) is drawn into a buffer first so its
-// bounding box can be measured, then an opaque panel is emitted UNDER it. Used to be opt-in via
-// legendAt.box — now always drawn (every town's legend sits over the spokes at least once they
-// wrap around a busy hub), auto-sized to content. legendAt.box still wins when given explicitly,
-// as a hand-tuning escape hatch.
-const legendBuf = [];
-const realOut = out;
-out = (x) => legendBuf.push(x);
-let panelMaxX = lx, panelMaxY = ly - 4;
-out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
-panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4));
-// legendWrap:{perRow:N} (optional) — wrap an operator's badge run onto further
-// lines instead of letting it run off the page. Needed once a town has an
-// operator with many routes (High Wycombe: Carousel runs 17 of them). Absent =>
-// one line per operator exactly as before, so gated towns stay byte-identical.
-const LW = (D.legendWrap && (D.legendWrap.perRow|0) > 0) ? (D.legendWrap.perRow|0) : 0;
-if(LW){
-  let yy = ly;
-  OPS.forEach(op=>{
-    const rs = op.routes.filter(r=>C[r] && !HIDDEN_ROUTES.has(r));
-    if(!rs.length) return;
-    const rows = Math.ceil(rs.length/LW);
-    // design.badgeFit: one column pitch for the whole grid, or the columns stop
-    // lining up. Widest extra in this operator's run, so a run of discs keeps 7.0.
-    const _oxw = badgeXWs(rs, 2.9), _col = 7.0 + 2*_oxw;
-    rs.forEach((r,k)=>badge(lx+3+_oxw+(k%LW)*_col, yy+Math.floor(k/LW)*6.2, r, 2.9));
-    const _textX = lx+Math.min(rs.length,LW)*_col+2;
-    out(`<text x="${_textX.toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
-    panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4));
-    panelMaxY = Math.max(panelMaxY, yy + (rows-1)*6.2 + 3);
-    yy += rows*6.2 + 1.4;
-  });
-  ly = yy - 6.6*OPS.length;   // keep the note's default offset sane
-} else
-OPS.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
-  // design.badgeFit: bx already walks left-to-right, so each badge takes the room
-  // it actually needs and the next one starts after it (7.0 = 5.8mm disc + 1.2mm gap).
-  op.routes.filter(r=>!HIDDEN_ROUTES.has(r)).forEach(r=>{ const w=badgeXW(r,2.9); badge(bx+3+w,yy,r,2.9); bx+=7.0+2*w; });
-  out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
-  panelMaxX = Math.max(panelMaxX, bx+2 + measureText(op.name,3.4));
-  panelMaxY = Math.max(panelMaxY, yy+3); });
+const LX0 = (D.legendAt && D.legendAt.x!=null) ? D.legendAt.x : 10;
+const LY0 = (D.legendAt && D.legendAt.y!=null) ? D.legendAt.y : 40;
+const _box = D.legendAt && D.legendAt.box;
 // auto-note any route that leaves town on more than one arm (e.g. "56 runs as
 // two arms — to Manea and to Wisbech"), or use D.externalNote to override.
-// Word-wrapped to the legend panel's own content width, so a long note (several
-// multi-arm routes, or long destination names) breaks onto further lines instead
-// of running off the page — it used to be one unbounded <text>.
+// Hoisted above buildLegend because its TEXT does not depend on where the legend
+// sits — only its wrap width and position do.
 let armNote = D.externalNote;
 if(armNote===undefined){
   const arms={}; EXT.forEach(b=>{(arms[b.route]=arms[b.route]||[]).push(b.label);});
   armNote = Object.entries(arms).filter(([,v])=>v.length>1)
     .map(([r,v])=>`${r} runs as two arms — to ${v.slice(0,-1).join(', ')} and to ${v[v.length-1]}.`).join('  ');
 }
-const _box = D.legendAt && D.legendAt.box;
-if(armNote){
-  const _nx=(OV.note&&OV.note.x!=null)?OV.note.x:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y:(ly+OPS.length*6.6+3);
-  // Wrap width: an explicit legendAt.box caps it to the box's own interior (so the note can
-  // never spill past a hand-tuned panel); otherwise prefer a wide-but-short wrap (110mm floor)
-  // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby
-  // terminus lozenge (St Ives: the default 60mm floor wrapped to 6 lines, reaching low enough
-  // to cover the Hinchingbrooke box; 110mm wraps the same note to 3).
-  const _panelW = _box ? (_box.w - 8) : Math.max(panelMaxX - lx, 100);
-  const _maxChars = Math.max(20, Math.floor(_panelW / (2.9*0.58)));
-  const _noteLines = wrapText(armNote, _maxChars);
-  _noteLines.forEach((ln,i)=>out(`<text x="${_nx}" y="${(_ny+i*3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
-  panelMaxX = Math.max(panelMaxX, _nx + Math.max(..._noteLines.map(ln=>measureText(ln,2.9))));
-  panelMaxY = Math.max(panelMaxY, _ny + (_noteLines.length-1)*3.6 + 2);
-}
-out = realOut;
-{
+/*
+ * ART — the artwork's own claimed boxes, snapshotted BEFORE the legend adds any
+ * badge boxes of its own. design.legendPlace searches against this, so the legend
+ * never treats its own contents as an obstacle.
+ */
+const ART = HARD.slice();
+/*
+ * buildLegend — draw the legend at (lx,ly) into a buffer and measure it.
+ *
+ * Extracted from the inline block it used to be so that design.legendPlace can
+ * build it TWICE: once to learn how big the box is, then again wherever the
+ * search puts it. Content is a pure function of (lx,ly), which is what makes the
+ * second build safe — and with the flag absent it is called exactly once, at the
+ * configured spot, emitting the same strings in the same order as before.
+ *
+ * dx,dy shift an explicit overrides.note position by however far the legend moved,
+ * so a hand-placed note travels with the box instead of being left behind.
+ */
+function buildLegend(lx, ly, dx, dy){
+  // legendWrap reassigns `ly` below (to keep the note's default offset sane) — the backing
+  // panel's TOP must stay pinned to where the header was actually drawn, or the panel drifts
+  // away from its own content (Wisbech/High Wycombe, 2026-08-06: box outline landed well below
+  // the "Operators & services" header once legendWrap was in play).
+  const legendTopY = ly;
+  // Auto backing panel: the legend (+ its arm note, if any) is drawn into a buffer first so its
+  // bounding box can be measured, then an opaque panel is emitted UNDER it. Used to be opt-in via
+  // legendAt.box — now always drawn (every town's legend sits over the spokes at least once they
+  // wrap around a busy hub), auto-sized to content. legendAt.box still wins when given explicitly,
+  // as a hand-tuning escape hatch.
+  const legendBuf = [];
+  const realOut = out;
+  out = (x) => legendBuf.push(x);
+  let panelMaxX = lx, panelMaxY = ly - 4;
+  out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
+  panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4));
+  // legendWrap:{perRow:N} (optional) — wrap an operator's badge run onto further
+  // lines instead of letting it run off the page. Needed once a town has an
+  // operator with many routes (High Wycombe: Carousel runs 17 of them). Absent =>
+  // one line per operator exactly as before, so gated towns stay byte-identical.
+  const LW = (D.legendWrap && (D.legendWrap.perRow|0) > 0) ? (D.legendWrap.perRow|0) : 0;
+  if(LW){
+    let yy = ly;
+    OPS.forEach(op=>{
+      const rs = op.routes.filter(r=>C[r] && !HIDDEN_ROUTES.has(r));
+      if(!rs.length) return;
+      const rows = Math.ceil(rs.length/LW);
+      // design.badgeFit: one column pitch for the whole grid, or the columns stop
+      // lining up. Widest extra in this operator's run, so a run of discs keeps 7.0.
+      const _oxw = badgeXWs(rs, 2.9), _col = 7.0 + 2*_oxw;
+      rs.forEach((r,k)=>badge(lx+3+_oxw+(k%LW)*_col, yy+Math.floor(k/LW)*6.2, r, 2.9));
+      const _textX = lx+Math.min(rs.length,LW)*_col+2;
+      out(`<text x="${_textX.toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+      panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4));
+      panelMaxY = Math.max(panelMaxY, yy + (rows-1)*6.2 + 3);
+      yy += rows*6.2 + 1.4;
+    });
+    ly = yy - 6.6*OPS.length;   // keep the note's default offset sane
+  } else
+  OPS.forEach((op,i)=>{ const yy=ly+i*6.6; let bx=lx;
+    // design.badgeFit: bx already walks left-to-right, so each badge takes the room
+    // it actually needs and the next one starts after it (7.0 = 5.8mm disc + 1.2mm gap).
+    op.routes.filter(r=>!HIDDEN_ROUTES.has(r)).forEach(r=>{ const w=badgeXW(r,2.9); badge(bx+3+w,yy,r,2.9); bx+=7.0+2*w; });
+    out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+    panelMaxX = Math.max(panelMaxX, bx+2 + measureText(op.name,3.4));
+    panelMaxY = Math.max(panelMaxY, yy+3); });
+  // Word-wrapped to the legend panel's own content width, so a long note (several
+  // multi-arm routes, or long destination names) breaks onto further lines instead
+  // of running off the page — it used to be one unbounded <text>.
+  if(armNote){
+    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(ly+OPS.length*6.6+3);
+    // Wrap width: an explicit legendAt.box caps it to the box's own interior (so the note can
+    // never spill past a hand-tuned panel); otherwise prefer a wide-but-short wrap (110mm floor)
+    // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby
+    // terminus lozenge (St Ives: the default 60mm floor wrapped to 6 lines, reaching low enough
+    // to cover the Hinchingbrooke box; 110mm wraps the same note to 3).
+    const _panelW = _box ? (_box.w - 8) : Math.max(panelMaxX - lx, 100);
+    const _maxChars = Math.max(20, Math.floor(_panelW / (2.9*0.58)));
+    const _noteLines = wrapText(armNote, _maxChars);
+    _noteLines.forEach((ln,i)=>out(`<text x="${_nx}" y="${(_ny+i*3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
+    panelMaxX = Math.max(panelMaxX, _nx + Math.max(..._noteLines.map(ln=>measureText(ln,2.9))));
+    panelMaxY = Math.max(panelMaxY, _ny + (_noteLines.length-1)*3.6 + 2);
+  }
+  out = realOut;
   // legendAt.box may override just one dimension (e.g. width, to steer clear of a spoke
   // label) — the other stays auto-sized to content instead of freezing at a stale value.
   const bw = (_box && _box.w!=null) ? _box.w : (panelMaxX - lx + 8);
   const bh = (_box && _box.h!=null) ? _box.h : (panelMaxY - (legendTopY-10) + 4);
-  if(V2) HARD.push([lx-4.6, legendTopY-10.6, lx-4+bw+0.6, legendTopY-10+bh+0.6, 'legend']);
-  out(`<rect x="${(lx-4).toFixed(2)}" y="${(legendTopY-10).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+  return { buf: legendBuf, x: lx-4, y: legendTopY-10, w: bw, h: bh };
 }
-legendBuf.forEach(out);
+/*
+ * design.legendPlace — let the legend find its own clear ground. Absent => the
+ * legend stays exactly where legendAt (or the default 10,40) puts it, byte-identical.
+ *
+ * WHY THIS EXISTS. The legend is furniture: pinned in page coordinates and drawn
+ * AFTER the spider, on an opaque panel. It is registered as a hard box for the
+ * label placer, so LABELS dodge it — but the spokes, terminus lozenges and route
+ * lines are laid out with no knowledge of it whatever, and simply disappear
+ * underneath. Until 2026-08-16 the only defence was legendAt, a hand-tuned
+ * constant per town, and four towns carried one; the other four sat at the
+ * default and happened to be clear. Every one of those eight positions is tuned
+ * against the CURRENT bearings, so one composition change invalidates all of them
+ * at once — which is exactly what design.spokeSpread did, burying 62 pieces of
+ * artwork across six towns while every defect metric went DOWN, because
+ * quality_metrics.js measures the map and the legend is not the map.
+ *
+ * The internal sheet solved this class of problem already (gen_internal.js,
+ * spotSearch: "the blank-space search, shared by every free-floating page
+ * device"). This is that idea for the external sheet, with the same two rules —
+ * a page device belongs at the EDGE of the sheet, so among equally clear
+ * positions the one nearest a frame corner wins; and a configured position is
+ * honoured when it is clear, so a town that has hand-placed its legend keeps it.
+ */
+const LEGPLACE = !!(DESIGN.legendPlace);
+const legendSpot = (w, h, wantX, wantY) => {
+  /*
+   * TWO occupancies, not one, because the two things the legend can cover are not
+   * equally bad. A terminus lozenge, the hub or a tick is a NAMED PLACE: cover it
+   * and the reader loses a destination with nothing to tell them it was ever
+   * there. A route line is a stroke: cover a stretch of it and the line is still
+   * legible either side. So symbols are a hard constraint and route ink is the
+   * thing minimised within it. Scoring them as one weighted number, which the
+   * first cut of this did, buys a slightly cleaner sheet by burying a lozenge —
+   * exactly the trade this whole fix exists to refuse.
+   */
+  const pal = new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
+  const inkL = new Labeller({ page:[W,H] });
+  inkL.stampSvg(s, (stroke,wd)=> pal.has(stroke) && wd>=1.2);
+  const symL = new Labeller({ page:[W,H] });
+  for(const b of ART) symL.stampBox(b);
+  // Summed-area tables. Without them, scoring ~15,000 candidate positions against
+  // an 80x90 mm box is ~400 million cell reads; with them every candidate is four.
+  const sat = (g)=>{
+    const nx=g.nx, ny=g.ny, T = new Int32Array((nx+1)*(ny+1));
+    for(let gy=0; gy<ny; gy++){
+      let run = 0;
+      for(let gx=0; gx<nx; gx++){ run += g.a[gy*nx+gx] ? 1 : 0; T[(gy+1)*(nx+1)+gx+1] = T[gy*(nx+1)+gx+1] + run; }
+    }
+    return T;
+  };
+  const clampi = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+  const mk = (g)=>{
+    const T = sat(g), nx=g.nx, ny=g.ny, cell=g.cell;
+    return (x0,y0)=>{
+      const gx0 = clampi(Math.floor(x0/cell), 0, nx), gx1 = clampi(Math.ceil((x0+w)/cell), 0, nx);
+      const gy0 = clampi(Math.floor(y0/cell), 0, ny), gy1 = clampi(Math.ceil((y0+h)/cell), 0, ny);
+      const tot = (gx1-gx0)*(gy1-gy0);
+      if(tot<=0) return 1;
+      const hit = T[gy1*(nx+1)+gx1] - T[gy0*(nx+1)+gx1] - T[gy1*(nx+1)+gx0] + T[gy0*(nx+1)+gx0];
+      return hit/tot;
+    };
+  };
+  const inkCover = mk(inkL.ink), symCover = mk(symL.ink);
+  // The frame the labeller itself works to, so the legend cannot stray under the
+  // title block or the footer band.
+  const FX0=6, FY0=30, FX1=291, FY1=190;
+  const wantSym = symCover(wantX, wantY), wantInk = inkCover(wantX, wantY);
+  if(wantSym <= 0 && wantInk <= 0.005) return { moved:false, want:wantInk, wantSym };
+  const cnr=[[FX0,FY0],[FX1,FY0],[FX0,FY1],[FX1,FY1]];
+  /*
+   * Covering NO symbol is a qualification, not a preference. A position that
+   * buries fewer lozenges than the current one is not thereby a good position,
+   * and ranking by "least symbol area" produced the worst result of this whole
+   * exercise: High Wycombe's 92x80 mm legend parked itself on the HUB — the town
+   * the sheet is about — because that scored lower than the three spokes it was
+   * covering before. Among clear positions, least route ink then nearest a frame
+   * corner, a page device belonging at the edge of the sheet rather than floating
+   * in the middle of it.
+   */
+  let best=null;
+  for(let by=FY0; by<=FY1-h; by+=1) for(let bx=FX0; bx<=FX1-w; bx+=1){
+    if(symCover(bx,by) > 0) continue;
+    const ink = inkCover(bx,by);
+    if(best && ink > best.ink + 1e-9) continue;
+    const d = Math.min(...cnr.map(c=>Math.hypot(bx-c[0],by-c[1])));
+    if(!best || ink < best.ink - 1e-9 || d < best.d - 1e-9) best={bx,by,ink,d};
+  }
+  // No clear position => leave the legend where the town put it and say so. A
+  // sheet whose legend cannot be placed clear needs a SMALLER legend (legendWrap,
+  // legendAt.box) — shuffling an oversized box around is not a fix, and moving it
+  // somewhere equally bad costs the reader the one thing they had, which is
+  // knowing where the legend lives from one version to the next.
+  if(!best) return { moved:false, want:wantInk, wantSym, nowhere:true };
+  if(wantSym <= 0 && best.ink >= wantInk - 1e-9) return { moved:false, want:wantInk, wantSym };
+  return { moved:true, want:wantInk, wantSym, cov:best.ink, sym:0, dx:best.bx-wantX, dy:best.by-wantY };
+};
+const hardMark = HARD.length;
+let LEG = buildLegend(LX0, LY0, 0, 0);
+if(LEGPLACE){
+  const got = legendSpot(LEG.w, LEG.h, LEG.x, LEG.y);
+  if(got.moved){
+    HARD.length = hardMark;               // drop the trial build's badge boxes
+    LEG = buildLegend(LX0+got.dx, LY0+got.dy, got.dx, got.dy);
+    process.stderr.write('legend: the configured spot covers '+(got.wantSym*100).toFixed(1)
+      +'% symbols / '+(got.want*100).toFixed(0)+'% route ink — moved '
+      +got.dx.toFixed(0)+','+got.dy.toFixed(0)+' mm to '+LEG.x.toFixed(0)+','+LEG.y.toFixed(0)
+      +' ('+(got.sym*100).toFixed(1)+'% / '+(got.cov*100).toFixed(0)+'%).\n');
+  } else if(got.nowhere){
+    process.stderr.write('legend: no position on this sheet leaves a '+LEG.w.toFixed(0)+'x'+LEG.h.toFixed(0)
+      +' mm legend clear of every symbol'+(got.wantSym>0 ? ', and where it sits covers '
+      +(got.wantSym*100).toFixed(1)+'% of them' : '')+'. Left where it is — shrink it with legendWrap '
+      +'or legendAt.box, or make room.\n');
+  }
+}
+if(V2) HARD.push([LEG.x-0.6, LEG.y-0.6, LEG.x+LEG.w+0.6, LEG.y+LEG.h+0.6, 'legend']);
+out(`<rect x="${LEG.x.toFixed(2)}" y="${LEG.y.toFixed(2)}" width="${LEG.w.toFixed(2)}" height="${LEG.h.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+LEG.buf.forEach(out);
 
 // ---- v2: deduplicate the stop names, then place them all at once ------------
 if(V2){

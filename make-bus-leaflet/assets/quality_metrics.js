@@ -93,6 +93,11 @@ function parseTransform(s) {
 function parseSvg(svg) {
   const texts = [], icons = [], strokes = [], rects = [], circles = [];
   let vb = [0, 0, 297, 210], mapFrame = null, footerTop = null, seenPlate = false;
+  // Document order, kept on every element. `afterPlate` below is the same idea
+  // applied to one specific box; the legend is a second, and it can sit anywhere
+  // on the sheet, so it needs the general form: what was drawn BEFORE the legend
+  // is what the legend is about to bury.
+  let seq = 0;
 
   const mVb = svg.match(/viewBox="([^"]*)"/);
   if (mVb) vb = mVb[1].trim().split(/[\s,]+/).map(Number);
@@ -126,7 +131,7 @@ function parseSvg(svg) {
       if (/translate\([^)]*\)\s*scale\(/.test(a.transform || '')) {
         const [cx, cy] = apply(m, 0, 0);
         const sc = Math.abs(m[0]) || 1;
-        icons.push({ cx, cy, r: 2.1 * sc });     // icons.js draws within a 4.2mm box
+        icons.push({ cx, cy, r: 2.1 * sc, seq: seq++ });     // icons.js draws within a 4.2mm box
       }
       continue;
     }
@@ -139,6 +144,7 @@ function parseSvg(svg) {
       const size = parseFloat(style['font-size'] ?? 0) || 0;
       const [x, y] = apply(m, parseFloat(a.x) || 0, parseFloat(a.y) || 0);
       texts.push({
+        seq: seq++,
         text: DEC(tail), x, y, size: size * scaleOf,
         anchor: a['text-anchor'] || 'start',
         bold: (style['font-weight'] || '') === 'bold',
@@ -160,19 +166,21 @@ function parseSvg(svg) {
     }
 
     if (tag === 'path' && a.d) {
-      for (const seg of pathSegments(a.d, m)) strokes.push({ seg, w: sw * scaleOf, stroke, clipped: top.clipped });
+      for (const seg of pathSegments(a.d, m)) strokes.push({ seg, w: sw * scaleOf, stroke, clipped: top.clipped, seq });
+      seq++;
       continue;
     }
     if (tag === 'line') {
       const p0 = apply(m, +a.x1 || 0, +a.y1 || 0), p1 = apply(m, +a.x2 || 0, +a.y2 || 0);
-      strokes.push({ seg: [p0, p1], w: sw * scaleOf, stroke, clipped: top.clipped });
+      strokes.push({ seg: [p0, p1], w: sw * scaleOf, stroke, clipped: top.clipped, seq: seq++ });
       continue;
     }
     if (tag === 'rect') {
       const x = +a.x || 0, y = +a.y || 0, w = +a.width || 0, h = +a.height || 0;
       const [x0, y0] = apply(m, x, y), [x1, y1] = apply(m, x + w, y + h);
       const r = { x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1), y1: Math.max(y0, y1),
-                  fill: (style.fill || a.fill || 'none').toLowerCase(), op: parseFloat(a['fill-opacity'] ?? 1) };
+                  fill: (style.fill || a.fill || 'none').toLowerCase(), op: parseFloat(a['fill-opacity'] ?? 1),
+                  rx: +a.rx || 0, stroked: (a.stroke || 'none').toLowerCase(), seq: seq++ };
       rects.push(r);
       // The footer plate: a full-width near-white band in the bottom third,
       // painted last over everything (footer.js footerBand()).
@@ -184,7 +192,7 @@ function parseSvg(svg) {
     }
     if (tag === 'circle') {
       const [cx, cy] = apply(m, +a.cx || 0, +a.cy || 0);
-      circles.push({ cx, cy, r: (+a.r || 0) * scaleOf, fill: (style.fill || a.fill || 'none').toLowerCase() });
+      circles.push({ cx, cy, r: (+a.r || 0) * scaleOf, fill: (style.fill || a.fill || 'none').toLowerCase(), seq: seq++ });
     }
   }
   return { vb, mapFrame, footerTop, texts, icons, strokes, rects, circles };
@@ -371,9 +379,18 @@ function analyse(svgPath) {
   // Legend/operators box on an external sheet: a large pale rounded rect.
   // ...but NOT the page background, which is also a big pale rect. Require it
   // to be a boxed panel: under a third of the page, and drawn with a border.
-  const legend = hasPanel ? null : (P.rects.find(r =>
+  //
+  // It used to require r.y0 < H * 0.5 as well, which quietly meant the tool could
+  // not see Beaconsfield's legend at all — that town parks it at y=145, so every
+  // legend-aware measure reported null for the one sheet whose legend sits in the
+  // busiest half of the page. gen_external_radial.js emits the box with an exact
+  // signature (fill-opacity 0.94, a #ccc hairline), so match that first and keep
+  // the loose rule only as a fallback for sheets drawn by older engines.
+  const legendSig = hasPanel ? null : (P.rects.find(r =>
+    Math.abs(r.op - 0.94) < 1e-6 && r.stroked === '#ccc') || null);
+  const legend = legendSig || (hasPanel ? null : (P.rects.find(r =>
     r.x1 - r.x0 > 30 && r.y1 - r.y0 > 15 && r.y0 < H * 0.5 &&
-    (r.x1 - r.x0) * (r.y1 - r.y0) < W * H / 3 && /fff|none|white/.test(r.fill)) || null);
+    (r.x1 - r.x0) * (r.y1 - r.y0) < W * H / 3 && /fff|none|white/.test(r.fill)) || null));
 
   // Ink that a label must not sit on: route ribbons, plus the river/railway.
   // The faint grey context road network is deliberately NOT included — labels
@@ -418,7 +435,68 @@ function analyse(svgPath) {
     mapLabels.push(Object.assign({}, t, { quad: textQuad(t), kind }));
   }
 
-  const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [] };
+  const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [],
+                   underLegend: [], routeUnderLegend: [] };
+
+  /*
+   * WHAT THE LEGEND IS BURYING.
+   *
+   * Every other measure in this file is about the map: ink, labels, collisions,
+   * the frame. The operators legend is furniture — pinned in page coordinates,
+   * drawn after the artwork, opaque — and until 2026-08-16 nothing here looked at
+   * what went underneath it. That gap was not theoretical: previewing
+   * design.spokeSpread across the seven towns hid 62 pieces of artwork behind
+   * legends, including whole spokes and their destination lozenges, while this
+   * tool reported the defect totals going DOWN on five of the six. A defect the
+   * measure cannot express is a defect that ships.
+   *
+   * Two counts, because the two cases are not equally bad and the placer in
+   * gen_external_radial.js draws the same line. A SYMBOL — a terminus lozenge,
+   * the hub, a stop tick, a badge, a name — is a place: bury it and the reader
+   * loses a destination with nothing to say it was ever there, so it counts as a
+   * defect. A ROUTE LINE is a stroke, still legible either side of the box, so it
+   * is reported and warned on but not scored. Document order is what makes this
+   * exact rather than a guess: anything drawn before the legend rect is content
+   * the legend is about to cover.
+   */
+  if (legend) {
+    const LB = [legend.x0, legend.y0, legend.x1, legend.y1];
+    const hits = (b) => !(b[2] < LB[0] || b[0] > LB[2] || b[3] < LB[1] || b[1] > LB[3]);
+    for (const r of P.rects) {
+      if (r.seq >= legend.seq || r === legend) continue;
+      if (r.x1 - r.x0 > W * 0.5) continue;                       // the page background
+      if (/none/.test(r.fill)) continue;
+      if (hits([r.x0, r.y0, r.x1, r.y1]))
+        detail.underLegend.push({ kind: 'box', at: [+r.x0.toFixed(1), +r.y0.toFixed(1)], fill: r.fill });
+    }
+    for (const c of P.circles) {
+      if (c.seq >= legend.seq) continue;
+      if (hits([c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r]))
+        detail.underLegend.push({ kind: c.r >= 3 ? 'node' : 'tick', at: [+c.cx.toFixed(1), +c.cy.toFixed(1)] });
+    }
+    for (const t of P.texts) {
+      if (t.seq >= legend.seq) continue;
+      const q = textQuad(t);
+      const bx = [Math.min(...q.map(p => p[0])), Math.min(...q.map(p => p[1])),
+                  Math.max(...q.map(p => p[0])), Math.max(...q.map(p => p[1]))];
+      if (hits(bx)) detail.underLegend.push({ kind: 'label', text: t.text, at: [+t.x.toFixed(1), +t.y.toFixed(1)] });
+    }
+    const seen = new Set();
+    for (const s of P.strokes) {
+      if (s.seq >= legend.seq || !isRouteInk(s)) continue;
+      if (seen.has(s.seq)) continue;
+      const [p, q] = s.seg;
+      const n = Math.max(2, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.4));
+      for (let i = 0; i <= n; i++) {
+        const x = p[0] + (q[0] - p[0]) * i / n, y = p[1] + (q[1] - p[1]) * i / n;
+        if (x >= LB[0] && x <= LB[2] && y >= LB[1] && y <= LB[3]) {
+          seen.add(s.seq);
+          detail.routeUnderLegend.push({ stroke: s.stroke, at: [+x.toFixed(1), +y.toFixed(1)] });
+          break;
+        }
+      }
+    }
+  }
 
   for (const L of mapLabels) {
     const cov = quadCoverage(grid, L.quad);
@@ -593,6 +671,8 @@ function analyse(svgPath) {
     labelIconCollisions: detail.labelIcon.length,
     iconBlobs: detail.iconPairs.length,
     textUnderFooter: detail.inFooter.length,
+    symbolsUnderLegend: legend ? detail.underLegend.length : null,
+    routeLinesUnderLegend: legend ? detail.routeUnderLegend.length : null,
     inkAreaUnderFooterMm2: inkAreaInFooter,
     labelsIntoPanel: hasPanel || legend ? detail.intoPanel.length : null,
     minTextMm: allText.length ? +Math.min(...allText.filter(t => t.size > 0).map(t => t.size)).toFixed(2) : null,
@@ -604,7 +684,8 @@ function analyse(svgPath) {
   // One trackable number. Every later phase should drive this down, and the
   // per-100-labels form stops a big town looking worse simply for being big.
   m.defects = m.pointLabelsOverInk + m.labelLabelCollisions + m.labelIconCollisions
-    + m.duplicateLabels + m.iconBlobs + m.textUnderFooter + (m.labelsIntoPanel || 0);
+    + m.duplicateLabels + m.iconBlobs + m.textUnderFooter + (m.labelsIntoPanel || 0)
+    + (m.symbolsUnderLegend || 0);
   m.defectsPer100 = m.mapLabels ? +(m.defects * 100 / m.mapLabels).toFixed(0) : null;
   const fails = [];
   const warns = [];
@@ -615,6 +696,8 @@ function analyse(svgPath) {
   if (m.labelIconCollisions > 0) fails.push('labels over a foreign icon');
   if (m.iconBlobs > 0) fails.push('icon blobs');
   if (m.textUnderFooter > 0) fails.push('text under footer');
+  if (m.symbolsUnderLegend > 0) fails.push('artwork buried under the legend');
+  else if (m.routeLinesUnderLegend > 0) warns.push('route lines behind the legend');
   if (m.labelsIntoPanel > 0) fails.push('labels into panel');
   if (m.minTextMm !== null && m.minTextMm < T.minTextMm) fails.push('text below ' + T.minTextMm + 'mm');
   if (m.inkAreaUnderFooterMm2 > T.footerInkWarnMm2) warns.push('route ink under footer');
@@ -667,6 +750,7 @@ function main() {
     ['dup', r => r.metrics.duplicateLabels, 4],
     ['blob', r => r.metrics.iconBlobs, 5],
     ['ftr.txt', r => r.metrics.textUnderFooter, 8],
+    ['lgnd', r => r.metrics.symbolsUnderLegend, 6],
     ['ftr.mm2', r => r.metrics.inkAreaUnderFooterMm2, 8],
     ['pnl', r => r.metrics.labelsIntoPanel ?? '-', 4],
     ['min', r => r.metrics.minTextMm, 5],
@@ -685,7 +769,7 @@ function main() {
   console.log('-'.repeat(width));
   console.log(`total defects: ${results.reduce((a,r)=>a+r.metrics.defects,0)} across ${results.length} sheets
 ${results.length} sheets · ${results.filter(r => r.fails.length).length} FAIL · ${results.filter(r => !r.fails.length && r.warns.length).length} warn · ${results.filter(r => !r.fails.length && !r.warns.length).length} clean`);
-  console.log(`totals: ${tot('pointLabelsOverInk')} point labels over route ink · ${tot('roadLabelsOverInk')} road names over route ink · ${tot('labelLabelCollisions')} label collisions · ${tot('duplicateLabels')} duplicate labels · ${tot('labelIconCollisions')} over a foreign icon · ${tot('iconBlobs')} icon blobs · ${tot('textUnderFooter')} text under footer`);
+  console.log(`totals: ${tot('pointLabelsOverInk')} point labels over route ink · ${tot('roadLabelsOverInk')} road names over route ink · ${tot('labelLabelCollisions')} label collisions · ${tot('duplicateLabels')} duplicate labels · ${tot('labelIconCollisions')} over a foreign icon · ${tot('iconBlobs')} icon blobs · ${tot('textUnderFooter')} text under footer · ${tot('symbolsUnderLegend')} buried under the legend`);
 
   if (detail) for (const r of results) {
     if (!r.fails.length && !r.warns.length) continue;

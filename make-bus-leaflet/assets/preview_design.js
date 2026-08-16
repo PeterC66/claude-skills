@@ -133,7 +133,14 @@ function build(t) {
   if (r.status !== 0) { console.error(t.name + ' gen_internal FAILED:\n' + r.stderr); return { ws, made, s4 }; }
   if (r.stderr.trim()) for (const ln of r.stderr.trim().split('\n')) console.error('  [' + t.name + '] ' + ln);
   made.push('internal.svg');
-  if (run(path.join(ws, 'gen_external.js'), ws).status === 0) made.push('external.svg');
+  // Forward the external generator's stderr too. It used to be dropped on success,
+  // so gen_external_radial's warnings (the water-palette check, and now the legend
+  // placer) were invisible in a preview — which is precisely the trap session 7
+  // wrote up as "run the engine and read its stderr": March's palette warning had
+  // been printing on every build for two rollouts with nobody able to see it here.
+  const re = run(path.join(ws, 'gen_external.js'), ws);
+  if (re.status === 0) made.push('external.svg');
+  if ((re.stderr || '').trim()) for (const ln of re.stderr.trim().split('\n')) console.error('  [' + t.name + '] ' + ln);
   for (const [key, script, out] of [['internalSchematic', 'schematize_internal.js', 'internal-schematic.svg'],
                                     ['internalDiagram', 'diagram_internal.js', 'internal-diagram.svg']]) {
     if (!rj[key]) continue;

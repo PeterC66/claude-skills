@@ -31,6 +31,7 @@ Measured over the 31 shipped sheets, before → after: **628 → 269 defects** (
 | `dedupeStopsMm` | `30` | External sheets only: two spokes calling at the same village label it once, not twice. |
 | `panelScale` | off | One type scale and one heading rhythm for the Services/Key panel. Section below. |
 | `panelCorridors` | off | One Services row per **drawn lane** rather than per service, wearing the badge stack the map draws, plus a sentence stating the corridor rule. Needs `internalCorridors`; ignored (with a note on stderr) without it. Section below. |
+| `spokeSpread` | off | External sheets: spreads the spider's spokes evenly around the hub in their own bearing order, clamped to `maxShift` (default 30°) of the true bearing. `strength` < 1 blends. Section below. |
 | `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
 | `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
@@ -136,6 +137,36 @@ Optional sub-keys, all sensibly defaulted: `cols` / `width` (default: whatever `
 **Saying the rule on the sheet is part of the same key.** The triage required rung 3 be "stated in the key" and it never was: a reader seeing 22 numbers in 11 hues, four of them shared, can only conclude the palette ran out — which is precisely the impression the rung exists to prevent. The engine now prints one sentence under the services list, worded from what the town actually declares (`internalCorridors` alone, or with `corridorPalette`), overridable as `corridorNote: "…"` and suppressible with `corridorNote: false`.
 
 **What it costs: nothing the scorecard can see** — 269 → 269, because no metric in `quality_metrics.js` looks at the panel. The label-set diff is 14 old panel strings out, 13 new ones in, and every service's destination survives the regrouping. Judge it by rendering the panel.
+
+### `design.spokeSpread` — open the spider's fan (plan §4.2)
+
+A radial spider is a tube map: spoke **length** already carries nothing (every spoke runs to the frame) and the footer says *Diagram — not to scale*. Bearing is the one geographic claim left, and taken literally it wastes the page. Ramsey's spokes left the east and west of the circle empty while three of them fought over a ~40° fan pointing straight down — which is *why* its labels collided.
+
+The target is an **even distribution around the circle in the spokes' own bearing order**, phased by a circular mean of `bearing − k·step` so the whole fan rotates rather than re-orders (an arithmetic mean breaks at the 0°/360° seam, which is exactly where a north-pointing spoke lives). Each spoke is then clamped to `maxShift` of its true bearing.
+
+**The clamp is the honesty control, and 30° is the default deliberately.** A spoke may be nudged to the edge of its compass sector — Ramsey's SSW Huntingdon drawn SW — but it cannot cross into the opposite one, so "which way do I leave town" survives. `strength` < 1 blends toward the true bearings instead, for a town that only wants the fan opened a little. Order is preserved by construction, which is what keeps the sheet readable as a compass. A town with hand-pinned bearings in `overrides.json` should **not** turn this on: those are inputs here and get spread with the rest.
+
+The run prints every spoke's before → after, the smallest resulting gap and the largest shift, and warns when two spokes are still under 18° apart — which the clamp cannot fix and merging can.
+
+**Previewed across all eight towns** (`--patch '{"design":{"spokeSpread":true}}'`), external sheets only:
+
+| town | defects | note |
+|---|---|---|
+| Huntingdon | 2 → **0** | the §4.2 example that started this |
+| Wisbech | 3 → **0** | |
+| March, St Neots | 1 → **0** | |
+| Beaconsfield | 3 → 2 | |
+| St Ives | 4 → 3 | +3 labels placed |
+| High Wycombe | 5 → 5 | **−2 labels; the one town to look at before adopting.** 21 spokes at hand-tuned bearings is already a spread; re-spreading them is a second opinion, not a fix |
+| Ramsey | 0 → 0 | adopted 2026-08-16, with the merge below |
+
+Only **Ramsey carries it today** — the rest is signed-off artwork and a composition change should be seen before it is spent.
+
+### Merging co-terminating spokes — `external[].routes` (plan §4.3)
+
+Not an engine feature: `external[].routes: ["303","305"]` has always put several services on one spoke with stacked badges, and *which destinations are the same place* is a judgement about the real world. Ramsey is the clearest case there will ever be — **303 and 305 had identical `stops` arrays, the same destination and the same journey time**, differing only in days, and were drawn as two parallel spokes with two `Huntingdon` lozenges side by side. Merging them cost nothing (the day difference moved into `days`, which this sheet does not draw) and bought a lot: Ramsey external went **3 defects → 0**, gained `Old Hurst`, and the four village names now print once each on one spoke instead of being split across two by the 30 mm de-duplicator.
+
+**When two spokes' `stops` arrays are equal, the merge is not a judgement at all — it is a de-duplication.** Check for that before anything else on a crowded spider.
 
 ### Blue-cyan belongs to the water (plan §5.2)
 

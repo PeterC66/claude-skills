@@ -207,14 +207,73 @@ function hubEdge(dx,dy){
   const denom = Math.sqrt((dx*dx)/(HUB_A*HUB_A) + (dy*dy)/(HUB_B*HUB_B));
   return denom>0 ? Math.max(14, 1/denom) : Math.max(14, HUB_A, HUB_B);
 }
+/* ---- design.spokeSpread — spread the spokes around the hub (plan §4.2) --------
+ *
+ * A radial spider is a tube map: spoke LENGTH already carries nothing (every
+ * spoke runs to the frame), and the footer says "Diagram — not to scale". Bearing
+ * is the one geographic claim left, and taken literally it wastes the page —
+ * Ramsey's five spokes left the east and west of the circle empty while three of
+ * them fought over a ~40° fan pointing straight down, which is *why* its labels
+ * collided. Every published spider (TfL's included) spreads its spokes and keeps
+ * the compass SECTOR rather than the compass angle.
+ *
+ * So: the target is an even distribution around the circle **in the spokes' own
+ * bearing order**, phased to sit as close to the true bearings as it can (a
+ * circular mean of bearing − k·step, so the whole fan is rotated rather than
+ * re-ordered), and then each spoke is clamped to `maxShift` degrees of its real
+ * bearing. **The clamp is the honesty control and 30° is deliberate**: a spoke may
+ * be nudged to the edge of its sector — Ramsey's SSW Huntingdon drawn SW — but it
+ * cannot cross into the opposite one, so "which way do I leave town" survives.
+ * Raise it per town knowingly; `strength` < 1 blends toward the true bearings
+ * instead, for a town that only wants the fan opened a little.
+ *
+ * Order is preserved by construction, which is what keeps the sheet readable as a
+ * compass. Absent the key nothing runs and every sheet is byte-identical; a town
+ * that has hand-pinned bearings in overrides.json should not turn it on, because
+ * those are inputs here and would be spread along with the rest.
+ */
+const SPRD = DESIGN.spokeSpread ? (DESIGN.spokeSpread===true?{}:DESIGN.spokeSpread) : null;
+const _cnt={}; EXT.forEach(b=>_cnt[b.route]=(_cnt[b.route]||0)+1);
+const _keyOf=(()=>{ const seen={}; return EXT.map(b=>{ seen[b.route]=(seen[b.route]||0)+1;
+  return _cnt[b.route]>1 ? b.route+'#'+seen[b.route] : b.route; }); })();
+const norm360 = a => ((a%360)+360)%360;
+const BEARINGS = (()=>{
+  const raw = EXT.map((b,i)=>{ const ov=(OV.branches||{})[_keyOf[i]]||{};
+    return norm360(ov.bearing!=null?ov.bearing:b.bearing); });
+  if(!SPRD || raw.length<2) return raw;
+  const maxShift = SPRD.maxShift!=null?SPRD.maxShift:30;
+  const strength = SPRD.strength!=null?SPRD.strength:1;
+  const order = raw.map((_,i)=>i).sort((a,b)=>raw[a]-raw[b]);
+  const step = 360/order.length;
+  // Phase = circular mean of (bearing − k·step): the rotation of the even fan that
+  // sits closest to the real bearings. A plain arithmetic mean would break at the
+  // 0°/360° seam, which is exactly where a north-pointing spoke lives.
+  let sx=0, sy=0;
+  order.forEach((idx,k)=>{ const d=(raw[idx]-k*step)*Math.PI/180; sx+=Math.cos(d); sy+=Math.sin(d); });
+  const phase = Math.atan2(sy,sx)*180/Math.PI;
+  const outB = raw.slice();
+  order.forEach((idx,k)=>{
+    const want = ((phase + k*step - raw[idx] + 540)%360)-180;      // signed shift wanted
+    const d = Math.max(-maxShift, Math.min(maxShift, want*strength));
+    outB[idx] = norm360(raw[idx]+d);
+  });
+  const gaps = order.map((idx,k)=>{ const nx=order[(k+1)%order.length];
+    return norm360(outB[nx]-outB[idx]) || 360; });
+  process.stderr.write('spokeSpread: '+order.map((idx,k)=>_keyOf[idx]+' '+raw[idx].toFixed(0)+'->'
+    +outB[idx].toFixed(0)+'°').join(', ')+'  (smallest gap '+Math.min(...gaps).toFixed(0)+'°, '
+    +'max shift '+Math.max(...outB.map((v,i)=>Math.abs(((v-raw[i]+540)%360)-180))).toFixed(0)+'°)\n');
+  if(Math.min(...gaps) < 18) process.stderr.write('spokeSpread: two spokes are still under 18° apart '
+    +'— the maxShift clamp cannot open them. Merge co-terminating routes onto one spoke '
+    +'(external[].routes) or raise design.spokeSpread.maxShift.\n');
+  return outB;
+})();
 // draw spokes first (under hub)
-const _cnt={}; EXT.forEach(b=>_cnt[b.route]=(_cnt[b.route]||0)+1); const _occ={};
-for(const b of EXT){
-  _occ[b.route]=(_occ[b.route]||0)+1;
-  const _key=_cnt[b.route]>1?b.route+'#'+_occ[b.route]:b.route;
+for(let _i=0;_i<EXT.length;_i++){
+  const b=EXT[_i];
+  const _key=_keyOf[_i];
   const _ov=(OV.branches||{})[_key]||{};
   if(EDK) out('<g data-kind="branch" data-key="'+esc(_key)+'">');
-  const _bearing=_ov.bearing!=null?_ov.bearing:b.bearing;
+  const _bearing=BEARINGS[_i];
   let a=_bearing*Math.PI/180, dx=Math.sin(a), dy=-Math.cos(a);
   let t=rayToRect(dx,dy);
   let tx=HX+dx*t, ty=HY+dy*t;            // terminus point on frame

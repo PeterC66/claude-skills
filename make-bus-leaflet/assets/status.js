@@ -158,6 +158,16 @@ function portalDrift() {
     // verify:area ran the portal's stale engine/footer.js against a fixture
     // built with the new one.
     [path.join(SK, 'footer.js'), path.join(PORTAL, 'engine', 'footer.js')],
+    // labeller.js and font_metrics.js became rows on 2026-08-16, at the Phase 8
+    // re-vendor that first carried them across. They are not optional extras:
+    // gen_internal.js REQUIRES labeller.js at load time (resolved through
+    // SKILL_ASSETS exactly as icons.js and footer.js are) and labeller.js
+    // requires font_metrics.js, so vendoring gen_internal.js without them throws
+    // at the portal's require time rather than failing a byte gate — which is a
+    // worse failure than the footer.js one this table was extended to prevent,
+    // because it takes the whole build down instead of one file's output.
+    [path.join(SK, 'labeller.js'), path.join(PORTAL, 'engine', 'labeller.js')],
+    [path.join(SK, 'font_metrics.js'), path.join(PORTAL, 'engine', 'font_metrics.js')],
     [path.join(SK, 'gen_internal.js'), path.join(PORTAL, 'engine', 'place', 'gen_internal.js')],
     [path.join(PSK, 'gen_external_places.js'), path.join(PORTAL, 'engine', 'place', 'gen_external_places.js')],
     [path.join(SK, 'schematize_internal.js'), path.join(PORTAL, 'engine', 'expert', 'schematize_internal.js')],
@@ -196,17 +206,27 @@ const qualityCell = (name) => {
   return rs.some(r => r.status === 'BETTER') ? 'better' : 'ok';
 };
 
+// Does anything need attention? Computed HERE, above the JSON branch, and not at
+// the foot of the file where it used to live.
+//
+// FIXED 2026-08-16, WITH the Phase 8 re-vendor and deliberately not before. The
+// JSON branch used to `process.exit(0)` unconditionally while the human branch
+// exited 1 — and `--json` is the form .github/workflows/gates.yml runs as its
+// gating step, so **CI was green no matter what the gates said**, on both repos,
+// for as long as that workflow has existed. The reason it could not be flipped
+// on its own is the reason it is easy to get wrong twice: the board legitimately
+// carried 4 DRIFTED vendoring rows while the design-quality plan held the portal
+// hand-off back, so turning this on first would have made CI red for an expected
+// state and taught everyone to ignore it. The re-vendor in this same commit is
+// what clears them. A quality REGRESSION counts too (Phase 8 item 1).
+const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL'))
+  || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || ['DIFF', 'FAIL'].includes(r.external))
+  || driftRows.some(r => r.same === false)
+  || qualityRows.some(r => r.status === 'REGRESSED');
+
 if (AS_JSON) {
   console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows }, null, 2));
-  // NOTE, 2026-08-16: this exits 0 whatever the gates said, while the human
-  // branch below exits 1 on anything needing attention — and `--json` is the
-  // form .github/workflows/gates.yml runs, so **CI is green regardless of the
-  // result**. Left as it is on purpose for now: the board carries 4 deliberate
-  // DRIFTED portal-vendoring rows until Phase 8 item 3 re-vendors, and flipping
-  // this first would turn CI red for a state that is expected. Change it to
-  // `process.exit(bad ? 1 : 0)` — moving the `bad` computation above this block
-  // — in the same commit as the re-vendor, not before.
-  process.exit(0);
+  process.exit(bad ? 1 : 0);
 }
 
 function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
@@ -251,11 +271,6 @@ if (qualityRows.length) {
     + '   (node quality_gate.js --accept to re-record)');
 }
 
-// Exit non-zero if anything needs attention, so this can gate CI. A quality
-// REGRESSION counts: that is the whole point of item 1 — the byte gate cannot
-// see a sheet getting worse, only a sheet getting different.
-const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL'))
-  || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || ['DIFF', 'FAIL'].includes(r.external))
-  || driftRows.some(r => r.same === false)
-  || qualityRows.some(r => r.status === 'REGRESSED');
+// Exit non-zero if anything needs attention, so this can gate CI. `bad` is
+// computed once, above the JSON branch, so both output forms agree — see there.
 process.exit(bad ? 1 : 0);

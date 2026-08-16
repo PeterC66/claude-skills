@@ -1781,9 +1781,20 @@ const SCALE_ON   = !!(DESIGN.scaleBar && (SCALE_M || NOT_TO_SCALE));
 // its caption 0.42mm OFF the page — a new instance of the exact defect this key
 // exists to fix, created by the fix. Character-count estimates (*1.25, *1.5) are
 // gone with it; font_metrics.js is right there.
+//
+// GATED, and it has to be. The corrected footprint moves the device, so it is
+// not byte-identical without the key: measured across all eight towns with
+// printSafe removed, High Wycombe and Ramsey both DIFFER (the other six do not).
+// Invariant 2 says absent config means absent change, and a bug fix is not an
+// exemption from it — it is a change like any other, and every town already
+// carries printSafe, so gating costs nothing real. Caught by testing the ungated
+// path directly: the byte gates could not see it, because every committed S4 now
+// has the key, so the gate only ever exercises one side of this branch.
 const scaleNoteW = ()=> SCALE_NOTE ? FONT.textWidth(SCALE_NOTE,2.4,false) : 0;
+const scaleWLegacy = ()=> Math.max(SCALE_LEN, SCALE_NOTE.length*1.25, SCALE_TEXT.length*1.5);
 function scaleBox(bx,by){
   const top = by-(SCALE_M?5.2:3.6), bot = by+(SCALE_NOTE?4.4:1.6);
+  if(PRINT_SAFE==null) return [bx-1.5, top, bx+scaleWLegacy()+1.5, bot];
   if(SCALE_M){
     const cx = bx + SCALE_LEN/2;                      // both caption and distance are centred here
     const half = Math.max(SCALE_LEN, scaleNoteW(), FONT.textWidth(SCALE_TEXT,2.8,false))/2;

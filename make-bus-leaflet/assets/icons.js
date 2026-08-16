@@ -37,7 +37,129 @@ function inkify(svg) {
     return `${k}="${CHARCOAL}"`;
   });
 }
-function icon(cat, x, y, s = 2.2, ink) {
+/* ------------------------------------------------------------------ grid set
+ * Phase 5 of the design-quality plan: all twelve redrawn on ONE 24x24 grid,
+ * one stroke weight, one corner radius, one level of detail, and SOLID rather
+ * than outlined — a 0.5 mm outline goes faint against a route ribbon at 4.2 mm,
+ * which is what the G3 decision sheet showed and why option E (recolour only)
+ * shipped ahead of this.
+ *
+ * Four rules, and they are the whole set:
+ *   1. 24 x 24 units, 2 units of padding, live area 20 x 20. Keylines: square
+ *      18, circle 20, portrait 16x20, landscape 20x16 — so a square glyph and a
+ *      round one look the same SIZE rather than measuring the same.
+ *   2. One stroke weight (GW) and one corner radius (GR). Nothing else.
+ *   3. Solid marks. A limb is never thinner than GW and two marks are never
+ *      closer than GW, so nothing fuses at printed size.
+ *   4. THE LIVE AREA IS THE BOX THE ENGINE RESERVES. 20u maps to exactly 2*s mm,
+ *      so at the map's s=2.1 a glyph fills the 4.2 mm box POI_HALF declares and
+ *      never exceeds it. The shipped set does not: its widest glyphs reach
+ *      +-2.6 in a +-2.2 space, ~18% outside the box `reserveIcons` blocks out
+ *      and `iconMinSep` separates, which is why symbols that measure clear can
+ *      still touch. Mapping the 24u GRID to the box instead of the 20u live
+ *      area was the first cut and it came out 20% smaller than the shipped set
+ *      on the comparison sheet — the padding is headroom the placer already
+ *      provides, so spending printed size on it twice is what that costs.
+ *
+ * Authored one-colour-per-glyph, so charcoal is a parameter rather than a
+ * regex over the artwork — `inkify` is not used on this set and must not be.
+ */
+const GW = 2.6, GR = 2, WHITE = '#ffffff';
+// The casing, in grid units. 1.6u at the map's s=2.1 is 0.34 mm — the same
+// 0.35 mm `design.routeCasing` puts under every route line, and for the same
+// reason: charcoal on a dark route is charcoal on navy. A solid glyph needs it
+// MORE than an outlined one, because an outline at least carries white inside.
+// Where the ground is already white it costs nothing; it is invisible.
+const GCASE = 1.6;
+const GRID_COL = {
+  shop: '#c2185b', gp: '#d00', pharmacy: '#0a8a3a', library: '#8a5a00', museum: '#6a3d9a',
+  leisure: '#e07b00', school: '#1f78b4', park: '#2f8f2f', industrial: '#777777',
+  community: '#00868b', townhall: '#555555', allotments: '#7a8f3c',
+};
+/* `cw > 0` draws the same glyph as one white silhouette fattened by cw, to be
+ * laid down before the real one. It is a separate PASS rather than
+ * `paint-order:stroke` per path, which would let a later part's casing eat into
+ * an earlier part's fill — the tree's trunk would cut a white notch out of its
+ * own canopy. Knockouts are skipped in the casing pass: the silhouette wants to
+ * be solid, and a knockout is white on white there anyway. */
+function gridGlyph(cat, col, cw = 0) {
+  const f = (d) => cw ? `<path d="${d}" fill="${WHITE}" stroke="${WHITE}" stroke-width="${cw * 2}" stroke-linejoin="round"/>`
+                      : `<path d="${d}" fill="${col}"/>`;
+  const k = (d) => cw ? '' : `<path d="${d}" fill="${WHITE}"/>`;   // knockout
+  const st = (d) => `<path d="${d}" fill="none" stroke="${cw ? WHITE : col}" stroke-width="${GW + cw * 2}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const dot = (cx, cy, r, c = col) => cw ? `<circle cx="${cx}" cy="${cy}" r="${r + cw}" fill="${WHITE}"/>`
+                                         : `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${c}"/>`;
+  // One cross, shared by the two health glyphs, knocked out of a solid field.
+  const cross = k('M10,5.6 H14 V10 H18.4 V14 H14 V18.4 H10 V14 H5.6 V10 H10 Z');
+  switch (cat) {
+    case 'shop':        // trolley: solid basket, one handle, two wheels
+      return st('M3.4,4.6 H5.6 L7.8,9')
+           + f('M7.4,9 H21.4 L19,15.6 H10 Z')
+           + dot(11.6, 17.9, 1.8) + dot(18, 17.9, 1.8);
+    case 'gp':          // cross knocked out of the SQUARE keyline
+      return `<rect x="${3 - cw}" y="${3 - cw}" width="${18 + cw * 2}" height="${18 + cw * 2}" rx="${GR + cw}" fill="${cw ? WHITE : col}"/>` + cross;
+    case 'pharmacy':    // the same cross, in the CIRCLE keyline — one family, and
+                        // it survives losing its colour, which the shipped pair
+                        // does not: in charcoal those two are the same drawing
+      return dot(12, 12, 10) + cross;
+    case 'library':     // open book: two leaves tilted into a shallow V with a GW
+                        // gutter. Drawn as slabs with a straight spine edge they
+                        // read as two blocks — the tilt is what says "book"
+      return f('M11.2,8.4 L2.4,5.8 V15.2 L11.2,17.8 Z')
+           + f('M12.8,8.4 L21.6,5.8 V15.2 L12.8,17.8 Z');
+    case 'museum':      // pediment, four columns, stylobate
+      return f('M12,3 L22,9 H2 Z')
+           + f('M3.2,10.6 h2.7 v7.6 h-2.7 Z M8.3,10.6 h2.7 v7.6 h-2.7 Z '
+             + 'M13.1,10.6 h2.7 v7.6 h-2.7 Z M18.2,10.6 h2.7 v7.6 h-2.7 Z')
+           + f('M2,19.4 H22 V21.4 H2 Z');
+    case 'leisure':     // running figure — limbs at GW, so it is solid too
+      return dot(15.2, 5.6, 3)
+           + st('M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 '
+              + 'M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6');
+    case 'school':      // mortarboard: board, cap, tassel
+      return f('M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z')
+           + f('M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z')
+           + st('M20.1,9.6 V15.4') + dot(20.1, 17.2, 1.7);
+    case 'park':        // three-lobe canopy — a broadleaf tree, not a lollipop
+      return dot(12, 7.6, 5.2) + dot(6.9, 11.6, 4.6) + dot(17.1, 11.6, 4.6)
+           + f('M10.4,12.6 h3.2 v8.2 h-3.2 Z');
+    case 'industrial':  // saw-tooth shed under one chimney
+      return f('M17.6,3.6 h3.4 v8.4 h-3.4 Z')
+           + f('M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z');
+    case 'community':   // two figures, the front one cased in white so the pair
+                        // does not fuse into one blob at printed size
+      return dot(16.4, 7.6, 3) + f('M11.4,20 C11.4,14.2 21.4,14.2 21.4,20 Z')
+           + (cw ? '' : `<g fill="${col}" stroke="${WHITE}" stroke-width="${GW}" stroke-linejoin="round" paint-order="stroke">`)
+           + dot(8, 7, 3) + f('M3.2,20 C3.2,13.6 13.4,13.6 13.4,20 Z') + (cw ? '' : '</g>');
+    case 'townhall':    // civic block with a flag — deliberately NOT a colonnade,
+                        // so it cannot be mistaken for the museum
+      return st('M12,2.2 V8') + f('M12.6,2.4 L17,3.8 L12.6,5.2 Z')
+           + f('M3.6,7.6 H20.4 V19 H3.6 Z')
+           + k('M5.6,10 h2.6 v2.6 h-2.6 Z M15.8,10 h2.6 v2.6 h-2.6 Z M10.4,13 h3.2 v6 h-3.2 Z')
+           + f('M2,19 H22 V21.4 H2 Z');
+    case 'allotments':  // three beds inside a frame — the one glyph that is a
+                        // frame, so it takes the corner radius
+      return `<rect x="${3 + GW / 2}" y="${5 + GW / 2}" width="${18 - GW}" height="${14 - GW}" rx="${GR}" fill="${cw ? WHITE : 'none'}" stroke="${cw ? WHITE : col}" stroke-width="${GW + cw * 2}"/>`
+           + f('M6.3,8.4 h2.6 v7.2 h-2.6 Z M10.7,8.4 h2.6 v7.2 h-2.6 Z M15.1,8.4 h2.6 v7.2 h-2.6 Z');
+    default:
+      return dot(12, 12, 7);
+  }
+}
+
+// Charcoal is one ink with two deliberate exceptions, both inherited from
+// `inkify` and both worth keeping: red for the GP cross, and a lighter neutral
+// for the industrial estate, which is CONTEXT rather than subject — flattening
+// it to full charcoal makes a cluster of factories the heaviest ink on the
+// sheet, which is the opposite of what taking the colour out is for.
+const GRID_INK = { gp: CHARCOAL_ACCENT, industrial: '#7c7f82' };
+function icon(cat, x, y, s = 2.2, ink, set) {
+  if (set === 'grid') {
+    const col = ink === 'charcoal' ? (GRID_INK[cat] || CHARCOAL) : (GRID_COL[cat] || '#666666');
+    // 20 grid units (the live area) == the 2*s mm box the engine reserves.
+    // The casing pass is a fattened white silhouette, laid down first.
+    return `<g transform="translate(${x} ${y}) scale(${s / 10}) translate(-12 -12)">`
+         + gridGlyph(cat, col, GCASE) + gridGlyph(cat, col) + '</g>';
+  }
   if (ink === 'charcoal') return inkify(icon(cat, x, y, s));
   const T = (inner) => `<g transform="translate(${x} ${y}) scale(${s/2.2})">${inner}</g>`;
   const plus = (col) => `<rect x="-0.55" y="-1.5" width="1.1" height="3" fill="${col}"/><rect x="-1.5" y="-0.55" width="3" height="1.1" fill="${col}"/>`;
@@ -92,4 +214,4 @@ function icon(cat, x, y, s = 2.2, ink) {
       return `<circle cx="${x}" cy="${y}" r="${s*0.7}" fill="#888"/>`;
   }
 }
-module.exports = { icon, inkify };
+module.exports = { icon, inkify, gridGlyph, GRID_COL };

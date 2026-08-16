@@ -69,6 +69,10 @@ const APPLY = !!args.apply;
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
+// --keep <dir>: dry run only. Copy each place's built sheets out before the scratch
+// workspace is deleted, so they can be measured and rendered rather than judged from
+// the label-set diff alone. Ignored with --apply (the sheets go to S4 anyway).
+const KEEP = typeof args.keep === 'string' ? args.keep : null;
 
 const STAGE_JS = path.join(SK, 'stage.js');
 function stage(cwd, ...cmdArgs) {
@@ -196,8 +200,23 @@ function rolloutOnePlace(p) {
   }
 
   if (!APPLY) {
+    // --keep <dir>: leave the built sheets somewhere so they can be MEASURED and
+    // LOOKED AT before anything is applied. preview_design.js has had this for the
+    // towns all along; places had only the label-set diff, which is a set and
+    // therefore cannot see a duplicate copy being merged, a label moving, or a box
+    // sliding under the footer plate. Added 2026-08-16 (plan Phase 8 item 4), when
+    // judging the place internals needed exactly that and there was nothing to point
+    // quality_metrics.js at.
+    if (KEEP) {
+      const dest = path.join(path.resolve(KEEP), p.name.replace(/[^\w]/g, '_'));
+      fs.mkdirSync(dest, { recursive: true });
+      for (const name of fs.readdirSync(s4)) {
+        const fp = path.join(s4, name);
+        if (!fs.statSync(fp).isDirectory()) fs.copyFileSync(fp, path.join(dest, name));
+      }
+    }
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'DRY-RUN', diffs, anyLost, version: prevS4.rec.version };
+    return { name: p.name, status: 'DRY-RUN', diffs, anyLost, version: prevS4.rec.version, kept: KEEP || null };
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----

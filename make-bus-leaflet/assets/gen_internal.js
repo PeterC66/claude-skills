@@ -1646,10 +1646,34 @@ if(IR){
    * lanes and everything where two routes cross.
    */
   const CASE = ROUTE_CASING_ON ? ((DESIGN.routeCasing&&DESIGN.routeCasing.mm!=null)?DESIGN.routeCasing.mm:0.35) : 0;
+  /* design.frequencyTiers — draw HOW USABLE a service is, not how many journeys it
+   * runs (2026-08-17; Buses repo, Development Docs/frequency-tier-model_2026-08-17.md).
+   *
+   *   "frequency": {"<lane>":"frequent"|"all-day"|"limited"}    which class each LANE is
+   *   "design":{"frequencyTiers":{"frequent":{"mm":2.4},
+   *                               "limited":{"mm":1.4,"dash":"2.6 2.4"}}}
+   *
+   * Keyed by the DRAWN LANE, which is why it reads the same key as `palette` and not
+   * a route number: where internalCorridors bundles co-running services into one
+   * line, the class belongs to the merged timetable, not to any one member.
+   *
+   * Needs BOTH keys; either absent ⇒ every string below is what it was, byte for
+   * byte. A tier with no `mm` keeps IR.stroke, so "limited" can be dash-only.
+   *
+   * A dashed tier gets a BUTT cap, per the 2026-08-17 dash gotcha: with round caps
+   * the usable gap is (gap − width), so a 1.4 mm line dashed "2.6 2.4" would draw
+   * solid with 1 mm of overlap per dash. The casing widens with the line, or a
+   * heavier tier would show its casing as a fringe.
+   */
+  const FTIER = (DESIGN.frequencyTiers && RJ.frequency) ? DESIGN.frequencyTiers : null;
+  const ftier = r => FTIER ? (FTIER[RJ.frequency[r]] || null) : null;
+  const fw = r => { const t=ftier(r); return (t && t.mm!=null) ? t.mm : IR.stroke; };
+  const fdash = r => { const t=ftier(r); return (t && t.dash) ? ` stroke-dasharray="${t.dash}"` : ''; };
+  const fcap = r => { const t=ftier(r); return (t && t.dash) ? 'butt' : 'round'; };
   if(CASE>0) for(const L of RLINES)
-    out(`<path d="${L.d}" fill="none" stroke="${(DESIGN.routeCasing&&DESIGN.routeCasing.color)||'#ffffff'}" stroke-width="${(IR.stroke+CASE*2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+    out(`<path d="${L.d}" fill="none" stroke="${(DESIGN.routeCasing&&DESIGN.routeCasing.color)||'#ffffff'}" stroke-width="${(fw(L.r)+CASE*2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
   for(const L of RLINES)
-    out(gk('route',L.r,`<path d="${L.d}" fill="none" stroke="${C[L.r]}" stroke-width="${IR.stroke}" stroke-linecap="round" stroke-linejoin="round"/>`));
+    out(gk('route',L.r,`<path d="${L.d}" fill="none" stroke="${C[L.r]}" stroke-width="${fw(L.r)}"${fdash(L.r)} stroke-linecap="${fcap(L.r)}" stroke-linejoin="round"/>`));
   // -- stop ticks ON the route lines (one per physical stop, first route wins;
   //    stops[ATCO].pos override moves the tick)
   const tickSeen=new Set();

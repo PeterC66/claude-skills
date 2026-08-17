@@ -31,12 +31,43 @@ HOW OFTEN A ROUTE RUNS -- read this before using any number below
   all 09:50-13:50 (a shopping bus), and the 69 runs 4, at 07:00/07:10 and
   17:30/18:10 (a commuter shuttle). Equal-looking counts, opposite products --
   hence `firstDeparture`/`lastDeparture` alongside the totals.
+
+WHICH FIELD TO TIER A LINE WEIGHT FROM -- not `journeysPerWeek`
+  Added 2026-08-17 for the frequency-tier model, and the reason they exist is that
+  `journeysPerWeek` is an honest field that is still the wrong thing to DRAW from.
+  It is a volume, and volume rises with route length and operating hours, neither
+  of which is what a reader wants a line weight to tell them: tiering on it
+  misplaces 10 of the 78 drawn lanes on the board, in both directions. Nor is span
+  the missing measure -- the 69's span is wider than the all-day 5A's.
+
+    weeksActive          how many of the sampled weeks the service runs AT ALL.
+                         A service below half the sample cannot hold a weekly rate:
+                         High Wycombe's 130, 300 and WW1 hold only bank-holiday
+                         trips and `journeysPerWeek` reports them at 24, 24 and 8.
+    typicalDayJourneys   journeys on the busiest WEEKDAY of the sampled weeks
+    typicalDayWindow     [first, last] that day, both directions
+    coreHeadwayMinutes   median gap between DISTINCT departure minutes 09:00-15:00,
+                         busier direction; null when that window holds under 3
+    longestDaytimeGap    largest gap 07:00-19:00, both directions -- the measure
+                         that separates a shopping bus from a commuter shuttle
+    duplicateDepartures  journeys sharing a departure minute AND direction with
+                         another that day. Normally 0. Non-zero means the feed
+                         registers a journey more than once, so `journeysPerWeek`
+                         is inflated for that route by about that proportion --
+                         High Wycombe's M40 files each journey up to four times.
+
+  `firstDeparture`/`lastDeparture` are the FIRST SAMPLED WEEK's extremes and stay
+  that way; `typicalDayWindow` is the profiled day's and is the one to reason from.
+  Full argument, the eight-town evidence and the proposed thresholds: Buses repo,
+  Development Docs/frequency-tier-model_2026-08-17.md.
 """
 import sqlite3, sys, json, argparse, os, datetime, statistics
 
 DOW=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 WEEKS_SAMPLED=12   # consecutive weeks expanded from the reference Monday
+DAY_LO,DAY_HI=7*60,19*60      # the working day: where a hole in the service counts
+CORE_LO,CORE_HI=9*60,15*60    # the core day: where a headway means what it says
 
 def fmt_days(flags):
     on=[i for i,f in enumerate(flags) if f]
@@ -118,6 +149,60 @@ def _sample_mondays(cal, ref, n=WEEKS_SAMPLED):
         out.append(m)
     return out or [monday]
 
+def _mins(t):
+    """GTFS clock time to minutes after midnight. Hours run past 24 for journeys
+    belonging to the previous service day, and that is not an error to clamp."""
+    p=t.split(":"); return int(p[0])*60+int(p[1])
+
+def _clock(m): return f"{m//60:02d}:{m%60:02d}"
+
+def _day_shape(profile):
+    """Describe one weekday's departures: the window, how long you wait in the core
+    of the day, and the largest hole in the working day.
+
+    The three exist because a count cannot tell a shopping bus from a commuter
+    shuttle and neither can a span. St Ives' 69 runs 07:00, 07:10, 17:30, 18:10 --
+    a span of 11h10, wider than the all-day 5A -- and what identifies it is the
+    ten-hour GAP. Endpoints cannot see a hole. Full argument: Buses repo,
+    Development Docs/frequency-tier-model_2026-08-17.md.
+
+    coreHeadway is the MEDIAN gap, not the worst: the worst gap of a day is set by
+    the thinnest hour at 05:00 and demotes every turn-up-and-go route there is. It
+    is taken in the BUSIER DIRECTION, because that is the wait a passenger going one
+    way actually has; longestDaytimeGap is taken across both, because a hole in the
+    service is a hole whichever way you are travelling. direction_id is not safe to
+    split a small service by -- by direction the 69's four journeys become two.
+
+    BOTH GAP MEASURES USE DISTINCT DEPARTURE MINUTES, and that is not tidying up.
+    Two buses leaving at the same minute are one moment to wait for, so a repeated
+    minute must not contribute a zero gap. It happens for two unrelated reasons and
+    the fix is right for both: operators register the same journey under several
+    overlapping service_ids (High Wycombe's M40 files every journey up to four times
+    -- same headsign, same 18 stops, different service_id -- which alone dragged its
+    median headway to 0 minutes), and a linked working can put two legs with
+    different headsigns at one stop in the same minute (St Ives' 5A, 11:40). The
+    count of journeys hidden this way is reported as `duplicateDepartures` rather
+    than silently absorbed -- it is also a warning that `journeysPerWeek` is
+    inflated for that route, which is a separate defect and not fixed here."""
+    if not profile: return {"typicalDayJourneys":0,"typicalDayWindow":None,
+                            "coreHeadwayMinutes":None,"longestDaytimeGap":None,
+                            "duplicateDepartures":0}
+    allt=sorted(m for m,_ in profile)
+    inday=sorted({m for m in allt if DAY_LO<=m<=DAY_HI})
+    gap=max((b-a for a,b in zip(inday,inday[1:])), default=None) if len(inday)>=2 else None
+    bydir={}
+    for m,dr in profile: bydir.setdefault(dr,set()).add(m)
+    dom=sorted(max(bydir.values(), key=len))
+    core=[m for m in dom if CORE_LO<=m<=CORE_HI]
+    head=int(statistics.median(b-a for a,b in zip(core,core[1:]))) if len(core)>=3 else None
+    return {
+      "typicalDayJourneys":len(allt),
+      "typicalDayWindow":[_clock(allt[0]),_clock(allt[-1])],
+      "coreHeadwayMinutes":head,
+      "longestDaytimeGap":gap,
+      "duplicateDepartures":len(profile)-len(set(profile)),
+    }
+
 def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
     """Real journeys per week for one route, by expanding the calendar.
 
@@ -130,13 +215,17 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
        WHERE t.route_id IN ({ph}) AND {IN}{SVCF}
        GROUP BY t.trip_id""", rids))
     weekly=[]; best_day=0; out_n=back_n=0; deps=[]
-    for m in mondays:
+    # (week, weekday) -> [(minutes, direction)], for the day-shape fields below.
+    # Weekdays only: a Saturday timetable is a different product, not a thin Tuesday.
+    profiles={}
+    for wi,m in enumerate(mondays):
         days=[m+datetime.timedelta(i) for i in range(7)]
         n=0; per_day=[0]*7
         for t in trips:
             for j,d in enumerate(days):
                 if _runs(cal,exc,t["service_id"],d):
                     n+=1; per_day[j]+=1
+                    if j<5 and t["dep"]: profiles.setdefault((wi,j),[]).append((_mins(t["dep"]),str(t["dir"])))
                     if m is mondays[0]:
                         if str(t["dir"])=="1": back_n+=1
                         else: out_n+=1
@@ -146,13 +235,20 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
     # lower median: an integer, and stable when the sample is even-length
     typical=sorted(live)[len(live)//2] if live else 0
     deps.sort()
+    # The day profiled is the BUSIEST WEEKDAY of the sampled weeks, ties going to the
+    # earliest. Deterministic, and it lands on a term-time day by itself for anything
+    # school-term-heavy -- profiling "this week" would read those routes as absent
+    # through August. Nothing to configure, which is the point.
+    best=max(profiles, key=lambda k:(len(profiles[k]),-k[0],-k[1])) if profiles else None
     return {
       "journeysPerWeek":typical,
       "journeysPerWeekRange":[min(weekly),max(weekly)] if weekly else [0,0],
+      "weeksActive":len(live),
       "busiestDayJourneys":best_day,
       "journeysOutBack":[out_n,back_n],
       "firstDeparture":deps[0][:5] if deps else None,
       "lastDeparture":deps[-1][:5] if deps else None,
+      **_day_shape(profiles.get(best) if best else None),
     }
 
 def query(db, prefixes=None, near=None, town=None, asof=None):
@@ -248,7 +344,11 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
              "from":mondays[0].isoformat(),"to":(mondays[-1]+datetime.timedelta(6)).isoformat(),
              "note":"journeysPerWeek is the lower median of the sampled weeks; the range shows "
                     "term-time/holiday variation. tripPatternsAtTown counts trips.txt rows and is "
-                    "NOT a rate -- never rank or draw from it."},
+                    "NOT a rate -- never rank or draw from it. To tier a line weight, use "
+                    "coreHeadwayMinutes and longestDaytimeGap with a weeksActive floor, not "
+                    "journeysPerWeek: a weekly total is a volume, not availability.",
+             "dayProfile":"the busiest weekday of the sampled weeks; 07:00-19:00 is the working "
+                    "day and 09:00-15:00 the core day"},
          "services":out}
     if asof: res["asOf"]=asof
     return res
@@ -280,10 +380,15 @@ if __name__=="__main__":
         sh="shape" if s["hasGtfsShape"] else "no-shape"
         lo,hi=s["journeysPerWeekRange"]
         rng=f"({lo}-{hi})" if lo!=hi else ""
-        span=f"{s['firstDeparture']}-{s['lastDeparture']}" if s["firstDeparture"] else "--"
+        span=("-".join(s["typicalDayWindow"]) if s["typicalDayWindow"]
+              else f"{s['firstDeparture']}-{s['lastDeparture']}" if s["firstDeparture"] else "--")
+        # the two tier measures, and a warning when the weekly rate is one week's worth
+        hd=f"~{s['coreHeadwayMinutes']}m" if s["coreHeadwayMinutes"] is not None else "--"
+        gp=f"gap {s['longestDaytimeGap']}m" if s["longestDaytimeGap"] is not None else ""
+        wa="" if s["weeksActive"]>=fb["weeksSampled"] else f" [runs {s['weeksActive']}/{fb['weeksSampled']} wks]"
         print(f"  {s['route']:6s} {s['operator']:26s} {s['days']:9s} "
-              f"{s['journeysPerWeek']:>4}/wk {rng:>10s} {span:>12s} {sh:8s}"
-              f" -> {', '.join(s['headsigns'][:2])}{v}")
+              f"{s['journeysPerWeek']:>4}/wk {rng:>10s} {span:>12s} {hd:>5s} {gp:>9s} {sh:8s}"
+              f" -> {', '.join(s['headsigns'][:2])}{v}{wa}")
     if a.out:
         json.dump(res,open(a.out,"w",encoding="utf-8"),indent=1,ensure_ascii=False)
         print("wrote",a.out)

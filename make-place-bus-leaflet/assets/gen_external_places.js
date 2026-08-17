@@ -86,12 +86,19 @@ const OPS = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name))
  */
 const DESIGN = D.design || {};
 const LABELS = D.labels || {};
-const V2 = LABELS.engine === 'v2';
-// printSafe: keep drawn content this many mm from the trim. Absent (null) => today's
-// geometry exactly. See footer.js's header for why 5 and why the descender counts.
-const PSAFE = DESIGN.printSafe != null ? +DESIGN.printSafe : null;
-const BFIT = !!DESIGN.badgeFit;
-const HUBFIT = !!DESIGN.hubFit;
+// G5 (2026-08-17): labels.engine, badgeFit, hubFit, printSafe and scaleBar were
+// uniform on all 5 places the day after item 4 shipped, so they are engine
+// DEFAULTS now — same escape-hatch convention as gen_internal.js (`false`, or
+// `"v1"` for labels.engine). legendPlace is deliberately EXCLUDED: measured
+// 2026-08-16 at no better than the search this file already had (0% symbols,
+// <=0.1% route ink either way), so it stays opt-in and OFF by default — the
+// one key this generator does not share with gen_external_radial.js's default.
+const V2 = !(LABELS.engine === 'v1' || LABELS.engine === false);
+// printSafe: keep drawn content this many mm from the trim. `false` => today's
+// geometry exactly; absent => 5. See footer.js's header for why 5.
+const PSAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null ? +DESIGN.printSafe : 5);
+const BFIT = DESIGN.badgeFit !== false;
+const HUBFIT = DESIGN.hubFit !== false;
 const LEGPLACE = !!DESIGN.legendPlace;
 const SPRD = DESIGN.spokeSpread ? (DESIGN.spokeSpread === true ? {} : DESIGN.spokeSpread) : null;
 const W = 297, H = 210;
@@ -295,7 +302,7 @@ const _hasTimes = dests.some(b => b.minutesToDestination != null);
 // and their length carries nothing — so it can never carry a bar, and it was the one sheet
 // type saying nothing at all about that. Kept short on purpose: a note long enough to WRAP
 // adds a line to the footer plate, which moves the plate top and refits the whole sheet.
-const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar ? ' Diagram — not to scale.' : ''}`;
+const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
 const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTES, safe: PSAFE });
 // The frame every free-floating page device works to: inside the title block, above the
 // footer plate, and never nearer the trim than design.printSafe asks for.

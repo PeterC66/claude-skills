@@ -192,19 +192,55 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     the corridor rule on the sheet (Phase 7). Needs
 //                     internalCorridors; row words come from corridorDesc{}.
 const DESIGN = RJ.design || {};
+/* ---- G5: twelve keys promoted from per-town config to engine DEFAULTS
+ * (2026-08-17, plan Phase 8 item 5) -------------------------------------
+ *
+ * Measured 2026-08-16: all eight towns, and (bar legendPlace, which lives
+ * only on the external generators) all five places, carried an IDENTICAL
+ * `design` block. "Should this be a default" was never a live question —
+ * it was twelve keys carried as config in thirteen places because nobody
+ * had listed the configs side by side. Any key repeated on every target is
+ * a default in disguise ([[feedback_engine_vs_config_labeling]]).
+ *
+ * Each keeps an explicit escape hatch, because ABSENT no longer means off:
+ * a target that genuinely needs the pre-2026-08-15 behaviour now writes
+ * `design:{key:false}` rather than the plan re-opening. Booleans read
+ * `!== false`; `iconInk`/`iconSet`/`cornerRadius` carry a VALUE when on, so
+ * `false` reverts to the literal each replaced (full colour / the 12-icon
+ * legacy set / a square corner). `labels.engine` accepts `"v1"` as well as
+ * `false`, since it is the one non-boolean key with its own vocabulary.
+ * `panelCorridors` and `spokeSpread` stay explicit config — the first needs
+ * internalCorridors, the second is a per-composition judgement, and neither
+ * was ever near 8/8.
+ *
+ * THE SELF-CHECK: every S3 that used to carry these keys explicitly still
+ * carried the same effective value, so stripping the redundant key must
+ * leave every shipped byte untouched — proved in scratch before any real S3
+ * was touched, then again as rollout.js's byte-identical gate.
+ */
+const FOOTER_SAFE     = DESIGN.footerSafe    !== false;
+const SPREAD_ICONS    = DESIGN.spreadIcons   !== false;
+const PANEL_SCALE_ON  = DESIGN.panelScale    !== false;
+const SCALE_BAR_ON    = DESIGN.scaleBar      !== false;
+const ROUTE_CASING_ON = DESIGN.routeCasing   !== false;
+const BADGE_FIT       = DESIGN.badgeFit      !== false;
+const CORNER_RADIUS   = DESIGN.cornerRadius === false ? 0
+  : (DESIGN.cornerRadius != null ? (DESIGN.cornerRadius === true ? 2.0 : DESIGN.cornerRadius) : 2.0);
+const ICON_INK = DESIGN.iconInk === false ? undefined : (DESIGN.iconInk !== undefined ? DESIGN.iconInk : 'charcoal');
+const ICON_SET = DESIGN.iconSet === false ? undefined : (DESIGN.iconSet !== undefined ? DESIGN.iconSet : 'grid');
 // printSafe: inset every edge the footer touches to this many millimetres from
-// the trim. Absent => today's 8/294/206 on a 297x210 page, byte-identical.
-// See the header of footer.js for why 5 and why it took a print to find.
-const PRINT_SAFE = DESIGN.printSafe != null ? +DESIGN.printSafe : null;
+// the trim. `false` => today's 8/294/206 on a 297x210 page, byte-identical;
+// absent => 5, the standard this whole key exists to enforce.
+const PRINT_SAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null ? +DESIGN.printSafe : 5);
 FOOTER_PLATE_TOP = footerPlateTop({ notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE });
 // labels{}: which label placer to use.
 //   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
 //                occupancy grid that knows where the route ink is, scored candidate
 //                positions, a relaxation pass, two-line wrapping and leader lines,
-//                and a report of anything it still could not place. Absent => the
-//                original first-fit placer below, byte-identical.
+//                and a report of anything it still could not place. `"v1"` or
+//                `false` => the original first-fit placer, byte-identical.
 const LABELS = RJ.labels || {};
-const V2 = LABELS.engine === 'v2';
+const V2 = !(LABELS.engine === 'v1' || LABELS.engine === false);
 if(V2 && DESIGN.reserveIcons === undefined) DESIGN.reserveIcons = true;
 const atco2ll = JSON.parse(fs.readFileSync(DIR+'/atco2ll.json','utf8'));
 // Routes to DRAW = the in-town DISPLAY subset (each route traced to the town EDGE,
@@ -329,7 +365,7 @@ if(RJ.features && RJ.features.length){
   // where this label has always gone) and lift y to just inside the frame.
   // Gated on footerSafe so the five PLACE sheets, still on v1 until the Phase 8
   // re-vendor, stay byte-identical.
-  const legacyY = DESIGN.footerSafe
+  const legacyY = FOOTER_SAFE
     ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0) - 6)*100)/100
     : 200;
   FEATURES = [{ key:'river', type:'river', label:(RJ.riverLabel||'River Great Ouse'),
@@ -740,7 +776,7 @@ const tform=ll=>lens(compress(tform0(ll)));
 // point, i.e. past the frame — a 1 mm gap left their tips under the plate and the ink
 // measure barely moved. 3.0 mm clears the arrow with a hair to spare.
 const MX0=6, MX1=196, MY0=30;
-const MY1 = DESIGN.footerSafe
+const MY1 = FOOTER_SAFE
   ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0))*100)/100
   : 205;
 const allT=stopPts.map(tform);
@@ -821,7 +857,7 @@ const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}"
  * zero and stays bit-for-bit identical (invariant 2). Absent the key `badgeXW` is
  * 0 everywhere and none of it runs at all.
  */
-const BFIT = !!DESIGN.badgeFit;
+const BFIT = BADGE_FIT;
 // Overflow is measured against the DIAMETER, not against a chord: "X31" pokes a
 // hair outside the circle at the corners of its cap band and has always looked
 // fine, and tightening the test to the chord would turn three-character keys
@@ -1028,7 +1064,7 @@ function drawFeatureLabel(f){
   // starting at 195.16: drawn, then covered, so those features went unlabelled
   // and no-one could see why. footerSafe does not help, because a feature label
   // is drawn outside the map's clip group. Refuse it and say so, as above.
-  if(DESIGN.footerSafe && y>FOOTER_PLATE_TOP-1.5){
+  if(FOOTER_SAFE && y>FOOTER_PLATE_TOP-1.5){
     console.error('footer: feature label "'+text+'" sits at y='+y.toFixed(0)+', under the footer plate '
       +'(top y'+FOOTER_PLATE_TOP.toFixed(1)+') where it is painted and then covered — not drawn. '
       +'Move its labelPos (routes.json features[] / overrides internal.features).');
@@ -1201,7 +1237,7 @@ function reserveIcons(){
 function poiMark(p){
   const s=poiSite(p); if(!s) return;
   const {k,o,x,y}=s;
-  out(gk('poi',k,icon(p.cat,x,y,2.1,DESIGN.iconInk,DESIGN.iconSet)));
+  out(gk('poi',k,icon(p.cat,x,y,2.1,ICON_INK,ICON_SET)));
   const auto = ['shop','leisure','school','park','community','allotments'].includes(p.cat) && p.name && p.name!=='Park';
   const showName = o.force===true || (auto && o.force!==false);
   if(showName) placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,{id:'poi:'+k});
@@ -1556,7 +1592,7 @@ if(IR){
    * adjacent segment. On 1.2 mm road segments that clamp reduces it to almost
    * nothing on its own, so the same key is safe on every model.
    */
-  const CORNER = DESIGN.cornerRadius!=null ? (DESIGN.cornerRadius===true?2.0:DESIGN.cornerRadius) : 0;
+  const CORNER = CORNER_RADIUS;
   const CORNER_MIN_TURN = DESIGN.cornerMinTurn!=null ? DESIGN.cornerMinTurn : 30;
   function pathD(pts){
     if(!(CORNER>0) || pts.length<3)
@@ -1603,7 +1639,7 @@ if(IR){
    * white between parallel lanes — so there the casing buys nothing BETWEEN
    * lanes and everything where two routes cross.
    */
-  const CASE = DESIGN.routeCasing ? ((DESIGN.routeCasing.mm!=null?DESIGN.routeCasing.mm:0.35)) : 0;
+  const CASE = ROUTE_CASING_ON ? ((DESIGN.routeCasing&&DESIGN.routeCasing.mm!=null)?DESIGN.routeCasing.mm:0.35) : 0;
   if(CASE>0) for(const L of RLINES)
     out(`<path d="${L.d}" fill="none" stroke="${(DESIGN.routeCasing&&DESIGN.routeCasing.color)||'#ffffff'}" stroke-width="${(IR.stroke+CASE*2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
   for(const L of RLINES)
@@ -1767,7 +1803,7 @@ const SCALE_TEXT = SCALE_M ? (SCALE_M>=1000 ? (SCALE_M/1000)+' km' : SCALE_M+' m
 // On such a town the bar is true of the ring OUTSIDE the box, so say that.
 const SCALE_NOTE = NOT_TO_SCALE ? 'Diagram — not to scale'
   : (FISHEYED ? ((PRINT_SAFE!=null && CBOX) ? 'scale outside the town centre box' : 'town centre scale') : '');
-const SCALE_ON   = !!(DESIGN.scaleBar && (SCALE_M || NOT_TO_SCALE));
+const SCALE_ON   = !!(SCALE_BAR_ON && (SCALE_M || NOT_TO_SCALE));
 // Footprint: the distance above the bar, the bar, the qualifier below it. `bx,by`
 // is the bar's LEFT END, so the box is asymmetric — which is what lets the search
 // push the device right up against a frame corner.
@@ -1829,7 +1865,7 @@ function drawScaleDevice(spotSearch){
 // placer knew it was there: 9 of the 31 sheets measured on 2026-08-15 had a label
 // printed and then erased by it. Shortening the frame (above) keeps the map out of the
 // band; this keeps the placers — which work in page mm, outside the clip — out too.
-if(DESIGN.footerSafe) reserve(0,FOOTER_PLATE_TOP,297,210);
+if(FOOTER_SAFE) reserve(0,FOOTER_PLATE_TOP,297,210);
 // design.printSafe also keeps the PLACER out of the trim margin. Fixing the
 // footer alone would have left the worse half untouched: the print check found
 // the credit at 3mm on every sheet, but also six sheets with a map label tighter
@@ -1867,7 +1903,7 @@ for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label 
 // baseline counted 190 labels sitting on a foreign symbol across the 31 shipped sheets.
 // Claiming the boxes here, before the first label is placed, is what stops it. Absent
 // the key nothing is reserved and every placer behaves exactly as it did.
-if(DESIGN.spreadIcons) spreadIcons();
+if(SPREAD_ICONS) spreadIcons();
 if(DESIGN.reserveIcons) reserveIcons();
 // Central interchange / bus-station label (the ANCHOR) drawn + reserved first
 // (suppressed when internalDiagram draws a lozenge for the anchor instead)
@@ -2565,7 +2601,7 @@ if(LAB){
     }
     reserve(...northBox(NORTH.x, NORTH.y));
   }
-  if(DESIGN.scaleBar) drawScaleDevice(spotSearch);
+  if(SCALE_BAR_ON) drawScaleDevice(spotSearch);
   if(process.env.DBG_LABELS) for(const r of LAB.solve()){
     console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
       +(r.placed?(r.pos||'fixed').padEnd(6)+(r.leader?'leader ':'       '):'      ')
@@ -2654,7 +2690,7 @@ const PCOLS=(RJ.panelCols&&(RJ.panelCols.cols|0)>1)?RJ.panelCols:null;
  * Absent => every size and every gap is exactly the hand-tuned value it was,
  * byte for byte (invariant 2).
  */
-const PS = DESIGN.panelScale ? { head:5.0, title:3.5, sub:2.9, dense:2.45 } : null;
+const PS = PANEL_SCALE_ON ? { head:5.0, title:3.5, sub:2.9, dense:2.45 } : null;
 const CAP=0.72, DESC=0.21;      // Arial cap-height / descender, as a fraction of size
 const AIR_BELOW_HEAD=3.2, AIR_ABOVE_HEAD=5.0;    // section heading (Services, Key)
 const AIR_ABOVE_GROUP=3.4, AIR_BELOW_GROUP=2.0;  // operator group header, a lesser break
@@ -3044,7 +3080,7 @@ if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
 // centre follows from it — the same clear air under `Key` as under `Services`.
 const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;
 key.forEach((kk,i)=>{const ky=py+KFIRST+i*KROW, kx=PX+3;
-  out(icon(kk[0],kx,ky,2.0,DESIGN.iconInk,DESIGN.iconSet));
+  out(icon(kk[0],kx,ky,2.0,ICON_INK,ICON_SET));
   // '3.0' as a STRING: the old code emitted the literal font-size="3.0", and
   // JS renders the number 3.0 as "3" — a one-character diff that fails all 27
   // byte-identical gates with the key absent.

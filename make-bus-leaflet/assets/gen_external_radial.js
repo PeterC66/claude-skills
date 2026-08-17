@@ -48,11 +48,17 @@ const EDK = process.env.EDITOR_KEYS==='1';
  * labeller.js and deduplicates the names first. Absent => byte-identical.
  */
 const LABELS = D.labels || {};
-const V2 = LABELS.engine === 'v2';
+// G5 (2026-08-17): labels.engine, badgeFit, hubFit, legendPlace, scaleBar and
+// printSafe are uniform on all 8 towns, so they are engine DEFAULTS now — see
+// gen_internal.js's G5 comment for the full rationale and the escape-hatch
+// convention (`false`, or `"v1"` for labels.engine) carried across all three
+// generators. spokeSpread stays explicit config: 4/8 towns, a per-composition
+// judgement.
+const V2 = !(LABELS.engine === 'v1' || LABELS.engine === false);
 const DESIGN = D.design || {};
-// printSafe: keep drawn content this many mm from the trim. Absent => today's
-// geometry exactly (byte-identical for ungated towns). See footer.js's header.
-const PSAFE = DESIGN.printSafe != null ? +DESIGN.printSafe : null;
+// printSafe: keep drawn content this many mm from the trim. `false` => today's
+// geometry exactly; absent => 5. See footer.js's header.
+const PSAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null ? +DESIGN.printSafe : 5);
 const W = 297, H = 210;
 let s = '';
 let out = (x) => { s += x + '\n'; };
@@ -99,7 +105,7 @@ function tick(x,y,color){ out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}"
  * always when the key is absent — and every pitch below is written as the old
  * literal plus that extra, so an ungated town stays byte-identical.
  */
-const BFIT = !!(D.design && D.design.badgeFit);
+const BFIT = DESIGN.badgeFit !== false;
 const badgeHalfW = (route,r)=>{
   if(!BFIT) return r;
   const w = FONT.textWidth(blab(route), r*0.95, true);
@@ -209,7 +215,7 @@ const HUB_H = 12 + (HUB_LINES.length-1)*4.0;
  * The wrap width stays in characters too: where a two-line hub label BREAKS is a
  * layout choice, not a fitting bug.
  */
-const HUBFIT = !!(D.design && D.design.hubFit);
+const HUBFIT = DESIGN.hubFit !== false;
 const HUB_W = HUBFIT
   ? Math.max(22, Math.max(...HUB_LINES.map(l=>FONT.textWidth(l,5.2,true)))+4.4, FONT.textWidth(D.town,5.2,true)+4.4)
   : Math.max(22, Math.max(...HUB_LINES.map(l=>l.length))*2.6+6, D.town.length*2.6+6);
@@ -491,7 +497,7 @@ function buildLegend(lx, ly, dx, dy){
  * positions the one nearest a frame corner wins; and a configured position is
  * honoured when it is clear, so a town that has hand-placed its legend keeps it.
  */
-const LEGPLACE = !!(DESIGN.legendPlace);
+const LEGPLACE = DESIGN.legendPlace !== false;
 const legendSpot = (w, h, wantX, wantY) => {
   /*
    * TWO occupancies, not one, because the two things the legend can cover are not
@@ -643,9 +649,9 @@ const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 out(footerBand({
   notes: [`Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
           `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
-            + `${DESIGN.scaleBar?' Diagram — not to scale.':''}`],
+            + `${DESIGN.scaleBar!==false?' Diagram — not to scale.':''}`],
   version: D.version, validFrom: D.validFrom || 'Summer 2026',
-  safe: DESIGN.printSafe != null ? +DESIGN.printSafe : null
+  safe: PSAFE
 }));
 
 // Optional "coming soon" / validity stamp. Opt-in via routes.json "stamp"

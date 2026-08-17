@@ -148,6 +148,11 @@ const measureText = (str, size) => String(str).length * size * 0.58;
 // line reads as a string of blobs rather than a dash (Beaconsfield 380, St Neots 66).
 // Butt caps plus a dash length comfortably longer than the stroke width keep each
 // dash a crisp rectangle.
+// The SAME primitive, with the same numbers, lives in gen_external_busway.js and
+// gen_external_radial.js — change one, change all three. This fix was made here on
+// 2026-08-06 and NOT propagated back to the two files it was copied from, so the
+// defect survived on every area external until St Ives VL14/9v/301o resurfaced it
+// on 2026-08-17. See make-bus-leaflet references/gotchas.md.
 function line(pts, color, w = 3.4, dashed = false) {
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' ');
   const cap = dashed ? 'butt' : 'round';

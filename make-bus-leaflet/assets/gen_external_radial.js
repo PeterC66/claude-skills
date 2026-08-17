@@ -89,9 +89,19 @@ function wrapText(text, maxChars){
 const measureText = (str, size) => String(str).length * size * 0.58;
 
 // ---- primitives -------------------------------------------------------------
+// dashed (limited-service) spokes use a BUTT cap, not round. A round cap adds w/2
+// of ink beyond EACH end of every dash, so at w=3.4 the old `round` + "1.6 2.2"
+// drew 1.6+3.4=5.0 mm of ink separated by 2.2-3.4 = -1.2 mm of gap: the dashes
+// overlapped into one scalloped caterpillar and the line read as solid-but-lumpy.
+// Butt caps plus a gap comfortably wider than the stroke keep each dash a crisp
+// rectangle. Identical primitive and identical numbers in gen_external_busway.js
+// and gen_external_places.js — if you change one, change all three (this defect
+// was fixed in the places copy on 2026-08-06 and left unfixed in the two it was
+// copied FROM, which is why it resurfaced on St Ives VL14/9v/301o).
 function line(pts, color, w=3.4, dashed=false){
   const d = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${dashed?' stroke-dasharray="1.6 2.2"':''}/>`);
+  const cap = dashed ? 'butt' : 'round';
+  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dashed?' stroke-dasharray="2.6 2.4"':''}/>`);
 }
 function tick(x,y,color){ out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 /* design.badgeFit — the same defect and the same fix as gen_internal.js, which

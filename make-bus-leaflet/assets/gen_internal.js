@@ -1015,7 +1015,13 @@ function drawFeature(f){
       lines.push(`<path d="${d}" fill="none" stroke="${st.coreColor}" stroke-width="${st.coreWidth}" stroke-dasharray="${st.chequer}" stroke-linecap="butt"/>`);
       continue;
     }
-    lines.push(`<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash} stroke-linecap="round" stroke-linejoin="round"/>`);
+    // A dashed feature needs a BUTT cap for the same reason the chequer above does
+    // and the external generators' dashed spokes do: a round cap adds width/2 of ink
+    // past each end of every dash, so any pattern whose gap is narrower than the
+    // stroke fuses into a solid scalloped line. The `canal` default ("3 1.6" at
+    // w2.4) is exactly such a pattern — latent today because no town has a canal yet.
+    const cap = st.dash ? 'butt' : 'round';
+    lines.push(`<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash} stroke-linecap="${cap}" stroke-linejoin="round"/>`);
   }
   if(st.ties){                     // railway cross-ties (perpendicular ticks)
     const t = st.tieLen!=null ? st.tieLen : st.width*0.9;   // OS-style: longer, bolder,

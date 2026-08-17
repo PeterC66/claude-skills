@@ -39,13 +39,24 @@ Multi-region: each town is mined from its own region's dataset, resolved through
 whose dataset isn't built is reported as NOT CHECKED rather than mined from a
 dataset that cannot contain it.
 
+PLACES as well as towns. Towns are registered by hand in town_prefixes.json;
+place maps are DISCOVERED from their manifests by gtfs_places.py and scanned
+against their OWN service radius. A place used to be covered only as a side
+effect of its parent town, which missed any place whose town isn't registered,
+and missed routes serving a place from outside the town's radius (a place's
+0.8 km circle is not a subset of its town's). Both kinds share one loop: a place
+is just an entry located by `near` instead of `prefixes`, which make_town_stops
+has handled since Beaconsfield and High Wycombe needed it.
+
 Usage:
-  python gtfs_upcoming.py [--root "<Buses folder>"] [--ahead 90] [--town "<Town>"]
-                          [--db <one dataset for every town>]
+  python gtfs_upcoming.py [--root "<Buses folder>"] [--ahead 90]
+                          [--town "<Town>" | --place "<Place>"] [--list-units]
+                          [--no-places] [--db <one dataset for every unit>]
 Writes _gtfs/upcoming/snapshot_<date>.json, upcoming-report_<date>.md, upcoming-summary.txt.
 """
 import os, sys, json, glob, argparse, datetime, hashlib, sqlite3
 import gtfs_regions as greg
+import gtfs_places as gplaces
 
 DOW = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
@@ -277,18 +288,52 @@ def main():
     ap.add_argument("--town", help="ad-hoc gate check: print just this town's upcoming changes to the "
                                    "console and do NOT write/overwrite the monthly snapshot or report. "
                                    "Use at the start of a leaflet build to decide print-now/wait/annotate.")
+    ap.add_argument("--place", help="the same ad-hoc gate check for a discovered place map "
+                                    "(e.g. \"High Wycombe Aldi\"). Prints only; writes nothing.")
+    ap.add_argument("--list-units", action="store_true",
+                    help="list every town and discovered place with its resolved region, radius and "
+                         "facts-file source, then exit. Writes nothing.")
+    ap.add_argument("--no-places", action="store_true",
+                    help="scan registered towns only, skipping discovered place maps (escape hatch).")
     a = ap.parse_args()
-    single = a.town
+    if a.town and a.place:
+        ap.error("--town and --place are mutually exclusive")
+    single = a.town or a.place
     gdir = os.path.join(a.root, "_gtfs")
     updir = os.path.join(gdir, "upcoming"); os.makedirs(updir, exist_ok=True)
     prefixes_cfg = json.load(open(os.path.join(gdir, "town_prefixes.json"), encoding="utf-8"))
-    groups, skipped = greg.plan(gdir, prefixes_cfg, a.db)
+
+    # Towns come from the hand-maintained registry, places from their manifests. Both end up
+    # in one dict keyed by name, which greg.plan() groups by dataset without caring which is
+    # which -- place folder names keep their town prefix ("High Wycombe Aldi"), so the two
+    # namespaces don't collide (gplaces.discover refuses the entry if they ever do).
+    scan_cfg = {k: v for k, v in prefixes_cfg.items() if not k.startswith("_")}
+    kinds = {k: "town" for k in scan_cfg}
+    place_problems = []
+    if not a.no_places:
+        regions, default = greg.load(gdir)
+        places, place_problems = gplaces.discover(a.root, regions, default, prefixes_cfg)
+        scan_cfg.update(places)
+        kinds.update({k: "place" for k in places})
+
+    if a.list_units:
+        for name, cfg in sorted(scan_cfg.items()):
+            where = f"near {cfg['near']}" if cfg.get("near") else f"prefixes {cfg.get('prefixes')}"
+            print(f"{kinds[name]:5} {name:32} region={cfg.get('region') or '(default)':16} {where}"
+                  + (f"  src={cfg['_src']}" if cfg.get("_src") else "")
+                  + (f"  [{cfg['_note']}]" if cfg.get("_note") else ""))
+        for name, reason in place_problems:
+            print(f"place {name:32} NOT CHECKED — {reason}")
+        return
+
+    groups, skipped = greg.plan(gdir, scan_cfg, a.db)
+    skipped = list(skipped) + place_problems
     today = datetime.date.today().strftime("%Y%m%d")
     today_iso = datetime.date.today().isoformat()
 
     prev_path, prev = prev_snapshot(updir, today_iso)
 
-    snapshot = {"generated": today_iso, "ahead_days": a.ahead, "regions": {}, "towns": {}}
+    snapshot = {"generated": today_iso, "ahead_days": a.ahead, "regions": {}, "towns": {}, "places": {}}
     lines = ["# Upcoming bus changes — get ahead of the game",
              f"_Report {today_iso}; look-ahead {a.ahead}d; "
              f"{'compared with ' + os.path.basename(prev_path) if prev_path else 'first run — no previous snapshot to diff'}. "
@@ -302,6 +347,7 @@ def main():
     summary = []
     total = 0
     towns_hit = []
+    places_hit = []
 
     for g in groups:
         gfi = (g["feed"] or {}).get("feed_info", {})
@@ -314,28 +360,44 @@ def main():
             for town, cfg in g["towns"]:
                 if single and town.lower() != single.lower():
                     continue
-                town_dir = os.path.join(a.root, "Areas", town)
-                if not os.path.isdir(town_dir):
+                is_place = kinds.get(town) == "place"
+                # Existence gate only -- nothing is read from this dir. A town must have an
+                # Areas/<Town> folder to be worth scanning; a discovered place carries the
+                # dir it was found in, wherever that layout put it.
+                unit_dir = cfg.get("_dir") or os.path.join(a.root, "Areas", town)
+                if not os.path.isdir(unit_dir):
                     continue
                 prefixes = cfg.get("prefixes")
                 near = tuple(cfg["near"]) if cfg.get("near") else None
                 routes = build_town(cur, feed_start, prefixes, near)
-                snapshot["towns"][town] = routes
-                prev_routes = (prev or {}).get("towns", {}).get(town) if prev else None
+                bucket = "places" if is_place else "towns"
+                snapshot[bucket][town] = routes
+                # An older snapshot has no "places" key at all, so a place's first run finds
+                # no baseline, skips the month-over-month lens and reports forward findings
+                # only -- rather than declaring every route [APPEARED].
+                prev_routes = (prev or {}).get(bucket, {}).get(town) if prev else None
                 fwd = forward_findings(routes, prev_routes, feed_start, today, a.ahead)
                 dif = diff_findings(routes, prev_routes) if prev_routes is not None else []
                 # actionable = firm upcoming changes; ENDS? is lower-confidence "verify"
                 findings = fwd + dif
                 actionable = [f for f in findings if f[0] not in ("ENDS?",)]
                 if actionable:
-                    towns_hit.append(town); total += len(actionable)
+                    (places_hit if is_place else towns_hit).append(town); total += len(actionable)
                 nverify = len([x for x in fwd if x[0] == "ENDS?"])
                 nact = len(actionable)
                 verdict = "nothing upcoming" if (nact == 0 and nverify == 0) else \
                     (", ".join(([f"{nact} upcoming"] if nact else []) + ([f"{nverify} to verify"] if nverify else [])))
-                summary.append(f"  {town}: {verdict}")
+                summary.append(f"  {town}{' [place]' if is_place else ''}: {verdict}")
                 lines.append(f"## {town} — {verdict}")
-                lines.append(f"_region {g['region']}_")
+                if is_place:
+                    # The portal reads this line to tell a place section from a town one, so it
+                    # can join to the right map instead of substring-matching map.subject.
+                    parent = cfg.get("_town")
+                    lines.append(f"_kind place · region {g['region']}"
+                                 + (f" · town {parent}" if parent else "")
+                                 + f" · radius {cfg['near'][2]} km_")
+                else:
+                    lines.append(f"_region {g['region']}_")
                 if not findings:
                     lines.append("- No upcoming changes detected in the current feed.")
                 order = {"NEW": 0, "CHANGE": 1, "APPEARED": 2, "WITHDRAWN": 3,
@@ -350,7 +412,7 @@ def main():
         finally:
             con.close()
 
-    # Towns deliberately not mined, rather than mined from a dataset that cannot contain them.
+    # Units deliberately not mined, rather than mined from a dataset that cannot contain them.
     if skipped and not single:
         lines.append("## Not checked — dataset unavailable")
         for town, reason in skipped:
@@ -359,14 +421,17 @@ def main():
         lines.append("")
 
     if single:
-        # Ad-hoc gate check: print this town's section, write nothing (don't disturb the monthly
+        # Ad-hoc gate check: print this unit's section, write nothing (don't disturb the monthly
         # snapshot cadence or the diff baseline).
+        noun = "Place" if a.place else "Town"
         blocked = [r for t, r in skipped if t.lower() == single.lower()]
         if blocked:
-            print(f"Town '{single}' could not be checked: {blocked[0]}")
+            print(f"{noun} '{single}' could not be checked: {blocked[0]}")
             return
-        if not any(town.lower() == single.lower() for town in prefixes_cfg if not town.startswith("_")):
-            print(f"Town '{single}' is not in town_prefixes.json - nothing to check.")
+        if not any(name.lower() == single.lower() for name in scan_cfg):
+            print(f"{noun} '{single}' is not "
+                  + ("a discovered place map (looked for a manifest.json under Areas/*/Places/ and Places/)."
+                     if a.place else "in town_prefixes.json - nothing to check."))
             return
         print("\n".join(lines[1:]).strip())  # drop the H1 title; keep feed context + the town section
         return
@@ -379,12 +444,14 @@ def main():
     if total == 0:
         headline = "Upcoming bus changes: nothing to prepare."
     else:
-        headline = f"Upcoming bus changes: {total} item(s) coming in {', '.join(towns_hit)}."
+        where = "; ".join(x for x in (", ".join(towns_hit),
+                                      ", ".join(f"{p} (place)" for p in places_hit)) if x)
+        headline = f"Upcoming bus changes: {total} item(s) coming in {where}."
     if skipped:
-        headline += f" {len(skipped)} town(s) NOT checked ({', '.join(t for t, _ in skipped)})."
+        headline += f" {len(skipped)} unit(s) NOT checked ({', '.join(t for t, _ in skipped)})."
     with open(os.path.join(updir, "upcoming-summary.txt"), "w", encoding="utf-8") as f:
         f.write(headline + "\n" + "\n".join(s.strip() for s in summary) + "\nREPORT=" + rep_path + "\n")
-    print("Upcoming changes per town:")
+    print("Upcoming changes per town and place:")
     print("\n".join(summary))
     print("\n" + headline)
     print("Snapshot:", snap_path)

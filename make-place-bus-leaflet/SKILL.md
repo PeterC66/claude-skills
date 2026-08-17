@@ -51,6 +51,8 @@ A place gets its **own folder** with a `manifest.json`, nested under the area it
 
 `node "%TSK%\stage.js" <init|new|pull|commit|latest|status>` — same commands as the town skill (`references/…` there). After S5, copy the JPGs into `<placeDir>\_latest\`.
 
+**The monthly change scan picks the place up by itself — there is nothing to register.** Unlike a town (which S1 must add to `_gtfs/town_prefixes.json` by hand, and which drifts when someone forgets), a place is discovered by `gtfs_places.py` from the `manifest.json` you just created, in any of the three layouts above. It is then scanned against **its own** service radius — the `near` in its `gtfs-services.json`, not its town's, which is the point: High Wycombe's 3.5 km town circle both misses routes reaching the Aldi from outside it and reports town-wide changes that never go near the store. Which dataset it is read from comes from the parent town's `region`, or for a standalone place from `place.json`'s region name; an unregistered region is reported NOT CHECKED with a reason, never passed over silently. Check with `python "%SK%\gtfs_upcoming.py" --list-units`, or `--place "<Place Name>"` for the pre-print gate (prints, writes nothing — the place equivalent of the town skill's `--town`).
+
 ## Process — the five stages (autonomous; confirm only genuine blockers)
 Defaults: walkshed **500 m**; service radius **0.8 km**; palette **Tol Bright**; data date current. Pause only for: an **ambiguous place** (two "Tesco Extra"), or a **destination grouping** you can't settle (the draft is always shown for confirmation).
 

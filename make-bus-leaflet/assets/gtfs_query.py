@@ -10,11 +10,33 @@ ATCO_PREFIX = the town's NaPTAN locality prefix(es), e.g. 0500HSTIV for St Ives,
 Emits the facts the make-bus-leaflet S1 stage needs (routes / operators / days /
 termini), straight from BODS open data. Geometry and community/pre-book (DRT)
 services are NOT covered here -- keep the bustimes/OSM pass for those.
+
+HOW OFTEN A ROUTE RUNS -- read this before using any number below
+  `journeysPerWeek` is the honest one: real journeys calling at the town in a
+  week, obtained by expanding each trip's calendar (and its calendar_dates
+  exceptions) over actual dates.
+
+  `tripPatternsAtTown` is NOT a rate. It counts rows in trips.txt -- timetable
+  patterns -- and a journey running Mon-Fri is ONE row carrying five day-flags.
+  It was called `tripsAtTownPerWeekSample` until 2026-08-17 and that name was
+  wrong in both halves: not per-week, not a sample. Verified against four towns,
+  it understates by x2.0 to x5.7, and the multiplier is set by how many
+  service_ids the operator split their timetable into -- a modelling choice in
+  somebody else's export -- so it is not correctable by a constant and it gets
+  the RANKING of routes wrong. Wisbech's two busiest routes came out in the
+  wrong order. Do not tier, weight, sort or draw anything from it.
+  Full account: Buses repo, Development Docs/publisher-benchmark-plan_2026-08-17.md.
+
+  Span matters as much as count in a market town: St Ives' 300 runs 5 journeys,
+  all 09:50-13:50 (a shopping bus), and the 69 runs 4, at 07:00/07:10 and
+  17:30/18:10 (a commuter shuttle). Equal-looking counts, opposite products --
+  hence `firstDeparture`/`lastDeparture` alongside the totals.
 """
-import sqlite3, sys, json, argparse, os, datetime
+import sqlite3, sys, json, argparse, os, datetime, statistics
 
 DOW=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+WEEKS_SAMPLED=12   # consecutive weeks expanded from the reference Monday
 
 def fmt_days(flags):
     on=[i for i,f in enumerate(flags) if f]
@@ -60,6 +82,79 @@ def _make_active_svc(cur, asof):
                 (asof, asof))
 
 
+def _load_calendar(cur):
+    """calendar + calendar_dates into memory once; per-date lookups are far too
+    many to push back into SQL per route."""
+    cal={r["service_id"]:dict(r) for r in cur.execute("SELECT * FROM calendar")}
+    exc={}
+    for r in cur.execute("SELECT service_id,date,exception_type FROM calendar_dates"):
+        exc.setdefault(r["service_id"],{})[r["date"]]=str(r["exception_type"])
+    return cal,exc
+
+def _runs(cal, exc, sid, d):
+    """Does service `sid` operate on date `d`? calendar_dates overrides calendar,
+    which is the whole point of it -- a bank holiday or a school-term break is an
+    exception row, not a different calendar."""
+    ds=d.strftime("%Y%m%d")
+    e=exc.get(sid,{}).get(ds)
+    if e=="2": return False
+    if e=="1": return True
+    c=cal.get(sid)
+    if not c or not (c["start_date"]<=ds<=c["end_date"]): return False
+    return str(c[DOW[d.weekday()]])=="1"
+
+def _sample_mondays(cal, ref, n=WEEKS_SAMPLED):
+    """`n` consecutive Mondays from the Monday of `ref`, stopping at the feed's
+    last end_date. Consecutive rather than spread so the window straddles a school
+    holiday boundary and the min/max range shows term-time variation instead of
+    hiding it. Deterministic: same feed + same reference date => same weeks."""
+    monday=ref-datetime.timedelta(ref.weekday())
+    ends=[c["end_date"] for c in cal.values() if c.get("end_date")]
+    last=max(ends) if ends else None
+    out=[]
+    for i in range(n):
+        m=monday+datetime.timedelta(weeks=i)
+        if last and m.strftime("%Y%m%d")>last: break
+        out.append(m)
+    return out or [monday]
+
+def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
+    """Real journeys per week for one route, by expanding the calendar.
+
+    Immune to the SVCF trap by construction: every journey is counted against a
+    real date, so an expired or not-yet-started timetable contributes nothing
+    whether or not the caller passed --asof."""
+    trips=list(cur.execute(f"""
+      SELECT t.trip_id, t.service_id, t.direction_id dir, MIN(st.departure_time) dep
+        FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id
+       WHERE t.route_id IN ({ph}) AND {IN}{SVCF}
+       GROUP BY t.trip_id""", rids))
+    weekly=[]; best_day=0; out_n=back_n=0; deps=[]
+    for m in mondays:
+        days=[m+datetime.timedelta(i) for i in range(7)]
+        n=0; per_day=[0]*7
+        for t in trips:
+            for j,d in enumerate(days):
+                if _runs(cal,exc,t["service_id"],d):
+                    n+=1; per_day[j]+=1
+                    if m is mondays[0]:
+                        if str(t["dir"])=="1": back_n+=1
+                        else: out_n+=1
+                        if t["dep"]: deps.append(t["dep"])
+        weekly.append(n); best_day=max(best_day,max(per_day) if per_day else 0)
+    live=[w for w in weekly if w]
+    # lower median: an integer, and stable when the sample is even-length
+    typical=sorted(live)[len(live)//2] if live else 0
+    deps.sort()
+    return {
+      "journeysPerWeek":typical,
+      "journeysPerWeekRange":[min(weekly),max(weekly)] if weekly else [0,0],
+      "busiestDayJourneys":best_day,
+      "journeysOutBack":[out_n,back_n],
+      "firstDeparture":deps[0][:5] if deps else None,
+      "lastDeparture":deps[-1][:5] if deps else None,
+    }
+
 def query(db, prefixes=None, near=None, town=None, asof=None):
     con=sqlite3.connect(db); con.row_factory=sqlite3.Row; cur=con.cursor()
     _make_town_stops(cur, prefixes, near)
@@ -69,6 +164,11 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
     if asof:
         _make_active_svc(cur, asof)
     SVCF = " AND t.service_id IN (SELECT service_id FROM active_svc)" if asof else ""
+    # frequency is expanded over real dates, so it needs the calendar in memory and a
+    # reference week. --asof moves that week; otherwise it is the week containing today.
+    cal,exc=_load_calendar(cur)
+    ref=datetime.datetime.strptime(asof,"%Y%m%d").date() if asof else datetime.date.today()
+    mondays=_sample_mondays(cal, ref)
     # all (route, agency) calling at the town
     routes=list(cur.execute(f"""
       SELECT DISTINCT r.route_id, r.route_short_name sn, r.route_long_name ln, a.agency_name op
@@ -122,15 +222,19 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
         # shape coverage
         hasshape=list(cur.execute(f"""SELECT COUNT(*) FROM trips t
           WHERE t.route_id IN ({ph}) AND t.shape_id IN (SELECT shape_id FROM shapes)""",rids))[0][0]>0
-        ntrips=list(cur.execute(f"""SELECT COUNT(DISTINCT t.trip_id) FROM trips t
+        # raw pattern count -- kept because it is cheap and occasionally useful for
+        # spotting a route with many timing variants, but it is NOT a rate. See module docstring.
+        npatterns=list(cur.execute(f"""SELECT COUNT(DISTINCT t.trip_id) FROM trips t
           JOIN stop_times st ON st.trip_id=t.trip_id
           WHERE t.route_id IN ({ph}) AND {IN}{SVCF}""", rids))[0][0]
+        freq=_journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays)
         out.append({"route":sn,"operator":" / ".join(sorted(d["ops"])),
           "days":fmt_days(flags),"daysFlags":flags,
           "validFrom":min(sd) if sd else None,"validTo":max(ed) if ed else None,
           "longName":" / ".join(sorted(d["long"])) if d["long"] else "",
           "headsigns":heads,"termini":sorted(ends),
-          "tripsAtTownPerWeekSample":ntrips,"hasGtfsShape":hasshape})
+          **freq,
+          "tripPatternsAtTown":npatterns,"hasGtfsShape":hasshape})
     # variant hints: short route name whose name starts with another present route name
     names=set(by)
     for s in out:
@@ -138,7 +242,14 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
         s["possibleVariantOf"]=base[0] if base else None
     out.sort(key=lambda s:(len(s["route"]),s["route"]))
     con.close()
-    res={"town":town,"atcoPrefixes":prefixes,"near":near,"source":"BODS GTFS (east_anglia)","services":out}
+    res={"town":town,"atcoPrefixes":prefixes,"near":near,"source":"BODS GTFS (east_anglia)",
+         "frequencyBasis":{
+             "weeksSampled":len(mondays),
+             "from":mondays[0].isoformat(),"to":(mondays[-1]+datetime.timedelta(6)).isoformat(),
+             "note":"journeysPerWeek is the lower median of the sampled weeks; the range shows "
+                    "term-time/holiday variation. tripPatternsAtTown counts trips.txt rows and is "
+                    "NOT a rate -- never rank or draw from it."},
+         "services":out}
     if asof: res["asOf"]=asof
     return res
 
@@ -162,10 +273,17 @@ if __name__=="__main__":
     if asof and (len(asof)!=8 or not asof.isdigit()):
         ap.error("--asof must be YYYYMMDD or YYYY-MM-DD")
     res=query(a.db, a.prefixes or None, near, a.town, asof)
-    for s in res["services"]:
+    fb=res["frequencyBasis"]
+    print(f"  frequency basis: {fb['weeksSampled']} weeks, {fb['from']} to {fb['to']}")
+    for s in sorted(res["services"], key=lambda x:-x["journeysPerWeek"]):
         v=f"  (variant of {s['possibleVariantOf']})" if s["possibleVariantOf"] else ""
         sh="shape" if s["hasGtfsShape"] else "no-shape"
-        print(f"  {s['route']:6s} {s['operator']:28s} {s['days']:10s} {sh:8s} -> {', '.join(s['headsigns'][:3])}{v}")
+        lo,hi=s["journeysPerWeekRange"]
+        rng=f"({lo}-{hi})" if lo!=hi else ""
+        span=f"{s['firstDeparture']}-{s['lastDeparture']}" if s["firstDeparture"] else "--"
+        print(f"  {s['route']:6s} {s['operator']:26s} {s['days']:9s} "
+              f"{s['journeysPerWeek']:>4}/wk {rng:>10s} {span:>12s} {sh:8s}"
+              f" -> {', '.join(s['headsigns'][:2])}{v}")
     if a.out:
         json.dump(res,open(a.out,"w",encoding="utf-8"),indent=1,ensure_ascii=False)
         print("wrote",a.out)

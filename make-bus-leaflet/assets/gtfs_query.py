@@ -37,7 +37,7 @@ WHICH FIELD TO TIER A LINE WEIGHT FROM -- not `journeysPerWeek`
   `journeysPerWeek` is an honest field that is still the wrong thing to DRAW from.
   It is a volume, and volume rises with route length and operating hours, neither
   of which is what a reader wants a line weight to tell them: tiering on it
-  misplaces 10 of the 78 drawn lanes on the board, in both directions. Nor is span
+  misplaces 11 of the 78 drawn lanes on the board, in both directions. Nor is span
   the missing measure -- the 69's span is wider than the all-day 5A's.
 
     weeksActive          how many of the sampled weeks the service runs AT ALL.
@@ -50,11 +50,16 @@ WHICH FIELD TO TIER A LINE WEIGHT FROM -- not `journeysPerWeek`
                          busier direction; null when that window holds under 3
     longestDaytimeGap    largest gap 07:00-19:00, both directions -- the measure
                          that separates a shopping bus from a commuter shuttle
-    duplicateDepartures  journeys sharing a departure minute AND direction with
-                         another that day. Normally 0. Non-zero means the feed
-                         registers a journey more than once, so `journeysPerWeek`
-                         is inflated for that route by about that proportion --
-                         High Wycombe's M40 files each journey up to four times.
+    typicalDayDuplicates on the profiled day, how many trip records were the same
+                         journey filed again -- same departure minute, direction and
+                         stop sequence -- and so were counted once. Normally 0.
+                         High Wycombe's M40 files each journey up to FOUR times.
+                         Counted on the DAY rather than over the whole feed on
+                         purpose: St Ives' B has 60 trip records that duplicate
+                         another on paper, under calendars that never coincide, so
+                         no count of it was ever inflated and the honest answer is
+                         zero. Since 2026-08-17 every count above is of distinct
+                         journeys; this is the audit trail of what was collapsed.
 
   `firstDeparture`/`lastDeparture` are the FIRST SAMPLED WEEK's extremes and stay
   that way; `typicalDayWindow` is the profiled day's and is the one to reason from.
@@ -122,17 +127,21 @@ def _load_calendar(cur):
         exc.setdefault(r["service_id"],{})[r["date"]]=str(r["exception_type"])
     return cal,exc
 
-def _runs(cal, exc, sid, d):
-    """Does service `sid` operate on date `d`? calendar_dates overrides calendar,
-    which is the whole point of it -- a bank holiday or a school-term break is an
-    exception row, not a different calendar."""
-    ds=d.strftime("%Y%m%d")
+def _runs(cal, exc, sid, ds, dow):
+    """Does service `sid` operate on the date whose YYYYMMDD is `ds` and whose
+    weekday column is `dow`? calendar_dates overrides calendar, which is the whole
+    point of it -- a bank holiday or a school-term break is an exception row, not a
+    different calendar.
+
+    Takes the formatted date rather than the date, because the caller loops days
+    outside trips and `strftime` for every (trip, date) pair was the single most
+    expensive thing this module did -- 265,000 calls and 1.8 s on High Wycombe."""
     e=exc.get(sid,{}).get(ds)
     if e=="2": return False
     if e=="1": return True
     c=cal.get(sid)
     if not c or not (c["start_date"]<=ds<=c["end_date"]): return False
-    return str(c[DOW[d.weekday()]])=="1"
+    return str(c[dow])=="1"
 
 def _sample_mondays(cal, ref, n=WEEKS_SAMPLED):
     """`n` consecutive Mondays from the Monday of `ref`, stopping at the feed's
@@ -181,12 +190,12 @@ def _day_shape(profile):
     -- same headsign, same 18 stops, different service_id -- which alone dragged its
     median headway to 0 minutes), and a linked working can put two legs with
     different headsigns at one stop in the same minute (St Ives' 5A, 11:40). The
-    count of journeys hidden this way is reported as `duplicateDepartures` rather
-    than silently absorbed -- it is also a warning that `journeysPerWeek` is
-    inflated for that route, which is a separate defect and not fixed here."""
+    Since 2026-08-17 the journey counts are themselves de-duplicated (see
+    _trip_signatures), so a repeated minute reaching here is a genuine second
+    departure -- two different journeys leaving together, as St Ives' 5A does at
+    11:40 -- and distinct minutes is still the right basis for a wait."""
     if not profile: return {"typicalDayJourneys":0,"typicalDayWindow":None,
-                            "coreHeadwayMinutes":None,"longestDaytimeGap":None,
-                            "duplicateDepartures":0}
+                            "coreHeadwayMinutes":None,"longestDaytimeGap":None}
     allt=sorted(m for m,_ in profile)
     inday=sorted({m for m in allt if DAY_LO<=m<=DAY_HI})
     gap=max((b-a for a,b in zip(inday,inday[1:])), default=None) if len(inday)>=2 else None
@@ -200,36 +209,77 @@ def _day_shape(profile):
       "typicalDayWindow":[_clock(allt[0]),_clock(allt[-1])],
       "coreHeadwayMinutes":head,
       "longestDaytimeGap":gap,
-      "duplicateDepartures":len(profile)-len(set(profile)),
     }
+
+def _trip_signatures(cur, tids):
+    """trip_id -> its full ordered stop list, the identity of a JOURNEY.
+
+    Needed because the same journey is often in the feed several times over. High
+    Wycombe's M40 files each one up to four times -- four `service_id`s with
+    overlapping calendars, two live on any given weekday -- and they are stop-for-stop
+    identical, so every count of that route came out inflated. Signature is the whole
+    stop sequence rather than the endpoints, because the near-misses must NOT be
+    collapsed: St Ives' 5A has two trips leaving Bar Hill at 11:40 in the same
+    direction, one of 41 stops terminating at St Ives and one of 42 running on to
+    Holywell. Same origin and minute, different journeys, and they stay two.
+
+    Only trips that TIE with another on departure minute and direction can possibly
+    be duplicates, so only those need a sequence fetched; the rest are their own
+    identity. That matters -- fetching every town-serving trip's stop_times took High
+    Wycombe from 1 s to 10 s, and its stop set is most of the feed's trips. Passed a
+    temp table rather than an IN list because a route can have more trips than SQLite
+    takes bound variables."""
+    cur.execute("DROP TABLE IF EXISTS sig_trips")
+    cur.execute("CREATE TEMP TABLE sig_trips(trip_id TEXT PRIMARY KEY)")
+    cur.executemany("INSERT OR IGNORE INTO sig_trips VALUES (?)", [(t,) for t in tids])
+    seqs={}
+    for tid,sid in cur.execute("""
+        SELECT st.trip_id, st.stop_id FROM stop_times st
+         WHERE st.trip_id IN (SELECT trip_id FROM sig_trips)
+         ORDER BY st.trip_id, CAST(st.stop_sequence AS INT)"""):
+        seqs.setdefault(tid,[]).append(sid)
+    return {k:tuple(v) for k,v in seqs.items()}
 
 def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
     """Real journeys per week for one route, by expanding the calendar.
 
     Immune to the SVCF trap by construction: every journey is counted against a
     real date, so an expired or not-yet-started timetable contributes nothing
-    whether or not the caller passed --asof."""
+    whether or not the caller passed --asof.
+
+    Every count here is of DISTINCT journeys -- (departure minute at the town,
+    direction, stop sequence) -- not of trip records. See _trip_signatures."""
     trips=list(cur.execute(f"""
       SELECT t.trip_id, t.service_id, t.direction_id dir, MIN(st.departure_time) dep
         FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id
        WHERE t.route_id IN ({ph}) AND {IN}{SVCF}
        GROUP BY t.trip_id""", rids))
-    weekly=[]; best_day=0; out_n=back_n=0; deps=[]
+    # only trips tying on (departure, direction) can be duplicates of one another
+    tied={}
+    for t in trips: tied.setdefault((t["dep"],str(t["dir"])),[]).append(t["trip_id"])
+    contested=[tid for ids in tied.values() if len(ids)>1 for tid in ids]
+    sigs=_trip_signatures(cur, contested) if contested else {}
+    weekly=[]; best_day=0; out_n=back_n=0; deps=[]; dupday={}
     # (week, weekday) -> [(minutes, direction)], for the day-shape fields below.
     # Weekdays only: a Saturday timetable is a different product, not a thin Tuesday.
     profiles={}
     for wi,m in enumerate(mondays):
         days=[m+datetime.timedelta(i) for i in range(7)]
         n=0; per_day=[0]*7
-        for t in trips:
-            for j,d in enumerate(days):
-                if _runs(cal,exc,t["service_id"],d):
-                    n+=1; per_day[j]+=1
-                    if j<5 and t["dep"]: profiles.setdefault((wi,j),[]).append((_mins(t["dep"]),str(t["dir"])))
-                    if m is mondays[0]:
-                        if str(t["dir"])=="1": back_n+=1
-                        else: out_n+=1
-                        if t["dep"]: deps.append(t["dep"])
+        for j,d in enumerate(days):
+            seen=set(); ds=d.strftime("%Y%m%d"); dow=DOW[d.weekday()]
+            for t in trips:
+                if not _runs(cal,exc,t["service_id"],ds,dow): continue
+                key=(t["dep"],str(t["dir"]),sigs.get(t["trip_id"]))
+                if key in seen:            # the same journey, filed again
+                    dupday[(wi,j)]=dupday.get((wi,j),0)+1; continue
+                seen.add(key)
+                n+=1; per_day[j]+=1
+                if j<5 and t["dep"]: profiles.setdefault((wi,j),[]).append((_mins(t["dep"]),str(t["dir"])))
+                if m is mondays[0]:
+                    if str(t["dir"])=="1": back_n+=1
+                    else: out_n+=1
+                    if t["dep"]: deps.append(t["dep"])
         weekly.append(n); best_day=max(best_day,max(per_day) if per_day else 0)
     live=[w for w in weekly if w]
     # lower median: an integer, and stable when the sample is even-length
@@ -248,6 +298,7 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
       "journeysOutBack":[out_n,back_n],
       "firstDeparture":deps[0][:5] if deps else None,
       "lastDeparture":deps[-1][:5] if deps else None,
+      "typicalDayDuplicates":dupday.get(best,0) if best else 0,
       **_day_shape(profiles.get(best) if best else None),
     }
 

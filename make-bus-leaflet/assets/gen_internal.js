@@ -266,6 +266,43 @@ const IR = (RJ.internalRoads === false) ? null : (function(){
     roadLabelMax:12, badgeEvery:70 }, u);       // gap>=stroke+~1mm so bundled lanes read separately (see header)
   o.focus = Object.assign({ coreKm:1.1, comp:0.5 }, u.focus||{});
   return o; })();
+
+/* design.frequencyTiers — draw HOW USABLE a service is, not how many journeys it
+ * runs (2026-08-17; Buses repo, Development Docs/frequency-tier-model_2026-08-17.md).
+ *
+ *   "frequency": {"<lane>":"frequent"|"all-day"|"limited"}    which class each LANE is
+ *   "design":{"frequencyTiers":{"frequent":{"mm":2.4,"label":"…"},
+ *                               "limited":{"mm":1.2}}}
+ *
+ * Keyed by the DRAWN LANE, which is why it reads the same key as `palette` and not
+ * a route number: where internalCorridors bundles co-running services into one
+ * line, the class belongs to the merged timetable, not to any one member.
+ *
+ * Needs BOTH keys; either absent ⇒ every string this touches is what it was, byte
+ * for byte. A tier with no `mm` keeps IR.stroke, so a tier can be dash-only.
+ *
+ * A dashed tier gets a BUTT cap, per the 2026-08-17 dash gotcha: with round caps
+ * the usable gap is (gap − width), so a 1.4 mm line dashed "2.6 2.4" would draw
+ * solid with 1 mm of overlap per dash. The casing widens with the line, or a
+ * heavier tier would show its casing as a fringe.
+ *
+ * Previewed on all eight sheets 2026-08-17. Dashing the limited tier was tried and
+ * rejected there: 40% of a market town's lanes are limited, and dashing them made
+ * Ramsey — which has no frequent lane at all — read as a town whose buses are
+ * provisional. The shipped shape is three solid weights, with the dash kept for
+ * what VL14's dashed grey already means: a service that runs on certain dates only.
+ */
+const FTIER = (DESIGN.frequencyTiers && RJ.frequency) ? DESIGN.frequencyTiers : null;
+const ftier = r => FTIER ? (FTIER[RJ.frequency[r]] || null) : null;
+const fw   = r => { const t=ftier(r); return (t && t.mm!=null) ? t.mm : (IR?IR.stroke:2.6); };
+const fdash= r => { const t=ftier(r); return (t && t.dash) ? ` stroke-dasharray="${t.dash}"` : ''; };
+const fcap = r => { const t=ftier(r); return (t && t.dash) ? 'butt' : 'round'; };
+// Default wording for the Key row. A tier may override it with `label`; an unknown
+// tier name falls back to itself, so a town can invent a fourth class and still
+// get a row rather than a silent line style.
+const FTIER_LABEL = { frequent:'Frequent — turn up and go',
+                      'all-day':'Runs through the day',
+                      limited:'Limited — check times' };
 // ---- internalDiagram render extensions (tube-map diagram, 2026-07-10) ------
 // Keyed off internalDiagramRENDER, which ONLY diagram_internal.js writes into
 // its workspace routes.json (curated stop ticks, interchange lozenges, one-way
@@ -1646,30 +1683,6 @@ if(IR){
    * lanes and everything where two routes cross.
    */
   const CASE = ROUTE_CASING_ON ? ((DESIGN.routeCasing&&DESIGN.routeCasing.mm!=null)?DESIGN.routeCasing.mm:0.35) : 0;
-  /* design.frequencyTiers — draw HOW USABLE a service is, not how many journeys it
-   * runs (2026-08-17; Buses repo, Development Docs/frequency-tier-model_2026-08-17.md).
-   *
-   *   "frequency": {"<lane>":"frequent"|"all-day"|"limited"}    which class each LANE is
-   *   "design":{"frequencyTiers":{"frequent":{"mm":2.4},
-   *                               "limited":{"mm":1.4,"dash":"2.6 2.4"}}}
-   *
-   * Keyed by the DRAWN LANE, which is why it reads the same key as `palette` and not
-   * a route number: where internalCorridors bundles co-running services into one
-   * line, the class belongs to the merged timetable, not to any one member.
-   *
-   * Needs BOTH keys; either absent ⇒ every string below is what it was, byte for
-   * byte. A tier with no `mm` keeps IR.stroke, so "limited" can be dash-only.
-   *
-   * A dashed tier gets a BUTT cap, per the 2026-08-17 dash gotcha: with round caps
-   * the usable gap is (gap − width), so a 1.4 mm line dashed "2.6 2.4" would draw
-   * solid with 1 mm of overlap per dash. The casing widens with the line, or a
-   * heavier tier would show its casing as a fringe.
-   */
-  const FTIER = (DESIGN.frequencyTiers && RJ.frequency) ? DESIGN.frequencyTiers : null;
-  const ftier = r => FTIER ? (FTIER[RJ.frequency[r]] || null) : null;
-  const fw = r => { const t=ftier(r); return (t && t.mm!=null) ? t.mm : IR.stroke; };
-  const fdash = r => { const t=ftier(r); return (t && t.dash) ? ` stroke-dasharray="${t.dash}"` : ''; };
-  const fcap = r => { const t=ftier(r); return (t && t.dash) ? 'butt' : 'round'; };
   if(CASE>0) for(const L of RLINES)
     out(`<path d="${L.d}" fill="none" stroke="${(DESIGN.routeCasing&&DESIGN.routeCasing.color)||'#ffffff'}" stroke-width="${(fw(L.r)+CASE*2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
   for(const L of RLINES)
@@ -3116,10 +3129,37 @@ key.forEach((kk,i)=>{const ky=py+KFIRST+i*KROW, kx=PX+3;
   // byte-identical gates with the key absent.
   out(`<text x="${kx+4.0}" y="${ky+1}" font-family="Arial" font-size="${PS?PS.sub:'3.0'}" fill="#222">${esc(kk[1])}</text>`);});
 
+/* The line-weight rows. style-guide §9 rule 7 — a sheet that shares a hue must say
+ * why — and an unexplained line WEIGHT is worse, because the reader can see it is
+ * deliberate and cannot tell what it claims. Only tiers a drawn lane actually uses
+ * get a row: a Key line for a class this town has none of would be a lie about the
+ * network, and Ramsey (no frequent lane) and March (none either) are why that is
+ * not hypothetical. Config order decides the order, so the town controls it.
+ */
+let KEYROWS = key.length;
+if(FTIER){
+  const used = new Set(Object.values(RJ.frequency||{}));
+  const tiers = Object.keys(FTIER).filter(t=>used.has(t));
+  // The sample occupies exactly the pictogram's footprint (kx±2.0) and the label
+  // sits at kx+4.0, so these rows share the POI rows' column and the whole Key
+  // reads as one list. A longer sample crowded the label — 1.2 mm of air against
+  // the pictograms' 2.0 — and the Key looked like two different tables.
+  const kx=PX+3;
+  let ty = py+KFIRST+key.length*KROW + KROW*0.5;   // half a row of air below the pictograms
+  for(const t of tiers){
+    const st=FTIER[t]||{}, w=(st.mm!=null)?st.mm:(IR?IR.stroke:2.6);
+    const dash=st.dash?` stroke-dasharray="${st.dash}"`:'', cap=st.dash?'butt':'round';
+    out(`<path d="M${(kx-2.0).toFixed(2)} ${ty.toFixed(2)}h4.00" fill="none" stroke="#555" stroke-width="${w}"${dash} stroke-linecap="${cap}"/>`);
+    out(`<text x="${kx+4.0}" y="${(ty+1).toFixed(2)}" font-family="Arial" font-size="${PS?PS.sub:'3.0'}" fill="#222">${esc(st.label||FTIER_LABEL[t]||t)}</text>`);
+    ty+=KROW; KEYROWS++;
+  }
+  KEYROWS += 0.5;                                // the air, so the fare note clears it
+}
+
 // fare note (opt-in routes.json "fareNote") — highlighted box under the key
 if(RJ.fareNote){
-  let fy=PS ? py+KFIRST+(key.length-1)*KROW+1+gapDown(PS.sub,AIR_ABOVE_HEAD,PS.sub*CAP)
-            : py+5+key.length*KROW+9;
+  let fy=PS ? py+KFIRST+(KEYROWS-1)*KROW+1+gapDown(PS.sub,AIR_ABOVE_HEAD,PS.sub*CAP)
+            : py+5+KEYROWS*KROW+9;
   const words=String(RJ.fareNote).split(' '); const lines=[]; let cur='';
   for(const wd of words){ if((cur+' '+wd).trim().length>38){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }
   if(cur.trim()) lines.push(cur.trim());

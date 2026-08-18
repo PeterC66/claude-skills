@@ -29,7 +29,7 @@ The same list is on the web at **`/app/admin` → To do** (the admin landing tab
 
 Read-only, safe to run at any time, and safe while the dev server is running (the portal DB is WAL). Add `--json` when you need to act on the fields, `--gates` to also run the full byte-identical gate sweep (slow — a minute or two; only worth it after an engine change or before a batch of deliveries).
 
-Against a **remote** portal, add `--url https://busmaps.uk --cookie <cbm_session value>` (or set `BUSMAPS_URL` / `BUSMAPS_COOKIE`). See "Remote portals" below — reading works, delivery does not yet.
+Against a **remote** portal, add `--url https://busmaps.uk --cookie <cbm_session value>` (or set `BUSMAPS_URL` / `BUSMAPS_COOKIE`). See "Remote portals" below — both reading and delivery work against the live site from this laptop (delivery proven end to end across all 13 sample maps on 2026-08-18). What has **no** laptop path is the operator half: accepting a staged refresh, withdrawing a publish request and changing a map’s outputs are HTTP endpoints needing a signed-in admin session, so they are browser work.
 
 **Occasionally, push the gate results to the portal too:** `node "%BW%\push-status.mjs"` runs `status.js` (the full regenerate-and-diff — a minute or two) and sends the result to `POST /api/admin/status`, so the failing-gate and engine/S6-stale items show at ranks 0/8 of the portal's own To-do tab and `GET /api/admin/worklist`, not only in this terminal. Worth doing after an engine change or before a batch of deliveries — it's a separate, occasional step, not part of the routine "print the worklist" above. Add `--url` + `--token <STATUS_TOKEN>` for a remote portal.
 
@@ -73,7 +73,8 @@ Every time, without being asked:
 - **`npm run verify` skips silently** when its fixture dir is unset — a green run with no byte counts proves nothing. Require the word PASS *and* byte counts before calling an import verified.
 - **PowerShell is the shell.** `FIXTURE_DIR=… npm run …` is bash and silently does nothing here; use `$env:FIXTURE_DIR = "…"; npm run …`. The worklist already emits the PowerShell form.
 - **Stop the dev server before any command that writes directly** to a *local* portal (`import-map.mjs`, `propose-update.mjs`, `seed-demo.mjs` run in place). Reading — including this worklist — is fine either way. `npm run deliver` (below) is different: it runs against the live VPS over SSH and stops *that* service itself, briefly, as part of its own sequence — it doesn't touch your local dev server at all.
-- **Delivering to the live site is `npm run deliver`, run from the laptop** (item 4, 2026-08-10 — see below). There is no longer a "must run on the machine that hosts the portal" restriction for this.
+- **Delivering to the live site is `npm run deliver`, run from the laptop** (item 4, 2026-08-10 — see below). There is no longer a "must run on the machine that hosts the portal" restriction for this. Each call emails the customer and briefly restarts the portal, so a multi-map pass means one of each *per map* — warn them first.
+- **The operator actions after delivery have no script at all.** Accept a staged refresh, withdraw a publish request, change a map’s outputs: all three are HTTP endpoints needing an admin `cbm_session`, so they are browser work. Two orderings the portal enforces in code and will surprise you otherwise: an open publish request makes the accept fail with a **409** until it is withdrawn, and an expert output (`internal_schematic`) cannot be switched on until the map’s live `routes.json` carries its opt-in key — so that toggle is gated on the refresh landing first. See `references/playbooks.md` §*Output toggles*.
 
 ## Remote portals — the honest state
 

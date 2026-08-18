@@ -117,7 +117,9 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
 
 Either way it stages *beside* the live map and never touches it, computes a plain-language service-facts diff (routes added/removed, descriptions, stops, operators, validity dates) and prints it. **Read that diff** — it is the sanity check that the regeneration did what the scan said it would.
 
-3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. Accepting is blocked while a publication awaits review. An admin can also act on it directly — the admin console's **Refreshes** tab (`/app/admin`) carries a link to the map plus Accept/Decline buttons (added 2026-08-10; needs a VPS deploy to reach the live site, since it's frontend code).
+   **Two side effects of the live form, confirmed over a 13-map pass on 2026-08-18.** Each call **emails the customer** an "update is ready" notification, and each call does its own `docker compose stop/start portal`. A one-map refresh is unremarkable; a whole-estate pass means one email and one short outage *per map*, so warn the customer first and don't run it during anything time-sensitive. Windows absolute paths (`C:/u3a St Ives/…`, spaces and all) are fine as `--src` — `scp` handles the drive letter.
+
+3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. **Accepting is blocked while a publication awaits review** — the accept returns a **409** ("Withdraw that request before accepting an update") until the open publish request is withdrawn, which is a real step and not a tidy-up. Note also that accepting, withdrawing and changing a map's outputs are **HTTP endpoints only** — there is no script for any of them, and they need a signed-in admin session, so they are browser work. Peter has once approved minting a short-lived session row on the VPS to drive them from a script; that was a one-off, so **ask before doing it again** rather than treating it as available. An admin can also act on it directly — the admin console's **Refreshes** tab (`/app/admin`) carries a link to the map plus Accept/Decline buttons (added 2026-08-10; needs a VPS deploy to reach the live site, since it's frontend code).
 4. Refusals worth knowing: a newer refresh **supersedes** any still-pending one (one open per map); the script refuses if the map has no built data yet ("nothing to refresh" — build it first); don't stage a no-op if the diff says nothing changed.
 5. If the item said "not yet flagged in the portal", run `npm run check-upcoming` in `PORTAL` once so the refresh-flag is recorded in the admin Messages inbox.
 
@@ -153,6 +155,18 @@ S6 is the independent, antagonistic verification pass — a cross-model red-team
 - Run it one town at a time via `make-bus-leaflet` stage S6.
 - Its findings are **HARD** (blocks) or **SOFT** (logged). A HARD finding needs a human call against the cited sources before any upstream stage is re-run — don't silently "fix" it, and don't batch four towns' findings into one decision.
 - Expect BLOCKED results on towns that have never had it. That is the tool working.
+
+---
+
+## Output toggles — switching a sheet type on for a map
+
+Which sheets a map publishes is `map.outputs`, changed with `PATCH /api/maps/:id/outputs` (browser work, or the map's own page in the portal). Three things about it are not obvious and cost a session's time on 2026-08-18:
+
+- **Send the whole desired set, never a partial one.** `chooseOutputs()` falls any omitted key back to the *shipped default* (geographic on, expert styles off), so patching `{internal_schematic: true}` alone silently switches the other two to their defaults rather than leaving them as they are.
+- **An expert style can only be switched on once the map's LIVE data carries its opt-in key.** `resolveGen()` refuses an expert output unless the map's own `routes.json` in its live data dir has the matching truthy key (`internalSchematic`, `internalDiagram`). So if a town's fresh render is what introduces that key, the toggle is **gated on the refresh landing first** — you cannot turn the sheet on in advance, and the API will just report it unavailable.
+- **The sheet is probably already rendered.** `internal_schematic` is declared `buildAlways: true`, so the engine renders it into every new version whose data supports it *regardless of the flag* — the flag only controls visibility. Turning it on therefore exposes a file that already exists, with no re-render needed. And turning it on early cannot leak anything, because the public page lists only files actually present in the *published* version's folder.
+
+The tube-map diagram (`internal_diagram`) is different again: it is **request-only**, and `chooseOutputs()` refuses to move it for a non-admin at all. It is hand-finished expert work with a price attached, not a tick-box.
 
 ---
 

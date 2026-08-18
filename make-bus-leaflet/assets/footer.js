@@ -124,8 +124,26 @@ function layout({ notes, url, urlLabel, qr, x0, x1, bottomY, lineGap, size, page
   const noteLines = wrapNotes(notes, g.x0, textX1, size);
   const urlSize = size * 1.25;
   const urlGap = lineGap * 1.4;
-  const urlY = url ? g.bottomY - lineGap * noteLines.length - urlGap : null;
-  const textTop = url ? urlY - urlSize * 1.3
+  let urlY = url ? g.bottomY - lineGap * noteLines.length - urlGap : null;
+  // With a code present, sit the URL line on the CODE's optical centre rather than at a
+  // fixed offset above the notes.
+  //
+  // The two devices are anchored from opposite ends — the code's BOTTOM aligns with the
+  // last footer line and it grows upward, while the URL line hangs at a fixed gap ABOVE
+  // the notes — so at 14mm they met only at the top: the address sat level with the top
+  // edge of the code and the band beside its lower two-thirds was empty. Peter spotted it
+  // on the St Ives sheet. Centring reads as one "scan or type this" pair and uses the
+  // band's own height instead of leaving a hole in it.
+  //
+  // Never closer to the notes than 0.6 of a line, so a tall code cannot push the address
+  // down onto the attribution text; without a code the arithmetic is untouched.
+  if (url && box) {
+    const centred = box.y0 + box.mm / 2 + urlSize * 0.36;
+    const floorY = g.bottomY - lineGap * noteLines.length - lineGap * 0.6;
+    urlY = Math.min(centred, floorY);
+  }
+  const textTop = url ? Math.min(urlY - urlSize * 1.3,
+                                 g.bottomY - lineGap * noteLines.length - size * 1.3)
                       : g.bottomY - lineGap * noteLines.length - size * 1.3;
   const plateTop = box ? Math.min(textTop, box.y0 - box.quiet) : textTop;
   return { ...g, box, textX1, noteLines, urlY, urlSize, plateTop, urlLabel };

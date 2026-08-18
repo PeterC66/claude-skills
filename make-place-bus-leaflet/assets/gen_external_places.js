@@ -308,7 +308,18 @@ const _hasTimes = dests.some(b => b.minutesToDestination != null);
 // type saying nothing at all about that. Kept short on purpose: a note long enough to WRAP
 // adds a line to the footer plate, which moves the plate top and refits the whole sheet.
 const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
-const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTES, safe: PSAFE });
+// design.sheetUrl / design.sheetQr — the printed route back to the current version.
+// Hoisted above footerPlateTop because a QR block can push the plate top UP, and every
+// free-floating page device below works to PLATE_TOP: deriving the plate without the
+// code would place that furniture against a boundary the footer then moves. Same shape
+// and same reason as gen_external_radial.js and gen_internal.js — this generator simply
+// never got the wiring when the keys landed on 2026-08-18, so the place external sheet
+// could not carry the code its town siblings could. Absent both keys every number below
+// reduces to the arithmetic that was here before, so ungated places stay byte-identical.
+const FOOTER_OPTS = {
+  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
+const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTES, safe: PSAFE, ...FOOTER_OPTS });
 // The frame every free-floating page device works to: inside the title block, above the
 // footer plate, and never nearer the trim than design.printSafe asks for.
 const _SAFE = PSAFE != null ? PSAFE : 0;
@@ -677,7 +688,8 @@ if (V2) {
 out(footerBand({
   notes: FOOTER_NOTES,
   version: D.version, validFrom: D.validFrom || 'Summer 2026',
-  safe: PSAFE
+  safe: PSAFE,
+  ...FOOTER_OPTS
 }));
 
 // Optional "coming soon" / validity stamp (shared shape with the town generators).

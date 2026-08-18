@@ -89,24 +89,42 @@ function wrap(label, max=13){
   for(const t of w){ if((a+' '+t).trim().length<=max && !b) a=(a+' '+t).trim(); else b=(b+' '+t).trim(); }
   return b?[a,b]:[a];
 }
-// wrapText — generic multi-line word wrap (unlike wrap() above, no 2-line cap), used for
-// free-text notes (the "runs as two arms" note, etc.) so a long sentence fits a panel width
-// instead of running off it as one unbounded line.
-function wrapText(text, maxChars){
+// wrapMm — multi-line word wrap to a width in MILLIMETRES, measured on the real Arial
+// advances. Used for free-text notes (the "runs as two arms" note, etc.) so a long
+// sentence fits a panel width instead of running off it as one unbounded line.
+//
+// This replaced wrapText(text, maxChars), a wrap by CHARACTER COUNT — see measureText
+// below for why counting characters was the wrong unit for this job.
+function wrapMm(text, maxMm, size){
   const words = String(text).split(' ');
   const lines = []; let cur = '';
   for(const w of words){
     const cand = cur ? cur+' '+w : w;
-    if(cand.length > maxChars && cur){ lines.push(cur); cur = w; }
+    if(cur && FONT.textWidth(cand, size, false) > maxMm){ lines.push(cur); cur = w; }
     else cur = cand;
   }
   if(cur) lines.push(cur);
   return lines;
 }
-// measureText — generous Arial glyph-width estimate (mm), used only to size the auto legend
-// backing panel and to pick a word-wrap width; not exact typesetting, deliberately erring wide
-// so the panel never clips its own content.
-const measureText = (str, size) => String(str).length * size * 0.58;
+// measureText — Arial advance width (mm) from the baked metrics table. Sizes the auto
+// legend backing panel and picks the note's word-wrap width.
+//
+// This used to be `String(str).length * size * 0.58` — a character count times a
+// deliberately generous per-character estimate — and the generosity was the bug. Real
+// Arial prose averages ~0.50em per character, so the estimate ran ~16% wide, and it was
+// used for BOTH jobs at once: the panel was sized ~16% wider than its own ink, AND the
+// note wrapped ~16% narrower than the panel actually allowed. The two errors compounded
+// into a dead column down the right-hand side of every legend — measured at 7-24% of
+// panel width across the eight towns (St Neots worst: 25.5mm of 105.6mm) — and because
+// the legend is placed before the spider is drawn around it, that dead column is map
+// area the diagram never got. Peter reported it as "lots of space on the right, and it
+// seems to do new lines unnecessarily and awkwardly", which is both halves of it.
+//
+// The howToUse panel further down already wraps on FONT.textWidth for exactly this
+// reason ("the character estimate is ~11% out on ordinary prose"); this brings the
+// legend into line with it. Callers must pass `bold` truthfully now — the old estimate
+// was wide enough to cover bold by accident, exact metrics are not.
+const measureText = (str, size, bold) => FONT.textWidth(str, size, !!bold);
 
 // ---- primitives -------------------------------------------------------------
 // dashed (limited-service) spokes use a BUTT cap, not round. A round cap adds w/2
@@ -184,6 +202,24 @@ function townNode(x,y,label,h=11,timeLabel){
     x = Math.min(Math.max(x, PSAFE + w/2), W - PSAFE - w/2);
     y = Math.min(Math.max(y, PSAFE + hh/2), H - PSAFE - hh/2);
   }
+  // ...and clear of the FOOTER PLATE, which is not the same boundary as the trim.
+  //
+  // The clamp above keeps a lozenge inside the printable page; it says nothing about
+  // the opaque footer plate, which is drawn LAST and over everything. That was safe
+  // only while the plate was short: the plate top sat around 190mm and RECT.y1's
+  // hardcoded 182 left a lozenge's half-height of room below it by luck, not by
+  // design. design.sheetQr changes the arithmetic — an 18mm code plus its quiet zone
+  // and the URL line lift the plate to ~183mm, and St Ives' bottom row (Hilton &
+  // Elsworth, Boxworth, Trumpington P&R, Bar Hill) was drawn 6mm INSIDE it, so four
+  // destinations lost their journey times under an opaque white band.
+  //
+  // Worth knowing how this was found: quality_metrics scored that very sheet BETTER
+  // (+8 labels) because the how-to panel's bullets are labels and a buried lozenge is
+  // not a label at all — `textUnderFooter` counts <text>, and these are <rect> plus
+  // white text that the metric reads as present. The defect was visible in the JPG
+  // and invisible in every number. Clamp the BOX, not the spoke's end point, so an
+  // overridden terminus (overrides.branches.*.terminus) is covered too.
+  if(PLATE_TOP != null) y = Math.min(y, PLATE_TOP - 1 - hh/2);
   if(V2){ HARD.push([x-w/2-0.6, y-hh/2-0.6, x+w/2+0.6, y+hh/2+0.6, 'terminus']); ANCH.push([x,y,'term:'+label]); }
   out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh=4.0, y0=y-((lines.length-1)*lh+extra)/2;
@@ -205,7 +241,13 @@ out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${e
 // ---- hub + radial spokes ----------------------------------------------------
 let HX=152, HY=116;                 // hub centre
 if(OV.hub){ HX=OV.hub.x; HY=OV.hub.y; }
-const RECT={x0:24,y0:34,x1:282,y1:182}; // inset frame the termini sit on
+// The inset frame the termini sit on. y1 used to be a flat 182, which was a constant
+// standing in for "just above the footer plate" and stopped being true the moment the
+// plate could grow (design.sheetUrl/sheetQr). Follow FRAME_Y1 — the bound every other
+// page device already works to — less a lozenge's half-height, so the spoke ENDS high
+// enough for its box to clear the plate instead of relying on the clamp in townNode()
+// to drag it back, which would band every southern terminus onto one line.
+const RECT={x0:24,y0:34,x1:282,y1:Math.min(182, FRAME_Y1 - 7.5)};
 function rayToRect(dx,dy){             // distance from hub to inset rect along (dx,dy)
   let t=1e9;
   if(dx>0) t=Math.min(t,(RECT.x1-HX)/dx); else if(dx<0) t=Math.min(t,(RECT.x0-HX)/dx);
@@ -449,7 +491,7 @@ function buildLegend(lx, ly, dx, dy){
   out = (x) => legendBuf.push(x);
   let panelMaxX = lx, panelMaxY = ly - 4;
   out(`<text x="${lx}" y="${ly-4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
-  panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4));
+  panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4, true));
   // legendWrap:{perRow:N} (optional) — wrap an operator's badge run onto further
   // lines instead of letting it run off the page. Needed once a town has an
   // operator with many routes (High Wycombe: Carousel runs 17 of them). Absent =>
@@ -490,9 +532,10 @@ function buildLegend(lx, ly, dx, dy){
     // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby
     // terminus lozenge (St Ives: the default 60mm floor wrapped to 6 lines, reaching low enough
     // to cover the Hinchingbrooke box; 110mm wraps the same note to 3).
+    // Measured in mm on the real advances, not in characters: the note now fills the
+    // width it is given instead of stopping ~16% short of it (see measureText).
     const _panelW = _box ? (_box.w - 8) : Math.max(panelMaxX - lx, 100);
-    const _maxChars = Math.max(20, Math.floor(_panelW / (2.9*0.58)));
-    const _noteLines = wrapText(armNote, _maxChars);
+    const _noteLines = wrapMm(armNote, _panelW, 2.9);
     _noteLines.forEach((ln,i)=>out(`<text x="${_nx}" y="${(_ny+i*3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
     panelMaxX = Math.max(panelMaxX, _nx + Math.max(..._noteLines.map(ln=>measureText(ln,2.9))));
     panelMaxY = Math.max(panelMaxY, _ny + (_noteLines.length-1)*3.6 + 2);

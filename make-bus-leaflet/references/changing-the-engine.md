@@ -163,11 +163,19 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 
 | Skill file | Portal destination |
 |---|---|
-| `%SK%\icons.js`, `%SK%\render.js`, `%SK%\footer.js`, `%SK%\labeller.js`, `%SK%\font_metrics.js` | `engine\` |
+| `%SK%\icons.js`, `%SK%\render.js`, `%SK%\footer.js`, `%SK%\qr.js`, `%SK%\labeller.js`, `%SK%\font_metrics.js` | `engine\` |
 | `%SK%\gen_internal.js` | `engine\place\` |
 | `%PSK%\gen_external_places.js` | `engine\place\` |
 | `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
 
+> ### 2026-08-18 — `footer.js` is skill-ahead again, and `qr.js` is a NEW row that the portal does not have at all. NOT re-vendored, adopted by no town.
+>
+> Publisher-benchmark items 2 and 3: `design.sheetUrl` / `design.sheetQr` (the printed URL and QR code, in `footer.js` + the new `qr.js`) and `design.howToUse` (the "how to read this" panel, `gen_external_radial.js` only, which is not a vendored file). Absent the keys the output is byte-identical — **all 27 gates re-run and PASS, portal fixture PASS, quality ratchet clean** — and no `routes.json` sets any of them, so nothing shipped has moved. The portal was deliberately not touched, same as the 2026-08-17 tier work.
+>
+> **Two things to know before the next portal touch.** (1) `qr.js` is a **new file beside `footer.js`**, and `footer.js` requires it **lazily, inside the QR branch only**. That is deliberate and it is the opposite of the `labeller.js` decision recorded below: `labeller.js` serves a path every map takes, so a top-level require failing loudly is right; a QR code is a dormant feature no map currently asks for, and a top-level require would let a partial vendor take the whole portal down for the sake of something nothing uses. `font_metrics.js` is required the same way from the same branch. (2) The row is in the §4 table **and** in `status.js`'s drift table, which is the whole lesson of the `footer.js` entry further down — the file that is easy to forget is the one nobody lists.
+>
+> **`status.js` now gates on MISSING as well as DRIFTED** (2026-08-18). A vendoring row whose portal file does not exist used to print `MISSING` and count as fine, which had it backwards: a file that DIFFERS is stale output, a file that is ABSENT is a require that throws. Flipped now for the same reason the exit code itself was flipped in the Phase 8 commit — the board is already red for the deferred re-vendor, so no expected state changes colour today and nobody learns to ignore it.
+>
 > ### ✅ 2026-08-16 — THE PHASE 8 RE-VENDOR IS DONE. Every row in the table above reads **in sync**.
 >
 > All nine files copied across in one session: `icons.js`, `render.js`, `footer.js`, **`labeller.js` and `font_metrics.js` (their first vendoring)**, `gen_internal.js`, `gen_external_places.js`, `schematize_internal.js`, `diagram_internal.js`. The four DRIFTED rows the design-quality plan had been holding open since 2026-07-28 are cleared, and `status.js`'s drift table gained the two new rows so a missing row cannot cause a silent failure again — which matters more here than it did for `footer.js`, because `gen_internal.js` **requires** `labeller.js` at load time and `labeller.js` requires `font_metrics.js`, so a partial vendor takes the whole portal build down instead of quietly staling one file's output.

@@ -39,6 +39,10 @@ Measured over the 31 shipped sheets, before → after: **628 → 225 defects** (
 | `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
 | `exitDevice` | off | **Built, measured, deliberately off.** One fixed design for every off-map continuation. It costs 15 defects to buy the consistency; see the section below before proposing it again. |
 | `iconSet` | off | `"grid"` swaps the twelve POI pictograms for the redrawn set: one 24 × 24 grid, one stroke weight, one corner radius, solid, each with a white casing. Pairs with `iconInk`, does not need it. Section below. |
+| `sheetUrl` | off | A short address printed in the footer band — the sheet's route back to the version that is current *now*. Prefixed `https://` for the QR when it has no scheme of its own. Section below. |
+| `sheetUrlLabel` | `"Check for a newer version:"` | The words before `sheetUrl`. `false` prints the address alone. |
+| `sheetQr` | off | Draws a QR code of `sheetUrl` at the bottom-right of the footer band. `true`, or `{mm, level, target}` — `mm` is the module area's side (default 16), `level` the error-correction level (`L`/`M`/`Q`/`H`, default `M`), `target` a different URL to encode from the one printed. Section below. |
+| `howToUse` | off | External sheets: a "How to use this map" panel of plain bullets, worded from the town's own data. `true`, or `{heading, bullets, at, width, size, headingSize, place}`. Section below. |
 | `printSafe` | off | `5` keeps every drawn thing 5 mm from the trim — footer, placer, panel columns, terminus lozenges — and carries the rest of the 2026-08-16 print check with it. **On all 8 towns; the 5 places do not have it yet.** Section below. |
 | `iconInk` | off | `"charcoal"` recolours every POI symbol to one neutral, keeping red for the GP cross, so **colour on the sheet means route and nothing else** (G3, Peter, 2026-08-15). Implemented in `icons.js` as a post-pass over the existing drawings, chosen over a redrawn outline set because at 4.2 mm a 0.5 mm outline goes noticeably faint against a ribbon while these solid glyphs hold their weight. Two things it is careful about: a pale fill is a backing plate, not a mark, so it goes white rather than black (the allotments bed); and a symbol that was *already* a neutral grey was drawn light on purpose, so it keeps its tone rather than flattening to charcoal — the industrial estate is context, and a cluster of factories at full charcoal was the heaviest ink on the High Wycombe sheet. |
 
@@ -286,6 +290,35 @@ Three details worth knowing:
 - **A configured `{x,y}` is still honoured when it is clear**, and overruled with a note on stderr when it is not. `northArrow:false` still suppresses it, and an explicit `angle` is still required by the schematic and diagram pre-stages, whose coordinates are pre-rotated.
 
 That search is now a shared helper, `spotSearch(boxOf, wantX, wantY, tol)` — the scale bar is its second caller, and anything else free-floating should be its third rather than a fourth inline loop.
+
+### `design.sheetUrl` / `design.sheetQr` — the route back (benchmark item 2)
+
+The footer used to end at `Map design © BusMaps.uk`. That is a **credit, not a route back**. The portal's whole promise is the monthly refresh, and a printed sheet is a snapshot of one month: the moment it goes on a noticeboard it had no way of telling anyone that a current version exists, and every sheet a council printed was silently a piece of marketing that named us and then gave the reader nowhere to go. The keys close that loop, and they satisfy the ODbL "reasonably calculated to inform" test more convincingly than a bare credit line does (see `uk_map_product_copyright_guide.md` §2).
+
+`sheetUrl` alone prints one bold right-anchored line above the source notes. Add `sheetQr` and a code is drawn at the bottom-right, its bottom edge on the same ink line as the last footer baseline, with the text column stopping clear of its quiet zone. Both absent, every number in `footer.js` reduces to the arithmetic that was there before, so an ungated sheet is byte-identical — all 27 gates re-run and PASS.
+
+**The encoder is ours** (`assets/qr.js`, no dependencies, byte mode, versions 1–10, all four EC levels). A package would have to be vendored into the portal and kept in step across two repos for one algorithm whose output has to be byte-stable, against invariants 4 (no network at render time) and 5 (deterministic output). The mask is not fixed by fiat: all eight are scored with the standard penalty rules and the lowest wins.
+
+Four things came out of building it that are worth keeping:
+
+- **It scans off the printed artefact, which is the only test that counts.** The 300 dpi JPG decodes on all four sheet types, whole-page and cropped. Photographed at 1600 px across the A4 it still reads; at 1200 px it does not — so a whole-sheet photo works on any modern phone, and pointing the camera at the code (what people actually do) has far more margin.
+- **Six modules of quiet zone, not the spec's four.** Of 78 realistic BusMaps URLs rendered at four, OpenCV could not *locate* one of them (Beaconsfield Waitrose at level Q) at any scale; at six it found all 78. The symbol was valid either way. A conformance test would have certified it and a phone would have refused it.
+- **A module under 0.40 mm gets a warning on stderr**, naming both remedies (shorter URL, or a bigger `mm`). 16 mm of version 4 is 0.48 mm.
+- **The cost is the footer plate, and it is mostly the text line, not the code.** On the internal sheet the plate top moves 193.6 → 185.7 mm; about 6 mm of that is the printed URL line and only 1.9 mm the code, so shrinking the QR buys almost nothing. `footerSafe` ends the map frame above the plate, so dense towns lose a few labels to it — High Wycombe 80 → 77, Beaconsfield 40 → 38, St Ives 41 → 38 — while sparse ones lose none (March 39 → 40, Ramsey and St Neots unchanged). `mapLabels` is a ratchet **floor**, so adopting this on a dense town will legitimately trip `quality_gate.js` and wants `--accept` in the same commit, per the standing rule.
+
+### `design.howToUse` — how to read a spider (benchmark item 3)
+
+TfL puts five plain bullets on every spider map, because a hub-and-spoke diagram is an unfamiliar **form** to most people and our external sheet is nothing but one. `Operators & services` and the Key both say what a mark *means*; neither says how to read the sheet.
+
+The words come from the town's own data rather than a literal, per invariant 1: the hub sentence names whatever `externalHubLabel` says (whitespace-collapsed — it carries a newline for the hub box), the journey-time bullet appears only where the sheet actually has `minutesToDestination`, and the not-to-scale bullet only where `design.scaleBar:false` has switched off the footer's own sentence, so nothing is said twice. `bullets` and `heading` replace the lot.
+
+Three findings from previewing all eight sheets, all of which changed the design:
+
+- **Wide and short, not narrow and tall.** The first column width of 74 mm produced an 81 × 72 mm panel that nothing on St Ives' sheet could clear, so it sat on a terminus lozenge. 92 mm puts most bullets on one line and gives 99 × 49 mm. `buildLegend`'s note wrap learned exactly this on 2026-08-06: it is a page device's **height** that collides, because the spokes fan out horizontally.
+- **An optional page device should decline rather than bury.** It reuses `legendSpot`, but not `legendPlace`'s rule for when nothing is clear. The legend stays put and warns, because a sheet with no legend is not a sheet. This panel is not drawn at all — the reader who loses Huntingdon's "St Neots" lozenge under it loses a destination with nothing to say it was ever there, and gains a paragraph telling them to look around the edge of the diagram for the thing that has just been covered up. Huntingdon's sheet did precisely that, first try. A fully-specified `at:{x,y}` is a decision and switches the search off, so a town can still force it.
+- **The legend gets first pick**, because it is mandatory and this is not — so it is added to `ART` before the panel searches.
+
+Previewed on all eight: **three towns draw it with zero added defects** (St Ives, March, Ramsey — St Ives' soft count in fact falls 8 → 6), and **five decline it** (Huntingdon, Wisbech, St Neots, Beaconsfield, High Wycombe), whose sheets are unchanged. That is the real finding of item 3, and it contradicts the plan's assumption: our external sheets do **not** all carry usable white space bottom-left. Making room on those five is a composition question — `spokeSpread`, a tighter legend — not a wording one.
 
 ## The fit set — `internalRoads.fitMaxOffPath`
 

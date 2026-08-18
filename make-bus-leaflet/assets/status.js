@@ -158,6 +158,13 @@ function portalDrift() {
     // verify:area ran the portal's stale engine/footer.js against a fixture
     // built with the new one.
     [path.join(SK, 'footer.js'), path.join(PORTAL, 'engine', 'footer.js')],
+    // qr.js became a row on 2026-08-18 with design.sheetQr. footer.js requires it
+    // LAZILY, and only when a sheet asks for a code, so a partial vendor does not
+    // take the portal down the way a missing labeller.js would — but it would make
+    // exactly one town's build throw, months later, with nothing in this table to
+    // say why. A row costs nothing and is the whole lesson of the footer.js entry
+    // above: the file that is easy to forget is the one nobody lists.
+    [path.join(SK, 'qr.js'), path.join(PORTAL, 'engine', 'qr.js')],
     // labeller.js and font_metrics.js became rows on 2026-08-16, at the Phase 8
     // re-vendor that first carried them across. They are not optional extras:
     // gen_internal.js REQUIRES labeller.js at load time (resolved through
@@ -221,7 +228,14 @@ const qualityCell = (name) => {
 // what clears them. A quality REGRESSION counts too (Phase 8 item 1).
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL'))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || ['DIFF', 'FAIL'].includes(r.external))
-  || driftRows.some(r => r.same === false)
+  // `null` is MISSING — the portal has no such file. It counted as fine until
+  // 2026-08-18, which had it backwards: a vendored file that DIFFERS is stale
+  // output, a vendored file that is ABSENT is a require that throws. The row was
+  // printed either way, so this only closes the gap between what the board says
+  // and what it gates on. Safe to flip now for the same reason the exit code
+  // itself was: the board is already red for the deferred re-vendor above, so no
+  // expected state changes colour today and nobody learns to ignore it.
+  || driftRows.some(r => r.same === false || r.same === null)
   || qualityRows.some(r => r.status === 'REGRESSED');
 
 if (AS_JSON) {

@@ -122,6 +122,18 @@ A triaged town's Services panel should list its **drawn lanes**, not its service
 
 `footerSafe` ends the map frame above the footer plate instead of drawing 9.84 mm of every sheet and then covering it; `spreadIcons` pulls fused POI symbols apart; `design.iconSet:"grid"` (2026-08-16) swaps in the twelve pictograms redrawn on one grid, solid and white-cased, whose live area is the box `POI_HALF` actually reserves — the shipped drawings run ~18% outside it, which is why symbols the placer scored as clear could still touch; `labels.engine:"v2"` hands every point label to the shared placer `%SK%\labeller.js` (occupancy grid, real Arial metrics, scored positions, relaxation, two-line wrapping, leader lines, and an `unplaced.json` report). They belong together — the shorter frame crowds a dense town, and the placer is what pays for it. Full key table, tuning weights and the measured before/after: **[design-quality.md](design-quality.md)**.
 
+### The printed route back, and how to read the sheet (2026-08-18 — opt-in, absent ⇒ byte-identical)
+
+```json
+"design": {
+  "sheetUrl": "busmaps.uk/st-ives",
+  "sheetQr": true,
+  "howToUse": true
+}
+```
+
+`sheetUrl` prints a short address in the footer band and `sheetQr` draws a QR code of it at the bottom right of every sheet type — the two halves of publisher-benchmark item 2, which exists because `Map design © BusMaps.uk` is a credit and not a way back to the version that is current now. `howToUse` adds a "How to use this map" panel of plain bullets to the **external** sheet only (item 3); the bullets are written from the town's own data, so `heading`/`bullets` are only needed when a town wants different words. Both keys cost page height — the QR raises the footer plate, and `footerSafe` shrinks the map frame to match, which costs a dense town a few labels and will legitimately trip the `mapLabels` floor in `quality_gate.js`. Full key table, the measured per-town cost, and why five of the eight external sheets decline the panel rather than bury a destination: **[design-quality.md](design-quality.md)**.
+
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
 A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the **perimeter of the external frame**. Five keys buy the room back. All were gated on every existing town, internal *and* external, before use.
 

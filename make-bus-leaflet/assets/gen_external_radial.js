@@ -8,7 +8,7 @@ const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
   try{ if(fs.existsSync(local)) return local; }catch(e){}
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
-const { footerBand } = require(_FOOTER);
+const { footerBand, footerPlateTop } = require(_FOOTER);
 const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
   try{ if(fs.existsSync(local)) return local; }catch(e){}
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'labeller.js')
@@ -60,6 +60,26 @@ const DESIGN = D.design || {};
 // geometry exactly; absent => 5. See footer.js's header.
 const PSAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null ? +DESIGN.printSafe : 5);
 const W = 297, H = 210;
+// Footer options and notes are hoisted to the top because the PLATE TOP has to be
+// known before any page furniture is placed, and design.sheetUrl/sheetQr can move
+// it. gen_internal.js has always computed this early for exactly that reason; this
+// sheet did not need to until the footer could grow. The same object is passed to
+// footerPlateTop() here and to footerBand() at the end of the file, so the plate the
+// furniture is fitted around cannot differ from the plate that gets drawn.
+const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
+const EXTERNAL_FOOTER_NOTES = [
+  `Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
+  `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
+    + `${DESIGN.scaleBar!==false?' Diagram — not to scale.':''}`];
+const FOOTER_OPTS = { notes: EXTERNAL_FOOTER_NOTES, safe: PSAFE,
+  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
+const PLATE_TOP = footerPlateTop(FOOTER_OPTS);
+// The bottom of the ground page furniture may stand on. 190 was a bare constant in
+// legendSpot; with the footer able to grow it has to be the smaller of that and the
+// plate. Absent the new keys the plate top is 193.57 and this is 190 exactly, so
+// nothing moves — which is the whole test of whether a derived constant is right.
+const FRAME_Y1 = Math.min(190, PLATE_TOP - 2);
 let s = '';
 let out = (x) => { s += x + '\n'; };
 const esc = (t) => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -549,7 +569,7 @@ const legendSpot = (w, h, wantX, wantY) => {
   const inkCover = mk(inkL.ink), symCover = mk(symL.ink);
   // The frame the labeller itself works to, so the legend cannot stray under the
   // title block or the footer band.
-  const FX0=6, FY0=30, FX1=291, FY1=190;
+  const FX0=6, FY0=30, FX1=291, FY1=FRAME_Y1;
   const wantSym = symCover(wantX, wantY), wantInk = inkCover(wantX, wantY);
   if(wantSym <= 0 && wantInk <= 0.005) return { moved:false, want:wantInk, wantSym };
   const cnr=[[FX0,FY0],[FX1,FY0],[FX0,FY1],[FX1,FY1]];
@@ -602,6 +622,134 @@ if(V2) HARD.push([LEG.x-0.6, LEG.y-0.6, LEG.x+LEG.w+0.6, LEG.y+LEG.h+0.6, 'legen
 out(`<rect x="${LEG.x.toFixed(2)}" y="${LEG.y.toFixed(2)}" width="${LEG.w.toFixed(2)}" height="${LEG.h.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
 LEG.buf.forEach(out);
 
+/* ---- design.howToUse: the "how to read this" panel -------------------------
+ *
+ * WHY (publisher benchmark plan, item 3). TfL puts five plain bullets on every
+ * spider map, because a hub-and-spoke diagram is an unfamiliar FORM to most
+ * people and this sheet is nothing but one. We had `Operators & services` and a
+ * Key: both tell you what a mark MEANS, neither tells you how to read the sheet.
+ *
+ * The words come from the town's own data, not from a literal (invariant 1): the
+ * hub sentence names whatever `externalHubLabel` says, and the journey-time
+ * bullet appears only on sheets that actually carry `minutesToDestination`. The
+ * not-to-scale bullet appears only when `design.scaleBar:false` has switched off
+ * the footer's own sentence, so the sheet never says it twice.
+ *
+ * `bullets` and `heading` override the lot for a town that wants its own words.
+ * Absent the key nothing below runs and the output is byte-identical.
+ */
+const HOWTO = DESIGN.howToUse ? (DESIGN.howToUse === true ? {} : DESIGN.howToUse) : null;
+if(HOWTO){
+  const HEAD = HOWTO.heading !== undefined ? HOWTO.heading : 'How to use this map';
+  // externalHubLabel carries a newline where the hub BOX wants to break ("St Ives
+  // Bus Station/\nPark and Ride"). In a sentence that is just whitespace, and it
+  // also makes one un-splittable 20-character token for the wrapper to choke on.
+  const HUB_PROSE = String(HUB_LABEL_TXT).replace(/\s+/g, ' ').trim();
+  const BULLETS = (Array.isArray(HOWTO.bullets) && HOWTO.bullets.length) ? HOWTO.bullets : (()=>{
+    const b = [
+      'Find where you want to go, around the edge of the diagram.',
+      `Follow its coloured line in to ${HUB_PROSE} at the centre.`,
+      'The badge on that line is the bus service number.',
+      'The panel headed “Operators & services” says who runs it.',
+      'Names printed along a line are its main stops, not every stop.',
+    ];
+    if(_hasTimes) b.push('A time under a destination is a typical whole journey, not a timetable.');
+    if(DESIGN.scaleBar === false) b.push('Not to scale — directions and distances are simplified.');
+    return b;
+  })();
+  const HS = HOWTO.headingSize!=null ? +HOWTO.headingSize : 4.4;   // matches the legend header
+  const BS = HOWTO.size!=null ? +HOWTO.size : 3.2;                 // style-guide floor for body type
+  // WIDE AND SHORT, deliberately. The first cut used a 74mm column and produced an
+  // 81x72mm panel that nothing on St Ives' sheet could clear, so it sat on a
+  // terminus lozenge. buildLegend's note wrap learned the same thing on 2026-08-06
+  // and for the same reason: it is a page device's HEIGHT that collides, because
+  // the spokes fan out horizontally. 92mm puts most bullets on one line.
+  const CW = HOWTO.width!=null ? +HOWTO.width : 92;                // content column, mm
+  const PAD = 3.4, LH = BS*1.28, GAP = 1.3, IND = 2.9;
+  // Width-based wrap using the real Arial advances, not wrapText()'s character
+  // count — a bullet is a whole sentence, and the character estimate is ~11% out
+  // on ordinary prose, which is the difference between four lines and five.
+  const wrapW = (text, maxMm) => {
+    const words = String(text).split(' '), lines = []; let cur = '';
+    for(const w of words){
+      const t = cur ? cur+' '+w : w;
+      if(cur && FONT.textWidth(t, BS, false) > maxMm){ lines.push(cur); cur = w; } else cur = t;
+    }
+    if(cur) lines.push(cur);
+    return lines;
+  };
+  const WRAPPED = BULLETS.map(t=>wrapW(t, CW-IND));
+  const bodyH = WRAPPED.reduce((a,ls)=>a + ls.length*LH + GAP, 0) - GAP;
+  const PW = CW + PAD*2;
+  const PH = PAD + (HEAD ? HS*1.15 + 1.6 : 0) + bodyH + PAD;
+  // Content is a pure function of (px,py), like buildLegend — which is what makes
+  // building it twice safe when the placement search moves it.
+  const buildHowTo = (px, py) => {
+    const buf = [];
+    buf.push(`<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${PW.toFixed(2)}" height="${PH.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+    let y = py + PAD;
+    if(HEAD){
+      y += HS*0.86;
+      buf.push(`<text x="${(px+PAD).toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${HS}" fill="#222">${esc(HEAD)}</text>`);
+      y += HS*0.29 + 1.6;
+    }
+    WRAPPED.forEach(lines=>{
+      y += BS*0.78;
+      buf.push(`<text x="${(px+PAD).toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-size="${BS}" fill="#555">•</text>`);
+      lines.forEach((ln,i)=>buf.push(`<text x="${(px+PAD+IND).toFixed(2)}" y="${(y+i*LH).toFixed(2)}" font-family="Arial" font-size="${BS}" fill="#333">${esc(ln)}</text>`));
+      y += (lines.length-1)*LH + (LH - BS*0.78) + GAP;
+    });
+    return buf;
+  };
+  // Default want-position: bottom-left, which is the white space these sheets
+  // already carry (the spokes fan out of a central hub and the legend lives top-
+  // left). `at:{x,y}` pins it for a town that knows better.
+  const HX0 = (HOWTO.at && HOWTO.at.x!=null) ? +HOWTO.at.x : 10;
+  const HY0 = (HOWTO.at && HOWTO.at.y!=null) ? +HOWTO.at.y : FRAME_Y1 - PH;
+  let hx = HX0, hy = HY0, draw = true;
+  // A fully-specified `at` is a decision, so it opts out of the search — unlike
+  // legendAt, which is only a preference the search may overrule. The difference
+  // is that this panel can decline to appear, so "put it exactly here" needs to
+  // mean it, or a town could set `at` and still get nothing.
+  const PINNED = !!(HOWTO.at && HOWTO.at.x != null && HOWTO.at.y != null);
+  if(HOWTO.place !== false && !PINNED){
+    // The legend is furniture too, and it is already on the page — without this
+    // the search would happily park the panel on top of it, since ART holds the
+    // ARTWORK's boxes and was snapshotted before the legend existed. The legend
+    // gets first pick of the clear ground, which is right: it is mandatory and
+    // this panel is not.
+    ART.push([LEG.x, LEG.y, LEG.x+LEG.w, LEG.y+LEG.h, 'legend']);
+    const got = legendSpot(PW, PH, HX0, HY0);
+    if(got.moved){
+      hx = HX0 + got.dx; hy = HY0 + got.dy;
+      process.stderr.write('howToUse: the configured spot covers '+(got.wantSym*100).toFixed(1)
+        +'% symbols / '+(got.want*100).toFixed(0)+'% route ink — moved '+got.dx.toFixed(0)+','+got.dy.toFixed(0)
+        +' mm to '+hx.toFixed(0)+','+hy.toFixed(0)+'.\n');
+    } else if(got.nowhere){
+      /*
+       * NOT DRAWN, rather than drawn where it does harm. This is where an optional
+       * page device has to part company with the legend: legendPlace's rule when
+       * nothing is clear is "leave it and warn", because a sheet with no legend is
+       * not a sheet. A help panel is different — the reader who loses the "St Neots"
+       * lozenge underneath it loses a destination and is given nothing to say it was
+       * ever there, and gains a paragraph telling them to look around the edge of
+       * the diagram for exactly the thing that has just been covered up.
+       * Huntingdon's sheet did precisely that, first try. Warn, name the two
+       * remedies, and ship the map intact.
+       */
+      draw = false;
+      process.stderr.write('howToUse: no position on this sheet leaves a '+PW.toFixed(0)+'x'+PH.toFixed(0)
+        +' mm panel clear of every symbol, so it was NOT DRAWN rather than cover one. '
+        +'Shrink it (design.howToUse.width, or fewer bullets), make room, or place it '
+        +'deliberately with design.howToUse.at — which also switches this search off.\n');
+    }
+  }
+  if(draw){
+    if(V2) HARD.push([hx-0.6, hy-0.6, hx+PW+0.6, hy+PH+0.6, 'howto']);
+    buildHowTo(hx, hy).forEach(out);
+  }
+}
+
 // ---- v2: deduplicate the stop names, then place them all at once ------------
 if(V2){
   /*
@@ -647,7 +795,6 @@ if(V2){
 }
 
 // source note
-const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 // design.scaleBar reaches this sheet too, but as a sentence rather than a device.
 // A radial spider is a tube map — bearings are spread for legibility and spoke
 // length carries nothing — so it can never carry a bar, and it was the one sheet
@@ -656,13 +803,7 @@ const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 // shown are approximate"). Kept short on purpose: a note long enough to WRAP adds
 // a line to the footer plate, which moves FOOTER_PLATE_TOP and refits every sheet
 // derived from it.
-out(footerBand({
-  notes: [`Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
-          `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
-            + `${DESIGN.scaleBar!==false?' Diagram — not to scale.':''}`],
-  version: D.version, validFrom: D.validFrom || 'Summer 2026',
-  safe: PSAFE
-}));
+out(footerBand({ ...FOOTER_OPTS, version: D.version, validFrom: D.validFrom || 'Summer 2026' }));
 
 // Optional "coming soon" / validity stamp. Opt-in via routes.json "stamp"
 // {heading?, notes:[...], asOf?, externalAt?:[x,y], internalAt?:[x,y]}. Absent => nothing

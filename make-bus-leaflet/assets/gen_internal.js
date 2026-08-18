@@ -232,7 +232,15 @@ const ICON_SET = DESIGN.iconSet === false ? undefined : (DESIGN.iconSet !== unde
 // the trim. `false` => today's 8/294/206 on a 297x210 page, byte-identical;
 // absent => 5, the standard this whole key exists to enforce.
 const PRINT_SAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null ? +DESIGN.printSafe : 5);
-FOOTER_PLATE_TOP = footerPlateTop({ notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE });
+// design.sheetUrl / design.sheetQr — the printed route back to the current version.
+// Bundled into ONE object because footerPlateTop() and footerBand() must be given
+// identical arguments or the plate the map is fitted around is not the plate that
+// gets drawn; passing the same object to both makes that true by construction
+// rather than by remembering (see INTERNAL_FOOTER_NOTES' header above).
+const FOOTER_OPTS = { notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE,
+  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
+FOOTER_PLATE_TOP = footerPlateTop(FOOTER_OPTS);
 // labels{}: which label placer to use.
 //   engine:"v2"  hand point labels to the shared labeller.js — real Arial widths, an
 //                occupancy grid that knows where the route ink is, scored candidate
@@ -3193,10 +3201,7 @@ if (NORTH_ON) {
 
 // footer band: attribution note + version + BusMaps.uk (shared across all four map types — footer.js)
 const _ver = process.env.LEAFLET_VERSION || RJ.version;
-out(footerBand({
-  notes: INTERNAL_FOOTER_NOTES,
-  version: _ver, validFrom: RJ.validFrom || 'Summer 2026', safe: PRINT_SAFE
-}));
+out(footerBand({ ...FOOTER_OPTS, version: _ver, validFrom: RJ.validFrom || 'Summer 2026' }));
 
 // Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).
 function stampNote(cfg,x,y,align){

@@ -70,6 +70,7 @@ Run the right skill for the item's `kind` — `make-bus-leaflet` (area) or `make
 Stop the dev server first (the importer writes). Then, in `PORTAL`:
 
 ```powershell
+cd "C:\Claude\community-bus-maps"
 node scripts/import-map.mjs --request <id> --src "<the S5-render dir>"
 ```
 
@@ -90,6 +91,7 @@ It refuses, before touching anything, if:
 The entire system rests on v1.0 == the shipped leaflet.
 
 ```powershell
+cd "C:\Claude\community-bus-maps"
 $env:FIXTURE_DIR = "<the S5-render dir>"; npm run verify:area
 ```
 
@@ -149,9 +151,12 @@ Collected_latests\Temp_places_internal-schematic\*.jpg
 
 `community-bus-maps/scripts/accept-publish-batch.mjs` (`npm run accept-publish`, PR #54, 2026-08-19) drives withdraw → accept → submit → approve → live-verify against the public API, for a named set of already-staged maps, in one run. Run from `PORTAL`:
 
-```bash
-npm run accept-publish -- --cookie "<cbm_session value>" --reviewed-by "<your name>" --note "<what this round is>"
+```powershell
+cd "C:\Claude\community-bus-maps"
+npm run accept-publish -- --cookie "<cbm_session value>" --reviewed-by "<your name>" --note "<what this round is>" --yes
 ```
+
+**The `cd` is not decoration.** `npm` looks for `package.json` in the *current* directory, and there is none in the Buses repo — running this from `C:\u3a St Ives\Using AI\Buses` fails with `ENOENT ... Could not read package.json` and nothing else. It happened on 2026-08-19.
 
 - `<cbm_session value>` — the admin session cookie. Sign in to busmaps.uk as admin, copy it from dev tools (Application/Storage → Cookies), or pass `--mint` instead to have it minted over SSH — same mint-and-revoke pattern as before, **ask Peter's OK each time**, it is not a standing approval.
 - `<your name>` — mandatory. This is the record of who did step 1; the script never looks at a rendered sheet itself, so leaving this out (or filling it in without having actually reviewed anything) defeats the one check in this whole process that has caught a real regression before.
@@ -181,11 +186,12 @@ Same regeneration, no portal step. These towns are printed sheets used outside t
 The town's shipped build was drawn by an older engine template. Harmless — it is not wrong, just not current — so this is opportunistic work, and it self-heals on the town's next real build. Do it deliberately when the current look matters or before a batch of deliveries.
 
 ```powershell
+cd "C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets"
 node rollout.js --all           # dry run: what would change
 node rollout.js --all --apply   # writes; one commit per town, minor version bump each
 ```
 
-(run in `SK`; `--town "St Ives"` for one town). It creates a new S4 from the current template with the config unchanged, diffs the label set against the previous build, renders S5 and refreshes `_latest`. **It stops before publishing if a label was lost** — that is a real signal, not a nuisance; review the loss rather than reaching for `--force`.
+(`--town "St Ives"` for one town; `--place "High Wycombe Aldi"` on `rollout_places.js` for a place. It finds the maps through `--buses`, which defaults to `C:\u3a St Ives\Using AI\Buses`, so only pass that if the tree has moved.) It creates a new S4 from the current template with the config unchanged, diffs the label set against the previous build, renders S5 and refreshes `_latest`. **It stops before publishing if a label was lost** — that is a real signal, not a nuisance; review the loss rather than reaching for `--force`.
 
 ### S6 missing or stale
 

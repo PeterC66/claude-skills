@@ -25,6 +25,8 @@ Let `BW=C:\u3a St Ives\.claude\skills\bus-work\assets` (this skill lives in the 
 node "%BW%\worklist.mjs"
 ```
 
+**Any directory.** Unlike everything in [references/playbooks.md](references/playbooks.md), this one does not care where you are: it is invoked by absolute path and reads nothing relative to the working directory. Every command in the playbooks does care, and each carries its own `cd` for that reason.
+
 The same list is on the web at **`/app/admin` → To do** (the admin landing tab) — same ranking, same wording, because both call the portal's `src/worklist/index.js`. The terminal version adds what only this machine can see: failing gates, engine-stale renders, missing S6, and towns with a leaflet but no portal map.
 
 Read-only, safe to run at any time, and safe while the dev server is running (the portal DB is WAL). Add `--json` when you need to act on the fields, `--gates` to also run the full byte-identical gate sweep (slow — a minute or two; only worth it after an engine change or before a batch of deliveries).

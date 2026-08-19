@@ -119,9 +119,48 @@ Either way it stages *beside* the live map and never touches it, computes a plai
 
    **Two side effects of the live form, confirmed over a 13-map pass on 2026-08-18.** Each call **emails the customer** an "update is ready" notification, and each call does its own `docker compose stop/start portal`. A one-map refresh is unremarkable; a whole-estate pass means one email and one short outage *per map*, so warn the customer first and don't run it during anything time-sensitive. Windows absolute paths (`C:/u3a St Ives/…`, spaces and all) are fine as `--src` — `scp` handles the drive letter.
 
-3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. **Accepting is blocked while a publication awaits review** — the accept returns a **409** ("Withdraw that request before accepting an update") until the open publish request is withdrawn, which is a real step and not a tidy-up. Note also that accepting, withdrawing and changing a map's outputs are **HTTP endpoints only** — there is no script for any of them, and they need a signed-in admin session, so they are browser work. Peter has once approved minting a short-lived session row on the VPS to drive them from a script; that was a one-off, so **ask before doing it again** rather than treating it as available. An admin can also act on it directly — the admin console's **Refreshes** tab (`/app/admin`) carries a link to the map plus Accept/Decline buttons (added 2026-08-10; needs a VPS deploy to reach the live site, since it's frontend code).
+3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. **Accepting is blocked while a publication awaits review** — the accept returns a **409** ("Withdraw that request before accepting an update") until the open publish request is withdrawn, which is a real step and not a tidy-up. Accepting, withdrawing and changing a map's outputs are **HTTP endpoints only** — there is no UI-free CLI for a single one-off action, and it needs a signed-in admin session, so a lone map is browser work (or the admin console's **Refreshes** tab, `/app/admin`, which carries a link plus Accept/Decline buttons — added 2026-08-10, needs a VPS deploy to reach the live site since it's frontend code). **If you're clearing several staged maps at once — e.g. everything an engine upgrade left behind — see the `bulk-accept-publish` playbook below instead of clicking through each one.**
 4. Refusals worth knowing: a newer refresh **supersedes** any still-pending one (one open per map); the script refuses if the map has no built data yet ("nothing to refresh" — build it first); don't stage a no-op if the diff says nothing changed.
 5. If the item said "not yet flagged in the portal", run `npm run check-upcoming` in `PORTAL` once so the refresh-flag is recorded in the admin Messages inbox.
+
+---
+
+## `bulk-accept-publish` — several staged maps at once (after an engine upgrade or a multi-town rebuild)
+
+The situation this is for: an engine change or a coordinated rebuild (frequency tiers, a new panel, a fixed defect — anything that touches the shared generator) has left a whole batch of maps sitting as staged proposed updates, all needing the same accept → submit → review → publish treatment. Clicking through the UI once per map is what this replaces. **The judgement — is each map actually fit to publish — is not replaced, and never will be by this playbook.**
+
+### 1. Review every sheet at full resolution, before anything is accepted
+
+Don't open the portal for this. `refresh_latest.js` runs as the last step of every S5/P5 build and keeps `Buses\Collected_latests\` current automatically (built 2026-08-08 after two place maps' collected copies went stale against a re-render and the staleness wasn't caught until this existed — see `project_bus_foolproofing_plan.md`). One flat JPG per map per sheet type, no digging into dated `S5-render` folders:
+
+```
+Collected_latests\Temp_areas_internal\*.jpg
+Collected_latests\Temp_areas_external\*.jpg
+Collected_latests\Temp_areas_internal-schematic\*.jpg
+Collected_latests\Temp_areas_internal-diagram\*.jpg
+Collected_latests\Temp_places_internal\*.jpg
+Collected_latests\Temp_places_external\*.jpg
+Collected_latests\Temp_places_internal-schematic\*.jpg
+```
+
+**Check the file's modified date against the build you're reviewing before trusting it** — that one glance is what would have caught the 2026-08-08 staleness incident, and the collection folder having auto-refreshed since doesn't make the habit optional. What you're looking for is the same class of thing that caught the High Wycombe regression on 2026-08-19: text or icons running off the edge, footer/key collisions, cut-off labels — anything wrong at a glance. A map that fails needs a real fix and a rebuild, the same as any other regression; it does not go into the batch below until it's re-reviewed clean.
+
+### 2. Run the batch, for whichever maps passed
+
+`community-bus-maps/scripts/accept-publish-batch.mjs` (`npm run accept-publish`, PR #54, 2026-08-19) drives withdraw → accept → submit → approve → live-verify against the public API, for a named set of already-staged maps, in one run. Run from `PORTAL`:
+
+```bash
+npm run accept-publish -- --cookie "<cbm_session value>" --reviewed-by "<your name>" --note "<what this round is>"
+```
+
+- `<cbm_session value>` — the admin session cookie. Sign in to busmaps.uk as admin, copy it from dev tools (Application/Storage → Cookies), or pass `--mint` instead to have it minted over SSH — same mint-and-revoke pattern as before, **ask Peter's OK each time**, it is not a standing approval.
+- `<your name>` — mandatory. This is the record of who did step 1; the script never looks at a rendered sheet itself, so leaving this out (or filling it in without having actually reviewed anything) defeats the one check in this whole process that has caught a real regression before.
+- `<what this round is>` — free text, lands in the audit trail on every accept/submit/approve call it makes.
+- Add `--only 30,33,37` (the proposed-update `#` ids) to run a subset — e.g. holding one map back that failed step 1 while the rest proceed. Omit it to process everything pending.
+- No `--yes` prints the full list and waits for you to type "yes"; add it once you trust the plan without re-reading it printed back.
+- `--dry-run` shows the plan with no `--cookie`/`--mint` needed and makes no calls at all — use it to sanity-check `--only` before spending a real session on it.
+
+It sends **one digest email per customer** for the whole run (`"N maps published"`) rather than one per map — the fix this script shipped with, after a live `/health?deep=1` read on 2026-08-19 showed all thirteen pilot maps sharing a single customer account, which would otherwise have meant a dozen near-identical emails landing in one inbox from one batch. A per-map failure is logged and the run continues to the next map; an auth failure (401/403) aborts the rest immediately rather than repeating the same failure across every remaining map. It writes a JSON report to `PORTAL\data\accept-publish-reports\` and prints a pass/fail summary — read that summary before calling the round done, same as reading any other gate's actual output rather than trusting a clean exit code.
 
 ---
 

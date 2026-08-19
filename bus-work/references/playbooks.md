@@ -165,6 +165,17 @@ npm run accept-publish -- --cookie "<cbm_session value>" --reviewed-by "<your na
 - No `--yes` prints the full list and waits for you to type "yes"; add it once you trust the plan without re-reading it printed back.
 - `--dry-run` shows the plan with no `--cookie`/`--mint` needed and makes no calls at all — use it to sanity-check `--only` before spending a real session on it.
 
+**It only sees PENDING proposals.** A map whose proposal you accepted by hand is invisible to it from that moment on — the accept leaves a *draft* version, and the batch has nothing left to walk. Beaconsfield sat on the old version in public through the whole 2026-08-19 round for exactly this reason, with nothing flagging it. **Accept by hand and you must publish by hand, in the same breath.** Afterwards, check the count: every map you expected should appear in the summary, and one that is silently absent is this.
+
+**Trust the public API, not the summary line.** The verify step reads `/api/public/maps/<slug>` back; when it says a map failed, confirm before re-running anything, because a broken *check* used to look exactly like a failed publish (fixed in PR #55, but the habit is the point). The quickest independent read:
+
+```powershell
+cd "C:\Claude\community-bus-maps"
+node -e "fetch('https://busmaps.uk/api/public/maps/<slug>?_='+Date.now()).then(r=>r.json()).then(j=>console.log(j.map && j.map.version))"
+```
+
+`<slug>` — the map's public slug, e.g. `wisbech`. Prints the live published version, or `undefined` if the map is not published.
+
 It sends **one digest email per customer** for the whole run (`"N maps published"`) rather than one per map — the fix this script shipped with, after a live `/health?deep=1` read on 2026-08-19 showed all thirteen pilot maps sharing a single customer account, which would otherwise have meant a dozen near-identical emails landing in one inbox from one batch. A per-map failure is logged and the run continues to the next map; an auth failure (401/403) aborts the rest immediately rather than repeating the same failure across every remaining map. It writes a JSON report to `PORTAL\data\accept-publish-reports\` and prints a pass/fail summary — read that summary before calling the round done, same as reading any other gate's actual output rather than trusting a clean exit code.
 
 ---

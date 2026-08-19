@@ -1,4 +1,9 @@
-// Generates the EXTERNAL bus map ("Buses from <Town> to nearby towns") as SVG.
+// Generates the EXTERNAL bus map ("Buses from <Town> to nearby places") as SVG.
+// (Title wording changed 2026-08-19 with the radial's, Peter's item 4 — "towns" was
+// wrong: St Ives alone terminates at Boxworth, Fen Drayton Lakes and two Park & Rides.
+// This file is otherwise kept UNEDITED per changing-the-engine.md §2; a title string is
+// changed here only so a town adopting the busway layout later cannot inherit the old
+// name and quietly disagree with every other sheet.)
 // Busway variant: hubs centre; colour branches fan LEFT to towns; the guided busway
 // runs as a vertical corridor down the centre-right; a Services panel sits far right.
 //
@@ -119,7 +124,7 @@ function stopLabel(x,y,label,size=3.0,prefer='above',anchor='middle'){
 // ---- canvas -----------------------------------------------------------------
 out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
-out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${C.B}">Buses from ${esc(D.town)} to nearby towns</text>`);
+out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${C.B}">Buses from ${esc(D.town)} to nearby places</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${esc(D.validFrom)})</text>`);
 
 // ---- layout anchors ---------------------------------------------------------

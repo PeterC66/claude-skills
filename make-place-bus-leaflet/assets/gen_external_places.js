@@ -318,6 +318,9 @@ const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK 
 // reduces to the arithmetic that was here before, so ungated places stay byte-identical.
 const FOOTER_OPTS = {
   url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  // design.sheetVersion — the PUBLISHED version, printed in the gap the QR left beside
+  // the credit line (footer.js). Absent => no row, byte-identical.
+  sheetVersion: DESIGN.sheetVersion || null,
   ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
 const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTES, safe: PSAFE, ...FOOTER_OPTS });
 // The frame every free-floating page device works to: inside the title block, above the

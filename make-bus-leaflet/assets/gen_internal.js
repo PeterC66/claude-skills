@@ -239,6 +239,9 @@ const PRINT_SAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null
 // rather than by remembering (see INTERNAL_FOOTER_NOTES' header above).
 const FOOTER_OPTS = { notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE,
   url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  // design.sheetVersion — the PUBLISHED version, printed in the gap the QR left beside
+  // the credit line (footer.js). Absent => no row, byte-identical.
+  sheetVersion: DESIGN.sheetVersion || null,
   ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
 FOOTER_PLATE_TOP = footerPlateTop(FOOTER_OPTS);
 // labels{}: which label placer to use.
@@ -578,6 +581,35 @@ const colourShared = r => !!(CPAL && CPAL.lead[r]);
         +dH.toFixed(0)+'° apart. Blue-cyan is reserved for water on a town that draws a '
         +'river: give this route another hue in the palette.');
     }
+  }
+  /* The other half of the same rule: GREY IS FURNITURE, so no route may wear it.
+   *
+   * The check above deliberately excludes near-neutral colours ("a grey is not a river")
+   * and that exclusion left a gap nothing else covered. Every grey on these sheets is
+   * apparatus — the road skeleton, the context roads, the railway casing, the footer type,
+   * the scale bar, the north arrow — so a grey ROUTE claims to be none of those and reads
+   * as whichever is nearest. Peter's item 23 is the worst case: Wisbech's X46 is #BBBBBB
+   * in the palette AND `sparse` in the frequency map, which makes it a grey DASHED line,
+   * i.e. the two properties the eye uses to spot a railway.
+   *
+   * #BBBBBB is the last entry of the Tol qualitative palette, where it means "other /
+   * undefined" rather than a colour — so this fires wherever a town has run to the end of
+   * the palette and taken it anyway, which is exactly when it should.
+   *
+   * Reported, never fixed here, same as above: which hue a route wears is a config
+   * decision and it has to stay stable across updates and across both sheets.
+   * pick_route_colour.js is the tool for choosing the replacement.
+   */
+  for(const r of order){ const c=C[r];
+    if(!/^#[0-9a-f]{6}$/i.test(c||'')) continue;
+    const R=_lab(c), chroma=Math.hypot(R[1],R[2]);
+    if(chroma>=8) continue;                                    // it has a hue; not our case
+    const dashed = FTIER && RJ.frequency && FTIER[RJ.frequency[r]] && FTIER[RJ.frequency[r]].dash;
+    console.error('PALETTE WARNING route '+r+' is drawn in '+c+', which is a NEUTRAL GREY '
+      +'(chroma '+chroma.toFixed(1)+') — the colour this sheet uses for its own furniture: '
+      +'road casing, railway, footer type, scale bar.'+(dashed ? ' It is also dashed on this '
+      +'sheet, so it reads as a railway rather than as a bus.' : '')+' Give it a hue from the '
+      +'palette (node pick_route_colour.js --town "'+(RJ.town||'?')+'" --route '+r+').');
   }
 }
 
@@ -1084,6 +1116,18 @@ function drawFeature(f){
 function drawFeatureLabel(f){
   const ov=featOv(f), lov=ov.label||{};
   if(ov.hide || lov.hide || !f.labelPos) return;
+  // labelPos:"auto" — the position was solved and reserved in the reserve pass, so
+  // just draw it. A feature whose auto search found nowhere has no entry and is
+  // skipped: it already said so on stderr, and a name printed on top of the map
+  // because nothing fitted is worse than the name being absent.
+  if(isAuto(f)){
+    const got = AUTOPOS[f.key];
+    if(!got) return;
+    const txt = lov.text!=null?lov.text:f.label;
+    const it = f.labelItalic!==false, sz = f.labelSize||4;
+    out(`<text x="${got.x.toFixed(2)}" y="${got.y.toFixed(2)}" font-family="Arial" ${it?'font-style="italic" ':''}font-size="${sz}" text-anchor="middle" fill="${f.labelColor||'#7fb0d8'}">${esc(txt)}</text>`);
+    return;
+  }
   let x=f.labelPos.x, y=f.labelPos.y;
   x+=(ov.move&&ov.move.dx)||0; y+=(ov.move&&ov.move.dy)||0;               // follow the feature nudge
   if(lov.pos){ x=lov.pos.x; y=lov.pos.y; } else if(lov.offset){ x+=lov.offset.dx; y+=lov.offset.dy; }
@@ -1137,17 +1181,49 @@ function drawFeatureLabel(f){
   // the remedy is a judgement about where the feature reads best. 25mm matches
   // quality_metrics.js's featureLabelMaxMm so the build and the gate agree.
   {
-    let best = Infinity;
-    for(const seg of featSegs(f)) for(let i=0;i<seg.length-1;i++){
-      const a=seg[i], b=seg[i+1], vx=b[0]-a[0], vy=b[1]-a[1], l2=vx*vx+vy*vy;
-      let t = l2 ? ((x-a[0])*vx + (y-a[1])*vy)/l2 : 0;
-      t = Math.max(0, Math.min(1, t));
-      best = Math.min(best, Math.hypot(a[0]+t*vx-x, a[1]+t*vy-y));
+    // Report the REMEDY, not only the fault, and report it about the ink the READER
+    // can see. The guard used to say a label named nothing and leave whoever read it
+    // to find the feature by eye on a 297x210 sheet — most of why six towns still
+    // carried a stranded label a day after the guard was written.
+    //
+    // MEASURED INSIDE THE FRAME, because a feature polyline does not stop at the map
+    // edge — it is CLIPPED there. Huntingdon's Great Ouse runs on to y=277 on a sheet
+    // whose frame ends at 182, so the nearest ink to its label was 28mm below the
+    // bottom of the page: the unclipped measure said 29mm and looked survivable, and
+    // the reader sees no river within reach of the words at all. The clipped measure
+    // is the one that matches the artwork, and the suggested spot has to be a place
+    // the feature is actually drawn.
+    const inFrame = q => q[0]>=MX0 && q[0]<=MX1 && q[1]>=MY0 && q[1]<=MY1;
+    let best = Infinity, nearest = null, anyInk = false, seen = 0;
+    const mids = [];
+    for(const seg of featSegs(f)){
+      const vis = [];
+      for(let i=0;i<seg.length-1;i++){
+        const a=seg[i], b=seg[i+1], vx=b[0]-a[0], vy=b[1]-a[1], l2=vx*vx+vy*vy;
+        anyInk = true;
+        // Sample the segment rather than only testing its ends: a long span can cross
+        // the frame without either endpoint being inside it.
+        const n = Math.max(2, Math.min(64, Math.ceil(Math.hypot(vx,vy)/2)));
+        for(let k=0;k<=n;k++){
+          const px=a[0]+vx*k/n, py=a[1]+vy*k/n;
+          if(!inFrame([px,py])) continue;
+          seen++; vis.push([px,py]);
+          const d = Math.hypot(px-x, py-y);
+          if(d < best){ best = d; nearest = [px,py]; }
+        }
+      }
+      if(vis.length) mids.push(vis[Math.floor(vis.length/2)]);
     }
-    if(best === Infinity)
+    const at = p => '('+p[0].toFixed(0)+','+p[1].toFixed(0)+')';
+    if(!anyInk)
       console.error('feature: label "'+text+'" has no geometry of its own on this sheet at all — check the features[] key against the drawn data.');
+    else if(!seen)
+      console.error('feature: label "'+text+'" has geometry, but none of it lands inside the map frame ('+MX0+','+MY0+' to '+MX1+','+MY1.toFixed(0)+') — '
+        +'every part of it is clipped away, so the label names nothing that is drawn. Drop it from features[], or check the projection.');
     else if(best > 25)
-      console.error('feature: label "'+text+'" is '+best.toFixed(0)+'mm from the nearest '+(f.key||f.type)+' ink — it names nothing where it sits. Move its labelPos onto the feature (routes.json features[] / overrides internal.features).');
+      console.error('feature: label "'+text+'" at '+at([x,y])+' is '+best.toFixed(0)+'mm from the nearest DRAWN '+(f.key||f.type)+' ink — it names nothing where it sits. '
+        +'Inside the frame the ink runs through '+mids.slice(0,4).map(at).join(' ')+(mids.length>4?' …':'')+'; nearest drawn point '+at(nearest)+'. '
+        +'Move its labelPos there (routes.json features[] / overrides internal.features).');
   }
   const italic=f.labelItalic!==false, size=f.labelSize||4, anchor=lov.anchor||null;
   out(`<text x="${x}" y="${y}" font-family="Arial" ${italic?'font-style="italic" ':''}font-size="${size}"${anchor?` text-anchor="${anchor}"`:''} fill="${f.labelColor||'#7fb0d8'}">${esc(text)}</text>`);
@@ -1852,7 +1928,12 @@ const SCALE_TEXT = SCALE_M ? (SCALE_M>=1000 ? (SCALE_M/1000)+' km' : SCALE_M+' m
 // and reading the words (2026-08-16): §4.6 asked whether the bar was honest
 // about the fisheye and never asked whether the thing it names is on the page.
 // On such a town the bar is true of the ring OUTSIDE the box, so say that.
-const SCALE_NOTE = NOT_TO_SCALE ? 'Diagram — not to scale'
+// notToScale carries WHICH sort of sheet this is, so the two expert outputs stop calling
+// themselves the same thing: the tube-map diagram really is a diagram, the octolinear sheet
+// is a straightened street map and now says "Simplified", matching the name it goes by in
+// the portal. `true` (the old value, and any unrecognised string) keeps the old wording.
+const SCALE_NOTE = NOT_TO_SCALE ? (RJ.notToScale === 'schematic' ? 'Simplified — not to scale'
+                                                                : 'Diagram — not to scale')
   : (FISHEYED ? ((PRINT_SAFE!=null && CBOX) ? 'scale outside the town centre box' : 'town centre scale') : '');
 const SCALE_ON   = !!(SCALE_BAR_ON && (SCALE_M || NOT_TO_SCALE));
 // Footprint: the distance above the bar, the bar, the qualifier below it. `bx,by`
@@ -1928,8 +2009,137 @@ if(PRINT_SAFE!=null){
   reserve(0,0,PRINT_SAFE,210); reserve(297-PRINT_SAFE,0,297,210);
   reserve(0,0,297,PRINT_SAFE); reserve(0,210-PRINT_SAFE,297,210);
 }
+/* ---- features[].labelPos:"auto" — a feature label that sites itself ---------
+ *
+ * WHY. A linear feature's label is hand-placed, in page mm, against geometry the
+ * town has no control over: the projection, the fisheye and the frame all move
+ * when the data is refreshed, and the label does not move with them. Every one of
+ * the seven stranded labels found on 2026-08-16 had been put on its feature by
+ * hand at some point — Ramsey's write-up even records the river name as having
+ * been "moved onto the river it names" — and then the ground moved underneath it.
+ * Ramsey's ended up 84mm away, High Wycombe's railway name 75mm, Beaconsfield's
+ * A355 108mm, and St Ives' river name under the footer plate where it was refused
+ * outright. A hand-set constant cannot survive a moving projection; the guard that
+ * caught them is necessary but it only ever produces more hand-set constants.
+ *
+ * WHAT IT DOES. `"labelPos": "auto"` sites the label on the feature's own ink:
+ * along the LONGEST run of it that lands inside the map frame, offset clear of the
+ * line, on a box that collides with nothing already reserved. It is geometry, not
+ * a search over the finished drawing — the reserve pass has to know where the
+ * label will be BEFORE the point-label placer runs, or every map label would treat
+ * the space as free (which is the bug labelReserve exists to stop).
+ *
+ * The three preferences, in the order they matter: near the middle of the visible
+ * run (a name at a clipped end reads as belonging to whatever is beyond the edge),
+ * on a stretch running across the page rather than up it (a horizontal name beside
+ * a vertical line points at nothing in particular), and tight to the ink.
+ *
+ * Opt-in per feature. Absent the string, labelPos is the {x,y} it has always been
+ * and the output is byte-identical.
+ */
+const AUTOPOS = {};                       // feature key -> {x,y,anchor,box}
+// TWO WAYS IN, because one of them cannot reach every case. A feature says
+// `"labelPos": "auto"` for itself; `design.featureLabelAuto` says it for the whole
+// sheet. The sheet-wide key exists for March, which carries no features[] at all —
+// its river comes from the engine's own legacy fallback, so there is nothing in its
+// config to hang a per-feature key on, and its "River Nene (old course)" was 42mm
+// from the river with no way to say otherwise short of inventing a features[] whose
+// geometry file that town does not have. Absent both keys, nothing changes.
+const isAuto = f => f && (f.labelPos === 'auto' || !!DESIGN.featureLabelAuto);
+// Occupancy read straight off the SVG built so far, on the SAME test the point-label
+// placer uses: a route colour, or any stroke both wide and dark. A pale river or road
+// casing is deliberately NOT ink by that measure — a river name is meant to lie along
+// its own water, and refusing to cross it would leave a winding river unnameable on a
+// sheet this size. Route lines and railways are another matter, and this is what stops
+// the name landing on one. Built once, lazily, because stamping the whole SVG is not free.
+let AUTOINK = null;
+function autoInk(){
+  if(AUTOINK) return AUTOINK;
+  const palette = new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
+  const lum = h => { const m=/^#([0-9a-f]{6})$/i.exec(h); if(!m) return 1;
+    const n=parseInt(m[1],16); return (0.2126*((n>>16)&255)+0.7152*((n>>8)&255)+0.0722*(n&255))/255; };
+  AUTOINK = new Labeller({ page:[297,210] });
+  AUTOINK.stampSvg(s, (stroke,w)=> palette.has(String(stroke).toLowerCase()) || (w>=1.2 && lum(stroke)<0.62));
+  return AUTOINK;
+}
+function autoFeatureLabel(f, txt, sz){
+  // Anchors of every point label still waiting to be placed (v1 has no queue, so the
+  // crowding term simply falls away and the other three preferences decide).
+  const QANCH = (LAB && LAB.items ? LAB.items : []).filter(it=>it.at).map(it=>it.at);
+  const SAMPLE = 1.0;                     // mm between candidate anchors along the ink
+  const inFrame = q => q[0]>=MX0 && q[0]<=MX1 && q[1]>=MY0 && q[1]<=MY1;
+  // Resample every segment and cut it into maximal runs that stay inside the frame.
+  const runs = [];
+  for(const seg of featSegs(f)){
+    let cur = [];
+    for(let i=0;i<seg.length-1;i++){
+      const a=seg[i], b=seg[i+1], vx=b[0]-a[0], vy=b[1]-a[1], L=Math.hypot(vx,vy);
+      const n = Math.max(1, Math.ceil(L/SAMPLE));
+      for(let k=0;k<n;k++){
+        const q=[a[0]+vx*k/n, a[1]+vy*k/n];
+        if(inFrame(q)) cur.push(q); else { if(cur.length>1) runs.push(cur); cur=[]; }
+      }
+    }
+    if(cur.length>1) runs.push(cur);
+  }
+  if(!runs.length) return null;
+  const runLen = r => { let L=0; for(let i=1;i<r.length;i++) L+=Math.hypot(r[i][0]-r[i-1][0], r[i][1]-r[i-1][1]); return L; };
+  const run = runs.reduce((a,b)=> runLen(b)>runLen(a) ? b : a);
+  const w = FONT.textWidth(txt, sz, false), mid = (run.length-1)/2;
+  // Clear of the feature's OWN stroke, not of an arbitrary 2.4mm: a river band is
+  // 3mm of ink and the first cut put the name's x-height straight through it, so
+  // "River Nene (Old Course)" read with a stripe across the middle word.
+  const CLR = ((featStyle(f)||{}).width||1)/2 + sz*0.45 + 0.6;
+  let best = null;
+  for(let i=0;i<run.length;i++){
+    const a = run[Math.max(0,i-2)], b = run[Math.min(run.length-1,i+2)];
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy) || 1;
+    const nx=-dy/L, ny=dx/L;                              // unit normal to the ink
+    const vert = Math.abs(dy/L);                          // 0 = across the page, 1 = up it
+    // Eight rungs, not four. The ladder has to be able to step a name right off a
+    // WIDE dark feature: a chequer railway is 2.6mm of casing under a 3mm label box,
+    // so the first few rungs are still on it and the ink test rejects them all —
+    // Beaconsfield's "Chiltern Main Line" simply vanished with a short ladder.
+    for(let oi=0; oi<8; oi++){
+      const d = CLR + oi*1.6;
+      for(const side of [-1, 1]){
+        const cx = run[i][0] + nx*d*side, cy = run[i][1] + ny*d*side + sz*0.35;
+        const box = [cx-w/2-0.5, cy-sz*FONT.CAP_HEIGHT-0.5, cx+w/2+0.5, cy+sz*FONT.DESCENDER+0.5];
+        if(box[0]<MX0+1 || box[2]>MX1-1 || box[1]<MY0+1 || box[3]>MY1-1) continue;
+        if(inCore([cx,cy]) || inCore([box[0],box[1]]) || inCore([box[2],box[3]])) continue;
+        if(overlaps(box)) continue;
+        const cov = autoInk().ink.cover(box);
+        if(cov > 0) continue;
+        // Fourth preference, and the one the first cut lacked: keep OUT OF THE WAY of
+        // the point labels that have not been solved yet. This box is reserved, so
+        // wherever it lands a stop or POI name loses its first choice — Huntingdon
+        // dropped "Child and Family Centre" and two others to gain one river name.
+        // The queue is right here (LAB.items are added, not yet solved), so prefer a
+        // stretch of the feature with nothing waiting to be named near it.
+        // Counting the anchors the box would SIT ON matters more than distance to the
+        // nearest one: a stop or POI whose anchor falls inside the reserved box has lost
+        // its own spot and its neighbours' fallbacks at once, which is how Beaconsfield
+        // paid for two correct feature names with "Waitrose" and "St Michael's Hall".
+        let sits = 0, near = Infinity;
+        for(const a of QANCH){
+          if(a[0]>=box[0]-3 && a[0]<=box[2]+3 && a[1]>=box[1]-3 && a[1]<=box[3]+3) sits++;
+          near = Math.min(near, Math.hypot(a[0]-cx, a[1]-cy));
+        }
+        const crowd = sits*14 + (near===Infinity ? 0 : Math.max(0, 14-near)*0.8);
+        const score = Math.abs(i-mid)*SAMPLE*0.2 + vert*25 + oi*2 + crowd;
+        if(!best || score < best.score) best = { x:cx, y:cy, anchor:'middle', box, score };
+      }
+    }
+  }
+  return best;
+}
 for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label areas
   if(ov.hide || (ov.label&&ov.label.hide)) continue;
+  // labelPos:"auto" claims its box in its own pass further down, once every other
+  // device has claimed one — see "resolve labelPos:auto". Its labelReserve, if the
+  // town still carries one, describes a position the engine no longer chooses, so
+  // it is deliberately not reserved here.
+  if(isAuto(f)) continue;
   if(f.labelReserve){ reserve(...f.labelReserve); continue; }
   // A feature label is hand-placed (labelPos) and drawn at the very END of the
   // file, so without labelReserve nothing knows it is there and a map label lands
@@ -2566,6 +2776,26 @@ if(RJ.internalTermini && !IR){ const TL=RJ.terminiLabels||{};
     badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],'to '+TL[r],2.7,C[r]||'#333',false,null); }
 }
 
+// ---- resolve labelPos:"auto" ------------------------------------------------
+// LAST of the claim phase, and that ordering is the whole of it. An auto feature
+// label has to know where the POI symbols, terminus badges, route badges, map notes
+// and page devices ended up — resolving it in the early reserve pass (the first cut)
+// put Beaconsfield's A355 on a symbol and cost the schematic a road name, because at
+// that point none of those had claimed anything. Here everything has, and the ink is
+// the finished drawing. It still runs BEFORE the point-label solve, so the box it
+// takes is one the map labels then work around, exactly as labelReserve's does.
+for(const f of FEATURES){
+  if(!isAuto(f)) continue;
+  const ov=featOv(f); if(ov.hide || (ov.label&&ov.label.hide)) continue;
+  const lov=ov.label||{}; const txt=lov.text!=null?lov.text:f.label;
+  if(!txt) continue;
+  const got = autoFeatureLabel(f, txt, f.labelSize||4);
+  if(got){ AUTOPOS[f.key]=got; reserve(...got.box); }
+  else console.error('feature: label "'+txt+'" is set to labelPos:"auto", but no spot along its '
+    +'drawn ink is both clear of other ink and big enough for the name — it was not drawn. '
+    +'Shorten the label, or place it by hand with labelPos:{x,y}.');
+}
+
 // ---- labels.engine:"v2": solve and draw every queued point label at once ------
 // This is the two-phase draw. Everything above has finished claiming space —
 // route ribbons, casings, the river and railway, POI symbols, route badges, stop
@@ -3177,6 +3407,26 @@ py+=10; out(`<text x="${KX}" y="${py}" font-family="Arial" font-weight="bold" fo
 const KEY_ALL=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
 const key=KEY_ALL.filter(([cat])=>pois.some(p=>p.cat===cat));
 if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
+/* design.keyCols — lay the pictogram rows out in N columns instead of one.
+ *
+ * The Services panel is ~92mm wide and a Key row is a 4mm symbol plus a name; the longest
+ * name in the list ("Community centre", "Industrial estate") measures about 25mm, so a
+ * one-column Key uses barely a third of the width it is given and leaves the rest blank
+ * all the way down (Peter's item 9). Filtering the unused categories out, which shipped on
+ * 2026-08-19, made the list SHORTER without making it any less narrow — it moved the dead
+ * space from below the Key to beside it.
+ *
+ * Only the PICTOGRAM rows column up. The frequency-tier rows underneath keep one column
+ * on purpose: their labels are sentences ("Frequent — turn up and go"), not nouns, and
+ * two columns of those read as a paragraph broken in half.
+ *
+ * Column width comes from the panel, not from a constant, so a town that has moved or
+ * narrowed its panel gets columns that still fit it. Absent the key, one column and
+ * byte-identical.
+ */
+const KEY_COLS = Math.max(1, Math.min(3, (DESIGN.keyCols|0) || 1));
+const KEY_PER_COL = Math.ceil(key.length / KEY_COLS) || 1;
+const KEY_COLW = ((PRINT_SAFE!=null ? 297-PRINT_SAFE : 294) - PX - 3) / KEY_COLS;
 // The label baseline is ky+1, so the heading rule is applied there and the icon
 // centre follows from it — the same clear air under `Key` as under `Services`.
 const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;
@@ -3197,7 +3447,10 @@ const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;
  * ungated sheet stays byte-identical.
  */
 const KROW_FIT = (()=>{
-  const rows = key.length + (FTIER ? new Set(Object.values(RJ.frequency||{})).size + 0.5 : 0);
+  // Rows deep, not rows total: with two columns the Key is half as tall, which is the
+  // point of the whole change — pitching it as if it were still one column would keep
+  // compressing a Key that now has room to breathe.
+  const rows = KEY_PER_COL + (FTIER ? new Set(Object.values(RJ.frequency||{})).size + 0.5 : 0);
   if(!FTIER || !FOOTER_SAFE) return KROW;
   const last = py + KFIRST + (rows-1)*KROW + 1;        // baseline of the final row
   const room = FOOTER_PLATE_TOP - 1.5;
@@ -3207,7 +3460,7 @@ const KROW_FIT = (()=>{
   process.stderr.write(`key: ${rows} rows need ${want.toFixed(2)}mm pitch to clear the footer plate, below the 3.6mm pictogram floor — the Key is too long for this panel. Shorten it, or move it with panelCols.keyAt.\n`);
   return 3.6;
 })();
-key.forEach((kk,i)=>{const ky=py+KFIRST+i*KROW_FIT, kx=PX+3;
+key.forEach((kk,i)=>{const ky=py+KFIRST+(i%KEY_PER_COL)*KROW_FIT, kx=PX+3+Math.floor(i/KEY_PER_COL)*KEY_COLW;
   out(icon(kk[0],kx,ky,2.0,ICON_INK,ICON_SET));
   // '3.0' as a STRING: the old code emitted the literal font-size="3.0", and
   // JS renders the number 3.0 as "3" — a one-character diff that fails all 27
@@ -3221,7 +3474,7 @@ key.forEach((kk,i)=>{const ky=py+KFIRST+i*KROW_FIT, kx=PX+3;
  * network, and Ramsey (no frequent lane) and March (none either) are why that is
  * not hypothetical. Config order decides the order, so the town controls it.
  */
-let KEYROWS = key.length;
+let KEYROWS = KEY_PER_COL;
 if(FTIER){
   const used = new Set(Object.values(RJ.frequency||{}));
   const tiers = Object.keys(FTIER).filter(t=>used.has(t));
@@ -3230,7 +3483,7 @@ if(FTIER){
   // reads as one list. A longer sample crowded the label — 1.2 mm of air against
   // the pictograms' 2.0 — and the Key looked like two different tables.
   const kx=PX+3;
-  let ty = py+KFIRST+key.length*KROW_FIT + KROW_FIT*0.5;   // half a row of air below the pictograms
+  let ty = py+KFIRST+KEY_PER_COL*KROW_FIT + KROW_FIT*0.5;   // half a row of air below the pictograms
   for(const t of tiers){
     const st=FTIER[t]||{}, w=(st.mm!=null)?st.mm:(IR?IR.stroke:2.6);
     const dash=st.dash?` stroke-dasharray="${st.dash}"`:'', cap=st.dash?'butt':'round';

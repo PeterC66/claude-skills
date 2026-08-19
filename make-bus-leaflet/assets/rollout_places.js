@@ -50,6 +50,40 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
+const BUILDLOG = require('./build_log');
+// ---- the printed sheet version (footer.js design.sheetVersion) -------------
+//
+// Peter, 2026-08-19: a sheet needs a version he can quote back when something on it
+// looks wrong, and the three places a sheet can come from need three different
+// answers. This is the FIRST of them — a map built here, before it has ever reached
+// the portal — and it says so in as many words, so it can never be mistaken for the
+// portal's customer-facing number. The other two (a portal draft, and a published
+// version) are the portal's to stamp, via LEAFLET_SHEET_VERSION.
+//
+// Written into the RUN'S OWN routes.json rather than passed as an environment
+// variable, and that is the whole reason it works: gate.sh reproduces a sheet from
+// its data folder and nothing else, so a value in routes.json is reproducible and a
+// value in the environment would make every gate DIFF forever.
+//
+// The date comes from the run folder's name, not from the clock — same reason the
+// generators may not read the clock at all (invariant 5, deterministic output).
+const _MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function buildStamp(runDirName) {
+  const m = /v([\d.]+)_(\d{4})-(\d{2})-(\d{2})/.exec(String(runDirName || ''));
+  if (!m) return null;
+  return `build ${m[1]} \u00b7 ${+m[4]} ${_MON[+m[3] - 1]} ${m[2]}`;
+}
+function stampSheetVersion(routesPath, runDirName) {
+  const stamp = buildStamp(runDirName);
+  if (!stamp) return null;
+  let rj;
+  try { rj = JSON.parse(fs.readFileSync(routesPath, 'utf8')); } catch (e) { return null; }
+  rj.design = rj.design || {};
+  rj.design.sheetVersion = stamp;
+  fs.writeFileSync(routesPath, JSON.stringify(rj, null, 2) + '\n');
+  return stamp;
+}
+
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
@@ -155,9 +189,13 @@ function rolloutOnePlace(p) {
     return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js: ' + (genOk.stderr || 'no internal.svg produced').split('\n')[0] };
   }
   outputs.push('internal.svg');
+  // Every generator's stderr is kept, not just a failing one's — the guards that
+  // matter refuse to draw and then exit 0 (build_log.js).
+  const said = [{ source: 'internal', stderr: genOk.stderr }];
   if (hasExternalGen) {
     copyFile(GEN_EXTERNAL_PLACES, s4);
     genOk = runNode(path.join(s4, 'gen_external_places.js'), s4);
+    said.push({ source: 'external', stderr: genOk.stderr });
     if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_external_places.js: ' + genOk.stderr.split('\n')[0] }; }
     outputs.push('external.svg');
   }
@@ -178,6 +216,7 @@ function rolloutOnePlace(p) {
     // the workspace subfolder, not this dir). No LEAFLET_DIR (runNode already
     // deletes it) — same trap, documented in changing-the-engine.md §4.
     const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4, 'overrides.json') });
+    said.push({ source: 'schematic', stderr: r.stderr });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
   }
   if (routesJson.internalDiagram) {
@@ -188,10 +227,13 @@ function rolloutOnePlace(p) {
     // shadow that file entirely (gen_internal.js prefers OVERRIDES_FILE over
     // its cwd-relative overrides.json unconditionally).
     const r = runNode(path.join(s4, 'diagram_internal.js'), s4, { SKILL_ASSETS: SK });
+    said.push({ source: 'diagram', stderr: r.stderr });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-diagram.svg'))) outputs.push('internal-diagram.svg');
   }
 
   const diffs = {};
+  const warnings = BUILDLOG.collect(said);
+  const blockers = BUILDLOG.blocking(warnings);
   let anyLost = false;
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
@@ -216,7 +258,7 @@ function rolloutOnePlace(p) {
       }
     }
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'DRY-RUN', diffs, anyLost, version: prevS4.rec.version, kept: KEEP || null };
+    return { name: p.name, status: 'DRY-RUN', diffs, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null };
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
@@ -236,15 +278,18 @@ function rolloutOnePlace(p) {
     if (name.endsWith('.json') && !s3Carry.includes(name) && !fs.existsSync(path.join(s4Dir, name))) fs.copyFileSync(fp, path.join(s4Dir, name));
   }
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
+  const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
   let r = buildInternal(s4Dir);
   if (!r.ok || !fs.existsSync(path.join(s4Dir, 'internal.svg'))) {
     fs.rmSync(scratch, { recursive: true, force: true });
     return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js (real S4): ' + (r.stderr || 'no internal.svg produced').split('\n')[0] };
   }
   const realOutputs = ['internal.svg'];
+  const realSaid = [{ source: 'internal', stderr: r.stderr }];
   if (hasExternalGen) {
     copyFile(GEN_EXTERNAL_PLACES, s4Dir);
     r = runNode(path.join(s4Dir, 'gen_external_places.js'), s4Dir);
+    realSaid.push({ source: 'external', stderr: r.stderr });
     if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_external_places.js (real S4): ' + r.stderr.split('\n')[0] }; }
     realOutputs.push('external.svg');
   }
@@ -252,22 +297,37 @@ function rolloutOnePlace(p) {
   if (routesJson.internalSchematic) {
     copyFile(path.join(SK, 'schematize_internal.js'), s4Dir);
     const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4Dir, 'overrides.json') });
+    realSaid.push({ source: 'schematic', stderr: r2.stderr });
     if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg');
   }
   if (routesJson.internalDiagram) {
     copyFile(path.join(SK, 'diagram_internal.js'), s4Dir);
     const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK });
+    realSaid.push({ source: 'diagram', stderr: r3.stderr });
     if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg');
   }
   // place.json must ride the S4 commit too — the portal's import-map.mjs
   // --kind place requires it in --src, and `pull` never reaches back further
   // than one stage (pipeline.md P4 note).
   if (fs.existsSync(path.join(s4Dir, 'place.json'))) realOutputs.push('place.json');
+  // The log goes in the run folder beside the artwork it describes and rides the
+  // commit as an output, so "what did the engine say when it drew this?" stays
+  // answerable from the tree without rebuilding.
+  const realWarnings = BUILDLOG.collect(realSaid);
+  const realBlockers = BUILDLOG.blocking(realWarnings);
+  BUILDLOG.write(s4Dir, realWarnings);
+  realOutputs.push(BUILDLOG.LOG_NAME);
   stage(p.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE);
   fs.rmSync(scratch, { recursive: true, force: true });
 
+  if (realBlockers.length && !FORCE) {
+    return { name: p.name, status: 'REVIEW-NEEDED', diffs, s4Dir, warnings: realWarnings, blockers: realBlockers,
+      detail: 'S4 committed but NOT rendered/published — ' + realBlockers.length + ' blocking build warning'
+        + (realBlockers.length > 1 ? 's' : '') + ' (the engine refused to draw something, or a label names nothing). Read '
+        + path.join(s4Dir, BUILDLOG.LOG_NAME) + ', fix the config it names, then re-run (or --force to publish anyway).' };
+  }
   if (anyLost && !FORCE) {
-    return { name: p.name, status: 'REVIEW-NEEDED', diffs, s4Dir, detail: 'S4 committed but NOT rendered/published — a label was lost vs the previous build. Inspect ' + s4Dir + ', then re-run with --force (or fix the cause and re-run).' };
+    return { name: p.name, status: 'REVIEW-NEEDED', diffs, s4Dir, warnings: realWarnings, blockers: realBlockers, detail: 'S4 committed but NOT rendered/published — a label was lost vs the previous build. Inspect ' + s4Dir + ', then re-run with --force (or fix the cause and re-run).' };
   }
 
   const s5Dir = stage(p.dir, 'new', 'S5');
@@ -290,7 +350,7 @@ function rolloutOnePlace(p) {
   // already in sync) and simpler than adding a --place flag there too.
   spawnSync(process.execPath, [path.join(SK, 'sync_ci_reference.js'), '--buses', BUSES, '--town', p.town], { encoding: 'utf8' });
 
-  return { name: p.name, status: 'DONE', diffs, anyLost, s4Dir, s5Dir, version: BUMP };
+  return { name: p.name, status: 'DONE', diffs, anyLost, warnings: realWarnings, blockers: realBlockers, s4Dir, s5Dir, version: BUMP, sheetStamp };
 }
 
 // ---- run ---------------------------------------------------------------
@@ -317,8 +377,14 @@ for (const p of selected) {
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
     }
   }
+  for (const w of (r.blockers || [])) console.log(`    BLOCKING [${w.source}] ${w.text}`);
+  const soft = (r.warnings || []).filter(w => w.severity === 'WARN');
+  if (soft.length && args.warnings) for (const w of soft) console.log(`    warn [${w.source}] ${w.text}`);
+  else if (soft.length) console.log(`    ${soft.length} non-blocking warning${soft.length > 1 ? 's' : ''} (pass --warnings to see them)`);
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED'].includes(r.status));
+const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
+if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} place(s) — the engine refused to draw something, or a label names nothing.`);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);

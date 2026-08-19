@@ -12,22 +12,63 @@ const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 
 // Word-wrap each note to the available width (x1-x0) so a caller can hand over one long
 // string (e.g. place-external's concatenated attribution) without it running off the page
-// edge. Char width is estimated the same way gen_internal.js estimates label widths
-// (size*0.52/char). Already-short lines pass through unsplit, so hand-authored multi-line
-// notes render exactly as before. Shared by footerBand and footerPlateTop so the two can
-// never disagree on how many lines a given `notes` value will actually render as.
+// edge. Already-short lines pass through unsplit, so hand-authored multi-line notes render
+// exactly as before. Shared by footerBand and footerPlateTop so the two can never disagree
+// on how many lines a given `notes` value will actually render as.
+//
+// MEASURED, NOT COUNTED (2026-08-19). This wrapped by CHARACTER COUNT at size*0.52 per
+// character — the same estimate the 2026-08-18 session had already found wrong in
+// gen_external_radial.js's legend and fixed there — and the five PLACE EXTERNAL sheets are
+// where it showed. Their attribution is one long concatenated string, so it is the only
+// note the wrap actually has to break, and 0.52/char let it run to x=240.8mm on a band
+// that ends at 177-195: between 46 and 64 mm PAST the right-hand "Latest version:" block,
+// straight through the label and into the QR's quiet zone, on every one of the five. Peter
+// saw the mild end of it on a town sheet ("footer left text nearly meets Latest version",
+// item 28); the place sheets were the same bug with the volume up.
+//
+// GUTTER, because "does not overlap" is not the same as "looks right". Wrapping to exactly
+// the available width puts a full-length note line flush against the right-hand block, which
+// is what item 28 is about even where nothing collides. 6mm of clear page is roughly two
+// characters at this size and reads as deliberate.
+//
+// font_metrics is required lazily and defended, for the same reason qr.js is (see qrBox):
+// footer.js is vendored into the portal and a partial vendor must not be able to take every
+// map down for the sake of a wrap. Without it the old estimate is used and says so.
+const NOTE_GUTTER = 6;
+let _FM = undefined;
+function fontMetrics() {
+  if (_FM !== undefined) return _FM;
+  try { _FM = require(path.join(__dirname, 'font_metrics.js')); }
+  catch (e) {
+    _FM = null;
+    process.stderr.write('footer: font_metrics.js is not beside footer.js — the attribution '
+      + 'note falls back to a character-count wrap, which over-runs by up to 60mm on a long '
+      + 'note. Vendor font_metrics.js (changing-the-engine.md §4).\n');
+  }
+  return _FM;
+}
 function wrapNotes(notes, x0, x1, size) {
   const rawLines = (Array.isArray(notes) ? notes : [notes]).filter(Boolean);
-  const maxChars = Math.max(20, Math.floor((x1 - x0) / (size * 0.52)));
+  const FM = fontMetrics();
+  const room = Math.max(30, x1 - x0 - NOTE_GUTTER);
+  const fits = FM ? (t => FM.textWidth(t, size, false) <= room)
+                  : (t => t.length <= Math.max(20, Math.floor(room / (size * 0.52))));
   const noteLines = [];
   for (const raw of rawLines) {
     const words = String(raw).split(' ');
     let cur = '';
     for (const wd of words) {
-      if ((cur + ' ' + wd).trim().length > maxChars) { noteLines.push(cur.trim()); cur = wd; }
+      if (cur && !fits((cur + ' ' + wd).trim())) { noteLines.push(cur.trim()); cur = wd; }
       else cur += ' ' + wd;
     }
     if (cur.trim()) noteLines.push(cur.trim());
+  }
+  // One unbreakable word can still be wider than the band. Say so rather than print it
+  // through the QR: the remedy is the caller's wording, and nothing here can guess it.
+  if (FM) for (const ln of noteLines) {
+    const over = FM.textWidth(ln, size, false) - room;
+    if (over > 0) process.stderr.write(`footer: the note line "${ln.slice(0, 40)}…" is `
+      + `${over.toFixed(1)}mm wider than the band even unwrapped — shorten it.\n`);
   }
   return noteLines;
 }
@@ -115,14 +156,33 @@ function qrBox({ x1, bottomY, size, url, qr }) {
 // comment on gen_internal.js's INTERNAL_FOOTER_NOTES exists because keeping them in
 // step was a manual job. With the QR able to push the plate up as well as the text,
 // two derivations would have been two chances to disagree.
-function layout({ notes, url, urlLabel, qr, x0, x1, bottomY, lineGap, size, pageW, pageH, safe }) {
+function layout({ notes, url, urlLabel, qr, sheetVersion, x0, x1, bottomY, lineGap, size, pageW, pageH, safe }) {
   const g = inset({ x0, x1, bottomY, pageW, pageH, safe, size });
   const box = qrBox({ x1: g.x1, bottomY: g.bottomY, size, url, qr });
   // Everything textual stops clear of the code's quiet zone. The floor keeps a
   // silly `mm` from squeezing the notes to nothing rather than failing visibly.
   const textX1 = box ? Math.max(g.x0 + 60, box.x0 - box.quiet) : g.x1;
-  const noteLines = wrapNotes(notes, g.x0, textX1, size);
   const urlSize = size * 1.25;
+  /* The notes wrap to clear the RIGHT-HAND BLOCK, not merely the QR.
+   *
+   * textX1 is where the code's quiet zone begins, and wrapping to it is what made item 28:
+   * "Latest version: <url>" is drawn end-anchored AT textX1 on the line above, so a note
+   * wrapped to the same width runs the full span underneath it with 0.6mm of air. On the
+   * five place-external sheets — the only ones whose attribution is long enough for the
+   * wrap to have to break it at all — the note ran to x=240.8 under a block occupying
+   * 177 to 275. Nothing overlapped, which is why no gate saw it; it just looked wrong,
+   * and Peter said so.
+   *
+   * Measuring the block is cheap and the width is already known here. Where there is no
+   * URL line the old width stands, so a sheet with no route back is unchanged.
+   */
+  let rightLeft = textX1;
+  if (url) {
+    const FM = fontMetrics();
+    if (FM) rightLeft = textX1 - FM.textWidth(url, urlSize, true)
+      - (urlLabel ? FM.textWidth(urlLabel, urlSize, false) : 0) - urlSize * 0.4;
+  }
+  const noteLines = wrapNotes(notes, g.x0, Math.min(textX1, rightLeft), size);
   const urlGap = lineGap * 1.4;
   let urlY = url ? g.bottomY - lineGap * noteLines.length - urlGap : null;
   // With a code present, sit the URL line on the CODE's optical centre rather than at a
@@ -146,19 +206,19 @@ function layout({ notes, url, urlLabel, qr, x0, x1, bottomY, lineGap, size, page
                                  g.bottomY - lineGap * noteLines.length - size * 1.3)
                       : g.bottomY - lineGap * noteLines.length - size * 1.3;
   const plateTop = box ? Math.min(textTop, box.y0 - box.quiet) : textTop;
-  return { ...g, box, textX1, noteLines, urlY, urlSize, plateTop, urlLabel };
+  return { ...g, box, textX1, noteLines, urlY, urlSize, plateTop, urlLabel, sheetVersion };
 }
 
 // The y (page mm) at which the footer's backing plate starts, for a given notes value —
 // exposed so a generator can check BEFORE drawing its own map content (e.g. gen_internal.js's
 // mapNotes) whether something is about to land underneath the footer and get visually lost.
 // Same defaults as footerBand; call with the same args you intend to pass footerBand with.
-function footerPlateTop({ notes, url = null, urlLabel, qr = null, x0 = 8, x1 = 294, bottomY = 206, lineGap = 3.6, size = 2.8, pageW = 297, pageH = 210, safe = null } = {}) {
-  return layout({ notes, url, urlLabel, qr, x0, x1, bottomY, lineGap, size, pageW, pageH, safe }).plateTop;
+function footerPlateTop({ notes, url = null, urlLabel, qr = null, sheetVersion = null, x0 = 8, x1 = 294, bottomY = 206, lineGap = 3.6, size = 2.8, pageW = 297, pageH = 210, safe = null } = {}) {
+  return layout({ notes, url, urlLabel, qr, sheetVersion, x0, x1, bottomY, lineGap, size, pageW, pageH, safe }).plateTop;
 }
 
-function footerBand({ notes, version, validFrom = 'Summer 2026', url = null, urlLabel = 'Check for a newer version:', qr = null, x0 = 8, x1 = 294, bottomY = 206, lineGap = 3.6, size = 2.8, pageW = 297, pageH = 210, safe = null }) {
-  const L = layout({ notes, url, urlLabel, qr, x0, x1, bottomY, lineGap, size, pageW, pageH, safe });
+function footerBand({ notes, version, sheetVersion = null, validFrom = 'Summer 2026', url = null, urlLabel = 'Check for a newer version:', qr = null, x0 = 8, x1 = 294, bottomY = 206, lineGap = 3.6, size = 2.8, pageW = 297, pageH = 210, safe = null }) {
+  const L = layout({ notes, url, urlLabel, qr, sheetVersion, x0, x1, bottomY, lineGap, size, pageW, pageH, safe });
   const { box, textX1, noteLines, plateTop } = L;
   ({ x0, x1, bottomY } = L);
   const n = noteLines.length;
@@ -194,6 +254,58 @@ function footerBand({ notes, version, validFrom = 'Summer 2026', url = null, url
       process.stderr.write(`footer: the QR is version ${box.sym.version} at ${box.mm}mm, so each module is `
         + `${box.mod.toFixed(2)}mm — under ${MIN_MODULE_MM}mm a phone will struggle in print. `
         + `Shorten design.sheetUrl, or raise design.sheetQr.mm.\n`);
+  }
+  /* design.sheetVersion — the PUBLISHED version, in the hole the QR left behind.
+   *
+   * Two of Peter's comments are one line of type. Item 6: no version number is printed
+   * anywhere on the sheet. Item 5: there is a vertical hole above the (c) line on the
+   * right-hand side — structural, because the URL sits on the QR's optical centre while
+   * the credit is pinned to bottomY, and unlike the left-hand side there is nothing
+   * between them. Putting the version in that gap answers both with one row.
+   *
+   * NOT the engine build number. That was deliberately dropped on 2026-08-10 and the
+   * decision stands: it is an internal counter, it moves for reasons a reader cannot see,
+   * and it was being confused with the portal's version pill. This is the PORTAL's
+   * customer-facing version — the number on the public page the QR leads to — so the
+   * sheet on the noticeboard and the page it points at agree, which is the whole promise
+   * of printing a route back. `version` is still accepted and still unused.
+   *
+   * THREE STATES, ONE ROW (Peter, 2026-08-19). The same sheet needs a different answer
+   * depending on where the reader got it, so the VALUE is the caller's to choose and the
+   * engine only decides how to word it:
+   *
+   *   built here, before it reaches the portal  ->  "build 6.54 · 19 Aug 2026"
+   *       the number to quote back when something on a development render looks wrong.
+   *       rollout.js stamps it into the run's own routes.json, so the byte gate — which
+   *       reads routes.json and nothing else — reproduces it like any other config.
+   *   downloaded from the portal as draft/review ->  "Draft 5.0 · 19 Aug 2026 14:02"
+   *       the version it WILL publish as, so a comment on a draft can name it.
+   *   downloaded from the portal, published      ->  "5.0"
+   *       a plain sequence, which is all a reader on a noticeboard needs.
+   *
+   * A bare number gets the words "Map version" in front of it; anything else prints
+   * verbatim, so a caller that needs its own phrasing is not fighting a prefix. That is
+   * the whole rule — one string in, one line out.
+   *
+   * NOT the engine build number. That was deliberately dropped on 2026-08-10 and the
+   * decision stands for the PUBLIC states above; the development state is the case it was
+   * dropped for not existing yet, and it is the one Peter asked for by name.
+   *
+   * "from June 2026" on the title already carries the DATA's validity, which is why the
+   * date here is the build's, not the timetable's, and why it is optional.
+   *
+   * LEAFLET_SHEET_VERSION wins over the config key, so the portal can stamp the state it
+   * is actually in without rewriting the map's data. Absent both, no row is drawn and the
+   * band is byte-identical.
+   */
+  const sv = process.env.LEAFLET_SHEET_VERSION || L.sheetVersion;
+  if (sv) {
+    const bare = /^v?\d[\d.]*$/.test(String(sv).trim());
+    // Midway between the URL baseline and the credit baseline when there is a URL line to
+    // measure from; otherwise one line above the credit. Same grey and size as the credit,
+    // because it is the same kind of fact about the sheet rather than a call to action.
+    const vy = (L.urlY != null) ? (L.urlY + bottomY) / 2 + size * 0.2 : bottomY - lineGap * 1.3;
+    out.push(`<text x="${textX1}" y="${vy.toFixed(2)}" font-family="Arial" font-size="${size}" fill="#999" text-anchor="end">${esc(bare ? 'Map version ' + sv : sv)}</text>`);
   }
   // The internal engine build number (`version`) is deliberately NOT printed on the
   // public sheet any more (2026-08-10, Peter) — it's an internal build counter, not

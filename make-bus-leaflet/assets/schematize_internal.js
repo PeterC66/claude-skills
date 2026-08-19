@@ -775,7 +775,13 @@ for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json',
   // workspace even sets focus.comp:1, so gen_internal's projection looks perfectly
   // uniform and would print a confident, meaningless scale bar. Say so instead.
   // Inert without design.scaleBar, so nothing moves.
-  rj.notToScale = true;
+  //
+  // 'schematic', not `true`: the value now says WHICH kind of not-to-scale sheet this is,
+  // because the schematic and the tube-map diagram were printing the same words. Both said
+  // "Diagram — not to scale", so the two expert sheets claimed to be the same thing and the
+  // straightened street map called itself a diagram (Peter's item 13). gen_internal.js reads
+  // the string; `true` still means the old wording, so nothing else has to change at once.
+  rj.notToScale = 'schematic';
   wjson('routes.json', rj);
 }
 

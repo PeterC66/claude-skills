@@ -802,7 +802,28 @@ function analyse(svgPath) {
         strandedFeatures.push({ label: f.label || f.key, mm: null, colour: want });
         continue;
       }
-      const L = [f.labelPos.x, f.labelPos.y];
+      /* MEASURE THE DRAWN LABEL, NOT THE CONFIGURED ONE.
+       *
+       * This read f.labelPos straight out of routes.json, which was true enough while
+       * every feature label was a hand-set {x,y}. It stopped being true on 2026-08-19,
+       * when labelPos gained the value "auto" — the engine then chooses the spot itself,
+       * f.labelPos.x is undefined, the distance is NaN, `best` never falls below Infinity
+       * and EVERY auto label is reported stranded. Six towns went REGRESSED on the ratchet
+       * for labels that had in fact just been moved onto the features they name.
+       *
+       * Reading the position off the sheet beats patching around the new value, and not
+       * only here: it is the difference between measuring the config and measuring the
+       * artwork, and this file's whole job is the second one. It also now sees an
+       * overrides.json nudge, which the config read never could.
+       *
+       * A feature whose label is NOT on the sheet at all is a genuine hard defect — the
+       * engine refused it, or auto found nowhere — and falls through to `stranded`,
+       * which is the right verdict for both.
+       */
+      const wantText = String((f.label != null ? f.label : f.key) || '');
+      const drawn = P.texts.find(t => t.text === wantText && !t.afterPlate);
+      if (!drawn) { strandedFeatures.push({ label: wantText, mm: null, colour: col }); continue; }
+      const L = [drawn.x, drawn.y];
       let best = Infinity;
       for (const s of P.strokes) {
         if (s.stroke !== col) continue;

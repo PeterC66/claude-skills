@@ -1,4 +1,4 @@
-// Generates the EXTERNAL bus map ("Buses from March to nearby towns") as SVG.
+// Generates the EXTERNAL bus map ("Buses from March to nearby places") as SVG.
 // RADIAL tube-map: March hub in the centre; every service that leaves town is a
 // straight spoke drawn to its terminus, with intermediate towns as ticks.
 // (March has no guided-busway / P&R corridor, so this replaces the St Ives layout.)
@@ -73,6 +73,9 @@ const EXTERNAL_FOOTER_NOTES = [
     + `${DESIGN.scaleBar!==false?' Diagram — not to scale.':''}`];
 const FOOTER_OPTS = { notes: EXTERNAL_FOOTER_NOTES, safe: PSAFE,
   url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  // design.sheetVersion — the PUBLISHED version, printed in the gap the QR left beside
+  // the credit line (footer.js). Absent => no row, byte-identical.
+  sheetVersion: DESIGN.sheetVersion || null,
   ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
 const PLATE_TOP = footerPlateTop(FOOTER_OPTS);
 // The bottom of the ground page furniture may stand on. 190 was a bare constant in
@@ -235,7 +238,7 @@ function townNode(x,y,label,h=11,timeLabel){
 out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
-out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.town)} to nearby towns</text>`);
+out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.town)} to nearby places</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${esc(D.validFrom)})</text>`);
 
 // ---- hub + radial spokes ----------------------------------------------------
@@ -442,6 +445,10 @@ if(EDK) out('<g data-kind="hub" data-key="hub">');
 if(EDK) out('</g>');
 
 // ---- legend + notes (top-left, under title) ---------------------------------
+// The words the dashed spokes get in the line-style key. Matches gen_internal.js's
+// FTIER_LABEL.limited so the two sheets of one map explain the same thing the same way;
+// design.limitedKeyLabel overrides it for a town whose dashed services are unusual.
+const LIMITED_KEY = DESIGN.limitedKeyLabel || 'Dashed — certain days only, check times';
 // legendAt:{x,y} (optional) — move the operator legend out of a sector the spokes
 // need. Absent => top-left under the title, exactly as before.
 const LX0 = (D.legendAt && D.legendAt.x!=null) ? D.legendAt.x : 10;
@@ -507,8 +514,19 @@ function buildLegend(lx, ly, dx, dy){
       // lining up. Widest extra in this operator's run, so a run of discs keeps 7.0.
       const _oxw = badgeXWs(rs, 2.9), _col = 7.0 + 2*_oxw;
       rs.forEach((r,k)=>badge(lx+3+_oxw+(k%LW)*_col, yy+Math.floor(k/LW)*6.2, r, 2.9));
-      const _textX = lx+Math.min(rs.length,LW)*_col+2;
-      out(`<text x="${_textX.toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+      /* The name goes after the LAST row of badges, not after a notional full one.
+       *
+       * It used to be drawn beside row 1 at an x past the width of a COMPLETE row —
+       * `Math.min(rs.length,LW)*_col`, which for any operator with more routes than fit
+       * on a line is the full row width. Carousel runs 17 routes over three rows on High
+       * Wycombe, so "Carousel Buses" landed past the panel's own edge (Peter's item 27)
+       * while the third row, holding just three badges, had room going spare. Anchoring
+       * to the last row uses that room and puts the name where the grid actually ends,
+       * which is also where the eye finishes reading it.
+       */
+      const _lastRow = rows - 1, _lastCount = rs.length - _lastRow*LW;
+      const _textX = lx + _lastCount*_col + 2, _textY = yy + _lastRow*6.2;
+      out(`<text x="${_textX.toFixed(2)}" y="${(_textY+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
       panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4));
       panelMaxY = Math.max(panelMaxY, yy + (rows-1)*6.2 + 3);
       yy += rows*6.2 + 1.4;
@@ -522,11 +540,37 @@ function buildLegend(lx, ly, dx, dy){
     out(`<text x="${bx+2}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
     panelMaxX = Math.max(panelMaxX, bx+2 + measureText(op.name,3.4));
     panelMaxY = Math.max(panelMaxY, yy+3); });
+  /* The line-style key. style-guide §9 rule 7 says a sheet that shares a HUE must say
+   * why, and an unexplained line WEIGHT or PATTERN is worse, because the reader can see
+   * it is deliberate and cannot tell what it claims. The internal sheets got a frequency
+   * key in the tier round; the externals got nothing at all, and a dashed spoke has meant
+   * "certain days only" on them since the first build (Peter's item 29).
+   *
+   * Only drawn when a spoke on THIS sheet is actually dashed — a key line for a class the
+   * town has none of would be a lie about the network, the same rule the internal Key's
+   * tier rows follow. So March, whose every service runs daily, gains nothing and stays
+   * byte-identical.
+   *
+   * The sample is 12mm of the real thing: same width, same dash array, same butt cap the
+   * spokes use, so what the key shows and what the map draws cannot drift apart. TWELVE,
+   * not the six it started at — at 6mm the 2.6/2.4 pattern fits two blocks and one gap and
+   * reads as a pair of squares rather than as a dashed line, which is the one thing the row
+   * has to communicate.
+   */
+  let lineKeyBottom = null;
+  if(EXT.some(b=>b.limited && C[b.route] && !HIDDEN_ROUTES.has(b.route))){
+    const _ky = ly + OPS.length*6.6 + 1.0;
+    out(`<path d="M${lx.toFixed(2)} ${_ky.toFixed(2)}h12.00" fill="none" stroke="#888" stroke-width="3.4" stroke-dasharray="2.6 2.4" stroke-linecap="butt"/>`);
+    out(`<text x="${(lx+14).toFixed(2)}" y="${(_ky+0.2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666" dominant-baseline="central">${esc(LIMITED_KEY)}</text>`);
+    panelMaxX = Math.max(panelMaxX, lx+14 + measureText(LIMITED_KEY,2.9));
+    panelMaxY = Math.max(panelMaxY, _ky + 2);
+    lineKeyBottom = _ky + 2;
+  }
   // Word-wrapped to the legend panel's own content width, so a long note (several
   // multi-arm routes, or long destination names) breaks onto further lines instead
   // of running off the page — it used to be one unbounded <text>.
   if(armNote){
-    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(ly+OPS.length*6.6+3);
+    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(lineKeyBottom!=null ? lineKeyBottom+4.4 : ly+OPS.length*6.6+3);
     // Wrap width: an explicit legendAt.box caps it to the box's own interior (so the note can
     // never spill past a hand-tuned panel); otherwise prefer a wide-but-short wrap (110mm floor)
     // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby

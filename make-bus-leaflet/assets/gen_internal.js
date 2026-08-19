@@ -3167,7 +3167,15 @@ if(PCOLS&&PCOLS.keyAt){ KX=PCOLS.keyAt.x!=null?PCOLS.keyAt.x:PX; py=(PCOLS.keyAt
 // map, not under the list, and only the town knows where that is.
 if(PS && !(PCOLS&&PCOLS.keyAt&&PCOLS.keyAt.y!=null)) py = lastSubY + gapDown(PS.sub,AIR_ABOVE_HEAD,PS.head*CAP) - 10;
 py+=10; out(`<text x="${KX}" y="${py}" font-family="Arial" font-weight="bold" font-size="${PS?PS.head:4.4}" fill="#222">Key</text>`);
-const key=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
+// Only list a category actually drawn on this sheet, the same rule the
+// 'allotments' row already followed on its own — an unused row is dead
+// weight that can crowd out real content below it (High Wycombe's Key listed
+// Town Hall with no Town Hall POI anywhere on the map, and that row was the
+// difference between the "Also serving..." note fitting and not, 2026-08-19).
+// Filtering can only ever REMOVE a row, never add one, so an already-shipped
+// town that happens to use all these categories renders byte-identical.
+const KEY_ALL=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
+const key=KEY_ALL.filter(([cat])=>pois.some(p=>p.cat===cat));
 if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
 // The label baseline is ky+1, so the heading rule is applied there and the icon
 // centre follows from it — the same clear air under `Key` as under `Services`.

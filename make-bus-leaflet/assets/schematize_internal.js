@@ -719,6 +719,28 @@ const wjson = (f, o) => fs.writeFileSync(path.join(WD, f), JSON.stringify(o));
   }
   wjson('features_geo.json', out);
 }
+// river_geo.json: the LEGACY single-river fallback (towns with no features[] of
+// their own, e.g. March) — same shape as one features_geo.json entry (an array
+// of polyline segments of [lat,lon]), so it needs the identical warp treatment
+// above, not the straight copy below. Found 2026-08-19: March was the straight
+// copy's only internalSchematic town, so nothing had exercised this path before.
+// Un-warped, gen_internal's legacy fallback (which reads this file directly, see
+// its own FEATURES synthesis) drew the river from raw lat/lon values on a page
+// scaled in mm — hundreds of thousands of units off the frame, so the river (and
+// therefore its label, however short) had no ink anywhere near the visible page
+// for labelPos:"auto" to land on. Absent or empty file ⇒ untouched, same as before.
+{
+  let rgeo = []; try { rgeo = JSON.parse(fs.readFileSync(DIR + '/river_geo.json', 'utf8')); } catch (e) { }
+  if (rgeo.length) {
+    const out = rgeo.map(seg => {
+      const mm = seg.map(p => XY(p));
+      if (mm.length < 3) return mm.map(p => INV(warp(p)).map(rll));
+      const keep = [0]; dp(mm, 0, mm.length - 1, SCH.featureTol, keep); keep.push(mm.length - 1);
+      return [...new Set(keep)].sort((a, b) => a - b).map(i => INV(warp(mm[i])).map(rll));
+    });
+    wjson('river_geo.json', out);
+  }
+}
 // osm POI coords through the warp
 for (const f of ['osm.json', 'osm2.json']) {
   const o = JSON.parse(fs.readFileSync(DIR + '/' + f, 'utf8'));
@@ -728,8 +750,8 @@ for (const f of ['osm.json', 'osm2.json']) {
   }
   wjson(f, o);
 }
-// straight copies
-for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'river_geo.json']) {
+// straight copies (river_geo.json handled above — it needs the warp, not this)
+for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json']) {
   try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { }
 }
 // workspace routes.json: rotation + fisheye are baked into the coordinates, so

@@ -5,6 +5,8 @@ description: Show what the BusMaps.uk bus-map system is waiting on — one ranke
 
 # Work the BusMaps.uk worklist
 
+**Names for the parts and the process.** `C:\u3a St Ives\Using AI\Buses\Documentation\README - Glossary of terms.md` is the shared vocabulary: sheet elements by callout code, and the stage / portal / repo / failure words this skill uses throughout. It also records which of them to translate before writing to a customer — `deliver`, `accept` and `publish` are three different acts, and only publish changes what the public sees.
+
 **The point of this skill: Peter should never have to open a runbook to do the routine month.** Everything the system is waiting on appears in one ranked list, and every item carries its own procedure. If you find yourself telling him to "see R4", you have failed — inline the step instead.
 
 ## The shape of the system (why the split exists)

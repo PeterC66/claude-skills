@@ -5,6 +5,8 @@ description: Create two A4 landscape bus-route leaflet images CENTRED ON A PLACE
 
 # Make the two bus-route leaflet images for a PLACE
 
+**Names for the parts.** Place sheets use the town sheets' vocabulary: `C:\u3a St Ives\Using AI\Buses\Documentation\README - Glossary of terms.md`, keyed by callout code to two annotated examples. Use those names rather than inventing place-specific ones.
+
 This is the **sibling** of `make-bus-leaflet`. That skill leaflets a whole **town**; this one leaflets a **point** — "the buses at/around this shop / school / station / park". It is **standalone**: it pulls its own data for any place, whether or not the town has ever been leafleted (per the planning decision). It **reuses the town skill's engine** one level down and only adds the place-specific pieces, so nothing is duplicated and the town skill is **never touched**.
 
 Worked examples on disk (each under its area, `…\Buses\Areas\<Town>\Places\`): **St Neots Tesco Extra** (v1.2, sparse edge-of-town), **St Neots Town Centre** (v1.1, dense), **Beaconsfield Waitrose** and **Beaconsfield Simpson Centre** (first outside Cambridgeshire), **High Wycombe Aldi** (v1.1, the busy case — 11 drawn services, 14 external spokes, solved layout). Plan of record: `…\Buses\Development Docs\place-bus-leaflet-plan_2026-07-21.md`.

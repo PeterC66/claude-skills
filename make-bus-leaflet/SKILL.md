@@ -5,6 +5,8 @@ description: Create two A4 landscape bus-route leaflet images for a British town
 
 # Make the two bus-route leaflet images for a town
 
+**Names for the parts.** `C:\u3a St Ives\Using AI\Buses\Documentation\README - Glossary of terms.md` is the agreed vocabulary — every element of both sheets, keyed by callout code (`I1`-`I27` internal, `E1`-`E15` external) to two annotated St Ives examples. Use those names in build notes and when reporting or acting on a defect, and if this skill gains a new drawn element, add it to the glossary in the same session.
+
 ## What this produces
 Per town, up to four deliverables:
 1. **Internal** map — `Buses within <Town>`: a geo-anchored, hand-simplified street schematic. Each route a colour, **traced through its real in-town stops out to the town edge** (so a pass-through route shows which way it leaves, not a stub); bus-stop ticks; ~25–40 point-of-interest **pictograms** (supermarkets by name, GPs, pharmacies, library, museum, schools, leisure, parks, town hall, industrial estate); **1–3 key linear features** (river / main road / railway / canal — see [references/linear-features.md](references/linear-features.md)); rotated **road-name** labels; a right-hand **Services** panel and a **Key**. Optional v3 clarity flags (`internalBundle`, `internalTermini` — see [references/s3-config.md](references/s3-config.md)) **fan co-running routes into closely-parallel lines** and **label where each route leaves town**; both default off (byte-identical when omitted).

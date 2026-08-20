@@ -192,6 +192,63 @@ const blab = r => (BL[r] != null ? BL[r] : r);
 //                     the corridor rule on the sheet (Phase 7). Needs
 //                     internalCorridors; row words come from corridorDesc{}.
 const DESIGN = RJ.design || {};
+
+/* ---- design.fixedOrientation — pin which way up this map is drawn -----------
+ *
+ * DEFAULT IS ABSENT, and absent means exactly what it has always meant: the map
+ * is rotated by PCA onto the principal axis of its own stop cloud, to fill A4.
+ * Nothing below runs, and the sheet is byte-identical to one built before this
+ * key existed. That inertness is the point — 13 live maps rely on it.
+ *
+ * Accepted values:
+ *   (absent) / null  auto — PCA, as before. No fixed orientation.
+ *   "north"          north up. Sugar for 0, and the value worth naming: it is the
+ *                    one orientation a reader can check against their own sense of
+ *                    direction, and the one a council is most likely to ask for.
+ *   <number>         any bearing, in degrees, same convention as the existing
+ *                    internalRoads.rotationDeg: 0 = north up, and the value is the
+ *                    map's rotation, so 90 puts east at the top. Accepts negatives
+ *                    and anything outside 0–360; normalised below.
+ *
+ * WHY A TOWN WOULD WANT THIS. PCA re-derives the angle from the stop cloud on
+ * every build, so a route added or withdrawn next month can swing the whole sheet
+ * a few degrees. That is invisible in any gate — the artwork is "correct" either
+ * way — but it is very visible to someone holding last month's printed copy next
+ * to this month's, and it silently invalidates every hand-placed label position.
+ * Pinning the angle makes successive months comparable.
+ *
+ * "AS THE CURRENTLY PUBLISHED SHEET" is deliberately NOT a value here. It cannot
+ * be resolved at build time — the published sheet lives on the portal, and a
+ * generator that reached out to the network to find out which way up it was would
+ * be both fragile and untestable. Instead the generator RECORDS the angle it used
+ * (build-meta.json, written when BUILD_META_DIR is set), and freeze_orientation.js
+ * turns that recorded number into an explicit `fixedOrientation: <deg>` here. The
+ * config then says the angle out loud rather than referring to something absent.
+ */
+const FIXED_ORIENTATION = (function () {
+  const raw = DESIGN.fixedOrientation;
+  if (raw == null) return null;                       // auto — the default path
+  if (typeof raw === 'string') {
+    const w = raw.trim().toLowerCase();
+    if (w === 'auto') return null;                    // explicit opt-out, same as absent
+    if (w === 'north') return 0;
+    // A bare numeric string ("-66") is a config-file typo worth accepting rather
+    // than silently ignoring — JSON makes it far too easy to quote a number.
+    if (w !== '' && Number.isFinite(Number(w))) return Number(w);
+    // Anything else is a mistake, and a mistake that would SILENTLY fall back to
+    // auto and draw a plausible sheet at the wrong angle. Refuse loudly instead.
+    throw new Error(`design.fixedOrientation: "${raw}" is not understood. `
+      + 'Use "north", "auto", or a number of degrees (0 = north up).');
+  }
+  // NOT normalised to 0–360, deliberately. -66 and 294 are the same bearing to a
+  // reader and NOT the same to the FPU: Math.cos(-66°) and Math.cos(294°) differ in
+  // the last bits, so normalising would silently change the drawn coordinates, break
+  // byte-identity against a sheet built with the equivalent internalRoads.rotationDeg,
+  // and make freeze_orientation.js's capture→write→rebuild round trip move the map.
+  // The trig below is happy with any angle; leave the author's number alone.
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  throw new Error(`design.fixedOrientation must be "north", "auto" or a number — got ${JSON.stringify(raw)}.`);
+})();
 /* ---- G5: twelve keys promoted from per-town config to engine DEFAULTS
  * (2026-08-17, plan Phase 8 item 5) -------------------------------------
  *
@@ -780,8 +837,24 @@ const P=stopPts.map(planar);
 const mx=P.reduce((s,p)=>s+p[0],0)/P.length, my=P.reduce((s,p)=>s+p[1],0)/P.length;
 let sxx=0,sxy=0,syy=0; for(const [x,y] of P){const dx=x-mx,dy=y-my; sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;}
 let theta=0.5*Math.atan2(2*sxy, sxx-syy);              // principal axis angle
+// ---- orientation, in precedence order -------------------------------------
+// 1. overrides.json  (the editor's own hand-nudge; always wins)
+// 2. design.fixedOrientation  (2026-08-21 — see FIXED_ORIENTATION below)
+// 3. internalRoads.rotationDeg  (the older, roads-model-only key; still honoured)
+// 4. PCA (above) — the default, and what every map used before this existed
+//
+// WHY 2 EXISTS ALONGSIDE 3. `internalRoads.rotationDeg` is read off the IR block,
+// so a town on the CLASSIC model (internalRoads:false — no roads skeleton) had no
+// config route to a fixed orientation at all; its only option was an overrides.json
+// entry, which is the editor's file, not the town's config. `design.fixedOrientation`
+// is top-level and therefore available to every map, classic or roads, area or place.
 if(OV.rotationDeg!=null) theta = -OV.rotationDeg*Math.PI/180;   // manual rotation override
+else if(FIXED_ORIENTATION!=null) theta = -FIXED_ORIENTATION*Math.PI/180; // design.fixedOrientation
 else if(IR && IR.rotationDeg!=null) theta = -IR.rotationDeg*Math.PI/180; // config rotation (0 = north up)
+// The rotation ACTUALLY APPLIED, in the same units and sign convention the config
+// uses, so `design.fixedOrientation: <this number>` reproduces this exact sheet.
+// Captured below for tooling; also printed in the closing summary line.
+const APPLIED_ROTATION_DEG = -theta*180/Math.PI;
 const cosT=Math.cos(-theta), sinT=Math.sin(-theta);
 const rot=([x,y])=>{const dx=x-mx,dy=y-my; return [dx*cosT-dy*sinT, dx*sinT+dy*cosT];};
 const tform0=ll=>rot(planar(ll));
@@ -3557,4 +3630,47 @@ if(THINKEEP){
     +' (minLines '+(THIN.minLines!=null?THIN.minLines:2)+(THIN.termini!==false?' + termini':'')+')');
 }
 fs.writeFileSync(DIR+'/internal.svg', s);
-console.log('internal.svg', s.length, 'bytes; pois', pois.length, 'rotation°', (-theta*180/Math.PI).toFixed(1) + (IR?' [internalRoads]':''));
+console.log('internal.svg', s.length, 'bytes; pois', pois.length, 'rotation°', APPLIED_ROTATION_DEG.toFixed(1)
+  + (FIXED_ORIENTATION!=null?' [fixedOrientation]':IR?' [internalRoads]':''));
+
+/* ---- build-meta.json — the facts this build chose, in machine-readable form ---
+ *
+ * WRITTEN ONLY WHEN `BUILD_META_DIR` IS SET, and deliberately so. rollout.js sets
+ * it to the S4 run folder; the PORTAL never sets it, so the portal's own re-render
+ * path writes nothing, drops no stray file into a map's data dir, and stays exactly
+ * as byte-identical as it was. An opt-in write cannot regress a gate that does not
+ * opt in.
+ *
+ * WHY IT EXISTS AT ALL. The applied rotation was previously available only as a
+ * formatted number inside a human-readable stdout line — so the only way to answer
+ * "which way up is this sheet?" mechanically was to parse that sentence, which is
+ * exactly the kind of brittleness that bites the moment someone rewords the log.
+ * A generator that knows a fact should write the fact down.
+ */
+if (process.env.BUILD_META_DIR) {
+  const meta = {
+    generator: 'gen_internal.js',
+    sheet: 'internal',
+    builtAt: new Date().toISOString(),
+    // The number to copy into design.fixedOrientation to reproduce THIS sheet's
+    // angle. Rounded to 0.1° — the precision the config is written at, and far
+    // finer than anything visible on a 300dpi A4 sheet.
+    rotationDeg: Number(APPLIED_ROTATION_DEG.toFixed(1)),
+    // How that angle was arrived at, so freeze_orientation.js can tell an angle
+    // that was CHOSEN from one that merely fell out of this month's stop cloud.
+    orientationSource: OV.rotationDeg != null ? 'overrides'
+      : FIXED_ORIENTATION != null ? 'fixedOrientation'
+      : (IR && IR.rotationDeg != null) ? 'internalRoads'
+      : 'auto',
+    fixedOrientation: DESIGN.fixedOrientation != null ? DESIGN.fixedOrientation : null,
+  };
+  try {
+    fs.mkdirSync(process.env.BUILD_META_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.BUILD_META_DIR, 'build-meta.json'),
+      JSON.stringify(meta, null, 2) + '\n');
+  } catch (e) {
+    // Never fail a build over the metadata sidecar — it is a convenience for
+    // tooling, not part of the artwork. Say so on stderr and carry on.
+    process.stderr.write('buildMeta: could not write build-meta.json — ' + e.message + '\n');
+  }
+}

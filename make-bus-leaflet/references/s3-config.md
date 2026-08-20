@@ -153,6 +153,41 @@ The placer's preferences, in the order they decide: near the middle of the visib
 
 **`design.limitedKeyLabel`** overrides the wording of the external sheet's line-style key row, which appears automatically whenever a drawn spoke is `limited` (item 29 — dashed had meant "certain days only" since the first build and no external sheet said so anywhere). Defaults to `Dashed — certain days only, check times`, matching `gen_internal.js`'s `FTIER_LABEL.limited` so the two sheets of one map explain the same thing the same way.
 
+### `design.fixedOrientation` — pin which way up the map is drawn (2026-08-21 — opt-in, absent ⇒ byte-identical)
+
+```json
+"design": { "fixedOrientation": "north" }
+"design": { "fixedOrientation": -66 }
+```
+
+By default the internal sheet is rotated by **PCA onto the principal axis of its own stop cloud**, so the town fills A4. That angle is **re-derived from the data on every build**: add or withdraw a route next month and the whole sheet can swing several degrees. No gate notices, because the sheet is correct either way — but it is obvious to anyone holding last month's printed copy beside this month's, and it quietly changes what every hand-placed page coordinate is relative to. `fixedOrientation` pins the angle so successive months are comparable.
+
+| Value | Effect |
+|---|---|
+| absent / `null` / `"auto"` | PCA, as before. **This is the default and nothing changes.** |
+| `"north"` | North up — sugar for `0`, and the one orientation a reader can check against their own sense of direction. |
+| *any number* | Degrees, same convention as `internalRoads.rotationDeg`: `0` = north up, `90` puts east at the top. Negatives are fine. |
+
+Anything else **throws** rather than falling back to auto, because a silent fallback would draw a perfectly plausible sheet at the wrong angle and nothing downstream would question it.
+
+**Precedence:** `overrides.json` `rotationDeg` → `design.fixedOrientation` → `internalRoads.rotationDeg` → PCA. The older `internalRoads.rotationDeg` still works and is unchanged; `fixedOrientation` exists alongside it because it is **top-level**, so it is available to a town on the classic model (`internalRoads: false`), which previously had no config route to a fixed angle at all — only the editor's `overrides.json`.
+
+**Numbers are written through unnormalised, on purpose.** `-66` and `294` are the same bearing to a reader and *not* the same to the FPU — `Math.cos(-66°)` and `Math.cos(294°)` differ in the last bits. Normalising them would silently move the drawn coordinates and break byte-identity against the equivalent `internalRoads.rotationDeg`. Verified: a sheet built with `fixedOrientation: -66` is byte-identical to the same sheet built with `internalRoads.rotationDeg: -66`.
+
+**"Keep it the way the published sheet is" is a tool, not a config value.** A generator cannot resolve that at build time without asking the portal over the network, which would make the same `routes.json` produce different artwork depending on what happened to be published that day. Instead `gen_internal.js` **records the angle it used** in `build-meta.json` (written into the S4 run folder whenever `BUILD_META_DIR` is set — `rollout.js` sets it; the portal does not, so the portal's re-render path writes nothing and drops no stray file into a map's data dir), and:
+
+```bash
+node freeze_orientation.js --town "St Neots"           # dry run, prints what it would write
+node freeze_orientation.js --town "St Neots" --apply   # writes design.fixedOrientation
+node freeze_orientation.js --town "March" --north --apply
+node freeze_orientation.js --town "March" --deg 12.5 --apply
+node freeze_orientation.js --town "March" --release --apply   # back to auto
+```
+
+Run from **anywhere**; paths resolve from `--buses`, which defaults to `C:\u3a St Ives\Using AI\Buses` — pass `--buses "<path to the buses-data repo>"` to point it elsewhere. `--town "<Town>"` names a folder under `Areas/`, `--place "<Place>"` one under `Places/`. It reads the newest `build-meta.json` under the map's `S4-generate/` runs and writes that number into `ci-reference/routes.json`, so the config **states the angle out loud** instead of referring to a sheet held somewhere else. It rebuilds nothing: the pin takes effect at the map's next build, which is the point — the current sheets already have that angle.
+
+A map whose last build predates 2026-08-21 has no recorded angle; the tool says so and tells you to rebuild once or pass `--north`/`--deg`.
+
 ### Big-town keys (added for High Wycombe, 2026-07-28 — all opt-in, absent ⇒ byte-identical)
 A town with 30+ services overruns two fixed budgets: the **height of one Services column** and the **perimeter of the external frame**. Five keys buy the room back. All were gated on every existing town, internal *and* external, before use.
 

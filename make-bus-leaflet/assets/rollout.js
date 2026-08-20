@@ -219,7 +219,13 @@ function rolloutOne(t) {
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
   const realSaid = [];
-  let r = runNode(path.join(s4Dir, 'gen_internal.js'), s4Dir);
+  // BUILD_META_DIR asks gen_internal.js to write build-meta.json beside the artwork
+  // — chiefly the rotation it actually applied, which is otherwise only a formatted
+  // number inside a stdout sentence. freeze_orientation.js reads it to turn "keep it
+  // the way the published sheet is" into an explicit design.fixedOrientation. Set
+  // only here, on the REAL S4 run: the scratch dry-run above would overwrite it with
+  // a build that is then thrown away.
+  let r = runNode(path.join(s4Dir, 'gen_internal.js'), s4Dir, { BUILD_META_DIR: s4Dir });
   realSaid.push({ source: 'internal', stderr: r.stderr });
   if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_internal.js (real S4): ' + r.stderr.split('\n')[0] }; }
   r = runNode(path.join(s4Dir, 'gen_external.js'), s4Dir);

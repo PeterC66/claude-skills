@@ -113,13 +113,28 @@ function run(busesDir) {
   return { ledgerPath, ledger, rows };
 }
 
+const DEFAULT_NOTE =
+  'Ceilings for hard/drop and a FLOOR for labels. Written by quality_gate.js --accept; '
+  + 'lowering a ceiling is a deliberate, reviewable commit. See the header of quality_gate.js.';
+
+// A recorded baseline usually encodes a DECISION -- "we accepted N more collisions to keep the QR
+// code" -- and that reasoning is what a future reader needs most. It used to survive only in a
+// commit message, because --accept rebuilt this file from scratch and silently dropped both the
+// top-level note and any per-sheet note. Both are now carried forward, so --accept re-records the
+// NUMBERS without discarding the WHY.
 function accept(busesDir, rows, ledgerPath) {
+  let prev = {};
+  if (fs.existsSync(ledgerPath)) { try { prev = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')); } catch {} }
+  const prevSheets = prev.sheets || {};
   const sheets = {};
-  for (const r of rows) sheets[r.key] = r.now;
+  for (const r of rows) {
+    sheets[r.key] = r.now;
+    const carried = prevSheets[r.key] && prevSheets[r.key].note;
+    if (carried) sheets[r.key].note = carried;
+  }
   fs.writeFileSync(ledgerPath, JSON.stringify({
     recorded: new Date().toISOString().slice(0, 10),
-    note: 'Ceilings for hard/drop and a FLOOR for labels. Written by quality_gate.js --accept; '
-        + 'lowering a ceiling is a deliberate, reviewable commit. See the header of quality_gate.js.',
+    note: prev.note || DEFAULT_NOTE,
     sheets,
   }, null, 2) + '\n');
 }

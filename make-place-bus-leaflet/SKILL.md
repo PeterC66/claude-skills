@@ -32,6 +32,7 @@ Let **`TSK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`** (the TOW
 | Walkshed clip (stops within radius) | `PSK/derive_walkshed.js` | **new** (models `derive_intown.js`) |
 | Destination aggregation | `PSK/aggregate_destinations.js` | **new** (the core new logic) |
 | External spoke layout solver (bearings + termini) | `PSK/solve_external_layout.py` | **new** (2026-07-30; needed once a place has >~8 spokes) |
+| Internal "to X" exit labels from the curated destinations | `PSK/derive_termini.js` | **new** (2026-08-21; every place map before this shipped with unlabelled exit arrows) |
 | External renderer (aggregated spokes) | `PSK/gen_external_places.js` | **new** (models `gen_external_radial.js`) |
 | Internal wrapper — classic (gen_internal + title) | `PSK/build_internal_place.js` | **new** (models `schematize_internal.js`) |
 | Internal wrapper — road-following (pull_roads + match_routes + gen_internal) | `PSK/build_internal_place_roads.js` | **new** (Phase 2; wraps the classic wrapper) |
@@ -74,6 +75,15 @@ For a **busy place** (roughly >8 services or >8 destinations) three extra P3 ste
 - **Bundle only what co-runs.** Set `internalCorridors` for routes sharing a corridor, then read the `corridors_report.json` the build prints — a member under the 60 % gate must get its **own colour** instead (32A looked identical to 32 in the walkshed but diverges on the full chain). Six 100 %-co-running routes on one lane is what makes an 11-route close-up work.
 - **Drop school variants by omission** — leave e.g. `37M` out of `routeOrder`/`palette` and `gen_internal` skips it; carry it as a `mapNotes` footnote. No S2 re-run needed.
 - **Solve the external layout, don't nudge it.** With `bearing` = each destination's TRUE bearing, run `python "%PSK%\solve_external_layout.py" routes.json --pin "<longest-badge-row dest>" --write` → order-preserving bearings ≥19° apart, the long badge row pinned to a clear ray, and a frozen `terminus{x,y}` per node that clears the page, the legend, the footnote and every other node. `--check-only` audits a stored layout. Keep the TRUE bearings in the README — `--write` overwrites `bearing` with the display value.
+
+**Then derive the internal exit labels — this step is not optional.** Run from the S3 run folder (the one holding the `routes.json` you just wrote), with `routes_full_atco.json`, `atco2ll.json`, `atco2name.json` and `place.json` copied in beside it from S2:
+
+```bash
+node "%PSK%\derive_termini.js"            # report only — read every row
+node "%PSK%\derive_termini.js" --write    # then merge into routes.json
+```
+
+`%PSK%` = this skill's `assets` folder. No other arguments are needed; `--force` additionally overwrites entries a human has already hand-set, and `--max-bearing N` (default 35) widens the tolerance for matching an end-stop to a curated destination. It writes `internalRoads.termini`, which is what makes `gen_internal` print "to Chatteris" beside an exit arrow instead of a bare arrowhead. **Every place map built before 2026-08-21 shipped without this** — the engine always supported it, the place pipeline simply never wrote the key, and only the hand-tuned High Wycombe Aldi fixture had it. Read the printed table before `--write`: any row flagged `[bearing off by N deg]` or `[destination does not list this route]` is a guess, and a route that terminates at the place itself is correctly reported as `(terminates at the place)` and written as `false`. Then delete the four copied-in files so S3 commits only `routes.json`.
 
 Commit S3 (`--outputs routes.json,overrides.json` if you wrote overrides).
 

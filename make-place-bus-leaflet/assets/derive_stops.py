@@ -15,9 +15,10 @@ Reads (all already on disk from P2/P3, none re-fetched):
   place.json               -- {lat, lon, ...}  (the place's own coordinate)
   routes.json               -- destinations[] to fill (curated, P3)
 
-For each single-route destination: pick the route's direction whose LAST stop
-name contains the destination name (same substring match discipline as
-gtfs_duration.py's journey_minutes); find the chain stop nearest the place
+For each single-route destination: pick the route's direction GEOMETRICALLY --
+project the destination's own bearing/distKm to a target point and take the
+direction whose downstream stops actually pass near it (see pick_direction);
+find the chain stop nearest the place
 coordinate as "where our rider boards"; take every stop AFTER that point,
 de-duplicate consecutive same-named stops (timing-point re-announcements),
 and keep at most `--max-stops` intermediate names plus the terminus itself
@@ -28,10 +29,18 @@ one spoke.
 
 Only ever ADDS a "stops" array to a destination lacking one -- re-run safely.
 
+NOTE: gtfs_duration.py's journey_minutes still matches destinations by name
+substring, which is the same failure this script's pick_direction was changed
+to stop relying on. It is a separate fix and has not been made.
+
 Usage:
   python derive_stops.py routes.json --dir . [--max-stops 4]
 """
 import json, os, argparse, math
+
+# Two directions whose closest approach to the target differs by less than this
+# are not meaningfully distinguished by geometry -- see pick_direction().
+TIE_KM = 1.5
 
 
 def _clean_dest(label):
@@ -44,11 +53,80 @@ def _haversine_km(la1, lo1, la2, lo2):
     return 6371 * 2 * math.asin(math.sqrt(x))
 
 
-def pick_direction(chain, dest_clean):
+def _project(lat, lon, bearing_deg, dist_km):
+    """Where you land starting at (lat,lon), going bearing_deg for dist_km."""
+    R = 6371.0
+    d = dist_km / R
+    th = math.radians(bearing_deg)
+    la1, lo1 = math.radians(lat), math.radians(lon)
+    la2 = math.asin(math.sin(la1) * math.cos(d) + math.cos(la1) * math.sin(d) * math.cos(th))
+    lo2 = lo1 + math.atan2(math.sin(th) * math.sin(d) * math.cos(la1),
+                           math.cos(d) - math.sin(la1) * math.sin(la2))
+    return math.degrees(la2), math.degrees(lo2)
+
+
+def pick_direction(chain, dest_clean, dest=None, plat=None, plon=None, atco2ll=None):
+    """Choose which of a route's GTFS directions actually goes to this destination.
+
+    The name match alone is not enough and never was. A direction's GTFS label
+    is whatever the operator registered, so "Cambridge" routinely fails to
+    appear in the label of the direction that goes to Cambridge -- and the old
+    fallback, dirs[0], is a coin flip. On the 2026-08-21 Co-op batch that coin
+    came up wrong for 7 of 26 single-route spokes, and two of them shipped.
+
+    So match on GEOMETRY, which cannot be worded differently: the destination
+    already carries `bearing` and `distKm` from the place, so project that to a
+    target point and pick whichever direction's downstream stops actually pass
+    near it. The name match is kept, but only to CONFIRM a geometric winner or
+    to break a genuine tie -- never as the sole evidence.
+
+    Falls back to the old name-only behaviour when the caller has no geometry
+    to offer (dest/plat/plon/atco2ll omitted), so existing callers still work.
+    """
     dirs = chain.get('directions', [])
-    dl = dest_clean.lower()
-    matches = [d for d in dirs if dl in (d.get('name', '') or '').lower()]
-    return matches[0] if matches else (dirs[0] if dirs else None)
+    if not dirs:
+        return None
+    dl = (dest_clean or '').lower()
+    named = [d for d in dirs if dl and dl in (d.get('name', '') or '').lower()]
+
+    have_geo = (dest is not None and plat is not None and plon is not None
+                and atco2ll and dest.get('distKm') and dest.get('bearing') is not None)
+    if not have_geo:
+        # No geometry available -- old behaviour, including its coin-flip tail.
+        return named[0] if named else dirs[0]
+
+    tlat, tlon = _project(plat, plon, float(dest['bearing']), float(dest['distKm']))
+
+    scored = []
+    for d in dirs:
+        stops = d.get('stops') or []
+        i0 = nearest_index(stops, atco2ll, plat, plon)
+        if i0 is None:
+            continue
+        best = None
+        for sid in stops[i0 + 1:]:
+            ll = atco2ll.get(sid)
+            if not ll:
+                continue
+            km = _haversine_km(tlat, tlon, ll[0], ll[1])
+            if best is None or km < best:
+                best = km
+        if best is not None:
+            scored.append((best, d))
+    if not scored:
+        return named[0] if named else dirs[0]
+
+    scored.sort(key=lambda t: t[0])
+    best_km, best_dir = scored[0]
+
+    # A tie is when two directions approach the target about equally well --
+    # a loop route with both termini on one chain does this. Let the name
+    # break it, since geometry genuinely cannot.
+    if len(scored) > 1 and named:
+        runner_km = scored[1][0]
+        if runner_km - best_km < TIE_KM and scored[1][1] in named and best_dir not in named:
+            return scored[1][1]
+    return best_dir
 
 
 def nearest_index(stops, atco2ll, plat, plon):
@@ -106,7 +184,7 @@ def main():
         chain = chains.get(routes[0])
         if not chain:
             noroute += 1; continue
-        direction = pick_direction(chain, _clean_dest(b.get('name', '')))
+        direction = pick_direction(chain, _clean_dest(b.get('name', '')), b, plat, plon, atco2ll)
         if not direction or not direction.get('stops'):
             noroute += 1; continue
         stops = direction['stops']

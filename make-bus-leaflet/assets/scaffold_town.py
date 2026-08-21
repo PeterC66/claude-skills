@@ -34,9 +34,11 @@ def main():
     ap.add_argument("--centre")
     ap.add_argument("--radius-km",type=float,default=1.6)
     ap.add_argument("--buses-root",default=r"C:\u3a St Ives\Using AI\Buses")
-    DEFAULT_DB=os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
-    ap.add_argument("--db",default=DEFAULT_DB)
+    ap.add_argument("--db", default=None,
+                   help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     a=ap.parse_args()
+    # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
+    a.db = greg.resolve_db(a.db)
     try: sys.stdout.reconfigure(encoding="utf-8")
     except Exception: pass
 

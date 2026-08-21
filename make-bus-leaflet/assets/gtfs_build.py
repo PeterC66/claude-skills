@@ -105,12 +105,15 @@ if __name__=="__main__":
     side={"built": time.strftime("%Y-%m-%d %H:%M"), "source_zip": os.path.basename(a.zip),
           "feed_info": info, "keep_prefixes": list(prefixes), "counts": counts,
           "size_mb": round(os.path.getsize(a.out)/1e6,1)}
-    # Write a PER-DATASET sidecar (feed_info_<dbstem>.json) so building a second
-    # region doesn't clobber another's. Keep the legacy shared feed_info.json for
-    # the DEFAULT cambridgeshire dataset only (the refresh tooling reads it).
+    # ONE sidecar per dataset, feed_info_<dbstem>.json, for every region alike.
+    #
+    # This used to ALSO write an unsuffixed feed_info.json whenever the dataset was
+    # cambridgeshire, and gtfs_regions.feed_info() fell back to reading it. So any
+    # region whose own sidecar was missing silently reported CAMBRIDGESHIRE's build
+    # date and validity window as its own -- a wrong answer indistinguishable from a
+    # right one. Both halves went on 2026-08-21 when every region became equal; a
+    # missing sidecar now reads as unknown, which is the truth.
     outdir=os.path.dirname(a.out); stem=os.path.splitext(os.path.basename(a.out))[0]
     json.dump(side, open(os.path.join(outdir,f"feed_info_{stem}.json"),"w"), indent=1)
-    if stem=="cambridgeshire":
-        json.dump(side, open(os.path.join(outdir,"feed_info.json"),"w"), indent=1)
     print("counts:", counts)
     print("size MB:", side["size_mb"], "in", round(time.time()-t0,1),"s")

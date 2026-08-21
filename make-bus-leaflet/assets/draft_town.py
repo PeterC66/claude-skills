@@ -51,6 +51,7 @@ Usage:
 import argparse, json, math, os, re, shutil, sqlite3, subprocess, sys, time
 import urllib.parse, urllib.request
 from datetime import date
+import gtfs_regions
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UA = {"User-Agent": "make-bus-leaflet/1.0 (draft_town Tier-2)"}
@@ -402,9 +403,11 @@ def main():
     ap.add_argument("--max-edge-km", type=float, default=2.5,
                     help="town-edge cap for the drawn buffer stops (derive_intown)")
     ap.add_argument("--buses-root", default=r"C:\u3a St Ives\Using AI\Buses")
-    DEFAULT_DB = os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
-    ap.add_argument("--db", default=DEFAULT_DB)
+    ap.add_argument("--db", default=None,
+                   help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     a = ap.parse_args()
+    # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
+    a.db = gtfs_regions.resolve_db(a.db)
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:

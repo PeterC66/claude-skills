@@ -148,8 +148,12 @@ def _place_dirs(root):
     return found
 
 
-def discover(root, regions=None, default="cambridgeshire", prefixes_cfg=None):
+def discover(root, regions=None, default=None, prefixes_cfg=None):
     """Built place maps as scan entries -> (entries, problems).
+
+    `default` is None since 2026-08-21: no region is privileged, so a place whose
+    region cannot be determined is reported as a problem rather than quietly
+    scanned against Cambridgeshire and found to serve nothing.
 
     entries  — {name: cfg} in exactly the shape gtfs_regions.plan() and
                gtfs_upcoming.build_town() already consume, plus `_`-prefixed

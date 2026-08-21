@@ -29,6 +29,7 @@ import sqlite3, sys, json, argparse, os, urllib.request, urllib.parse, math, tim
 HERE=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gtfs_query  # reuse the BODS facts query
+import gtfs_regions
 
 TOL_BRIGHT=["#4477AA","#EE6677","#228833","#CCBB44","#66CCEE","#AA3377","#EE7733","#BBBBBB"]
 LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7733"}   # need dark badge text
@@ -149,11 +150,13 @@ def main():
     ap.add_argument("--region",default="Cambridgeshire")
     ap.add_argument("--centre",help="override geocode: 'lat,lon'")
     ap.add_argument("--radius-km",type=float,default=1.6)
-    DEFAULT_DB=os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
-    ap.add_argument("--db",default=DEFAULT_DB)
+    ap.add_argument("--db", default=None,
+                   help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     ap.add_argument("--out",default=".")
     ap.add_argument("--no-osm",action="store_true",help="skip the Overpass feature suggestion")
     a=ap.parse_args()
+    # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
+    a.db = gtfs_regions.resolve_db(a.db)
     try: sys.stdout.reconfigure(encoding="utf-8")   # Windows console is cp1252 by default
     except Exception: pass
     os.makedirs(a.out,exist_ok=True)

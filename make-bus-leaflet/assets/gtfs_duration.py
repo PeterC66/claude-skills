@@ -36,6 +36,7 @@ and High Wycombe): give the same lat,lon,km used for that town's S1 query.
 import sqlite3, argparse, os, json, statistics
 from math import radians, sin, cos, asin, sqrt
 from collections import Counter
+import gtfs_regions
 
 def _to_seconds(hms):
     if not hms: return None
@@ -157,9 +158,11 @@ if __name__ == "__main__":
     ap.add_argument("--dest", help="destination name substring, e.g. Wisbech (single-lookup mode)")
     ap.add_argument("--fill", help="routes.json path: fill every external[] entry lacking minutesToDestination")
     ap.add_argument("--fill-place", help="routes.json path (place skill): fill every destinations[] entry lacking minutesToDestination")
-    DEFAULT_DB = os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
-    ap.add_argument("--db", default=DEFAULT_DB)
+    ap.add_argument("--db", default=None,
+                   help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     a = ap.parse_args()
+    # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
+    a.db = gtfs_regions.resolve_db(a.db)
     if not a.prefixes and not a.near:
         ap.error("give one or more ATCO prefixes, or --near lat,lon,km")
     near = None

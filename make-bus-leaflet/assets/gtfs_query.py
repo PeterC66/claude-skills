@@ -67,6 +67,7 @@ WHICH FIELD TO TIER A LINE WEIGHT FROM -- not `journeysPerWeek`
   Development Docs/frequency-tier-model_2026-08-17.md.
 """
 import sqlite3, sys, json, argparse, os, datetime, statistics
+import gtfs_regions
 
 DOW=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
@@ -411,10 +412,12 @@ if __name__=="__main__":
     ap.add_argument("--near",help="geographic radius instead of/with prefixes: 'lat,lon,km' e.g. 52.3231,-0.0709,1.2")
     ap.add_argument("--asof",help="render the network as it will be on this date (YYYYMMDD or YYYY-MM-DD): "
                                   "only services in effect then are returned. Omit for today's live network.")
-    DEFAULT_DB=os.environ.get("CAMBS_GTFS_DB", r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
-    ap.add_argument("--db",default=DEFAULT_DB)
+    ap.add_argument("--db", default=None,
+                   help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     ap.add_argument("--out")
     a=ap.parse_args()
+    # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
+    a.db = gtfs_regions.resolve_db(a.db)
     near=None
     if a.near:
         la,lo,km=[float(x) for x in a.near.split(",")]; near=(la,lo,km)

@@ -102,6 +102,39 @@
 //                                   // Absent => single column, byte-identical.
 const fs = require('fs');
 const path = require('path');
+
+// ---- STRICT_GUARDS -----------------------------------------------------------
+// A guard that REFUSES TO DRAW something the config asked for has not done its
+// job, but it used to exit 0 all the same -- from the process's point of view it
+// succeeded, because declining was the decision. The sheet is wrong and nothing
+// on it says so; only stderr does. rollout.js learned to read that stream on
+// 2026-08-18 and found 21 blocking warnings across 7 of 13 maps. The portal never
+// learned: renderMap.js reads stderr only when the exit status is non-zero, so on
+// the success path -- the only path that matters here -- the whole stream is
+// discarded unread, and those are the bytes that go public.
+//
+// So make the refusal itself the exit code. Every spawn path, present and future,
+// then catches it through the ordinary error handling it already has, with no
+// change at the call site.
+//
+// Behind a flag because the byte-identical reproduce gate re-runs these generators
+// over committed fixtures and some of those legitimately carry warnings. A
+// generator that started failing on them would turn that gate red on day one,
+// which is the surest way to get a check muted. Unset, this is inert: every
+// existing caller behaves exactly as it did.
+//
+// Counted, not thrown, so one run reports EVERY refusal rather than only the
+// first -- and the artwork is still written, so it can be looked at.
+const STRICT_GUARDS = process.env.STRICT_GUARDS === '1';
+const GUARD_NL = String.fromCharCode(10);
+let REFUSAL_COUNT = 0;
+function refuse(msg){
+  REFUSAL_COUNT++;
+  let t = String(msg);
+  while (t.length && t.charAt(t.length - 1) === GUARD_NL) t = t.slice(0, -1);
+  process.stderr.write(t + GUARD_NL);
+}
+// ------------------------------------------------------------------------------
 // All DATA files are read from, and SVG written to, the TOWN WORKING FOLDER
 // (the current directory). Run this script from inside the town's folder.
 const DIR = process.env.LEAFLET_DIR || process.cwd();
@@ -1221,7 +1254,7 @@ function drawFeatureLabel(f){
   // metric (which counts point labels) nor the byte gate can see it, so refuse
   // to draw it and say why — as with coreBox, the fix is the labelPos.
   if(x>MX1+2){
-    console.error('panel: feature label "'+text+'" sits at x='+x.toFixed(0)+', right of the map frame '
+    refuse('panel: feature label "'+text+'" sits at x='+x.toFixed(0)+', right of the map frame '
       +'(x'+MX1+') and inside the Services panel — not drawn. Move its labelPos '
       +'(routes.json features[] / overrides internal.features).');
     return;
@@ -1233,7 +1266,7 @@ function drawFeatureLabel(f){
   // and no-one could see why. footerSafe does not help, because a feature label
   // is drawn outside the map's clip group. Refuse it and say so, as above.
   if(FOOTER_SAFE && y>FOOTER_PLATE_TOP-1.5){
-    console.error('footer: feature label "'+text+'" sits at y='+y.toFixed(0)+', under the footer plate '
+    refuse('footer: feature label "'+text+'" sits at y='+y.toFixed(0)+', under the footer plate '
       +'(top y'+FOOTER_PLATE_TOP.toFixed(1)+') where it is painted and then covered — not drawn. '
       +'Move its labelPos (routes.json features[] / overrides internal.features).');
     return;
@@ -1289,12 +1322,12 @@ function drawFeatureLabel(f){
     }
     const at = p => '('+p[0].toFixed(0)+','+p[1].toFixed(0)+')';
     if(!anyInk)
-      console.error('feature: label "'+text+'" has no geometry of its own on this sheet at all — check the features[] key against the drawn data.');
+      refuse('feature: label "'+text+'" has no geometry of its own on this sheet at all — check the features[] key against the drawn data.');
     else if(!seen)
-      console.error('feature: label "'+text+'" has geometry, but none of it lands inside the map frame ('+MX0+','+MY0+' to '+MX1+','+MY1.toFixed(0)+') — '
+      refuse('feature: label "'+text+'" has geometry, but none of it lands inside the map frame ('+MX0+','+MY0+' to '+MX1+','+MY1.toFixed(0)+') — '
         +'every part of it is clipped away, so the label names nothing that is drawn. Drop it from features[], or check the projection.');
     else if(best > 25)
-      console.error('feature: label "'+text+'" at '+at([x,y])+' is '+best.toFixed(0)+'mm from the nearest DRAWN '+(f.key||f.type)+' ink — it names nothing where it sits. '
+      refuse('feature: label "'+text+'" at '+at([x,y])+' is '+best.toFixed(0)+'mm from the nearest DRAWN '+(f.key||f.type)+' ink — it names nothing where it sits. '
         +'Inside the frame the ink runs through '+mids.slice(0,4).map(at).join(' ')+(mids.length>4?' …':'')+'; nearest drawn point '+at(nearest)+'. '
         +'Move its labelPos there (routes.json features[] / overrides internal.features).');
   }
@@ -1470,7 +1503,7 @@ const inFrame=p=>p[0]>=MX0&&p[0]<=MX1&&p[1]>=MY0&&p[1]<=MY1;
 const CORE = (function(){
   if(!CBOX) return null;
   const all = atco2ll[ANCHOR];
-  if(!all){ console.error('coreBox: anchor '+ANCHOR+' has no coordinate — box not drawn'); return null; }
+  if(!all){ refuse('coreBox: anchor '+ANCHOR+' has no coordinate — box not drawn'); return null; }
   const R = (CBOX.radius!=null?CBOX.radius:600)/1000;           // km
   const latKm = 110.574, lonKm = 111.320*Math.cos(all[0]*Math.PI/180);
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
@@ -2048,7 +2081,7 @@ function drawScaleDevice(spotSearch){
   const got = spotSearch(scaleBox, (IR&&IR.scaleBar&&IR.scaleBar.x)!=null?IR.scaleBar.x:null,
                                    (IR&&IR.scaleBar&&IR.scaleBar.y)!=null?IR.scaleBar.y:null, 0.02);
   if(got.x===null){
-    process.stderr.write('scaleBar: no clear spot found on this sheet — not drawn. '
+    refuse('scaleBar: no clear spot found on this sheet — not drawn. '
       +'Set design.scaleBar:false on this town, or make room.\n');
     return;
   }
@@ -2864,7 +2897,7 @@ for(const f of FEATURES){
   if(!txt) continue;
   const got = autoFeatureLabel(f, txt, f.labelSize||4);
   if(got){ AUTOPOS[f.key]=got; reserve(...got.box); }
-  else console.error('feature: label "'+txt+'" is set to labelPos:"auto", but no spot along its '
+  else refuse('feature: label "'+txt+'" is set to labelPos:"auto", but no spot along its '
     +'drawn ink is both clear of other ink and big enough for the name — it was not drawn. '
     +'Shorten the label, or place it by hand with labelPos:{x,y}.');
 }
@@ -3673,4 +3706,16 @@ if (process.env.BUILD_META_DIR) {
     // tooling, not part of the artwork. Say so on stderr and carry on.
     process.stderr.write('buildMeta: could not write build-meta.json — ' + e.message + '\n');
   }
+}
+
+// ---- STRICT_GUARDS: report the refusals as an exit code ----------------------
+// Last statement in the file, so the artwork above is already written: a build
+// that refused something is still worth LOOKING at, it is just not worth
+// publishing. exitCode rather than exit() so buffered stdout still flushes.
+if (STRICT_GUARDS && REFUSAL_COUNT > 0) {
+  process.stderr.write('STRICT_GUARDS: ' + REFUSAL_COUNT + ' guard'
+    + (REFUSAL_COUNT === 1 ? '' : 's') + ' refused to draw something this config'
+    + ' asked for -- see the messages above. The sheet is incomplete and nothing'
+    + ' on it says so.' + GUARD_NL);
+  process.exitCode = 1;
 }

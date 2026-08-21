@@ -9,6 +9,8 @@ description: Show what the BusMaps.uk bus-map system is waiting on — one ranke
 
 **The point of this skill: Peter should never have to open a runbook to do the routine month.** Everything the system is waiting on appears in one ranked list, and every item carries its own procedure. If you find yourself telling him to "see R4", you have failed — inline the step instead.
 
+**Where Peter reads about this in his own words.** `Buses\Documentation\README - How to publish a map to the portal.md` (written 2026-08-21) is his plain-English account of the whole lifecycle — the three approval gates, what the publish review is actually asking, deliver vs accept vs publish, and the monthly cycle — and it names this skill as the front door. It is command-free by design and defers to R1/R3/R4 on anything technical. Point him at it when he wants to understand a step rather than execute one; **when a procedure here changes, check whether it changed the story there**, and don't answer him out of R1/R3/R4 when that guide already says it in his register.
+
 ## The shape of the system (why the split exists)
 
 | Zone | Where it happens | Why it can't move |

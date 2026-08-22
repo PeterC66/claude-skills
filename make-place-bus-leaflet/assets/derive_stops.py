@@ -141,6 +141,27 @@ def nearest_index(stops, atco2ll, plat, plon):
     return best_i
 
 
+def _locality(atco):
+    """NaPTAN locality of a stop -- "0500HSTIV025" -> "0500HSTIV". None if the
+    stop_id is not in that coded form (cross-border stops often are not)."""
+    s = str(atco or '')
+    return s[:9] if len(s) >= 10 and s[:4].isdigit() and s[4:9].isalpha() else None
+
+
+def _truncate_at_destination(downstream, atco2name):
+    """Cut the chain at the first stop that IS the destination -- same NaPTAN
+    locality and same name as the chain's final stop. Returns the list unchanged
+    when the destination is only reached once, which is the ordinary case."""
+    last = downstream[-1]
+    loc, nm = _locality(last), atco2name.get(last)
+    if not loc or not nm:
+        return downstream
+    for i, sid in enumerate(downstream[:-1]):
+        if _locality(sid) == loc and atco2name.get(sid) == nm:
+            return downstream[:i + 1]
+    return downstream
+
+
 def sample_names(names, max_stops):
     """Keep the terminus (last) always; evenly sample the intermediates down
     to max_stops-1 if there are more than that."""
@@ -194,11 +215,31 @@ def main():
         downstream = stops[i0 + 1:]
         if not downstream:
             noroute += 1; continue
+        # Stop at the FIRST arrival at the destination. A looping route reaches it and
+        # carries on: route 9 out of Godmanchester calls at St Ives Bus Station
+        # (0500HSTIV025), runs the loop through Boxworth, and ends back at St Ives Bus
+        # Station (0500HSTIV002), which sampled as
+        # "Church Lane / Bus Station / Elsworth Road / Bus Station" -- reading as though
+        # the bus leaves St Ives and comes back. It does, but not on any journey a rider
+        # making THIS trip takes. Match on locality + name, not stop_id, because those
+        # two ATCOs are separate stands of the one bus station.
+        downstream = _truncate_at_destination(downstream, atco2name)
+        # Then keep the terminus's name out of the intermediates. What survives that is
+        # a same-named stop in a DIFFERENT town -- Ely -> Huntingdon on route 101 passes
+        # St Ives Bus Station (0500HSTIV002) on its way to Huntingdon Bus Station
+        # (0500HHUNT027) and sampled as
+        # "Windmill Lane / Bus Station / Baumgartner / Bus Station", where the first
+        # "Bus Station" reads as if the bus had already arrived. An unqualified repeat
+        # is worse than a shorter list, and the sampler has plenty of other stops.
+        term_name = atco2name.get(downstream[-1])
         names = []
-        for sid in downstream:
+        for k, sid in enumerate(downstream):
             nm = atco2name.get(sid)
-            if nm and (not names or names[-1] != nm):
-                names.append(nm)
+            if not nm or (names and names[-1] == nm):
+                continue
+            if nm == term_name and k != len(downstream) - 1:
+                continue
+            names.append(nm)
         if not names:
             noroute += 1; continue
         b['stops'] = sample_names(names, a.max_stops)

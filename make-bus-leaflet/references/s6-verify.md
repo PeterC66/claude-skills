@@ -81,6 +81,11 @@ Spawn a `general-purpose` agent with this (replace **`<TOWN, COUNTY>`** and the 
 
 Classification is deliberately **cautious about HARD**: terminus/direction checks only go HARD when the contradiction is unambiguous (no token overlap at all / > 90°), so naming artifacts (a terminus coded under a parent locality, a route that leaves town on a different bearing than the straight line to its destination) stay SOFT and never falsely block a good build.
 
+## What survives in git, and what does not (added 2026-08-22)
+`buses-data`'s `.gitignore` ignores `Areas/**/S6-verify/**` and `Places/**/S6-verify/**`, re-including only `README.md`, `manifest.json` and `*.docx`. So **`redteam.json` and `verification.json` are NOT tracked** — they live on disk and in the SyncBack mirror only, and a fresh clone of the repo has neither. `verification.docx` is what actually carries a run's verdict into git, which is why step 5 is not optional: an S6 whose report was never rendered leaves nothing behind but a manifest row.
+
+If a run needs a prose note — a place run where the HARD count needs interpreting, say — **name it `README.md`**. That is the keep-rule the ignore file already has (`!Areas/**/README.md`), so the note is preserved without forcing anything past the ignore rules or changing repo policy. Check with `git check-ignore -v <path>` rather than assuming.
+
 ## Files S6 owns
 `redteam.json` (the blind agent's JSON), `verification.json` (classified findings + summary), `verification.docx` (the rendered reliability report).
 
@@ -90,6 +95,8 @@ This engine was built for towns and reads `verified-services.json` as a **requir
 1. **Generate the required input first.** Run `node "%PSK%\place_verified_services.js"` (from `make-place-bus-leaflet/assets`) in the S6 dir, after pulling S1 — it adapts `gtfs-services.json` into a `verified-services.json` the engine can read, treating every entry as `servesTown:true` (read as "calls at the place"), since P1's `--near` radius already filtered to stops inside the walkshed.
 
 2. **The S-4 terminus check WILL false-positive HARD on every route, every place — this is expected, not a real defect.** It compares `placeToken(declared terminus)` against NaPTAN `localityToken`s at the chain ends. Town `verified-services.json` is hand-curated to write termini as **settlement names** ("St Ives", "Ramsey") so this matches. `gtfs-services.json`'s termini are raw GTFS **headsigns** — venue/stop names ("Tesco", "The White Horse") — which structurally can never equal a locality token. Read the HARD block from this check as "the adapter can't verify this", not "the route is wrong" — cross-check the actual rendered JPGs and the red-team's own termini instead of trusting this one check's verdict for a place. (A real fix would need `place_verified_services.js` to map termini through curated locality-shaped names — e.g. `routes.json`'s `destinations[]` — instead of the raw GTFS headsigns; not done yet, flagged here for whoever picks it up next.)
+
+3. **So a place's HARD COUNT is not readable as a defect count, and must never be reported as one.** St Neots Town Centre came back BLOCKED with 13 hard on 2026-08-21; ten were this artefact (six terminus-vs-chain, four our-termini-vs-red-team, which is the same root cause seen from the other side). Subtract the terminus family first, then read what is left. On that run what remained was worth having: two `no-full-chain` HARDs on routes carried deliberately as "not shown" panel rows (a check that cannot tell a deliberate panel row from missing geometry), and one genuine direction question on route 66.
 
 Everything else (red-team diff, direction/count sanity, the ladder checks) behaves normally and is genuinely informative for a place — treat SOFT findings (esp. `missing-service`) as real curation leads, same as for a town.
 

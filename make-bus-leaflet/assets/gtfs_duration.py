@@ -51,6 +51,15 @@ def _haversine_km(la1, lo1, la2, lo2):
     x = sin(dla / 2) ** 2 + cos(radians(la1)) * cos(radians(la2)) * sin(dlo / 2) ** 2
     return 6371 * 2 * asin(sqrt(x))
 
+def _norm_stop_name(s):
+    return ' '.join(str(s or '').lower().split())
+
+def _locality(atco):
+    """NaPTAN locality of a stop -- "0500HSTIV025" -> "0500HSTIV". None if the
+    stop_id is not in that coded form (cross-border stops often are not)."""
+    s = str(atco or '')
+    return s[:9] if len(s) >= 10 and s[:4].isdigit() and s[4:9].isalpha() else None
+
 def resolve_origin_stop_ids(cur, prefixes=None, near=None):
     """Exact stop_ids for the origin, from ATCO prefix(es) or a (lat,lon,km)
     radius -- mirrors gtfs_query.py's _make_town_stops. Returns a set."""
@@ -106,7 +115,8 @@ def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_m
     terminus_counts = Counter()
     for tid, headsign in trip_rows:
         rows = list(cur.execute(
-            "SELECT st.stop_id, st.departure_time, st.arrival_time, s.stop_name "
+            "SELECT st.stop_id, st.departure_time, st.arrival_time, s.stop_name, "
+            "s.stop_lat, s.stop_lon "
             "FROM stop_times st JOIN stops s ON s.stop_id=st.stop_id "
             "WHERE st.trip_id=? ORDER BY CAST(st.stop_sequence AS INT)", (tid,)))
         if not rows: continue
@@ -124,13 +134,46 @@ def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_m
         # POI ("Drummer St Bus Station") with no town in it, so check both.
         return dest_l in headsign.lower() or dest_l in (last_name or '').lower()
 
+    def _arrival_index(origin_i, rows):
+        """Which stop to time the journey TO.
+
+        Every path here identifies the destination as the trip's LAST stop, which is
+        right for a route that ends there and wrong for one that loops: route 9 out of
+        Godmanchester reaches St Ives Bus Station at 09:15, carries on round through
+        Fenstanton, Boxworth and Conington, and returns to the SAME bus station at
+        10:13, where the trip ends. Timing to the last stop called that 20-minute ride
+        78 minutes. A rider gets off the first time the bus arrives, so return the
+        EARLIEST arrival at the terminus. Matching on stop_id alone is not enough: the
+        two visits above are 0500HSTIV025 and 0500HSTIV002, separate stands of the one
+        bus station. Match instead on SAME NaPTAN LOCALITY AND SAME STOP NAME, which
+        pairs those two and nothing else. A plain distance rule was tried and rejected
+        -- a 400 m radius also swallowed the ordinary approach stop before a terminus
+        and quietly shaved a minute off 13 of 44 town spokes.
+
+        Deliberately no more than this. `bearing`/`distKm` in routes.json look like a
+        better handle but are SCHEMATIC -- the radial diagram spreads its spokes apart
+        to stay legible, so High Wycombe town centre is drawn at 270 degrees where it
+        really lies at about 295, and projecting that lands 1.3 km away on an unrelated
+        stop. Measured 2026-08-22; see open-actions."""
+        end = len(rows) - 1
+        eloc = _locality(rows[end]['stop_id'])
+        ename = _norm_stop_name(rows[end]['stop_name'])
+        for j in range(origin_i + 1, end):
+            if rows[j]['stop_id'] == rows[end]['stop_id']:
+                return j
+            if eloc and ename and _locality(rows[j]['stop_id']) == eloc \
+                    and _norm_stop_name(rows[j]['stop_name']) == ename:
+                return j
+        return end
+
     def _durations(filter_fn):
         out = []
         for origin_i, rows, headsign in trips:
             if filter_fn and not filter_fn(headsign, rows[-1]['stop_name']):
                 continue
+            end_i = _arrival_index(origin_i, rows)
             t0 = _to_seconds(rows[origin_i]['departure_time'] or rows[origin_i]['arrival_time'])
-            t1 = _to_seconds(rows[-1]['arrival_time'] or rows[-1]['departure_time'])
+            t1 = _to_seconds(rows[end_i]['arrival_time'] or rows[end_i]['departure_time'])
             if t0 is None or t1 is None or t1 < t0: continue
             out.append((t1 - t0) / 60)
         return out

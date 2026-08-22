@@ -1,0 +1,6 @@
+{
+  "_comment": "NaPTAN locality CODE -> settlement NAME(s), for S6's terminus checks. Only needed for codes whose letters do NOT match the settlement's own first letters, because verify_report.js already matches a name to a code on a 3-character prefix (St Neots -> STNE vs locality STNS matches on 'STN'; Buckden -> BUCK vs BUCN matches on 'BUC'). Checked 2026-08-22 against every chain-end locality in the built estate (27 distinct codes across all town and place maps): CITY was the ONLY irregular one. Add an entry here only when a real run shows a name that cannot reach its code on the prefix rule. An UNKNOWN code is deliberately NOT an error — verify_report.js treats 'no gazetteer entry' as unverifiable (soft), never as a mismatch (hard), so a missing entry can never manufacture a false HARD.",
+  "localities": {
+    "CITY": ["Cambridge", "Cambridge City Centre"]
+  }
+}

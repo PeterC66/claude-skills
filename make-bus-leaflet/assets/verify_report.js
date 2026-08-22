@@ -97,6 +97,23 @@ function placeToken(name) {               // "St Ives" -> "STIV", "Ramsey" -> "R
   const a = String(name).toUpperCase().replace(/[^A-Z]/g, '');
   return a.slice(0, 4) || null;
 }
+// Locality CODE -> settlement NAME(s), for the handful of NaPTAN codes that the 3-char
+// prefix rule below cannot reach (Cambridge is "CITY"). A code with no entry is
+// UNVERIFIABLE, never a mismatch — see naptan_localities.json's own comment.
+const LOCALITY_NAMES = (() => {
+  try {
+    const p = path.join(__dirname, 'naptan_localities.json');
+    return JSON.parse(fs.readFileSync(p, 'utf8')).localities || {};
+  } catch { return {}; }
+})();
+// Does settlement `name` denote locality code `code`? Prefix rule first (STNE~STNS,
+// BUCK~BUCN), then the gazetteer for the irregulars.
+function nameMatchesLocality(name, code) {
+  const pt = placeToken(name);
+  if (!pt || !code) return false;
+  if (code === pt || code.slice(0, 3) === pt.slice(0, 3)) return true;
+  return (LOCALITY_NAMES[code] || []).some(n => placeToken(n) === pt);
+}
 function tokenize(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
 }
@@ -214,6 +231,23 @@ for (const r of displayed) {
 function normRouteKey(r) { return Object.keys(intown || {}).find(k => normRoute(k) === normRoute(r)); }
 function intownByNorm(r) { const k = normRouteKey(r); return k ? intown[k] : null; }
 
+// Locality tokens at both ends of every direction of a route's full chain.
+// Chain ends OUTSIDE the NaPTAN "0500H<LLLL>nnn" locality-coded style yield no token
+// (a cross-border town has them: St Neots' 905 ends at Bedford Bus Station 020035035).
+// Count those as UNVERIFIABLE rather than as a mismatch, or an entirely correct route
+// gets a false HARD just for leaving the county.
+function chainEnds(fe) {
+  const endTokens = new Set(); let untokenisedEnds = 0;
+  for (const d of fullDirections(fe)) {
+    for (const a of [d.stops[0], d.stops[d.stops.length - 1]]) {
+      const t = localityToken(a);
+      if (t) endTokens.add(t); else untokenisedEnds++;
+    }
+  }
+  endTokens.delete(null);
+  return { endTokens, untokenisedEnds };
+}
+
 // S-4: routes_full termini align with S1 declared termini
 const vsByRoute = {};
 for (const s of (verified.services || [])) vsByRoute[normRoute(s.route)] = s;
@@ -221,27 +255,28 @@ for (const r of displayed) {
   const vs = vsByRoute[r];
   const fe = fullEntry(r);
   if (!vs || !fe || !Array.isArray(vs.termini) || vs.termini.length === 0) continue;
-  const dirs = fullDirections(fe);
-  // collect locality tokens at both ends of every direction
-  // Chain ends OUTSIDE the NaPTAN "0500H<LLLL>nnn" locality-coded style yield no token
-  // (a cross-border town has them: St Neots' 905 ends at Bedford Bus Station 020035035).
-  // Count those as UNVERIFIABLE rather than as a mismatch, or an entirely correct route
-  // gets a false HARD just for leaving the county.
-  const endTokens = new Set(); let untokenisedEnds = 0;
-  for (const d of dirs) {
-    for (const a of [d.stops[0], d.stops[d.stops.length - 1]]) {
-      const t = localityToken(a);
-      if (t) endTokens.add(t); else untokenisedEnds++;
-    }
-  }
-  endTokens.delete(null);
+  const { endTokens, untokenisedEnds } = chainEnds(fe);
   const results = vs.termini.map(t => {
     const pt = placeToken(t);
-    const matched = pt && [...endTokens].some(et => et === pt || et.slice(0, 3) === pt.slice(0, 3));
+    const matched = [...endTokens].some(et => nameMatchesLocality(t, et));
     return { terminus: t, token: pt, matched: !!matched };
   });
   const nMatched = results.filter(x => x.matched).length;
-  if (nMatched === 0 && untokenisedEnds) {
+  // A PLACE has no hand-verified terminus list. Its termini come from routes.json's
+  // curated destinations[] where those exist, and otherwise from raw BODS headsigns —
+  // and a headsign ("Market Square", "Tesco") is not a settlement, so it can never match
+  // a locality code. Scoring that as HARD made every route of every place fail and left
+  // a place's hard count unreadable (10 of St Neots Town Centre's 13, 2026-08-21).
+  // Say plainly that the check is unavailable rather than inventing a pass for it: the
+  // independent terminus signal for a place is the red-team comparison further down.
+  if (nMatched === 0 && vs.terminiSource) {
+    const why = vs.terminiSource === 'gtfs-headsign'
+      ? `they are raw BODS headsigns (${vs.termini.join(', ')}), not settlements, and routes.json names no destinations[] entry for this route`
+      : `they are place destinations (${vs.termini.join(', ')}) — a landmark a rider can reach, which is what a place map is for, not the settlement the route terminates in`;
+    add('soft', 'terminus',
+      `Route ${r}: terminus not checkable against the drawn chain — ${why}. Chain ends: ${[...endTokens].join(', ')}. This is a limit of the check on a PLACE, not evidence of a fault; the independent terminus signal here is the red-team comparison.`,
+      { route: r, termini: vs.termini, terminiSource: vs.terminiSource, chainEndTokens: [...endTokens], results }, r);
+  } else if (nMatched === 0 && untokenisedEnds) {
     add('soft', 'terminus',
       `Route ${r}: could not verify either declared terminus (${vs.termini.join(', ')}) — ${untokenisedEnds} chain end(s) are not NaPTAN locality-coded (cross-border stops), so there is nothing to match against. Confirm by hand.`,
       { route: r, termini: vs.termini, chainEndTokens: [...endTokens], untokenisedEnds, results }, r);
@@ -407,17 +442,52 @@ if (redteam) {
 
     // (c) termini (independent)
     if (Array.isArray(vs.termini) && Array.isArray(rt.termini) && rt.termini.length) {
-      const rtTokens = rt.termini.map(placeToken).filter(Boolean);
-      const res = vs.termini.map(t => ({ terminus: t, matched: overlaps([placeToken(t)], rtTokens) || rt.termini.some(x => overlaps(tokenize(t), tokenize(x))) }));
-      const nM = res.filter(x => x.matched).length;
-      if (nM === 0) {
-        add('hard', 'terminus',
-          `Route ${r}: our termini (${vs.termini.join(', ')}) match NEITHER red-team terminus (${rt.termini.join(', ')}).`,
-          { route: r, ours: vs.termini, redteam: rt.termini }, r, 'redteam');
-      } else if (nM < vs.termini.length) {
-        add('soft', 'terminus',
-          `Route ${r}: a terminus differs from the red-team — ours (${vs.termini.join(', ')}) vs red-team (${rt.termini.join(', ')}).`,
-          { route: r, ours: vs.termini, redteam: rt.termini, results: res }, r, 'redteam');
+      if (vs.terminiSource) {
+        /*
+         * PLACE. Our own "termini" are headsigns or landmarks and will never match a
+         * settlement name, so comparing the two name lists is meaningless — it was
+         * scoring HARD on every route (4 of St Neots Town Centre's 13, 2026-08-21).
+         *
+         * Compare the red-team's settlements against the LOCALITY CODES at the ends of
+         * our drawn chain instead. That is a real assertion and it can still fail: the
+         * red-team put route 66 at Fenstanton where our chain ends at Huntingdon.
+         * It is not circular — the red-team is sourced blind, independently of BODS.
+         */
+        const feRt = fullEntry(r);
+        const { endTokens: ends, untokenisedEnds: untok } = feRt
+          ? chainEnds(feRt)
+          : { endTokens: new Set(), untokenisedEnds: 0 };
+        const res = rt.termini.map(t => ({
+          terminus: t,
+          matched: [...ends].some(et => nameMatchesLocality(t, et)),
+        }));
+        const nM = res.filter(x => x.matched).length;
+        const unmatched = res.filter(x => !x.matched).map(x => x.terminus);
+        if (nM === 0) {
+          // Everything unmatched AND ends we cannot tokenise: nothing was actually
+          // compared, so this is unverifiable, not a disagreement.
+          add(untok ? 'soft' : 'hard', 'terminus',
+            `Route ${r}: NEITHER red-team terminus (${rt.termini.join(', ')}) is a locality at the ends of our drawn chain (chain ends: ${[...ends].join(', ')}${untok ? `, plus ${untok} end(s) with no NaPTAN locality code` : ''}).`,
+            { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
+        } else if (nM < rt.termini.length) {
+          add('soft', 'terminus',
+            `Route ${r}: red-team terminus ${unmatched.join(', ')} is not a locality at either end of our drawn chain (chain ends: ${[...ends].join(', ')}).`,
+            { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
+        }
+      } else {
+        // TOWN. Both sides are hand-asserted settlement names, so compare them directly.
+        const rtTokens = rt.termini.map(placeToken).filter(Boolean);
+        const res = vs.termini.map(t => ({ terminus: t, matched: overlaps([placeToken(t)], rtTokens) || rt.termini.some(x => overlaps(tokenize(t), tokenize(x))) }));
+        const nM = res.filter(x => x.matched).length;
+        if (nM === 0) {
+          add('hard', 'terminus',
+            `Route ${r}: our termini (${vs.termini.join(', ')}) match NEITHER red-team terminus (${rt.termini.join(', ')}).`,
+            { route: r, ours: vs.termini, redteam: rt.termini }, r, 'redteam');
+        } else if (nM < vs.termini.length) {
+          add('soft', 'terminus',
+            `Route ${r}: a terminus differs from the red-team — ours (${vs.termini.join(', ')}) vs red-team (${rt.termini.join(', ')}).`,
+            { route: r, ours: vs.termini, redteam: rt.termini, results: res }, r, 'redteam');
+        }
       }
     }
 

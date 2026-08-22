@@ -860,8 +860,17 @@ function analyse(svgPath) {
   // Corridor-aware: a bundled route rides its lead's colour (internalCorridors)
   // or shares a corridor hue (corridorPalette), so it IS drawn. Only a route
   // that is in panelOrder, has its own hue, and has no ink counts.
+  // A BOARDING SHEET DRAWS NO ROUTE LINES, ON PURPOSE. Both measures below assume
+  // a sheet whose subject is drawn route ink, and neither is meaningful on the
+  // destination-index sheet gen_boarding.js produces (see its header: "not a route
+  // map"). Measured against it unadjusted, all nine of its services scored as
+  // "in the panel with no line" and its repeated boarding-point names as duplicate
+  // labels — 12 hard defects, none of them a fault, and a permanent FAIL row that
+  // would train everyone to ignore the quality report. Scoped to the one basename
+  // so every other sheet is byte-for-byte unaffected.
+  const isBoarding = base === 'boarding';
   const panelOnly = [];
-  if (RJ && hasPanel && Array.isArray(RJ.panelOrder) && RJ.palette) {
+  if (RJ && hasPanel && !isBoarding && Array.isArray(RJ.panelOrder) && RJ.palette) {
     const rides = {};
     for (const [lead, ms] of Object.entries(RJ.internalCorridors || {})) for (const x of ms) rides[x] = lead;
     for (const [lead, ms] of Object.entries(RJ.corridorPalette || {})) for (const x of ms) if (!rides[x]) rides[x] = lead;
@@ -958,7 +967,8 @@ function analyse(svgPath) {
     pointLabelsOverInk: detail.overInk.filter(d => d.kind === 'point').length,
     roadLabelsOverInk: detail.overInk.filter(d => d.kind === 'road').length,
     labelLabelCollisions: detail.labelPairs.length,
-    duplicateLabels: detail.duplicates.length,
+    // An index legitimately names the same boarding point on many rows.
+    duplicateLabels: isBoarding ? 0 : detail.duplicates.length,
     labelIconCollisions: detail.labelIcon.length,
     iconBlobs: detail.iconPairs.length,
     textUnderFooter: detail.inFooter.length,

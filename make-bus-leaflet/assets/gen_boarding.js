@@ -98,6 +98,11 @@ if (STANDS.verdict !== 'OK') {
 // shared 3508x2480 (A4 landscape at 300 dpi) so render.js needs no special case.
 const W = 297, H = 210;
 const SAFE = 8;                       // print-safe margin, matches footer.js
+// PRINT LEGIBILITY FLOOR. quality_metrics.js counts EVERY text element below
+// 2.4 mm as a hard defect, so a sheet with 84 small labels scores 84 defects
+// from one careless default — which is exactly what the first cut of this file
+// did (HARD 87 against 3 real faults). Nothing here may be set smaller.
+const MIN_TEXT = 2.4;
 const parts = [];
 const out = (s) => parts.push(s);
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -307,7 +312,7 @@ for (const w of ROAD_WAYS) {
   }
   if (!best) continue;
   const X = px(best.mlo), Y = py(best.mla);
-  const size = 2.15, tw = FM.textWidth(nm, size, false);
+  const size = MIN_TEXT, tw = FM.textWidth(nm, size, false);
   const rad = best.ang * Math.PI / 180;
   const hw = Math.abs(Math.cos(rad)) * tw / 2 + Math.abs(Math.sin(rad)) * size / 2;
   const hh = Math.abs(Math.sin(rad)) * tw / 2 + Math.abs(Math.cos(rad)) * size / 2;
@@ -331,7 +336,7 @@ for (const p of poi) {
   if (hits(icoBox)) continue;               // symbol itself has nowhere to sit
   out(ICONS.icon(cat, X, Y, 1.7, 'charcoal'));
   claim(icoBox);
-  const size = 2.3, tw = FM.textWidth(p.name, size, false);
+  const size = MIN_TEXT, tw = FM.textWidth(p.name, size, false);
   const cands = [
     { x: X + 2.6, a: 'start', y: Y + 0.8 },
     { x: X - 2.6, a: 'end', y: Y + 0.8 },
@@ -446,7 +451,12 @@ const perCol = Math.max(1, Math.ceil(dests.length / COLS));
 const ROW_H = Math.min(6.4, Math.max(4.15, (IY1 - bodyTop - HDR_H) / Math.max(perCol, 1)));
 
 // Column geometry: destination name, then route badges, then the boarding point.
-const C_BOARD = colW - 30.0;   // the bay disc / stop name
+// Sized from the longest flag name at the 2.4 mm floor, not from taste. Raising
+// the type floor to clear the legibility check re-truncated 'The Busway Station
+// Road' to 'The Busway Station Ro.' — the same fault the two-column layout was
+// chosen to fix, reintroduced from the other direction. If a longer stop name
+// ever appears, this widens again; it does not get to abbreviate.
+const C_BOARD = colW - 33.0;   // the bay disc / stop name
 const C_ROUTE = C_BOARD - 21.0;
 
 function badge(x, yb, label, route, size) {
@@ -479,7 +489,7 @@ for (let c = 0; c < COLS; c++) {
     let name = d.destination;
     const maxNameW = C_ROUTE - 1.5;
     let ns = 2.95;
-    while (FM.textWidth(name, ns, false) > maxNameW && ns > 2.35) ns -= 0.1;
+    while (FM.textWidth(name, ns, false) > maxNameW && ns - 0.05 >= MIN_TEXT - 1e-9) ns = Math.max(MIN_TEXT, +(ns - 0.05).toFixed(2));
     if (FM.textWidth(name, ns, false) > maxNameW) {
       while (name.length > 4 && FM.textWidth(name + '.', ns, false) > maxNameW) name = name.slice(0, -1);
       name += '.';
@@ -487,17 +497,17 @@ for (let c = 0; c < COLS; c++) {
     out(`<text x="${f2(x0)}" y="${f2(ry)}" font-size="${f2(ns)}" fill="${INK}">${esc(name)}</text>`);
     if (d.limited) {
       const lw = FM.textWidth(name, ns, false);
-      out(`<text x="${f2(x0 + lw + 1.0)}" y="${f2(ry)}" font-size="2.1" fill="${INK_SOFT}">ltd</text>`);
+      out(`<text x="${f2(x0 + lw + 1.0)}" y="${f2(ry)}" font-size="${MIN_TEXT}" fill="${INK_SOFT}">ltd</text>`);
     }
     // route badges (grouped)
     let bx = x0 + C_ROUTE;
     const shown = displayRoutes(d.routes);
     for (const r of shown) {
       if (bx + 5.2 > x0 + C_BOARD - 1.0) {
-        out(`<text x="${f2(bx)}" y="${f2(ry)}" font-size="2.3" fill="${INK_SOFT}">+</text>`);
+        out(`<text x="${f2(bx)}" y="${f2(ry)}" font-size="${MIN_TEXT}" fill="${INK_SOFT}">+</text>`);
         break;
       }
-      bx += badge(bx, ry, r, r, 2.35) + 0.8;
+      bx += badge(bx, ry, r, r, MIN_TEXT) + 0.8;
     }
     // boarding point
     const st = (INDEX.stands || []).find(s => s.atco === d.boardAtAtco);
@@ -511,9 +521,9 @@ for (let c = 0; c < COLS; c++) {
       const bxc = x0 + C_BOARD;
       out(`<circle cx="${f2(bxc + 1.6)}" cy="${f2(ry - 1.0)}" r="1.6" fill="${NAMED_INK}"/>`);
       out(`<circle cx="${f2(bxc + 1.6)}" cy="${f2(ry - 1.0)}" r="0.65" fill="#ffffff"/>`);
-      let t = short, ts = 2.3;
+      let t = short, ts = 2.6;
       const room = colW - C_BOARD - 4.2;
-      while (FM.textWidth(t, ts, false) > room && ts > 1.9) ts -= 0.1;
+      while (FM.textWidth(t, ts, false) > room && ts - 0.05 >= MIN_TEXT - 1e-9) ts = Math.max(MIN_TEXT, +(ts - 0.05).toFixed(2));
       if (FM.textWidth(t, ts, false) > room) {
         while (t.length > 3 && FM.textWidth(t + '.', ts, false) > room) t = t.slice(0, -1);
         t += '.';
@@ -537,11 +547,16 @@ out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${es
 if (BP.note) out(`<text x="${f2(IX0)}" y="${f2(LGY + 3.2)}" font-size="2.4" fill="${INK_SOFT}">${esc(BP.note)}</text>`);
 
 /* ---------------------------------------------------------------- footer */
+// `safe` is opt-in on footerBand and defaults to null, which leaves the credit
+// 3 mm from the right trim — the exact fault the 2026-08-16 printSafe work fixed
+// on all 21 town sheets. Omitting it here put this sheet's nearest ink at 3.41 mm
+// and failed the quality metric's 5 mm edge rule on its first measurement.
+const PRINT_SAFE = (RJ.design && RJ.design.printSafe != null) ? +RJ.design.printSafe : 5;
 out(FOOTER.footerBand({
   notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
   version: RJ.version || 'v1.0',
   validFrom: RJ.validFrom || 'Summer 2026',
-  x0: SAFE, x1: W - SAFE,
+  x0: SAFE, x1: W - SAFE, safe: PRINT_SAFE,
 }));
 
 out(`</g></svg>`);

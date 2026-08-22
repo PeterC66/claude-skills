@@ -141,6 +141,9 @@ python "%TSK%\boarding_verify.py" --db <region.sqlite>         # the gate — mu
 - **Frequency comes from `calendar`,** not from counting feed rows.
 - **Fit the locator to the stands, not the landmarks,** and use street names for context at that zoom.
 - **Prove the gate red before trusting it green:** `boarding_verify.py --self-test`.
+- **Nothing on the sheet may be under 2.4 mm** (`MIN_TEXT`), and an adaptive shrink loop must CLAMP to it, not compare — `2.95 - 0.05*11` lands on `2.4000000000000004` and steps straight through. `quality_metrics.js` counts every undersized element as its own hard defect, so one bad default scores once per label (87 on the first run, 84 of them this).
+- **Pass `safe` to `footerBand`.** It is opt-in and defaults to null, which puts the credit 3 mm from the trim; every town sheet clears 5 mm.
+- **`quality_metrics.js` skips two map-only measures for a `boarding` basename** (panel-only services, duplicate labels) because this sheet draws no route lines and an index repeats stop names by design. If you add another line-less sheet type it will need the same scoping — and re-run the whole ratchet afterwards to prove no other sheet moved.
 
 **Adding any new sheet means editing the delivery path by hand** — `refresh_latest.js`'s `SHEETS` array and `collect-maps.ps1`'s `ValidateSet` and `-All` list. Neither warns when it falls behind, and `boarding.jpg` silently missed `_latest` on first build because of it.
 

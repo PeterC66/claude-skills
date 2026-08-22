@@ -14,7 +14,8 @@ Worked examples on disk (each under its area, `…\Buses\Areas\<Town>\Places\`):
 ## What this produces (per place)
 1. **Internal close-up** — `internal.jpg/.svg`, `Buses serving <place>`: a tight-zoom map of the **bus stops in the immediate walkshed** around the place (default 500 m), colour-coded per route, with POI pictograms, a **Services** panel and a **Key**. Drawn by the town skill's **`gen_internal.js` unchanged**, fed walkshed-clipped geometry (the schematize-workspace pattern). **Default = road-following** (Phase 2): route lines trace the real street network via the town skill's `internalRoads` pipeline (`pull_roads.js` + `match_routes.js`), driven by `PSK/build_internal_place_roads.js`. **Classic mode** (straight stop-to-stop chords, `PSK/build_internal_place.js`) remains the fallback for places too sparse to map-match (e.g. a single served stop → no line).
 2. **External radial** — `external.jpg/.svg`, `Buses from <place>`: an **aggregated** tube-map. The place is the hub ("you are here"); each **spoke is a reachable destination** (town / interchange / village), and the small badges on it are **every route that gets you there**. This is the genuinely new idea vs the town skill's one-spoke-per-route external map. Drawn by the new `gen_external_places.js`.
-3. **Service facts** — `gtfs-services.json` (operators / days / termini / headsigns), straight from BODS. (A full disagreement audit like the town skill's is a later add; for now cross-check odd spokes against bustimes by hand — see gotchas.)
+3. **Boarding plan** (optional third sheet, Phase 3) — `boarding.jpg/.svg`, *Where to catch your bus in <place>*: an alphabetical destination-to-stand index beside a tight locator. Only where `routes.json` carries a `boardingPlan` block.
+4. **Service facts** — `gtfs-services.json` (operators / days / termini / headsigns), straight from BODS. (A full disagreement audit like the town skill's is a later add; for now cross-check odd spokes against bustimes by hand — see gotchas.)
 
 Each map is an editable **SVG** rendered to a **300 dpi JPG** (3508×2480), A4 landscape, auto-versioned `vN.N`, via the shared `render.js`.
 
@@ -34,6 +35,10 @@ Let **`TSK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`** (the TOW
 | External spoke layout solver (bearings + termini) | `PSK/solve_external_layout.py` | **new** (2026-07-30; needed once a place has >~8 spokes) |
 | Internal "to X" exit labels from the curated destinations | `PSK/derive_termini.js` | **new** (2026-08-21; every place map before this shipped with unlabelled exit arrows) |
 | External renderer (aggregated spokes) | `PSK/gen_external_places.js` | **new** (models `gen_external_radial.js`) |
+| Boarding-plan stand resolution | `TSK/naptan_stands.py` | **new** (2026-08-22; frame-based, OK/REFUSE) |
+| Boarding-plan destination index | `TSK/boarding_index.py` | **new** (2026-08-22; departures only, NPTG rollup) |
+| Boarding-plan sheet | `TSK/gen_boarding.js` | **new** (2026-08-22; see Phase 3) |
+| Boarding-plan gate | `TSK/boarding_verify.py` | **new** (2026-08-22; checks NaPTAN + GTFS + the SVG) |
 | Internal wrapper — classic (gen_internal + title) | `PSK/build_internal_place.js` | **new** (models `schematize_internal.js`) |
 | Internal wrapper — road-following (pull_roads + match_routes + gen_internal) | `PSK/build_internal_place_roads.js` | **new** (Phase 2; wraps the classic wrapper) |
 
@@ -108,6 +113,38 @@ Commit S3 (`--outputs routes.json,overrides.json` if you wrote overrides).
 The Phase-1 classic straight-line internal map zigzagged for **sparse edge-of-town** places (the Tesco bypass superstore — one shared stop plus a couple of loops drawn as straight chords). Phase 2 fixes this by reusing the town skill's `internalRoads` pipeline verbatim: `build_internal_place_roads.js` runs `pull_roads.js` + `match_routes.js` over the walkshed, then gen_internal draws road-following lines. **No new drawing code** — the place data was already the right shape (`match_routes` reads `full.canonical[0].stops`, exactly what `gtfs_chains.py` writes). Validated on **both** the sparse case (Tesco Extra — night-and-day improvement) and the dense case (Town Centre — also better, no regression), so road-following is now the **default** internal style.
 
 **Fit + framing (v1.2, automatic):** the wrapper injects `internalRoads.fitExtra` = all drawn stops so a **cross-locality** place (Tesco straddles Eynesbury + St Neots) frames the whole walkshed instead of one locality's stops (was clipping routes at the frame), and defaults `fitMargin` to 8 mm for road-tail clearance. It also auto-hides gen_internal's default "River Great Ouse" label when the walkshed has no river. To sit a map lower on the page, freeze an `overrides.json` viewport with a bumped `offY` (Tesco v1.2). See `references/gotchas.md`. Classic (`build_internal_place.js`) stays the fallback where map-matching yields no line (a place with a single served stop). *Remaining phases: one-page flyer (Phase 3); portal fold-in (Phase 4).*
+
+## Phase 3 — the BOARDING PLAN, a third sheet (PROTOTYPED 2026-08-22)
+
+A place can carry a **third sheet**: *"Where to catch your bus in ‹place›"* — `boarding.jpg/.svg`, an alphabetical **destination → which stop to stand at** index beside a tight locator map. It answers the inverse of the other two sheets ("I have decided to go to X; where do I stand?"), and it is the only sheet we make whose error strands a passenger. Plan of record and findings: `…\Buses\Development Docs\boarding-plan-product_2026-08-22.md` (read **§7** first). First built on **St Ives Bus Station** (v1.0, 44 destinations, 4 boarding points).
+
+**Four new tools, all in `TSK` (the town skill's assets) because they are engine-level.** Run them from the S4 dir after `pull`, in this order:
+
+```bash
+python "%TSK%\naptan_stands.py" --write                        # which stops can be named, and how
+python "%TSK%\boarding_index.py" --db <region.sqlite> --write  # the destination index
+node   "%TSK%\gen_boarding.js"                                 # boarding.svg
+python "%TSK%\boarding_verify.py" --db <region.sqlite>         # the gate — must PASS
+```
+
+`%TSK%` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`; `<region.sqlite>` is the parent town's GTFS database from `_gtfs/regions.json` (e.g. `C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite`) — there is no default region, so pass it. Then render with `render.js boarding.svg boarding.jpg` and commit `boarding.svg` in S4 and `boarding.jpg` in S5 as usual.
+
+**Gated on config, and declining is correct.** The sheet is offered only where `routes.json` carries a `boardingPlan` block — the local stand-in for the portal's `requiresConfig`. `gen_boarding.js` exits non-zero and writes nothing when that key is absent, or when `naptan_stands.py` returned `REFUSE`.
+
+**The rules that are easy to get wrong** (each cost a wrong artefact during the prototype — the paper's §7.3 has the traces):
+
+- **The unit is the FRAME, not the name-cluster.** Consider every served stop near the anchor whatever it is called. At St Ives the Cambridge-bound A and B never enter the bus station; they board at an unlettered stop 47 m away. Judging by shared name passes that place as fully lettered and sends every Cambridge passenger to the wrong bay.
+- **Read `directions`, never `canonical`.** Every other consumer wants the canonical one-direction chain; a boarding plan is a statement *about* direction and goes blind if it reads it.
+- **Departures only.** A stop where a route terminates is not a boarding point. Route 9 departs St Ives Bay 2 and terminates at Bay 1.
+- **Two honest label classes.** A lettered bay prints its code; a stop with no code prints its NaPTAN `CommonName`. Never fall back to `Indicator` — "opp" tells a reader nothing.
+- **Roll localities to the top of the NPTG tree, keyed on ATCO.** `Orchard Park → Kings Hedges → Cambridge` needs two hops, and `Church End` has five different parents.
+- **Frequency comes from `calendar`,** not from counting feed rows.
+- **Fit the locator to the stands, not the landmarks,** and use street names for context at that zoom.
+- **Prove the gate red before trusting it green:** `boarding_verify.py --self-test`.
+
+**Adding any new sheet means editing the delivery path by hand** — `refresh_latest.js`'s `SHEETS` array and `collect-maps.ps1`'s `ValidateSet` and `-All` list. Neither warns when it falls behind, and `boarding.jpg` silently missed `_latest` on first build because of it.
+
+*Remaining: the A1 heads-up posted variant (a genuinely different artwork — see the paper's §6), and the portal `OUTPUTS` entry (step 3, not started).*
 
 ## Review (end of every session)
 Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the project memory (`project_bus_leaflets.md` / the place-skill memory). Flag out-of-scope items rather than silently fixing. This step is itself a standing rule.

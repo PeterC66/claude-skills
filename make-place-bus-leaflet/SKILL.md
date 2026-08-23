@@ -188,6 +188,16 @@ python "%TSK%\boarding_verify.py" --db <region.sqlite> --json boarding-verify.js
 - **The frame at a town-centre anchor may be a bus station in disguise.** `frame-coverage_2026-08-23.md` counts *lettered stops*, not *town-wide series membership*: at Oxford Street sixteen of the eighteen are bus-station bays, and High Wycombe's actual TfL-style series (High Street R/S, Castle Street V/W) is 373–447 m out and never in frame. **Look at the stand list `naptan_stands.py` prints before believing what kind of sheet you are building.**
 - **`quality_metrics.js` skips two map-only measures for a `boarding` basename** (panel-only services, duplicate labels) because this sheet draws no route lines and an index repeats stop names by design. If you add another line-less sheet type it will need the same scoping — and re-run the whole ratchet afterwards to prove no other sheet moved.
 
+**A NEW PLACE IS OUTSIDE THE QUALITY RATCHET AND THE CI GATES UNTIL `sync_ci_reference.js` HAS RUN, and nothing says so.** `quality_metrics.js` finds sheets by walking for `ci-reference/*.svg`, and `status.js`'s CI path reads the same folder; a place whose S4 has been committed but never synced is simply not in the sheet total (45 as of 2026-08-23). Missed on the High Wycombe build and caught only by reading the board. Run it **after the S4 commit**, naming the parent TOWN — it takes no place name, it syncs the town and every place under it, and re-syncing an unchanged one writes nothing:
+
+```bash
+node "%TSK%\sync_ci_reference.js" --town "<Parent Town>"
+```
+
+Run it from anywhere inside the Buses tree. `%TSK%` is the town skill's assets folder, `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`; `<Parent Town>` is the AREA the place sits under — `High Wycombe`, not `High Wycombe Town Centre`. **Never run it with no `--town`** while another session may be mid-build: it rewrites every town's and every place's `ci-reference/` from whatever each manifest currently calls latest.
+
+**A place that carries only a boarding plan needs its S4 record to be honest about it.** `status.js` decides whether a sheet is missing or was never part of this map by reading the S4 manifest record's own `outputs` list, so commit S4 with `--outputs boarding.svg,...` and **no** `internal.svg`. The board then prints `-` in the internal column instead of running `gen_internal.js` against a folder holding none of its inputs and reporting FAIL — which reddened the whole board on 2026-08-23 and is fixed in `status.js`.
+
 **Adding any new sheet means editing the delivery path by hand** — `refresh_latest.js`'s `SHEETS` array and `collect-maps.ps1`'s `ValidateSet` and `-All` list. Neither warns when it falls behind, and `boarding.jpg` silently missed `_latest` on first build because of it.
 
 *Remaining: the A1 heads-up posted variant (a genuinely different artwork — see the paper's §6), and the portal `OUTPUTS` entry (step 3, not started).*

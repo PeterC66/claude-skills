@@ -72,6 +72,16 @@ function daysSince(isoDate) {
 // so a manifest CAN advertise a version with no map in it. Reading the declaration
 // is what stops "never built" and "lost since" collapsing into one benign dash —
 // which is the trap the 2026-08-18 vendoring change had to undo for MISSING files.
+// ASK BEFORE RUNNING, not after. gate() only ever reports NO-SHEET when the
+// generator SUCCEEDED and found nothing committed to compare against. A map that
+// never had this sheet has none of the generator's inputs either, so the run
+// errors and the honest answer "this map has no internal sheet" comes back as
+// FAIL. High Wycombe Town Centre -- a place carrying a boarding plan and nothing
+// else -- is the first of those, and it reddened the whole board.
+function declares(rec, basename) {
+  return !!(rec && Array.isArray(rec.outputs) && rec.outputs.includes(basename));
+}
+
 function judgeNoSheet(rec, basename) {
   const declared = !!(rec && Array.isArray(rec.outputs) && rec.outputs.includes(basename));
   return declared ? 'MISSING' : '-';
@@ -94,7 +104,13 @@ function gateTown(t) {
   row.engine = routesJsonEarly.engine || '(none)';
   row.engineCurrent = routesJsonEarly.engine === CURRENT_ENGINE;
 
-  row.internal = gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg')).status;
+  // Same judgement as the place row below: no town is without an internal map today,
+  // so this is inert -- and leaving the known second instance of a fixed fault in
+  // place is how it comes back.
+  const tInt = declares(s4.rec, 'internal.svg') || exists(path.join(s4.dir, 'internal.svg'))
+    ? gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg')).status
+    : 'NO-SHEET';
+  row.internal = tInt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal.svg') : tInt;
 
   const style = detectExternalStyle(s4.dir);
   row.externalStyle = style;
@@ -131,7 +147,17 @@ function gatePlace(p) {
   const s4 = latestRunDir(m, p.dir, 'S4');
   const row = { name: p.name, town: p.town, version: s4 ? s4.rec.version : null };
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; return row; }
-  row.internal = gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE }).status;
+  // The NO-SHEET judgement was applied to `external` in August 2026 and not to
+  // `internal`, because at the time every place had an internal map. High Wycombe
+  // Town Centre (2026-08-23) is the first that does not -- it carries a boarding
+  // plan and nothing else -- and it read FAIL, which is the same "absent is not
+  // different" fault the external half already fixed. Its S4 record does not
+  // declare internal.svg, so this reports '-'; a manifest that DID declare one
+  // still gets MISSING.
+  const pInt = declares(s4.rec, 'internal.svg') || exists(path.join(s4.dir, 'internal.svg'))
+    ? gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE }).status
+    : 'NO-SHEET';
+  row.internal = pInt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal.svg') : pInt;
   const genExt = path.join(PSK, 'gen_external_places.js');
   const pExt = exists(genExt)
     ? gate(genExt, s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status

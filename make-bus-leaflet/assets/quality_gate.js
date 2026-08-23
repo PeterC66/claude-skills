@@ -46,16 +46,25 @@ const { analyse } = require('./quality_metrics');
 const DEFAULT_BUSES = 'C:/u3a St Ives/Using AI/Buses';
 const LEDGER_NAME = path.join('Development Docs', 'quality-ledger.json');
 
+// Walks BOTH place layouts, not just the nested one. This searched `Areas/` alone
+// until 2026-08-23, so the three maps under `Places/_standalone/` were measured by
+// nothing — and Ely Co-op shipped a Key running off the bottom of the page while the
+// ratchet reported no change at all, because its sheets were not among the sheets it
+// knows about. Same shape as the gap in gate_lib's findPlaces(), in a second file.
+// `_portal-fixture` is excluded for the reason gtfs_places.py excludes it: it is a CI
+// fixture reproduced byte-for-byte on purpose, not a map anybody reads.
 function findSheets(busesDir) {
   const out = [];
-  (function walk(d) {
+  const walk = (d) => {
     let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of ents) {
       const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); }
+      if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '_portal-fixture') walk(p); }
       else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);
     }
-  })(path.join(busesDir, 'Areas'));
+  };
+  walk(path.join(busesDir, 'Areas'));
+  walk(path.join(busesDir, 'Places'));
   return out.sort();
 }
 

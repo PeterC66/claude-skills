@@ -21,6 +21,20 @@
 // stale against the newest S5-render — see project_bus_foolproofing_plan.md).
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const TOWN = process.argv[2] || process.cwd();
+// REFUSE A FOLDER THAT IS NOT A TOWN OR PLACE. There is no walking up: the dir
+// is taken verbatim, so running this from the Buses root with no argument used
+// to create a bogus `Buses/_latest` holding whatever disagreements.docx and
+// verification.docx happened to be newest ANYWHERE in the tree, print one
+// cheerful "refreshed" line, and leave every real town untouched. It looked
+// like it had worked. Done on 2026-08-23 and only noticed because `git status`
+// showed an untracked folder at the root. A manifest is what makes a folder a
+// town or a place, so ask for one.
+if (!fs.existsSync(path.join(TOWN, 'manifest.json'))) {
+  console.error('refresh_latest: ' + TOWN + ' has no manifest.json, so it is not a town or place folder.');
+  console.error('  This refreshes ONE town/place. Pass its folder, or run it from inside one:');
+  console.error('    node refresh_latest.js "<townDir-or-placeDir>"');
+  process.exit(2);
+}
 const OUT = path.join(TOWN, '_latest');
 fs.mkdirSync(OUT, { recursive: true });
 

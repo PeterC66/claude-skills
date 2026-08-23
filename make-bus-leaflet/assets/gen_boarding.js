@@ -306,12 +306,27 @@ const landmarkRankOf = (t) => {
   // nothing to a passenger ends up, so it sits below the trading frontages.
   return 4;
 };
+/* A PERSON'S OWN LIST BEATS THE RANKING, because at a street anchor the ranking
+ * cannot win. Measured at High Wycombe High Street: 54 named things inside the
+ * frame, and the top 16 by rank are ten banks and convenience shops and six places
+ * to eat. The one civic landmark in the frame, the Old Town Hall, is a named
+ * building with no function tag and therefore rank 4 -- 54th of 54, below every
+ * nail bar and tattoo studio on the street. The comment on that rank says such a
+ * building is "often the best landmark of the lot" and then returns last place.
+ * Widening the ranking does not fix it (swapping ranks 3 and 4 still leaves the Old
+ * Town Hall 27th), so the lever is the one the paper's 8.5 already asks for: a
+ * person who knows the town names the marks. Absent the key nothing changes.
+ */
+const LM_NAMES = new Map();
+(Array.isArray(BP.locatorLandmarkNames) ? BP.locatorLandmarkNames : [])
+  .forEach((n, i) => { if (n) LM_NAMES.set(String(n).trim().toLowerCase(), i); });
 const poi = [];
 const poiSeen = new Set();
 const addPoi = (lat, lon, name, tags, rank) => {
   if (lat == null || lon == null || !name) return;
   if (!inFrame(lat, lon)) return;
   const k = name.toLowerCase();
+  if (LM_NAMES.has(k)) rank = -1000 + LM_NAMES.get(k);
   if (poiSeen.has(k)) return;               // osm.json and locator_geo.json overlap
   poiSeen.add(k);
   poi.push({ lat, lon, name, tags: tags || {}, rank, d: distM(lat, lon) });
@@ -609,6 +624,15 @@ if (LOC && Array.isArray(LOC.signals)) {
     if (!nearAStand(g.lat, g.lon)) { skippedSignals++; continue; }
     const X = px(g.lon), Y = py(g.lat);
     if (X < MAP_X0 + 1 || X > MAP_X1 - 1 || Y < MAP_Y0 + 1 || Y > MAP_Y1 - 1) continue;
+    // ASK BEFORE DRAWING. This layer claimed its box afterwards and never tested
+    // it, alone among the layers on this map -- the markers, the street names and
+    // the landmarks all call hits() first. At High Wycombe High Street two signals
+    // landed on the "Castle Street" label and it printed as an unreadable stub: a
+    // street name destroyed on a sheet whose whole job is to send someone to a
+    // named street. A signal with nowhere to sit is now dropped and counted, which
+    // is what every other layer on this map already does.
+    const sigBox = { x0: X - 1.6, x1: X + 1.6, y0: Y - 2.6, y1: Y + 3.0 };
+    if (hits(sigBox)) { skippedSignals++; continue; }
     // A traffic light: white-cased body so it reads on the road band it sits on,
     // three lamps, short mast. 2.9 mm tall — small, but it is a symbol not a label,
     // so the MIN_TEXT floor (which governs TEXT) does not apply to it.
@@ -620,7 +644,7 @@ if (LOC && Array.isArray(LOC.signals)) {
       + `<circle cx="0" cy="0.45" r="0.42" fill="#5aab63"/>`
       + `<rect x="-0.3" y="1.25" width="0.6" height="1.5" fill="${INK}"/>`
       + `</g>`);
-    claim({ x0: X - 1.6, x1: X + 1.6, y0: Y - 2.6, y1: Y + 3.0 });
+    claim(sigBox);
     drewSignals++;
   }
 }
@@ -692,7 +716,14 @@ function standMarker(s) {
     // the four marks it is, and this is the one that matters most here: it is where
     // every Cambridge passenger boards. Printed VERBATIM, never shortened, because
     // rule 3 is that the printed string must match the flag.
-    const size = MIN_TEXT, tw = FM.textWidth(s.label, size, false);
+    // MEASURED AS REGULAR, DRAWN AS BOLD. This is the only label on the locator set
+    // in bold, and it was the only one measured with bold off, so every fit test it
+    // made was about 6 per cent short. At High Wycombe High Street "Crendon Street"
+    // measured 16.28 mm from x=86.94, cleared the 103.5 mm frame test by 0.28 mm,
+    // and printed 17.34 mm wide -- 0.78 mm off the edge of the map, with its last
+    // letter cut in half. The neighbouring street-name labels are drawn regular and
+    // measured regular, which is why nothing else on this map has ever shown it.
+    const size = MIN_TEXT, tw = FM.textWidth(s.label, size, true);
     const cands = [
       { x: X + 3.4, a: 'start', y: Y + 0.9 },
       { x: X - 3.4, a: 'end', y: Y + 0.9 },
@@ -774,6 +805,26 @@ const PLATE_TOP = FOOTER.footerPlateTop(FOOTER_OPTS);
 //
 // Two rows per stand where they fit; one compact row per stand where they do not;
 // and if even that overruns, say so and fail, the way the index does.
+/* A LETTER IS NOT A LOCATION once the series spans more than one street.
+ * `boardingPlan.standKeyNames` prints the stop's own NaPTAN CommonName beside its
+ * code. Off by default, and it should stay off wherever every stand shares one
+ * name: St Ives would print "Bus Station" three times, St Neots "Market Square"
+ * five times, High Wycombe town centre "High Wycombe BusStn" fifteen. It earns its
+ * place on a town-wide letter series -- at High Wycombe High Street the six stands
+ * are High Street, the Town Hall, Castle Street and Crendon Street, and "Stop V,
+ * 139 m walk, buses face east" does not tell a reader which street to walk to.
+ * `boardingPlan.emptyStandLabel` captions a stand the index never names. Three of
+ * the six here are in that position, and a reader standing at one of them found it
+ * drawn, lettered and unexplained.
+ */
+const KEY_NAMES = !!BP.standKeyNames;
+const EMPTY_STAND_LABEL = (BP.emptyStandLabel != null) ? (BP.emptyStandLabel || null) : null;
+const keyLabelOf = (s) => {
+  const nm = String(s.name || '').trim();
+  if (!KEY_NAMES || !nm) return s.label;
+  if (nm.toLowerCase() === String(s.label || '').trim().toLowerCase()) return s.label;
+  return s.label + ' \u2014 ' + nm;
+};
 const KEY_TOP = MAP_Y1 + 5.0;
 const KEY_LIMIT = PLATE_TOP - 0.8;      // St Ives's fourth sub-line sits 0.9 mm clear
 const KEY_ROW_1 = KEY_TOP + 4.2;        // baseline of the first stand's label
@@ -810,14 +861,36 @@ for (const s of stands) {
   const walk = (HERE_PHRASE && s.distM <= 30) ? HERE_PHRASE
              : `${s.distM} m walk, about ${s.walkMin} min`;
   const facing = s.facing ? `, buses face ${s.facing}` : '';
-  out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky)}" font-size="3.1" fill="${INK}">${esc(s.label)}</text>`);
+  // AN EMPTY STAND'S CAPTION REPLACES THE WALK LINE, IT DOES NOT EXTEND IT.
+  // Appended, "Not the best stop for anywhere on this sheet" made the grey line
+  // 114 mm long in an 89 mm column and it printed straight across the destination
+  // index -- three rows of the sheet's own product, under three lines of grey. The
+  // bearing goes with it: a stand nothing departs from does not need one.
+  const isEmpty = !((s.destinations || []).length);
+  const keyLabel = keyLabelOf(s);
+  const keySub = (EMPTY_STAND_LABEL && isEmpty)
+    ? `${s.distM} m walk \u2014 ${EMPTY_STAND_LABEL}`
+    : (walk + facing);
+  // ...and now that two config keys can lengthen it, measure it. The legend notes
+  // have had this check since High Wycombe town centre; the key never did, and it is
+  // the half of the sheet a new key is most likely to overrun.
+  const keyRoom = MAP_X1 - (cxk + 4.6);
+  const keyWide = KEY_TWO_LINE
+    ? Math.max(FM.textWidth(keyLabel, 3.1, false), FM.textWidth(keySub, 2.5, false))
+    : FM.textWidth(keyLabel, 3.1, false) + 2.0 + FM.textWidth(keySub, 2.5, false);
+  if (keyWide > keyRoom) {
+    console.error(`gen_boarding: the stand key line for ${s.label} is `
+      + `${(keyWide - keyRoom).toFixed(1)} mm wider than the map column and runs into the index:`);
+    console.error(`  "${keyLabel} ${keySub}"`);
+  }
+  out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky)}" font-size="3.1" fill="${INK}">${esc(keyLabel)}</text>`);
   if (KEY_TWO_LINE) {
-    out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky + 3.4)}" font-size="2.5" fill="${INK_SOFT}">${esc(walk + facing)}</text>`);
+    out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky + 3.4)}" font-size="2.5" fill="${INK_SOFT}">${esc(keySub)}</text>`);
   } else {
     // One line. The label is set in FM's measured width so the grey half starts
     // clear of it rather than at a guessed offset.
-    const lw = FM.textWidth(s.label, 3.1, false);
-    out(`<text x="${f2(cxk + 4.6 + lw + 2.0)}" y="${f2(ky)}" font-size="2.5" fill="${INK_SOFT}">${esc(walk + facing)}</text>`);
+    const lw = FM.textWidth(keyLabel, 3.1, false);
+    out(`<text x="${f2(cxk + 4.6 + lw + 2.0)}" y="${f2(ky)}" font-size="2.5" fill="${INK_SOFT}">${esc(keySub)}</text>`);
   }
   ky += KEY_PITCH;
 }
@@ -838,8 +911,14 @@ const IY0 = HEAD_Y + 4;
 // sheet whose columns stop short of the floor.
 const LG_GAP = 3.2;
 const LG_NOTES = BP.note == null ? [] : (Array.isArray(BP.note) ? BP.note.filter(Boolean) : [BP.note]);
-const LG_LINES = 1 + LG_NOTES.length;
-const LG_TOP = PLATE_TOP - 2.0 - LG_GAP * (LG_LINES - 1);
+// The 'ltd = ...' line explains a mark. Printed unconditionally it explained a mark
+// that appears nowhere: High Wycombe High Street has 54 destinations and not one of
+// them is limited, so the sheet defined a symbol it never used and spent 3.2 mm of
+// index depth doing it. Inert on all three sheets built before this -- St Ives has
+// 7 limited rows, St Neots 10, High Wycombe town centre 7.
+const LG_LTD = (INDEX.destinations || []).some(d => d && d.limited) ? 1 : 0;
+const LG_LINES = LG_LTD + LG_NOTES.length;
+const LG_TOP = PLATE_TOP - 2.0 - LG_GAP * Math.max(LG_LINES - 1, 0);
 const IY1 = Math.min(186, LG_TOP - 3.6);
 
 out(`<text x="${f2(IX0)}" y="${f2(IY0 + 3.2)}" font-size="4.0" font-weight="bold" fill="${INK}">${esc(BP.indexHeading || 'Where to board, by destination')}</text>`);
@@ -1031,8 +1110,10 @@ if (overflow > 0) {
 // still renders byte-identically to before. LG_GAP / LG_NOTES / LG_LINES / LG_TOP are
 // declared with IY1 above, because the index's floor has to know how tall this is.
 const LGY = Math.min(IY1 + 3.6, LG_TOP);
-out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('ltd = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
-LG_NOTES.forEach((n, i) => out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP * (i + 1))}" font-size="2.4" fill="${INK_SOFT}">${esc(n)}</text>`));
+if (LG_LTD) {
+  out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('ltd = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
+}
+LG_NOTES.forEach((n, i) => out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP * (i + LG_LTD))}" font-size="2.4" fill="${INK_SOFT}">${esc(n)}</text>`));
 // A note is drawn as one unwrapped line, so a long one walks off the right of the
 // index and into the print-safe margin without anything saying so. quality_metrics
 // caught High Wycombe's third note at 4.62 mm from the trim; the generator that

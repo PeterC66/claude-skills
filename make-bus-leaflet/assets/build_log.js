@@ -17,8 +17,9 @@
 // TWO SEVERITIES, and the line between them is deliberate.
 //
 //   BLOCKING — the sheet is wrong. Something the config asked for was refused and is
-//   absent from the artwork, or a label was drawn somewhere it means nothing. A reader
-//   cannot tell either from the sheet; only this log can. rollout.js stops on these.
+//   absent from the artwork, a label was drawn somewhere it means nothing, or a device
+//   was drawn past the edge of the space it was given. A reader cannot tell any of the
+//   three from the sheet; only this log can. rollout.js stops on these.
 //
 //   WARN — the sheet is tight, or a device moved itself, or the engine is reporting a
 //   judgement it made. Worth reading, never worth blocking a build over.
@@ -35,9 +36,18 @@ const path = require('path');
 const REFUSED = /\bnot drawn\b/i;
 // A label that landed somewhere it means nothing, or has nothing to name at all.
 const MEANINGLESS = /\bnames nothing\b|\bhas no geometry\b/i;
+// A device drawn PAST the edge of the space it was given. Added 2026-08-23, after Ely
+// Co-op shipped a Key whose last rows — including a whole frequency tier — ran under
+// the footer plate and off the page. gen_internal.js clamps the row pitch at its floor
+// and then draws anyway, so this is not a refusal in the "not drawn" sense: the ink
+// exists, it is simply somewhere no reader will ever see it. That is worse than
+// absent, not better, and it is the same failure the boarding sheet already hit once
+// (Stop E painted out under the plate on a sheet that rendered clean and gated PASS).
+// It was WARN, so nothing stopped, and the sheet went into a review set.
+const OVERFLOWED = /\bunder the footer plate\b|\btoo long for this panel\b|\bpast the frame edge\b/i;
 
 function severity(line) {
-  return (REFUSED.test(line) || MEANINGLESS.test(line)) ? 'BLOCKING' : 'WARN';
+  return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)) ? 'BLOCKING' : 'WARN';
 }
 
 // Split a captured stderr blob into one entry per message. The generators write

@@ -57,6 +57,26 @@ function daysSince(isoDate) {
   return Math.floor((Date.now() - then) / 86400000);
 }
 
+// ---- was this sheet ever part of the build? --------------------------------
+// gate() reports NO-SHEET when there is nothing committed to reproduce. Whether
+// that is fine depends on something gate() cannot see: what the build SAID it
+// produced. The S4 manifest record lists its own outputs, so:
+//
+//   declared and present   -> PASS / DIFF as before
+//   NOT declared, absent   -> '-'      the sheet was never part of this map
+//   declared, absent       -> 'MISSING' the manifest advertises a sheet that is
+//                                       not there — alarming, and it fails the board
+//
+// The third case is not hypothetical: `stage.js commit` does not check that the
+// outputs it is told about exist (a known open action, hit again on 2026-08-23),
+// so a manifest CAN advertise a version with no map in it. Reading the declaration
+// is what stops "never built" and "lost since" collapsing into one benign dash —
+// which is the trap the 2026-08-18 vendoring change had to undo for MISSING files.
+function judgeNoSheet(rec, basename) {
+  const declared = !!(rec && Array.isArray(rec.outputs) && rec.outputs.includes(basename));
+  return declared ? 'MISSING' : '-';
+}
+
 // ---- gate a single town -----------------------------------------------------
 function gateTown(t) {
   const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -78,7 +98,8 @@ function gateTown(t) {
 
   const style = detectExternalStyle(s4.dir);
   row.externalStyle = style;
-  row.external = gate(path.join(SK, `gen_external_${style}.js`), s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status;
+  const extGate = gate(path.join(SK, `gen_external_${style}.js`), s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status;
+  row.external = extGate === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : extGate;
 
   // Optional pre-stage outputs, only gated if routes.json opted in.
   let routesJson = {};
@@ -112,9 +133,10 @@ function gatePlace(p) {
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; return row; }
   row.internal = gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE }).status;
   const genExt = path.join(PSK, 'gen_external_places.js');
-  row.external = exists(genExt)
+  const pExt = exists(genExt)
     ? gate(genExt, s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status
     : 'no-gen';
+  row.external = pExt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : pExt;
   return row;
 }
 
@@ -134,12 +156,17 @@ function gatePortalFixture() {
     // gate reproduces what the portal actually renders, not the un-overridden base.
     const baseOverrides = path.join(dataDir, 'base-overrides.json');
     const extraEnv = exists(baseOverrides) ? { OVERRIDES_FILE: baseOverrides } : {};
-    row.internal = exists(genInt)
+    // A fixture has no manifest to consult, and it exists precisely to be a frozen
+    // shipped sheet — so NO-SHEET here is never "never built", it is a fixture that
+    // has lost the artwork it is supposed to prove. Always MISSING, always red.
+    const fInt = exists(genInt)
       ? gate(genInt, dataDir, 'internal.svg', path.join(dataDir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE, extraEnv }).status
       : 'no-gen';
-    row.external = exists(genExt)
+    const fExt = exists(genExt)
       ? gate(genExt, dataDir, 'external.svg', path.join(dataDir, 'external.svg'), { extraEnv }).status
       : 'no-gen';
+    row.internal = fInt === 'NO-SHEET' ? 'MISSING' : fInt;
+    row.external = fExt === 'NO-SHEET' ? 'MISSING' : fExt;
     out.push(row);
   }
   return out;
@@ -226,8 +253,12 @@ const qualityCell = (name) => {
 // hand-off back, so turning this on first would have made CI red for an expected
 // state and taught everyone to ignore it. The re-vendor in this same commit is
 // what clears them. A quality REGRESSION counts too (Phase 8 item 1).
-const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL'))
-  || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD'].includes(r.internal) || ['DIFF', 'FAIL'].includes(r.external))
+// MISSING joins the failing set and '-' does not, which is the whole point of
+// judgeNoSheet: a sheet the build never claimed to make cannot have regressed, and
+// a sheet it did claim to make and has not got is worse than one that differs.
+const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING')
+  || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external))
+  || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external))
   // `null` is MISSING — the portal has no such file. It counted as fine until
   // 2026-08-18, which had it backwards: a vendored file that DIFFERS is stale
   // output, a vendored file that is ABSENT is a require that throws. The row was

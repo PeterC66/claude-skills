@@ -178,6 +178,23 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 >
 > **A metric that reads config instead of artwork will lie the moment the config gains a new value.** `quality_metrics.js`'s `strandedFeatureLabels` measured from `f.labelPos.x` in `routes.json`. `labelPos:"auto"` made that `undefined`, the distance NaN, and every auto label read as stranded — six towns went REGRESSED on the ratchet for labels that had just been moved *onto* the features they name. It now finds the label's own `<text>` on the sheet and measures from there, which is both the fix and the general rule this file exists to enforce: measure the artwork. Same change makes the metric see an `overrides.json` nudge, which the config read never could.
 
+> ### 2026-08-23 — `status.js` learned the difference between "differs" and "was never built"
+>
+> `gate()` now returns **`NO-SHEET`** when the generator runs fine and there is **nothing committed to compare against**. That is a different fact from `DIFF`, and reporting it as one had a real cost: St Ives Bus Station has no external radial (the solver cannot fan its eight spokes), so its external row read `DIFF` for ever, and once the vendoring cleared it was the **sole** reason `status.js` exited 1. A board permanently red for one known-benign reason is the state a real failure has to be spotted through — [[feedback_a_new_gate_must_start_green]], arriving from the other direction.
+>
+> **`gate()` does not decide whether that is acceptable, because it cannot.** It does not know whether the sheet was never built or has gone missing. `status.js` judges it against the **S4 manifest record's own `outputs` list**:
+>
+> | | committed file present | absent |
+> |---|---|---|
+> | **declared** in `outputs` | `PASS` / `DIFF` as before | **`MISSING`** — fails the board |
+> | **not declared** | `PASS` / `DIFF` as before | **`-`** — the sheet was never part of this map |
+>
+> **The `MISSING` half is the point, and it is not hypothetical.** `stage.js commit` still does not check that the outputs it is told about exist (an open action, hit again the same day), so a manifest **can** advertise a version with no map in it. Without the declaration check, "never built" and "lost since" would collapse into one benign dash — exactly the hole the 2026-08-18 vendoring change had to undo for absent files. Portal fixtures have no manifest and exist to be frozen shipped sheets, so `NO-SHEET` there is **always** `MISSING`.
+>
+> **Proven in three directions before it was trusted**, not merely observed green: declare `external.svg` in a manifest that has none → `MISSING`, exit 1; delete a place's real `external.svg` → `MISSING`, exit 1; inject one line into a committed sheet → `DIFF`, exit 1. Every file restored and md5-checked afterwards. The board now exits **0**.
+>
+> Callers other than `status.js` are unaffected by design: `rollout.js` and `rollout_places.js` only take `PASS` (or `SKIP`) for their up-to-date fast path, so `NO-SHEET` behaves there exactly as `DIFF` did — not up to date, rebuild.
+
 > ### ✅ 2026-08-23 — `internalRoads.skeletonMaxW`: `gen_internal.js`, RE-VENDORED AND MERGED ([PR #75](https://github.com/PeterC66/community-bus-maps/pull/75) → `996d7b7`), adopted by St Ives Bus Station alone.
 >
 > One optional key: a ceiling in mm on the grey road casing. Rationale in `make-place-bus-leaflet/references/gotchas.md`, "…and past a point it is not a road at all". Absent the key the output is byte-identical, and that is **gated rather than asserted** — all 8 towns and all 7 places still reproduce byte-for-byte on `status.js`, the quality ratchet reports 0 regressed, and on the portal branch `verify:area`, `verify:place`, `verify:defaults` (13/13 area and 11/11 place escape hatches still live) and `npm test` all pass.

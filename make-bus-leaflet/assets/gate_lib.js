@@ -136,6 +136,22 @@ function gate(genPath, dataDir, outName, committedPath, opts = {}) {
   if (!run.ok || !fs.existsSync(outPath)) {
     return { status: 'FAIL', detail: (run.stderr || 'no output produced').trim().split('\n').slice(0, 5).join(' / '), tmpDir: run.tmpDir };
   }
+  // NO-SHEET: the generator ran and produced output, and there is NOTHING COMMITTED
+  // to compare it against. That is a different fact from DIFF and it used to be
+  // reported as one — St Ives Bus Station has no external radial (the solver cannot
+  // fan its eight spokes), so its external row read DIFF for ever and was the sole
+  // reason `status.js` exited 1 once the vendoring cleared. A board that is
+  // permanently red for one known-benign reason is the state a real failure has to
+  // be spotted through, which is the whole argument of "a new gate must start green".
+  //
+  // This function does NOT decide whether that is acceptable — it cannot, because it
+  // does not know whether the sheet was never built or has gone missing. It reports
+  // the fact and the caller judges it (status.js reads the S4 manifest record).
+  // Cleaning the workspace is right here: there is nothing to inspect.
+  if (!fs.existsSync(committedPath)) {
+    rmTmp(run.tmpDir);
+    return { status: 'NO-SHEET', detail: 'nothing committed at ' + committedPath };
+  }
   const d = diffSvg(outPath, committedPath, opts);
   if (d.same) { rmTmp(run.tmpDir); return { status: 'PASS', filtered: !!d.filtered }; }
   return { status: 'DIFF', diffs: d.diffs || [], lineCountA: d.lineCountA, lineCountB: d.lineCountB, tmpDir: run.tmpDir };

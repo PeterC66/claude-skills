@@ -159,7 +159,11 @@ For the schematic and diagram outputs, gate St Ives v6.6 (`internal-schematic.sv
 
 ### 3a. The boarding sheet has its own gate set, and it is not in the portal
 
-`gen_boarding.js`, `naptan_stands.py`, `boarding_index.py`, `boarding_verify.py` and `pull_locator.js` are engine-level files in `make-bus-leaflet/assets` used by the place skill as Phase 3. **They are NOT vendored into the portal** (open action), so §4 does not yet apply to them — but everything else here does, and invariant 2 above especially: a new `boardingPlan` key must default to exactly the previous behaviour.
+`gen_boarding.js`, `naptan_stands.py`, `boarding_index.py`, `boarding_verify.py` and `pull_locator.js` are engine-level files in `make-bus-leaflet/assets` used by the place skill as Phase 3. **`gen_boarding.js` IS vendored into the portal as of 2026-08-23** — `engine\expert\gen_boarding.js`, a row in §4's table and in `status.js` — so §4 applies to it in full. The other four are **not**, and do not need to be: the portal never runs the Python. It consumes what they wrote (`stands.json`, `boarding_index.json`, `locator_geo.json`) as committed payload inputs, exactly as it consumes `routes.json`, and `import-map.mjs` copies them with the rest of the `*.json` with no change. That settles the open question about whether the portal would pull its own locator: it does not, and it should not.
+
+Everything else here applies, and invariant 2 above especially: a new `boardingPlan` key must default to exactly the previous behaviour.
+
+**Two things about `gen_boarding.js` were only true because it had never run anywhere but here, and both were fixed on 2026-08-23 when the portal first ran it.** It required `footer.js`, `icons.js` and `font_metrics.js` from `__dirname` alone — fine beside them in `assets\`, and a throw at require time from `engine\expert\`, before a single input is read; it now self-resolves sibling → `SKILL_ASSETS` → skill path, the way `gen_internal.js` has for months. And `--dir` defaulted to `.` with no `LEAFLET_DIR` fallback, so it worked in the portal only because `renderMap.js` happens to spawn with `cwd` set to the data dir — true today, and not invariant 6's contract. **The general lesson: a dependency that resolves is not a dependency that is portable, and the only way to find out is to run the file somewhere else.**
 
 **The gate is a byte-identical re-run of every built boarding sheet.** As of 2026-08-23 there are four. Copy the run folder's `*.json` into a scratch directory, run the candidate `gen_boarding.js` there, and `cmp` the result against the committed `boarding.svg`:
 
@@ -186,6 +190,7 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 | `%SK%\gen_internal.js` | `engine\place\` |
 | `%PSK%\gen_external_places.js` | `engine\place\` |
 | `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
+| `%SK%\gen_boarding.js` | `engine\expert\` |
 
 > ### ✅ 2026-08-19 — THE P1 ROUND RE-VENDOR IS DONE. Every row in the table above reads **in sync**, and all four portal suites PASS.
 >

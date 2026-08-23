@@ -51,14 +51,48 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-
-const FOOTER = require(path.join(__dirname, 'footer.js'));
-const ICONS = require(path.join(__dirname, 'icons.js'));
-const FM = require(path.join(__dirname, 'font_metrics.js'));
+const NLCH = String.fromCharCode(10);
 
 const argv = process.argv.slice(2);
 const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] != null ? argv[i + 1] : d; };
-const DIR = path.resolve(val('--dir', '.'));
+
+// SHARED CODE IS SELF-RESOLVING, exactly as in gen_internal.js. This file used to
+// require its three dependencies from __dirname alone, which is true only while it
+// sits in the skill's assets folder beside them. The portal runs a generator from
+// its own engine folder against a map's data dir and passes SKILL_ASSETS, so the
+// __dirname-only form could never have rendered a boarding sheet there - it would
+// have thrown on the require, before reading a single input. Resolution order: a
+// sibling file, then SKILL_ASSETS, then the skill's own path. Resolution does not
+// affect the SVG.
+const _dep = (name) => {
+  const local = path.join(__dirname, name);
+  try { if (fs.existsSync(local)) return local; } catch (e) {}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/' + name;
+};
+const FOOTER = require(_dep('footer.js'));
+const ICONS = require(_dep('icons.js'));
+const FM = require(_dep('font_metrics.js'));
+
+// STRICT_GUARDS - same contract as gen_internal.js. A guard that refuses to draw
+// something the config asked for used to say so on stderr and exit 0, and the
+// portal reads stderr only on a non-zero exit, so on the success path the whole
+// stream was discarded unread. Counted (not thrown) so one run reports every
+// refusal, and the artwork is still written so it can be looked at. Unset, inert.
+const STRICT_GUARDS = process.env.STRICT_GUARDS === '1';
+let REFUSAL_COUNT = 0;
+const refuse = (msg) => {
+  REFUSAL_COUNT++;
+  let t = String(msg);
+  while (t.length && t.charAt(t.length - 1) === NLCH) t = t.slice(0, -1);
+  process.stderr.write(t + NLCH);
+};
+
+// The data folder: --dir wins, then LEAFLET_DIR (what the portal and the skill's
+// own runners set), then the current directory. Before LEAFLET_DIR was honoured
+// this worked in the portal only because renderMap.js happens to spawn with
+// cwd = the map's data dir - true today, and not a contract this file should rest on.
+const DIR = path.resolve(val('--dir', process.env.LEAFLET_DIR || '.'));
 const OUT = val('--out', 'boarding.svg');
 
 const rd = (f, optional) => {
@@ -122,7 +156,21 @@ const STAND_INK = '#14304f';          // lettered bay marker
 const NAMED_INK = '#7a4a12';          // named on-street stop marker — deliberately a
                                       // different hue, because they are different things
 
-const PAL = RJ.palette || {};
+// THE CUSTOMER'S SAFE-SUBSET LAYER. The portal lets a customer recolour a route,
+// and that recolour has to reach every sheet in the pack or one route prints in
+// two colours across two pages of one leaflet. Same file and same key as
+// gen_internal.js reads (`routeColors`), so one edit moves both. Absent or empty
+// => byte-identical to the sheet as it was before this block existed.
+//
+// `hiddenOperators`, the other top-level customer edit, is NOT applied here and
+// must not be: which stand a destination is boarded at was decided by
+// boarding_index.py across ALL the routes serving it, so dropping routes in the
+// generator can strand a destination that is still reachable from another stand.
+// Re-deciding it needs the index rebuilt, which is a step the portal does not
+// have. So it is refused rather than half-applied - see the guard below.
+const OVF = process.env.OVERRIDES_FILE || path.join(DIR, 'overrides.json');
+const ALLOV = (() => { try { return JSON.parse(fs.readFileSync(OVF, 'utf8')); } catch (e) { return {}; } })();
+const PAL = Object.assign({}, RJ.palette || {}, ALLOV.routeColors || {});
 const TEXT_ON = RJ.textOn || {};
 const colourOf = (r) => PAL[r] || '#66707a';
 const textOnOf = (r) => TEXT_ON[r] || '#ffffff';
@@ -154,6 +202,24 @@ const stands = HIDE_EMPTY ? standsAll.filter(s => (s.destinations || []).length)
 const dests = (INDEX.destinations || []).slice()
   .sort((a, b) => (a.destination.toLowerCase() < b.destination.toLowerCase() ? -1
                  : a.destination.toLowerCase() > b.destination.toLowerCase() ? 1 : 0));
+
+// hiddenOperators: see the note at PAL. Refuse only when the hide would actually
+// change this sheet - a customer who hides an operator that puts nothing in the
+// index has asked for nothing here, and gets the sheet unchanged.
+const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
+if (HIDDEN_OPS.size) {
+  const hiddenRoutes = new Set();
+  for (const op of RJ.operators || []) if (HIDDEN_OPS.has(op.name)) for (const r of op.routes || []) hiddenRoutes.add(r);
+  const touched = [];
+  for (const d of dests) for (const r of d.routes || []) if (hiddenRoutes.has(r) && !touched.includes(r)) touched.push(r);
+  if (touched.length) {
+    refuse(`gen_boarding: ${touched.length} route(s) in the index belong to a hidden operator (${touched.join(', ')}),`
+      + ' and this sheet cannot honour that edit. A destination\'s boarding point was chosen across'
+      + ' every route serving it, so dropping routes here can strand a destination that is still'
+      + ' reachable from another stand. Rebuild the index with boarding_index.py, or turn the'
+      + ' boarding plan off for this map.');
+  }
+}
 
 if (!stands.length) { console.error('gen_boarding: no stands with destinations — nothing to draw.'); process.exit(1); }
 if (!dests.length) { console.error('gen_boarding: the index is empty — nothing to draw.'); process.exit(1); }
@@ -534,7 +600,7 @@ let markerMoveMax = { mm: 0, label: null };
   for (const it of items) {
     const moved = Math.hypot(it.x - it.x0, it.y - it.y0);
     if (moved > MK_R(it.s)) {
-      console.error(`gen_boarding: ${it.s.label} was moved ${moved.toFixed(1)} mm to stay legible,`);
+      refuse(`gen_boarding: ${it.s.label} was moved ${moved.toFixed(1)} mm to stay legible,`);
       console.error('  which is further than its own marker; the locator frame is too wide for these stops.');
     }
     if (moved > markerMoveMax.mm) markerMoveMax = { mm: moved, label: it.s.label };
@@ -879,7 +945,7 @@ for (const s of stands) {
     ? Math.max(FM.textWidth(keyLabel, 3.1, false), FM.textWidth(keySub, 2.5, false))
     : FM.textWidth(keyLabel, 3.1, false) + 2.0 + FM.textWidth(keySub, 2.5, false);
   if (keyWide > keyRoom) {
-    console.error(`gen_boarding: the stand key line for ${s.label} is `
+    refuse(`gen_boarding: the stand key line for ${s.label} is `
       + `${(keyWide - keyRoom).toFixed(1)} mm wider than the map column and runs into the index:`);
     console.error(`  "${keyLabel} ${keySub}"`);
   }
@@ -895,7 +961,7 @@ for (const s of stands) {
   ky += KEY_PITCH;
 }
 if (keyOverflow > 0) {
-  console.error(`gen_boarding: ${keyOverflow} stand(s) do not fit under the map and are NOT on the sheet.`);
+  refuse(`gen_boarding: ${keyOverflow} stand(s) do not fit under the map and are NOT on the sheet.`);
 }
 
 /* ================================================================= INDEX */
@@ -1076,7 +1142,7 @@ for (let c = 0; c < COLS; c++) {
 }
 overflow = Math.max(0, dests.length - COLS * perCol);   // perCol is now capped at capacity
 if (overflow > 0) {
-  console.error(`gen_boarding: ${overflow} destination(s) did not fit and are NOT on the sheet.`);
+  refuse(`gen_boarding: ${overflow} destination(s) did not fit and are NOT on the sheet.`);
   console.error('  An index that silently drops rows is the one failure this sheet cannot have.');
   console.error('  Widen the columns, drop a column, or set an explicit selection rule in');
   console.error('  boardingPlan (paper §5: "selected destinations" needs a stated rule).');
@@ -1121,7 +1187,7 @@ LG_NOTES.forEach((n, i) => out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP * (i +
 for (const n of LG_NOTES) {
   const w = FM.textWidth(n, 2.4, false);
   if (IX0 + w > IX1_TEXT) {
-    console.error(`gen_boarding: a boardingPlan.note is ${(IX0 + w - IX1_TEXT).toFixed(1)} mm too long and runs into the print-safe margin:`);
+    refuse(`gen_boarding: a boardingPlan.note is ${(IX0 + w - IX1_TEXT).toFixed(1)} mm too long and runs into the print-safe margin:`);
     console.error(`  "${n.slice(0, 72)}${n.length > 72 ? '...' : ''}"`);
   }
 }
@@ -1149,5 +1215,12 @@ if (markerMoveMax.mm > 0.05) {
 if (HIDE_EMPTY && standsAll.length !== stands.length) {
   const dropped = standsAll.filter(s => !(s.destinations || []).length).map(s => s.label);
   console.log(`  not drawn (never the nearest boarding point for anything): ${dropped.join(', ')}`);
+}
+// A refusal IS the exit code under STRICT_GUARDS, so every spawn path catches it
+// through the error handling it already has. Unset, the exit is what it always was.
+if (STRICT_GUARDS && REFUSAL_COUNT > 0) {
+  process.stderr.write('STRICT_GUARDS: ' + REFUSAL_COUNT + ' guard'
+    + (REFUSAL_COUNT === 1 ? '' : 's') + ' refused to draw something this sheet was asked for.' + NLCH);
+  process.exit(1);
 }
 process.exit(overflow > 0 ? 1 : 0);

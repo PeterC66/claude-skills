@@ -232,6 +232,13 @@ function portalDrift() {
     [path.join(PSK, 'gen_external_places.js'), path.join(PORTAL, 'engine', 'place', 'gen_external_places.js')],
     [path.join(SK, 'schematize_internal.js'), path.join(PORTAL, 'engine', 'expert', 'schematize_internal.js')],
     [path.join(SK, 'diagram_internal.js'), path.join(PORTAL, 'engine', 'expert', 'diagram_internal.js')],
+    // gen_boarding.js became a row on 2026-08-23, when the portal started
+    // offering the boarding plan as its fifth output. It is portal-owned like the
+    // two expert pre-stages above rather than copied into each map's data, so a
+    // skill-side change to it drifts the portal exactly the way gen_internal.js
+    // does — and its three dependencies (footer.js, icons.js, font_metrics.js)
+    // are already rows, which is what makes vendoring it safe at all.
+    [path.join(SK, 'gen_boarding.js'), path.join(PORTAL, 'engine', 'expert', 'gen_boarding.js')],
   ];
   return rows.map(([skillFile, portalFile]) => ({
     file: path.basename(skillFile) + ' -> ' + path.relative(PORTAL, portalFile),

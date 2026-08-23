@@ -321,6 +321,7 @@ def main():
     # calendar entry actually operates, giving journeys per week. (calendar_dates
     # exceptions -- bank holidays, one-off cancellations -- are not applied; they
     # move individual dates rather than the weekly shape.)
+    no_week = {}          # route -> trips dropped for having no operating week
     week_of = {}
     for sid, *flags in db.execute(
             "SELECT service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday "
@@ -349,7 +350,16 @@ def main():
             continue          # boardingPlan.excludeRoutes
         per_week = week_of.get(svc, 0)
         if per_week == 0:
-            continue  # no operating day in the feed week -- not a service a reader can catch
+            # No row in `calendar` at all, or a row with no operating day: not a
+            # service a reader can turn up and catch. Correct to drop, and NOT correct
+            # to drop in silence -- a service registered wholly through
+            # `calendar_dates` (a bank-holiday timetable, a match-day shuttle, a
+            # school working) looks exactly like this, and so would a daily service
+            # filed the same way. At High Wycombe it removed eight of the frame's 37
+            # routes including the 130 and 300, the town's Aylesbury link, and nothing
+            # said so. Reported below.
+            no_week[rname] = no_week.get(rname, 0) + 1
+            continue
         seq = [r[0] for r in db.execute(
             "SELECT stop_id FROM stop_times WHERE trip_id=? ORDER BY CAST(stop_sequence AS INTEGER)",
             (tid,))]
@@ -382,6 +392,13 @@ def main():
     if exclude:
         print("  boardingPlan.excludeRoutes: left off the sheet -- %s"
               % ", ".join(sorted(exclude)))
+    if no_week:
+        print("  no operating week in `calendar`, so not indexed -- %s"
+              % ", ".join("%s (%d trip%s)" % (r, n, "" if n == 1 else "s")
+                          for r, n in sorted(no_week.items())))
+        print("     Registered through `calendar_dates` only: a named set of dates rather than a")
+        print("     weekly pattern. Check each before accepting the drop -- gtfs_query.py reports")
+        print("     them as days '?' with weeksActive 1.")
 
     if not reach:
         sys.stderr.write("boarding_index: no onward destinations found\n")

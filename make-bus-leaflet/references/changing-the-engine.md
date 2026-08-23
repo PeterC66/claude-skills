@@ -157,6 +157,22 @@ For the schematic and diagram outputs, gate St Ives v6.6 (`internal-schematic.sv
 
 `make-place-bus-leaflet` reuses `gen_internal.js`, `render.js`, `stage.js`, `gtfs_query.py` and `icons.js` **unchanged**. If your change touches any of them, also rebuild a place fixture and diff. Worked places on disk: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra`, `St Neots Town Centre`, `Beaconsfield Waitrose`, `Beaconsfield Simpson Centre`. The portal's fixture is `…\Buses\Places\_portal-fixture`.
 
+### 3a. The boarding sheet has its own gate set, and it is not in the portal
+
+`gen_boarding.js`, `naptan_stands.py`, `boarding_index.py`, `boarding_verify.py` and `pull_locator.js` are engine-level files in `make-bus-leaflet/assets` used by the place skill as Phase 3. **They are NOT vendored into the portal** (open action), so §4 does not yet apply to them — but everything else here does, and invariant 2 above especially: a new `boardingPlan` key must default to exactly the previous behaviour.
+
+**The gate is a byte-identical re-run of every built boarding sheet.** As of 2026-08-23 there are three. Copy the run folder's `*.json` into a scratch directory, run the candidate `gen_boarding.js` there, and `cmp` the result against the committed `boarding.svg`:
+
+| Place | Latest S4 | Region |
+|---|---|---|
+| St Ives Bus Station | `v1.3_2026-08-23_0233` | cambridgeshire |
+| St Neots Town Centre | `v2.1_2026-08-23_0403` | cambridgeshire |
+| High Wycombe Town Centre | `v1.0_2026-08-23_0849` | buckinghamshire |
+
+**Take the baseline before you edit** — all three PASSing on the unmodified template is what makes a later DIFF mean something. Then also re-run each sheet's own `boarding_verify.py` (and `--self-test` on one, to prove the gate can still go red) and `quality_metrics.js --all`, whose 44-sheet output is a second, wider ratchet: on 2026-08-23 a rotation fix to the metric was accepted only because that whole output came back byte-identical.
+
+Two of the 2026-08-23 changes were **deliberately not byte-identical**: markers that overlap each other now push apart, and a street label now tries more than one position. Both are corrective on the two older sheets (13 changed lines each) and both leave them **stale until re-rendered**, which is the normal state §2a describes — but those two sheets are live on the portal, so re-rendering them is a re-delivery and a decision, not housekeeping.
+
 ## 4. The portal hand-off — a generator change is NOT done until this is done
 
 The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of some engine files. It does not import them from the skill; it vendors them. A skill-side change leaves the portal running the old code, and its gates will keep passing against the *old* shipped fixture until you re-vendor.

@@ -160,8 +160,18 @@ function parseSvg(svg) {
         anchor: a['text-anchor'] || 'start',
         bold: (style['font-weight'] || '') === 'bold',
         central: a['dominant-baseline'] === 'central',
+        // A ROTATED LABEL CAN CARRY ITS ROTATION ON EITHER ELEMENT. gen_internal.js
+        // rotates the <text>; gen_boarding.js wraps it in <g transform="translate()
+        // rotate()"> and leaves the text at 0,0. Reading only the text's own
+        // attribute made every boarding-sheet street name a HORIZONTAL box as wide
+        // as the words are long, so the separating-axis test below -- written to be
+        // "exact for the rotated road names" -- was fed a box for a label that is
+        // not there. High Wycombe's near-vertical "Oxford Road" was reported as
+        // colliding with "Arch Way" and with "Cineworld", neither of which it comes
+        // near on the page. The composed matrix already holds the angle.
         rot: a.transform && /rotate/.test(a.transform)
-          ? (parseFloat(a.transform.match(/rotate\(([-\d.]+)/)[1]) || 0) : 0,
+          ? (parseFloat(a.transform.match(/rotate\(([-\d.]+)/)[1]) || 0)
+          : (Math.hypot(m[0], m[1]) > 1e-9 ? Math.atan2(m[1], m[0]) * 180 / Math.PI : 0),
         fill: (style.fill || '#000').toLowerCase(),
         halo: !!a.stroke,
         // Document order tells map content from footer chrome exactly. footer.js

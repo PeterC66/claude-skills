@@ -178,7 +178,12 @@ out(`<line x1="${SAFE}" y1="${f2(HEAD_Y)}" x2="${W - SAFE}" y2="${f2(HEAD_Y)}" s
 /* =========================================================== LOCATOR MAP */
 // Left column. Deliberately the smaller half: it exists to get the reader from
 // "Bay 4" on the page to Bay 4 in the street, and nothing more.
-const MAP_X0 = SAFE, MAP_X1 = 104;
+// THE LOCATOR/INDEX SPLIT IS A BUDGET LINE, not a fixed one.  104 mm suits a
+// sheet whose index is two columns wide; a town whose index needs three has to
+// buy the width from somewhere, and the locator is where the slack is (at St
+// Ives and St Neots the map box is largely empty grey).  Absent the key this is
+// exactly 104, so every sheet built before this change is unmoved.
+const MAP_X0 = SAFE, MAP_X1 = (BP.mapRightMm != null) ? +BP.mapRightMm : 104;
 const MAP_Y0 = HEAD_Y + 4, MAP_Y1 = 150;
 
 // Projection: equirectangular about the anchor, which is exact enough over 250 m
@@ -463,9 +468,67 @@ const ICON_FOR = { supermarket: 'shop', library: 'library', townhall: 'townhall'
 const taken = [];
 const hits = (b) => taken.some(t => !(b.x1 < t.x0 || b.x0 > t.x1 || b.y1 < t.y0 || b.y0 > t.y1));
 const claim = (b) => taken.push(b);
+
+/* MARKERS THAT COLLIDE WITH EACH OTHER. The occupancy map below is stamped FROM the
+ * markers, so it can say "no label over a bay number" and cannot say "no bay number
+ * over a bay number". At St Ives the four bays are 11-47 m apart in a 130 m frame and
+ * nothing touches; at St Neots two of the five discs touch (recorded, left open); at
+ * High Wycombe the frame is 240 m wide because the two boarding areas are 230 m
+ * apart, and Bays 15 and 18 - 12 m apart, so 4.4 mm on the page - printed one over
+ * the other with "Bay 15" reading as "Bay 1".
+ *
+ * Deterministic relaxation: repeatedly push overlapping pairs apart along the line
+ * between them, in the stands' own order, a fixed number of passes. A marker that
+ * ends up more than a third of a millimetre from its true position draws a hairline
+ * back to a dot there, so a moved marker still says where the stop actually is
+ * rather than quietly relocating it. Absent any overlap nothing moves.
+ */
+const MK_R = (s) => (s.class === 'stand' ? 3.7 : 3.0);
+const MPOS = new Map();
+let markerMoveMax = { mm: 0, label: null };
+{
+  const items = stands.filter(s => s.pos).map(s => ({
+    s, x: px(s.pos[1]), y: py(s.pos[0]), x0: px(s.pos[1]), y0: py(s.pos[0]), r: MK_R(s),
+  }));
+  for (let pass = 0; pass < 60; pass++) {
+    let moved = false;
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i], b = items[j];
+        const need = a.r + b.r;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= need - 1e-6) continue;
+        if (d < 1e-6) { dx = 1; dy = 0; d = 1; }        // exactly coincident: split on x
+        const push = (need - d) / 2, ux = dx / d, uy = dy / d;
+        a.x -= ux * push; a.y -= uy * push;
+        b.x += ux * push; b.y += uy * push;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  for (const it of items) {
+    it.x = Math.min(Math.max(it.x, MAP_X0 + it.r), MAP_X1 - it.r);
+    it.y = Math.min(Math.max(it.y, MAP_Y0 + it.r), MAP_Y1 - it.r);
+    MPOS.set(it.s.atco, it);
+  }
+  // A push smaller than the marker's own radius leaves the stop's true position under
+  // its own disc, so the sheet is not claiming the wrong side of the street and no
+  // leader is warranted. Past that it would be, so say so rather than move silently.
+  for (const it of items) {
+    const moved = Math.hypot(it.x - it.x0, it.y - it.y0);
+    if (moved > MK_R(it.s)) {
+      console.error(`gen_boarding: ${it.s.label} was moved ${moved.toFixed(1)} mm to stay legible,`);
+      console.error('  which is further than its own marker; the locator frame is too wide for these stops.');
+    }
+    if (moved > markerMoveMax.mm) markerMoveMax = { mm: moved, label: it.s.label };
+  }
+}
 for (const s of stands) {
   if (!s.pos) continue;
-  const X = px(s.pos[1]), Y = py(s.pos[0]), r = (s.class === 'stand' ? 4.2 : 3.0);
+  const m = MPOS.get(s.atco);
+  const X = m ? m.x : px(s.pos[1]), Y = m ? m.y : py(s.pos[0]), r = (s.class === 'stand' ? 4.2 : 3.0);
   claim({ x0: X - r, x1: X + r, y0: Y - r, y1: Y + r });
 }
 // STREET NAMES ARE THE CONTEXT AT THIS SCALE, not distant shops. The frame here is
@@ -480,8 +543,8 @@ for (const w of ROAD_WAYS) {
   if (!nm || streetSeen.has(nm)) continue;
   const line = w.geometry;
   if (!Array.isArray(line) || line.length < 2) continue;
-  // the segment midpoint that is furthest inside the frame
-  let best = null;
+  // the segment midpoints, ranked by how far inside the frame they sit
+  const cands = [];
   for (let i = 0; i < line.length - 1; i++) {
     const a = line[i], b = line[i + 1];
     const mla = (a[0] + b[0]) / 2, mlo = (a[1] + b[1]) / 2;
@@ -490,22 +553,30 @@ for (const w of ROAD_WAYS) {
                + Math.min(mlo - minLo, maxLo - mlo) / (maxLo - minLo);
     let ang = Math.atan2(-(b[0] - a[0]) * KY, (b[1] - a[1]) * KX) * 180 / Math.PI;
     if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
-    if (!best || edge > best.edge) best = { mla, mlo, ang, edge };
+    cands.push({ mla, mlo, ang, edge });
   }
-  if (!best) continue;
-  const X = px(best.mlo), Y = py(best.mla);
+  // Try the candidates best-first instead of giving up on the best one. Oxford
+  // Street's most-inboard midpoint is the pavement between Stops J and K, whose
+  // markers are claimed first, so the one street this sheet's subtitle names was the
+  // one street it did not label. Every other street keeps its old position: the first
+  // candidate is unchanged, and the rest are reached only where it failed.
+  cands.sort((a, b) => b.edge - a.edge || a.mla - b.mla || a.mlo - b.mlo);
   const size = MIN_TEXT, tw = FM.textWidth(nm, size, false);
-  const rad = best.ang * Math.PI / 180;
-  const hw = Math.abs(Math.cos(rad)) * tw / 2 + Math.abs(Math.sin(rad)) * size / 2;
-  const hh = Math.abs(Math.sin(rad)) * tw / 2 + Math.abs(Math.cos(rad)) * size / 2;
-  const box = { x0: X - hw, x1: X + hw, y0: Y - hh, y1: Y + hh };
-  if (box.x0 < MAP_X0 + 0.5 || box.x1 > MAP_X1 - 0.5) continue;
-  if (box.y0 < MAP_Y0 + 0.5 || box.y1 > MAP_Y1 - 0.5) continue;
-  if (hits(box)) continue;
-  claim(box);
-  streetSeen.add(nm);
-  out(`<g transform="translate(${f2(X)} ${f2(Y)}) rotate(${f2(best.ang)})">`
-    + `<text x="0" y="0.7" font-size="${size}" fill="#8d959c" text-anchor="middle">${esc(nm)}</text></g>`);
+  for (const best of cands) {
+    const X = px(best.mlo), Y = py(best.mla);
+    const rad = best.ang * Math.PI / 180;
+    const hw = Math.abs(Math.cos(rad)) * tw / 2 + Math.abs(Math.sin(rad)) * size / 2;
+    const hh = Math.abs(Math.sin(rad)) * tw / 2 + Math.abs(Math.cos(rad)) * size / 2;
+    const box = { x0: X - hw, x1: X + hw, y0: Y - hh, y1: Y + hh };
+    if (box.x0 < MAP_X0 + 0.5 || box.x1 > MAP_X1 - 0.5) continue;
+    if (box.y0 < MAP_Y0 + 0.5 || box.y1 > MAP_Y1 - 0.5) continue;
+    if (hits(box)) continue;
+    claim(box);
+    streetSeen.add(nm);
+    out(`<g transform="translate(${f2(X)} ${f2(Y)}) rotate(${f2(best.ang)})">`
+      + `<text x="0" y="0.7" font-size="${size}" fill="#8d959c" text-anchor="middle">${esc(nm)}</text></g>`);
+    break;
+  }
 }
 
 /* SIGNAL-CONTROLLED CROSSINGS AND JUNCTIONS — asked for by name, and they earn
@@ -518,10 +589,24 @@ for (const w of ROAD_WAYS) {
  * signalled junction anywhere within 300 m. A symbol drawn for each is truthful
  * and useful; inventing a network of them would not be.
  */
-let drewSignals = 0;
+// boardingPlan.locatorSignalNearM: keep only signals within N metres of a stand the
+// sheet names.  A signal is on the sheet to support "cross at the lights" on the
+// walk to a flag; one 200 m away on a ring road supports nothing and, where there
+// are 28 of them, hides the flags.  Absent the key nothing is filtered.
+const SIG_NEAR_M = (BP.locatorSignalNearM != null) ? +BP.locatorSignalNearM : null;
+function nearAStand(lat, lon) {
+  if (SIG_NEAR_M == null) return true;
+  for (const s of stands) {
+    if (!s.pos) continue;
+    if (Math.hypot((lat - s.pos[0]) * KY, (lon - s.pos[1]) * KX) <= SIG_NEAR_M) return true;
+  }
+  return false;
+}
+let drewSignals = 0, skippedSignals = 0;
 if (LOC && Array.isArray(LOC.signals)) {
   for (const g of LOC.signals) {
     if (!inFrame(g.lat, g.lon)) continue;
+    if (!nearAStand(g.lat, g.lon)) { skippedSignals++; continue; }
     const X = px(g.lon), Y = py(g.lat);
     if (X < MAP_X0 + 1 || X > MAP_X1 - 1 || Y < MAP_Y0 + 1 || Y > MAP_Y1 - 1) continue;
     // A traffic light: white-cased body so it reads on the road band it sits on,
@@ -585,7 +670,8 @@ for (const p of poi) {
 // the index prints and the flag in the street shows.
 function standMarker(s) {
   if (!s.pos) return;
-  const X = px(s.pos[1]), Y = py(s.pos[0]);
+  const m = MPOS.get(s.atco);
+  const X = m ? m.x : px(s.pos[1]), Y = m ? m.y : py(s.pos[0]);
   const isStand = s.class === 'stand';
   const fill = isStand ? STAND_INK : NAMED_INK;
   // A lettered bay gets the code alone in a disc; a named stop gets a smaller disc
@@ -639,6 +725,10 @@ for (const s of stands) standMarker(s);
 // Off by default for an interchange, on for everything else; boardingPlan
 // .anchorTick overrides either way.
 const INTERCHANGE = new Set(['bus_station', 'ferry_terminal']);
+// The stand key's 'you are already there' caption. Only an interchange anchor has
+// one by default; boardingPlan.hereLabel names it for any other place that does.
+const HERE_PHRASE = (BP.hereLabel != null) ? (BP.hereLabel || null)
+                  : (INTERCHANGE.has(PLACE.type) ? 'in the bus station' : null);
 const ANCHOR_TICK = (BP.anchorTick != null) ? !!BP.anchorTick
   : !INTERCHANGE.has(String(PLACE.type || ''));
 if (ANCHOR_TICK) {
@@ -710,7 +800,14 @@ for (const s of stands) {
   // is 47 m away and OUTSIDE the bus station, and telling a Cambridge passenger they
   // are already there is the specific error this sheet exists to prevent. Print the
   // measured distance and let the reader judge.
-  const walk = s.distM <= 30 ? 'in the bus station'
+  // 'in the bus station' was a town literal wearing a phrase (invariant 1). It is
+  // true only where the anchor IS a bus station, and it is the worst possible thing
+  // to be wrong about: at High Wycombe the anchor is Oxford Street and Stops J and K
+  // are ON Oxford Street, 14 m and 28 m away, yet both were captioned 'in the bus
+  // station' -- sending a reader 200 m up the road, past the flag they wanted, for
+  // every one of the 60 destinations those two stops serve. Off a bus-station anchor
+  // the sheet prints the measured walk instead, which is never wrong.
+  const walk = (HERE_PHRASE && s.distM <= 30) ? HERE_PHRASE
              : `${s.distM} m walk, about ${s.walkMin} min`;
   const facing = s.facing ? `, buses face ${s.facing}` : '';
   out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky)}" font-size="3.1" fill="${INK}">${esc(s.label)}</text>`);
@@ -731,8 +828,19 @@ if (keyOverflow > 0) {
 /* ================================================================= INDEX */
 // The product. Alphabetical by destination, three columns.
 const IX0 = MAP_X1 + 6, IX1 = W - SAFE;
+const IX1_TEXT = W - Math.max(SAFE, PRINT_SAFE);   // where a note line must stop
 const IY0 = HEAD_Y + 4;
-const IY1 = 186;
+// THE INDEX'S FLOOR IS WHATEVER THE LEGEND LEAVES IT.  186 mm was written when the
+// legend was one line; it grows upward from the footer plate, a line per
+// boardingPlan.note, and at three notes it starts at 176.5 mm.  High Wycombe's
+// columns ran to 185.9 and printed their last two rows through it -- undetected,
+// because the rows were inside IY1 and the legend tests nothing.  Inert on any
+// sheet whose columns stop short of the floor.
+const LG_GAP = 3.2;
+const LG_NOTES = BP.note == null ? [] : (Array.isArray(BP.note) ? BP.note.filter(Boolean) : [BP.note]);
+const LG_LINES = 1 + LG_NOTES.length;
+const LG_TOP = PLATE_TOP - 2.0 - LG_GAP * (LG_LINES - 1);
+const IY1 = Math.min(186, LG_TOP - 3.6);
 
 out(`<text x="${f2(IX0)}" y="${f2(IY0 + 3.2)}" font-size="4.0" font-weight="bold" fill="${INK}">${esc(BP.indexHeading || 'Where to board, by destination')}</text>`);
 
@@ -742,7 +850,7 @@ out(`<text x="${f2(IX0)}" y="${f2(IY0 + 3.2)}" font-size="4.0" font-weight="bold
 // truncated into nonsense. A boarding point that cannot be printed in full is not
 // a boarding point, so the column count follows from the longest flag name rather
 // than from how many rows would fit.
-const COLS = 2;
+const COLS = Math.max(1, Math.min(4, Math.round((BP.indexCols != null) ? +BP.indexCols : 2)));
 const COL_GAP = 6.0;
 const colW = ((IX1 - IX0) - COL_GAP * (COLS - 1)) / COLS;
 const HDR_H = 5.8;
@@ -750,8 +858,16 @@ const bodyTop = IY0 + 8.6;
 // Balance the columns instead of filling the first one to the floor: 44 rows over
 // three columns had filled column 1 with 33, column 2 with 11 and left column 3
 // entirely blank.
-const capacity = Math.floor((IY1 - bodyTop - HDR_H) / 4.35);
-const perCol = Math.max(1, Math.ceil(dests.length / COLS));
+// HOW MANY ROWS A COLUMN CAN ACTUALLY HOLD.  This was computed here and then
+// never used: `overflow` below compared dests.length against COLS*perCol, and
+// perCol is itself ceil(dests.length/COLS), so the difference is 0 for every
+// input the generator can be given.  The guard could not fire, and the comment
+// over the stand key ("the destination index already counts what it cannot fit
+// and says so") recorded the opposite belief.  High Wycombe town centre is where
+// it mattered: 87 destinations, a capacity of 64, exit code 0, and 23 rows drawn
+// past the foot of the page and over the footer plate.
+const capacity = Math.max(1, Math.floor((IY1 - bodyTop - HDR_H) / 4.35));
+const perCol = Math.min(capacity, Math.max(1, Math.ceil(dests.length / COLS)));
 const ROW_H = Math.min(6.4, Math.max(4.15, (IY1 - bodyTop - HDR_H) / Math.max(perCol, 1)));
 
 // Column geometry: destination name, then route badges, then the boarding point.
@@ -760,8 +876,42 @@ const ROW_H = Math.min(6.4, Math.max(4.15, (IY1 - bodyTop - HDR_H) / Math.max(pe
 // Road' to 'The Busway Station Ro.' — the same fault the two-column layout was
 // chosen to fix, reintroduced from the other direction. If a longer stop name
 // ever appears, this widens again; it does not get to abbreviate.
-const C_BOARD = colW - 33.0;   // the bay disc / stop name
-const C_ROUTE = C_BOARD - 21.0;
+// The 33 mm and 21 mm below are the widths ONE sheet needed: St Ives, whose
+// longest flag name is 'The Busway Station Road' and whose busiest row carries
+// four badges.  They are kept verbatim as the default so every sheet built
+// against them is unmoved.  Where the config asks for a different column count
+// the reservations are instead MEASURED off this sheet's own rows -- the widest
+// board-at label it will really print, and the widest badge run it will really
+// draw -- because at three columns a guessed 54 mm leaves nothing for the name.
+const BOARD_MAX_BADGES = Math.max(1, Math.round((BP.indexMaxBadges != null) ? +BP.indexMaxBadges : 3));
+function boardCellW(d) {
+  const st = (INDEX.stands || []).find(s => s.atco === d.boardAtAtco);
+  if (st && st.class === 'stand') return 5.0;                       // disc at +2.2, r 2.3
+  return 3.8 + FM.textWidth(String(d.boardAt), 2.6, false) + 0.6;   // named stop, spelled out
+}
+function routeCellW(d) {
+  const shown = displayRoutes(d.routes);
+  let w = 0;
+  for (const r of shown.slice(0, BOARD_MAX_BADGES)) w += Math.max(4.6, FM.textWidth(r, MIN_TEXT, true) + 2.0) + 0.8;
+  return w + (shown.length > BOARD_MAX_BADGES ? 2.6 : 0);
+}
+let C_BOARD, C_ROUTE;
+if (BP.indexCols == null) {
+  C_BOARD = colW - 33.0;   // the bay disc / stop name
+  C_ROUTE = C_BOARD - 21.0;
+} else {
+  const boardW = dests.reduce((m, d) => Math.max(m, boardCellW(d)), 0);
+  const routeW = dests.reduce((m, d) => Math.max(m, routeCellW(d)), 0);
+  const nameW = dests.reduce((m, d) => Math.max(m, FM.textWidth(d.destination, MIN_TEXT, false)), 0) + 1.5;
+  C_BOARD = colW - boardW;
+  C_ROUTE = C_BOARD - routeW;
+  if (C_ROUTE < nameW) {
+    console.error(`gen_boarding: ${COLS} index column(s) leave ${C_ROUTE.toFixed(1)} mm for the destination name;`);
+    console.error(`  the longest one needs ${nameW.toFixed(1)} mm even at the ${MIN_TEXT} mm type floor, so names would be`);
+    console.error('  truncated. Use fewer columns, or move the map edge left with boardingPlan.mapRightMm.');
+    process.exit(2);
+  }
+}
 
 function badge(x, yb, label, route, size) {
   const w = Math.max(4.6, FM.textWidth(label, size, true) + 2.0);
@@ -778,7 +928,15 @@ for (let c = 0; c < COLS; c++) {
   // column header
   out(`<text x="${f2(x0)}" y="${f2(ry)}" font-size="2.5" font-weight="bold" fill="${INK_SOFT}">TO</text>`);
   out(`<text x="${f2(x0 + C_ROUTE)}" y="${f2(ry)}" font-size="2.5" font-weight="bold" fill="${INK_SOFT}">BUS</text>`);
-  out(`<text x="${f2(x0 + C_BOARD)}" y="${f2(ry)}" font-size="2.5" font-weight="bold" fill="${INK_SOFT}">BOARD AT</text>`);
+  // Left-aligned at C_BOARD this header is 11 mm wide in a cell that, once measured
+  // rather than reserved, is 5 mm: it ran into the next column's 'TO' and off the
+  // right trim. Flush right against the column clears both, and clears the 'BUS'
+  // header too because the badge cell never reaches within 6 mm of C_BOARD.
+  if (BP.indexCols == null) {
+    out(`<text x="${f2(x0 + C_BOARD)}" y="${f2(ry)}" font-size="2.5" font-weight="bold" fill="${INK_SOFT}">BOARD AT</text>`);
+  } else {
+    out(`<text x="${f2(x0 + colW)}" y="${f2(ry)}" font-size="2.5" font-weight="bold" fill="${INK_SOFT}" text-anchor="end">BOARD AT</text>`);
+  }
   out(`<line x1="${f2(x0)}" y1="${f2(ry + 1.2)}" x2="${f2(x0 + colW)}" y2="${f2(ry + 1.2)}" stroke="${RULE}" stroke-width="0.4"/>`);
   ry += HDR_H;
 
@@ -837,7 +995,7 @@ for (let c = 0; c < COLS; c++) {
     ry += ROW_H;
   }
 }
-overflow = Math.max(0, dests.length - COLS * perCol);
+overflow = Math.max(0, dests.length - COLS * perCol);   // perCol is now capped at capacity
 if (overflow > 0) {
   console.error(`gen_boarding: ${overflow} destination(s) did not fit and are NOT on the sheet.`);
   console.error('  An index that silently drops rows is the one failure this sheet cannot have.');
@@ -866,17 +1024,26 @@ if (overflow > 0) {
 // raised the plate top from 197.17 mm to 188.10 mm and both lines, pinned to the
 // index bottom at 189.6 and 192.8, were painted over (Peter, 2026-08-23 — the
 // first render of this sheet carrying a QR). 2 mm of air above the plate.
-const LG_GAP = 3.2;
 // `boardingPlan.note` takes a string or an array of them. A place can need more than
 // one line: St Neots has to say both where the letters come from AND that two of the
 // services calling at Stand A are community routes outside the national dataset, and
 // the second sentence is exactly the kind a sheet must not swallow. A single string
-// still renders byte-identically to before.
-const LG_NOTES = BP.note == null ? [] : (Array.isArray(BP.note) ? BP.note.filter(Boolean) : [BP.note]);
-const LG_LINES = 1 + LG_NOTES.length;
-const LGY = Math.min(IY1 + 3.6, PLATE_TOP - 2.0 - LG_GAP * (LG_LINES - 1));
+// still renders byte-identically to before. LG_GAP / LG_NOTES / LG_LINES / LG_TOP are
+// declared with IY1 above, because the index's floor has to know how tall this is.
+const LGY = Math.min(IY1 + 3.6, LG_TOP);
 out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('ltd = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
 LG_NOTES.forEach((n, i) => out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP * (i + 1))}" font-size="2.4" fill="${INK_SOFT}">${esc(n)}</text>`));
+// A note is drawn as one unwrapped line, so a long one walks off the right of the
+// index and into the print-safe margin without anything saying so. quality_metrics
+// caught High Wycombe's third note at 4.62 mm from the trim; the generator that
+// wrote it should be the one to complain.
+for (const n of LG_NOTES) {
+  const w = FM.textWidth(n, 2.4, false);
+  if (IX0 + w > IX1_TEXT) {
+    console.error(`gen_boarding: a boardingPlan.note is ${(IX0 + w - IX1_TEXT).toFixed(1)} mm too long and runs into the print-safe margin:`);
+    console.error(`  "${n.slice(0, 72)}${n.length > 72 ? '...' : ''}"`);
+  }
+}
 
 /* ---------------------------------------------------------------- footer */
 out(FOOTER.footerBand({ ...FOOTER_OPTS,
@@ -894,6 +1061,9 @@ if (LOC) {
 } else {
   console.log('  locator context: locator_geo.json absent — streets only.'
     + ' Run pull_locator.js in this directory to draw buildings, the station apron and the lights.');
+}
+if (markerMoveMax.mm > 0.05) {
+  console.log(`  markers spread to stay legible: furthest move ${markerMoveMax.mm.toFixed(1)} mm (${markerMoveMax.label})`);
 }
 if (HIDE_EMPTY && standsAll.length !== stands.length) {
   const dropped = standsAll.filter(s => !(s.destinations || []).length).map(s => s.label);

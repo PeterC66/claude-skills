@@ -266,9 +266,30 @@ def main():
     frame = list(by_atco)
     ph = ",".join("?" * len(frame))
     reach = defaultdict(set)          # locality -> {atco}
+    # boardingPlan.excludeRoutes governs which services the SHEET indexes, so it has
+    # to govern what the checker compares it against, or the two are describing
+    # different sheets. At High Wycombe the 654 -- a Royal Grammar School working
+    # that is excluded by config -- made Stop K look like a better boarding point
+    # than Bay 18 for three villages the sheet does not claim it serves.
+    excluded = set()
+    try:
+        _bp = read_json(os.path.join(folder, "routes.json")).get("boardingPlan") or {}
+        excluded = {str(r) for r in (_bp.get("excludeRoutes") or [])}
+    except Exception:
+        pass
     if frame:
         tids = [r[0] for r in db.execute(
             "SELECT DISTINCT trip_id FROM stop_times WHERE stop_id IN (%s)" % ph, frame)]
+        if excluded:
+            keep = []
+            for t in tids:
+                row = db.execute(
+                    "SELECT r.route_short_name FROM trips t JOIN routes r ON r.route_id=t.route_id "
+                    "WHERE t.trip_id=?", (t,)).fetchone()
+                if row and str(row[0]) in excluded:
+                    continue
+                keep.append(t)
+            tids = keep
         for t in tids:
             seq = [r[0] for r in db.execute(
                 "SELECT stop_id FROM stop_times WHERE trip_id=? ORDER BY CAST(stop_sequence AS INTEGER)",

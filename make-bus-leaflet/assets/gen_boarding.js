@@ -77,6 +77,11 @@ const INDEX = rd('boarding_index.json');
 const PLACE = rd('place.json');
 const OSM = rd('osm.json', true);
 const ROADS = rd('roads_geo.json', true);
+// GROUND CONTEXT for the locator — pull_locator.js. OPTIONAL, and the fallback is
+// the point: absent, everything below is skipped and the sheet renders exactly as
+// it did before this file existed, byte for byte. So a place built before the pull
+// script existed still re-renders, and an Overpass outage costs context, not a sheet.
+const LOC = rd('locator_geo.json', true);
 
 const BP = RJ.boardingPlan;
 if (!BP) {
@@ -226,15 +231,106 @@ minLo = Math.min(minLo, PLON); maxLo = Math.max(maxLo, PLON);
 }
 const inFrame = (la, lo) => la >= minLa && la <= maxLa && lo >= minLo && lo <= maxLo;
 
+/* RANKING THE LANDMARKS. A jeweller 55 m away is nearer than the Boots 96 m away
+ * and far less use for finding yourself, so the handful of amenity types people
+ * genuinely navigate by go first, then named brands, then the rest by distance.
+ * Applied to osm.json's entries too: left un-ranked they sorted purely by distance
+ * and put "The Spirit of St Ives" — a sculpture, and the one landmark v1.2 printed
+ * — ahead of the pub on the corner.
+ */
+const NAV_AMENITY = new Set(['pharmacy', 'bank', 'post_office', 'library', 'townhall',
+  'place_of_worship', 'pub', 'cinema', 'theatre', 'toilets', 'marketplace', 'doctors']);
+// A place people EAT AND DRINK in is a landmark; a jeweller the same distance away
+// is not. Both are one anonymous `shop`/`amenity` tag to a nearest-first sort, which
+// is how a 55 m jeweller kept beating the 62 m restaurant on the corner.
+const EAT_DRINK = new Set(['restaurant', 'cafe', 'fast_food', 'bar']);
+/* A NAMED THING INSIDE THE PLACE ITSELF OUTRANKS EVERYTHING OUTSIDE IT. "The
+ * Octagon" is the shelter in the middle of St Ives bus station: it is the single
+ * most useful mark on this sheet, and on rank alone it is a `building=shed` with
+ * no function tag and lost its place to a jeweller across the road. Being inside
+ * the polygon the sheet is about is a stronger claim than any tag, so it is tested
+ * first and wins outright.
+ */
+function pointInRing(la, lo, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i][0], xi = ring[i][1], yj = ring[j][0], xj = ring[j][1];
+    if ((yi > la) !== (yj > la) && lo < (xj - xi) * (la - yi) / ((yj - yi) || 1e-12) + xi) inside = !inside;
+  }
+  return inside;
+}
+const ANCHOR_AREAS = (LOC && Array.isArray(LOC.areas))
+  ? LOC.areas.filter(a => (a.kind === 'bus_station' || a.kind === 'pedestrian')
+                          && pointInRing(PLAT, PLON, a.geometry))
+  : [];
+/* ...and being CLOSE ENOUGH TO SEE counts the same way, because OSM's polygons do
+ * not honour the idea. "The Octagon" is the shelter people wait under, 24 m from
+ * the anchor and plainly part of the bus station — and it is mapped as a separate
+ * shed just OUTSIDE the bus_station way, so point-in-polygon alone still lost it
+ * to a jeweller across the road. 40 m is the inner third of a ~130 m frame: near
+ * enough that a reader standing at the bays can see the thing without walking.
+ */
+const NEAR_LANDMARK_M = (BP.locatorNearM != null) ? +BP.locatorNearM : 40;
+const insideAnchorArea = (la, lo) =>
+  distM(la, lo) <= NEAR_LANDMARK_M || ANCHOR_AREAS.some(a => pointInRing(la, lo, a.geometry));
+
+const landmarkRankOf = (t) => {
+  if (t.tourism === 'hotel' || t.tourism === 'museum') return 1;
+  if (NAV_AMENITY.has(t.amenity)) return 1;
+  if (t.shop === 'supermarket' || t.shop === 'convenience' || t.shop === 'department_store') return 1;
+  if (EAT_DRINK.has(t.amenity)) return 2;
+  if (t.brand) return 2;
+  if (t.amenity || t.shop || t.tourism) return 3;
+  // A named building with no function tag — "The Octagon" — is a pointable thing,
+  // and often the best landmark of the lot; it is also where an OSM name that means
+  // nothing to a passenger ends up, so it sits below the trading frontages.
+  return 4;
+};
 const poi = [];
+const poiSeen = new Set();
+const addPoi = (lat, lon, name, tags, rank) => {
+  if (lat == null || lon == null || !name) return;
+  if (!inFrame(lat, lon)) return;
+  const k = name.toLowerCase();
+  if (poiSeen.has(k)) return;               // osm.json and locator_geo.json overlap
+  poiSeen.add(k);
+  poi.push({ lat, lon, name, tags: tags || {}, rank, d: distM(lat, lon) });
+};
 if (OSM && Array.isArray(OSM.elements)) {
   for (const e of OSM.elements) {
-    if (e.lat == null || !e.tags || !e.tags.name) continue;
-    if (!inFrame(e.lat, e.lon)) continue;
-    poi.push({ lat: e.lat, lon: e.lon, name: e.tags.name, tags: e.tags, d: distM(e.lat, e.lon) });
+    if (!e.tags || !e.tags.name) continue;
+    addPoi(e.lat, e.lon, e.tags.name, e.tags, landmarkRankOf(e.tags));
   }
 }
-poi.sort((a, b) => a.d - b.d);
+/* NAMED SHOPFRONTS AND NAMED BUILDINGS ARE THE LANDMARKS AT THIS SCALE, and the
+ * town-scale pull has none of them. overpass-pois.txt asks for supermarkets,
+ * libraries, schools and surgeries — the landmarks of a TOWN map, and at St Ives
+ * Bus Station the nearest one is 138 m away, off the frame. What is actually in
+ * the frame is a parade of shops, a pub and the station's own octagon, and until
+ * pull_locator.js none of it was fetched. That is why v1.2 printed exactly one
+ * landmark, and why it was a sculpture nobody could name.
+ *
+ * `boardingPlan.locatorLandmarks` caps how many are even OFFERED to the placer
+ * (default 6); the occupancy check then drops any that cannot find clear air, so
+ * the printed number is usually smaller.
+ */
+if (LOC) {
+  for (const p of (LOC.places || [])) addPoi(p.lat, p.lon, p.name, p.tags || {},
+    insideAnchorArea(p.lat, p.lon) ? 0 : landmarkRankOf(p.tags || {}));
+  // A named building is a landmark you can point at — "The Octagon" is the shelter
+  // in the middle of this very bus station. Placed at the footprint's centroid.
+  for (const b of (LOC.buildings || [])) {
+    const t = b.tags || {}; if (!t.name) continue;
+    const g = b.geometry; if (!Array.isArray(g) || !g.length) continue;
+    let la = 0, lo = 0;
+    for (const pt of g) { la += pt[0]; lo += pt[1]; }
+    la /= g.length; lo /= g.length;
+    addPoi(la, lo, t.name, t, insideAnchorArea(la, lo) ? 0 : landmarkRankOf(t));
+  }
+}
+poi.sort((a, b) => (a.rank - b.rank) || (a.d - b.d));
+const POI_MAX = (BP.locatorLandmarks != null) ? +BP.locatorLandmarks : 6;
+if (poi.length > POI_MAX) poi.length = POI_MAX;
 
 const spanX = (maxLo - minLo) * KX, spanY = (maxLa - minLa) * KY;
 const boxW = MAP_X1 - MAP_X0, boxH = MAP_Y1 - MAP_Y0;
@@ -246,6 +342,59 @@ const py = (lat) => (MAP_Y0 + boxH / 2) - (lat - cy) * KY * scale;
 out(`<rect x="${f2(MAP_X0)}" y="${f2(MAP_Y0)}" width="${f2(boxW)}" height="${f2(boxH)}" fill="${PLATE}" stroke="${RULE}" stroke-width="0.4" rx="1.5"/>`);
 out(`<clipPath id="mapclip"><rect x="${f2(MAP_X0)}" y="${f2(MAP_Y0)}" width="${f2(boxW)}" height="${f2(boxH)}" rx="1.5"/></clipPath>`);
 out(`<g clip-path="url(#mapclip)">`);
+
+/* --------------------------------------------------- ground context (rule 6)
+ * "I find it hard to envisage it on the ground at the moment" — Peter, on the
+ * v1.2 sheet, 2026-08-23. The locator drew streets, four bay markers and one
+ * landmark; it did not draw the place. At a ~130 m frame the thing that says
+ * WHERE YOU ARE is the built fabric — the shape of the bus station you are
+ * standing in, the buildings across the road, the car park behind you — and none
+ * of it was in the data. pull_locator.js fetches it; this draws it.
+ *
+ * Everything here is BACKGROUND and is toned to stay background. The subject of
+ * this sheet is four numbered discs, and a building layer that competes with them
+ * has made the sheet worse, not better. Order is areas, then buildings, then the
+ * streets on top — a street drawn under a footprint reads as a road going through
+ * a building.
+ */
+const AREA_STYLE = {
+  bus_station: { fill: '#e6ddcb', stroke: '#cbbb9d' },   // the apron: warm, so the
+                                                        // place the sheet is about
+                                                        // is the one shape that is
+                                                        // not neutral grey
+  parking:     { fill: '#eaedf0', stroke: '#d8dee4' },
+  pedestrian:  { fill: '#edeff1', stroke: '#dde1e5' },
+  green:       { fill: '#e4ebe2', stroke: '#d2ded0' },
+};
+function polyD(geometry) {
+  if (!Array.isArray(geometry) || geometry.length < 3) return '';
+  let any = false;
+  const d = geometry.map((pt, i) => {
+    const la = pt[0], lo = pt[1];
+    if (la == null || lo == null) return '';
+    if (inFrame(la, lo)) any = true;
+    return `${i ? 'L' : 'M'}${f2(px(lo))} ${f2(py(la))}`;
+  }).join(' ');
+  return any ? d + ' Z' : '';
+}
+let drewAreas = 0, drewBuildings = 0;
+if (LOC && Array.isArray(LOC.areas)) {
+  // Largest first, so a car park inside a pedestrian precinct still shows.
+  const ordered = LOC.areas.slice().sort((a, b) => b.geometry.length - a.geometry.length);
+  for (const a of ordered) {
+    const st = AREA_STYLE[a.kind]; if (!st) continue;
+    const d = polyD(a.geometry); if (!d) continue;
+    out(`<path d="${d}" fill="${st.fill}" stroke="${st.stroke}" stroke-width="0.3"/>`);
+    drewAreas++;
+  }
+}
+if (LOC && Array.isArray(LOC.buildings)) {
+  for (const b of LOC.buildings) {
+    const d = polyD(b.geometry); if (!d) continue;
+    out(`<path d="${d}" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>`);
+    drewBuildings++;
+  }
+}
 
 // Streets, if pull_roads.js has run — context only, so they stay very quiet.
 // roads_geo.json is {bbox, ways:[{geometry:[[lat,lon],…], tags}]}, NOT a bare
@@ -270,9 +419,17 @@ for (const d of drawnRoads) out(`<path d="${d}" fill="none" stroke="#ffffff" str
 for (const d of drawnRoads) out(`<path d="${d}" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>`);
 
 // POIs — landmarks are how people navigate at this scale (rule 6)
+// A PICTOGRAM ONLY WHERE THERE IS A REAL ONE. The first cut mapped everything it
+// did not recognise onto `community` (two figures), so a jeweller, a bookmaker, a
+// building society, a pet charity and a bus shelter all printed the identical
+// symbol six times on one small map — six marks that carried no information and
+// competed with the four that carry all of it. Anything without a true glyph now
+// gets a plain dot and lets its NAME do the work, which is what a reader reads
+// anyway.
 const ICON_FOR = { supermarket: 'shop', library: 'library', townhall: 'townhall',
-                   place_of_worship: 'community', parking: 'community', pharmacy: 'pharmacy',
-                   pub: 'community', hotel: 'community', memorial: 'museum' };
+                   place_of_worship: 'community', pharmacy: 'pharmacy',
+                   doctors: 'gp', dentist: 'gp', school: 'school',
+                   museum: 'museum', memorial: 'museum', park: 'park' };
 // Landmark labels are placed with a simple occupancy check rather than dropped on
 // top of one another. The stand markers are stamped in FIRST and are immovable —
 // a landmark name over a bay number would obscure the one thing the sheet exists
@@ -326,15 +483,53 @@ for (const w of ROAD_WAYS) {
     + `<text x="0" y="0.7" font-size="${size}" fill="#8d959c" text-anchor="middle">${esc(nm)}</text></g>`);
 }
 
+/* SIGNAL-CONTROLLED CROSSINGS AND JUNCTIONS — asked for by name, and they earn
+ * their place: "cross at the lights" is how a person gives directions, and this
+ * sheet's whole job is a walking instruction. Drawn AFTER the streets and before
+ * the bay markers, and claimed in the occupancy map so no label lands on one.
+ *
+ * Kept honest about how little there usually is. St Ives Bus Station has exactly
+ * ONE inside the frame (a puffin crossing on Station Road, 56 m west); there is no
+ * signalled junction anywhere within 300 m. A symbol drawn for each is truthful
+ * and useful; inventing a network of them would not be.
+ */
+let drewSignals = 0;
+if (LOC && Array.isArray(LOC.signals)) {
+  for (const g of LOC.signals) {
+    if (!inFrame(g.lat, g.lon)) continue;
+    const X = px(g.lon), Y = py(g.lat);
+    if (X < MAP_X0 + 1 || X > MAP_X1 - 1 || Y < MAP_Y0 + 1 || Y > MAP_Y1 - 1) continue;
+    // A traffic light: white-cased body so it reads on the road band it sits on,
+    // three lamps, short mast. 2.9 mm tall — small, but it is a symbol not a label,
+    // so the MIN_TEXT floor (which governs TEXT) does not apply to it.
+    out(`<g transform="translate(${f2(X)} ${f2(Y)})">`
+      + `<rect x="-1.35" y="-2.35" width="2.7" height="4.0" rx="0.6" fill="#ffffff"/>`
+      + `<rect x="-0.95" y="-1.95" width="1.9" height="3.2" rx="0.45" fill="${INK}"/>`
+      + `<circle cx="0" cy="-1.15" r="0.42" fill="#e05a4d"/>`
+      + `<circle cx="0" cy="-0.35" r="0.42" fill="#e0a63d"/>`
+      + `<circle cx="0" cy="0.45" r="0.42" fill="#5aab63"/>`
+      + `<rect x="-0.3" y="1.25" width="0.6" height="1.5" fill="${INK}"/>`
+      + `</g>`);
+    claim({ x0: X - 1.6, x1: X + 1.6, y0: Y - 2.6, y1: Y + 3.0 });
+    drewSignals++;
+  }
+}
+
 let poiLabelled = 0, poiBare = 0;
 for (const p of poi) {
   const kind = p.tags.shop || p.tags.amenity || p.tags.tourism || p.tags.historic || '';
-  const cat = ICON_FOR[kind] || 'community';
+  const cat = ICON_FOR[kind] || null;
   const X = px(p.lon), Y = py(p.lat);
   if (X < MAP_X0 + 1 || X > MAP_X1 - 1 || Y < MAP_Y0 + 1 || Y > MAP_Y1 - 1) continue;
-  const icoBox = { x0: X - 2, x1: X + 2, y0: Y - 2, y1: Y + 2 };
+  const half = cat ? 2 : 1.1;
+  const icoBox = { x0: X - half, x1: X + half, y0: Y - half, y1: Y + half };
   if (hits(icoBox)) continue;               // symbol itself has nowhere to sit
-  out(ICONS.icon(cat, X, Y, 1.7, 'charcoal'));
+  if (cat) {
+    out(ICONS.icon(cat, X, Y, 1.7, 'charcoal'));
+  } else {
+    out(`<circle cx="${f2(X)}" cy="${f2(Y)}" r="0.95" fill="#ffffff"/>`);
+    out(`<circle cx="${f2(X)}" cy="${f2(Y)}" r="0.62" fill="#6b737b"/>`);
+  }
   claim(icoBox);
   const size = MIN_TEXT, tw = FM.textWidth(p.name, size, false);
   const cands = [
@@ -381,12 +576,49 @@ function standMarker(s) {
     out(`<circle cx="${f2(X)}" cy="${f2(Y)}" r="${f2(r + 0.7)}" fill="#ffffff"/>`);
     out(`<circle cx="${f2(X)}" cy="${f2(Y)}" r="${f2(r)}" fill="${fill}"/>`);
     out(`<circle cx="${f2(X)}" cy="${f2(Y)}" r="1.0" fill="#ffffff"/>`);
+    // A LETTERED BAY CARRIES ITS OWN NAME; A NAMED STOP DOES NOT. The ring alone is
+    // anonymous on the map — the reader has to go to the key to find out which of
+    // the four marks it is, and this is the one that matters most here: it is where
+    // every Cambridge passenger boards. Printed VERBATIM, never shortened, because
+    // rule 3 is that the printed string must match the flag.
+    const size = MIN_TEXT, tw = FM.textWidth(s.label, size, false);
+    const cands = [
+      { x: X + 3.4, a: 'start', y: Y + 0.9 },
+      { x: X - 3.4, a: 'end', y: Y + 0.9 },
+      { x: X, a: 'middle', y: Y + 5.4 },
+      { x: X, a: 'middle', y: Y - 3.8 },
+    ];
+    for (const c of cands) {
+      const x0 = c.a === 'start' ? c.x : c.a === 'end' ? c.x - tw : c.x - tw / 2;
+      const b = { x0, x1: x0 + tw, y0: c.y - size, y1: c.y + 0.8 };
+      if (b.x0 < MAP_X0 + 0.5 || b.x1 > MAP_X1 - 0.5) continue;
+      if (b.y0 < MAP_Y0 + 0.5 || b.y1 > MAP_Y1 - 0.5) continue;
+      if (hits(b)) continue;
+      claim(b);
+      out(`<text x="${f2(c.x)}" y="${f2(c.y)}" font-size="${size}" font-weight="bold"`
+        + ` fill="${NAMED_INK}" text-anchor="${c.a}">${esc(s.label)}</text>`);
+      break;
+    }
   }
 }
 for (const s of stands) standMarker(s);
 
-// the anchor itself, drawn last and small — "you are here"
-out(`<circle cx="${f2(px(PLON))}" cy="${f2(py(PLAT))}" r="1.1" fill="none" stroke="${INK}" stroke-width="0.5"/>`);
+// the anchor itself, drawn last and small — "you are here".
+//
+// Only where the place is a LANDMARK the stops sit near — a shop, a school, a
+// hospital. At an interchange the stands ARE the place, so this draws a fifth
+// point that is not a stop and cannot be boarded: on St Ives Bus Station it fell
+// 8 mm from Bay 2, clear of every marker, and read as a stop we had failed to
+// label (Peter, 2026-08-23). It is the OSM centroid of the bus-station polygon,
+// not any stop's NaPTAN position, which is why no marker-overlap test catches it.
+// Off by default for an interchange, on for everything else; boardingPlan
+// .anchorTick overrides either way.
+const INTERCHANGE = new Set(['bus_station', 'ferry_terminal']);
+const ANCHOR_TICK = (BP.anchorTick != null) ? !!BP.anchorTick
+  : !INTERCHANGE.has(String(PLACE.type || ''));
+if (ANCHOR_TICK) {
+  out(`<circle cx="${f2(px(PLON))}" cy="${f2(py(PLAT))}" r="1.1" fill="none" stroke="${INK}" stroke-width="0.5"/>`);
+}
 out(`</g>`);
 
 // north arrow — a plan that is north-up must say so (rule 7's other half)
@@ -541,28 +773,62 @@ if (overflow > 0) {
   console.error('  boardingPlan (paper §5: "selected destinations" needs a stated rule).');
 }
 
+/* ----------------------------------------------------------- footer options */
+// Built HERE, above the legend, because the legend has to know where the footer
+// plate starts. `safe` is opt-in on footerBand and defaults to null, which leaves
+// the credit 3 mm from the right trim — the exact fault the 2026-08-16 printSafe
+// work fixed on all 21 town sheets. Omitting it here put this sheet's nearest ink
+// at 3.41 mm and failed the quality metric's 5 mm edge rule on its first measurement.
+//
+// design.sheetUrl / sheetQr / sheetUrlLabel / sheetVersion — the QR and the printed
+// build stamp. footerBand has taken all four since 2026-08-18 and gen_internal.js has
+// passed them since; this sheet never did, so it shipped with no QR and no version a
+// reader could quote back (Peter, 2026-08-23). Every key is opt-in and null-safe: a
+// routes.json with no design block renders byte-identically.
+//
+// ONE options object, passed to BOTH footerPlateTop and footerBand — the rule
+// gen_internal.js follows for the same reason, so the plate the legend dodges can
+// never be a different plate from the one that gets drawn.
+const PRINT_SAFE = (RJ.design && RJ.design.printSafe != null) ? +RJ.design.printSafe : 5;
+const DESIGN = RJ.design || {};
+const FOOTER_OPTS = {
+  notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
+  url: DESIGN.sheetUrl || null,
+  qr: DESIGN.sheetQr || null,
+  sheetVersion: DESIGN.sheetVersion || null,
+  ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}),
+  x0: SAFE, x1: W - SAFE, safe: PRINT_SAFE,
+};
+const PLATE_TOP = FOOTER.footerPlateTop(FOOTER_OPTS);
+
 /* ---------------------------------------------------------------- legend */
-const LGY = IY1 + 3.6;
+// Under the index where there is room, but never under the footer plate: the QR
+// raised the plate top from 197.17 mm to 188.10 mm and both lines, pinned to the
+// index bottom at 189.6 and 192.8, were painted over (Peter, 2026-08-23 — the
+// first render of this sheet carrying a QR). 2 mm of air above the plate.
+const LG_GAP = 3.2;
+const LG_LINES = BP.note ? 2 : 1;
+const LGY = Math.min(IY1 + 3.6, PLATE_TOP - 2.0 - LG_GAP * (LG_LINES - 1));
 out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('ltd = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
-if (BP.note) out(`<text x="${f2(IX0)}" y="${f2(LGY + 3.2)}" font-size="2.4" fill="${INK_SOFT}">${esc(BP.note)}</text>`);
+if (BP.note) out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP)}" font-size="2.4" fill="${INK_SOFT}">${esc(BP.note)}</text>`);
 
 /* ---------------------------------------------------------------- footer */
-// `safe` is opt-in on footerBand and defaults to null, which leaves the credit
-// 3 mm from the right trim — the exact fault the 2026-08-16 printSafe work fixed
-// on all 21 town sheets. Omitting it here put this sheet's nearest ink at 3.41 mm
-// and failed the quality metric's 5 mm edge rule on its first measurement.
-const PRINT_SAFE = (RJ.design && RJ.design.printSafe != null) ? +RJ.design.printSafe : 5;
-out(FOOTER.footerBand({
-  notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
+out(FOOTER.footerBand({ ...FOOTER_OPTS,
   version: RJ.version || 'v1.0',
   validFrom: RJ.validFrom || 'Summer 2026',
-  x0: SAFE, x1: W - SAFE, safe: PRINT_SAFE,
 }));
 
 out(`</g></svg>`);
 
 fs.writeFileSync(path.join(DIR, OUT), parts.join('\n'));
 console.log(`gen_boarding: wrote ${OUT} — ${dests.length} destination(s), ${stands.length} boarding point(s)`);
+if (LOC) {
+  console.log(`  locator context: ${drewBuildings} building(s), ${drewAreas} area(s), `
+    + `${drewSignals} signal(s), ${poiLabelled} landmark label(s), ${poiBare} unlabelled`);
+} else {
+  console.log('  locator context: locator_geo.json absent — streets only.'
+    + ' Run pull_locator.js in this directory to draw buildings, the station apron and the lights.');
+}
 if (HIDE_EMPTY && standsAll.length !== stands.length) {
   const dropped = standsAll.filter(s => !(s.destinations || []).length).map(s => s.label);
   console.log(`  not drawn (never the nearest boarding point for anything): ${dropped.join(', ')}`);

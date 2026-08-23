@@ -63,11 +63,12 @@ import io
 import json
 import math
 import os
+import re
 import sqlite3
 import sys
 from collections import defaultdict
 
-SCRIPT_VERSION = "1.0"
+SCRIPT_VERSION = "1.1"
 
 
 def read_json(path):
@@ -130,6 +131,21 @@ def main():
     args = ap.parse_args()
 
     folder = os.path.abspath(args.dir)
+
+    # boardingPlan.excludeRoutes -- services to leave OFF the sheet even though the
+    # feed still carries them. The case it was built for: Whippet's 101 to Hunstanton
+    # is a summer seaside service whose calendar ends 13 Sep 2026, so a sheet printed
+    # in August and read in October would send a reader to Bay 2 for a bus that has
+    # stopped running (Peter, 2026-08-23). Filtered HERE, at the index, and never in
+    # stands.json -- that file records what NaPTAN and the feed say about a stop, and
+    # this is an editorial decision about a sheet. Absent key => byte-identical output.
+    exclude = set()
+    try:
+        _rj = read_json(os.path.join(folder, "routes.json"))
+        exclude = {str(r) for r in ((_rj.get("boardingPlan") or {}).get("excludeRoutes") or [])}
+    except (OSError, ValueError):
+        pass
+
     try:
         place = read_json(os.path.join(folder, "place.json"))
         stands = read_json(os.path.join(folder, "stands.json"))
@@ -183,6 +199,40 @@ def main():
     # applies a locality's parent from elsewhere in the register, but ONLY where
     # the whole register agrees on a single parent for that name. "Church End"
     # has five, so it is left alone and its per-ATCO parent stands.
+    # THE ROLLUP MUST STOP AT A JOINT CIVIL PARISH. Reported by Peter, 2026-08-23:
+    # route 301 serves Needingworth and the index printed "Holywell-cum-Needingworth",
+    # so a reader looking for the village they were going to could not find it. That
+    # is not an unfamiliar spelling, it is a wrong answer: EVERY stop the 301 family
+    # calls at in that parish is in Needingworth, and Holywell -- the other half of
+    # the name -- has one stop (0500HHOLY009) that no service calls at at all. The
+    # printed name therefore advertised a village the bus does not reach.
+    #
+    # A joint parish ("Holywell-cum-Needingworth", "Bythorn and Keyston") is an
+    # ADMINISTRATIVE union of villages that keep their own names, which is a
+    # different relationship from the hamlet-to-town one the rollup exists for. The
+    # test is narrow on purpose: the child must be a whole COMPONENT of the
+    # compound, not merely contained in it. "Fenton End" is not a component of
+    # "Pidley cum Fenton", so it still rolls up -- and it must, because most stops
+    # in that parish carry "Pidley cum Fenton" directly and un-rolling the other two
+    # would print one village under two names.
+    #
+    # Measured over the whole NaPTAN register (127,658 stops) this fires on exactly
+    # six locality names, and every one is a village a passenger would name:
+    # Bythorn, Keyston, Caldecote, Folksworth, Washingley, Needingworth.
+    JOINT = re.compile(r"\s*(?:-cum-|\scum\s|-with-|\swith\s|-and-|\sand\s|\s&\s)\s*",
+                       re.IGNORECASE)
+
+    def _norm(v):
+        return re.sub(r"[^a-z0-9]", "", (v or "").lower())
+
+    def joint_parish(child, parent):
+        """True when `parent` is a joint parish and `child` is one of its halves."""
+        parts = JOINT.split(parent or "")
+        if len(parts) < 2:
+            return False
+        c = _norm(child)
+        return bool(c) and any(_norm(x) == c for x in parts)
+
     parent_of = {}
     ambiguous = set()
     for child, parent in nap.execute(
@@ -212,6 +262,8 @@ def main():
             nxt = parent_of.get(cur)
             if not nxt or nxt == cur:
                 break
+            if joint_parish(cur, nxt):
+                break
             cur = nxt
         return cur
 
@@ -226,7 +278,10 @@ def main():
         val = None
         if r:
             child, parent = (r[0] or "").strip(), (r[1] or "").strip()
-            val = climb(parent or child) or None
+            if parent and child and joint_parish(child, parent):
+                val = child                      # a half of a joint parish keeps its own name
+            else:
+                val = climb(parent or child) or None
         loc_cache[atco] = val
         return val
 
@@ -268,6 +323,8 @@ def main():
         if not row:
             continue
         rname, svc = row[0], row[1]
+        if rname in exclude:
+            continue          # boardingPlan.excludeRoutes
         per_week = week_of.get(svc, 0)
         if per_week == 0:
             continue  # no operating day in the feed week -- not a service a reader can catch
@@ -290,6 +347,10 @@ def main():
                 cell["routes"].add(rname)
                 cell["trips"] += per_week
             route_of.setdefault(rname, True)
+
+    if exclude:
+        print("  boardingPlan.excludeRoutes: left off the sheet -- %s"
+              % ", ".join(sorted(exclude)))
 
     if not reach:
         sys.stderr.write("boarding_index: no onward destinations found\n")

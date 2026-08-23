@@ -37,6 +37,20 @@ The config-driven keys the generators read (2026-06-07 — the per-town code edi
 
 From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-in; **absent ⇒ byte-identical**, like every other key here.
 
+#### `internalRoads.skeletonMaxW` — a ceiling on the grey road casing (2026-08-23)
+
+```json
+"internalRoads": { "skeletonMaxW": 11 }
+```
+
+Absent ⇒ **uncapped**, which is every map built before this date, byte for byte.
+
+The casing is sized by **drawn lanes**: `(drawn lanes − 1) × gap + stroke + skeletonPad`. Nine services sharing a corridor therefore reach 23.7 mm of grey whatever the street underneath is like — on a place map at ~0.38 mm per metre, a 62-metre-wide road. And at an interchange it is credited with lanes that are not there: a segment counts every bundle member passing within `corridor.dist` of its **midpoint**, and there they are converging rather than running parallel, so short segments carry a full-width **round** cap and the caps fuse into a lobe wider than any road.
+
+**Set it near the widest real road in the frame as that road measures on the page**, and read the number off the map rather than copying one: `DBG_CASE=1` prints the **uncapped** maximum and how many segments the cap clamped. St Ives Bus Station uses 11 mm against an uncapped 23.7 mm, clamping 11 segments; its widest real feature is the bus-station apron at about 25 m.
+
+Below the ceiling nothing changes, so a value above the uncapped maximum is a no-op rather than an error.
+
 #### `internalCorridors` — rung 1, LIVE since P2 (2026-07-28)
 
 ```json

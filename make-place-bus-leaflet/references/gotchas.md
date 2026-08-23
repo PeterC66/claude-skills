@@ -189,6 +189,46 @@ Reported as "the street skeleton seems very broad" on Ely Co-op. The casing widt
 
 **So close the gap rather than narrowing the band.** Ely went to `stroke 2.0 / gap 2.6 / skeletonPad 0.9`: the band barely moves (28.2 → 26.3 mm) but the grey between lanes drops 1.1 → 0.6 mm and the colours fill the road. The source comment says keep `gap ≥ stroke + ~1 mm` so bundled lanes read separately; 0.6 mm still separates them cleanly at 300 dpi, and that comment is the reason nobody had tried it. Bundling via `internalCorridors` is the other lever but costs identity — bundling Ely's 112+12 (0.93/0.87 shared, a legitimate family) turned route 12 green and put two identical green badges side by side, which is worse than the 2.6 mm it saved.
 
+## …and past a point it is not a road at all — cap it (2026-08-23)
+
+Closing the gap (above) was the right first move and it was not enough. Reported again on St Ives Bus Station as "a lot of **curved** grey road casing around the central knot", and the adjective is the diagnosis.
+
+**Render the casing layer on its own before theorising.** Strip every path except `stroke="#e4e4e4"` out of the SVG and rasterise that alone. The St Ives knot came back as a single grey **amoeba with clear white space inside it** — not a set of road bands at all. That one picture replaced a page of guessing about gaps and lane counts.
+
+Two things were happening at once:
+
+- **The casing had outgrown the ground.** Width is `(drawn lanes − 1) × gap + stroke + skeletonPad`, so nine services give 23.7 mm whatever the street is like. At this map's scale (~0.38 mm per metre) that is a **62-metre-wide road** through a market town. Lane count is a *drawing* fact; road width is a *ground* fact; past a point the casing stops describing the second and only describes the first.
+- **At a junction it is credited with lanes that are not there.** A segment counts every bundle member whose line passes within `corridor.dist` (2.4 mm ≈ 65 m) of its **midpoint**. At an interchange all of them do — but they are *converging*, not running parallel, so the ink never fills the credited width. Those segments are one or two millimetres long and carry a **round** cap, so a 23.7 mm stroke paints a 23.7 mm **disc**, and a cluster of them fuses into a lobe. That is where "curved" comes from.
+
+**Fix: `internalRoads.skeletonMaxW`** (new 2026-08-23, absent ⇒ uncapped and byte-identical). Set it near the widest real thing in the frame as it measures on the page — St Ives Bus Station used **11 mm**, just above the ~25 m bus-station apron. Clamping the width clamps the cap radius with it, which is what removes the lobe; below the ceiling nothing changes at all. `DBG_CASE=1` prints the **uncapped** maximum plus how many segments were clamped, so the number is read off the map rather than guessed.
+
+**Do not copy 11 mm to the next place.** It is a per-place number and the whole point is that it tracks the ground, not the lane stack.
+
+## An identical twin is a config problem, not a drawing one (2026-08-23)
+
+"Two seemingly identical 301 routes from the bus station to Ramsey" — and they were not *seemingly* identical. `301` and `301V` matched onto **73 of 73 identical road edges**, so the sheet drew two magenta lines side by side, each badged "301". Check this directly before reaching for any engine key: read `routes_paths.json` and compare the `edges` sets pairwise. Where two variants share 1.00, the second line carries no information.
+
+**`internalCorridors` is the wrong tool for this and it is the obvious one.** It makes a family one *lane*, which fixes the casing width — but the badge pass draws the stack of every member co-running at that point, so the shared branch printed "301" **three times over**. `badgeLabels` cannot help; there is no dedupe. The right fix is the same config-only route a withdrawn route takes: drop the twin from `palette`, `textOn`, `routeOrder`, `frequency`, `internalRoads.termini` and `operators[].routes`, and say why in a `_note`.
+
+**Keep the sibling that is genuinely different, and make it say so.** `301S` shares only 11 % of its path, so it is a real second line — it badges as `301S` and earns its own Services row. A same-coloured line with no way to tell it from its neighbour is the defect; two lines with different badges is not.
+
+**And none of this reaches the boarding plan.** `boarding_index.py` reads `stands.json` and the feed directly and never consults `routeOrder`, so every variant's departures survive under `boardingPlan.routeGroups` — which is the same separation `boardingPlan.excludeRoutes` had to exist for.
+
+## The locator map needs its own OSM pull — the town one has nothing in the frame (2026-08-23)
+
+"I find it hard to envisage it on the ground at the moment… the one POI on the plan is not well-known at all." The boarding plan's locator drew streets, four bay markers and one landmark, and the landmark was a sculpture. **It reads as a data gap dressed up as a drawing problem.** `overpass-pois.txt` asks for supermarkets, libraries, schools and surgeries — the landmarks of a **town** map. At the ~130 m frame a boarding plan needs, the nearest of those at St Ives is 138 m away and off the page. What *is* in the frame is building fabric and shopfronts, and none of it had ever been fetched.
+
+`pull_locator.js` (town skill `assets/`) fetches building footprints, the bus-station apron, car parks and pedestrian areas, signal-controlled crossings, and named shops/amenities within a radius of the anchor, into `locator_geo.json`. `gen_boarding.js` draws them as quiet background. **The file is optional and its absence is byte-identical**, so an older place re-renders untouched.
+
+Four things learned drawing it:
+
+- **The apron is the "you are here".** Drawing the `amenity=bus_station` polygon in a warm tint, alone among neutral greys, does more than any label: the bays are inside a shape the reader is standing in.
+- **Nearest-first is the wrong ranking.** It put a jeweller 55 m away ahead of the pub on the corner and a sculpture ahead of both. Rank by usefulness first: inside-the-place-or-within-40 m wins outright, then the amenity types people navigate by, then eating and drinking places, then everything else by distance.
+- **Point-in-polygon is not enough for "inside the place".** *The Octagon* — the shelter people wait under, 24 m away — is mapped as a `building=shed` just **outside** the bus-station way, so the polygon test lost it. A distance fallback is what recovers it.
+- **A pictogram only where there is a real one.** Mapping every unrecognised kind onto the `community` two-figures glyph printed the identical symbol six times on one small map. A plain dot plus the **name** carries more and competes less.
+
+**Count what you actually have before promising it.** Asked for traffic lights, the honest answer here is *one* — a puffin crossing 56 m west; there is no signalled junction within 300 m. Draw the one and say so.
+
 ## stage.js `commit` believes whatever you declare (2026-08-21)
 
 Two traps, hit in one command. **First: never pass an already-absolute path as `"$PWD/$S3"`.** `stage.js new S3` prints an absolute path; joining it onto the cwd records a mangled `dir` in `manifest.json` (`.../Ely Co-op/C:/u3a St Ives/.../S3-config/...`), after which `pull S3` fails with an ENOENT that names a path containing the town folder twice. Either `cd` to the run dir and pass `"$PWD"`, or keep a relative path. **Second, and worse: `commit` does not check that the outputs you declare actually exist.** With the pulls broken, `build_internal_place_roads.js` had nothing to build from and wrote nothing, and `commit S4 --outputs internal.svg,external.svg,...` still reported "committed — 5 output(s)" over an empty folder. The manifest then advertises a version that has no map in it. **Always `ls` the run folder before committing it**, and read `pull`'s output rather than sending it to `/dev/null` — the successful form prints `pulled S3 (<id>) -> <dir>`.

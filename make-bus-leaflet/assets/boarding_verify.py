@@ -58,7 +58,7 @@ import sqlite3
 import sys
 from collections import defaultdict
 
-SCRIPT_VERSION = "1.0"
+SCRIPT_VERSION = "1.1"
 
 
 def read_json(p):
@@ -187,15 +187,57 @@ def main():
 
     lc = {}
 
+    # A STOP CAN BE HONESTLY NAMED MORE THAN ONE WAY, so this returns the SET of
+    # names a sheet is allowed to print for it, not one name.
+    #
+    # boarding_index.py stops the parent rollup at a joint civil parish, so route
+    # 301's Needingworth stops print "Needingworth" rather than the parish name
+    # "Holywell-cum-Needingworth" (2026-08-23; the parish name sent a reader
+    # looking for a village name that was not in the index). Re-deriving with only
+    # the rolled-up name then reported every one of those rows as HARD S-2 — the
+    # bus really does reach the place, the two files just disagreed about what to
+    # call it.
+    #
+    # Copying the rollup rule into this file would fix the symptom and cost the
+    # independence that makes this check worth running: it would then only ever
+    # confirm that the generator agrees with itself. So it stays independent about
+    # the thing S-2 actually tests — DOES A BUS LEAVE THIS STAND AND REACH THAT
+    # PLACE — and widens what it will ACCEPT as a name for the place, by exactly
+    # the one case where NaPTAN itself offers two honest answers.
+    #
+    # Deliberately NOT "any un-rolled name is acceptable". That would let the sheet
+    # print "Kings Hedges" for Cambridge and still pass, because a bus does reach
+    # Kings Hedges. The exception is a joint civil parish — a name of the form
+    # "A-cum-B" or "A and B", where the child IS one of the halves — and over the
+    # whole register that is six names: Bythorn, Keyston, Caldecote, Folksworth,
+    # Washingley, Needingworth. Everywhere else the rolled-up name is still the
+    # only answer this check will take.
+    JOINT_RE = re.compile(r"\s*(?:-cum-|\scum\s|-with-|\swith\s|-and-|\sand\s|\s&\s)\s*",
+                          re.IGNORECASE)
+
+    def _norm(v):
+        return re.sub(r"[^a-z0-9]", "", (v or "").lower())
+
+    def joint_parish(child, parent):
+        parts = JOINT_RE.split(parent or "")
+        if len(parts) < 2:
+            return False
+        c = _norm(child)
+        return bool(c) and any(_norm(x) == c for x in parts)
+
     def locality(atco):
         if atco in lc:
             return lc[atco]
         r = nap.execute("SELECT LocalityName, ParentLocalityName FROM naptan WHERE ATCOCode=?",
                         (atco,)).fetchone()
-        v = None
+        v = set()
         if r:
             child, parent = (r[0] or "").strip(), (r[1] or "").strip()
-            v = climb(parent or child) or None
+            top = climb(parent or child)
+            if top:
+                v.add(top)
+            if child and parent and joint_parish(child, parent):
+                v.add(child)          # a half of a joint parish is its own honest name
         lc[atco] = v
         return v
 
@@ -215,8 +257,7 @@ def main():
                 if sid not in by_atco:
                     continue
                 for nxt in seq[i + 1:]:
-                    l = locality(nxt)
-                    if l:
+                    for l in locality(nxt):
                         reach[l].add(sid)
 
     for d in dests:

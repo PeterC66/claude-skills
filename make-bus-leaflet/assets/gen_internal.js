@@ -54,6 +54,16 @@
 //                                      // more aggressively, lower it to avoid merging close
 //                                      // parallel streets.
 //     skeleton:"#e4e4e4", skeletonPad:1.3,   // road casing colour / extra width (bundle-sized)
+//     skeletonMaxW:14,                // OPTIONAL ceiling on the casing width, mm. Absent =>
+//                                      // uncapped (every map before 2026-08-23). The casing is
+//                                      // sized by DRAWN LANES, so nine services on one corridor
+//                                      // give 23.7 mm of grey whatever the street is like -- and
+//                                      // at a junction, where the credited lanes are converging
+//                                      // rather than running parallel, the round line-caps of
+//                                      // those short wide segments fuse into a grey lobe wider
+//                                      // than any road. Set it near the widest real road in the
+//                                      // frame as it measures on the page. DBG_CASE=1 prints the
+//                                      // uncapped maximum to size it from.
 //     contextRoads:true, contextColor:"#f0f0f0", contextWidth:0.45, // named side roads
 //     focus:{coreKm:1.1, comp:0.5},   // fisheye: built-up-centroid radius kept 1:1 / outer scale.
 //                                      // LOWER comp => interchange bigger (smaller compressed
@@ -1755,7 +1765,7 @@ if(IR){
     : drawnCovers1;
   SKEL=[];                                       // [{c,p,q,name}] for road labels
   const eSeen=new Set();
-  let _wmax=0;
+  let _wmax=0, _capped=0;
   for(const r of order){ const o=RPP[r]; if(!o)continue; const Pp=o.P,E=o.E;
     for(let i=0;i<E.length;i++){ const t=E[i]; if(!t)continue; const c=canonOf(t);
       if(eSeen.has(c))continue; eSeen.add(c);
@@ -1774,11 +1784,37 @@ if(IR){
       for(let k2=0;k2<nb;k2++){ if(!drawnCovers(bundle[k2],M))continue;
         const off=(k2-(nb-1)/2)*IR.gap; if(off<loO)loO=off; if(off>hiO)hiO=off; }
       const drawn=hiO>=loO, mid=drawn?(loO+hiO)/2:0, span=drawn?(hiO-loO):0;
-      const w=span + IR.stroke + IR.skeletonPad;
+      // skeletonMaxW -- a ceiling on the casing, in mm. Absent => no ceiling, which
+      // is every map built before 2026-08-23, byte for byte.
+      //
+      // WHY A CEILING IS NOT A FUDGE. The casing is sized by the drawn lanes, and a
+      // lane is a DRAWING artefact: nine services on one corridor stack to
+      // 8*gap + stroke + pad = 23.7 mm whatever the road is like underneath. On the
+      // St Ives Bus Station place map that is 62 metres of ground -- six lanes of
+      // motorway -- for a market-town street about ten metres wide. So past a point
+      // the casing stops describing a road and starts describing the stack.
+      //
+      // AND IT IS WORSE AT A JUNCTION, which is what gets reported. A segment is
+      // credited with every bundle member whose line passes within corridor.dist of
+      // its MIDPOINT, so where eight routes converge on an interchange all eight
+      // count -- but they are converging, not running parallel, so the ink does not
+      // fill the width they are credited with. Each such segment is only a
+      // millimetre or two long and carries a ROUND cap, so a 23.7 mm stroke paints a
+      // 23.7 mm disc; a cluster of them fuses into one lobe. Rendered on its own the
+      // St Ives knot was a single grey amoeba with clear white inside it. Reported
+      // as "a lot of curved grey road casing around the central knot" (Peter,
+      // 2026-08-23) -- and "curved" is the diagnosis: those are cap arcs.
+      //
+      // Clamping the WIDTH clamps the cap radius with it, which is what removes the
+      // lobe. Set it to about what the widest real road in the frame measures on the
+      // page; below the ceiling nothing changes at all.
+      const wRaw=span + IR.stroke + IR.skeletonPad;
+      let w=wRaw;
+      if(IR.skeletonMaxW!=null && w>IR.skeletonMaxW){ w=+IR.skeletonMaxW; _capped++; }
       const [rdx,rdy]=refDir(bundle[0],M[0],M[1],Pp[i+1][0]-Pp[i][0],Pp[i+1][1]-Pp[i][1]);
       const Ln=Math.hypot(rdx,rdy)||1, nX=-rdy/Ln*mid, nY=rdx/Ln*mid;
       const p0x=Pp[i][0]+nX, p0y=Pp[i][1]+nY, p1x=Pp[i+1][0]+nX, p1y=Pp[i+1][1]+nY;
-      if(w>_wmax)_wmax=w;
+      if(wRaw>_wmax)_wmax=wRaw;      // the UNCAPPED maximum, so DBG_CASE can size the cap
       // DBG_CASE=2: per-segment casing report (road name, geometric bundle size,
       // drawn lanes, final width, centre offset) -- companion to DBG_TRIM/DBG_LABELS.
       if(process.env.DBG_CASE==='2' && inFrame(M)){ const nm=(RP.edgeWay[c]&&RP.edgeWay[c].name)||'?';
@@ -1787,7 +1823,8 @@ if(IR){
       SKEL.push({c, p:Pp[i], q:Pp[i+1], name:(RP.edgeWay[c]&&RP.edgeWay[c].name)||null});
       out(`<path d="M${p0x.toFixed(2)} ${p0y.toFixed(2)}L${p1x.toFixed(2)} ${p1y.toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${w.toFixed(2)}" stroke-linecap="round"/>`);
     } }
-  if(process.env.DBG_CASE) console.error('CASE max casing width '+_wmax.toFixed(2)+' mm');
+  if(process.env.DBG_CASE) console.error('CASE max casing width '+_wmax.toFixed(2)+' mm (uncapped)'
+    + (IR.skeletonMaxW!=null ? '; skeletonMaxW '+IR.skeletonMaxW+' mm clamped '+_capped+' segment(s)' : ''));
   // -- keyRoads: named roads drawn at skeleton weight regardless of bus usage
   //    today (e.g. a real-world corridor continuation whose stretch nearest a
   //    junction happens to be unused). Same RG.ways name-lookup technique the

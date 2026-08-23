@@ -32,12 +32,12 @@ Scrape with WebFetch. Because WebFetch summarises, cross-check any group whose d
 1. **Exactly two pages.** This overrides completeness — it is better to drop days/times than to spill onto a third page.
 2. **Never reduce the font size** (older readers must be able to read it).
 3. **Preserve** colours, font, headers, footers, and the u3a logo. Only change group content and the "As at" date.
-4. **Condensations are allowed** to save space: merge "1/2" variants into one cell (e.g. "Table Tennis 1/2", "Tai Chi Friday/Tuesday", "French Intermed 1/2"); full groups may be listed with **no** day/time.
+4. **Condensations are allowed** to save space: merge "1/2" variants into one cell (e.g. "Table Tennis 1/2", "Tai Chi Friday/Tuesday", "French Intermed 1/2"); an established **condensed row** — a whole row of full/waiting-list groups shown in status colour only, no day/time, matching the document's existing layout — may stay that way. **This does not excuse a lone blank cell on a New (amber) group sitting in an ordinary row.** That blank usually just means the schedule wasn't fixed when the group was added, not a deliberate space-saving choice — see check 1.
 5. **Interest Area order:** keep the document's existing order — Literature is deliberately placed **before** Languages to keep an area's groups together on one page.
 6. **Outings, Theatre Trips, Events** and **Support Teams** are intentionally NOT sections; they appear only in the footer note. Don't add them as sections.
 
 ## The five checks each month
-1. Every current website group is present, with correct day/time.
+1. Every current website group is present, with correct day/time. **A blank day/time on a New (amber) group needs its own look**: it's often provisional — added before the schedule was fixed — not the document's deliberate condensed-row pattern. Check the website for each blank New Group specifically; if it now publishes a day/time, propose adding it to the confirmation table, even though blank cells in an established condensed row elsewhere are fine and untouched.
 2. No groups appear that aren't on the website.
 3. Each cell's colour matches its status per the key.
 4. Each group sits under the correct Interest Area. **New groups** go under the area the **webpage specifies**; if the site lists a group under several areas, pick one and flag it in the confirmation table.

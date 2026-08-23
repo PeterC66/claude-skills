@@ -34,7 +34,7 @@ Scrape with WebFetch. Because WebFetch summarises, **cross-check any group you i
 - Closed / "no longer meeting" groups belong in the list, in grey. A closed group present and grey is correct, not a finding.
 
 ## The five checks
-1. Every current website group is present in the supplied version, with the correct day/time.
+1. Every current website group is present in the supplied version, with the correct day/time. **A blank day/time on a New (amber) group needs its own look, not a pass by default.** The document's established condensed rows — a whole row of full/waiting-list groups shown in status colour only, no day/time, matching the surrounding layout — are a deliberate space-saving choice and not a finding. A lone blank cell on a New group sitting in an otherwise-populated row is different: it's usually provisional, left blank because the schedule wasn't fixed when the group was added. Check the website for each such blank specifically; if it now publishes a day/time, that's a check-1 finding even though blank condensed-row cells elsewhere are fine.
 2. No groups appear that aren't on the website.
 3. Each cell's colour matches its status per the key.
 4. Each group sits under the correct Interest Area. If the site lists a group under several areas, say so and name them rather than picking one silently.

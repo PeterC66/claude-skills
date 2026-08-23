@@ -185,14 +185,43 @@ function gatePortalFixture() {
     // A fixture has no manifest to consult, and it exists precisely to be a frozen
     // shipped sheet — so NO-SHEET here is never "never built", it is a fixture that
     // has lost the artwork it is supposed to prove. Always MISSING, always red.
-    const fInt = exists(genInt)
+    //
+    // 2026-08-23 — that held while every place fixture carried both sheets, and
+    // broke the day one did not. `High Wycombe High Street` is a BOARDING-ONLY
+    // place (open action: deliberate, not unfinished), so its payload has no
+    // routes_paths.json and no destinations[]; running gen_internal.js against it
+    // is the same mistake the places table made a fortnight ago and printed FAIL
+    // for the honest answer "this fixture has no internal sheet". A fixture still
+    // has no manifest, so the declaration is read from the payload instead — the
+    // same question the portal's own `requiresFiles` asks: can this generator's
+    // inputs be satisfied at all? Absent, the row is '-' and gates nothing.
+    // PRESENT and the reference SVG missing is still MISSING, still red, which is
+    // the guard the paragraph above exists for.
+    const rjF = readJson(path.join(dataDir, 'routes.json')) || {};
+    const canInt = exists(path.join(dataDir, 'routes_paths.json'));
+    const canExt = Array.isArray(rjF.destinations) && rjF.destinations.length > 0;
+    const fInt = !canInt ? 'n/a' : exists(genInt)
       ? gate(genInt, dataDir, 'internal.svg', path.join(dataDir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE, extraEnv }).status
       : 'no-gen';
-    const fExt = exists(genExt)
+    const fExt = !canExt ? 'n/a' : exists(genExt)
       ? gate(genExt, dataDir, 'external.svg', path.join(dataDir, 'external.svg'), { extraEnv }).status
       : 'no-gen';
-    row.internal = fInt === 'NO-SHEET' ? 'MISSING' : fInt;
-    row.external = fExt === 'NO-SHEET' ? 'MISSING' : fExt;
+    row.internal = fInt === 'n/a' ? '-' : fInt === 'NO-SHEET' ? 'MISSING' : fInt;
+    row.external = fExt === 'n/a' ? '-' : fExt === 'NO-SHEET' ? 'MISSING' : fExt;
+    // The BOARDING sheet, new on 2026-08-23 with the portal's fifth output. This
+    // is the one table it belongs in today: the places table would start on two
+    // true DIFFs (St Ives is 13 lines behind the engine, High Wycombe town centre
+    // 1) and a gate that is red on day one gets muted — that column stays tied to
+    // its own open action. Here it starts green, and without it the fixture
+    // committed to prove the boarding sheet proves nothing on this board at all.
+    const genBrd = path.join(PORTAL, 'engine', 'expert', 'gen_boarding.js');
+    const canBrd = !!rjF.boardingPlan
+      && exists(path.join(dataDir, 'stands.json'))
+      && exists(path.join(dataDir, 'boarding_index.json'));
+    const fBrd = !canBrd ? 'n/a' : exists(genBrd)
+      ? gate(genBrd, dataDir, 'boarding.svg', path.join(dataDir, 'boarding.svg'), { extraEnv }).status
+      : 'no-gen';
+    row.boarding = fBrd === 'n/a' ? '-' : fBrd === 'NO-SHEET' ? 'MISSING' : fBrd;
     out.push(row);
   }
   return out;
@@ -291,7 +320,7 @@ const qualityCell = (name) => {
 // a sheet it did claim to make and has not got is worse than one that differs.
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING')
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external))
-  || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external))
+  || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external) || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
   // `null` is MISSING — the portal has no such file. It counted as fine until
   // 2026-08-18, which had it backwards: a vendored file that DIFFERS is stale
   // output, a vendored file that is ABSENT is a require that throws. The row was
@@ -329,9 +358,9 @@ for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r
 
 if (portalFixtureRows.length) {
   console.log('\n=== Portal fixtures (vendored engine, ' + PORTAL + ') ===');
-  const fw = [24, 9, 9];
-  console.log(line(['Fixture', 'Internal', 'External'], fw));
-  for (const r of portalFixtureRows) console.log(line([r.name, r.internal, r.external], fw));
+  const fw = [24, 9, 9, 9];
+  console.log(line(['Fixture', 'Internal', 'External', 'Boarding'], fw));
+  for (const r of portalFixtureRows) console.log(line([r.name, r.internal, r.external, r.boarding], fw));
 }
 
 if (driftRows.length) {

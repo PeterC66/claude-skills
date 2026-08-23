@@ -236,3 +236,19 @@ Two traps, hit in one command. **First: never pass an already-absolute path as `
 ## `pull_roads.js` can hang on Overpass; reuse is legitimate when the graph is unchanged (2026-08-21)
 
 A second Ely build hit an Overpass stall and timed out with nothing written. For a **re-style at the same data** the road graph is not the variable: two independent pulls six hours apart produced byte-identical `roads_geo.json` and `routes_paths.json` (md5 `892f0ee6…` / `a76ffa17…`). Copying both forward from the previous S4 and running `build_internal_place.js` directly is then sound — but replicate the one thing `build_internal_place_roads.js` does to `routes.json` besides the network stages, its PLACE FIT FIX: inject `internalRoads.fitExtra` = every stop in `routes_intown_atco.json` (and default `fitMargin` to 8) or the map fits to one locality's stops and the whole composition shifts. Prove the result rather than assuming it: re-render the config you reviewed and `diff` the two SVGs, which is how this build was confirmed byte-identical to the sheet that had been eyeballed.
+
+## A regression "diff" against a stage folder proves nothing — they are gitignored (2026-08-23)
+
+`Areas/**/S4-generate/**` and `S5-render/**` are in the Buses `.gitignore`, so `git status` and `git diff` are **silent** about every file in a run folder. Regenerating a sheet there and reading a clean `git diff` as "unchanged" is a false green, and it looks exactly like agreement. The tracked reference for a run is `ci-reference/`, which `sync_ci_reference.js` mirrors from the latest S4.
+
+The same hour produced its twin: a tool's printed report was compared before and after and showed no change, while the **JSON on disk was from an intermediate run** — `--write` had been passed on an early pass and dropped on the later ones — so the sheet was built from an answer neither version of the code would produce. It surfaced only when the regenerated SVG differed by one route badge.
+
+**How to check a regression here.** Take your own copy of the baseline first, or diff against `ci-reference/`. If the script has a `--write` flag, re-run it **with** the flag before comparing the file it writes: a report on stdout and a JSON on disk are two different artefacts. And make the check fail once on purpose before trusting it green.
+
+## "Journeys from here" double-counts any route that calls twice in the frame (2026-08-23)
+
+Counting `stop_times` rows at the frame's stops credits a trip once **per stop it calls at**, so a circular that goes round past two of them scores twice: St Neots' 61EY read 84 journeys a week and runs 42. Count DISTINCT trips, then weight each by its `calendar` operating days — both halves are needed, and the other half (feed rows are patterns, not journeys) is already recorded above.
+
+## A stand with no index rows is on the map and nowhere else (2026-08-23)
+
+`hideStandsWithNoDestinations: false` is right on a town-centre square, where every flag is in view and hiding one a reader may be standing at is worse than drawing it empty. But the consequence is that St Neots Stop C appears on the locator and **never once in the index**, so somebody waiting there cannot learn from the sheet that their bus goes from Stop E. `boarding_index.py` already computes `alsoFrom` for every destination and nothing prints it. Open action.

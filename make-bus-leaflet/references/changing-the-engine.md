@@ -178,13 +178,15 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 >
 > **A metric that reads config instead of artwork will lie the moment the config gains a new value.** `quality_metrics.js`'s `strandedFeatureLabels` measured from `f.labelPos.x` in `routes.json`. `labelPos:"auto"` made that `undefined`, the distance NaN, and every auto label read as stranded — six towns went REGRESSED on the ratchet for labels that had just been moved *onto* the features they name. It now finds the label's own `<text>` on the sheet and measures from there, which is both the fix and the general rule this file exists to enforce: measure the artwork. Same change makes the metric see an `overrides.json` nudge, which the config read never could.
 
-> ### 2026-08-23 — `internalRoads.skeletonMaxW`: `gen_internal.js`, RE-VENDORED on a branch ([PR #75](https://github.com/PeterC66/community-bus-maps/pull/75), open), adopted by St Ives Bus Station alone.
+> ### ✅ 2026-08-23 — `internalRoads.skeletonMaxW`: `gen_internal.js`, RE-VENDORED AND MERGED ([PR #75](https://github.com/PeterC66/community-bus-maps/pull/75) → `996d7b7`), adopted by St Ives Bus Station alone.
 >
 > One optional key: a ceiling in mm on the grey road casing. Rationale in `make-place-bus-leaflet/references/gotchas.md`, "…and past a point it is not a road at all". Absent the key the output is byte-identical, and that is **gated rather than asserted** — all 8 towns and all 7 places still reproduce byte-for-byte on `status.js`, the quality ratchet reports 0 regressed, and on the portal branch `verify:area`, `verify:place`, `verify:defaults` (13/13 area and 11/11 place escape hatches still live) and `npm test` all pass.
 >
 > **`DBG_CASE=1` changed meaning slightly and deliberately.** It now prints the **uncapped** maximum plus how many segments the cap clamped. Printing the capped figure would have made the tool useless for the one job it has here — telling you what to set the cap to.
 >
-> **The row will read DRIFTED until #75 merges**, and `status.js` exits 1 on it. That is the board doing its job; do not re-run the sync and expect it to clear.
+> **Merged and read back**: all ten vendoring rows on `status.js` are **in sync**, and the portal's `engine/place/gen_internal.js` has the same md5 as the skill's. **Not deployed** — the running host keeps the old copy until `npm run deploy`, which is a separate act from the merge ([[feedback_merging_is_not_deploying]]). Nothing shipped moves when it goes: absent the key the output is byte-identical.
+>
+> **`status.js` still exits 1 afterwards, and it is not this.** The only remaining cause is `St Ives Bus Station · External: DIFF` — the place gate runs `gen_external_places.js` and diffs against an `external.svg` that does not exist for that place, so it compares against nothing and calls it a difference. Tracked in `open-actions.md`. Worth knowing before you conclude a re-vendor failed.
 >
 > ### 2026-08-23 — the BOARDING PLAN gains a fifth file, `pull_locator.js`, and a locator layer in `gen_boarding.js`. Also NOT vendored.
 >

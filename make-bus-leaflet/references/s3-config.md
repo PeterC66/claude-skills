@@ -127,12 +127,14 @@ A triaged town's Services panel should list its **drawn lanes**, not its service
 
 **Blue-cyan is reserved for water.** On a town that draws a river or canal, the route palette must stay off it: `gen_internal.js` prints a `PALETTE WARNING` when a drawn route's colour is close to the water's in both Lab distance and hue. St Ives' 9 and Ramsey's X31 were both `#66CCEE` against a `#9ec9e8` river (dE 14.6) and moved to teal and indigo on 2026-08-16.
 
-### Design-quality keys (added 2026-08-15 — opt-in, absent ⇒ byte-identical; every built TOWN carries them, places do not yet)
+### Design-quality keys (added 2026-08-15 — **ON BY DEFAULT since the same day; these are opt-OUT, not opt-in**)
 
 ```json
 "design": { "footerSafe": true, "spreadIcons": true },
 "labels": { "engine": "v2" }
 ```
+
+**Correction, 2026-08-23. Twelve keys listed in this file as opt-in have been DEFAULTS since 2026-08-15**, and this heading said otherwise for eight days. `gen_internal.js` reads `footerSafe`, `spreadIcons`, `panelScale`, `scaleBar`, `routeCasing`, `badgeFit` and `reserveIcons` as `!== false`; `cornerRadius` defaults to 2.0, `iconInk` to `charcoal`, `iconSet` to `grid`, `printSafe` to 5 mm, and `labels.engine` to v2 unless told `"v1"`. Absent no longer means off for any of them — each keeps an explicit `false` escape hatch instead, and the reasoning is written at `gen_internal.js:300`: any key repeated on every target is a default in disguise. A doc that describes a default as an opt-in is not a harmless lag: it is why a reader looking at a sheet with a feature missing goes hunting for the config key rather than the cause. See [[feedback_a_feature_can_be_absent_by_config]].
 
 `footerSafe` ends the map frame above the footer plate instead of drawing 9.84 mm of every sheet and then covering it; `spreadIcons` pulls fused POI symbols apart; `design.iconSet:"grid"` (2026-08-16) swaps in the twelve pictograms redrawn on one grid, solid and white-cased, whose live area is the box `POI_HALF` actually reserves — the shipped drawings run ~18% outside it, which is why symbols the placer scored as clear could still touch; `labels.engine:"v2"` hands every point label to the shared placer `%SK%\labeller.js` (occupancy grid, real Arial metrics, scored positions, relaxation, two-line wrapping, leader lines, and an `unplaced.json` report). They belong together — the shorter frame crowds a dense town, and the placer is what pays for it. Full key table, tuning weights and the measured before/after: **[design-quality.md](design-quality.md)**.
 

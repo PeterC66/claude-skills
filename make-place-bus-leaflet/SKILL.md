@@ -213,7 +213,14 @@ Run it from anywhere inside the Buses tree. `%TSK%` is the town skill's assets f
 
 **Adding any new sheet means editing the delivery path by hand** — `refresh_latest.js`'s `SHEETS` array and `collect-maps.ps1`'s `ValidateSet` and `-All` list. Neither warns when it falls behind, and `boarding.jpg` silently missed `_latest` on first build because of it.
 
-*Remaining: the A1 heads-up posted variant (a genuinely different artwork — see the paper's §6), and the portal `OUTPUTS` entry (step 3, not started).*
+**Step 3 — the portal — is DONE (2026-08-23), and two things about it change what you build here.**
+
+`boarding_plan` is the portal's fifth output: `requiresConfig: 'boardingPlan'` plus a new `requiresFiles: ['stands.json', 'boarding_index.json']`, `requestOnly`, drawn by `gen_boarding.js` **vendored into `engine/expert/`**. So a skill-side change to that file now drifts the portal exactly the way `gen_internal.js` does — it is a row on `status.js` and in `changing-the-engine.md` §4. The four Python tools are **not** vendored and should not be: the portal never runs them, it consumes what they wrote (`stands.json`, `boarding_index.json`, `locator_geo.json`) as committed payload inputs, exactly as it consumes `routes.json`.
+
+- **The S5 payload must be COMPLETE, and a boarding-only render run is not.** `import-map.mjs` copies the place engine into *every* place map, which makes the internal sheet resolve and therefore render — so a payload with no `routes_paths.json` kills the whole import with an `ENOENT`, not just that one sheet. St Neots Town Centre's v2.1 S5 was a boarding-only run and could not have been delivered; v2.2 was rebuilt as a full payload before it went. **Both High Wycombe places are still in that state** (boarding plan only, no internal or external sheet) and cannot be imported at all until either they gain the other sheets or `internal_geographic` learns `requiresFiles` — open action.
+- **Landing it takes a step the batch script has not got.** Granting the output renders nothing, so the order is accept → grant → **save a version** → submit → approve. See `bus-work/references/playbooks.md` §*Output toggles*.
+
+*Remaining: the A1 heads-up posted variant (a genuinely different artwork — see the paper's §6), and pricing.*
 
 ## Review (end of every session)
 Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the project memory (`project_bus_leaflets.md` / the place-skill memory). Flag out-of-scope items rather than silently fixing. This step is itself a standing rule.

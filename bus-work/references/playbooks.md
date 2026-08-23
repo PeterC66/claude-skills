@@ -222,7 +222,20 @@ Which sheets a map publishes is `map.outputs`, changed with `PATCH /api/maps/:id
 - **An expert style can only be switched on once the map's LIVE data carries its opt-in key.** `resolveGen()` refuses an expert output unless the map's own `routes.json` in its live data dir has the matching truthy key (`internalSchematic`, `internalDiagram`). So if a town's fresh render is what introduces that key, the toggle is **gated on the refresh landing first** — you cannot turn the sheet on in advance, and the API will just report it unavailable.
 - **The sheet is probably already rendered.** `internal_schematic` is declared `buildAlways: true`, so the engine renders it into every new version whose data supports it *regardless of the flag* — the flag only controls visibility. Turning it on therefore exposes a file that already exists, with no re-render needed. And turning it on early cannot leak anything, because the public page lists only files actually present in the *published* version's folder.
 
-The tube-map diagram (`internal_diagram`) is different again: it is **request-only**, and `chooseOutputs()` refuses to move it for a non-admin at all. It is hand-finished expert work with a price attached, not a tick-box.
+**Two outputs are request-only**, and `chooseOutputs()` refuses to move either for a non-admin at all: the tube-map diagram (`internal_diagram`), which is hand-finished expert work with a price attached, and the boarding plan (`boarding_plan`, added 2026-08-23), whose frame radius, empty-stand rule and locator landmarks are judgements made per place. Neither is a tick-box.
+
+### The boarding plan needs a step the other four do not, and the batch script has not got it
+
+`PATCH /api/maps/:id/outputs` **sets a flag and renders nothing.** For `internal_schematic` that never bites, because it is `buildAlways` and is already in the version folder. For `internal_diagram` it never bites either, because the grant is a *side effect* of the pin editor's save (`POST /api/maps/:id/diagram`), which sets the flag and calls `renderVersion` in one act. The boarding plan has neither: there is no expert action to carry the render, so **granting it and stopping leaves the sheet absent from every version, with nothing saying so**.
+
+`accept-publish-batch.mjs` runs withdraw → accept → submit → approve, with no step between accept and submit. **Run it on a map whose boarding plan has just arrived and it will publish the map without the sheet.** Until that is fixed (open action), land such a map by hand, in this order:
+
+1. **accept** the proposed update — `POST /api/maps/:id/proposed/:pid/accept`. This is what puts `boardingPlan` into the map's **live** `routes.json`, so it must come first: before it, the grant is refused because the output is not `available`.
+2. **grant** — `PATCH /api/maps/:id/outputs`, sending the *whole* desired set with `boarding_plan: true`. Admin only.
+3. **save a version** — `POST /api/maps/:id/save`. This is the act that actually renders the sheet. Check the reply's `files` really lists `boarding.svg` before going on.
+4. **submit + approve** as normal.
+
+Proved end to end on St Neots Town Centre, 2026-08-23 (map #13, proposal #45 → v6.0 → **v6.1** live). Read the result back from `/api/public/maps/<slug>`, not from the admin reply — and note the public JPG is legitimately a different size from the one step 3 reported, because that URL serves the watermarked copy.
 
 ---
 

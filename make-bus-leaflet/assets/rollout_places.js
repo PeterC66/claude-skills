@@ -130,6 +130,19 @@ function copyFile(src, destDir, name) {
 }
 
 const GEN_EXTERNAL_PLACES = path.join(PSK, 'gen_external_places.js');
+// The boarding-plan sheet is a place's THIRD output (make-place-bus-leaflet SKILL.md
+// "Phase 3"), drawn by an engine-level generator in this folder rather than the place
+// skill's. It was missing from this tool entirely until 2026-08-23 — so a rollout of
+// a place that has one committed an S4 with internal + external and no boarding.svg
+// at all, quietly dropping a whole sheet while _latest kept mirroring the previous
+// run's copy. `boardingPlan` in routes.json is the same gate gen_boarding.js applies
+// to itself: absent means the place declines the sheet, which is a valid answer and
+// not an error.
+const GEN_BOARDING = path.join(SK, 'gen_boarding.js');
+function buildBoarding(dir) {
+  copyFile(GEN_BOARDING, dir);
+  return runNode(path.join(dir, 'gen_boarding.js'), dir, { SKILL_ASSETS: SK });
+}
 
 // Build internal.svg the same way build_internal_place.js does (title-fix
 // wrapper around the UNCHANGED town gen_internal.js) — never
@@ -149,19 +162,40 @@ function rolloutOnePlace(p) {
   const prevS4 = latestRunDir(manifest, p.dir, 'S4');
   if (!prevS3 || !prevS4) return { name: p.name, status: 'SKIP', detail: 'no committed S3/S4 to roll forward from' };
 
+  // WHICH SHEETS DOES THIS PLACE ACTUALLY SHIP? Read it off the previous S4 rather
+  // than assuming. Until 2026-08-23 this tool took "a place has an internal" as given
+  // and would have died in buildInternal() on High Wycombe High Street and High
+  // Wycombe Town Centre, which are BOARDING-ONLY (`internalRoads:false`, no external):
+  // the boarding plan can be the whole product at a lettered town centre, and those
+  // two places have never had another sheet.
+  const hadInternal = fs.existsSync(path.join(prevS4.dir, 'internal.svg'));
+  const hadExternal = fs.existsSync(path.join(prevS4.dir, 'external.svg'));
+
   // Already current? Same fast-path as rollout.js: check the existing
   // PASS/DIFF gate (status.js's gatePlace logic) before doing any work.
-  const internalGate = gate(path.join(SK, 'gen_internal.js'), prevS4.dir, 'internal.svg', path.join(prevS4.dir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE });
-  const hasExternalGen = fs.existsSync(GEN_EXTERNAL_PLACES);
+  const internalGate = hadInternal
+    ? gate(path.join(SK, 'gen_internal.js'), prevS4.dir, 'internal.svg', path.join(prevS4.dir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE })
+    : { status: 'SKIP' };
+  const hasExternalGen = fs.existsSync(GEN_EXTERNAL_PLACES) && hadExternal;
   const externalGate = hasExternalGen
     ? gate(GEN_EXTERNAL_PLACES, prevS4.dir, 'external.svg', path.join(prevS4.dir, 'external.svg'))
     : { status: 'SKIP' };
-  if (internalGate.status === 'PASS' && (externalGate.status === 'PASS' || externalGate.status === 'SKIP') && !FORCE) {
-    return { name: p.name, status: 'UP-TO-DATE', detail: 'internal+external already gate PASS against the current template' };
-  }
-
   let routesJson = {};
   try { routesJson = readJson(path.join(prevS3.dir, 'routes.json')); } catch (e) {}
+
+  // The boarding sheet has to be in the fast path too, or a place whose ONLY stale
+  // sheet is its boarding plan reports UP-TO-DATE and is skipped — including the case
+  // this tool created for itself before it could build one: a previous rollout whose
+  // S4 has no boarding.svg at all, while the place's routes.json asks for one.
+  const wantsBoarding = !!routesJson.boardingPlan;
+  const boardingGate = !wantsBoarding ? { status: 'SKIP' }
+    : !fs.existsSync(path.join(prevS4.dir, 'boarding.svg')) ? { status: 'MISSING' }
+    : gate(GEN_BOARDING, prevS4.dir, 'boarding.svg', path.join(prevS4.dir, 'boarding.svg'));
+  const ok = (g) => g.status === 'PASS' || g.status === 'SKIP';
+  const shipped = [hadInternal && 'internal', hadExternal && 'external', wantsBoarding && 'boarding'].filter(Boolean);
+  if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE) {
+    return { name: p.name, status: 'UP-TO-DATE', detail: shipped.join('+') + ' already gate PASS against the current template' };
+  }
 
   // ---- build in a scratch workspace first (this is also the entire dry-run) ----
   // Mirrors rollout.js: no new S1/S2/S3 needed, only a new S4. Copy routes.json
@@ -183,15 +217,19 @@ function rolloutOnePlace(p) {
 
   const s4 = path.join(scratch, 'S4');
   const outputs = [];
-  let genOk = buildInternal(s4);
-  if (!genOk.ok || !fs.existsSync(path.join(s4, 'internal.svg'))) {
-    fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js: ' + (genOk.stderr || 'no internal.svg produced').split('\n')[0] };
-  }
-  outputs.push('internal.svg');
   // Every generator's stderr is kept, not just a failing one's — the guards that
   // matter refuse to draw and then exit 0 (build_log.js).
-  const said = [{ source: 'internal', stderr: genOk.stderr }];
+  const said = [];
+  let genOk;
+  if (hadInternal) {
+    genOk = buildInternal(s4);
+    if (!genOk.ok || !fs.existsSync(path.join(s4, 'internal.svg'))) {
+      fs.rmSync(scratch, { recursive: true, force: true });
+      return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js: ' + (genOk.stderr || 'no internal.svg produced').split('\n')[0] };
+    }
+    outputs.push('internal.svg');
+    said.push({ source: 'internal', stderr: genOk.stderr });
+  }
   if (hasExternalGen) {
     copyFile(GEN_EXTERNAL_PLACES, s4);
     genOk = runNode(path.join(s4, 'gen_external_places.js'), s4);
@@ -218,6 +256,13 @@ function rolloutOnePlace(p) {
     const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4, 'overrides.json') });
     said.push({ source: 'schematic', stderr: r.stderr });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
+  }
+  if (routesJson.boardingPlan) {
+    const r = buildBoarding(s4);
+    said.push({ source: 'boarding', stderr: r.stderr });
+    if (r.ok && fs.existsSync(path.join(s4, 'boarding.svg'))) outputs.push('boarding.svg');
+    else return (fs.rmSync(scratch, { recursive: true, force: true }),
+      { name: p.name, status: 'FAIL', detail: 'gen_boarding.js: ' + ((r.stderr || 'no boarding.svg produced').split('\n')[0]) });
   }
   if (routesJson.internalDiagram) {
     copyFile(path.join(SK, 'diagram_internal.js'), s4);
@@ -279,13 +324,18 @@ function rolloutOnePlace(p) {
   }
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
-  let r = buildInternal(s4Dir);
-  if (!r.ok || !fs.existsSync(path.join(s4Dir, 'internal.svg'))) {
-    fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js (real S4): ' + (r.stderr || 'no internal.svg produced').split('\n')[0] };
+  let r;
+  const realOutputs = [];
+  const realSaid = [];
+  if (hadInternal) {
+    r = buildInternal(s4Dir);
+    if (!r.ok || !fs.existsSync(path.join(s4Dir, 'internal.svg'))) {
+      fs.rmSync(scratch, { recursive: true, force: true });
+      return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js (real S4): ' + (r.stderr || 'no internal.svg produced').split('\n')[0] };
+    }
+    realOutputs.push('internal.svg');
+    realSaid.push({ source: 'internal', stderr: r.stderr });
   }
-  const realOutputs = ['internal.svg'];
-  const realSaid = [{ source: 'internal', stderr: r.stderr }];
   if (hasExternalGen) {
     copyFile(GEN_EXTERNAL_PLACES, s4Dir);
     r = runNode(path.join(s4Dir, 'gen_external_places.js'), s4Dir);
@@ -299,6 +349,12 @@ function rolloutOnePlace(p) {
     const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4Dir, 'overrides.json') });
     realSaid.push({ source: 'schematic', stderr: r2.stderr });
     if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg');
+  }
+  if (routesJson.boardingPlan) {
+    const rb = buildBoarding(s4Dir);
+    realSaid.push({ source: 'boarding', stderr: rb.stderr });
+    if (rb.ok && fs.existsSync(path.join(s4Dir, 'boarding.svg'))) realOutputs.push('boarding.svg');
+    else { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_boarding.js (real S4): ' + ((rb.stderr || 'no boarding.svg produced').split('\n')[0]) }; }
   }
   if (routesJson.internalDiagram) {
     copyFile(path.join(SK, 'diagram_internal.js'), s4Dir);

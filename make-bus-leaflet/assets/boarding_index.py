@@ -68,7 +68,7 @@ import sqlite3
 import sys
 from collections import defaultdict
 
-SCRIPT_VERSION = "1.1"
+SCRIPT_VERSION = "1.2"
 
 
 def read_json(path):
@@ -233,19 +233,36 @@ def main():
         c = _norm(child)
         return bool(c) and any(_norm(x) == c for x in parts)
 
+    # AND THE FALLBACK MUST BE SCOPED TO THE STOP'S OWN ADMINISTRATIVE AREA.
+    # Found on the St Neots prototype, 2026-08-23. The "only where the whole
+    # register agrees on a single parent" guard is not enough, because it only
+    # fires on a name carrying TWO DIFFERENT parents -- and a name whose only
+    # parent anywhere is in another county reads as unanimous. Cambridgeshire's
+    # Barton, Croxton, Kingston, Tilbrook and Croydon all carry NO parent of their
+    # own, so they inherited one from a namesake: the index printed **Oxford,
+    # Thetford, Milton Keynes and London** as destinations of a St Neots town bus,
+    # and "London -- Stop A" would have gone to print. Keying the fallback on
+    # (AdministrativeAreaCode, LocalityName) kills all five, and costs nothing that
+    # worked before: every relationship the rollup relies on -- Orchard Park ->
+    # Kings Hedges -> Cambridge, Needingworth's joint parish, Fenton End -> Pidley
+    # cum Fenton -- is attested inside area 071 already. The register has no parent
+    # LOCALITY CODE column, so the area is the narrowest scope available; a village
+    # whose real parent town is over a county line will now keep its own name,
+    # which is the safe direction to be wrong in.
     parent_of = {}
     ambiguous = set()
-    for child, parent in nap.execute(
-            "SELECT DISTINCT LocalityName, ParentLocalityName FROM naptan "
+    for area, child, parent in nap.execute(
+            "SELECT DISTINCT AdministrativeAreaCode, LocalityName, ParentLocalityName FROM naptan "
             "WHERE LocalityName IS NOT NULL AND TRIM(COALESCE(ParentLocalityName,'')) <> ''"):
         c, p = (child or "").strip(), (parent or "").strip()
         if not c:
             continue
-        if c in parent_of and parent_of[c] != p:
-            ambiguous.add(c)
-        parent_of[c] = p
-    for c in ambiguous:
-        parent_of.pop(c, None)
+        key = ((area or "").strip(), c)
+        if key in parent_of and parent_of[key] != p:
+            ambiguous.add(key)
+        parent_of[key] = p
+    for key in ambiguous:
+        parent_of.pop(key, None)
 
     # THE HIERARCHY IS MORE THAN ONE LEVEL DEEP, which is the trap here. Route A
     # calls at 0500SORCH010, whose LocalityName is "Orchard Park" and whose parent
@@ -254,12 +271,12 @@ def main():
     # the index as though it were a separate town. So climb to the top of the
     # chain, with a visited-set because a register this size cannot be assumed
     # acyclic.
-    def climb(name):
+    def climb(area, name):
         seen_names = set()
         cur = name
         while cur and cur not in seen_names:
             seen_names.add(cur)
-            nxt = parent_of.get(cur)
+            nxt = parent_of.get((area, cur))
             if not nxt or nxt == cur:
                 break
             if joint_parish(cur, nxt):
@@ -273,15 +290,17 @@ def main():
         if atco in loc_cache:
             return loc_cache[atco]
         r = nap.execute(
-            "SELECT LocalityName, ParentLocalityName FROM naptan WHERE ATCOCode=?",
+            "SELECT LocalityName, ParentLocalityName, AdministrativeAreaCode "
+            "FROM naptan WHERE ATCOCode=?",
             (atco,)).fetchone()
         val = None
         if r:
             child, parent = (r[0] or "").strip(), (r[1] or "").strip()
+            area = (r[2] or "").strip()
             if parent and child and joint_parish(child, parent):
                 val = child                      # a half of a joint parish keeps its own name
             else:
-                val = climb(parent or child) or None
+                val = climb(area, parent or child) or None
         loc_cache[atco] = val
         return val
 
@@ -313,8 +332,11 @@ def main():
     trip_ids = [r[0] for r in db.execute(
         "SELECT DISTINCT trip_id FROM stop_times WHERE stop_id IN (%s)" % ph, list(inframe))]
 
-    # dest -> atco -> {routes:set, trips:int}
-    reach = defaultdict(lambda: defaultdict(lambda: {"routes": set(), "trips": 0}))
+    # dest -> atco -> {routes:set, trips:int, arr:set}
+    # `arr` is where the journey SETS THE READER DOWN in that destination, and it is
+    # kept because "this bus reaches Swavesey" turns out not to mean the same thing
+    # from every stand -- see the arrival-band note under the picker below.
+    reach = defaultdict(lambda: defaultdict(lambda: {"routes": set(), "trips": 0, "arr": set()}))
     route_of = {}
     for tid in trip_ids:
         row = db.execute(
@@ -337,13 +359,22 @@ def main():
             onward = seq[i + 1:]
             if not onward:
                 continue  # terminates here -- not a boarding point for anywhere
+            # `seen` stops a trip counting the same destination twice -- a bus calling
+            # at nine stops in Huntingdon is still one journey to Huntingdon. It must
+            # NOT also gate `arr`: the first stop a trip makes in a settlement is
+            # wherever the road happens to enter it, and taking that as "how near this
+            # bus gets" said route B reaches Huntingdon 2,171 m out, at a Hartford
+            # estate, when the same journey goes on to the bus station.
             seen = set()
             for nxt in onward:
                 l = locality(nxt)
-                if not l or l == home or l in seen:
+                if not l or l == home:
+                    continue
+                cell = reach[l][sid]
+                cell["arr"].add(nxt)
+                if l in seen:
                     continue
                 seen.add(l)
-                cell = reach[l][sid]
                 cell["routes"].add(rname)
                 cell["trips"] += per_week
             route_of.setdefault(rname, True)
@@ -356,12 +387,77 @@ def main():
         sys.stderr.write("boarding_index: no onward destinations found\n")
         return 1
 
+    # ---- how near the destination does each option actually get? ------------
+    # HOW FAR THE BUS GETS INTO THE PLACE IT NAMES. Found on the St Neots
+    # prototype, 2026-08-23, from the other end: at St Ives, routes A and B reach
+    # "Swavesey" 1,393 m from the middle of Swavesey, because the Busway halt is
+    # out on the guided track, while the 5A calls at School Lane in the village
+    # itself. Both are true statements that the reader can reach Swavesey; only one
+    # of them puts them in it. Frequency alone would send them to the halt (1,102
+    # journeys a week against 60), so it has to be measured rather than assumed.
+    #
+    # The measure is the distance from the arrival stop to the CENTROID of that
+    # locality's own stops, banded at 400 m -- roughly five minutes on foot, which
+    # is the granularity a difference of this kind matters at. Options in the same
+    # band are treated as arriving equally well and frequency then decides, which
+    # is the St Neots case: the 18 and the C2 call at the very same four stops in
+    # Abbotsley, so the eleven-a-week service should win over the one-a-week.
+    ARRIVAL_BAND_M = 400.0
+    R_EARTH = 6371000.0
+
+    def _metres(lat1, lon1, lat2, lon2):
+        p1, p2 = math.radians(lat1), math.radians(lat2)
+        dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+        a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return 2 * R_EARTH * math.asin(math.sqrt(a))
+
+    pos_cache = {}
+
+    def stop_pos(atco):
+        if atco not in pos_cache:
+            r = nap.execute("SELECT lat, lon, AdministrativeAreaCode FROM naptan WHERE ATCOCode=?",
+                            (atco,)).fetchone()
+            pos_cache[atco] = (r[0], r[1], (r[2] or "").strip()) if r else (None, None, "")
+        return pos_cache[atco]
+
+    centre_cache = {}
+
+    def locality_centre(dest, area):
+        """Centroid of the destination's own stops, scoped to one administrative
+        area so a namesake in another county cannot drag it across the map."""
+        key = (dest, area)
+        if key not in centre_cache:
+            rows = nap.execute(
+                "SELECT lat, lon FROM naptan WHERE LocalityName=? AND AdministrativeAreaCode=? "
+                "AND Status='active' AND lat IS NOT NULL", (dest, area)).fetchall()
+            centre_cache[key] = ((sum(r[0] for r in rows) / len(rows),
+                                  sum(r[1] for r in rows) / len(rows)) if rows else None)
+        return centre_cache[key]
+
+    def arrival_metres(dest, arr):
+        """Metres from the nearest arrival stop to the middle of the destination,
+        or None where the register gives the destination no stops of its own (a
+        rollup target such as a parish name), in which case every option is equal
+        and this term drops out."""
+        best = None
+        for atco in arr:
+            lat, lon, area = stop_pos(atco)
+            if lat is None:
+                continue
+            centre = locality_centre(dest, area)
+            if not centre:
+                continue
+            d = _metres(centre[0], centre[1], lat, lon)
+            best = d if best is None else min(best, d)
+        return best
+
     # ---- pick the stand for each destination --------------------------------
     dests = []
     for dest, bystop in reach.items():
         options = []
         for sid, cell in bystop.items():
             st = inframe[sid]
+            arr_m = arrival_metres(dest, cell["arr"])
             options.append({
                 "atco": sid,
                 "label": st["label"],
@@ -370,9 +466,26 @@ def main():
                 "walkMin": st["walkMin"],
                 "routes": sorted(cell["routes"]),
                 "trips": cell["trips"],
+                "arrivalM": None if arr_m is None else round(arr_m),
+                "arrivalBand": 0 if arr_m is None else int(arr_m // ARRIVAL_BAND_M),
             })
-        # shortest walk wins; more trips breaks a tie; label for determinism
-        options.sort(key=lambda o: (o["distM"], -o["trips"], o["label"]))
+        # SHORTEST WALK WINS, BUT THE UNIT IS THE MINUTE THE SHEET PRINTS, NOT THE
+        # METRE. Sorting on raw distance made sense while the only place was a bus
+        # station, where the stands are 11-47 m out and the far option is 182 m. At
+        # St Neots the five Market Square stands are 46-55 m from the centre, so a
+        # 4 m difference -- noise to a walker, and identical on the sheet, which
+        # says "1 min" for all five -- was deciding the answer: "Abbotsley: Stop A,
+        # C2, ltd" beat Stop E's eleven journeys a week on the 18 because Stop A is
+        # four metres nearer.
+        #
+        # Then how near the bus gets to the destination, then how often it runs.
+        # That order is deliberate and both halves were needed: frequency alone
+        # sends a Swavesey passenger to the Busway halt a mile outside the village,
+        # and distance-from-the-anchor alone sends an Abbotsley passenger to a
+        # once-a-week bus. Raw distance breaks a tie inside the minute, then the
+        # label, so the output is deterministic.
+        options.sort(key=lambda o: (o["walkMin"], o["arrivalBand"], -o["trips"],
+                                    o["distM"], o["label"]))
         best = options[0]
         total = sum(o["trips"] for o in options)
         if total < args.min_trips:

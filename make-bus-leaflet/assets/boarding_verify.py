@@ -23,9 +23,11 @@ influence:
        here from stop_times rather than read from boarding_index.json, so a bug in
        the index cannot pass by agreeing with itself.
 
-  S-3  NO NEARER STAND. If a different in-frame stop reaches the same destination
-       with a shorter walk, the sheet is sending the reader further than it needs
-       to. Not wrong, but worth reporting.
+  S-3  NO LONGER WALK THAN NEEDED. If a different in-frame stop reaches the same
+       destination in fewer walking minutes -- the unit the sheet itself prints --
+       the reader is being sent further than they need to go. Not wrong, but worth
+       reporting. Deliberately NOT measured in metres: which of two stands the same
+       minute away to pick is the sheet's editorial call, not this file's.
 
   S-4  SHEET AGREES WITH INDEX. Every boarding label that actually appears in
        boarding.svg must be one NaPTAN sanctions, and every destination in the
@@ -40,7 +42,7 @@ USAGE. Run from the stage folder holding boarding.svg and its inputs:
 
     python boarding_verify.py                     check, print a report
     python boarding_verify.py --db <path.sqlite>  name the GTFS region explicitly
-    python boarding_verify.py --json report.json  also write the findings
+    python boarding_verify.py --json boarding-verify.json   write the durable record
 
 PROVE IT CAN GO RED before trusting it green (the paper's own house rule, and
 `feedback_prove_the_check_can_fail`): edit one letter in boarding_index.json and
@@ -57,8 +59,9 @@ import re
 import sqlite3
 import sys
 from collections import defaultdict
+from datetime import date
 
-SCRIPT_VERSION = "1.1"
+SCRIPT_VERSION = "1.2"
 
 
 def read_json(p):
@@ -162,24 +165,41 @@ def main():
                  % (d["destination"], got, atco, want, why))
 
     # ---------------------------------------------------------------- locality, re-derived
+    # THE PARENT LOOKUP IS SCOPED TO ONE ADMINISTRATIVE AREA, and that is a
+    # correction to THIS file's own reading of the register, not an import of the
+    # generator's rule. Keyed on the bare name, "Barton" -- which in Cambridgeshire
+    # carries no parent at all -- inherits the one belonging to the Barton outside
+    # Oxford; the same accident makes Croxton a suburb of Thetford, Kingston and
+    # Tilbrook parts of Milton Keynes, and Croydon part of London. The `ambiguous`
+    # guard cannot catch it, because it only fires on a name carrying two DIFFERENT
+    # parents, and a namesake carrying none reads as agreement.
+    #
+    # Worth stating plainly, because it bears on what this file is for: the same
+    # defect sat in boarding_index.py, and the two agreed with each other for as
+    # long as neither met a place with a namesake. Two files running the same
+    # algorithm are not an independent check OF that algorithm, whatever the header
+    # says -- they are independent only about what they compute differently. Here
+    # that is reachability, genuinely re-derived from stop_times, which is what
+    # makes S-2 worth running.
     parent_of, ambiguous = {}, set()
-    for child, parent in nap.execute(
-            "SELECT DISTINCT LocalityName, ParentLocalityName FROM naptan "
+    for area, child, parent in nap.execute(
+            "SELECT DISTINCT AdministrativeAreaCode, LocalityName, ParentLocalityName FROM naptan "
             "WHERE LocalityName IS NOT NULL AND TRIM(COALESCE(ParentLocalityName,'')) <> ''"):
         c, p = (child or "").strip(), (parent or "").strip()
         if not c:
             continue
-        if c in parent_of and parent_of[c] != p:
-            ambiguous.add(c)
-        parent_of[c] = p
-    for c in ambiguous:
-        parent_of.pop(c, None)
+        key = ((area or "").strip(), c)
+        if key in parent_of and parent_of[key] != p:
+            ambiguous.add(key)
+        parent_of[key] = p
+    for key in ambiguous:
+        parent_of.pop(key, None)
 
-    def climb(n):
+    def climb(area, n):
         seen, cur = set(), n
         while cur and cur not in seen:
             seen.add(cur)
-            nxt = parent_of.get(cur)
+            nxt = parent_of.get((area, cur))
             if not nxt or nxt == cur:
                 break
             cur = nxt
@@ -228,12 +248,12 @@ def main():
     def locality(atco):
         if atco in lc:
             return lc[atco]
-        r = nap.execute("SELECT LocalityName, ParentLocalityName FROM naptan WHERE ATCOCode=?",
-                        (atco,)).fetchone()
+        r = nap.execute("SELECT LocalityName, ParentLocalityName, AdministrativeAreaCode "
+                        "FROM naptan WHERE ATCOCode=?", (atco,)).fetchone()
         v = set()
         if r:
             child, parent = (r[0] or "").strip(), (r[1] or "").strip()
-            top = climb(parent or child)
+            top = climb((r[2] or "").strip(), parent or child)
             if top:
                 v.add(top)
             if child and parent and joint_parish(child, parent):
@@ -267,13 +287,28 @@ def main():
             hard("S-2", "%s: no trip departs %s (%s) and later reaches %s"
                  % (dest, d.get("boardAt"), atco, dest))
             continue
+        # THE UNIT IS THE MINUTE THE SHEET PRINTS, NOT THE METRE. Measured in
+        # metres this fired seven times at St Neots, every one of them noise: the
+        # five Market Square stands are 46-55 m from the centre and the sheet calls
+        # all five "1 min", so "Stop E (52 m) but Stop C (46 m) also reaches it"
+        # reports a six-metre difference as though the reader had been sent out of
+        # their way. A check that cries wolf on its first real town gets muted.
+        #
+        # It also asserted a rule the generator no longer has. Choosing between two
+        # stands that are the same walk away is an editorial judgement the sheet
+        # owns -- it now weighs how near the bus gets to the destination and how
+        # often it runs -- and a checker has no business restating one input to
+        # that judgement as if it were the whole of it. What this check can still
+        # own is the reader's own feet: never send them a longer walk than the
+        # sheet's own arithmetic says they need.
         nearer = [a for a in who
-                  if a in by_atco and by_atco[a]["distM"] < by_atco[atco]["distM"]]
+                  if a in by_atco and by_atco[a]["walkMin"] < by_atco[atco]["walkMin"]]
         if nearer:
-            n = min(nearer, key=lambda a: by_atco[a]["distM"])
-            soft("S-3", "%s: sheet sends the reader to %s (%d m) but %s (%d m) also reaches it"
-                 % (dest, d.get("boardAt"), by_atco[atco]["distM"],
-                    by_atco[n]["label"], by_atco[n]["distM"]))
+            n = min(nearer, key=lambda a: (by_atco[a]["walkMin"], by_atco[a]["distM"]))
+            soft("S-3", "%s: sheet sends the reader to %s (%d min, %d m) but %s (%d min, %d m) "
+                        "also reaches it"
+                 % (dest, d.get("boardAt"), by_atco[atco]["walkMin"], by_atco[atco]["distM"],
+                    by_atco[n]["label"], by_atco[n]["walkMin"], by_atco[n]["distM"]))
 
     # ---------------------------------------------------------------- S-4
     svg_path = os.path.join(folder, args.svg)
@@ -345,10 +380,30 @@ def main():
     print()
     print("  RESULT: %s" % ("FAIL" if hards else ("PASS with %d note(s)" % len(softs)) if softs else "PASS"))
 
+    # THE REPORT SAYS WHO CHECKED WHAT, WHEN. It used to carry the place, the
+    # findings and the verdict and nothing else, so the durable record of a run had
+    # to be finished by hand -- and a hand-written record can say PASS about a build
+    # it never saw. Everything the reader needs to judge the verdict is written by
+    # the tool that reached it: which version of this checker, against which sheet
+    # version, on what date, over how many rows, from which two databases.
     if args.json:
+        try:
+            sheet_version = read_json(os.path.join(folder, "routes.json")).get("version")
+        except (OSError, ValueError):
+            sheet_version = None
         with io.open(os.path.join(folder, args.json), "w", encoding="utf-8") as fh:
-            fh.write(json.dumps({"place": place.get("name"), "findings": findings,
-                                 "result": "FAIL" if hards else "PASS"}, indent=1, ensure_ascii=False))
+            fh.write(json.dumps({
+                "place": place.get("name"),
+                "version": sheet_version,
+                "checkedAt": date.today().isoformat(),
+                "verifier": "boarding_verify.py v%s" % SCRIPT_VERSION,
+                "register": os.path.basename(napath),
+                "region": os.path.basename(dbpath),
+                "checked": {"labels": checked_labels, "destinations": len(dests),
+                            "boardingPoints": len(by_atco), "sheetRead": svg_checked},
+                "findings": findings,
+                "result": "FAIL" if hards else "PASS",
+            }, indent=1, ensure_ascii=False) + "\n")
 
     return 1 if hards else 0
 

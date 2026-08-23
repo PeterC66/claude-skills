@@ -52,12 +52,21 @@ otherwise; it must contain `atco2ll.json`, `routes_full_atco.json` and `place.js
 
     python naptan_stands.py                       report only, writes nothing
     python naptan_stands.py --write               also write stands.json
-    python naptan_stands.py --radius-m 250        frame radius (default: walkshed_cfg.json's, else 250)
+    python naptan_stands.py --radius-m 250        frame radius; overrides the config below
     python naptan_stands.py --dir <folder>        run against another folder
     python naptan_stands.py --naptan <path>       override the register location
 
 `--naptan` defaults to `_gtfs/naptan.sqlite` found by walking up from --dir, so it
 works from any stage folder inside the Buses tree without being told where it is.
+
+THE FRAME RADIUS, most explicit first: `--radius-m`, then `routes.json`'s
+`boardingPlan.frameRadiusM`, then `walkshed_cfg.json`'s `radiusM`, then 250 m. Set
+it in the config, not on the command line, or the frame is not reproducible from
+what is committed. The walkshed is the OTHER two sheets' radius and it is a poor
+default here: St Neots town centre walks 450 m, and at 450 m the frame reaches the
+unlettered `Church View` pair and this script refuses the sheet. Where the widest
+usable radius is not obvious, `Development Docs/measure_frame_coverage_2026-08-23.py`
+prints it per anchor as `maxOK`.
 
 OUTPUT. `stands.json` -- one entry per served stop in the frame, in the order a
 sheet should list them (stands by code, then named stops by distance), each with the
@@ -177,7 +186,21 @@ def main():
         sys.stderr.write("  needs atco2ll.json, routes_full_atco.json and place.json in %s\n" % folder)
         return 2
 
+    # Frame radius, most explicit first. routes.json comes BEFORE walkshed_cfg.json
+    # because the walkshed is the OTHER two sheets' radius and has no reason to suit
+    # this one: St Neots town centre walks 450 m, and at 450 m the frame reaches the
+    # unlettered Church View pair and this script correctly REFUSES the sheet. St Ives
+    # never showed the problem -- its walkshed happens to be 250 m -- so the fallback
+    # looked right for as long as there was one place. A frame that the committed
+    # config cannot reproduce is a frame that depends on someone remembering a flag.
     radius = args.radius_m
+    if radius is None:
+        try:
+            bp = read_json(folder, "routes.json").get("boardingPlan") or {}
+            if bp.get("frameRadiusM") is not None:
+                radius = float(bp["frameRadiusM"])
+        except (OSError, ValueError, AttributeError):
+            pass
     if radius is None:
         try:
             radius = float(read_json(folder, "walkshed_cfg.json").get("radiusM", 250))

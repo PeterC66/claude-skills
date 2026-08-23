@@ -259,9 +259,24 @@ function pointInRing(la, lo, ring) {
   }
   return inside;
 }
+// THE ANCHOR IS NOT ALWAYS INSIDE ITS OWN PLACE. At a bus station it is: the
+// geocoder returns the `amenity=bus_station` way and the anchor is its centroid.
+// At St Neots, "Market Square" resolved to OSM way 26125963 — `highway=unclassified`,
+// the ROAD of that name — while the square itself is way 301086229,
+// `highway=pedestrian` + `area`, and the road runs along its southern edge. The
+// anchor therefore sits 40 m OUTSIDE the precinct it is named after, and a
+// point-in-polygon test alone finds the place has no shape at all.
+//
+// So an area is the place's if the anchor stands in it OR if it carries the place's
+// own name. The name is ours — it comes from the config and place.json, not from a
+// guess about the ground — and it is exact where a distance threshold would be a
+// judgement call at precisely the wrong moment.
+const PLACE_NAMES = new Set([PLACE.place, PLACE.name, RJ.placeShort, RJ.anchorLabel]
+  .filter(Boolean).map(s => String(s).trim().toLowerCase()));
 const ANCHOR_AREAS = (LOC && Array.isArray(LOC.areas))
   ? LOC.areas.filter(a => (a.kind === 'bus_station' || a.kind === 'pedestrian')
-                          && pointInRing(PLAT, PLON, a.geometry))
+                          && (pointInRing(PLAT, PLON, a.geometry)
+                              || PLACE_NAMES.has(String(a.name || '').trim().toLowerCase())))
   : [];
 /* ...and being CLOSE ENOUGH TO SEE counts the same way, because OSM's polygons do
  * not honour the idea. "The Octagon" is the shelter people wait under, 24 m from
@@ -366,6 +381,15 @@ const AREA_STYLE = {
   pedestrian:  { fill: '#edeff1', stroke: '#dde1e5' },
   green:       { fill: '#e4ebe2', stroke: '#d2ded0' },
 };
+// THE WARM TINT BELONGS TO THE PLACE, NOT TO THE TAG. It was keyed on
+// `kind === 'bus_station'`, which is the same thing only for as long as every
+// boarding plan is drawn at a bus station. St Neots Market Square is OSM way
+// 301086229, `highway=pedestrian` + `area`, and it took the ordinary pedestrian
+// grey — so the square the whole sheet is about was the one shape on the page with
+// nothing to say it was there, while a car park two streets away read the same.
+// ANCHOR_AREAS is already exactly "the area the anchor stands in", so use it.
+const PLACE_STYLE = AREA_STYLE.bus_station;
+const ANCHOR_AREA_IDS = new Set(ANCHOR_AREAS.map(a => a.id));
 function polyD(geometry) {
   if (!Array.isArray(geometry) || geometry.length < 3) return '';
   let any = false;
@@ -382,7 +406,8 @@ if (LOC && Array.isArray(LOC.areas)) {
   // Largest first, so a car park inside a pedestrian precinct still shows.
   const ordered = LOC.areas.slice().sort((a, b) => b.geometry.length - a.geometry.length);
   for (const a of ordered) {
-    const st = AREA_STYLE[a.kind]; if (!st) continue;
+    const st = ANCHOR_AREA_IDS.has(a.id) ? PLACE_STYLE : AREA_STYLE[a.kind];
+    if (!st) continue;
     const d = polyD(a.geometry); if (!d) continue;
     out(`<path d="${d}" fill="${st.fill}" stroke="${st.stroke}" stroke-width="0.3"/>`);
     drewAreas++;
@@ -630,7 +655,44 @@ out(`</g>`);
 out(`<text x="${f2(NX)}" y="${f2(NY + 2.9)}" font-size="2.5" fill="${INK}" text-anchor="middle">N</text>`);
 
 /* ------------------------------------------- the stand key under the map */
-let ky = MAP_Y1 + 5.0;
+// THE FOOTER PLATE IS COMPUTED HERE, BEFORE ANYTHING HAS TO DODGE IT.
+// (Was computed just before the index legend; it is the same object and the same
+// call, only earlier, because the stand key needs it too.)
+//
+// ONE options object, passed to BOTH footerPlateTop and footerBand — the rule
+// gen_internal.js follows for the same reason, so the plate the legend dodges can
+// never be a different plate from the one that gets drawn.
+const PRINT_SAFE = (RJ.design && RJ.design.printSafe != null) ? +RJ.design.printSafe : 5;
+const DESIGN = RJ.design || {};
+const FOOTER_OPTS = {
+  notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
+  url: DESIGN.sheetUrl || null,
+  qr: DESIGN.sheetQr || null,
+  sheetVersion: DESIGN.sheetVersion || null,
+  ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}),
+  x0: SAFE, x1: W - SAFE, safe: PRINT_SAFE,
+};
+const PLATE_TOP = FOOTER.footerPlateTop(FOOTER_OPTS);
+
+// THE STAND KEY CAN OUTGROW ITS COLUMN, and nothing said so. It stepped a fixed
+// 8.2 mm per stand from the bottom of the map with no bound, which fits the four
+// bays at St Ives and does not fit the five lettered stands on St Neots Market
+// Square: Stop E — the busiest of the five, seventeen destinations — was written at
+// y=192 mm under a footer plate whose top is 188.1 mm, so the sheet's most-used
+// stand was painted out. The destination index already counts what it cannot fit
+// and says so; this column did not, which is the whole of why it went unnoticed.
+//
+// Two rows per stand where they fit; one compact row per stand where they do not;
+// and if even that overruns, say so and fail, the way the index does.
+const KEY_TOP = MAP_Y1 + 5.0;
+const KEY_LIMIT = PLATE_TOP - 0.8;      // St Ives's fourth sub-line sits 0.9 mm clear
+const KEY_ROW_1 = KEY_TOP + 4.2;        // baseline of the first stand's label
+const KEY_TWO_LINE = (KEY_ROW_1 + (stands.length - 1) * 8.2 + 3.4) <= KEY_LIMIT;
+const KEY_PITCH = KEY_TWO_LINE ? 8.2 : 5.2;
+const KEY_FITS = Math.max(0, Math.floor((KEY_LIMIT - KEY_ROW_1) / KEY_PITCH) + 1);
+const keyOverflow = Math.max(0, stands.length - KEY_FITS);
+
+let ky = KEY_TOP;
 out(`<text x="${SAFE}" y="${f2(ky)}" font-size="3.4" font-weight="bold" fill="${INK}">The stops</text>`);
 ky += 4.2;
 for (const s of stands) {
@@ -652,8 +714,18 @@ for (const s of stands) {
              : `${s.distM} m walk, about ${s.walkMin} min`;
   const facing = s.facing ? `, buses face ${s.facing}` : '';
   out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky)}" font-size="3.1" fill="${INK}">${esc(s.label)}</text>`);
-  out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky + 3.4)}" font-size="2.5" fill="${INK_SOFT}">${esc(walk + facing)}</text>`);
-  ky += 8.2;
+  if (KEY_TWO_LINE) {
+    out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky + 3.4)}" font-size="2.5" fill="${INK_SOFT}">${esc(walk + facing)}</text>`);
+  } else {
+    // One line. The label is set in FM's measured width so the grey half starts
+    // clear of it rather than at a guessed offset.
+    const lw = FM.textWidth(s.label, 3.1, false);
+    out(`<text x="${f2(cxk + 4.6 + lw + 2.0)}" y="${f2(ky)}" font-size="2.5" fill="${INK_SOFT}">${esc(walk + facing)}</text>`);
+  }
+  ky += KEY_PITCH;
+}
+if (keyOverflow > 0) {
+  console.error(`gen_boarding: ${keyOverflow} stand(s) do not fit under the map and are NOT on the sheet.`);
 }
 
 /* ================================================================= INDEX */
@@ -789,28 +861,22 @@ if (overflow > 0) {
 // ONE options object, passed to BOTH footerPlateTop and footerBand — the rule
 // gen_internal.js follows for the same reason, so the plate the legend dodges can
 // never be a different plate from the one that gets drawn.
-const PRINT_SAFE = (RJ.design && RJ.design.printSafe != null) ? +RJ.design.printSafe : 5;
-const DESIGN = RJ.design || {};
-const FOOTER_OPTS = {
-  notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
-  url: DESIGN.sheetUrl || null,
-  qr: DESIGN.sheetQr || null,
-  sheetVersion: DESIGN.sheetVersion || null,
-  ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}),
-  x0: SAFE, x1: W - SAFE, safe: PRINT_SAFE,
-};
-const PLATE_TOP = FOOTER.footerPlateTop(FOOTER_OPTS);
-
 /* ---------------------------------------------------------------- legend */
 // Under the index where there is room, but never under the footer plate: the QR
 // raised the plate top from 197.17 mm to 188.10 mm and both lines, pinned to the
 // index bottom at 189.6 and 192.8, were painted over (Peter, 2026-08-23 — the
 // first render of this sheet carrying a QR). 2 mm of air above the plate.
 const LG_GAP = 3.2;
-const LG_LINES = BP.note ? 2 : 1;
+// `boardingPlan.note` takes a string or an array of them. A place can need more than
+// one line: St Neots has to say both where the letters come from AND that two of the
+// services calling at Stand A are community routes outside the national dataset, and
+// the second sentence is exactly the kind a sheet must not swallow. A single string
+// still renders byte-identically to before.
+const LG_NOTES = BP.note == null ? [] : (Array.isArray(BP.note) ? BP.note.filter(Boolean) : [BP.note]);
+const LG_LINES = 1 + LG_NOTES.length;
 const LGY = Math.min(IY1 + 3.6, PLATE_TOP - 2.0 - LG_GAP * (LG_LINES - 1));
 out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('ltd = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
-if (BP.note) out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP)}" font-size="2.4" fill="${INK_SOFT}">${esc(BP.note)}</text>`);
+LG_NOTES.forEach((n, i) => out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP * (i + 1))}" font-size="2.4" fill="${INK_SOFT}">${esc(n)}</text>`));
 
 /* ---------------------------------------------------------------- footer */
 out(FOOTER.footerBand({ ...FOOTER_OPTS,

@@ -768,7 +768,14 @@ function analyse(svgPath) {
   // every feature as stranded — three fabricated defects on the first run, which
   // is the failure this file's own comments keep warning about. A frame means an
   // internal sheet (geographic, schematic or diagram); those three draw features.
-  if (RJ && Array.isArray(RJ.features) && hasPanel) {
+  // AND NOT ON A BOARDING SHEET, which is the same exclusion the panel-only and
+  // duplicate-label measures already carry further down, found the same way. A
+  // boarding plan's locator draws buildings and streets and no features at all, so
+  // St Neots Town Centre's inherited `features: [River Great Ouse]` scored as a
+  // stranded label with no ink of its colour anywhere — one hard defect, not a fault,
+  // on an otherwise clean sheet. St Ives Bus Station never showed it because that
+  // place's routes.json carries no `features[]` at all.
+  if (RJ && Array.isArray(RJ.features) && hasPanel && base !== 'boarding') {
     // Which colour did the feature ACTUALLY get drawn in? Not derivable from
     // config: `rail:"chequer"` declares #4a4a4a and the sheets emit #33383d, and
     // the shipped SVG carries no feature grouping (gen_internal's gk() tags

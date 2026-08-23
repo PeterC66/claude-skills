@@ -130,11 +130,11 @@ function stage(cwd, ...a) {
 const allTowns = findTowns(BUSES);
 const targets = [
   ...allTowns.filter(t => args.all || args.town.includes(t.name)),
-  ...findPlaces(allTowns).filter(p => args['all-places'] || args.place.includes(p.name)),
+  ...findPlaces(allTowns, BUSES).filter(p => args['all-places'] || args.place.includes(p.name)),
 ];
 if (!targets.length) {
   console.error('--all / --town from: ' + allTowns.map(t => t.name).join(', '));
-  console.error('--all-places / --place from: ' + findPlaces(allTowns).map(p => p.name).join(', '));
+  console.error('--all-places / --place from: ' + findPlaces(allTowns, BUSES).map(p => p.name).join(', '));
   process.exit(2);
 }
 if (!SET && !args.unset.length && !args.rail && !FEATPOS.length && !SETPATH.length) { console.error('nothing to do: pass --set, --unset, --rail, --feature-pos or --set-path'); process.exit(2); }

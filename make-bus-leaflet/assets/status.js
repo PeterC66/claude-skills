@@ -145,7 +145,7 @@ function gateTown(t) {
 function gatePlace(p) {
   const m = readJson(path.join(p.dir, 'manifest.json'));
   const s4 = latestRunDir(m, p.dir, 'S4');
-  const row = { name: p.name, town: p.town, version: s4 ? s4.rec.version : null };
+  const row = { name: p.name, town: p.town || '(standalone)', version: s4 ? s4.rec.version : null };
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; return row; }
   // The NO-SHEET judgement was applied to `external` in August 2026 and not to
   // `internal`, because at the time every place had an internal map. High Wycombe
@@ -277,7 +277,7 @@ function portalDrift() {
 
 // ---- run ---------------------------------------------------------------
 const towns = findTowns(BUSES);
-const places = findPlaces(towns);
+const places = findPlaces(towns, BUSES);
 const townRows = towns.map(gateTown);
 const placeRows = places.map(gatePlace);
 const portalFixtureRows = gatePortalFixture();

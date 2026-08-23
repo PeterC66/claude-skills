@@ -25,7 +25,10 @@
  * with whatever the manifest currently calls "latest".
  *
  * Usage: node sync_ci_reference.js [--buses "<Buses dir>"] [--town "<Name>"]
- * (no --town: sync every town + every place)
+ *                                   [--place "<Place name>"]
+ * (no --town/--place: sync every town + every place). `--town` takes a town and its
+ * own nested places; `--place` takes one place by name and is the only way to reach
+ * a STANDALONE place, which has no parent town to be named by.
  */
 const fs = require('fs');
 const path = require('path');
@@ -70,14 +73,28 @@ function syncOne(dir) {
 }
 
 const allTowns = findTowns(BUSES);
-const allPlaces = findPlaces(allTowns);
+const allPlaces = findPlaces(allTowns, BUSES);
 const targetTownName = args.town;
-const towns = targetTownName ? allTowns.filter(t => t.name === targetTownName) : allTowns;
-const places = targetTownName ? allPlaces.filter(p => p.town === targetTownName) : allPlaces;
-
-if (targetTownName && !towns.length) {
-  console.error('No town named "' + targetTownName + '". Known: ' + allTowns.map(t => t.name).join(', '));
-  process.exit(2);
+// `--place` exists because a STANDALONE place has no parent town to be named by, so
+// `--town` cannot reach it at all. rollout_places.js used to sync with `--town
+// p.town`, which is null for such a place; it now passes `--place p.name`, which
+// works for both layouts.
+const targetPlaceName = typeof args.place === 'string' ? args.place : null;
+let towns, places;
+if (targetPlaceName) {
+  towns = [];
+  places = allPlaces.filter(p => p.name === targetPlaceName);
+  if (!places.length) {
+    console.error('No place named "' + targetPlaceName + '". Known: ' + allPlaces.map(p => p.name).join(', '));
+    process.exit(2);
+  }
+} else {
+  towns = targetTownName ? allTowns.filter(t => t.name === targetTownName) : allTowns;
+  places = targetTownName ? allPlaces.filter(p => p.town === targetTownName) : allPlaces;
+  if (targetTownName && !towns.length) {
+    console.error('No town named "' + targetTownName + '". Known: ' + allTowns.map(t => t.name).join(', '));
+    process.exit(2);
+  }
 }
 
 let bad = false;
@@ -88,7 +105,7 @@ for (const t of towns) {
 }
 for (const p of places) {
   const r = syncOne(p.dir);
-  console.log(`${p.town} / ${p.name}: ${r.status} — ${r.detail}`);
+  console.log(`${p.town || '(standalone)'} / ${p.name}: ${r.status} — ${r.detail}`);
   if (r.status === 'SKIP' && r.detail.startsWith('latest S4')) bad = true;
 }
 process.exit(bad ? 1 : 0);

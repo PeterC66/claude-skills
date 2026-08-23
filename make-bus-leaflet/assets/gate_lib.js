@@ -168,9 +168,9 @@ function sameIgnoringLineEndings(pathA, pathB) {
 }
 
 // ---- shared town/place discovery -------------------------------------------
-// A "town" is any Areas/<Name>/manifest.json. A "place" is any
-// Areas/<Town>/Places/<Place>/manifest.json. Both share the same S1..S6
-// manifest shape (stage.js is generic over it).
+// A "town" is any Areas/<Name>/manifest.json. A "place" is any manifest.json in one
+// of the THREE place layouts (see findPlaces). Both share the same S1..S6 manifest
+// shape (stage.js is generic over it).
 function findTowns(busesDir) {
   const areasDir = path.join(busesDir, 'Areas');
   if (!fs.existsSync(areasDir)) return [];
@@ -178,14 +178,52 @@ function findTowns(busesDir) {
     .filter(name => fs.existsSync(path.join(areasDir, name, 'manifest.json')))
     .map(name => ({ name, dir: path.join(areasDir, name) }));
 }
-function findPlaces(towns) {
+// A place lives in one of THREE layouts, not one. `Documentation/README - Folder
+// structure.md` and `gtfs_places.py` have both said so since 2026-08-02 — a place
+// under its town, a place at `Places/<Place>/`, and a place under a bucket such as
+// `Places/_standalone/<Place>/` for a place whose surrounding town we do not map.
+// This function only ever walked the first, so from 2026-08-21 (when the first
+// standalone place was built) Ely Co-op and the two Godmanchester Co-ops were
+// invisible to EVERY consumer of it: no byte gate and no quality row in status.js,
+// skipped by `rollout_places.js --all`, absent from `adopt_config.js --all-places`,
+// and never mirrored into ci-reference. Three shipped maps, ungated — while the
+// monthly GTFS scan, which discovers places independently, listed them as live the
+// whole time. The two halves of the system disagreed about what a place is.
+// Keyed on manifest.json exactly as gtfs_places.py is, excluding the same fixture.
+const PLACE_ROOT_EXCLUDE = new Set(['_portal-fixture']);
+function findPlaces(towns, busesDir) {
   const places = [];
+  const seen = new Set();
+  const add = (name, town, dir) => {
+    if (seen.has(dir)) return;
+    if (!fs.existsSync(path.join(dir, 'manifest.json'))) return;
+    seen.add(dir);
+    places.push({ name, town, dir, standalone: town == null });
+  };
   for (const t of towns) {
     const pd = path.join(t.dir, 'Places');
     if (!fs.existsSync(pd)) continue;
-    for (const name of fs.readdirSync(pd)) {
-      const dir = path.join(pd, name);
-      if (fs.existsSync(path.join(dir, 'manifest.json'))) places.push({ name, town: t.name, dir });
+    for (const name of fs.readdirSync(pd)) add(name, t.name, path.join(pd, name));
+  }
+  // `busesDir` stays optional so an outside caller that passes only `towns` keeps
+  // working; every caller in this folder passes it. Derived from a town's own dir
+  // as a fallback, since Areas/<Town> and Places/ are siblings.
+  const root = busesDir || (towns[0] && path.dirname(path.dirname(towns[0].dir)));
+  const pr = root && path.join(root, 'Places');
+  if (pr && fs.existsSync(pr)) {
+    for (const name of fs.readdirSync(pr)) {
+      if (PLACE_ROOT_EXCLUDE.has(name)) continue;
+      const dir = path.join(pr, name);
+      if (!fs.statSync(dir).isDirectory()) continue;
+      // `Places/<Place>/` — a place with no parent area at all.
+      add(name, null, dir);
+      // `Places/<Bucket>/<Place>/` — the same thing filed under a bucket.
+      if (!fs.existsSync(path.join(dir, 'manifest.json'))) {
+        for (const inner of fs.readdirSync(dir)) {
+          const idir = path.join(dir, inner);
+          if (fs.statSync(idir).isDirectory()) add(inner, null, idir);
+        }
+      }
     }
   }
   return places;

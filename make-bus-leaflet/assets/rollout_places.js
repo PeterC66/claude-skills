@@ -345,17 +345,20 @@ function rolloutOnePlace(p) {
   stage(p.dir, 'commit', 'S5', s5Dir, '--outputs', s5Outputs.join(','), '--note', NOTE);
   spawnSync(process.execPath, [path.join(SK, 'refresh_latest.js'), p.dir], { encoding: 'utf8' });
   // Keep the small tracked CI reference mirror in step with what was just
-  // published (see sync_ci_reference.js). It filters by town name, which
-  // also mirrors every OTHER place under the same town — harmless (they're
-  // already in sync) and simpler than adding a --place flag there too.
-  spawnSync(process.execPath, [path.join(SK, 'sync_ci_reference.js'), '--buses', BUSES, '--town', p.town], { encoding: 'utf8' });
+  // published (see sync_ci_reference.js). This passed `--town p.town` until
+  // 2026-08-23, on the reasoning that mirroring the town's other places too was
+  // harmless and saved adding a flag there. It was harmless only while every place
+  // had a town: `p.town` is null for a STANDALONE place, so the sync would exit 2
+  // with "No town named null" — and since the result is never checked, the mirror
+  // would silently not happen. `--place` names one place in any layout.
+  spawnSync(process.execPath, [path.join(SK, 'sync_ci_reference.js'), '--buses', BUSES, '--place', p.name], { encoding: 'utf8' });
 
   return { name: p.name, status: 'DONE', diffs, anyLost, warnings: realWarnings, blockers: realBlockers, s4Dir, s5Dir, version: BUMP, sheetStamp };
 }
 
 // ---- run ---------------------------------------------------------------
 const allTowns = findTowns(BUSES);
-const allPlaces = findPlaces(allTowns);
+const allPlaces = findPlaces(allTowns, BUSES);
 const selected = args.all ? allPlaces
   : args.place.length ? allPlaces.filter(p => args.place.includes(p.name))
   : allPlaces; // default: consider every place (UP-TO-DATE ones are skipped cheaply by the gate check)
@@ -366,7 +369,7 @@ console.log(`${APPLY ? 'APPLYING' : 'DRY RUN'} rollout over ${selected.length} p
 
 const results = [];
 for (const p of selected) {
-  process.stdout.write(`${p.town} / ${p.name}... `);
+  process.stdout.write(`${p.town || "(standalone)"} / ${p.name}... `);
   let r;
   try { r = rolloutOnePlace(p); } catch (e) { r = { name: p.name, status: 'ERROR', detail: e.message }; }
   results.push(r);

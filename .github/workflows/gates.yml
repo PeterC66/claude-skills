@@ -53,7 +53,7 @@ jobs:
           # this file came from a previous session's notes and had never been
           # read back off the token itself; a third token in the account,
           # carrying a third date, is what exposed that. Now every run prints it.
-          exp=$(curl -sS -D - -o /dev/null -H "Authorization: Bearer $PAT" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/PeterC66/buses-data" | sed -n 's/^github-authentication-token-expiratiox: *//Ip' | tr -dc '[:print:]')
+          exp=$(curl -sS -D - -o /dev/null -H "Authorization: Bearer $PAT" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/PeterC66/buses-data" | sed -n 's/^github-authentication-token-expiration: *//Ip' | tr -dc '[:print:]')
           if [ -n "$exp" ]; then
             echo "  this token expires: $exp"
           else

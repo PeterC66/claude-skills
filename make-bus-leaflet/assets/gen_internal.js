@@ -346,7 +346,12 @@ const PRINT_SAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null
 // gets drawn; passing the same object to both makes that true by construction
 // rather than by remembering (see INTERNAL_FOOTER_NOTES' header above).
 const FOOTER_OPTS = { notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE,
-  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr === false ? null : (DESIGN.sheetQr || { mm: 14 }),
+  // design.sheetQr DEFAULTS to a 14mm code (2026-08-24). It was opt-in, all 20 maps
+  // set exactly {mm:14}, and a key every target repeats is a default in disguise. It
+  // only fires where design.sheetUrl is set — qrBox() returns null without a url — so
+  // this cannot put a code on a sheet that has no address to point at. `sheetQr:false`
+  // switches it off. Proved byte-inert on all 20 maps before the keys were stripped.
   // design.sheetVersion — the PUBLISHED version, printed in the gap the QR left beside
   // the credit line (footer.js). Absent => no row, byte-identical.
   sheetVersion: DESIGN.sheetVersion || null,
@@ -3631,10 +3636,15 @@ if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
  * two columns of those read as a paragraph broken in half.
  *
  * Column width comes from the panel, not from a constant, so a town that has moved or
- * narrowed its panel gets columns that still fit it. Absent the key, one column and
- * byte-identical.
+ * narrowed its panel gets columns that still fit it.
+ *
+ * TWO COLUMNS IS THE DEFAULT since 2026-08-24. It was opt-in and 17 of the 18 maps
+ * that draw a Key set it to 2; the eighteenth (Ely Co-op) sets 3 because a place has
+ * less panel height to spend. The two that set nothing are boarding-only sheets, and
+ * gen_boarding.js deliberately does not read this key. `keyCols:1` restores the old
+ * single column.
  */
-const KEY_COLS = Math.max(1, Math.min(3, (DESIGN.keyCols|0) || 1));
+const KEY_COLS = Math.max(1, Math.min(3, (DESIGN.keyCols|0) || 2));
 const KEY_PER_COL = Math.ceil(key.length / KEY_COLS) || 1;
 const KEY_COLW = ((PRINT_SAFE!=null ? 297-PRINT_SAFE : 294) - PX - 3) / KEY_COLS;
 // The label baseline is ky+1, so the heading rule is applied there and the icon

@@ -890,7 +890,7 @@ const DESIGN = RJ.design || {};
 const FOOTER_OPTS = {
   notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
   url: DESIGN.sheetUrl || null,
-  qr: DESIGN.sheetQr || null,
+  qr: DESIGN.sheetQr === false ? null : (DESIGN.sheetQr || { mm: 14 }),
   sheetVersion: DESIGN.sheetVersion || null,
   ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}),
   x0: SAFE, x1: W - SAFE, safe: PRINT_SAFE,
@@ -1010,6 +1010,14 @@ for (const s of stands) {
     emptySub = SHOW_WALK ? `${s.distM} m walk \u2014 ${EMPTY_STAND_LABEL}` : EMPTY_STAND_LABEL;
   }
   const keySub = (isEmpty && emptySub) ? emptySub : walkLine;
+  // AN EMPTY SUB-LINE IS NO SUB-LINE. With `anchorTick` off (the default since
+  // 2026-08-24) `walkLine` collapses to '' for any stand whose bearing NaPTAN does not
+  // give — three of High Wycombe Town Centre's five — and the element was still
+  // emitted, so the sheet carried `<text ...></text>` drawing nothing. Invisible on
+  // paper and not invisible everywhere: the quality metric counts <text> nodes, so an
+  // empty one is a label by every measure this project has. Found by the opt-in
+  // rebase, which is the first thing to re-render every boarding sheet since.
+  const hasSub = !!(keySub && keySub.trim());
   // ...and now that two config keys can lengthen it, measure it. The legend notes
   // have had this check since High Wycombe town centre; the key never did, and it is
   // the half of the sheet a new key is most likely to overrun.
@@ -1024,12 +1032,12 @@ for (const s of stands) {
   }
   out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky)}" font-size="3.1" fill="${INK}">${esc(keyLabel)}</text>`);
   if (KEY_TWO_LINE) {
-    out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky + 3.4)}" font-size="2.5" fill="${INK_SOFT}">${esc(keySub)}</text>`);
+    if (hasSub) out(`<text x="${f2(cxk + 4.6)}" y="${f2(ky + 3.4)}" font-size="2.5" fill="${INK_SOFT}">${esc(keySub)}</text>`);
   } else {
     // One line. The label is set in FM's measured width so the grey half starts
     // clear of it rather than at a guessed offset.
     const lw = FM.textWidth(keyLabel, 3.1, false);
-    out(`<text x="${f2(cxk + 4.6 + lw + 2.0)}" y="${f2(ky)}" font-size="2.5" fill="${INK_SOFT}">${esc(keySub)}</text>`);
+    if (hasSub) out(`<text x="${f2(cxk + 4.6 + lw + 2.0)}" y="${f2(ky)}" font-size="2.5" fill="${INK_SOFT}">${esc(keySub)}</text>`);
   }
   ky += KEY_PITCH;
 }

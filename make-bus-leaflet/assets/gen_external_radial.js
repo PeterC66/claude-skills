@@ -72,7 +72,7 @@ const EXTERNAL_FOOTER_NOTES = [
   `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
     + `${DESIGN.scaleBar!==false?' Diagram — not to scale.':''}`];
 const FOOTER_OPTS = { notes: EXTERNAL_FOOTER_NOTES, safe: PSAFE,
-  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr === false ? null : (DESIGN.sheetQr || { mm: 14 }),
   // design.sheetVersion — the PUBLISHED version, printed in the gap the QR left beside
   // the credit line (footer.js). Absent => no row, byte-identical.
   sheetVersion: DESIGN.sheetVersion || null,
@@ -766,9 +766,15 @@ LEG.buf.forEach(out);
  * the footer's own sentence, so the sheet never says it twice.
  *
  * `bullets` and `heading` override the lot for a town that wants its own words.
- * Absent the key nothing below runs and the output is byte-identical.
+ *
+ * ON BY DEFAULT since 2026-08-24, `howToUse:false` to refuse it. All 8 towns had
+ * opted in, which is the definition of a default here. NOTE what was NOT flipped:
+ * every one of those towns also stores its own three `bullets`, a hand-picked subset
+ * of the five derived below, and those stay explicit — they are per-map content, not
+ * a repeated flag, and unsetting them would grow every town's panel by two bullets.
  */
-const HOWTO = DESIGN.howToUse ? (DESIGN.howToUse === true ? {} : DESIGN.howToUse) : null;
+const HOWTO = DESIGN.howToUse === false ? null
+  : (DESIGN.howToUse == null || DESIGN.howToUse === true ? {} : DESIGN.howToUse);
 if(HOWTO){
   const HEAD = HOWTO.heading !== undefined ? HOWTO.heading : 'How to use this map';
   // externalHubLabel carries a newline where the hub BOX wants to break ("St Ives

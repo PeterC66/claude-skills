@@ -212,6 +212,38 @@ function rolloutOnePlace(p) {
     if (fs.statSync(fp).isDirectory()) continue;
     if (name.endsWith('.json') && !s3Carry.includes(name)) fs.copyFileSync(fp, path.join(scratch, 'S4', name));
   }
+  // REFUSE TO SEED FROM AN S3 THE BUILT S4 DISAGREES WITH. The comment on
+  // buildInternal() says routes.json's internalRoads block arrives "already stamped
+  // with fitExtra etc from the original build" — true of the S4 copy, and NOT true of
+  // the S3 this tool actually seeds from. `build_internal_place_roads.js` injects
+  // `internalRoads.fitExtra` (every drawn stop, so a cross-locality walkshed frames the
+  // whole close-up) and `fitMargin` at BUILD time, writing them into the run folder
+  // only. Three places — St Neots Co-op and both Godmanchester Co-ops — had them in S4
+  // and not in S3 on 2026-08-24, so the opt-in rebase was one --force away from
+  // re-fitting each map to one locality's stops: no error, no lost sheet, just a
+  // different composition and a handful of swapped road labels in the label diff.
+  // Three blocks are checked, and they are exactly the ones a build stage writes BACK
+  // into a run's routes.json: `internalRoads` (build_internal_place_roads.js's fit fix
+  // and derive_termini.js's exits), `frequency` and `design.frequencyTiers`
+  // (derive_frequency.js). Nothing else is compared — `design.sheetVersion` and `engine`
+  // are stamped per run and MUST differ, which is why this is a named list and not a
+  // whole-object diff.
+  // The fix when this fires is to lift the value out of the built S4 into the S3
+  // (`adopt_config.js --place ... --set-file`), never to let the rollout proceed.
+  const _s3ir = (routesJson.internalRoads && typeof routesJson.internalRoads === 'object') ? routesJson.internalRoads : {};
+  const _s4rj = readJson(path.join(prevS4.dir, 'routes.json')) || {};
+  const _s4ir = (_s4rj.internalRoads && typeof _s4rj.internalRoads === 'object') ? _s4rj.internalRoads : {};
+  const _onlyInS4 = Object.keys(_s4ir).filter(k => !(k in _s3ir)).map(k => 'internalRoads.' + k);
+  if (_s4rj.frequency && !routesJson.frequency) _onlyInS4.push('frequency');
+  if (_s4rj.design && _s4rj.design.frequencyTiers && !(routesJson.design && routesJson.design.frequencyTiers))
+    _onlyInS4.push('design.frequencyTiers');
+  if (_onlyInS4.length) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: p.name, status: 'STALE-S3',
+      detail: 'the built S4 holds ' + _onlyInS4.join(', ')
+            + ' and the S3 this would seed from does not — copy it into the S3 first (adopt_config --set-file), do not roll out over it' };
+  }
+
   const engineHash = computeEngineVersion();
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
 

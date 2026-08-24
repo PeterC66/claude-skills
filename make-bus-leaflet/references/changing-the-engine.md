@@ -192,6 +192,14 @@ The High Street build added a third: **the traffic-signal layer now calls `hits(
 >
 > **The same guard caught the next new string on the same sheet.** The stand-key width check added on 2026-08-23 refused the first `alsoFrom` caption at 12.2 mm over an 82 mm column. A guard added for a class of fault, firing on the first member of that class written after it, is the whole argument for adding it.
 
+> ### 2026-08-24 — the opt-in rebase, and the S3 that did not describe its own build
+
+> **A rollout seeds from S3, and a BUILD writes back to S4.** `build_internal_place_roads.js` injects `internalRoads.fitExtra` (every drawn stop, so a cross-locality walkshed frames the whole close-up) and `fitMargin` at build time, into the run folder's copy of routes.json — never back into the S3 it came from. `rollout_places.js` re-renders from S3, and its own comment said the block arrives "already stamped with fitExtra etc from the original build", which is true of the S4 and not of the S3. Three places — St Neots Co-op and both Godmanchester Co-ops — had the keys in S4 and not in S3, so the rebase was one `--force` away from re-fitting each map to one locality's stops: no error, no lost sheet, just a different composition and a handful of swapped road labels in the label diff. **The label diff is what caught it** — "Gumcester Way" and "Old Queen Elizabeth School" out, "Causeway" and "Post Street" in, on a re-render that touched no data. `rollout_places.js` now REFUSES with `STALE-S3` when the built S4 holds `internalRoads`, `frequency` or `design.frequencyTiers` the S3 does not; lift the value into the S3 with `adopt_config.js --place ... --set-file` and re-run. Proved both ways in a sandbox copy before it was trusted. Same family as [[feedback_the_config_stage_may_not_hold_the_config]] and [[feedback_a_rollout_reverts_what_only_a_run_folder_holds]].
+>
+> **Prove a default inert by BUILDING WITHOUT THE KEY, not by building with it.** Promoting `sheetQr`/`keyCols`/`howToUse` to defaults changes nothing while every map still spells them out — that run is worth doing and proves almost nothing. The test that matters strips the key from a scratch copy of every map's inputs and asserts the output still matches the pre-flip build. All 54 sheets across 20 maps came out identical, and the comparison was then shown to go red by removing one key it was NOT supposed to cover (`design.sheetUrl`), which is the only thing that separates "inert" from "not looking".
+>
+> **`_latest` is a folder of copies, so anything this build did not write is stale by definition.** `refresh_latest.js` skipped a missing source silently and left the old copy, which is how St Neots Town Centre carried an `external.svg` from 7 August beside an `external.jpg` from 23 August. It now sweeps what it did not write and says so.
+
 ## 4. The portal hand-off — a generator change is NOT done until this is done
 
 The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of some engine files. It does not import them from the skill; it vendors them. A skill-side change leaves the portal running the old code, and its gates will keep passing against the *old* shipped fixture until you re-vendor.
@@ -204,7 +212,13 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 | `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
 | `%SK%\gen_boarding.js` | `engine\expert\` |
 
-> ### ⚠ OPEN DRIFT, 2026-08-24 — the review round moved **two vendored files**, and unlike every drift above this one is **NOT byte-inert**. Re-vendoring is gate 8 of the opt-in rebase, unconditionally.
+> ### ✅ CLOSED 2026-08-24 — re-vendored, both fixtures recut, all four suites PASS (`community-bus-maps` `a22dd9a`). The account below is kept because it is the first time this section's step 5 actually bit, and it is worth reading before the next non-inert drift.
+>
+> **What actually happened, against what this note predicted.** THREE files moved, not two — `gen_external_places.js` picked up the `sheetQr` default the same day. `verify:place` went red on the vendoring alone before either fixture was touched: the Aldi internal missed by 41 bytes and the High Wycombe High Street boarding sheet by 115. Both fixtures were then recut from the skill's own new builds (Aldi v1.14, High Street v1.4) and `FIXTURE_DIR` repointed to St Ives v6.55 / Huntingdon v3.42 / Beaconsfield v1.46. The order matters and is the whole point: **watch the gate go red first**, then rebuild, or a fixture cut alongside the change passes by construction and proves nothing.
+>
+> **One thing the round found that this note did not predict.** With `anchorTick` off by default, a stand whose bearing NaPTAN does not give produced an EMPTY `<text>` element on the boarding sheet — three of High Wycombe Town Centre's five. It drew nothing and it counted as a label everywhere this project counts labels. Fixed in the same round.
+>
+> The original warning, unedited:
 >
 > Peter's 19-point review of the 23 August sheet set (`Development Docs/review-triage_2026-08-24.md`). Two rows of the table above are now skill-ahead:
 >

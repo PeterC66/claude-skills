@@ -94,7 +94,23 @@ grab(newestUnder('disagreements.docx'), 'disagreements.docx');
 grab(newestUnder('disagreements.pdf'), 'disagreements.pdf');
 grab(newestUnder('verification.docx'), 'verification.docx');
 
-console.log('_latest refreshed: ' + copied.join(', ') + (missing.length ? '  (skipped: ' + missing.join(', ') + ')' : ''));
+// SWEEP WHAT THIS RUN DID NOT WRITE. _latest is a folder of copies and nothing
+// else writes to it, so any file left over from an earlier build is stale by
+// definition — but grab() skips a missing source silently, so the old copy just
+// stayed. St Neots Town Centre carried an external.svg from 7 August beside an
+// external.jpg from 23 August, and the whole point of a rebase is that every
+// _latest describes the build that made it. This also stops the failure mode in
+// rollout_places' comment above: a run that drops a sheet entirely used to leave
+// _latest mirroring the previous run's copy, so the sheet did not look missing.
+const swept = [];
+for (const e of fs.readdirSync(OUT, { withFileTypes: true })) {
+  if (!e.isFile() || copied.includes(e.name)) continue;
+  fs.unlinkSync(path.join(OUT, e.name));
+  swept.push(e.name);
+}
+
+console.log('_latest refreshed: ' + copied.join(', ') + (missing.length ? '  (skipped: ' + missing.join(', ') + ')' : '') +
+            (swept.length ? '  (swept stale: ' + swept.join(', ') + ')' : ''));
 
 // Find the Buses root (the ancestor dir holding collect-maps.ps1) by walking
 // up from TOWN, then re-run it so Collected_latests never lags _latest.

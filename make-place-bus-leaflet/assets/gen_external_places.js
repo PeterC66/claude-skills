@@ -317,7 +317,7 @@ const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK 
 // could not carry the code its town siblings could. Absent both keys every number below
 // reduces to the arithmetic that was here before, so ungated places stay byte-identical.
 const FOOTER_OPTS = {
-  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr || null,
+  url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr === false ? null : (DESIGN.sheetQr || { mm: 14 }),
   // design.sheetVersion — the PUBLISHED version, printed in the gap the QR left beside
   // the credit line (footer.js). Absent => no row, byte-identical.
   sheetVersion: DESIGN.sheetVersion || null,

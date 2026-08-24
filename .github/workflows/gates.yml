@@ -11,6 +11,16 @@ name: Bus leaflet gates
 # what caused this workflow to be red from 2026-08-04 to 2026-08-24: the token in
 # the store could read buses-data and could not see the portal, so the run died at
 # the portal checkout having gated nothing. Widen the token, not this list.
+#
+# ONE token, FOUR stores, and they renew together: buses-data Actions,
+# claude-skills Actions, community-bus-maps Actions, community-bus-maps
+# Dependabot -- the portal's verify.yml runs on pull_request, and a Dependabot PR
+# cannot read an Actions secret. The 2026-08-21 rotation updated three of the
+# four and missed one, which is the six weeks of red described above.
+# CROSS_REPO_PAT2 expires Sunday 22 November 2026; when it does, this workflow,
+# buses-data's copy and the portal's verify all fail at once, at their
+# preflights. Its predecessor CROSS_REPO_PAT is no longer named by any workflow
+# in any of the three repos (migrated 2026-08-24).
 
 on:
   push:

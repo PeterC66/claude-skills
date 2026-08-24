@@ -31,10 +31,19 @@ jobs:
           token: ${{ secrets.CROSS_REPO_PAT }}
           path: buses-data
 
-      - name: Checkout community-bus-maps (portal, public)
+      # community-bus-maps is PRIVATE, and this step used to say "public" and pass no
+      # token. The checkout failed with "Not Found" on every run, before a single gate
+      # executed, so this workflow has been reporting red for the checkout rather than
+      # for anything it was written to measure -- a gate that cannot run hides whatever
+      # backlog it would have found. It takes the same CROSS_REPO_PAT the buses-data
+      # checkout above it takes. EXPECT IT TO GO RED FOR REAL once it can see the repo:
+      # the portal fixture rows DIFF whenever the vendored engine is ahead of the
+      # portal's main, which is exactly the state a re-vendoring PR is in.
+      - name: Checkout community-bus-maps (portal, private)
         uses: actions/checkout@v4
         with:
           repository: PeterC66/community-bus-maps
+          token: ${{ secrets.CROSS_REPO_PAT }}
           path: community-bus-maps
 
       - uses: actions/setup-node@v4

@@ -49,7 +49,15 @@ The casing is sized by **drawn lanes**: `(drawn lanes − 1) × gap + stroke + s
 
 **Set it near the widest real road in the frame as that road measures on the page**, and read the number off the map rather than copying one: `DBG_CASE=1` prints the **uncapped** maximum and how many segments the cap clamped. St Ives Bus Station uses 11 mm against an uncapped 23.7 mm, clamping 11 segments; its widest real feature is the bus-station apron at about 25 m.
 
+St Ives town uses 11.5 against an uncapped 22.6 (7 of 756 segments) and Ely Co-op 18.5 against 26.3 (8 segments), both added 2026-08-24.
+
 Below the ceiling nothing changes, so a value above the uncapped maximum is a no-op rather than an error.
+
+**THERE IS NO SENSIBLE ENGINE DEFAULT, AND THAT WAS MEASURED RATHER THAN ASSUMED (2026-08-24).** `3*gap + stroke + skeletonPad` — a four-lane road, 11.4 mm — was tried as a default because it is right on St Ives, where the seven segments it clamps are all short round-capped junction stubs. It is wrong on most of the rest: **Beaconsfield clamps 235 segments of 897**, and they are not stubs — 47 consecutive segments of Station Road carry six real parallel lanes for the length of the street, and 46 of Amersham Road carry five — so the cap would put coloured ribbon OUTSIDE the grey along whole corridors. March at 14.2 does the same to Broad Street's seven lanes; High Wycombe clamps 149, Wisbech 142.
+
+So **read the histogram, not the maximum**. `DBG_CASE=2` prints one line per segment (road name, geometric bundle size, drawn lanes, final width, centre offset). A ceiling is safe where the wide widths are a thin tail well above a dense body, and unsafe where a wide width carries a road NAME repeated twenty or forty times. What `DBG_CASE=2` does **not** print is segment LENGTH, which is the actual discriminator between a junction stub and a street — worth adding before anyone tries this again.
+
+And the ceiling is a proxy for the real defect. A segment shorter than its own stroke paints a full-width **round-capped disc**, and a cluster of them fuses into a lobe; that is what "curved grey casing" means and why "curved" was the diagnosis. Drawing a run of consecutive same-width segments as ONE path, with caps only at true ends, would remove the lobe without narrowing any road. That is the better fix and it is not built (open-actions, item 2b).
 
 #### `internalCorridors` — rung 1, LIVE since P2 (2026-07-28)
 
@@ -168,6 +176,20 @@ The placer's preferences, in the order they decide: near the middle of the visib
 **`design.sheetVersion`** prints a version in the gap the QR left between the address line and the credit (Peter's items 5 and 6 — the missing version, and the vertical hole, are one line of type). A **bare number** gets the words `Map version` in front of it; **anything else prints verbatim**, so one string covers the three states a sheet can be in: `build 6.54 · 19 Aug 2026` for a map built here before it reaches the portal, `Draft 5.0 · 19 Aug 2026 14:02` for a portal draft or review copy, and `5.0` for a published one. **`rollout.js` stamps the build form automatically** into each run's own `routes.json` — in the data, not the environment, because `gate.sh` reproduces a sheet from its data folder and nothing else. The portal overrides it with `LEAFLET_SHEET_VERSION`. This is **not** the engine build number dropped on 2026-08-10; that decision stands for the two public states.
 
 **`design.limitedKeyLabel`** overrides the wording of the external sheet's line-style key row, which appears automatically whenever a drawn spoke is `limited` (item 29 — dashed had meant "certain days only" since the first build and no external sheet said so anywhere). Defaults to `Dashed — certain days only, check times`, matching `gen_internal.js`'s `FTIER_LABEL.limited` so the two sheets of one map explain the same thing the same way.
+
+### `design.labelInkMinContrast` — a route colour is chosen to be seen, not to be read (2026-08-24 — **ON by default; NOT byte-inert**)
+
+```json
+"design": { "labelInkMinContrast": 3.5 }
+```
+
+A `to <somewhere>` terminus label is drawn in its route's own colour, which is what ties the words to the line and is worth keeping. But the palettes are colour-blind-safe sets chosen for **area** contrast — one 1.7 mm ribbon against another — and their pale members are hopeless as **ink on white**. Ely Co-op's route 129 is `#DDCC77`, which scores **1.62:1** against the page, below even the 3:1 floor WCAG allows large text, and "to Littleport" was in Peter's words on 2026-08-24 "very hard to read". The white halo every `placeLabel` carries makes it worse rather than better, because the halo is the background bleeding into the letterforms.
+
+`inkOnWhite()` in `gen_internal.js` darkens **the ink only, never the line**: every channel is scaled by the same factor, so the hue is preserved and the label still reads as that route's colour, just deep enough to be type. Anything already at or above the floor is returned **untouched and byte-identical** — `#882255` at 8.73, `#332288` at 12.17, `#AA4499` at 5.26, `#117733` at 5.66 and `#CC6677` at 3.66 all pass through unchanged. The default of **3.5** was chosen because it lifts the genuinely unreadable palette entries and leaves the strong hues alone: `#EEDD88` 1.37, `#DDCC77` 1.62, `#88CCEE` 1.76, `#FFAABB` 1.79, `#EE8866` 2.52, `#44AA99` 2.82 and `#999999` 2.85 each land just over the floor.
+
+Raise it for a sheet that will be photocopied; set it to `0` to disable the darkening entirely and get the pre-2026-08-24 ink back. **This is not an opt-in key** — it is on by default, so any map drawing a terminus label in a pale route colour moves the first time it is re-rendered. That is deliberate: an opt-in that no map opts into is a feature nobody has, which is exactly what happened to `internalRoads.skeletonMaxW` above.
+
+It applies to the two places a route colour becomes type — the solo-route terminus rows in the diagram's `internalTermini` block, and the geographic `to <terminus>` labels. It does **not** touch route badges, whose text is white on the colour and is a different contrast question.
 
 ### `design.fixedOrientation` — pin which way up the map is drawn (2026-08-21 — opt-in, absent ⇒ byte-identical)
 

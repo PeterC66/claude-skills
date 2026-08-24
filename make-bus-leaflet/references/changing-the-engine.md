@@ -204,6 +204,23 @@ The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of so
 | `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
 | `%SK%\gen_boarding.js` | `engine\expert\` |
 
+> ### ⚠ OPEN DRIFT, 2026-08-24 — the review round moved **two vendored files**, and unlike every drift above this one is **NOT byte-inert**. Re-vendoring is gate 8 of the opt-in rebase, unconditionally.
+>
+> Peter's 19-point review of the 23 August sheet set (`Development Docs/review-triage_2026-08-24.md`). Two rows of the table above are now skill-ahead:
+>
+> | Vendored row | What moved | Does the portal's shipped output change? |
+> |---|---|---|
+> | `%SK%\gen_internal.js` → `engine\place\` | footer sentence "Stop names in italics are approximate" → "Stop positions are approximate" (item 8); the frequency-tier Key asks the **drawn** routes instead of the `frequency` block (item 7); chequer white core gains `stroke-linejoin="round"` (item 9); `inkOnWhite()` + `design.labelInkMinContrast` (item 19) | **YES, on every internal sheet.** The footer sentence alone is unconditional. |
+> | `%SK%\gen_boarding.js` → `engine\expert\` | `anchorTick` off by default and `SHOW_WALK = ANCHOR_TICK` (item 13); "ltd" → `*` (item 14) | **YES, on every boarding sheet.** Both defaults changed. |
+>
+> `gen_external_radial.js` also moved (item 11, the badge/lozenge overlap) and is **not** a vendored file, so it carries its own change as it always has.
+>
+> **This is the case section 4's step 5 is written for, and it will be the first time it has actually bitten.** Every drift note above this one could honestly say "absent the key the output is byte-identical", so the portal's frozen fixtures were safe to leave alone. Four of the six changes here are **defaults, not keys** — there is no absent state to be inert in. So `verify:area` and `verify:place` **will** go red the moment the files are copied across, and that is the gate doing its job, not a fault. The shipped fixtures are genuinely stale and must be re-rendered from the new engine and re-imported. **Do not edit a gate's expectation, and do not freeze a fixture built alongside the change** — a fixture cut from the new engine passes by construction and proves nothing ([[feedback_ground_truth_can_carry_the_bug]]).
+>
+> **Expect the label diff to show LOST, and read every one.** High Wycombe loses two frequency-tier Key rows ("Limited — check times" and the dashed "Certain dates only"), which is item 7 working: the nine routes that justified them — 27/29/38/158/331/333/334 limited, 275/WW1 sparse — are none of them drawn on that sheet. Every `"N m walk"` stand caption goes too, by item 13. Both are intended losses in a tool whose whole job is to flag losses, so `--force` past them is exactly the wrong instinct.
+>
+> **And re-run the quality ledger afterwards** (gate 5): 27 badges move on the externals, so the ceiling accepted before this round is not the ceiling after it.
+
 > ### ✅ 2026-08-19 — THE P1 ROUND RE-VENDOR IS DONE. Every row in the table above reads **in sync**, and all four portal suites PASS.
 >
 > Peter's 32-comment map review, jobs J1–J8 (J9 deferred). Four vendored files moved: **`footer.js`** (the note wrap, and the new `design.sheetVersion` row), **`engine\place\gen_internal.js`** (`design.keyCols`, `features[].labelPos:"auto"`, `design.featureLabelAuto`, the grey-route palette guard, the frame-aware feature-label guard), **`engine\place\gen_external_places.js`** and **`engine\expert\schematize_internal.js`** (`notToScale:'schematic'`). `gen_external_radial.js` is not a vendored file and carries the external title change, the line-style key and the operator-name fix on its own.

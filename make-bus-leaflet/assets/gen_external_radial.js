@@ -189,6 +189,38 @@ function measureNodeWidth(label, timeLabel){
 const HARD = [];      // [x0,y0,x1,y1,tag]
 const ANCH = [];      // [x,y,id] every tick/lozenge, for the "nearer a foreign symbol" test
 const REQS = [];      // queued stop labels
+/* WHERE THE LOZENGE ACTUALLY ENDS UP, asked separately so the badge placement further
+ * down can ask it BEFORE it draws. The box is nudged twice after the spoke's end point is
+ * chosen — once by design.printSafe and once by the footer plate — and both nudges move it
+ * TOWARDS the hub, i.e. onto the badges parked just inside it. March's X32 was the visible
+ * case (Peter, 2026-08-24): the box clamped 1.75 mm left to stay inside the print margin,
+ * over a badge positioned against the unclamped point. Same arithmetic, used by both.
+ *
+ * A REACH-BACK ALONG THE SPOKE WAS THE FIRST ANSWER AND IS NOT THIS ONE. Asking how far
+ * the box reaches from its own centre along the spoke — min(halfW/|dx|, halfH/|dy|), which
+ * is 12.72 mm on March's X32 against the 11.75 mm reserved — is a real correction and still
+ * the wrong question, because a badge parked down-and-left of the box is nearest its EDGE,
+ * not the point where the spoke crosses it. It left the X32 0.44 mm under "Whittlesey".
+ * distToRect() below is what the badge placement actually asks; this clamp is the other
+ * half. The two errors together came to 2.7 mm; the overlap measured on the shipped sheet
+ * was 2.84. */
+function nodeClamp(x,y,w,hh){
+  if(PSAFE!=null){
+    x = Math.min(Math.max(x, PSAFE + w/2), W - PSAFE - w/2);
+    y = Math.min(Math.max(y, PSAFE + hh/2), H - PSAFE - hh/2);
+  }
+  if(PLATE_TOP != null) y = Math.min(y, PLATE_TOP - 1 - hh/2);
+  return [x,y];
+}
+// Distance from a point to a RECTANGLE (0 inside it). The badge/box test has to be this,
+// not a distance measured along the spoke: the box's nearest point to a badge sitting
+// down-and-left of it is the perpendicular foot on its edge, not where the spoke crosses.
+// Measuring along the spoke left March's X32 still 0.44 mm under "Whittlesey" after the
+// clamp had been accounted for — right answer to the wrong question.
+function distToRect(px,py,cx,cy,w,hh){
+  const dx = Math.max(Math.abs(px-cx) - w/2, 0), dy = Math.max(Math.abs(py-cy) - hh/2, 0);
+  return Math.hypot(dx,dy);
+}
 function townNode(x,y,label,h=11,timeLabel){
   const lines = wrap(label);
   const w = measureNodeWidth(label, timeLabel);
@@ -201,10 +233,8 @@ function townNode(x,y,label,h=11,timeLabel){
   // inside the margin rather than shorten the spoke: the shift is a millimetre
   // or two and the box is at least 18mm wide, so it still covers the line end
   // and still reads as that spoke's terminus.
-  if(PSAFE!=null){
-    x = Math.min(Math.max(x, PSAFE + w/2), W - PSAFE - w/2);
-    y = Math.min(Math.max(y, PSAFE + hh/2), H - PSAFE - hh/2);
-  }
+  // (the two clamps below now live in nodeClamp(), because the badge placement has to
+  //  apply exactly the same ones before it decides where the badges go.)
   // ...and clear of the FOOTER PLATE, which is not the same boundary as the trim.
   //
   // The clamp above keeps a lozenge inside the printable page; it says nothing about
@@ -222,7 +252,7 @@ function townNode(x,y,label,h=11,timeLabel){
   // white text that the metric reads as present. The defect was visible in the JPG
   // and invisible in every number. Clamp the BOX, not the spoke's end point, so an
   // overridden terminus (overrides.branches.*.terminus) is covered too.
-  if(PLATE_TOP != null) y = Math.min(y, PLATE_TOP - 1 - hh/2);
+  [x,y] = nodeClamp(x,y,w,hh);
   if(V2){ HARD.push([x-w/2-0.6, y-hh/2-0.6, x+w/2+0.6, y+hh/2+0.6, 'terminus']); ANCH.push([x,y,'term:'+label]); }
   out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh=4.0, y0=y-((lines.length-1)*lh+extra)/2;
@@ -419,8 +449,21 @@ for(let _i=0;_i<EXT.length;_i++){
   // the 8.6mm stacking pitch and the 4.5mm box clearance were sized for. Both
   // grow by the widest extra on THIS spoke; an ungated spoke adds zero.
   const _bxw = badgeXWs(_badges, 4.0);
-  const _autoOff = measureNodeWidth(b.label, _timeLabel)/2 + 4.5 + _bxw;
-  const _boff = Math.max((D.badgeOffset != null) ? D.badgeOffset : 8, _autoOff);
+  /* Measure the clearance against the box AS IT WILL BE DRAWN, and along the spoke.
+   * See nodeClamp() and distToRect() above for why each half of that matters; the two
+   * together are March's X32 sitting under "Whittlesey ~17 min". `_shift` is how much of
+   * the clamp eats into the gap: it is the component of the box's move along the spoke's
+   * own direction, so a sideways nudge (which does not close the gap) costs nothing. */
+  const _nw = measureNodeWidth(b.label, _timeLabel), _nh = 11 + (_timeLabel ? 3.6 : 0);
+  const [_cx,_cy] = nodeClamp(tx, ty, _nw, _nh);
+  // The badge's own half-extent: the 4.0 disc, its 0.7 white stroke, and design.badgeFit's
+  // extra half-width where the pill is wider than the disc. Plus 1.1 mm of daylight.
+  const _bneed = 4.0 + 0.35 + _bxw + 1.1;
+  let _boff = Math.max((D.badgeOffset != null) ? D.badgeOffset : 8,
+                       measureNodeWidth(b.label, _timeLabel)/2 + 4.5 + _bxw);
+  // ...then walk it back until the badge genuinely clears the box. Terminates: the spoke
+  // is finite and the box is at its far end, so moving hubward strictly increases the gap.
+  for(let _g=0; _g<200 && distToRect(tx-dx*_boff, ty-dy*_boff, _cx, _cy, _nw, _nh) < _bneed; _g++) _boff += 0.2;
   const _bpitch = 8.6 + 2*_bxw;
   _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*_bpitch), ty-dy*(_boff+i*_bpitch), r, 4.0));
   // terminus node

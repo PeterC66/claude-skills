@@ -831,8 +831,25 @@ const INTERCHANGE = new Set(['bus_station', 'ferry_terminal']);
 // one by default; boardingPlan.hereLabel names it for any other place that does.
 const HERE_PHRASE = (BP.hereLabel != null) ? (BP.hereLabel || null)
                   : (INTERCHANGE.has(PLACE.type) ? 'in the bus station' : null);
-const ANCHOR_TICK = (BP.anchorTick != null) ? !!BP.anchorTick
-  : !INTERCHANGE.has(String(PLACE.type || ''));
+/* OFF EVERYWHERE BY DEFAULT SINCE 2026-08-24, and the walk figures go with it.
+ *
+ * The tick was switched off at St Ives Bus Station because at an interchange the stands
+ * ARE the place. Peter extended that to the whole product on 2026-08-24, and the reason
+ * generalises: the tick is the only thing on the sheet that says WHERE the distances are
+ * measured from, and it is a single point inside a shop, a square or a station that no
+ * reader is standing on. "48 m walk, about 1 min" against a point nobody occupies is a
+ * number with no origin, so the two have to live or die together — hence SHOW_WALK below
+ * rather than a second config key that could be set the other way round.
+ *
+ * THE CAPABILITY IS KEPT, NOT REMOVED. `boardingPlan.anchorTick:true` restores both the
+ * tick and every distance, which is exactly the shape a future "You are here" arrow needs:
+ * move the anchor, turn the tick on, and the walks re-measure themselves from it. Several
+ * versions of one sheet with different arrows is then a per-version anchor, not a code
+ * change. */
+const ANCHOR_TICK = (BP.anchorTick != null) ? !!BP.anchorTick : false;
+// Distances and walking times are measured FROM the anchor. Print them only when the
+// anchor is drawn, so the sheet never quotes a distance from a point it does not show.
+const SHOW_WALK = ANCHOR_TICK;
 if (ANCHOR_TICK) {
   out(`<circle cx="${f2(px(PLON))}" cy="${f2(py(PLAT))}" r="1.1" fill="none" stroke="${INK}" stroke-width="0.5"/>`);
 }
@@ -943,9 +960,15 @@ for (const s of stands) {
   // station' -- sending a reader 200 m up the road, past the flag they wanted, for
   // every one of the 60 destinations those two stops serve. Off a bus-station anchor
   // the sheet prints the measured walk instead, which is never wrong.
+  // HERE_PHRASE survives SHOW_WALK: it quotes no number, and what it is measured from is
+  // the named place itself ("in the bus station"), not a tick the reader has to find.
   const walk = (HERE_PHRASE && s.distM <= 30) ? HERE_PHRASE
-             : `${s.distM} m walk, about ${s.walkMin} min`;
-  const facing = s.facing ? `, buses face ${s.facing}` : '';
+             : SHOW_WALK ? `${s.distM} m walk, about ${s.walkMin} min` : null;
+  const facing = s.facing ? `buses face ${s.facing}` : null;
+  // Built from the parts that survive, so the bearing can stand alone as the whole
+  // caption. It is a sentence fragment either way, so it takes a capital when it leads.
+  const cap = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+  const walkLine = walk ? [walk, facing].filter(Boolean).join(', ') : (cap(facing) || '');
   // AN EMPTY STAND'S CAPTION REPLACES THE WALK LINE, IT DOES NOT EXTEND IT.
   // Appended, "Not the best stop for anywhere on this sheet" made the grey line
   // 114 mm long in an 89 mm column and it printed straight across the destination
@@ -978,12 +1001,15 @@ for (const s of stands) {
     // often" and the key's own width guard refused it at 12.2 mm over an 82 mm
     // column -- the guard added for exactly this, doing its job on the first new
     // caption written after it. The budget here is about 70 characters.
-    emptySub = `${s.distM} m walk \u2014 the ${rts.join(', ')} also leave${rts.length === 1 ? 's' : ''}`
+    // The `<n> m walk \u2014` prefix goes with SHOW_WALK for the same reason the stand's own
+    // walk line does; without it the caption starts at the thing it is actually saying.
+    const _lead = SHOW_WALK ? `${s.distM} m walk \u2014 the` : 'The';
+    emptySub = `${_lead} ${rts.join(', ')} also leave${rts.length === 1 ? 's' : ''}`
              + ` here; ${pref.join(' / ')} ha${pref.length === 1 ? 's' : 've'} more buses`;
   } else if (EMPTY_STAND_LABEL) {
-    emptySub = `${s.distM} m walk \u2014 ${EMPTY_STAND_LABEL}`;
+    emptySub = SHOW_WALK ? `${s.distM} m walk \u2014 ${EMPTY_STAND_LABEL}` : EMPTY_STAND_LABEL;
   }
-  const keySub = (isEmpty && emptySub) ? emptySub : (walk + facing);
+  const keySub = (isEmpty && emptySub) ? emptySub : walkLine;
   // ...and now that two config keys can lengthen it, measure it. The legend notes
   // have had this check since High Wycombe town centre; the key never did, and it is
   // the half of the sheet a new key is most likely to overrun.
@@ -1152,9 +1178,15 @@ for (let c = 0; c < COLS; c++) {
       name += '.';
     }
     out(`<text x="${f2(x0)}" y="${f2(ry)}" font-size="${f2(ns)}" fill="${INK}">${esc(name)}</text>`);
+    // AN ASTERISK, NOT THE WORD "ltd". Set small, soft and hard against a place name,
+    // "ltd" reads as part of the name — Peter's first reading of it was "Rd", i.e. a road
+    // (2026-08-24). An asterisk cannot be mistaken for a word, it is the mark a reader
+    // already expects to send them to a footnote, and Arial sets it at cap height so it
+    // sits as a superscript on the row's own baseline with no dy. Drawn at the name's own
+    // size (the glyph is small at any size) so it survives a row that has shrunk to fit.
     if (d.limited) {
       const lw = FM.textWidth(name, ns, false);
-      out(`<text x="${f2(x0 + lw + 1.0)}" y="${f2(ry)}" font-size="${MIN_TEXT}" fill="${INK_SOFT}">ltd</text>`);
+      out(`<text x="${f2(x0 + lw + 0.6)}" y="${f2(ry)}" font-size="${f2(ns)}" fill="${INK_SOFT}">*</text>`);
     }
     // route badges (grouped)
     let bx = x0 + C_ROUTE;
@@ -1244,7 +1276,7 @@ if (overflow > 0) {
 // declared with IY1 above, because the index's floor has to know how tall this is.
 const LGY = Math.min(IY1 + 3.6, LG_TOP);
 if (LG_LTD) {
-  out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('ltd = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
+  out(`<text x="${f2(IX0)}" y="${f2(LGY)}" font-size="2.4" fill="${INK_SOFT}">${esc('* = a limited service, fewer than ' + (BP.limitedBelowPerWeek || 6) + ' journeys a week.')}</text>`);
 }
 LG_NOTES.forEach((n, i) => out(`<text x="${f2(IX0)}" y="${f2(LGY + LG_GAP * (i + LG_LTD))}" font-size="2.4" fill="${INK_SOFT}">${esc(n)}</text>`));
 // A note is drawn as one unwrapped line, so a long one walks off the right of the

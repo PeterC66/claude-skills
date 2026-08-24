@@ -173,8 +173,16 @@ const FONT = require(_FONTM);
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep
 // these two in sync: whichever notes array is passed to footerBand must match this one.
+// "Stop names in italics are approximate" was a legacy sentence carried over from the
+// hand-made St Ives leaflet, and it described a convention this engine has never had:
+// every placeLabel() call site passes italic=false, so a stop name is never italic on
+// any sheet. Italics belong to map notes, feature (river) names and the scale note, and
+// to nothing else. The claim also under-sold the map — stop POSITIONS are approximate on
+// every sheet, italic or not, because a stop is snapped to the drawn road skeleton.
+// Reported by Peter 2026-08-24 ("I do not see any. They are all approximate!").
+// Two lines either way, so the footer plate's top edge does not move.
 const INTERNAL_FOOTER_NOTES = ['Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org (June 2026), Open Government Licence v3.0.',
-          'Places: © OpenStreetMap contributors (ODbL). Stop names in italics are approximate; check live times at bustimes.org.'];
+          'Places: © OpenStreetMap contributors (ODbL). Stop positions are approximate; check live times at bustimes.org.'];
 // FOOTER_PLATE_TOP is assigned just below DESIGN, not here: design.printSafe
 // moves the footer's bottom baseline, which moves the plate top, and every
 // consumer of this constant (the mapNotes check, the map frame's y1, the
@@ -376,6 +384,23 @@ const IR = (RJ.internalRoads === false) ? null : (function(){
     contextRoads:true, contextColor:'#f0f0f0', contextWidth:0.45,
     roadLabelMax:12, badgeEvery:70 }, u);       // gap>=stroke+~1mm so bundled lanes read separately (see header)
   o.focus = Object.assign({ coreKm:1.1, comp:0.5 }, u.focus||{});
+  /* A FOUR-LANE DEFAULT WAS TRIED HERE ON 2026-08-24 AND MEASURED WRONG. Peter asked
+   * whether the 2026-08-23 casing ceiling was "in the engine yet" — it was, but absent on
+   * every map, so it had never drawn anything. `3*gap + stroke + skeletonPad` = 11.4 mm
+   * looked like the obvious default, and on St Ives it is right: 7 segments of 756 clamp,
+   * all of them the short round-capped junction stubs that fuse into the grey lobe, and
+   * the crop is plainly better. It is wrong everywhere else. Beaconsfield clamps 235 of
+   * 897, and they are not stubs — 47 consecutive segments of Station Road carry six real
+   * parallel lanes for the length of the street, 46 of Amersham Road carry five, and
+   * capping those puts coloured ribbon OUTSIDE the grey along whole corridors. High
+   * Wycombe clamps 149, Wisbech 142, March 113.
+   *
+   * So the ceiling is genuinely per-map and has to be set from that map's own measured
+   * distribution — the widest LONG run, not a lane count. `DBG_CASE=2 node gen_internal.js`
+   * prints one line per segment (road name, bundle size, drawn lanes, width) and is how
+   * the numbers above were got. Left absent here on purpose: an engine default that is
+   * right for one town in eight is worse than no default, because it ships as correct.
+   * Recorded in Development Docs/review-triage_2026-08-24.md, item 2. */
   return o; })();
 
 /* design.frequencyTiers — draw HOW USABLE a service is, not how many journeys it
@@ -1205,7 +1230,16 @@ function drawFeature(f){
     const d=seg.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
     if(st.chequer){                              // black casing + white blocks on top
       lines.push(`<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}" stroke-linecap="butt" stroke-linejoin="round"/>`);
-      lines.push(`<path d="${d}" fill="none" stroke="${st.coreColor}" stroke-width="${st.coreWidth}" stroke-dasharray="${st.chequer}" stroke-linecap="butt"/>`);
+      // The white core needs the SAME linejoin as the casing under it. It had none, so
+      // it took SVG's default — miter — and a miter spike is width/sin(turn/2) long: on
+      // GEOGRAPHIC geometry the turns are gentle and nothing showed, but the diagram
+      // engine warps the line into turns up to 148 deg, where a 0.88 mm core throws a
+      // 3.2 mm spike out past a 1.6 mm casing. That is High Wycombe's "malformed railway
+      // segments (white too large)" (Peter, 2026-08-24) — white blocks bursting out of
+      // the dark band at every bend, and the pattern reading as an outline rather than a
+      // chequer. Round joins clip the spike back inside the casing. Byte-inert on any
+      // sheet whose railway has no sharp turn, which is every geographic internal.
+      lines.push(`<path d="${d}" fill="none" stroke="${st.coreColor}" stroke-width="${st.coreWidth}" stroke-dasharray="${st.chequer}" stroke-linecap="butt" stroke-linejoin="round"/>`);
       continue;
     }
     // A dashed feature needs a BUTT cap for the same reason the chequer above does
@@ -1370,6 +1404,38 @@ const overlapsNoIcons=(b)=>placed.some(o=>!iconBoxes.has(o) && hit(b,o));
 const LAB = V2 ? new Labeller({ page:[297,210], frame:{x0:MX0,y0:MY0,x1:MX1,y1:MY1},
                                 bounds:{x0:1, y0:1, x1:MX1+2, y1:FOOTER_PLATE_TOP-0.4} }) : null;
 function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]); if(LAB) LAB.block([x0,y0,x1,y1]);}
+
+/* A ROUTE COLOUR IS CHOSEN TO BE SEEN AS A 1.7 mm RIBBON, NOT READ AS 2.7 mm TYPE.
+ *
+ * The "to <somewhere>" terminus labels are drawn in their route's own colour, which is
+ * what ties the words to the line and is worth keeping. But the palettes are
+ * colour-blind-safe sets built for AREA contrast, and their pale members are hopeless as
+ * ink on white: Ely Co-op's route 129 is #DDCC77, which scores 1.62:1 against the page —
+ * below even the 3:1 floor for large text — so "to Littleport" was, in Peter's words on
+ * 2026-08-24, "very hard to read". The white halo every placeLabel carries makes it
+ * worse, not better, because the halo is the background bleeding into the letterforms.
+ *
+ * Darken the INK only, never the line: the hue is preserved (every channel scales by the
+ * same factor) so the label still reads as that route's colour, just deep enough to be
+ * type. Anything already above the floor is returned untouched, so the strong hues —
+ * magenta 6.09, red 5.19, wine 8.73, the navies — are byte-identical.
+ * design.labelInkMinContrast tunes the floor; 3.5 was chosen because it lifts the six
+ * genuinely unreadable palette entries (yellow 1.95, cyan 1.84, grey 1.92, amber 2.25,
+ * light cyan 2.21, orange 2.87) and leaves the rest of the board alone. */
+const INK_MIN_CONTRAST = (DESIGN.labelInkMinContrast != null) ? +DESIGN.labelInkMinContrast : 3.5;
+const _srgb = v => v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+const _lum = hex => { const c=[1,3,5].map(i=>_srgb(parseInt(hex.substr(i,2),16)/255));
+  return 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2]; };
+const _scaleHex = (hex,f) => '#' + [1,3,5].map(i=>{
+  const v = Math.max(0, Math.min(255, Math.round(parseInt(hex.substr(i,2),16)*f)));
+  return v.toString(16).padStart(2,'0'); }).join('');
+function inkOnWhite(hex, min){
+  const floor = (min!=null) ? min : INK_MIN_CONTRAST;
+  if(!/^#[0-9a-fA-F]{6}$/.test(String(hex))) return hex;
+  let f = 1, out = hex;
+  for(let i=0; i<40 && 1.05/(_lum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }
+  return out;
+}
 // `self` = this label's OWN icon box, excluded from the collision test: placement puts a
 // label 2.6 mm from a 4.2 mm symbol by design, so its own symbol is not a defect (the
 // same exclusion quality_metrics.js makes when it counts "label over a foreign icon").
@@ -2455,7 +2521,8 @@ if(IR && TRIM){
       // Cambridge) is drawn in BLACK so it clearly applies to every route in the
       // cluster, not just one (Peter's ask 2026-07-20). A solo route keeps its
       // own colour.
-      const col=g.ms.length===1?(C[g.ms[0].r]||'#333'):'#111';
+      // ...and a solo route's colour is darkened to a legible ink first — see inkOnWhite().
+      const col=g.ms.length===1?inkOnWhite(C[g.ms[0].r]||'#333'):'#111';
       // SOLO rows used to go through placeLabel anchored ON the badge centre, which
       // printed the text straight over its own badge ("65to Buckden", "905to Bedford",
       // and at the frame edge a clipped "05to Cambridge") because the badge was not
@@ -2916,7 +2983,7 @@ if(RJ.internalTermini && !IR){ const TL=RJ.terminiLabels||{};
     const txw=badgeXW(r,3.0);
     let t=0; while(tplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<6.5+txw) && t<8){ p=[p[0]+nx*4, p[1]+ny*4]; t++; }
     tplaced.push(p);
-    badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],'to '+TL[r],2.7,C[r]||'#333',false,null); }
+    badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],'to '+TL[r],2.7,inkOnWhite(C[r]||'#333'),false,null); }
 }
 
 // ---- resolve labelPos:"auto" ------------------------------------------------
@@ -3619,7 +3686,18 @@ key.forEach((kk,i)=>{const ky=py+KFIRST+(i%KEY_PER_COL)*KROW_FIT, kx=PX+3+Math.f
  */
 let KEYROWS = KEY_PER_COL;
 if(FTIER){
-  const used = new Set(Object.values(RJ.frequency||{}));
+  /* ...and "actually uses" has to be asked of the DRAWN routes, not of the frequency
+   * block. `frequency` is service DATA and covers every service the town has, including
+   * the ones the sheet deliberately does not draw and lists in prose instead ("Also
+   * serving High Wycombe, not on this map"). Reading its values counted those, so High
+   * Wycombe printed BOTH "Limited — check times" and the dashed "Certain dates only"
+   * against a sheet on which no drawn lane is either: 27/29/38/158/331/333/334 are the
+   * limited ones and 275/WW1 the sparse ones, and not one of the nine is in routeOrder.
+   * The guard ran, it just measured the wrong set (Peter, 2026-08-24). `order` is the
+   * post-dropHidden draw order, so this is the same population the lanes come from.
+   * Measured across all 20 maps on 2026-08-24: High Wycombe is the only one that loses
+   * a row, and it loses exactly those two. */
+  const used = new Set(order.map(r=>(RJ.frequency||{})[r]).filter(Boolean));
   const tiers = Object.keys(FTIER).filter(t=>used.has(t));
   // The sample occupies exactly the pictogram's footprint (kx±2.0) and the label
   // sits at kx+4.0, so these rows share the POI rows' column and the whole Key

@@ -254,3 +254,27 @@ Counting `stop_times` rows at the frame's stops credits a trip once **per stop i
 ## A stand with no index rows is on the map and nowhere else (2026-08-23)
 
 `hideStandsWithNoDestinations: false` is right on a town-centre square, where every flag is in view and hiding one a reader may be standing at is worse than drawing it empty. But the consequence is that St Neots Stop C appears on the locator and **never once in the index**, so somebody waiting there cannot learn from the sheet that their bus goes from Stop E. `boarding_index.py` already computes `alsoFrom` for every destination and nothing prints it. Open action.
+
+## A GTFS feed carries registrations that have not started, and counting them doubles the frequency (2026-08-24)
+
+`boarding_index.py` summed every `calendar` row, so a route with a re-registration filed ahead of time counted twice. It is not rare: M40 and X74 each carry two complete filings in `buckinghamshire.sqlite`, and routes A, B and the 905 each carry two in `cambridgeshire.sqlite`. Eleven destinations at High Wycombe High Street were inflated, two of them exactly doubled. Pass `--asof` and read the report's shelf-life lines before building.
+
+Three rules were tried before one held. **A stop-set comparison alone false-positives**: route 102's services 12722 and 401 are both Sunday, both the same date span, and of course share a stop set because they are the same route — two journey groups inside ONE registration, and halving them would have been silent. **Matching the journeys exactly is too strict**: M40's two filings differ by one minute on the last stop of a 36-stop route, which is a re-registration by any reading. What works is same route, same operating days, a strictly LATER start, overlapping spans, and an identical stop set.
+
+## A printed sheet outlives its build date, so "today" is the wrong default to build on (2026-08-24)
+
+Building the St Ives Bus Station index strictly for the build date DROPPED Histon from route B: the journeys from The Busway Station Road onward to Histon exist only in the registration starting 30 August, and under the current one all three services carry zero. The sheet would have been right for six days and wrong for the nine months after. Built `--asof 2026-08-30` it is byte-identical to the committed sheet. `boarding_index.py` now names every excluded registration with its dates rather than testing them against a threshold nobody argued — read that list, then build on whichever registration the sheet will actually live on.
+
+## "Unique inside the frame" is not unique on the pavement (2026-08-24)
+
+`naptan_stands.py` accepts a stop whose CommonName nothing else in the frame shares. The frame edge is an arbitrary line through a street, so a name can be the only one in view and still be one of three identical flags 20 m further on. At High Wycombe High Street, `maxOK` reported 252 m and at that radius the tool offered a boarding point called plain `Station Interchange` whose two same-named siblings sit 0.4 m and 13 m outside. `measure_frame_coverage_2026-08-23.py` now stops before a name cluster is clipped, and `naptan_stands.py` WARNS when an accepted name has same-named stops out to twice the frame radius.
+
+**And `maxOK` is not a value to copy into `--radius-m`.** The two tools anchor on different points — the measurer on a NaPTAN stop, `naptan_stands.py` on `place.json`'s centre, which is where the sheet is drawn from. At High Street they are ~20 m apart and the same cluster falls either side of the frame edge depending on which you measure from. Treat maxOK as an upper bound and believe `naptan_stands.py`'s own verdict at the radius you intend.
+
+## The locator pull asked for functions as nodes only (2026-08-24)
+
+`pull_locator.js` asked for `shop`/`amenity`/`tourism` on NODES, and for ways only as `way["building"]`. Anything whose function is mapped as an AREA with no `building` tag matched nothing at all — absent from the pull, not merely ranked low. The Eden Shopping Centre (`shop=mall`) is the largest thing in the High Wycombe Town Centre frame and was invisible; so were a university campus and a hospital. Such a way now becomes a PLACE at its centroid rather than a building, because drawing a mall's outline would put a grey block over ground already drawn from the buildings inside it — what was missing is the name.
+
+**This does not fix an unranked landmark, and the two faults look identical from the pulled file.** The Old Town Hall, the Guildhall, the Chilterns Shopping Centre, Wycombe Museum and the railway station are all `building=yes` in OSM with no function tag of any kind. `way["building"]` already returns them with every tag they have; there is simply no tag saying they matter. Both levers open-actions proposed were measured and rejected — proximity-as-tiebreak drops "The Octagon" at St Ives, the one case the 40 m rule exists for, and a civic `building` value gains nothing at High Wycombe. `boardingPlan.locatorLandmarkNames` is the answer there. It does work at St Neots, where it lifts the Priory Centre and the parish church above nearer shopfronts.
+
+Diagnose from OSM, not from `locator_geo.json`: a first version of this note claimed only `shop` needed adding, on the grounds that every amenity way already carried a `building` tag. The pulled file could not show otherwise, because the counter-examples were never fetched.

@@ -182,6 +182,16 @@ Two of the 2026-08-23 changes were **deliberately not byte-identical**: markers 
 
 The High Street build added a third: **the traffic-signal layer now calls `hits()` before drawing**, as every other layer on the locator already did. Corrective, one element each on St Neots town centre (a signal on a stand marker) and High Wycombe town centre (a signal on the `Bridge Street` label), nothing on St Ives. So the standing arrears are St Neots 14 lines, St Ives 13, High Wycombe town centre 1 — and only the first two are live. The other four changes in that build (`standKeyNames`, `emptyStandLabel`, `locatorLandmarkNames`, and a stand-key width guard) default to the previous behaviour and are byte-identical everywhere.
 
+> ### 2026-08-24 — the boarding round, and three ways a measurement changed the answer
+
+> The boarding sheets went to **v1.2** on both High Wycombe places (the index's `+` now carries a count; `alsoFrom` is read for a drawn stand that departs nowhere the sheet chose). `gen_boarding.js` was re-vendored and `Places/_portal-fixture/High Wycombe High Street` re-staged from the new build in the same change — `verify:place` PASS, `npm test` green. The two LIVE sheets (St Ives Bus Station, St Neots Town Centre) were held back; a re-delivery is Peter's call.
+>
+> **A `--all` dry run is worth reading before it is worth trusting.** `adopt_config.js --all-places --unset design.keyCols` was about to strip the key from **eleven** places on the strength of an open-actions row saying it sat inert in two. It is a `gen_internal.js` key (`gen_internal.js:3570`, the Services panel's pictogram columns) and eight of those places have an internal sheet where it does real work. Only a place shipping a boarding sheet ALONE has no reader for it. The dry run named all eleven; applying it would have been a silent regression on every place internal.
+>
+> **Reserve for what you will draw, not for what you drew before.** The counted `+N` was reserved for in `routeCellW()` and then drawn under the old break condition, which asked only whether the next BADGE fitted. A bare `+` is ~1.4 mm and always fitted; `+1` is 3 mm and printed underneath the boarding disc. Found by rendering and zooming, not by reading the code — the SVG was valid and the label diff was clean.
+>
+> **The same guard caught the next new string on the same sheet.** The stand-key width check added on 2026-08-23 refused the first `alsoFrom` caption at 12.2 mm over an 82 mm column. A guard added for a class of fault, firing on the first member of that class written after it, is the whole argument for adding it.
+
 ## 4. The portal hand-off — a generator change is NOT done until this is done
 
 The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of some engine files. It does not import them from the skill; it vendors them. A skill-side change leaves the portal running the old code, and its gates will keep passing against the *old* shipped fixture until you re-vendor.

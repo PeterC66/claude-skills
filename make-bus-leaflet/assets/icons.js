@@ -1,4 +1,4 @@
-// Reusable POI pictograms. Each returns an SVG string centred at (x,y),
+// Reusable POI pictograms.  Each returns an SVG string centred at (x,y),
 // drawn to fit roughly a 5mm box (scale s = half-extent in mm, default 2.2).
 //
 // `ink` (optional, 4th arg after s): "charcoal" recolours the whole set to one

@@ -66,7 +66,17 @@ what is committed. The walkshed is the OTHER two sheets' radius and it is a poor
 default here: St Neots town centre walks 450 m, and at 450 m the frame reaches the
 unlettered `Church View` pair and this script refuses the sheet. Where the widest
 usable radius is not obvious, `Development Docs/measure_frame_coverage_2026-08-23.py`
-prints it per anchor as `maxOK`.
+prints it per anchor as `maxOK` -- but that tool anchors on a NaPTAN STOP and this
+one anchors on `place.json`'s centre, so its number is a starting point and not a
+value to copy. At High Wycombe High Street the two anchors are ~20 m apart and the
+`Station Interchange` cluster falls either side of the frame edge depending on which
+you measure from. Take maxOK as an upper bound, then run this tool at the radius you
+intend and believe its verdict.
+
+A frame can also clip a name CLUSTER: a name unique in view whose twins sit just
+outside. That is not a refusal -- the sheet can still be drawn -- but the printed
+instruction may send a reader to the wrong flag, so it is reported as a WARNING
+naming every sibling found out to twice the frame radius (added 2026-08-24).
 
 OUTPUT. `stands.json` -- one entry per served stop in the frame, in the order a
 sheet should list them (stands by code, then named stops by distance), each with the
@@ -82,7 +92,7 @@ import re
 import sqlite3
 import sys
 
-SCRIPT_VERSION = "1.0"
+SCRIPT_VERSION = "1.1"
 
 # Compass points NaPTAN uses in `Bearing`, to the words a sheet prints.
 COMPASS = {
@@ -299,6 +309,41 @@ def main():
 
     verdict = "REFUSE" if bad else "OK"
 
+    # ---- names accepted as unique that are NOT unique on the pavement ---------
+    # "Unique inside the frame" is the rule this tool applies, and the frame edge is
+    # an arbitrary line drawn through a street. A name can be the only one of its kind
+    # in view and still be one of three identical flags 20 m further on, at which point
+    # the sheet prints a boarding instruction the reader cannot follow.
+    #
+    # Measured at High Wycombe High Street 2026-08-23: `frame-coverage` reported maxOK
+    # 252 m, and at that radius this tool accepted a stop called plain `Station
+    # Interchange` whose two same-named siblings sit 0.4 m and 13 m OUTSIDE the frame,
+    # neither carrying a stand code. `measure_frame_coverage_2026-08-23.py` now stops
+    # before a name cluster is clipped; this is the same fault caught at build time,
+    # for a frame radius somebody set by hand.
+    #
+    # The search looks out to TWICE the frame radius -- the frame again -- and every
+    # sibling found is NAMED with its distance rather than tested against a threshold.
+    # Whether it matters is a judgement about that street, and the person building the
+    # sheet is the one who can make it.
+    outside = []
+    for r in [x for x in rows if x["class"] == "named"]:
+        common = ((r["naptan"] or {}).get("CommonName") or "").strip()
+        if not common:
+            continue
+        sibs = []
+        for s in nap.execute(
+                "SELECT ATCOCode, stand, lat, lon FROM naptan "
+                "WHERE Status='active' AND lower(CommonName)=? AND lat IS NOT NULL",
+                (common.lower(),)):
+            if s["ATCOCode"] == r["atco"]:
+                continue
+            d = haversine_m(plat, plon, float(s["lat"]), float(s["lon"]))
+            if radius < d <= radius * 2:
+                sibs.append((round(d), s["ATCOCode"], (s["stand"] or "").strip()))
+        if sibs:
+            outside.append((r, sorted(sibs)))
+
     # ---- report --------------------------------------------------------------
     print("# naptan_stands v%s — %s" % (SCRIPT_VERSION, place.get("name") or folder))
     print("  frame: %.6f,%.6f  radius %d m   register: %s"
@@ -315,6 +360,22 @@ def main():
         print("      %-24s routes: %s" % (r["name"] or "?", ", ".join(r["routes"])))
         print("      %s" % r["why"])
     print()
+    if outside:
+        print("  WARNING — %d name(s) accepted as unique here are NOT unique just outside the frame:"
+              % len(outside))
+        for r, sibs in outside:
+            print("    %-26s %s at %d m, accepted because nothing IN frame shares the name."
+                  % (r["label"] or r["name"], r["atco"], r["distM"]))
+            for d, atco, st in sibs:
+                print("        also %-24s %s at %d m%s"
+                      % (r["name"], atco, d, (" (stand %s)" % st) if st else " — no stand code"))
+        print("    A reader sent to this stop by name may be standing at the wrong flag. Either")
+        print("    shrink the frame below the cluster, or give the stand key something the reader")
+        print("    can check from the pavement. Searched to %d m (twice the frame radius)."
+              % (radius * 2))
+        sys.stderr.write("naptan_stands: %d accepted name(s) have same-named stops just outside "
+                         "the frame — see the report\n" % len(outside))
+        print()
     print("  VERDICT: %s" % verdict)
     if verdict == "REFUSE":
         print("  A boarding plan MUST NOT be generated for this frame: the stop(s) above")

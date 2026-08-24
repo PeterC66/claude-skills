@@ -48,6 +48,7 @@ after `stage.js pull`). Needs `place.json` and `stands.json` (run `naptan_stands
     python boarding_index.py --db <path.sqlite>     pick the GTFS region explicitly
     python boarding_index.py --min-trips 2          hide destinations below N trips/week
     python boarding_index.py --limited-below 6      mark, not hide, below N trips/week
+    python boarding_index.py --asof 2026-09-06     count the registrations live that day
 
 There is deliberately NO default region: `regions.json` removed `_default` on
 2026-08-21 because a silently-wrong dataset reports every route as withdrawn. If
@@ -59,6 +60,7 @@ the stand to board at, the routes, the weekly trip count and any alternative sto
 plus `stands[]` carrying the reverse view for the map's own labels.
 """
 import argparse
+import datetime
 import io
 import json
 import math
@@ -68,7 +70,7 @@ import sqlite3
 import sys
 from collections import defaultdict
 
-SCRIPT_VERSION = "1.2"
+SCRIPT_VERSION = "1.3"
 
 
 def read_json(path):
@@ -128,7 +130,13 @@ def main():
                     help="drop destinations with fewer than N trips in the feed week")
     ap.add_argument("--limited-below", type=int, default=6,
                     help="mark (not hide) destinations below N trips in the feed week")
+    ap.add_argument("--asof", default=None, metavar="YYYY-MM-DD",
+                    help="count only registrations running on this date (default: today)")
     args = ap.parse_args()
+
+    args.asof = (args.asof or datetime.date.today().isoformat()).replace("-", "")
+    if len(args.asof) != 8 or not args.asof.isdigit():
+        sys.exit("--asof must be YYYY-MM-DD")
 
     folder = os.path.abspath(args.dir)
 
@@ -322,16 +330,105 @@ def main():
     # exceptions -- bank holidays, one-off cancellations -- are not applied; they
     # move individual dates rather than the weekly shape.)
     no_week = {}          # route -> trips dropped for having no operating week
-    week_of = {}
+    n_offwindow = {}      # route -> trips dropped for not running on `asof`
+    n_superseded = {}     # route -> trips dropped as a re-registration counted twice
+    cal = {}
     for sid, *flags in db.execute(
-            "SELECT service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday "
-            "FROM calendar"):
-        week_of[sid] = sum(1 for f in flags if str(f) == "1")
+            "SELECT service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, "
+            "start_date, end_date FROM calendar"):
+        days = "".join("1" if str(f) == "1" else "0" for f in flags[:7])
+        cal[sid] = {"days": days,
+                    "week": days.count("1"),
+                    "start": str(flags[7] or ""),
+                    "end": str(flags[8] or "")}
+
+    # ---- which registrations are LIVE on the sheet's date --------------------
+    # A feed carries every registration it has been given, including ones that have
+    # not started. Counted together they double a route's journeys-per-week, which
+    # is the picker's third tie-break and what feeds `limitedBelowPerWeek`. Measured
+    # in `buckinghamshire.sqlite` 2026-08-24: M40 and X74 each carry two COMPLETE
+    # registrations -- 3 Aug 2026 to 3 May 2027, and 6 Sep 2026 to 6 Jun 2027 -- with
+    # identical day patterns and near-identical trip counts on both sides.
+    asof = args.asof
+    off_window = {}       # service_id -> (start, end) for anything outside the window
+    for sid, c in cal.items():
+        if c["start"] and c["end"] and not (c["start"] <= asof <= c["end"]):
+            off_window[sid] = (c["start"], c["end"])
+    week_of = {sid: c["week"] for sid, c in cal.items() if sid not in off_window}
 
     # ---- walk every trip touching an in-frame stop --------------------------
     ph = ",".join("?" * len(inframe))
     trip_ids = [r[0] for r in db.execute(
         "SELECT DISTINCT trip_id FROM stop_times WHERE stop_id IN (%s)" % ph, list(inframe))]
+
+    # ---- and which of the LIVE ones supersede each other ---------------------
+    # A date window alone does not settle it: the two Buckinghamshire registrations
+    # above OVERLAP for eight months, so from 6 Sep 2026 both are live and the double
+    # count returns.
+    #
+    # A STOP-SET comparison is what settled the 905 at St Neots on 2026-08-23, and it
+    # is NOT enough on its own here. Tried first and it produced a false positive:
+    # route 102's services 12722 and 401 are both Sunday, both 3 Aug 2026 to 3 May
+    # 2027, and of course share a stop set -- they are the same route. They are two
+    # journey groups inside ONE registration (3 trips and 65), and halving them would
+    # have been silent and wrong. Two services with the same start date are never a
+    # supersession, and comparing route coverage cannot tell journey groups apart.
+    #
+    # The test that DOES work is the stop set plus a strictly LATER start date, which
+    # is what separates a re-registration from a journey group. Matching the journeys
+    # exactly was tried and is too strict: M40's two filings are identical except that
+    # the last stop departs 05:50 instead of 05:51, one minute earlier on one stop of
+    # a 36-stop route. That is a re-registration by any reading, and an exact-times
+    # test called it a different service.
+    #
+    # So: same route, same operating days, a strictly later start date, overlapping
+    # spans, and an identical stop set. Trip counts are PRINTED rather than tested --
+    # they are evidence a reader should see (M40 53 v 53, X74 72 v 73), not a
+    # threshold to invent. Anything failing any test is left alone and counted.
+    svc_by_route = defaultdict(set)
+    for rn, sv in db.execute(
+            "SELECT DISTINCT r.route_short_name, t.service_id FROM stop_times st "
+            "JOIN trips t ON t.trip_id=st.trip_id JOIN routes r ON r.route_id=t.route_id "
+            "WHERE st.stop_id IN (%s)" % ph, list(inframe)):
+        if sv in week_of:
+            svc_by_route[rn].add(sv)
+
+    _shape_cache = {}
+
+    def _shape(rname, sid):
+        """(set of stops, number of trips) for this service on this route."""
+        key = (rname, sid)
+        if key not in _shape_cache:
+            rows = db.execute(
+                "SELECT COUNT(DISTINCT st.trip_id), COUNT(DISTINCT st.stop_id) "
+                "FROM stop_times st JOIN trips t ON t.trip_id=st.trip_id "
+                "JOIN routes r ON r.route_id=t.route_id "
+                "WHERE r.route_short_name=? AND t.service_id=?", (rname, sid)).fetchone()
+            stops = frozenset(r[0] for r in db.execute(
+                "SELECT DISTINCT st.stop_id FROM stop_times st JOIN trips t ON t.trip_id=st.trip_id "
+                "JOIN routes r ON r.route_id=t.route_id "
+                "WHERE r.route_short_name=? AND t.service_id=?", (rname, sid)))
+            _shape_cache[key] = (stops, rows[0] if rows else 0)
+        return _shape_cache[key]
+
+    superseded = {}       # service_id -> (route, winning service_id)
+    for rname, svcs in svc_by_route.items():
+        by_days = defaultdict(list)
+        for sv in svcs:
+            by_days[cal[sv]["days"]].append(sv)
+        for _days, group in by_days.items():
+            if len(group) < 2:
+                continue
+            group.sort(key=lambda s: (cal[s]["start"], str(s)))
+            keep = group[-1]
+            for sv in group[:-1]:
+                if cal[sv]["start"] >= cal[keep]["start"]:
+                    continue      # same registration, two journey groups -- not a supersession
+                if cal[sv]["end"] < cal[keep]["start"]:
+                    continue      # no overlap: the old one has already finished
+                old, new = _shape(rname, sv), _shape(rname, keep)
+                if old[0] == new[0]:
+                    superseded[sv] = (rname, keep, old[1], new[1])
 
     # dest -> atco -> {routes:set, trips:int, arr:set}
     # `arr` is where the journey SETS THE READER DOWN in that destination, and it is
@@ -348,6 +445,12 @@ def main():
         rname, svc = row[0], row[1]
         if rname in exclude:
             continue          # boardingPlan.excludeRoutes
+        if svc in superseded:
+            n_superseded[rname] = n_superseded.get(rname, 0) + 1
+            continue          # re-registration of the same timetable; counted once
+        if svc in off_window:
+            n_offwindow[rname] = n_offwindow.get(rname, 0) + 1
+            continue          # registration not running on the sheet's date
         per_week = week_of.get(svc, 0)
         if per_week == 0:
             # No row in `calendar` at all, or a row with no operating day: not a
@@ -392,6 +495,41 @@ def main():
     if exclude:
         print("  boardingPlan.excludeRoutes: left off the sheet -- %s"
               % ", ".join(sorted(exclude)))
+    print("  counting registrations running on %s-%s-%s (--asof)"
+          % (args.asof[:4], args.asof[4:6], args.asof[6:]))
+    if n_offwindow:
+        print("  not running on that date, so not counted -- %s"
+              % ", ".join("%s (%d trip%s)" % (r, n, "" if n == 1 else "s")
+                          for r, n in sorted(n_offwindow.items())))
+        # A PRINTED SHEET OUTLIVES ITS BUILD DATE, so an excluded registration is not
+        # simply noise -- it is the sheet's shelf life, and it is named rather than
+        # counted against a threshold nobody argued. Measured at St Ives Bus Station
+        # 2026-08-24: route B reaches Histon from The Busway Station Road on the
+        # registration starting 30 AUGUST and on no current one, so a sheet built
+        # strictly for today drops a destination that is true six days later and for
+        # the nine months after that. Build with --asof set to the date the sheet goes
+        # into use, and read this list before choosing it.
+        upcoming = sorted({cal[sv]["start"] for sv in off_window if cal[sv]["start"] > asof})
+        if upcoming:
+            print("     registrations in this feed that START after %s-%s-%s: %s"
+                  % (asof[:4], asof[4:6], asof[6:],
+                     ", ".join("%s-%s-%s" % (d[:4], d[4:6], d[6:]) for d in upcoming)))
+            print("     A sheet printed now will be read past those dates. Re-run with --asof <date>")
+            print("     to see what the sheet says then, and build on whichever registration it will live on.")
+        ended = sorted({cal[sv]["end"] for sv in off_window if cal[sv]["end"] < asof})
+        if ended:
+            print("     and registrations that ENDED before it: %s"
+                  % ", ".join("%s-%s-%s" % (d[:4], d[4:6], d[6:]) for d in ended[-3:]))
+    if n_superseded:
+        print("  re-registration of a timetable already counted, so counted ONCE -- %s"
+              % ", ".join("%s (%d trip%s)" % (r, n, "" if n == 1 else "s")
+                          for r, n in sorted(n_superseded.items())))
+        print("     Same route, same operating days, overlapping dates, an IDENTICAL stop set and a")
+        print("     strictly later start. Trip counts are shown so the pair can be judged, not tested.")
+        for sv, (rn, keep, n_old, n_new) in sorted(superseded.items(), key=lambda kv: (kv[1][0], str(kv[0]))):
+            print("     %-5s service %s (%s..%s, %d trips) superseded by %s (%s..%s, %d trips)"
+                  % (rn, sv, cal[sv]["start"], cal[sv]["end"], n_old,
+                     keep, cal[keep]["start"], cal[keep]["end"], n_new))
     if no_week:
         print("  no operating week in `calendar`, so not indexed -- %s"
               % ", ".join("%s (%d trip%s)" % (r, n, "" if n == 1 else "s")

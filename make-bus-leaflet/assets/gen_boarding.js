@@ -847,6 +847,20 @@ out(`</g>`);
 out(`<text x="${f2(NX)}" y="${f2(NY + 2.9)}" font-size="2.5" fill="${INK}" text-anchor="middle">N</text>`);
 
 /* ------------------------------------------- the stand key under the map */
+/* ONE COLUMN, DELIBERATELY, AND `design.keyCols` IS NOT READ HERE. That key belongs
+ * to gen_internal.js (gen_internal.js:3570, the Services panel's pictogram columns)
+ * and eleven of twelve places set it for that sheet, where it does real work. On a
+ * place that ships ONLY a boarding plan there is no Services panel and the key is
+ * inert -- it was carried by High Wycombe Town Centre until 2026-08-24 and removed
+ * there, and High Wycombe High Street had never set it.
+ *
+ * A second column was considered and is not needed: the key lists only the stands
+ * that DEPART somewhere (`hideStandsWithNoDestinations`), so High Wycombe Town
+ * Centre's nineteen classified stops print as five rows with room to spare, and
+ * `keyOverflow` has never fired on any sheet. The vertical fit is adaptive already
+ * (two-line at 8.2 mm, one-line at 5.2 mm); a second column would halve `keyRoom`
+ * and start refusing long labels to solve a problem no sheet has.
+ */
 // THE FOOTER PLATE IS COMPUTED HERE, BEFORE ANYTHING HAS TO DODGE IT.
 // (Was computed just before the index legend; it is the same object and the same
 // call, only earlier, because the stand key needs it too.)
@@ -939,9 +953,37 @@ for (const s of stands) {
   // bearing goes with it: a stand nothing departs from does not need one.
   const isEmpty = !((s.destinations || []).length);
   const keyLabel = keyLabelOf(s);
-  const keySub = (EMPTY_STAND_LABEL && isEmpty)
-    ? `${s.distM} m walk \u2014 ${EMPTY_STAND_LABEL}`
-    : (walk + facing);
+  // A DRAWN STAND WITH NOTHING AGAINST ITS NAME TELLS A READER STANDING AT IT
+  // NOTHING. St Neots draws all five flags because they sit in one view of the
+  // square, and Stop C carried only "46 m walk, about 1 min" -- from which a reader
+  // cannot tell whether no bus leaves there or whether the sheet simply preferred
+  // somewhere else.
+  //
+  // `boarding_index.py` has computed `alsoFrom` for every destination since it was
+  // written and nothing has ever read it. It answers exactly this: Stop C IS an
+  // alternative for Brampton, Buckden, Diddington, Huntingdon and Little Paxton, on
+  // route 66, six journeys a week. "Nothing boards here" would be FALSE. Note too
+  // that Stop C is the NEARER flag (46 m against Stop E's 52 m) -- Stop E won on
+  // service once the walk rounded to the same minute, which is the picker's
+  // documented rule working rather than a fault. So the caption names the route that
+  // does leave, and where the same journey is better caught.
+  const altFor = isEmpty
+    ? dests.filter(d => (d.alsoFrom || []).some(a => a.label === s.label)) : [];
+  let emptySub = null;
+  if (altFor.length) {
+    const rts = [...new Set(altFor.flatMap(d =>
+      (d.alsoFrom || []).filter(a => a.label === s.label).flatMap(a => a.routes || [])))];
+    const pref = [...new Set(altFor.map(d => d.boardAt))];
+    // KEPT SHORT ON PURPOSE. The first phrasing ended "serves the same places more
+    // often" and the key's own width guard refused it at 12.2 mm over an 82 mm
+    // column -- the guard added for exactly this, doing its job on the first new
+    // caption written after it. The budget here is about 70 characters.
+    emptySub = `${s.distM} m walk \u2014 the ${rts.join(', ')} also leave${rts.length === 1 ? 's' : ''}`
+             + ` here; ${pref.join(' / ')} ha${pref.length === 1 ? 's' : 've'} more buses`;
+  } else if (EMPTY_STAND_LABEL) {
+    emptySub = `${s.distM} m walk \u2014 ${EMPTY_STAND_LABEL}`;
+  }
+  const keySub = (isEmpty && emptySub) ? emptySub : (walk + facing);
   // ...and now that two config keys can lengthen it, measure it. The legend notes
   // have had this check since High Wycombe town centre; the key never did, and it is
   // the half of the sheet a new key is most likely to overrun.
@@ -1043,7 +1085,10 @@ function routeCellW(d) {
   const shown = displayRoutes(d.routes);
   let w = 0;
   for (const r of shown.slice(0, BOARD_MAX_BADGES)) w += Math.max(4.6, FM.textWidth(r, MIN_TEXT, true) + 2.0) + 0.8;
-  return w + (shown.length > BOARD_MAX_BADGES ? 2.6 : 0);
+  // The overflow marker is `+N`, not a bare `+`, so reserve for the digits it can
+  // reach: a frame with more than nine hidden routes on one row would print `+10`.
+  return w + (shown.length > BOARD_MAX_BADGES
+    ? FM.textWidth('+' + (shown.length - BOARD_MAX_BADGES), MIN_TEXT, false) + 0.8 : 0);
 }
 let C_BOARD, C_ROUTE;
 if (BP.indexCols == null) {
@@ -1114,12 +1159,29 @@ for (let c = 0; c < COLS; c++) {
     // route badges (grouped)
     let bx = x0 + C_ROUTE;
     const shown = displayRoutes(d.routes);
-    for (const r of shown) {
-      if (bx + 5.2 > x0 + C_BOARD - 1.0) {
-        out(`<text x="${f2(bx)}" y="${f2(ry)}" font-size="${MIN_TEXT}" fill="${INK_SOFT}">+</text>`);
+    // THE `+` CARRIES A COUNT. A bare plus says "and others" and a reader comparing
+    // services cannot tell whether it hides one route or four. At High Wycombe town
+    // centre seven rows truncate and *London* printed `102 104 M40 +`, silently
+    // dropping the X74 — the busiest service in the frame. The boarding instruction
+    // was never in doubt (the stand is what the sheet promises), but the badge row
+    // is the only place the sheet says what else runs, so it should say how much
+    // else. `+3` costs about 3 mm where a 5.2 mm badge already would not fit.
+    // AND THE ROW MUST LEAVE ROOM FOR IT. The old condition asked only whether the
+    // next BADGE fitted, then drew the marker in whatever was left. A bare `+` is
+    // about 1.4 mm and always fitted; `+1` is 3 mm and did not — on High Wycombe
+    // town centre's `1 1A 1B 31 +1` row the digit printed underneath the boarding
+    // disc. So each badge is now drawn only if the marker that would follow it also
+    // fits, which is the same arithmetic routeCellW() reserves by.
+    const limit = x0 + C_BOARD - 1.0;
+    for (let i = 0; i < shown.length; i++) {
+      const badgeW = Math.max(4.6, FM.textWidth(shown[i], MIN_TEXT, true) + 2.0);
+      const after = shown.length - i - 1;
+      const markW = after ? FM.textWidth('+' + after, MIN_TEXT, false) + 0.6 : 0;
+      if (bx + badgeW + markW > limit) {
+        out(`<text x="${f2(bx)}" y="${f2(ry)}" font-size="${MIN_TEXT}" fill="${INK_SOFT}">+${shown.length - i}</text>`);
         break;
       }
-      bx += badge(bx, ry, r, r, MIN_TEXT) + 0.8;
+      bx += badge(bx, ry, shown[i], shown[i], MIN_TEXT) + 0.8;
     }
     // boarding point
     const st = (INDEX.stands || []).find(s => s.atco === d.boardAtAtco);

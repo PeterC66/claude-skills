@@ -146,7 +146,7 @@ function gatePlace(p) {
   const m = readJson(path.join(p.dir, 'manifest.json'));
   const s4 = latestRunDir(m, p.dir, 'S4');
   const row = { name: p.name, town: p.town || '(standalone)', version: s4 ? s4.rec.version : null };
-  if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; return row; }
+  if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; row.boarding = '-'; return row; }
   // The NO-SHEET judgement was applied to `external` in August 2026 and not to
   // `internal`, because at the time every place had an internal map. High Wycombe
   // Town Centre (2026-08-23) is the first that does not -- it carries a boarding
@@ -163,6 +163,24 @@ function gatePlace(p) {
     ? gate(genExt, s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status
     : 'no-gen';
   row.external = pExt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : pExt;
+  // The boarding sheet joins the board on 2026-08-24, and it starts GREEN because the
+  // last arrears were cleared first: both High Wycombe sheets went to v1.2 and the two
+  // LIVE ones -- St Ives Bus Station v1.4, St Neots Town Centre v2.5 -- were re-rendered
+  // the same day. Adding it before that would have put four permanent reds on a board a
+  // real failure has to be spotted through ([[feedback_a_new_gate_must_start_green]]).
+  //
+  // Gated on `routes.json.boardingPlan`, the same key gen_boarding.js and
+  // rollout_places.js read, so a place without one shows '-' rather than a verdict about
+  // a sheet it never had. The hand procedure this replaces is changing-the-engine.md §3a.
+  let routesJson = {};
+  try { routesJson = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
+  if (!routesJson.boardingPlan) row.boarding = '-';
+  else {
+    const pBrd = declares(s4.rec, 'boarding.svg') || exists(path.join(s4.dir, 'boarding.svg'))
+      ? gate(path.join(SK, 'gen_boarding.js'), s4.dir, 'boarding.svg', path.join(s4.dir, 'boarding.svg')).status
+      : 'NO-SHEET';
+    row.boarding = pBrd === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'boarding.svg') : pBrd;
+  }
   return row;
 }
 
@@ -319,7 +337,8 @@ const qualityCell = (name) => {
 // judgeNoSheet: a sheet the build never claimed to make cannot have regressed, and
 // a sheet it did claim to make and has not got is worse than one that differs.
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING')
-  || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external))
+  || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
+    || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
   || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external) || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
   // `null` is MISSING — the portal has no such file. It counted as fine until
   // 2026-08-18, which had it backwards: a vendored file that DIFFERS is stale
@@ -352,9 +371,9 @@ for (const r of townRows) {
 }
 
 console.log('\n=== Places (' + places.length + ') ===');
-const pw = [24, 18, 6, 9, 9, 11];
-if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Quality'], pw));
-for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, qualityCell(r.name)], pw));
+const pw = [24, 18, 6, 9, 9, 9, 11];
+if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality'], pw));
+for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name)], pw));
 
 if (portalFixtureRows.length) {
   console.log('\n=== Portal fixtures (vendored engine, ' + PORTAL + ') ===');

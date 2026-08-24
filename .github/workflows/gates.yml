@@ -46,6 +46,19 @@ jobs:
             echo "::error::CROSS_REPO_PAT2 is not set on this repository. Add it under Settings -> Secrets and variables -> Actions, with read access to PeterC66/buses-data and PeterC66/community-bus-maps."
             exit 1
           fi
+          # Ask the credential when it dies rather than trusting a date typed
+          # into the comment above. GitHub returns a
+          # github-authentication-token-expiration header on any request
+          # authenticated with a PAT that expires. Until 2026-08-24 the date in
+          # this file came from a previous session's notes and had never been
+          # read back off the token itself; a third token in the account,
+          # carrying a third date, is what exposed that. Now every run prints it.
+          exp=$(curl -sS -D - -o /dev/null -H "Authorization: Bearer $PAT" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/PeterC66/buses-data" | sed -n 's/^github-authentication-token-expiration: *//Ip' | tr -dc '[:print:]')
+          if [ -n "$exp" ]; then
+            echo "  this token expires: $exp"
+          else
+            echo "::warning::GitHub reported no token-expiry header, so the date in this file's header comment is unverified."
+          fi
           fail=0
           for repo in PeterC66/buses-data PeterC66/community-bus-maps; do
             code=$(curl -s -o /dev/null -w '%{http_code}'               -H "Authorization: Bearer $PAT"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$repo")

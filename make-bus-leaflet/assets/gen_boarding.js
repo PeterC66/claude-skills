@@ -363,7 +363,12 @@ const insideAnchorArea = (la, lo) =>
 const landmarkRankOf = (t) => {
   if (t.tourism === 'hotel' || t.tourism === 'museum') return 1;
   if (NAV_AMENITY.has(t.amenity)) return 1;
-  if (t.shop === 'supermarket' || t.shop === 'convenience' || t.shop === 'department_store') return 1;
+  // `mall` joins these because a shopping centre is a first-class landmark at this
+  // scale -- it is usually the biggest named thing in a town-centre frame. It could
+  // not be reached before 2026-08-24: a mall is normally an AREA with no `building`
+  // tag, and pull_locator.js asked for shops as nodes only, so it never arrived.
+  if (t.shop === 'supermarket' || t.shop === 'convenience'
+      || t.shop === 'department_store' || t.shop === 'mall') return 1;
   if (EAT_DRINK.has(t.amenity)) return 2;
   if (t.brand) return 2;
   if (t.amenity || t.shop || t.tourism) return 3;

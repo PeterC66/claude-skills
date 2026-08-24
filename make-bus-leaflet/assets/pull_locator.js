@@ -78,8 +78,37 @@ const q = `[out:json][timeout:90];
   node["shop"]["name"](${B});
   node["amenity"~"^(pharmacy|bank|cafe|restaurant|fast_food|pub|bar|post_office|library|townhall|place_of_worship|toilets|doctors|dentist|cinema|theatre|marketplace)$"]["name"](${B});
   node["tourism"~"^(hotel|museum|attraction|information)$"]["name"](${B});
+  way["shop"]["name"](${B});
+  way["amenity"]["name"](${B});
+  way["tourism"]["name"](${B});
 );
 out geom;`;
+// A FUNCTION MAPPED AS A WAY WAS INVISIBLE UNTIL 2026-08-24. Shops, amenities and
+// tourism were asked for as NODES only; ways were asked for as `way["building"]`
+// with no tag filter, plus four named area kinds. So anything whose function is
+// mapped as an area and which carries no `building` tag matched NOTHING AT ALL --
+// not merely ranked badly, absent. Measured over the High Wycombe High Street bbox:
+//
+//   Eden Shopping Centre       shop=mall, no building   <- the largest thing in frame
+//   Buckinghamshire New Univ.  amenity=university, no building
+//   Monkey Puzzle Day Nursery  amenity=kindergarten, no building
+//   Wycombe General Hospital   amenity=hospital, no building
+//
+// A first version of this comment claimed only `shop` needed adding, on the grounds
+// that every amenity way already carried a `building` tag. That was asserted from
+// the pulled file rather than from OSM, and the three amenity ways above disprove
+// it -- the pulled file could not show them because they were never fetched.
+//
+// WHAT THIS DOES NOT FIX. The Old Town Hall's rank-4 problem is not a pull gap. It
+// is `building=yes` in OSM with no function tag of any kind, and so are the
+// Guildhall, the Chilterns Shopping Centre, Wycombe Museum and the railway station.
+// `way["building"]` already returns them with every tag they have; there is simply
+// no tag that says they matter. No query can rank what the data does not say, which
+// is what `boardingPlan.locatorLandmarkNames` is for.
+//
+// STILL MISSING: anything mapped as a RELATION (a multipolygon). `out geom` returns
+// member ways rather than one ring and nothing here assembles them, so a relation
+// would arrive as fragments. Left out deliberately rather than half-supported.
 
 const MIRRORS = [
   'https://overpass-api.de/api/interpreter',
@@ -140,7 +169,21 @@ function areaKind(t) {
       continue;
     }
     const kind = areaKind(t);
-    if (kind) areas.push({ id: e.id, kind, name: t.name || null, geometry });
+    if (kind) { areas.push({ id: e.id, kind, name: t.name || null, geometry }); continue; }
+    // A NAMED FUNCTION WITH A FOOTPRINT AND NO BUILDING TAG. It becomes a PLACE at
+    // its centroid, not a building: drawing the Eden Shopping Centre's outline or a
+    // university campus as a footprint would put a large grey block on a locator
+    // whose fabric is already drawn from the individual buildings inside it. What
+    // was missing is the NAME, so that is all this adds -- one label candidate, the
+    // drawn ground unchanged.
+    if (t.name && (t.shop || t.amenity || t.tourism)) {
+      let la = 0, lo = 0;
+      for (const p of geometry) { la += p[0]; lo += p[1]; }
+      places.push({
+        lat: la / geometry.length, lon: lo / geometry.length, name: t.name,
+        tags: { shop: t.shop, amenity: t.amenity, tourism: t.tourism, brand: t.brand }
+      });
+    }
   }
 
   // Deterministic order, so a re-pull that returns the same features writes the

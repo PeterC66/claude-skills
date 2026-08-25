@@ -18,6 +18,7 @@
  *
  * Usage:
  *   node status.js [--buses "<Buses dir>"] [--portal "<portal repo dir>"] [--md] [--json] [--no-quality]
+ *   ...[--live <base url>] [--no-live]     (deployment drift; see deploymentRow below)
  *
  * Defaults (Peter's machine): --buses "C:\u3a St Ives\Using AI\Buses"
  *                              --portal "C:\Claude\community-bus-maps"
@@ -47,6 +48,23 @@ const PORTAL = path.resolve(args.portal || 'C:/Claude/community-bus-maps');
 const AS_MD = !!args.md;
 const AS_JSON = !!args.json;
 const NO_QUALITY = !!args['no-quality'];
+// Deployment drift (technical-audit_2026-08-25 N2). Default ON against the live
+// site; --no-live skips it entirely, --live <url> points it somewhere else.
+const NO_LIVE = !!args['no-live'];
+const LIVE_URL = typeof args.live === 'string' ? args.live.replace(/\/+$/, '') : 'https://busmaps.uk';
+// How long a merged-but-undeployed commit is allowed to sit before this goes
+// RED rather than amber. A deploy is a deliberate act and a merge at midnight
+// should not page anyone at 00:01, but "we merged it and forgot" is exactly the
+// state this exists to catch, and twelve hours is long enough that reaching it
+// means nobody is coming.
+//
+// Overridable so the RED branch can be PROVED to fire rather than assumed to:
+// `--deploy-grace-hours 0` against a deployment that is behind must exit 1. A
+// gate nobody has watched fail is not a gate, and the amber/red split is the
+// only part of this row that contains a judgement.
+const DEPLOY_GRACE_HOURS = (args['deploy-grace-hours'] !== undefined && args['deploy-grace-hours'] !== true)
+  ? Number(args['deploy-grace-hours'])
+  : 12;
 
 function exists(p) { return fs.existsSync(p); }
 
@@ -350,53 +368,159 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   || driftRows.some(r => r.same === false || r.same === null)
   || qualityRows.some(r => r.status === 'REGRESSED');
 
-if (AS_JSON) {
-  console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows }, null, 2));
-  process.exit(bad ? 1 : 0);
+
+// ---- deployment drift: is the LIVE site running what main says? ------------
+//
+// WHY THIS IS HERE AT ALL (technical-audit_2026-08-25 N2). On 2026-08-25 the
+// live site was one commit behind `main`, and the commit it was missing was the
+// one crediting NaPTAN in legal.html -- an attribution correction whose entire
+// value is that the public can see it. Nothing in the estate compared the two.
+// The portal's own /health had carried `gitSha` until the S4 fix gated it
+// (correctly) behind a token on 2026-08-20, and the only other surface was a
+// <meta> injected by a script, so establishing the gap took a headless browser.
+// A security fix had quietly cost an operational control.
+//
+// The portal now sets `X-App-Version: <version>+<short sha>` on every response,
+// from every route, with no authentication and no JavaScript. This reads it.
+//
+// THREE RULES ABOUT WHEN THIS MAY GO RED, because a badly-judged gate here would
+// be worse than none:
+//
+//   1. A NETWORK FAILURE IS NEVER RED. If the site is unreachable, that is what
+//      the uptime monitor is for (audit O2, live since 2026-08-20). A gate that
+//      cannot reach the network must say "I could not tell", not "your
+//      deployment is stale" -- the difference between the two is the whole
+//      lesson of a checker that reports "no answer" as "wrong answer".
+//   2. A MISSING HEADER IS NEVER RED either. It means the live build predates
+//      this change, which is a true and temporary fact, not a fault.
+//   3. BEHIND IS AMBER FOR DEPLOY_GRACE_HOURS AND RED AFTER. A merge is not a
+//      deploy and nobody should be gated the minute they press merge; twelve
+//      hours later, "merged and forgotten" is the only remaining explanation.
+//
+// The comparison is against `origin/main` in the portal checkout, falling back
+// to HEAD -- so running this on a feature branch still asks the right question
+// ("is the deployment current with main"), not the wrong one ("is the deployment
+// running my branch").
+function gitIn(dir, args) {
+  try {
+    const r = require('child_process').execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return r.trim();
+  } catch { return null; }
 }
 
-function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
-function line(cells, widths) { return cells.map((c, i) => pad(c, widths[i])).join(AS_MD ? ' | ' : '  '); }
+async function deploymentRow() {
+  if (NO_LIVE) return { status: 'skipped', why: '--no-live' };
+  if (!exists(PORTAL)) return { status: 'skipped', why: 'no portal checkout to compare against' };
 
-console.log('=== Towns (' + towns.length + ') === engine: current template = ' + CURRENT_ENGINE);
-if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | Quality | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
-const tw = [16, 6, 12, 9, 16, 10, 8, 11, 20, 8];
-if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Quality', 'S6 latest', 'S6 age'], tw));
-for (const r of townRows) {
-  const ext = r.external + (r.externalStyle ? ` (${r.externalStyle})` : '');
-  const s6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
-  const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
-  const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, qualityCell(r.name), r.s6, s6age];
-  console.log(line(cells, tw));
+  const ref = gitIn(PORTAL, ['rev-parse', '--verify', '--quiet', 'origin/main']) ? 'origin/main' : 'HEAD';
+  const wantFull = gitIn(PORTAL, ['rev-parse', ref]);
+  const want = gitIn(PORTAL, ['rev-parse', '--short', ref]);
+  if (!want) return { status: 'skipped', why: 'could not read a SHA from ' + PORTAL };
+
+  let live = null;
+  try {
+    const res = await fetch(LIVE_URL + '/health', { signal: AbortSignal.timeout(8000), redirect: 'follow' });
+    live = res.headers.get('x-app-version');
+  } catch (e) {
+    // Rule 1: unreachable is not stale.
+    return { status: 'unreachable', want, url: LIVE_URL, why: String(e.message || e) };
+  }
+  if (!live) {
+    // Rule 2: no header means an older build, which is a fact and not a fault.
+    return { status: 'no-header', want, url: LIVE_URL, why: 'live build predates X-App-Version' };
+  }
+  const deployed = live.split('+').pop();
+  if (deployed === want || (wantFull && wantFull.startsWith(deployed))) {
+    return { status: 'current', want, deployed, url: LIVE_URL };
+  }
+
+  // Rule 3: how long has the undeployed commit been sitting there?
+  const ts = Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', ref]));
+  const ageH = Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
+  const overGrace = ageH == null ? true : ageH >= DEPLOY_GRACE_HOURS;
+  return {
+    status: overGrace ? 'BEHIND' : 'behind (grace)',
+    want, deployed, url: LIVE_URL, ageHours: ageH, graceHours: DEPLOY_GRACE_HOURS,
+  };
 }
 
-console.log('\n=== Places (' + places.length + ') ===');
-const pw = [24, 18, 6, 9, 9, 9, 11];
-if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality'], pw));
-for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name)], pw));
+async function main() {
+  const deploy = await deploymentRow();
+  if (AS_JSON) {
+    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows, deployment: deploy }, null, 2));
+    return bad || deploy.status === 'BEHIND';
+  }
 
-if (portalFixtureRows.length) {
-  console.log('\n=== Portal fixtures (vendored engine, ' + PORTAL + ') ===');
-  const fw = [24, 9, 9, 9];
-  console.log(line(['Fixture', 'Internal', 'External', 'Boarding'], fw));
-  for (const r of portalFixtureRows) console.log(line([r.name, r.internal, r.external, r.boarding], fw));
-}
+  function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
+  function line(cells, widths) { return cells.map((c, i) => pad(c, widths[i])).join(AS_MD ? ' | ' : '  '); }
 
-if (driftRows.length) {
-  console.log('\n=== Portal vendoring drift (skill -> portal, CRLF-safe) ===');
-  for (const r of driftRows) console.log('  ' + (r.same === null ? 'MISSING  ' : r.same ? 'in sync  ' : 'DRIFTED  ') + r.file);
-}
+  console.log('=== Towns (' + towns.length + ') === engine: current template = ' + CURRENT_ENGINE);
+  if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | Quality | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
+  const tw = [16, 6, 12, 9, 16, 10, 8, 11, 20, 8];
+  if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Quality', 'S6 latest', 'S6 age'], tw));
+  for (const r of townRows) {
+    const ext = r.external + (r.externalStyle ? ` (${r.externalStyle})` : '');
+    const s6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
+    const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
+    const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, qualityCell(r.name), r.s6, s6age];
+    console.log(line(cells, tw));
+  }
 
-if (qualityRows.length) {
-  const moved = qualityRows.filter(r => r.status !== 'ok');
-  console.log('\n=== Quality ratchet (' + qualityRows.length + ' sheets, ledger: ' + quality.LEDGER_NAME + ') ===');
-  if (!moved.length) console.log('  every sheet at or under its recorded ceiling, and none printing fewer labels');
-  for (const r of moved) console.log('  ' + r.status.padEnd(11) + r.key.padEnd(38) + r.why.join('; '));
-  console.log('  totals: ' + ['labels', 'hard', 'soft', 'drop']
-    .map(k => k + ' ' + qualityRows.reduce((s, r) => s + (r.now[k] || 0), 0)).join(' · ')
-    + '   (node quality_gate.js --accept to re-record)');
+  console.log('\n=== Places (' + places.length + ') ===');
+  const pw = [24, 18, 6, 9, 9, 9, 11];
+  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality'], pw));
+  for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name)], pw));
+
+  if (portalFixtureRows.length) {
+    console.log('\n=== Portal fixtures (vendored engine, ' + PORTAL + ') ===');
+    const fw = [24, 9, 9, 9];
+    console.log(line(['Fixture', 'Internal', 'External', 'Boarding'], fw));
+    for (const r of portalFixtureRows) console.log(line([r.name, r.internal, r.external, r.boarding], fw));
+  }
+
+  if (driftRows.length) {
+    console.log('\n=== Portal vendoring drift (skill -> portal, CRLF-safe) ===');
+    for (const r of driftRows) console.log('  ' + (r.same === null ? 'MISSING  ' : r.same ? 'in sync  ' : 'DRIFTED  ') + r.file);
+  }
+
+  if (qualityRows.length) {
+    const moved = qualityRows.filter(r => r.status !== 'ok');
+    console.log('\n=== Quality ratchet (' + qualityRows.length + ' sheets, ledger: ' + quality.LEDGER_NAME + ') ===');
+    if (!moved.length) console.log('  every sheet at or under its recorded ceiling, and none printing fewer labels');
+    for (const r of moved) console.log('  ' + r.status.padEnd(11) + r.key.padEnd(38) + r.why.join('; '));
+    console.log('  totals: ' + ['labels', 'hard', 'soft', 'drop']
+      .map(k => k + ' ' + qualityRows.reduce((s, r) => s + (r.now[k] || 0), 0)).join(' · ')
+      + '   (node quality_gate.js --accept to re-record)');
+  }
+
+  // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
+  // computed once, above the JSON branch, so both output forms agree — see there.
+
+  // Deployment drift is reported LAST, under the gates, because it is a
+  // statement about a different thing: everything above asks "does the code
+  // still produce what it produced", this asks "is any of that actually live".
+  console.log('\n=== Deployment (' + (deploy.url || LIVE_URL) + ') ===');
+  if (deploy.status === 'current') {
+    console.log('  current   live ' + deploy.deployed + ' == main ' + deploy.want);
+  } else if (deploy.status === 'skipped') {
+    console.log('  skipped   ' + deploy.why);
+  } else if (deploy.status === 'unreachable') {
+    console.log('  unreachable  ' + deploy.why + '  (not a verdict about the deployment -- the uptime monitor owns that)');
+  } else if (deploy.status === 'no-header') {
+    console.log('  no header    the live build predates X-App-Version; deploy once and this row starts working');
+  } else {
+    console.log('  ' + deploy.status + '   live ' + deploy.deployed + ' != main ' + deploy.want
+      + (deploy.ageHours == null ? '' : '  (' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
+    console.log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
+    console.log('      npm run deploy');
+  }
+
+  return bad || deploy.status === 'BEHIND';
 }
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
-// computed once, above the JSON branch, so both output forms agree — see there.
-process.exit(bad ? 1 : 0);
+// computed once, above the JSON branch, so both output forms agree -- see there.
+main().then((failed) => process.exit(failed ? 1 : 0)).catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

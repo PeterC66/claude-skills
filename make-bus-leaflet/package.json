@@ -1,14 +1,15 @@
 {
   "name": "make-bus-leaflet",
   "version": "1.0.0",
-  "description": "",
+  "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 — see ../LICENSE.",
+  "private": true,
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Peter Cooper",
+  "license": "SEE LICENSE IN ../LICENSE",
   "type": "commonjs",
   "dependencies": {
     "sharp": "^0.34.5"

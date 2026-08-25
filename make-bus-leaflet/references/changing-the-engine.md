@@ -252,6 +252,14 @@ The table that used to sit here listed eleven files, and `status.js` listed the 
 node scripts/check-vendored.mjs --update
 ```
 
+### The SVG vocabulary is now a portal-side allowlist — a NEW ELEMENT is a hand-off too
+
+Added 2026-08-25 (`technical-audit_2026-08-25` N18). The portal inlines a published sheet into a web page as live DOM, and since that date it filters it through an **allowlist** in `src/public/svgSanitise.js`: eight elements — `svg`, `g`, `path`, `rect`, `circle`, `line`, `text`, `clipPath` — plus `tspan`, `title` and `desc`, and 38 attribute names. That list is a census of what these generators emit, measured across all 1,277 sheets in the map tree.
+
+**So if you make a generator draw something new — a `<tspan>`, a gradient, a `<use>`, a `style` attribute — the print sheet will be right and the WEB view will silently lose it.** The portal counts and logs every drop, and `scripts/test-inline-svg.mjs` goes red on the fixture corpus, but neither is in this repository. Treat it as a fifth step of the hand-off: add the element to `ALLOWED_ELEMENTS` (or the attribute to `ALLOWED_ATTRS`) in the same round as the re-vendor, and if it is URL-valued say why in the Caddyfile's CSP block, which reasons about exactly this sink.
+
+That trap is not hypothetical: the allowlist shipped without `tspan` because the census covered generator output only, and the portal's own pilot band — stamped on after the generator runs — uses one. Every inlined sheet lost the words "PILOT — SAMPLE MAP" for an hour.
+
 The two checks ask different questions and neither can answer the other's. The portal's `scripts/check-vendored.mjs` runs inside its `npm test`, needs nothing but the portal itself, and asks *has the portal's copy been edited since it was vendored* — so it works in CI, where this skill tree does not exist. `status.js` here runs on the laptop where both trees are present and asks *has the source moved on without us*, which is the drift this section is about; it reports `UNLISTED` for a portal file the manifest does not name, so the population is checked from both ends.
 
 > ### ✅ CLOSED 2026-08-24 — re-vendored, both fixtures recut, all four suites PASS (`community-bus-maps` `a22dd9a`). The account below is kept because it is the first time this section's step 5 actually bit, and it is worth reading before the next non-inert drift.

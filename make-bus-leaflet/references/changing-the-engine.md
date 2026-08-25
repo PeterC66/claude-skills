@@ -38,6 +38,28 @@ If it's a whole new *output* (a fourth kind of sheet), don't extend an existing 
 6. **Env contract is fixed:** `LEAFLET_DIR` (data folder; **preferred over cwd**), `SKILL_ASSETS` (where `icons.js` resolves from), `OVERRIDES_FILE` (customer edits; absent/empty ⇒ baseline), `EDITOR_KEYS`. The portal sets all of these. Don't add a new env var without updating `docs/DEVELOPING.md` in the portal repo.
 7. **`gen_internal.js` is shared with the place skill** and with the schematic/diagram pre-stages. A change to it affects five outputs, not one. See `make-place-bus-leaflet/references/internal-reuse.md`.
 
+## 1a. The unit tests, and what they are for that the byte gate is not
+
+Run them from `%SK%\..` — that is the `make-bus-leaflet` folder itself, not `assets`. Neither command takes an argument:
+
+```bash
+npm test
+```
+
+85 assertions across eight suites in `test/`, about a third of a second, no network and no data tree. **Run this before the byte gates**, which is also the order `gates.yml` runs them in: when the engine's own tests fail there is nothing to learn from being told that a wrong renderer still reproduces itself byte for byte.
+
+**They answer a different question from the gate below.** The byte gate compares this engine's output against *this engine's own previous output*. That is a regression check and it is a good one, but it cannot tell you the previous output was right — and this project has already had a verification harness score 7/7 against committed data that WAS the bug's output. Every suite in `test/` is instead one fault we have already debugged, written down as a property: the placer's collisions and the `mustPlace` trade, the footer's measured wrap and its plate, the build-warning severities, the ratchet's arithmetic, the text quad, the engine hash, the gate helpers, the icon recolouring.
+
+```bash
+npm run test:prove-red
+```
+
+`tools/prove-red.js` copies `assets/` to a scratch directory, breaks it twelve ways one at a time and checks the suite goes red each time, then prints which test objected to which break. **A green suite that has never been seen to fail proves nothing**, and this one found a hole in itself on its first run. Add a mutation whenever you add a test; the runner reports an anchor that no longer matches the engine as stale rather than quietly passing.
+
+**Adding a test:** load the module through `test/_engine.js` (`require('./_engine.js').load('labeller.js')`), never with a direct `require('../assets/…')` — that indirection is what lets the mutation runner point a suite at a broken copy through `ENGINE_DIR`.
+
+**What they cannot reach, and why that matters here.** The five big generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be required. Extracting a helper out of one is not a tidy-up: four of those files are hashed by `engine_version.js` and eleven files in `assets/` are vendored into the portal and compared file-by-file, so it means §4's re-vendor in the same change. `test/README.md` lists the known faults that sit inside that boundary.
+
 ## 2. The byte-identical gate (the town side)
 
 **Harness:** `%SK%\gate.sh <genfile> <S4-datadir> internal|external <committed_svg>` It copies the data `*.json` + `icons.js` + the candidate generator into a temp dir, runs it, and diffs the SVG against the committed one. Exit 0 = PASS.

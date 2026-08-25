@@ -55,6 +55,21 @@ const MUTATIONS = [
     find: 'if (now.drop !== null && was.drop !== null && now.drop < was.drop)',
     to: 'if ((now.drop || 0) < (was.drop || 0))' },
 
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'a board-wide total sums an uncounted sheet as zero',
+    find: 'if (v === null || v === undefined) unknown += 1; else total += v;',
+    to: 'total += (v || 0);' },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'a deadline that has gone by takes the target with it',
+    find: 'const next = sorted.find(m => m.by >= today) || sorted[sorted.length - 1];',
+    to: 'const next = sorted.find(m => m.by >= today) || sorted[0];' },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: '--accept discards the target on the run that moved towards it',
+    find: '  if (prev.targets) out.targets = prev.targets;',
+    to: '  if (false) out.targets = prev.targets;' },
+
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'mustPlace loses its second, relaxed pass',
     find: 'for (const relax of (it.mustPlace ? [false, true] : [false]))',

@@ -323,9 +323,16 @@ const driftRows = portalDrift();
 // what actually shipped — so a green byte gate and a green quality row are
 // statements about the same bytes.
 let qualityRows = [];
+let qualityTargets = [];
 if (!NO_QUALITY) {
-  try { qualityRows = quality.run(BUSES).rows; }
-  catch (e) { qualityRows = []; console.error('quality gate skipped: ' + e.message); }
+  try {
+    const q = quality.run(BUSES);
+    qualityRows = q.rows;
+    // Distance to target (technical-audit_2026-08-25 N11). Reported here and
+    // never folded into `bad` below: this board fails on regression, and a
+    // target that reddens the board on the day it is written gets muted.
+    qualityTargets = quality.targetProgress(q.rows, q.ledger.targets, new Date().toISOString().slice(0, 10));
+  } catch (e) { qualityRows = []; qualityTargets = []; console.error('quality gate skipped: ' + e.message); }
 }
 // Sheets belonging to one town/place, so a row can sit beside its byte-gate row.
 const qualityFor = (name) => qualityRows.filter(r => r.key.startsWith(name + ' · '));
@@ -456,7 +463,7 @@ async function deploymentRow() {
 async function main() {
   const deploy = await deploymentRow();
   if (AS_JSON) {
-    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows, deployment: deploy }, null, 2));
+    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, deployment: deploy }, null, 2));
     return bad || deploy.status === 'BEHIND';
   }
 
@@ -500,6 +507,7 @@ async function main() {
     console.log('  totals: ' + ['labels', 'hard', 'soft', 'drop']
       .map(k => k + ' ' + qualityRows.reduce((s, r) => s + (r.now[k] || 0), 0)).join(' · ')
       + '   (node quality_gate.js --accept to re-record)');
+    for (const line of quality.targetLines(qualityTargets)) console.log(line);
   }
 
   // Exit non-zero if anything needs attention, so this can gate CI. `bad` is

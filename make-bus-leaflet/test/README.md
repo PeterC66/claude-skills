@@ -6,13 +6,13 @@ Run them from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` (or wherever this
 npm test
 ```
 
-That is `node --test`, which finds every `test/*.test.js` file from the package root. 85 assertions, about a third of a second, no network, no data tree, no `Areas/` folder needed.
+That is `node --test`, which finds every `test/*.test.js` file from the package root. 96 assertions, about four tenths of a second, no network, no data tree, no `Areas/` folder needed.
 
 ## Why these exist
 
 Until 2026-08-25 this package's `test` script was `echo "Error: no test specified" && exit 1`, across 23,462 lines of JavaScript and Python. The `gate.sh` byte gates are real and they are green, but they compare the engine's output against the engine's *own previous* output — they are a regression check, and they cannot tell you the previous output was right. This project has been bitten by exactly that: a verification harness once scored 7/7 on a map whose committed data **was** the bug's output. Every engine fault it has actually had was found by a person looking at a printed sheet.
 
-So each test here is one of those faults, written down as a property. The comment above each one says which. Between them they cover the label placer's collision and `mustPlace` behaviour, the footer's measured wrap and its backing plate, the build-warning severities, the ratchet's arithmetic, the text-quad geometry the collision metrics are built from, the engine hash, the byte-gate comparison helpers, and the icon recolouring.
+So each test here is one of those faults, written down as a property. The comment above each one says which. Between them they cover the label placer's collision and `mustPlace` behaviour, the footer's measured wrap and its backing plate, the build-warning severities, the ratchet's arithmetic and its distance-to-target reporting, the text-quad geometry the collision metrics are built from, the engine hash, the byte-gate comparison helpers, and the icon recolouring.
 
 ## Proving they can fail
 
@@ -22,7 +22,7 @@ A green check that has never been seen to go red proves nothing.
 npm run test:prove-red
 ```
 
-`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — twelve deliberate one-line edits, one per property, each reverted before the next — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
+`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — fifteen deliberate one-line edits, one per property, each reverted before the next — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
 
 It has already earned its place. On its first run, dropping the file name out of the engine hash survived every assertion in `engine_version.test.js` — the tests checked that the hash moved when a file changed, and never that content could not migrate between two files unnoticed. That test exists now because the mutation run found it missing.
 

@@ -37,6 +37,29 @@
  * because rungs 2 and 2b of complexity-triage.md say a RED town should, and a
  * flat rate ceiling would either fail it or excuse everyone else. Its own
  * recorded figure is the only honest allowance.
+ *
+ * TARGETS (added 2026-08-25, technical-audit_2026-08-25 N11). Non-regression
+ * gives the ratchet a floor and no direction. Between 19 and 25 August the board
+ * grew from 39 sheets to 52 and every PER-SHEET number improved — and the
+ * accepted ceiling rose, hard 130 -> 137, with the dropped-label floor not
+ * moving by a single label across thirteen more sheets. Both readings were true
+ * and the ledger could state neither, because it recorded only where the ceiling
+ * WAS. `targets` records where it is GOING: dated milestones for the board-wide
+ * totals against a baseline taken the day they were written, so the file that
+ * holds the ceiling also holds the distance still to travel.
+ *
+ * A TARGET NEVER FAILS THE BUILD. It is reported, not gated. A check that is red
+ * on the day it is written gets muted within the week, and 137 -> 0 is a
+ * quarter's work: gating it would redden every run until January and teach
+ * everyone to skip the section. The ratchet still fails on a RISE, exactly as
+ * before; the target block only adds a line saying how far there is left to go
+ * and what weekly rate that now implies.
+ *
+ * NULLS ARE COUNTED, NOT SUMMED AWAY. `drop` is null on a sheet whose run could
+ * not count dropped labels. Adding null as zero would let a board that measures
+ * LESS report itself closer to target — the same trap the label floor exists to
+ * close — so `targetProgress` carries an `unknown` count beside every total and
+ * the report prints it.
  */
 'use strict';
 const fs = require('fs');
@@ -110,6 +133,88 @@ function judge(now, was) {
   return { status: better.length ? 'BETTER' : 'ok', why: better.concat(softMoved) };
 }
 
+// ---- distance to target ---------------------------------------------------
+// Pure, and `today` is a parameter rather than a call to Date.now(), for the
+// ordinary reason: a test that reads the clock passes today and fails in
+// November. Every date here is a plain 'YYYY-MM-DD' string, which sorts and
+// compares lexically, so no timezone can move a milestone by a day.
+const DAY_MS = 86_400_000;
+const daysBetween = (from, to) => Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / DAY_MS);
+
+// Board-wide total for one metric, plus how many sheets could not supply it.
+// A sheet whose `drop` is null is UNKNOWN, not zero — see the header.
+function boardTotal(rows, metric) {
+  let total = 0, unknown = 0;
+  for (const r of rows) {
+    const v = r.now ? r.now[metric] : undefined;
+    if (v === null || v === undefined) unknown += 1; else total += v;
+  }
+  return { total, unknown, sheets: rows.length };
+}
+
+// One line per metric that has a target. Returns [] when the ledger has no
+// `targets` block at all, so a ledger written before this existed reports
+// nothing rather than throwing — and so does a metric with an empty list.
+function targetProgress(rows, targets, today) {
+  if (!targets) return [];
+  const out = [];
+  for (const metric of Object.keys(targets)) {
+    // The same guard skips the block's own `note` (a string) and `baseline` (an
+    // object): a metric is a key whose value is a non-empty list of milestones.
+    const milestones = targets[metric];
+    if (!Array.isArray(milestones) || !milestones.length) continue;
+    const sorted = milestones.slice().sort((a, b) => (a.by < b.by ? -1 : a.by > b.by ? 1 : 0));
+    const { total, unknown, sheets } = boardTotal(rows, metric);
+
+    // The milestone in play is the first one still open. If every date has
+    // passed, the LAST one is still the target and the report says overdue —
+    // a deadline that has gone by must not silently become "no target".
+    const next = sorted.find(m => m.by >= today) || sorted[sorted.length - 1];
+    const distance = total - next.total;
+    const daysLeft = daysBetween(today, next.by);
+    const status = distance <= 0 ? 'met' : daysLeft < 0 ? 'overdue' : 'open';
+    // Rate needed from here, which is the number that tells you whether a target
+    // has quietly become fiction. Null when it is met or the day has passed,
+    // because "per week" means nothing once there are no weeks.
+    const perWeek = status === 'open' && daysLeft > 0
+      ? Math.round((distance / (daysLeft / 7)) * 10) / 10
+      : null;
+
+    const base = targets.baseline && typeof targets.baseline[metric] === 'number'
+      ? targets.baseline[metric] : null;
+    out.push({
+      metric, sheets, total, unknown,
+      by: next.by, want: next.total, distance, daysLeft, status, perWeek,
+      baseline: base,
+      baselineOn: (targets.baseline && targets.baseline.on) || null,
+      // Travelled since the baseline was set: NEGATIVE means the board got
+      // worse. Recorded separately from `distance` because "we are 37 away" and
+      // "we have moved 0 in six days" are different facts and the audit's
+      // finding was the second one.
+      moved: base === null ? null : base - total,
+      remaining: sorted.filter(m => m.by > next.by).length,
+    });
+  }
+  return out;
+}
+
+// One printable line per target. Lives here rather than in either caller so the
+// gate board and this script cannot describe the same number two different ways.
+function targetLines(progress) {
+  return progress.map((p) => {
+    const head = '  ' + p.metric.toUpperCase().padEnd(6) + String(p.total).padStart(4)
+      + ' -> ' + String(p.want).padEnd(4) + ' by ' + p.by + '  ';
+    if (p.status === 'met') return head + 'MET (' + Math.abs(p.distance) + ' under)';
+    const rate = p.perWeek === null ? '' : ' (' + p.perWeek + '/wk)';
+    const when = p.daysLeft < 0 ? 'OVERDUE by ' + Math.abs(p.daysLeft) + ' days' : p.daysLeft + ' days left' + rate;
+    const moved = p.moved === null ? ''
+      : ' · ' + (p.moved === 0 ? 'none removed' : p.moved > 0 ? p.moved + ' removed' : Math.abs(p.moved) + ' ADDED')
+        + (p.baselineOn ? ' since ' + p.baselineOn : '');
+    const blind = p.unknown ? ' · ' + p.unknown + ' of ' + p.sheets + ' sheets could not count it' : '';
+    return head + p.distance + ' to go, ' + when + moved + blind;
+  });
+}
+
 function run(busesDir) {
   const ledgerPath = path.join(busesDir, LEDGER_NAME);
   let ledger = { recorded: null, sheets: {} };
@@ -141,14 +246,19 @@ function accept(busesDir, rows, ledgerPath) {
     const carried = prevSheets[r.key] && prevSheets[r.key].note;
     if (carried) sheets[r.key].note = carried;
   }
-  fs.writeFileSync(ledgerPath, JSON.stringify({
-    recorded: new Date().toISOString().slice(0, 10),
-    note: prev.note || DEFAULT_NOTE,
-    sheets,
-  }, null, 2) + '\n');
+  // `targets` is carried forward for the same reason the notes are, and it
+  // matters more: --accept runs after a change that improved things, which is
+  // exactly the moment a target is being progressed against. Rebuilding the file
+  // without it would delete the target on the run that moved towards it.
+  const out = { recorded: new Date().toISOString().slice(0, 10), note: prev.note || DEFAULT_NOTE };
+  if (prev.targets) out.targets = prev.targets;   // ahead of `sheets`, which is 300 lines long
+  out.sheets = sheets;
+  fs.writeFileSync(ledgerPath, JSON.stringify(out, null, 2) + '\n');
 }
 
-module.exports = { run, accept, measure, judge, sheetKey, findSheets, LEDGER_NAME };
+module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal, LEDGER_NAME };
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 if (require.main === module) {
   const argv = process.argv.slice(2);
@@ -161,8 +271,10 @@ if (require.main === module) {
     console.log(`recorded ${rows.length} sheets into ${ledgerPath}`);
     process.exit(0);
   }
+  const progress = targetProgress(rows, ledger.targets, todayISO());
+
   if (argv.includes('--json')) {
-    console.log(JSON.stringify({ ledgerPath, recorded: ledger.recorded, rows: rows.map(r => ({ ...r, file: undefined })) }, null, 2));
+    console.log(JSON.stringify({ ledgerPath, recorded: ledger.recorded, targets: progress, rows: rows.map(r => ({ ...r, file: undefined })) }, null, 2));
     process.exit(rows.some(r => r.status === 'REGRESSED') ? 1 : 0);
   }
 
@@ -180,6 +292,15 @@ if (require.main === module) {
   console.log('-'.repeat(w.reduce((a, b) => a + b, 0)));
   console.log([`totals (${rows.length} sheets)`, '', tot('labels'), tot('hard'), tot('soft'), tot('drop')]
     .map((s, i) => pad(s, w[i])).join(''));
+  // Where the ceiling is GOING. Reported under the totals and never added to
+  // `bad`: the exit code stays a statement about regression alone.
+  if (progress.length) {
+    console.log('\n=== Distance to target (reported, never gated) ===');
+    for (const line of targetLines(progress)) console.log(line);
+  } else if (ledger.targets) {
+    console.log('\nNo target milestones in the ledger to measure against.');
+  }
+
   console.log(`\n${rows.length} sheets · ${bad.length} REGRESSED · ${rows.filter(r => r.status === 'BETTER').length} better · ${nu.length} new`);
   if (nu.length) console.log('Run --accept to record the current figures as the ceiling.');
   process.exit(bad.length ? 1 : 0);

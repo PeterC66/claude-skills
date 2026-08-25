@@ -888,7 +888,21 @@ out(`<text x="${f2(NX)}" y="${f2(NY + 2.9)}" font-size="2.5" fill="${INK}" text-
 const PRINT_SAFE = (RJ.design && RJ.design.printSafe != null) ? +RJ.design.printSafe : 5;
 const DESIGN = RJ.design || {};
 const FOOTER_OPTS = {
-  notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).'],
+  // TWO notes, not one, and the second is a LICENCE OBLIGATION rather than a
+  // courtesy. This sheet's locator draws `locator_geo.json` -- building
+  // footprints, named shops, amenities and areas pulled from OSM by
+  // pull_locator.js and kept with their element IDs. Until 2026-08-25 the line
+  // below named BODS and NaPTAN only, so both LIVE boarding sheets drew 412 and
+  // 472 OSM footprints respectively, printed OSM-only landmark names (Coral,
+  // Ivo Lounge, The Octagon...), and credited OpenStreetMap NOWHERE. Attribution
+  // is owed under ODbL 4.3 whatever the answer on 4.6 turns out to be.
+  //
+  // Each generator supplies its OWN notes array -- footer.js prints whatever it
+  // is handed -- so a shared footer component is not a shared attribution, and
+  // only gen_internal.js named OSM. If a sixth generator is ever added, this is
+  // the line it must copy.
+  notes: ['Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence v3.0).',
+          'Streets, buildings and landmarks: © OpenStreetMap contributors (ODbL).'],
   url: DESIGN.sheetUrl || null,
   qr: DESIGN.sheetQr === false ? null : (DESIGN.sheetQr || { mm: 14 }),
   sheetVersion: DESIGN.sheetVersion || null,

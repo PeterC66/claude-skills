@@ -242,13 +242,17 @@ The High Street build added a third: **the traffic-signal layer now calls `hits(
 
 The portal (`C:\Claude\community-bus-maps`) holds **byte-for-byte copies** of some engine files. It does not import them from the skill; it vendors them. A skill-side change leaves the portal running the old code, and its gates will keep passing against the *old* shipped fixture until you re-vendor.
 
-| Skill file | Portal destination |
-|---|---|
-| `%SK%\icons.js`, `%SK%\render.js`, `%SK%\footer.js`, `%SK%\qr.js`, `%SK%\labeller.js`, `%SK%\font_metrics.js` | `engine\` |
-| `%SK%\gen_internal.js` | `engine\place\` |
-| `%PSK%\gen_external_places.js` | `engine\place\` |
-| `%SK%\schematize_internal.js`, `%SK%\diagram_internal.js` | `engine\expert\` |
-| `%SK%\gen_boarding.js` | `engine\expert\` |
+**THE LIST OF VENDORED FILES IS NOT IN THIS DOCUMENT ANY MORE.** It is `engine/vendored.json` in the portal, which names every `.js` under `engine/` as either `vendored` (with the skill path it came from and a hash of the bytes) or `portal-owned` (a wrapper with no counterpart here). Read it there; both drift checks read it there too, so nothing can fall off one list and stay on the other.
+
+The table that used to sit here listed eleven files, and `status.js` listed the same eleven, while the portal tree held sixteen. The three nobody was watching were `engine/area/gen_external_busway.js`, `engine/area/gen_external_radial.js` and `engine/place/gen_internal_place.js` — and on 2026-08-25 the radial one turned out to have been stale since 2026-08-21, missing the March X32 badge-overlap fix and the `sheetQr` default, silently, for four days (`technical-audit_2026-08-25` N14). A hand-maintained table of what to check is a list you have to remember to extend; a manifest that fails when the tree holds a file it does not name is not.
+
+**After copying a file across, restamp the manifest.** Run this in the portal repository root (`C:\Claude\community-bus-maps`), and commit the manifest change in the same commit as the file it describes:
+
+```bash
+node scripts/check-vendored.mjs --update
+```
+
+The two checks ask different questions and neither can answer the other's. The portal's `scripts/check-vendored.mjs` runs inside its `npm test`, needs nothing but the portal itself, and asks *has the portal's copy been edited since it was vendored* — so it works in CI, where this skill tree does not exist. `status.js` here runs on the laptop where both trees are present and asks *has the source moved on without us*, which is the drift this section is about; it reports `UNLISTED` for a portal file the manifest does not name, so the population is checked from both ends.
 
 > ### ✅ CLOSED 2026-08-24 — re-vendored, both fixtures recut, all four suites PASS (`community-bus-maps` `a22dd9a`). The account below is kept because it is the first time this section's step 5 actually bit, and it is worth reading before the next non-inert drift.
 >

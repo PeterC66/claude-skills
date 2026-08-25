@@ -263,52 +263,68 @@ function gatePortalFixture() {
   return out;
 }
 
-// ---- portal vendoring drift (§4 table in changing-the-engine.md) -----------
+// ---- portal vendoring drift (engine/vendored.json in the portal) -----------
+// UNTIL 2026-08-25 THIS FUNCTION HELD THE LIST ITSELF: eleven hard-coded pairs,
+// maintained by remembering to add a row whenever a file was vendored. It went
+// four days green while engine/area/gen_external_radial.js was stale, because
+// nobody had added the row — the portal tree held sixteen files and this list
+// named eleven, so area/gen_external_busway.js, area/gen_external_radial.js and
+// place/gen_internal_place.js were vendored copies no gate had ever looked at.
+// That is technical-audit_2026-08-25 N14, and "an enumeration is a silent
+// filter" already in this project's memory.
+//
+// The list now lives ONCE, in the portal's own engine/vendored.json, which
+// scripts/check-vendored.mjs reads inside `npm test` there. This function reads
+// the same file, so the two checks cannot disagree about which files exist:
+// each portal .js is either `vendored` (with a source to compare against) or
+// `portal-owned` (a wrapper with no counterpart here), and a file on disk that
+// the manifest does not name is UNLISTED, which is red.
+//
+// The division of labour between the two: the portal's check runs everywhere
+// including CI and asks "has the portal's copy been edited since it was
+// vendored?" — it cannot see the skill tree. THIS one runs on the laptop where
+// both trees exist and asks the other question, "has the source moved on
+// without us?". Neither can answer the other's.
 function portalDrift() {
   if (!exists(PORTAL)) return [];
-  const rows = [
-    [path.join(SK, 'icons.js'), path.join(PORTAL, 'engine', 'icons.js')],
-    [path.join(SK, 'render.js'), path.join(PORTAL, 'engine', 'render.js')],
-    // footer.js was missing from this table until 2026-08-10: gen_internal.js
-    // resolves it via SKILL_ASSETS just like icons.js (see its _FOOTER IIFE),
-    // so a footer-only skill change silently drifted the portal — the reproduce
-    // gate still "passed" locally (own-copy-vs-own-copy) and only failed when
-    // verify:area ran the portal's stale engine/footer.js against a fixture
-    // built with the new one.
-    [path.join(SK, 'footer.js'), path.join(PORTAL, 'engine', 'footer.js')],
-    // qr.js became a row on 2026-08-18 with design.sheetQr. footer.js requires it
-    // LAZILY, and only when a sheet asks for a code, so a partial vendor does not
-    // take the portal down the way a missing labeller.js would — but it would make
-    // exactly one town's build throw, months later, with nothing in this table to
-    // say why. A row costs nothing and is the whole lesson of the footer.js entry
-    // above: the file that is easy to forget is the one nobody lists.
-    [path.join(SK, 'qr.js'), path.join(PORTAL, 'engine', 'qr.js')],
-    // labeller.js and font_metrics.js became rows on 2026-08-16, at the Phase 8
-    // re-vendor that first carried them across. They are not optional extras:
-    // gen_internal.js REQUIRES labeller.js at load time (resolved through
-    // SKILL_ASSETS exactly as icons.js and footer.js are) and labeller.js
-    // requires font_metrics.js, so vendoring gen_internal.js without them throws
-    // at the portal's require time rather than failing a byte gate — which is a
-    // worse failure than the footer.js one this table was extended to prevent,
-    // because it takes the whole build down instead of one file's output.
-    [path.join(SK, 'labeller.js'), path.join(PORTAL, 'engine', 'labeller.js')],
-    [path.join(SK, 'font_metrics.js'), path.join(PORTAL, 'engine', 'font_metrics.js')],
-    [path.join(SK, 'gen_internal.js'), path.join(PORTAL, 'engine', 'place', 'gen_internal.js')],
-    [path.join(PSK, 'gen_external_places.js'), path.join(PORTAL, 'engine', 'place', 'gen_external_places.js')],
-    [path.join(SK, 'schematize_internal.js'), path.join(PORTAL, 'engine', 'expert', 'schematize_internal.js')],
-    [path.join(SK, 'diagram_internal.js'), path.join(PORTAL, 'engine', 'expert', 'diagram_internal.js')],
-    // gen_boarding.js became a row on 2026-08-23, when the portal started
-    // offering the boarding plan as its fifth output. It is portal-owned like the
-    // two expert pre-stages above rather than copied into each map's data, so a
-    // skill-side change to it drifts the portal exactly the way gen_internal.js
-    // does — and its three dependencies (footer.js, icons.js, font_metrics.js)
-    // are already rows, which is what makes vendoring it safe at all.
-    [path.join(SK, 'gen_boarding.js'), path.join(PORTAL, 'engine', 'expert', 'gen_boarding.js')],
-  ];
-  return rows.map(([skillFile, portalFile]) => ({
-    file: path.basename(skillFile) + ' -> ' + path.relative(PORTAL, portalFile),
-    same: sameIgnoringLineEndings(skillFile, portalFile),
-  }));
+  const engineDir = path.join(PORTAL, 'engine');
+  const manifestPath = path.join(engineDir, 'vendored.json');
+  if (!exists(manifestPath)) {
+    return [{ file: 'engine/vendored.json', same: null,
+      status: 'NO-MANIFEST',
+      note: 'no manifest in the portal — nothing here can say which files are vendored' }];
+  }
+  const SKILL_ROOT = path.resolve(SK, '..', '..');   // …/.claude/skills
+  const manifest = readJson(manifestPath) || {};
+  const entries = Array.isArray(manifest.files) ? manifest.files : [];
+  const rows = [];
+
+  for (const e of entries) {
+    const portalFile = path.join(engineDir, e.path);
+    if (e.kind === 'portal-owned') continue;         // no source to compare against
+    const skillFile = path.join(SKILL_ROOT, e.source || '');
+    rows.push({
+      file: (e.source ? path.basename(e.source) : '?') + ' -> ' + path.join('engine', e.path),
+      same: sameIgnoringLineEndings(skillFile, portalFile),
+    });
+  }
+
+  // The population check. A .js under engine/ that the manifest does not name is
+  // exactly the fault this rewrite is about, so it is red here as well as in the
+  // portal's own check — the two components count the same set or neither does.
+  const listed = new Set(entries.map(e => String(e.path).replace(/\\/g, '/')));
+  const walk = (dir, prefix) => {
+    for (const name of fs.readdirSync(dir).sort()) {
+      const full = path.join(dir, name);
+      const rel = prefix ? prefix + '/' + name : name;
+      if (fs.statSync(full).isDirectory()) walk(full, rel);
+      else if (name.endsWith('.js') && !listed.has(rel)) {
+        rows.push({ file: path.join('engine', rel) + ' (not named in engine/vendored.json)', same: null, status: 'UNLISTED' });
+      }
+    }
+  };
+  if (exists(engineDir)) walk(engineDir, '');
+  return rows;
 }
 
 // ---- run ---------------------------------------------------------------
@@ -496,7 +512,7 @@ async function main() {
 
   if (driftRows.length) {
     console.log('\n=== Portal vendoring drift (skill -> portal, CRLF-safe) ===');
-    for (const r of driftRows) console.log('  ' + (r.same === null ? 'MISSING  ' : r.same ? 'in sync  ' : 'DRIFTED  ') + r.file);
+    for (const r of driftRows) console.log('  ' + (r.status || (r.same === null ? 'MISSING' : r.same ? 'in sync' : 'DRIFTED')).padEnd(9) + r.file);
   }
 
   if (qualityRows.length) {

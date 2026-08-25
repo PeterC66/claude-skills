@@ -44,7 +44,7 @@ const MEANINGLESS = /\bnames nothing\b|\bhas no geometry\b/i;
 // absent, not better, and it is the same failure the boarding sheet already hit once
 // (Stop E painted out under the plate on a sheet that rendered clean and gated PASS).
 // It was WARN, so nothing stopped, and the sheet went into a review set.
-const OVERFLOWED = /$^/;   // DELIBERATE BREAK, to be reverted
+const OVERFLOWED = /\bunder the footer plate\b|\btoo long for this panel\b|\bpast the frame edge\b/i;
 
 function severity(line) {
   return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)) ? 'BLOCKING' : 'WARN';

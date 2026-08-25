@@ -421,6 +421,15 @@ async function deploymentRow() {
   try {
     const res = await fetch(LIVE_URL + '/health', { signal: AbortSignal.timeout(8000), redirect: 'follow' });
     live = res.headers.get('x-app-version');
+    // DRAIN THE BODY even though only the header is wanted. An unconsumed
+    // response body leaves undici holding the socket, and this process ends by
+    // calling process.exit -- on Windows that combination aborts the process
+    // outright: "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file
+    // src\win\async.c". Found on the first real run after the deploy of
+    // 2026-08-25: every row was correct, the Deployment row said `current`, and
+    // the EXIT CODE was 127. Which is the worse half, because the exit code is
+    // the only part of this CI reads.
+    await res.arrayBuffer().catch(() => {});
   } catch (e) {
     // Rule 1: unreachable is not stale.
     return { status: 'unreachable', want, url: LIVE_URL, why: String(e.message || e) };
@@ -520,7 +529,33 @@ async function main() {
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
 // computed once, above the JSON branch, so both output forms agree -- see there.
-main().then((failed) => process.exit(failed ? 1 : 0)).catch((e) => {
+//
+// process.exitCode AND NOT process.exit(), for a reason worth keeping. This file
+// became async on 2026-08-25 to fetch the live version header, and
+// `main().then(f => process.exit(f ? 1 : 0))` tears the process down while
+// undici is still closing its socket. On Windows that aborts with
+// "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" and the shell sees
+// 127 -- so the board printed every row correctly and then reported a status
+// nobody could act on. Draining the response body above is the other half of
+// the fix; setting the code and letting Node exit when the loop is genuinely
+// empty is this half.
+//
+// The watchdog is unref'd, so it never keeps the process alive by itself. It is
+// there because "let Node exit naturally" fails in the other direction if
+// anything ever holds a handle open: a gate that hangs is worse than one that
+// fails, since nothing chases a check that never reaches a verdict. Fifteen
+// seconds is far past undici's keep-alive, so reaching it means a real leak --
+// and it exits with the RIGHT code rather than pretending nothing happened.
+function finish(failed) {
+  const code = failed ? 1 : 0;
+  process.exitCode = code;
+  const watchdog = setTimeout(() => {
+    console.error('status.js: something is still holding the event loop open after 15s; exiting ' + code + ' anyway.');
+    process.exit(code);
+  }, 15_000);
+  if (watchdog.unref) watchdog.unref();
+}
+main().then(finish).catch((e) => {
   console.error(e);
-  process.exit(1);
+  finish(true);
 });

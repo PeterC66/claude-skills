@@ -206,6 +206,17 @@ function rolloutOne(t) {
     return { name: t.name, status: 'DRY-RUN', diffs, anyLost, warnings, blockers, version: prevS4.rec.version };
   }
 
+  // A lost label stops the rollout BEFORE anything is written -- see the same
+  // block in rollout_places.js. The old position, after `stage.js commit S4`,
+  // left a committed S4 with no S5 render: the manifest naming a version that
+  // has no JPG, and byte gates passing against it. The backlog recorded this
+  // against the PLACE rollout only, because that is where it was hit; the town
+  // rollout was written from the same template and had it too.
+  if (anyLost && !FORCE) {
+    return { name: t.name, status: 'REVIEW-NEEDED', diffs, warnings, blockers,
+      detail: 'a label was lost vs the previous build, and NOTHING was written. Inspect the dry run, then re-run with --force (or fix the cause and re-run).' };
+  }
+
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
   // No new S3 run: routes.json/overrides.json are unchanged for a pure engine
   // rollout, and S3 no longer carries a generator copy to re-commit (item 3).
@@ -260,9 +271,6 @@ function rolloutOne(t) {
       detail: 'S4 committed but NOT rendered/published — ' + realBlockers.length + ' blocking build warning'
         + (realBlockers.length > 1 ? 's' : '') + ' (the engine refused to draw something, or a label names nothing). Read '
         + path.join(s4Dir, BUILDLOG.LOG_NAME) + ', fix the config it names, then re-run (or --force to publish anyway).' };
-  }
-  if (anyLost && !FORCE) {
-    return { name: t.name, status: 'REVIEW-NEEDED', diffs, s4Dir, warnings: realWarnings, blockers: realBlockers, detail: 'S4 committed but NOT rendered/published — a label was lost vs the previous build. Inspect ' + s4Dir + ', then re-run with --force (or fix the cause and re-run).' };
   }
 
   const s5Dir = stage(t.dir, 'new', 'S5');

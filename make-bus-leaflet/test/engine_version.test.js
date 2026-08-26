@@ -27,9 +27,12 @@ const seed = (dir, overrides = {}) => {
   return dir;
 };
 
-test('the four hashed files are the four every town build runs unmodified', () => {
+test('the hashed files are the ones every town build runs unmodified', () => {
+  // lane_normals.js was added 2026-08-26 with design.laneOrientation. A file
+  // that decides where a lane is drawn and is not in this list would let the
+  // engine change while the stamp stayed put.
   assert.deepStrictEqual(ENGINE_FILES,
-    ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js']);
+    ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js']);
 });
 
 test('the same tree hashes the same, twice', () => tmp(dir => {

@@ -2,7 +2,7 @@
 /*
  * engine_version.js — content-hash the engine (the files every town's S4 build
  * runs unmodified: gen_internal.js, gen_external_radial.js,
- * gen_external_busway.js, icons.js), for item 3 of the 2026-08-04
+ * gen_external_busway.js, icons.js, lane_normals.js), for item 3 of the 2026-08-04
  * process-efficiency plan.
  *
  * Why: a town's S3 used to carry its own COPY of the two generators (frozen at
@@ -30,7 +30,11 @@ const path = require('path');
 const crypto = require('crypto');
 
 const SK = __dirname;
-const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js'];
+// lane_normals.js joined the list on 2026-08-26. It is required by
+// gen_internal.js and it decides where a lane is drawn, so a hash that
+// excluded it would go on reporting the same engine across a change that
+// moves ink -- a stamp that is current and wrong.
+const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js'];
 
 function computeEngineVersion(sk = SK) {
   const h = crypto.createHash('sha256');

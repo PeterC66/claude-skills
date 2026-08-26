@@ -338,6 +338,20 @@ function rolloutOnePlace(p) {
     return { name: p.name, status: 'DRY-RUN', diffs, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null };
   }
 
+  // A lost label stops the rollout BEFORE anything is written.
+  //
+  // It used to stop after `stage.js commit S4`, and the state that left behind
+  // was the dangerous part: a committed S4, a manifest advertising it, byte
+  // gates newly PASSING against it, and no S5 render at all -- so the board
+  // read healthy while no JPG existed for the version it was naming. Hit on all
+  // four boarding places on 2026-08-25. `anyLost` comes from the scratch build
+  // above, which is the same build, so nothing is gained by getting here first.
+  if (anyLost && !FORCE) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: p.name, status: 'REVIEW-NEEDED', diffs, warnings, blockers,
+      detail: 'a label was lost vs the previous build, and NOTHING was written. Re-run with --keep <dir> to inspect the sheets, then --force to publish anyway (or fix the cause and re-run).' };
+  }
+
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
   const s4Dir = stage(p.dir, 'new', 'S4', '--bump', BUMP);
   stage(p.dir, 'pull', 'S1', s4Dir); // place.json is an S1 output (pipeline.md P4 note) — pull it explicitly, not just S2
@@ -414,9 +428,7 @@ function rolloutOnePlace(p) {
         + (realBlockers.length > 1 ? 's' : '') + ' (the engine refused to draw something, or a label names nothing). Read '
         + path.join(s4Dir, BUILDLOG.LOG_NAME) + ', fix the config it names, then re-run (or --force to publish anyway).' };
   }
-  if (anyLost && !FORCE) {
-    return { name: p.name, status: 'REVIEW-NEEDED', diffs, s4Dir, warnings: realWarnings, blockers: realBlockers, detail: 'S4 committed but NOT rendered/published — a label was lost vs the previous build. Inspect ' + s4Dir + ', then re-run with --force (or fix the cause and re-run).' };
-  }
+
 
   const s5Dir = stage(p.dir, 'new', 'S5');
   stage(p.dir, 'pull', 'S4', s5Dir);

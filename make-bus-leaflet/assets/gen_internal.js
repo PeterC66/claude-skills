@@ -169,6 +169,11 @@ const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
 const { Labeller } = require(_LABELLER);
 const _FONTM = path.join(path.dirname(_LABELLER), 'font_metrics.js');
 const FONT = require(_FONTM);
+const _LANES = (()=>{ const local=path.join(__dirname,'lane_normals.js');
+  try{ if(fs.existsSync(local)) return local; }catch(e){}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'lane_normals.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/lane_normals.js'; })();
+const LN = require(_LANES);
 // The internal map's own footer notes are fixed (not per-town), so the footer plate's
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep
@@ -1716,27 +1721,66 @@ if(IR){
     ? (a=>[...new Set(a.map(laneKey))].sort((x,y)=>orderIdx[x]-orderIdx[y]))
     : (a=>a);
   const MEM={}, MEMR={};
-  for(const s of SEG){ const set=new Set([s.r]);
-    for(const u of SEG){ if(u.r===s.r)continue;
+  // CORPAIRS: the same near-parallel-and-overlapping pairs, kept as indices for
+  // lane_normals.js's orientation field. Collected HERE because this loop
+  // already runs the comparison over every pair of segments on the sheet, and
+  // running it a second time in the module would double the most expensive pass
+  // in the generator.
+  //
+  // The same-route skip moved from the top of the loop to just before set.add:
+  // membership must still ignore a route co-running with itself, but ORIENTATION
+  // must not — a reference route doubling back on itself is 104 of the 233
+  // measured lane flips. Adding s.r to a set that already contains it is a
+  // no-op, so MEM and MEMR are unchanged by the move.
+  const CORPAIRS=[];
+  for(let si=0;si<SEG.length;si++){ const s=SEG[si]; const set=new Set([s.r]);
+    for(let ui=0;ui<SEG.length;ui++){ if(ui===si)continue; const u=SEG[ui];
       if(Math.abs(s.ux*u.ux+s.uy*u.uy)<CA)continue;             // not near-parallel
       if(pSeg(s.mx,s.my,u)>CD)continue;                         // s mid far from u
       if(pSeg(u.mx,u.my,s)>CD)continue;                         // u mid far from s
+      if(ui>si) CORPAIRS.push([si,ui]);                         // each pair once
+      if(u.r===s.r)continue;
       set.add(u.r); }
     const here=[...set].sort((x,y)=>orderIdx[x]-orderIdx[y]);
     (MEMR[s.r]=MEMR[s.r]||{})[s.i]=here;
     (MEM[s.r]=MEM[s.r]||{})[s.i]=laneList(here); }
   CORUN=MEMR;                    // published for the badge logic further below
-  const segByRoute={};                             // r -> its own segments (for reference dir)
-  for(const s of SEG){ (segByRoute[s.r]=segByRoute[s.r]||[]).push(s); }
+  const segIdxByRoute={};                          // r -> its own SEG indices
+  for(let si=0;si<SEG.length;si++){ (segIdxByRoute[SEG[si].r]=segIdxByRoute[SEG[si].r]||[]).push(si); }
+  // design.laneOrientation — opt in to the corridor orientation field.
+  //
+  // OFF (absent, the default) is exactly the behaviour that shipped before
+  // 2026-08-26: refDir returns its nearest segment's raw heading, sign and all.
+  // Byte-identical, per invariant 2, and every built map stays on it.
+  //
+  // ON gives the corridor one agreed direction, which is what stops a lane
+  // bundle mirroring around its centreline where the reference route doubles
+  // back or the bundle's reference changes identity. It is opt-in rather than
+  // unconditional for an honest reason: it demonstrably repairs the site a
+  // reader reported on St Neots Town Centre, and across the other 110 measured
+  // sites nothing here can yet say whether the redrawn sheet is better or
+  // worse. quality_metrics.js cannot see a lane mirror at all, so there is no
+  // instrument to settle it with. Until there is, the key is adopted one map at
+  // a time on the evidence of a rendered crop.
+  const ORIENT=DESIGN.laneOrientation===true
+    ? LN.orientSegments(SEG,CORPAIRS.concat(LN.chainPairs(SEG,{cosAngle:-1})),[])
+    : {sign:null,components:0,conflicts:0,bridges:0};
+  if(process.env.DBG_LANES) console.error(`LANEFIELD on=${DESIGN.laneOrientation===true} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0}`);
   // reference direction for a lane-bundle at a point: the local heading of the
-  // bundle's lowest-order route (r0). Using ONE shared reference per location (not
-  // each route's own per-segment heading) gives a normal that varies smoothly along
-  // the corridor -- no 180 deg hemisphere flips that made curved bundles swap sides,
-  // and no per-stop pinch from adjacent segments disagreeing on the normal.
-  const refDir=(r0,mx,my,fx,fy)=>{ const segs=segByRoute[r0]; if(!segs) return [fx,fy];
-    let best=Infinity,bux=fx,buy=fy;
-    for(const s of segs){ const dd=(s.mx-mx)*(s.mx-mx)+(s.my-my)*(s.my-my); if(dd<best){best=dd;bux=s.ux;buy=s.uy;} }
-    return [bux,buy]; };
+  // bundle's lowest-order route (r0), ORIENTED TO ITS CORRIDOR by
+  // lane_normals.js. Using ONE shared reference per location (not each route's
+  // own per-segment heading) is what stops two routes digitised in opposite
+  // directions along one street taking opposite normals and swapping sides.
+  //
+  // Picking r0's nearest segment is not on its own enough, and until 2026-08-26
+  // that was all this did. Nearest-by-midpoint says nothing about DIRECTION, so
+  // the reference heading reversed wherever r0 doubled back on itself, or
+  // wherever a change of bundle membership made some other route the reference
+  // -- 111 in-frame sites across the eighteen built maps, each one mirroring a
+  // whole bundle around its centreline so its lanes crossed for no visible
+  // reason. The sign now comes from the corridor's own orientation field, which
+  // no polyline's digitisation direction can move. See lane_normals.js.
+  const refDir=LN.makeRefDir(SEG,segIdxByRoute,ORIENT.sign);
   // -- context roads (named side streets, very light) under everything
   if(IR.contextRoads){
     for(const w of RG.ways){ if(!w.tags.name)continue;
@@ -1769,7 +1813,20 @@ if(IR){
         // i.e. make co-running lines cross over) -- use the raw perpendicular.
         const [dx0,dy0]=refDir(arr[0],(Pp[i][0]+Pp[i+1][0])/2,(Pp[i][1]+Pp[i+1][1])/2,ox,oy);
         const L=Math.hypot(dx0,dy0)||1; const nx=-dy0/L, ny=dx0/L;
-        sx=nx*so; sy=ny*so; }
+        sx=nx*so; sy=ny*so;
+        // DBG_LANES=1: one line per bundled segment -- the lane offset actually
+        // applied, the bundle it came from, and WHICH segment of the reference
+        // route supplied the normal. A lane order that mirrors between two
+        // neighbouring segments is a sign flip in that one vector, and this is
+        // the only place it can be seen; the drawn SVG shows the consequence.
+        if(process.env.DBG_LANES){ const rl=refDir.last||{};
+          console.error(`LANE ${r}	seg=${i}	mid=${((Pp[i][0]+Pp[i+1][0])/2).toFixed(2)},${((Pp[i][1]+Pp[i+1][1])/2).toFixed(2)}`
+            +`	bundle=[${arr.join(',')}]	k=${arr.indexOf(laneKey(r))}	so=${so.toFixed(2)}`
+            +`	r0=${arr[0]}	r0seg=${rl.at}	r0dir=${(rl.ux||0).toFixed(3)},${(rl.uy||0).toFixed(3)}`
+            +`	r0sign=${rl.sign}	r0dist=${(rl.dist||0).toFixed(2)}	n=${nx.toFixed(3)},${ny.toFixed(3)}`
+            +`	own=${(ox/(Math.hypot(ox,oy)||1)).toFixed(3)},${(oy/(Math.hypot(ox,oy)||1)).toFixed(3)}`
+            +`	fr=${inFrame([(Pp[i][0]+Pp[i+1][0])/2,(Pp[i][1]+Pp[i+1][1])/2])?1:0}`); }
+        }
       v.push([sx,sy]); }
     SH[r]=Pp.map((p,i)=>{ let sx,sy;
       if(i===0){[sx,sy]=v[0];} else if(i===Pp.length-1){[sx,sy]=v[v.length-1];}

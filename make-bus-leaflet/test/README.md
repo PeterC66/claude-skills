@@ -52,4 +52,8 @@ So the faults that live inside those scripts are **not** tested here yet, and th
 
 The Python half — `boarding_index.py`'s locality rollup, `naptan_stands.py`'s uniqueness test — is untested here for the same reason and would need its own runner.
 
+**The first one landed on 2026-08-26, by a different route than expected.** `lane_normals.js` is not an extraction — nothing was carved out of `gen_internal.js`. It is NEW code, written as a module from the start because the fault it repairs (the lane-bundle mirror behind `design.laneOrientation`) needed a design that could be argued with, and three designs were tried and measured before the right one was found. Its suite is fourteen assertions and six mutations, and four of those mutations are the failed designs: filtering chain edges by angle, letting a chain edge close a cycle, dropping the anchor, losing the `Math.abs`. A suite that survived them would have let the wrong fix through, and one of them DID survive the first draft of the suite — the anchoring test could not fail, because with only two segments the union-find root IS the lowest-index segment.
+
+So the cheaper route into that boundary is: when a generator fault needs new logic, write the new logic as a module rather than as more lines in the script. The re-vendor is owed either way, and this way the fault arrives with a test.
+
 Extracting helpers from the generators, one at a time, each with its test and its re-vendor, is the next step. It is logged in `Development Docs/open-actions.md` rather than left in this file.

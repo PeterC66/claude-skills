@@ -64,6 +64,26 @@ test('the version stamp never counts as content lost or gained', () => tmp(dir =
   assert.ok(G.VERSION_STAMP_RE.test('Map v2.1 · 2026-08-10'), 'the pre-2026-08-10 stamp format is still recognised');
 }));
 
+test('design.sheetVersion is a stamp too, in every form footer.js prints it', () => {
+  // The gap that made rollout_places.js report a lost label on all four
+  // boarding places, 2026-08-25: the filter knew `Valid from ...` and the old
+  // `Map v...` and not the sheet version, which by design carries the run's own
+  // number and therefore CANNOT survive a rollout. A stamp that must change is
+  // never evidence that content was dropped.
+  for (const stamp of ['build 2.8 · 25 Aug 2026', 'Draft 5.0 · 19 Aug 2026 14:02',
+                       'Preview 5.0 · 19 Aug 2026', 'Map version 5.0', 'Map version v5.0']) {
+    assert.ok(G.VERSION_STAMP_RE.test(stamp), stamp + ' must be filtered as a stamp');
+  }
+});
+
+test('a real label that merely begins like a stamp is still a label', () => {
+  // The filter must key on the version NUMBER, not the word. A street called
+  // "Draft Lane" disappearing from a sheet is content loss.
+  for (const label of ['build up the High Street', 'Draft Lane', 'Preview Cinema', 'Map version']) {
+    assert.strictEqual(G.VERSION_STAMP_RE.test(label), false, label + ' must survive as a label');
+  }
+});
+
 test('a name that stopped being printed IS reported', () => tmp(dir => {
   const older = put(dir, 'old.svg', SVG);
   const newer = put(dir, 'new.svg', SVG.replace('<text x="20" y="40">Needingworth</text>\n', ''));

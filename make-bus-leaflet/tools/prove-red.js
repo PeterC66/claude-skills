@@ -37,6 +37,44 @@ const KEEP = process.argv.includes('--keep');
  * is a mutation that did not do what it says, which would report a false green
  * just as loudly as the bug it is hunting. */
 const MUTATIONS = [
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'the sheet-version stamp goes back to counting as a lost label',
+    find: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?|Map version v?[\\d.]+|(?:build|Draft|Preview) v?[\\d.]+(?: · .*)?)$/;',
+    to: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?)$/;' },
+
+  // lane_normals.js - four of these six are repairs that were actually tried
+  // and measured on the board before the right one was found, so a suite that
+  // survives them is a suite that would have let the wrong fix through.
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'a corridor forgets that two lines can face opposite ways',
+    find: '  if (Math.abs(a.ux * b.ux + a.uy * b.uy) < cosAngle) return false;',
+    to: '  if ((a.ux * b.ux + a.uy * b.uy) < cosAngle) return false;' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'chain edges go back to walking array positions, and vanish when routes interleave',
+    find: '  for (const idx of byRoute.values()) {',
+    to: '  for (const idx of [Array.from(segs.keys())]) {' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'a chain edge is allowed to close a cycle and contradict the lateral structure',
+    find: '    if (find(i).root === find(j).root) continue;      // bridges only, never a cycle',
+    to: '    if (false) continue;      // bridges only, never a cycle' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'components stop being anchored, so a clean corridor can come out mirrored',
+    find: '    if (!anchorParity.has(f.root)) anchorParity.set(f.root, f.parity);',
+    to: '    if (!anchorParity.has(f.root)) anchorParity.set(f.root, 1);' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'the key-off path starts applying an orientation it was never given',
+    find: '    const sg = (sign && bSeg >= 0) ? (sign[bSeg] || 1) : 1;',
+    to: '    const sg = (bSeg >= 0 && sign) ? (sign[bSeg] || 1) : -1;' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'an unorientable corridor reports itself as clean',
+    find: "    if (union(i, j, rel(segs[i], segs[j])) === 'conflict') conflicts++;",
+    to: '    union(i, j, rel(segs[i], segs[j]));' },
+
   { suite: 'font_metrics.test.js', file: 'font_metrics.js',
     what: 'an unmapped glyph costs nothing',
     find: 'const FALLBACK = 0.556;', to: 'const FALLBACK = 0;' },

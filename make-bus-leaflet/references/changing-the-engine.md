@@ -252,6 +252,16 @@ The table that used to sit here listed eleven files, and `status.js` listed the 
 node scripts/check-vendored.mjs --update
 ```
 
+### A NEW MODULE is a hand-off the drift table cannot warn you about (2026-08-26)
+
+`gen_internal.js` gained a `require` of a new sibling, `lane_normals.js`, when `design.laneOrientation` was added. The requirement it creates is absolute and it is not a byte gate: **the portal must receive both files or neither.** The generator requires the module at load, before it reads a thing, so a portal that got `gen_internal.js` alone would throw on the first internal render of any map — area or place — whatever any config key said.
+
+**Nothing in `status.js` will tell you.** Its drift table reads `engine/vendored.json` and compares the files the PORTAL already has. A file the portal does not have yet is not in that manifest, so it is not a row, so it cannot be red. The one row you do see — `gen_internal.js → engine/place/gen_internal.js` differs — looks like an ordinary stale vendor and says nothing about the new dependency riding with it. Copy both, then `node scripts/check-vendored.mjs --update` in the portal root, and add the `lane_normals.js` entry in the same commit.
+
+It also joined `ENGINE_FILES` in `engine_version.js`, so the template hash moved. A file that decides where a lane is drawn and is outside the hash would let the engine change while the stamp stayed put.
+
+**As of 2026-08-26 this hand-off is OUTSTANDING** — the skill has moved ahead and the portal has not been re-vendored, deliberately, because nothing has been delivered from the new engine yet. St Neots Town Centre v2.9 is built in the tree and not published.
+
 ### The SVG vocabulary is now a portal-side allowlist — a NEW ELEMENT is a hand-off too
 
 Added 2026-08-25 (`technical-audit_2026-08-25` N18). The portal inlines a published sheet into a web page as live DOM, and since that date it filters it through an **allowlist** in `src/public/svgSanitise.js`: eight elements — `svg`, `g`, `path`, `rect`, `circle`, `line`, `text`, `clipPath` — plus `tspan`, `title` and `desc`, and 38 attribute names. That list is a census of what these generators emit, measured across all 1,277 sheets in the map tree.

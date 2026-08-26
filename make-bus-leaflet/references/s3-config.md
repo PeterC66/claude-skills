@@ -193,6 +193,20 @@ Raise it for a sheet that will be photocopied; set it to `0` to disable the dark
 
 It applies to the two places a route colour becomes type — the solo-route terminus rows in the diagram's `internalTermini` block, and the geographic `to <terminus>` labels. It does **not** touch route badges, whose text is white on the colour and is a different contrast question.
 
+### `design.laneOrientation` — stop a lane bundle mirroring around its own centreline (2026-08-26 — opt-in, absent ⇒ byte-identical)
+
+```json
+"design": { "laneOrientation": true }
+```
+
+Where several routes run along one street the engine draws them as parallel lanes, offset along a normal taken from the local heading of the bundle's lowest-order member. That heading came from whichever of the reference route's own segments was nearest, and nearest-by-midpoint says nothing whatever about DIRECTION — so the normal could reverse from one segment to the next, mirroring the whole bundle and making its lanes cross for no reason a reader can see. It reverses in two situations, and they turned out to be about equally common: the reference route traverses the corridor twice (out and back, its two legs near-coincident, so which is "nearest" changes wherever they stop overlapping), or the bundle's membership changes so that a DIFFERENT and oppositely-digitised route becomes the reference. Measured across all eighteen built maps on 2026-08-26: **111 distinct in-frame sites on 15 of them**, worst case a 24 mm swing at High Wycombe's fourteen-lane vertex.
+
+With the key on, `lane_normals.js` gives each corridor one agreed direction — a parity union-find over segments that are near-parallel and overlapping, anchored so the corridor's lowest-index segment keeps the direction it was digitised in. A corridor whose routes all run the same way gets every sign +1 and does not move at all.
+
+**It is opt-in, and per-map, for an honest reason.** It demonstrably repairs the site a reviewer reported on St Neots Town Centre — proven on a rendered crop, four lanes uncrossed — and across the other 110 sites nothing in this repository can yet say whether the redrawn sheet is better or worse. `quality_metrics.js` cannot see a lane mirror at all: run over St Neots Town Centre before and after, it returns **identical numbers** — same `defects`, same `mapLabels`, same `roadLabelsOverInk`. Two throwaway crossing detectors written to settle it disagreed with each other. So adopt it one map at a time, on `crop_compare.js` evidence, until there is an instrument that can judge the board.
+
+**Adopted on:** St Neots Town Centre (v2.9, 2026-08-26). Adopting it cost the `Cambridge Street` road label, which in the shipped sheet had been printed across the magenta and orange lanes — the placer now declines to overprint and drops it instead. That trade was Peter's call, made on the crop.
+
 ### `design.fixedOrientation` — pin which way up the map is drawn (2026-08-21 — opt-in, absent ⇒ byte-identical)
 
 ```json

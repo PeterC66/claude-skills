@@ -65,7 +65,19 @@ function labelSet(svg) {
 // current "Valid from <date>" format and the pre-2026-08-10 "Map v<N.N> ·
 // <date>" format (old archived SVGs / mid-migration diffs still use it).
 // Filtered out by labelDiff below.
-const VERSION_STAMP_RE = /^(Valid from .*|Map v[\d.]+(?: · .*)?)$/;
+//
+// design.sheetVersion IS THE SAME KIND OF FACT AND WAS NOT FILTERED, which is
+// what made rollout_places.js report a lost label on every rollout it has ever
+// run -- it hit all four boarding places on 2026-08-25, and the label it had
+// "lost" was `build 2.7 · 24 Aug 2026`, replaced by `build 2.8 · 25 Aug 2026`.
+// A stamp that MUST change on every rollout can never be evidence that content
+// was dropped. footer.js prints it in four forms (project memory calls them the
+// four states of a sheet version) and all four belong here: the development
+// `build <n> · <date>`, the portal's `Draft <n> · <date> <time>` and `Preview
+// ...`, and the published bare number, which footer.js prefixes with `Map
+// version `.
+const VERSION_STAMP_RE =
+  /^(Valid from .*|Map v[\d.]+(?: · .*)?|Map version v?[\d.]+|(?:build|Draft|Preview) v?[\d.]+(?: · .*)?)$/;
 
 // Label-set diff, oriented old->new (matches changing-the-engine.md's
 // comm -23/-13 recipe): lost = present in old, gone in new; gained = present

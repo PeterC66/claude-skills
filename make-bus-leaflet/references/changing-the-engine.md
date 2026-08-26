@@ -252,15 +252,34 @@ The table that used to sit here listed eleven files, and `status.js` listed the 
 node scripts/check-vendored.mjs --update
 ```
 
-### A NEW MODULE is a hand-off the drift table cannot warn you about (2026-08-26)
+### ✅ CLOSED 2026-08-26 — A NEW MODULE is a hand-off the drift table could not warn you about, and now it can
 
 `gen_internal.js` gained a `require` of a new sibling, `lane_normals.js`, when `design.laneOrientation` was added. The requirement it creates is absolute and it is not a byte gate: **the portal must receive both files or neither.** The generator requires the module at load, before it reads a thing, so a portal that got `gen_internal.js` alone would throw on the first internal render of any map — area or place — whatever any config key said.
 
-**Nothing in `status.js` will tell you.** Its drift table reads `engine/vendored.json` and compares the files the PORTAL already has. A file the portal does not have yet is not in that manifest, so it is not a row, so it cannot be red. The one row you do see — `gen_internal.js → engine/place/gen_internal.js` differs — looks like an ordinary stale vendor and says nothing about the new dependency riding with it. Copy both, then `node scripts/check-vendored.mjs --update` in the portal root, and add the `lane_normals.js` entry in the same commit.
+**Nothing in `status.js` will tell you.** Its drift table reads `engine/vendored.json` and compares the files the PORTAL already has. A file the portal does not have yet is not in that manifest, so it is not a row, so it cannot be red. The one row you do see — `gen_internal.js → engine/place/gen_internal.js` differs — looks like an ordinary stale vendor and says nothing about the new dependency riding with it. Copy both, then `node scripts/check-vendored.mjs --update` in the portal root, and add the new file's entry in the same commit — `--update` restamps rows that already exist and will not write one for you. `npm run vendor:engine` now does the copying and the restamping together.
 
 It also joined `ENGINE_FILES` in `engine_version.js`, so the template hash moved. A file that decides where a lane is drawn and is outside the hash would let the engine change while the stamp stayed put.
 
-**As of 2026-08-26 this hand-off is OUTSTANDING** — the skill has moved ahead and the portal has not been re-vendored, deliberately, because nothing has been delivered from the new engine yet. St Neots Town Centre v2.9 is built in the tree and not published.
+**Closed 2026-08-26.** Both files are vendored, `lane_normals.js` has its own manifest row, and the whole round was byte-inert: `npm run verify:place` reproduces all four place sheets across both fixtures byte-for-byte, because `design.laneOrientation` is absent from every fixture and the OFF path is the code that shipped before it. Measured the same day, on the area fixture too: rendering it through `628a881` (the commit before the lane change) and through the new engine gives the identical md5, so the key really is the only thing that moves.
+
+**Two things the round taught that this note had not predicted.**
+
+**1. The hand-off IS provable, and no document said with what.** `npm test` cannot do it — `test-p7.mjs` and `test-lifecycle.mjs` write `'// stub\n'` in place of a generator, so nothing there ever loads the real one. Neither can `verify:area` or `verify:defaults`, which run the *fixture's own* `gen_internal.js` because it travels with the map. The one gate that exercises the vendored copy is **`npm run verify:place`** (`scripts/verify-reproduce-place.mjs:93` copies `engine/place/*` into its scratch and renders through them). Copying `gen_internal.js` alone and running it gives exactly the failure this section predicted, in the place it predicted:
+
+```
+Error: Cannot find module 'C:\Claude\community-bus-maps\engine\lane_normals.js'
+    at Object.<anonymous> (…\gen_internal.js:176:12)  code: 'MODULE_NOT_FOUND'
+```
+
+Note the path it names. The module goes at **`engine/lane_normals.js`**, the engine ROOT beside `icons.js` — not `engine/place/` beside the generator that requires it. `renderMap.js` passes `SKILL_ASSETS = engine/`, and the copy `import-map.mjs` plants in a map's `data/` folder has no sibling to find first.
+
+**2. "The drift table cannot warn you" was true of a table, not of a check.** `UNLISTED` walks the tree and asks what is here that the manifest does not name; `MISSING` walks the manifest and asks what it names that is not here. A file in NEITHER — because nobody has copied it across yet — is not a row in either direction. So the portal now enumerates a **third population: what the vendored code asks for.** `requireScan()` in `scripts/lib/vendored.mjs` extracts every `process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'x.js')` literal out of every engine file and fails with `UNRESOLVED` when the target is not there. In the exact state this section described, it prints one row naming the file and its requirer, where before there was only `place/gen_internal.js DRIFTED` looking like an ordinary stale vendor.
+
+The `?` in that pattern is load-bearing. `diagram_internal.js` and `schematize_internal.js` use `process.env.SKILL_ASSETS && path.join(…, 'gen_internal.js')` as one candidate in an `existsSync` list that reports its own miss — matching that form too would have opened the check red on day one, which is how a check gets muted rather than fixed.
+
+**What it still cannot see, and both are already manifest rows saying so:** `font_metrics.js`, reached by `path.dirname(_LABELLER)` arithmetic rather than a literal, and `qr.js`, required lazily inside `footer.js` only when a sheet asks for a code.
+
+**And the copying is no longer done by hand.** `npm run vendor:engine` copies every `vendored` row from its skill source, restamps, and then runs the audit — the July 2026 dedup proposal's Option B, five weeks after its Option A shipped as `check-vendored.mjs`. It cannot invent a row for a module nobody has listed, which is precisely why it and `requireScan()` are a pair: one moves the bytes, the other notices when the set of bytes should have grown.
 
 ### The SVG vocabulary is now a portal-side allowlist — a NEW ELEMENT is a hand-off too
 

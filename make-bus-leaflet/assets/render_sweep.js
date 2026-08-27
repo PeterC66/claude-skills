@@ -97,20 +97,58 @@ function readFraming(dataDir) {
  * the two boards answer about the same set of artefacts — a sweep that asks
  * about a different set of sheets from the byte gate is a third list, and this
  * repo already knows what a third list costs.
+ *
+ * WHICH GENERATOR, AND THE TWO ANSWERS ARE DIFFERENT ON PURPOSE.
+ *
+ *   tree mode   the SKILL's template. A map's S4/ci-reference folder holds no
+ *               generator, and gating a town against its own frozen copy would
+ *               pass by construction — changing-the-engine.md §2, "gate the
+ *               TEMPLATE, not the town's frozen copy".
+ *
+ *   store mode  the PACK's own copy, which is what the portal runs:
+ *               generateSvg() resolves `path.join(dataDir, generator)`. A
+ *               delivered map is pinned to the generator that travelled with it
+ *               until `npm run track:engine --apply` moves it forward (OA-130),
+ *               so a sweep that reached past the pack for the skill's current
+ *               engine would report on an engine that map does not run. This
+ *               version got that wrong on its first outing and cheerfully
+ *               reported a store of un-tracked packs as clean.
+ *
+ * AND THE PACK ONLY OWNS TWO OF THE FIVE SHEETS. `src/maps/store.js` marks the
+ * schematic, the diagram and the boarding plan `engine: 'expert'`, and
+ * resolveGen() takes those from the PORTAL's own engine/expert/ directory,
+ * ignoring the pack entirely. A store pack can still hold a `gen_boarding.js`
+ * left by an older import — map 4 here holds one that predates strict_guards.js
+ * altogether — and running it would report on a file the portal never executes.
+ * So only `internal` and `external` prefer the pack; the expert three never do.
+ * That stale copy is dead weight rather than a live fault, and `track-engine.mjs`
+ * does not move it, but it is exactly the kind of file a sweep would be fooled by.
+ *
+ * Falling back to the template when the pack has no copy is right for both: it
+ * is how an area map's portal-owned expert sheets resolve anyway.
  */
-function sheetsFor(dataDir, { isPlace }) {
+function sheetsFor(dataDir, { isPlace, preferPackGen }) {
   const rj = readJson(path.join(dataDir, 'routes.json'));
   const sheets = [];
   const have = (n) => fs.existsSync(path.join(dataDir, n));
-  if (have('gen_internal.js') || fs.existsSync(path.join(SK, 'gen_internal.js'))) {
-    if (have('internal.svg')) sheets.push({ key: 'internal', gen: path.join(SK, 'gen_internal.js'), out: 'internal.svg' });
-  }
+  const pick = (fallbackDir, name) => {
+    const inPack = path.join(dataDir, name);
+    if (preferPackGen && fs.existsSync(inPack)) return inPack;
+    return path.join(fallbackDir, name);
+  };
+  if (have('internal.svg')) sheets.push({ key: 'internal', gen: pick(SK, 'gen_internal.js'), out: 'internal.svg' });
   if (have('external.svg')) {
-    const gen = isPlace
-      ? path.join(PSK, 'gen_external_places.js')
+    // A store's area pack names its external generator `gen_external.js` and does
+    // NOT record which template it came from, which is the same ambiguity
+    // track-engine.mjs refuses to guess through. Prefer the pack's own file when
+    // there is one; otherwise fall back to detecting the style from the sheet.
+    const gen = preferPackGen && have('gen_external.js') ? path.join(dataDir, 'gen_external.js')
+      : isPlace ? pick(PSK, 'gen_external_places.js')
       : path.join(SK, `gen_external_${detectExternalStyle(dataDir) || 'radial'}.js`);
     sheets.push({ key: 'external', gen, out: 'external.svg' });
   }
+  // The expert three are portal-owned (store.js `engine: 'expert'`): always the
+  // template, never the pack, however tempting a copy sitting in the pack looks.
   if (rj.internalSchematic) sheets.push({ key: 'schematic', gen: path.join(SK, 'schematize_internal.js'), out: 'internal-schematic.svg' });
   if (rj.internalDiagram) sheets.push({ key: 'diagram', gen: path.join(SK, 'diagram_internal.js'), out: 'internal-diagram.svg' });
   if (rj.boardingPlan) sheets.push({ key: 'boarding', gen: path.join(SK, 'gen_boarding.js'), out: 'boarding.svg' });
@@ -228,6 +266,8 @@ function enumerateStore(storeDir) {
       // is what import-map.mjs keys its own `isPlace` branch on.
       isPlace: fs.existsSync(path.join(dataDir, 'gen_internal_place.js')),
       dataDir,
+      // The portal runs the pack's OWN generator, not the skill's; so must this.
+      preferPackGen: true,
     });
   }
   return maps;

@@ -42,7 +42,20 @@ npm run test:prove-red-gates
 
 Add `--keep` to leave the mutated generators on disk, and `--buses "<path>"` if the data repo is not at `C:\u3a St Ives\Using AI\Buses`.
 
-## Proving the S6 CHECKS can still fail — the third harness, added 2026-08-27
+### The three refactor tools
+
+Not tests, and not run by `npm test`: these answer the questions an EXTRACTION asks, and they are here because the same three were rebuilt from scratch twice before being committed. All three run from `make-bus-leaflet/`, with no placeholders.
+
+| Command | Answers |
+|---|---|
+| `npm run gate:extraction -- --baseline`, then `npm run gate:extraction` | Did any sheet move? 74 verdicts in **27 seconds**, so it is affordable after *every* extraction rather than at the end. Portal drift is reported and never gated — between an engine change and its re-vendor the portal is meant to differ. |
+| `npm run gate:branch-coverage -- tools/<spec>.js` | Which branches of the new module do the committed maps actually take? Instruments a scratch copy and runs every map. `tools/branch-coverage.linear_features.js` is a worked spec whose expected answer is in its header. |
+| `npm run gate:dark-paths -- --before <old gen.js>` / `-- --after <gen.js>` / `-- --diff` | Did anything move on the two paths no byte gate reads — an `EDITOR_KEYS=1` render, and stderr? All 18 maps with an internal sheet exercise both. |
+
+**Each of them was watched fail before being trusted, and two were wrong first time.** `extraction-gate.js` let `execFileSync` throw, and `status.js` exits 1 whenever the board is red — so the gate died with a stack trace in exactly the situation it exists for; a deliberate one-character edit to the stadium-badge casing now prints **14 of 74** moved, naming every one. `branch-coverage.js` matched its anchors against the wrong line endings and reported **every** branch dark, which is why it now normalises first and refuses outright if nothing is hit at all. The lesson both times: **falsify the harness, not only the check.**
+
+Their working files — the recorded baseline and the two sweeps — are gitignored on purpose. Each is a snapshot of one machine at one moment, and a committed one would be read as authoritative by the next session and quietly compared against a different engine.
+# Proving the S6 CHECKS can still fail — the third harness, added 2026-08-27
 
 The other two falsify code that draws. This one falsifies code that **judges**, and it exists for a different reason from either.
 

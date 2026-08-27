@@ -8,7 +8,10 @@
     "test": "node --test",
     "test:prove-red": "node tools/prove-red.js",
     "test:prove-red-gates": "node tools/prove-red-gates.js",
-    "test:prove-s6": "node tools/prove-s6-checks.js"
+    "test:prove-s6": "node tools/prove-s6-checks.js",
+    "gate:extraction": "node tools/extraction-gate.js",
+    "gate:dark-paths": "node tools/dark-paths.js",
+    "gate:branch-coverage": "node tools/branch-coverage.js"
   },
   "keywords": [],
   "author": "Peter Cooper",

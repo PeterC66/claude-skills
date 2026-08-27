@@ -10,3 +10,11 @@ __pycache__/
 
 # preview_design.js scratch output (default --out dir)
 make-bus-leaflet/assets/design-preview/
+
+# Refactor-tool working state, not source: a recorded gate baseline and the two
+# dark-path sweeps. Each is a snapshot of ONE machine at ONE moment, and a
+# committed one would be read as authoritative by the next session and quietly
+# compared against a different engine.
+make-bus-leaflet/tools/.extraction-gate-baseline.json
+make-bus-leaflet/tools/.dark-paths-before.json
+make-bus-leaflet/tools/.dark-paths-after.json

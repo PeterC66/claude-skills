@@ -53,7 +53,7 @@ node assets/status.js --buses "C:/u3a St Ives/Using AI/Buses" --portal "C:/Claud
 
 ## What cannot be unit-tested, and what to do instead
 
-Five generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be `require`d: `gen_internal.js` (**3,454 lines**, down from 3,933 and coming down — see the module map below), `gen_boarding.js`, `diagram_internal.js`, `gen_external_radial.js`, `gen_external_places.js`. The Python half has no runner at all.
+Five generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be `require`d: `gen_internal.js` (**2,873 lines**, down from 3,933 and coming down — see the module map below), `gen_boarding.js`, `diagram_internal.js`, `gen_external_radial.js`, `gen_external_places.js`. The Python half has no runner at all.
 
 ### The module map — what has come OUT of the generators, and what each piece owns
 
@@ -68,6 +68,7 @@ OA-129 Phase 3 is extracting `gen_internal.js` along the comment banners already
 | `svg_primitives.js` | the eight small marks a sheet is drawn out of: `esc`, `gk`, the four badge-width measurements, `badge`/`badgeStack`/`cross`. A factory, because four of them need the town in scope; `out` is passed IN, so the caller keeps the document | `gen_internal.js` |
 | `linear_features.js` | river, road, railway, canal: style layering, geometry, the stitch and merge passes, and `drawFeature`. NOT the label — siting a feature's name needs four subsystems the line knows nothing about, so `drawFeatureLabel` stayed behind on purpose | `gen_internal.js` |
 | `label_placer.js` | the shared reserved-box list, both label placers, and the route-ink contrast floor. Owns mutable state deliberately: 31 call sites reserve into one `placed` | `gen_internal.js` |
+| `services_panel.js` | the sheet's whole right-hand column: the Services list in its four layouts, the pictogram Key, the frequency-tier rows, the fare note. DRAWS and returns nothing — measured, not assumed: none of the thirty-odd names it declares is read below it | `gen_internal.js` |
 | `lane_normals.js` | the corridor orientation field behind `design.laneOrientation` | `gen_internal.js` |
 | `labeller.js`, `font_metrics.js`, `footer.js`, `icons.js`, `qr.js` | text placement, metrics, the footer band, the icon set, QR codes | several |
 

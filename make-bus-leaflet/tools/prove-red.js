@@ -179,6 +179,77 @@ const MUTATIONS = [
     what: "the first cross-tie is drawn at the segment start rather than half a pitch in, so ties pile up at every vertex",
     find: "        for(let dd=step*0.5; dd<L; dd+=step){ const cx=x0+(x1-x0)*dd/L, cy=y0+(y1-y0)*dd/L;",
     to: "        for(let dd=0; dd<L; dd+=step){ const cx=x0+(x1-x0)*dd/L, cy=y0+(y1-y0)*dd/L;" },
+  // label_placer.js - extracted 2026-08-27 from gen_internal.js. MEASURED the
+  // same day across all 18 maps with an internal sheet: the WHOLE v1 placer is
+  // dark. Every map runs v2, so the eight-candidate search, the manual-offset
+  // path, the icon-box relaxation and the give-up return are taken by no
+  // committed map at all, and this suite is the only thing that covers them.
+  // Covered by the byte gate: the v2 branch (18), reserve (18), the v2 queue
+  // (17), inkOnWhite (13, all of which darken at least one colour).
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the collision test stops being inclusive, so two labels may touch edge to edge",
+    find: "  const hit=(b,o)=>!(b[2]<o[0]||b[0]>o[2]||b[3]<o[1]||b[1]>o[3]);",
+    to: "  const hit=(b,o)=>!(b[2]<=o[0]||b[0]>=o[2]||b[3]<=o[1]||b[1]>=o[3]);" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "a label stops being allowed to sit beside its own symbol, so every POI name jumps a candidate",
+    find: "  const overlaps=(b,skip)=>placed.some(o=>o!==skip && hit(b,o));",
+    to: "  const overlaps=(b,skip)=>placed.some(o=>hit(b,o));" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the icon-relaxation pass counts the icons after all, so it can never find anywhere the first pass did not",
+    find: "  const overlapsNoIcons=(b)=>placed.some(o=>!iconBoxes.has(o) && hit(b,o));",
+    to: "  const overlapsNoIcons=(b)=>placed.some(o=>hit(b,o));" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "reserve stops telling the v2 solver, so v2 places labels over ink v1 would have dodged",
+    find: "  function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]); if(LAB) LAB.block([x0,y0,x1,y1]);}",
+    to: "  function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]);}" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "a manual label offset goes back through de-collision, so a hand-placed name moves",
+    find: "    if(lov && lov.offset){                       // manual label placement (skip de-collision)",
+    to: "    if(false){                       // manual label placement (skip de-collision)" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the second pass that relaxes the icon boxes is dropped, so a label with nowhere clear of a symbol is lost",
+    find: "    if(!chosen && iconBoxes.size){             // nowhere clear of the symbols: fall back to",
+    to: "    if(false){             // nowhere clear of the symbols: fall back to" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the page bound stops applying, so a name at the frame edge runs off the paper or into the panel",
+    find: "    const onPage=b=>!(IR && (b[0]<1 || b[2]>MX1+2));   // keep labels on the page / off the panel",
+    to: "    const onPage=b=>true;   // keep labels on the page / off the panel" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "v1 overlaps rather than give up, which is the trade the placer exists to refuse",
+    find: "    if(!chosen){ return false; }                // give up rather than overlap",
+    to: "    if(!chosen){ chosen=[x+2.6,y+0.9,'start']; }                // give up rather than overlap" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "a queued v2 label loses its own-icon exclusion, so the solver treats its own symbol as an obstacle",
+    find: "      at:[x,y], text, size:sz, fill:col, italic, own:self||null,",
+    to: "      at:[x,y], text, size:sz, fill:col, italic, own:null," },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the ink floor stops being applied, so a pale route colour prints as unreadable type again",
+    find: "    let f = 1, out = hex;",
+    to: "    let f = 1, out = hex; if(true) return hex;" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the darkening scales one channel, so a pale route label changes hue instead of getting darker",
+    find: "  const _scaleHex = (hex,f) => '#' + [1,3,5].map(i=>{",
+    to: "  const _scaleHex = (hex,f) => '#' + [1,3,5].map((i,j)=>{ if(j) return hex.substr(i,2);" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the darkening loop loses its bound, so an unreachable floor hangs the build instead of returning",
+    find: "    for(let i=0; i<40 && 1.05/(_lum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }",
+    to: "    for(let i=0; i<8 && 1.05/(_lum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: "the per-call contrast floor is ignored in favour of the design key",
+    find: "    const floor = (min!=null) ? min : INK_MIN_CONTRAST;",
+    to: "    const floor = INK_MIN_CONTRAST;" },
   // fit_set.js - extracted 2026-08-27 from gen_internal.js. Exactly ONE of the 20
   // committed maps (Ramsey) reaches the off-path rule, and it is the map the rule
   // was written for, so the byte diff certifies this block on a single data point.

@@ -193,19 +193,29 @@ Raise it for a sheet that will be photocopied; set it to `0` to disable the dark
 
 It applies to the two places a route colour becomes type — the solo-route terminus rows in the diagram's `internalTermini` block, and the geographic `to <terminus>` labels. It does **not** touch route badges, whose text is white on the colour and is a different contrast question.
 
-### `design.laneOrientation` — stop a lane bundle mirroring around its own centreline (2026-08-26 — opt-in, absent ⇒ byte-identical)
+### `design.laneOrientation` — stop a lane bundle mirroring around its own centreline (2026-08-26; **a DEFAULT since 2026-08-27**, escape hatch `false`)
 
 ```json
-"design": { "laneOrientation": true }
+"design": { "laneOrientation": false }
 ```
 
 Where several routes run along one street the engine draws them as parallel lanes, offset along a normal taken from the local heading of the bundle's lowest-order member. That heading came from whichever of the reference route's own segments was nearest, and nearest-by-midpoint says nothing whatever about DIRECTION — so the normal could reverse from one segment to the next, mirroring the whole bundle and making its lanes cross for no reason a reader can see. It reverses in two situations, and they turned out to be about equally common: the reference route traverses the corridor twice (out and back, its two legs near-coincident, so which is "nearest" changes wherever they stop overlapping), or the bundle's membership changes so that a DIFFERENT and oppositely-digitised route becomes the reference. Measured across all eighteen built maps on 2026-08-26: **111 distinct in-frame sites on 15 of them**, worst case a 24 mm swing at High Wycombe's fourteen-lane vertex.
 
 With the key on, `lane_normals.js` gives each corridor one agreed direction — a parity union-find over segments that are near-parallel and overlapping, anchored so the corridor's lowest-index segment keeps the direction it was digitised in. A corridor whose routes all run the same way gets every sign +1 and does not move at all.
 
-**It is opt-in, and per-map, for an honest reason.** It demonstrably repairs the site a reviewer reported on St Neots Town Centre — proven on a rendered crop, four lanes uncrossed — and across the other 110 sites nothing in this repository can yet say whether the redrawn sheet is better or worse. `quality_metrics.js` cannot see a lane mirror at all: run over St Neots Town Centre before and after, it returns **identical numbers** — same `defects`, same `mapLabels`, same `roadLabelsOverInk`. Two throwaway crossing detectors written to settle it disagreed with each other. So adopt it one map at a time, on `crop_compare.js` evidence, until there is an instrument that can judge the board.
+**It was opt-in for a season, and per-map, for an honest reason — that reason expired once the board had judged it.** It demonstrably repairs the site a reviewer reported on St Neots Town Centre — proven on a rendered crop, four lanes uncrossed — and across the other 110 sites nothing in this repository can yet say whether the redrawn sheet is better or worse. `quality_metrics.js` cannot see a lane mirror at all: run over St Neots Town Centre before and after, it returns **identical numbers** — same `defects`, same `mapLabels`, same `roadLabelsOverInk`. Two throwaway crossing detectors written to settle it disagreed with each other. So adopt it one map at a time, on `crop_compare.js` evidence, until there is an instrument that can judge the board.
 
-**Adopted on:** St Neots Town Centre (v2.9, 2026-08-26). Adopting it cost the `Cambridge Street` road label, which in the shipped sheet had been printed across the magenta and orange lanes — the placer now declines to overprint and drops it instead. That trade was Peter's call, made on the crop.
+**It is now the default, and `false` is the only way to decline it (2026-08-27, OA-120).** The engine tests `!== false`, so a map with no key adopts — which is the point: an opt-in that sixteen of eighteen maps opt into is a default wearing a disguise, and a town built next month was inheriting the mirror with nothing anywhere asking the question. **Seventeen of eighteen maps adopt. St Ives is the single decline**, and it declines explicitly, in its own `routes.json`.
+
+**Reverting a map is `false`, NOT `--unset`.** This matters and it is the opposite of what it used to be. While the key was opt-in, `node adopt_config.js --town "<Town>" --unset design.laneOrientation --apply` (run from the skill's `assets/` folder, `<Town>` being the town's own name as `status.js` prints it) was the revert. It is now an **adoption**, because absence means on. The revert is `--set '{"design":{"laneOrientation":false}}'`, and key-off remains byte-identical to the pre-2026-08-26 engine, so the old artwork returns exactly.
+
+**The build warning.** Where two streets meet at both ends inside the angle tolerance, a corridor can be given contradictory directions and there is no consistent orientation to find — the repair cannot reach those bundles whatever the key says. The engine now says so on stderr, and `build_log.js` files it as a **WARN** in the run folder's `build-warnings.txt`:
+
+> `lanes: 50 corridor adjacencies on this sheet disagree about which way their street runs …`
+
+WARN rather than BLOCKING because the sheet is not wrong; it is one the automatic repair cannot fully straighten. **St Ives is the only built map that trips it**, with 50 — and that is exactly why St Ives is the map that declines. The other seventeen report zero, which is what lets the warning start green rather than arriving red and being muted. The count is over LATERAL edges only; a chain edge is a bridge and is never counted, and until 2026-08-27 the call site conflated the two, which made the number non-zero on 14 of 17 maps and useless as a gate.
+
+**Adoption history.** St Neots Town Centre first (v2.9, 2026-08-26), which cost the `Cambridge Street` road label — printed across the magenta and orange lanes in the shipped sheet, and the placer now declines to overprint and drops it instead. Thirteen more the same day on a 47-crop proof pack. Then Beaconsfield Simpson Centre (v1.15) and Ramsey (v1.42) on 2026-08-27, when the default flipped. **Ramsey is the one worth remembering:** its `internal.svg` is byte-identical either way and its SCHEMATIC moves at seven sites, because the schematic re-runs the generator over schematised geometry — a different segment set. A map can be unaffected on one sheet and not on another, so check every sheet the map configures, not just the internal one.
 
 ### `design.fixedOrientation` — pin which way up the map is drawn (2026-08-21 — opt-in, absent ⇒ byte-identical)
 

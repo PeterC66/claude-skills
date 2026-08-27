@@ -120,6 +120,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-gates.js --buses "$GITHUB_WORKSPACE/buses-data"
 
+      # Falsify the S6 verification checks too. Four of them were rewritten on
+      # 2026-08-27 (OA-129 Phase 2) because they were manufacturing findings that
+      # looked like defects and were not, and the failure mode of quietening a
+      # noisy check is a check that no longer says anything -- which looks exactly
+      # like success. Every case here comes in a pair: quiet on the artefact, loud
+      # on a real fault of the same kind. It seeds from the TRACKED S1/S2/S3 runs
+      # plus redteam.json, so it runs on a fresh clone; the S4/S5/S6 run folders
+      # are gitignored and CI has none of them.
+      - name: Prove the S6 checks can still go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-s6-checks.js --buses "$GITHUB_WORKSPACE/buses-data"
+
       - name: Run gates (JSON)
         working-directory: skills/make-bus-leaflet
         run: |

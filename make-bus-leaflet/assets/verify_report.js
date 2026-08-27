@@ -66,6 +66,56 @@ function readRedteam() {                    // unescape HTML entities the agent 
 const redteam   = readRedteam();
 const verified  = readJSON('verified-services.json');
 const routes    = readJSON('routes.json');
+
+/*
+ * PRECONDITION -- refuse to run on an uncurated S1 (added 2026-08-27).
+ *
+ * A town auto-drafted by draft_town.py holds GTFS HEADSIGNS in `termini` where a
+ * real S1 pass holds SETTLEMENT names. Every terminus check then fails by
+ * construction, and the five red-team ones are not independent corroboration
+ * because both sides read the same field. Ramsey returned 12 terminus HARDs on
+ * that basis alone on 2026-08-26, on a sheet whose Services panel was correct
+ * throughout -- a large, confident, unactionable count that buries the findings
+ * that matter. Its own DRAFT-REVIEW.md had predicted every one of them and had
+ * sat unread since 4 August.
+ *
+ * So the S1 pass is owed FIRST. Exit 3 (distinct from 2, a missing input) and say
+ * what to do. VERIFY_ALLOW_UNCURATED=1 forces the run anyway -- for proving this
+ * gate, and for deliberately measuring what an uncurated town scores.
+ */
+let UNCURATED = null;                       // reasons array when the S1 is a draft, else null
+{
+  const reasons = [];
+  if (routes._bootstrap) reasons.push('routes.json carries _bootstrap ("' + String(routes._bootstrap).slice(0, 120) + '")');
+  // DIR is <town>/S6-verify/<date> (or <town>/Places/<place>/S6-verify/<date>), so
+  // the build folder is two levels up.
+  const buildDir = path.resolve(DIR, '..', '..');
+  const draft = path.join(buildDir, 'DRAFT-REVIEW.md');
+  if (fs.existsSync(draft)) reasons.push(draft + ' is present and unactioned');
+  if (reasons.length && process.env.VERIFY_ALLOW_UNCURATED !== '1') {
+    console.error('-'.repeat(64));
+    console.error('verify_report.js: REFUSING TO RUN - this town has an uncurated S1.');
+    console.error('-'.repeat(64));
+    for (const r of reasons) console.error('  * ' + r);
+    console.error('');
+    console.error('  An auto-drafted verified-services.json holds GTFS headsigns where a real');
+    console.error('  S1 pass holds settlement names, so every terminus check fails by');
+    console.error('  construction and the HARD count says nothing about the sheet. Do the S1');
+    console.error('  pass first, and read DRAFT-REVIEW.md - it usually already names the');
+    console.error('  findings a run would rediscover.');
+    console.error('');
+    console.error('  To run anyway (the count will not be readable): VERIFY_ALLOW_UNCURATED=1');
+    console.error('-'.repeat(64));
+    process.exit(3);
+  }
+  if (reasons.length) {
+    UNCURATED = reasons;
+    console.error('verify_report.js: WARNING - running on an uncurated S1 (VERIFY_ALLOW_UNCURATED=1).');
+    for (const r of reasons) console.error('  * ' + r);
+    console.error('  Terminus findings below are reported SOFT: the field they read holds stop');
+    console.error('  names, so they are artefacts of the draft, not statements about the sheet.\n');
+  }
+}
 const full      = readJSON('routes_full_atco.json');
 const intown    = readJSON('routes_intown_atco.json');
 const ll        = readJSON('atco2ll.json');
@@ -89,6 +139,28 @@ const hard = () => findings.filter(f => f.severity === 'hard');
 const soft = () => findings.filter(f => f.severity === 'soft');
 
 const normRoute = (r) => String(r == null ? '' : r).toUpperCase().replace(/\s+/g, '');
+/*
+ * A route NUMBER is not a unique key, and two different things were indexed on it
+ * as if it were.
+ *
+ * OURS. verified-services.json already carries `key` wherever the number repeats:
+ * Wisbech runs two route 46s (Stagecoach East to March, Lynx to King's Lynn) and
+ * keys them `46` and `46L` -- exactly how routes_full_atco, routes_intown_atco and
+ * the palette key them. This file indexed on the number alone, so the Lynx entry
+ * silently overwrote the Stagecoach one: route 46's drawn chain was checked against
+ * the LYNX termini, and 46L was never checked at all. `ourKey` reads the field the
+ * data has been carrying all along.
+ *
+ * THEIRS. The red team writes what the operator BRANDS, so `46 (Lynx)`,
+ * `ZIP2 (Ely Zipper 2)` and `102 (Flightline)` normalise to keys we do not hold and
+ * the same route then appears TWICE -- once as `not-confirmed <ours>` and once as
+ * `missing-service <theirs>`. Seen on March, Beaconsfield and Wisbech in one run,
+ * and the Wisbech case read as a gap in data that was already correct. `baseRoute`
+ * strips the brand so the two sides pair on the number and are then told apart by
+ * operator, which is the only thing that actually distinguishes them.
+ */
+const ourKey    = (s) => normRoute(s && (s.key || s.route));
+const baseRoute = (r) => { const n = normRoute(r); return n.replace(/\(.*\)$/, '') || n; };
 function localityToken(atco) {           // 0500H<LLLL>nnn -> "LLLL"
   const m = String(atco).match(/^[0-9]{4}[A-Z]([A-Z]{4})/);
   return m ? m[1] : null;
@@ -236,6 +308,20 @@ function intownByNorm(r) { const k = normRouteKey(r); return k ? intown[k] : nul
 // (a cross-border town has them: St Neots' 905 ends at Bedford Bus Station 020035035).
 // Count those as UNVERIFIABLE rather than as a mismatch, or an entirely correct route
 // gets a false HARD just for leaving the county.
+// The town's own locality token, from the in-town ATCO prefix ("0500FWISH" -> "WISH").
+const TOWN_TOKEN = localityToken(intownCfg.prefix || routes.atcoPrefix || '');
+// Does every end of every direction of this chain sit in the town's own locality?
+// Compared on three characters, the same rule nameMatchesLocality uses, so a
+// neighbouring sub-locality counts as still-in-town: Wisbech is WISH and Wisbech
+// St Mary is WISM. A chain like that has not left town and so cannot be evidence
+// about a terminus beyond it. No town token => cannot tell => false, never suppress.
+function chainNeverLeavesTown(fe) {
+  if (!TOWN_TOKEN) return false;
+  const { endTokens, untokenisedEnds } = chainEnds(fe);
+  if (untokenisedEnds || !endTokens.size) return false;
+  return [...endTokens].every(t => t.slice(0, 3) === TOWN_TOKEN.slice(0, 3));
+}
+
 function chainEnds(fe) {
   const endTokens = new Set(); let untokenisedEnds = 0;
   for (const d of fullDirections(fe)) {
@@ -248,9 +334,11 @@ function chainEnds(fe) {
   return { endTokens, untokenisedEnds };
 }
 
-// S-4: routes_full termini align with S1 declared termini
+// S-4: routes_full termini align with S1 declared termini.
+// Indexed on the SERVICE's own key, so a town with two same-numbered routes gets
+// each checked against its own chain rather than one of them checked twice.
 const vsByRoute = {};
-for (const s of (verified.services || [])) vsByRoute[normRoute(s.route)] = s;
+for (const s of (verified.services || [])) vsByRoute[ourKey(s)] = s;
 for (const r of displayed) {
   const vs = vsByRoute[r];
   const fe = fullEntry(r);
@@ -276,14 +364,39 @@ for (const r of displayed) {
     add('soft', 'terminus',
       `Route ${r}: terminus not checkable against the drawn chain — ${why}. Chain ends: ${[...endTokens].join(', ')}. This is a limit of the check on a PLACE, not evidence of a fault; the independent terminus signal here is the red-team comparison.`,
       { route: r, termini: vs.termini, terminiSource: vs.terminiSource, chainEndTokens: [...endTokens], results }, r);
+  } else if (nMatched === 0 && chainNeverLeavesTown(fe)) {
+    /*
+     * A TRUNCATED chain. Wisbech's `excel` holds only its 15 local stops, both ends
+     * inside Wisbech / Wisbech St Mary, while its declared termini are Peterborough
+     * and Norwich. "Neither declared terminus appears at the ends of its full chain"
+     * is then perfectly true and says nothing about the sheet, which draws the route
+     * correctly as two external spokes. The chain never left town, so it cannot
+     * confirm OR contradict a terminus beyond it -- the check did not run.
+     */
+    const ext = (routes.external || []).some(e => normRoute(e.route) === r);
+    add('soft', 'terminus',
+      `Route ${r}: terminus not checkable - its full chain never leaves the town (every chain end is a local locality: ${[...endTokens].join(', ')}), so it cannot reach the declared termini (${vs.termini.join(', ')}) whether those are right or wrong. The chain in routes_full_atco.json is truncated to local stops.${ext ? ' routes.json draws this route from external[], which is where its real destination is asserted.' : ''}`,
+      { route: r, termini: vs.termini, chainEndTokens: [...endTokens], truncatedChain: true, hasExternalEntry: ext, results }, r);
   } else if (nMatched === 0 && untokenisedEnds) {
     add('soft', 'terminus',
       `Route ${r}: could not verify either declared terminus (${vs.termini.join(', ')}) — ${untokenisedEnds} chain end(s) are not NaPTAN locality-coded (cross-border stops), so there is nothing to match against. Confirm by hand.`,
       { route: r, termini: vs.termini, chainEndTokens: [...endTokens], untokenisedEnds, results }, r);
   } else if (nMatched === 0) {
-    add('hard', 'terminus',
-      `Route ${r}: neither declared terminus (${vs.termini.join(', ')}) appears at the ends of its full chain (chain ends: ${[...endTokens].join(', ')}).`,
-      { route: r, termini: vs.termini, chainEndTokens: [...endTokens], results }, r);
+    /*
+     * An UNCURATED S1 fails this check by construction, so under the override that
+     * let the run happen at all, do not dress the artefact up as a HARD. The
+     * declared "termini" are GTFS headsigns -- stop names like "Bus Station" or
+     * "New Road" -- and a stop name can never match a locality code however right
+     * the sheet is. Ramsey scored 12 terminus HARDs this way on 2026-08-26 on a
+     * sheet that was correct throughout. The default path refuses to run at all,
+     * so nothing bad gets a PASS out of this; the override exists to let someone
+     * see the other checks, and this keeps their count readable.
+     */
+    add(UNCURATED ? 'soft' : 'hard', 'terminus',
+      UNCURATED
+        ? `Route ${r}: terminus not checkable - this town's S1 is an unreviewed draft, so its declared termini (${vs.termini.join(', ')}) are GTFS stop names rather than settlements and can never match a chain-end locality (chain ends: ${[...endTokens].join(', ')}). An artefact of the draft, not a statement about the sheet. Do the S1 pass.`
+        : `Route ${r}: neither declared terminus (${vs.termini.join(', ')}) appears at the ends of its full chain (chain ends: ${[...endTokens].join(', ')}).`,
+      { route: r, termini: vs.termini, chainEndTokens: [...endTokens], uncuratedS1: !!UNCURATED, results }, r);
   } else if (nMatched < vs.termini.length) {
     add('soft', 'terminus',
       `Route ${r}: terminus name(s) not all confirmed at the chain ends — ${results.filter(x => !x.matched).map(x => x.terminus).join(', ')} (likely naming, chain ends: ${[...endTokens].join(', ')}).`,
@@ -292,6 +405,7 @@ for (const r of displayed) {
 }
 
 // S-5: direction sanity — the drawn edge stop heads toward the terminus
+const dirUnavailable = [];
 if (anchorLL) {
   for (const r of displayed) {
     if (CIRCULAR.has(r)) continue;
@@ -308,9 +422,36 @@ if (anchorLL) {
     const extraCore = new Set(intownCfg.extraCore || []);
     const isCore = a => (corePrefix && a.startsWith(corePrefix)) || extraCore.has(a);
     const edgeCands = corePrefix ? seq.filter(a => !isCore(a)) : [];
-    const cands = edgeCands.length ? edgeCands : seq;
+    /*
+     * THE CHECK NEEDS AT LEAST TWO BUFFER STOPS TO ASSERT ANYTHING (added 2026-08-27).
+     *
+     * The comment above explains at length why the farthest DRAWN stop is the wrong
+     * choice. The line that used to stand here -- `edgeCands.length ? edgeCands : seq`
+     * -- then fell straight back to that rejected behaviour whenever a route had NO
+     * buffer stop, comparing an in-town stop's bearing against the terminus, which
+     * asserts nothing at all. With exactly ONE buffer stop the selector has no choice
+     * and returns it whichever way it points.
+     *
+     * On 2026-08-26 all four direction HARDs across seven towns (Huntingdon T1,
+     * March 32, Ramsey 32, Ramsey X31) came from routes below this threshold, and
+     * every one was wrong: Ramsey's 32 and X31 were called "drawn the wrong way" on
+     * the strength of a single Bury stop 207 degrees south, on a sheet that correctly
+     * draws both leaving north-east under "to March" and "to Peterborough". The only
+     * two findings from routes where the selector had a genuine choice (St Ives 301
+     * and 5A) were SOFT, and both were real.
+     *
+     * So say the check is unavailable, which is true, rather than manufacturing a
+     * HARD. A route with two or more buffer stops still goes HARD exactly as before.
+     */
+    if (edgeCands.length < 2) {
+      // ONE finding per town, not one per route. Wisbech draws no buffer stop on
+      // seven of its eleven routes, and seven identical rows is the same "large
+      // SOFT count" noise this fix exists to remove.
+      dirUnavailable.push({ route: r, bufferStops: edgeCands.length, drawnStops: seq.length });
+      continue;
+    }
     let edge = null, edgeD = -1;
-    for (const a of cands) { if (!ll[a]) continue; const d = haversineKm(anchorLL, ll[a]); if (d > edgeD) { edgeD = d; edge = a; } }
+    for (const a of edgeCands) { if (!ll[a]) continue; const d = haversineKm(anchorLL, ll[a]); if (d > edgeD) { edgeD = d; edge = a; } }
     // A route can have TWO out-of-town ends (St Neots' 905: Cambridge east, Bedford
     // west; a two-arm route likewise). Comparing the drawn edge stop against only the
     // single farthest chain stop flagged 905 as "drawn the wrong way" when its edge stop
@@ -341,6 +482,33 @@ if (anchorLL) {
         `Route ${r}: edge stop bearing (${bEdge.toFixed(0)}°) is somewhat off the terminus bearing (${bTerm.toFixed(0)}°, ${diff.toFixed(0)}° apart) — check the drawn arm.`,
         { route: r, edge, edgeBearing: +bEdge.toFixed(1), terminusBearing: +bTerm.toFixed(1), angleApart: +diff.toFixed(1) }, r);
     }
+  }
+}
+
+if (dirUnavailable.length) {
+  if (!intownCfg.prefix) {
+    /*
+     * A PLACE has no intown_cfg.json at all, so there is no in-town ATCO prefix and
+     * `isCore` can never be true -- the buffer-stop set is empty for every route on
+     * every place, always has been, and the check has therefore only ever run in the
+     * fallback mode its own comment rejects. Worth stating plainly, because
+     * references/s6-verify.md cited St Neots Town Centre's route 66 as corroborated
+     * by "two independent checks"; it was one real check (the red-team terminus,
+     * which still fires) plus this one, which was structurally incapable of
+     * disagreeing with anything.
+     */
+    add('soft', 'direction-unavailable',
+      `Direction not checkable on any route: this build declares no in-town ATCO prefix (intown_cfg.json is absent, which is normal for a PLACE), so nothing distinguishes an out-of-town stop from an in-town one and the check has no edge stop to reason from. It is unavailable here by construction, not failing. The independent direction-ish signal for a place is the red-team terminus comparison.`,
+      { routes: dirUnavailable, reason: 'no-intown-prefix', displayedRoutes: displayed.size }, null);
+  } else {
+    const none = dirUnavailable.filter(d => d.bufferStops === 0).map(d => d.route);
+    const one  = dirUnavailable.filter(d => d.bufferStops === 1).map(d => d.route);
+    const bits = [];
+    if (none.length) bits.push(`${none.join(', ')} (no buffer stop drawn, so the check would compare an in-town stop against the terminus)`);
+    if (one.length) bits.push(`${one.join(', ')} (one buffer stop, so the selector returns it whichever way it points)`);
+    add('soft', 'direction-unavailable',
+      `Direction not checkable on ${dirUnavailable.length} of ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'}: ${bits.join('; ')}. The check needs at least two out-of-town buffer stops before the edge stop it picks means anything. Read those arms on _latest/internal.jpg instead — this is a limit of the check, not a fault in the sheet.`,
+      { routes: dirUnavailable, needed: 2, displayedRoutes: displayed.size }, null);
   }
 }
 
@@ -381,10 +549,74 @@ if (anchorLL) {
 if (redteam) {
   const rtServices = redteam.services || [];
   const rtExcluded = redteam.excluded || [];
-  const rtByRoute = {};
-  for (const s of rtServices) rtByRoute[normRoute(s.route)] = s;
-  const rtExclByRoute = {};
-  for (const s of rtExcluded) rtExclByRoute[normRoute(s.route)] = s;
+
+  /*
+   * PAIR the two sides on the route NUMBER, then tell same-numbered routes apart by
+   * OPERATOR -- see the baseRoute comment above for why a plain number index
+   * double-counted every branded route and mis-paired every duplicated one.
+   *
+   * Pass 1 pairs on operator-token overlap. Pass 2 pairs a single leftover on each
+   * side, because that IS a disagreement about the operator and check (b) below is
+   * the one that should say so. Anything still unpaired on their side is a genuine
+   * `missing-service` candidate; anything unpaired on ours is `not-confirmed`.
+   */
+  function group(list, keyOf) {
+    const m = new Map();
+    for (const s of list) { const b = baseRoute(keyOf(s)); if (!m.has(b)) m.set(b, []); m.get(b).push(s); }
+    return m;
+  }
+  /*
+   * `lastResort` is TRUE for the red team's services[] and FALSE for its excluded[].
+   *
+   * In services[], a single leftover on each side is a disagreement about the
+   * OPERATOR, and check (b) below is the one that should say so -- pairing them is
+   * how that SOFT gets raised at all.
+   *
+   * In excluded[] it is the opposite, and pairing on a mismatched operator inverts
+   * the red team's meaning. St Ives' red team excluded `5A (Peterborough)`,
+   * Stagecoach East, whose own reason says in terms that the St Ives 5A is
+   * STEPHENSONS and that a different Stagecoach 5A had taken over the bustimes URL.
+   * A last-resort pairing turned that into "red-team says route 5A does NOT serve
+   * the town, but we draw it" -- a HARD manufactured out of the red team telling us
+   * we were right. An exclusion of a same-numbered route run by someone else is not
+   * a statement about ours.
+   *
+   * Where either side names no operator there is nothing to reconcile on, so fall
+   * back to exact key equality, which is what this code did before it could pair
+   * at all.
+   */
+  function pairGroups(ours, theirs, lastResort) {
+    const taken = new Set(), out = new Map();
+    for (const o of ours) {
+      const a = opTokens(o.operator);
+      if (!a.length) continue;
+      const i = theirs.findIndex((t, j) => !taken.has(j) && opTokens(t.operator).length && overlaps(a, opTokens(t.operator)));
+      if (i >= 0) { taken.add(i); out.set(o, theirs[i]); }
+    }
+    // Nothing to reconcile on: one side named no operator. Exact key only.
+    for (const o of ours) {
+      if (out.has(o)) continue;
+      const i = theirs.findIndex((t, j) => !taken.has(j)
+        && (!opTokens(o.operator).length || !opTokens(t.operator).length)
+        && normRoute(t.route) === normRoute(o.route));
+      if (i >= 0) { taken.add(i); out.set(o, theirs[i]); }
+    }
+    if (lastResort) {
+      const freeOurs = ours.filter(o => !out.has(o));
+      const freeTheirs = theirs.filter((_, j) => !taken.has(j));
+      if (freeOurs.length === 1 && freeTheirs.length === 1) out.set(freeOurs[0], freeTheirs[0]);
+    }
+    return out;
+  }
+  const ourGroups    = group(verified.services || [], s => s.route);
+  const rtGroups     = group(rtServices, s => s.route);
+  const rtExclGroups = group(rtExcluded, s => s.route);
+  const pairedRt = new Map(), pairedExcl = new Map();
+  for (const [base, ours] of ourGroups) {
+    for (const [k, v] of pairGroups(ours, rtGroups.get(base) || [], true)) pairedRt.set(k, v);
+    for (const [k, v] of pairGroups(ours, rtExclGroups.get(base) || [], false)) pairedExcl.set(k, v);
+  }
+  const rtConsumed = new Set([...pairedRt.values()]);
 
   // Sub-service aliases: a red-team-found "301S/301V/301X" maps to our parent
   // "301" if we model it as a variant/arm subService. Don't flag those as
@@ -406,9 +638,9 @@ if (redteam) {
 
   // for each of OUR verified/displayed services, diff against the red-team
   for (const vs of (verified.services || [])) {
-    const r = normRoute(vs.route);
-    const rt = rtByRoute[r];
-    const excl = rtExclByRoute[r];
+    const r = ourKey(vs);
+    const rt = pairedRt.get(vs) || null;
+    const excl = pairedExcl.get(vs) || null;
     const isDisplayed = displayed.has(r);
 
     // (a) red-team says it does NOT serve the town, but we display/include it
@@ -480,9 +712,15 @@ if (redteam) {
         const res = vs.termini.map(t => ({ terminus: t, matched: overlaps([placeToken(t)], rtTokens) || rt.termini.some(x => overlaps(tokenize(t), tokenize(x))) }));
         const nM = res.filter(x => x.matched).length;
         if (nM === 0) {
-          add('hard', 'terminus',
-            `Route ${r}: our termini (${vs.termini.join(', ')}) match NEITHER red-team terminus (${rt.termini.join(', ')}).`,
-            { route: r, ours: vs.termini, redteam: rt.termini }, r, 'redteam');
+          // Same artefact as S-4 above, and NOT independent corroboration of it:
+          // both sides read the same `termini` field. Five of Ramsey's twelve came
+          // from here, and counting them as a second opinion is what made the
+          // draft's noise look like agreement between two checks.
+          add(UNCURATED ? 'soft' : 'hard', 'terminus',
+            UNCURATED
+              ? `Route ${r}: terminus not comparable - our termini (${vs.termini.join(', ')}) are GTFS stop names from an unreviewed S1 draft, so they cannot match the red team's settlements (${rt.termini.join(', ')}). This reads the same field S-4 does, so it is not a second opinion. Do the S1 pass.`
+              : `Route ${r}: our termini (${vs.termini.join(', ')}) match NEITHER red-team terminus (${rt.termini.join(', ')}).`,
+            { route: r, ours: vs.termini, redteam: rt.termini, uncuratedS1: !!UNCURATED }, r, 'redteam');
         } else if (nM < vs.termini.length) {
           add('soft', 'terminus',
             `Route ${r}: a terminus differs from the red-team — ours (${vs.termini.join(', ')}) vs red-team (${rt.termini.join(', ')}).`,
@@ -502,8 +740,8 @@ if (redteam) {
   // (e) red-team found a town service we don't have (handle aliases + explicit exclusions)
   for (const rt of rtServices) {
     if (rt.servesTown === false) continue;
-    const r = normRoute(rt.route);
-    if (vsByRoute[r]) continue;             // we already model it
+    if (rtConsumed.has(rt)) continue;       // already paired with one of ours above
+    const r = baseRoute(rt.route);
     if (aliasOf[r]) {                       // it's a sub-service of one of ours
       add('soft', 'sub-service',
         `Red-team lists ${r} separately; we model it as a variant of ${aliasOf[r]} — confirm the variant routeing/days are captured.`,
@@ -535,11 +773,17 @@ const out = {
     routesVersion: routes.version || null,
     displayedRoutes: [...displayed].sort(),
   },
+  // An uncurated S1 cannot produce a verdict, only a partial one. Say so in the
+  // file as well as on the console: `pass` would otherwise read true for a town
+  // whose terminus checks were all downgraded because they could not run, and a
+  // true in a JSON file outlives the console banner that qualified it.
+  uncuratedS1: UNCURATED || null,
   summary: {
     checks: findings.length,
     hard: hard().length,
     soft: soft().length,
-    pass: hard().length === 0,
+    pass: hard().length === 0 && !UNCURATED,
+    verdict: UNCURATED ? 'not-verified-uncurated-s1' : (hard().length === 0 ? 'pass' : 'blocked'),
   },
   findings,
 };
@@ -559,7 +803,15 @@ for (const sev of ['hard', 'soft']) {
   for (const f of fs2) console.log(`  [${f.id}] ${f.category}${f.route ? ' ' + f.route : ''}: ${f.message}`);
 }
 console.log('\n' + bar);
-console.log(`RESULT: ${out.summary.pass ? 'PASS ✓' : 'BLOCKED ✗'}  (${out.summary.hard} hard, ${out.summary.soft} soft)  → verification.json`);
+if (UNCURATED) {
+  console.log(`RESULT: NOT VERIFIED — uncurated S1  (${out.summary.hard} hard, ${out.summary.soft} soft)  → verification.json`);
+  console.log('        The terminus checks could not run, so this is a PARTIAL result and');
+  console.log('        NOT a pass. Do the S1 pass and re-run without VERIFY_ALLOW_UNCURATED.');
+} else {
+  console.log(`RESULT: ${out.summary.pass ? 'PASS ✓' : 'BLOCKED ✗'}  (${out.summary.hard} hard, ${out.summary.soft} soft)  → verification.json`);
+}
 console.log(bar);
 
-process.exit(out.summary.pass ? 0 : 1);
+// 3 = could not verify (uncurated S1), the same code the refusal above uses;
+// 1 = verified and BLOCKED; 0 = verified and clean.
+process.exit(UNCURATED ? 3 : (out.summary.pass ? 0 : 1));

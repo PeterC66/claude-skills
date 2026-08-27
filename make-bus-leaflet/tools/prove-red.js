@@ -37,6 +37,40 @@ const KEEP = process.argv.includes('--keep');
  * is a mutation that did not do what it says, which would report a false green
  * just as loudly as the bug it is hunting. */
 const MUTATIONS = [
+  // fit_set.js - extracted 2026-08-27 from gen_internal.js. Exactly ONE of the 20
+  // committed maps (Ramsey) reaches the off-path rule, and it is the map the rule
+  // was written for, so the byte diff certifies this block on a single data point.
+  // Every branch below except that one is dark to it.
+  { suite: 'fit_set.test.js', file: 'fit_set.js',
+    what: 'the three-survivor floor goes, so a broken road match quietly refits the map to whatever is left',
+    find: "    if (far.length && near.length >= 3) {",
+    to: "    if (far.length) {" },
+
+  { suite: 'fit_set.test.js', file: 'fit_set.js',
+    what: 'the off-path distance halves, and stops the map legitimately draws fall out of the fit',
+    find: "  const OFFPATH = ir.fitMaxOffPath != null ? ir.fitMaxOffPath : 1500;",
+    to: "  const OFFPATH = ir.fitMaxOffPath != null ? ir.fitMaxOffPath : 750;" },
+
+  { suite: 'fit_set.test.js', file: 'fit_set.js',
+    what: 'fitMaxOffPath:0 stops disabling the rule, so a town has no escape hatch',
+    find: "  if (OFFPATH > 0 && psegs.length) {",
+    to: "  if (psegs.length) {" },
+
+  { suite: 'fit_set.test.js', file: 'fit_set.js',
+    what: 'an explicit empty fitExtra falls through to extraCore, so a decision reads as an absence',
+    find: "  const xc = new Set(ir.fitExtra || ICFG.extraCore || []);",
+    to: "  const xc = new Set(ICFG.extraCore || ir.fitExtra || []);" },
+
+  { suite: 'fit_set.test.js', file: 'fit_set.js',
+    what: 'distance to a segment is measured to its ends, so a stop beside a long line reads as far away',
+    find: "  let t = (px*bx + py*by) / L2; t = Math.max(0, Math.min(1, t));",
+    to: "  let t = (px*bx + py*by) / L2; t = t < 0.5 ? 0 : 1;" },
+
+  { suite: 'fit_set.test.js', file: 'fit_set.js',
+    what: 'the classic model starts fitting the town core only, and every classic map reframes',
+    find: "    for (const r in routes) for (const a of routes[r]) if (atco2ll[a]) stopPts.push(atco2ll[a]);",
+    to: "    for (const r in routes) for (const a of routes[r]) if (atco2ll[a] && a.startsWith(prefix)) stopPts.push(atco2ll[a]);" },
+
   // poi_select.js - extracted 2026-08-27 from gen_internal.js. Unlike
   // strict_guards this block IS covered by the byte gate: measured, every
   // optional branch is exercised by at least one committed map. These six guard

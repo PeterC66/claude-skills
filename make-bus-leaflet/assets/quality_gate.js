@@ -11,6 +11,12 @@
  *   node quality_gate.js                # report, exit 1 on any regression
  *   node quality_gate.js --accept       # re-record the ledger from today
  *   node quality_gate.js --json
+ *   node quality_gate.js --accept --include-uncommitted
+ *
+ * --accept HOLDS BACK any sheet whose ci-reference is not committed, and says
+ * which. This tool writes a SHARED ledger and sessions here run concurrently;
+ * see the comment above partitionByCommitted() for the run that made that
+ * necessary. --include-uncommitted overrides it deliberately.
  *
  * WHY A LEDGER AND NOT A THRESHOLD. The plan says "gate HARD at 0". That is the
  * destination, not a gate that can be switched on today: the board carries 139
@@ -236,11 +242,60 @@ const DEFAULT_NOTE =
 // commit message, because --accept rebuilt this file from scratch and silently dropped both the
 // top-level note and any per-sheet note. Both are now carried forward, so --accept re-records the
 // NUMBERS without discarding the WHY.
+// ---- whose work is this? ---------------------------------------------------
+// THE SCOPE OF THIS TOOL IS "EVERY SHEET I CAN FIND", AND THAT IS THE BUG.
+// On 2026-08-23 a run of `--accept` folded a NEIGHBOURING SESSION's uncommitted
+// `ci-reference/` (St Neots Co-op) into the shared ledger. No `git add` of a
+// directory was involved and nothing looked wrong: the ledger is one file this
+// session had every reason to rewrite, and its diff read entirely as own work.
+// Staging by name protects the other session from me; it does nothing about a
+// tool that rebuilds a shared file from whatever it discovers on disk.
+//
+// So: a sheet whose ci-reference is not COMMITTED is, by definition, work that
+// is still in flight — either a neighbouring session's or this one's unfinished
+// own. Accepting it records a ceiling for a sheet that may never exist in that
+// form, and it steals the other session's chance to accept its own figures.
+//
+// One `git status` call for the whole tree, not one per sheet. Returns a Set of
+// repo-relative paths with forward slashes, or NULL when git could not answer —
+// which is deliberately different from "nothing is dirty", because a checker
+// that cannot distinguish "no answer" from "clean answer" reports the first as
+// the second.
+function dirtyPaths(busesDir) {
+  const { spawnSync } = require('child_process');
+  const res = spawnSync('git', ['-C', busesDir, 'status', '--porcelain', '--untracked-files=all'],
+    { encoding: 'utf8' });
+  if (res.error || res.status !== 0) return null;
+  const out = new Set();
+  for (const line of res.stdout.split('\n')) {
+    if (!line.trim()) continue;
+    let p = line.slice(3).trim();
+    if (p.includes(' -> ')) p = p.split(' -> ').pop();      // renames name both ends
+    if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
+    out.add(p);
+  }
+  return out;
+}
+
+function partitionByCommitted(busesDir, rows) {
+  const dirty = dirtyPaths(busesDir);
+  if (dirty === null) return { clean: rows, held: [], unknown: true };
+  const rel = f => path.relative(busesDir, f).split(path.sep).join('/');
+  const clean = [], held = [];
+  for (const r of rows) (dirty.has(rel(r.file)) ? held : clean).push(r);
+  return { clean, held, unknown: false };
+}
+
 function accept(busesDir, rows, ledgerPath) {
   let prev = {};
   if (fs.existsSync(ledgerPath)) { try { prev = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')); } catch {} }
   const prevSheets = prev.sheets || {};
   const sheets = {};
+  // Sheets not being re-recorded keep whatever the ledger already held for them,
+  // rather than dropping out of it. A held sheet must be left EXACTLY as it was,
+  // not deleted: deleting it would read as "new sheet" on the next run and be
+  // accepted silently, which is the same adoption by a slower route.
+  for (const [k, v] of Object.entries(prevSheets)) sheets[k] = v;
   for (const r of rows) {
     sheets[r.key] = r.now;
     const carried = prevSheets[r.key] && prevSheets[r.key].note;
@@ -256,7 +311,7 @@ function accept(busesDir, rows, ledgerPath) {
   fs.writeFileSync(ledgerPath, JSON.stringify(out, null, 2) + '\n');
 }
 
-module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal, LEDGER_NAME };
+module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal, partitionByCommitted, dirtyPaths, LEDGER_NAME };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -267,8 +322,30 @@ if (require.main === module) {
   const { ledgerPath, ledger, rows } = run(buses);
 
   if (argv.includes('--accept')) {
-    accept(buses, rows, ledgerPath);
-    console.log(`recorded ${rows.length} sheets into ${ledgerPath}`);
+    const force = argv.includes('--include-uncommitted');
+    const { clean, held, unknown } = partitionByCommitted(buses, rows);
+
+    if (unknown && !force) {
+      console.error('REFUSING to --accept: `git status` could not be read in ' + buses + '.');
+      console.error('Without it there is no way to tell your sheets from a concurrent session\'s');
+      console.error('uncommitted work, and this tool records into a SHARED ledger.');
+      console.error('Pass --include-uncommitted to accept everything anyway.');
+      process.exit(2);
+    }
+
+    const use = force ? rows : clean;
+    accept(buses, use, ledgerPath);
+    console.log(`recorded ${use.length} sheets into ${ledgerPath}`);
+
+    if (held.length && !force) {
+      console.log(`\nHELD BACK ${held.length} sheet(s) whose ci-reference is not committed:`);
+      for (const r of held) console.log('  ' + r.key);
+      console.log('\nTheir existing ledger rows are untouched. A sheet still in flight may be a');
+      console.log('concurrent session\'s work, and accepting it both records a ceiling that may');
+      console.log('never exist and takes away their chance to accept their own figures.');
+      console.log('Commit them and re-run, or pass --include-uncommitted if they are yours.');
+    }
+    if (force) console.log('\n--include-uncommitted: uncommitted sheets were accepted deliberately.');
     process.exit(0);
   }
   const progress = targetProgress(rows, ledger.targets, todayISO());

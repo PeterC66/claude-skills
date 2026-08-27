@@ -169,6 +169,7 @@ const _LABELLER = _dep('labeller.js');
 const { Labeller } = require(_LABELLER);
 const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
+const { selectPois } = require(_dep('poi_select.js'));
 // The internal map's own footer notes are fixed (not per-town), so the footer plate's
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep
@@ -794,57 +795,12 @@ const POI = RJ.poi || {};
 // ===========================================================================
 
 // ---------- classify POIs from raw OSM ----------
-function classify(t){
-  if(t.shop==='supermarket') return ['shop', t.name||'Supermarket'];
-  if(t.amenity==='pharmacy')  return ['pharmacy', t.name||''];
-  if(t.amenity==='doctors')   return ['gp', t.name||''];
-  if(t.amenity==='library')   return ['library','Library'];
-  if(t.tourism==='museum')    return ['museum','Museum'];
-  if(t.amenity==='townhall')  return ['townhall','Town Hall'];
-  if(t.amenity==='community_centre') return ['community', t.name||'Community Centre'];
-  if(t.leisure==='sports_centre'||t.leisure==='fitness_centre') return ['leisure', t.name||'Leisure'];
-  if(t.amenity==='school')    return ['school', t.name||'School'];
-  if(t.leisure==='park'||t.leisure==='recreation_ground') return ['park', t.name||'Park'];
-  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
-  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
-  return null;
-}
-let pois=[];
-for(const f of ['osm.json','osm2.json']){
-  for(const e of JSON.parse(fs.readFileSync(DIR+'/'+f,'utf8')).elements){
-    const t=e.tags||{}; const c=classify(t); if(!c) continue;
-    const ll=e.lat!=null?[e.lat,e.lon]:(e.center?[e.center.lat,e.center.lon]:null); if(!ll) continue;
-    pois.push({cat:c[0], name:c[1], ll});
-  }
-}
-// industrial: keep a named list (array), drop all ("none"), or keep any named (default)
-const IND = POI.industrialKeep;
-pois = pois.filter(p=>{
-  if(p.cat!=='industrial') return true;
-  if(IND==='none') return false;
-  if(Array.isArray(IND)) return IND.includes(p.name);
-  return !!(p.name && p.name!=='Industrial Estate');   // default: keep named estates
-});
-// drop POIs whose name matches any excludeName pattern (case-insensitive, any cat)
-const EXN = POI.excludeName||[];
-if(EXN.length){ const exRe=new RegExp(EXN.join('|'),'i'); pois=pois.filter(p=>!exRe.test(p.name)); }
-// drop unnamed greens (always)
-pois = pois.filter(p=> !(p.cat==='park' && (p.name==='Park'||!p.name)));
-// tidy names: generic strip, then per-town tidy[] (suffix replaces), then canon[] (whole-name)
-const TIDY  = (POI.tidy ||[]).map(([re,to])=>[new RegExp(re),    to]);
-const CANON = (POI.canon||[]).map(([re,to])=>[new RegExp(re,'i'),to]);
-for(const p of pois){
-  p.name = p.name.replace(/\s*\(.*?\)/g,'').replace(/\s*-\s*building$/i,'').trim();
-  for(const [re,to] of TIDY) p.name = p.name.replace(re,to);
-  for(const [re,to] of CANON) if(re.test(p.name)) p.name=to;
-}
-// de-duplicate by cat+name, and collapse near-duplicate points (<60 m)
-const dedup=[]; const near=(a,b)=>Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;
-outer: for(const p of pois){
-  for(const q of dedup){ if(q.cat===p.cat && (q.name===p.name || near(q.ll,p.ll))){ continue outer; } }
-  dedup.push(p);
-}
-pois = dedup;
+// The rules, the filters and the de-duplication live in poi_select.js. Reading
+// stays here: the module is given elements, in file order, because that order
+// decides which of two duplicates survives.
+const pois = selectPois(
+  ['osm.json','osm2.json'].map(f => JSON.parse(fs.readFileSync(DIR+'/'+f,'utf8')).elements),
+  POI);
 
 // ---------- projection: planar -> PCA rotate -> fit ----------
 // FIT SET: classic model fits ALL drawn stops; internalRoads fits only the

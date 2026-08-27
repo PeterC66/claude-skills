@@ -37,6 +37,41 @@ const KEEP = process.argv.includes('--keep');
  * is a mutation that did not do what it says, which would report a false green
  * just as loudly as the bug it is hunting. */
 const MUTATIONS = [
+  // poi_select.js - extracted 2026-08-27 from gen_internal.js. Unlike
+  // strict_guards this block IS covered by the byte gate: measured, every
+  // optional branch is exercised by at least one committed map. These six guard
+  // the properties that turn on ORDER and on thresholds, which the 20 maps
+  // certify only by accident of what happens to be committed today.
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the same place mapped as node and building stops collapsing, and prints twice',
+    find: "const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;",
+    to: "const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<6;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'excludeName narrows to industrial, so a town cannot drop a named shop again',
+    find: "pois=pois.filter(p=>!exRe.test(p.name)); }",
+    to: "pois=pois.filter(p=>p.cat!=='industrial'||!exRe.test(p.name)); }" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'an unnamed industrial estate is kept, and prints the words "Industrial Estate" at nothing',
+    find: "    return !!(p.name && p.name!=='Industrial Estate');   // default: keep named estates",
+    to: "    return !!p.name;   // default: keep named estates" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a green named literally "Park" survives, naming nothing',
+    find: "  pois = pois.filter(p=> !(p.cat==='park' && (p.name==='Park'||!p.name)));",
+    to: "  pois = pois.filter(p=> !(p.cat==='park' && !p.name));" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the per-town tidy rules stop being applied, so a town cannot shorten a name at all',
+    find: "    for(const [re,to] of TIDY) p.name = p.name.replace(re,to);",
+    to: "    for(const [re,to] of TIDY) p.name = p.name;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'allotments stop being opt-in and appear on every town that has any',
+    find: "  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
+    to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
+
   // strict_guards.js - extracted 2026-08-27 from two copies in gen_internal.js
   // and gen_boarding.js. The byte gate runs with the flag UNSET and no committed
   // map refuses anything, so none of this file is reachable from it; these four

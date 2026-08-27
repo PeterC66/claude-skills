@@ -322,6 +322,24 @@ Written down because the method, not the target shape, is what makes this safe. 
 
 **And the copying is no longer done by hand.** `npm run vendor:engine` copies every `vendored` row from its skill source, restamps, and then runs the audit — the July 2026 dedup proposal's Option B, five weeks after its Option A shipped as `check-vendored.mjs`. It cannot invent a row for a module nobody has listed, which is precisely why it and `requireScan()` are a pair: one moves the bytes, the other notices when the set of bytes should have grown.
 
+### ✅ DECIDED 2026-08-27 — a published map TRACKS the engine, and one command is what makes that true
+
+**Peter's decision on OA-130: track, not freeze.** A map's data pack carries its own copy of `gen_internal.js`, and the portal's `generateSvg()` runs THAT copy — `path.join(dataDir, generator)`, with no fallback to `engine/` — so until this was decided, an engine fix did not reach a published map at all until somebody re-imported it. Measured the same day, the stored packs were **1,383 lines behind** and required eleven modules they do not mention, which happen to resolve because `SKILL_ASSETS` points at the portal's `engine/`. Freezing would have guaranteed that a published map re-renders identically for its whole life; tracking means one fix reaches every map, and that is the choice.
+
+**So the hand-off gains a step, after the re-vendor and before you stop.** From the portal repository root, no placeholders:
+
+```bash
+npm run track:engine
+```
+
+It reports which stored packs are behind the vendored engine and **exits non-zero when any is**, so it is a check as much as a report — a re-vendor that forgets this step fails it. `node scripts/track-engine.mjs --apply` brings them forward. On the VPS it runs inside the container, where `DATA_DIR=/data`; on the laptop it reads the dev store under `data/`.
+
+**It never re-renders, and that is the whole safety of it.** The stored SVGs and JPGs are untouched, so nothing a member of the public can see changes on the day you run it. What changes is the NEXT render of each map — a preview, an accepted proposed update, a re-publish — which then uses the current engine instead of the one frozen at its import. Proven rather than assumed: after applying it locally, two maps were rendered straight through `generateSvg()` and both wrote a sheet, resolving all eleven modules out of `engine/`.
+
+**An area pack's `gen_external.js` is deliberately skipped and reported.** It was copied from either `gen_external_radial.js` or `gen_external_busway.js` and the pack does not record which, so the script will not guess. Re-import such a map to move it forward.
+
+**And the script reads `DATA_DIR` the way `src/db/index.js` computes it rather than importing that module for the constant** — importing it opens and MIGRATES the database as a side effect, which is a great deal of machinery, and a great many ways to fail, for a script that only reads files off disk. The first cut did import it and died on a migration in the dev database.
+
 ### The SVG vocabulary is now a portal-side allowlist — a NEW ELEMENT is a hand-off too
 
 Added 2026-08-25 (`technical-audit_2026-08-25` N18). The portal inlines a published sheet into a web page as live DOM, and since that date it filters it through an **allowlist** in `src/public/svgSanitise.js`: eight elements — `svg`, `g`, `path`, `rect`, `circle`, `line`, `text`, `clipPath` — plus `tspan`, `title` and `desc`, and 38 attribute names. That list is a census of what these generators emit, measured across all 1,277 sheets in the map tree.

@@ -6,7 +6,7 @@ Run them from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` (or wherever this
 npm test
 ```
 
-That is `node --test`, which finds every `test/*.test.js` file from the package root. **123 tests** as at 2026-08-27, about a second, no network, no data tree, no `Areas/` folder needed.
+That is `node --test`, which finds every `test/*.test.js` file from the package root. **227 tests** as at 2026-08-27, about a second, no network, no data tree, no `Areas/` folder needed.
 
 ## Why these exist
 
@@ -22,7 +22,9 @@ A green check that has never been seen to go red proves nothing.
 npm run test:prove-red
 ```
 
-`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — twenty-five deliberate one-line edits, one per property, each reverted before the next — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
+`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — seventy-eight deliberate one-line edits, one per property, each reverted before the next — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
+
+**A survivor is almost always a hole in the suite — but check that it CAN differ before you write a test for it.** On 2026-08-27 a mutation deleting `badgeStack`'s one-element fast path survived because there was nothing to break: with one member `y0` collapses to `y` and `(n-1)/2*pitch` to zero, so the general loop draws identical bytes at every radius. It is an optimisation, not a branch, and the file's own comments were claiming a fork it does not have. An **equivalent mutant** like that gets replaced with an observable one, with a note in `prove-red.js` saying why it is absent, so nobody re-adds it — and the source comment gets corrected too. Two other survivors in that same run were genuine holes, so the default assumption still holds.
 
 It has already earned its place. On its first run, dropping the file name out of the engine hash survived every assertion in `engine_version.test.js` — the tests checked that the hash moved when a file changed, and never that content could not migrate between two files unnoticed. That test exists now because the mutation run found it missing.
 

@@ -2,6 +2,8 @@
 
 How the internal map draws its 1–3 key linear features in the `make-bus-leaflet` workflow. Chosen in S2, configured in S3 `routes.json`, overridable via `overrides.json` (see `references/overrides.md`).
 
+**Where the code is, as of 2026-08-27:** `assets/linear_features.js` — style layering, geometry (`featSegs`), the stitch and merge passes, and `drawFeature`. The LABEL is still in `gen_internal.js` (`drawFeatureLabel`), deliberately, because siting a feature name reaches into the coreBox, the Services panel edge, the footer plate and the auto-label solver. Two things measured across all 18 maps with an internal sheet the day it moved: **no map uses the `segments`, `points` or `move` overrides at all**, and **no map draws the tie symbol** — all six railway maps take `rail:"chequer"`, which sets `ties:false` and `minSegLen:0`. Both are live features nothing currently selects, so the byte gate cannot certify them and `test/linear_features.test.js` is the only thing that does.
+
 A town's internal map draws **1–3 key linear features**. They are **config-driven** (no hardcoded river): `routes.json` `features[]` chooses them, S2's `features_geo.json` supplies the geometry, and each is independently straightenable/nudgeable.
 
 - **Choosing (once per town).** For a new town, identify candidates from OSM (river/canal, the main A-road(s), the railway), **list them and ask the user which 1–3 to include**, then lock the choice in `features[]`. Don't re-ask on refreshes — an existing town already carries its list. (No `features[]` at all ⇒ one auto river feature, the legacy fallback.)

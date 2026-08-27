@@ -37,6 +37,46 @@ const KEEP = process.argv.includes('--keep');
  * is a mutation that did not do what it says, which would report a false green
  * just as loudly as the bug it is hunting. */
 const MUTATIONS = [
+  // projection.js - extracted 2026-08-27 from gen_internal.js. Measured the same
+  // day, SIX of its branches are taken by no committed map at all: overrides
+  // rotationDeg, design.fixedOrientation, footerSafe:false, the three-zone
+  // fisheye, a frozen viewport, and the classic model itself. The byte gate
+  // certifies none of them.
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'design.fixedOrientation stops outranking internalRoads.rotationDeg, so the top-level key silently loses',
+    find: "  else if(FIXED_ORIENTATION!=null) theta = -FIXED_ORIENTATION*Math.PI/180; // design.fixedOrientation",
+    to: "  else if(false) theta = -FIXED_ORIENTATION*Math.PI/180; // design.fixedOrientation" },
+
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'the published rotation loses its sign, so feeding it back as fixedOrientation mirrors the sheet',
+    find: "  const APPLIED_ROTATION_DEG = -theta*180/Math.PI;",
+    to: "  const APPLIED_ROTATION_DEG = theta*180/Math.PI;" },
+
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'a frozen viewport is ignored, so hand-placed stops drift on the next data refresh',
+    find: "  if(OV.viewport){ ({minX,maxX,minY,maxY,sc,offX,offY}=OV.viewport); }",
+    to: "  if(false){ ({minX,maxX,minY,maxY,sc,offX,offY}=OV.viewport); }" },
+
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'footerSafe:false keeps the short frame, so the escape hatch stops being one',
+    find: "    : 205;",
+    to: "    : 192.16;" },
+
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'the three-zone fisheye collapses to a single band, and midKm/outerComp do nothing',
+    find: "  const R1  = (IR && IR.focus.midKm!=null)     ? IR.focus.midKm/111.32 : null;",
+    to: "  const R1  = null;" },
+
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'a detail lens forgets its configured radius and always uses the default',
+    find: "    R: (z.radiusKm!=null?z.radiusKm:0.5)/111.32,",
+    to: "    R: 0.5/111.32," },
+
+  { suite: 'projection.test.js', file: 'projection.js',
+    what: 'the footer gap is not rounded, so the frame bottom carries float noise',
+    find: "    ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0))*100)/100",
+    to: "    ? (FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0)) + 0.001" },
+
   // fit_set.js - extracted 2026-08-27 from gen_internal.js. Exactly ONE of the 20
   // committed maps (Ramsey) reaches the off-path rule, and it is the map the rule
   // was written for, so the byte diff certifies this block on a single data point.

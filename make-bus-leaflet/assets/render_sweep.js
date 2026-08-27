@@ -214,7 +214,15 @@ function sweepOne(map, flags) {
   const rows = [];
   try {
     for (const s of sheetsFor(map.dataDir, map)) {
-      if (!fs.existsSync(s.gen)) { rows.push({ sheet: s.key, verdict: 'NO-GEN', lines: [], detail: s.gen }); continue; }
+      // NO-GEN carries the same SHAPE as every other row, `refusals` and
+      // `refused` included. It did not, and the summary crashed reading
+      // `.refusals.length` off it — on the live host, mid-measurement, which is
+      // the worst place to discover that two rows built in one function do not
+      // agree about their own fields.
+      if (!fs.existsSync(s.gen)) {
+        rows.push({ sheet: s.key, verdict: 'NO-GEN', lines: [], refusals: [], refused: 0, detail: s.gen });
+        continue;
+      }
       const run = runGenerator(s.gen, map.dataDir, { extraEnv: { STRICT_GUARDS: '1', OVERRIDES_FILE: ovFile } });
       const lines = guardLines(run.stderr);
       const refused = refusalCount(run.stderr);

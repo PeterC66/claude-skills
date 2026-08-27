@@ -11,8 +11,14 @@
  * still be incapable of ever producing a NEW version. That map looks completely
  * healthy from every angle we had, right up until somebody tries to update it.
  *
- * Seven of the eighteen live maps were in exactly that state on 2026-08-27
- * (OA-137), and it was found by hand on the live host. This is that sweep, kept.
+ * Seven of the eighteen live maps were REPORTED to be in exactly that state on
+ * 2026-08-27 (OA-137). They were not: measured on the live host the same day,
+ * through the portal's own previewFrom(), all eighteen render. The refusal was
+ * in the MEASURING HARNESS, which invoked each generator without composing
+ * base-overrides.json into OVERRIDES_FILE — see the next paragraph, which is
+ * the reason this file composes it explicitly. The question above is still
+ * worth asking and nothing else in the estate asks it; the false alarm is a
+ * reason to run the sweep, not a reason to trust a report that skipped it.
  *
  * WHY IT COMPOSES THE OVERRIDES ITSELF, which is the whole point. A place's
  * "expert framing" — the river-hide, the frozen viewport — does not live in
@@ -27,10 +33,13 @@
  *
  * A harness that renders a pack in place, and lets gen_internal.js pick up
  * whatever overrides.json happens to sit beside it, models the FIRST of those
- * and cannot see a fault in the second. So this composes the framing explicitly,
+ * and reports a fault that does not exist in the second — which is exactly what
+ * OA-137 did, and it cost a day. So this composes the framing explicitly,
  * the way src/maps/engine.js's renderVersion(id, {}) does, and says which file
  * it took it from. --drop-framing renders with the framing deliberately absent,
- * which is what a delivery that loses the side file actually looks like.
+ * which is what a delivery that loses the side file WOULD look like. Note the
+ * conditional: no delivery has been observed losing it. --drop-framing measures
+ * a dependency, not an incident, and must not be quoted as one.
  *
  * Usage — every argument below is a real path on this machine, no placeholders:
  *

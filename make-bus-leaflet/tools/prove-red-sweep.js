@@ -5,8 +5,10 @@
  *
  * WHY. render_sweep.js was written on 2026-08-27 to answer a question no other
  * check in the estate asks: can a delivered map still be RE-RENDERED? Seven of
- * the eighteen live maps could not (OA-137), and every board we had was green
- * about them. A sweep that reports "20 maps swept, 0 cannot be re-rendered" is
+ * the eighteen live maps were REPORTED unable to (OA-137). They were not: the
+ * report came from a harness that skipped the overrides composition the portal
+ * performs, and all eighteen render through the portal's own previewFrom(). The
+ * question is still real and no board was asking it. A sweep that reports "20 maps swept, 0 cannot be re-rendered" is
  * worth precisely nothing until it has been watched say the opposite, which is
  * this repository's oldest and most expensively-relearned rule.
  *
@@ -20,17 +22,20 @@
  *   2  control, --drop-framing      0 refusals   THE FIX: a pack that loses its
  *                                                side file still renders
  *   3  mutant,  framing present     0 refusals   the old default is invisible
- *                                                while the side file survives —
- *                                                this is why it went unnoticed
- *                                                for a year, and a harness that
- *                                                only ran this mode would have
- *                                                certified the bug
- *   4  mutant,  --drop-framing      7 refusals   the reproduction of OA-137,
- *                                                one cause, named maps
+ *                                                while the side file survives.
+ *                                                This is PRODUCTION's case: the
+ *                                                framing was always there, which
+ *                                                is why nothing was ever broken
+ *   4  mutant,  --drop-framing      7 refusals   what OA-137 actually measured —
+ *                                                the composition left out
  *
- * Run 3 is the one worth staring at. It is a mutation the check does NOT catch,
- * asserted deliberately as a no-op, because the whole finding is that the fault
- * is invisible from inside the pack that carries the workaround.
+ * Run 3 is the one worth staring at, and its meaning changed once the live host
+ * was measured. It is a mutation the check does NOT catch, asserted deliberately
+ * as a no-op — and it is the state production was actually in. Every live pack
+ * carries its framing and every portal render path composes it, so the old
+ * default was inert there. Run 4 is therefore not "the bug"; it is the
+ * dependency the fix removes, and the exact configuration under which OA-137's
+ * harness produced its seven. Do not quote run 4 as an incident.
  *
  * HOW THE MUTANT IS BUILT. Nothing under assets/ is touched — every file there
  * is vendored into the portal and hashed by status.js, so an edit in place would
@@ -181,7 +186,7 @@ try {
     else {
       const r = refusing(m1.parsed);
       check('3 mutant, framing present  [expected NO-OP]', m1.status === 0 && r.names.length === 0,
-        r.names.length ? `${r.names.length} refusing — the side file was meant to mask this` : 'masked by the packs\u2019 own overrides.json, as it was for a year');
+        r.names.length ? `${r.names.length} refusing — the side file was meant to mask this` : 'masked by the packs\u2019 own overrides.json, as it always was in production');
     }
 
     const m2 = runSweep(scratch, true);
@@ -190,7 +195,7 @@ try {
       const r = refusing(m2.parsed);
       const sameMaps = JSON.stringify(r.names) === JSON.stringify(EXPECT_SEVEN);
       const ok = m2.status === 1 && sameMaps && r.total === 7 && r.everyOneOnTheRiver;
-      check('4 mutant, --drop-framing  [OA-137 reproduced]', ok,
+      check('4 mutant, --drop-framing  [what OA-137 measured]', ok,
         ok ? 'the named seven, 7 refusals in total \u2014 one each, all on the orphan river'
           : `got ${r.names.length} maps (${r.names.join(', ')}), ${r.total} refusals,`
             + ` river-on-every-map=${r.everyOneOnTheRiver}`);

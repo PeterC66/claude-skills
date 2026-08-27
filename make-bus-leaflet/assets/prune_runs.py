@@ -14,7 +14,11 @@ What it prunes, and why the rules differ by stage:
   S4-generate    keep the newest --keep-outputs VERSIONS, and within a kept
   S5-render      version only its newest run (re-runs of the same version are
                  superseded). NOT tracked in git - see the warning below.
-  S6-verify      keep the newest run.
+  S6-verify      never pruned, since 2026-08-27. Its redteam.json is now TRACKED
+                 (each one is 89k-137k tokens of blind research that cannot be
+                 rebuilt), so deleting the folder would delete files git holds,
+                 and the rule that kept only the newest run was entitled to
+                 destroy the older half of seventeen of them.
   _latest        never touched. It is only copies, refreshed by every build.
 
 Pins in retention-pins.json are never pruned whatever the rules say. Add a pin
@@ -31,11 +35,15 @@ import argparse, json, os, re, shutil, sys, datetime
 
 INPUT_STAGES  = ("S1-services", "S2-geometry")
 OUTPUT_STAGES = ("S4-generate", "S5-render")
-NEVER_PRUNE   = ("S3-config",)
-SINGLE_KEEP   = ("S6-verify",)
+# S3 is the judgement; S6 holds the tracked redteam.json. Neither is ever pruned.
+NEVER_PRUNE   = ("S3-config", "S6-verify")
 UNTOUCHED     = ("_latest",)
 
-TRACKED = set(INPUT_STAGES) | set(NEVER_PRUNE)     # in git -> pruning recoverable
+# In git, so pruning would be recoverable. S6 is in NEVER_PRUNE and so never
+# reaches the accounting this set feeds, but it belongs here on the facts: since
+# 2026-08-27 its redteam.json, verification.docx, README.md and manifest.json are
+# all tracked. Its verification.json is not, and is rebuilt by verify_report.js.
+TRACKED = set(INPUT_STAGES) | set(NEVER_PRUNE)
 RUN_RE  = re.compile(r"^(?:(v\d+\.\d+)_)?(\d{4}-\d{2}-\d{2}_\d{4})$")
 
 
@@ -80,15 +88,13 @@ def load_pins(root):
 def plan_stage(stage, runs, keep_inputs, keep_outputs):
     """runs: list of (name, version, stamp). Returns {name: (verdict, reason)}."""
     if stage in NEVER_PRUNE:
-        return {r[0]: ("keep", "S3 config is never pruned") for r in runs}
+        why = ("S3 config is never pruned" if stage == "S3-config"
+               else "S6 holds the tracked redteam.json and is never pruned")
+        return {r[0]: ("keep", why) for r in runs}
     if stage in UNTOUCHED:
         return {r[0]: ("keep", "not a run folder") for r in runs}
 
     ordered = sorted(runs, key=lambda r: (version_key(r[1]), r[2]), reverse=True)
-
-    if stage in SINGLE_KEEP:
-        return {r[0]: (("keep", "newest") if i == 0 else ("prune", "superseded"))
-                for i, r in enumerate(ordered)}
 
     if stage in INPUT_STAGES:
         return {r[0]: (("keep", f"newest {keep_inputs}") if i < keep_inputs
@@ -163,7 +169,7 @@ def main():
 
     print(f"Buses folder : {root}")
     print(f"Rules        : keep newest {a.keep_outputs} versions of S4/S5, "
-          f"newest {a.keep_inputs} of S1/S2, all of S3, newest of S6")
+          f"newest {a.keep_inputs} of S1/S2, all of S3, all of S6")
     print(f"Pins honoured: {pinned_hits}\n")
 
     if not prune:

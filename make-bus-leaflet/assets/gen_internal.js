@@ -551,6 +551,40 @@ if(RJ.features && RJ.features.length){
       +'") has NO geometry in features_geo.json — its label will print with no line under it. '
       +'Re-run S2 for that feature, or drop it from routes.json features[].');
   }
+} else if(!(river||[]).length){
+  // NO features[] AND NO RIVER GEOMETRY: there is nothing here to name, so name
+  // nothing. The fallback below invents a feature whose label is a St Ives
+  // inheritance — `RJ.riverLabel || 'River Great Ouse'` — and hands it `geo:
+  // river`, which in this branch is empty. That is a label with no line under
+  // it, which is precisely what feature_labels.js refuses to draw, so under
+  // STRICT_GUARDS the generator exits non-zero and the map CANNOT BE RENDERED.
+  //
+  // It cost seven of the eighteen live maps (OA-137, measured on the live host
+  // 2026-08-27 and reproduced here the same day with assets/render_sweep.js).
+  // They could all still reproduce their committed bytes — the byte gate runs
+  // with STRICT_GUARDS unset — so no board went red; what they could not do was
+  // ever produce a NEW version, which for a published pilot map is the one thing
+  // nobody tries until a customer asks.
+  //
+  // It was survivable because build_internal_place.js writes an overrides.json
+  // saying {"internal":{"features":{"river":{"hide":true}}}} — a side file whose
+  // whole content is undoing this default. All seven of those files contained
+  // that and nothing else. A suppression is a worse answer than not inventing
+  // the thing: the override has to survive delivery, import (where it is renamed
+  // base-overrides.json), engine tracking and the customer merge, and it
+  // demonstrably does not survive all four.
+  //
+  // The error message is worth naming too. The refusal quotes "River Great Ouse"
+  // whatever the town, because the label is a DEFAULT and not a fact about the
+  // place — so the finding read as "seven place maps on the Great Ouse" when two
+  // of the seven (Beaconsfield Simpson Centre, St Ives Bus Station) are nowhere
+  // near it. A default that reaches an error message gets read as evidence.
+  //
+  // BYTE-NEUTRAL on all 20 committed maps, and that is a fact about the reserve
+  // pass rather than luck: a feature hidden by overrides is skipped both where
+  // labelReserve claims its box and where the label is drawn, so a hidden
+  // feature and an absent one already produced identical ink.
+  FEATURES = [];
 } else {
   // The legacy fallback's label has always sat at y=200 — which was fine against
   // the old flat frame bottom of 205, and is 4.8 mm INSIDE the footer plate once

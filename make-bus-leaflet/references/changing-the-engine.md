@@ -60,6 +60,30 @@ npm run test:prove-red
 
 **What they cannot reach, and why that matters here.** The five big generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be required. Extracting a helper out of one is not a tidy-up: four of those files are hashed by `engine_version.js` and eleven files in `assets/` are vendored into the portal and compared file-by-file, so it means §4's re-vendor in the same change. `test/README.md` lists the known faults that sit inside that boundary.
 
+## 1b. The re-render sweep — can a DELIVERED map still be published?
+
+```bash
+node assets/render_sweep.js --buses "C:/u3a St Ives/Using AI/Buses" --expect 20
+```
+
+```bash
+node assets/render_sweep.js --buses "C:/u3a St Ives/Using AI/Buses" --expect 20 --drop-framing
+```
+
+Run both from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own folder, not the data repo. The path above is real on this machine and is not a placeholder; `--expect <n>` is the number of maps the tree should contain (20 today) and fails when the enumeration finds a different number, because a sweep that quietly covers 13 of 20 reports the same green as one that covers all 20. Add `--store "<portal data/maps dir>"` instead of `--buses` to sweep a portal store rather than the data tree — on the VPS that is `/opt/community-bus-maps/data/maps`, inside the container.
+
+**This asks a question none of the gates above ask.** The byte gate runs the generators with `STRICT_GUARDS` **unset** — deliberately, so it cannot redden on a fixture that legitimately carries a warning. The portal sets `STRICT_GUARDS=1` on *every* render that goes public. So a map can reproduce its committed bytes perfectly and still be incapable of producing a NEW version, and every board we had would call it healthy. **Seven of the eighteen live maps were in exactly that state** and had been for about a year (OA-137); they were found by hand on the live host, not by any check.
+
+**`--drop-framing` is the mode that matters, and it is not a stress test.** A place's expert framing — historically a river-hide, sometimes a frozen viewport — lives in a side file, and that file changes its name and its loading mechanism on the way to the portal: `overrides.json` read from `LEAFLET_DIR` here, `base-overrides.json` merged into a temp `OVERRIDES_FILE` there. `--drop-framing` renders as a delivery that has lost it, which is what the seven maps actually were. A sweep that renders a pack in place, letting the generator pick up whatever `overrides.json` happens to sit beside it, models only the local case and certifies the bug.
+
+**Two things it reports carefully, both because a previous reading of the same output was wrong.** The refusal count comes from `strict_guards.js`'s own banner, not from counting guard-shaped stderr lines — `refuse()`, `warn()` and a bare `stderr.write()` are indistinguishable by text, and reading them as one turned five build notes into "five further refusals" on a map that had refused once. And a sheet whose generator has no `STRICT_GUARDS` contract reports `n/a` rather than `OK`: only `gen_internal.js` and `gen_boarding.js` participate, so **no external, schematic or diagram sheet can ever refuse** (OA-045).
+
+```bash
+npm run test:prove-red-sweep
+```
+
+Falsifies it in four runs: control green with framing and without, the old default restored and **invisible** while the side file survives (asserted as a deliberate no-op — that is why nobody saw this for a year), and the old default restored with `--drop-framing`, which must reproduce the named seven and exactly seven refusals.
+
 ## 2. The byte-identical gate (the town side)
 
 **Harness:** `%SK%\gate.sh <genfile> <S4-datadir> internal|external <committed_svg>` It copies the data `*.json` + `icons.js` + the candidate generator into a temp dir, runs it, and diffs the SVG against the committed one. Exit 0 = PASS.

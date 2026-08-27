@@ -31,26 +31,27 @@ for (const [f, empty] of [['osm.json', '{"elements":[]}'], ['osm2.json', '{"elem
   if (!fs.existsSync(p)) fs.writeFileSync(p, empty);
 }
 
-// Orphan-river suppression. With NO `features` config, gen_internal falls back to a
-// default "River Great Ouse" feature (a St Ives inheritance) drawn from river_geo.json.
-// Most places have no river in their walkshed (river_geo.json = []), so only the
-// hardcoded LABEL renders — an orphan with no line. Hide it via overrides.json, unless
-// the place actually declared river/other features or has real river geometry. Merges
-// into any existing overrides (a hand-authored viewport/layout survives).
-(function suppressOrphanRiver() {
-  if (RJ.features && RJ.features.length) return;                 // place declared real features
-  let river = []; try { river = JSON.parse(fs.readFileSync(path.join(DIR, 'river_geo.json'), 'utf8')); } catch (e) {}
-  if (Array.isArray(river) && river.length) return;             // there IS a river to draw
-  const ovPath = path.join(DIR, 'overrides.json');
-  let ov = {}; try { ov = JSON.parse(fs.readFileSync(ovPath, 'utf8')); } catch (e) {}
-  ov.internal = ov.internal || {};
-  ov.internal.features = ov.internal.features || {};
-  if (!ov.internal.features.river) {
-    ov.internal.features.river = { hide: true };
-    fs.writeFileSync(ovPath, JSON.stringify(ov, null, 2));
-    console.log('no river in walkshed -> hid the default "River Great Ouse" label (overrides.json).');
-  }
-})();
+// ORPHAN-RIVER SUPPRESSION — REMOVED 2026-08-27, because the thing it suppressed
+// is no longer invented. It used to write {"internal":{"features":{"river":
+// {"hide":true}}}} into the pack's overrides.json whenever a place had no
+// `features` config and no river in its walkshed, to cancel gen_internal.js's
+// hardcoded fallback "River Great Ouse" label. gen_internal.js now emits no
+// feature at all when there is neither a features[] nor any river geometry, so
+// there is nothing left to hide.
+//
+// IT IS WORTH SAYING WHY THE SUPPRESSION WAS THE WRONG SHAPE, not merely why it
+// is now redundant. It undid the default in a SIDE FILE, and that file has to
+// survive four hops to reach the render that matters: delivery out of here,
+// import into the portal (which renames it base-overrides.json), engine
+// tracking, and the merge under the customer's own overrides layer. It did not
+// survive all four. Seven of the eighteen live maps were consequently unable to
+// render at all under STRICT_GUARDS — the guard correctly refusing to print a
+// name for a line that is not drawn — which meant no accepted update and no
+// re-publish on any of them (OA-137). Every one of those seven packs carried an
+// overrides.json whose entire content was this one suppression.
+//
+// A default that has to be cancelled everywhere is a default in the wrong place.
+// assets/render_sweep.js --drop-framing is the check that fails if it returns.
 
 const gen = [path.join(DIR, 'gen_internal.js'), path.join(TSK, 'gen_internal.js')]
   .find(f => fs.existsSync(f));

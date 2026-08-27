@@ -177,6 +177,7 @@ const { linearFeatures } = require(_dep('linear_features.js'));
 const { labelPlacer } = require(_dep('label_placer.js'));
 const { drawServicesPanel } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
+const { northArrow } = require(_dep('north_arrow.js'));
 // The internal map's own footer notes are fixed (not per-town), so the footer plate's
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep
@@ -1513,23 +1514,13 @@ out(`</g>`);
 // ---- reserve protected areas so labels avoid them ----
 reserve(197,0,297,210);                 // right service panel
 reserve(0,0,86,26);                     // title block
-// ---- the north arrow's home -------------------------------------------------
-// It is drawn at the very END of the file, so nothing used to know it was there:
-// on High Wycombe it printed straight through route 130's terminus badge and
-// across the railway (Peter, G2, 2026-08-15). It does not need a chosen spot,
-// only a blank one (Peter, same day), so under v2 the engine finds one — see the
-// search in the labels block below, which runs once the ink is known. `NORTH` is
-// the resolved base point; `northBox()` is the footprint of the whole device.
-const NORTH_ON = !!(IR && IR.northArrow!==false);
-const NA = (IR && IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};
-const NORTH_LEN = NA.len||8;
-const NORTH_ANG = NA.angle!=null ? NA.angle*Math.PI/180
-                : Math.atan2(-Math.cos(-theta), Math.sin(-theta));
-function northBox(bx,by){                 // base, tip, arrowhead and the "N"
-  const tx = bx+Math.cos(NORTH_ANG)*NORTH_LEN, ty = by+Math.sin(NORTH_ANG)*NORTH_LEN;
-  return [Math.min(bx,tx)-3.4, Math.min(by,ty)-4.6, Math.max(bx,tx)+3.4, Math.max(by,ty)+4.6];
-}
-const NORTH = { x: NA.x!=null?NA.x:14, y: NA.y!=null?NA.y:150, auto:false };
+// ---- the north arrow --------------------------------------------------------
+// DEFAULT ON for internalRoads; internalRoads.northArrow:false suppresses it, and
+// {x,y,len,angle} positions it by hand. The whole device — its angle, its
+// footprint, the blank-space search that sites it and the drawing itself — is in
+// north_arrow.js, which explains why those three happen at three different
+// moments in this file. `NORTH.at` is the resolved base point and it MOVES.
+const NORTH = northArrow({ IR, theta });
 
 /* ---- design.scaleBar: a scale bar, or an honest refusal to draw one ---------
  *
@@ -2526,19 +2517,7 @@ if(LAB){
     }
     return best ? { x:best.bx, y:best.by, auto:true, want } : { x:null, y:null, auto:false, want };
   };
-  if(NORTH_ON){
-    const got = spotSearch(northBox, NORTH.x, NORTH.y, 0.02);
-    if(got.auto){
-      process.stderr.write('northArrow: '+(got.want===null?'the configured spot is blocked':
-        'the configured spot is '+(got.want*100).toFixed(0)+'% covered by ink')
-        +' — placed automatically at '+got.x+','+got.y+' (nearest clear corner).\n');
-      NORTH.x=got.x; NORTH.y=got.y; NORTH.auto=true;
-    } else if(got.x===null){
-      process.stderr.write('northArrow: no clear spot found on this sheet; left at the configured '
-        +NORTH.x+','+NORTH.y+'. Set internalRoads.northArrow:false, or make room.\n');
-    }
-    reserve(...northBox(NORTH.x, NORTH.y));
-  }
+  if(NORTH.on) NORTH.site(spotSearch, reserve, m=>process.stderr.write(m));
   if(SCALE_BAR_ON) drawScaleDevice(spotSearch);
   if(process.env.DBG_LABELS) for(const r of LAB.solve()){
     console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
@@ -2590,29 +2569,10 @@ drawServicesPanel({
   FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET,
 });
 
-// ---- north arrow (DEFAULT ON for internalRoads; disable with northArrow:false)
-// The internal map is rotated (rotationDeg / PCA) to fill the page, so "up" is
-// not north — a small arrow shows which way north actually is. Drawn on EVERY
-// internalRoads map by default (Peter's ask 2026-07-20, "north arrow on every
-// map"); set internalRoads.northArrow:false to suppress, or pass {x,y,len,angle}
-// to position it. Still gated by IR so non-internalRoads gate towns are
-// unaffected. Direction: the SCREEN bearing of increasing latitude under the
-// active rotation (theta); the schematic passes a precomputed `angle` (deg)
-// because its coords are pre-rotated and run at rotationDeg 0, so it can't
-// re-derive north from theta.
-if (NORTH_ON) {
-  // Position resolved above: the configured {x,y} when it is clear, otherwise the
-  // nearest blank corner (v2 only — a v1 sheet never runs that search, so its
-  // arrow stays exactly where its config puts it and the output is byte-identical).
-  // north planar step (0,-1) through the same rot() the projection uses:
-  // rot(0,-1) = [sin(-theta), -cos(-theta)] in screen space (y down).
-  const bx = NORTH.x, by = NORTH.y, L = NORTH_LEN, ang = NORTH_ANG;
-  const c=Math.cos(ang), s=Math.sin(ang), tx=bx+c*L, ty=by+s*L;
-  const px=-s, py=c, ah=2.4, aw=1.4;                     // arrowhead
-  out(`<line x1="${bx.toFixed(2)}" y1="${by.toFixed(2)}" x2="${tx.toFixed(2)}" y2="${ty.toFixed(2)}" stroke="#666" stroke-width="0.8"/>`);
-  out(`<path d="M${tx.toFixed(2)} ${ty.toFixed(2)}L${(tx-c*ah+px*aw).toFixed(2)} ${(ty-s*ah+py*aw).toFixed(2)}L${(tx-c*ah-px*aw).toFixed(2)} ${(ty-s*ah-py*aw).toFixed(2)}Z" fill="#666"/>`);
-  out(`<text x="${(tx+c*3).toFixed(2)}" y="${(ty+s*3+1).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="3.4" fill="#666" text-anchor="middle">N</text>`);
-}
+// ---- north arrow: the line, the arrowhead and the N (north_arrow.js) --------
+// Last, so it sits on top of everything; sited earlier, in the labels block, so
+// it lands on blank paper rather than through a terminus badge.
+if (NORTH.on) NORTH.draw(out);
 
 // footer band: attribution note + version + BusMaps.uk (shared across all four map types — footer.js)
 const _ver = process.env.LEAFLET_VERSION || RJ.version;

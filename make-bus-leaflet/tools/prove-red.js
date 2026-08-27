@@ -679,6 +679,76 @@ const MUTATIONS = [
     find: "        if (!seen.has(dep) && fs.existsSync(path.join(sk, dep))) queue.push(dep);",
     to: "        if (!seen.has(dep)) queue.push(dep);" },
 
+
+  // north_arrow.js - extracted 2026-08-27 from gen_internal.js, and the
+  // best-covered module of the phase: MEASURED across the 18 maps with an
+  // internal sheet, 12 of its 17 labelled branches are live and 13 maps have
+  // their arrow moved off the configured spot by the blank-space search. Note
+  // the one that only LOOKS dark: northArrow.angle is taken by no internal
+  // sheet and by TWELVE derived ones, because schematize_internal.js and
+  // diagram_internal.js inject it - the probe renders internal.svg only.
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "the arrow needs asking for, so every town that lets the engine own it loses its compass",
+    find: "  const on = !!(IR && IR.northArrow!==false);",
+    to: "  const on = !!(IR && IR.northArrow);" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "the northArrow config object is never read, so x, y, len and angle are all ignored",
+    find: "  const NA = (IR && IR.northArrow && IR.northArrow!==true) ? IR.northArrow : {};",
+    to: "  const NA = {};" },
+
+  // NOT HERE, and deliberately: dropping the `!==true` guard so that NA becomes
+  // the boolean `true` is an EQUIVALENT MUTANT. Every read of NA is a property
+  // access - NA.len, NA.angle, NA.x, NA.y - and `true.len` is undefined exactly
+  // as `{}.len` is, so the guard cannot change an output. It is kept for what it
+  // says, not for what it does; the mutation above breaks the same line in the
+  // way that IS observable. (Same shape as badgeStack's one-element fast path.)
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "a given angle is used as radians, so every schematic and diagram points 57x the wrong way",
+    find: "  const ANG = NA.angle!=null ? NA.angle*Math.PI/180",
+    to: "  const ANG = NA.angle!=null ? NA.angle" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "north is derived with the rotation instead of against it, mirroring the compass on every rotated town",
+    find: "            : Math.atan2(-Math.cos(-theta), Math.sin(-theta));",
+    to: "            : Math.atan2(-Math.cos(theta), Math.sin(theta));" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "the footprint shrinks to the shaft, so the N and the arrowhead are drawn over whatever is there",
+    find: "    return [Math.min(bx,tx)-3.4, Math.min(by,ty)-4.6, Math.max(bx,tx)+3.4, Math.max(by,ty)+4.6];",
+    to: "    return [Math.min(bx,tx), Math.min(by,ty), Math.max(bx,tx), Math.max(by,ty)];" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "the reservation is taken at the OLD spot, so an auto-placed arrow is left unprotected",
+    find: "    reserve(...box(at.x, at.y));",
+    to: "    reserve(...box(14, 150));" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "an auto placement moves the arrow but never records it, so the drawing goes back to the config",
+    find: "      at.x=got.x; at.y=got.y; at.auto=true;",
+    to: "      at.auto=true;" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "a sheet with no clear spot moves the arrow to nowhere instead of leaving it be",
+    find: "      warn('northArrow: no clear spot found on this sheet; left at the configured '",
+    to: "      at.x=got.x; at.y=got.y;\n      warn('northArrow: no clear spot found on this sheet; left at the configured '" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "the search is given the base point rather than the whole device, so the N may sit on ink",
+    find: "    const got = spotSearch(box, at.x, at.y, 0.02);",
+    to: "    const got = spotSearch((x,y)=>[x,y,x,y], at.x, at.y, 0.02);" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "the letter N is drawn at the tip rather than beyond it, so it sits inside the arrowhead",
+    find: "    out(`<text x=\"${(tx+c*3).toFixed(2)}\" y=\"${(ty+s*3+1).toFixed(2)}\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"3.4\" fill=\"#666\" text-anchor=\"middle\">N</text>`);",
+    to: "    out(`<text x=\"${tx.toFixed(2)}\" y=\"${ty.toFixed(2)}\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"3.4\" fill=\"#666\" text-anchor=\"middle\">N</text>`);" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: "coordinates go out unrounded, so a re-render moves bytes nobody changed",
+    find: "    out(`<line x1=\"${bx.toFixed(2)}\" y1=\"${by.toFixed(2)}\" x2=\"${tx.toFixed(2)}\" y2=\"${ty.toFixed(2)}\" stroke=\"#666\" stroke-width=\"0.8\"/>`);",
+    to: "    out(`<line x1=\"${bx}\" y1=\"${by}\" x2=\"${tx}\" y2=\"${ty}\" stroke=\"#666\" stroke-width=\"0.8\"/>`);" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

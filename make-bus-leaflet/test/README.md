@@ -22,7 +22,7 @@ A green check that has never been seen to go red proves nothing.
 npm run test:prove-red
 ```
 
-`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — fifteen deliberate one-line edits, one per property, each reverted before the next — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
+`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — twenty-five deliberate one-line edits, one per property, each reverted before the next — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
 
 It has already earned its place. On its first run, dropping the file name out of the engine hash survived every assertion in `engine_version.test.js` — the tests checked that the hash moved when a file changed, and never that content could not migrate between two files unnoticed. That test exists now because the mutation run found it missing.
 

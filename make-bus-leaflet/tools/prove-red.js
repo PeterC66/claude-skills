@@ -143,6 +143,25 @@ const MUTATIONS = [
   { suite: 'icons.test.js', file: 'icons.js',
     what: 'a pale backing plate is recoloured charcoal',
     find: "if (lum > 0.75) return `${k}=\"#ffffff\"`;", to: 'if (false) return k;' },
+
+  // quality_metrics.js - the first of these three IS the bug of 2026-08-27,
+  // restored exactly. It shipped for eleven days, hid 14 sheets' worth of
+  // honest zeroes behind the word UNKNOWN, and no test in this folder objected
+  // because no test in this folder read a sidecar.
+  { suite: 'quality_metrics.test.js', file: 'quality_metrics.js',
+    what: 'an absent sidecar reads as UNKNOWN again on every sheet but the internal one',
+    find: '    } else unplaced = [];      // every writer unlinks its sidecar when nothing dropped',
+    to: "    } else if (base === 'internal') unplaced = [];" },
+
+  { suite: 'quality_metrics.test.js', file: 'quality_metrics.js',
+    what: 'the schematic goes back to having no sidecar of its own',
+    find: "    'internal-schematic': 'unplaced-schematic.json',",
+    to: '' },
+
+  { suite: 'quality_metrics.test.js', file: 'quality_metrics.js',
+    what: 'a corrupt sidecar is filed under the same word as a sheet type nobody reports',
+    find: "    if (unplaced === null) dropState = 'unreadable';   // the file was there and would not parse",
+    to: "    if (unplaced === null) dropState = 'no-reporter';" },
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

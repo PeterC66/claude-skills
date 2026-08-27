@@ -730,19 +730,54 @@ function analyse(svgPath) {
   // defect will certify it. Phase 8 wires this tool into the gate; wiring it in
   // without this count would gate the board on a number you can game.
   //
-  // gen_internal.js writes unplaced.json into its run dir, so the file beside a
-  // sheet belongs to internal.svg; the radial writes unplaced-external.json.
-  // The diagram and schematic run gen_internal inside their own workspace, so
-  // their drops stay there and are honestly reported as null rather than as 0.
+  // EVERY generator that can drop a label writes what it dropped BESIDE THE SHEET,
+  // and deletes the file when it dropped nothing. One table, one rule, no
+  // per-sheet-type special cases — because the special cases were the bug.
+  //
+  // Until 2026-08-27 this table had two entries and one of them read the shared
+  // idiom wrong. gen_internal.js, gen_external_radial.js and gen_external_places.js
+  // ALL end with `if (un.length) writeFileSync(...) else unlinkSync(...)`, so an
+  // absent file means ZERO — but the branch below turned an absent file into 0 for
+  // `internal` and into null (UNKNOWN) for `external`. Fourteen external sheets
+  // had counted themselves clean and were recorded as uncountable, and the board
+  // headline of "108 dropped labels, 31 of 52 sheets could not count it" was
+  // reporting a bug in this function as a gap in the generators.
+  //
+  // The schematic, the diagram and the boarding sheet were the real gap, and a
+  // different one each. schematize_internal.js and diagram_internal.js run
+  // gen_internal.js inside a workspace SUBFOLDER and used to copy only internal.svg
+  // back out, stranding the workspace's unplaced.json where sync_ci_reference.js
+  // (which skips directories) could never reach it — 165 dropped labels sitting on
+  // disk, uncounted, on 13 sheets. gen_boarding.js does not use labeller.js at all
+  // but has its own occupancy placer that silently draws an unnamed pictogram when
+  // a landmark name cannot find clear air, and wrote no file of any kind. All three
+  // now emit their own sidecar; see those files for the writing half.
+  //
+  // ABSENT IS NOT UNKNOWN. `null` here means "no generator on this sheet type
+  // reports drops", and nothing on the board is in that state any more. A sheet
+  // whose sidecar is missing scored zero and is reported as zero.
   const base = path.basename(svgPath, '.svg');
-  const dropFile = base === 'internal' ? 'unplaced.json'
-                 : base === 'external' ? 'unplaced-external.json' : null;
+  const DROP_FILE = {
+    'internal': 'unplaced.json',
+    'external': 'unplaced-external.json',
+    'internal-schematic': 'unplaced-schematic.json',
+    'internal-diagram': 'unplaced-diagram.json',
+    'boarding': 'unplaced-boarding.json',
+  };
+  const dropFile = DROP_FILE[base] || null;
   let unplaced = null;
+  // Three states, not two. `no-reporter` is a sheet type nothing writes a sidecar
+  // for; `unreadable` is a sidecar that WAS there and would not parse. Both leave
+  // unplacedLabels null, and reporting them as one fact is how a parse failure
+  // would hide inside a coverage gap and be read as "that sheet type again".
+  let dropState = 'no-reporter';
   if (dropFile) {
     const dp = path.join(path.dirname(svgPath), dropFile);
     if (fs.existsSync(dp)) {
       try { unplaced = JSON.parse(fs.readFileSync(dp, 'utf8')); } catch { unplaced = null; }
-    } else if (base === 'internal') unplaced = [];      // engine unlinks it when nothing dropped
+    } else unplaced = [];      // every writer unlinks its sidecar when nothing dropped
+    if (unplaced === null) dropState = 'unreadable';   // the file was there and would not parse
+    else dropState = 'counted';
   }
   if (unplaced) for (const u of unplaced) detail.unplaced.push({ text: u.text, reason: u.reason, at: u.at });
 
@@ -1000,6 +1035,7 @@ function analyse(svgPath) {
     mapLabels: mapLabels.length,
     // --- the seven added 2026-08-16 ---
     unplacedLabels: unplaced ? unplaced.length : null,
+    unplacedLabelsState: dropState,   // 'counted' | 'no-reporter' | 'unreadable'
     exitTailOverInk: exitTail.length,
     strandedFeatureLabels: strandedFeatures.length,
     panelOnlyServices: hasPanel ? panelOnly.length : null,

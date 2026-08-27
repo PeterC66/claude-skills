@@ -6,7 +6,7 @@
  * to break the engine, not to break the test. Every module below is resolved
  * through ENGINE_DIR, so a mutation run is:
  *
- *     node test/prove-red.js
+ *     npm run test:prove-red        (tools/prove-red.js)
  *
  * which copies assets/ to a scratch directory, makes one deliberate edit per
  * test file, and reports which suites noticed. Nothing in assets/ is touched:

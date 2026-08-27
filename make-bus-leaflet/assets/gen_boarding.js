@@ -721,6 +721,19 @@ if (LOC && Array.isArray(LOC.signals)) {
 }
 
 let poiLabelled = 0, poiBare = 0;
+// WHAT THIS SHEET GAVE UP ON, written out like every other generator does it.
+// gen_boarding.js does not use labeller.js -- it has the hand-rolled occupancy
+// placer below -- so it was the one sheet type that dropped labels and reported
+// nothing anywhere: no file, no warning, and for the first of the two cases below,
+// not even a count. quality_metrics.js read that silence as "this sheet type cannot
+// count drops" and left all four boarding sheets out of the board total entirely.
+// TWO losses are recorded, because they are not the same harm to a reader: "no room
+// for the symbol" loses the landmark altogether and was counted by NOTHING before
+// 2026-08-27, while "no room for the name" still draws the pictogram, so the reader
+// sees a thing they cannot name. Skipped SIGNALS are deliberately NOT in here: a
+// traffic light is a symbol and not a label, and unplacedLabels has to keep
+// meaning exactly one thing or it stops being addable across sheets.
+const unplacedPoi = [];
 for (const p of poi) {
   const kind = p.tags.shop || p.tags.amenity || p.tags.tourism || p.tags.historic || '';
   const cat = ICON_FOR[kind] || null;
@@ -728,7 +741,10 @@ for (const p of poi) {
   if (X < MAP_X0 + 1 || X > MAP_X1 - 1 || Y < MAP_Y0 + 1 || Y > MAP_Y1 - 1) continue;
   const half = cat ? 2 : 1.1;
   const icoBox = { x0: X - half, x1: X + half, y0: Y - half, y1: Y + half };
-  if (hits(icoBox)) continue;               // symbol itself has nowhere to sit
+  if (hits(icoBox)) {                       // symbol itself has nowhere to sit
+    unplacedPoi.push({ id: 'poi:' + (cat || 'dot') + ':' + p.name, text: p.name, at: [X, Y], reason: 'no room for the symbol' });
+    continue;
+  }
   if (cat) {
     out(ICONS.icon(cat, X, Y, 1.7, 'charcoal'));
   } else {
@@ -757,6 +773,7 @@ for (const p of poi) {
     poiLabelled++;
   } else {
     poiBare++;
+    unplacedPoi.push({ id: 'poi:' + (cat || 'dot') + ':' + p.name, text: p.name, at: [X, Y], reason: 'no room for the name' });
   }
 }
 
@@ -1330,6 +1347,19 @@ if (LOC) {
   console.log('  locator context: locator_geo.json absent — streets only.'
     + ' Run pull_locator.js in this directory to draw buildings, the station apron and the lights.');
 }
+
+// Beside the sheet, named for the sheet, unlinked when empty -- exactly what
+// gen_internal.js and the two external generators do, so quality_metrics.js needs
+// no boarding-shaped special case to read it. OUTSIDE the if (LOC) above, not
+// inside it: with no locator_geo.json there are no landmarks and so no drops, and
+// the unlink still has to run, or a stale sidecar from the previous build would be
+// read as this build's answer.
+const UN_OUT = path.join(DIR, 'unplaced-boarding.json');
+if (unplacedPoi.length) {
+  fs.writeFileSync(UN_OUT, JSON.stringify(unplacedPoi, null, 2));
+  process.stderr.write('boarding labels: ' + unplacedPoi.length + ' could not be placed -> unplaced-boarding.json'
+    + ' (' + unplacedPoi.map(u => '"' + u.text + '"').join(', ') + ')\n');
+} else { try { fs.unlinkSync(UN_OUT); } catch (e) {} }
 if (markerMoveMax.mm > 0.05) {
   console.log(`  markers spread to stay legible: furthest move ${markerMoveMax.mm.toFixed(1)} mm (${markerMoveMax.label})`);
 }

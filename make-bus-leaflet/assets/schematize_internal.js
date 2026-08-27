@@ -851,6 +851,21 @@ if (process.env.SCHEMATIZE_ONLY !== '1') {
   if (res.status !== 0) process.exit(res.status || 1);
   const OUT = path.join(DIR, 'internal-schematic.svg');
   fs.copyFileSync(path.join(WD, 'internal.svg'), OUT);
+  // CARRY THE DROP REPORT OUT WITH THE SHEET. gen_internal.js writes unplaced.json
+  // into its own cwd -- which here is the WORKSPACE, a subfolder -- while the sheet
+  // itself is copied up to DIR. sync_ci_reference.js copies files and skips
+  // directories, so every label this schematic gave up on stayed in the workspace
+  // where no gate, ledger or report could ever see it: 165 dropped labels across the
+  // 13 schematic and diagram sheets, on disk and uncounted, until 2026-08-27.
+  // Same unlink-when-empty idiom as every other writer, so an ABSENT sidecar means
+  // zero and quality_metrics.js can read it with no special case.
+  const UN_OUT = path.join(DIR, 'unplaced-schematic.json');
+  const UN_IN = path.join(WD, 'unplaced.json');
+  if (fs.existsSync(UN_IN)) {
+    fs.copyFileSync(UN_IN, UN_OUT);
+    const nDropped = JSON.parse(fs.readFileSync(UN_IN, 'utf8')).length;
+    process.stderr.write('schematic labels: ' + nDropped + ' could not be placed -> unplaced-schematic.json\n');
+  } else { try { fs.unlinkSync(UN_OUT); } catch (e) {} }
   if (isPlace) {
     const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const emitted = 'Buses within ' + esc(RJ.town);

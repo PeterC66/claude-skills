@@ -127,6 +127,58 @@ const MUTATIONS = [
     what: 'the badge text shrinks to fit instead of the disc growing - the fix that was rejected for breaking the 2.4mm legibility floor',
     find: "    out(`<text x=\"${x}\" y=\"${y}\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"${(rad).toFixed(2)}\" fill=\"${TXT[r]||'#fff'}\" text-anchor=\"middle\" dominant-baseline=\"central\">${esc(blab(r))}</text>`);",
     to: "    out(`<text x=\"${x}\" y=\"${y}\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"${(Math.min(rad, rad*2*rad/Math.max(1,hw*2))).toFixed(2)}\" fill=\"${TXT[r]||'#fff'}\" text-anchor=\"middle\" dominant-baseline=\"central\">${esc(blab(r))}</text>`);" },
+  // linear_features.js - extracted 2026-08-27 from gen_internal.js. Every branch
+  // MEASURED the same day by instrumenting the module and running all 18 maps
+  // that have an internal sheet. Covered by the byte gate: projected geometry
+  // (11 maps), hide (7), railStitch/railMerge/chequer (6 each), plain stroke
+  // (10). DARK - no committed map takes them: the segments/points/move
+  // overrides, minSegLen (every railway map takes the chequer, which sets it to
+  // 0), a dashed feature (only canal has a dash and no town has a canal), and
+  // ties (the chequer sets ties:false, and all six railway maps take it).
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "the town style stops outranking the chequer preset, so a per-feature colour is silently ignored",
+    find: "    return Object.assign({}, base, mid, own);",
+    to: "    return Object.assign({}, base, own, mid);" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "the whole-feature nudge is dropped, so overrides.move does nothing",
+    find: "    if(dx||dy) segs = segs.map(s=>s.map(p=>[p[0]+dx,p[1]+dy]));",
+    to: "    if(false) segs = segs.map(s=>s.map(p=>[p[0]+dx,p[1]+dy]));" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "railStitch chains any two ways that touch, so the St Neots station throat folds back on itself again",
+    find: "          if(turnAt(m, jn) > maxTurn) continue;",
+    to: "          if(false) continue;" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "railMerge keeps every trimmed stretch, so short floating fragments survive",
+    find: "        if(kept.some(k=>ptToPoly(p,k)<=tol)){ if(segLen(run)>=minRun) runs.push(run); run=[]; }",
+    to: "        if(kept.some(k=>ptToPoly(p,k)<=tol)){ if(run.length) runs.push(run); run=[]; }" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "railMerge stops trimming and keeps a partly-coincident siding whole, re-doubling the main line",
+    find: "      for(const r of runs) kept.push(dropCollinear(r, 0.02));",
+    to: "      if(runs.length) kept.push(s);" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "a feature hidden by override is drawn anyway - every place sheet gets its river back",
+    find: "    if(featOv(f).hide) return;",
+    to: "    if(false) return;" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "minSegLen stops dropping the short crossover stubs, so the junction throat splays again",
+    find: "      segs = segs.filter(s=>s.length>1 && segLen(s)>=st.minSegLen);",
+    to: "      segs = segs.filter(s=>s.length>1);" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "a dashed feature takes a round cap again, so its gaps fuse into a scalloped solid line",
+    find: "      const cap = st.dash ? 'butt' : 'round';",
+    to: "      const cap = 'round';" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "the first cross-tie is drawn at the segment start rather than half a pitch in, so ties pile up at every vertex",
+    find: "        for(let dd=step*0.5; dd<L; dd+=step){ const cx=x0+(x1-x0)*dd/L, cy=y0+(y1-y0)*dd/L;",
+    to: "        for(let dd=0; dd<L; dd+=step){ const cx=x0+(x1-x0)*dd/L, cy=y0+(y1-y0)*dd/L;" },
   // fit_set.js - extracted 2026-08-27 from gen_internal.js. Exactly ONE of the 20
   // committed maps (Ramsey) reaches the off-path rule, and it is the map the rule
   // was written for, so the byte diff certifies this block on a single data point.

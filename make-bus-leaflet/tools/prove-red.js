@@ -554,6 +554,104 @@ const MUTATIONS = [
     what: 'the fare note wraps at 48 characters, so its box and the panel below it move',
     find: "    for(const wd of words){ if((cur+' '+wd).trim().length>38){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }",
     to: "    for(const wd of words){ if((cur+' '+wd).trim().length>48){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }" },
+
+  // complexity_ladder.js - extracted 2026-08-27 from gen_internal.js. MEASURED
+  // the same day across the 18 maps that draw an internal sheet: only THREE
+  // declare corridor families and only ONE - High Wycombe - sets coreBox,
+  // stopThinning or corridorPalette at all, so 14 of the 39 labelled branches
+  // are dark to the byte gate. Every hand override of the box (w, h, at,
+  // minRun), the whole object form of stopThinning, both "true" shorthands and
+  // the anchor refusal are certified by complexity_ladder.test.js alone.
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a family of one becomes a family, so a lone route is bundled with nothing and loses its own lane",
+    find: "    if(list.length<2) continue;",
+    to: "    if(list.length<1) continue;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the {routes:[…]} spelling of a family is read as empty, so the town silently draws no bundle",
+    find: "    const members=Array.isArray(v)?v:((v&&v.routes)||[]);",
+    to: "    const members=Array.isArray(v)?v:[];" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a lead named among its own members is listed twice, so it takes two slots in the badge stack",
+    find: "    const list=[k].concat(members.filter(r=>r!==k));",
+    to: "    const list=[k].concat(members);" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "colour aliasing invents a palette key, which changes Object.keys(C) and therefore the draw order",
+    find: "    if(m in C) C[m] = C[l];",
+    to: "    C[m] = C[l];" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a member with no text colour acquires the lead’s, so a badge is lettered against the wrong ink",
+    find: "    if(TXT && (m in TXT)) TXT[m] = TXT[l];",
+    to: "    if(TXT) TXT[m] = TXT[l];" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a route outside every family gets an undefined lane, so the offset maths loses it",
+    find: "  const laneKey = CORR ? (r=>CORR.lead[r]||r) : (r=>r);",
+    to: "  const laneKey = CORR ? (r=>CORR.lead[r]) : (r=>r);" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "rung 1 starts reporting a shared colour, so a bundled member is force-badged like a rung-3 line",
+    find: "  const colourShared = r => !!(CPAL && CPAL.lead[r]);",
+    to: "  const colourShared = r => !!((CPAL && CPAL.lead[r]) || (CORR && CORR.lead[r]));" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "coreBox:true stops meaning \"the box with every default\" and turns the rung off instead",
+    find: "  const CBOX = RJ.coreBox ? (RJ.coreBox===true?{}:RJ.coreBox) : null;",
+    to: "  const CBOX = (RJ.coreBox && RJ.coreBox!==true) ? RJ.coreBox : null;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "stopThinning:true stops meaning \"thin, with every default\" and turns the rung off instead",
+    find: "  const THIN = RJ.stopThinning ? (RJ.stopThinning===true?{}:RJ.stopThinning) : null;",
+    to: "  const THIN = (RJ.stopThinning && RJ.stopThinning!==true) ? RJ.stopThinning : null;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a hand width grows the box eastwards instead of about its centre, so the town centre moves",
+    find: "    if(CBOX.w!=null){ const cx=(x0+x1)/2; x0=cx-CBOX.w/2; x1=cx+CBOX.w/2; }",
+    to: "    if(CBOX.w!=null){ x1=x0+CBOX.w; }" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "coreBox.at is read as the top-left corner rather than the centre, so the box lands half a box out",
+    find: "      x0=CBOX.at[0]-w/2; x1=CBOX.at[0]+w/2; y0=CBOX.at[1]-h/2; y1=CBOX.at[1]+h/2; }",
+    to: "      x0=CBOX.at[0]; x1=CBOX.at[0]+w; y0=CBOX.at[1]; y1=CBOX.at[1]+h; }" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "label:\"\" falls back to \"town centre\", so a town that asked for a wordless box gets words",
+    find: "    return { x0,y0,x1,y1, label:(CBOX.label!=null?CBOX.label:'town centre'), sublabel:CBOX.sublabel||null };",
+    to: "    return { x0,y0,x1,y1, label:(CBOX.label||'town centre'), sublabel:CBOX.sublabel||null };" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the box boundary becomes exclusive, so a route ending exactly on the edge is drawn into the box",
+    find: "  const inCore = p => !!CORE && p[0]>=CORE.x0 && p[0]<=CORE.x1 && p[1]>=CORE.y0 && p[1]<=CORE.y1;",
+    to: "  const inCore = p => !!CORE && p[0]>CORE.x0 && p[0]<CORE.x1 && p[1]>CORE.y0 && p[1]<CORE.y1;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "minRun:0 stops disabling the stub filter, so the one escape hatch from it is unreachable",
+    find: "  const MINRUN = CBOX ? (CBOX.minRun!=null?CBOX.minRun:2.5) : 0;",
+    to: "  const MINRUN = CBOX ? (CBOX.minRun||2.5) : 0;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the interchange bar rises to three lines, so a two-route stop loses its tick everywhere",
+    find: "  const minLines = THIN.minLines!=null?THIN.minLines:2;",
+    to: "  const minLines = THIN.minLines!=null?THIN.minLines:3;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "termini have to be asked for, so stopThinning:true silently deletes every end stop",
+    find: "    if(THIN.termini!==false){ keep.add(chain[0]); keep.add(chain[chain.length-1]); }",
+    to: "    if(THIN.termini===true){ keep.add(chain[0]); keep.add(chain[chain.length-1]); }" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "interchanges are counted per ROUTE, so a bundled 1/1A/1B reads as three lines at one stop",
+    find: "    for(const a of new Set(chain)) (lanes[a]=lanes[a]||new Set()).add(lane); }",
+    to: "    for(const a of new Set(chain)) (lanes[a]=lanes[a]||new Set()).add(r); }" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the hand drop list is applied before the anchor is added, so drop can no longer remove it",
+    find: "  keep.add(ANCHOR);                                    // the interchange always stays\n  for(const a of (THIN.drop||[])) keep.delete(a);",
+    to: "  for(const a of (THIN.drop||[])) keep.delete(a);\n  keep.add(ANCHOR);                                    // the interchange always stays" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

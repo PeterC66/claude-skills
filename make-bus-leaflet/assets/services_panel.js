@@ -94,6 +94,11 @@ function drawServicesPanel(deps) {
    * Absent => every size and every gap is exactly the hand-tuned value it was,
    * byte for byte (invariant 2).
    */
+  // DARK, measured 2026-08-27 (tools/branch-coverage.services_panel.js): all 18
+  // maps run the type scale, so the `null` arm — design.panelScale:false, the
+  // hand-tuned size set the whole "absent config => byte-identical" invariant
+  // exists to protect — is exercised by no build at all. It is certified by
+  // test/services_panel.test.js alone.
   const PS = PANEL_SCALE_ON ? { head:5.0, title:3.5, sub:2.9, dense:2.45 } : null;
   const CAP=0.72, DESC=0.21;      // Arial cap-height / descender, as a fraction of size
   const AIR_BELOW_HEAD=3.2, AIR_ABOVE_HEAD=5.0;    // section heading (Services, Key)
@@ -222,6 +227,9 @@ function drawServicesPanel(deps) {
     const w = FONT.textWidth(sub, size, false);
     if(x + w <= right) return size;
     const want = size * (right - x) / w;
+    // DARK, measured 2026-08-27: no committed subtitle is long enough to be shrunk
+    // past the 2.4 mm print floor, so the refusal below has never fired on a
+    // shipped sheet.
     if(want >= 2.4) return Math.floor(want*100)/100;
     process.stderr.write(`panel: service ${routeKey}'s subtitle "${sub}" needs ${want.toFixed(2)}mm type to fit its column, below the 2.4mm print floor — shorten it in routes.json internalDesc.\n`);
     return 2.4;
@@ -236,6 +244,14 @@ function drawServicesPanel(deps) {
     for(const r of panelOrder){ const k=laneKey(r); if(seenLane.has(k)) continue; seenLane.add(k);
       const mem=(CORR.fam[k]||[k]).filter(m=>panelOrder.includes(m));
       lanes.push({key:k, mem:mem.length?mem:[k]}); }
+    // A panelCols BLOCK feeds this branch even though the panelCols LAYOUT below is
+    // never selected, and that is worth saying plainly because it was written down
+    // wrongly first. High Wycombe is the only town with the block; MEASURED
+    // 2026-08-27, its two 49 mm columns come from `panelCols.cols` and
+    // `panelCols.width` READ HERE, not from panelCorridors, which it sets to plain
+    // `true`. So three of that block's four keys are live (`cols`, `width`, and
+    // `keyAt`, which pins the Key); only `panelCols.row` is unread. The dark thing
+    // is the LAYOUT branch, not the config — a distinction OA-136 originally missed.
     const nCol = Math.max(1, (PCORR.cols|0) || (PCOLS?(PCOLS.cols|0):0) || 1);
     let cw     = PCORR.width || (PCOLS&&PCOLS.width) || 96;
     // THE PANEL CAN RUN OFF THE PAGE, AND NOTHING SAID SO. High Wycombe sits its
@@ -441,6 +457,13 @@ function drawServicesPanel(deps) {
       firstBlock=false;
     }
   } else if(PCOLS){
+    // DARK, measured 2026-08-27: this whole layout — roughly thirty lines with a
+    // badge-radius floor, a type-scale check and a badgeFit width guard of its own
+    // — is drawn by NO committed map. High Wycombe is the only town carrying a
+    // panelCols block and it sets design.panelCorridors as well, which wins the
+    // if/else above; its cols and width are read up there instead. Live feature,
+    // certified by test/services_panel.test.js and by no byte gate.
+    //
     // multi-column panel: a town with more services than one column fits on A4.
     // Column-major so a column reads top-to-bottom like the single-column panel.
     const nCol=Math.max(1,PCOLS.cols|0), cw=PCOLS.width||48, crow=PCOLS.row||PROW;

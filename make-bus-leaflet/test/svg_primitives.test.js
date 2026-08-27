@@ -11,8 +11,9 @@
  * is certified separately by rendering all 20 maps with EDITOR_KEYS=1 before and
  * after the extraction (18 of them emit data-kind attrs; every SVG hash matched).
  *
- * `cross()` has NO CALLER anywhere, measured the same day. Its assertions here
- * are a record of what it does, not a claim that anything uses it.
+ * `cross()` was here until 2026-08-27 and is gone: it had no caller anywhere,
+ * and OA-136's Phase 4 pass retired it. Removing it moved no bytes on any of the
+ * 20 maps, which is what dark means when it is true.
  *
  * ONE CLAIM HERE WAS WRONG AND THE MUTATION RUN SAID SO. The module comments
  * present badgeStack's one-element fast path as the invariant that keeps every
@@ -196,11 +197,11 @@ test('a stack reports the widest overhang any of its members drew', () => {
   assert.strictEqual(make().api.badgeStack(100, 50, [9, 9], 2.4).xw, 0);
 });
 
-test('cross draws two crossed bars centred on the point — and nothing calls it', () => {
-  const { api, lines } = make();
-  api.cross(100, 50, '#333');
-  assert.strictEqual(lines.length, 1);
-  assert.strictEqual(lines[0],
-    '<rect x="99.5" y="48.7" width="1" height="2.6" fill="#333"/>' +
-    '<rect x="98.7" y="49.5" width="2.6" height="1" fill="#333"/>');
+test('the factory returns exactly the seven marks the sheet is drawn out of', () => {
+  // cross() was the eighth until 2026-08-27, when OA-136 retired it for having no
+  // caller anywhere. This assertion is here so the next person to add a primitive
+  // has to say so out loud, rather than leaving one to go quietly unused for
+  // weeks behind a name another generator uses for something else entirely.
+  assert.deepStrictEqual(Object.keys(make().api).sort(),
+    ['badge', 'badgeHalfW', 'badgeStack', 'badgeXW', 'badgeXWs', 'esc', 'gk']);
 });

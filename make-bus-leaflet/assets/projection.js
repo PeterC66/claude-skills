@@ -57,6 +57,13 @@ function projection({ stopPts, atco2ll, ANCHOR, IR, ZOOM, OV, FIXED_ORIENTATION,
   // config route to a fixed orientation at all; its only option was an overrides.json
   // entry, which is the editor's file, not the town's config. `design.fixedOrientation`
   // is top-level and therefore available to every map, classic or roads, area or place.
+  // DARK, measured 2026-08-27 (tools/branch-coverage.projection.js): of the 18
+  // maps with an internal sheet, 16 take the PCA default and 2 take
+  // internalRoads.rotationDeg. NEITHER of the top two rules is taken by any of
+  // them, so the precedence order itself is certified by no byte gate — only by
+  // test/projection.test.js. Live features: the editor writes OV.rotationDeg
+  // whenever anyone hand-nudges a sheet, and design.fixedOrientation is the only
+  // route to a fixed orientation for a CLASSIC town.
   if(OV.rotationDeg!=null) theta = -OV.rotationDeg*Math.PI/180;   // manual rotation override
   else if(FIXED_ORIENTATION!=null) theta = -FIXED_ORIENTATION*Math.PI/180; // design.fixedOrientation
   else if(IR && IR.rotationDeg!=null) theta = -IR.rotationDeg*Math.PI/180; // config rotation (0 = north up)
@@ -73,6 +80,11 @@ function projection({ stopPts, atco2ll, ANCHOR, IR, ZOOM, OV, FIXED_ORIENTATION,
   // internalRoads: fisheye centred on the BUILT-UP CENTROID — everything within
   // focus.coreKm stays 1:1, beyond that distances scale by focus.comp; applied to
   // stops, roads, river and POIs alike so the layers stay mutually consistent.
+  // DARK, measured 2026-08-27: all 18 maps run internalRoads, so the CLASSIC
+  // straight-chord model below — the one every sheet used before the roads model
+  // — is taken by no committed map at all, and neither is any focus.center other
+  // than the anchor stop. The classic branches are still the fallback for a town
+  // with no road match, which is why they are here.
   const O = IR ? (function(){
             const fc=IR.focus.center;                       // [lat,lon] | 'centroid' | default = anchor
             if(Array.isArray(fc)) return tform0(fc);
@@ -90,6 +102,8 @@ function projection({ stopPts, atco2ll, ANCHOR, IR, ZOOM, OV, FIXED_ORIENTATION,
   // magnifies the true-scale core -> the bus-station interchange gets breathing
   // room without changing mid-town spacing. Absent midKm/outerComp => the original
   // single-band behaviour (byte-identical). (St Ives item 4a, 2026-07-04.)
+  // DARK, measured 2026-08-27: no committed map sets focus.midKm, so the third
+  // zone below never runs and every sheet takes the two-band fisheye.
   const R1  = (IR && IR.focus.midKm!=null)     ? IR.focus.midKm/111.32 : null;
   const CPF2= (IR && IR.focus.outerComp!=null) ? IR.focus.outerComp    : CPF;
   function compress([x,y]){ if(CPF>=1 && R1===null) return [x,y];
@@ -134,6 +148,10 @@ function projection({ stopPts, atco2ll, ANCHOR, IR, ZOOM, OV, FIXED_ORIENTATION,
   // exit ARROWS are drawn OUTSIDE the map's clip group and point 2.6 mm past the cut
   // point, i.e. past the frame — a 1 mm gap left their tips under the plate and the ink
   // measure barely moved. 3.0 mm clears the arrow with a hair to spare.
+  // DARK, measured 2026-08-27: all 18 maps run footerSafe, so the legacy flat
+  // 205 mm frame below is taken by none of them — and neither is a footerGap
+  // override. The 205 is what every sheet drew before 2026-08-15; keep it, and do
+  // not read the constant as live.
   const MX0=6, MX1=196, MY0=30;
   const MY1 = FOOTER_SAFE
     ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0))*100)/100
@@ -149,6 +167,11 @@ function projection({ stopPts, atco2ll, ANCHOR, IR, ZOOM, OV, FIXED_ORIENTATION,
   let offX=(MX1-MX0-(maxX-minX)*sc)/2, offY=(MY1-MY0-(maxY-minY)*sc)/2;
   // frozen viewport: once you hand-place stops the editor freezes the fit so absolute
   // page positions stay valid across data refreshes (new stops project into the same frame)
+  // DARK, measured 2026-08-27: no committed map carries a frozen viewport. Eight
+  // maps have an overrides.json and none of them freezes the fit, so this line is
+  // certified by test/projection.test.js alone. It is the editor's own mechanism
+  // — hand-place a stop and the fit must stop moving under it — so it will be
+  // taken the first time anyone does that and keeps the result.
   if(OV.viewport){ ({minX,maxX,minY,maxY,sc,offX,offY}=OV.viewport); }
   // The EDITOR_KEYS viewport dump stays with the caller: this module writes
   // nothing. The whole fit is returned, so the caller can print it.

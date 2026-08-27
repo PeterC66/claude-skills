@@ -132,6 +132,11 @@ function complexityLadder({ RJ, C, TXT }){
   // covered: route lines are CUT at the boundary (so each ends flush against the
   // box rather than being hidden under it), and stop ticks, POIs, road labels, the
   // anchor label and route badges inside it are dropped.
+  // DARK, measured 2026-08-27 (tools/branch-coverage.complexity_ladder.js): High
+  // Wycombe is the ONLY town that climbs rung 2 at all, and it takes every default
+  // — so `coreBox:true`, and every hand override of the rectangle (`w`, `h`, `at`,
+  // `minRun`), is taken by no committed map. 14 of this file's 39 labelled branches
+  // are dark for the same reason; they are certified by test/complexity_ladder.test.js.
   const CBOX = RJ.coreBox ? (RJ.coreBox===true?{}:RJ.coreBox) : null;
 
   // ====== stopThinning — RUNG 2b of the complexity ladder (P3, 2026-07-28) =====
@@ -148,6 +153,9 @@ function complexityLadder({ RJ, C, TXT }){
   //
   // Counted per LANE, not per route: a stop served only by a bundled 1/1A/1B is
   // served by one drawn line, not three.
+  // DARK, measured 2026-08-27: High Wycombe is the only town that thins, and it
+  // passes plain `true` — so the whole OBJECT form (`minLines`, `keep`, `drop`,
+  // `termini:false`) has never been used on a shipped sheet.
   const THIN = RJ.stopThinning ? (RJ.stopThinning===true?{}:RJ.stopThinning) : null;
   return { CORR, CPAL, laneKey, colourShared, CBOX, THIN };
 }

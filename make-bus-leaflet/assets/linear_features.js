@@ -48,6 +48,10 @@ function linearFeatures(deps) {
   };
   function featSegs(f){              // page-mm polylines, honouring straighten/move overrides
     const ov=featOv(f); let segs;
+    // DARK, measured 2026-08-27 (tools/branch-coverage.linear_features.js): the
+    // ENTIRE hand-adjust path for a linear feature — `segments`, `points` and the
+    // `move` nudge below — has never been used on a shipped sheet. All 11 maps that
+    // draw a feature take the projected geometry.
     if(ov.segments) segs = ov.segments.map(s=>s.map(p=>[p[0],p[1]]));      // straighten (page mm)
     else if(ov.points) segs = [ov.points.map(p=>[p[0],p[1]])];
     else segs = f.geo.map(seg=>seg.map(p=>XY(p)));                          // project geo -> page mm
@@ -146,6 +150,10 @@ function linearFeatures(deps) {
     const st=featStyle(f); let segs=featSegs(f);
     if(st.railStitch) segs = stitchSegs(segs, st.railStitch, st.railStitchTurn!=null?st.railStitchTurn:60);
     if(st.railMerge)  segs = mergeSegs(segs, st.railMerge, st.railMinRun!=null?st.railMinRun:6);
+    // DARK, measured 2026-08-27: all six railway maps take rail:"chequer", which
+    // sets minSegLen:0 and ties:false — so this filter and the tie symbol further
+    // down are drawn by no committed map. Both are live options FEATURE_STYLES
+    // selects; the chequer simply won on every sheet built since it existed.
     if(st.minSegLen){                              // drop short stubs (e.g. rail crossovers) — see FEATURE_STYLES
       segs = segs.filter(s=>s.length>1 && segLen(s)>=st.minSegLen);
     }

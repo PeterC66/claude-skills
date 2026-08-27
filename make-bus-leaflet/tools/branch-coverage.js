@@ -42,6 +42,19 @@
  * gate has it covered and a test only repeats it — write one there only for
  * what the maps cannot express (ordering, precedence, a round trip).
  *
+ * ANCHOR A MARK ON THE BRANCH'S OWN LINE, NOT ON THE STATEMENT AFTER IT. The
+ * `insert` is spliced in immediately BEFORE the `find`, so a mark anchored on the
+ * next statement runs only when control reaches that statement — and if the
+ * branch you are counting `return`s, `continue`s or throws, it never does. That
+ * mark then reports ZERO whatever the maps do, which is indistinguishable from a
+ * genuinely dark branch and reads as a finished answer. It has cost three specs
+ * on 2026-08-27 alone: three of feature_labels.js's guard refusals were anchored
+ * on the NEXT guard's `if`, past the `return` they were meant to observe, and
+ * label_placer.js's v2 mark sat after the `if(LAB){ … return true; }` block, so
+ * the branch EVERY map takes reported zero. The tell is a row that is dark when
+ * you would expect it to be universal — but the reverse case, a fault path that
+ * is dark for a good reason, has no tell at all. Anchor on the `if`.
+ *
  * IT NORMALISES LINE ENDINGS BEFORE MATCHING, and that is not housekeeping: an
  * extracted module can be genuinely mixed on disk (an LF header written by the
  * extraction script over a CRLF body moved out of the generator), and matching

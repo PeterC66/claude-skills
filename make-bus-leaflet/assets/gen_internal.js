@@ -776,7 +776,7 @@ const W=297,H=210; let s=''; const out=x=>{s+=x+'\n';};
 // The eight primitives every mark on this sheet is made of live in
 // svg_primitives.js, along with the design.badgeFit reasoning. They append
 // through `out` and return measurements, so the document stays here.
-const { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack, cross } = svgPrimitives({
+const { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack } = svgPrimitives({
   out, palette: C, textOn: TXT, badgeLabel: blab, font: FONT,
   badgeFit: BADGE_FIT, editorKeys: EDK,
 });

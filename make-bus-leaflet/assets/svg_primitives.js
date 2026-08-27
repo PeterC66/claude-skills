@@ -2,7 +2,7 @@
  * svg_primitives.js — the small marks the internal sheet is drawn out of.
  *
  * CONTRACT. `svgPrimitives(deps)` returns `{ esc, gk, badgeHalfW, badgeXW,
- * badgeXWs, badge, badgeStack, cross }`. It is a FACTORY, not a module of
+ * badgeXWs, badge, badgeStack }`. It is a FACTORY, not a module of
  * free functions, because four of the eight need the town in scope: the route
  * palette, the text colour on that fill, the badge-label lookup and the font
  * metrics table. `out` is passed in rather than returned from, so the caller
@@ -90,13 +90,15 @@ function svgPrimitives(deps) {
     list.forEach((r,i)=>{ xw=Math.max(xw, badge(x, y0+i*pitch, r, rad)); });
     return {h:(list.length-1)/2*pitch + rad, xw};
   }
-  // NO CALLER, measured 2026-08-27: nothing in gen_internal.js, in any other
-  // generator or in the portal calls this — gen_external_places.js has a
-  // `cross()` of its own and it is the eight-argument segment-intersection
-  // test, a different function with the same name. Moved verbatim all the
-  // same, because deleting it is a decision and this commit is an extraction.
-  function cross(x,y,col){const a=1.0,b=2.6;out(`<rect x="${x-a/2}" y="${y-b/2}" width="${a}" height="${b}" fill="${col}"/><rect x="${x-b/2}" y="${y-a/2}" width="${b}" height="${a}" fill="${col}"/>`);}
-  return { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack, cross };
+  // RETIRED 2026-08-27 (OA-136): `cross(x,y,col)` lived here and had no caller
+  // anywhere — not in gen_internal.js, not in another generator, not in the
+  // portal. gen_external_places.js has a `cross()` of its own and it is the
+  // eight-argument segment-intersection test, a different function that shares
+  // the name; that is why it read as used for as long as it did. Extraction 8
+  // moved it verbatim rather than deleting it, because deleting is a decision
+  // and that commit was an extraction. This is the decision: it drew two
+  // crossed bars, nothing asked for them, and removing it cannot move a byte.
+  return { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack };
 }
 
 module.exports = { svgPrimitives };

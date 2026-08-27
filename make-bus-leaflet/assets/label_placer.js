@@ -98,6 +98,13 @@ function labelPlacer(deps) {
   // `self` = this label's OWN icon box, excluded from the collision test: placement puts a
   // label 2.6 mm from a 4.2 mm symbol by design, so its own symbol is not a defect (the
   // same exclusion quality_metrics.js makes when it counts "label over a foreign icon").
+  // DARK BELOW THE v2 BRANCH, measured 2026-08-27 (tools/branch-coverage.label_placer.js):
+  // 17 of the 18 maps with an internal sheet queue their labels through v2 and
+  // NOT ONE runs v1, so everything after the `if(LAB)` return — the eight-candidate
+  // greedy search, the manual-offset path, the icon-box relaxation and the give-up
+  // return — is certified by test/label_placer.js and by nothing else. It is a live
+  // feature `labels.engine:"v1"` selects, not dead code: do not delete it, and do
+  // not assume a change here is covered because the byte gate stayed green.
   function placeLabel(x,y,text,sz=2.6,col='#222',italic=false,lov=null,self=null,opt=null){
     if(LAB){                                     // v2: queue it, solve them all together
       LAB.add(Object.assign({ id:(opt&&opt.id)||('L'+text+'@'+x.toFixed(1)+','+y.toFixed(1)),

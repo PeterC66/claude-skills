@@ -37,7 +37,7 @@
 const NL = String.fromCharCode(10);
 
 /** True when the caller asked for refusals to be fatal. Read once, at load. */
-// DARK IN THE ONLY SENSE THAT MATTERS, measured 2026-08-27: 40 runs, both
+// DARK, measured 2026-08-27, in the only sense that matters here: 40 runs, both
 // generators against all 20 maps with STRICT_GUARDS=1, and NOT ONE MAP REFUSES
 // ANYTHING. That is the estate being clean rather than the contract being unused,
 // but it does mean no byte gate and no build exercises the refusal path — the

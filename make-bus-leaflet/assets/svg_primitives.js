@@ -90,6 +90,12 @@ function svgPrimitives(deps) {
     list.forEach((r,i)=>{ xw=Math.max(xw, badge(x, y0+i*pitch, r, rad)); });
     return {h:(list.length-1)/2*pitch + rad, xw};
   }
+  // DARK, measured 2026-08-27: `design.badgeFit:false` is set by NO committed map,
+  // so the whole opt-out from the stadium badge is certified by
+  // test/svg_primitives.test.js alone. Seven maps draw at least one stadium badge,
+  // so the ON path is well covered by the byte gate; the OFF path is not covered
+  // at all.
+  //
   // RETIRED 2026-08-27 (OA-136): `cross(x,y,col)` lived here and had no caller
   // anywhere — not in gen_internal.js, not in another generator, not in the
   // portal. gen_external_places.js has a `cross()` of its own and it is the

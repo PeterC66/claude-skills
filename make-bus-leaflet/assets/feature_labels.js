@@ -39,6 +39,14 @@
  */
 'use strict';
 
+// DARK, measured 2026-08-27 (tools/branch-coverage.feature_labels.js): EVERY FAULT
+// PATH OF ALL FOUR GUARDS below is taken by no committed map — the three that
+// refuse to draw and the fourth that warns and draws anyway. That is the guards
+// WORKING: each was written after a shipped sheet went wrong and the boards were
+// then fixed, and a fixed board trips nothing. It also means no byte gate
+// certifies any of them — delete a guard and all 20 maps stay byte-identical,
+// right up until the next town sites a label badly. test/feature_labels.test.js
+// is what stands behind them.
 function featureLabels({ out, esc, refuse, warn, featOv, featSegs, isAuto, autoPos,
                          inCore, MX0, MY0, MX1, MY1, FOOTER_SAFE, FOOTER_PLATE_TOP }){
   function drawFeatureLabel(f){

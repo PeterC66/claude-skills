@@ -6,7 +6,7 @@ Run them from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` (or wherever this
 npm test
 ```
 
-That is `node --test`, which finds every `test/*.test.js` file from the package root. 96 assertions, about four tenths of a second, no network, no data tree, no `Areas/` folder needed.
+That is `node --test`, which finds every `test/*.test.js` file from the package root. **123 tests** as at 2026-08-27, about a second, no network, no data tree, no `Areas/` folder needed.
 
 ## Why these exist
 
@@ -27,6 +27,25 @@ npm run test:prove-red
 It has already earned its place. On its first run, dropping the file name out of the engine hash survived every assertion in `engine_version.test.js` — the tests checked that the hash moved when a file changed, and never that content could not migrate between two files unnoticed. That test exists now because the mutation run found it missing.
 
 Add `--keep` to leave the scratch copy behind for inspection.
+
+## Proving the BYTE gates can fail — the other half, added 2026-08-27
+
+`prove-red.js` above falsifies the unit suite. It cannot reach the five big generators at all, for the reasons in "What is not covered" below — and those five are exactly what the **byte gate** guards. That gate had never been watched go red for any sheet type: twenty maps all reported PASS, which is the state a real failure has to be spotted through.
+
+```bash
+npm run test:prove-red-gates
+```
+
+`tools/prove-red-gates.js` runs each generator **unmutated** against a map's tracked `ci-reference/` and requires PASS — the control, because a mutation that "fails" a gate which was already failing proves nothing — then applies one anchored mutation and requires DIFF. Six targets, one per sheet type: internal (town), internal (place, which needs `PLACE_IGNORE`), external, schematic, diagram, boarding. It gates against `ci-reference/` rather than the local `S4-generate` run dir on purpose, because `ci-reference/` is what a fresh CI clone actually has; gating against a run dir that only exists on this laptop would prove the gate works in the one place it is never needed. Nothing under `assets/` is touched — the mutated copy goes to a temp file and is handed to `gate()` by path. It runs in `gates.yml` **ahead of** the `status.js` board, so CI falsifies the gates before trusting them.
+
+Add `--keep` to leave the mutated generators on disk, and `--buses "<path>"` if the data repo is not at `C:\u3a St Ives\Using AI\Buses`.
+
+**It found two faults on its first run, both in `status.js`, and neither was in the mutation table.** They came from reading the gate closely enough to write the harness:
+
+- The derived-sheet rows guarded on `routesJson.internalSchematic && exists(<sheet>.svg)`. So a map whose config **asks** for a schematic and whose SVG had gone printed `-`, the same benign dash as a map that never had one. That is the precise trap `judgeNoSheet()` was written for on internal/external/boarding, still open on the other two sheet types.
+- Worse: `r.schematic` and `r.diagram` appeared **nowhere** in the `bad` set that computes the exit code. Both columns were computed, printed, and then discarded — a town whose schematic came back DIFF showed DIFF on the board and exited 0, so CI passed. Eight towns draw a schematic and four draw a diagram, so twelve sheet-gates had been decorative for their whole lives.
+
+Both are fixed and both were proven to fire by deleting a real schematic from a scratch copy of Huntingdon and watching the row go `-` → `MISSING` and the exit code go 0 → 1. Both start green on the real estate, so nothing changed colour and nobody learns to ignore a red.
 
 ## Adding a test
 

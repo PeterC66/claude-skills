@@ -136,13 +136,32 @@ function gateTown(t) {
   row.external = extGate === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : extGate;
 
   // Optional pre-stage outputs, only gated if routes.json opted in.
+  //
+  // The `routesJson.<key> &&` guard is the honest half: a map that never asked
+  // for a schematic has none of the pre-stage's inputs, so running it would
+  // error and print FAIL for a sheet that was correctly never built.
+  //
+  // The `&& exists(...)` that used to sit beside it was NOT honest, and it was
+  // the same trap judgeNoSheet exists for on the three sheets above (found
+  // 2026-08-27, OA-129 Phase 0). It collapsed two different facts into one
+  // benign dash: "this map has no schematic" and "this map's config asks for a
+  // schematic and the file is GONE". The second is what a botched regenerate
+  // looks like, and the board printed '-' for it. `stage.js commit` does not
+  // verify that the outputs it is told about exist, so a manifest genuinely can
+  // advertise a sheet that is not there.
+  //
+  // Both derived sheets now read the same way as internal/external/boarding:
+  // gate() reports the fact, judgeNoSheet asks the S4 manifest record whether
+  // the build claimed to produce it. Proven able to fire by tools/prove-red-gates.js.
   let routesJson = {};
   try { routesJson = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
-  if (routesJson.internalSchematic && exists(path.join(s4.dir, 'internal-schematic.svg'))) {
-    row.schematic = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg')).status;
+  if (routesJson.internalSchematic) {
+    const g = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg')).status;
+    row.schematic = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-schematic.svg') : g;
   } else row.schematic = '-';
-  if (routesJson.internalDiagram && exists(path.join(s4.dir, 'internal-diagram.svg'))) {
-    row.diagram = gate(path.join(SK, 'diagram_internal.js'), s4.dir, 'internal-diagram.svg', path.join(s4.dir, 'internal-diagram.svg')).status;
+  if (routesJson.internalDiagram) {
+    const g = gate(path.join(SK, 'diagram_internal.js'), s4.dir, 'internal-diagram.svg', path.join(s4.dir, 'internal-diagram.svg')).status;
+    row.diagram = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-diagram.svg') : g;
   } else row.diagram = '-';
 
   // S6 staleness: flag if S1/S2/S3 has moved on since the latest S6 run.
@@ -377,7 +396,16 @@ const qualityCell = (name) => {
 // MISSING joins the failing set and '-' does not, which is the whole point of
 // judgeNoSheet: a sheet the build never claimed to make cannot have regressed, and
 // a sheet it did claim to make and has not got is worse than one that differs.
-const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING')
+// SCHEMATIC AND DIAGRAM WERE NOT IN THIS SET UNTIL 2026-08-27, and had never been
+// (OA-129 Phase 0). Both columns were computed, printed, and then dropped: a town
+// whose internal-schematic.svg came back DIFF showed DIFF on the board and exited
+// 0, so CI passed. Eight towns draw a schematic and four draw a diagram, so twelve
+// sheet-gates were decorative — the exact "a gate described is not a gate run"
+// shape, one rung further along, where the gate genuinely runs and its answer is
+// discarded. Safe to add today because every one of those twelve currently reads
+// PASS or '-', so the set starts green rather than red-on-day-one.
+const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
+    || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
     || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
   || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external) || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))

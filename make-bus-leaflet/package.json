@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "test:prove-red": "node tools/prove-red.js"
+    "test:prove-red": "node tools/prove-red.js",
+    "test:prove-red-gates": "node tools/prove-red-gates.js"
   },
   "keywords": [],
   "author": "Peter Cooper",

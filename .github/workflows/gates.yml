@@ -110,6 +110,16 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm ci
 
+      # Falsify the byte gates BEFORE trusting them. status.js below reports PASS
+      # for every sheet in the estate; this step is what establishes that those
+      # PASSes can turn into DIFFs at all. It mutates a scratch copy of each of
+      # the five generators, never assets/ itself. Added 2026-08-27 (OA-129
+      # Phase 0) because the byte gate had never been watched go red for any of
+      # the five sheet types, and the refactor's whole method rests on it.
+      - name: Prove the byte gates can go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-gates.js --buses "$GITHUB_WORKSPACE/buses-data"
+
       - name: Run gates (JSON)
         working-directory: skills/make-bus-leaflet
         run: |

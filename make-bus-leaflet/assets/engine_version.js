@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /*
- * engine_version.js — content-hash the engine (the files every town's S4 build
- * runs unmodified: gen_internal.js, gen_external_radial.js,
- * gen_external_busway.js, icons.js, lane_normals.js), for item 3 of the 2026-08-04
- * process-efficiency plan.
+ * engine_version.js — content-hash the engine: the five entry points every town's
+ * S4 build runs unmodified (gen_internal.js, gen_external_radial.js,
+ * gen_external_busway.js, icons.js, lane_normals.js) AND every module they
+ * require, found by following the requires. Item 3 of the 2026-08-04
+ * process-efficiency plan; the closure replaced the flat list on 2026-08-27,
+ * when ten extractions had moved most of the drawing code outside it.
  *
  * Why: a town's S3 used to carry its own COPY of the two generators (frozen at
  * commit time) purely so a later build could know what code drew it. That copy
@@ -30,15 +32,65 @@ const path = require('path');
 const crypto = require('crypto');
 
 const SK = __dirname;
-// lane_normals.js joined the list on 2026-08-26. It is required by
-// gen_internal.js and it decides where a lane is drawn, so a hash that
-// excluded it would go on reporting the same engine across a change that
-// moves ink -- a stamp that is current and wrong.
+// THE ENTRY POINTS, not the whole engine. lane_normals.js joined them on
+// 2026-08-26: it is required by gen_internal.js and it decides where a lane is
+// drawn, so a hash that excluded it would go on reporting the same engine across
+// a change that moves ink -- a stamp that is current and wrong.
 const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js'];
+
+// ...and everything they require is hashed WITH them, found by following the
+// requires rather than by keeping a second list beside this one.
+//
+// WHY THIS IS NOT A LIST ANY MORE (2026-08-27, OA-129 Phase 3). Ten extractions
+// moved 1,235 lines of drawing code OUT of gen_internal.js and into siblings —
+// the projection, the linear features, both label placers, the Services panel,
+// the complexity ladder. Every one of them left the hash behind: measured on the
+// day, appending a line to services_panel.js or complexity_ladder.js did not move
+// the template hash at all, and neither did editing labeller.js or footer.js,
+// which were never on the list in the first place. A refactor that cannot change
+// the answer is exactly the refactor that should not change it; a REDESIGN of the
+// Services panel would have been invisible in the same way.
+//
+// The four idioms below are the four ways this engine names a sibling: _dep() (the
+// shared resolver), path.join(..,'x.js') (footer.js and labeller.js reaching for
+// font_metrics.js and qr.js), a bare relative require, and the SKILL_ASSETS forms
+// the portal's own requireScan() reads. A name is only followed if a file of that
+// name is actually there, so a filename mentioned in a comment adds nothing.
+const DEP_PATTERNS = [
+  /_dep\(\s*['"]([\w.-]+\.js)['"]\s*\)/g,                       // _dep('x.js')
+  /path\.join\([^()]*?['"]([\w.-]+\.js)['"]\s*\)/g,             // path.join(<dir>, 'x.js')
+  /require\(\s*['"]\.\/([\w.-]+?)(?:\.js)?['"]\s*\)/g,          // require('./x')
+  /SKILL_ASSETS\s*,\s*['"]([\w.-]+\.js)['"]/g,                   // path.join(SKILL_ASSETS,'x.js')
+];
+
+/** Every engine file the entry points reach, transitively, sorted. */
+function engineFiles(sk = SK) {
+  const seen = new Set();
+  const queue = ENGINE_FILES.slice();
+  while (queue.length) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const p = path.join(sk, name);
+    if (!fs.existsSync(p)) continue;               // a missing entry point still hashes, as MISSING
+    const src = fs.readFileSync(p, 'utf8');
+    for (const re of DEP_PATTERNS) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(src))) {
+        const dep = m[1].endsWith('.js') ? m[1] : m[1] + '.js';
+        if (!seen.has(dep) && fs.existsSync(path.join(sk, dep))) queue.push(dep);
+      }
+    }
+  }
+  // Sorted, so the hash cannot depend on the order the requires happen to appear
+  // in — an extraction reorders them constantly.
+  return [...seen].sort();
+}
 
 function computeEngineVersion(sk = SK) {
   const h = crypto.createHash('sha256');
-  for (const name of ENGINE_FILES) {
+  for (const name of engineFiles(sk)) {
     const p = path.join(sk, name);
     h.update(name + '\0');
     h.update(fs.existsSync(p) ? fs.readFileSync(p) : Buffer.from('MISSING'));
@@ -83,4 +135,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { computeEngineVersion, stampEngine, ENGINE_FILES };
+module.exports = { computeEngineVersion, stampEngine, engineFiles, ENGINE_FILES };

@@ -652,6 +652,33 @@ const MUTATIONS = [
     find: "  keep.add(ANCHOR);                                    // the interchange always stays\n  for(const a of (THIN.drop||[])) keep.delete(a);",
     to: "  for(const a of (THIN.drop||[])) keep.delete(a);\n  keep.add(ANCHOR);                                    // the interchange always stays" },
 
+
+  // engine_version.js - the template hash stopped being a hand-kept list of five
+  // on 2026-08-27 and became the transitive closure of what the entry points
+  // require. It had to: ten extractions moved most of gen_internal.js into
+  // siblings, and MEASURED that day, appending a line to services_panel.js or
+  // complexity_ladder.js moved the hash not at all. labeller.js and footer.js had
+  // never been in it. These four break the walk in the four ways that matter.
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "the _dep idiom is no longer followed, so every module extracted from a generator falls back outside the hash",
+    find: "  /_dep\\(\\s*['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,                       // _dep('x.js')",
+    to: "  /_NEVER_MATCHES_\\(([\\w.-]+\\.js)\\)/g,                            // _dep('x.js')" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "path.join(__dirname,\"x.js\") is no longer followed, so font_metrics.js and qr.js leave the hash",
+    find: "  /path\\.join\\([^()]*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,             // path.join(<dir>, 'x.js')",
+    to: "  /path\\.NEVER\\([^()]*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,            // path.join(<dir>, 'x.js')" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "the closure comes back in discovery order, so reordering two requires reports a different engine",
+    find: "  return [...seen].sort();",
+    to: "  return [...seen];" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "a name is followed whether or not the file exists, so a typo in a require invents a hashed file",
+    find: "        if (!seen.has(dep) && fs.existsSync(path.join(sk, dep))) queue.push(dep);",
+    to: "        if (!seen.has(dep)) queue.push(dep);" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

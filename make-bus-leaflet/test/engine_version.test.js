@@ -16,7 +16,8 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { computeEngineVersion, stampEngine, ENGINE_FILES } = require('./_engine.js').load('engine_version.js');
+const { computeEngineVersion, stampEngine, engineFiles, ENGINE_FILES } = require('./_engine.js').load('engine_version.js');
+const { ENGINE_DIR } = require('./_engine.js');
 
 const tmp = (fn) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engver-'));
@@ -27,12 +28,77 @@ const seed = (dir, overrides = {}) => {
   return dir;
 };
 
-test('the hashed files are the ones every town build runs unmodified', () => {
-  // lane_normals.js was added 2026-08-26 with design.laneOrientation. A file
-  // that decides where a lane is drawn and is not in this list would let the
-  // engine change while the stamp stayed put.
+test('the ENTRY POINTS are the files every town build runs unmodified', () => {
+  // lane_normals.js was added 2026-08-26 with design.laneOrientation. These five
+  // are only where the walk STARTS; what gets hashed is their transitive closure.
   assert.deepStrictEqual(ENGINE_FILES,
     ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js']);
+});
+
+test('the hash follows the requires, so an extracted module is inside it', () => {
+  // The reason this test exists, measured 2026-08-27: with the flat list of five,
+  // appending a line to services_panel.js or complexity_ladder.js did not move the
+  // template hash at all — and nor did editing labeller.js, which was never on the
+  // list. Ten extractions had moved most of the drawing code outside the thing
+  // that is supposed to say which code drew a sheet.
+  const files = engineFiles(ENGINE_DIR);
+  for (const f of ENGINE_FILES) assert.ok(files.includes(f), f + ' is an entry point and must be hashed');
+  for (const f of ['services_panel.js', 'complexity_ladder.js', 'projection.js', 'label_placer.js',
+                   'linear_features.js', 'svg_primitives.js', 'fit_set.js', 'poi_select.js',
+                   'strict_guards.js', 'labeller.js', 'footer.js', 'font_metrics.js', 'qr.js']) {
+    assert.ok(files.includes(f), f + ' draws part of a sheet and is outside the engine hash');
+  }
+  assert.deepStrictEqual(files, [...files].sort(), 'the closure must be sorted, or the hash moves with require order');
+});
+
+test('a file nothing requires is not hashed, however much it looks like the engine', () => {
+  // The closure is the point: quality_gate.js, status.js and the stage tools all
+  // sit in assets/ and none of them draws anything, so a change to one of them
+  // must not mark every town's sheet as built by a different engine.
+  const files = engineFiles(ENGINE_DIR);
+  for (const f of ['status.js', 'quality_gate.js', 'stage.js', 'render.js']) {
+    assert.ok(!files.includes(f), f + ' is not part of what draws a sheet');
+  }
+});
+
+test('every file in the closure moves the hash — none of them is decorative', () => tmp(dir => {
+  fs.cpSync(ENGINE_DIR, dir, { recursive: true });
+  const base = computeEngineVersion(dir);
+  for (const f of engineFiles(dir)) {
+    const p = path.join(dir, f);
+    const was = fs.readFileSync(p);
+    fs.writeFileSync(p, Buffer.concat([was, Buffer.from(' ')]));
+    assert.notStrictEqual(computeEngineVersion(dir), base, `editing ${f} did not move the engine hash`);
+    fs.writeFileSync(p, was);
+  }
+  assert.strictEqual(computeEngineVersion(dir), base, 'putting the files back did not restore the hash');
+}));
+
+test('a name only mentioned in a comment is not followed', () => {
+  // Over-inclusion is the safe direction for a hash, but not this safe: a
+  // filename in prose would drag a whole generator in and move the stamp for
+  // every town whenever somebody edited a comment.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engver-'));
+  try {
+    for (const f of ENGINE_FILES) fs.writeFileSync(path.join(dir, f), '// ' + f + '\n');
+    fs.writeFileSync(path.join(dir, 'decoy.js'), '// nothing requires this\n');
+    fs.writeFileSync(path.join(dir, 'gen_internal.js'), '// see decoy.js for why\n');
+    assert.ok(!engineFiles(dir).includes('decoy.js'),
+      'a filename in prose pulled a whole file into the engine hash');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a required sibling that is not on disk is not hashed at all', () => {
+  // Only an ENTRY POINT hashes as MISSING when it is absent. A require of
+  // something that was never there is a broken build, and the portal's
+  // requireScan() is the check that names it; this one is about not inventing
+  // a row here and calling the engine changed because of it.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engver-'));
+  try {
+    for (const f of ENGINE_FILES) fs.writeFileSync(path.join(dir, f), '// ' + f + '\n');
+    fs.writeFileSync(path.join(dir, 'gen_internal.js'), "require(_dep('ghost.js'));" + '\n');
+    assert.ok(!engineFiles(dir).includes('ghost.js'));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the same tree hashes the same, twice', () => tmp(dir => {
@@ -62,18 +128,27 @@ test('moving content between two files changes the hash', () => tmp(dir => {
 
 test('the file NAME is hashed, so the NUL delimiter cannot be forged', () => {
   // The separator alone is not enough. These two trees produce a byte-identical
-  // stream of contents-plus-delimiters — the NUL sits inside gen_internal.js in
-  // one and at the end of gen_external_radial.js in the other — so an engine that
-  // hashed only the bytes would call them the same build. Hashing the name first
-  // is what makes the record unambiguous, and this is the one property the swap
-  // test above cannot see. (Found by test/prove-red.js: dropping the name from
-  // the hash survived every other assertion in this file.)
+  // stream of contents-plus-delimiters — the NUL sits inside the first file in
+  // one and at the end of the second in the other — so an engine that hashed only
+  // the bytes would call them the same build. Hashing the name first is what makes
+  // the record unambiguous, and this is the one property the swap test above
+  // cannot see. (Found by test/prove-red.js: dropping the name from the hash
+  // survived every other assertion in this file.)
+  //
+  // THE TWO FILES HAVE TO BE ADJACENT IN HASH ORDER, and that is why they are
+  // named here rather than taken from ENGINE_FILES. The construction used
+  // gen_internal.js and gen_external_radial.js while the hash walked the entry
+  // points in declaration order; the closure sorts, which put another file
+  // between them and made the two streams differ for a reason that had nothing to
+  // do with names. The mutation then survived — a test that had been proving the
+  // property stopped, silently, because a change elsewhere invalidated its setup.
   const NUL = '\u0000';   // a real NUL, written as an escape
+  const [FIRST, SECOND] = [...ENGINE_FILES].sort();
   const hash = (o) => tmp(d => computeEngineVersion(seed(d, Object.assign(
     Object.fromEntries(ENGINE_FILES.map(f => [f, ''])), o))));
   assert.notStrictEqual(
-    hash({ 'gen_internal.js': 'A' + NUL + 'B' }),
-    hash({ 'gen_internal.js': 'A', 'gen_external_radial.js': 'B' + NUL }));
+    hash({ [FIRST]: 'A' + NUL + 'B' }),
+    hash({ [FIRST]: 'A', [SECOND]: 'B' + NUL }));
 });
 
 test('a missing file is not the same as an empty one', () => tmp(dir => {

@@ -467,6 +467,93 @@ const MUTATIONS = [
     what: 'a corrupt sidecar is filed under the same word as a sheet type nobody reports',
     find: "    if (unplaced === null) dropState = 'unreadable';   // the file was there and would not parse",
     to: "    if (unplaced === null) dropState = 'no-reporter';" },
+
+  // services_panel.js - extracted 2026-08-27 from gen_internal.js. MEASURED the
+  // same day across the 18 maps that draw an internal sheet: NINE of its 35
+  // labelled branches are dark, and they include a whole layout (panelCols, 0
+  // maps), the whole panelScale opt-out (0), the fare note (0) and keyCols:1 (0).
+  // Covered by the byte gate instead: the plain layout (12), panelGroups (5),
+  // panelCorridors (1, High Wycombe), the not-shown note (6), a subtitle fitted
+  // down (2) and the compressed Key pitch (1, Ely Co-op).
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the type scale can no longer be turned off, so the hand-tuned sizes it replaced are unreachable',
+    find: "  const PS = PANEL_SCALE_ON ? { head:5.0, title:3.5, sub:2.9, dense:2.45 } : null;",
+    to: "  const PS = { head:5.0, title:3.5, sub:2.9, dense:2.45 };" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the no-scale panel loses the 2mm nudge under its heading, so every ungated row moves up',
+    find: "  if(!PS) py+=2;",
+    to: "  if(!PS) py+=0;" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'panelCols fills row-major, so a column no longer reads top to bottom',
+    find: "      const col=Math.floor(i/per), row=i%per;",
+    to: "      const col=i%nCol, row=Math.floor(i/nCol);" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the panelCols badge loses its legibility floor, so a tight row prints an unreadable disc rather than warning',
+    find: "    const pcolsBadgeR = Math.min(PBR-0.6, Math.max(1.8, crow/2-0.5));",
+    to: "    const pcolsBadgeR = Math.min(PBR-0.6, Math.max(0.8, crow/2-0.5));" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'a panelCols subtitle is measured to the sheet trim again, so column one runs under column two',
+    find: "      const _sfz=(PRINT_SAFE==null)?_ssz:subFit(r,_stext,_sx,_ssz,cx+cw);",
+    to: "      const _sfz=(PRINT_SAFE==null)?_ssz:subFit(r,_stext,_sx,_ssz,297-PRINT_SAFE);" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'subFit shrinks past the 2.4mm print floor instead of refusing and saying so',
+    find: "    if(want >= 2.4) return Math.floor(want*100)/100;",
+    to: "    if(want >= 0) return Math.floor(want*100)/100;" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the corridor note claims a shared palette on a town that has none',
+    find: "      const txt = RJ.corridorNote || (CPAL",
+    to: "      const txt = RJ.corridorNote || (true" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'corridorNote:false stops suppressing the sentence',
+    find: "    if(RJ.corridorNote!==false){",
+    to: "    if(true){" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the duplicated route-number prefix is dropped whether or not printSafe is set, so an ungated town changes',
+    find: "      const d = (PRINT_SAFE!=null && !stacked && d0[0])",
+    to: "      const d = (!stacked && d0[0])" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'keyCols is ignored and every Key takes the two-column default',
+    find: "  const KEY_COLS = Math.max(1, Math.min(3, (DESIGN.keyCols|0) || 2));",
+    to: "  const KEY_COLS = 2;" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key lists every category again, including ones this sheet draws none of',
+    find: "  const key=KEY_ALL.filter(([cat])=>pois.some(p=>p.cat===cat));",
+    to: "  const key=KEY_ALL.slice();" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key pitch is measured against a footer plate a footerSafe:false sheet does not draw',
+    find: "    if(!FTIER || !FOOTER_SAFE) return KROW;",
+    to: "    if(!FTIER) return KROW;" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the tier rows are counted off the frequency block again, so a sheet explains a weight no drawn lane uses',
+    find: "    const used = new Set(order.map(r=>(RJ.frequency||{})[r]).filter(Boolean));",
+    to: "    const used = new Set(Object.values(RJ.frequency||{}));" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the not-shown note loses its short fallback, so a row one word too long says nothing at all',
+    find: "    for(const note of [NOT_SHOWN_NOTE, NOT_SHOWN_SHORT]){",
+    to: "    for(const note of [NOT_SHOWN_NOTE]){" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'a one-point trim counts as drawn, so a service with no line on the map is badged in silence',
+    find: "  const NOT_DRAWN = new Set(panelOrder.filter(r=>!(TRIM && TRIM[r] && TRIM[r].pts && TRIM[r].pts.length>=2)));",
+    to: "  const NOT_DRAWN = new Set(panelOrder.filter(r=>!(TRIM && TRIM[r] && TRIM[r].pts)));" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the fare note wraps at 48 characters, so its box and the panel below it move',
+    find: "    for(const wd of words){ if((cur+' '+wd).trim().length>38){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }",
+    to: "    for(const wd of words){ if((cur+' '+wd).trim().length>48){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }" },
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

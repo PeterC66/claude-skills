@@ -79,14 +79,9 @@ const FM = require(_dep('font_metrics.js'));
 // portal reads stderr only on a non-zero exit, so on the success path the whole
 // stream was discarded unread. Counted (not thrown) so one run reports every
 // refusal, and the artwork is still written so it can be looked at. Unset, inert.
-const STRICT_GUARDS = process.env.STRICT_GUARDS === '1';
-let REFUSAL_COUNT = 0;
-const refuse = (msg) => {
-  REFUSAL_COUNT++;
-  let t = String(msg);
-  while (t.length && t.charAt(t.length - 1) === NLCH) t = t.slice(0, -1);
-  process.stderr.write(t + NLCH);
-};
+// The flag, the counter and refuse() live in strict_guards.js, shared with
+// gen_internal.js, which carried the original of all of it.
+const { STRICT_GUARDS, refuse, report: reportRefusals } = require(_dep('strict_guards.js'));
 
 // The data folder: --dir wins, then LEAFLET_DIR (what the portal and the skill's
 // own runners set), then the current directory. Before LEAFLET_DIR was honoured
@@ -1369,9 +1364,7 @@ if (HIDE_EMPTY && standsAll.length !== stands.length) {
 }
 // A refusal IS the exit code under STRICT_GUARDS, so every spawn path catches it
 // through the error handling it already has. Unset, the exit is what it always was.
-if (STRICT_GUARDS && REFUSAL_COUNT > 0) {
-  process.stderr.write('STRICT_GUARDS: ' + REFUSAL_COUNT + ' guard'
-    + (REFUSAL_COUNT === 1 ? '' : 's') + ' refused to draw something this sheet was asked for.' + NLCH);
+if (reportRefusals('refused to draw something this sheet was asked for.')) {
   process.exit(1);
 }
 process.exit(overflow > 0 ? 1 : 0);

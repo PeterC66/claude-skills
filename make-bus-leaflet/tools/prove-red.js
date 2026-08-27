@@ -37,6 +37,29 @@ const KEEP = process.argv.includes('--keep');
  * is a mutation that did not do what it says, which would report a false green
  * just as loudly as the bug it is hunting. */
 const MUTATIONS = [
+  // strict_guards.js - extracted 2026-08-27 from two copies in gen_internal.js
+  // and gen_boarding.js. The byte gate runs with the flag UNSET and no committed
+  // map refuses anything, so none of this file is reachable from it; these four
+  // are the whole of what keeps the refusal contract honest.
+  { suite: 'strict_guards.test.js', file: 'strict_guards.js',
+    what: 'refusals become fatal by default, and the byte gate turns red over fixtures that legitimately warn',
+    find: "const STRICT_GUARDS = process.env.STRICT_GUARDS === '1';",
+    to: "const STRICT_GUARDS = process.env.STRICT_GUARDS !== '0';" },
+
+  { suite: 'strict_guards.test.js', file: 'strict_guards.js',
+    what: 'only one trailing newline is stripped, so a caller that added two gets a blank line in the middle of the report',
+    find: '  while (t.length && t.charAt(t.length - 1) === NL) t = t.slice(0, -1);',
+    to: '  if (t.length && t.charAt(t.length - 1) === NL) t = t.slice(0, -1);' },
+
+  { suite: 'strict_guards.test.js', file: 'strict_guards.js',
+    what: 'the banner says "guard" however many refused - the plural branch is the one a real run takes',
+    find: "    + (count === 1 ? '' : 's') + ' ' + tail + NL);",
+    to: "    + '' + ' ' + tail + NL);" },
+
+  { suite: 'strict_guards.test.js', file: 'strict_guards.js',
+    what: 'the module ends the run itself, taking the decision away from callers that end differently on purpose',
+    find: '  return true;' + String.fromCharCode(10) + '}' + String.fromCharCode(10) + String.fromCharCode(10) + 'module.exports',
+    to: '  process.exitCode = 1;' + String.fromCharCode(10) + '  return true;' + String.fromCharCode(10) + '}' + String.fromCharCode(10) + String.fromCharCode(10) + 'module.exports' },
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'the sheet-version stamp goes back to counting as a lost label',
     find: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?|Map version v?[\\d.]+|(?:build|Draft|Preview) v?[\\d.]+(?: · .*)?)$/;',

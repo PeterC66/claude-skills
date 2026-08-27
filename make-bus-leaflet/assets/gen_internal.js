@@ -113,6 +113,21 @@
 const fs = require('fs');
 const path = require('path');
 
+// SHARED CODE IS SELF-RESOLVING. This file runs in three places: in-place from
+// the skill's assets/ (siblings present), copied into a town's run folder (no
+// siblings), and from the portal's engine/place/ against a map's data dir (no
+// siblings either, but SKILL_ASSETS points at the vendored engine/ root). A
+// require that resolves here and throws there is a recorded failure shape, so
+// every shared dependency goes through this one resolver. Order: a sibling
+// file, then SKILL_ASSETS, then the skill's own path. Resolution does not
+// affect the SVG.
+const _dep = (name) => {
+  const local = path.join(__dirname, name);
+  try { if (fs.existsSync(local)) return local; } catch (e) {}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/' + name;
+};
+
 // ---- STRICT_GUARDS -----------------------------------------------------------
 // A guard that REFUSES TO DRAW something the config asked for has not done its
 // job, but it used to exit 0 all the same -- from the process's point of view it
@@ -135,15 +150,10 @@ const path = require('path');
 //
 // Counted, not thrown, so one run reports EVERY refusal rather than only the
 // first -- and the artwork is still written, so it can be looked at.
-const STRICT_GUARDS = process.env.STRICT_GUARDS === '1';
-const GUARD_NL = String.fromCharCode(10);
-let REFUSAL_COUNT = 0;
-function refuse(msg){
-  REFUSAL_COUNT++;
-  let t = String(msg);
-  while (t.length && t.charAt(t.length - 1) === GUARD_NL) t = t.slice(0, -1);
-  process.stderr.write(t + GUARD_NL);
-}
+// The flag, the counter and refuse() live in strict_guards.js, shared with
+// gen_boarding.js, which carried a second copy of all of it. The reasoning went
+// with the code; the paragraphs above are what a reader of THIS file needs.
+const { STRICT_GUARDS, NL: GUARD_NL, refuse, report: reportRefusals } = require(_dep('strict_guards.js'));
 // ------------------------------------------------------------------------------
 // All DATA files are read from, and SVG written to, the TOWN WORKING FOLDER
 // (the current directory). Run this script from inside the town's folder.
@@ -3924,10 +3934,7 @@ if (process.env.BUILD_META_DIR) {
 // Last statement in the file, so the artwork above is already written: a build
 // that refused something is still worth LOOKING at, it is just not worth
 // publishing. exitCode rather than exit() so buffered stdout still flushes.
-if (STRICT_GUARDS && REFUSAL_COUNT > 0) {
-  process.stderr.write('STRICT_GUARDS: ' + REFUSAL_COUNT + ' guard'
-    + (REFUSAL_COUNT === 1 ? '' : 's') + ' refused to draw something this config'
-    + ' asked for -- see the messages above. The sheet is incomplete and nothing'
-    + ' on it says so.' + GUARD_NL);
+if (reportRefusals('refused to draw something this config asked for -- see the'
+    + ' messages above. The sheet is incomplete and nothing on it says so.')) {
   process.exitCode = 1;
 }

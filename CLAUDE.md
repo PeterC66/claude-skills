@@ -53,7 +53,26 @@ node assets/status.js --buses "C:/u3a St Ives/Using AI/Buses" --portal "C:/Claud
 
 ## What cannot be unit-tested, and what to do instead
 
-Five generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be `require`d: `gen_internal.js` (3,933 lines), `gen_boarding.js`, `diagram_internal.js`, `gen_external_radial.js`, `gen_external_places.js` — 8,178 lines between them. The Python half has no runner at all.
+Five generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be `require`d: `gen_internal.js` (**3,734 lines**, down from 3,933 and coming down — see the module map below), `gen_boarding.js`, `diagram_internal.js`, `gen_external_radial.js`, `gen_external_places.js`. The Python half has no runner at all.
+
+### The module map — what has come OUT of the generators, and what each piece owns
+
+OA-129 Phase 3 is extracting `gen_internal.js` along the comment banners already in it. Each of these is requireable, tested, and vendored into the portal at `engine/<name>.js` (the engine ROOT, beside `icons.js` — not beside the generator that requires it, because `renderMap.js` passes `SKILL_ASSETS = engine/`).
+
+| Module | Owns | Callers |
+|---|---|---|
+| `strict_guards.js` | the refusal contract: the flag, the counter, `refuse()`, and the closing banner. `report()` decides but does not exit, because the callers end differently on purpose | `gen_internal.js`, `gen_boarding.js` |
+| `poi_select.js` | raw OSM elements → the drawable POI list: classify, industrial, excludeName, unnamed greens, tidy/canon, de-duplication | `gen_internal.js` |
+| `fit_set.js` | which stops the frame is scaled to, including the off-path rule | `gen_internal.js` |
+| `projection.js` | lat/lon → page mm: planar, PCA rotation, centre fisheye, detail lenses, fit | `gen_internal.js` |
+| `lane_normals.js` | the corridor orientation field behind `design.laneOrientation` | `gen_internal.js` |
+| `labeller.js`, `font_metrics.js`, `footer.js`, `icons.js`, `qr.js` | text placement, metrics, the footer band, the icon set, QR codes | several |
+
+**The method, if you are continuing it.** Extract, never rewrite: move the block into a module whose parameters are the generator's own variable names, have the script require it through `_dep()`, and prove all 20 maps byte-identical before committing. `node assets/status.js --json` reduced to its sheet verdicts is a 27-second gate, so run it after every single extraction. Before trusting it, watch it go red — one anchored mutation to a generator moves 17 of the 74 verdicts.
+
+**And measure which branches the 20 maps actually take before deciding what to test.** Some blocks are fully covered by the byte gate and need tests only for their order properties; others are almost entirely dark to it. Measured 2026-08-27: no committed map refuses anything, so the whole `STRICT_GUARDS` path is invisible to the gate; six of `projection.js`'s branches are taken by no map at all; `fit_set.js`'s off-path rule is reached by exactly one. A test written without that measurement is as likely to duplicate the gate as to complement it.
+
+**Two things no byte gate reads, and both are worth comparing before and after an extraction:** **stderr** (19 of the 20 maps write to it) and an **`EDITOR_KEYS=1`** render, which is a different code path that 18 of the 20 exercise.
 
 **So when a generator fault needs new logic, write the new logic as a module rather than as more lines in the script.** `lane_normals.js` was created that way and was requireable and tested from the day it existed. The re-vendor is owed either way, and this way the fault arrives with a test.
 

@@ -77,6 +77,56 @@ const MUTATIONS = [
     find: "    ? Math.round((FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0))*100)/100",
     to: "    ? (FOOTER_PLATE_TOP - (DESIGN.footerGap!=null?DESIGN.footerGap:3.0)) + 0.001" },
 
+  // svg_primitives.js - extracted 2026-08-27 from gen_internal.js. Measured the
+  // same day: seven of the 18 maps with an internal sheet draw a stadium badge,
+  // so the SHAPE change is well covered by the byte gate. Two things are not.
+  // design.badgeFit is false on ZERO maps, so the opt-out is a dark branch; and
+  // gk() emits nothing unless EDITOR_KEYS=1, which no byte gate sets.
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the badgeFit opt-out stops working, so a town that asked for plain discs gets stadiums anyway',
+    find: "    if(!BFIT) return rad;",
+    to: "    if(false) return rad;" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the 0.3mm inset goes, so X31 - the widest shipped three-character key - turns into a pill on four maps',
+    find: "    return (w <= 2*rad-0.3) ? rad : w/2 + 0.35*rad;",
+    to: "    return (w <= 2*rad) ? rad : w/2 + 0.35*rad;" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'badgeXWs takes the first route\'s extra rather than the widest, so a bundle reserves too little',
+    find: "  const badgeXWs = (list,rad)=> BFIT ? Math.max(0,...list.map(r=>badgeXW(r,rad))) : 0;",
+    to: "  const badgeXWs = (list,rad)=> BFIT ? (list.length?badgeXW(list[0],rad):0) : 0;" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the badge measures the route KEY rather than the label printed in it, so a relabelled route is sized wrong',
+    find: "    const w = FONT.textWidth(blab(r), rad, true);   // font-size == rad, Arial Bold",
+    to: "    const w = FONT.textWidth(String(r), rad, true);   // font-size == rad, Arial Bold" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'a bundled stack hangs downward from the line instead of straddling it, so half of it sits on the route',
+    find: "    const pitch=rad*2+0.5, y0=y-(list.length-1)/2*pitch;",
+    to: "    const pitch=rad*2+0.5, y0=y;" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the stack half-height forgets the outermost disc, so labels are allowed to sit on top of it',
+    find: "    return {h:(list.length-1)/2*pitch + rad, xw};",
+    to: "    return {h:(list.length-1)/2*pitch, xw};" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'gk stops escaping the key, so a feature named with an ampersand writes invalid SVG in editor mode',
+    find: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${esc(key)}\">${inner}</g>` : inner;",
+    to: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${key}\">${inner}</g>` : inner;" },
+
+  // NOT here, and deliberately: a mutation that deletes badgeStack's one-element
+  // fast path SURVIVES, because it is an optimisation and not a branch — with one
+  // member y0 collapses to y and (n-1)/2*pitch to 0, so the general loop draws the
+  // same bytes. Measured 2026-08-27 at four radii. Leaving an equivalent mutant in
+  // this list would teach the next reader to write a test for a difference that
+  // does not exist.
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the badge text shrinks to fit instead of the disc growing - the fix that was rejected for breaking the 2.4mm legibility floor',
+    find: "    out(`<text x=\"${x}\" y=\"${y}\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"${(rad).toFixed(2)}\" fill=\"${TXT[r]||'#fff'}\" text-anchor=\"middle\" dominant-baseline=\"central\">${esc(blab(r))}</text>`);",
+    to: "    out(`<text x=\"${x}\" y=\"${y}\" font-family=\"Arial\" font-weight=\"bold\" font-size=\"${(Math.min(rad, rad*2*rad/Math.max(1,hw*2))).toFixed(2)}\" fill=\"${TXT[r]||'#fff'}\" text-anchor=\"middle\" dominant-baseline=\"central\">${esc(blab(r))}</text>`);" },
   // fit_set.js - extracted 2026-08-27 from gen_internal.js. Exactly ONE of the 20
   // committed maps (Ramsey) reaches the off-path rule, and it is the map the rule
   // was written for, so the byte diff certifies this block on a single data point.

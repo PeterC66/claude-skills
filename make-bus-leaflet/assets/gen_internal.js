@@ -172,6 +172,7 @@ const LN = require(_dep('lane_normals.js'));
 const { selectPois } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
+const { svgPrimitives } = require(_dep('svg_primitives.js'));
 // The internal map's own footer notes are fixed (not per-town), so the footer plate's
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep
@@ -863,67 +864,13 @@ const XYS=a=> baseXY(a);            // base accessor (anchor / road labels share
 
 // ---------- svg helpers ----------
 const W=297,H=210; let s=''; const out=x=>{s+=x+'\n';};
-const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-// editor-only element keys (no-op unless EDITOR_KEYS=1, so normal output is unchanged)
-const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>` : inner;
-/* ---- design.badgeFit: a 4-character route key does not fit a disc ------------
- * badge() has always drawn its text at font-size = the badge RADIUS. That is
- * right for one to three characters and wrong for four: "301S" is 5.6mm of Arial
- * Bold in a 4.8mm stop badge, 7.0mm in a 6.0mm terminus badge and 9.3mm in the
- * 8.0mm Services-panel one, so it spilled over BOTH edges and the number read as
- * sitting ON the disc rather than IN it. Found 2026-08-15 on Ramsey (301S / 301V
- * / 301X); March (ZIP2) and St Ives (VL14) have it too, on their external sheets
- * as well as their internal ones.
- *
- * The fix is the SHAPE, not the type. Shrinking the font to fit the disc is the
- * smaller change and it fails exactly where it matters most: fitting "301S"
- * inside a 2.4mm-radius stop badge needs 1.8mm type, well under the 2.4mm print
- * legibility floor `quality_metrics.js` enforces. So the badge grows sideways
- * into a stadium — what operator maps do with a lettered route number — and the
- * type stays the size it was.
- *
- * `badgeHalfW(route, rad)` is the single source of truth for how wide a badge is,
- * and `badgeXW` is the same thing as an EXTRA over the radius. Every pitch, clamp
- * and reserve box below is expressed as `<the old literal> + <extra>`, never
- * recomputed from the half-width, so a town with no long key adds a floating
- * zero and stays bit-for-bit identical (invariant 2). Absent the key `badgeXW` is
- * 0 everywhere and none of it runs at all.
- */
-const BFIT = BADGE_FIT;
-// Overflow is measured against the DIAMETER, not against a chord: "X31" pokes a
-// hair outside the circle at the corners of its cap band and has always looked
-// fine, and tightening the test to the chord would turn three-character keys
-// that ship today into pills. 0.3mm of inset keeps the widest shipped
-// three-character key (X31, 4.27mm in a 4.8mm disc) a disc.
-const badgeHalfW = (r,rad)=>{
-  if(!BFIT) return rad;
-  const w = FONT.textWidth(blab(r), rad, true);   // font-size == rad, Arial Bold
-  return (w <= 2*rad-0.3) ? rad : w/2 + 0.35*rad;
-};
-const badgeXW = (r,rad)=> BFIT ? badgeHalfW(r,rad)-rad : 0;
-// widest EXTRA over a set of routes drawn at one radius — needed before the draw,
-// because several call sites test for collisions and then decide whether to badge.
-const badgeXWs = (list,rad)=> BFIT ? Math.max(0,...list.map(r=>badgeXW(r,rad))) : 0;
-function badge(x,y,r,rad=4.6){
-  const hw=badgeHalfW(r,rad);
-  if(hw>rad) out(`<rect x="${(x-hw).toFixed(2)}" y="${(y-rad).toFixed(2)}" width="${(2*hw).toFixed(2)}" height="${(2*rad).toFixed(2)}" rx="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  else out(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(r))}</text>`);
-  return hw-rad;}
-// A bundled corridor's badge is a vertical STACK of its members' badges (the
-// convention every operator's own big-town map uses: one line, many identities).
-// A one-element list reduces to exactly badge() at the same centre, so an
-// unbundled town is byte-identical. Returns the stack's half-height in mm, and
-// (under design.badgeFit) how much wider than the disc its widest member drew,
-// so the caller can reserve the right box.
-function badgeStack(x,y,list,rad){
-  if(list.length===1){ const xw=badge(x,y,list[0],rad); return {h:rad, xw}; }
-  const pitch=rad*2+0.5, y0=y-(list.length-1)/2*pitch;
-  let xw=0;
-  list.forEach((r,i)=>{ xw=Math.max(xw, badge(x, y0+i*pitch, r, rad)); });
-  return {h:(list.length-1)/2*pitch + rad, xw};
-}
-function cross(x,y,col){const a=1.0,b=2.6;out(`<rect x="${x-a/2}" y="${y-b/2}" width="${a}" height="${b}" fill="${col}"/><rect x="${x-b/2}" y="${y-a/2}" width="${b}" height="${a}" fill="${col}"/>`);}
+// The eight primitives every mark on this sheet is made of live in
+// svg_primitives.js, along with the design.badgeFit reasoning. They append
+// through `out` and return measurements, so the document stays here.
+const { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack, cross } = svgPrimitives({
+  out, palette: C, textOn: TXT, badgeLabel: blab, font: FONT,
+  badgeFit: BADGE_FIT, editorKeys: EDK,
+});
 
 // ---- linear features: paths + labels (honour overrides.features[key]) ----
 const featOv = f => (OV.features||{})[f.key]||{};

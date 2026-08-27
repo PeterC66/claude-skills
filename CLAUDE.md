@@ -23,7 +23,7 @@ Run from `make-bus-leaflet`:
 npm test
 ```
 
-123 tests, about a second, no network and no data tree needed. Then the two falsification harnesses, which exist because a green check nobody has watched go red proves nothing:
+123 tests, about a second, no network and no data tree needed. Then the three falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
 
 ```bash
 npm run test:prove-red
@@ -36,6 +36,12 @@ npm run test:prove-red-gates
 ```
 
 Mutates each of the five generators and requires the **byte gate** to object — one target per sheet type. This is the one that matters before a refactor, because the byte gate is the only thing guarding the five big generators at all.
+
+```bash
+npm run test:prove-s6
+```
+
+Falsifies the **S6 verification checks** — the third thing neither of the others can reach, because `verify_report.js` is a top-to-bottom script like the generators. Four of its checks were rewritten on 2026-08-27 to stop manufacturing artefacts, and quietening a check and breaking it look identical from outside: fewer findings either way. So every case comes in a **pair** — quiet on the artefact, loud on a real fault of the same kind. 22 assertions; 12 of them go red against the pre-fix engine. It seeds from the **tracked** S1/S2/S3 runs plus `redteam.json`, never from an S6 run folder, because S4/S5/S6 folders are gitignored and a fresh clone has none of them.
 
 **Nothing may edit `assets/` in place.** Every file there is vendored and hashed; both harnesses work on temp copies for exactly that reason.
 

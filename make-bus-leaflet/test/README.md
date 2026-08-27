@@ -40,6 +40,24 @@ npm run test:prove-red-gates
 
 Add `--keep` to leave the mutated generators on disk, and `--buses "<path>"` if the data repo is not at `C:\u3a St Ives\Using AI\Buses`.
 
+## Proving the S6 CHECKS can still fail — the third harness, added 2026-08-27
+
+The other two falsify code that draws. This one falsifies code that **judges**, and it exists for a different reason from either.
+
+On 2026-08-27 four of `verify_report.js`'s checks were rewritten because they were manufacturing findings that looked like defects and were not — across the stored runs the estate went from 34 HARD findings to 12. That is only good news if the checks can still find a real fault, and **the failure mode of fixing a noisy check is a check that no longer says anything at all, which looks exactly like success**: in both cases the report gets shorter. Neither of the other harnesses can see any of this. `prove-red.js` cannot require `verify_report.js` — it is a top-to-bottom script that reads a run directory and exits, the same reason the five generators are out of reach — and `prove-red-gates.js` compares drawn bytes, which a verification check never touches.
+
+```bash
+npm run test:prove-s6
+```
+
+`tools/prove-s6-checks.js` builds a run directory from real map data, optionally mutates **one input**, runs `verify_report.js` there, and asserts on the resulting `verification.json`. **Every case is a pair**: the artefact must be quiet, *and* a genuine fault of the same kind must still be found. So the direction check must stay silent on a one-buffer-stop route **and** still go HARD on a route reversed on purpose; a truncated chain must be SOFT **and** the identical data must go HARD once the chain is extended one stop past the town boundary; an exclusion naming a different operator must be ignored **and** the same exclusion carrying our own operator must block. 22 assertions in all, and **12 of them go red against the pre-fix engine** — which is what establishes that the assertions are load-bearing rather than decorative.
+
+**It seeds from the tracked S1/S2/S3 runs plus `redteam.json`, never from an S6 run folder.** Copying a stored S6 run is shorter and was the first attempt, but `S4/S5/S6` folders are gitignored: `git ls-files` over one returns `README.md`, `verification.docx` and (since 2026-08-27) `redteam.json`, and nothing else. A harness written that way runs only on the laptop that already has the data. Seeding from the tracked stages is also what a real S6 does — `stage.js pull S1 S2 S3` — and for a place it runs `place_verified_services.js` from the sibling skill first, exactly as the documented place procedure does.
+
+**Because it seeds from `latest`, the inputs can move under the fixtures, and that is deliberate.** Every case that depends on a property of the data asserts that property and throws `fixture assumption broken` rather than quietly passing over data that no longer exhibits the thing being proved. That guard has already earned itself twice: once when route 303's chain ends turned out to span too widely for a reflection to express a reversal, and once when St Neots Town Centre's route 66 stopped being a HARD **because the data had been fixed** — the place gained curated `destinations[]`. Asserting the historic finding would have left this harness a monument to a resolved defect; it now proves the check can be *made* to fire instead.
+
+Add `--keep` to leave the temp directories on disk, and `--buses "<path>"` if the data repo is elsewhere. It runs in `gates.yml` alongside the other two, ahead of the board.
+
 **It found two faults on its first run, both in `status.js`, and neither was in the mutation table.** They came from reading the gate closely enough to write the harness:
 
 - The derived-sheet rows guarded on `routesJson.internalSchematic && exists(<sheet>.svg)`. So a map whose config **asks** for a schematic and whose SVG had gone printed `-`, the same benign dash as a map that never had one. That is the precise trap `judgeNoSheet()` was written for on internal/external/boarding, still open on the other two sheet types.

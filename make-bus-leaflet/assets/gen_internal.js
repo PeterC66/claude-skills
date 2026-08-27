@@ -158,32 +158,17 @@ const { STRICT_GUARDS, NL: GUARD_NL, refuse, report: reportRefusals } = require(
 // All DATA files are read from, and SVG written to, the TOWN WORKING FOLDER
 // (the current directory). Run this script from inside the town's folder.
 const DIR = process.env.LEAFLET_DIR || process.cwd();
-// icons.js (shared code) loads from the skill's assets. Self-resolving so this
-// SAME file works whether it is run in-place from assets/ (sibling icons.js) or
-// copied into a town's run folder (no sibling -> fall back to the skill path /
-// SKILL_ASSETS env). Resolution does not affect SVG output.
-const _ICONS = (()=>{ const local=path.join(__dirname,'icons.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'icons.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/icons.js'; })();
-const { icon } = require(_ICONS);
-const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
-const { footerBand, footerPlateTop } = require(_FOOTER);
-const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'labeller.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
+// Every shared dependency resolves through _dep above, which is the same three-
+// step search these five each spelled out for themselves until 2026-08-27.
+// font_metrics.js deliberately follows labeller.js rather than searching on its
+// own: the labeller and its metrics table must come from ONE engine, and a
+// search could pair a sibling labeller with a SKILL_ASSETS metrics file.
+const { icon } = require(_dep('icons.js'));
+const { footerBand, footerPlateTop } = require(_dep('footer.js'));
+const _LABELLER = _dep('labeller.js');
 const { Labeller } = require(_LABELLER);
-const _FONTM = path.join(path.dirname(_LABELLER), 'font_metrics.js');
-const FONT = require(_FONTM);
-const _LANES = (()=>{ const local=path.join(__dirname,'lane_normals.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'lane_normals.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/lane_normals.js'; })();
-const LN = require(_LANES);
+const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
+const LN = require(_dep('lane_normals.js'));
 // The internal map's own footer notes are fixed (not per-town), so the footer plate's
 // top edge is a known constant — computed once here and used both by the mapNotes
 // collision check below and the footerBand() call at the very end of this file. Keep

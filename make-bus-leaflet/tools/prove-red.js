@@ -749,6 +749,94 @@ const MUTATIONS = [
     find: "    out(`<line x1=\"${bx.toFixed(2)}\" y1=\"${by.toFixed(2)}\" x2=\"${tx.toFixed(2)}\" y2=\"${ty.toFixed(2)}\" stroke=\"#666\" stroke-width=\"0.8\"/>`);",
     to: "    out(`<line x1=\"${bx}\" y1=\"${by}\" x2=\"${tx}\" y2=\"${ty}\" stroke=\"#666\" stroke-width=\"0.8\"/>`);" },
 
+
+  // feature_labels.js - extracted 2026-08-27 from gen_internal.js, the block
+  // extraction 7 left behind. MEASURED across the 18 maps with an internal
+  // sheet: 17 of its 34 labelled branches are dark, and among them is every
+  // fault path of all four guards. That is the guards WORKING - each was
+  // written after a shipped sheet went wrong and the boards were then fixed -
+  // but it also means the byte gate certifies none of them. Delete a guard and
+  // all 20 maps stay byte-identical, until the next town sites a label badly.
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "a hidden feature keeps its name, so a suppressed river is labelled on empty paper",
+    find: "    if(ov.hide || lov.hide || !f.labelPos) return;",
+    to: "    if(lov.hide || !f.labelPos) return;" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the coreBox guard goes, so a feature name prints inside the town-centre box",
+    find: "    if(inCore([x,y])){",
+    to: "    if(false){" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the panel guard goes, and a river name is struck across the Services list again",
+    find: "    if(x>MX1+2){",
+    to: "    if(false){" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the panel guard measures from the wrong edge, so nothing to the right ever trips it",
+    find: "    if(x>MX1+2){",
+    to: "    if(x>MX1+200){" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the footer guard goes, so six sheets print a name under the plate that covers it",
+    find: "    if(FOOTER_SAFE && y>FOOTER_PLATE_TOP-1.5){",
+    to: "    if(false){" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the footer guard loses its 1.5mm margin, so a name touching the plate is let through",
+    find: "    if(FOOTER_SAFE && y>FOOTER_PLATE_TOP-1.5){",
+    to: "    if(FOOTER_SAFE && y>FOOTER_PLATE_TOP+1.5){" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the stranded-label check is measured against ALL the geometry, including the part clipped off the page",
+    find: "          if(!inFrame([px,py])) continue;",
+    to: "          if(false) continue;" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "a long span is tested only at its ends, so a line crossing the frame reads as entirely clipped",
+    find: "          const n = Math.max(2, Math.min(64, Math.ceil(Math.hypot(vx,vy)/2)));",
+    to: "          const n = 1;" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the stranded threshold triples, so a name 70mm from its river passes without a word",
+    find: "      else if(best > 25)",
+    to: "      else if(best > 75)" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "\"no geometry at all\" and \"all of it clipped\" collapse into one message, so the remedy is wrong half the time",
+    find: "      if(!anyInk)",
+    to: "      if(false)" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the auto path stops reading the solved position and draws at the feature default instead",
+    find: "      const got = autoPos[f.key];",
+    to: "      const got = autoPos[f.key] || {x:0,y:0};" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "a label offset compounds with a hand position instead of losing to it",
+    find: "    if(lov.pos){ x=lov.pos.x; y=lov.pos.y; } else if(lov.offset){ x+=lov.offset.dx; y+=lov.offset.dy; }",
+    to: "    if(lov.pos){ x=lov.pos.x; y=lov.pos.y; } if(lov.offset){ x+=lov.offset.dx; y+=lov.offset.dy; }" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the label stops following the feature nudge, so a moved river leaves its name behind",
+    find: "    x+=(ov.move&&ov.move.dx)||0; y+=(ov.move&&ov.move.dy)||0;               // follow the feature nudge",
+    to: "    x+=0; y+=0;               // follow the feature nudge" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "an override text of \"\" falls back to the feature label, so there is no way to draw the line unnamed",
+    find: "    const text=lov.text!=null?lov.text:f.label;",
+    to: "    const text=lov.text||f.label;" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "labelItalic:false stops meaning upright, so every feature name is italic whatever the town says",
+    find: "    const italic=f.labelItalic!==false, size=f.labelSize||4, anchor=lov.anchor||null;",
+    to: "    const italic=true, size=f.labelSize||4, anchor=lov.anchor||null;" },
+
+  { suite: 'feature_labels.test.js', file: 'feature_labels.js',
+    what: "the feature name goes out unescaped, so an ampersand in a river name breaks the SVG",
+    find: "${anchor?` text-anchor=\"${anchor}\"`:''} fill=\"${f.labelColor||'#7fb0d8'}\">${esc(text)}</text>`);",
+    to: "${anchor?` text-anchor=\"${anchor}\"`:''} fill=\"${f.labelColor||'#7fb0d8'}\">${text}</text>`);" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

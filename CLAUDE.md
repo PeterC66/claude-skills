@@ -23,7 +23,7 @@ Run from `make-bus-leaflet`:
 npm test
 ```
 
-123 tests, about a second, no network and no data tree needed. Then the three falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
+**324 tests across 22 suites**, about nine and a half seconds, no network and no data tree needed. (This said *123 tests, about a second* until 2026-08-28 — true when eleven modules had been extracted, and nothing reads a sentence to check it.) Then the four falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
 
 ```bash
 npm run test:prove-red
@@ -42,6 +42,13 @@ npm run test:prove-s6
 ```
 
 Falsifies the **S6 verification checks** — the third thing neither of the others can reach, because `verify_report.js` is a top-to-bottom script like the generators. Four of its checks were rewritten on 2026-08-27 to stop manufacturing artefacts, and quietening a check and breaking it look identical from outside: fewer findings either way. So every case comes in a **pair** — quiet on the artefact, loud on a real fault of the same kind. 22 assertions; 12 of them go red against the pre-fix engine. It seeds from the **tracked** S1/S2/S3 runs plus `redteam.json`, never from an S6 run folder, because S4/S5/S6 folders are gitignored and a fresh clone has none of them.
+
+```bash
+npm run gate:design-keys
+npm run test:prove-red-design-keys
+```
+
+**Every `design.*` key the engine reads must have a row in the register**, and every row must name a key something still reads — the table under the *design* heading in `references/design-quality.md`. **Add the row in the same commit as the key.** Built 2026-08-28 (OA-142) because the register held **19** rows against **33** keys: six of the missing fourteen were discussed further down the same document, eight appeared nowhere in it, and `design.laneOrientation` had been promoted to a DEFAULT the day before without ever being named there. Nothing could catch it, because **a table with a Default column asserts completeness by construction** — there is no count to disagree with. So the checker prints its two counts even when it passes, and the harness re-counts the population by its own independent walk instead of believing the verdict. It fires in both directions: a key deleted from the engine and left in the document is the same staleness from the other end.
 
 **Nothing may edit `assets/` in place.** Every file there is vendored and hashed; both harnesses work on temp copies for exactly that reason.
 

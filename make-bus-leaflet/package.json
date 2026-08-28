@@ -10,6 +10,8 @@
     "test:prove-red-gates": "node tools/prove-red-gates.js",
     "test:prove-red-sweep": "node tools/prove-red-sweep.js",
     "test:prove-s6": "node tools/prove-s6-checks.js",
+    "test:prove-red-design-keys": "node tools/prove-red-design-keys.js",
+    "gate:design-keys": "node tools/check-design-keys.js",
     "gate:extraction": "node tools/extraction-gate.js",
     "gate:dark-paths": "node tools/dark-paths.js",
     "gate:branch-coverage": "node tools/branch-coverage.js"

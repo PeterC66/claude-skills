@@ -46,7 +46,7 @@ Run them from `%SK%\..` — that is the `make-bus-leaflet` folder itself, not `a
 npm test
 ```
 
-123 assertions across eleven suites in `test/`, about three-quarters of a second, no network and no data tree. **Run this before the byte gates**, which is also the order `gates.yml` runs them in: when the engine's own tests fail there is nothing to learn from being told that a wrong renderer still reproduces itself byte for byte.
+**324 tests across 22 suites** in `test/`, about nine and a half seconds, no network and no data tree. (This line said *123 assertions across eleven suites, about three-quarters of a second* until 2026-08-28, which was true when eleven modules had been extracted; the count had since trebled and nothing reads a sentence to check it.) **Run this before the byte gates**, which is also the order `gates.yml` runs them in: when the engine's own tests fail there is nothing to learn from being told that a wrong renderer still reproduces itself byte for byte.
 
 **They answer a different question from the gate below.** The byte gate compares this engine's output against *this engine's own previous output*. That is a regression check and it is a good one, but it cannot tell you the previous output was right — and this project has already had a verification harness score 7/7 against committed data that WAS the bug's output. Every suite in `test/` is instead one fault we have already debugged, written down as a property: the placer's collisions and the `mustPlace` trade, the footer's measured wrap and its plate, the build-warning severities, the ratchet's arithmetic, the text quad, the engine hash, the gate helpers, the icon recolouring.
 
@@ -55,6 +55,13 @@ npm run test:prove-red
 ```
 
 `tools/prove-red.js` copies `assets/` to a scratch directory, breaks it twenty-five ways one at a time and checks the suite goes red each time, then prints which test objected to which break. **A green suite that has never been seen to fail proves nothing**, and this one found a hole in itself on its first run. Add a mutation whenever you add a test; the runner reports an anchor that no longer matches the engine as stale rather than quietly passing.
+
+```bash
+npm run gate:design-keys
+npm run test:prove-red-design-keys
+```
+
+**Every `design.*` key the engine reads must have a row in the register**, and every row must name a key something still reads. The register is the table under `## `design`` in [`design-quality.md`](design-quality.md); the gate is `tools/check-design-keys.js` and its falsification is `tools/prove-red-design-keys.js`. Both run in `gates.yml`, the prove-red first. **Add the row in the same commit as the key** — that is the whole discipline, and the gate exists because it was not being kept: on 2026-08-28 the engine read **33** keys and the table held **19** rows, six of the missing fourteen discussed further down the same document and eight appearing nowhere in it. `design.laneOrientation` had been promoted to a DEFAULT the day before and the register had never named it. A table with a Default column asserts completeness by construction — there is no count to disagree with — which is why the checker prints its two counts even when it passes, and why the harness re-counts the population by its own independent walk rather than believing the verdict. The gate fires in both directions: a key you delete from the engine and leave in the document is the same document going stale from the other end.
 
 **Adding a test:** load the module through `test/_engine.js` (`require('./_engine.js').load('labeller.js')`), never with a direct `require('../assets/…')` — that indirection is what lets the mutation runner point a suite at a broken copy through `ENGINE_DIR`.
 

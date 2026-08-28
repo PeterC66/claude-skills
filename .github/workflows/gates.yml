@@ -132,6 +132,19 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-s6-checks.js --buses "$GITHUB_WORKSPACE/buses-data"
 
+      # The sweep asks the one question the byte gate does not: could each map be
+      # re-rendered under STRICT_GUARDS=1, which is what every portal render that
+      # goes public sets. Its harness was the ONE falsification harness never wired
+      # in here, and on 2026-08-28 it was found RED -- its run-3 control asserted a
+      # no-op that depended on a side file whose writer the OA-137 fix had deleted.
+      # A harness nobody runs is a harness nobody can trust. It works on a fresh
+      # clone because latestRunDir() already falls back to the tracked ci-reference/
+      # when the gitignored S4 run folder is absent, which was verified against
+      # `git archive HEAD` rather than assumed.
+      - name: Prove the render sweep can still go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-sweep.js --buses "$GITHUB_WORKSPACE/buses-data"
+
       # And falsify the severity contract that decides whether a build may ship at
       # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that
       # has never been watched fail is a green light nobody has earned. Added

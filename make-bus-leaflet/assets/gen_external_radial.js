@@ -15,6 +15,19 @@ const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
 const { Labeller } = require(_LABELLER);
 const FONT = require(path.join(path.dirname(_LABELLER),'font_metrics.js'));
+// STRICT_GUARDS, adopted 2026-08-28 (OA-045). Until then only gen_internal.js and
+// gen_boarding.js participated in the contract at all, so "STRICT_GUARDS is live"
+// was true of a third of the sheets we publish and the board did not say which
+// third. Swept before adopting it: across all 20 committed maps NOTHING here
+// refuses, so this starts green — the precondition every gate on this project
+// needs. This file has exactly ONE site that declines to draw something the
+// config asked for, the howToUse panel below; the legend deliberately does NOT
+// refuse (a sheet with no legend is not a sheet, so it warns and stays put), and
+// `spokeSpread`, `external labels` and the two `moved` messages are a device
+// relocating itself or a drop already counted by the sidecar. None of those is a
+// refusal and none becomes one here.
+const { refuse: guardRefuse, report: reportRefusals } =
+  require(path.join(path.dirname(_LABELLER), 'strict_guards.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -874,10 +887,15 @@ if(HOWTO){
        * remedies, and ship the map intact.
        */
       draw = false;
-      process.stderr.write('howToUse: no position on this sheet leaves a '+PW.toFixed(0)+'x'+PH.toFixed(0)
+      // refuse(), not stderr.write(): the message is unchanged, and build_log.js
+      // has always classified it BLOCKING off the words "NOT DRAWN". What it was
+      // missing was the EXIT CODE, which is the only signal the portal's publish
+      // path reads — renderMap.js looks at stderr only when the status is
+      // non-zero, so on the success path this stream went public unread.
+      guardRefuse('howToUse: no position on this sheet leaves a '+PW.toFixed(0)+'x'+PH.toFixed(0)
         +' mm panel clear of every symbol, so it was NOT DRAWN rather than cover one. '
         +'Shrink it (design.howToUse.width, or fewer bullets), make room, or place it '
-        +'deliberately with design.howToUse.at — which also switches this search off.\n');
+        +'deliberately with design.howToUse.at — which also switches this search off.');
     }
   }
   if(draw){
@@ -963,3 +981,12 @@ function stampNote(cfg,x,y,align){
 out('</svg>');
 fs.writeFileSync(DIR+'/external.svg', s);
 console.log('external.svg', s.length, 'bytes;', EXT.length, 'spokes');
+
+// ---- STRICT_GUARDS: report the refusals as an exit code ----------------------
+// Last statement in the file, after the artwork is written, exactly as
+// gen_internal.js does it: a build that refused something is still worth
+// LOOKING at, it is just not worth publishing.
+if (reportRefusals('refused to draw something this config asked for -- see the'
+    + ' messages above. The sheet is incomplete and nothing on it says so.')) {
+  process.exitCode = 1;
+}

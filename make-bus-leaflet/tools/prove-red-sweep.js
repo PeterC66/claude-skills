@@ -21,21 +21,35 @@
  *   1  control, framing present     0 refusals   the estate is genuinely clean
  *   2  control, --drop-framing      0 refusals   THE FIX: a pack that loses its
  *                                                side file still renders
- *   3  mutant,  framing present     0 refusals   the old default is invisible
- *                                                while the side file survives.
- *                                                This is PRODUCTION's case: the
- *                                                framing was always there, which
- *                                                is why nothing was ever broken
+ *   3  mutant,  framing present     masked ONLY on the packs that still
+ *                                                carry a side file. Was written as
+ *                                                "0 refusals" and that premise has
+ *                                                EXPIRED — see below
  *   4  mutant,  --drop-framing      7 refusals   what OA-137 actually measured —
  *                                                the composition left out
  *
- * Run 3 is the one worth staring at, and its meaning changed once the live host
- * was measured. It is a mutation the check does NOT catch, asserted deliberately
- * as a no-op — and it is the state production was actually in. Every live pack
- * carries its framing and every portal render path composes it, so the old
- * default was inert there. Run 4 is therefore not "the bug"; it is the
- * dependency the fix removes, and the exact configuration under which OA-137's
- * harness produced its seven. Do not quote run 4 as an incident.
+ * Run 3 is the one worth staring at, and it has now been wrong twice for opposite
+ * reasons. It was written on 2026-08-27 as a mutation the check does NOT catch,
+ * asserted deliberately as a no-op, on the premise that "every live pack carries
+ * its framing". **That premise expired on the day it was written, and the fix
+ * this harness exists to certify is what expired it.** The OA-137 fix deleted
+ * `suppressOrphanRiver` from build_internal_place.js — the code whose entire job
+ * was WRITING that side file — because the engine no longer invents a river to
+ * cancel. So a place pack rebuilt since then carries no framing at all, and for
+ * it "framing present" and "--drop-framing" are the same run. Measured
+ * 2026-08-28: five packs (Beaconsfield Simpson Centre, St Neots Tesco Extra, Ely
+ * Co-op and both Godmanchesters) have neither an overrides.json nor a features[]
+ * entry, and the mutant refuses on every one of them. **The estate is not broken
+ * — run 1 is clean.** What was broken is this assertion, which had been red since
+ * some time before 2026-08-28 with nothing watching, because `test:prove-red-sweep`
+ * was the one falsification harness NOT wired into gates.yml. It is now.
+ *
+ * So run 3 no longer asserts a count. It DERIVES the set of packs that still carry
+ * framing and requires the mutant to be masked on exactly those and to refuse on
+ * the rest — a property that survives the next place rebuild, which a number
+ * never could. Run 4 is still not "the bug": it is the dependency the fix
+ * removes, and the exact configuration under which OA-137's harness produced its
+ * seven. Do not quote run 4 as an incident.
  *
  * HOW THE MUTANT IS BUILT. Nothing under assets/ is touched — every file there
  * is vendored into the portal and hashed by status.js, so an edit in place would
@@ -81,6 +95,32 @@ const MUTANT = '} else if(false){';
  * miscounted finding in this project's history — including OA-137's own, which
  * named "the St Neots, Godmanchester and Ely places" when two of the seven are
  * nowhere near the Great Ouse. Name them. */
+/*
+ * What run 3 should expect, derived from run 4's own answer rather than
+ * re-derived here.
+ *
+ * Run 4 renders every pack with its framing DROPPED, so the packs it names are
+ * exactly those the mutant can reach when nothing protects them — whatever the
+ * engine's protection rules happen to be today. Run 3 restores each pack's own
+ * framing, so its refusing set must be run 4's set minus the packs that still
+ * have a side file to restore. Nothing here needs to know that a features[]
+ * entry protects a pack, or that real river geometry does: a second
+ * implementation of a rule is a second chance to get it wrong, and the first
+ * attempt at this proved it — it re-derived the rule from framing and features[]
+ * alone and confidently listed March, which is protected by neither and has a
+ * real river.
+ */
+function expectedWithFraming(dropFramingNames, framedPacks) {
+  return dropFramingNames.filter((n) => !framedPacks.has(n)).sort();
+}
+
+/* Which packs still carry a framing side file, read from the sweep's own row. */
+function framed(parsed) {
+  const set = new Set();
+  for (const m of parsed.results || []) if (m.framing) set.add(m.name);
+  return set;
+}
+
 const EXPECT_SEVEN = [
   'Beaconsfield Simpson Centre',
   'Ely Co-op',
@@ -181,15 +221,26 @@ try {
   } else {
     fs.writeFileSync(genPath, src.replace(ANCHOR, MUTANT));
 
+    // Run 4 FIRST, because run 3's expectation is derived from it — see
+    // expectedWithFraming() above. The reported order is unchanged.
+    const m2 = runSweep(scratch, true);
+
     const m1 = runSweep(scratch, false);
     if (m1.fatal) check('3 mutant, framing present', false, m1.fatal);
+    else if (m2.fatal) check('3 mutant, framing present', false, 'run 4 could not run, so there is nothing to derive from');
     else {
+      const unprotected = expectedWithFraming(refusing(m2.parsed).names, framed(m1.parsed));
       const r = refusing(m1.parsed);
-      check('3 mutant, framing present  [expected NO-OP]', m1.status === 0 && r.names.length === 0,
-        r.names.length ? `${r.names.length} refusing — the side file was meant to mask this` : 'masked by the packs\u2019 own overrides.json, as it always was in production');
+      const same = JSON.stringify(r.names) === JSON.stringify(unprotected);
+      check('3 mutant, framing present  [masked only where there IS framing]',
+        m1.status === (unprotected.length ? 1 : 0) && same,
+        same
+          ? (unprotected.length
+              ? `masked on every pack that still carries framing; refuses on the ${unprotected.length} that carry none`
+              : 'masked on every pack, as it was in production')
+          : `refused on [${r.names.join(', ')}], expected exactly [${unprotected.join(', ')}]`);
     }
 
-    const m2 = runSweep(scratch, true);
     if (m2.fatal) check('4 mutant, --drop-framing', false, m2.fatal);
     else {
       const r = refusing(m2.parsed);

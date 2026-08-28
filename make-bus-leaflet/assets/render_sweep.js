@@ -207,11 +207,23 @@ function refusalCount(stderr) {
  * it has, which is the fault this whole sweep exists to catch.
  */
 const guardedCache = new Map();
+// THE DETECTOR WAS BLIND TO A BRACKET, found 2026-08-28 while adopting the
+// contract in gen_external_radial.js (OA-045). The test was
+// `/require\([^)]*strict_guards\.js/`, and `[^)]*` cannot cross a closing
+// bracket — so it matched gen_internal.js's `require(_dep('strict_guards.js'))`
+// and NOT `require(path.join(path.dirname(X), 'strict_guards.js'))`, which is
+// the idiom the external generator resolves its own dependencies with. The
+// newly guarded sheet reported `n/a`: not a failure, not a pass, but "this
+// generator has no guard contract" — which is the one thing this column exists
+// to say and it was saying it about a generator that had just adopted one. A
+// detector made of a pattern over SOURCE can only see the spellings its author
+// happened to have in front of them. `.*` within the line is the honest test
+// here: any require naming the module is a require of the module.
 function isGuarded(genPath) {
   if (!guardedCache.has(genPath)) {
     let src = '';
     try { src = fs.readFileSync(genPath, 'utf8'); } catch (e) {}
-    guardedCache.set(genPath, /require\([^)]*strict_guards\.js/.test(src));
+    guardedCache.set(genPath, /require\(.*strict_guards\.js/.test(src));
   }
   return guardedCache.get(genPath);
 }

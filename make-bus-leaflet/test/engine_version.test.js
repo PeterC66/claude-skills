@@ -194,3 +194,38 @@ test('stamping refuses a file that is not JSON, rather than writing over it', ()
   assert.throws(() => stampEngine(p, 'abcdef1234'), /not valid JSON/);
   assert.strictEqual(fs.readFileSync(p, 'utf8'), 'not json at all');
 }));
+
+test('CRLF and LF are the same engine, because the checkout is not the commit', () => tmp(dir => {
+  // The hash used to be over raw bytes, so it answered a question about the
+  // FILESYSTEM. With core.autocrlf=true and no .gitattributes, one commit of the
+  // skills repo gave three answers on 2026-08-28: f83987f11b on the laptop's
+  // historical mix of CRLF and LF files — the value stamped into all 20 maps —
+  // 24ebbec148 in a fresh Windows clone, and 0a32b566d4 in an all-LF tree, which
+  // is what Linux CI computes. 54 files under assets/ differed byte-for-byte
+  // between the first two and none of them differed once \r was stripped. Every
+  // town printed STALE in CI against character-for-character the code that drew
+  // it, and CI stayed green only because status.js leaves engine staleness out of
+  // its exit code.
+  const lf = computeEngineVersion(seed(dir, { 'icons.js': 'const a = 1;\nconst b = 2;\n' }));
+  const crlf = computeEngineVersion(seed(dir, { 'icons.js': 'const a = 1;\r\nconst b = 2;\r\n' }));
+  assert.strictEqual(crlf, lf, 'the same source with different line endings must be the same engine');
+}));
+
+test('...and normalising line endings does not blind the hash to a real edit', () => tmp(dir => {
+  // The other direction, which the test above cannot see on its own: a rule that
+  // ignores \r must not ignore anything else.
+  const base = computeEngineVersion(seed(dir, { 'icons.js': 'const a = 1;\r\n' }));
+  assert.notStrictEqual(computeEngineVersion(seed(dir, { 'icons.js': 'const a = 2;\r\n' })), base,
+    'an edit inside a CRLF file must still move the hash');
+
+  // THE DISCRIMINATING PAIR, and the first version of this test did not have it.
+  // It compared a CRLF file against a bare-CR one, which the correct rule and a
+  // rule that strips EVERY \r both call DIFFERENT — so the assertion passed under
+  // either and proved nothing. tools/prove-red.js is what said so: the mutation
+  // 'a bare CR is stripped as well as a CRLF pair' SURVIVED. These two differ
+  // under the correct rule (a lone \r survives, so they differ) and are IDENTICAL
+  // under the greedy one, which is the only shape that can separate them.
+  const pairA = computeEngineVersion(seed(dir, { 'icons.js': 'a\rb' }));
+  const pairB = computeEngineVersion(seed(dir, { 'icons.js': 'ab' }));
+  assert.notStrictEqual(pairA, pairB, 'a lone CR is content, not a line ending, and must survive the hash');
+}));

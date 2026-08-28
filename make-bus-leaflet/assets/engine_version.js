@@ -88,12 +88,35 @@ function engineFiles(sk = SK) {
   return [...seen].sort();
 }
 
+// THE HASH IGNORES LINE ENDINGS, and that is not tidiness (2026-08-28).
+//
+// This used to hash the raw bytes, which made the engine version a property of
+// the CHECKOUT rather than of the commit. `core.autocrlf=true` is set on the
+// machine that writes this repo and there was no .gitattributes, so one commit
+// gave three different answers depending on who had checked it out: f83987f11b
+// on the laptop's historical mix of 15 CRLF files and 180 LF ones — the value
+// stamped into all 20 maps — 24ebbec148 in a fresh Windows clone, and
+// 0a32b566d4 in an all-LF tree, which is what Linux CI computes. 54 files under
+// assets/ differed byte-for-byte between the first two and NOT ONE of them
+// differed once \r was stripped. Every town therefore printed `STALE` in CI
+// against code that was character-for-character the code that drew it.
+//
+// `* text=auto eol=lf` (OA-073) stops that happening again, and is the primary
+// fix. This is the second half, and it is worth having on its own: a checkout
+// made before that rule existed, or on a machine configured some third way,
+// still has to reach the same answer as everyone else. The identity of the
+// engine is what the code SAYS, not how a filesystem chose to end its lines.
+//
+// On an all-LF tree this changes nothing — there are no \r to strip — so the
+// answer here is the same 0a32b566d4 the fix produced, not a third new value.
+const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
+
 function computeEngineVersion(sk = SK) {
   const h = crypto.createHash('sha256');
   for (const name of engineFiles(sk)) {
     const p = path.join(sk, name);
     h.update(name + '\0');
-    h.update(fs.existsSync(p) ? fs.readFileSync(p) : Buffer.from('MISSING'));
+    h.update(fs.existsSync(p) ? stripCR(fs.readFileSync(p)) : Buffer.from('MISSING'));
     h.update('\0');
   }
   return h.digest('hex').slice(0, 10);

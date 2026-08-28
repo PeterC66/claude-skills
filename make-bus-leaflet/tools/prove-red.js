@@ -820,6 +820,19 @@ const MUTATIONS = [
     find: "        if (!seen.has(dep) && fs.existsSync(path.join(sk, dep))) queue.push(dep);",
     to: "        if (!seen.has(dep)) queue.push(dep);" },
 
+  // The fifth is not about the walk but about WHAT IS HASHED. The engine version
+  // was a property of the checkout until 2026-08-28: one commit, three answers,
+  // and every town printing STALE in CI against the code that drew it.
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "line endings go back into the hash, so one commit reports a different engine per checkout",
+    find: "const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\\r\\n/g, '\\n'), 'utf8');",
+    to: "const stripCR = (buf) => buf;" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "a bare CR is stripped as well as a CRLF pair, so a real content change can hide inside one",
+    find: "const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\\r\\n/g, '\\n'), 'utf8');",
+    to: "const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\\r/g, ''), 'utf8');" },
+
 
   // north_arrow.js - extracted 2026-08-27 from gen_internal.js, and the
   // best-covered module of the phase: MEASURED across the 18 maps with an

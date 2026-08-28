@@ -505,3 +505,22 @@ node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/preview_design.js" -
 `preview_design.js` builds every sheet from the latest committed S4 data with a `routes.json` patch applied, measures before and after, and reports which label strings were gained and lost — writing nothing under `Areas/`. `--render` for JPGs, `--keep` to leave the workspace so a generator can be re-run by hand with `DBG_LABELS=1`. When the numbers look right, `adopt_config.js` commits the patch as a new S3 per town and `rollout.js --force` renders it; the full sequence, and the reason `--force` is not optional, is in [changing-the-engine.md](changing-the-engine.md) §2b.
 
 **One caution, learned the expensive way.** More candidate positions is not obviously better. A third leader ring at 3.9× the nominal gap was added on the theory that more reach means more placements; High Wycombe lost five more names, because the extra reach let low-priority labels claim distant space that higher-value ones then could not use. Any weight or candidate change gets measured across all eight towns, never on the one sheet that motivated it.
+
+## Badge overprints, and how to find which pass drew one
+
+`quality_metrics.js` counts two things no measure could express before 2026-08-28: `labelsOverBadge`, a map label printed over a route badge, and `badgeOverBadge`, a badge printed on another badge. Both are **reported and not scored** — they sit in `warns`, they have their own metrics, and they are deliberately absent from `defects`, `hard` and `soft`, because folding them into `hard` before the population is clear would redden every affected sheet on its first run and the check would be muted within the week. Both are `null` rather than `0` on a sheet whose `routes.json` will not parse, because the route palette is the whole discriminator between a badge and a stop tick and “could not tell” must not read as “clean”.
+
+**The badge RADIUS is the attribution, and it saves reading the generator.** Every pass draws at its own size, so the two radii in an overprint say which pass produced it:
+
+| Radius | Which pass drew it |
+|---|---|
+| **2.4 mm** | the sprinkled badges along a visible line, and the `corridorPalette`/`internalCorridors` guaranteed-badge fallback |
+| **2.6 mm** | `drawTermBadges()` — a route that simply ENDS in town |
+| **3.0 mm** | the frame-cut terminus rows, where a tail leaves the page |
+| **3.4 / 4.0 mm** | the place and area external sheets |
+
+`--detail` prints the half-height of both marks beside each overprint, so `node assets/quality_metrics.js <sheet.svg> --detail` names the responsible pass directly. Run it from this skill's own folder; `<sheet.svg>` is the only placeholder and any committed `ci-reference` sheet will do. Tallying the board this way on 2026-08-28 said that 34 of 57 known overprints involved a 2.6, which is what turned OA-023 from a suspicion into a sized job.
+
+**Test a badge as a BOX, never as a circle**, and take the tolerance from `quality_metrics.js`'s `T.badgeOverlapMm` (0.6 mm) so the generator and the metric cannot disagree about what an overlap is. A radial test is wrong in both directions: under `design.badgeFit` a wide key is a stadium far wider than it is tall, so `hypot < max(rx, ry)` reports tidy neighbours as overprints; and two 2.6 mm discs at dx=5.0, dy=5.0 are 7.07 mm apart yet overlap on both axes, so a radial threshold misses them. A STACK is a box too — its half-height is its member count times the pitch — and a register of bare centres cannot answer the question at all.
+
+**A board-wide figure is only as good as the walk that produced it.** There are three place layouts, and a sweep that searches `Areas/` alone silently omits the three maps under `Places/_standalone/`. `quality_metrics.js`'s own `findSheets()` did exactly that until 2026-08-28, so every board total it had ever printed was taken over 46 sheets when the board has 52; the corrected baseline was 70 badge overprints, not 57. `test/find_sheets.test.js` now pins the invariant that its walk and `quality_gate.js`'s **agree**. If you add a third walk, add it to that test.

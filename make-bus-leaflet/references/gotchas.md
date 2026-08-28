@@ -478,3 +478,15 @@ The rule this leaves behind is narrower and more useful than "no town literals":
 `provenance_date.test.js` reads the generators as source. Its first version did `path.join(__dirname, '..', 'assets')`, and **all three of its prove-red mutations survived**: the harness copies `assets/` to a scratch directory and points `ENGINE_DIR` at it, so the test was faithfully reading the unmutated real engine and reporting green. It was a suite that could not fail, and only `npm run test:prove-red` said so — `npm test` was perfectly happy.
 
 **Anything under `test/` must reach the engine through `_engine.js`**, whether it `require`s a module or just reads the file as text. `E.load(name)` for the former, `E.ENGINE_DIR` for the latter. The header of `_engine.js` says why the indirection exists; this is the first case where the thing being loaded was bytes rather than an export, which is exactly where the habit slips.
+
+## A falsification harness must BUILD the fault it asserts, not borrow it (2026-08-28)
+
+Two harnesses went red on the day Ramsey was fixed, and that is the worst way for one to fail: it reports a regression at the exact moment the work succeeded, and the obvious reading is that the fix broke something.
+
+- **`prove-s6-checks` case 1** asserts that the S6 precondition gate names **both** tells — `_bootstrap` in `routes.json` and an unactioned `DRAFT-REVIEW.md`. It wrote the DRAFT-REVIEW.md itself but took `_bootstrap` from Ramsey's real config, so it held only while Ramsey was an unreviewed auto-draft. Curating Ramsey's S1 removed both, and the check failed about a map that had been *repaired*.
+- **`prove-red-external-spokes`** requires the OLD code to reproduce the four spoke lists busmaps.uk actually served, which is the step that makes its verdict on the fix worth anything. It read them from Ramsey's `ci-reference/`. After the rebuild those were the **corrected** spokes, so the old code was being asked to reproduce the fix, and all four cases failed.
+- **`prove-red-status`** had the same shape a few hours earlier: a control case asserting that `ENGINE_STALE_ALLOWED`'s live Ramsey entry excused Ramsey. Retiring the entry — correctly, once Ramsey ran the current engine — turned the control red.
+
+All three now construct what they assert: `_bootstrap` is injected into the staged copy, the served spoke lists are frozen as `PUBLISHED_2026_08_28` (recovered from `buses-data` `7930633`, with the 303 carrying **one** arm because its Chatteris spoke did not yet exist — the defect preserved as evidence), and the staleness exception is written into a scratch copy of `assets/`.
+
+**The rule: a harness may read live data for the ARTEFACT it checks, never for the FAULT it injects.** Borrowing the fault makes the proof expire the day somebody does the work it was waiting for — and the failure arrives disguised as a regression. When a harness's baseline is a historical fact ("what the public actually read"), freeze it with the commit it came from; a fact about the past should not be re-derived from a present that has moved on.

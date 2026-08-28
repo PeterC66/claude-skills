@@ -47,7 +47,27 @@ import draft_town as dt  # noqa: E402
 chains = json.load(open(REF + "routes_full_atco.json", encoding="utf-8"))
 ll = json.load(open(REF + "atco2ll.json", encoding="utf-8"))
 cfg = json.load(open(REF + "routes.json", encoding="utf-8"))
-published = {e["route"]: e["stops"] for e in cfg["external"]}
+# FROZEN, not read from the live config. These are the four spoke lists busmaps.uk
+# actually served on 2026-08-28, recovered from buses-data 7930633 -- the commit
+# before Ramsey was rebuilt. They are a historical fact about what a member of the
+# public read, and the whole design of this harness is that the OLD code must
+# reproduce them before its verdict on the fix means anything.
+#
+# They USED to be read from Ramsey's ci-reference/routes.json, which was correct
+# for exactly as long as nobody fixed the map. Ramsey was rebuilt on 2026-08-28
+# (v2.0, OA-153): the served spokes are now the CORRECTED ones, so the old code was
+# being asked to reproduce the fix and every case failed. A harness whose baseline
+# moves when the bug is fixed cannot prove the bug was ever there.
+#
+# Note what is NOT here: the 303 has one entry, to Huntingdon, because that is what
+# was published -- its Chatteris arm did not exist, which was the fourth defect.
+PUBLISHED_2026_08_28 = {
+    "32":  ["Whittlesey", "March"],
+    "301": ["Bury", "Pidley cum Fenton", "Colne", "Bluntisham", "St Ives"],
+    "303": ["Bury", "Wistow", "Warboys", "Old Hurst", "Huntingdon"],
+    "X31": ["Whittlesey", "Peterborough"],
+}
+published = PUBLISHED_2026_08_28
 anchor = ll[cfg["anchor"]]                      # routes.json anchors on an ATCO code
 prefix = cfg["atcoPrefix"]
 

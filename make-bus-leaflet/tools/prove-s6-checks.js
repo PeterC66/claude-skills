@@ -152,6 +152,16 @@ console.log('\n1. Precondition gate — an uncurated S1 is refused, a curated on
   fs.mkdirSync(town, { recursive: true });
   for (const f of fs.readdirSync(d)) fs.copyFileSync(path.join(d, f), path.join(town, f));
   fs.writeFileSync(path.join(TMP, 'precond-town', 'DRAFT-REVIEW.md'), 'unactioned\n');
+  /* Inject the OTHER tell too. This case wrote the DRAFT-REVIEW.md itself and took
+   * `_bootstrap` from Ramsey's real routes.json, which worked only while Ramsey
+   * happened to be an unreviewed auto-draft. It stopped being one on 2026-08-28 --
+   * curated S1, draft flag removed, DRAFT-REVIEW.md retired -- and this check then
+   * went red about a map that had been FIXED. A harness must BUILD the fault it
+   * asserts; borrowing it from live data makes the proof expire the day somebody
+   * does the work it was waiting for. */
+  const prj = readJ(town, 'routes.json');
+  prj._bootstrap = 'injected by prove-s6-checks.js -- an unreviewed draft';
+  writeJ(town, 'routes.json', prj);
   const a = verify(town);
   check('refuses an uncurated S1', 'exit 3, no verification.json written',
     a.code === 3 && a.v === null, `exit ${a.code}, verification.json ${a.v ? 'written' : 'absent'}`);
@@ -170,6 +180,10 @@ console.log('\n1. Precondition gate — an uncurated S1 is refused, a curated on
 console.log('\n2. Uncurated override — terminus findings are downgraded, and the verdict says so');
 {
   const d = stage('ramsey', 'uncurated');
+  // Uncurated by construction, for the same reason as case 1: Ramsey is curated now.
+  const urj = readJ(d, 'routes.json');
+  urj._bootstrap = 'injected by prove-s6-checks.js -- an unreviewed draft';
+  writeJ(d, 'routes.json', urj);
   const a = verify(d, { VERIFY_ALLOW_UNCURATED: '1' });
   check('no terminus HARD survives the override', '0 hard terminus findings',
     a.v && !has(a.v, 'hard', 'terminus'), `${a.v ? a.v.findings.filter(f => f.severity === 'hard' && f.category === 'terminus').length : '?'} hard terminus`);

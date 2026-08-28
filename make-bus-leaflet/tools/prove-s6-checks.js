@@ -376,6 +376,70 @@ console.log('\n7. A place — the direction check is unavailable by construction
     b.v ? JSON.stringify(b.v.findings.filter(f => f.route === '66').map(f => f.severity + '/' + f.category + '/' + f.source)) : 'no report');
 }
 
+/* ------------------------------------------------------------------ 8. the not-shown declaration */
+console.log("\n8. Not shown \u2014 a declared panel row is not missing geometry, and the declaration is checked both ways");
+{
+  /*
+   * The artefact this pair exists for. Routes 112 and 193 (Ivel Sprinter, a
+   * Bedfordshire community service outside the BODS region we pull) are carried on
+   * both St Neots place sheets as Services-panel rows with no line, on purpose. S6
+   * called both HARD `no-full-chain`, and on current data those two findings were
+   * the ENTIRE distance between this place being BLOCKED and being clean.
+   *
+   * The fixture asserts that first, against the UNDECLARED config, so this case
+   * cannot quietly pass on a place that no longer carries either route.
+   */
+  const base = stage('place', 'notshown-base');
+  const a0 = verify(base);
+  check('the artefact is real before the fix', 'hard no-full-chain on both 112 and 193 with no declaration',
+    has(a0.v, 'hard', 'no-full-chain', '112') && has(a0.v, 'hard', 'no-full-chain', '193'),
+    a0.v ? JSON.stringify(a0.v.findings.filter(f => f.category === 'no-full-chain').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  const d = stage('place', 'notshown-quiet');
+  const rj = readJ(d, 'routes.json'); rj.notShown = ['112', '193']; writeJ(d, 'routes.json', rj);
+  const a = verify(d);
+  check('a declared panel row no longer blocks', 'no hard no-full-chain on 112 or 193',
+    a.v && !has(a.v, 'hard', 'no-full-chain', '112') && !has(a.v, 'hard', 'no-full-chain', '193'),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'no-full-chain').map(f => f.severity + '/' + f.route)) : 'no report');
+  check('and it is reported, not silently dropped', 'a soft declared-not-shown for each',
+    a.v && has(a.v, 'soft', 'declared-not-shown', '112') && has(a.v, 'soft', 'declared-not-shown', '193'),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'declared-not-shown').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  /*
+   * A route with NO declaration must still go HARD -- otherwise the fix is a mute
+   * button with extra steps. Declare only 112 and check that 193 still blocks.
+   */
+  const u = stage('place', 'notshown-undeclared');
+  const rju = readJ(u, 'routes.json'); rju.notShown = ['112']; writeJ(u, 'routes.json', rju);
+  const b = verify(u);
+  check('an UNDECLARED route with no chain still goes HARD', 'hard no-full-chain on 193',
+    has(b.v, 'hard', 'no-full-chain', '193'),
+    b.v ? JSON.stringify(b.v.findings.filter(f => f.category === 'no-full-chain').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  /*
+   * The declaration checked the other way. Route 66 IS drawn on this place -- seven
+   * stops in routes_intown_atco.json -- so declaring it "not shown" is false, and a
+   * false declaration is exactly how this key would be abused to silence a finding
+   * about a route that is on the sheet.
+   */
+  const c = stage('place', 'notshown-loud');
+  const drawn66 = (readJ(c, 'routes_intown_atco.json')['66'] || []).length;
+  if (drawn66 < 2) throw new Error('fixture assumption broken: route 66 is no longer drawn on this place');
+  const rjc = readJ(c, 'routes.json'); rjc.notShown = ['112', '193', '66']; writeJ(c, 'routes.json', rjc);
+  const cc = verify(c);
+  check('declaring a DRAWN route not shown goes HARD', 'hard declared-not-shown on 66',
+    has(cc.v, 'hard', 'declared-not-shown', '66'),
+    cc.v ? JSON.stringify(cc.v.findings.filter(f => f.category === 'declared-not-shown').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  // ...and a declaration for a route the sheet does not carry at all is stale, and says so.
+  const e = stage('place', 'notshown-stale');
+  const rje = readJ(e, 'routes.json'); rje.notShown = ['112', '193', 'ZZ9']; writeJ(e, 'routes.json', rje);
+  const ee = verify(e);
+  check('a stale declaration is reported, not ignored', 'soft declared-not-shown on ZZ9',
+    has(ee.v, 'soft', 'declared-not-shown', 'ZZ9'),
+    ee.v ? JSON.stringify(ee.v.findings.filter(f => f.category === 'declared-not-shown').map(f => f.severity + '/' + f.route)) : 'no report');
+}
+
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

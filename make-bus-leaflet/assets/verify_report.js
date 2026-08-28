@@ -23,7 +23,7 @@
  * Inputs (read from the working dir; override the dir with VERIFY_DIR):
  *   redteam.json            (the blind red-team JSON; optional — sanity-only without it)
  *   verified-services.json  (S1)
- *   routes.json             (S3)
+ *   routes.json             (S3 — incl. `notShown[]`, routes carried in the panel with no line)
  *   routes_full_atco.json   (S2 — full both-direction chains)
  *   routes_intown_atco.json (S2 — the drawn display subset)
  *   atco2ll.json            (S2 — coords for every full-chain stop)
@@ -257,18 +257,77 @@ function fullAllStops(fe) {
 
 const CIRCULAR = new Set((intownCfg.circular || []).map(normRoute));
 
+/*
+ * NOT SHOWN ON THIS MAP -- a DECLARATION, not an inference (OA-049).
+ *
+ * A service can be real, correct and deliberately undrawn. The two St Neots place
+ * sheets carry routes 112 and 193 as Services-panel rows with no line, because the
+ * Ivel Sprinter is a Bedfordshire community service outside the BODS region we pull
+ * -- there is no chain to draw and there never will be from this data. The sheets
+ * already say so in words: services_panel.js appends "not shown on this map" to the
+ * row, and routes.json has carried `notShownNote` / `notShownNoteShort` to change
+ * those words since that convention landed.
+ *
+ * S6 could not tell that from a route whose geometry has genuinely gone missing, so
+ * it called both HARD `no-full-chain`. On current data that one category was the
+ * ENTIRE distance between two BLOCKED places and two clean ones -- 2 hard apiece and
+ * nothing else -- which is the shape of a check that has stopped being believed.
+ *
+ * `routes.json notShown[]` is the missing declaration, and it is deliberately a
+ * declaration rather than a smarter check. Inferring it -- "no chain and no palette
+ * entry, so it must be on purpose" -- would make a genuinely broken route
+ * indistinguishable from an intended one, which is the fault this check exists to
+ * catch. Someone has to write the route down.
+ *
+ * A declaration that can only ever quieten a finding is a mute button, so this one
+ * is checked in both directions (see S-1b below): declaring a route not shown when
+ * the sheet DOES draw it is itself HARD, and declaring one the sheet does not carry
+ * at all is a stale entry and is reported.
+ */
+const NOT_SHOWN = new Set((routes.notShown || []).map(normRoute));
+
 // =====================================================================
 // SANITY CHECKS (no red-team needed)
 // =====================================================================
 
-// S-1: every displayed route has full-chain data
+// S-1: every displayed route has full-chain data -- unless the config declares it undrawn
 for (const r of displayed) {
   const fe = fullEntry(r);
   const dirs = fullDirections(fe);
-  if (!fe || dirs.length === 0) {
-    add('hard', 'no-full-chain',
-      `Displayed route ${r} has no full-chain data in routes_full_atco.json.`,
-      { route: r, hasEntry: !!fe, directions: dirs.length }, r);
+  if (fe && dirs.length) continue;
+  if (NOT_SHOWN.has(normRoute(r))) {
+    add('soft', 'declared-not-shown',
+      `Route ${r} has no full-chain data, and routes.json declares it — it is a panel row carried on purpose with no line on the map, not missing geometry. The sheet says so too ("not shown on this map").`,
+      { route: r, hasEntry: !!fe, directions: dirs.length, declared: true }, r);
+    continue;
+  }
+  add('hard', 'no-full-chain',
+    `Displayed route ${r} has no full-chain data in routes_full_atco.json.`,
+    { route: r, hasEntry: !!fe, directions: dirs.length }, r);
+}
+
+/*
+ * S-1b: the declaration checked the other way, so it cannot be used as a mute button.
+ *
+ * Two ways a `notShown` entry can be wrong, and neither is quiet:
+ *   - the sheet DRAWS the route. Then the declaration is false, the row's own
+ *     subtitle will not say "not shown", and whatever the entry was written to
+ *     silence is still there unexamined. HARD.
+ *   - the sheet does not carry the route at all -- no palette entry, no panel row.
+ *     Then it is a leftover from a config the sheet has moved past, and the next
+ *     reader will trust it. Reported SOFT rather than HARD: it hides nothing, it
+ *     just is not true any more.
+ */
+for (const d of NOT_SHOWN) {
+  const drawn = intownByNorm(d) || [];
+  if (drawn.length >= 2) {
+    add('hard', 'declared-not-shown',
+      `routes.json declares route ${d} is not shown on this map, but the drawn set gives it ${drawn.length} stops — the sheet draws it. Either the declaration is stale, or it is silencing a finding about a route that is on the sheet.`,
+      { route: d, drawnStops: drawn.length }, d);
+  } else if (!displayed.has(normRoute(d))) {
+    add('soft', 'declared-not-shown',
+      `routes.json declares route ${d} is not shown on this map, but the sheet does not carry it at all — no palette entry and no panel row. The entry is stale.`,
+      { route: d, drawnStops: drawn.length, inDisplayed: false }, d);
   }
 }
 

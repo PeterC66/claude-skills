@@ -97,6 +97,24 @@ Classification is deliberately **cautious about HARD**: terminus/direction check
 
 If a run needs a prose note — a place run where the HARD count needs interpreting, say — **name it `README.md`**. That is the keep-rule the ignore file already has (`!Areas/**/README.md`), so the note is preserved without forcing anything past the ignore rules or changing repo policy. Check with `git check-ignore -v <path>` rather than assuming.
 
+## A service that is deliberately not drawn — `routes.json notShown[]` (added 2026-08-28, OA-049)
+
+A service can be real, correct and deliberately undrawn. Both St Neots place sheets carry routes **112 and 193** — the Ivel Sprinter, an East Beds community bus outside the BODS region we pull — as Services-panel rows with no line on the map, because there is no chain to draw and there never will be from this data. The sheets already say so in words: `services_panel.js` appends *"not shown on this map"* to the row, and `routes.json` has carried `notShownNote` / `notShownNoteShort` to change those words since that convention landed.
+
+S6 could not tell that from a route whose geometry has genuinely gone missing, so it called both HARD `no-full-chain`. On current data that one category was the **entire** distance between two BLOCKED places and two clean ones — 2 hard apiece and nothing else. A check that blocks on a decision somebody made on purpose is a check that stops being believed.
+
+**The fix is a declaration, not a smarter check.** Add the route to `routes.json`:
+
+```json
+"notShown": ["112", "193"]
+```
+
+Inferring it — *"no chain and no palette entry, so it must be on purpose"* — was considered and rejected: it would make a genuinely broken route indistinguishable from an intended one, which is the fault this check exists to catch. Somebody has to write the route down.
+
+**And a declaration that can only ever quieten a finding is a mute button, so this one is checked in both directions.** A declared route with no chain is a SOFT `declared-not-shown` (reported, never silent). A route the sheet actually **draws** — two or more stops in `routes_intown_atco.json` — is a **HARD** `declared-not-shown`, because that is how the key would be abused to silence a finding about a route that is on the sheet. A declared route the sheet does not carry at all is a stale entry and reads SOFT. All five behaviours are in `npm run test:prove-s6` (case 8), including an assertion that the artefact is still real against the *undeclared* config — so the case cannot quietly pass on a place that no longer carries either route.
+
+**It changes no bytes.** No generator reads the key; that was proved by regenerating all five committed sheets of both places with and without it and comparing line for line, fresh against fresh through the identical path. So adopting it is a new dated **S3** run and no S4/S5 rebuild — which is what the two places' 2026-08-28 S3 runs record.
+
 ## Files S6 owns
 `redteam.json` (the blind agent's JSON), `verification.json` (classified findings + summary), `verification.docx` (the rendered reliability report).
 
@@ -113,7 +131,7 @@ This engine was built for towns and reads `verified-services.json` as a **requir
    - Where a red-team terminus is unmatched *and* a chain end carries no NaPTAN locality code (a cross-border route — St Neots' 905 ends at Bedford `020035035`), nothing was actually compared, so it is SOFT, not HARD.
    - `naptan_localities.json` (new, in `make-bus-leaflet/assets/`) maps the few locality CODES the 3-character prefix rule cannot reach. Checked against every chain-end locality in the built estate — 27 distinct codes — **`CITY` (Cambridge) was the only irregular one**, confirming the note at the foot of this file. A code with no entry is unverifiable, never a mismatch, so a missing entry cannot manufacture a false HARD. Adding `CITY` also cleared five long-standing false SOFTs on Huntingdon, St Ives and St Neots.
 
-3. **What a place's remaining HARDs mean.** On the St Neots Town Centre run the three survivors are all genuine and all already on the open-actions list: two `no-full-chain` HARDs on routes 112/193, carried deliberately as "not shown" panel rows (a check that still cannot tell a deliberate panel row from missing geometry), and one direction question on route 66. **That last sentence used to read "two independent checks pointing at one route is real signal", and it was wrong** — see "The four noise sources" above. The direction check cannot run on a place at all (no `intown_cfg.json`, so no in-town prefix, so no buffer stops, ever), so the corroboration was one real check plus one structurally incapable of disagreeing. The real one was the red-team terminus comparison, which put 66's red-team terminus (Fenstanton) nowhere near our chain ends (HUNT, STNS); it has since been answered in the data — this place now carries curated `destinations[]`, the red team's other terminus (St Neots) matches a chain end, and route 66 reads SOFT on current inputs.
+3. **What a place's remaining HARDs mean — and as of 2026-08-28 there are none.** On the St Neots Town Centre run the three survivors were all genuine and all on the open-actions list: two `no-full-chain` HARDs on routes 112/193, carried deliberately as "not shown" panel rows, and one direction question on route 66. All three have since been answered rather than muted — the 112/193 pair by the `notShown[]` declaration described above (OA-049), the direction one by the paragraph below. **Both places now read 0 hard** (Town Centre 17 soft, Tesco Extra 14 soft) on their 2026-08-28 runs. **That last sentence used to read "two independent checks pointing at one route is real signal", and it was wrong** — see "The four noise sources" above. The direction check cannot run on a place at all (no `intown_cfg.json`, so no in-town prefix, so no buffer stops, ever), so the corroboration was one real check plus one structurally incapable of disagreeing. The real one was the red-team terminus comparison, which put 66's red-team terminus (Fenstanton) nowhere near our chain ends (HUNT, STNS); it has since been answered in the data — this place now carries curated `destinations[]`, the red team's other terminus (St Neots) matches a chain end, and route 66 reads SOFT on current inputs.
 
 Everything else (red-team diff, direction/count sanity, the ladder checks) behaves normally and is genuinely informative for a place — treat SOFT findings (esp. `missing-service`) as real curation leads, same as for a town.
 

@@ -10,9 +10,13 @@
 //
 //   1. TITLE — gen_internal hardcodes "Buses within <town>"; a place wants
 //      "Buses serving <place>". We string-replace that one token afterwards.
-//   2. VERSION STAMP — the place convention stores version:"v1.0" (leading v),
-//      and gen_internal renders "Map v" + version, doubling to "Map vv1.0"; so,
-//      like build_internal_place_roads.js, strip a leading v and pass it through.
+//   2. VERSION STAMP — INERT since 2026-08-10, kept for provenance only. The
+//      place convention stores version:"v1.0" (leading v) and gen_internal USED
+//      to render "Map v" + version, doubling to "Map vv1.0"; the leading-v strip
+//      below is the fix for that doubling. Nothing renders it any more - the
+//      engine build number was dropped from the public sheet (see footer.js) and
+//      no place sheet has ever carried one. Do not delete the strip to "simplify"
+//      it, and do not re-derive the doubling bug: neither is reachable today.
 //
 // It is a strict S4/S5 (deterministic) citizen: reads LEAFLET_DIR + OVERRIDES_FILE
 // + EDITOR_KEYS from the env (all inherited by the child), writes internal.svg,

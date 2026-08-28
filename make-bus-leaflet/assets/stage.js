@@ -25,6 +25,7 @@
  *   pull  <S1..S6> [destDir]           copy latest outputs of a stage into destDir (def cwd)
  *   latest <S1..S6>                    print latest run dir (abs) of a stage
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
+ *         refuses when a declared output is not in <runDir> (--force-missing overrides)
  *   status                             print a manifest summary
  *   nextver [--bump major|minor]       print the version `new S4` would assign (no side effects)
  *   stampver [runDir]                  force routes.json "version" to match the run dir's v<N.N>
@@ -117,10 +118,13 @@ function computeVersion(m, bump) {
 }
 
 /* ---------------------------------------------------------------- version stamp
- * The version PRINTED ON THE MAP is a data field — routes.json "version", read by
+ * The map's version is a data field — routes.json "version", read by
  * gen_internal.js (RJ.version, unless LEAFLET_VERSION overrides) and by
- * gen_external_*.js (D.version). The v<N.N>_<ts> run-dir name is manifest
- * metadata. Nothing tied the two together, so branching a new version from an
+ * gen_external_*.js (D.version). It is NOT PRINTED on the sheet: that was dropped
+ * on 2026-08-10, and the generators pass it to footerBand, which ignores it. It is
+ * a provenance field, and keeping it in step with the run dir is what stops a
+ * branched build being RECORDED under the wrong version. The v<N.N>_<ts> run-dir
+ * name is manifest metadata. Nothing tied the two together, so branching a new version from an
  * older routes.json shipped maps stamped with the PREVIOUS version (Beaconsfield
  * v1.1 printed "v1.0"; corrected by hand at the time).
  *
@@ -254,6 +258,30 @@ function main() {
     const outputs = f.outputs ? String(f.outputs).split(',').map(s => s.trim()).filter(Boolean) : [];
     const basedOn = {};
     if (f['based-on']) for (const pair of String(f['based-on']).split(';')) { const [k, v] = pair.split('='); if (k) basedOn[k.trim()] = (v || '').trim(); }
+    // Guard (OA-106): never record an output that is not there. `commit` used to
+    // take --outputs on trust, so a stage could be committed over an empty folder
+    // and the manifest then advertised a version with no map in it — hit for real
+    // on 2026-08-21 and again on 2026-08-23. status.js reports the result as
+    // MISSING, which detects the symptom after the fact; this refuses to create it.
+    // MISSING is still needed and is not superseded: a run folder can also be lost
+    // AFTER a good commit, which is exactly what prune_runs.py does by design.
+    if (!fs.existsSync(runDir) || !fs.statSync(runDir).isDirectory())
+      die(`no such run dir: ${runDir}\n`
+        + `  Create it with \`stage.js new ${st}\`, and write the stage's outputs into it, before committing.`);
+    const absent = outputs.filter(o => {
+      const p = path.join(runDir, o);
+      return !fs.existsSync(p) || !fs.statSync(p).isFile();
+    });
+    if (absent.length && !f['force-missing']) {
+      die(`${absent.length} of ${outputs.length} declared output(s) are not in ${id}:\n`
+        + absent.map(o => '    ' + o).join('\n') + '\n'
+        + `  A manifest that advertises a sheet nobody wrote is worse than no record at all —\n`
+        + `  status.js reports it as MISSING and the board fails. Re-run the stage, or name\n`
+        + `  only what it actually produced.\n`
+        + `  Override with --force-missing only if the absence is deliberate.`);
+    }
+    if (absent.length) console.log(`  WARNING: recording ${absent.length} output(s) that do not exist (--force-missing): ${absent.join(', ')}`);
+
     const rec = { id, dir: relDir, at: isoNow(), outputs };
     if (VERSIONED.has(st)) { const v = id.match(/^v(\d+\.\d+)_/); rec.version = v ? v[1] : null; }
 

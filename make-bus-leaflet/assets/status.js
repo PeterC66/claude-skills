@@ -85,9 +85,12 @@ function daysSince(isoDate) {
 //   declared, absent       -> 'MISSING' the manifest advertises a sheet that is
 //                                       not there — alarming, and it fails the board
 //
-// The third case is not hypothetical: `stage.js commit` does not check that the
-// outputs it is told about exist (a known open action, hit again on 2026-08-23),
-// so a manifest CAN advertise a version with no map in it. Reading the declaration
+// The third case is not hypothetical. `stage.js commit` took --outputs on trust
+// until 2026-08-28 (OA-106), so a manifest could advertise a version with no map
+// in it, and two of them were created that way on 2026-08-21 and 2026-08-23.
+// commit now refuses that, which closes the way of CREATING one -- it does not
+// retire this branch, because a run folder can also be lost AFTER a good commit
+// and prune_runs.py does exactly that by design. Reading the declaration
 // is what stops "never built" and "lost since" collapsing into one benign dash —
 // which is the trap the 2026-08-18 vendoring change had to undo for MISSING files.
 // ASK BEFORE RUNNING, not after. gate() only ever reports NO-SHEET when the
@@ -146,9 +149,10 @@ function gateTown(t) {
   // 2026-08-27, OA-129 Phase 0). It collapsed two different facts into one
   // benign dash: "this map has no schematic" and "this map's config asks for a
   // schematic and the file is GONE". The second is what a botched regenerate
-  // looks like, and the board printed '-' for it. `stage.js commit` does not
-  // verify that the outputs it is told about exist, so a manifest genuinely can
-  // advertise a sheet that is not there.
+  // looks like, and the board printed '-' for it. Since OA-106 `stage.js commit`
+  // refuses to record an output that is not there, so a manifest can no longer be
+  // BORN advertising a sheet nobody wrote -- but it can still come to advertise
+  // one, because a pruned or hand-deleted run folder leaves the record behind.
   //
   // Both derived sheets now read the same way as internal/external/boarding:
   // gate() reports the fact, judgeNoSheet asks the S4 manifest record whether

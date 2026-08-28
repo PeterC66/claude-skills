@@ -36,7 +36,7 @@ Reuses the town skill's `internalRoads` model with **zero new drawing code**. Th
 
 **Orphan-river fix (automatic):** with no `features` config gen_internal draws a default "River Great Ouse" label. `build_internal_place.js` suppresses it via a merged `overrides.json` `features.river.hide` when the walkshed has no river geometry and no declared features. See `references/gotchas.md` for both, plus the `overrides.json` viewport nudge used to sit a map lower on the page.
 
-**Version-stamp gotcha:** gen_internal stamps `· Map v<version>` and prefixes its own `v`. The place `routes.json` stores `version:"v1.0"` (leading `v`), which would render `Map vv1.0`. The wrapper strips the leading `v` when passing `LEAFLET_VERSION`, so it reads `Map v1.0`. Bump the `version` field alongside the S4 folder version so folder and stamp agree.
+**Version-stamp gotcha — HISTORICAL.** gen_internal *used to* stamp `· Map v<version>` and prefix its own `v`; the place `routes.json` stores `version:"v1.0"` (leading `v`), which would have rendered `Map vv1.0`, and the wrapper strips the leading `v` when passing `LEAFLET_VERSION`. **Nothing renders it now** — the engine build number was dropped from the public sheet on 2026-08-10, and no place sheet has ever carried one. The `version` field is still worth keeping in step with the S4 folder, but `stage.js pull` and `stage.js commit` now do that for you rather than you bumping it by hand.
 
 **Command**
 ```bash

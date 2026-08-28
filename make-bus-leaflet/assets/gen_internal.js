@@ -96,9 +96,17 @@
 //     badgeEvery:70,                  // route badge spacing along lines (mm)
 //     termini:{ r:{start:"X",end:"Y"} } // arrow labels per cut end (falls back to terminiLabels)
 //   }
-// When internalRoads is active the source note also gets a build-version stamp
-// (LEAFLET_VERSION env, else routes.json "version"); only `internalRoads:false`
-// (classic model) omits the stamp.
+// The build-version stamp is READ here (LEAFLET_VERSION env, else routes.json
+// "version") and passed to footerBand, which ACCEPTS AND IGNORES it: printing the
+// engine build number on a public sheet was dropped on 2026-08-10 (Peter) because
+// it duplicated the portal's own customer-facing version pill. No sheet in the
+// estate carries "Map v<N.N>" - measured across all 35 ci-reference sheets on
+// 2026-08-28, town and place alike, and all 35 carry "Valid from <date>" instead.
+// The public version line that DOES print comes from a different key,
+// design.sheetVersion / LEAFLET_SHEET_VERSION, and reads "Map version N".
+// The plumbing below is kept deliberately (footer.js says `version` is "still
+// accepted here (unused)" so existing call sites need not change) - do not read
+// it as evidence that the stamp renders.
 // Also additive (work in both models, no output when absent): mapNotes[],
 // panelGroups, panelRow, keyRow, panelBadge, fareNote.
 //   panelCols:{ cols:2, width:48, row:5.0, keyAt:{x,y} }

@@ -832,8 +832,10 @@ console.log('workspace written: ' + WD);
 //
 // PLACE maps (DIR carries gen_internal_place.js) need the same two fixes that
 // wrapper applies for the ordinary geographic output: the version stamp (via
-// LEAFLET_VERSION, set BEFORE the run so it lands in the rendered SVG) and the
-// title token (a post-hoc swap, since gen_internal itself has no place concept).
+// LEAFLET_VERSION, set BEFORE the run - inert since 2026-08-10, when the engine
+// build number stopped being printed, but reproduced here so that this path and
+// gen_internal_place.js cannot drift) and the title token (a post-hoc swap, since
+// gen_internal itself has no place concept).
 // We reproduce gen_internal_place.js's own logic here rather than running it,
 // because it resolves gen_internal.js and internal.svg relative to DIR/cwd —
 // assumptions that don't hold once the workspace subfolder is in play.

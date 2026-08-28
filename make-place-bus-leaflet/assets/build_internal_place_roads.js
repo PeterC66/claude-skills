@@ -67,9 +67,11 @@ fs.writeFileSync(rjPath, JSON.stringify(RJ, null, 2));
 run('pull_roads', path.join(TSK, 'pull_roads.js'), [roadMarginKm]);
 run('match_routes', path.join(TSK, 'match_routes.js'), []);
 
-// 3) gen_internal + title fix, via the shared classic wrapper. Pass a build-version
-//    stamp with any leading "v" stripped so the place convention version:"v1.0"
-//    renders "Map v1.0" (gen_internal prefixes its own "v"), not "vv1.0".
+// 3) gen_internal + title fix, via the shared classic wrapper. Passes the build
+//    version with any leading "v" stripped - the place convention stores "v1.0"
+//    and gen_internal used to prefix its own "v", giving "vv1.0". INERT since
+//    2026-08-10: the engine build number is no longer printed on the sheet, so
+//    nothing renders either form. Kept for provenance; see gen_internal_place.js.
 const ver = String(process.env.LEAFLET_VERSION || RJ.version || '').replace(/^v/i, '');
 run('build_internal_place', path.join(PSK, 'build_internal_place.js'), [],
     ver ? { LEAFLET_VERSION: ver } : {});

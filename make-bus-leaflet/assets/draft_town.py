@@ -52,6 +52,7 @@ import argparse, json, math, os, re, shutil, sqlite3, subprocess, sys, time
 import urllib.parse, urllib.request
 from datetime import date
 import gtfs_regions
+import index_guard
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UA = {"User-Agent": "make-bus-leaflet/1.0 (draft_town Tier-2)"}
@@ -172,21 +173,47 @@ def build_verified_services(gtfs_services_path, out_path):
 
 
 # ------------------------------------------- S2: chains + coords direct from GTFS
-def gtfs_full_chains(db, routes):
+def gtfs_full_chains(db, routes, prefix):
     """Per route: the modal (most-frequent) stop pattern per direction_id -- the
-    route's canonical journey, not every timing variation."""
+    route's canonical journey, not every timing variation.
+
+    SCOPED TO THE TOWN. `route_short_name` is not unique within a BODS region, and
+    this function's output becomes `routes_full_atco.json` -- the drawn geometry.
+    Until 2026-08-28 it pulled every trip on every route with that number ANYWHERE
+    in the region, so a town drafting its route 9 could be handed a different
+    operator's route 9 from sixty miles away and draw it. Measured 2026-08-22: six
+    of our eight towns carry at least one colliding number (St Ives four -- `A`, `B`
+    Stagecoach East vs First Norfolk & Suffolk, `9` Dews vs A2B, `5A` Stagecoach
+    East vs Stephensons). Nothing shipped is known to be wrong because Ramsey is the
+    only town ever auto-drafted and it has no collision; the next one would have been.
+
+    The restriction is the one `gtfs_duration.py` already applies and comments: keep
+    only trips of that short_name which actually CALL AT a stop in this town. Trips
+    dropped by it are counted and printed, so the scoping is visible rather than
+    silent. See OA-097.
+    """
     con = sqlite3.connect(db); cur = con.cursor()
     out = {}
+    dropped_total = 0
     for route in routes:
         route_ids = [r[0] for r in cur.execute(
             "SELECT route_id FROM routes WHERE route_short_name=?", (route,))]
         if not route_ids:
             out[route] = {"directions": [], "canonical": [], "all": []}
             continue
+        ph = ",".join("?" * len(route_ids))
+        in_town = {r[0] for r in cur.execute(
+            "SELECT DISTINCT t.trip_id FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id "
+            "JOIN stops s ON s.stop_id=st.stop_id "
+            "WHERE t.route_id IN (%s) AND s.stop_id LIKE ?" % ph,
+            route_ids + [prefix + "%"])}
         groups = {}
         for rid in route_ids:
             for tid, headsign, did in cur.execute(
                     "SELECT trip_id, trip_headsign, direction_id FROM trips WHERE route_id=?", (rid,)).fetchall():
+                if tid not in in_town:
+                    dropped_total += 1
+                    continue
                 stops = [row[0] for row in cur.execute(
                     "SELECT stop_id FROM stop_times WHERE trip_id=? "
                     "ORDER BY CAST(stop_sequence AS INT)", (tid,))]
@@ -203,6 +230,9 @@ def gtfs_full_chains(db, routes):
         out[route] = {"directions": dirs, "canonical": dirs,
                       "all": sorted(set(a for d in dirs for a in d["stops"]))}
     con.close()
+    if dropped_total:
+        print(f"  chains scoped to {prefix}*: dropped {dropped_total} trip(s) on same-numbered "
+              f"routes that never call at this town (see OA-097)")
     return out
 
 
@@ -444,7 +474,7 @@ def main():
     s2 = node("stage.js", "new", "S2", cwd=town_dir)
     print("S2 dir:", s2)
 
-    chains = gtfs_full_chains(a.db, routes)
+    chains = gtfs_full_chains(a.db, routes, prefix)
     json.dump(chains, open(os.path.join(s2, "routes_full_atco.json"), "w", encoding="utf-8"), ensure_ascii=False)
     all_atco = sorted(set(x for r in chains.values() for x in r["all"]))
     ll, nm = gtfs_coords(a.db, all_atco)
@@ -554,8 +584,15 @@ def main():
     # ---- S3: routes.json -- the CURRENT-standard config, not a v1 one
     anchor_ll = ll[draft["anchor"]]
     print("naming places (reverse-geocode, cached per ATCO locality)...")
-    facts_by_route = {s["route"]: s for s in json.load(
-        open(os.path.join(s1, "gtfs-services.json"), encoding="utf-8")).get("services", [])}
+    # S1's GTFS facts carry NO `key` field -- that is added later, by curation -- so
+    # this genuinely is keyed on the route number, and a town with two same-numbered
+    # routes would silently give one operator's days and headsigns to the other's
+    # spoke. Refuse instead: an auto-draft that cannot tell two routes apart should
+    # stop and say so, not guess. See OA-134.
+    facts_by_route = index_guard.index_unique(
+        json.load(open(os.path.join(s1, "gtfs-services.json"), encoding="utf-8")).get("services", []),
+        key=lambda s: str(s["route"]),
+        what="draft_town S1 gtfs-services.json")
     externals, termini, unnamed = [], {}, []
     for r in draft.get("routeOrder", routes):
         ch = chains.get(r)

@@ -42,6 +42,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { assertNoCollision } = require('./index_guard');
 
 const DIR = process.env.VERIFY_DIR || process.cwd();
 const P = (f) => path.join(DIR, f);
@@ -398,6 +399,13 @@ function chainEnds(fe) {
 // each checked against its own chain rather than one of them checked twice.
 const vsByRoute = {};
 for (const s of (verified.services || [])) vsByRoute[ourKey(s)] = s;
+// The assertion the 2026-08-27 fix did not carry. `ourKey` is the RIGHT key today,
+// but nothing here would notice if a future map's `key` field were absent or
+// duplicated -- the index would quietly shrink again and every route would still
+// appear exactly once. Measured 2026-08-28: `key` is present on 4 of 8 towns and
+// 0 of 12 places, so the fallback to `route` is the live path on most of the estate.
+// One line, and it is the only thing that tells "indexed" from "deduplicated".
+assertNoCollision(vsByRoute, (verified.services || []), 'verify_report verified-services');
 for (const r of displayed) {
   const vs = vsByRoute[r];
   const fe = fullEntry(r);

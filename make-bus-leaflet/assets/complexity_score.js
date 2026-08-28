@@ -54,6 +54,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { serviceKey, indexUniqueObj } = require('./index_guard');
 
 // ---------------------------------------------------------------- constants
 const CELL_DEG = 0.001;              // ~111 m of latitude
@@ -267,8 +268,13 @@ function band(m) {
  */
 function findFrequencyCliff(paths, services) {
   if (!services) return null;
-  const meta = {};
-  for (const s of services) meta[s.route] = s;
+  // Keyed on the service's own `key`, not its route NUMBER, and it REFUSES a
+  // collision rather than dropping a row. Wisbech runs two 46s: `meta[s.route] = s`
+  // gave the second one's tripsPerWeek to both, so the frequency cliff -- the cut
+  // that decides which services get curated away -- was computed from one
+  // operator's numbers wearing the other's name. Nothing could see it: every route
+  // still appeared exactly once. See OA-134.
+  const meta = indexUniqueObj(services, serviceKey, 'complexity_score services');
   const rows = Object.keys(paths)
     .map(r => ({ r, n: (meta[r] && meta[r].tripsPerWeek) || 0 }))
     .filter(x => x.n > 0)

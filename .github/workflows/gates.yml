@@ -156,6 +156,20 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-build-log.js
 
+      # A route NUMBER is not unique, and indexing on it is an index AND a silent
+      # de-duplication that nothing distinguishes afterwards. Wisbech runs two 46s,
+      # so `gtfs_refresh_report.py` had been diffing the Lynx one against BODS every
+      # month and had never once checked the Stagecoach East one -- eleven services
+      # indexed into ten entries, every route appearing exactly once, report complete.
+      # This harness reproduces the OLD logic alongside the new one and asserts the
+      # old stays SILENT on the mutant, so it shows the fix distinguishes itself from
+      # the code that had the bug rather than merely agreeing with today's file.
+      # BODS is stubbed and the fixture is synthetic: no dataset, no built map, and
+      # ubuntu-latest already has python3. Added 2026-08-28 with OA-134/OA-097.
+      - name: Prove the route-number collision guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: python3 tools/prove-red-route-collision.py
+
       - name: Run gates (JSON)
         working-directory: skills/make-bus-leaflet
         run: |

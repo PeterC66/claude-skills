@@ -13,12 +13,12 @@ cd "St Neots Tesco Extra"
 ## P1 — place  (→ stage.js S1)
 ```bash
 S1=$(node "$TSK/stage.js" new S1); cd "$S1"
-python "$PSK/resolve_place.py" "Tesco Extra" --town "St Neots" --radius-m 500
+python "$PSK/resolve_place.py" "Tesco Extra" --town "St Neots" --region "Cambridgeshire" --radius-m 500
 #   -> Tesco Extra [shop/supermarket] 52.21023,-0.26990  (chosen)
 #   review place-candidates.json; --pick N if the auto-pick is wrong
 node "$TSK/stage.js" commit S1 "$S1" --outputs place.json,place-candidates.json,gtfs-services.json
 ```
-`resolve_place.py` auto-picks the first candidate whose OSM class is place-like (shop/amenity/leisure/railway/…). It sets `ambiguous:true` if another candidate shares the name — then confirm with `--pick`.
+`resolve_place.py` auto-picks the first candidate whose OSM class is place-like (shop/amenity/leisure/railway/…). It sets `ambiguous:true` if another candidate shares the name — then confirm with `--pick`. `--region` is **required** and is checked against `_gtfs/regions.json` before any network call: it narrows the geocode *and* becomes the dataset a standalone place is change-scanned against, so there is deliberately no default (OA-025).
 
 ## P2 — geometry  (→ S2)
 ```bash

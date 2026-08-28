@@ -30,6 +30,7 @@ Usage:
 import os, sys, json, glob, argparse, datetime
 import gtfs_query as gq
 import gtfs_regions as greg
+import index_guard as ig
 
 DOW=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 COMMUNITY_HINTS=["villager","fact","community","minibus","dial","demand","voluntary","cvs","car scheme"]
@@ -58,13 +59,23 @@ def latest_verified(town_dir):
     return cands[-1] if cands else None
 
 def fold_gtfs(services):
-    """Fold variant suffixes (301S/V/X -> 301) into the base route."""
+    """Fold variant suffixes (301S/V/X -> 301) into the base route.
+
+    `opFlags` keeps each operator's own day flags alongside the folded union. It is
+    only consulted when a route NUMBER carries more than one shipped service, which
+    is the case the union cannot answer: Wisbech's two 46s are Stagecoach East and
+    Lynx, and the union of their days describes neither of them. See OA-134.
+    """
     base={}
     for s in services:
         key=s["possibleVariantOf"] or s["route"]
-        b=base.setdefault(key,{"route":key,"operators":set(),"flags":[0]*7,"variants":set(),"hasShape":False})
+        b=base.setdefault(key,{"route":key,"operators":set(),"flags":[0]*7,"variants":set(),
+                              "hasShape":False,"opFlags":{}})
         b["operators"].add(s["operator"])
-        for i in range(7): b["flags"][i]|=s["daysFlags"][i]
+        of=b["opFlags"].setdefault(s["operator"],[0]*7)
+        for i in range(7):
+            b["flags"][i]|=s["daysFlags"][i]
+            of[i]|=s["daysFlags"][i]
         if s["possibleVariantOf"]: b["variants"].add(s["route"])
         b["hasShape"]=b["hasShape"] or s["hasGtfsShape"]
     return base
@@ -73,7 +84,14 @@ def diff_town(db, name, cfg, town_dir):
     vf=latest_verified(town_dir)
     if not vf: return None
     vs=json.load(open(vf,encoding="utf-8"))
-    shipped={s["route"]:s for s in vs.get("services",[]) if s.get("servesTown",True)}
+    # GROUPED, not indexed. `{s["route"]: s for s in ...}` was here until 2026-08-28 and
+    # it silently dropped a service on any town with two same-numbered routes: Wisbech
+    # ships eleven and that comprehension built ten, so the Stagecoach East 46 had never
+    # once been diffed against BODS -- only the Lynx one, which happened to be last in
+    # the file. Every check below therefore runs PER SHIPPED ENTRY and is labelled with
+    # the entry's own `key` (46, 46L), which is what tells the two apart. See OA-134.
+    shipped=ig.group_by([s for s in vs.get("services",[]) if s.get("servesTown",True)],
+                        key=lambda s: str(s["route"]))
     not_serving={x["route"] for x in vs.get("notOnLeaflet",[]) if x.get("servesTown") is False}
     prefixes=cfg.get("prefixes"); near=None
     if cfg.get("near"): la,lo,km=cfg["near"]; near=(la,lo,km)
@@ -84,27 +102,41 @@ def diff_town(db, name, cfg, town_dir):
     for r,g in gtfs.items():
         gdays=set(i for i in range(7) if g["flags"][i])
         if r in shipped:
-            sh=shipped[r]
-            # operator
-            gops=g["operators"]
-            if not any(o in (sh.get("operator") or "") or (sh.get("operator") or "") in o for o in gops):
-                changes.append(("OPERATOR", r, f"shipped '{sh.get('operator')}' vs BODS '{' / '.join(sorted(gops))}'"))
-            # days
-            sd=parse_days(sh.get("days"))
-            if sd is not None and sd!=gdays:
-                changes.append(("DAYS", r, f"shipped '{sh.get('days')}' vs BODS '{fmt(gdays)}'"))
+            rows=shipped[r]
+            for sh in rows:
+                label=ig.service_key(sh)          # '46' and '46L', not '46' twice
+                shop=sh.get("operator") or ""
+                # operator
+                gops=g["operators"]
+                matched=[o for o in gops if o in shop or shop in o]
+                if not matched:
+                    changes.append(("OPERATOR", label, f"shipped '{sh.get('operator')}' vs BODS '{' / '.join(sorted(gops))}'"))
+                # days. With one shipped entry on this number the folded union IS this
+                # service. With two it is the union of two different operators' weeks,
+                # which describes neither -- so narrow it to the operator that matched.
+                gdays_e=gdays
+                if len(rows)>1 and matched:
+                    f=[0]*7
+                    for o in matched:
+                        for i in range(7): f[i]|=g["opFlags"].get(o,[0]*7)[i]
+                    gdays_e=set(i for i in range(7) if f[i])
+                sd=parse_days(sh.get("days"))
+                if sd is not None and sd!=gdays_e:
+                    changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(gdays_e)}'"))
         elif r in not_serving:
             changes.append(("RE-EVAL", r, f"BODS now shows it serving the town ({fmt(gdays)}); we'd marked it 'does not serve'"))
         else:
             extra=f" [+ road geometry]" if g["hasShape"] else ""
             changes.append(("ADD?", r, f"new in BODS: {' / '.join(sorted(g['operators']))}, {fmt(gdays)}{extra}"))
     # shipped routes missing from GTFS
-    for r,sh in shipped.items():
+    for r,rows in shipped.items():
         if r not in gtfs:
-            if is_community(sh.get("operator"), sh.get("source")):
-                changes.append(("COMMUNITY", r, f"absent from BODS as expected ({sh.get('operator')}); re-check on bustimes"))
-            else:
-                changes.append(("WITHDRAWN?", r, f"shipped ({sh.get('operator')}, {sh.get('days')}) but gone from BODS - verify"))
+            for sh in rows:
+                label=ig.service_key(sh)
+                if is_community(sh.get("operator"), sh.get("source")):
+                    changes.append(("COMMUNITY", label, f"absent from BODS as expected ({sh.get('operator')}); re-check on bustimes"))
+                else:
+                    changes.append(("WITHDRAWN?", label, f"shipped ({sh.get('operator')}, {sh.get('days')}) but gone from BODS - verify"))
     return {"file":vf,"verifiedOn":vs.get("verifiedOn"),"changes":changes}
 
 def fmt(dayset):

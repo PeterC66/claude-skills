@@ -23,7 +23,7 @@ Run from `make-bus-leaflet`:
 npm test
 ```
 
-**324 tests across 22 suites**, about nine and a half seconds, no network and no data tree needed. (This said *123 tests, about a second* until 2026-08-28 — true when eleven modules had been extracted, and nothing reads a sentence to check it.) Then the four falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
+**352 tests across 24 suites**, about a second and a half, no network and no data tree needed. (This said *123 tests* until 2026-08-28 and *324* later the same day — each true when written, and nothing reads a sentence to check it, so read the count off the run.) Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
 
 ```bash
 npm run test:prove-red
@@ -49,6 +49,12 @@ npm run test:prove-red-design-keys
 ```
 
 **Every `design.*` key the engine reads must have a row in the register**, and every row must name a key something still reads — the table under the *design* heading in `references/design-quality.md`. **Add the row in the same commit as the key.** Built 2026-08-28 (OA-142) because the register held **19** rows against **33** keys: six of the missing fourteen were discussed further down the same document, eight appeared nowhere in it, and `design.laneOrientation` had been promoted to a DEFAULT the day before without ever being named there. Nothing could catch it, because **a table with a Default column asserts completeness by construction** — there is no count to disagree with. So the checker prints its two counts even when it passes, and the harness re-counts the population by its own independent walk instead of believing the verdict. It fires in both directions: a key deleted from the engine and left in the document is the same staleness from the other end.
+
+```bash
+npm run test:prove-red-route-collision
+```
+
+Falsifies the **route-number collision guard** — the one harness here written in Python, and the only one that runs the pre-fix code alongside the current code on purpose. A route NUMBER is not an identity: Wisbech runs two 46s, and `{s["route"]: s for s in services}` turned eleven shipped services into ten entries, so the monthly change scan had been diffing the Lynx 46 every month and had never once checked the Stagecoach East one. Every route still appeared exactly once, which is why nothing found it for months. Each case is a pair — quiet on right data, loud on a fault of the same kind — plus an **inertness** case proving a town with no colliding number gets a byte-identical answer either way, and a case asserting the OLD logic stays SILENT, without which "the tests pass" only says today's code agrees with itself. BODS is stubbed, so it needs no dataset and runs in both workflows. See `assets/index_guard.js` / `.py` and OA-134.
 
 **Nothing may edit `assets/` in place.** Every file there is vendored and hashed; both harnesses work on temp copies for exactly that reason.
 

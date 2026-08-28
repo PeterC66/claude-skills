@@ -52,6 +52,14 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+// The town engine's collision guard. Sibling-relative first, absolute only as a
+// fallback -- a bare absolute path resolves on this laptop and nowhere else.
+const { assertNoCollision } = (() => {
+  const sibling = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'index_guard.js');
+  try { return require(fs.existsSync(sibling) ? sibling
+    : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/index_guard.js'); }
+  catch (e) { return { assertNoCollision: () => {} }; }
+})();
 
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
@@ -124,6 +132,11 @@ if (!lanes.length) {
 
 const byRoute = new Map();
 for (const s of (S1.services || [])) byRoute.set(String(s.route), s);
+// A place's service list carries NO `key` field -- measured 2026-08-28, 0 of 12
+// places have one -- so this genuinely is keyed on the route number, and two
+// same-numbered routes serving one place would silently become one tier. No place
+// has that today; this line is what will say so when one does. See OA-134.
+assertNoCollision(byRoute, (S1.services || []), 'derive_frequency S1 services');
 
 const place = S1.town || RJ.placeShort || RJ.town || path.basename(DIR);
 const basis = S1.frequencyBasis || {};

@@ -1,0 +1,29 @@
+# This repository is source, and `core.autocrlf=true` is set on the machine that
+# writes it. With no rule here, Git stores every tracked file with LF and hands
+# the working copy CRLF — so the bytes on disk depend on who checked them out.
+#
+# That is not cosmetic here, because THE ENGINE HASHES ITS OWN BYTES.
+# `engine_version.js` runs sha256 over the raw contents of every file the five
+# entry points reach, and stamps the answer into each map's `routes.json` as the
+# provenance of the code that drew it. Line endings therefore move it.
+#
+# Measured 2026-08-28 at one commit, three checkouts, three answers:
+#
+#   f83987f11b   this laptop's worktree — a historical MIX of 15 CRLF files and
+#                180 LF ones, and the value stamped into all 20 maps
+#   24ebbec148   a fresh `git clone` on Windows — every text file CRLF
+#   0a32b566d4   an all-LF tree, which is what Linux CI computes
+#
+# 54 files under make-bus-leaflet/assets differ byte-for-byte between the first
+# two, and ZERO of them differ once `\r` is stripped. So the engine version was
+# never a property of the commit at all; it was a property of the checkout, and
+# only this one laptop in its one accidental mix could reproduce the number the
+# maps record. In CI every town already prints `f83987f11b STALE` — and CI is
+# green, because status.js leaves engine staleness out of its exit code.
+#
+# `text=auto` lets Git decide what is text (binaries are detected and left
+# alone); `eol=lf` fixes what a checkout writes. Every one of the 196 tracked
+# files is ALREADY stored LF, so this changes no committed byte — only what
+# lands on disk. The sibling rule for the data repo's byte fixtures is the
+# .gitattributes at the root of buses-data (OA-146).
+* text=auto eol=lf

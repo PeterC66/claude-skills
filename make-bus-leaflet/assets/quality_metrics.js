@@ -65,15 +65,6 @@ const T = {
   badgeOverlapMm: 0.6,    // two badge discs closer than (r1+r2-this) are printing on each other
   laneCrossDeg: 25,       // two route ribbons crossing SHALLOWER than this are swapping sides
   laneCrossSiteMm: 4,     // intersections closer than this are one visual crossing
-  // How far either side of a crossing the lane spacing is read. It has to reach
-  // BEYOND the swap zone, or it measures the swap rather than the lanes: at 6mm
-  // both a mirror and a fork read as a fraction of a millimetre apart, the
-  // min-separation floor below rejects both, and the symmetry test — which is the
-  // actual discriminator — never runs at all. Found 2026-08-28 by the mutation
-  // run: removing the symmetry test changed no verdict, because nothing reached it.
-  laneMirrorArmMm: 12,
-  laneMirrorTolFrac: 0.4, // spacing that changes by less than this across the crossing = a mirror
-  laneMirrorMinSepMm: 0.8,// below this the two ribbons are coincident, not lanes
   laneCrossWarn: 0,       // any shallow crossing is worth naming
 };
 
@@ -1108,26 +1099,38 @@ function analyse(svgPath) {
     });
   }
 
-  // --- 8. TWO ROUTE RIBBONS THAT CROSS INSTEAD OF RUNNING ---------------
+  // --- 8. TWO ROUTE RIBBONS THAT CROSS AT A SHALLOW ANGLE ---------------
   //
-  // OA-118, and the hole lane_normals.js names in its own header: "across the
-  // other 110 measured sites nothing can yet say whether the redrawn sheet is
-  // better or worse, because quality_metrics.js cannot see a lane mirror at
-  // all." Since 2026-08-27 laneOrientation is the DEFAULT, so what was a
-  // regression that could only reach a map which had opted in is now one that
-  // would reach every map at once.
+  // Two co-running routes crossing at a shallow angle, clustered one site per
+  // visual crossing. Different colours only: one route crossing ITSELF is an
+  // out-and-back leg, which is the town rather than the placer. A steep crossing
+  // is a junction and is not counted.
   //
-  // WHAT A MIRROR LOOKS LIKE ON THE PAGE, which is all this file can read. Two
-  // co-running routes are drawn as parallel lanes either side of a shared
-  // centreline. When the reference heading reverses mid-corridor the whole
-  // bundle flips around that centreline, so the two ribbons SWAP SIDES — they
-  // stay parallel before the flip and parallel after it, and in between they
-  // cross at a very shallow angle. A junction where two routes genuinely part
-  // company crosses steeply. So the angle at the crossing is the discriminator,
-  // and it needs no knowledge of bundles, corridors or the config.
+  // WHAT THIS IS NOT, and the distinction cost a day to learn. It is NOT a lane
+  // mirror detector. It was built as one on 2026-08-28 for OA-118 — the shipped
+  // version classified a crossing as a "mirror" when the lane spacing was the
+  // same either side of it — and the first site anybody actually LOOKED at
+  // disproved it in both directions at once. High Wycombe internal, the street
+  // at x≈156, y=116..134: with laneOrientation OFF the 32/32A and 34 ribbons
+  // swap sides between y=126 and y=128 at a near-constant 2.9mm gap, which is a
+  // textbook mirror, and the measure scored it ZERO — because that swap happens
+  // as a JUMP between vertices, the two polylines never intersect, and a
+  // crossing-based test cannot see a mirror that does not cross. With the fix ON
+  // the same ribbons stay in the same order the whole way, and the measure
+  // reported ONE mirror there.
   //
-  // Different colours only: one route crossing ITSELF is an out-and-back leg,
-  // which is the town, not the placer.
+  // Two later attempts at a lateral-order test failed for a reason worth
+  // recording: "which strand of the other route am I beside" is a discontinuous
+  // selector wherever a route runs out and back, so the side flips spuriously —
+  // which is precisely the bug lane_normals.js exists to fix, reappearing in the
+  // detector written to check it.
+  //
+  // THE NUMBER ALREADY EXISTS AND IT IS NOT HERE. lane_normals.js computes the
+  // corridor orientation field and returns `conflicts` and `flipped`; a corridor
+  // with conflicts === 0 has a consistent orientation and therefore no mirrors,
+  // by construction. gen_internal.js prints both behind DBG_LANES and nothing
+  // else reads them. Surfacing that is OA-118's real answer; an SVG reader is
+  // the wrong place to re-derive it. See OA-118.
   const laneSegs = [];
   for (const s2 of P.strokes) {
     if (!isRouteInk(s2) || !palette || !palette.has(s2.stroke)) continue;
@@ -1160,53 +1163,8 @@ function analyse(svgPath) {
     sites.push({ x, y, n: 1, deg: +(Math.acos(Math.min(1, cos)) * 180 / Math.PI).toFixed(1),
                  cols: [a.col, b.col], a });
   }
-  // A SHALLOW CROSSING IS NOT YET A MIRROR, and the difference is the whole of
-  // OA-118. Two routes that genuinely part company at a fork also cross shallowly
-  // for a millimetre or two — but their gap then GROWS. A mirror is the case
-  // lane_normals.js describes: the bundle flips around its own centreline, so the
-  // two ribbons are parallel at one spacing before the flip and parallel at the
-  // SAME spacing after it, having simply changed sides. That is the signature the
-  // 2026-08-26 measurement recorded ("two routes staying parallel at the SAME
-  // spacing on both sides of a swap, in frame") and it is decidable from the page.
-  //
-  // Reported as its own number rather than folded into the crossings count: a
-  // crossing is worth knowing about either way, and a measure that silently
-  // narrows itself is the failure shape this file has been bitten by twice.
-  const byColour = new Map();
-  for (const g of laneSegs) {
-    if (!byColour.has(g.col)) byColour.set(g.col, []);
-    byColour.get(g.col).push(g);
-  }
-  // Perpendicular distance from a point to the nearest ribbon of one colour, and
-  // which SIDE of that ribbon the point falls, as a signed pair.
-  const toRibbon = (x, y, col) => {
-    let best = Infinity, side = 0;
-    for (const g of byColour.get(col) || []) {
-      let t = ((x - g.p[0]) * g.dx + (y - g.p[1]) * g.dy) / (g.L * g.L);
-      if (t < 0) t = 0; else if (t > 1) t = 1;
-      const cx = g.p[0] + g.dx * t, cy = g.p[1] + g.dy * t;
-      const d = Math.hypot(x - cx, y - cy);
-      if (d < best) { best = d; side = Math.sign(g.dx * (y - g.p[1]) - g.dy * (x - g.p[0])); }
-    }
-    return { d: best, side };
-  };
-  for (const s3 of sites) {
-    // Walk along ribbon A's own heading, an arm either side of the crossing, and
-    // ask how far ribbon B is from each of those two points.
-    const a = s3.a;
-    const ux = a.dx / a.L, uy = a.dy / a.L, R = T.laneMirrorArmMm;
-    const before = toRibbon(s3.x - ux * R, s3.y - uy * R, s3.cols[1]);
-    const after  = toRibbon(s3.x + ux * R, s3.y + uy * R, s3.cols[1]);
-    const big = Math.max(before.d, after.d);
-    s3.mirror = big > 0
-      && before.d >= T.laneMirrorMinSepMm && after.d >= T.laneMirrorMinSepMm
-      && Math.abs(before.d - after.d) / big <= T.laneMirrorTolFrac
-      && before.side !== 0 && after.side !== 0 && before.side !== after.side;
-    s3.sep = [+before.d.toFixed(2), +after.d.toFixed(2)];
-  }
   for (const s3 of sites)
-    detail.laneCross.push({ at: [+s3.x.toFixed(1), +s3.y.toFixed(1)], deg: s3.deg, hits: s3.n,
-                            cols: s3.cols, sep: s3.sep, mirror: !!s3.mirror });
+    detail.laneCross.push({ at: [+s3.x.toFixed(1), +s3.y.toFixed(1)], deg: s3.deg, hits: s3.n, cols: s3.cols });
 
   const m = {
     pointLabelsOverInk: detail.overInk.filter(d => d.kind === 'point').length,
@@ -1241,7 +1199,6 @@ function analyse(svgPath) {
     labelsOverBadge: (palette && palette.size) ? detail.labelOverBadge.length : null,
     badgeOverBadge: (palette && palette.size) ? detail.badgeOverBadge.length : null,
     laneCrossings: (palette && palette.size) ? detail.laneCross.length : null,
-    laneMirrors: (palette && palette.size) ? detail.laneCross.filter(c => c.mirror).length : null,
   };
   // A point label over its OWN continuation is the design, not a defect — see
   // measure 2. pt/ink is left untouched so the board stays comparable with the
@@ -1328,8 +1285,7 @@ function analyse(svgPath) {
   // sheets they name are clean. See OA-021 / OA-118 for the numbers on the day.
   if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge');
   if (m.badgeOverBadge > 0) warns.push(m.badgeOverBadge + ' route badges printed on each other');
-  if (m.laneMirrors > 0) warns.push(m.laneMirrors + ' lane mirrors (a bundle flipped around its own centreline)');
-  else if (m.laneCrossings > T.laneCrossWarn) warns.push(m.laneCrossings + ' shallow route crossings');
+  if (m.laneCrossings > T.laneCrossWarn) warns.push(m.laneCrossings + ' shallow route crossings');
   if (m.colourClashOnMap > 0) warns.push('route hues that read alike running together');
   else if (m.colourClashInPanel > 0) warns.push('route hues that read alike in the panel');
 

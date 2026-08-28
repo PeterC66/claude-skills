@@ -436,9 +436,6 @@ const MUTATIONS = [
     what: 'a route crossing ITSELF counts as two routes crossing',
     find: '    if (a.col === b.col) continue;', to: '    if (false) continue;' },
 
-  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
-    what: 'a fork counts as a mirror, so the spacing test means nothing',
-    find: '      && Math.abs(before.d - after.d) / big <= T.laneMirrorTolFrac', to: '      && true' },
 
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'a sheet with no palette reports a clean ZERO instead of UNKNOWN',

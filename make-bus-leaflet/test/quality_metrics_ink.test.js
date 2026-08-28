@@ -135,22 +135,30 @@ test('a badge in the Services panel is not on the map', () => {
 });
 
 // -------------------------------------------------------------------- OA-118
-test('two ribbons crossing shallowly at the same spacing either side is a MIRROR', () => {
-  // A swaps from 2mm above B to 2mm below it, over a short run, while both carry
-  // straight on — the bundle flipped around its own centreline.
+test('two ribbons that cross shallowly are counted as one crossing', () => {
   const m = analyse(sheet(
     ribbon([[40, 98], [70, 98], [100, 102]], '#4477aa') +
     ribbon([[40, 102], [70, 102], [100, 98]], '#ee6677'))).metrics;
   assert.strictEqual(m.laneCrossings, 1);
-  assert.strictEqual(m.laneMirrors, 1);
 });
 
-test('two ribbons that part company cross shallowly and are NOT a mirror', () => {
-  // Same crossing angle; the gap after it keeps growing, which is a fork.
+test('the measure does NOT claim to find a lane mirror, and that is the point', () => {
+  // WITHDRAWN 2026-08-28, the day it was written, on the evidence of the
+  // artwork. `laneMirrors` classified a crossing as a mirror when the lane
+  // spacing was the same either side of it. The first site anybody LOOKED at
+  // disproved it in both directions: High Wycombe internal, the street at
+  // x≈156 — with laneOrientation OFF the 32/32A and 34 ribbons swap sides
+  // between y=126 and y=128 at a near-constant 2.9mm gap, a textbook mirror,
+  // and the measure scored it ZERO, because that swap happens as a JUMP
+  // between vertices and a crossing-based test cannot see a mirror that does
+  // not cross. With the fix ON the ribbons keep their order and it reported
+  // one. This assertion is what stops the field coming back without the
+  // evidence that it works.
   const m = analyse(sheet(
-    ribbon([[40, 97], [70, 100], [140, 100]], '#4477aa') +
-    ribbon([[40, 103], [70, 100], [140, 60]], '#ee6677'))).metrics;
-  assert.strictEqual(m.laneMirrors, 0);
+    ribbon([[40, 98], [70, 98], [100, 102]], '#4477aa') +
+    ribbon([[40, 102], [70, 102], [100, 98]], '#ee6677'))).metrics;
+  assert.strictEqual(m.laneMirrors, undefined);
+  assert.ok(!('laneMirrors' in m));
 });
 
 test('a route crossing ITSELF is the town, not the placer', () => {

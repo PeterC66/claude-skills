@@ -114,11 +114,11 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null }) {
  * nothing to do with engine stamps. The PORTAL is the real one and is only read
  * — the vendoring-drift rows are part of `bad`, so a green control here is also
  * a statement that the portal is in sync, which is the honest reading of it. */
-function board(busesDir) {
+function board(busesDir, statusPath = STATUS, portalDir = PORTAL) {
   let out, code = 0;
   try {
     out = execFileSync(process.execPath,
-      [STATUS, '--buses', busesDir, '--portal', PORTAL, '--no-quality', '--no-live', '--json'],
+      [statusPath, '--buses', busesDir, '--portal', portalDir, '--no-quality', '--no-live', '--json'],
       { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
   } catch (e) {
     if (typeof e.status !== 'number') throw e;
@@ -137,6 +137,34 @@ function board(busesDir) {
   return { code, json };
 }
 
+/* A scratch copy of the engine whose ENGINE_STALE_ALLOWED carries exactly one
+ * entry. The list is EMPTY in the real status.js and should normally stay that
+ * way -- an exception excuses a town from the staleness gate, so a live one is a
+ * hole somebody has to justify. This case used to depend on the live Ramsey
+ * entry, and when that entry was retired on 2026-08-28 (OA-072 answered, Ramsey
+ * rebuilt onto the current engine) the control went red: the harness was
+ * asserting a fact about today's config rather than about the mechanism.
+ *
+ * Building the exception here proves the mechanism whether or not any real one
+ * exists, and means retiring the last live exception can never again break the
+ * proof that exceptions work. assets/ itself is not touched -- the whole folder
+ * is copied first, the same way tools/prove-red.js does it. */
+function statusWithException(town, engine) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-engine-'));
+  copyDir(ASSETS, path.join(root, 'assets'));
+  const f = path.join(root, 'assets', 'status.js');
+  const src = fs.readFileSync(f, 'utf8');
+  const find = 'const ENGINE_STALE_ALLOWED = [];';
+  if (!src.includes(find)) {
+    throw new Error('prove-red-status: ENGINE_STALE_ALLOWED is no longer an empty literal in status.js, '
+      + 'so this case cannot inject its exception. Re-point it at whatever replaced it.');
+  }
+  const one = "const ENGINE_STALE_ALLOWED = [{ town: '" + town + "', engine: '" + engine
+    + "', since: '2026-08-28', why: 'injected by prove-red-status.js' }];";
+  fs.writeFileSync(f, src.replace(find, one));
+  return { statusPath: f, root };
+}
+
 const CASES = [
   {
     label: 'control: donor town, its own current stamp',
@@ -151,10 +179,11 @@ const CASES = [
     what: 'THE GATE ITSELF - this exited 0 for as long as the hash existed',
   },
   {
-    label: 'Ramsey at d8eb6961c7 - the dated exception',
+    label: 'an INJECTED exception excuses its own town-and-hash pair',
     make: { town: 'Ramsey', engine: 'd8eb6961c7' },
+    engineException: { town: 'Ramsey', engine: 'd8eb6961c7' },
     expect: 0,
-    what: 'the exception must excuse its own town-and-hash pair',
+    what: 'the mechanism still works, with no live exception needed to show it',
   },
   {
     /* OA-057. The place-completeness column is REPORTED and deliberately not in
@@ -192,7 +221,16 @@ let failed = 0;
 for (const c of CASES) {
   const root = scratchTree(c.make);
   kept.push(root);
-  const { code, json } = board(root);
+  const inj = c.engineException ? statusWithException(c.engineException.town, c.engineException.engine) : null;
+  if (inj) kept.push(inj.root);
+  /* The injected case runs a COPY of status.js, and portalDrift() derives the
+   * skill root from its own location -- so from a scratch folder every vendored
+   * file reads MISSING and the board goes red for a reason this case is not
+   * about. Point it at no portal at all: portalDrift() returns [] for a path
+   * that does not exist, which leaves exactly the towns section this case
+   * exists to judge. The other four cases still run against the real portal. */
+  const portalFor = inj ? path.join(root, '__no-portal__') : PORTAL;
+  const { code, json } = board(root, inj ? inj.statusPath : STATUS, portalFor);
   const stale = json && Array.isArray(json.engineStale) ? json.engineStale.map(r => r.town) : null;
   const wantRed = c.expect !== 0;
   const colourOk = (code !== 0) === wantRed;
@@ -219,7 +257,8 @@ for (const c of CASES) {
             : 'exit ' + code + ', stale ' + (stale === null ? '(unparseable)' : '[' + stale.join(',') + ']'),
     c.what,
   ]);
-  if (!KEEP) fs.rmSync(root, { recursive: true, force: true });
+  if (!KEEP) { fs.rmSync(root, { recursive: true, force: true });
+    if (inj) fs.rmSync(inj.root, { recursive: true, force: true }); }
 }
 
 const w = [18, 52, 40];
@@ -230,5 +269,5 @@ if (failed) {
   console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the engine-staleness gate is not what status.js says it is.');
   process.exitCode = 1;
 } else {
-  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, the Ramsey exception is exactly one town-and-hash pair wide, and the OA-057 completeness column is still reported rather than gated.');
+  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, an injected exception is exactly one town-and-hash pair wide, and the OA-057 completeness column is still reported rather than gated.');
 }

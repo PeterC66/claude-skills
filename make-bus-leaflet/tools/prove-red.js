@@ -104,13 +104,26 @@ const MUTATIONS = [
 
   { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
     what: 'a bundled stack hangs downward from the line instead of straddling it, so half of it sits on the route',
-    find: "    const pitch=rad*2+0.5, y0=y-(list.length-1)/2*pitch;",
+    find: "    const pitch=rad*2+0.5, y0=y-(uniq.length-1)/2*pitch;",
     to: "    const pitch=rad*2+0.5, y0=y;" },
 
   { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
     what: 'the stack half-height forgets the outermost disc, so labels are allowed to sit on top of it',
-    find: "    return {h:(list.length-1)/2*pitch + rad, xw};",
-    to: "    return {h:(list.length-1)/2*pitch, xw};" },
+    find: "    return {h:(uniq.length-1)/2*pitch + rad, xw};",
+    to: "    return {h:(uniq.length-1)/2*pitch, xw};" },
+
+  // OA-024. Both of the two above were ANCHOR-stale the moment badgeStack started
+  // deduping, and the harness said so rather than quietly passing 152 of 154 — which
+  // is the whole reason its verdict separates "stale" from "caught".
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the stack dedupes by route KEY rather than by printed label, so a bundled 301 family prints 301 three times',
+    find: "    for(const r of list){ const t=blab(r); if(!seen.has(t)){ seen.add(t); uniq.push(r); } }",
+    to: "    for(const r of list){ const t=r; if(!seen.has(t)){ seen.add(t); uniq.push(r); } }" },
+
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the dedupe keeps the LAST member of a duplicate group, so the stack takes a follower colour instead of the leader',
+    find: "    for(const r of list){ const t=blab(r); if(!seen.has(t)){ seen.add(t); uniq.push(r); } }",
+    to: "    for(const r of list){ const t=blab(r); const i=uniq.findIndex(u=>blab(u)===t); if(i>=0) uniq[i]=r; else { seen.add(t); uniq.push(r); } }" },
 
   { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
     what: 'gk stops escaping the key, so a feature named with an ampersand writes invalid SVG in editor mode',

@@ -174,7 +174,13 @@ test('a one-element badgeStack is byte-identical to badge at the same centre', (
 test('a bundled stack pitches its members by 2r+0.5 about the given centre', () => {
   const { api, lines } = make();
   const rad = 2.4, pitch = rad * 2 + 0.5;
-  const r = api.badgeStack(100, 50, [9, 9, 9], rad);
+  // THIS TEST USED [9, 9, 9] UNTIL 2026-08-28, one route key three times, purely
+  // because repeating a key was the shortest way to get three discs out of the
+  // stack. That was free while nothing deduped; under OA-024's dedupe-by-printed-
+  // label it is one identity and draws once, so the premise expired and the test
+  // went red for a reason that had nothing to do with pitching. Three DISTINCT
+  // labels is what the assertion was always about.
+  const r = api.badgeStack(100, 50, [9, 8, 7], rad);
   // Compared as the emitted STRINGS, because a circle's cx/cy go into the SVG
   // unrounded — only the rect branch runs them through toFixed(2). The third
   // disc really is written as cy="55.300000000000004", and any future rounding
@@ -204,4 +210,36 @@ test('the factory returns exactly the seven marks the sheet is drawn out of', ()
   // weeks behind a name another generator uses for something else entirely.
   assert.deepStrictEqual(Object.keys(make().api).sort(),
     ['badge', 'badgeHalfW', 'badgeStack', 'badgeXW', 'badgeXWs', 'esc', 'gk']);
+});
+
+/*
+ * OA-024. `badgeLabels` exists so several route keys can print the same text, and
+ * a stack drew one badge per MEMBER — so a bundled 301 family printed "301" three
+ * times down one lane, which is one identity drawn three times and two badges
+ * carrying nothing. The stack is a list of identities a reader can tell apart.
+ */
+test('a stack dedupes by what is PRINTED, not by route key', () => {
+  const { api, lines } = make({ badgeLabel: (r) => (String(r).startsWith('301') ? '301' : String(r)) });
+  const r = api.badgeStack(100, 50, ['301', '301A', '301B'], 2.6);
+  const texts = lines.filter((l) => l.startsWith('<text')).map((l) => />([^<]*)</.exec(l)[1]);
+  assert.deepStrictEqual(texts, ['301'], 'three members printing "301" are one badge');
+  // and it collapses to the one-element geometry, not to a three-high stack
+  assert.deepStrictEqual(r, { h: 2.6, xw: 0 });
+});
+
+test('members printing DIFFERENT text all keep their badge', () => {
+  const { api, lines } = make();
+  api.badgeStack(100, 50, [9, '301S'], 2.6);
+  const texts = lines.filter((l) => l.startsWith('<text')).map((l) => />([^<]*)</.exec(l)[1]);
+  assert.deepStrictEqual(texts, ['9', '301S'], 'a real family with distinct numbers is untouched');
+});
+
+test('dedupe keeps the FIRST member, so the group leader supplies the drawn colour', () => {
+  const { api, lines } = make({
+    palette: { A: '#111111', B: '#222222' },
+    badgeLabel: () => '7',        // short, so it stays a disc rather than a stadium
+  });
+  api.badgeStack(100, 50, ['A', 'B'], 2.6);
+  const fills = lines.filter((l) => l.startsWith('<circle')).map((l) => /fill="([^"]*)"/.exec(l)[1]);
+  assert.deepStrictEqual(fills, ['#111111']);
 });

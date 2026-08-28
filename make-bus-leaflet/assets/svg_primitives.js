@@ -83,12 +83,32 @@ function svgPrimitives(deps) {
   // unbundled town is byte-identical. Returns the stack's half-height in mm, and
   // (under design.badgeFit) how much wider than the disc its widest member drew,
   // so the caller can reserve the right box.
+  // OA-024: DEDUPE BY WHAT IS PRINTED, not by route key. A bundled family is a set
+  // of route keys, and `badgeLabels` exists precisely so several of them can print
+  // the SAME text — so bundling the 301 family on St Ives Bus Station correctly
+  // reduced them to one lane and then drew "301" three times down it, one badge per
+  // member. The workaround at the time was to delete the duplicate variants from
+  // the drawn config, which left the generator fault in place and simply stopped
+  // feeding it. A stack is a list of IDENTITIES a reader can tell apart; two badges
+  // reading "301" are one identity drawn twice, and the second carries nothing.
+  //
+  // Deduping here rather than at the call sites because all three badge passes in
+  // gen_internal.js reach the page through this function, and a rule applied at two
+  // of three call sites is the kind of exempt layer this project has been bitten by.
+  // The callers' pre-draw size estimates still count the undeduped group, which
+  // over-reserves by a badge — conservative, and it cannot overlap anything.
+  //
+  // BYTE-NEUTRAL on all 20 committed maps, verified by the byte gate: no map today
+  // bundles two routes that print the same text, exactly because the one that did
+  // was edited around. What this changes is what happens the next time one does.
   function badgeStack(x,y,list,rad){
-    if(list.length===1){ const xw=badge(x,y,list[0],rad); return {h:rad, xw}; }
-    const pitch=rad*2+0.5, y0=y-(list.length-1)/2*pitch;
+    const seen=new Set(), uniq=[];
+    for(const r of list){ const t=blab(r); if(!seen.has(t)){ seen.add(t); uniq.push(r); } }
+    if(uniq.length===1){ const xw=badge(x,y,uniq[0],rad); return {h:rad, xw}; }
+    const pitch=rad*2+0.5, y0=y-(uniq.length-1)/2*pitch;
     let xw=0;
-    list.forEach((r,i)=>{ xw=Math.max(xw, badge(x, y0+i*pitch, r, rad)); });
-    return {h:(list.length-1)/2*pitch + rad, xw};
+    uniq.forEach((r,i)=>{ xw=Math.max(xw, badge(x, y0+i*pitch, r, rad)); });
+    return {h:(uniq.length-1)/2*pitch + rad, xw};
   }
   // DARK, measured 2026-08-27: `design.badgeFit:false` is set by NO committed map,
   // so the whole opt-out from the stadium badge is certified by

@@ -462,3 +462,19 @@ Two traps in one key. **It is default-ON** — `const SPREAD_ICONS = DESIGN.spre
 ## `routes.json`'s `engine` field is a hash, not a note (2026-08-28)
 
 It looks like free-text provenance and it is not: `status.js` compares it against `engine_version.js`'s current template hash and prints `ENGINE STALE (gating)` on any mismatch. Writing a sentence into it during a rebuild ("curated S1 2026-08-28; chains GTFS + bustimes community") gates the town as stale on a build that had just used the current engine. Set it with `node engine_version.js --stamp <routes.json>`, and put the provenance in the manifest's stage note, which is what that field is for. Nothing draws from it — only `labels.engine` is read by the generators — so it can be corrected in place without moving a byte.
+
+## A literal in a generator is a claim about every map it draws (2026-08-28)
+
+`cross-checked at bustimes.org (June 2026)` sat in three generators, so all 20 maps stated the same cross-check month and only March was telling the truth — the S1 passes it described ran between June and August 2026, and on Ramsey it had never happened at all when its sheets first claimed it had. It survived for months because **no gate in this project can see it**: the byte gate compares a generator against its OWN previous output, so a date that is wrong everywhere reproduces perfectly and for ever, and the quality metrics count collisions and drops rather than reading what the words say.
+
+The rule this leaves behind is narrower and more useful than "no town literals": **a generator must not state a FACT about the world.** Geometry, thresholds and style constants are fine; a date, a source name, a verification claim or an operator is a per-map fact and belongs in `routes.json`. `test/provenance_date.test.js` now enforces exactly that for dates — no month-and-year literal in any generator — because the only other thing that would have caught it is somebody reading a footer they had read a hundred times.
+
+**Two design points worth keeping.** An absent key **omits** the parenthetical rather than filling it with a default: a missing date is honest and a wrong one is not, and a new map that forgets the key then says nothing instead of inheriting somebody else's month. And it is deliberately **not** defaulted from the neighbouring `validFrom`, which looks like the same thing and is not — that is when the timetable takes effect, this is when we last checked it against the operator, and they already disagreed on Huntingdon (valid from June, S1 ran 12 July). Defaulting one from the other would have manufactured a confident wrong date, which is the fault being fixed.
+
+**Keep one map that does not move.** March's S1 genuinely ran in June, so it kept its date and its footer bytes while the other 19 changed. A rollout where every target changes tells you far less than one with a control in it — if March had moved too, nothing in the run would have distinguished "read the config correctly" from "wrote the new string everywhere".
+
+## A test that resolves its own path can be green about code the run never read (2026-08-28)
+
+`provenance_date.test.js` reads the generators as source. Its first version did `path.join(__dirname, '..', 'assets')`, and **all three of its prove-red mutations survived**: the harness copies `assets/` to a scratch directory and points `ENGINE_DIR` at it, so the test was faithfully reading the unmutated real engine and reporting green. It was a suite that could not fail, and only `npm run test:prove-red` said so — `npm test` was perfectly happy.
+
+**Anything under `test/` must reach the engine through `_engine.js`**, whether it `require`s a module or just reads the file as text. `E.load(name)` for the former, `E.ENGINE_DIR` for the latter. The header of `_engine.js` says why the indirection exists; this is the first case where the thing being loaded was bytes rather than an export, which is exactly where the habit slips.

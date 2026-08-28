@@ -14,6 +14,12 @@ Detailed steps for S3 of the `make-bus-leaflet` workflow. See SKILL.md for the s
 ### The `engine` field — provenance, not control (item 3, 2026-08-04)
 S4 stamps `routes.json`'s **`engine`** field with a short content-hash of the generator files it just ran (`node "%SK%\engine_version.js"` — hashes `gen_internal.js` + both `gen_external_*.js` + `icons.js`), the same surgical-replace approach `stage.js` already uses for `"version"`. It's pure record-keeping — which engine build actually drew this map — not something you set by hand or that controls anything at generate time (S4 always runs whatever is currently in `%SK%`). `node "%SK%\status.js"` reads it back to flag at a glance which towns' *last build* predates the current template (`(none)` for any town built before this field existed — not an error, just no provenance recorded yet). See [changing-the-engine.md](changing-the-engine.md) §2a for how this changes the re-render recipe.
 
+## `checkedAt` — when THIS map's services were last cross-checked
+
+Prints in the footer as `cross-checked at bustimes.org (August 2026)`. Set it from the map's own **latest S1/P1 run date**, in `Month YYYY` form. All 20 maps carry it as of 2026-08-28.
+
+**Absent ⇒ the parenthetical is omitted entirely**, not defaulted. That is deliberate: a missing date is honest and a wrong one is not, and until 2026-08-28 this was a hardcoded `June 2026` in three generators, identical on all 20 maps and false on 19 of them (OA-153). It is **not** derived from `validFrom` — that is when the timetable takes effect, this is when we last checked it against the operator, and the two already disagree on Huntingdon. `test/provenance_date.test.js` refuses any month-and-year literal in a generator, so re-hardcoding it fails the suite.
+
 ## Everything town-specific is a `routes.json` key (the generators have NO town literals)
 The config-driven keys the generators read (2026-06-07 — the per-town code edits were all lifted into config; `bootstrap_town.py` drafts most of them):
 - **`routeOrder`** — internal draw order (default = palette key order).

@@ -183,6 +183,54 @@ function gateTown(t) {
 
 // ---- gate a single place ----------------------------------------------------
 // PLACE_IGNORE (title + "· Map v…" stamp, post-edited by build_internal_place.js) now lives in gate_lib.js, shared with rollout_places.js.
+// ---- place-completeness keys: REPORTED, never gated (OA-057) ---------------
+//
+// `derive_frequency.js` and `derive_termini.js` both exist, both work, and both
+// are written into the place skill's P3 procedure with their exact commands.
+// Running them is REMEMBERED rather than required, and a key nobody writes is
+// indistinguishable from a feature nobody built — which is how the count in the
+// backlog row itself went stale between one week and the next. This column is
+// the enforcement half: it makes the answer readable on demand instead of by
+// hand, so the number cannot drift again unnoticed.
+//
+// FOUR KEYS, and each one is a visible thing on the sheet rather than a tidiness
+// score. `frequency` + `design.frequencyTiers` are what draw a busy route heavier
+// than a two-buses-a-day one; without both, every service prints at the same
+// 1.7 mm weight. `internalRoads.termini` is what puts a destination name on a
+// frame-exit arrow; without it the arrow is bare. `panelGroups` orders the
+// Services panel.
+//
+// IT IS DELIBERATELY NOT IN `bad`, AND THAT IS THE WHOLE DESIGN. Seven of the ten
+// places that draw an internal sheet are short today, so gating on it would put
+// seven permanent reds on a board a real failure has to be spotted through — the
+// same rule that keeps the quality TARGETS reported rather than gated, and the
+// same rule that decided which of the three ink-on-ink measures got folded into
+// `hard`. Filling them in is a VISIBLE change to seven live maps and therefore
+// Peter's call, not a config sweep to run unannounced; the recommendation in
+// OA-057 is to carry it with OA-019's other changes in one rebuild round. When
+// that round has run, this becomes one line in `bad` — and the day it does,
+// falsify it, because a column that has never been red is not yet a gate.
+//
+// READ FROM THE S4 routes.json, not from the latest S3, though the row proposed
+// S3. They are normally the same file — S4 builds from the config S3 committed —
+// but where they differ, S4 is what the SHIPPED sheet was actually drawn from,
+// and every other column on this board is a statement about what shipped.
+const PLACE_KEYS = [
+  { id: 'freq', has: j => !!j.frequency },
+  { id: 'tiers', has: j => !!(j.design && j.design.frequencyTiers) },
+  { id: 'termini', has: j => !!(j.internalRoads && j.internalRoads.termini) },
+  { id: 'panelGroups', has: j => !!j.panelGroups },
+];
+function placeKeys(routesJson, row) {
+  // A place with no internal sheet cannot use any of them. 'n/a' rather than
+  // '4 missing' is the same distinction the byte-gate columns draw between
+  // MISSING and '-': a sheet the build never claimed to make cannot be short of
+  // the keys that decorate it.
+  if (row.internal === '-' || row.internal === 'NO-BUILD') return { state: 'n/a', missing: [] };
+  const missing = PLACE_KEYS.filter(k => !k.has(routesJson)).map(k => k.id);
+  return { state: missing.length ? 'short' : 'complete', missing };
+}
+
 function gatePlace(p) {
   const m = readJson(path.join(p.dir, 'manifest.json'));
   const s4 = latestRunDir(m, p.dir, 'S4');
@@ -222,6 +270,7 @@ function gatePlace(p) {
       : 'NO-SHEET';
     row.boarding = pBrd === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'boarding.svg') : pBrd;
   }
+  row.keys = placeKeys(routesJson, row);
   return row;
 }
 
@@ -611,9 +660,29 @@ async function main() {
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
   console.log('\n=== Places (' + places.length + ') ===');
-  const pw = [24, 18, 6, 9, 9, 9, 11];
-  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality'], pw));
-  for (const r of placeRows) console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name)], pw));
+  const pw = [34, 18, 6, 9, 9, 9, 11, 26];
+  if (AS_MD) console.log('| Place | Town | Ver | Internal | External | Boarding | Quality | Keys |\n|---|---|---|---|---|---|---|---|');
+  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality', 'Keys'], pw));
+  for (const r of placeRows) {
+    // Names what is MISSING rather than a fraction, because the missing key is
+    // the actionable half and 'freq+tiers' says which command to run.
+    const keys = !r.keys ? '-' : r.keys.state === 'n/a' ? 'n/a'
+      : r.keys.state === 'complete' ? 'all four'
+      : r.keys.missing.length === PLACE_KEYS.length ? 'none of four'
+      : 'no ' + r.keys.missing.join('/');
+    console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys], pw));
+  }
+  // Reported under the table, never in `bad` -- see placeKeys() for why.
+  const drawing = placeRows.filter(r => r.keys && r.keys.state !== 'n/a');
+  const short = drawing.filter(r => r.keys.state === 'short');
+  if (drawing.length) {
+    const noFreq = short.filter(r => r.keys.missing.includes('freq') || r.keys.missing.includes('tiers')).length;
+    const noTerm = short.filter(r => r.keys.missing.includes('termini')).length;
+    console.log('  completeness (OA-057, reported not gated): ' + (drawing.length - short.length) + ' of ' + drawing.length
+      + ' places that draw an internal sheet carry all four keys');
+    if (short.length) console.log('    ' + noFreq + ' draw every service at the same weight, ' + noTerm
+      + ' have bare arrows at the frame exits -- derive_frequency.js / derive_termini.js, in ONE rebuild round (OA-019)');
+  }
 
   if (portalFixtureRows.length) {
     console.log('\n=== Portal fixtures (vendored engine, ' + PORTAL + ') ===');

@@ -81,13 +81,20 @@ function copyDir(from, to) {
 /* Build a one-town scratch Buses tree and, optionally, rename the town and
  * re-stamp its engine hash. `engine: null` leaves the donor's own stamp alone,
  * which is what makes case 1 a control rather than a fifth mutation. */
-function scratchTree({ town = DONOR, engine = null }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-'));
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
   fs.mkdirSync(dst, { recursive: true });
   fs.copyFileSync(path.join(src, 'manifest.json'), path.join(dst, 'manifest.json'));
   copyDir(path.join(src, 'ci-reference'), path.join(dst, 'ci-reference'));
+  if (withPlace) {
+    const pd = path.join(root, 'Places', '_standalone', withPlace);
+    const ps = path.join(BUSES, 'Places', '_standalone', withPlace);
+    fs.mkdirSync(pd, { recursive: true });
+    fs.copyFileSync(path.join(ps, 'manifest.json'), path.join(pd, 'manifest.json'));
+    copyDir(path.join(ps, 'ci-reference'), path.join(pd, 'ci-reference'));
+  }
   if (engine) {
     const rjPath = path.join(dst, 'ci-reference', 'routes.json');
     const rj = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
@@ -150,6 +157,28 @@ const CASES = [
     what: 'the exception must excuse its own town-and-hash pair',
   },
   {
+    /* OA-057. The place-completeness column is REPORTED and deliberately not in
+     * `bad`: seven of the ten places that draw an internal sheet are short today,
+     * and gating on it would put seven permanent reds on a board a real failure
+     * has to be spotted through. That is a contract, not a coincidence, and
+     * "tidy up the last one while we are here" is exactly how such a rule is
+     * lost -- it looks like housekeeping in review. This case fails the day
+     * somebody folds it in early, the same way quality_metrics_ink.test.js
+     * guards `labelsOverBadge`. When the rebuild round HAS run, the honest edit
+     * is to flip this case's expectation and say why. */
+    label: 'a place short of every completeness key stays GREEN',
+    make: { withPlace: 'Godmanchester Co-op Cambridge Road' },
+    expect: 0,
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === 'Godmanchester Co-op Cambridge Road');
+      if (!p) return 'the board never saw the place at all';
+      if (!p.keys || p.keys.state !== 'short') return 'the board saw it but did not judge it short: ' + JSON.stringify(p.keys);
+      if (p.keys.missing.length !== 4) return 'expected all four keys missing, got ' + p.keys.missing.join('+');
+      return null;
+    },
+    what: 'OA-057 is reported, not gated, until the rebuild round has run',
+  },
+  {
     label: 'Ramsey at some OTHER stale hash',
     make: { town: 'Ramsey', engine: 'deadbeef00' },
     expect: 1,
@@ -172,21 +201,28 @@ for (const c of CASES) {
   const causeOk = stale === null ? false
     : wantRed ? (stale.length === 1 && stale[0] === (c.make.town || DONOR))
               : stale.length === 0;
-  const ok = colourOk && causeOk;
+  /* A GREEN case needs more than a green exit: a map the board never FOUND is
+   * green too, and an enumeration that quietly walks past a map is this
+   * project's most-repeated bug. `also` is where a case says what the board must
+   * have actually seen for its green to mean anything. */
+  const alsoWhy = (c.also && json) ? c.also(json) : null;
+  const ok = colourOk && causeOk && !alsoWhy;
   if (!ok) failed++;
   const verdict = !colourOk ? (wantRed ? 'SURVIVED' : 'CONTROL RED')
     : !causeOk ? 'RED, WRONG CAUSE'
+    : alsoWhy ? 'VACUOUS'
     : wantRed ? 'caught' : 'green';
   rows.push([
     verdict,
     c.label,
-    'exit ' + code + ', stale ' + (stale === null ? '(unparseable)' : '[' + stale.join(',') + ']'),
+    alsoWhy ? 'exit ' + code + ' BUT ' + alsoWhy
+            : 'exit ' + code + ', stale ' + (stale === null ? '(unparseable)' : '[' + stale.join(',') + ']'),
     c.what,
   ]);
   if (!KEEP) fs.rmSync(root, { recursive: true, force: true });
 }
 
-const w = [18, 48, 34];
+const w = [18, 52, 40];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
 
@@ -194,5 +230,5 @@ if (failed) {
   console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the engine-staleness gate is not what status.js says it is.');
   process.exitCode = 1;
 } else {
-  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, and the Ramsey exception is exactly one town-and-hash pair wide.');
+  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, the Ramsey exception is exactly one town-and-hash pair wide, and the OA-057 completeness column is still reported rather than gated.');
 }

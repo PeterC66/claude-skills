@@ -454,6 +454,20 @@ for (let _i = 0; _i < dests.length; _i++) {
 })();
 
 // ---- legend + notes -----------------------------------------------------------
+/*
+ * design.limitedKeyLabel — the words the DASHED spokes get in the line-style key.
+ *
+ * This sheet has drawn `limited: true` destinations dashed since its first build and
+ * said nowhere what dashed means. The TOWN external gained the row on 2026-08-19 for
+ * exactly that reason and this generator never got it, so every place external with a
+ * limited destination was showing an unexplained convention — St Neots Town Centre's
+ * "Huntingdon / St Ives dir" spoke among them (OA-055).
+ *
+ * Same default string as gen_external_radial.js and the same override key, so the town
+ * sheet and the place sheet of one map explain the same thing in the same words. Both
+ * match gen_internal.js's FTIER_LABEL.limited.
+ */
+const LIMITED_KEY = DESIGN.limitedKeyLabel || 'Dashed \u2014 certain days only, check times';
 // Auto backing panel (from gen_external_radial.js): the legend + its note is drawn into
 // a buffer first so its bounding box can be measured, then an opaque panel is emitted
 // UNDER it and both are flushed on top of the spokes — otherwise a spoke that happens to
@@ -489,6 +503,27 @@ function buildLegend(lx, ly) {
     panelMaxY = Math.max(panelMaxY, ny + 3);
     ny += 6.0;
   });
+  /*
+   * The line-style key row — drawn only when a dashed spoke is actually on this sheet.
+   *
+   * The sample is 12mm of the real thing: same stroke width, same dash array and the same
+   * butt cap the spokes use (see `line()` above), so what the key shows and what the map
+   * draws cannot drift apart. Ported from gen_external_radial.js including the 12mm, which
+   * is not arbitrary — at 6mm the 2.6/2.4 pattern fits two blocks and one gap and reads as
+   * a pair of squares rather than as a dashed line, which is the one thing the row exists
+   * to communicate.
+   *
+   * It sits after the local loops and before the free-text note, which is the same place
+   * in the reading order the town sheet puts it: line styles belong with the other things
+   * the reader has to decode, above prose.
+   */
+  if (dests.some(b => b.limited && b.routes.some(r => !HIDDEN_ROUTES.has(r)))) {
+    out(`<path d="M${lx.toFixed(2)} ${ny.toFixed(2)}h12.00" fill="none" stroke="#888" stroke-width="3.4" stroke-dasharray="2.6 2.4" stroke-linecap="butt"/>`);
+    out(`<text x="${(lx + 14).toFixed(2)}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666" dominant-baseline="central">${esc(LIMITED_KEY)}</text>`);
+    panelMaxX = Math.max(panelMaxX, lx + 14 + measureText(LIMITED_KEY, 2.9));
+    panelMaxY = Math.max(panelMaxY, ny + 3);
+    ny += 6.0;
+  }
   // D.note — word-wrapped to the legend panel's own content width, so a long note breaks
   // onto further lines instead of running off the panel as one unbounded line.
   if (D.note) {

@@ -23,7 +23,8 @@
  * Inputs (read from the working dir; override the dir with VERIFY_DIR):
  *   redteam.json            (the blind red-team JSON; optional — sanity-only without it)
  *   verified-services.json  (S1)
- *   routes.json             (S3 — incl. `notShown[]`, routes carried in the panel with no line)
+ *   routes.json             (S3 — incl. `notShown[]`, routes carried in the panel with no
+ *                            line, and `redteamRejected[]`, red-team claims checked and rejected)
  *   routes_full_atco.json   (S2 — full both-direction chains)
  *   routes_intown_atco.json (S2 — the drawn display subset)
  *   atco2ll.json            (S2 — coords for every full-chain stop)
@@ -287,6 +288,64 @@ const CIRCULAR = new Set((intownCfg.circular || []).map(normRoute));
  */
 const NOT_SHOWN = new Set((routes.notShown || []).map(normRoute));
 
+/*
+ * THE RED TEAM WAS CHECKED AND IS WRONG -- a DECLARATION, not an inference.
+ *
+ * The blind red team is the most valuable input this stage has and it is not an
+ * oracle. Its answer comes from public web sources, so it cannot see a BODS
+ * calendar that started yesterday, and it reasons about a town by its name
+ * rather than by NaPTAN's locality tree. Both of those produced the same false
+ * HARD twice on St Neots route 69: the red team called the "Eynesbury Tesco"
+ * stop a data-extraction artefact, when NaPTAN gives 0500HEYNE001
+ * ParentLocalityName "St Neots" and BODS carries the service from 20 Aug 2026,
+ * a calendar that opened the day before that red team ran. Peter adjudicated it
+ * on 2026-08-22 and wrote the evidence down -- and S6 went on reporting it HARD,
+ * because there was nowhere to put the answer.
+ *
+ * A finding that is known-wrong and cannot be recorded is the most dangerous
+ * kind of red: it is re-litigated every run, it blocks delivery on a settled
+ * question, and the pressure it creates is to waive the town or mute the check.
+ * That is how a real finding eventually stops being read.
+ *
+ * `routes.json redteamRejected[]` is where the answer goes. Same discipline as
+ * `notShown[]` above -- a declaration rather than a smarter check, because
+ * inferring it would make a genuine defect indistinguishable from an adjudicated
+ * one -- and the same refusal to be a mute button:
+ *
+ *   - it NEVER goes silent. Honouring an entry still emits a SOFT naming the
+ *     date, the decider and the evidence, so every report carries the
+ *     adjudication instead of hiding it.
+ *   - an entry missing `decidedOn`, `decidedBy` or `why` silences NOTHING. The
+ *     HARD fires as it always did and the malformed entry is reported beside it
+ *     (S-1c). An undated, unexplained rejection is precisely the mute button
+ *     this exists to avoid being.
+ *   - `recheckBy` is optional and, once past, the entry STOPS silencing and the
+ *     HARD returns naming the expiry -- the rule scripts/s6-waivers.json applies
+ *     to a deferral, for the same reason.
+ *   - it is checked in the other direction (R-1b): a rejection for a route our
+ *     own drawn data no longer places in the town is HARD, because the red team
+ *     may have become right and the entry would be silencing it; a rejection
+ *     this red team does not contradict, or one for a route the sheet does not
+ *     carry, is a stale leftover and is reported.
+ */
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
+const REDTEAM_REJECTED = new Map();       // normRoute -> entry
+const REDTEAM_REJECTED_BAD = [];          // entries that will not silence anything
+for (const e of (routes.redteamRejected || [])) {
+  const r = normRoute(e && e.route);
+  if (!r) { REDTEAM_REJECTED_BAD.push({ route: String((e && e.route) || '?'), missing: ['route'] }); continue; }
+  const missing = ['decidedOn', 'decidedBy', 'why'].filter(k => !e[k]);
+  if (missing.length) { REDTEAM_REJECTED_BAD.push({ route: r, missing }); continue; }
+  REDTEAM_REJECTED.set(r, e);
+}
+const REDTEAM_REJECTION_USED = new Set();
+/** The live rejection for a route, or null. An `expired` one does not silence. */
+function rejectionFor(r) {
+  const e = REDTEAM_REJECTED.get(normRoute(r));
+  if (!e) return null;
+  return { entry: e, expired: !!(e.recheckBy && String(e.recheckBy) < TODAY_ISO) };
+}
+
 // =====================================================================
 // SANITY CHECKS (no red-team needed)
 // =====================================================================
@@ -330,6 +389,17 @@ for (const d of NOT_SHOWN) {
       `routes.json declares route ${d} is not shown on this map, but the sheet does not carry it at all — no palette entry and no panel row. The entry is stale.`,
       { route: d, drawnStops: drawn.length, inDisplayed: false }, d);
   }
+}
+
+/*
+ * S-1c: a rejection that cannot be honoured. It silences nothing — the HARD it
+ * was written for fires as it always did — but it is reported, because an entry
+ * sitting in routes.json looking like an adjudication is worse than no entry.
+ */
+for (const bad of REDTEAM_REJECTED_BAD) {
+  add('soft', 'redteam-rejected',
+    `routes.json has a redteamRejected entry for route ${bad.route} missing ${bad.missing.join(', ')} — it silences nothing. A rejection needs a date, a decider and a reason, or it is a mute button with a respectable name.`,
+    { route: bad.route, missing: bad.missing }, bad.route);
 }
 
 // S-2: every drawn ATCO has a coordinate (orphan stop check)
@@ -714,9 +784,36 @@ if (redteam) {
     if ((excl && excl.servesTown === false) || (rt && rt.servesTown === false)) {
       const ev = excl || rt;
       if (isDisplayed || vs.servesTown) {
-        add('hard', 'serves-town',
-          `Red-team says route ${r} does NOT serve the town${ev.reason ? ' (' + ev.reason + ')' : ''}, but we include it${isDisplayed ? ' and draw it' : ''}.`,
-          { route: r, ours: { servesTown: vs.servesTown, displayed: isDisplayed }, redteam: { servesTown: ev.servesTown, reason: ev.reason || null } }, r, 'redteam');
+        const rej = rejectionFor(r);
+        // The red team DID make this claim about this route, so R-1b must not
+        // then report the entry as silencing nothing. Marked here rather than in
+        // the honoured arm alone: the first draft marked it only on success, and
+        // the dangerous arm below emitted a HARD ("your own data no longer
+        // supports this") beside a SOFT saying the red team makes no such claim
+        // -- two findings contradicting each other about one entry.
+        if (rej) REDTEAM_REJECTION_USED.add(normRoute(r));
+        const drawnStops = (intownByNorm(r) || []).length;
+        const base = `Red-team says route ${r} does NOT serve the town${ev.reason ? ' (' + ev.reason + ')' : ''}, but we include it${isDisplayed ? ' and draw it' : ''}.`;
+        const evidence = { route: r, ours: { servesTown: vs.servesTown, displayed: isDisplayed, drawnStops }, redteam: { servesTown: ev.servesTown, reason: ev.reason || null } };
+        if (rej && rej.expired) {
+          // A dated re-check that has come due stops silencing, exactly as an
+          // expired row in s6-waivers.json does. Louder than a missing entry,
+          // because somebody meant to look again and has not.
+          add('hard', 'serves-town', `${base} routes.json rejected this claim on ${rej.entry.decidedOn} (${rej.entry.decidedBy}), but that rejection asked to be re-checked by ${rej.entry.recheckBy} and the date has passed — it no longer silences anything. Re-check, then move the date or drop the route.`,
+            { ...evidence, rejection: { ...rej.entry, expired: true } }, r, 'redteam');
+        } else if (rej && drawnStops === 0) {
+          // R-1b, the dangerous direction: we asserted the red team was wrong,
+          // and our OWN drawn data no longer puts this route in the town. The
+          // entry would now be muting a claim that has become correct.
+          add('hard', 'redteam-rejected', `routes.json rejects the red team's claim that route ${r} does not serve the town (${rej.entry.decidedOn}, ${rej.entry.decidedBy}), but our own drawn data now gives it NO stops in the town — so the rejection is silencing a finding that may have become true. Re-check it before this report is trusted.`,
+            { ...evidence, rejection: rej.entry }, r, 'redteam');
+        } else if (rej) {
+
+          add('soft', 'redteam-rejected', `${base} This claim was checked and REJECTED on ${rej.entry.decidedOn} by ${rej.entry.decidedBy}: ${rej.entry.why}${rej.entry.evidence ? ' Evidence: ' + rej.entry.evidence + '.' : ''}${rej.entry.recheckBy ? ' Re-check by ' + rej.entry.recheckBy + '.' : ' The entry carries no re-check date, so it is reported in full on every run rather than fading out.'} Our drawn data gives the route ${drawnStops} stop(s) in the town.`,
+            { ...evidence, rejection: rej.entry }, r, 'redteam');
+        } else {
+          add('hard', 'serves-town', base, evidence, r, 'redteam');
+        }
       }
       continue;
     }
@@ -824,6 +921,27 @@ if (redteam) {
     add('soft', 'missing-service',
       `Red-team lists route ${r} (${rt.operator || '?'}) serving the town, but it is absent from our verified set — inclusion candidate.`,
       { route: r, redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
+  }
+
+  /*
+   * R-1b: every rejection this run did NOT need. A declaration that silences
+   * nothing is not harmless — the next reader takes it for a live
+   * adjudication and stops asking. SOFT rather than HARD in both arms below,
+   * matching notShown's stale arm: it hides nothing, it just is not true now.
+   */
+  for (const [r, e] of REDTEAM_REJECTED) {
+    if (REDTEAM_REJECTION_USED.has(r)) continue;
+    if (e.recheckBy && String(e.recheckBy) < TODAY_ISO) continue;   // already HARD above
+    const carried = displayed.has(r) || (verified.services || []).some(v => normRoute(ourKey(v)) === r);
+    if (!carried) {
+      add('soft', 'redteam-rejected',
+        `routes.json rejects a red-team claim about route ${r} (${e.decidedOn}, ${e.decidedBy}), but the sheet does not carry that route at all — no panel row and nothing in our verified set. The entry is stale.`,
+        { route: r, rejection: e, inDisplayed: false }, r, 'redteam');
+    } else {
+      add('soft', 'redteam-rejected',
+        `routes.json rejects the red team's claim that route ${r} does not serve the town (${e.decidedOn}, ${e.decidedBy}), but THIS red-team answer makes no such claim — it either lists the route as serving the town or does not mention it. The rejection is silencing nothing in this run and may be stale; confirm before carrying it forward.`,
+        { route: r, rejection: e, redteamClaimPresent: false }, r, 'redteam');
+    }
   }
 }
 

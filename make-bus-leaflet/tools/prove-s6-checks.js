@@ -54,6 +54,9 @@ const RUNS = {
   wisbech: 'Areas/Wisbech/S6-verify/2026-08-26_0700',
   //  red team excluded "5A (Peterborough)" run by a DIFFERENT operator than our 5A
   stives: 'Areas/St Ives/S6-verify/2026-08-10_1138',
+  //  the red team says route 69 does NOT serve the town and is wrong about it --
+  //  the fixture for `redteamRejected[]`
+  stneots: 'Areas/St Neots/S6-verify/2026-08-28_1347',
   //  a PLACE: no intown_cfg.json, so no in-town prefix and no buffer stops at all
   place: 'Areas/St Neots/Places/St Neots Town Centre/S6-verify/2026-08-21_1912',
 };
@@ -460,6 +463,105 @@ console.log("\n8. Not shown \u2014 a declared panel row is not missing geometry,
   check('a stale declaration is reported, not ignored', 'soft declared-not-shown on ZZ9',
     has(ee.v, 'soft', 'declared-not-shown', 'ZZ9'),
     ee.v ? JSON.stringify(ee.v.findings.filter(f => f.category === 'declared-not-shown').map(f => f.severity + '/' + f.route)) : 'no report');
+}
+
+/* ------------------------------------------------ redteamRejected: adjudicated claims */
+console.log('\n6. redteamRejected — an adjudicated red-team claim is recorded, never muted');
+{
+  /*
+   * THE ARTEFACT. The blind red team says St Neots route 69 does not serve the
+   * town, calling its "Eynesbury Tesco" stop a data-extraction artefact. It is
+   * wrong twice over: NaPTAN gives 0500HEYNE001 ParentLocalityName "St Neots",
+   * and BODS carries the service from 20 Aug 2026 -- a calendar that opened the
+   * day before that red team ran, which is exactly what a web-sourced check
+   * cannot see. Peter adjudicated it on 2026-08-22; S6 went on saying HARD.
+   *
+   * THE FIXTURE UNDECLARES IT ITSELF, and throws if there was nothing to
+   * undeclare. `stage()` seeds from the town's LATEST S3, which is where the fix
+   * lands -- so a case that merely read the config would, from the moment the fix
+   * shipped, be testing the fixed state against itself and could never show the
+   * fix doing anything. That is the failure shape `the fix invalidates its own
+   * control`, and it cost this harness four consecutive red pushes once already.
+   */
+  const base = stage('stneots', 'rtr-base');
+  {
+    const rj = readJ(base, 'routes.json');
+    if (!Array.isArray(rj.redteamRejected) || !rj.redteamRejected.some(e => String(e.route) === '69')) {
+      throw new Error('fixture assumption broken: St Neots\' latest S3 no longer declares a redteamRejected '
+        + 'entry for route 69, so this case cannot show the declaration doing anything. Got: '
+        + JSON.stringify(rj.redteamRejected || null));
+    }
+    delete rj.redteamRejected;
+    writeJ(base, 'routes.json', rj);
+  }
+  const a0 = verify(base);
+  check('the artefact is real before the declaration', 'hard serves-town on 69 with nothing declared',
+    has(a0.v, 'hard', 'serves-town', '69'),
+    a0.v ? JSON.stringify(a0.v.findings.filter(f => f.category === 'serves-town').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  const GOOD = {
+    route: '69', claim: 'serves-town', decidedOn: '2026-08-22', decidedBy: 'Peter',
+    why: 'NaPTAN gives 0500HEYNE001 ParentLocalityName "St Neots"; BODS carries 69 to it from 20 Aug 2026.',
+    evidence: 'Development Docs/route-66-and-69-evidence_2026-08-22.md',
+  };
+  const withDecl = (name, decl, mutate) => {
+    const d = stage('stneots', name);
+    const rj = readJ(d, 'routes.json'); rj.redteamRejected = decl; writeJ(d, 'routes.json', rj);
+    if (mutate) mutate(d);
+    return verify(d);
+  };
+
+  const ok = withDecl('rtr-quiet', [GOOD]);
+  check('an adjudicated claim no longer blocks', 'no hard serves-town on 69',
+    ok.v && !has(ok.v, 'hard', 'serves-town', '69'),
+    ok.v ? JSON.stringify(ok.v.findings.filter(f => f.severity === 'hard').map(f => f.category + '/' + f.route)) : 'no report');
+  check('and it is reported in full, not silently dropped', 'a soft redteam-rejected on 69',
+    has(ok.v, 'soft', 'redteam-rejected', '69'),
+    ok.v ? JSON.stringify(ok.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  /*
+   * The three ways this could become a mute button, each proved to still be loud.
+   */
+  const bad = withDecl('rtr-malformed', [{ route: '69', decidedOn: '2026-08-22', decidedBy: 'Peter' }]);
+  check('an entry with no reason silences NOTHING', 'hard serves-town on 69 still fires',
+    has(bad.v, 'hard', 'serves-town', '69'),
+    bad.v ? JSON.stringify(bad.v.findings.filter(f => f.severity === 'hard').map(f => f.category + '/' + f.route)) : 'no report');
+  check('and the malformed entry is named', 'a soft redteam-rejected reporting the missing field',
+    has(bad.v, 'soft', 'redteam-rejected', '69'),
+    bad.v ? JSON.stringify(bad.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  const expired = withDecl('rtr-expired', [{ ...GOOD, recheckBy: '2026-08-01' }]);
+  check('a rejection past its recheckBy stops silencing', 'hard serves-town on 69 returns',
+    has(expired.v, 'hard', 'serves-town', '69'),
+    expired.v ? JSON.stringify(expired.v.findings.filter(f => f.severity === 'hard').map(f => f.category + '/' + f.route)) : 'no report');
+
+  /*
+   * The dangerous direction. We asserted the red team was wrong; if our OWN drawn
+   * data stops placing the route in the town, the entry would be silencing a claim
+   * that has become correct. Assert 69 IS drawn first, so the mutation means
+   * something on a future config rather than passing vacuously.
+   */
+  const drawn69 = (readJ(base, 'routes_intown_atco.json')['69'] || []).length;
+  if (drawn69 < 1) throw new Error('fixture assumption broken: route 69 is no longer drawn in St Neots at all');
+  const danger = withDecl('rtr-danger', [GOOD], (d) => {
+    const it = readJ(d, 'routes_intown_atco.json'); delete it['69']; writeJ(d, 'routes_intown_atco.json', it);
+  });
+  check('a rejection our own data no longer supports goes HARD', 'hard redteam-rejected on 69',
+    has(danger.v, 'hard', 'redteam-rejected', '69'),
+    danger.v ? JSON.stringify(danger.v.findings.filter(f => f.severity === 'hard').map(f => f.category + '/' + f.route)) : 'no report');
+  check('and it does not ALSO claim the entry is unused', 'exactly one redteam-rejected finding for 69',
+    danger.v && danger.v.findings.filter(f => f.category === 'redteam-rejected' && f.route === '69').length === 1,
+    danger.v ? JSON.stringify(danger.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  /* Two kinds of stale entry, both reported rather than ignored. */
+  const stale1 = withDecl('rtr-stale-uncontested', [GOOD, { ...GOOD, route: '66' }]);
+  check('a rejection the red team does not contradict is reported stale', 'soft redteam-rejected on 66',
+    has(stale1.v, 'soft', 'redteam-rejected', '66'),
+    stale1.v ? JSON.stringify(stale1.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
+  const stale2 = withDecl('rtr-stale-absent', [GOOD, { ...GOOD, route: 'ZZ9' }]);
+  check('a rejection for a route the sheet does not carry is reported stale', 'soft redteam-rejected on ZZ9',
+    has(stale2.v, 'soft', 'redteam-rejected', 'ZZ9'),
+    stale2.v ? JSON.stringify(stale2.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
 }
 
 console.log('\n' + '='.repeat(78));

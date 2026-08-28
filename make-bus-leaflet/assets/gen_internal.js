@@ -1786,15 +1786,74 @@ if(IR && TRIM){
   const TL=RJ.terminiLabels||{};
   const aplaced=[];
   // terminal badge where a route simply ENDS in town (not continuing, not circular)
+  //
+  // OA-023: THIS PASS USED TO DRAW IMMEDIATELY AND HAD NO SPACING TEST OF ANY
+  // KIND, so two routes ending at the same place stamped two discs on the same
+  // spot. Measured 2026-08-28 with the OA-021 badge-overprint measure: of the 57
+  // badge-on-badge overprints across the 46 committed sheets, **34 involve a
+  // 2.6 mm badge, and 2.6 mm is this function's radius and nothing else's** (the
+  // sprinkled pass draws at 2.4, the frame-cut terminus rows at 3.0) — St Neots
+  // alone stacked five of them, 18/66/65/C2/193, inside one 10x6 mm patch beside
+  // the bus station. So the fix is not a nudge: co-located ends are ONE fact
+  // about the town and want one badge stack, which is the convention badgeStack()
+  // already exists for and the convention the frame-cut path below has used since
+  // 2026-07-04. termBadge() therefore COLLECTS; drawing happens once, after.
+  const TBOL=0.6;                              // == quality_metrics.js T.badgeOverlapMm
+  const termEvents=[];
+  // Every badge stack this block draws, as a BOX. Until 2026-08-28 the only
+  // record was `bplaced`, a list of bare centres, which cannot answer "would
+  // this stack overlap that one" because a stack's height is its member count
+  // and a stadium's width is its printed label. Both passes below need the box.
+  const bboxes=[];
+  const noteBadge=(x,y,w,h)=>bboxes.push({x,y,w,h});
+  const badgeClash=(x,y,w,h)=>bboxes.some(b=>
+    (w+b.w)-Math.abs(b.x-x) > TBOL && (h+b.h)-Math.abs(b.y-y) > TBOL);
   const termBadge=(p,r,grp)=>{
     if(inCore(p)) return;                                      // coreBox owns the centre
     // and never on an end whose run was dropped as a stub (see clipOutCore)
     if(CORERUNS && !(CORERUNS[r]||[]).some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<0.05)) return;
     const anc=(atco2ll[ANCHOR]||baseOv[ANCHOR])?XYS(ANCHOR):null;
     if(anc && Math.hypot(p[0]-anc[0],p[1]-anc[1])<8) return;   // not at the interchange knot
-    const bs=badgeStack(p[0],p[1],grp||[r],2.6);
-    reserve(p[0]-2.8-bs.xw,p[1]-bs.h-0.2,p[0]+2.8+bs.xw,p[1]+bs.h+0.2);
+    termEvents.push({p,r,grp:grp||[r]});
   };
+  // Draw the collected in-town terminus badges, merging any that would print on
+  // each other. Single-link clustering in `order` sequence, so it is deterministic.
+  //
+  // THE MERGE TEST IS A BOX TEST, NOT A RADIAL ONE, and that is the lesson OA-021
+  // paid for in the opposite direction. There, a radial test on a stadium badge
+  // INVENTED defects; here a radial test would MISS them, because two discs at
+  // dx=5.0, dy=5.0 are 7.07 mm apart — outside any sane radius — and still overlap
+  // by 0.2 mm on both axes, which is exactly what the measure counts. So this uses
+  // the measure's own rule, `badgeOverlapMm` and all, and the two cannot disagree
+  // about what an overprint is.
+  const termHalf=(e)=>({                       // the box this event WOULD draw
+    w: 2.6 + badgeXWs(e.grp,2.6),
+    h: (e.grp.length-1)/2*5.7 + 2.6,           // badgeStack pitches at rad*2+0.5
+  });
+  function drawTermBadges(){
+    const cls=[];
+    for(const e of termEvents){
+      const he=termHalf(e);
+      const cl=cls.find(c=>c.some(m=>{
+        const hm=termHalf(m);
+        return (he.w+hm.w)-Math.abs(m.p[0]-e.p[0]) > TBOL
+            && (he.h+hm.h)-Math.abs(m.p[1]-e.p[1]) > TBOL; }));
+      if(cl) cl.push(e); else cls.push([e]);
+    }
+    for(const ms of cls){
+      // A CLUSTER OF ONE MUST BE BYTE-IDENTICAL to the old code, or every sheet
+      // with a lone terminus badge re-renders for nothing: the mean of one point
+      // is that point, and dedupe of one group is that group. Same idiom, and the
+      // same reason, as the frame-cut cluster below.
+      let px=0,py=0; for(const m of ms){ px+=m.p[0]; py+=m.p[1]; }
+      px/=ms.length; py/=ms.length;
+      const list=[], seen=new Set();
+      for(const m of ms) for(const g of m.grp) if(!seen.has(g)){ seen.add(g); list.push(g); }
+      const bs=badgeStack(px,py,list,2.6);
+      noteBadge(px,py,2.6+bs.xw,bs.h);
+      reserve(px-2.8-bs.xw,py-bs.h-0.2,px+2.8+bs.xw,py+bs.h+0.2);
+    }
+  }
   // -- consolidate frame-cut termini into ONE box per exit cluster (item 5,
   //    2026-07-04): nearby cut points used to each place an independent
   //    arrow+badge+label, which just overlapped/jittered (e.g. St Ives A/B
@@ -1978,6 +2037,7 @@ if(IR && TRIM){
         if(g) termBadge(tr.pts[0],r,g); }
     }
   }
+  drawTermBadges();                            // OA-023: collect, merge, then draw
   // small route badges sprinkled along each visible line
   const bplaced=aplaced.slice();
   const badged=new Set();          // routes that got at least one badge anywhere
@@ -2004,6 +2064,7 @@ if(IR && TRIM){
         const gh=grp.length===1?2.3:(grp.length-1)/2*5.3+2.3;
         if(overlaps([p[0]-2.3-gxw,p[1]-gh,p[0]+2.3+gxw,p[1]+gh]))continue;
         bplaced.push(p); const bs=badgeStack(p[0],p[1],grp,2.4);
+        noteBadge(p[0],p[1],2.4+bs.xw,bs.h);
         for(const g of grp) badged.add(g);
         reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
       }
@@ -2031,14 +2092,34 @@ if(IR && TRIM){
         if(L){ segs.push({i,L,at:tot+L/2}); tot+=L; } }
       if(!segs.length) continue;
       segs.sort((a,b)=>Math.abs(a.at-tot/2)-Math.abs(b.at-tot/2));
-      for(const s of segs){
-        const p=[(tr.pts[s.i][0]+tr.pts[s.i+1][0])/2, (tr.pts[s.i][1]+tr.pts[s.i+1][1])/2];
-        if(!inFrame(p)||inCore(p)) continue;
-        const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
-        const bs=badgeStack(p[0],p[1],grp,2.4);
-        for(const g of grp) badged.add(g);
-        bplaced.push(p); reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
-        break;
+      // TWO PASSES, AND THE GUARANTEE IS UNCHANGED. This pass exists because an
+      // unidentifiable line is a worse defect than a crowded one, so it has always
+      // placed its badge regardless of collision — but it took the FIRST spot on the
+      // list and never asked whether a later one was clear, which is a different
+      // thing from being willing to force. Measured 2026-08-28 on High Wycombe: it
+      // stamped a 3-badge stack and a 2-badge stack 0.6mm apart, interleaved, and a
+      // reader can identify NEITHER line — 8 of the board's overprints, from the one
+      // pass whose whole purpose is to make a line identifiable. So: prefer a spot
+      // that clashes with no badge already drawn; if there is no such spot, fall
+      // through and force exactly as before. Nothing that got a badge stops getting
+      // one, which is the property this pass is here to hold.
+      let done=false;
+      for(const avoid of [true,false]){
+        if(done) break;
+        for(const s of segs){
+          const p=[(tr.pts[s.i][0]+tr.pts[s.i+1][0])/2, (tr.pts[s.i][1]+tr.pts[s.i+1][1])/2];
+          if(!inFrame(p)||inCore(p)) continue;
+          const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
+          if(avoid){
+            const gxw=badgeXWs(grp,2.4), gh=(grp.length-1)/2*5.3+2.3;
+            if(badgeClash(p[0],p[1],2.4+gxw,gh)) continue;
+          }
+          const bs=badgeStack(p[0],p[1],grp,2.4);
+          noteBadge(p[0],p[1],2.4+bs.xw,bs.h);
+          for(const g of grp) badged.add(g);
+          bplaced.push(p); reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
+          done=true; break;
+        }
       }
     }
   }

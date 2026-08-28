@@ -1096,6 +1096,13 @@ function analyse(svgPath) {
     detail.badgeOverBadge.push({
       over: [+ox.toFixed(2), +oy.toFixed(2)],
       at: [+a.cx.toFixed(1), +a.cy.toFixed(1)], and: [+b.cx.toFixed(1), +b.cy.toFixed(1)],
+      // The HALF-HEIGHT is the badge radius the generator asked for, and that is
+      // which pass drew it: termBadge() uses 2.6, the sprinkled pass 2.4, the
+      // frame-cut terminus rows 3. Without it the detail line says two badges
+      // overlap and cannot say whose fault it is, which is the whole question
+      // OA-023/OA-024 turn on. Half-height, not half-width: a stadium is widened
+      // by design.badgeFit and its ry is still the radius.
+      rad: [+a.ry.toFixed(2), +b.ry.toFixed(2)],
     });
   }
 
@@ -1306,16 +1313,29 @@ function analyse(svgPath) {
 }
 
 // --------------------------------------------------------------------- CLI
+// THE THIRD COPY OF THE SAME ENUMERATION, and it was the one still short.
+// quality_gate.js fixed this on 2026-08-23 with a comment reading "same shape as
+// the gap in gate_lib's findPlaces(), in a second file" — and this, the walk the
+// `--all` CLI actually uses, was the third and nobody looked for it. Consequence,
+// measured 2026-08-28: every board-wide figure this tool has ever printed, the
+// "57 badge overprints across 46 sheets" of OA-021 included, was taken over a
+// population three maps short — Ely Co-op and the two Godmanchester Co-ops live
+// under `Places/_standalone/` and were measured by nothing. An enumeration is a
+// silent filter: it does not fail, it answers about a smaller board.
+// `_portal-fixture` is excluded for the reason quality_gate.js excludes it — it is
+// a CI fixture reproduced byte-for-byte on purpose, not a map anybody reads.
 function findSheets(busesDir) {
   const out = [];
-  (function walk(d) {
+  const walk = (d) => {
     let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of ents) {
       const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); }
+      if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '_portal-fixture') walk(p); }
       else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);
     }
-  })(path.join(busesDir, 'Areas'));
+  };
+  walk(path.join(busesDir, 'Areas'));
+  walk(path.join(busesDir, 'Places'));
   return out.sort();
 }
 const label = (p) => {
@@ -1397,8 +1417,13 @@ ${results.length} sheets · ${results.filter(r => r.fails.length).length} FAIL �
     if (r.detail.clashMap.length) console.log('  hues alike AND running together: ' + r.detail.clashMap.map(d => `${d.a} vs ${d.b} (dE ${d.dE})`).join(', '));
     if (r.detail.clashPanel.length) console.log('  hues alike in the panel: ' + r.detail.clashPanel.map(d => `${d.a} vs ${d.b} (dE ${d.dE})`).join(', '));
     if (r.detail.nearEdge.length) console.log('  inside the print safe margin: ' + r.detail.nearEdge.map(d => `"${d.text}" ${d.mm}mm from the trim`).join(', '));
+    // OA-021 built both badge measures REPORTED and gave neither a --detail line,
+    // so the board could say 57 and not say WHERE. That is the half a placer fix
+    // actually needs: OA-023/OA-024/OA-060 are all "which pass stamped these two".
+    if (r.detail.labelOverBadge.length) console.log('  label over a route badge: ' + r.detail.labelOverBadge.map(d => `"${d.text}" on the badge at ${d.at}`).join(', '));
+    if (r.detail.badgeOverBadge.length) console.log('  badge on a badge: ' + r.detail.badgeOverBadge.map(d => `${d.at} r${d.rad[0]} x ${d.and} r${d.rad[1]} (overlap ${d.over[0]}x${d.over[1]}mm)`).join(', '));
     if (r.share) console.log('  ink share by 9th: ' + r.share.map(s=>(s*100).toFixed(0)+"%").join(" "));
   }
 }
 if (require.main === module) main();
-module.exports = { analyse, parseSvg, textQuad, T };
+module.exports = { analyse, parseSvg, textQuad, findSheets, T };

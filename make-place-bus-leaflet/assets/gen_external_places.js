@@ -34,6 +34,9 @@ const _LABELLER = (() => { const local = path.join(__dirname, 'labeller.js');
   return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
 const { Labeller } = require(_LABELLER);
 const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
+// Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
+// makes it load inside the portal as well as here.
+const { separateRow } = require(path.join(path.dirname(_LABELLER), 'svg_primitives.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn || {};
@@ -176,6 +179,11 @@ const badgeXWs = (list, r) => BFIT ? Math.max(0, ...list.map(k => badgeXW(k, r))
 function badge(x, y, route, r = 4.0) {
   const hw = badgeHalfW(route, r);
   HARD.push([x - hw - 0.4, y - r - 0.4, x + hw + 0.4, y + r + 0.4, 'badge']);
+  // Registered HERE rather than at the call site, so a badge cannot be drawn without
+  // the register hearing about it. hw/r are the half-extents quality_metrics.js reads
+  // back off the finished <circle>/<rect>; the 0.7 white stroke is outside both and is
+  // excluded by the measure too.
+  BADGES.push({ x, y, hw, hh: r });
   if (hw > r) out(`<rect x="${(x - hw).toFixed(2)}" y="${(y - r).toFixed(2)}" width="${(2 * hw).toFixed(2)}" height="${(2 * r).toFixed(2)}" rx="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
   else out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
   out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r * 0.95).toFixed(2)}" fill="${TXT[route] || '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
@@ -331,6 +339,51 @@ const FY0 = 30, FY1 = Math.min(190, PLATE_TOP - 1);
 const nodeBoxes = [{ x0: HX - HUB_W / 2, y0: HY - HUB_H / 2, x1: HX + HUB_W / 2, y1: HY + HUB_H / 2 }];
 HARD.push([HX - HUB_W / 2 - 0.6, HY - HUB_H / 2 - 0.6, HX + HUB_W / 2 + 0.6, HY + HUB_H / 2 + 0.6, 'hub']);
 const spokeSegs = [];
+/* EVERY SPOKE'S BADGE ROW STARTED AT THE SAME RADIUS, AND NO ROW KNEW ABOUT ANY OTHER.
+ *
+ * A badge row is drawn along its own spoke at `r0 + 4 + xw` from the hub, and `r0` is
+ * hubEdge(), which carries a `Math.max(16, ...)` floor. On five of the six place maps
+ * the hub box is 26mm wide, so HUB_A is exactly 16 and the ellipse can never return
+ * more than its own floor -- so r0 is 16 on every bearing and the first badge of every
+ * spoke lands on one perfect ring. Measured on the committed sheets 2026-08-28: r =
+ * 19.99-20.00mm, on all four affected maps, with 14 of High Wycombe Aldi's spokes
+ * sitting on it.
+ *
+ * Bearings, meanwhile, are REAL -- they are a geographic claim and are not spread out
+ * unless design.spokeSpread says so, which no place map sets. So two destinations that
+ * happen to lie in similar directions get their badges 3mm apart on a shared ring, and
+ * nothing anywhere tested for it: 17 of the board's 30 badge overprints were this, in
+ * one chain of 9 around High Wycombe Aldi's hub.
+ *
+ * The fix is the one OA-023 used on the internal sheet's terminus badges and the one
+ * OA-147 prescribes: ONE register that every badge pass tests against, so no mark is
+ * ever placed in ignorance of what is already on the page. Here the free variable is
+ * how far OUT along its own spoke a row starts, and pushing outward always helps --
+ * two spokes theta apart are 2*r*sin(theta/2) apart at radius r, which is monotonic in
+ * r -- so a greedy walk outward terminates on geometry rather than on a step count.
+ *
+ * A BOX TEST, NOT A RADIAL ONE, and the tolerance is quality_metrics.js's own, so the
+ * generator and the measure cannot disagree about what an overprint is. OA-021 paid
+ * for that lesson in one direction (a radial test on a stadium INVENTED nine defects
+ * on High Wycombe internal) and OA-023 in the other (two discs at dx=dy=5.0 are 7.07mm
+ * apart and overlap on both axes).
+ */
+const BADGE_CLEAR = 0.6;      // quality_metrics.js T.badgeOverlapMm
+const BADGES = [];            // {x,y,hw,hh} every badge already committed to the page
+/* The SAME arithmetic quality_metrics.js scores with, deliberately duplicated rather
+ * than approximated. A badge is a stadium -- a disc when its key is narrow, a rect with
+ * rx=r when design.badgeFit widens it -- so the exact gap between two of them is the gap
+ * between their straight cores less the two corner radii. A plain box test on both axes
+ * is WRONG here and was wrong in the measure until 2026-08-28: two discs of r=3.4 whose
+ * centres are 7.22mm apart have 0.42mm of daylight and overlapping bounding boxes, which
+ * is what a badge row looks like on any diagonal spoke. Seventeen of the thirty overprints
+ * the board reported that morning were that, and none of them was a defect. */
+const badgeGap = (a, b) => {
+  const ax0 = a.x - (a.hw - a.hh), ax1 = a.x + (a.hw - a.hh);
+  const bx0 = b.x - (b.hw - b.hh), bx1 = b.x + (b.hw - b.hh);
+  return Math.hypot(Math.max(0, ax0 - bx1, bx0 - ax1), a.y - b.y) - (a.hh + b.hh);
+};
+const badgeClash = (x, y, hw, hh) => BADGES.some(g => -badgeGap(g, { x, y, hw, hh }) > BADGE_CLEAR);
 /* design.spokeSpread — spread the spokes around the hub, ported verbatim in behaviour
  * from gen_external_radial.js (§4.2); its comment carries the full rationale. Short
  * version: an aggregated radial is a tube map — spoke LENGTH already carries nothing —
@@ -369,6 +422,60 @@ const BEARINGS = (() => {
     + '— the maxShift clamp cannot open them. Merge co-terminating destinations, or raise '
     + 'design.spokeSpread.maxShift.\n');
   return outB;
+})();
+/* WHERE EVERY DESTINATION BOX ENDS UP, SOLVED BEFORE ANY OF THEM IS DRAWN.
+ *
+ * destNodeAt() clamps one box to the print margin and the footer plate, and it is
+ * the only rule there has ever been. It is a per-object rule, and two boxes landing
+ * on each other is a relationship between objects, so it cannot see the defect no
+ * matter how carefully it is written: two spokes that both end low are both pushed
+ * up to the same line above the plate, and there they sit on top of one another.
+ * On the committed board that is High Wycombe Aldi burying "Bourne End &
+ * Maidenhead" under "Windsor Parish Church" by 6.58 x 13.70mm.
+ *
+ * So the boxes are placed as a SET, in a pass of their own, and the loop below
+ * reads the answer instead of computing it. Boxes that share a horizontal band are
+ * separated along x -- the axis the frame edge leaves free, and the one OA-060
+ * asks for -- and a band of one is returned exactly where the clamp put it, which
+ * is what keeps every uncollided sheet byte-identical.
+ */
+const DEST_AT = (() => {
+  const boxes = dests.map((b, i) => {
+    const ov = (OV.branches || {})[b.name] || {};
+    const a = BEARINGS[i] * Math.PI / 180;
+    let dx = Math.sin(a), dy = -Math.cos(a);
+    let t = rayToRect(dx, dy);
+    let tx = HX + dx * t, ty = HY + dy * t;
+    if (ov.terminus || b.terminus) { const T = ov.terminus || b.terminus; tx = T.x; ty = T.y; }
+    const size = destNodeSize(b.name, b.sub, b.minutesToDestination != null ? ('~' + b.minutesToDestination + ' min') : null);
+    const at = destNodeAt(tx, ty, size);
+    return { x: at.x, y: at.y, w: size.w, h: size.h };
+  });
+  // Band membership is a y-overlap deeper than the tolerance the measure scores by,
+  // so the generator and quality_metrics.js cannot disagree about which pairs are a
+  // problem. Single-link, in index order, so the grouping is deterministic.
+  const TOL = 0.6;
+  const band = boxes.map(() => -1);
+  let nb = 0;
+  for (let i = 0; i < boxes.length; i++) {
+    if (band[i] < 0) band[i] = nb++;
+    for (let j = i + 1; j < boxes.length; j++) {
+      const oy = Math.min(boxes[i].y + boxes[i].h / 2, boxes[j].y + boxes[j].h / 2)
+               - Math.max(boxes[i].y - boxes[i].h / 2, boxes[j].y - boxes[j].h / 2);
+      if (oy > TOL) { if (band[j] < 0) band[j] = band[i]; else { const from = band[j], to = band[i];
+        for (let k = 0; k < boxes.length; k++) if (band[k] === from) band[k] = to; } }
+    }
+  }
+  const lo = (PSAFE != null ? PSAFE : 0), hi = W - (PSAFE != null ? PSAFE : 0);
+  for (let g = 0; g < nb; g++) {
+    const idx = boxes.map((_, i) => i).filter(i => band[i] === g);
+    if (idx.length < 2) continue;
+    const r = separateRow(idx.map(i => ({ c: boxes[i].x, hw: boxes[i].w / 2 })), lo, hi, 1);
+    idx.forEach((i, k) => { boxes[i].x = r.centres[k]; });
+    if (!r.fits) console.error('destination boxes on one line are wider than the page: '
+      + idx.map(i => dests[i].name).join(', ') + ' -- shorten a label or merge two destinations.');
+  }
+  return boxes.map(b => ({ x: b.x, y: b.y }));
 })();
 for (let _i = 0; _i < dests.length; _i++) {
   const b = dests[_i];
@@ -435,11 +542,38 @@ for (let _i = 0; _i < dests.length; _i++) {
   // on THIS spoke, or the badges stop sitting evenly; an ungated spoke adds zero.
   const rs = b.routes;
   const _xw = badgeXWs(rs, 3.4);
-  rs.forEach((r, i) => { const rr = r0 + 4 + _xw + i * (7.2 + 2 * _xw); badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
+  const _pitch = 7.2 + 2 * _xw;
+  const _hw = rs.map(r => badgeHalfW(r, 3.4));
+  // Walk the WHOLE row outward together, not badge by badge: the row is a single
+  // object reading left to right along its spoke, and staggering its members would
+  // break the reading order to fix a collision with a different spoke entirely.
+  //
+  // The cap is the destination lozenge. Pushing past it would hide the badges under
+  // the box that is drawn on top of them afterwards -- ink off the page beats ink
+  // absent, but ink UNDER an opaque box is neither, it is a route identity silently
+  // deleted. If the row cannot clear inside the cap the badges stay where they were
+  // and the sheet says so, rather than the generator quietly making it worse.
+  let _rr0 = r0 + 4 + _xw;
+  const _rowClash = (base) => rs.some((_, i) => badgeClash(HX + dx * (base + i * _pitch),
+    HY + dy * (base + i * _pitch), _hw[i], 3.4));
+  const _cap = (t - nodeGap) - (rs.length - 1) * _pitch - _xw - 3.4;
+  const _want = _rr0;
+  while (_rr0 <= _cap && _rowClash(_rr0)) _rr0 += 0.2;
+  if (_rr0 > _cap) {
+    // Could not clear. Two spokes this close in bearing want MERGING into one
+    // destination or opening with design.spokeSpread -- neither is something a
+    // generator may decide for itself, so it reports and draws as before.
+    console.error('badge row on "' + b.name + '" cannot clear its neighbours '
+      + 'inside this spoke (' + (_cap - _want).toFixed(1) + 'mm of travel available): '
+      + 'two spokes are too close in bearing. Merge the destinations, or set '
+      + 'design.spokeSpread.');
+    _rr0 = _want;
+  }
+  rs.forEach((r, i) => { const rr = _rr0 + i * _pitch; badge(HX + dx * rr, HY + dy * rr, r, 3.4); });
   // destination node
   const _timeLabel = b.minutesToDestination != null ? ('~' + b.minutesToDestination + ' min') : null;
   const _size = destNodeSize(b.name, b.sub, _timeLabel);
-  const _at = destNodeAt(tx, ty, _size);
+  const _at = DEST_AT[_i];      // solved as a set above; see DEST_AT for why
   nodeBoxes.push({ x0: _at.x - _size.w / 2, y0: _at.y - _size.h / 2, x1: _at.x + _size.w / 2, y1: _at.y + _size.h / 2 });
   HARD.push([_at.x - _size.w / 2 - 0.6, _at.y - _size.h / 2 - 0.6, _at.x + _size.w / 2 + 0.6, _at.y + _size.h / 2 + 0.6, 'terminus']);
   ANCH.push([_at.x, _at.y, 'term:' + b.name]);

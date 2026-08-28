@@ -15,6 +15,9 @@ const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
 const { Labeller } = require(_LABELLER);
 const FONT = require(path.join(path.dirname(_LABELLER),'font_metrics.js'));
+// Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
+// makes it load inside the portal as well as here.
+const { separateRow } = require(path.join(path.dirname(_LABELLER),'svg_primitives.js'));
 // STRICT_GUARDS, adopted 2026-08-28 (OA-045). Until then only gen_internal.js and
 // gen_boarding.js participated in the contract at all, so "STRICT_GUARDS is live"
 // was true of a third of the sheets we publish and the board did not say which
@@ -234,7 +237,12 @@ function distToRect(px,py,cx,cy,w,hh){
   const dx = Math.max(Math.abs(px-cx) - w/2, 0), dy = Math.max(Math.abs(py-cy) - hh/2, 0);
   return Math.hypot(dx,dy);
 }
-function townNode(x,y,label,h=11,timeLabel){
+// `at` (optional) — the centre this box has ALREADY been solved to, from NODE_AT
+// below. Passed in rather than recomputed because the badge placement further down
+// has to know the same answer, and the one thing this file has learned the hard way
+// is that two places computing a box's position separately will disagree (March's
+// X32, 2026-08-24). Absent => clamp here exactly as before.
+function townNode(x,y,label,h=11,timeLabel,at){
   const lines = wrap(label);
   const w = measureNodeWidth(label, timeLabel);
   const extra = timeLabel ? 3.6 : 0;
@@ -265,7 +273,7 @@ function townNode(x,y,label,h=11,timeLabel){
   // white text that the metric reads as present. The defect was visible in the JPG
   // and invisible in every number. Clamp the BOX, not the spoke's end point, so an
   // overridden terminus (overrides.branches.*.terminus) is covered too.
-  [x,y] = nodeClamp(x,y,w,hh);
+  if(at) { x = at[0]; y = at[1]; } else [x,y] = nodeClamp(x,y,w,hh);
   if(V2){ HARD.push([x-w/2-0.6, y-hh/2-0.6, x+w/2+0.6, y+hh/2+0.6, 'terminus']); ANCH.push([x,y,'term:'+label]); }
   out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-hh/2).toFixed(2)}" width="${w.toFixed(2)}" height="${hh}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`);
   const lh=4.0, y0=y-((lines.length-1)*lh+extra)/2;
@@ -406,6 +414,64 @@ const BEARINGS = (()=>{
   return outB;
 })();
 // draw spokes first (under hub)
+/* WHERE EVERY TERMINUS BOX ENDS UP, SOLVED BEFORE ANY OF THEM IS DRAWN.
+ *
+ * nodeClamp() moves one box inside the print margin and above the footer plate,
+ * and it is the only rule there has ever been. Both of its clamps are per-object,
+ * and two boxes landing on each other is a relationship BETWEEN objects, so no
+ * amount of care inside nodeClamp can see it: several spokes ending low all get
+ * pushed up to the same line above the plate and pile onto one another there.
+ * Measured on the committed board 2026-08-28 that is four of the seven lozenge
+ * overlaps on the estate, and the loudest is Huntingdon printing "Addenbrooke's
+ * ~79 min" over "Cambridge ~56 min" by 13.46 x 14.60mm — a destination a reader
+ * simply cannot recover, on a sheet every other measure calls clean.
+ *
+ * So the boxes are solved as a SET, once, and BOTH consumers read the answer: the
+ * badge placement below (which must know where the box will be before it decides
+ * how far back to park the badges — see distToRect) and townNode itself. That is
+ * the whole reason this is a pre-pass and not a tidy-up afterwards. Moving the
+ * boxes after the badges were placed against their old positions would recreate
+ * March's X32 sitting under "Whittlesey", which is the defect the comments around
+ * nodeClamp exist to describe.
+ *
+ * A band of one is returned exactly where the clamp put it, so every sheet with no
+ * collision stays byte-identical.
+ */
+const NODE_AT = (()=>{
+  const boxes = EXT.map((b,i)=>{
+    const ov=(OV.branches||{})[_keyOf[i]]||{};
+    const a=BEARINGS[i]*Math.PI/180; let dx=Math.sin(a), dy=-Math.cos(a);
+    let t=rayToRect(dx,dy); let tx=HX+dx*t, ty=HY+dy*t;
+    if(ov.terminus){ tx=ov.terminus.x; ty=ov.terminus.y; }
+    const tl = b.minutesToDestination!=null?('~'+b.minutesToDestination+' min'):null;
+    const w = measureNodeWidth(b.label, tl), hh = 11 + (tl?3.6:0);
+    const [cx,cy] = nodeClamp(tx,ty,w,hh);
+    return {x:cx,y:cy,w,h:hh};
+  });
+  // Band membership is a y-overlap deeper than the tolerance quality_metrics.js
+  // scores by, so the generator and the measure cannot disagree about which pairs
+  // are a problem. Single-link, in index order, so the grouping is deterministic.
+  const TOL=0.6, band=boxes.map(()=>-1); let nb=0;
+  for(let i=0;i<boxes.length;i++){
+    if(band[i]<0) band[i]=nb++;
+    for(let j=i+1;j<boxes.length;j++){
+      const oy = Math.min(boxes[i].y+boxes[i].h/2, boxes[j].y+boxes[j].h/2)
+               - Math.max(boxes[i].y-boxes[i].h/2, boxes[j].y-boxes[j].h/2);
+      if(oy>TOL){ if(band[j]<0) band[j]=band[i];
+        else { const from=band[j], to=band[i]; for(let k=0;k<boxes.length;k++) if(band[k]===from) band[k]=to; } }
+    }
+  }
+  const lo = PSAFE!=null?PSAFE:0, hi = W - (PSAFE!=null?PSAFE:0);
+  for(let g=0; g<nb; g++){
+    const idx = boxes.map((_,i)=>i).filter(i=>band[i]===g);
+    if(idx.length<2) continue;
+    const r = separateRow(idx.map(i=>({c:boxes[i].x, hw:boxes[i].w/2})), lo, hi, 1);
+    idx.forEach((i,k)=>{ boxes[i].x = r.centres[k]; });
+    if(!r.fits) console.error('terminus boxes on one line are wider than the page: '
+      + idx.map(i=>EXT[i].label).join(', ') + ' — shorten a label or merge two termini.');
+  }
+  return boxes.map(b=>[b.x,b.y]);
+})();
 for(let _i=0;_i<EXT.length;_i++){
   const b=EXT[_i];
   const _key=_keyOf[_i];
@@ -468,7 +534,7 @@ for(let _i=0;_i<EXT.length;_i++){
    * the clamp eats into the gap: it is the component of the box's move along the spoke's
    * own direction, so a sideways nudge (which does not close the gap) costs nothing. */
   const _nw = measureNodeWidth(b.label, _timeLabel), _nh = 11 + (_timeLabel ? 3.6 : 0);
-  const [_cx,_cy] = nodeClamp(tx, ty, _nw, _nh);
+  const [_cx,_cy] = NODE_AT[_i];      // solved as a set above; see NODE_AT for why
   // The badge's own half-extent: the 4.0 disc, its 0.7 white stroke, and design.badgeFit's
   // extra half-width where the pill is wider than the disc. Plus 1.1 mm of daylight.
   const _bneed = 4.0 + 0.35 + _bxw + 1.1;
@@ -480,7 +546,7 @@ for(let _i=0;_i<EXT.length;_i++){
   const _bpitch = 8.6 + 2*_bxw;
   _badges.forEach((r,i)=>badge(tx-dx*(_boff+i*_bpitch), ty-dy*(_boff+i*_bpitch), r, 4.0));
   // terminus node
-  townNode(tx,ty,b.label,11,_timeLabel);
+  townNode(tx,ty,b.label,11,_timeLabel,NODE_AT[_i]);
   if(EDK) out('</g>');
 }
 // 56 serves two arms (Manea & Wisbech) — note it once

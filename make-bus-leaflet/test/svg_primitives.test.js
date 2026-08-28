@@ -243,3 +243,78 @@ test('dedupe keeps the FIRST member, so the group leader supplies the drawn colo
   const fills = lines.filter((l) => l.startsWith('<circle')).map((l) => /fill="([^"]*)"/.exec(l)[1]);
   assert.deepStrictEqual(fills, ['#111111']);
 });
+
+// ------------------------------------------- separateRow (OA-060, 2026-08-28)
+/*
+ * The terminus lozenges on an external sheet were each clamped to the page and
+ * the footer plate ALONE, so two destinations whose spokes both end low were
+ * pushed onto the same line and printed on each other. Six of the estate's seven
+ * lozenge overlaps were that, the worst being Huntingdon burying "Cambridge"
+ * under "Addenbrooke's" by 13.46 x 14.60mm.
+ */
+const { separateRow } = require('./_engine.js').load('svg_primitives.js');
+
+// No two boxes may overlap, and with fits:true none may leave the bounds.
+function check(t, items, lo, hi, gap, r) {
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    assert.ok(Math.abs(r.centres[i] - r.centres[j]) >= items[i].hw + items[j].hw - 1e-9,
+      t + ': boxes ' + i + ' and ' + j + ' still overlap');
+  }
+  if (r.fits) for (let i = 0; i < items.length; i++) {
+    assert.ok(r.centres[i] - items[i].hw >= lo - 1e-9 && r.centres[i] + items[i].hw <= hi + 1e-9,
+      t + ': box ' + i + ' left the bounds while reporting fits');
+  }
+}
+
+test('a row that is already clear is not moved at all', () => {
+  // The byte gate depends on this: every external sheet with no lozenge
+  // collision must render exactly as before, or 17 sheets re-render for nothing.
+  const items = [{ c: 50, hw: 5 }, { c: 70, hw: 5 }, { c: 90, hw: 5 }];
+  const r = separateRow(items, 0, 300, 1);
+  assert.deepStrictEqual(r.centres, [50, 70, 90]);
+  assert.strictEqual(r.fits, true);
+});
+
+test('two boxes on top of each other are separated, and share the movement', () => {
+  // Huntingdon's shape. A forward-only pass leaves the left box alone and shoves
+  // the right one the whole way; on this sheet x is roughly the direction you
+  // travel to reach the place, so 31mm of one-sided shove is a claim about
+  // geography. Half each is the honest repair.
+  const items = [{ c: 180, hw: 20 }, { c: 172, hw: 18 }];
+  const r = separateRow(items, 24, 282, 1);
+  check('pair', items, 24, 282, 1, r);
+  assert.ok(r.fits);
+  assert.ok(Math.abs((r.centres[0] - 180) + (r.centres[1] - 172)) < 1e-9,
+    'the two moves should cancel, i.e. the run stays centred where it was');
+});
+
+test('a run pinned against the far edge is pulled back inside it', () => {
+  const items = [{ c: 270, hw: 20 }, { c: 265, hw: 20 }];
+  const r = separateRow(items, 24, 282, 1);
+  check('edge', items, 24, 282, 1, r);
+  assert.ok(r.fits);
+});
+
+test('input order is preserved however the boxes are sorted', () => {
+  // The caller indexes the result by branch, so a returned array in sorted order
+  // would silently attach every destination name to the wrong box.
+  const items = [{ c: 200, hw: 10 }, { c: 100, hw: 10 }, { c: 150, hw: 10 }];
+  const r = separateRow(items, 0, 300, 1);
+  assert.deepStrictEqual(r.centres, [200, 100, 150]);
+});
+
+test('a row too wide for its bounds says so instead of pretending', () => {
+  // AND the feasibility answer must not be produced by the repair. The first cut
+  // asked after distributing, and the left-hand clamp had by then shoved the run
+  // off the right of the page — so the left edge was legal and it reported true.
+  const items = [{ c: 50, hw: 30 }, { c: 60, hw: 30 }];
+  const r = separateRow(items, 24, 100, 1);
+  assert.strictEqual(r.fits, false);
+  check('narrow', items, 24, 100, 1, r);       // still separated, just overflowing
+  assert.ok(r.centres[1] + 30 > 100, 'the overflow should be visible, not hidden');
+});
+
+test('one box, and no boxes, are both handled', () => {
+  assert.deepStrictEqual(separateRow([{ c: 50, hw: 5 }], 0, 300, 1), { centres: [50], fits: true });
+  assert.deepStrictEqual(separateRow([], 0, 300, 1), { centres: [], fits: true });
+});

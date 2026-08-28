@@ -205,3 +205,130 @@ test('the two measures are reported, never folded into the scored totals', () =>
   assert.ok(r.warns.some(w => /over a route badge/.test(w)));
   assert.ok(r.warns.some(w => /printed on each other/.test(w)));
 });
+
+// ------------------------------------ OA-060, the badge rule made exact
+/*
+ * THE BOX RULE WAS RIGHT ABOUT STADIUMS AND WRONG ABOUT DISCS. OA-021's first cut
+ * was radial and invented defects on stadiums; the box test that replaced it
+ * invented them on discs instead, wherever two sat on a diagonal. Measured across
+ * the committed board on 2026-08-28: of 30 reported badge overprints, SEVENTEEN
+ * were pairs with real daylight between them -- the shape a badge row makes on any
+ * diagonal spoke, where consecutive members sit at a pitch barely over a diameter.
+ * The honest board was 13.
+ */
+test('two discs on a diagonal with daylight between them are not an overprint', () => {
+  // r=3.4 discs 7.22mm apart: 0.42mm of clear paper. Their bounding boxes overlap
+  // 3.10 x 0.60mm, which is what the box rule called a defect on real sheets.
+  // 4.8 x 5.2mm apart => centres 7.08mm, radii sum 6.8mm, 0.28mm of clear paper.
+  // The box rule sees 2.0 x 1.6mm of overlap and calls it a defect; both figures
+  // are well clear of the 0.6mm tolerance, so this fixture cannot pass by luck.
+  const m = analyse(sheet(badge(80, 100, '#4477aa', '9', 3.4)
+    + badge(84.8, 105.2, '#ee6677', '12', 3.4))).metrics;
+  assert.strictEqual(m.badgeOverBadge, 0);
+  // ...and the genuinely overlapping pair right beside it still counts.
+  const over = analyse(sheet(badge(80, 100, '#4477aa', '9', 3.4)
+    + badge(82.5, 102.5, '#ee6677', '12', 3.4))).metrics;
+  assert.strictEqual(over.badgeOverBadge, 1);
+});
+
+test('two stadium badges side by side are still measured across their width', () => {
+  // The case the box rule existed for, and the exact rule must not lose it: a
+  // stadium's half-width is not a radius, so a radial test would call these clear.
+  const clear = analyse(sheet(stadium(70, 100, '#4477aa', 'X31')
+    + stadium(89, 100, '#ee6677', 'X32'))).metrics;
+  assert.strictEqual(clear.badgeOverBadge, 0);
+  const r = analyse(sheet(stadium(70, 100, '#4477aa', 'X31')
+    + stadium(85, 100, '#ee6677', 'X32')));
+  assert.strictEqual(r.metrics.badgeOverBadge, 1);
+  // The PRINTED pair, not just the verdict. These two stadiums share a centreline,
+  // so the y figure is the full height they have in common -- 2 x 4.6mm. Reading a
+  // stadium's half-width as its radius here would print 2 x 9mm and tell a reader
+  // the clash is twice as deep as it is.
+  assert.deepStrictEqual(r.detail.badgeOverBadge[0].over, [3, 9.2]);
+});
+
+test('the detail reports how deep two badges actually interpenetrate', () => {
+  // A per-axis pair cannot be compared between a disc and a stadium; one number can.
+  const r = analyse(sheet(badge(80, 100, '#4477aa', '9', 3.4) + badge(82, 100, '#ee6677', '12', 3.4)));
+  assert.strictEqual(r.detail.badgeOverBadge.length, 1);
+  assert.strictEqual(r.detail.badgeOverBadge[0].deep, 4.8);   // 6.8 - 2.0
+});
+
+// -------------------------------------------------------- OA-060, lozenges
+/*
+ * A terminus lozenge is the WIDEST box on any sheet — 18 mm at its floor and
+ * often 40 — and until 2026-08-28 nothing measured it. The row that wanted it
+ * fixed had been quoting one hand-measured overlap since 2026-08-24 and saying
+ * outright that the real population was "an unknown number".
+ *
+ * These fixtures write external.svg, not internal.svg, because the measure is
+ * scoped by sheet type: a lozenge cannot appear on an internal sheet, and a
+ * measure that answered 0 there would be claiming to have checked something it
+ * cannot see.
+ */
+function extSheet(body) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-loz-' + (seq++) + '-'));
+  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ palette: PAL }));
+  fs.writeFileSync(path.join(dir, 'external.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'
+    + '<clipPath id="map"><rect x="6" y="30" width="190" height="155"/></clipPath>'
+    + body + '</svg>');
+  return path.join(dir, 'external.svg');
+}
+// The mark exactly as both external generators emit it. The fill/stroke pair is
+// the identity the measure keys on; rx is incidental and deliberately not tested.
+const loz = (x, y, w, h, t) =>
+  `<rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="2.4" fill="#2e8b57" stroke="#1d5f3a" stroke-width="0.5"/>`
+  + `<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="3.4" fill="#fff"`
+  + ` text-anchor="middle" dominant-baseline="central">${t}</text>`;
+
+test('two destination lozenges printed on each other are counted, and neighbours are not', () => {
+  const over = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge') + loz(105, 100, 30, 11, 'Ely'))).metrics;
+  assert.strictEqual(over.lozengeOverlap, 1);
+  assert.strictEqual(over.lozengeOverlapState, 'counted');
+  assert.strictEqual(over.lozenges, 2);
+  // 30mm apart on x, so the boxes touch at exactly 0mm and never overlap.
+  const clear = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge') + loz(110, 100, 30, 11, 'Ely'))).metrics;
+  assert.strictEqual(clear.lozengeOverlap, 0);
+});
+
+test('a lozenge overlap must clear the tolerance on BOTH axes, not either one', () => {
+  // THE FAULT THIS GUARDS is a radial or single-axis test on a box that is three
+  // times wider than it is tall. These two share 20mm of x and are 11mm apart on
+  // y: they line up in a column and do not touch. An x-only rule calls it a
+  // defect; a centre-distance rule reads the 15mm half-width as a radius in both
+  // directions and does the same. Both were real first cuts on this project.
+  const stacked = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge') + loz(80, 111.5, 30, 11, 'Ely'))).metrics;
+  assert.strictEqual(stacked.lozengeOverlap, 0);
+  // ...and the genuine diagonal case, which a radial test MISSES: overlapping on
+  // both axes while the centres sit far enough apart to pass any sane radius.
+  const diag = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge') + loz(100, 108, 30, 11, 'Ely'))).metrics;
+  assert.strictEqual(diag.lozengeOverlap, 1);
+});
+
+test('the detail names both destinations, because a count sends the fix the wrong way', () => {
+  // OA-060 guessed overlapping lozenges would be one place reached two ways and
+  // should be MERGED. Named, all seven on the board were distinct destinations.
+  const r = analyse(extSheet(loz(80, 100, 30, 11, 'Addenbrookes') + loz(90, 100, 30, 11, 'Cambridge')));
+  const d = r.detail.lozengeOverlap[0];
+  assert.match(d.text, /Addenbrookes/);
+  assert.match(d.under, /Cambridge/);
+});
+
+test('an external sheet with no lozenge at all is UNKNOWN, not clean', () => {
+  // The false-zero guard. Every external sheet draws at least one destination —
+  // the fewest on the board is four — so finding none means the fill/stroke
+  // signature has stopped matching what the generator emits, not that the sheet
+  // is tidy. Reporting that as 0 is how a measure goes blind and keeps its tick.
+  const m = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge').replace('#2e8b57', '#2e8b58'))).metrics;
+  assert.strictEqual(m.lozengeOverlap, null);
+  assert.strictEqual(m.lozengeOverlapState, 'signature-lost');
+});
+
+test('the measure does not apply to a sheet type that has no lozenges', () => {
+  // null, not 0: an internal sheet has no terminus lozenges by construction, and
+  // answering 0 would claim a check that never ran.
+  const m = analyse(sheet(badge(60, 100, '#4477aa', '5'))).metrics;
+  assert.strictEqual(m.lozengeOverlap, null);
+  assert.strictEqual(m.lozengeOverlapState, 'not-external');
+});

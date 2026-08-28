@@ -418,11 +418,17 @@ const MUTATIONS = [
   // --- the two ink-on-ink measures, added 2026-08-28 (OA-021, OA-118) ---
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'a badge printed on a badge stops counting',
-    find: '    if (ox <= T.badgeOverlapMm || oy <= T.badgeOverlapMm) continue;',
+    find: '    if (over <= T.badgeOverlapMm) continue;',
     to: '    if (true) continue;' },
 
+  // This one used to break the VERDICT. Since the rule was made exact on 2026-08-28
+  // (OA-060) `ox`/`oy` are the reported per-axis pair and nothing else, so the same
+  // edit now only corrupts what the detail line PRINTS -- and it survived, because
+  // no test read that pair. Kept rather than retired, and the suite now asserts the
+  // printed figures: a report that quietly lies about how two marks overlap is how
+  // OA-021's first cut got believed for a day.
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
-    what: 'a stadium badge is measured as a disc again, so tidy neighbours read as overprints',
+    what: 'the reported y-overlap measures a stadium as a disc, so the detail line overstates how badly two badges clash',
     find: '    const oy = (a.ry + b.ry) - Math.abs(a.cy - b.cy);',
     to: '    const oy = (Math.max(a.rx, a.ry) + Math.max(b.rx, b.ry)) - Math.abs(a.cy - b.cy);' },
 
@@ -533,6 +539,50 @@ const MUTATIONS = [
     what: 'a corrupt sidecar is filed under the same word as a sheet type nobody reports',
     find: "    if (unplaced === null) dropState = 'unreadable';   // the file was there and would not parse",
     to: "    if (unplaced === null) dropState = 'no-reporter';" },
+
+  // OA-060, the badge rule made exact 2026-08-28. The box rule it replaced was not
+  // a rounding matter: it accounted for 17 of the 30 overprints the board reported
+  // that morning, every one of them a pair of discs with clear paper between them.
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the badge rule goes back to a plain box test, so two discs on a diagonal with daylight between them read as an overprint',
+    find: "    const over = -gapMm(a, b);",
+    to: "    const over = Math.min((a.rx + b.rx) - Math.abs(a.cx - b.cx), (a.ry + b.ry) - Math.abs(a.cy - b.cy));" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the badge rule goes back to a radial test, so two stadiums sitting tidily side by side read as an overprint',
+    find: "    return Math.hypot(dx, a.cy - b.cy) - (a.ry + b.ry);",
+    to: "    return Math.hypot(a.cx - b.cx, a.cy - b.cy) - (Math.max(a.rx, a.ry) + Math.max(b.rx, b.ry));" },
+
+  // OA-060, the lozenge measure added 2026-08-28. The FIRST of these is the
+  // mutation that matters and it is aimed at the Y term on purpose: a terminus
+  // lozenge is 30-40mm wide and 11mm tall, so an x-only or centre-distance rule
+  // agrees with the correct one on almost every real pair and diverges only on
+  // the column case. OA-021 learned the same lesson on the badges and had to aim
+  // its mutation at y for the same reason -- a stadium's rx IS its max.
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the lozenge test drops its y term, so two destinations stacked in a tidy column read as an overprint',
+    find: "      if (ox <= T.lozengeOverlapMm || oy <= T.lozengeOverlapMm) continue;",
+    to: "      if (ox <= T.lozengeOverlapMm) continue;" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the lozenge test drops its x term, so any two boxes on the same row read as an overprint',
+    find: "      if (ox <= T.lozengeOverlapMm || oy <= T.lozengeOverlapMm) continue;",
+    to: "      if (oy <= T.lozengeOverlapMm) continue;" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'an external sheet whose lozenge signature matches nothing reports a clean zero instead of UNKNOWN',
+    find: "                 : lozenges.length === 0 ? 'signature-lost' : 'counted';",
+    to: "                 : 'counted';" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the measure claims to have checked an internal sheet, which cannot carry a lozenge at all',
+    find: "  const lozState = base !== 'external' ? 'not-external'",
+    to: "  const lozState = false ? 'not-external'" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the detail stops naming the buried destination, leaving a count that cannot say whether to merge or separate',
+    find: "        text: a.txt, under: b.txt,",
+    to: "        text: '', under: ''," },
 
   // services_panel.js - extracted 2026-08-27 from gen_internal.js. MEASURED the
   // same day across the 18 maps that draw an internal sheet: NINE of its 35

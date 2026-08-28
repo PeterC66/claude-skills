@@ -126,12 +126,36 @@ function rolloutOne(t) {
   const prevS4 = latestRunDir(manifest, t.dir, 'S4');
   if (!prevS3 || !prevS4) return { name: t.name, status: 'SKIP', detail: 'no committed S3/S4 to roll forward from' };
 
-  // Already current? Check the existing PASS/DIFF gate before doing any work.
+  /* Already current? Check the existing PASS/DIFF gate before doing any work.
+   *
+   * ALL FOUR SHEETS, as of 2026-08-28. This test used to read `internal` and
+   * `external` and nothing else, so a town whose SCHEMATIC or DIAGRAM would be
+   * redrawn by the current template was reported UP-TO-DATE and skipped — the
+   * rollout's own answer to "does this town need rebuilding" was blind to half
+   * its deliverables. Caught on OA-147: Beaconsfield, March and Wisbech all came
+   * back UP-TO-DATE while status.js showed a DIFF on a schematic or a diagram,
+   * and March's was an exit arrowhead with no area at all. A tool that decides
+   * what to rebuild from a subset of what it builds will keep a defect alive
+   * indefinitely and report a clean board while it does it.
+   *
+   * status.js gates the same four from the same routes.json keys; these two now
+   * agree, which is the point. A town that configures neither key is unaffected
+   * and the extra gates do not run.
+   */
   const style = detectExternalStyle(prevS4.dir);
-  const internalGate = gate(path.join(SK, 'gen_internal.js'), prevS4.dir, 'internal.svg', path.join(prevS4.dir, 'internal.svg'));
-  const externalGate = gate(path.join(SK, `gen_external_${style}.js`), prevS4.dir, 'external.svg', path.join(prevS4.dir, 'external.svg'));
-  if (internalGate.status === 'PASS' && externalGate.status === 'PASS' && !FORCE) {
-    return { name: t.name, status: 'UP-TO-DATE', detail: 'internal+external already gate PASS against the current template' };
+  const rj = readJson(path.join(prevS4.dir, 'routes.json')) || {};
+  const sheetGates = [
+    ['internal', gate(path.join(SK, 'gen_internal.js'), prevS4.dir, 'internal.svg', path.join(prevS4.dir, 'internal.svg'))],
+    ['external', gate(path.join(SK, `gen_external_${style}.js`), prevS4.dir, 'external.svg', path.join(prevS4.dir, 'external.svg'))],
+  ];
+  if (rj.internalSchematic) sheetGates.push(['internal-schematic',
+    gate(path.join(SK, 'schematize_internal.js'), prevS4.dir, 'internal-schematic.svg', path.join(prevS4.dir, 'internal-schematic.svg'))]);
+  if (rj.internalDiagram) sheetGates.push(['internal-diagram',
+    gate(path.join(SK, 'diagram_internal.js'), prevS4.dir, 'internal-diagram.svg', path.join(prevS4.dir, 'internal-diagram.svg'))]);
+  const internalGate = sheetGates[0][1], externalGate = sheetGates[1][1];
+  if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE) {
+    return { name: t.name, status: 'UP-TO-DATE',
+             detail: sheetGates.map(([n]) => n).join('+') + ' already gate PASS against the current template' };
   }
 
   let routesJson = {};

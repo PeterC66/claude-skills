@@ -1805,9 +1805,33 @@ if(IR && TRIM){
   // this stack overlap that one" because a stack's height is its member count
   // and a stadium's width is its printed label. Both passes below need the box.
   const bboxes=[];
-  const noteBadge=(x,y,w,h)=>bboxes.push({x,y,w,h});
-  const badgeClash=(x,y,w,h)=>bboxes.some(b=>
-    (w+b.w)-Math.abs(b.x-x) > TBOL && (h+b.h)-Math.abs(b.y-y) > TBOL);
+  // `r` is the badge RADIUS this mark was drawn at — 2.6 in-town, 2.4 sprinkled,
+  // 3.0 frame-cut — and it is what makes the test below exact rather than merely
+  // conservative.
+  const noteBadge=(x,y,w,h,r)=>bboxes.push({x,y,w,h,r});
+  /* THE EXACT GAP BETWEEN TWO BADGE MARKS, which is the same arithmetic
+   * quality_metrics.js scores by since 2026-08-28 (OA-060).
+   *
+   * Every mark this file draws is a rounded rectangle: a disc when the key is
+   * narrow, a stadium when design.badgeFit widens it, a tall rounded box when
+   * badgeStack pitches several vertically. The corner radius is the badge radius
+   * in all three cases, so the true separation is the gap between the two CORE
+   * rectangles less the two radii — and that degenerates to the radial test for
+   * two discs and the box test for two stadiums on one line.
+   *
+   * The plain box test this replaces was CONSERVATIVE, not wrong, and being
+   * conservative had a price: it moves ink to avoid collisions the measure does
+   * not score. Two r=2.4 discs on a diagonal 5.1mm apart have clear paper between
+   * them and overlapping bounding boxes, so the placer walked a badge away from a
+   * perfectly good spot and, on Godmanchester Ermine Street, took the label
+   * "Godley Green" off the sheet with it — a named place lost to avoid a defect
+   * that was not there. */
+  const badgeGap=(a,b)=>{
+    const dx=Math.max(0, Math.abs(a.x-b.x)-((a.w-a.r)+(b.w-b.r)));
+    const dy=Math.max(0, Math.abs(a.y-b.y)-((a.h-a.r)+(b.h-b.r)));
+    return Math.hypot(dx,dy)-(a.r+b.r);
+  };
+  const badgeClash=(x,y,w,h,r)=>bboxes.some(b=>-badgeGap(b,{x,y,w,h,r}) > TBOL);
   const termBadge=(p,r,grp)=>{
     if(inCore(p)) return;                                      // coreBox owns the centre
     // and never on an end whose run was dropped as a stub (see clipOutCore)
@@ -1849,9 +1873,27 @@ if(IR && TRIM){
       px/=ms.length; py/=ms.length;
       const list=[], seen=new Set();
       for(const m of ms) for(const g of m.grp) if(!seen.has(g)){ seen.add(g); list.push(g); }
-      const bs=badgeStack(px,py,list,2.6);
-      noteBadge(px,py,2.6+bs.xw,bs.h);
-      reserve(px-2.8-bs.xw,py-bs.h-0.2,px+2.8+bs.xw,py+bs.h+0.2);
+      // AND CLEAR OF EVERYTHING ALREADY DRAWN, not just of its own kind. Merging
+      // co-located terminus events (above) fixed this pass against itself and left
+      // it blind to the frame-cut rows, which are drawn BEFORE it and are now in
+      // `bboxes`. Same shape as the guaranteed-badge pass: prefer a clear spot,
+      // fall through to the forced one. The offsets are small and tried nearest
+      // first, because this badge means "the route ends HERE" and a badge nudged
+      // far enough to be clear is a badge that has stopped saying that.
+      let bpx=px, bpy=py;
+      const probe=(w,h)=>{
+        if(!badgeClash(px,py,w,h,2.6)) return true;
+        for(const d of [4.5,7,9.5]) for(let k=0;k<8;k++){
+          const a=k*Math.PI/4, cx=px+Math.cos(a)*d, cy=py+Math.sin(a)*d;
+          if(inCore([cx,cy])||!inFrame([cx,cy])) continue;
+          if(!badgeClash(cx,cy,w,h,2.6)){ bpx=cx; bpy=cy; return true; }
+        }
+        return false;
+      };
+      probe(2.6+badgeXWs(list,2.6), (list.length-1)/2*5.7+2.6);
+      const bs=badgeStack(bpx,bpy,list,2.6);
+      noteBadge(bpx,bpy,2.6+bs.xw,bs.h,2.6);
+      reserve(bpx-2.8-bs.xw,bpy-bs.h-0.2,bpx+2.8+bs.xw,bpy+bs.h+0.2);
     }
   }
   // -- consolidate frame-cut termini into ONE box per exit cluster (item 5,
@@ -1904,12 +1946,43 @@ if(IR && TRIM){
     let px=0,py=0,dx=0,dy=0;
     for(const m of ms){ px+=m.cut.p[0]; py+=m.cut.p[1]; dx+=m.cut.d[0]; dy+=m.cut.d[1]; }
     const n=ms.length; px/=n; py/=n;
-    const dl=Math.hypot(dx,dy)||1; dx/=dl; dy/=dl;
+    /* A CLUSTER'S OUTWARD DIRECTION CAN CANCEL TO ZERO, and nothing noticed for
+     * eight weeks. The direction is the SUM of its members' cut vectors, so a
+     * cluster holding two routes that leave through the same point in opposite
+     * directions sums to (0,0) — and `Math.hypot(0,0)||1` is 1, so the guard that
+     * looks like it handles this divides zero by one and returns zero.
+     *
+     * Everything downstream then multiplies by it. March's schematic has shipped
+     * an exit marker reading exactly
+     *     <path d="M34.09 162.73 L34.09 162.73 L34.09 162.73 Z" fill="#555"/>
+     * — an arrowhead with no area, an off-map continuation a reader cannot see —
+     * and the badge de-collision below was equally inert, because every candidate
+     * position it tried was `bx - dx*6*k` with dx zero, i.e. the same spot eight
+     * times over. That is how a 0.95mm overprint survived a search designed to
+     * clear it: the search ran, and could not move.
+     *
+     * Falling back to "outward from the middle of the frame" is right rather than
+     * merely non-zero: a frame cut is on the edge by definition, so the vector from
+     * the centre to the cut genuinely points off the page, which is what the
+     * arrowhead and the inboard walk-back both mean by outward. */
+    let dl=Math.hypot(dx,dy);
+    if(dl<1e-6){
+      dx=px-(MX0+MX1)/2; dy=py-(MY0+MY1)/2; dl=Math.hypot(dx,dy);
+      if(dl<1e-6){ dx=1; dy=0; dl=1; }      // a cut at the exact centre cannot happen
+    }
+    dx/=dl; dy/=dl;
     const nx=-dy, ny=dx;
     const cols=[...new Set(ms.map(m=>C[m.r]||'#888'))], col=cols.length===1?cols[0]:'#555';
     out(`<path d="M${(px+dx*2.6).toFixed(2)} ${(py+dy*2.6).toFixed(2)} L${(px-dx*0.5+nx*1.6).toFixed(2)} ${(py-dy*0.5+ny*1.6).toFixed(2)} L${(px-dx*0.5-nx*1.6).toFixed(2)} ${(py-dy*0.5-ny*1.6).toFixed(2)} Z" fill="${col}"/>`);
-    let bx=px-dx*5, by=py-dy*5, tries=0;
-    while(aplaced.some(q=>Math.hypot(q[0]-bx,q[1]-by)<7) && tries<5){ bx-=dx*6; by-=dy*6; tries++; }
+    let bx=px-dx*5, by=py-dy*5;
+    // The walk-back used to happen HERE, against `aplaced` — a list of bare cluster
+    // CENTRES, tested radially at 7mm. Two things were wrong with it and both are
+    // the same mistake: a badge row is a box, not a point, and its size is not known
+    // until `rowHalf`/`colHalf` are computed twenty lines below. So a wide row was
+    // tested as though it were a solo disc, and the frame clamp that follows could
+    // shove it straight back into the neighbour it had just stepped away from. It is
+    // now done after both, and against the same box register every other badge pass
+    // uses. See the walk-back below.
     // The cut point sits ON the frame, so a badge centred near it straddles the edge and
     // renders half-clipped ("905" printed as "05" at the right edge in St Neots v1.1).
     // Keep the whole 3.0 mm badge inside the drawing frame.
@@ -1938,7 +2011,42 @@ if(IR && TRIM){
     // skipped badge digits (dominant-baseline="central"). Clamp by the column's
     // own half-height too.
     const colHalf=Math.max(3.4, ((groups.length-1)/2)*RH+3.4);
-    bx=Math.min(Math.max(bx,MX0+rowHalf),MX1-rowHalf); by=Math.min(Math.max(by,MY0+colHalf),MY1-colHalf);
+    const clampRow=()=>{ bx=Math.min(Math.max(bx,MX0+rowHalf),MX1-rowHalf);
+                         by=Math.min(Math.max(by,MY0+colHalf),MY1-colHalf); };
+    clampRow();
+    /* Move this row until it clears every badge already on the page, re-clamping
+     * after each try — the clamp is what makes this a search rather than a single
+     * test, and it is also what defeats the obvious version.
+     *
+     * INBOARD FIRST, along the route's own outward vector reversed, which keeps the
+     * row pointing at the exit it describes. That alone was not enough and March
+     * showed why: two clusters both exiting near the bottom-left corner are both
+     * PINNED there by the frame clamp, so every backward step is undone on the way
+     * out and five tries change nothing. Measured on the committed sheet, they sat
+     * 5.05mm apart with 0.95mm of one disc under the other, and the row was unmoved
+     * by the inboard search.
+     *
+     * So the corner's remaining freedom is used: SIDEWAYS, along the frame edge, on
+     * the perpendicular this cluster already computes for its arrowhead. A row that
+     * has slid along the edge still sits beside the cut it belongs to.
+     *
+     * Both searches are bounded and then it is forced, deliberately. An unreadable
+     * badge is worse than a crowded one, and a row that has walked 30mm from its cut
+     * has stopped describing that exit at all. */
+    if(badgeClash(bx,by,rowHalf,colHalf,3.0)){
+      const bx0=bx, by0=by;
+      let done=false;
+      for(let k=1;k<=5 && !done;k++){
+        bx=bx0-dx*6*k; by=by0-dy*6*k; clampRow();
+        done=!badgeClash(bx,by,rowHalf,colHalf,3.0);
+      }
+      for(let k=1;k<=4 && !done;k++) for(const s of [1,-1]){
+        if(done) break;
+        bx=bx0+nx*s*4*k; by=by0+ny*s*4*k; clampRow();
+        done=!badgeClash(bx,by,rowHalf,colHalf,3.0);
+      }
+      if(!done){ bx=bx0; by=by0; clampRow(); }
+    }
     aplaced.push([bx,by]);
     let bxMin=Infinity,bxMax=-Infinity,byMin=Infinity,byMax=-Infinity;
     const pendingTermini=[];
@@ -1946,6 +2054,14 @@ if(IR && TRIM){
       const ry=by+(gidx-(groups.length-1)/2)*RH;
       let lastX=bx;
       g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BSx; badge(bxi,ry,m.r,3.0); lastX=bxi;
+        // REGISTERED, as of 2026-08-28 (OA-147). Until now this pass drew badges and
+        // told `bboxes` nothing, so the two passes that read that register — the
+        // in-town terminus badges below and the guaranteed-badge pass after them —
+        // could not see a single frame-cut badge and stamped straight through them.
+        // Five of the seven badge overprints left on the internal sheets were one
+        // 3.0mm frame-cut badge under one 2.6mm in-town one, including St Neots'
+        // diagram where two of them share a centre EXACTLY.
+        noteBadge(bxi,ry,3.0+CXW,3.0,3.0);
         bxMin=Math.min(bxMin,bxi); bxMax=Math.max(bxMax,bxi); byMin=Math.min(byMin,ry); byMax=Math.max(byMax,ry); });
       if(!g.label) return;
       // A "to X" shared by 2+ differently-coloured routes (e.g. 18 + 905 both to
@@ -2064,7 +2180,7 @@ if(IR && TRIM){
         const gh=grp.length===1?2.3:(grp.length-1)/2*5.3+2.3;
         if(overlaps([p[0]-2.3-gxw,p[1]-gh,p[0]+2.3+gxw,p[1]+gh]))continue;
         bplaced.push(p); const bs=badgeStack(p[0],p[1],grp,2.4);
-        noteBadge(p[0],p[1],2.4+bs.xw,bs.h);
+        noteBadge(p[0],p[1],2.4+bs.xw,bs.h,2.4);
         for(const g of grp) badged.add(g);
         reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
       }
@@ -2112,10 +2228,10 @@ if(IR && TRIM){
           const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
           if(avoid){
             const gxw=badgeXWs(grp,2.4), gh=(grp.length-1)/2*5.3+2.3;
-            if(badgeClash(p[0],p[1],2.4+gxw,gh)) continue;
+            if(badgeClash(p[0],p[1],2.4+gxw,gh,2.4)) continue;
           }
           const bs=badgeStack(p[0],p[1],grp,2.4);
-          noteBadge(p[0],p[1],2.4+bs.xw,bs.h);
+          noteBadge(p[0],p[1],2.4+bs.xw,bs.h,2.4);
           for(const g of grp) badged.add(g);
           bplaced.push(p); reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
           done=true; break;

@@ -17,6 +17,16 @@
  * Extracted from gen_internal.js on 2026-08-27 (OA-129 Phase 3), verbatim.
  * The design.badgeFit reasoning below came with it, because it explains this
  * code and nothing else.
+ *
+ * ALSO EXPORTS `separateRow`, added 2026-08-28 (OA-060), which is a pure
+ * geometry helper and not a mark at all. It lives here rather than in a new
+ * module for one blunt reason: a new file would have to be vendored into the
+ * portal and wired into its engine layout before either external generator
+ * could load, and a generator that resolves its dependency on this laptop and
+ * throws inside the portal is a failure this project has already shipped once.
+ * This file is vendored today. The alternative was to duplicate the routine in
+ * both external generators, where the two copies would drift apart with nothing
+ * to notice.
  */
 'use strict';
 
@@ -127,4 +137,99 @@ function svgPrimitives(deps) {
   return { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack };
 }
 
-module.exports = { svgPrimitives };
+/*
+ * separateRow -- push a row of boxes apart along ONE axis, moving each as little
+ * as possible, and say so when they will not fit.
+ *
+ * WHY THIS EXISTS. Both external generators place a terminus lozenge by clamping
+ * it to the printable page and then to the footer plate, and each box is clamped
+ * ALONE. Two destinations whose spokes end low both get pushed up to the same
+ * line just above the plate, and land on each other; the same happens along the
+ * top margin. Measured on the committed board 2026-08-28, that is six of the
+ * seven lozenge overlaps on the estate, and the worst is Huntingdon printing
+ * "Addenbrooke's ~79 min" over "Cambridge ~56 min" by 13.46 x 14.60 mm -- one
+ * destination almost entirely erased on a sheet whose every other number is
+ * clean. A clamp is a per-object rule and the defect is a relationship, so no
+ * amount of clamping can ever see it.
+ *
+ * `items` is [{c, hw}] -- centre and half-extent on the axis being separated --
+ * and need not be sorted. Returns new centres in the SAME ORDER as the input.
+ * `lo`/`hi` bound the axis; `gap` is the daylight to leave between neighbours.
+ *
+ * The two passes are the whole algorithm. Forward, in sorted order, each box is
+ * pushed just clear of its left neighbour; that alone is correct but drifts the
+ * whole run one way and can walk the last box off the page, so a backward pass
+ * pulls anything past `hi` back, and the two together settle on the layout that
+ * moves the row least. A run too long for the space cannot be fixed by moving
+ * anything -- the caller is told, and decides. Silently overlapping and silently
+ * running off the page are both worse than saying so.
+ */
+function separateRow(items, lo, hi, gap) {
+  const n = items.length;
+  const ord = items.map((_, i) => i).sort((a, b) => items[a].c - items[b].c || a - b);
+  const need = (k) => items[ord[k - 1]].hw + items[ord[k]].hw + gap;
+  const solve = () => {
+    const c = items.map(it => it.c);
+    for (let k = 1; k < n; k++) c[ord[k]] = Math.max(c[ord[k]], c[ord[k - 1]] + need(k));
+    if (n && c[ord[n - 1]] + items[ord[n - 1]].hw > hi) {
+      c[ord[n - 1]] = hi - items[ord[n - 1]].hw;
+      for (let k = n - 2; k >= 0; k--) c[ord[k]] = Math.min(c[ord[k]], c[ord[k + 1]] - need(k + 1));
+    }
+    return c;
+  };
+  const c = solve();
+  /* DECIDE WHETHER IT FITS BEFORE DISTRIBUTING ANYTHING, not after.
+   *
+   * The first cut asked the question at the end and got a wrong answer that
+   * looked right: when the row is wider than the space, the two clamps below
+   * disagree -- there is no position that satisfies both -- and `Math.max(loCap,
+   * ...)` silently let the left-hand clamp win, shoving the run off the right of
+   * the page and then reporting fits:true because the LEFT edge was now legal. A
+   * feasibility test that runs after the repair can be satisfied by the repair.
+   */
+  const fits = !n || c[ord[0]] - items[ord[0]].hw >= lo - 1e-9;
+  /* CENTRE EACH PRESSED-TOGETHER RUN ON WHERE ITS MEMBERS WANTED TO BE.
+   *
+   * The two passes above are correct and lopsided: they only ever push to the
+   * right, so the leftmost box of a colliding pair never moves and the whole
+   * cost lands on its neighbour. On Huntingdon that put "Addenbrooke's" 31mm
+   * along the bottom edge to clear "Cambridge", and on this sheet x is not free
+   * decoration -- a terminus sits where it does because that is roughly the
+   * direction you travel to reach it, so 31mm of sideways shove is a claim about
+   * geography. Sharing the move between the two costs each about half as much.
+   *
+   * A run is a maximal chain of neighbours now sitting at exactly their minimum
+   * separation. Shifting a whole run rigidly cannot re-open a collision inside
+   * it, and the shift is capped by the slack to whatever sits either side, so it
+   * cannot create one outside it either.
+   */
+  for (let k = 0; fits && k < n;) {
+    let e = k;
+    while (e + 1 < n && c[ord[e + 1]] - c[ord[e]] <= need(e + 1) + 1e-9) e++;
+    if (e > k) {
+      let want = 0;
+      for (let m = k; m <= e; m++) want += items[ord[m]].c - c[ord[m]];
+      want /= (e - k + 1);
+      // How far this run may travel each way before it touches its neighbour or
+      // the page edge. With `fits` true these bracket zero, so the clamp below is
+      // always well formed -- which is exactly what is NOT true when it is false.
+      const loCap = k === 0 ? lo + items[ord[k]].hw - c[ord[k]]
+                            : (c[ord[k - 1]] + need(k)) - c[ord[k]];
+      const hiCap = e === n - 1 ? hi - items[ord[e]].hw - c[ord[e]]
+                                : (c[ord[e + 1]] - need(e + 1)) - c[ord[e]];
+      const shift = Math.max(loCap, Math.min(hiCap, want));
+      if (shift) for (let m = k; m <= e; m++) c[ord[m]] += shift;
+    }
+    k = e + 1;
+  }
+  // The run is wider than the space. Report rather than pretend: the caller has
+  // options a geometry helper does not (merge two destinations, spread the
+  // spokes, shorten a label), and choosing one here would hide the choice. The
+  // boxes are still laid left to right from `lo` so the sheet stays readable.
+  if (!fits) for (let k = 0; k < n; k++) {
+    c[ord[k]] = k === 0 ? lo + items[ord[0]].hw : c[ord[k - 1]] + need(k);
+  }
+  return { centres: c, fits };
+}
+
+module.exports = { svgPrimitives, separateRow };

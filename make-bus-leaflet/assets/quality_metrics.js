@@ -63,6 +63,10 @@ const T = {
   // --- added 2026-08-28, OA-021 and OA-118: the two things a reader sees at a
   // glance and every measure above is blind to. ---
   badgeOverlapMm: 0.6,    // two badge discs closer than (r1+r2-this) are printing on each other
+  // --- added 2026-08-28, OA-060. Deliberately the SAME tolerance as the badges:
+  // an overprint is one thing, and a generator that separates marks to one rule
+  // while the metric scores them by another is how the two come to disagree. ---
+  lozengeOverlapMm: 0.6,  // two terminus lozenges overlapping by more than this on BOTH axes
   laneCrossDeg: 25,       // two route ribbons crossing SHALLOWER than this are swapping sides
   laneCrossSiteMm: 4,     // intersections closer than this are one visual crossing
   laneCrossWarn: 0,       // any shallow crossing is worth naming
@@ -492,7 +496,7 @@ function analyse(svgPath) {
 
   const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [],
                    underLegend: [], routeUnderLegend: [], unplaced: [], nearEdge: [],
-                   labelOverBadge: [], badgeOverBadge: [], laneCross: [] };
+                   labelOverBadge: [], badgeOverBadge: [], laneCross: [], lozengeOverlap: [] };
 
   /*
    * WHAT THE LEGEND IS BURYING.
@@ -1088,12 +1092,41 @@ function analyse(svgPath) {
   // two stadium badges sitting tidily side by side as printing on each other.
   // First cut of this measure did exactly that and claimed 9 overprints on High
   // Wycombe internal, of which the honest number is far smaller.
+  //
+  // CORRECTED 2026-08-28 (OA-060): the BOX rule above was right about stadiums and
+  // wrong about discs, and it swapped one shape's false positive for another's.
+  // Two circles of r=3.4 whose centres are 7.22mm apart have 0.42mm of daylight
+  // between them and cannot be printing on anything -- but their bounding boxes
+  // overlap 3.10 x 0.60mm, so a box test on both axes calls it an overprint. That
+  // is not a corner case: it is what a badge ROW looks like on a diagonal spoke,
+  // where consecutive badges sit at the row pitch and the pitch is only a little
+  // more than the diameter. Ely Co-op and Godmanchester Ermine Street each carried
+  // one, and they are not defects.
+  //
+  // The exact answer covers both shapes at once, because a disc IS a stadium whose
+  // straight core has zero length. Take each badge's core segment -- horizontal,
+  // half-length (rx - ry), at its centre -- and measure the true gap between the
+  // two segments; the marks touch when that gap is less than the sum of their
+  // corner radii. It degenerates to the radial test for two discs and to the box
+  // test for two stadiums on one line, which is why both earlier rules looked
+  // right on the cases their author had in front of them.
+  const gapMm = (a, b) => {
+    const ax0 = a.cx - (a.rx - a.ry), ax1 = a.cx + (a.rx - a.ry);
+    const bx0 = b.cx - (b.rx - b.ry), bx1 = b.cx + (b.rx - b.ry);
+    const dx = Math.max(0, ax0 - bx1, bx0 - ax1);   // 0 when the cores overlap in x
+    return Math.hypot(dx, a.cy - b.cy) - (a.ry + b.ry);
+  };
   for (let i = 0; i < badges.length; i++) for (let j = i + 1; j < badges.length; j++) {
     const a = badges[i], b = badges[j];
+    const over = -gapMm(a, b);
+    if (over <= T.badgeOverlapMm) continue;
     const ox = (a.rx + b.rx) - Math.abs(a.cx - b.cx);
     const oy = (a.ry + b.ry) - Math.abs(a.cy - b.cy);
-    if (ox <= T.badgeOverlapMm || oy <= T.badgeOverlapMm) continue;
     detail.badgeOverBadge.push({
+      // `over` stays the per-axis pair every earlier report printed; `deep` is how
+      // far the two marks actually interpenetrate, which is the figure the rule now
+      // turns on and the only one that is comparable between a disc and a stadium.
+      deep: +over.toFixed(2),
       over: [+ox.toFixed(2), +oy.toFixed(2)],
       at: [+a.cx.toFixed(1), +a.cy.toFixed(1)], and: [+b.cx.toFixed(1), +b.cy.toFixed(1)],
       // The HALF-HEIGHT is the badge radius the generator asked for, and that is
@@ -1104,6 +1137,71 @@ function analyse(svgPath) {
       // by design.badgeFit and its ry is still the radius.
       rad: [+a.ry.toFixed(2), +b.ry.toFixed(2)],
     });
+  }
+
+  // --- 7b. A TERMINUS LOZENGE PRINTED ON ANOTHER TERMINUS LOZENGE -------
+  //
+  // The destination boxes on an external sheet were measured by NOTHING until
+  // 2026-08-28. OA-060 had been open since 2026-08-24 saying "High Wycombe has
+  // two overlapping by 4.99 mm" and quoting a hand measurement, because there
+  // was no tool that could say how many more there were; the row's own words
+  // were "18 badges plus an unknown number". The honest answer turned out to be
+  // seven, and one of them is Huntingdon printing "Addenbrooke's ~79 min" over
+  // "Cambridge ~56 min" by 13.46 x 14.60 mm -- a destination almost entirely
+  // erased, on a sheet whose every other number was clean.
+  //
+  // Both external generators draw the box identically -- gen_external_radial.js
+  // townNode() and gen_external_places.js destNode() -- so ONE signature covers
+  // the town sheets and the place sheets. Keyed on the FILL AND STROKE PAIR
+  // rather than on rx=2.4, because the corner radius is a magic number that a
+  // later restyle could move without meaning anything, while #2e8b57 on #1d5f3a
+  // is this mark's identity. Measured across all 52 committed sheets on
+  // 2026-08-28: 153 lozenges, one signature, and nothing else on any sheet uses
+  // that colour at all.
+  //
+  // BOX overlap on BOTH axes, with the badge tolerance, for the reason OA-021
+  // and OA-023 paid for in opposite directions -- a radial test on a box that is
+  // 40 mm wide and 11 mm tall invents defects along its short axis and misses
+  // them along its long one. A lozenge is the widest box on the sheet, so it is
+  // the worst possible candidate for a centre-distance test.
+  const lozenges = [];
+  for (const r of P.rects) {
+    if (r.fill !== '#2e8b57' || r.stroked !== '#1d5f3a') continue;
+    lozenges.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1,
+      // The words inside the box, so a detail line can say WHICH destination is
+      // buried. This is not decoration: it is what settled the open question on
+      // OA-060, which had guessed that overlapping lozenges would turn out to be
+      // one destination reached two ways and should therefore be MERGED. Named,
+      // all seven were distinct places -- Addenbrooke's over Cambridge, Gatwick
+      // over Maidenhead over Bourne End -- and the single same-destination pair
+      // (St Ives' two Ramseys) carries different journey times, 67 min against
+      // 49, so merging would have destroyed the one fact a reader wants. A count
+      // alone would have sent that fix the wrong way.
+      txt: P.texts.filter(t => t.x > r.x0 && t.x < r.x1 && t.y > r.y0 && t.y < r.y1)
+                  .map(t => t.text).join(' ').trim() });
+  }
+  // THREE STATES, NOT TWO, and the middle one is a false-zero guard. An external
+  // sheet ALWAYS draws at least one destination -- the fewest on the board is
+  // Ramsey with four -- so finding none does not mean a clean sheet, it means
+  // the signature above has stopped matching what the generator emits. Reporting
+  // that as 0 would be exactly the shape this file already carries a paragraph
+  // about at measure 1: a coverage gap reading as a good result. Any other sheet
+  // type has no terminus lozenges by construction and the measure simply does
+  // not apply to it.
+  const lozState = base !== 'external' ? 'not-external'
+                 : lozenges.length === 0 ? 'signature-lost' : 'counted';
+  if (lozState === 'counted') {
+    for (let i = 0; i < lozenges.length; i++) for (let j = i + 1; j < lozenges.length; j++) {
+      const a = lozenges[i], b = lozenges[j];
+      const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+      const oy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+      if (ox <= T.lozengeOverlapMm || oy <= T.lozengeOverlapMm) continue;
+      detail.lozengeOverlap.push({
+        over: [+ox.toFixed(2), +oy.toFixed(2)],
+        at: [+a.x0.toFixed(1), +a.y0.toFixed(1)], and: [+b.x0.toFixed(1), +b.y0.toFixed(1)],
+        text: a.txt, under: b.txt,
+      });
+    }
   }
 
   // --- 8. TWO ROUTE RIBBONS THAT CROSS AT A SHALLOW ANGLE ---------------
@@ -1206,6 +1304,13 @@ function analyse(svgPath) {
     labelsOverBadge: (palette && palette.size) ? detail.labelOverBadge.length : null,
     badgeOverBadge: (palette && palette.size) ? detail.badgeOverBadge.length : null,
     laneCrossings: (palette && palette.size) ? detail.laneCross.length : null,
+    // --- added 2026-08-28, OA-060 ---
+    // null on every sheet that is not an external, and null on an external whose
+    // lozenge signature found nothing at all; see measure 7b for why the second
+    // of those is not a zero.
+    lozengeOverlap: lozState === 'counted' ? detail.lozengeOverlap.length : null,
+    lozengeOverlapState: lozState,    // 'counted' | 'not-external' | 'signature-lost'
+    lozenges: lozState === 'counted' ? lozenges.length : null,
   };
   // A point label over its OWN continuation is the design, not a defect — see
   // measure 2. pt/ink is left untouched so the board stays comparable with the
@@ -1292,6 +1397,11 @@ function analyse(svgPath) {
   // sheets they name are clean. See OA-021 / OA-118 for the numbers on the day.
   if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge');
   if (m.badgeOverBadge > 0) warns.push(m.badgeOverBadge + ' route badges printed on each other');
+  // OA-060, same treatment and the same reason: reported until the sheets are
+  // clean, then folded in. `signature-lost` is louder than any count, because it
+  // means this measure has stopped being able to see its own subject.
+  if (m.lozengeOverlap > 0) warns.push(m.lozengeOverlap + ' destination lozenges printed on each other');
+  if (m.lozengeOverlapState === 'signature-lost') warns.push('external sheet with NO terminus lozenge found - the lozengeOverlap measure is blind here');
   if (m.laneCrossings > T.laneCrossWarn) warns.push(m.laneCrossings + ' shallow route crossings');
   if (m.colourClashOnMap > 0) warns.push('route hues that read alike running together');
   else if (m.colourClashInPanel > 0) warns.push('route hues that read alike in the panel');
@@ -1421,6 +1531,7 @@ ${results.length} sheets · ${results.filter(r => r.fails.length).length} FAIL �
     // so the board could say 57 and not say WHERE. That is the half a placer fix
     // actually needs: OA-023/OA-024/OA-060 are all "which pass stamped these two".
     if (r.detail.labelOverBadge.length) console.log('  label over a route badge: ' + r.detail.labelOverBadge.map(d => `"${d.text}" on the badge at ${d.at}`).join(', '));
+    if (r.detail.lozengeOverlap.length) console.log('  lozenge on a lozenge: ' + r.detail.lozengeOverlap.map(d => `"${d.text}" over "${d.under}" (${d.over[0]}x${d.over[1]}mm)`).join(', '));
     if (r.detail.badgeOverBadge.length) console.log('  badge on a badge: ' + r.detail.badgeOverBadge.map(d => `${d.at} r${d.rad[0]} x ${d.and} r${d.rad[1]} (overlap ${d.over[0]}x${d.over[1]}mm)`).join(', '));
     if (r.share) console.log('  ink share by 9th: ' + r.share.map(s=>(s*100).toFixed(0)+"%").join(" "));
   }

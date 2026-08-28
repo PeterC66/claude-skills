@@ -187,10 +187,13 @@ const { drawServicesPanel } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
-// The internal map's own footer notes are fixed (not per-town), so the footer plate's
-// top edge is a known constant — computed once here and used both by the mapNotes
-// collision check below and the footerBand() call at the very end of this file. Keep
-// these two in sync: whichever notes array is passed to footerBand must match this one.
+// The internal map's footer notes are built just above FOOTER_OPTS (search
+// INTERNAL_FOOTER_NOTES), not here. They used to be a fixed const at this line, and
+// could not stay one once the cross-check DATE became per-map (routes.json
+// `checkedAt`) — routes.json has not been read yet at this point in the file, which
+// is the same reason FOOTER_PLATE_TOP is a `let` assigned later. Whichever notes
+// array is passed to footerBand must be the one footerPlateTop() measured; passing
+// the single FOOTER_OPTS object to both is what makes that true by construction.
 // "Stop names in italics are approximate" was a legacy sentence carried over from the
 // hand-made St Ives leaflet, and it described a convention this engine has never had:
 // every placeLabel() call site passes italic=false, so a stop name is never italic on
@@ -199,8 +202,6 @@ const { featureLabels } = require(_dep('feature_labels.js'));
 // every sheet, italic or not, because a stop is snapped to the drawn road skeleton.
 // Reported by Peter 2026-08-24 ("I do not see any. They are all approximate!").
 // Two lines either way, so the footer plate's top edge does not move.
-const INTERNAL_FOOTER_NOTES = ['Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org (June 2026), Open Government Licence v3.0.',
-          'Places: © OpenStreetMap contributors (ODbL). Stop positions are approximate; check live times at bustimes.org.'];
 // FOOTER_PLATE_TOP is assigned just below DESIGN, not here: design.printSafe
 // moves the footer's bottom baseline, which moves the plate top, and every
 // consumer of this constant (the mapNotes check, the map frame's y1, the
@@ -363,6 +364,32 @@ const PRINT_SAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null
 // identical arguments or the plate the map is fitted around is not the plate that
 // gets drawn; passing the same object to both makes that true by construction
 // rather than by remembering (see INTERNAL_FOOTER_NOTES' header above).
+/*
+ * routes.json `checkedAt` — WHEN this map's services were last cross-checked.
+ *
+ * The date in this note was a hardcoded "(June 2026)" in three generators until
+ * 2026-08-28, identical on all 20 maps, and it was simply false on most of them:
+ * the S1 passes it claims to describe ran between June and August 2026, and
+ * Ramsey's had never happened at all. A provenance claim is not decoration — this
+ * one tells a reader how old the timetable research is, and OA-153 raised it after
+ * a member of the public found real errors on a sheet whose footer said it had been
+ * checked.
+ *
+ * Deliberately NOT defaulted from `validFrom`. They are different claims — when the
+ * timetable takes effect versus when we last verified it against the operator — and
+ * they already disagree on Huntingdon (S1 ran 2026-07-12, validFrom "June 2026").
+ * Silently reusing one for the other would manufacture a confident wrong date,
+ * which is the fault being fixed.
+ *
+ * ABSENT => the parenthetical is omitted entirely, not filled with a guess. A
+ * missing date is honest; a wrong one is not, and a new map that forgets the key
+ * then says nothing rather than inheriting somebody else's month. This is the one
+ * place the "absent config => byte-identical" invariant is knowingly broken, which
+ * is why every one of the 20 maps is re-rendered and re-gated in the same commit.
+ */
+const CHECKED_AT = RJ.checkedAt ? ` (${RJ.checkedAt})` : '';
+const INTERNAL_FOOTER_NOTES = [`Routes & stops: UK Bus Open Data Service, cross-checked at bustimes.org${CHECKED_AT}, Open Government Licence v3.0.`,
+          'Places: © OpenStreetMap contributors (ODbL). Stop positions are approximate; check live times at bustimes.org.'];
 const FOOTER_OPTS = { notes: INTERNAL_FOOTER_NOTES, safe: PRINT_SAFE,
   url: DESIGN.sheetUrl || null, qr: DESIGN.sheetQr === false ? null : (DESIGN.sheetQr || { mm: 14 }),
   // design.sheetQr DEFAULTS to a 14mm code (2026-08-24). It was opt-in, all 20 maps
@@ -2685,7 +2712,14 @@ if(LAB){
 // has nothing to do with the sheet's identity (High Wycombe's title turned red
 // when 32A joined the Booker–Micklefield corridor). Absent => byte-identical.
 out(`<text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fill="${RJ.internalTitleColor||C[ORI]}">Buses within ${esc(RJ.town)}</text>`);
-out(`<text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from ${esc(RJ.validFrom||'June 2026')})</text>`);
+// The subtitle carries the DATA's validity (routes.json `validFrom`), which is a
+// different claim from the footer's cross-check date — see CHECKED_AT above. It
+// fell back to a hardcoded 'June 2026' until 2026-08-28, the same fault as the
+// footer's: a literal in the generator is identical on every map it draws, so it is
+// wrong everywhere but where it was written. Absent => draw no subtitle at all
+// rather than a confident wrong month. Byte-identical on all 20 maps, every one of
+// which sets validFrom; this only changes what a map that FORGETS it would say.
+if(RJ.validFrom) out(`<text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from ${esc(RJ.validFrom)})</text>`);
 for(const f of FEATURES) drawFeatureLabel(f);
 
 // ---------- right service panel ----------

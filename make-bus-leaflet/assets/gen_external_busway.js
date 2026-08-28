@@ -250,9 +250,16 @@ if(PANX==null){
 }
 // source notes (bottom)
 out(footerBand({
-  notes: ['Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org, June 2026.',
+  // routes.json `checkedAt` — when this map's services were last cross-checked.
+  // Hardcoded ", June 2026." here until 2026-08-28; absent => omitted, never guessed.
+  // See gen_internal.js's CHECKED_AT for why this is not defaulted from validFrom.
+  notes: [`Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org${D.checkedAt ? `, ${D.checkedAt}` : ''}.`,
           D.externalNote || 'Always confirm live times & fares at bustimes.org or operator apps.'],
-  version: D.version, validFrom: D.validFrom || 'Summer 2026'
+  // `|| null`, not `|| 'Summer 2026'`: footer.js draws no "Valid from" line for a
+  // falsy value, which is the honest answer for a map that has not said. The old
+  // literal was the same fault as the cross-check date it sits beside. Byte-identical
+  // for St Ives, the only busway map, which sets validFrom.
+  version: D.version, validFrom: D.validFrom || null
 }));
 
 // Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).

@@ -1014,6 +1014,26 @@ const MUTATIONS = [
     find: "${anchor?` text-anchor=\"${anchor}\"`:''} fill=\"${f.labelColor||'#7fb0d8'}\">${esc(text)}</text>`);",
     to: "${anchor?` text-anchor=\"${anchor}\"`:''} fill=\"${f.labelColor||'#7fb0d8'}\">${text}</text>`);" },
 
+  // The provenance date. A byte gate cannot catch any of these three: it compares a
+  // generator against its OWN previous output, so a date that is wrong on every map
+  // reproduces perfectly for ever. That is how "(June 2026)" survived on 20 maps
+  // until a member of the public reported errors on a sheet whose footer said it had
+  // been cross-checked (OA-153).
+  { suite: 'provenance_date.test.js', file: 'gen_internal.js',
+    what: "the internal footer goes back to a hardcoded cross-check date, identical and wrong on every map",
+    find: "const CHECKED_AT = RJ.checkedAt ? ` (${RJ.checkedAt})` : '';",
+    to: "const CHECKED_AT = ' (June 2026)';" },
+
+  { suite: 'provenance_date.test.js', file: 'gen_external_radial.js',
+    what: "an absent checkedAt falls back to validFrom - a DIFFERENT claim, and already wrong on Huntingdon",
+    find: "cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ''}.`,",
+    to: "cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ` (${D.validFrom})`}.`," },
+
+  { suite: 'provenance_date.test.js', file: 'gen_external_busway.js',
+    what: "the busway footer states a date of its own again",
+    find: "cross-checked with operators at bustimes.org${D.checkedAt ? `, ${D.checkedAt}` : ''}.`,",
+    to: "cross-checked with operators at bustimes.org, June 2026.`," },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

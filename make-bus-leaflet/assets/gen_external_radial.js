@@ -84,7 +84,12 @@ const W = 297, H = 210;
 // furniture is fitted around cannot differ from the plate that gets drawn.
 const _hasTimes = EXT.some(b=>b.minutesToDestination!=null);
 const EXTERNAL_FOOTER_NOTES = [
-  `Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org (June 2026).`,
+  // routes.json `checkedAt` — when this map's services were last cross-checked.
+  // Hardcoded "(June 2026)" here until 2026-08-28 and identical on all 20 maps, so
+  // it was false on most of them. Absent => the parenthetical is omitted rather than
+  // guessed; see gen_internal.js's CHECKED_AT for the full reasoning and why this is
+  // not defaulted from validFrom.
+  `Routes & stops: UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ''}.`,
   `Confirm live times & fares at bustimes.org or operator apps.${_hasTimes?' Journey times shown are approximate.':''}`
     + `${DESIGN.scaleBar!==false?' Diagram — not to scale.':''}`];
 const FOOTER_OPTS = { notes: EXTERNAL_FOOTER_NOTES, safe: PSAFE,

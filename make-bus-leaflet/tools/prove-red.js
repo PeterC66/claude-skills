@@ -540,6 +540,31 @@ const MUTATIONS = [
     find: "    if (unplaced === null) dropState = 'unreadable';   // the file was there and would not parse",
     to: "    if (unplaced === null) dropState = 'no-reporter';" },
 
+  // The fold-in, 2026-08-28 (OA-021). These four defend a DECISION rather than an
+  // algorithm, which is unusual here and deliberate: the whole convention is that
+  // a measure is scored only once its board is empty, and the two ways to break it
+  // are to quietly unscore one that was folded in, or to fold in one that is still
+  // red. Both are one-line edits nobody would notice in review.
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a badge printed on a badge stops counting as a hard defect, so the ratchet stops seeing it',
+    find: "    + (m.badgeOverBadge || 0) + (m.lozengeOverlap || 0)",
+    to: "    + (m.lozengeOverlap || 0)" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a lozenge printed on a lozenge stops counting as a hard defect',
+    find: "    + (m.badgeOverBadge || 0) + (m.lozengeOverlap || 0)",
+    to: "    + (m.badgeOverBadge || 0)" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'labelsOverBadge is folded in while it still stands at 47, which is how a new gate lands red and gets muted',
+    find: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels",
+    to: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels + (m.labelsOverBadge || 0)" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'an unmeasurable sheet is charged a defect for the measurement it could not take',
+    find: "  if (m.badgeOverBadge > 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');",
+    to: "  if (m.badgeOverBadge !== 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');" },
+
   // OA-060, the badge rule made exact 2026-08-28. The box rule it replaced was not
   // a rounding matter: it accounted for 17 of the 30 overprints the board reported
   // that morning, every one of them a pair of discs with clear paper between them.

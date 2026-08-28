@@ -1360,9 +1360,33 @@ function analyse(svgPath) {
    * Keep them as two numbers and a weighted sum can never quietly buy the
    * unacceptable thing because it happened to be small.
    */
+  /* FOLDED IN 2026-08-28 (OA-021, on the day OA-060 and OA-147 emptied them):
+   * `badgeOverBadge` and `lozengeOverlap` are HARD.
+   *
+   * Both were built REPORTED AND NOT SCORED on purpose, and the reason was never
+   * that they did not matter -- a route number with its last digit under another
+   * disc, or a destination printed over another destination, is information the
+   * reader simply cannot recover, which is the definition of hard above. The
+   * reason was that they were non-zero on the day they were written, and a check
+   * that is red the day it lands gets muted within the week. So the fold-in was
+   * gated on the sheets, not on anybody's opinion.
+   *
+   * The sheets are clean. Board-wide, all 52: badge-on-badge 0, lozenge-on-
+   * lozenge 0. Both start green and every future occurrence fails the ratchet on
+   * the sheet that causes it.
+   *
+   * `labelsOverBadge` STAYS REPORTED, at 47, and that is the same rule applied
+   * honestly rather than an inconsistency: it is not zero, so scoring it today
+   * would fail the ratchet on every affected sheet at once, which is the outcome
+   * this whole convention exists to avoid. It folds in when it is empty too.
+   *
+   * `|| 0` on both, because null means "could not tell" -- an unreadable
+   * routes.json, or a sheet type with no lozenges -- and an unmeasurable sheet
+   * must not be charged for a defect nobody has established is there. */
   m.hard = m.textUnderFooter + m.duplicateLabels + m.labelLabelCollisions
     + (m.symbolsUnderLegend || 0) + (m.unplacedLabels || 0)
     + (m.panelOnlyServices || 0) + m.strandedFeatureLabels
+    + (m.badgeOverBadge || 0) + (m.lozengeOverlap || 0)
     + (m.minTextMm !== null && m.minTextMm < T.minTextMm ? detail.tiny.length : 0);
   m.soft = m.pointLabelsOverInkNet + m.labelIconCollisions + m.iconBlobs + (m.labelsIntoPanel || 0);
   m.defectsAll = m.hard + m.soft;
@@ -1388,19 +1412,15 @@ function analyse(svgPath) {
   if (m.strandedFeatureLabels > 0) fails.push('feature label far from its own feature');
   if (m.textEdgeMm !== null && m.textEdgeMm < T.edgeFailMm) fails.push('text ' + m.textEdgeMm + 'mm from the trim edge');
   else if (m.textEdgeMm !== null && m.textEdgeMm < T.edgeSafeMm) warns.push('text inside the ' + T.edgeSafeMm + 'mm print safe margin');
-  // The two added 2026-08-28. REPORTED, NOT SCORED — deliberately, and the reason
-  // is the standing lesson that a check which is red on the day it is written gets
-  // muted within the week. Both are non-zero on the board today (that is why
-  // OA-023 and OA-060 exist), so folding them into `hard` would fail the ratchet on
-  // every affected sheet at once on their first run. They are named here and
-  // carried as their own metrics; the fold-in is a separate, dated step once the
-  // sheets they name are clean. See OA-021 / OA-118 for the numbers on the day.
+  // badgeOverBadge and lozengeOverlap are SCORED as of 2026-08-28 — see the note
+  // on m.hard above for why that waited until the board was empty, and why
+  // labelsOverBadge has not followed them yet.
   if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge');
-  if (m.badgeOverBadge > 0) warns.push(m.badgeOverBadge + ' route badges printed on each other');
+  if (m.badgeOverBadge > 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');
   // OA-060, same treatment and the same reason: reported until the sheets are
   // clean, then folded in. `signature-lost` is louder than any count, because it
   // means this measure has stopped being able to see its own subject.
-  if (m.lozengeOverlap > 0) warns.push(m.lozengeOverlap + ' destination lozenges printed on each other');
+  if (m.lozengeOverlap > 0) fails.push(m.lozengeOverlap + ' destination lozenges printed on each other');
   if (m.lozengeOverlapState === 'signature-lost') warns.push('external sheet with NO terminus lozenge found - the lozengeOverlap measure is blind here');
   if (m.laneCrossings > T.laneCrossWarn) warns.push(m.laneCrossings + ' shallow route crossings');
   if (m.colourClashOnMap > 0) warns.push('route hues that read alike running together');

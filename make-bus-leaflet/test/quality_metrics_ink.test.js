@@ -188,22 +188,54 @@ test('one visual crossing is one site, however many segments make it', () => {
   assert.strictEqual(m.laneCrossings, 1);
 });
 
-test('the two measures are reported, never folded into the scored totals', () => {
-  // Deliberate, and dated: both are non-zero across the board today (OA-023,
-  // OA-060), so folding them into `hard` would fail the quality ratchet on every
-  // affected sheet on their first run — a check that is red on the day it is
-  // written gets muted within the week. The fold-in is a separate step once the
-  // sheets they name are clean.
+test('a badge printed on a badge is a HARD defect and a failure', () => {
+  // FOLDED IN 2026-08-28, once OA-060 and OA-147 had emptied the board. Both
+  // measures were reported and unscored for exactly as long as they were
+  // non-zero, because a check that is red on the day it lands gets muted within
+  // the week; the fold-in was gated on the sheets, not on an opinion.
+  const clean = analyse(sheet(label(56, 101, 'Market Hill'))).metrics;
   const r = analyse(sheet(badge(60, 100, '#4477aa', '301') + badge(61, 100.5, '#ee6677', '302')
     + label(56, 101, 'Market Hill')));
-  assert.ok(r.metrics.badgeOverBadge > 0 && r.metrics.labelsOverBadge > 0);
-  const clean = analyse(sheet(label(56, 101, 'Market Hill')));
-  assert.strictEqual(r.metrics.hard, clean.metrics.hard);
-  assert.strictEqual(r.metrics.soft, clean.metrics.soft);
-  assert.strictEqual(r.metrics.defects, clean.metrics.defects);
-  // ...but they are NAMED, so a reader of the report is not left to guess.
+  assert.strictEqual(r.metrics.badgeOverBadge, 1);
+  assert.strictEqual(r.metrics.hard, clean.hard + 1);
+  assert.ok(r.fails.some(f => /printed on each other/.test(f)));
+});
+
+test('a destination lozenge printed on another is a HARD defect and a failure', () => {
+  const r = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge') + loz(105, 100, 30, 11, 'Ely')));
+  const clean = analyse(extSheet(loz(80, 100, 30, 11, 'Cambridge'))).metrics;
+  assert.strictEqual(r.metrics.lozengeOverlap, 1);
+  assert.strictEqual(r.metrics.hard, clean.hard + 1);
+  assert.ok(r.fails.some(f => /lozenges printed on each other/.test(f)));
+});
+
+test('labelsOverBadge is still REPORTED and not scored, and that is not an oversight', () => {
+  // It stands at 47 across the board, so scoring it today would fail the ratchet
+  // on every affected sheet at once — the outcome the whole convention exists to
+  // avoid. Same rule as the other two, applied honestly to a different number.
+  // This test is what stops it being folded in by tidiness rather than by
+  // measurement: it will fail the day somebody does it, and the fix is to empty
+  // the board first.
+  const clean = analyse(sheet(badge(60, 100, '#4477aa', '5'))).metrics;
+  const r = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'Market Hill')));
+  assert.strictEqual(r.metrics.labelsOverBadge, 1);
+  assert.strictEqual(r.metrics.hard, clean.hard);
   assert.ok(r.warns.some(w => /over a route badge/.test(w)));
-  assert.ok(r.warns.some(w => /printed on each other/.test(w)));
+});
+
+test('a sheet that cannot measure either is not charged for one', () => {
+  // null means "could not tell" — an unreadable routes.json, or a sheet type
+  // with no lozenges at all. Charging a hard defect for an absent measurement
+  // would make an unmeasurable sheet look like a defective one.
+  const r = analyse(sheet(badge(60, 100, '#4477aa', '301') + badge(61, 100.5, '#ee6677', '302'), {}));
+  assert.strictEqual(r.metrics.badgeOverBadge, null);
+  assert.strictEqual(r.metrics.lozengeOverlap, null);
+  const bare = analyse(sheet(label(56, 101, 'Market Hill'), {})).metrics;
+  assert.strictEqual(r.metrics.hard, bare.hard);
+  // ...and it must not be REPORTED as failing either. A null compared with !== 0
+  // is true, so the obvious spelling of this guard announces "null route badges
+  // printed on each other" on every sheet whose palette would not parse.
+  assert.ok(!r.fails.some(f => /printed on each other/.test(f)), r.fails.join(" | "));
 });
 
 // ------------------------------------ OA-060, the badge rule made exact

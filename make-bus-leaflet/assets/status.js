@@ -27,7 +27,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, PLACE_IGNORE } = require('./gate_lib');
+const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { computeEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
 
@@ -239,8 +239,34 @@ function gatePortalFixture() {
     // The portal's flat fixture dirs carry customer edits as base-overrides.json,
     // not the staged skill's overrides.json — pass it through explicitly so the
     // gate reproduces what the portal actually renders, not the un-overridden base.
-    const baseOverrides = path.join(dataDir, 'base-overrides.json');
-    const extraEnv = exists(baseOverrides) ? { OVERRIDES_FILE: baseOverrides } : {};
+    // SKILL_ASSETS MUST BE THE PORTAL'S OWN engine/, AND WAS NOT (2026-08-28).
+    //
+    // This whole table exists to gate the copies the live site renders. But
+    // gate_lib's runGenerator sets SKILL_ASSETS to the SKILL's assets, and until
+    // this line was added nothing here overrode it — so the gate ran the portal's
+    // ENTRY generator (engine/place/gen_internal.js) against the SKILL's shared
+    // modules. The portal's own svg_primitives.js, labeller.js, projection.js and
+    // every other file in engine/ were never loaded at all. That is a combination
+    // that exists in no deployment: renderMap.js passes SKILL_ASSETS = engine/, so
+    // live, the portal's modules are the ones that draw.
+    //
+    // The vendored entry generators resolve a sibling FIRST and SKILL_ASSETS
+    // second (`_dep`), and the shared modules sit one level up in engine/ rather
+    // than beside them in engine/place/ — so the SKILL_ASSETS arm is the only arm,
+    // and pointing it at the skill silently substituted 19 of the 22 vendored
+    // files. MEASURED by making four portal modules throw on load: this table
+    // still said PASS, and the same gate with SKILL_ASSETS = engine/ said FAIL.
+    // A green row about code it had never executed.
+    //
+    // Its stablemate, the drift check further down, compares the two copies file
+    // by file and is what has been carrying this — but drift is a different
+    // question from "does the portal's engine still draw the shipped sheet", and
+    // OA-145 keeps three of those files deliberately DRIFTED.
+    // Built by gate_lib so that tools/prove-red-gates.js falsifies THIS gate
+    // rather than a second copy of it that can drift away in silence. That
+    // helper also carries base-overrides.json, the portal's name for the
+    // customer edits the shipped sheet was rendered with.
+    const extraEnv = portalFixtureEnv(PORTAL, dataDir);
     // A fixture has no manifest to consult, and it exists precisely to be a frozen
     // shipped sheet — so NO-SHEET here is never "never built", it is a fixture that
     // has lost the artwork it is supposed to prove. Always MISSING, always red.

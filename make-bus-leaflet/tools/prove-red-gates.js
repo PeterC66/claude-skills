@@ -32,8 +32,11 @@
  *     npm run test:prove-red-gates
  *     node tools/prove-red-gates.js --keep     leave the mutated copies on disk
  *     node tools/prove-red-gates.js --buses "<path to the Buses repo>"
- * `--buses` defaults to C:\u3a St Ives\Using AI\Buses and is only needed if the
- * data repo is checked out somewhere else.
+ *     node tools/prove-red-gates.js --portal "<path to community-bus-maps>"
+ * `--buses` defaults to C:\u3a St Ives\Using AI\Buses and `--portal` to
+ * C:\Claude\community-bus-maps; both are only needed if that repo is checked out
+ * somewhere else, which in CI it is. Without a portal the four portal-fixture
+ * targets are reported SKIPPED rather than silently dropped.
  */
 'use strict';
 const fs = require('node:fs');
@@ -42,12 +45,14 @@ const path = require('node:path');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
-const { gate, PLACE_IGNORE } = require(path.join(ASSETS, 'gate_lib.js'));
+const { gate, PLACE_IGNORE, portalFixtureEnv } = require(path.join(ASSETS, 'gate_lib.js'));
 
 const argv = process.argv.slice(2);
 const KEEP = argv.includes('--keep');
 const bi = argv.indexOf('--buses');
 const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
+const pi = argv.indexOf('--portal');
+const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-bus-maps';
 
 /* One target per SHEET TYPE, because the five sheet types are drawn by five
  * different generators and a gate proven red on one says nothing about the
@@ -112,6 +117,63 @@ const TARGETS = [
   },
 ];
 
+/* THE PORTAL ARM (2026-08-28, OA-132). Everything above falsifies the byte gate
+ * over maps in buses-data, run with the SKILL's generators. status.js also gates
+ * two PORTAL FIXTURES through gatePortalFixture(), and those are supposed to be
+ * the copies the live site renders — a different generator, a different
+ * resolution order, a different extraEnv — and nothing had ever proved that arm
+ * could go red.
+ *
+ * Proving it found something worse than an unproven check. gate_lib's
+ * runGenerator sets SKILL_ASSETS to the SKILL's assets, and gatePortalFixture did
+ * not override it, so the arm ran the portal's ENTRY generator against the
+ * SKILL's shared modules — a combination that exists in no deployment. MEASURED
+ * by making four portal modules throw on load: the board still said PASS.
+ * renderMap.js passes SKILL_ASSETS = engine/, so live it is the portal's own
+ * modules that draw, and the gate had never executed one of them.
+ *
+ * THE SECOND TARGET BELOW IS THE ONE THAT WOULD HAVE CAUGHT IT: it mutates a
+ * SHARED module rather than an entry generator, which is exactly the class that
+ * was invisible. A target list made only of entry generators would have gone
+ * green against the same bug.
+ *
+ * Nothing under the portal's engine/ is written to. The whole directory is copied
+ * into the scratch tree per target, the mutation is applied to the copy, and
+ * SKILL_ASSETS points at the copy — the same discipline the local arm uses for
+ * assets/. */
+const PORTAL_TARGETS = [
+  {
+    sheet: 'internal.svg', fixture: 'High Wycombe Aldi', out: 'internal.svg',
+    gen: 'place/gen_internal.js', mutFile: 'place/gen_internal.js',
+    opts: { ignoreLineRe: PLACE_IGNORE },
+    what: 'every point-of-interest icon is drawn a third larger',
+    find: 'const POI_HALF=2.1;',
+    to: 'const POI_HALF=2.8;',
+  },
+  {
+    sheet: 'internal.svg [SHARED]', fixture: 'High Wycombe Aldi', out: 'internal.svg',
+    gen: 'place/gen_internal.js', mutFile: 'svg_primitives.js',
+    opts: { ignoreLineRe: PLACE_IGNORE },
+    what: 'a SHARED module moves every route badge label — the class this arm could not see at all until 2026-08-28',
+    find: 'dominant-baseline="central"',
+    to: 'dominant-baseline="middle"',
+  },
+  {
+    sheet: 'external.svg', fixture: 'High Wycombe Aldi', out: 'external.svg',
+    gen: 'place/gen_external_places.js', mutFile: 'place/gen_external_places.js',
+    what: 'every destination hub box loses a millimetre of height',
+    find: 'const HUB_H = 13;',
+    to: 'const HUB_H = 12;',
+  },
+  {
+    sheet: 'boarding.svg', fixture: 'High Wycombe High Street', out: 'boarding.svg',
+    gen: 'expert/gen_boarding.js', mutFile: 'expert/gen_boarding.js',
+    what: 'the legend gap closes by a millimetre',
+    find: 'const LG_GAP = 3.2;',
+    to: 'const LG_GAP = 2.2;',
+  },
+];
+
 const outName = t => t.sheet.split(' ')[0];
 
 function mutate(genPath, find, to, scratch) {
@@ -165,6 +227,69 @@ for (const t of TARGETS) {
   }
 }
 
+// ---- the portal arm --------------------------------------------------------
+let portalRan = 0;
+const portalEngine = path.join(PORTAL, 'engine');
+if (!fs.existsSync(portalEngine)) {
+  rows.push(['portal fixtures (all)'.padEnd(24) + ' -', 'SKIPPED',
+    `no engine/ at ${PORTAL} — pass --portal <path to community-bus-maps>`]);
+} else {
+  for (const t of PORTAL_TARGETS) {
+    const dataDir = path.join(BUSES, 'Places', '_portal-fixture', t.fixture);
+    const committed = path.join(dataDir, t.out);
+    const label = `${(t.sheet + ' (portal)').padEnd(24)} ${t.fixture}`;
+    portalRan++;
+    if (!fs.existsSync(committed)) {
+      rows.push([label, 'NO REFERENCE', `${committed} is not on disk`]);
+      failures++;
+      continue;
+    }
+    // A fresh copy of the WHOLE vendored engine per target, so one mutation
+    // cannot leak into the next and nothing under the portal is written to. It is
+    // copied to <scratch>/portal-N/engine — the same SHAPE as the portal repo —
+    // precisely so portalFixtureEnv can be handed that root and asked the same
+    // question status.js asks it. Overriding SKILL_ASSETS here afterwards would
+    // have been simpler and would have made this harness blind to the one thing
+    // it is here to protect: if the builder ever goes back to pointing at the
+    // SKILL's assets, the mutation below stops biting and this goes red.
+    const portalCopy = path.join(scratch, 'portal-' + portalRan);
+    const engCopy = path.join(portalCopy, 'engine');
+    fs.cpSync(portalEngine, engCopy, { recursive: true });
+    // THE SAME env builder status.js uses, pointed at the scratch portal — so
+    // this falsifies the gate the board runs, not a second implementation of it.
+    const opts = { ...(t.opts || {}), extraEnv: portalFixtureEnv(portalCopy, dataDir) };
+    const genCopy = path.join(engCopy, t.gen);
+
+    // Control: the unmutated vendored engine must reproduce the shipped fixture.
+    const ctl = gate(genCopy, dataDir, t.out, committed, opts);
+    if (ctl.status !== 'PASS') {
+      rows.push([label, 'CONTROL ' + ctl.status,
+        'the unmutated vendored engine does not reproduce this fixture, so a red '
+        + 'from the mutation would prove nothing']);
+      failures++;
+      continue;
+    }
+
+    const mutPath = path.join(engCopy, t.mutFile);
+    const src = fs.readFileSync(mutPath, 'utf8');
+    const n = src.split(t.find).length - 1;
+    if (n !== 1) {
+      rows.push([label, 'BAD ANCHOR',
+        `anchor matched ${n} times in ${t.mutFile}, expected exactly 1: ${t.find}`]);
+      failures++;
+      continue;
+    }
+    fs.writeFileSync(mutPath, src.replace(t.find, t.to));
+    const mut = gate(genCopy, dataDir, t.out, committed, opts);
+    if (mut.status === 'PASS') {
+      rows.push([label, 'SURVIVED', `gate stayed green while ${t.what}`]);
+      failures++;
+    } else {
+      rows.push([label, 'caught (' + mut.status + ')', t.what]);
+    }
+  }
+}
+
 console.log('\nByte-gate falsification — control must PASS, mutation must not\n');
 for (const [label, verdict, detail] of rows) {
   const mark = /caught/.test(verdict) ? 'ok  ' : 'FAIL';
@@ -175,5 +300,6 @@ for (const [label, verdict, detail] of rows) {
 if (KEEP) console.log(`\nmutated copies kept in ${scratch}`);
 else fs.rmSync(scratch, { recursive: true, force: true });
 
-console.log(`\n${rows.length - failures}/${rows.length} sheet types have a byte gate proven able to go red.`);
+console.log(`\n${rows.length - failures}/${rows.length} byte gates proven able to go red`
+  + ` — ${TARGETS.length} local sheet types, ${portalRan} portal-fixture gates.`);
 process.exit(failures ? 1 : 0);

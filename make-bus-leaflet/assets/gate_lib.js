@@ -316,8 +316,30 @@ function applySetPath(obj, spec) {
   return spec.path + ': ' + was + ' -> ' + JSON.stringify(spec.value);
 }
 
+// The environment a PORTAL FIXTURE is rendered in, in ONE place (2026-08-28,
+// OA-132), because status.js gates the fixtures and tools/prove-red-gates.js
+// falsifies that gate — and a harness that builds its own copy of the environment
+// proves a copy of the gate, not the gate. The two drifted apart the moment they
+// were written separately: status.js inherited SKILL_ASSETS from runGenerator,
+// which points at the SKILL's assets, so the board ran the portal's entry
+// generator against the skill's shared modules and every file in the portal's
+// engine/ went unexecuted. Measured by making four of them throw on load: the
+// board still said PASS.
+//
+// SKILL_ASSETS = <portal>/engine is what src/render/renderMap.js passes live, and
+// the vendored entry generators resolve a sibling first and SKILL_ASSETS second —
+// with the shared modules one level up in engine/ rather than beside them, that
+// second arm is the only arm. base-overrides.json is the portal's name for a
+// customer's edits, which the shipped sheet was rendered WITH.
+function portalFixtureEnv(portalDir, dataDir) {
+  const env = { SKILL_ASSETS: path.join(portalDir, 'engine') };
+  const baseOverrides = path.join(dataDir, 'base-overrides.json');
+  if (fs.existsSync(baseOverrides)) env.OVERRIDES_FILE = baseOverrides;
+  return env;
+}
+
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, VERSION_STAMP_RE, PLACE_IGNORE,
   gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
-  parseSetPath, applySetPath,
+  parseSetPath, applySetPath, portalFixtureEnv,
 };

@@ -251,9 +251,21 @@ function latestRunDir(manifest, townDir, stage) {
   // it. Fall back to the small tracked ci-reference/ mirror of the latest S4
   // run (see sync_ci_reference.js) — same files, just not the run history.
   // Locally, where the real S4-generate dir exists, this branch never fires.
-  if (stage === 'S4' && !fs.existsSync(dir)) {
+  //
+  // IT TESTS FOR A FILE, NOT THE FOLDER, and that is the whole point (2026-08-28).
+  // The ignore file re-includes a few names from inside an S4 run — README.md,
+  // manifest.json, *.docx, and since 2026-08-28 build-warnings.txt. The moment
+  // build-warnings.txt started being tracked, every S4 run FOLDER began existing
+  // in a fresh clone with one file in it, `fs.existsSync(dir)` became true, this
+  // fallback stopped firing, and the byte gate reported FAIL on all twenty maps in
+  // CI while passing on every laptop that had the real folders. Nothing in the
+  // commit that tracked the file went anywhere near this one. Probing for
+  // routes.json — which every real S4 run and every ci-reference has, and which no
+  // re-included name will ever be — asks the question the caller actually means:
+  // are the inputs here?
+  if (stage === 'S4' && !fs.existsSync(path.join(dir, 'routes.json'))) {
     const ciRef = path.join(townDir, 'ci-reference');
-    if (fs.existsSync(ciRef)) dir = ciRef;
+    if (fs.existsSync(path.join(ciRef, 'routes.json'))) dir = ciRef;
   }
   return { dir, rec: r };
 }

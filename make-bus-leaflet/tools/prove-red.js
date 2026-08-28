@@ -825,13 +825,13 @@ const MUTATIONS = [
   // and every town printing STALE in CI against the code that drew it.
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: "line endings go back into the hash, so one commit reports a different engine per checkout",
-    find: "const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\\r\\n/g, '\\n'), 'utf8');",
-    to: "const stripCR = (buf) => buf;" },
+    find: "    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;",
+    to: "    if (false) continue;" },
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: "a bare CR is stripped as well as a CRLF pair, so a real content change can hide inside one",
-    find: "const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\\r\\n/g, '\\n'), 'utf8');",
-    to: "const stripCR = (buf) => Buffer.from(buf.toString('utf8').replace(/\\r/g, ''), 'utf8');" },
+    find: "    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;",
+    to: "    if (buf[i] === 0x0d) continue;" },
 
 
   // north_arrow.js - extracted 2026-08-27 from gen_internal.js, and the

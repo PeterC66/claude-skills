@@ -34,6 +34,29 @@ const fs = require('fs');
 const path = require('path');
 const { findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
 
+/* CRLF -> LF ON THE BYTES, never through a string (2026-08-28).
+ *
+ * The obvious spelling decodes the file to a UTF-8 string, runs a replace over
+ * it and re-encodes. That SILENTLY CORRUPTS anything that is not valid UTF-8.
+ * It was written that way first and caught within the hour: March's
+ * atco2name_all.json carries a raw 0x92
+ * — the CP1252 right single quote, in "Ramsey St Mary's" — which is not legal
+ * UTF-8, so the round trip replaced it with U+FFFD and rewrote the file. A
+ * newline fix that quietly edits the TEXT is worse than the newlines.
+ *
+ * Working on the buffer is encoding-agnostic, and it also gets the semantics
+ * right: only a CR that is part of a CRLF PAIR is dropped. A lone CR is content.
+ */
+function lfBytes(buf) {
+  const out = Buffer.allocUnsafe(buf.length);
+  let n = 0;
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;
+    out[n++] = buf[i];
+  }
+  return out.subarray(0, n);
+}
+
 function parseArgs(argv) {
   const f = {};
   for (let i = 0; i < argv.length; i++) {
@@ -66,7 +89,22 @@ function syncOne(dir) {
     const p = path.join(s4.dir, name);
     if (fs.statSync(p).isDirectory()) continue;
     if (!/\.(json|svg)$/i.test(name)) continue;
-    fs.copyFileSync(p, path.join(dest, name));
+    // WRITTEN WITH LF, WHATEVER WROTE THE S4 RUN (2026-08-28, the other half of
+    // OA-146). ci-reference/ is a tracked BYTE FIXTURE, and buses-data now covers
+    // it with `-text` so that a checkout cannot translate it — which is the fix
+    // for the twenty maps that read DIFF in a fresh clone on Windows. But `-text`
+    // also switches off the normalising `core.autocrlf` was doing on the way IN,
+    // and an S4 run dir is not all node's work: the Python tools write their JSON
+    // in text mode, so on Windows those files carry CRLF. A plain copyFileSync
+    // then puts CRLF into the fixture, and the first sync after the attribute
+    // landed produced 75 files of pure line-ending churn against 7 real changes.
+    //
+    // Normalising here makes the stored bytes a property of the CONTENT rather
+    // than of the platform that generated the run — the same lesson as the engine
+    // hash (OA-073). It is inert for the artefacts the gate actually diffs: every
+    // S4 SVG is written by node and already carries no CR at all, measured across
+    // March, St Ives and Huntingdon on the day this was added.
+    fs.writeFileSync(path.join(dest, name), lfBytes(fs.readFileSync(p)));
     n++;
   }
   return { status: 'OK', detail: `${n} files from ${s4.rec.id} (v${s4.rec.version})` };

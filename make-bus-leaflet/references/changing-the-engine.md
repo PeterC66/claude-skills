@@ -103,17 +103,15 @@ Run it with **no `overrides.json` and no `EDITOR_KEYS`/`OVERRIDES_FILE`** — th
 
 (Both runs are worth doing when you are diagnosing: *own copy* PASS + *template* DIFF says "the shipped map is intact, the town is just behind the template". *Own copy* DIFF means the data or the committed SVG has been tampered with — a different and more serious problem.)
 
-**Current gate set** — every built town, internal *and* external (14 runs), all PASS as of 2026-08-03:
+**Current gate set — ask the board, do not read it here (OA-099).** A table of "the latest S4 of every town" is a fact that changes on every build, and this document is not rebuilt when a town is. Run this from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — both paths below are real on this machine and neither is a placeholder:
 
-| Town | Latest S4 | External generator |
-|---|---|---|
-| St Ives | `v6.14_2026-08-03_1440` | **radial** (was busway through v6.8) |
-| March | `v2.2_2026-08-03_1446` | radial |
-| Huntingdon | `v3.2_2026-08-03_1452` | radial |
-| Wisbech | `v1.2_2026-08-03_1724` | radial |
-| St Neots | `v2.2_2026-08-03_1728` | radial |
-| Beaconsfield | `v1.2_2026-08-03_1736` | radial |
-| High Wycombe | `v2.2_2026-08-03_1741` | radial |
+```bash
+node assets/status.js --buses "C:/u3a St Ives/Using AI/Buses" --portal "C:/Claude/community-bus-maps" --md
+```
+
+`--md` prints exactly the table that used to be typed out here, for every town AND every place, with each one's latest S4, its external style, its reproduce verdict and its quality column — and it exits non-zero when anything needs attention, which a table cannot do.
+
+**What was here until 2026-08-28, and why it is worth knowing it was removed rather than corrected.** It listed seven towns "all PASS as of 2026-08-03". Measured on 2026-08-28: **every one of the seven rows was wrong**, most by more than forty minor versions (St Ives `v6.14` → `v6.56`, High Wycombe `v2.2` → `v2.50`), and the eighth town, **Ramsey, was not in the table at all**. The note below has said "treat the tables as history, not as the thing to update by hand" since 2026-08-04, and that did not stop the table reading as current to anyone who scrolled to it — a table that is *labelled* stale still looks like an answer. Correcting the numbers would only have restarted the clock.
 
 > **2026-08-03.** `gen_external_radial.js` (and the place skill's `gen_external_places.js`) gained an opt-in `minutesToDestination` time label under the destination box, plus `gtfs_build.py` gained `arrival_time`/`departure_time` columns and a new `gtfs_duration.py` derives the minutes from them (plan #3 of the 2026-08-03 five-feature plan). All 7 built towns' external + all 5 built places' external gated PASS before shipping, then **every built town was rolled out** with real `minutesToDestination` data (all a minor bump, engine/geometry unchanged): St Ives v6.14 (10/11 spokes; only the DRT-only VL14 stays absent), March v2.2 (7/7), Huntingdon v3.2 (9/10; 401->Spaldwick absent — no sampled trip reaches a distinct Spaldwick stop), Wisbech v1.2 (12/12 — see the route-key-vs-GTFS-short-name gotcha below), St Neots v2.2 (7/10; 69/112/193 absent — confirmed "Ivel Sprinter (community)" operators, not in BODS), Beaconsfield v1.2 (7/8; 380->Holtspur & Loudwater absent — neither of the route's 2 GTFS trips reaches that stop) and High Wycombe v2.2 (19/20; 333->Speen absent — its only sampled trip is the return leg). Buckinghamshire's `buckinghamshire.sqlite` (used by Beaconsfield/High Wycombe) was rebuilt too, and `gtfs_duration.py` gained `--near lat,lon,km` since those two towns have no clean ATCO prefix (same trap as `gtfs_query.py`'s `town_prefixes.json` entries for them). A real bug was caught and fixed mid-rollout: the first "majority terminus" fallback (for single-arm routes whose GTFS name doesn't say the destination town) blended St Ives' two `301`-numbered arms into one wrong value — `allow_majority_fallback` now only applies when a route number has exactly one spoke in that town. See [s3-config.md](s3-config.md) `external[].minutesToDestination` for the full gotcha list (route-key-vs-short-name mismatches, round-trip/circular services, thin samples).
 
@@ -224,14 +222,15 @@ Everything else here applies, and invariant 2 above especially: a new `boardingP
 
 **As of 2026-08-23 the gate and the rebuild are both automated, and the hand procedure below is the fallback.** `rollout_places.js` builds a boarding sheet whenever `routes.json` carries `boardingPlan`, and gates it in its fast path — so `node rollout_places.js --all` now covers every boarding sheet on the board, and a place whose ONLY stale sheet is its boarding plan no longer reports UP-TO-DATE. Before that the tool had no boarding branch at all: a rollout committed an S4 with no `boarding.svg` in it while `_latest` went on mirroring the previous run's copy, so the sheet did not look missing — it looked fine. The same run taught it to read which sheets a place ships off its previous S4 rather than assume an internal, because High Wycombe High Street and High Wycombe Town Centre have never had one. The first thing the new gate found was High Wycombe Town Centre one build behind: the current generator draws a traffic-signal glyph its v1.0 sheet had not got.
 
-**The gate is a byte-identical re-run of every built boarding sheet.** As of 2026-08-23 there are four. Copy the run folder's `*.json` into a scratch directory, run the candidate `gen_boarding.js` there, and `cmp` the result against the committed `boarding.svg`:
+**The gate is a byte-identical re-run of every built boarding sheet.** Copy the run folder's `*.json` into a scratch directory, run the candidate `gen_boarding.js` there, and `cmp` the result against the committed `boarding.svg`.
 
-| Place | Latest S4 | Region |
-|---|---|---|
-| St Ives Bus Station | `v1.3_2026-08-23_0233` | cambridgeshire |
-| St Neots Town Centre | `v2.1_2026-08-23_0403` | cambridgeshire |
-| High Wycombe Town Centre | `v1.0_2026-08-23_0849` | buckinghamshire |
-| High Wycombe High Street | `v1.0_2026-08-23_1211` | buckinghamshire |
+**Which places those are is a question for the tree, not for this document (OA-099).** A boarding sheet exists exactly where `routes.json` carries `boardingPlan`, and `sheet_registry.js` records that boarding is **place-only** — `gen_boarding.js` reads `place.json` on its way in, and `rollout.js`, the area rollout, does not mention boarding at all. Run this from `C:\u3a St Ives\Using AI\Buses`, the repository root, with no placeholders:
+
+```bash
+grep -rl boardingPlan --include=routes.json Areas Places
+```
+
+There were four on 2026-08-23 and there are still four; the point is that the list is derived rather than typed, so it cannot quietly fall behind the way the town table above did.
 
 **Take the baseline before you edit, and take it by RUNNING the old generator, not by reading the committed file.** Two of these four are already several lines behind the current engine and have been since 2026-08-23, so a straight `cmp` against the committed `boarding.svg` reports a DIFF that has nothing to do with your change: on the High Street build it read "13 changed lines" on two sheets before a line of the new code had run. Copy the `.orig` generator over the same inputs, keep that output, and diff **baseline against candidate**. That is what separated "13 pre-existing" from "1 corrective" and made the change safe to keep. Then also re-run each sheet's own `boarding_verify.py` (and `--self-test` on one, to prove the gate can still go red) and `quality_metrics.js --all`, whose 44-sheet output is a second, wider ratchet: on 2026-08-23 a rotation fix to the metric was accepted only because that whole output came back byte-identical.
 

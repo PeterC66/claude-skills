@@ -507,10 +507,14 @@ const MUTATIONS = [
     what: 'the file NAME drops out of the engine hash',
     find: "h.update(name + '\\0');", to: 'h.update("");' },
 
+  // Re-anchored 2026-08-28: sameIgnoringLineEndings stopped normalising inline
+  // and now compares BYTES through line_endings.js, so the mutation has to break
+  // the comparison rather than the old `norm` helper. Same property either way —
+  // a CRLF working tree must not read as vendoring drift.
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',
-    find: "const norm = (p) => fs.readFileSync(p, 'utf8').replace(/\\r\\n/g, '\\n');",
-    to: "const norm = (p) => fs.readFileSync(p, 'utf8');" },
+    find: "  return sameBytesIgnoringLineEndings(fs.readFileSync(pathA), fs.readFileSync(pathB));",
+    to: "  return fs.readFileSync(pathA).equals(fs.readFileSync(pathB));" },
 
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'a file that cannot be read reports "different" instead of "cannot compare"',
@@ -820,18 +824,37 @@ const MUTATIONS = [
     find: "        if (!seen.has(dep) && fs.existsSync(path.join(sk, dep))) queue.push(dep);",
     to: "        if (!seen.has(dep)) queue.push(dep);" },
 
-  // The fifth is not about the walk but about WHAT IS HASHED. The engine version
-  // was a property of the checkout until 2026-08-28: one commit, three answers,
-  // and every town printing STALE in CI against the code that drew it.
-  { suite: 'engine_version.test.js', file: 'engine_version.js',
+  // line_endings.js - the normalisation the engine hash, sync_ci_reference.js and
+  // the vendoring drift check all share. It was three copies until 2026-08-28,
+  // two of them written hours apart WITH THE SAME BUG, so these mutations are
+  // aimed at the one implementation now.
+  //
+  // TWO SUITES ARE NAMED ON PURPOSE. The first pair runs engine_version.test.js,
+  // because a change here has to be caught THROUGH A CONSUMER — an engine version
+  // that is a property of the checkout is the failure that started this, and a
+  // unit test of the helper alone would not have said so. The third runs the
+  // helper's own suite, because the fault it describes is not visible in a hash
+  // at all: it rewrites the file.
+  { suite: 'engine_version.test.js', file: 'line_endings.js',
     what: "line endings go back into the hash, so one commit reports a different engine per checkout",
-    find: "    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;",
+    find: "    if (buf[i] === CR && buf[i + 1] === LF) continue;",
     to: "    if (false) continue;" },
 
-  { suite: 'engine_version.test.js', file: 'engine_version.js',
+  { suite: 'engine_version.test.js', file: 'line_endings.js',
     what: "a bare CR is stripped as well as a CRLF pair, so a real content change can hide inside one",
-    find: "    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;",
-    to: "    if (buf[i] === 0x0d) continue;" },
+    find: "    if (buf[i] === CR && buf[i + 1] === LF) continue;",
+    to: "    if (buf[i] === CR) continue;" },
+
+  // THE ONE THAT CORRUPTED A FIXTURE. Routing the bytes through a UTF-8 string
+  // rewrites every byte that is not legal UTF-8 as U+FFFD, and it did that to
+  // March's atco2name_all.json — a raw 0x92, the CP1252 quote in "Ramsey St
+  // Mary's" — on its first real run. The hash suites cannot see this: the engine
+  // sources are all ASCII, so mutating this way leaves the engine version alone.
+  // Only a test that feeds it a byte no decoder can represent goes red.
+  { suite: 'line_endings.test.js', file: 'line_endings.js',
+    what: "the bytes go through a UTF-8 string again, so anything that is not valid UTF-8 is rewritten as U+FFFD",
+    find: "function lfBytes(buf) {",
+    to: "function lfBytes(buf) {\n  return Buffer.from(buf.toString('utf8').split('\\r\\n').join('\\n'), 'utf8');" },
 
 
   // north_arrow.js - extracted 2026-08-27 from gen_internal.js, and the

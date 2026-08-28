@@ -33,29 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const { findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
-
-/* CRLF -> LF ON THE BYTES, never through a string (2026-08-28).
- *
- * The obvious spelling decodes the file to a UTF-8 string, runs a replace over
- * it and re-encodes. That SILENTLY CORRUPTS anything that is not valid UTF-8.
- * It was written that way first and caught within the hour: March's
- * atco2name_all.json carries a raw 0x92
- * — the CP1252 right single quote, in "Ramsey St Mary's" — which is not legal
- * UTF-8, so the round trip replaced it with U+FFFD and rewrote the file. A
- * newline fix that quietly edits the TEXT is worse than the newlines.
- *
- * Working on the buffer is encoding-agnostic, and it also gets the semantics
- * right: only a CR that is part of a CRLF PAIR is dropped. A lone CR is content.
- */
-function lfBytes(buf) {
-  const out = Buffer.allocUnsafe(buf.length);
-  let n = 0;
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;
-    out[n++] = buf[i];
-  }
-  return out.subarray(0, n);
-}
+const { lfBytes } = require('./line_endings');
 
 function parseArgs(argv) {
   const f = {};

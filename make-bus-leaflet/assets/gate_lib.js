@@ -10,6 +10,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { sameBytesIgnoringLineEndings } = require('./line_endings');
 
 const SK = __dirname; // …/make-bus-leaflet/assets
 
@@ -173,10 +174,17 @@ function gate(genPath, dataDir, outName, committedPath, opts = {}) {
 // repos store LF but a fresh skills-repo checkout can write CRLF into the
 // working tree (core.autocrlf=true, no .gitattributes), which must not read as
 // drift. See changing-the-engine.md's caveat on this exact trap.
+//
+// COMPARED AS BYTES since 2026-08-28, through the shared line_endings helper.
+// It used to read both sides as UTF-8 strings, which decoded every byte that is
+// not legal UTF-8 to U+FFFD on BOTH sides — so two vendored files differing only
+// in such a byte compared EQUAL and the drift check said "in sync". A narrow
+// blind spot, since these are generator sources, but it is the same decode that
+// corrupted a real fixture elsewhere the same day, and there is no reason for a
+// byte comparison to route through a text decoder.
 function sameIgnoringLineEndings(pathA, pathB) {
   if (!fs.existsSync(pathA) || !fs.existsSync(pathB)) return null; // can't compare
-  const norm = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  return norm(pathA) === norm(pathB);
+  return sameBytesIgnoringLineEndings(fs.readFileSync(pathA), fs.readFileSync(pathB));
 }
 
 // ---- shared town/place discovery -------------------------------------------

@@ -30,6 +30,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { lfBytes } = require('./line_endings');
 
 const SK = __dirname;
 // THE ENTRY POINTS, not the whole engine. lane_normals.js joined them on
@@ -109,31 +110,19 @@ function engineFiles(sk = SK) {
 //
 // On an all-LF tree this changes nothing — there are no \r to strip — so the
 // answer here is the same 0a32b566d4 the fix produced, not a third new value.
-// ON THE BYTES, not through a string. The first version of this decoded to a
-// UTF-8 string, replaced, and re-encoded — which mangles any byte that is not
-// legal UTF-8 into U+FFFD. The identical spelling in sync_ci_reference.js
-// corrupted a real fixture the same day (March's atco2name_all.json holds a raw
-// 0x92, the CP1252 right quote in "Ramsey St Mary's"). Here it would not damage
-// a file, only the hash — but a hash computed over a mangled buffer is blind to
-// every change inside the mangled run, which is the same fault wearing a quieter
-// coat. Dropping only the CR of a CRLF PAIR is also the correct semantics: a
-// lone CR is content, and test/engine_version.test.js pins both halves.
-const stripCR = (buf) => {
-  const out = Buffer.allocUnsafe(buf.length);
-  let n = 0;
-  for (let i = 0; i < buf.length; i++) {
-    if (buf[i] === 0x0d && buf[i + 1] === 0x0a) continue;
-    out[n++] = buf[i];
-  }
-  return out.subarray(0, n);
-};
+//
+// The normalisation itself lives in line_endings.js and works ON THE BYTES, for
+// reasons written up there: the obvious string round-trip mangles anything that
+// is not legal UTF-8, and it did exactly that to a real fixture the same day.
+// Here it would damage no file — this only hashes — but a hash taken over a
+// mangled buffer is blind to every change inside the mangled run.
 
 function computeEngineVersion(sk = SK) {
   const h = crypto.createHash('sha256');
   for (const name of engineFiles(sk)) {
     const p = path.join(sk, name);
     h.update(name + '\0');
-    h.update(fs.existsSync(p) ? stripCR(fs.readFileSync(p)) : Buffer.from('MISSING'));
+    h.update(fs.existsSync(p) ? lfBytes(fs.readFileSync(p)) : Buffer.from('MISSING'));
     h.update('\0');
   }
   return h.digest('hex').slice(0, 10);

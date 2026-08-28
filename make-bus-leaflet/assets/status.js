@@ -260,8 +260,13 @@ function gatePortalFixture() {
     //
     // Its stablemate, the drift check further down, compares the two copies file
     // by file and is what has been carrying this — but drift is a different
-    // question from "does the portal's engine still draw the shipped sheet", and
-    // OA-145 keeps three of those files deliberately DRIFTED.
+    // question from "does the portal's engine still draw the shipped sheet".
+    // Until 2026-08-28 this comment added "and OA-145 keeps three of those files
+    // deliberately DRIFTED", which was the reassurance that stopped anyone
+    // re-reading the rows: by then four of six drifted files carried real code
+    // and the portal was a badge-and-lozenge release behind. Nothing is drifted
+    // now, and the standing rule is that a note explaining away a red must carry
+    // the measurement that made it benign — see "a row that explains away a red".
     // Built by gate_lib so that tools/prove-red-gates.js falsifies THIS gate
     // rather than a second copy of it that can drift away in silence. That
     // helper also carries base-overrides.json, the portal's name for the

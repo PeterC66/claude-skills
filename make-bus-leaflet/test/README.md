@@ -73,6 +73,38 @@ npm run test:prove-s6
 
 Add `--keep` to leave the temp directories on disk, and `--buses "<path>"` if the data repo is elsewhere. It runs in `gates.yml` alongside the other two, ahead of the board.
 
+## Prove the build-warning severities can go red
+
+The three harnesses above falsify code that draws and code that judges a finished run. This one falsifies the thing that decides whether a build may **ship at all** — `build_log.js`, which sorts every generator message into WARN or BLOCKING and which `rollout.js` and `rollout_places.js` stop on.
+
+```bash
+npm run test:prove-red-build-log
+```
+
+`tools/prove-red-build-log.js` breaks each of the nine severity rules on purpose and requires the break to be caught. **Every case carries a NEAR-MISS** — a message that looks like the one being caught and must stay WARN — because a rule that fires on everything is as useless as one that fires on nothing, and only the near-miss separates them. It then replays the nine messages a real build writes every day and requires all nine to stay WARN, and it asserts its own case COUNT, because a harness that has quietly stopped running some of its cases reports a clean sweep either way. It needs no other repository, so it runs in CI as its own step and a cross-repo checkout failure cannot take it down.
+
+It was written on 2026-08-28 with OA-065, which promoted "a mapNotes entry ends inside the footer plate" from WARN to BLOCKING. **Promoting a warning needs both halves**: that it starts green on the real corpus — a sweep of all 20 committed maps, 52 generator runs, zero footer-plate messages of any wording — *and* that it can still go red. The OVERFLOWED rule was watched go red by deleting the new phrase and green by restoring it.
+
+Two things the sweep found beside the row it was run for, and both are the kind that only a sweep finds. A generator that **died** classified as WARN, the mildest verdict the module has, for the one outcome where no sheet exists at all: `severity()` is a text rule, and an uncaught exception is not phrased like a guard. "No message matched" and "no message at all" are the same thing to a matcher. The remedy was not another phrase but a fact no text rule can reach — the process exit status, which the callers already had and were discarding; `collect()` takes `ok` and all 18 run records in the two rollouts now pass it. And a message prefix carrying an underscore (`gen_internal_place:`) was not recognised as a message head at all.
+
+## Prove the lane-mirror measure can tell the two renders apart
+
+```bash
+node tools/prove-lane-mirror.js
+```
+
+Not a mutation harness. `quality_metrics.js` gained a measure for a **lane mirror** on 2026-08-28 (OA-118) — a co-running bundle flipped around its own centreline so its members swap sides — and the question that row asked was never "can something be counted" but "would anything notice if a future engine change put the mirrors back". So this renders every internal sheet **twice**, as shipped and with `design.laneOrientation:false`, which is exactly the pre-2026-08-26 behaviour, and asks whether the measure separates them.
+
+**It reports three states, not two.** A sheet whose two renders are byte-identical has nothing to see, and scoring that as blindness would libel the measure — *absent is not different*. As at 2026-08-28: 18 sheets, 15 of which the flip moves, and the pair (`laneMirrors`, `laneCrossings`) separates 11 of them. The 4 it cannot draw no shallow crossing either way. Re-run it rather than quoting it.
+
+## Two rules the 2026-08-28 round taught, which apply to every suite here
+
+**A fixture rejected by the wrong rule certifies nothing.** The test written to prove that a *fork* is not a lane mirror passed from the day it was written — and it was passing because a minimum-separation floor rejected the fixture, not because the symmetry test it was written for did. The symmetry test never ran on any fixture at all. Nothing in a green suite can show that; what showed it was a mutation that **deleted the symmetry test and changed no verdict**. The underlying fault was in the measure, not the test: the comparison window was 6 mm and the thing it compares across is tens of millimetres wide, so the probe stopped short of its own discriminator. Size a window from the phenomenon, then print the intermediate values and check the near-miss is rejected for the reason you think.
+
+**Aim a mutation at a term where the two rules actually differ.** The mutation for "a stadium badge is measured as a disc again" was first pointed at the *x* term — and a stadium's `rx` **is** its `max(rx, ry)`, so both rules agree exactly along x and the mutation was a no-op that survived looking like a hole in the suite. It only bites on the *y* term. A surviving mutation is a claim about the suite; check it is not a claim about the mutation.
+
+**And the general one, again.** The 15 assertions written for the two new measures passed 15/15 on their first run, and the mutation run then found **three** real holes in them. A new suite asserts what its author believed.
+
 **It found two faults on its first run, both in `status.js`, and neither was in the mutation table.** They came from reading the gate closely enough to write the harness:
 
 - The derived-sheet rows guarded on `routesJson.internalSchematic && exists(<sheet>.svg)`. So a map whose config **asks** for a schematic and whose SVG had gone printed `-`, the same benign dash as a map that never had one. That is the precise trap `judgeNoSheet()` was written for on internal/external/boarding, still open on the other two sheet types.

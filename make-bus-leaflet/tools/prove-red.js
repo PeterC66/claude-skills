@@ -386,8 +386,64 @@ const MUTATIONS = [
 
   { suite: 'build_log.test.js', file: 'build_log.js',
     what: 'ink drawn off the page is only a WARN again',
-    find: "const OVERFLOWED = /\\bunder the footer plate\\b|\\btoo long for this panel\\b|\\bpast the frame edge\\b/i;",
+    find: "const OVERFLOWED = /\\bunder the footer plate\\b|\\binside\\/near the footer plate\\b|\\btoo long for this panel\\b|\\bpast the frame edge\\b/i;",
     to: 'const OVERFLOWED = /$^/;' },
+
+  { suite: 'build_log.test.js', file: 'build_log.js',
+    what: 'a mapNotes entry buried in the footer plate is only a WARN again (OA-065)',
+    find: "|\\binside\\/near the footer plate\\b", to: '' },
+
+  { suite: 'build_log.test.js', file: 'build_log.js',
+    what: 'a generator that DIED is only a WARN again',
+    find: '          || CRASHED.test(line)) ? \'BLOCKING\' : \'WARN\';',
+    to: '          ) ? \'BLOCKING\' : \'WARN\';' },
+
+  { suite: 'build_log.test.js', file: 'build_log.js',
+    what: 'a non-zero exit stops being blocking on its own account',
+    find: 'if (r.ok === false &&', to: 'if (false &&' },
+
+  // --- the two ink-on-ink measures, added 2026-08-28 (OA-021, OA-118) ---
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a badge printed on a badge stops counting',
+    find: '    if (ox <= T.badgeOverlapMm || oy <= T.badgeOverlapMm) continue;',
+    to: '    if (true) continue;' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a stadium badge is measured as a disc again, so tidy neighbours read as overprints',
+    find: '    const oy = (a.ry + b.ry) - Math.abs(a.cy - b.cy);',
+    to: '    const oy = (Math.max(a.rx, a.ry) + Math.max(b.rx, b.ry)) - Math.abs(a.cy - b.cy);' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a label over a route badge stops counting',
+    find: "        detail.labelOverBadge.push({ text: L.text, kind: L.kind, at: [+g.cx.toFixed(1), +g.cy.toFixed(1)] });",
+    to: '        void 0;' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the badge glyph counts as a map label, so every badge reports itself',
+    find: '    if (t.central) continue;', to: '    if (false) continue;' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a steep junction counts as a lane crossing',
+    find: '    if (cos < COSMAX) continue;                  // steep: a real junction',
+    to: '    if (false) continue;' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'one visual crossing stops being clustered into one site',
+    find: '    const near = sites.find(s3 => Math.hypot(s3.x - x, s3.y - y) < T.laneCrossSiteMm);',
+    to: '    const near = null;' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a route crossing ITSELF counts as two routes crossing',
+    find: '    if (a.col === b.col) continue;', to: '    if (false) continue;' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a fork counts as a mirror, so the spacing test means nothing',
+    find: '      && Math.abs(before.d - after.d) / big <= T.laneMirrorTolFrac', to: '      && true' },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'a sheet with no palette reports a clean ZERO instead of UNKNOWN',
+    find: '    labelsOverBadge: (palette && palette.size) ? detail.labelOverBadge.length : null,',
+    to: '    labelsOverBadge: detail.labelOverBadge.length,' },
 
   { suite: 'quality_gate.test.js', file: 'quality_gate.js',
     what: 'the label floor stops being checked',

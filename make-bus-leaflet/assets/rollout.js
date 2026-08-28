@@ -171,23 +171,23 @@ function rolloutOne(t) {
   // precisely the case where nothing was listening — see build_log.js.
   const said = [];
   let genOk = runNode(path.join(s4, 'gen_internal.js'), s4);
-  said.push({ source: 'internal', stderr: genOk.stderr });
+  said.push({ source: 'internal', stderr: genOk.stderr, ok: genOk.ok });
   if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_internal.js: ' + genOk.stderr.split('\n')[0] }; }
   outputs.push('internal.svg');
   genOk = runNode(path.join(s4, 'gen_external.js'), s4);
-  said.push({ source: 'external', stderr: genOk.stderr });
+  said.push({ source: 'external', stderr: genOk.stderr, ok: genOk.ok });
   if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_external.js: ' + genOk.stderr.split('\n')[0] }; }
   outputs.push('external.svg');
   if (routesJson.internalSchematic) {
     copyFile(path.join(SK, 'schematize_internal.js'), s4);
     const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK });
-    said.push({ source: 'schematic', stderr: r.stderr });
+    said.push({ source: 'schematic', stderr: r.stderr, ok: r.ok });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
   }
   if (routesJson.internalDiagram) {
     copyFile(path.join(SK, 'diagram_internal.js'), s4);
     const r = runNode(path.join(s4, 'diagram_internal.js'), s4, { SKILL_ASSETS: SK });
-    said.push({ source: 'diagram', stderr: r.stderr });
+    said.push({ source: 'diagram', stderr: r.stderr, ok: r.ok });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-diagram.svg'))) outputs.push('internal-diagram.svg');
   }
   const warnings = BUILDLOG.collect(said);
@@ -237,10 +237,10 @@ function rolloutOne(t) {
   // only here, on the REAL S4 run: the scratch dry-run above would overwrite it with
   // a build that is then thrown away.
   let r = runNode(path.join(s4Dir, 'gen_internal.js'), s4Dir, { BUILD_META_DIR: s4Dir });
-  realSaid.push({ source: 'internal', stderr: r.stderr });
+  realSaid.push({ source: 'internal', stderr: r.stderr, ok: r.ok });
   if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_internal.js (real S4): ' + r.stderr.split('\n')[0] }; }
   r = runNode(path.join(s4Dir, 'gen_external.js'), s4Dir);
-  realSaid.push({ source: 'external', stderr: r.stderr });
+  realSaid.push({ source: 'external', stderr: r.stderr, ok: r.ok });
   if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_external.js (real S4): ' + r.stderr.split('\n')[0] }; }
   const realOutputs = ['internal.svg', 'external.svg'];
   // Bug fixed 2026-08-06: this block ran schematize_internal.js/diagram_internal.js straight out
@@ -249,8 +249,8 @@ function rolloutOne(t) {
   // output just vanished from the commit with no error surfaced. Caught when High Wycombe,
   // Beaconsfield, St Neots and St Ives all lost internal-diagram.svg (St Ives also
   // internal-schematic.svg) across a rollout --all --apply.
-  if (routesJson.internalSchematic) { copyFile(path.join(SK, 'schematize_internal.js'), s4Dir); const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'schematic', stderr: r2.stderr }); if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
-  if (routesJson.internalDiagram) { copyFile(path.join(SK, 'diagram_internal.js'), s4Dir); const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'diagram', stderr: r3.stderr }); if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg'); }
+  if (routesJson.internalSchematic) { copyFile(path.join(SK, 'schematize_internal.js'), s4Dir); const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok }); if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
+  if (routesJson.internalDiagram) { copyFile(path.join(SK, 'diagram_internal.js'), s4Dir); const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'diagram', stderr: r3.stderr, ok: r3.ok }); if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg'); }
   // The log goes in the run folder BESIDE the artwork it describes, and is committed
   // as an output — so "what did the engine say when it drew this?" is answerable
   // later, from the tree, without rebuilding. Written even when empty (build_log.js).

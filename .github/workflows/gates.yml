@@ -132,6 +132,17 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-s6-checks.js --buses "$GITHUB_WORKSPACE/buses-data"
 
+      # And falsify the severity contract that decides whether a build may ship at
+      # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that
+      # has never been watched fail is a green light nobody has earned. Added
+      # 2026-08-28 with OA-065, which promoted the buried-mapNotes warning to
+      # BLOCKING: promoting a warning is only safe with both halves — that it starts
+      # green on the real corpus, and that it can still go red. Needs no repository
+      # but this one, so it runs even when the cross-repo checkout is unavailable.
+      - name: Prove the build-warning severities can still go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-build-log.js
+
       - name: Run gates (JSON)
         working-directory: skills/make-bus-leaflet
         run: |

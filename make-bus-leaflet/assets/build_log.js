@@ -44,17 +44,40 @@ const MEANINGLESS = /\bnames nothing\b|\bhas no geometry\b/i;
 // absent, not better, and it is the same failure the boarding sheet already hit once
 // (Stop E painted out under the plate on a sheet that rendered clean and gated PASS).
 // It was WARN, so nothing stopped, and the sheet went into a review set.
-const OVERFLOWED = /\bunder the footer plate\b|\btoo long for this panel\b|\bpast the frame edge\b/i;
+//
+// PROMOTED 2026-08-28 (OA-065). `gen_internal.js`'s mapNotes guard says a note
+// "ends at y=…, inside/near the footer plate" — the same failure as the Ely
+// Co-op Key that ran under the plate, and it shipped on all three diagram towns
+// for the same reason: it was WARN, so nothing stopped. The words differ from the
+// two already here, which is exactly why neither caught it — this file classifies
+// on the MESSAGE, and a phrase that is not in the list is not in the contract.
+// Swept over all 20 committed maps on 2026-08-28 before promoting it: 48 generator
+// runs, ZERO footer-plate messages of any wording, so the gate starts green, which
+// is the precondition OA-065 named. tools/prove-red-build-log.js is the proof it
+// can still go red.
+const OVERFLOWED = /\bunder the footer plate\b|\binside\/near the footer plate\b|\btoo long for this panel\b|\bpast the frame edge\b/i;
+// A generator that DIED. Every rule above is a text rule and an uncaught exception
+// is not phrased like a guard, so before 2026-08-28 a stack trace scored WARN —
+// the mildest verdict this file has, for the one outcome where no sheet exists at
+// all. Found while sweeping the estate for OA-065: ten runs exited non-zero and
+// every one was filed as "worth reading, never worth blocking a build over".
+const CRASHED = /^[A-Za-z]*Error:|^\s*at .+:\d+:\d+\)?$|\bis not vendored\b/m;
 
 function severity(line) {
-  return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)) ? 'BLOCKING' : 'WARN';
+  return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)
+          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';
 }
 
 // Split a captured stderr blob into one entry per message. The generators write
 // multi-line messages (a warning that names its own remedy usually wraps), and they
 // end every one with a newline — so a line that starts with a `prefix:` token begins
 // a new message and anything else is a continuation of the one before it.
-const HEAD = /^[a-zA-Z][a-zA-Z0-9]*:\s/;
+// A prefix token may carry an underscore: `gen_internal_place:` is one, and
+// without this it was not recognised as a message head at all, so its entry got
+// an empty `code` and the NEXT line would have been glued onto it as a
+// continuation. Widened 2026-08-28, with no change to any classified entry on
+// the 20 committed maps.
+const HEAD = /^[a-zA-Z][a-zA-Z0-9_]*:\s/;
 function parse(stderr, source) {
   const out = [];
   for (const raw of String(stderr || '').split('\n')) {
@@ -67,10 +90,27 @@ function parse(stderr, source) {
                          severity: severity(e.text) }));
 }
 
-// Collect from several generator runs at once. `runs` is [{source, stderr}, ...].
+// Collect from several generator runs at once. `runs` is
+// [{source, stderr, ok}, ...] — `ok` is optional, and where it is given a FALSE
+// is blocking on its own account.
+//
+// WHY THE EXIT STATUS AND NOT ONLY THE TEXT. Every rule above is a text rule, and
+// a text rule can only catch a failure that is PHRASED like one. A generator that
+// dies of a bad path, a missing vendored file or an uncaught exception may say
+// anything at all, or nothing — and then the log records a clean run, because
+// "no message matched" and "no message" are the same thing to a matcher. The
+// caller already knows the exit status; passing it in is free and closes the whole
+// class. A run with no `ok` key behaves exactly as it did before.
 function collect(runs) {
   const all = [];
-  for (const r of runs || []) all.push(...parse(r.stderr, r.source));
+  for (const r of runs || []) {
+    all.push(...parse(r.stderr, r.source));
+    if (r.ok === false && !all.some(e => e.source === r.source && e.severity === 'BLOCKING')) {
+      all.push({ source: r.source, code: 'exit',
+                 text: `exit: ${r.source} exited non-zero and produced no sheet`,
+                 severity: 'BLOCKING' });
+    }
+  }
   return all;
 }
 

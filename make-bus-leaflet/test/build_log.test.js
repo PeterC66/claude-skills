@@ -80,3 +80,50 @@ test('the formatted log leads with the blocking count', () => {
   assert.match(text, /--- BLOCKING \(1\) ---/);
   assert.match(text, /--- WARN \(1\) ---/);
 });
+
+test('a mapNotes entry buried in the footer plate is BLOCKING (OA-065)', () => {
+  // The engine has said this on three diagram towns and all three shipped: the
+  // guard's WORDING differs from the two phrases already in the contract, and a
+  // phrase that is not in the list is not in the contract. Promoted 2026-08-28
+  // after sweeping all 20 committed maps — 52 generator runs, zero footer-plate
+  // messages of any wording — so the gate starts green.
+  assert.strictEqual(BL.severity(
+    'mapNotes: "300, 301 and 9 stop at Morrisons" ends at y=190.0, inside/near the footer plate (top 188.1)'), 'BLOCKING');
+  // ...and the near-miss stays a warning, or the rule fires on everything and
+  // says nothing.
+  assert.strictEqual(BL.severity(
+    'mapNotes: "300, 301 and 9 stop at Morrisons" ends at y=170.0, clear of the footer plate (top 188.1)'), 'WARN');
+});
+
+test('a generator that threw is BLOCKING, not the mildest verdict this module has', () => {
+  // Every other rule is a text rule, and an uncaught exception is not phrased
+  // like a guard. Before 2026-08-28 a stack trace scored WARN — for the one
+  // outcome where no sheet exists at all.
+  assert.strictEqual(BL.severity("TypeError: Cannot read properties of undefined (reading 'some')"), 'BLOCKING');
+  assert.strictEqual(BL.severity('    at Object.<anonymous> (/x/gen_internal.js:1801:14)'), 'BLOCKING');
+  assert.strictEqual(BL.severity('gen_internal_place: gen_internal.js is not vendored beside the payload'), 'BLOCKING');
+  assert.strictEqual(BL.severity('northArrow: the configured spot is blocked — placed automatically at 191,39'), 'WARN');
+});
+
+test('a run that exited non-zero is blocking even if it said NOTHING', () => {
+  // The gap no text rule can close: "no message matched" and "no message" are
+  // the same thing to a matcher, so a silent death read as a clean run.
+  const died = BL.collect([{ source: 'gen_internal.js', stderr: '', ok: false }]);
+  assert.strictEqual(BL.blocking(died).length, 1);
+  assert.strictEqual(died[0].code, 'exit');
+  // A run that both refused and died is ONE blocking entry, not two.
+  const both = BL.collect([{ source: 'gen_internal.js', stderr: 'feature: the river was not drawn\n', ok: false }]);
+  assert.strictEqual(BL.blocking(both).length, 1);
+  // A clean run that warned is not blocking, and a caller that passes no `ok`
+  // at all behaves exactly as it did before the key existed.
+  assert.strictEqual(BL.blocking(BL.collect([{ source: 'g', stderr: 'northArrow: moved\n', ok: true }])).length, 0);
+  assert.strictEqual(BL.blocking(BL.collect([{ source: 'g', stderr: 'northArrow: moved\n' }])).length, 0);
+});
+
+test('a message head may carry an underscore', () => {
+  // `gen_internal_place:` was not recognised as a head at all, so its entry got
+  // an empty code and the next line would have been glued onto it.
+  const e = BL.parse('gen_internal_place: it failed\nlabels: 1 dropped\n', 'x');
+  assert.strictEqual(e.length, 2);
+  assert.deepStrictEqual(e.map(x => x.code), ['gen_internal_place', 'labels']);
+});

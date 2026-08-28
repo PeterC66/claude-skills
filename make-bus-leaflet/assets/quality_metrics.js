@@ -60,6 +60,21 @@ const T = {
   // What deserves a fail is a sheet TIGHTER than that systemic floor, which is a
   // placer or config problem on that sheet: today six sheets, worst 1.54mm.
   edgeFailMm: 2.5,
+  // --- added 2026-08-28, OA-021 and OA-118: the two things a reader sees at a
+  // glance and every measure above is blind to. ---
+  badgeOverlapMm: 0.6,    // two badge discs closer than (r1+r2-this) are printing on each other
+  laneCrossDeg: 25,       // two route ribbons crossing SHALLOWER than this are swapping sides
+  laneCrossSiteMm: 4,     // intersections closer than this are one visual crossing
+  // How far either side of a crossing the lane spacing is read. It has to reach
+  // BEYOND the swap zone, or it measures the swap rather than the lanes: at 6mm
+  // both a mirror and a fork read as a fraction of a millimetre apart, the
+  // min-separation floor below rejects both, and the symmetry test — which is the
+  // actual discriminator — never runs at all. Found 2026-08-28 by the mutation
+  // run: removing the symmetry test changed no verdict, because nothing reached it.
+  laneMirrorArmMm: 12,
+  laneMirrorTolFrac: 0.4, // spacing that changes by less than this across the crossing = a mirror
+  laneMirrorMinSepMm: 0.8,// below this the two ribbons are coincident, not lanes
+  laneCrossWarn: 0,       // any shallow crossing is worth naming
 };
 
 // ------------------------------------------------------------------- parsing
@@ -485,7 +500,8 @@ function analyse(svgPath) {
   }
 
   const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [],
-                   underLegend: [], routeUnderLegend: [], unplaced: [], nearEdge: [] };
+                   underLegend: [], routeUnderLegend: [], unplaced: [], nearEdge: [],
+                   labelOverBadge: [], badgeOverBadge: [], laneCross: [] };
 
   /*
    * WHAT THE LEGEND IS BURYING.
@@ -1015,6 +1031,183 @@ function analyse(svgPath) {
   }
   if (edgeWorst && textEdge < T.edgeSafeMm) detail.nearEdge.push({ text: edgeWorst, mm: +textEdge.toFixed(2) });
 
+  /* ==================================================================
+   * TWO MEASURES ADDED 2026-08-28 — OA-021 and OA-118.
+   *
+   * Both are things a reader sees the instant the sheet is in front of them
+   * and every measure above scores as zero. They are grouped here because they
+   * are one family: the densest small ink on the page, and the ink that is
+   * drawn ON TOP of other ink rather than beside it.
+   * ================================================================== */
+
+  // --- 7. A LABEL PRINTED OVER A ROUTE BADGE, AND A BADGE OVER A BADGE ---
+  //
+  // OA-021. `lbl/lbl`, `lbl/ic` and `pt/ink` between them miss this: a badge is
+  // not a label (its glyph carries dominant-baseline="central" and is excluded
+  // from mapLabels by construction), it is not an icon (icons.js emits a scaled
+  // <g>; a badge translates but never scales), and a filled disc is not a
+  // stroke, so the occupancy grid never hears about it either. A place name
+  // sitting on a 4.6mm coloured roundel is therefore worth exactly 0 today.
+  //
+  // svg_primitives.js badge() draws either a <circle r=rad> or, under
+  // design.badgeFit, a <rect rx=rad> when the key is too wide for the disc —
+  // both filled with the ROUTE's own palette colour and stroked white at 0.7.
+  // The palette is what tells a badge from any other disc on the sheet (a stop
+  // tick is white or black, a POI dot is grey), which is why this measure is
+  // skipped entirely on a sheet with no readable routes.json rather than
+  // guessed at: a guess here invents defects, and a fabricated defect is worse
+  // than none (the same rule the legend exclusion above was written under).
+  const badges = [];
+  if (palette && palette.size) {
+    for (const c of P.circles) {
+      if (!palette.has(c.fill) || c.r <= 0) continue;
+      if (c.cx >= panelX0 - 1 || c.cy >= footerTop) continue;   // panel key and footer chrome
+      badges.push({ cx: c.cx, cy: c.cy, rx: c.r, ry: c.r, seq: c.seq });
+    }
+    for (const r of P.rects) {
+      if (r.rx <= 0 || !palette.has(r.fill)) continue;
+      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+      if (cx >= panelX0 - 1 || cy >= footerTop) continue;
+      badges.push({ cx, cy, rx: (r.x1 - r.x0) / 2, ry: (r.y1 - r.y0) / 2, seq: r.seq });
+    }
+  }
+  // A label over a badge. The badge's own glyph is already excluded (central),
+  // and a "to X" terminus caption is placed clear of the badge box it belongs
+  // to by termBadge()'s own reserve(), so anything that lands here is ink the
+  // placer did not know was there.
+  for (const L of mapLabels) {
+    const b = quadBox(growQuad(L.quad, T.haloPadMm));
+    for (const g of badges) {
+      if (g.cx + g.rx > b.x0 && g.cx - g.rx < b.x1 && g.cy + g.ry > b.y0 && g.cy - g.ry < b.y1) {
+        detail.labelOverBadge.push({ text: L.text, kind: L.kind, at: [+g.cx.toFixed(1), +g.cy.toFixed(1)] });
+        break;                                   // one defect per label, not one per badge under it
+      }
+    }
+  }
+  // A badge over a badge. badgeStack() pitches its members at rad*2+0.5, so a
+  // legitimate stack clears by 0.5mm and never registers; what does register is
+  // two INDEPENDENT badges stamped at the same place, which is what termBadge()
+  // does today because it has no spacing test at all (OA-023: the 301 disc is
+  // half under the 302 disc on the St Ives Bus Station internal sheet).
+  //
+  // BOX overlap, not centre distance, and the difference is not academic: under
+  // design.badgeFit a wide key ("X31") is drawn as a STADIUM — a rect with rx =
+  // the disc radius — that is far wider than it is tall. A radial test over
+  // max(rx, ry) reads that half-width as a radius in BOTH directions and reports
+  // two stadium badges sitting tidily side by side as printing on each other.
+  // First cut of this measure did exactly that and claimed 9 overprints on High
+  // Wycombe internal, of which the honest number is far smaller.
+  for (let i = 0; i < badges.length; i++) for (let j = i + 1; j < badges.length; j++) {
+    const a = badges[i], b = badges[j];
+    const ox = (a.rx + b.rx) - Math.abs(a.cx - b.cx);
+    const oy = (a.ry + b.ry) - Math.abs(a.cy - b.cy);
+    if (ox <= T.badgeOverlapMm || oy <= T.badgeOverlapMm) continue;
+    detail.badgeOverBadge.push({
+      over: [+ox.toFixed(2), +oy.toFixed(2)],
+      at: [+a.cx.toFixed(1), +a.cy.toFixed(1)], and: [+b.cx.toFixed(1), +b.cy.toFixed(1)],
+    });
+  }
+
+  // --- 8. TWO ROUTE RIBBONS THAT CROSS INSTEAD OF RUNNING ---------------
+  //
+  // OA-118, and the hole lane_normals.js names in its own header: "across the
+  // other 110 measured sites nothing can yet say whether the redrawn sheet is
+  // better or worse, because quality_metrics.js cannot see a lane mirror at
+  // all." Since 2026-08-27 laneOrientation is the DEFAULT, so what was a
+  // regression that could only reach a map which had opted in is now one that
+  // would reach every map at once.
+  //
+  // WHAT A MIRROR LOOKS LIKE ON THE PAGE, which is all this file can read. Two
+  // co-running routes are drawn as parallel lanes either side of a shared
+  // centreline. When the reference heading reverses mid-corridor the whole
+  // bundle flips around that centreline, so the two ribbons SWAP SIDES — they
+  // stay parallel before the flip and parallel after it, and in between they
+  // cross at a very shallow angle. A junction where two routes genuinely part
+  // company crosses steeply. So the angle at the crossing is the discriminator,
+  // and it needs no knowledge of bundles, corridors or the config.
+  //
+  // Different colours only: one route crossing ITSELF is an out-and-back leg,
+  // which is the town, not the placer.
+  const laneSegs = [];
+  for (const s2 of P.strokes) {
+    if (!isRouteInk(s2) || !palette || !palette.has(s2.stroke)) continue;
+    const seg = (s2.clipped && P.mapFrame) ? clipSegToRect(s2.seg, P.mapFrame, 0) : s2.seg;
+    if (!seg) continue;
+    const dx = seg[1][0] - seg[0][0], dy = seg[1][1] - seg[0][1];
+    const L = Math.hypot(dx, dy);
+    if (L < 0.3) continue;                       // a vertex, not a run
+    laneSegs.push({ p: seg[0], q: seg[1], dx, dy, L, col: s2.stroke });
+  }
+  const COSMAX = Math.cos(T.laneCrossDeg * Math.PI / 180);
+  const sites = [];
+  for (let i = 0; i < laneSegs.length; i++) for (let j = i + 1; j < laneSegs.length; j++) {
+    const a = laneSegs[i], b = laneSegs[j];
+    if (a.col === b.col) continue;
+    // |cos| because a ribbon's digitisation direction is arbitrary: anti-parallel
+    // lanes are the same corridor, not a 180-degree crossing.
+    const cos = Math.abs((a.dx * b.dx + a.dy * b.dy) / (a.L * b.L));
+    if (cos < COSMAX) continue;                  // steep: a real junction
+    const den = a.dx * b.dy - a.dy * b.dx;
+    if (Math.abs(den) < 1e-9) continue;          // exactly parallel: never crosses
+    const t = ((b.p[0] - a.p[0]) * b.dy - (b.p[1] - a.p[1]) * b.dx) / den;
+    const u = ((b.p[0] - a.p[0]) * a.dy - (b.p[1] - a.p[1]) * a.dx) / den;
+    if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+    const x = a.p[0] + a.dx * t, y = a.p[1] + a.dy * t;
+    // One visual crossing is many segment intersections (a polyline is hundreds
+    // of segments and the two ribbons interleave through the swap), so cluster.
+    const near = sites.find(s3 => Math.hypot(s3.x - x, s3.y - y) < T.laneCrossSiteMm);
+    if (near) { near.n++; continue; }
+    sites.push({ x, y, n: 1, deg: +(Math.acos(Math.min(1, cos)) * 180 / Math.PI).toFixed(1),
+                 cols: [a.col, b.col], a });
+  }
+  // A SHALLOW CROSSING IS NOT YET A MIRROR, and the difference is the whole of
+  // OA-118. Two routes that genuinely part company at a fork also cross shallowly
+  // for a millimetre or two — but their gap then GROWS. A mirror is the case
+  // lane_normals.js describes: the bundle flips around its own centreline, so the
+  // two ribbons are parallel at one spacing before the flip and parallel at the
+  // SAME spacing after it, having simply changed sides. That is the signature the
+  // 2026-08-26 measurement recorded ("two routes staying parallel at the SAME
+  // spacing on both sides of a swap, in frame") and it is decidable from the page.
+  //
+  // Reported as its own number rather than folded into the crossings count: a
+  // crossing is worth knowing about either way, and a measure that silently
+  // narrows itself is the failure shape this file has been bitten by twice.
+  const byColour = new Map();
+  for (const g of laneSegs) {
+    if (!byColour.has(g.col)) byColour.set(g.col, []);
+    byColour.get(g.col).push(g);
+  }
+  // Perpendicular distance from a point to the nearest ribbon of one colour, and
+  // which SIDE of that ribbon the point falls, as a signed pair.
+  const toRibbon = (x, y, col) => {
+    let best = Infinity, side = 0;
+    for (const g of byColour.get(col) || []) {
+      let t = ((x - g.p[0]) * g.dx + (y - g.p[1]) * g.dy) / (g.L * g.L);
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+      const cx = g.p[0] + g.dx * t, cy = g.p[1] + g.dy * t;
+      const d = Math.hypot(x - cx, y - cy);
+      if (d < best) { best = d; side = Math.sign(g.dx * (y - g.p[1]) - g.dy * (x - g.p[0])); }
+    }
+    return { d: best, side };
+  };
+  for (const s3 of sites) {
+    // Walk along ribbon A's own heading, an arm either side of the crossing, and
+    // ask how far ribbon B is from each of those two points.
+    const a = s3.a;
+    const ux = a.dx / a.L, uy = a.dy / a.L, R = T.laneMirrorArmMm;
+    const before = toRibbon(s3.x - ux * R, s3.y - uy * R, s3.cols[1]);
+    const after  = toRibbon(s3.x + ux * R, s3.y + uy * R, s3.cols[1]);
+    const big = Math.max(before.d, after.d);
+    s3.mirror = big > 0
+      && before.d >= T.laneMirrorMinSepMm && after.d >= T.laneMirrorMinSepMm
+      && Math.abs(before.d - after.d) / big <= T.laneMirrorTolFrac
+      && before.side !== 0 && after.side !== 0 && before.side !== after.side;
+    s3.sep = [+before.d.toFixed(2), +after.d.toFixed(2)];
+  }
+  for (const s3 of sites)
+    detail.laneCross.push({ at: [+s3.x.toFixed(1), +s3.y.toFixed(1)], deg: s3.deg, hits: s3.n,
+                            cols: s3.cols, sep: s3.sep, mirror: !!s3.mirror });
+
   const m = {
     pointLabelsOverInk: detail.overInk.filter(d => d.kind === 'point').length,
     roadLabelsOverInk: detail.overInk.filter(d => d.kind === 'road').length,
@@ -1042,6 +1235,13 @@ function analyse(svgPath) {
     colourClashOnMap: clashMap.length,
     colourClashInPanel: clashPanel.length,
     textEdgeMm: textEdge === Infinity ? null : +textEdge.toFixed(2),
+    // --- the two added 2026-08-28 (OA-021, OA-118) ---
+    // null, not 0, on a sheet with no readable routes.json: both measures are
+    // defined by the route palette, and "could not tell" must not read as "clean".
+    labelsOverBadge: (palette && palette.size) ? detail.labelOverBadge.length : null,
+    badgeOverBadge: (palette && palette.size) ? detail.badgeOverBadge.length : null,
+    laneCrossings: (palette && palette.size) ? detail.laneCross.length : null,
+    laneMirrors: (palette && palette.size) ? detail.laneCross.filter(c => c.mirror).length : null,
   };
   // A point label over its OWN continuation is the design, not a defect — see
   // measure 2. pt/ink is left untouched so the board stays comparable with the
@@ -1119,6 +1319,17 @@ function analyse(svgPath) {
   if (m.strandedFeatureLabels > 0) fails.push('feature label far from its own feature');
   if (m.textEdgeMm !== null && m.textEdgeMm < T.edgeFailMm) fails.push('text ' + m.textEdgeMm + 'mm from the trim edge');
   else if (m.textEdgeMm !== null && m.textEdgeMm < T.edgeSafeMm) warns.push('text inside the ' + T.edgeSafeMm + 'mm print safe margin');
+  // The two added 2026-08-28. REPORTED, NOT SCORED — deliberately, and the reason
+  // is the standing lesson that a check which is red on the day it is written gets
+  // muted within the week. Both are non-zero on the board today (that is why
+  // OA-023 and OA-060 exist), so folding them into `hard` would fail the ratchet on
+  // every affected sheet at once on their first run. They are named here and
+  // carried as their own metrics; the fold-in is a separate, dated step once the
+  // sheets they name are clean. See OA-021 / OA-118 for the numbers on the day.
+  if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge');
+  if (m.badgeOverBadge > 0) warns.push(m.badgeOverBadge + ' route badges printed on each other');
+  if (m.laneMirrors > 0) warns.push(m.laneMirrors + ' lane mirrors (a bundle flipped around its own centreline)');
+  else if (m.laneCrossings > T.laneCrossWarn) warns.push(m.laneCrossings + ' shallow route crossings');
   if (m.colourClashOnMap > 0) warns.push('route hues that read alike running together');
   else if (m.colourClashInPanel > 0) warns.push('route hues that read alike in the panel');
 

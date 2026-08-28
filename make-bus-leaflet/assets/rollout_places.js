@@ -260,12 +260,12 @@ function rolloutOnePlace(p) {
       return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js: ' + (genOk.stderr || 'no internal.svg produced').split('\n')[0] };
     }
     outputs.push('internal.svg');
-    said.push({ source: 'internal', stderr: genOk.stderr });
+    said.push({ source: 'internal', stderr: genOk.stderr, ok: genOk.ok });
   }
   if (hasExternalGen) {
     copyFile(GEN_EXTERNAL_PLACES, s4);
     genOk = runNode(path.join(s4, 'gen_external_places.js'), s4);
-    said.push({ source: 'external', stderr: genOk.stderr });
+    said.push({ source: 'external', stderr: genOk.stderr, ok: genOk.ok });
     if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_external_places.js: ' + genOk.stderr.split('\n')[0] }; }
     outputs.push('external.svg');
   }
@@ -286,12 +286,12 @@ function rolloutOnePlace(p) {
     // the workspace subfolder, not this dir). No LEAFLET_DIR (runNode already
     // deletes it) — same trap, documented in changing-the-engine.md §4.
     const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4, 'overrides.json') });
-    said.push({ source: 'schematic', stderr: r.stderr });
+    said.push({ source: 'schematic', stderr: r.stderr, ok: r.ok });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
   }
   if (routesJson.boardingPlan) {
     const r = buildBoarding(s4);
-    said.push({ source: 'boarding', stderr: r.stderr });
+    said.push({ source: 'boarding', stderr: r.stderr, ok: r.ok });
     if (r.ok && fs.existsSync(path.join(s4, 'boarding.svg'))) outputs.push('boarding.svg');
     else return (fs.rmSync(scratch, { recursive: true, force: true }),
       { name: p.name, status: 'FAIL', detail: 'gen_boarding.js: ' + ((r.stderr || 'no boarding.svg produced').split('\n')[0]) });
@@ -304,7 +304,7 @@ function rolloutOnePlace(p) {
     // shadow that file entirely (gen_internal.js prefers OVERRIDES_FILE over
     // its cwd-relative overrides.json unconditionally).
     const r = runNode(path.join(s4, 'diagram_internal.js'), s4, { SKILL_ASSETS: SK });
-    said.push({ source: 'diagram', stderr: r.stderr });
+    said.push({ source: 'diagram', stderr: r.stderr, ok: r.ok });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-diagram.svg'))) outputs.push('internal-diagram.svg');
   }
 
@@ -380,12 +380,12 @@ function rolloutOnePlace(p) {
       return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js (real S4): ' + (r.stderr || 'no internal.svg produced').split('\n')[0] };
     }
     realOutputs.push('internal.svg');
-    realSaid.push({ source: 'internal', stderr: r.stderr });
+    realSaid.push({ source: 'internal', stderr: r.stderr, ok: r.ok });
   }
   if (hasExternalGen) {
     copyFile(GEN_EXTERNAL_PLACES, s4Dir);
     r = runNode(path.join(s4Dir, 'gen_external_places.js'), s4Dir);
-    realSaid.push({ source: 'external', stderr: r.stderr });
+    realSaid.push({ source: 'external', stderr: r.stderr, ok: r.ok });
     if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_external_places.js (real S4): ' + r.stderr.split('\n')[0] }; }
     realOutputs.push('external.svg');
   }
@@ -393,19 +393,19 @@ function rolloutOnePlace(p) {
   if (routesJson.internalSchematic) {
     copyFile(path.join(SK, 'schematize_internal.js'), s4Dir);
     const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4Dir, 'overrides.json') });
-    realSaid.push({ source: 'schematic', stderr: r2.stderr });
+    realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok });
     if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg');
   }
   if (routesJson.boardingPlan) {
     const rb = buildBoarding(s4Dir);
-    realSaid.push({ source: 'boarding', stderr: rb.stderr });
+    realSaid.push({ source: 'boarding', stderr: rb.stderr, ok: rb.ok });
     if (rb.ok && fs.existsSync(path.join(s4Dir, 'boarding.svg'))) realOutputs.push('boarding.svg');
     else { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_boarding.js (real S4): ' + ((rb.stderr || 'no boarding.svg produced').split('\n')[0]) }; }
   }
   if (routesJson.internalDiagram) {
     copyFile(path.join(SK, 'diagram_internal.js'), s4Dir);
     const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK });
-    realSaid.push({ source: 'diagram', stderr: r3.stderr });
+    realSaid.push({ source: 'diagram', stderr: r3.stderr, ok: r3.ok });
     if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg');
   }
   // place.json must ride the S4 commit too — the portal's import-map.mjs

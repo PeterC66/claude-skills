@@ -8,10 +8,12 @@ This repository holds the skills. `make-bus-leaflet/assets/` **is the bus-map en
 
 Fifteen files under `make-bus-leaflet/assets/` and `make-place-bus-leaflet/assets/` exist as byte-for-byte copies in the portal's `engine/`, listed in `community-bus-maps/engine/vendored.json` with a CRLF-normalised SHA-256 each. Edit one here and the portal keeps running the old code until someone copies it across. `status.js` reports the drift; the portal's own `scripts/check-vendored.mjs` reports it from the other side.
 
-Two traps inside that rule, both already paid for:
+Three traps inside that rule, all already paid for:
 
 - **Compare the way the checker compares.** `vendored.json` hashes CRLF-normalised bytes on purpose, so a working tree under `core.autocrlf=true` does not read as wholly drifted. A plain `md5sum` will tell you a file has drifted when only its line endings differ. Use `node scripts/check-vendored.mjs` from the portal root, or `tr -d '\r' | sha256sum`.
 - **A NEW module is a hand-off the drift table cannot warn you about.** A file nobody has listed is in neither the manifest nor the portal tree, so it is not a row in either direction. `requireScan()` covers this now, but if you add a module that a vendored generator requires, write its `vendored.json` row **by hand** in the same change — `--update` only restamps rows that already exist.
+
+- **This repository has a `.gitattributes` now, and it is load-bearing** (2026-08-28, OA-073). `core.autocrlf=true` is set on the machine that writes it, and `engine_version.js` hashes the RAW BYTES of every file the entry points reach — so before the rule, one commit gave three different engine versions depending on who had checked it out: `f83987f11b` on this laptop's historical mix of CRLF and LF files, which is the value stamped into all 20 maps, `24ebbec148` in a fresh Windows clone, and `0a32b566d4` in an all-LF tree, which is what Linux CI computes. Every town printed `STALE` in CI against character-for-character the code that drew it. `* text=auto eol=lf` fixes what a checkout writes and the hash now ignores line endings as well, so a checkout made before the rule still reaches the same answer. **Do not remove either half**, and if you ever see the engine version disagree between two machines, that is what has come back.
 
 Read `make-bus-leaflet/references/changing-the-engine.md` §4 before any generator change.
 
@@ -23,19 +25,21 @@ Run from `make-bus-leaflet`:
 npm test
 ```
 
-**373 tests across 26 suites**, a few seconds, no network and no data tree needed. (This said *123 tests* until 2026-08-28, then *324*, then *352*, all on the same day — each true when written, and nothing reads a sentence to check it, so read the count off the run.) Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
+**399 tests**, a few seconds, no network and no data tree needed. (This said *123 tests* until 2026-08-28, then *324*, then *352*, all on the same day — each true when written, and nothing reads a sentence to check it, so read the count off the run.) Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
 
 ```bash
 npm run test:prove-red
 ```
 
-Mutates a scratch copy of `assets/` 25 ways and requires the unit suite to object.
+Mutates a scratch copy of `assets/` and requires the unit suite to object — 169 mutations today, and again, read the number off the run rather than off this line.
+
+**Both of these now run in CI**, in the `gates` job of buses-data's `.github/workflows/gates.yml`, which they never had until 2026-08-28. They cost about two minutes together. A harness that only ever runs on the machine its subject was written on proves the check works in the one place it is least needed.
 
 ```bash
 npm run test:prove-red-gates
 ```
 
-Mutates each of the five generators and requires the **byte gate** to object — one target per sheet type. This is the one that matters before a refactor, because the byte gate is the only thing guarding the five big generators at all.
+Mutates each of the five generators and requires the **byte gate** to object — one target per sheet type. This is the one that matters before a refactor, because the byte gate is the only thing guarding the five big generators at all. Since 2026-08-28 it also carries a **portal arm**: four more targets against the two portal fixtures, run through `gate_lib`'s `portalFixtureEnv` so it falsifies the gate `status.js` runs rather than a second copy of it. It takes `--portal <path>` and reports SKIPPED, not silence, when there is no portal to find. **The second portal target mutates a SHARED module rather than an entry generator, and that is the whole point** — the fixture arm had been running the portal's entry generator against the SKILL's modules, so 19 of the 22 vendored files were substituted and four of them could be made to throw on load with the board still reporting PASS. A target list of entry generators alone would have gone green against that.
 
 ```bash
 npm run test:prove-s6

@@ -1,7 +1,7 @@
 {
   "name": "make-bus-leaflet",
   "version": "1.0.0",
-  "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 — see ../LICENSE.",
+  "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 \u2014 see ../LICENSE.",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -20,7 +20,8 @@
     "gate:attribution": "node tools/attribution-gate.js",
     "gate:extraction": "node tools/extraction-gate.js",
     "gate:dark-paths": "node tools/dark-paths.js",
-    "gate:branch-coverage": "node tools/branch-coverage.js"
+    "gate:branch-coverage": "node tools/branch-coverage.js",
+    "test:prove-red-external-spokes": "python tools/prove-red-external-spokes.py"
   },
   "keywords": [],
   "author": "Peter Cooper",

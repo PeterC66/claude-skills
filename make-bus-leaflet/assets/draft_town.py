@@ -81,7 +81,22 @@ def km_between(la1, lo1, la2, lo2):
 
 # --------------------------------------------------------------- place naming
 class PlaceNamer:
-    """Reverse-geocode a stop to its SETTLEMENT name, cached per ATCO locality.
+    """Name a stop's SETTLEMENT -- from NaPTAN where it can, Nominatim otherwise.
+
+    NaPTAN carries `LocalityName` per stop and it is authoritative, offline, free
+    and deterministic, so it is consulted FIRST and answers almost everything
+    (253/253 stops on Ramsey's chains). Reverse-geocoding remains only as the
+    fallback for a stop NaPTAN does not know.
+
+    It used to be the other way round, and a member of the public found what that
+    cost (2026-08-28, first genuine public report): Ramsey's published external
+    sheet showed Whittlesey on the X31, which does not go there. Nominatim at
+    zoom=14 returns `town=Whittlesey` for Pondersbridge, Turves, Coates and
+    Eastrea alike -- they are all in Whittlesey's civil parish -- so FIVE distinct
+    settlements answered to one name. Raising the zoom does not fix it (`town`
+    still outranks `village`), and preferring the most specific instead turns
+    Peterborough's Queensgate into "New Fletton", which is the regression the
+    SETTLEMENT comment below already records. NaPTAN simply knows.
 
     GTFS has no locality column (schema: stop_id/stop_code/stop_name/lat/lon) and
     stop_name is a street or POI ("Bus Station", "Station Road", "Grandford
@@ -107,10 +122,64 @@ class PlaceNamer:
     WIDER = ("municipality", "county", "state_district")
     ADMIN = re.compile(r"(shire|\bDistrict\b|\bBorough\b|\bCounty\b|\bCouncil\b)\s*$", re.I)
 
-    def __init__(self, delay=1.1):
+    def __init__(self, naptan_db=None, delay=1.1):
         self.cache = {}
         self.delay = delay
         self._last = 0.0
+        self.naptan = {}
+        if naptan_db and os.path.exists(naptan_db):
+            con = sqlite3.connect(naptan_db)
+            for atco, loc, par in con.execute(
+                    "SELECT ATCOCode, LocalityName, ParentLocalityName FROM naptan "
+                    "WHERE LocalityName IS NOT NULL AND LocalityName <> ''"):
+                self.naptan[atco] = (self.tidy(loc), self.tidy(par) if par else None)
+            con.close()
+        if self.naptan:
+            print(f"  PlaceNamer: {len(self.naptan):,} NaPTAN stop localities loaded")
+        else:
+            print("  PlaceNamer: NO NaPTAN DB -- falling back to reverse-geocoding for "
+                  "every place name. Expect parish-level names (see the class docstring).")
+
+    def locality(self, stop_id):
+        """NaPTAN's own answer: (settlement, parent settlement or None)."""
+        return self.naptan.get(stop_id, (None, None))
+
+    def in_town(self, stop_id, town):
+        """Is this stop in the town PROPER? (Not its outlying parts -- see of_town.)
+
+        Strict on purpose. Folding the outlying parts in here re-creates the very
+        bug this replaced: Ramsey Heights and Ramsey St Marys sit AFTER Bury,
+        Wistow and Upwood in the X31's chain, so counting them as "in town" puts
+        the last in-town stop back beyond the villages and drops them again. That
+        was caught by prove_ramsey_spokes.py, not by reading the code.
+
+        The test this replaces was `stop_id.startswith(atcoPrefix)`, and the ATCO
+        block is an ADMINISTRATIVE grouping, not a settlement: 0500HRAMS covers
+        Ramsey Heights, Ramsey St Marys, Ramsey Mereside and Ramsey Forty Foot as
+        well as Ramsey. That is what dropped Bury, Wistow and Upwood off the 32 and
+        X31 spokes -- both routes loop out through those villages and come BACK
+        through the Ramsey ATCO block before leaving for good, so "everything after
+        the last in-town stop" threw the villages away. By LOCALITY the loop is
+        outside the town and survives. Ramsey End is the check on the other side:
+        it reads like Ramsey and its NaPTAN parent is Warboys, so a name-prefix
+        rule would have wrongly swallowed it.
+        """
+        loc, _par = self.locality(stop_id)
+        if not loc:
+            return None                       # unknown -- caller keeps the old test
+        return loc == town
+
+    def of_town(self, stop_id, town):
+        """Is this stop one of the town's own outlying parts (NaPTAN parent)?
+
+        Ramsey Forty Foot, Ramsey Heights, Ramsey Mereside and Ramsey St Marys all
+        carry ParentLocalityName=Ramsey, so they are the town's own edges rather
+        than destinations from it. Ramsey End is the counter-example that makes
+        this a NaPTAN question and not a string one: it reads like Ramsey and its
+        parent is Warboys.
+        """
+        loc, par = self.locality(stop_id)
+        return bool(loc) and par == town and loc != town
 
     @staticmethod
     def tidy(name):
@@ -143,6 +212,9 @@ class PlaceNamer:
     def name(self, stop_id, lat, lon):
         """-> (name, confident). name is never None; an unresolved stop keeps its
         own stop-level identity so the draft still renders, flagged not-confident."""
+        loc, _parent = self.locality(stop_id)
+        if loc:
+            return loc, True                  # NaPTAN is authoritative; no call needed
         key = stop_id[:9]
         if key not in self.cache:
             self.cache[key] = self._lookup(lat, lon)
@@ -249,7 +321,7 @@ def gtfs_coords(db, atcos):
 
 
 # ------------------------------------------------- external spokes + termini
-def spoke_for_route(chain, ll, prefix, anchor_ll, namer):
+def spoke_for_route(chain, ll, prefix, anchor_ll, namer, town=None):
     """Derive one external spoke from a route's canonical chain.
 
     Picks the direction whose far end is farthest from the anchor, then walks
@@ -257,6 +329,13 @@ def spoke_for_route(chain, ll, prefix, anchor_ll, namer):
     giving the ordered intermediate places ... terminus list gen_external_radial.js
     draws, and that gtfs_duration.py --fill matches its destination on (it uses
     the LAST name in "stops").
+
+    "In town" is a NaPTAN LOCALITY test, not an ATCO-prefix one -- see
+    PlaceNamer.in_town for why, and for the public report that found the
+    difference. Also returns `otherEnd`: a route running THROUGH the town reaches
+    a second destination this spoke cannot express, and dropping it silently lost
+    Chatteris off Ramsey's 303. It is reported, not drawn -- a second spoke is a
+    bearing/collision decision a human should make.
     """
     best = None
     for d in chain.get("canonical") or chain.get("directions") or []:
@@ -270,17 +349,39 @@ def spoke_for_route(chain, ll, prefix, anchor_ll, namer):
     if not best or best[0] < 1.0:            # never leaves town -> no spoke
         return None
     dist, stops = best
-    last_in_town = max((i for i, a in enumerate(stops) if a.startswith(prefix)), default=-1)
+
+    def _in_town(a):
+        v = namer.in_town(a, town) if town else None
+        return a.startswith(prefix) if v is None else v
+
+    last_in_town = max((i for i, a in enumerate(stops) if _in_town(a)), default=-1)
     outward = stops[last_in_town + 1:] if last_in_town >= 0 else stops
     if not outward:
         return None
-    places, seen = [], set()
+    places, parents, seen = [], {}, set()
     for a in outward:
+        if town and namer.of_town(a, town):
+            continue                          # the town's own outskirts, not a destination
         nm, ok = namer.name(a, ll[a][0], ll[a][1])
         if nm and nm not in seen:
             seen.add(nm); places.append(nm if ok else f"{nm} <check>")
+            parents[nm] = namer.locality(a)[1]
     if not places:
         return None
+    # The terminus is where the chain ENDS, not the last new name on it. A route
+    # that runs Hartford -> Huntingdon -> Newtown -> Huntingdon meets Huntingdon
+    # early, so dedup-by-first-sighting left the spoke labelled "Newtown" -- a
+    # suburb standing in for the town, which is the same class of error as
+    # "Whittlesey" standing in for Pondersbridge.
+    term, _ok = namer.name(outward[-1], ll[outward[-1]][0], ll[outward[-1]][1])
+    if term in places:
+        places = [p for p in places if p != term] + [term]
+    # Fold the terminus's own suburbs into it. NaPTAN's ParentLocalityName makes
+    # Stanground and Fletton parts of Peterborough, Hartford and Sapley parts of
+    # Huntingdon, Westry part of March -- and a spoke naming three suburbs before
+    # the town reads as four separate destinations.
+    if len(places) > 1:
+        places = [p for p in places[:-1] if parents.get(p) != places[-1]] + [places[-1]]
     # Thin the intermediates. A GTFS chain passes through every hamlet on the road
     # (Ramsey->St Ives listed ten), which overflows the spoke and collides with the
     # neighbouring one; s3-config.md's crowded-radial recipe explicitly includes
@@ -291,8 +392,21 @@ def spoke_for_route(chain, ll, prefix, anchor_ll, namer):
         places = [mids[int(i * step)] for i in range(MAX_INTERMEDIATE)] + [places[-1]]
     end = outward[-1]
     bearing = _bearing(anchor_ll[0], anchor_ll[1], ll[end][0], ll[end][1])
+    # A through service reaches a second place the chosen direction never names.
+    other = None
+    for d in chain.get("canonical") or chain.get("directions") or []:
+        ds = [x for x in d["stops"] if x in ll]
+        if len(ds) < 2:
+            continue
+        for x in (ds[0], ds[-1]):
+            if _in_town(x):
+                continue
+            nm, _ok = namer.name(x, ll[x][0], ll[x][1])
+            if nm and nm not in places and km_between(
+                    anchor_ll[0], anchor_ll[1], ll[x][0], ll[x][1]) >= 1.0:
+                other = nm
     return {"label": places[-1], "stops": places, "bearing": round(bearing),
-            "far_km": round(dist, 1)}
+            "far_km": round(dist, 1), "otherEnd": other}
 
 
 def variant_families(services):
@@ -351,7 +465,7 @@ def _bearing(la1, lo1, la2, lo2):
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
-def termini_for_route(chain, ll, prefix, namer):
+def termini_for_route(chain, ll, prefix, namer, town=None):
     """internalRoads.termini entry: the place each drawn tail heads towards.
 
     Under internalRoads a single-ended destination auto-routes to whichever
@@ -366,7 +480,8 @@ def termini_for_route(chain, ll, prefix, namer):
         return None
     ends = {}
     for key, a in (("start", stops[0]), ("end", stops[-1])):
-        if a.startswith(prefix):
+        _v = namer.in_town(a, town) if town else None
+        if (a.startswith(prefix) if _v is None else _v):
             continue                                  # that tail terminates in town
         nm, ok = namer.name(a, ll[a][0], ll[a][1])
         if nm:
@@ -433,6 +548,10 @@ def main():
     ap.add_argument("--max-edge-km", type=float, default=2.5,
                     help="town-edge cap for the drawn buffer stops (derive_intown)")
     ap.add_argument("--buses-root", default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--naptan", default=None,
+                    help="NaPTAN stop register; defaults to "
+                         "<buses-root>/_gtfs/naptan.sqlite. It is what makes place "
+                         "names authoritative rather than reverse-geocoded.")
     ap.add_argument("--db", default=None,
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     a = ap.parse_args()
@@ -445,7 +564,7 @@ def main():
 
     town_dir = os.path.join(a.buses_root, "Areas", a.town)
     py = sys.executable
-    namer = PlaceNamer()
+    namer = PlaceNamer(a.naptan or os.path.join(a.buses_root, "_gtfs", "naptan.sqlite"))
 
     # ---- scaffold: init + S1 + bootstrap draft + town_prefixes registration
     scaffold = [py, os.path.join(HERE, "scaffold_town.py"), a.town,
@@ -593,19 +712,22 @@ def main():
         json.load(open(os.path.join(s1, "gtfs-services.json"), encoding="utf-8")).get("services", []),
         key=lambda s: str(s["route"]),
         what="draft_town S1 gtfs-services.json")
-    externals, termini, unnamed = [], {}, []
+    externals, termini, unnamed, through = [], {}, [], []
     for r in draft.get("routeOrder", routes):
         ch = chains.get(r)
         if not ch:
             continue
-        sp = spoke_for_route(ch, ll, prefix, anchor_ll, namer)
+        sp = spoke_for_route(ch, ll, prefix, anchor_ll, namer, a.town)
         if sp:
             svc = facts_by_route.get(r, {})
             externals.append({"route": r, "label": sp["label"], "days": svc.get("days", ""),
                               "bearing": sp["bearing"], "side": "up", "stops": sp["stops"]})
             if "<check>" in sp["label"]:
                 unnamed.append(f"external spoke {r} -> {sp['label']}")
-        t = termini_for_route(ch, ll, prefix, namer)
+            if sp.get("otherEnd"):
+                through.append(f"{r} also reaches {sp['otherEnd']} (it runs THROUGH "
+                               f"the town; only {sp['label']} gets a spoke)")
+        t = termini_for_route(ch, ll, prefix, namer, a.town)
         if t:
             termini[r] = t
             for v in t.values():
@@ -714,6 +836,8 @@ def main():
     node("refresh_latest.js", town_dir)
 
     nocheck = "\n".join(f"   - {u}" for u in unnamed) or "   - (none -- every place name resolved confidently)"
+    through_block = ("\n".join(f"    - {t}" for t in through)
+                     or "    - (none -- every route ends in this town)")
     if band == "GREEN":
         amber_block = ""
     else:
@@ -779,6 +903,13 @@ Before this ships as a real leaflet:
     of 301), not a judgement that different services co-run -- but it is still a claim
     worth eyeballing on the map.
     {"**The engine's corridors_report.json flags these as weakly-overlapping (<0.6) -- s4-s5-build-and-render.md says drop a family that warns: " + "; ".join(weak_families) + "**" if weak_families else "The engine's overlap report raised no warnings." if families else ""}
+15. **Routes running THROUGH the town reach a second destination that has no spoke.**
+    A spoke is one direction of travel, so a through service can only draw one of its
+    two ends and the other is silently absent from "Buses from {a.town} to nearby
+    places" -- which reads to a passenger as "you cannot get there from here". Decide
+    for each whether to add a second spoke (pick a `bearing` and re-check collisions)
+    or to accept the omission:
+{through_block}
 
 Recommended next step: work through `references/s1-services.md` for a real S1 pass
 (replacing the auto-drafted `verified-services.json`), then re-run S2 onward normally.
@@ -788,6 +919,8 @@ Recommended next step: work through `references/s1-services.md` for a real S1 pa
     print(f"  Review checklist: {review}")
     if unnamed:
         print(f"  {len(unnamed)} place name(s) flagged <check>")
+    if through:
+        print(f"  {len(through)} through-route destination(s) with no spoke -- see DRAFT-REVIEW item 15")
 
 
 if __name__ == "__main__":

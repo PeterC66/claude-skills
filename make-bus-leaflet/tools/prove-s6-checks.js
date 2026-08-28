@@ -388,8 +388,30 @@ console.log("\n8. Not shown \u2014 a declared panel row is not missing geometry,
    *
    * The fixture asserts that first, against the UNDECLARED config, so this case
    * cannot quietly pass on a place that no longer carries either route.
+   *
+   * AND IT MUST UNDECLARE IT ITSELF. This case was written on 2026-08-28 against a
+   * config that had no `notShown`, and the same day the fix went into the place's
+   * real S3 -- which is where `stage()` seeds from, deliberately, by `latest`. From
+   * that moment the "before the fix" fixture WAS the fixed config, the precondition
+   * could never hold again, and CI went red reporting a fault in the subject when
+   * the fault was in its own premise. It was red on four consecutive pushes before
+   * anybody read the log. Deleting the key here makes the fixture state what it
+   * means rather than borrowing it from a file the fix is expected to change; the
+   * throw below is what distinguishes "the declaration was there and is now gone"
+   * from "this place no longer carries either route", which the old form could not.
+   * See the failure shape `the fix invalidates its own control`.
    */
   const base = stage('place', 'notshown-base');
+  {
+    const rj0 = readJ(base, 'routes.json');
+    if (!Array.isArray(rj0.notShown) || !rj0.notShown.includes('112') || !rj0.notShown.includes('193')) {
+      throw new Error('fixture assumption broken: the place\'s latest S3 no longer declares 112 and 193 '
+        + 'as notShown, so this case can no longer show the fix doing anything. Got: '
+        + JSON.stringify(rj0.notShown || null));
+    }
+    delete rj0.notShown;
+    writeJ(base, 'routes.json', rj0);
+  }
   const a0 = verify(base);
   check('the artefact is real before the fix', 'hard no-full-chain on both 112 and 193 with no declaration',
     has(a0.v, 'hard', 'no-full-chain', '112') && has(a0.v, 'hard', 'no-full-chain', '193'),

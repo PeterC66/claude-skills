@@ -512,9 +512,14 @@ const qualityCell = (name) => {
 // rebuild Ramsey on any engine and the pair stops matching, the exception stops
 // applying, and the row gates like every other. It cannot silently widen into
 // "Ramsey is never checked".
-const ENGINE_STALE_ALLOWED = [
-  { town: 'Ramsey', engine: 'd8eb6961c7', since: '2026-08-28', why: 'genuinely older engine, not a line-ending artefact; OA-072 asks whether Ramsey stays a town at all' },
-];
+// Empty on purpose. The one entry this ever held — Ramsey at d8eb6961c7, excused
+// because OA-072 asked whether Ramsey stayed a town at all — expired twice over on
+// 2026-08-28: OA-072 was answered "keep it", and Ramsey was then rebuilt from S1 as
+// v2.0 on the current engine. The board itself reported the exception as no longer
+// applying, which is the behaviour to preserve: an entry here must name the town,
+// the exact engine hash it excuses and why, so it stops excusing anything the
+// moment that town is rebuilt.
+const ENGINE_STALE_ALLOWED = [];
 const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
 // '(none)' is a map stamped before the hash existed, not a map built from stale
 // code, and it is a different question — reported, never gated, exactly as the

@@ -50,6 +50,7 @@ const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
 const { SK, latestRunDir, readJson, findTowns, detectExternalStyle, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
+const GEN = require(path.join(__dirname, 'sheet_registry.js'));
 
 function parseArgs(argv) {
   const f = { town: [], unset: [], 'feature-pos': [], 'set-path': [] };
@@ -141,8 +142,16 @@ function build(t) {
   const re = run(path.join(ws, 'gen_external.js'), ws);
   if (re.status === 0) made.push('external.svg');
   if ((re.stderr || '').trim()) for (const ln of re.stderr.trim().split('\n')) console.error('  [' + t.name + '] ' + ln);
-  for (const [key, script, out] of [['internalSchematic', 'schematize_internal.js', 'internal-schematic.svg'],
-                                    ['internalDiagram', 'diagram_internal.js', 'internal-diagram.svg']]) {
+  // The opt-in sheets come from sheet_registry.js since 2026-08-28 (OA-098). This
+  // was a hand-written pair, and it had already fallen behind: it named the
+  // schematic and the diagram and NOT the boarding plan, so a design preview of any
+  // of the four maps that carry one silently showed every sheet except that one.
+  // Nothing was red -- an absent sheet in a preview reads as a map without it.
+  for (const { optIn: key, gen: _g, out, script } of GEN.optional('svg').map(s => ({
+    ...s, script: { schematic: 'schematize_internal.js', diagram: 'diagram_internal.js',
+                    boarding: 'gen_boarding.js' }[s.key],
+  }))) {
+    if (!script) continue;
     if (!rj[key]) continue;
     copy(path.join(SK, script), path.join(ws, script));
     const rr = run(path.join(ws, script), ws);

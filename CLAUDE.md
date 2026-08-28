@@ -23,7 +23,7 @@ Run from `make-bus-leaflet`:
 npm test
 ```
 
-**352 tests across 24 suites**, about a second and a half, no network and no data tree needed. (This said *123 tests* until 2026-08-28 and *324* later the same day — each true when written, and nothing reads a sentence to check it, so read the count off the run.) Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
+**373 tests across 26 suites**, a few seconds, no network and no data tree needed. (This said *123 tests* until 2026-08-28, then *324*, then *352*, all on the same day — each true when written, and nothing reads a sentence to check it, so read the count off the run.) Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
 
 ```bash
 npm run test:prove-red

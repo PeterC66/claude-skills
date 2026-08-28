@@ -78,15 +78,17 @@ function grab(src, destName) {
   } else missing.push(destName);
 }
 
-// The sheet basenames this delivery path knows about. ADDING A SHEET MEANS ADDING
-// IT HERE — the list is hardcoded, and nothing warns when it falls behind.
+// The sheet basenames this delivery path knows about — read from the registry
+// since 2026-08-28 (OA-098), not written out here.
+//
+// This array used to be the list, and it is what the registry exists because of.
 // boarding.jpg was rendered, committed to S5 and verified on 2026-08-22, and still
 // did not reach _latest (or Collected_latests, which reads _latest) purely because
-// this array had four entries and the engine now makes five. The build said
-// nothing; `_latest` simply held one file. Same shape as "merging is not
-// deploying": the artefact was correct on disk and nothing downstream knew.
-const SHEETS = ['internal.jpg', 'external.jpg', 'internal-schematic.jpg',
-                'internal-diagram.jpg', 'boarding.jpg'];
+// it had four entries and the engine had started making five. The build said
+// nothing; `_latest` simply held one file fewer, which looks exactly like a map
+// with no boarding sheet. Same shape as "merging is not deploying": the artefact
+// was correct on disk and nothing downstream knew.
+const SHEETS = require('./sheet_registry.js').basenames('jpg');
 const s5 = latestS5();
 for (const img of SHEETS)
   grab(s5 ? path.join(s5, img) : null, img);

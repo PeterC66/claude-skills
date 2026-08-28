@@ -115,6 +115,45 @@ Inferring it — *"no chain and no palette entry, so it must be on purpose"* —
 
 **It changes no bytes.** No generator reads the key; that was proved by regenerating all five committed sheets of both places with and without it and comparing line for line, fresh against fresh through the identical path. So adopting it is a new dated **S3** run and no S4/S5 rebuild — which is what the two places' 2026-08-28 S3 runs record.
 
+## A red-team claim that was checked and is wrong — `routes.json redteamRejected[]` (added 2026-08-28)
+
+The blind red team is the most valuable input this stage has and it is **not an oracle**. Its answer comes from public web sources, so it cannot see a BODS calendar that opened yesterday, and it reasons about a town by its name rather than by NaPTAN's locality tree. Both of those faults produced the same false HARD twice on **St Neots route 69**: the red team called the route's "Eynesbury Tesco" stop a data-extraction artefact and excluded the route, when NaPTAN gives `0500HEYNE001` CommonName *Tesco*, LocalityName *Eynesbury*, **ParentLocalityName "St Neots"** — Eynesbury is part of St Neots, so a stop there is a stop in the town — and BODS carries 69 calling there Mon–Fri from 20 August 2026, a calendar that opened the day before that red team ran. That is also why 69 is absent from the prefix-only `gtfs-services.json` and present in the `--near` pull.
+
+Peter adjudicated it on 2026-08-22, wrote the evidence into S1's `verified-services.json`, and S6 went on reporting HARD — because there was nowhere to put the answer. **A known-wrong finding that cannot be recorded is the most dangerous kind of red**: it is re-litigated every run, it blocks delivery on a settled question, and the pressure it creates is to waive the town or mute the check, which is how a real finding eventually stops being read.
+
+**The fix is a declaration, not a smarter check** — same reasoning as [`notShown[]`](#a-service-that-is-deliberately-not-drawn-routesjson-notshown-added-2026-08-28-oa-049) above. Add it to `routes.json`:
+
+```json
+"redteamRejected": [
+  {
+    "route": "69",
+    "claim": "serves-town",
+    "decidedOn": "2026-08-22",
+    "decidedBy": "Peter",
+    "why": "NaPTAN gives 0500HEYNE001 ParentLocalityName \"St Neots\"; BODS carries 69 there from 20 Aug 2026. Do not re-open on a red-team exclusion alone.",
+    "evidence": "Development Docs/route-66-and-69-evidence_2026-08-22.md",
+    "recheckBy": "2027-05-20"
+  }
+]
+```
+
+`route`, `decidedOn`, `decidedBy` and `why` are required; `evidence` and `recheckBy` are optional. `claim` is currently documentation — `serves-town` is the only claim honoured.
+
+**It never goes silent, and it is checked in every direction that could make it a mute button.**
+
+| Situation | What S6 says |
+|---|---|
+| The claim is made and the entry is well-formed | **SOFT** `redteam-rejected`, printing the date, the decider, the reason, the evidence path and the route's in-town stop count — the adjudication is in every report, not hidden by it |
+| The entry is missing `decidedOn`, `decidedBy` or `why` | It silences **nothing**. The original **HARD** `serves-town` fires as before, and a SOFT names the missing field. An undated, unexplained rejection is precisely the mute button this exists to avoid being |
+| `recheckBy` has passed | The entry **stops silencing** and the **HARD** returns, naming the expiry — the rule `scripts/s6-waivers.json` applies to a deferral, and for the same reason |
+| Our own drawn data gives the route **no** in-town stops | **HARD** `redteam-rejected` — the red team may have become right and the entry would be hiding it |
+| This red team makes no such claim about the route | **SOFT** stale — it is silencing nothing this run |
+| The sheet does not carry the route at all | **SOFT** stale |
+
+All of these are in `npm run test:prove-s6` (case 6, ten checks), and the harness **undeclares the key itself** before asserting the artefact is real — because `stage()` seeds from the town's latest S3, which is exactly where the fix lands, so a case that merely read the config would be testing the fixed state against itself from the day it shipped. That is the failure shape *the fix invalidates its own control*, and it cost this harness four consecutive red pushes the last time.
+
+**It changes no bytes.** No generator reads the key. St Neots adopted it as a new dated **S3** run with no S4/S5 rebuild, and all four of its byte gates still PASS against a `ci-reference` built from the previous S3; `rollout.js` reports the town UP-TO-DATE. If you do rebuild, note that the `build N.N · date` stamp is written by `rollout.js` on the way out and **not** by the generators — a hand-run `node gen_internal.js` comes out 137 bytes short on every sheet, with no stamp at all.
+
 ## Files S6 owns
 `redteam.json` (the blind agent's JSON), `verification.json` (classified findings + summary), `verification.docx` (the rendered reliability report).
 

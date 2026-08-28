@@ -119,6 +119,28 @@ Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`; the npm script wraps 
 
 The guard itself is `assets/index_guard.js` / `assets/index_guard.py`, unit-tested in `index_guard.test.js`. The cheap form — `assertNoCollision(map, list, what)`, one line, asserting the map's size equals the list's length — is the only thing that tells "indexed" from "silently deduplicated", and it belongs wherever an index is built from a list. The `key` field the data carries (`46`, `46L`) is **not** the protection: measured 2026-08-28, `key` is present on 4 of 8 towns and 0 of 12 places, so on most of the estate `serviceKey()` returns the route number and the behaviour is exactly what it was. See OA-134.
 
+## Prove the ATTRIBUTION gate can go red — added 2026-08-28
+
+```bash
+npm run test:prove-red-attribution
+```
+
+`tools/prove-red-attribution.js` breaks `tools/attribution-gate.js` once per question that gate claims to answer, which is four: a generator that reads an OSM input and does not credit it (the source half); a shipped `ci-reference` sheet whose SVG has lost the credit its generator still carries (the artefact half — the 2026-08-25 fault as it actually happened, with a correct source and wrong artwork); a committed sheet kind no generator in the gate's table claims to draw (coverage); and an extraction anchor that no longer matches (the gate's own eyesight). That last one matters most: the source half locates each notes block by a text anchor, and a naive implementation whose anchor stops matching finds no credit and no inputs and reports "ok" — **a checker whose failure mode is a pass is worse than no checker.** Nothing under `assets/` or in the Buses repo is touched; the five generators are copied into a temp dir and the gate is pointed at them with `--assets` / `--place-assets`.
+
+## Prove the STATUS BOARD can go red — added 2026-08-28
+
+```bash
+npm run test:prove-red-status
+```
+
+`tools/prove-red-status.js` falsifies `status.js`'s own exit code rather than any generator. Five cases: an unmutated control; a town stamped with a hash that is not current, which is the gate OA-151 added after it had been computed, printed and dropped for as long as the hash existed; the dated Ramsey exception excusing its own town-and-hash pair; the same exception ceasing to apply the moment the hash changes; and OA-057's completeness column staying green while a place is short of every key. Each case builds a one-town scratch Buses tree from a tracked `ci-reference/` in the temp dir — the form CI actually gates against — so nothing under `Areas/` or `Places/` is touched.
+
+## The rule both of those harnesses are built on: assert the CAUSE, not the colour
+
+**"It went red" and "it went red for this reason" are different claims, and only the second is one a mutation test is entitled to make.** Four of the attribution harness's five cases would have gone red together if the gate merely threw at startup, and a colour-only harness would have scored all four as catches — a confident green about a gate that had stopped working entirely. Both harnesses therefore read the run's output: the board prints its JSON *before* setting the exit code, so a red run is still parseable and the specific town can be checked; the gate's message is matched by regex. Both report a third verdict, `RED, WRONG CAUSE`, distinct from `caught` and `SURVIVED`. It is the same fault the withdrawn lane-mirror detector shipped with — green on a two-run comparison while the field it reported was backwards.
+
+**And the mirror of it on the GREEN side: a case whose subject the run never found is green too.** OA-057's contract case says a place short of every completeness key must not turn the board red — which a board that never enumerated the place satisfies perfectly, and an enumeration silently walking past a map is this repository's most-repeated bug. The case carries an `also` assertion naming what the run must have SEEN: the place present, judged short of all four keys, exit 0 anyway. It was watched report `VACUOUS` with the place removed from the scratch tree.
+
 ## Two rules the 2026-08-28 round taught, which apply to every suite here
 
 **A fixture rejected by the wrong rule certifies nothing.** The test written to prove that a *fork* is not a lane mirror passed from the day it was written — and it was passing because a minimum-separation floor rejected the fixture, not because the symmetry test it was written for did. The symmetry test never ran on any fixture at all. Nothing in a green suite can show that; what showed it was a mutation that **deleted the symmetry test and changed no verdict**. The underlying fault was in the measure, not the test: the comparison window was 6 mm and the thing it compares across is tens of millimetres wide, so the probe stopped short of its own discriminator. Size a window from the phenomenon, then print the intermediate values and check the near-miss is rejected for the reason you think.

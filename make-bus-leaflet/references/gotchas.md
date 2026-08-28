@@ -490,3 +490,15 @@ Two harnesses went red on the day Ramsey was fixed, and that is the worst way fo
 All three now construct what they assert: `_bootstrap` is injected into the staged copy, the served spoke lists are frozen as `PUBLISHED_2026_08_28` (recovered from `buses-data` `7930633`, with the 303 carrying **one** arm because its Chatteris spoke did not yet exist — the defect preserved as evidence), and the staleness exception is written into a scratch copy of `assets/`.
 
 **The rule: a harness may read live data for the ARTEFACT it checks, never for the FAULT it injects.** Borrowing the fault makes the proof expire the day somebody does the work it was waiting for — and the failure arrives disguised as a regression. When a harness's baseline is a historical fact ("what the public actually read"), freeze it with the commit it came from; a fact about the past should not be re-derived from a present that has moved on.
+
+## Deploying is not republishing — the portal serves stored renders (2026-08-28)
+
+The `checkedAt` engine fix was merged, deployed and verified live, and **all 17 published maps still printed "(June 2026)"**. The portal stores rendered sheets; shipping the engine changes nothing a reader sees until each map is delivered and republished. It was caught only by fetching a live sheet back — `curl https://busmaps.uk/api/public/maps/<slug>/internal.svg` and reading the footer out of it.
+
+There are **four** states and each needs its own evidence: merged → deployed → delivered → republished. `status.js`'s Deployment row covers the second and nothing covers the fourth.
+
+**Three things blocked the round, and they will block the next one.**
+
+- **`deliver-map.mjs`'s step-0 S6 gate refuses a map whose verification pre-dates its own data** — and giving every map a new S3 makes that true of every map that had recently PASSED, because those are exactly the ones with no dated deferral. Four were cleared by re-running S6 with a **reused** red-team answer (`redteam_source.js` said REUSE, so nothing was bought); the fifth took a dated deferral. Probe the gate across every map *before* starting: `checkS6()` from `scripts/lib/s6-freshness.mjs` is a read-only call, and a deferral in `scripts/s6-waivers.json` is matched on name and expiry alone.
+- **A place's S6 cannot be re-run from its manifest alone.** `verified-services.json` is not among a place's S1 outputs, so `stage.js pull S1` does not bring it and `verify_report.js` exits 2. Carry it forward from the previous S6 run when the place's S1 has not moved.
+- **`accept-publish --mint` was broken by its own comment.** The mint script is flattened to one line before `node -e`, and a `//` comment block added to it later commented out the rest — every mint died with `Unexpected end of input` over a wall of code. Fixed with a block comment and a guard that refuses to send a script still containing `//`.

@@ -439,6 +439,39 @@ const qualityCell = (name) => {
 // shape, one rung further along, where the gate genuinely runs and its answer is
 // discarded. Safe to add today because every one of those twelve currently reads
 // PASS or '-', so the set starts green rather than red-on-day-one.
+// ---- engine staleness: which STALE stamps gate, and which one does not ------
+//
+// OA-151. `row.engineCurrent` has been computed since the hash existed, printed
+// in the Engine column, and then dropped on the floor: it was in neither `bad`
+// below nor the JSON verdict. That is the same "verdict computed and discarded"
+// shape as the twelve schematic/diagram sheet-gates folded in on 2026-08-27, one
+// rung further along — because until 2026-08-28 a Linux checkout computed a
+// DIFFERENT engine hash from the laptop that stamped the maps, so every town
+// printed `f83987f11b STALE` in CI while CI exited 0. The verdict was discarded
+// AND the value it was computed from had been invented by the checkout.
+//
+// WHY THERE IS AN EXCEPTION, AND WHY IT IS THIS NARROW. Folding this in
+// unconditionally turns the board red for Ramsey on its first run, and a gate
+// that is red on day one is a gate that gets muted — this project has paid for
+// that more than once, and it is why the quality TARGETS are still reported
+// rather than gated a few lines above. Ramsey is genuinely built from older code
+// rather than carrying a line-ending artefact, it is the only record that any map
+// was, and whether it stays a town at all is an open question (OA-072) — so
+// rebuilding it to clear the gate would be work on a map that may not survive.
+//
+// The exception is keyed to the TOWN AND THE EXACT HASH, so it expires by itself:
+// rebuild Ramsey on any engine and the pair stops matching, the exception stops
+// applying, and the row gates like every other. It cannot silently widen into
+// "Ramsey is never checked".
+const ENGINE_STALE_ALLOWED = [
+  { town: 'Ramsey', engine: 'd8eb6961c7', since: '2026-08-28', why: 'genuinely older engine, not a line-ending artefact; OA-072 asks whether Ramsey stays a town at all' },
+];
+const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
+// '(none)' is a map stamped before the hash existed, not a map built from stale
+// code, and it is a different question — reported, never gated, exactly as the
+// Engine column has always shown it.
+const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' && !r.engineCurrent && !engineStaleAllowed(r));
+
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
     || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
@@ -452,7 +485,8 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // itself was: the board is already red for the deferred re-vendor above, so no
   // expected state changes colour today and nobody learns to ignore it.
   || driftRows.some(r => r.same === false || r.same === null)
-  || qualityRows.some(r => r.status === 'REGRESSED');
+  || qualityRows.some(r => r.status === 'REGRESSED')
+  || engineStaleRows.length > 0;
 
 
 // ---- deployment drift: is the LIVE site running what main says? ------------
@@ -542,7 +576,7 @@ async function deploymentRow() {
 async function main() {
   const deploy = await deploymentRow();
   if (AS_JSON) {
-    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, deployment: deploy }, null, 2));
+    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy }, null, 2));
     return bad || deploy.status === 'BEHIND';
   }
 
@@ -551,16 +585,31 @@ async function main() {
 
   console.log('=== Towns (' + towns.length + ') === engine: current template = ' + CURRENT_ENGINE);
   if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | Quality | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
-  const tw = [16, 6, 12, 9, 16, 10, 8, 11, 20, 8];
+  // Engine is 26 wide, not 12: 'd8eb6961c7 STALE (allowed)' is exactly 26 characters
+  // and anything narrower pushes the Internal column out of line on the one row the
+  // reader is most likely to be looking at.
+  const tw = [16, 6, 26, 9, 16, 10, 8, 11, 20, 8];
   if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Quality', 'S6 latest', 'S6 age'], tw));
   for (const r of townRows) {
     const ext = r.external + (r.externalStyle ? ` (${r.externalStyle})` : '');
     const s6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
-    const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
+    // 'STALE (allowed)' rather than plain STALE, so the board says out loud which
+    // staleness gates and which is the dated exception above — an exception nobody
+    // can see on the board is one nobody will ever come back to.
+    const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : (engineStaleAllowed(r) ? ' STALE (allowed)' : ' STALE'))) : '-';
     const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, qualityCell(r.name), r.s6, s6age];
     console.log(line(cells, tw));
   }
 
+  // The exception is stated under the table it excuses, not only in the source.
+  // An exception a reader of the board cannot see is one nobody ever comes back to,
+  // and this one is meant to be temporary.
+  for (const a of ENGINE_STALE_ALLOWED) {
+    const row = townRows.find(r => r.name === a.town && r.engine === a.engine);
+    if (row) console.log('  engine staleness ALLOWED for ' + a.town + ' at ' + a.engine + ' since ' + a.since + ' -- ' + a.why);
+    else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
+  }
+  if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
   console.log('\n=== Places (' + places.length + ') ===');
   const pw = [24, 18, 6, 9, 9, 9, 11];
   if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality'], pw));

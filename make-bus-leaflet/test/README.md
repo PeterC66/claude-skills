@@ -205,3 +205,23 @@ On 2026-08-28 the badge-overlap rule was made exact, and the per-axis figures `o
 ## Four mutations here defend a DECISION rather than an algorithm
 
 `badgeOverBadge` and `lozengeOverlap` are scored; `labelsOverBadge` is not, because it still stands at 47 and a check that is red on the day it lands gets muted within the week. That is a rule about sequencing, and the two ways to break it are both one-line edits nobody would query in review: quietly unscore one that was folded in, or fold in one that is still red. So `prove-red.js` carries a mutation for each, plus one for charging a `null` sheet a defect it could not measure. **A convention that only exists in a comment is not defended by anything.**
+
+## Prove the REDTEAM-SOURCE ambiguity guard can go red — added 2026-08-29
+
+```bash
+npm run test:prove-red-redteam-source
+```
+
+`tools/prove-red-redteam-source.js` cuts both OA-141 changes out of a copy of `assets/redteam_source.js` and runs `test/redteam_source.test.js` against it, requiring four guard tests to fail while the two named CONTROL tests hold. The subject is the tool that decides whether an S6 run must **buy** a blind red team — 89k–137k tokens a time — so a refusal that fired on the documented invocation would cost one rather than save one, which is what the CONTROLs are watching for. What the cut restores is the code as it stood on 2026-08-25, when it printed `redteam_source — Beaconsfield` for a place called Beaconsfield Waitrose, answered REUSE, copied the town's answer into the place's folder, and said nothing about any of it. It needs no other repository, so it runs in the `unit` job rather than behind the cross-repo checkout.
+
+## `node --test` speaks TWO formats, and three harnesses here only read one — fixed 2026-08-29
+
+The harness above **failed on its very first CI run, on a completely correct result.** It had done its job — `# pass 2 / # fail 4`, the two CONTROLs green and the four guard tests red — and its PARSER read zero tests out of that, because `node --test` defaults to the `spec` reporter (`✔`/`✖` plus a duration) from Node 22 and to `tap` before it. This laptop runs Node 24; the CI runner is pinned to Node 20.
+
+`prove-red-stage-commit.js` and `prove-red.js` carried the same spec-only parser and the same latent failure, unnoticed because neither has ever run anywhere but a Windows laptop — the harnesses themselves in the shape they exist to catch, [[feedback_a_harness_as_local_as_its_subject]]. All three now pin `--test-reporter=spec` **and** parse either format, proved by running the new harness under each reporter in turn.
+
+**The count assertion is what caught it.** A parser that reads nothing produces a tidy "0 controls, 0 guards", which a verdict alone would have called green. Every harness here that parses another tool's output should assert how many results it found, not only what they said.
+
+## The `unit` CI job — added 2026-08-29
+
+`node --test` had **never run in CI at all**: 30 test files and 423 assertions whose only evidence of passing was somebody remembering to run them on the machine they were written on. They now run in a `unit` job in `gates.yml`, alongside the three falsification harnesses that need no dataset and no built map (`prove-red-build-log`, `prove-red-route-collision`, `prove-red-redteam-source`). It is a **separate job** with no secrets and no cross-repo checkout, for the same reason `buses-data` split out its `docs` job: `CROSS_REPO_PAT2` expires on 22 November 2026, and an expiry should not take 423 tests down with the byte gates.

@@ -48,39 +48,12 @@ const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 const BUILDLOG = require('./build_log');
-// ---- the printed sheet version (footer.js design.sheetVersion) -------------
-//
-// Peter, 2026-08-19: a sheet needs a version he can quote back when something on it
-// looks wrong, and the three places a sheet can come from need three different
-// answers. This is the FIRST of them — a map built here, before it has ever reached
-// the portal — and it says so in as many words, so it can never be mistaken for the
-// portal's customer-facing number. The other two (a portal draft, and a published
-// version) are the portal's to stamp, via LEAFLET_SHEET_VERSION.
-//
-// Written into the RUN'S OWN routes.json rather than passed as an environment
-// variable, and that is the whole reason it works: gate.sh reproduces a sheet from
-// its data folder and nothing else, so a value in routes.json is reproducible and a
-// value in the environment would make every gate DIFF forever.
-//
-// The date comes from the run folder's name, not from the clock — same reason the
-// generators may not read the clock at all (invariant 5, deterministic output).
-const _MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function buildStamp(runDirName) {
-  const m = /v([\d.]+)_(\d{4})-(\d{2})-(\d{2})/.exec(String(runDirName || ''));
-  if (!m) return null;
-  return `build ${m[1]} \u00b7 ${+m[4]} ${_MON[+m[3] - 1]} ${m[2]}`;
-}
-function stampSheetVersion(routesPath, runDirName) {
-  const stamp = buildStamp(runDirName);
-  if (!stamp) return null;
-  let rj;
-  try { rj = JSON.parse(fs.readFileSync(routesPath, 'utf8')); } catch (e) { return null; }
-  rj.design = rj.design || {};
-  rj.design.sheetVersion = stamp;
-  fs.writeFileSync(routesPath, JSON.stringify(rj, null, 2) + '\n');
-  return stamp;
-}
-
+// The printed sheet version (footer.js design.sheetVersion). Byte-identical
+// copies of this lived in BOTH rollouts until 2026-08-29 and in neither of the
+// other two routes into an S4, which is how a hand-built build shipped with no
+// stamp at all (OA-161). One copy now, in sheet_stamps.js, reachable from the
+// stage boundary that enforces it.
+const { stampSheetVersion } = require('./sheet_stamps');
 
 function parseArgs(argv) {
   const f = { town: [] };

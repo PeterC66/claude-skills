@@ -89,6 +89,24 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-derive-frequency
 
+      # OA-161: a hand-built S4 lost BOTH provenance stamps -- the engine hash and
+      # the footer's build stamp -- because only the two rollouts ever wrote them,
+      # and the byte gate cannot see it (ci-reference is seeded from the same
+      # unstamped run). The check is a refusal at the stage boundary every route to
+      # an S4 passes through. This cuts it out and requires the seven guard tests
+      # to fail while the four CONTROLs hold.
+      - name: Prove the S4 provenance-stamp guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-stamps
+
+      # OA-106's sibling, and it has NEVER run in CI. It reads the same stage.js
+      # and it broke on 2026-08-29 the moment stage.js gained a relative require --
+      # only its own CONTROL assertion distinguished "the harness broke the file"
+      # from a successful falsification.
+      - name: Prove the S4 output-existence guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-commit
+
   status:
     runs-on: ubuntu-latest
     steps:

@@ -243,6 +243,19 @@ function gatePlace(p) {
   if (!ps6) { row.s6 = 'NEVER'; row.s6Age = null; }
   else { row.s6 = ps6.rec.id; row.s6Age = daysSince(ps6.rec.at); row.s6Stale = pNewest && ps6.rec.at < pNewest; }
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; row.boarding = '-'; return row; }
+
+  // The engine hash, on the same terms as a town (OA-161). The places table had
+  // no Engine column where the towns table has had one since the hash existed,
+  // so a place built from stale code -- or, as St Neots Town Centre v2.13 was,
+  // from a hand-assembled S4 carrying no hash AT ALL -- did not show on the board
+  // in any form. `stage.js commit S4` now refuses the second case outright; this
+  // is what makes the first one visible. Reported, not gated, exactly as the town
+  // column was until OA-151, and for the same reason: the place estate has never
+  // been measured for staleness and a gate that goes red on day one gets muted.
+  let placeRoutes = {};
+  try { placeRoutes = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
+  row.engine = placeRoutes.engine || '(none)';
+  row.engineCurrent = placeRoutes.engine === CURRENT_ENGINE;
   // The NO-SHEET judgement was applied to `external` in August 2026 and not to
   // `internal`, because at the time every place had an internal map. High Wycombe
   // Town Centre (2026-08-23) is the first that does not -- it carries a boarding
@@ -672,9 +685,9 @@ async function main() {
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
   console.log('\n=== Places (' + places.length + ') ===');
-  const pw = [34, 18, 6, 9, 9, 9, 11, 26, 20, 8];
-  if (AS_MD) console.log('| Place | Town | Ver | Internal | External | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
-  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));
+  const pw = [34, 18, 6, 26, 9, 9, 9, 11, 26, 20, 8];
+  if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|');
+  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Engine', 'Internal', 'External', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));
   for (const r of placeRows) {
     // Names what is MISSING rather than a fraction, because the missing key is
     // the actionable half and 'freq+tiers' says which command to run.
@@ -683,7 +696,11 @@ async function main() {
       : r.keys.missing.length === PLACE_KEYS.length ? 'none of four'
       : 'no ' + r.keys.missing.join('/');
     const ps6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
-    console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
+    // Same wording as the town row, minus the 'STALE (allowed)' arm — there is no
+    // exception list for places and there should not be one until a measured
+    // reason for it exists.
+    const peng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
+    console.log(line([r.name, r.town, r.version || '-', peng, r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
   }
   // Reported under the table, never in `bad` -- see placeKeys() for why.
   const drawing = placeRows.filter(r => r.keys && r.keys.state !== 'n/a');

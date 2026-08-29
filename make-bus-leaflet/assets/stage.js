@@ -26,9 +26,21 @@
  *   latest <S1..S6>                    print latest run dir (abs) of a stage
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
+ *         and, for S4, refuses a routes.json carrying no "engine" hash or no
+ *         "design.sheetVersion" build stamp (--force-stamps overrides)
+ *   stamps [runDir]                    write BOTH S4 provenance stamps into that
+ *         run's routes.json — the engine hash and the footer's build stamp — then
+ *         re-run the generators so the sheets carry them
  *   status                             print a manifest summary
  *   nextver [--bump major|minor]       print the version `new S4` would assign (no side effects)
  *   stampver [runDir]                  force routes.json "version" to match the run dir's v<N.N>
+ *
+ * THE TWO S4 PROVENANCE STAMPS are separate from the version stamp below and
+ * are enforced at `commit` (OA-161): "engine" says which generator drew a map,
+ * and "design.sheetVersion" is the `build N.N · date` the footer prints. Both
+ * used to be written only by the two rollouts, so a hand-assembled S4 lost both
+ * silently — and the byte gate cannot notice, because ci-reference is seeded
+ * from the same unstamped run.
  *
  * THE VERSION STAMP (see "version stamp" section below): the version PRINTED ON
  * THE MAP comes from routes.json's "version" field, which is separate from the
@@ -41,6 +53,9 @@ const path = require('path');
 
 const STAGE_NAME = { S1: 'services', S2: 'geometry', S3: 'config', S4: 'generate', S5: 'render', S6: 'verify' };
 const VERSIONED = new Set(['S4', 'S5']);
+
+const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
+const { computeEngineVersion, stampEngine } = require('./engine_version');
 
 function die(msg) { console.error('stage.js: ' + msg); process.exit(1); }
 
@@ -250,6 +265,27 @@ function main() {
     return;
   }
 
+  // The other half of the OA-161 guard: one command that writes both stamps, so
+  // the refusal above can name a single thing to run. Deliberately NOT run by
+  // `commit` itself — see the guard's comment: by commit time the sheets are
+  // drawn, and a silent repair would leave them carrying the old footer while
+  // the manifest said otherwise.
+  if (cmd === 'stamps') {
+    const dir = path.resolve(rest[0] || process.cwd());
+    const rjp = path.join(dir, 'routes.json');
+    if (!fs.existsSync(rjp)) die('no routes.json in ' + dir);
+    const hash = computeEngineVersion();
+    const eng = stampEngine(rjp, hash);
+    const stamp = stampSheetVersion(rjp, path.basename(dir));
+    console.log(`engine: ${eng.status}${eng.from ? ' (was ' + eng.from + ')' : ''} -> ${hash}`);
+    if (stamp) console.log(`design.sheetVersion: "${stamp}"`);
+    else console.log(`design.sheetVersion: NOT written — "${path.basename(dir)}" is not a versioned run dir (expected v<N.N>_<date>_<time>)`);
+    const left = missingStamps(JSON.parse(fs.readFileSync(rjp, 'utf8')));
+    if (left.length) die('still missing after stamping: ' + left.join(', '));
+    console.log('both stamps present. Re-run the generators so the sheets carry them.');
+    return;
+  }
+
   if (cmd === 'commit') {
     const st = rest[0]; const sx = stage(st);
     const runDir = path.resolve(rest[1] || die('commit needs <runDir>'));
@@ -298,6 +334,58 @@ function main() {
           + `  Override with --force-version only if the stamp is deliberately different.`);
       }
       if (sv.status === 'no-field') console.log(`  note: routes.json has no "version" field — maps carry no version stamp`);
+    }
+
+    // Guard (OA-161): an S4 must carry BOTH of its provenance stamps — the
+    // `engine` hash that says which generator drew it, and `design.sheetVersion`,
+    // the `build N.N · date` the footer prints.
+    //
+    // WHY THE CHECK IS HERE AND NOT IN A CALLER. `rollout_places.js` and
+    // `rollout.js` each stamped both, between seeding and generating. A build
+    // assembled BY HAND — `stage.js new S4`, `pull`, then the generators — ran
+    // neither, and nothing said so at the time. St Neots Town Centre v2.13
+    // shipped on 2026-08-29 with no engine hash and no footer stamp, and was
+    // caught only because the NEXT version's label diff came back too clean: the
+    // build stamp is a text element and it should have changed between two
+    // versions. The stage boundary is the one place every route to an S4 passes
+    // through, so it is the only place a check covers the hand-built one too.
+    //
+    // THE BYTE GATE CANNOT DO THIS JOB. `sync_ci_reference.js` mirrors the S4
+    // run into `ci-reference/`, and the gate reproduces the sheet from
+    // `ci-reference` and compares — both sides come from the same unstamped
+    // inputs, agree exactly, and it goes green. A gate that regenerates an
+    // artefact from its own committed inputs can never notice an input missing
+    // from both. That is why this is a refusal at a boundary rather than a
+    // comparison.
+    //
+    // A refusal, not a repair: by commit time the SVGs are already drawn, so
+    // stamping now would leave the sheets carrying the old footer. Stamp, then
+    // re-run the generators.
+    if (st === 'S4') {
+      const rjp = path.join(runDir, 'routes.json');
+      if (fs.existsSync(rjp)) {
+        let rj = null;
+        try { rj = JSON.parse(fs.readFileSync(rjp, 'utf8')); } catch (e) { rj = null; }
+        const miss = rj ? missingStamps(rj) : ['engine', 'design.sheetVersion'];
+        if (miss.length && !f['force-stamps']) {
+          die(`${miss.length} of the 2 S4 provenance stamps missing from ${id}: ${miss.join(', ')}
+`
+            + `  "engine" says WHICH generator drew this map; "design.sheetVersion" is the
+`
+            + `  build stamp the footer prints and the number to quote when a sheet looks wrong.
+`
+            + `  A sheet with no version at all is the one case that vocabulary cannot describe,
+`
+            + `  and the byte gate cannot see this because ci-reference is seeded from this run.
+`
+            + `  Stamp them, then RE-RUN THE GENERATORS (the SVGs already carry the old footer):
+`
+            + `    node "%SK%\\stage.js" stamps "${runDir}"
+`
+            + `  Override with --force-stamps only if the absence is deliberate.`);
+        }
+        if (miss.length) console.log(`  WARNING: committing an S4 with no ${miss.join(' and no ')} (--force-stamps)`);
+      }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;
     if (f.note) rec.note = String(f.note);

@@ -15,7 +15,6 @@
 'use strict';
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
@@ -37,9 +36,18 @@ if (broken.includes('OA-106')) {
   process.exit(1);
 }
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-stage-'));
-const copy = path.join(dir, 'stage.js');
+// THE COPY GOES IN assets/, NOT IN A TEMP DIR (changed 2026-08-29). It was a
+// temp dir until stage.js gained two relative requires with the OA-161 work —
+// ./sheet_stamps and ./engine_version — and a copy anywhere else cannot resolve
+// them, so it dies in the module loader before main() runs and EVERY test goes
+// red, controls included. This harness reported exactly that on the day, and
+// the CONTROL assertion below is the only reason it read as "the harness broke
+// the file" rather than as a triumphant falsification. Adding a require to a CLI
+// silently breaks every harness that copies it somewhere else.
+const copy = path.join(ROOT, 'assets', '.stage.prove-red-commit.js');
 fs.writeFileSync(copy, broken);
+const cleanup = () => { try { fs.unlinkSync(copy); } catch (e) { } };
+process.on('exit', cleanup);
 
 const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', TEST],
   { cwd: ROOT, encoding: 'utf8', env: { ...process.env, STAGE_JS: copy } });
@@ -78,7 +86,7 @@ if (guards.length !== 6) { console.error(`FAIL: expected 6 guard tests, found ${
 if (controlsRed.length) { console.error(`FAIL: a control went red — the harness broke the file, it did not falsify the guard:\n  ${controlsRed.join('\n  ')}`); bad = true; }
 if (guardsGreen.length) { console.error(`FAIL: these guard tests still PASS without the guard, so they do not test it:\n  ${guardsGreen.join('\n  ')}`); bad = true; }
 
-fs.rmSync(dir, { recursive: true, force: true });
+cleanup();
 
 if (bad) { console.error('\n--- test output ---\n' + out); process.exit(1); }
 console.log('\nPROVEN RED: all 6 guard tests fail without the guard, both controls stay green.');

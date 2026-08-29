@@ -683,11 +683,27 @@ function nearAStand(lat, lon) {
   }
   return false;
 }
-let drewSignals = 0, skippedSignals = 0;
+// SIGNALS: THREE COUNTERS, NOT ONE (OA-127). There used to be a single
+// `skippedSignals`, incremented at two sites that mean OPPOSITE things — and
+// never printed anywhere at all, so the number had to be recovered with an
+// instrumented scratch copy to be read even once.
+//
+// `notNearAStand` is the RELEVANCE FILTER doing its job: a signal nowhere near a
+// stand is not information this sheet wants. High Wycombe Town Centre draws zero
+// signals and 23 of its 24 are this — the design working, not a fault.
+// `noRoom` is a genuine LOSS OF INK: a signal the sheet wanted and could not fit.
+// Measured 2026-08-27 across all four boarding sheets: 27 filtered, 5 lost.
+//
+// Added together they made "32 signals skipped", which reads as alarming and
+// means almost nothing — the trap that kept the raw figure out of the build log
+// in the first place. Split, the 5 is actionable and the 27 is reassurance.
+// `drewSignals` is printed with them because a count of what was lost is not
+// readable without the denominator the decision actually used.
+let drewSignals = 0, signalsNotNearAStand = 0, signalsNoRoom = 0;
 if (LOC && Array.isArray(LOC.signals)) {
   for (const g of LOC.signals) {
     if (!inFrame(g.lat, g.lon)) continue;
-    if (!nearAStand(g.lat, g.lon)) { skippedSignals++; continue; }
+    if (!nearAStand(g.lat, g.lon)) { signalsNotNearAStand++; continue; }   // deliberate: not a loss
     const X = px(g.lon), Y = py(g.lat);
     if (X < MAP_X0 + 1 || X > MAP_X1 - 1 || Y < MAP_Y0 + 1 || Y > MAP_Y1 - 1) continue;
     // ASK BEFORE DRAWING. This layer claimed its box afterwards and never tested
@@ -698,7 +714,7 @@ if (LOC && Array.isArray(LOC.signals)) {
     // named street. A signal with nowhere to sit is now dropped and counted, which
     // is what every other layer on this map already does.
     const sigBox = { x0: X - 1.6, x1: X + 1.6, y0: Y - 2.6, y1: Y + 3.0 };
-    if (hits(sigBox)) { skippedSignals++; continue; }
+    if (hits(sigBox)) { signalsNoRoom++; continue; }                        // a real loss of ink
     // A traffic light: white-cased body so it reads on the road band it sits on,
     // three lamps, short mast. 2.9 mm tall — small, but it is a symbol not a label,
     // so the MIN_TEXT floor (which governs TEXT) does not apply to it.
@@ -1350,6 +1366,15 @@ if (LOC) {
 // the unlink still has to run, or a stale sidecar from the previous build would be
 // read as this build's answer.
 const UN_OUT = path.join(DIR, 'unplaced-boarding.json');
+// The signal counts, said out loud (OA-127). stderr and not the sheet: this is a
+// build fact, so it must not move a byte of the SVG or every byte gate would
+// diff on a diagnostic. The two are named separately even when one is zero,
+// because "5 lost" is only readable beside the 27 that were never wanted.
+if (signalsNoRoom || signalsNotNearAStand || drewSignals) {
+  process.stderr.write('boarding signals: ' + drewSignals + ' drawn, '
+    + signalsNoRoom + ' with nowhere to sit (lost), '
+    + signalsNotNearAStand + ' not near a stand (filtered on purpose)\n');
+}
 if (unplacedPoi.length) {
   fs.writeFileSync(UN_OUT, JSON.stringify(unplacedPoi, null, 2));
   process.stderr.write('boarding labels: ' + unplacedPoi.length + ' could not be placed -> unplaced-boarding.json'

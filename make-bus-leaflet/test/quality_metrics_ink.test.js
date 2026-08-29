@@ -62,6 +62,59 @@ test('a label sitting on a route badge is counted, and one clear of it is not', 
   assert.strictEqual(off.labelsOverBadge, 0);
 });
 
+/* ---- OA-148: the two populations inside labelsOverBadge -------------------
+ *
+ * The measure's own comment used to assert that a "to X" terminus caption could
+ * never land here, because termBadge() reserves its box. Measured on 2026-08-29
+ * across all 52 sheets, **31 of the 44 hits were exactly that** — so the whole
+ * number read as placer-attributable when two thirds of it is a caption sitting
+ * beside the frame exit it names. `exitCaptionOverBadge` splits them, the same
+ * correction `exitTailOverInk` already applies to the sibling pt/ink measure.
+ *
+ * The name test is the same `^to\s` one, with the same limitation: it tells a
+ * caption from a place name, and it does NOT tell a caption on its own badge
+ * from one on a neighbour's.
+ */
+test('a "to X" caption on a badge is counted separately from a place name on one', () => {
+  const cap = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'to Newmarket'))).metrics;
+  assert.strictEqual(cap.labelsOverBadge, 1, 'still counted in the raw total');
+  assert.strictEqual(cap.exitCaptionOverBadge, 1);
+  assert.strictEqual(cap.labelsOverBadgeNet, 0, 'and worth nothing against the placer');
+
+  const name = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'Market Hill'))).metrics;
+  assert.strictEqual(name.labelsOverBadge, 1);
+  assert.strictEqual(name.exitCaptionOverBadge, 0);
+  assert.strictEqual(name.labelsOverBadgeNet, 1, 'this is the one the placer owns');
+});
+
+test('the raw total is left alone, so the frozen scorecard stays comparable', () => {
+  const m = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'to Newmarket')
+    + badge(60, 140, '#ee6677', '9') + label(56, 141, 'Market Hill'))).metrics;
+  assert.strictEqual(m.labelsOverBadge, 2, 'the number the ledger has tracked all along');
+  assert.strictEqual(m.exitCaptionOverBadge, 1);
+  assert.strictEqual(m.labelsOverBadgeNet, 1);
+});
+
+test('a label merely STARTING with the letters "to" is not a caption', () => {
+  // "Tower Road" must not be excused by a prefix match. The sibling measure uses
+  // /^to\s/ for the same reason and this fixture is what keeps the two honest.
+  const m = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'Tower Road'))).metrics;
+  assert.strictEqual(m.exitCaptionOverBadge, 0);
+  assert.strictEqual(m.labelsOverBadgeNet, 1);
+});
+
+test('an unreadable palette makes the split null too, not a clean zero', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-ink-nopal-split-'));
+  fs.writeFileSync(path.join(dir, 'internal.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'
+    + '<clipPath id="map"><rect x="6" y="30" width="190" height="155"/></clipPath>'
+    + badge(60, 100, '#4477aa', '5') + label(56, 101, 'to Newmarket') + '</svg>');
+  const m = analyse(path.join(dir, 'internal.svg')).metrics;
+  assert.strictEqual(m.labelsOverBadge, null);
+  assert.strictEqual(m.exitCaptionOverBadge, null);
+  assert.strictEqual(m.labelsOverBadgeNet, null, '"could not tell" must not read as clean');
+});
+
 test('a label over TWO badges is one defect, not one per badge under it', () => {
   const m = analyse(sheet(badge(60, 100, '#4477aa', '5') + badge(70, 100, '#ee6677', '9')
     + label(56, 101, 'A very long street name indeed'))).metrics;

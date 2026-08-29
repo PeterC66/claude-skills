@@ -1066,10 +1066,25 @@ function analyse(svgPath) {
       badges.push({ cx, cy, rx: (r.x1 - r.x0) / 2, ry: (r.y1 - r.y0) / 2, seq: r.seq });
     }
   }
-  // A label over a badge. The badge's own glyph is already excluded (central),
-  // and a "to X" terminus caption is placed clear of the badge box it belongs
-  // to by termBadge()'s own reserve(), so anything that lands here is ink the
-  // placer did not know was there.
+  // A label over a badge. The badge's own glyph is already excluded (central).
+  //
+  // THIS COMMENT USED TO SAY that a "to X" terminus caption "is placed clear of
+  // the badge box it belongs to by termBadge()'s own reserve(), so anything that
+  // lands here is ink the placer did not know was there". **That was asserted,
+  // never measured, and it is false** — measured 2026-08-29 across all 52 sheets,
+  // 31 of the 44 hits are "to X" captions. The claim is also the reason nobody
+  // looked for four weeks: the measure was documented as already excluding them,
+  // so the whole number read as placer-attributable when two thirds of it is not.
+  //
+  // The two populations are now counted separately, because a caption on a frame
+  // exit and a place name buried under a roundel are different harms with
+  // different fixes, and one number cannot be driven to zero. This is exactly the
+  // correction `exitTailOverInk` already applies to the sibling `pt/ink` measure
+  // — "a point label over its OWN continuation is the design, not a defect" — and
+  // it uses the same `^to\s` name test, with the same limitation stated out loud:
+  // it tells a CAPTION from a place name, and it does not tell a caption on its
+  // own badge from one on a neighbour's. Splitting that further needs the badge's
+  // route identity, which is a separate measurement.
   for (const L of mapLabels) {
     const b = quadBox(growQuad(L.quad, T.haloPadMm));
     for (const g of badges) {
@@ -1302,6 +1317,9 @@ function analyse(svgPath) {
     // null, not 0, on a sheet with no readable routes.json: both measures are
     // defined by the route palette, and "could not tell" must not read as "clean".
     labelsOverBadge: (palette && palette.size) ? detail.labelOverBadge.length : null,
+    // Of those, the frame-exit continuation captions — see the measure above.
+    exitCaptionOverBadge: (palette && palette.size)
+      ? detail.labelOverBadge.filter(d => d.kind === 'point' && /^to\s/.test(d.text)).length : null,
     badgeOverBadge: (palette && palette.size) ? detail.badgeOverBadge.length : null,
     laneCrossings: (palette && palette.size) ? detail.laneCross.length : null,
     // --- added 2026-08-28, OA-060 ---
@@ -1316,6 +1334,11 @@ function analyse(svgPath) {
   // measure 2. pt/ink is left untouched so the board stays comparable with the
   // frozen scorecard; this is the figure that means anything.
   m.pointLabelsOverInkNet = m.pointLabelsOverInk - m.exitTailOverInk;
+  // The same correction for labels over a badge (OA-148). `labelsOverBadge` is
+  // left untouched so the frozen scorecard stays comparable; THIS is the figure
+  // the placer can be held to, and it is the one to drive to zero before the
+  // measure is folded into `hard`.
+  m.labelsOverBadgeNet = m.labelsOverBadge === null ? null : m.labelsOverBadge - m.exitCaptionOverBadge;
 
   // Drops as a RATE, because the raw count is not comparable between sheets and
   // reading it as one would libel the towns the triage deliberately thinned.
@@ -1415,7 +1438,8 @@ function analyse(svgPath) {
   // badgeOverBadge and lozengeOverlap are SCORED as of 2026-08-28 — see the note
   // on m.hard above for why that waited until the board was empty, and why
   // labelsOverBadge has not followed them yet.
-  if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge');
+  if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge'
+    + (m.exitCaptionOverBadge ? ' (' + m.exitCaptionOverBadge + ' of them frame-exit captions, ' + m.labelsOverBadgeNet + ' placer-attributable)' : ''));
   if (m.badgeOverBadge > 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');
   // OA-060, same treatment and the same reason: reported until the sheets are
   // clean, then folded in. `signature-lost` is louder than any count, because it

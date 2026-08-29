@@ -66,6 +66,12 @@ function readRedteam() {                    // unescape HTML entities the agent 
   return JSON.parse(raw);
 }
 const redteam   = readRedteam();
+/* Declared here rather than beside the downgrade loop far below, because the
+ * missing-service row now needs to know whether the answer was borrowed at the
+ * moment it is written — a `const` in the temporal dead zone throws, and this is
+ * the one fact about the red team that several checks want. The reasoning about
+ * what borrowing does and does not preserve stays with the downgrade loop. */
+const BORROWED = (redteam && redteam._borrowedFrom) || null;
 const verified  = readJSON('verified-services.json');
 const routes    = readJSON('routes.json');
 
@@ -194,11 +200,27 @@ function tokenize(s) {
 const OP_STOP = new Set(['coaches', 'coach', 'buses', 'bus', 'ltd', 'limited', 'the', 'of', 'and', 'company', 'co', 'travel', 'group', 'services', 'service', 'minibus', 'minibuses']);
 function opTokens(s) { return tokenize(s).filter(t => !OP_STOP.has(t)); }
 function overlaps(a, b) { const sb = new Set(b); return a.some(x => sb.has(x)); }
+/*
+ * Two things changed here on 2026-08-29 (OA-156, source three), both measured on
+ * the estate's 102 `days` findings before the edit and after it.
+ *
+ * PLURALS. "Thursdays only" normalised to "thus", because the day-name rewrite
+ * had no optional s. Ours "Thu" then read as a PREFIX of theirs rather than as
+ * the same value, which is the difference between "the red team adds something"
+ * and "these are identical".
+ *
+ * "ONLY" IS NOT A DAY. Eighteen findings across the estate said nothing but
+ * that the red team writes "Sat only" where we write "Sat", "Mon-Fri only"
+ * where we write "Mon-Fri". The word restates the closed-world assumption a
+ * days field already carries; dropping it makes those eighteen comparisons
+ * equal and they stop being reported at all. It cannot hide a real difference,
+ * because the days either side of it are still compared in full.
+ */
 function normDays(s) {
   let d = String(s || '').toLowerCase().replace(/[–—]/g, '-');
-  d = d.replace(/monday/g, 'mon').replace(/tuesday/g, 'tue').replace(/wednesday/g, 'wed')
-       .replace(/thursday/g, 'thu').replace(/friday/g, 'fri').replace(/saturday/g, 'sat').replace(/sunday/g, 'sun')
-       .replace(/\bto\b/g, '-').replace(/\bevery ?day\b/g, 'daily');
+  d = d.replace(/mondays?/g, 'mon').replace(/tuesdays?/g, 'tue').replace(/wednesdays?/g, 'wed')
+       .replace(/thursdays?/g, 'thu').replace(/fridays?/g, 'fri').replace(/saturdays?/g, 'sat').replace(/sundays?/g, 'sun')
+       .replace(/\bto\b/g, '-').replace(/\bevery ?day\b/g, 'daily').replace(/\bonly\b/g, '');
   return d.replace(/[^a-z0-9&-]/g, '');
 }
 
@@ -476,11 +498,52 @@ for (const s of (verified.services || [])) vsByRoute[ourKey(s)] = s;
 // 0 of 12 places, so the fallback to `route` is the live path on most of the estate.
 // One line, and it is the only thing that tells "indexed" from "deduplicated".
 assertNoCollision(vsByRoute, (verified.services || []), 'verify_report verified-services');
+/* COVERAGE IS COUNTED, NOT ASSUMED — the same contract S-5 adopted on 2026-08-29
+ * (OA-048), applied to the terminus check on 2026-08-29 (OA-156) once the same
+ * measurement was made of it. Every displayed route lands in exactly one of
+ * three buckets and `summary.terminusCoverage.accountsForAll` asserts
+ * checked + unavailable + skipped == displayed.
+ *
+ * WHAT THE MEASUREMENT FOUND, and it is not what OA-156 expected. 217 of the
+ * estate's 280 terminus findings were routes where the chain offered NO
+ * locality-coded end at all, so nothing was compared — and 41 of those are on
+ * TOWNS, not places: High Wycombe printed 34 such rows and Beaconsfield 7,
+ * because Buckinghamshire's ATCO codes are not in the 0500H<LLLL>nnn style this
+ * check reads. The terminus check has therefore never once run on either town,
+ * and it said so 34 times rather than once. One row per route, in the language
+ * of a comparison, is how a check that cannot run reads as a check that looked.
+ *
+ * So an unavailable route no longer prints its own row. It joins a bucket, and
+ * ONE grouped `terminus-unavailable` finding names them all with the reason —
+ * exactly the shape `direction-unavailable` already uses. A REAL mismatch, on a
+ * route where the comparison could and did run, still prints per route and
+ * still goes HARD. */
+const termChecked = [];
+const termUnavailable = [];
+const termSkipped = [];
 for (const r of displayed) {
   const vs = vsByRoute[r];
   const fe = fullEntry(r);
-  if (!vs || !fe || !Array.isArray(vs.termini) || vs.termini.length === 0) continue;
+  if (!vs || !fe || !Array.isArray(vs.termini) || vs.termini.length === 0) {
+    termSkipped.push({ route: r, reason: !fe ? 'no-full-chain' : (!vs ? 'not-in-verified-set' : 'no-declared-termini') });
+    continue;
+  }
   const { endTokens, untokenisedEnds } = chainEnds(fe);
+  /*
+   * NOTHING TO COMPARE AGAINST. Not one end of one direction of this chain
+   * carries a NaPTAN locality code, so the check has no right-hand side. Both
+   * former wordings for this case were misleading in the same direction: the
+   * cross-border arm said "could not verify either declared terminus - N chain
+   * end(s) are not NaPTAN locality-coded ... Confirm by hand", once per route,
+   * and the default arm said "neither declared terminus appears at the ends of
+   * its full chain (chain ends: )" as a HARD, which states a disagreement about
+   * an empty list. Unavailable is the true thing to say, and it is one fact
+   * about the build, not N facts about N routes.
+   */
+  if (endTokens.size === 0) {
+    termUnavailable.push({ route: r, reason: 'no-chain-end-locality-tokens', untokenisedEnds, termini: vs.termini });
+    continue;
+  }
   const results = vs.termini.map(t => {
     const pt = placeToken(t);
     const matched = [...endTokens].some(et => nameMatchesLocality(t, et));
@@ -495,13 +558,11 @@ for (const r of displayed) {
   // Say plainly that the check is unavailable rather than inventing a pass for it: the
   // independent terminus signal for a place is the red-team comparison further down.
   if (nMatched === 0 && vs.terminiSource) {
-    const why = vs.terminiSource === 'gtfs-headsign'
-      ? `they are raw BODS headsigns (${vs.termini.join(', ')}), not settlements, and routes.json names no destinations[] entry for this route`
-      : `they are place destinations (${vs.termini.join(', ')}) — a landmark a rider can reach, which is what a place map is for, not the settlement the route terminates in`;
-    add('soft', 'terminus',
-      `Route ${r}: terminus not checkable against the drawn chain — ${why}. Chain ends: ${[...endTokens].join(', ')}. This is a limit of the check on a PLACE, not evidence of a fault; the independent terminus signal here is the red-team comparison.`,
-      { route: r, termini: vs.termini, terminiSource: vs.terminiSource, chainEndTokens: [...endTokens], results }, r);
-  } else if (nMatched === 0 && chainNeverLeavesTown(fe)) {
+    termUnavailable.push({ route: r, reason: vs.terminiSource === 'gtfs-headsign' ? 'place-termini-are-headsigns' : 'place-termini-are-destinations',
+      terminiSource: vs.terminiSource, termini: vs.termini, chainEndTokens: [...endTokens] });
+    continue;
+  }
+  if (nMatched === 0 && chainNeverLeavesTown(fe)) {
     /*
      * A TRUNCATED chain. Wisbech's `excel` holds only its 15 local stops, both ends
      * inside Wisbech / Wisbech St Mary, while its declared termini are Peterborough
@@ -510,13 +571,18 @@ for (const r of displayed) {
      * correctly as two external spokes. The chain never left town, so it cannot
      * confirm OR contradict a terminus beyond it -- the check did not run.
      */
-    const ext = (routes.external || []).some(e => normRoute(e.route) === r);
+    termUnavailable.push({ route: r, reason: 'chain-truncated-to-local-stops', termini: vs.termini,
+      chainEndTokens: [...endTokens], truncatedChain: true,
+      hasExternalEntry: (routes.external || []).some(e => normRoute(e.route) === r) });
+    continue;
+  }
+  /* Past here the comparison RAN: at least one chain end carried a locality code
+   * and was matched against the declared termini. Whatever it says now is a
+   * statement about this route, not about the instrument. */
+  termChecked.push(r);
+  if (nMatched === 0 && untokenisedEnds) {
     add('soft', 'terminus',
-      `Route ${r}: terminus not checkable - its full chain never leaves the town (every chain end is a local locality: ${[...endTokens].join(', ')}), so it cannot reach the declared termini (${vs.termini.join(', ')}) whether those are right or wrong. The chain in routes_full_atco.json is truncated to local stops.${ext ? ' routes.json draws this route from external[], which is where its real destination is asserted.' : ''}`,
-      { route: r, termini: vs.termini, chainEndTokens: [...endTokens], truncatedChain: true, hasExternalEntry: ext, results }, r);
-  } else if (nMatched === 0 && untokenisedEnds) {
-    add('soft', 'terminus',
-      `Route ${r}: could not verify either declared terminus (${vs.termini.join(', ')}) — ${untokenisedEnds} chain end(s) are not NaPTAN locality-coded (cross-border stops), so there is nothing to match against. Confirm by hand.`,
+      `Route ${r}: neither declared terminus (${vs.termini.join(', ')}) matches the ${endTokens.size} locality-coded chain end(s) present (${[...endTokens].join(', ')}), and a further ${untokenisedEnds} end(s) carry no NaPTAN locality code, so the comparison is only partial. Confirm by hand.`,
       { route: r, termini: vs.termini, chainEndTokens: [...endTokens], untokenisedEnds, results }, r);
   } else if (nMatched === 0) {
     /*
@@ -539,6 +605,30 @@ for (const r of displayed) {
       `Route ${r}: terminus name(s) not all confirmed at the chain ends — ${results.filter(x => !x.matched).map(x => x.terminus).join(', ')} (likely naming, chain ends: ${[...endTokens].join(', ')}).`,
       { route: r, termini: vs.termini, chainEndTokens: [...endTokens], results }, r);
   }
+}
+
+/* ONE finding for every route the terminus check could not run on, in the shape
+ * `direction-unavailable` established. `allBlind` is the field that separates a
+ * sheet whose terminus sanity has never been tested from one where a single
+ * route was awkward — until 2026-08-29 both produced N identical-looking rows
+ * and no reader could tell N-of-N from N-of-many. */
+if (termUnavailable.length) {
+  const REASON_TEXT = {
+    'no-chain-end-locality-tokens': 'no end of any direction of the drawn chain carries a NaPTAN locality code, so there is nothing to compare a terminus against (normal wherever the local ATCO codes are not in the 0500H<LLLL>nnn style — every route of High Wycombe and Beaconsfield is here)',
+    'place-termini-are-headsigns': 'our "termini" are raw BODS headsigns rather than settlements, and routes.json names no destinations[] entry for these routes',
+    'place-termini-are-destinations': 'our "termini" are place destinations — a landmark a rider can reach, which is what a place map is for, not the settlement the route terminates in',
+    'chain-truncated-to-local-stops': 'the chain in routes_full_atco.json never leaves the town, so it can neither confirm nor contradict a terminus beyond it (these routes are drawn from external[], which is where the real destination is asserted)',
+  };
+  const byReason = {};
+  for (const u of termUnavailable) (byReason[u.reason] = byReason[u.reason] || []).push(u.route);
+  const bits = Object.entries(byReason).map(([k, rs]) => `${rs.join(', ')} — ${REASON_TEXT[k] || k}`);
+  const allBlind = termChecked.length === 0;
+  add('soft', 'terminus-unavailable',
+    (allBlind
+      ? `Terminus not checkable on ANY of the ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'} — this sheet has no terminus check at all, not a partial one: ${bits.join('; ')}.`
+      : `Terminus not checkable on ${termUnavailable.length} of ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'} (checked on ${termChecked.length}: ${termChecked.join(', ')}): ${bits.join('; ')}.`)
+    + ` Nothing was compared on these routes, so this is a limit of the check rather than evidence about the sheet — read the termini on _latest/internal.jpg instead.`,
+    { routes: termUnavailable, checkedRoutes: termChecked, skipped: termSkipped, displayedRoutes: displayed.size, allBlind }, null);
 }
 
 /* S-5: direction sanity — the drawn edge stop heads toward the terminus.
@@ -567,6 +657,40 @@ const dirChecked = [];
  * checked + unavailable + skipped == displayed and the coverage figure below
  * is an arithmetic identity rather than a claim. */
 const dirSkipped = [];
+/*
+ * DOES THE CHAIN CONTINUE BEYOND WHAT WE DRAW? (OA-048, 2026-08-29.)
+ *
+ * A route the direction check declines is one of two quite different things,
+ * and until now the report could not tell them apart. Either the full chain in
+ * routes_full_atco.json runs on past the last stop this sheet draws — in which
+ * case the data to reason about the exit EXISTS and only the instrument is
+ * missing — or the drawn window already reaches both ends of the chain, and no
+ * instrument whatever could say which way the route leaves, because there is
+ * nothing beyond it.
+ *
+ * Measured over the eight towns on 2026-08-29: of the 55 routes the check
+ * declines, 44 have a continuation and 11 do not. That is the denominator any
+ * future attempt at this check has to be designed against, and it is recorded
+ * here rather than re-derived, because it costs one pass over data already
+ * loaded and it cannot be wrong: it asserts nothing about geometry, only about
+ * whether a chain has stops past the ones we drew.
+ *
+ * IT DELIBERATELY DOES NOT RAISE A FINDING. Two instruments for using that
+ * continuation were built and measured on 2026-08-29 and BOTH produce large
+ * angles on sheets that are correct — the counter-examples are named in OA-048.
+ * Recording the count is the honest half; a check would have been red on day
+ * one, and a gate that is red on day one gets muted.
+ */
+function chainContinuesBeyondDrawn(fe, seq) {
+  const drawn = new Set(seq || []);
+  for (const d of fullDirections(fe)) {
+    const last = d.stops.length - 1;
+    let lastDrawn = -1;
+    for (let i = 0; i <= last; i++) if (drawn.has(d.stops[i])) lastDrawn = i;
+    if (lastDrawn >= 0 && lastDrawn < last) return true;
+  }
+  return false;
+}
 if (anchorLL) {
   for (const r of displayed) {
     if (CIRCULAR.has(r)) { dirSkipped.push({ route: r, reason: 'circular' }); continue; }
@@ -611,7 +735,8 @@ if (anchorLL) {
       // ONE finding per town, not one per route. Wisbech draws no buffer stop on
       // seven of its eleven routes, and seven identical rows is the same "large
       // SOFT count" noise this fix exists to remove.
-      dirUnavailable.push({ route: r, bufferStops: edgeCands.length, drawnStops: seq.length });
+      dirUnavailable.push({ route: r, bufferStops: edgeCands.length, drawnStops: seq.length,
+        chainContinues: chainContinuesBeyondDrawn(fe, seq) });
       continue;
     }
     let edge = null, edgeD = -1;
@@ -634,7 +759,8 @@ if (anchorLL) {
       // Still a route the check said nothing about, so it is still uncovered.
       // Counting only the two-buffer-stop refusal above would have flattered the
       // coverage figure with the very routes it is meant to expose.
-      dirUnavailable.push({ route: r, bufferStops: edgeCands.length, drawnStops: seq.length, reason: 'no-meaningful-buffer' });
+      dirUnavailable.push({ route: r, bufferStops: edgeCands.length, drawnStops: seq.length, reason: 'no-meaningful-buffer',
+        chainContinues: chainContinuesBeyondDrawn(fe, seq) });
       continue;
     }
     dirChecked.push(r);
@@ -691,8 +817,10 @@ if (dirUnavailable.length) {
       (allBlind
         ? `Direction not checkable on ANY of the ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'} — this sheet has no direction check at all, not a partial one: ${bits.join('; ')}.`
         : `Direction not checkable on ${dirUnavailable.length} of ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'} (checked on ${dirChecked.length}: ${dirChecked.join(', ')}): ${bits.join('; ')}.`)
-      + ` The check needs at least two out-of-town buffer stops before the edge stop it picks means anything. Read those arms on _latest/internal.jpg instead — this is a limit of the check, not a fault in the sheet.`,
-      { routes: dirUnavailable, checkedRoutes: dirChecked, needed: 2, displayedRoutes: displayed.size, allBlind }, null);
+      + ` The check needs at least two out-of-town buffer stops before the edge stop it picks means anything. Read those arms on _latest/internal.jpg instead — this is a limit of the check, not a fault in the sheet.`
+      + ` The full chain runs on past the drawn window on ${dirUnavailable.filter(d => d.chainContinues).length} of these ${dirUnavailable.length}, so the data to reason about their exits exists even though this instrument cannot use it (OA-048).`,
+      { routes: dirUnavailable, checkedRoutes: dirChecked, needed: 2, displayedRoutes: displayed.size, allBlind,
+        withChainContinuation: dirUnavailable.filter(d => d.chainContinues).length }, null);
   }
 }
 
@@ -801,6 +929,14 @@ if (redteam) {
     for (const [k, v] of pairGroups(ours, rtExclGroups.get(base) || [], false)) pairedExcl.set(k, v);
   }
   const rtConsumed = new Set([...pairedRt.values()]);
+  /* The red-team terminus comparison keeps its own coverage buckets, separate
+   * from the sanity check's, because they can differ: the sanity check compares
+   * OUR declared termini against the chain, the red team's compares THEIRS
+   * against the same chain, and a route can be skipped by one and not the other
+   * (a place has terminiSource, so its own comparison is unavailable, while the
+   * red-team one still runs wherever the chain has a locality-coded end). */
+  const rtTermChecked = [];
+  const rtTermUnavailable = [];
 
   // Sub-service aliases: a red-team-found "301S/301V/301X" maps to our parent
   // "301" if we model it as a variant/arm subService. Don't flag those as
@@ -900,22 +1036,37 @@ if (redteam) {
         const { endTokens: ends, untokenisedEnds: untok } = feRt
           ? chainEnds(feRt)
           : { endTokens: new Set(), untokenisedEnds: 0 };
-        const res = rt.termini.map(t => ({
-          terminus: t,
-          matched: [...ends].some(et => nameMatchesLocality(t, et)),
-        }));
-        const nM = res.filter(x => x.matched).length;
-        const unmatched = res.filter(x => !x.matched).map(x => x.terminus);
-        if (nM === 0) {
-          // Everything unmatched AND ends we cannot tokenise: nothing was actually
-          // compared, so this is unverifiable, not a disagreement.
-          add(untok ? 'soft' : 'hard', 'terminus',
-            `Route ${r}: NEITHER red-team terminus (${rt.termini.join(', ')}) is a locality at the ends of our drawn chain (chain ends: ${[...ends].join(', ')}${untok ? `, plus ${untok} end(s) with no NaPTAN locality code` : ''}).`,
-            { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
-        } else if (nM < rt.termini.length) {
-          add('soft', 'terminus',
-            `Route ${r}: red-team terminus ${unmatched.join(', ')} is not a locality at either end of our drawn chain (chain ends: ${[...ends].join(', ')}).`,
-            { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
+        /*
+         * NOTHING TO COMPARE AGAINST (OA-156 source one, 2026-08-29). With no
+         * locality-coded chain end there is no right-hand side, and the sentence
+         * this used to print — "NEITHER red-team terminus ... is a locality at
+         * the ends of our drawn chain (chain ends: )" — states a disagreement
+         * about an empty list. It was the single largest line item in S6's
+         * output: 85 rows across five maps, 32 of them on one sheet. The routes
+         * join the same bucket the sanity check uses and are reported once.
+         */
+        if (ends.size === 0) {
+          rtTermUnavailable.push({ route: r, reason: 'no-chain-end-locality-tokens', untokenisedEnds: untok, redteam: rt.termini });
+        } else {
+          rtTermChecked.push(r);
+          const res = rt.termini.map(t => ({
+            terminus: t,
+            matched: [...ends].some(et => nameMatchesLocality(t, et)),
+          }));
+          const nM = res.filter(x => x.matched).length;
+          const unmatched = res.filter(x => !x.matched).map(x => x.terminus);
+          if (nM === 0) {
+            // A comparison DID run here: at least one chain end carried a locality
+            // code and none of the red team's termini matched it. Partial evidence
+            // (some ends untokenised) still softens it, as before.
+            add(untok ? 'soft' : 'hard', 'terminus',
+              `Route ${r}: NEITHER red-team terminus (${rt.termini.join(', ')}) is a locality at the ends of our drawn chain (chain ends: ${[...ends].join(', ')}${untok ? `, plus ${untok} end(s) with no NaPTAN locality code` : ''}).`,
+              { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
+          } else if (nM < rt.termini.length) {
+            add('soft', 'terminus',
+              `Route ${r}: red-team terminus ${unmatched.join(', ')} is not a locality at either end of our drawn chain (chain ends: ${[...ends].join(', ')}).`,
+              { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
+          }
         }
       } else {
         // TOWN. Both sides are hand-asserted settlement names, so compare them directly.
@@ -940,12 +1091,53 @@ if (redteam) {
       }
     }
 
-    // (d) days
+    /*
+     * (d) days — THREE ANSWERS, NOT ONE (OA-156 source three, 2026-08-29).
+     *
+     * A single `days` category made a data gap, a qualification and a
+     * contradiction all read alike. Measured across the estate's 102 findings:
+     * 18 were pure wording, 15 were our own value reading "?", 35 were the red
+     * team saying our days plus a qualification, and 34 were a real difference
+     * of fact. Only the last of those four is a disagreement about which days a
+     * bus runs, and it was 1 row in 3.
+     *
+     * The eighteen disappear in normDays above. The other three keep their rows
+     * and get their own category, so a reader can sort them and `status.js` can
+     * count them separately. NONE of them is dropped: a qualification like
+     * "Sat & Sun only, 13 June-13 Sept (summer seasonal)" is real information
+     * about a service, and the point is to stop it looking like a contradiction.
+     */
     if (vs.days && rt.days && normDays(vs.days) !== normDays(rt.days)) {
-      add('soft', 'days',
-        `Route ${r} operating days differ: ours "${vs.days}" vs red-team "${rt.days}".`,
-        { route: r, ours: vs.days, redteam: rt.days }, r, 'redteam');
+      const ours = normDays(vs.days), theirs = normDays(rt.days);
+      if (String(vs.days).trim() === '?') {
+        add('soft', 'days-unknown',
+          `Route ${r} has no operating days in our data ("?"); the red-team gives "${rt.days}". This is a gap on our side, not a disagreement.`,
+          { route: r, ours: vs.days, redteam: rt.days }, r, 'redteam');
+      } else if (ours && theirs.startsWith(ours)) {
+        add('soft', 'days-qualified',
+          `Route ${r}: the red-team agrees on the days and adds a qualification we do not carry — ours "${vs.days}" vs red-team "${rt.days}". Decide whether the qualification belongs on the sheet; the days themselves do not differ.`,
+          { route: r, ours: vs.days, redteam: rt.days }, r, 'redteam');
+      } else {
+        add('soft', 'days',
+          `Route ${r} operating days differ: ours "${vs.days}" vs red-team "${rt.days}".`,
+          { route: r, ours: vs.days, redteam: rt.days }, r, 'redteam');
+      }
     }
+  }
+
+  /* ONE row for every route the red-team terminus comparison could not run on
+   * (OA-156, 2026-08-29), in the shape `direction-unavailable` established and
+   * the sanity check now shares. This was the single largest line item in S6's
+   * whole output before the fix. */
+  if (rtTermUnavailable.length) {
+    const rs = rtTermUnavailable.map(u => u.route);
+    const allBlind = rtTermChecked.length === 0;
+    add('soft', 'terminus-unavailable',
+      (allBlind
+        ? `Red-team terminus comparison not possible on ANY route it named — no end of any direction of our drawn chains carries a NaPTAN locality code, so there was nothing to compare a settlement name against: ${rs.join(', ')}.`
+        : `Red-team terminus comparison not possible on ${rs.length} route${rs.length === 1 ? '' : 's'} (${rs.join(', ')}) — no end of those chains carries a NaPTAN locality code, so nothing was compared. It ran on ${rtTermChecked.length}: ${rtTermChecked.join(', ')}.`)
+      + ` This is a limit of the check, not a disagreement with the red team.`,
+      { routes: rtTermUnavailable, checkedRoutes: rtTermChecked, allBlind }, null, 'redteam');
   }
 
   // (e) red-team found a town service we don't have (handle aliases + explicit exclusions)
@@ -965,9 +1157,27 @@ if (redteam) {
         { route: r, ours: { servesTown: false, note: notServe[r].note || notServe[r].reason || null }, redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
       continue;
     }
+    /*
+     * A BORROWED ANSWER IS A SUPERSET, AND THE ROW HAS TO SAY SO (OA-156 source
+     * two, 2026-08-29). A place inside a mapped town borrows that town's blind
+     * answer under OA-141, and the town answer is about services serving the
+     * TOWN while the place draws only what calls at its own stops. High Wycombe
+     * Aldi draws 12 services against a borrowed answer naming 44, so 36 of its
+     * 64 soft findings were "inclusion candidate" leads for routes that do not
+     * call at an Aldi car park.
+     *
+     * These are NOT suppressed, and that is deliberate: St Neots Co-op's W9 and
+     * W10 leads come out of exactly this path and are real (OA-050). What was
+     * missing is the reason — nothing in the row said whether the red team was
+     * asked about this map or about its parent. Now it does, and a reader can
+     * sort a superset artefact from a lead without knowing OA-141 exists.
+     */
     add('soft', 'missing-service',
-      `Red-team lists route ${r} (${rt.operator || '?'}) serving the town, but it is absent from our verified set — inclusion candidate.`,
-      { route: r, redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
+      BORROWED
+        ? `Red-team lists route ${r} (${rt.operator || '?'}) serving ${BORROWED.map || 'the parent town'}, but it is absent from our verified set. The answer was BORROWED from ${BORROWED.map || 'another map'}, which is about services serving that town rather than services calling at this map's own stops — so a route that never comes near here will appear on this list. Confirm against the stops this map draws before treating it as an inclusion candidate.`
+        : `Red-team lists route ${r} (${rt.operator || '?'}) serving the town, but it is absent from our verified set — inclusion candidate.`,
+      { route: r, borrowedFrom: BORROWED ? (BORROWED.map || null) : null, supersetArtefactPossible: !!BORROWED,
+        redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
   }
 
   /*
@@ -1013,7 +1223,6 @@ if (redteam) {
  * run dir, never onto the answer in its own build. An answer that was not
  * borrowed carries no such field and nothing here fires.
  * ===================================================================== */
-const BORROWED = (redteam && redteam._borrowedFrom) || null;
 const downgraded = [];
 if (BORROWED) {
   for (const f of findings) {
@@ -1073,6 +1282,25 @@ const out = {
       // above has gone quiet again. Recorded rather than asserted so a stale file
       // still says which.
       accountsForAll: dirChecked.length + dirUnavailable.length + dirSkipped.length === displayed.size,
+      /* Of the routes the check declined, how many have a chain that runs on
+       * past the drawn window — i.e. how much of the gap is reachable at all by
+       * any future instrument. 44 of 55 across the eight towns on 2026-08-29. */
+      unavailableWithChainContinuation: dirUnavailable.filter(d => d.chainContinues).length,
+    },
+    /* How much of S-4 actually RAN (OA-156, 2026-08-29). The same argument as
+     * directionCoverage above and the same arithmetic identity — added once the
+     * measurement showed the terminus check is unavailable on 217 of the
+     * estate's routes and had never once run on two whole towns, which no count
+     * in this file could express. */
+    terminusCoverage: {
+      checked: termChecked.length,
+      unavailable: termUnavailable.length,
+      unavailableBy: termUnavailable.reduce((a, u) => (a[u.reason] = (a[u.reason] || 0) + 1, a), {}),
+      skipped: termSkipped.length,
+      skippedBy: termSkipped.reduce((a, u) => (a[u.reason] = (a[u.reason] || 0) + 1, a), {}),
+      displayed: displayed.size,
+      pct: displayed.size ? Math.round(100 * termChecked.length / displayed.size) : 0,
+      accountsForAll: termChecked.length + termUnavailable.length + termSkipped.length === displayed.size,
     },
   },
   findings,
@@ -1107,6 +1335,13 @@ const skipBits = Object.entries(dc.skippedBy).map(([k, n]) => `${n} ${k}`).join(
 console.log(`        direction check ran on ${dc.checked}/${dc.displayed} displayed routes (${dc.pct}%)`
   + (dc.checked === 0 ? ' — NONE, so this verdict says nothing about which way anything is drawn' : '')
   + (skipBits ? `; ${dc.skipped} not candidates (${skipBits})` : ''));
+const tc = out.summary.terminusCoverage;
+console.log(`        terminus check ran on ${tc.checked}/${tc.displayed} displayed routes (${tc.pct}%)`
+  + (tc.checked === 0 ? ' — NONE, so this verdict says nothing about where anything terminates' : '')
+  + (tc.skipped ? `; ${tc.skipped} not candidates (${Object.entries(tc.skippedBy).map(([k, n]) => `${n} ${k}`).join(', ')})` : ''));
+if (!tc.accountsForAll) {
+  console.log(`        WARNING: ${tc.checked}+${tc.unavailable}+${tc.skipped} != ${tc.displayed} — a route left S-4 by an unrecorded path.`);
+}
 if (downgraded.length) {
   console.log(`        ${downgraded.length} red-team HARD${downgraded.length === 1 ? '' : 's'} restated as soft (${downgraded.join(', ')}) — the answer was bought for ${BORROWED.map || 'another map'}.`);
   console.log(`        Buy this map its own red team to make them blocking again.`);

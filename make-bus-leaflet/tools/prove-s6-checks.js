@@ -335,8 +335,18 @@ console.log('\n4. Truncated chain — a chain that never leaves town cannot cont
 {
   const d = stage('wisbech', 'trunc');
   const a = verify(d);
-  check('the truncated chain is SOFT, not HARD', 'soft terminus on EXCEL with truncatedChain',
-    a.v && a.v.findings.some(f => f.route === 'EXCEL' && f.category === 'terminus' && f.severity === 'soft' && f.evidence.truncatedChain === true),
+  /* The fact asserted here has not changed — a chain that never leaves town does
+   * not contradict a terminus — but since 2026-08-29 (OA-156) it is carried in
+   * the grouped `terminus-unavailable` finding rather than in a row of its own,
+   * because a route the check could not run on is not a finding about the route.
+   * So look for EXCEL in that finding's bucket, with its reason, and assert
+   * separately that no terminus row about EXCEL survives anywhere. */
+  const tu = a.v && a.v.findings.find(f => f.category === 'terminus-unavailable' && f.source !== 'redteam');
+  check('the truncated chain is SOFT, not HARD', "EXCEL in terminus-unavailable with reason 'chain-truncated-to-local-stops'",
+    !!tu && tu.severity === 'soft' && (tu.evidence.routes || []).some(u => u.route === 'EXCEL' && u.reason === 'chain-truncated-to-local-stops' && u.truncatedChain === true),
+    tu ? JSON.stringify((tu.evidence.routes || []).filter(u => u.route === 'EXCEL')) : 'no terminus-unavailable finding');
+  check('and no terminus row is raised about it at all', 'zero terminus findings on EXCEL',
+    a.v && !a.v.findings.some(f => f.route === 'EXCEL' && f.category === 'terminus'),
     a.v ? JSON.stringify(a.v.findings.filter(f => f.route === 'EXCEL').map(f => f.severity + '/' + f.category)) : 'no report');
 
   // Extend the chain one stop beyond town: it now HAS left town, so the check
@@ -660,6 +670,154 @@ console.log('\n9. A borrowed red team is evidence, not a verdict — and it stil
     !!lent.v && !!own.v
       && lent.v.findings.filter(f => f.source === 'sanity').length === own.v.findings.filter(f => f.source === 'sanity').length,
     lent.v && own.v ? `${lent.v.findings.filter(f => f.source === 'sanity').length} vs ${own.v.findings.filter(f => f.source === 'sanity').length}` : 'no report');
+}
+
+/* --------------------------------------------------- 10. terminus coverage */
+console.log('\n10. Terminus coverage — a check with nothing to compare against says so ONCE');
+{
+  /*
+   * OA-156, 2026-08-29. The terminus check reads NaPTAN locality codes off the
+   * ends of a route's full chain. Where the local ATCO codes are not in the
+   * 0500H<LLLL>nnn style there is no code to read, nothing is compared, and the
+   * check used to print a row per route saying so — 34 of them on High Wycombe,
+   * where it has therefore never once run, and 7 on Beaconsfield. Estate-wide
+   * that was 217 of 280 terminus findings.
+   *
+   * The fixture is BUILT rather than borrowed, for the reason case 1 learned the
+   * hard way: High Wycombe's own data would make this case expire the day
+   * somebody re-codes Buckinghamshire's stops. Wisbech's chain ends are properly
+   * locality-coded, so re-coding them to a non-locality style is the fault.
+   */
+  const d = stage('wisbech', 'term-blind');
+  const full = readJ(d, 'routes_full_atco.json'), ll = readJ(d, 'atco2ll.json');
+  const rename = {};
+  for (const fe of Object.values(full)) {
+    /* BOTH lists, not one: verify_report's fullDirections() concatenates
+     * fe.directions AND fe.canonical, so a fixture that re-codes only the first
+     * leaves tokenised ends behind and the check goes on running. It did, on the
+     * first run of this case. */
+    const dirs = [...(fe.directions ? Object.values(fe.directions) : []), ...(fe.canonical || [])];
+    for (const dir of dirs) {
+      if (!dir || !Array.isArray(dir.stops) || !dir.stops.length) continue;
+      for (const i of [0, dir.stops.length - 1]) {
+        const a = dir.stops[i];
+        if (!rename[a]) { rename[a] = 'ZZ' + a.replace(/[^0-9]/g, '').slice(-8); ll[rename[a]] = ll[a]; }
+        dir.stops[i] = rename[a];
+      }
+    }
+    if (Array.isArray(fe.all)) fe.all = fe.all.map(a => rename[a] || a);
+  }
+  writeJ(d, 'routes_full_atco.json', full); writeJ(d, 'atco2ll.json', ll);
+  const a = verify(d);
+  const tc = a.v && a.v.summary && a.v.summary.terminusCoverage;
+  check('a sheet the terminus check never ran on reports 0, not silence', 'terminusCoverage.checked === 0',
+    !!tc && tc.checked === 0, tc ? JSON.stringify(tc) : 'no terminusCoverage in summary');
+  /* Scoped to the SANITY check on purpose. On a TOWN the red-team terminus
+   * comparison is name-against-name — our declared termini against the red
+   * team's settlements — and reads no chain code at all, so blinding the chain
+   * does not and should not blind it. Asserting "no terminus row of any kind"
+   * would have made this case fail for the right check doing its job. */
+  check('it says so ONCE, not once per route', 'exactly one terminus-unavailable finding, and no per-route SANITY terminus rows',
+    !!a.v && a.v.findings.filter(f => f.category === 'terminus-unavailable' && f.source !== 'redteam').length === 1
+         && a.v.findings.filter(f => f.category === 'terminus' && f.source !== 'redteam').length === 0,
+    a.v ? JSON.stringify(a.v.findings.filter(f => /^terminus/.test(f.category)).map(f => f.severity + '/' + f.category + '/' + (f.route || '-') + '/' + f.source)) : 'no report');
+  check('and it says ANY rather than N of M', 'the finding carries allBlind true',
+    !!a.v && a.v.findings.some(f => f.category === 'terminus-unavailable' && f.evidence && f.evidence.allBlind === true),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'terminus-unavailable').map(f => f.evidence && f.evidence.allBlind)) : 'no report');
+
+  /*
+   * THE LOUD ARM. The same town, unmutated: the check runs, the arithmetic
+   * closes, and a route whose declared termini are nowhere near its chain ends
+   * still goes HARD. Without this the case above is satisfied by a checker that
+   * has stopped saying anything at all.
+   */
+  const c = stage('wisbech', 'term-loud');
+  const vs = readJ(c, 'verified-services.json');
+  vs.services.find(t => String(t.route) === '50').termini = ['Aberdeen', 'Inverness'];
+  writeJ(c, 'verified-services.json', vs);
+  const b = verify(c);
+  const tc2 = b.v && b.v.summary && b.v.summary.terminusCoverage;
+  check('on the same town unmutated the check DOES run', 'terminusCoverage.checked > 0',
+    !!tc2 && tc2.checked > 0, tc2 ? JSON.stringify(tc2) : 'no terminusCoverage');
+  check('and the coverage arithmetic closes', 'checked + unavailable + skipped == displayed',
+    !!tc2 && tc2.accountsForAll && tc2.checked + tc2.unavailable + tc2.skipped === tc2.displayed,
+    tc2 ? `${tc2.checked}+${tc2.unavailable}+${tc2.skipped} vs ${tc2.displayed}` : 'no terminusCoverage');
+  check('a real terminus contradiction still goes HARD', 'hard terminus on 50',
+    has(b.v, 'hard', 'terminus', '50'),
+    b.v ? JSON.stringify(b.v.findings.filter(f => f.route === '50').map(f => f.severity + '/' + f.category)) : 'no report');
+}
+
+/* ------------------------------------------------------------- 11. days */
+console.log('\n11. Days — a wording difference, a qualification and a contradiction are three things');
+{
+  /*
+   * OA-156 source three, 2026-08-29. One `days` category made a gap in our data,
+   * a qualification the red team adds, and a genuine disagreement about which
+   * days a bus runs all read alike: 102 findings across the estate, of which 34
+   * were a difference of fact. All four arms below are driven off ONE fixture
+   * route so the only thing that varies is the red team's string.
+   */
+  const setDays = (name, ours, theirs) => {
+    const d = stage('wisbech', name);
+    const vs = readJ(d, 'verified-services.json');
+    const svc = vs.services.find(t => String(t.route) === '50');
+    svc.days = ours;
+    writeJ(d, 'verified-services.json', vs);
+    const rt = readJ(d, 'redteam.json');
+    const rs = (rt.services || []).find(t => String(t.route).replace(/\s+/g, '') === '50');
+    if (!rs) throw new Error('fixture: the red team does not name route 50, so this case would prove nothing');
+    rs.days = theirs;
+    writeJ(d, 'redteam.json', rt);
+    const v = verify(d).v;
+    return (v ? v.findings : []).filter(f => f.route === '50' && /^days/.test(f.category)).map(f => f.category);
+  };
+  check('"only" is not a day', 'ours "Mon-Fri" vs red-team "Mon-Fri only" raises nothing at all',
+    JSON.stringify(setDays('days-wording', 'Mon-Fri', 'Mon-Fri only')) === '[]', JSON.stringify(setDays('days-wording2', 'Mon-Fri', 'Mon-Fri only')));
+  check('nor is a plural', 'ours "Thu" vs red-team "Thursdays only" raises nothing at all',
+    JSON.stringify(setDays('days-plural', 'Thu', 'Thursdays only')) === '[]', JSON.stringify(setDays('days-plural2', 'Thu', 'Thursdays only')));
+  check('a qualification is reported as a qualification', "days-qualified, not days",
+    JSON.stringify(setDays('days-qual', 'Mon-Fri', 'Mon-Fri (not bank holidays)')) === '["days-qualified"]',
+    JSON.stringify(setDays('days-qual2', 'Mon-Fri', 'Mon-Fri (not bank holidays)')));
+  check('a gap on our side is reported as a gap', 'days-unknown when ours is "?"',
+    JSON.stringify(setDays('days-unk', '?', 'Mon-Sat')) === '["days-unknown"]',
+    JSON.stringify(setDays('days-unk2', '?', 'Mon-Sat')));
+  /* THE LOUD ARM: a real difference of fact must still be reported as one. */
+  check('a real difference of fact still fires', 'plain days when the days genuinely differ',
+    JSON.stringify(setDays('days-real', 'Mon-Fri', 'Sun')) === '["days"]',
+    JSON.stringify(setDays('days-real2', 'Mon-Fri', 'Sun')));
+}
+
+/* --------------------------------------- 12. missing-service on a borrowed answer */
+console.log('\n12. missing-service — a borrowed answer is a superset, and the row says so');
+{
+  /*
+   * OA-156 source two, 2026-08-29. A place borrows its parent town's blind
+   * answer (OA-141); the town answer is about services serving the TOWN, so
+   * every town service the place does not draw arrives as an "inclusion
+   * candidate". High Wycombe Aldi drew 12 against a borrowed answer naming 44.
+   * These are NOT suppressed — St Neots Co-op's W9/W10 leads come out of this
+   * same path and are real (OA-050) — so the pair is: the row carries the reason
+   * when borrowed, and does NOT claim a borrow when the answer is the map's own.
+   */
+  const own = verify(stage('wisbech', 'ms-own')).v;
+  const ownMs = (own ? own.findings : []).filter(f => f.category === 'missing-service');
+  check('the fixture really produces a missing-service row to begin with', 'at least one missing-service finding',
+    ownMs.length > 0, `${ownMs.length} — without one this case proves nothing`);
+  check('an answer bought for THIS map claims no borrow', 'supersetArtefactPossible false on every row',
+    ownMs.every(f => f.evidence && f.evidence.supersetArtefactPossible === false && f.evidence.borrowedFrom === null),
+    JSON.stringify(ownMs.map(f => f.evidence && f.evidence.borrowedFrom)));
+
+  const d = stage('wisbech', 'ms-lent');
+  const rt = readJ(d, 'redteam.json');
+  rt._borrowedFrom = { map: 'Somewhere Else', build: '/elsewhere', run: '2026-08-26_0700', derivedAt: '2026-08-26', borrowedOn: '2026-08-29' };
+  writeJ(d, 'redteam.json', rt);
+  const lent = verify(d).v;
+  const lentMs = (lent ? lent.findings : []).filter(f => f.category === 'missing-service');
+  check('none of them is dropped when the answer is borrowed', `${ownMs.length} missing-service row(s) either way`,
+    lentMs.length === ownMs.length, `${lentMs.length} vs ${ownMs.length}`);
+  check('and every row names the map the answer was bought for', "supersetArtefactPossible true, borrowedFrom 'Somewhere Else'",
+    lentMs.length > 0 && lentMs.every(f => f.evidence && f.evidence.supersetArtefactPossible === true && f.evidence.borrowedFrom === 'Somewhere Else'),
+    JSON.stringify(lentMs.map(f => f.evidence && f.evidence.borrowedFrom)));
 }
 
 console.log('\n' + '='.repeat(78));

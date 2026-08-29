@@ -243,8 +243,31 @@ function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 -
 
 // ---------- derive the displayed-route set + anchor ----------
 const palette = routes.palette || {};
+
+/* DISPLAYED MEANS ON THE SHEET, NOT PRESENT IN THE GEOMETRY (OA-004, 2026-08-29).
+ *
+ * `intown` is routes_intown_atco.json -- an S2 output listing the in-town chain of
+ * every route NEAR the town. The config then chooses which of them to draw, and a
+ * route left out of `palette`/`routeOrder` is skipped by gen_internal entirely.
+ * Seeding `displayed` from the geometry therefore counted routes the sheet does
+ * not draw, and the consequence was that DROPPING A ROUTE FROM THE CONFIG COULD
+ * NOT CLEAR A FINDING ABOUT IT: the map stopped drawing X46, and S6 went on
+ * reporting "we include it and draw it" off S2's leftovers.
+ *
+ * That was found the day Peter adjudicated the X46 question and the sheet was
+ * rebuilt without it. Measured across all eight towns before changing anything:
+ * every one has geometry and drawn set of exactly equal size with no difference
+ * between them, so this narrowing is a NO-OP on the estate as it stands and only
+ * bites where a config deliberately omits a route it has geometry for -- which is
+ * the case it exists for.
+ *
+ * The palette is still unioned in below, so a route the config intends to draw is
+ * displayed even if S2 gave it no in-town chain; that is a different fault and the
+ * no-full-chain check is the one that reports it.
+ */
+const drawnByConfig = new Set([...Object.keys(palette), ...(routes.routeOrder || [])].map(normRoute));
 const displayed = new Set();
-for (const r of Object.keys(intown || {})) displayed.add(normRoute(r));
+for (const r of Object.keys(intown || {})) if (!drawnByConfig.size || drawnByConfig.has(normRoute(r))) displayed.add(normRoute(r));
 for (const e of (routes.external || [])) displayed.add(normRoute(e.route));
 for (const e of (routes.busway || [])) displayed.add(normRoute(e.route));
 for (const r of Object.keys(palette)) displayed.add(normRoute(r)); // palette = intended to draw

@@ -227,3 +227,17 @@ The harness above **failed on its very first CI run, on a completely correct res
 ## The `unit` CI job — added 2026-08-29
 
 `node --test` had **never run in CI at all**: 30 test files and 423 assertions whose only evidence of passing was somebody remembering to run them on the machine they were written on. They now run in a `unit` job in `gates.yml`, alongside the three falsification harnesses that need no dataset and no built map (`prove-red-build-log`, `prove-red-route-collision`, `prove-red-redteam-source`). It is a **separate job** with no secrets and no cross-repo checkout, for the same reason `buses-data` split out its `docs` job: `CROSS_REPO_PAT2` expires on 22 November 2026, and an expiry should not take 423 tests down with the byte gates.
+
+## Prove the S4 provenance-stamp guard can go red — added 2026-08-29
+
+```bash
+npm run test:prove-red-stage-stamps
+```
+
+`tools/prove-red-stage-stamps.js` cuts the OA-161 guard out of a copy of `assets/stage.js` and runs `test/stage_stamps.test.js` against it, requiring the **seven** guard tests to fail while the **four** named CONTROL tests hold — an ordinary stamped commit, a non-S4 stage, and the two `stage.js stamps` cases the refusal points at. The subject is the check that stops an S4 committing with no `engine` hash and no `design.sheetVersion`, which the byte gate is structurally incapable of noticing: `ci-reference/` is seeded from the same run the gate reproduces, so both sides come from the same unstamped inputs and agree exactly. It needs no other repository, so it runs in the `unit` job. `prove-red-stage-commit.js` now runs there too, having never run in CI at all.
+
+## A harness that COPIES its subject also tests the copy — found 2026-08-29
+
+Both stage harnesses used to write their broken copy into a temp folder. That worked for as long as `stage.js` had no relative `require`s, and stopped working the moment it gained two (`./sheet_stamps`, `./engine_version`): the copy died in the module loader before `main()` ran, and **all eight tests went red, controls included**. Every case failing is exactly what a falsification harness hopes to see, so the only thing that distinguished *the guard works* from *the file does not load* was the assertion that the CONTROLs must stay green.
+
+Both now write the copy into `assets/` beside its dependencies, under a dotted name, and delete it on `exit`. **The trigger is invisible and routine: adding a `require` to a CLI breaks every harness that relocates it.** After adding one, run the harnesses that copy it. Two more here copy a single file — `prove-red-derive-frequency.js` and `prove-red-redteam-source.js` — and both subjects have no relative requires today, which is the only reason they still work.

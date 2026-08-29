@@ -67,6 +67,8 @@ Let `SK=C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`. Run `node "%SK%\
 
 Rule of thumb for the S4 bump: **major** when you produced a new S1/S2/S3 run this time (data changed), **minor** when you reused the existing data and only changed the visuals. Always carry forward through S5 so the JPGs match the new SVGs, and `commit` each stage so the manifest stays the source of truth.
 
+**AN S4 MUST CARRY BOTH PROVENANCE STAMPS, AND `stage.js commit S4` NOW REFUSES ONE THAT DOES NOT (2026-08-29, OA-161).** `engine` says which generator drew a map; `design.sheetVersion` is the `build N.N · date` the footer prints and the number to quote when a sheet looks wrong. Both were written only by `rollout.js` and `rollout_places.js`, so a build assembled BY HAND — `stage.js new S4`, `pull`, then the generators — lost both silently, and St Neots Town Centre v2.13 shipped that way. **The byte gate cannot see it**: `ci-reference/` is seeded from the same unstamped run, so both sides of the comparison agree exactly and it goes green — the shape *seeded from what it polices*. The fix is a refusal at the stage boundary every route to an S4 passes through. If it fires, run `stage.js stamps <runDir>` and then **re-run the generators**, because by commit time the sheets already carry the old footer. `--force-stamps` overrides and says out loud what it recorded. Falsified by `npm run test:prove-red-stage-stamps`, which runs in CI.
+
 ## Per-town working folder (required — everything lives here)
 Each town gets **one dedicated folder** holding `manifest.json` and the six stage folders:
 ```

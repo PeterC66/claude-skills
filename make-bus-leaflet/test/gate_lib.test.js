@@ -60,7 +60,7 @@ test('the version stamp never counts as content lost or gained', () => tmp(dir =
   // what made a scratch build report a false LOST/GAINED pair on 2026-08-09.
   const older = put(dir, 'old.svg', SVG.replace('Valid from Summer 2026', 'Valid from Spring 2026'));
   const newer = put(dir, 'new.svg', SVG);
-  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [] });
+  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [] });
   assert.ok(G.VERSION_STAMP_RE.test('Map v2.1 · 2026-08-10'), 'the pre-2026-08-10 stamp format is still recognised');
 }));
 
@@ -92,9 +92,60 @@ test('a name that stopped being printed IS reported', () => tmp(dir => {
   assert.deepStrictEqual(d.gained, []);
 }));
 
+test('a label that merely RE-WRAPS is not a lost label', () => tmp(dir => {
+  /* OA-171, and this is the real Godmanchester Co-op Ermine Street case reduced to
+   * its bones. The name was on the sheet twice -- once over two lines, once on one --
+   * and after the round both copies wrap. Nothing left the sheet, no reader lost
+   * anything, and rollout_places.js refused to render.
+   *
+   * Note what is NOT here: nothing was GAINED. `Wood Green` was already in the old
+   * set and went from one copy to two, which a SET cannot see. A rule written
+   * against the gained labels -- which is the rule the backlog row proposed -- reads
+   * this case as a loss exactly as the old one did. */
+  const before = ['<text x="10" y="20">Wood Green Animal Shelter</text>',
+                  '<text x="10" y="30">Wood Green</text>',
+                  '<text x="10" y="40">Animal Shelter</text>',
+                  '<text x="10" y="50">Huntingdon</text>'].join('\n');
+  const after = ['<text x="10" y="20">Wood Green</text>',
+                 '<text x="10" y="30">Animal Shelter</text>',
+                 '<text x="10" y="50">Huntingdon</text>'].join('\n');
+  const d = G.labelDiff(put(dir, 'old.svg', before), put(dir, 'new.svg', after));
+  assert.deepStrictEqual(d.lost, [], 'a re-wrap must not stop the rollout');
+  assert.deepStrictEqual(d.rewrapped, [{ label: 'Wood Green Animal Shelter', as: ['Wood Green', 'Animal Shelter'] }],
+    'and it must still be REPORTED -- a check that forgives silently is the next --force habit');
+}));
+
+test('a destination that genuinely disappears still stops the rollout', () => tmp(dir => {
+  /* The other half of OA-171: a softened check nobody has watched refuse anything is
+   * worse than the noisy one it replaced. Half the name surviving is a real loss --
+   * `Wood Green` alone reconstructs nothing -- and so is a whole name going. */
+  const before = ['<text x="10" y="20">Wood Green Animal Shelter</text>',
+                  '<text x="10" y="30">Uxbridge</text>'].join('\n');
+  const after = ['<text x="10" y="20">Wood Green</text>'].join('\n');
+  const d = G.labelDiff(put(dir, 'old.svg', before), put(dir, 'new.svg', after));
+  assert.deepStrictEqual(d.lost.sort(), ['Uxbridge', 'Wood Green Animal Shelter']);
+  assert.deepStrictEqual(d.rewrapped, []);
+}));
+
+test('a re-wrap must RECONSTRUCT the name, not merely reuse its words', () => {
+  /* The rule is deliberately narrower than "the words are all still there
+   * somewhere", which would call a lost `High Street` benign on a sheet that happens
+   * to hold `High Wycombe` and `Green Street`. Concatenation in order, on word
+   * boundaries, or it is a loss. */
+  assert.deepStrictEqual(G.rewrapOf('Wood Green Animal Shelter', ['Wood Green', 'Animal Shelter']),
+    ['Wood Green', 'Animal Shelter']);
+  assert.strictEqual(G.rewrapOf('High Street', ['High Wycombe', 'Green Street']), null);
+  assert.strictEqual(G.rewrapOf('Uxbridge', ['Uxbridge Road', 'Wood Green']), null,
+    'a single word has no parts to be re-wrapped into');
+  assert.strictEqual(G.rewrapOf('Wood Green Animal Shelter', ['Wood Green']), null,
+    'half the name surviving is a loss, not a re-wrap');
+  assert.deepStrictEqual(G.rewrapOf('St Ives  Bus Station', ['St Ives', 'Bus Station']),
+    ['St Ives', 'Bus Station'], 'run-together whitespace is normalised on both sides');
+});
+
 test('a missing side of a label diff is empty, not a wholesale loss', () => tmp(dir => {
   const only = put(dir, 'new.svg', SVG);
-  assert.deepStrictEqual(G.labelDiff(path.join(dir, 'nope.svg'), only), { lost: [], gained: [] });
+  assert.deepStrictEqual(G.labelDiff(path.join(dir, 'nope.svg'), only), { lost: [], gained: [], rewrapped: [] });
 }));
 
 test('diffSvg names the first line that moved, and says which file was missing', () => tmp(dir => {

@@ -308,6 +308,9 @@ for (const t of selected) {
   if (r.diffs) {
     for (const [file, d] of Object.entries(r.diffs)) {
       if (d.lost.length) console.log(`    LOST in ${file}: ${d.lost.join(' | ')}`);
+      // Re-wraps are NOT lost labels and do not stop the rollout, but they are
+      // printed: a check that silently forgives is the next --force habit starting.
+      if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
     }
   }

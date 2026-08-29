@@ -118,13 +118,79 @@ const VERSION_STAMP_RE =
 // the label is expected to change on every rollout, so it should never be
 // judged as content loss regardless of which version numbers land on which
 // side of the diff.
+/* A LABEL'S IDENTITY IS ITS STRING, AND A RE-WRAP CHANGES THE STRING (OA-171).
+ *
+ * labelSet() reads <text>…</text> contents, so a label the placer decides to break
+ * over two lines is not the same label: `Wood Green Animal Shelter` disappears and
+ * `Wood Green` and `Animal Shelter` are there instead. That is a LOST label to the
+ * diff, and a lost label stops the rollout.
+ *
+ * IT HAPPENED, on Godmanchester Co-op Ermine Street in OA-019's round three. The
+ * name was on the sheet TWICE already -- once wrapped, once not -- and both copies
+ * then wrapped, so nothing left the sheet and no reader lost anything. The net text
+ * count was +8, so a count alone would have hidden it; the safety stop is right to
+ * compare sets rather than totals. The cost is not the false positive, it is what
+ * the false positive teaches: the remedy on offer is --force, and --force disables
+ * the check for the whole run, including for the sheet where a loss would be real.
+ *
+ * WHY NOT THE RULE THE BACKLOG ROW PROPOSED. It said to treat a lost string as
+ * benign when its words are accounted for by strings that APPEARED. On this very
+ * case nothing appeared: `Wood Green` was already in the old set -- it went from one
+ * copy to two, and a SET cannot see that. The rule has to look at what the new sheet
+ * CONTAINS, not at what is new in it.
+ *
+ * THE RULE, AND IT IS DELIBERATELY NARROW. A lost label is a re-wrap only when its
+ * text can be rebuilt by concatenating TWO OR MORE labels that are on the new sheet,
+ * in order, on word boundaries. `Wood Green` + `Animal Shelter` reconstructs it
+ * exactly. A destination that genuinely disappears reconstructs from nothing and is
+ * still reported. This is stricter than "the words are all still there somewhere",
+ * which would call `High Street` benign on a sheet holding `High Wycombe` and
+ * `Green Street`.
+ *
+ * AND IT IS REPORTED, NOT SWALLOWED. Re-wraps come back in their own array, so the
+ * rollout can say what happened instead of going quiet -- a check that hides its
+ * reasoning is the next --force habit waiting to start. */
+const normLabel = (x) => x.trim().replace(/\s+/g, ' ');
+
+function rewrapOf(lost, newLabels) {
+  const words = normLabel(lost).split(' ').filter(Boolean);
+  if (words.length < 2) return null;                 // one word cannot be re-wrapped into parts
+  const present = new Set(newLabels.map(normLabel));
+  /* Segment words[i..] into chunks that are each a label on the new sheet. Longest
+   * chunk first, memoised, so `A B` beats `A` + `B` when both are present and the
+   * search still backtracks when the greedy choice dead-ends. */
+  const memo = new Array(words.length + 1).fill(undefined);
+  const seg = (i) => {
+    if (i === words.length) return [];
+    if (memo[i] !== undefined) return memo[i];
+    memo[i] = null;
+    for (let j = words.length; j > i; j--) {
+      const chunk = words.slice(i, j).join(' ');
+      if (!present.has(chunk)) continue;
+      const rest = seg(j);
+      if (rest) { memo[i] = [chunk, ...rest]; break; }
+    }
+    return memo[i];
+  };
+  const parts = seg(0);
+  return parts && parts.length >= 2 ? parts : null;
+}
+
 function labelDiff(oldSvgPath, newSvgPath) {
-  if (!fs.existsSync(oldSvgPath) || !fs.existsSync(newSvgPath)) return { lost: [], gained: [] };
+  if (!fs.existsSync(oldSvgPath) || !fs.existsSync(newSvgPath)) return { lost: [], gained: [], rewrapped: [] };
   const oldLabels = labelSet(fs.readFileSync(oldSvgPath, 'utf8')).filter(x => !VERSION_STAMP_RE.test(x));
   const newLabels = labelSet(fs.readFileSync(newSvgPath, 'utf8')).filter(x => !VERSION_STAMP_RE.test(x));
+  const lost = [], rewrapped = [];
+  for (const x of oldLabels) {
+    if (newLabels.includes(x)) continue;
+    const parts = rewrapOf(x, newLabels);
+    if (parts) rewrapped.push({ label: x, as: parts });
+    else lost.push(x);
+  }
   return {
-    lost: oldLabels.filter(x => !newLabels.includes(x)),
+    lost,
     gained: newLabels.filter(x => !oldLabels.includes(x)),
+    rewrapped,
   };
 }
 
@@ -370,7 +436,7 @@ function portalFixtureEnv(portalDir, dataDir) {
 }
 
 module.exports = {
-  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, VERSION_STAMP_RE, PLACE_IGNORE,
+  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
   gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

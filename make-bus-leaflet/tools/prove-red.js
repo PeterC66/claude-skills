@@ -356,6 +356,16 @@ const MUTATIONS = [
     find: '  return true;' + String.fromCharCode(10) + '}' + String.fromCharCode(10) + String.fromCharCode(10) + 'module.exports',
     to: '  process.exitCode = 1;' + String.fromCharCode(10) + '  return true;' + String.fromCharCode(10) + '}' + String.fromCharCode(10) + String.fromCharCode(10) + 'module.exports' },
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'a re-wrapped label goes back to reading as a lost one (OA-171 reverted)',
+    find: '  return parts && parts.length >= 2 ? parts : null;',
+    to: '  return null;' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'a re-wrap is accepted on merely REUSING the words, not reconstructing the name',
+    find: '      if (!present.has(chunk)) continue;',
+    to: '      if (!newLabels.some(l => normLabel(l).includes(chunk))) continue;' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'the sheet-version stamp goes back to counting as a lost label',
     find: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?|Map version v?[\\d.]+|(?:build|Draft|Preview) v?[\\d.]+(?: · .*)?)$/;',
     to: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?)$/;' },

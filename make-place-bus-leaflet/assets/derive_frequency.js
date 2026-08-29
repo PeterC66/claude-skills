@@ -76,7 +76,32 @@ const TIER_STYLE = {
   'limited': { mm: 1.2 },
   'sparse': { mm: 1.2, dash: '2.4 2.2', label: 'Certain dates only' },
 };
-const SPARSE_WORDS = new Set(['certain dates only', 'a few journeys a day']);
+
+// THE SPARSE TIER'S KEY LABEL IS NOT A CONSTANT (OA-163, 2026-08-29).
+//
+// Two different phrases promote a limited lane to sparse, and the Key printed one
+// of them whichever it was. High Wycombe's 275 runs in all 12 sampled weeks, two
+// journeys a day, 06:50-18:43 -- promoted for "a few journeys a day" -- and the
+// live sheet's Key said "Certain dates only" about it. Wisbech's X46 is the same
+// shape at 9 weeks of 12. Of the three sparse lanes on the whole estate, the
+// constant was true of one.
+//
+// The dash's MEMBERSHIP is deliberate and unchanged: TIER_STYLE's own comment in
+// measure_frequency_tiers_2026-08-17.py says the dash survives "for lanes running
+// on certain dates or a handful of journeys". It is the wording that was wrong,
+// not which lanes are dashed -- so this names the reason it actually found, and
+// says both where a map carries both kinds.
+const SPARSE_LABEL = {
+  'certain dates only': 'Certain dates only',
+  'a few journeys a day': 'A few journeys a day',
+};
+function sparseLabel(words) {
+  const seen = [...new Set(words)].filter((w) => w in SPARSE_LABEL);
+  if (!seen.length) return TIER_STYLE.sparse.label;
+  if (seen.length === 1) return SPARSE_LABEL[seen[0]];
+  return 'Certain dates only, or a few journeys a day';
+}
+const SPARSE_WORDS = new Set(Object.keys(SPARSE_LABEL));
 
 const rd = (f) => JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8'));
 let RJ, S1;
@@ -173,6 +198,7 @@ console.log('  ' + lanes.length + ' drawn lane(s); S1 sampled ' + (basis.weeksSa
 console.log('  lane    wks  day  head  worst  window          -> tier      (why)');
 
 const freq = {};
+const sparseWords = [];
 const skipped = [];
 const unmeasured = [];
 for (const lane of lanes) {
@@ -191,7 +217,7 @@ for (const lane of lanes) {
   };
   let t = tier(r);
   const w = word(r);
-  if (t === 'limited' && SPARSE_WORDS.has(w)) t = 'sparse';
+  if (t === 'limited' && SPARSE_WORDS.has(w)) { t = 'sparse'; sparseWords.push(w); }
   freq[lane] = t;
   const pad = (v, n) => String(v == null ? '-' : v).padStart(n);
   console.log('  ' + lane.padEnd(7) + pad(r.wks, 3) + pad(r.day, 5) + pad(r.head, 6) + pad(r.worst, 7) +
@@ -201,6 +227,7 @@ for (const lane of lanes) {
 const used = new Set(Object.values(freq));
 const tiers = {};
 for (const k of Object.keys(TIER_STYLE)) if (used.has(k)) tiers[k] = TIER_STYLE[k];
+if (tiers.sparse) tiers.sparse = { ...tiers.sparse, label: sparseLabel(sparseWords) };
 
 console.log('\n  ' + Object.keys(freq).length + ' of ' + lanes.length + ' drawn lane(s) tiered; classes used: ' +
   (Object.keys(tiers).join(', ') || 'none'));

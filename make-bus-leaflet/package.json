@@ -1,7 +1,7 @@
 {
   "name": "make-bus-leaflet",
   "version": "1.0.0",
-  "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 \u2014 see ../LICENSE.",
+  "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 — see ../LICENSE.",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "test:prove-red-sweep": "node tools/prove-red-sweep.js",
     "test:prove-red-build-log": "node tools/prove-red-build-log.js",
     "test:prove-red-stage-commit": "node tools/prove-red-stage-commit.js",
+    "test:prove-red-stage-pull": "node tools/prove-red-stage-pull.js",
     "test:prove-red-stage-stamps": "node tools/prove-red-stage-stamps.js",
     "test:prove-red-route-collision": "python tools/prove-red-route-collision.py",
     "test:prove-s6": "node tools/prove-s6-checks.js",

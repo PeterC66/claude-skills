@@ -107,6 +107,17 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-commit
 
+      # OA-164. `pull` copies the whole run FOLDER while the manifest speaks only
+      # of DECLARED outputs, so an undeclared file left in an older stage's folder
+      # rides along and clobbers whatever the destination already holds. It cost
+      # Beaconsfield Waitrose its intermediate stop names, its journey times and
+      # its QR on 2026-08-29, and the byte gate could not see it because
+      # ci-reference is re-synced from the same run. The CONTROLS matter more than
+      # the guard tests here: refusing too much would break every build silently.
+      - name: Prove the pull shadowing guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-pull
+
   status:
     runs-on: ubuntu-latest
     steps:

@@ -108,13 +108,38 @@ function parseFlags(args) {
   }
   return { f, rest };
 }
-function copyInto(srcDir, destDir) {
+/* AN UNDECLARED FILE MAY NOT CLOBBER ONE ALREADY IN THE DESTINATION (OA-164, 2026-08-29).
+ *
+ * `pull` copies the whole run FOLDER, while `commit` and the manifest speak only of
+ * the outputs a stage DECLARED. Any other file left in a run folder therefore rides
+ * along, and whether it does damage depends on nothing but the order the pulls happen
+ * to be written in.
+ *
+ * It fired on 2026-08-29. Beaconsfield Waitrose's S2 folder from 21 July holds a
+ * `routes.json` it never declared -- the July draft -- and the documented P3 order is
+ * `pull S3` then `pull S2`, so the S2 copy landed on top of five weeks of curated
+ * config. The sheet rebuilt clean, gated PASS and lost its intermediate stop names,
+ * its journey times, its QR code and its `checkedAt`, because ci-reference is
+ * re-synced from the same run and the byte gate compares a build against itself.
+ * One place in twelve carries such a file, which is why five earlier rounds missed it.
+ *
+ * So: a DECLARED output still overwrites, because that is what pulling a stage means.
+ * An undeclared extra is still copied when the destination does not already hold that
+ * name -- older folders are full of harmless upstream copies and something may rely on
+ * them -- but it may no longer overwrite, and every skip is named on stdout. Silence
+ * was the whole defect.
+ */
+function copyInto(srcDir, destDir, declared) {
   fs.mkdirSync(destDir, { recursive: true });
+  const shadowed = [];
   for (const name of fs.readdirSync(srcDir)) {
     const s = path.join(srcDir, name);
     if (fs.statSync(s).isDirectory()) continue; // outputs are flat files
-    fs.copyFileSync(s, path.join(destDir, name));
+    const d = path.join(destDir, name);
+    if (declared && !declared.has(name) && fs.existsSync(d)) { shadowed.push(name); continue; }
+    fs.copyFileSync(s, d);
   }
+  return shadowed;
 }
 function maxVersion(stage) {
   let best = null; // [major, minor]
@@ -242,8 +267,10 @@ function main() {
     if (!sx.latest) die('no committed runs for ' + st + ' to pull');
     const r = sx.runs.find(x => x.id === sx.latest);
     const dest = path.resolve(rest[1] || process.cwd());
-    copyInto(path.join(townDir, r.dir), dest);
+    const shadowed = copyInto(path.join(townDir, r.dir), dest, new Set(r.outputs || []));
     console.log(`pulled ${st} (${r.id}) -> ${dest}`);
+    for (const f of shadowed)
+      console.log(`  kept the file already there: ${st}'s folder holds an undeclared "${f}" and did NOT overwrite it`);
     // Keep the on-map version stamp in step with the run dir it just landed in.
     // Silent when there is nothing to do (unversioned dest, no routes.json, or
     // already correct) — it should only speak when it changed something.

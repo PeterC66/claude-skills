@@ -53,6 +53,8 @@ node "$TSK/stage.js" commit S3 "$S3" --outputs routes.json
 ```
 
 ## P4 — generate  (→ S4, versioned)
+**A PULL NO LONGER LETS AN UNDECLARED FILE CLOBBER ONE ALREADY THERE (2026-08-29, OA-164), AND YOU SHOULD STILL READ WHAT IT SAYS.** `pull` copies the whole run FOLDER, while `commit` and the manifest speak only of the outputs a stage DECLARED, so anything else left lying in a run folder rides along on every pull. Beaconsfield Waitrose's S2 folder from 21 July holds a `routes.json` it never declared — the July draft — and pulling S3 and then S2 put that draft on top of five weeks of curated config. The sheet rebuilt clean, the byte gate said PASS, and the external quietly lost every intermediate stop name, every journey time, its QR code and its `checkedAt`: **the byte gate cannot see this, because `ci-reference` is re-synced from the same run and the sheet is then compared against itself.** A declared output still overwrites; an undeclared extra is copied only where the destination has no such file, and every skip prints `kept the file already there`. **If you see that line, the folder it names is dirty — go and look.** Three places carry such a file today; run `node stage.js pull` and read, or sweep for them.
+
 ```bash
 S4=$(node "$TSK/stage.js" new S4 --bump major); cd "$S4"   # --bump minor for a re-style, same data
 node "$TSK/stage.js" pull S1 .; node "$TSK/stage.js" pull S2 .; node "$TSK/stage.js" pull S3 .

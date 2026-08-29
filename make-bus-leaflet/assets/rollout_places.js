@@ -100,6 +100,8 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const APPLY = !!args.apply;
+// ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
+const { seedPrevS4 } = require('./seed_prev_s4');
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
@@ -207,11 +209,7 @@ function rolloutOnePlace(p) {
   fs.mkdirSync(path.join(scratch, 'S4'));
   const s3Carry = ['routes.json', 'overrides.json', 'diagram-overrides.json'];
   for (const name of s3Carry) copyFile(path.join(prevS3.dir, name), path.join(scratch, 'S4'));
-  for (const name of fs.readdirSync(prevS4.dir)) {
-    const fp = path.join(prevS4.dir, name);
-    if (fs.statSync(fp).isDirectory()) continue;
-    if (name.endsWith('.json') && !s3Carry.includes(name)) fs.copyFileSync(fp, path.join(scratch, 'S4', name));
-  }
+  seedPrevS4(path.join(scratch, 'S4'), prevS4.dir, s3Carry);
   // REFUSE TO SEED FROM AN S3 THE BUILT S4 DISAGREES WITH. The comment on
   // buildInternal() says routes.json's internalRoads block arrives "already stamped
   // with fitExtra etc from the original build" — true of the S4 copy, and NOT true of
@@ -362,14 +360,21 @@ function rolloutOnePlace(p) {
   // brings them in, so a real (non-scratch) apply run was missing them entirely
   // and crashed reading roads_geo.json (found 2026-08-10 rolling out all 5
   // places: the scratch/dry-run path above already carries these forward from
-  // prevS4, this real path didn't). Mirror that here.
-  for (const name of fs.readdirSync(prevS4.dir)) {
-    const fp = path.join(prevS4.dir, name);
-    if (fs.statSync(fp).isDirectory()) continue;
-    if (name.endsWith('.json') && !s3Carry.includes(name) && !fs.existsSync(path.join(s4Dir, name))) fs.copyFileSync(fp, path.join(s4Dir, name));
-  }
+  // prevS4, this real path didn't).
+  //
+  // THE SAME CALL AS THE SCRATCH BUILD ABOVE, and until 2026-08-29 it was not
+  // (OA-013). This one used to add `&& !fs.existsSync(...)`, so a file present in
+  // both a pulled stage and the previous S4 was taken from the STAGE here and from
+  // the previous S4 there — the dry run's diff then described a build this path
+  // would not make. St Ives Bus Station is the recorded case; seed_prev_s4.js
+  // carries the account. `shadowed` names every file where the two disagreed, so
+  // the choice is stated rather than silently made.
+  const seeded = seedPrevS4(s4Dir, prevS4.dir, s3Carry);
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
+  if (seeded.shadowed.length) {
+    console.log(`  ${p.name}: ${seeded.shadowed.length} file(s) existed in a pulled stage with different content and the previous S4's copy was used — ${seeded.shadowed.join(', ')}. That is the rollout rule (same data, new engine); if one of them SHOULD be refreshed, re-run the stage that owns it and commit before rolling out.`);
+  }
   let r;
   const realOutputs = [];
   const realSaid = [];

@@ -66,12 +66,20 @@ what is committed. The walkshed is the OTHER two sheets' radius and it is a poor
 default here: St Neots town centre walks 450 m, and at 450 m the frame reaches the
 unlettered `Church View` pair and this script refuses the sheet. Where the widest
 usable radius is not obvious, `Development Docs/measure_frame_coverage_2026-08-23.py`
-prints it per anchor as `maxOK` -- but that tool anchors on a NaPTAN STOP and this
-one anchors on `place.json`'s centre, so its number is a starting point and not a
-value to copy. At High Wycombe High Street the two anchors are ~20 m apart and the
-`Station Interchange` cluster falls either side of the frame edge depending on which
-you measure from. Take maxOK as an upper bound, then run this tool at the radius you
-intend and believe its verdict.
+prints it per anchor as `maxOK`.
+
+**RUN THAT TOOL WITH `--place <this place's build folder>` AND ITS maxOK TRANSFERS
+STRAIGHT TO `--radius-m`** (added 2026-08-29, OA-012). Without the flag it anchors
+on a NaPTAN STOP while this script anchors on `place.json`'s centre, and the two are
+not the same point: measured over all nine built places on 2026-08-29, every one of
+them gives a different maxOK from the two anchors, and the gap goes both ways --
+St Neots Market Square reads 75 m from the stop and 55 m from the centre, so a
+radius the survey called usable is one this script refuses; High Wycombe High Street
+reads 136 m and 139 m the other way round. Run it from
+`C:/u3a St Ives/Using AI/Buses/Development Docs`; `--all-places` does the lot.
+
+Read a stop-anchored maxOK as an upper bound only, then run this tool at the radius
+you intend and believe its verdict.
 
 A frame can also clip a name CLUSTER: a name unique in view whose twins sit just
 outside. That is not a refusal -- the sheet can still be drawn -- but the printed

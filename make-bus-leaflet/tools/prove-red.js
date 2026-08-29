@@ -511,6 +511,22 @@ const MUTATIONS = [
   // and now compares BYTES through line_endings.js, so the mutation has to break
   // the comparison rather than the old `norm` helper. Same property either way —
   // a CRLF working tree must not read as vendoring drift.
+  // seed_prev_s4.js - the ONE rule the rollout's dry run and its apply now share
+  // (OA-013). Two mutations, one per half of the property: the winner, and the
+  // report that a choice was made at all. Measured on 2026-08-29, no map on the
+  // estate currently has an S4 input that differs from its stage copy, so the
+  // live tree cannot tell the fixed rule from the broken one -- these mutations
+  // are the only thing that can.
+  { suite: 'seed_prev_s4.test.js', file: 'seed_prev_s4.js',
+    what: "the apply prefers a pulled stage copy again, so the dry run's diff describes a build it will not make",
+    find: "    if (fs.existsSync(to) && !fs.readFileSync(to).equals(fs.readFileSync(from))) shadowed.push(name);\n    fs.copyFileSync(from, to);",
+    to: "    if (fs.existsSync(to)) continue;\n    fs.copyFileSync(from, to);" },
+
+  { suite: 'seed_prev_s4.test.js', file: 'seed_prev_s4.js',
+    what: 'the overwrite happens silently, so nothing says a stage disagreed',
+    find: "    if (fs.existsSync(to) && !fs.readFileSync(to).equals(fs.readFileSync(from))) shadowed.push(name);",
+    to: "" },
+
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',
     find: "  return sameBytesIgnoringLineEndings(fs.readFileSync(pathA), fs.readFileSync(pathB));",

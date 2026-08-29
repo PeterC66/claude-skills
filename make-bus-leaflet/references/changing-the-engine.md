@@ -56,6 +56,8 @@ npm run test:prove-red
 
 `tools/prove-red.js` copies `assets/` to a scratch directory, breaks it twenty-five ways one at a time and checks the suite goes red each time, then prints which test objected to which break. **A green suite that has never been seen to fail proves nothing**, and this one found a hole in itself on its first run. Add a mutation whenever you add a test; the runner reports an anchor that no longer matches the engine as stale rather than quietly passing.
 
+**And read WHICH test objected, not just that something did** (2026-08-29, from the portal side of the same discipline). A rule that asks several things at once can be tested through one fixture that answers more than one of them, and then an assertion passes for a reason it does not name: breaking the clause it is about leaves it green, so the falsification round reports the check as sound when it is not. Three of four new assertions on `outputsNeedingRender()` were in exactly that state — a case written to test the payload clause was answered by the file clause, and two deliberate breaks produced no red at all. The remedy is a **fixture per clause**, chosen so only that clause can answer it, and the test is that breaking clause A reddens A's own assertion rather than somebody else's. That is what this runner's "which test objected to which break" line is for; it is not decoration. Named as *Satisfied by the other clause* in the failure-shapes list.
+
 ```bash
 npm run gate:design-keys
 npm run test:prove-red-design-keys

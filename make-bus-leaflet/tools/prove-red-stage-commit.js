@@ -41,20 +41,26 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-stage-'));
 const copy = path.join(dir, 'stage.js');
 fs.writeFileSync(copy, broken);
 
-const r = spawnSync(process.execPath, ['--test', TEST],
+const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', TEST],
   { cwd: ROOT, encoding: 'utf8', env: { ...process.env, STAGE_JS: copy } });
 const out = r.stdout + r.stderr;
 
 // Parse the per-test verdicts rather than the exit code: "some failed" is not
 // the claim. The claim is WHICH failed.
+/* BOTH REPORTER FORMATS ARE READ (2026-08-29). `node --test` defaults to `spec`
+ * from Node 22 and to `tap` before it; this laptop is on Node 24 and the CI
+ * runner is pinned to Node 20. This parser was spec-only and would have read
+ * zero tests in CI — it has simply never run anywhere but Windows. Found when
+ * the sibling harness prove-red-redteam-source.js hit it on its first CI run. */
 const failed = new Set(), passed = new Set();
 for (const line of out.split('\n')) {
   // The trailing duration is what distinguishes a test line from the summary
   // heading "✖ failing tests:", which an earlier version of this parser counted
   // as a seventh test and which is exactly what the count assertion caught.
-  const m = line.match(/^\s*(✔|✖)\s+(.+?)\s+\(\d[\d.]*ms\)\s*$/);
-  if (!m) continue;
-  (m[1] === '✖' ? failed : passed).add(m[2].trim());
+  const spec = line.match(/^\s*(✔|✖)\s+(.+?)\s+\(\d[\d.]*ms\)\s*$/);
+  if (spec) { (spec[1] === '✖' ? failed : passed).add(spec[2].trim()); continue; }
+  const tap = line.match(/^(not ok|ok) \d+ - (.+?)\s*$/);
+  if (tap) (tap[1] === 'not ok' ? failed : passed).add(tap[2].trim());
 }
 
 const controls = [...passed, ...failed].filter(n => n.startsWith('CONTROL'));

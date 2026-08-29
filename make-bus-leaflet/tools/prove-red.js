@@ -1040,7 +1040,7 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));
 const engine = path.join(scratch, 'assets');
 fs.cpSync(ASSETS, engine, { recursive: true });
 
-const runSuite = (suite) => spawnSync(process.execPath, ['--test', path.join(SK, 'test', suite)],
+const runSuite = (suite) => spawnSync(process.execPath, ['--test', '--test-reporter=spec', path.join(SK, 'test', suite)],
   { cwd: SK, env: { ...process.env, ENGINE_DIR: engine }, encoding: 'utf8' });
 
 let survived = 0, broken = 0;

@@ -258,6 +258,13 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: python3 tools/prove-red-route-collision.py
 
+      # OA-164, REPORTED not gated: eight files exist today, the pull guard already
+      # stops them doing harm, and a check red on the day it lands gets muted. It is
+      # here so "harmless" stays something somebody looked at.
+      - name: Sweep for run folders holding a later stage's output
+        working-directory: skills/make-bus-leaflet
+        run: node assets/stray_outputs.js --buses "$GITHUB_WORKSPACE/buses-data"
+
       - name: Run gates (JSON)
         working-directory: skills/make-bus-leaflet
         run: |

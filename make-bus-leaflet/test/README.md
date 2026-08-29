@@ -6,13 +6,15 @@ Run them from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` (or wherever this
 npm test
 ```
 
-That is `node --test`, which finds every `test/*.test.js` file from the package root. **324 tests** as at 2026-08-27, about a second and a half, no network, no data tree, no `Areas/` folder needed. That figure moved six times in a fortnight — 114, 170, 227, 246, 303, 324 — so read it off the run rather than off this line.
+That is `node --test`, which finds every `test/*.test.js` file from the package root. **430 tests** as at 2026-08-29, about a second and a half, no network, no data tree, no `Areas/` folder needed. That figure moved six times in a fortnight — 114, 170, 227, 246, 303, 324 — so read it off the run rather than off this line.
 
 ## Why these exist
 
 Until 2026-08-25 this package's `test` script was `echo "Error: no test specified" && exit 1`, across 23,462 lines of JavaScript and Python. The `gate.sh` byte gates are real and they are green, but they compare the engine's output against the engine's *own previous* output — they are a regression check, and they cannot tell you the previous output was right. This project has been bitten by exactly that: a verification harness once scored 7/7 on a map whose committed data **was** the bug's output. Every engine fault it has actually had was found by a person looking at a printed sheet.
 
 So each test here is one of those faults, written down as a property. The comment above each one says which. Between them they cover the label placer's collision and `mustPlace` behaviour, the footer's measured wrap and its backing plate, the build-warning severities, the ratchet's arithmetic and its distance-to-target reporting, the text-quad geometry the collision metrics are built from, the engine hash, the byte-gate comparison helpers, and the icon recolouring.
+
+**`seed_prev_s4.test.js` is a unit test because it cannot be a data one** (added 2026-08-29, OA-013). It pins the rule the rollout's dry run and its apply now share, and measured on the day, no map on the estate has an S4 input that differs from its stage copy — so the live tree would have reported the broken rule working just as loudly as the fixed one. Its first draft required `../assets/` directly and **both of its prove-red mutations survived**: a suite that resolves its own path never sees the harness's scratch copy, so it is green about code it never ran. Everything here goes through `_engine.js` for exactly that reason.
 
 ## Proving they can fail
 
@@ -22,7 +24,7 @@ A green check that has never been seen to go red proves nothing.
 npm run test:prove-red
 ```
 
-`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — one deliberate one-line edit per property, each reverted before the next — 143 of them as at 2026-08-27, and again, read the count off the run — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
+`tools/prove-red.js` copies `assets/` to a scratch directory, then breaks it on purpose — one deliberate one-line edit per property, each reverted before the next — 175 of them as at 2026-08-29, and again, read the count off the run — and runs the relevant suite against the mutated copy expecting it to **fail**. It prints a table of which test objected to which break, and exits 1 if any mutation SURVIVED. Nothing under `assets/` is touched: every file there is vendored into the portal and compared by `status.js`, so an edit in place would surface as portal drift the next morning.
 
 **A survivor is almost always a hole in the suite — but check that it CAN differ before you write a test for it.** On 2026-08-27 a mutation deleting `badgeStack`'s one-element fast path survived because there was nothing to break: with one member `y0` collapses to `y` and `(n-1)/2*pitch` to zero, so the general loop draws identical bytes at every radius. It is an optimisation, not a branch, and the file's own comments were claiming a fork it does not have. An **equivalent mutant** like that gets replaced with an observable one, with a note in `prove-red.js` saying why it is absent, so nobody re-adds it — and the source comment gets corrected too. Two other survivors in that same run were genuine holes, so the default assumption still holds.
 

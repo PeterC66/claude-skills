@@ -14,7 +14,11 @@
 // and gets 406 — see gotchas), retry across mirrors.
 const fs = require('fs');
 const DIR = process.env.LEAFLET_DIR || process.cwd();
-const marginKm = parseFloat(process.argv[2] || '0.6');
+const ARGV = process.argv.slice(2);
+// --reuse: do not fetch if a roads_geo.json is already here whose stored bbox
+// CONTAINS the box this run needs. See the REUSE block below for why (OA-159).
+const REUSE = ARGV.includes('--reuse');
+const marginKm = parseFloat(ARGV.filter(a => !a.startsWith('--'))[0] || '0.6');
 
 const atco2ll = JSON.parse(fs.readFileSync(DIR + '/atco2ll.json', 'utf8'));
 const routes = (function () {
@@ -77,6 +81,39 @@ try {
 
 const latM = marginKm / 111.32, lonM = marginKm / (111.32 * Math.cos(((minLat + maxLat) / 2) * Math.PI / 180));
 const bbox = [minLat - latM, minLon - lonM, maxLat + latM, maxLon + lonM];
+
+// --- REUSE (OA-159) --------------------------------------------------------
+// A road graph is an INPUT, and re-fetching an input is a decision rather than
+// housekeeping. Until 2026-08-29 this script had no cache, no skip and no
+// offline mode: it queried Overpass every time it was called, which meant every
+// CONFIG-only place rebuild silently took whatever OSM had changed since the
+// last build, at the exact moment it was trying to attribute a config change.
+// It fired on the first sheet it was looked for on -- St Neots Town Centre
+// v2.13, a two-line label correction, came back with one OSM way split in two
+// at a shared vertex: identical coordinates, identical ink, and nothing would
+// have reported it.
+//
+// The check is CONTAINMENT, not existence. An existing graph is only reusable
+// if its stored bbox covers the box this run needs -- a config change that adds
+// a stop or widens the fit enlarges the box, and reusing a smaller graph would
+// draw routes off the end of the road network. So the reuse is refused, loudly,
+// and the pull happens. That is the difference between a cache and a shortcut.
+if (REUSE) {
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(DIR + '/roads_geo.json', 'utf8')); } catch (e) { }
+  const pb = prev && Array.isArray(prev.bbox) && prev.bbox.length === 4 ? prev.bbox : null;
+  if (!pb) {
+    console.log('pull_roads --reuse: no usable roads_geo.json here — pulling.');
+  } else if (pb[0] <= bbox[0] && pb[1] <= bbox[1] && pb[2] >= bbox[2] && pb[3] >= bbox[3]) {
+    console.log('pull_roads --reuse: kept the existing roads_geo.json (' +
+      (prev.ways || []).length + ' ways); its bbox ' + pb.map(x => x.toFixed(4)).join(',') +
+      ' contains the ' + bbox.map(x => x.toFixed(4)).join(',') + ' this run needs. No Overpass call.');
+    return;
+  } else {
+    console.log('pull_roads --reuse: REFUSED — the existing bbox ' + pb.map(x => x.toFixed(4)).join(',') +
+      ' does not contain the ' + bbox.map(x => x.toFixed(4)).join(',') + ' this run needs. Pulling.');
+  }
+}
 
 // Highways a bus (or its road context) can plausibly use. service is included
 // for bus-station / supermarket loops; match_routes.js penalises it so paths

@@ -82,6 +82,22 @@ let failures = 0, run = 0;
  * "fixture assumption broken" rather than quietly passing over data that no
  * longer exhibits the thing being proved.
  */
+/* Tell the staged red team that a route the sheet DOES draw does not serve the
+ * town, so the serves-town HARD this section needs exists by construction. Fails
+ * loudly if the route stops being drawn, rather than quietly proving nothing --
+ * which is the whole failure this helper was written to end. */
+function injectServesTownFalse(dir, route = 'T7') {
+  const routes = JSON.parse(fs.readFileSync(path.join(dir, 'routes.json'), 'utf8'));
+  const drawn = new Set([...(routes.routeOrder || []), ...Object.keys(routes.palette || {})]);
+  if (!drawn.has(route)) throw new Error(`prove-s6-checks: fixture route ${route} is no longer drawn by the Wisbech config — pick another drawn route, do not delete the case`);
+  const rt = JSON.parse(fs.readFileSync(path.join(dir, 'redteam.json'), 'utf8'));
+  rt.excluded = (rt.excluded || []).filter((e) => String(e.route) !== route);
+  rt.excluded.push({ route, operator: 'Stagecoach East Midlands', servesTown: false,
+    reason: 'INJECTED BY prove-s6-checks.js — not a real claim about this route. The case needs a serves-town HARD to exist by construction rather than by borrowing whatever the estate happens to be wrong about today.' });
+  rt.services = (rt.services || []).filter((sv) => String(sv.route) !== route);
+  fs.writeFileSync(path.join(dir, 'redteam.json'), JSON.stringify(rt, null, 1));
+}
+
 function stage(runKey, name) {
   const buildDir = path.join(BUSES, path.dirname(path.dirname(RUNS[runKey])));
   const s6 = path.join(BUSES, RUNS[runKey]);
@@ -641,17 +657,31 @@ console.log('\n9. A borrowed red team is evidence, not a verdict — and it stil
    * "Fix the noisy check" whose failure mode is a check that no longer says
    * anything is exactly the shape this file exists to catch.
    *
-   * Wisbech is the fixture because its red team produces a real, reproducible
-   * HARD: X46, which the red team says merged into the plain 46 and we still
-   * draw. Stamping the answer is what redteam_source.js does to the COPY it
-   * places in a run dir; the answer in its own build is never touched.
+   * THE HARD IS BUILT, NOT BORROWED (2026-08-29). It used to rely on Wisbech's
+   * own red team producing a real one -- X46, which the answer says merged into
+   * the plain 46 while we still drew it. On 2026-08-29 Peter adjudicated that
+   * question, X46 came off the sheet and out of verified-services.json, and this
+   * case failed in CI the same afternoon: "the fixture really produces a
+   * red-team HARD to begin with" went red, not because anything broke but
+   * because the estate got BETTER underneath it. That is the same trap case 1
+   * and case 10 both record, walked into from the other side -- a fixture that
+   * borrows a real object which happens to have the property under test expires
+   * the day somebody fixes the object, and it expires as a FALSE ALARM.
+   *
+   * So the claim is now injected: the red team is told a route the sheet
+   * genuinely draws does not serve the town. T7 is chosen because it is drawn,
+   * it carries no redteamRejected entry (case 8 uses 66 for that), and nothing
+   * else in this file depends on it.
    */
-  const own = verify(stage('wisbech', 'borrow-own'));
+  const ownDir = stage('wisbech', 'borrow-own');
+  injectServesTownFalse(ownDir);
+  const own = verify(ownDir);
   const ownHard = own.v ? own.v.findings.filter(f => f.source === 'redteam' && f.severity === 'hard') : [];
   check('the fixture really produces a red-team HARD to begin with', 'at least one hard finding with source redteam',
     ownHard.length > 0, `${ownHard.length} — without one this case proves nothing`);
 
   const d = stage('wisbech', 'borrow-lent');
+  injectServesTownFalse(d);
   const rt = readJ(d, 'redteam.json');
   rt._borrowedFrom = { map: 'Somewhere Else', build: '/elsewhere', run: '2026-08-26_0700', derivedAt: '2026-08-26', borrowedOn: '2026-08-29' };
   writeJ(d, 'redteam.json', rt);

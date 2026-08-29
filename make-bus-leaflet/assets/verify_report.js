@@ -992,6 +992,39 @@ if (redteam) {
   }
 }
 
+/* =====================================================================
+ * A BORROWED RED TEAM BLOCKS NOTHING (OA-141, decided by Peter 2026-08-29).
+ *
+ * A place inside a mapped town draws a subset of that town's services, and its
+ * town usually already owns a recent blind answer. Reusing it takes seven of the
+ * ten unverified place maps to zero cost. The independence argument survives
+ * whole -- the red team never saw our data either way, and blindness does not
+ * decay by being read twice.
+ *
+ * What does NOT survive is the SCOPE. A town's answer is about *services serving
+ * the town*; a place asks *services calling at these stops*. The town answer can
+ * be legitimately silent about a service that reaches the place but not the
+ * centre, and its termini are settlements where a place map wants landmarks. So
+ * a borrowed answer is evidence, not a verdict: every HARD it produces is
+ * restated as a SOFT, carrying the reason, and none of them is dropped. The
+ * sanity checks -- which read our own data, not the red team's -- are untouched.
+ *
+ * `_borrowedFrom` is stamped by redteam_source.js onto the COPY it places in the
+ * run dir, never onto the answer in its own build. An answer that was not
+ * borrowed carries no such field and nothing here fires.
+ * ===================================================================== */
+const BORROWED = (redteam && redteam._borrowedFrom) || null;
+const downgraded = [];
+if (BORROWED) {
+  for (const f of findings) {
+    if (f.source !== 'redteam' || f.severity !== 'hard') continue;
+    f.severity = 'soft';
+    f.evidence = Object.assign({}, f.evidence, { downgradedFromHard: true, borrowedFrom: BORROWED });
+    f.message += ` [Downgraded HARD→soft: this red-team answer was derived for ${BORROWED.map || 'another map'}, not for this one. It is scoped to services serving that map, so it cannot settle a question about these stops on its own — read it, do not be blocked by it. Buy this map its own answer to restore a blocking verdict.]`;
+    downgraded.push(f.id);
+  }
+}
+
 // =====================================================================
 // emit
 // =====================================================================
@@ -1016,6 +1049,10 @@ const out = {
     soft: soft().length,
     pass: hard().length === 0 && !UNCURATED,
     verdict: UNCURATED ? 'not-verified-uncurated-s1' : (hard().length === 0 ? 'pass' : 'blocked'),
+    /* A pass reached with a borrowed red team is a weaker pass, and the file has
+     * to say so — the console banner that qualified it does not outlive the JSON. */
+    borrowedRedteam: BORROWED || null,
+    downgradedFromHard: downgraded,
     /* How much of S-5 actually RAN (OA-048). A verdict of `pass` says nothing
      * about the routes no check looked at, and this is the one check on the
      * sheet that can be structurally unavailable rather than merely quiet — on
@@ -1046,7 +1083,7 @@ fs.writeFileSync(P('verification.json'), JSON.stringify(out, null, 2) + '\n');
 const bar = '─'.repeat(64);
 console.log(bar);
 console.log(`Verification — ${out.town}  (routes v${out.inputs.routesVersion || '?'}, S1 ${out.inputs.verifiedOn || '?'})`);
-console.log(`Red-team: ${out.redteamPresent ? 'present' : 'ABSENT (sanity checks only)'}   Displayed: ${out.inputs.displayedRoutes.join(', ')}`);
+console.log(`Red-team: ${out.redteamPresent ? (BORROWED ? `BORROWED from ${BORROWED.map || '?'} (${BORROWED.run || '?'}) — nothing it says can block` : 'present') : 'ABSENT (sanity checks only)'}   Displayed: ${out.inputs.displayedRoutes.join(', ')}`);
 console.log(bar);
 if (!findings.length) console.log('  No findings — all checks clean.');
 for (const sev of ['hard', 'soft']) {
@@ -1070,6 +1107,10 @@ const skipBits = Object.entries(dc.skippedBy).map(([k, n]) => `${n} ${k}`).join(
 console.log(`        direction check ran on ${dc.checked}/${dc.displayed} displayed routes (${dc.pct}%)`
   + (dc.checked === 0 ? ' — NONE, so this verdict says nothing about which way anything is drawn' : '')
   + (skipBits ? `; ${dc.skipped} not candidates (${skipBits})` : ''));
+if (downgraded.length) {
+  console.log(`        ${downgraded.length} red-team HARD${downgraded.length === 1 ? '' : 's'} restated as soft (${downgraded.join(', ')}) — the answer was bought for ${BORROWED.map || 'another map'}.`);
+  console.log(`        Buy this map its own red team to make them blocking again.`);
+}
 if (!dc.accountsForAll) {
   console.log(`        WARNING: ${dc.checked}+${dc.unavailable}+${dc.skipped} != ${dc.displayed} — a route left S-5 by an unrecorded path, so the coverage figure understates the gap.`);
 }

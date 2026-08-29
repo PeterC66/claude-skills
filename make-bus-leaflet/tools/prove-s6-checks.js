@@ -621,6 +621,47 @@ console.log('\n6. redteamRejected — an adjudicated red-team claim is recorded,
     stale2.v ? JSON.stringify(stale2.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
 }
 
+/* ------------------------------------------- 9. borrowed red team (OA-141) */
+console.log('\n9. A borrowed red team is evidence, not a verdict — and it still says everything it said');
+{
+  /*
+   * Peter decided on 2026-08-29 that a TOWN's blind answer may verify a PLACE
+   * inside it, with every HARD restated as a SOFT. The pair is the whole point:
+   * the downgrade must happen, AND nothing may be silently dropped on the way.
+   * "Fix the noisy check" whose failure mode is a check that no longer says
+   * anything is exactly the shape this file exists to catch.
+   *
+   * Wisbech is the fixture because its red team produces a real, reproducible
+   * HARD: X46, which the red team says merged into the plain 46 and we still
+   * draw. Stamping the answer is what redteam_source.js does to the COPY it
+   * places in a run dir; the answer in its own build is never touched.
+   */
+  const own = verify(stage('wisbech', 'borrow-own'));
+  const ownHard = own.v ? own.v.findings.filter(f => f.source === 'redteam' && f.severity === 'hard') : [];
+  check('the fixture really produces a red-team HARD to begin with', 'at least one hard finding with source redteam',
+    ownHard.length > 0, `${ownHard.length} — without one this case proves nothing`);
+
+  const d = stage('wisbech', 'borrow-lent');
+  const rt = readJ(d, 'redteam.json');
+  rt._borrowedFrom = { map: 'Somewhere Else', build: '/elsewhere', run: '2026-08-26_0700', derivedAt: '2026-08-26', borrowedOn: '2026-08-29' };
+  writeJ(d, 'redteam.json', rt);
+  const lent = verify(d);
+  check('a borrowed answer blocks nothing', 'no hard finding with source redteam',
+    lent.v && lent.v.findings.filter(f => f.source === 'redteam' && f.severity === 'hard').length === 0,
+    lent.v ? JSON.stringify(lent.v.findings.filter(f => f.source === 'redteam' && f.severity === 'hard').map(f => f.id)) : 'no report');
+  check('and every one of them survives as a soft, not dropped', `${ownHard.length} downgraded finding(s) still present`,
+    !!lent.v && ownHard.every(o => lent.v.findings.some(f => f.category === o.category && f.route === o.route
+      && f.severity === 'soft' && f.evidence && f.evidence.downgradedFromHard === true)),
+    lent.v ? JSON.stringify(lent.v.findings.filter(f => f.evidence && f.evidence.downgradedFromHard).map(f => f.category + '/' + f.route)) : 'no report');
+  check('the file records that this pass rests on a borrowed answer', 'summary.borrowedRedteam names the lending map',
+    !!lent.v && lent.v.summary.borrowedRedteam && lent.v.summary.borrowedRedteam.map === 'Somewhere Else',
+    lent.v ? JSON.stringify(lent.v.summary.borrowedRedteam) : 'no report');
+  check('the SANITY checks are untouched — only the red team is scoped', 'the same number of sanity findings either way',
+    !!lent.v && !!own.v
+      && lent.v.findings.filter(f => f.source === 'sanity').length === own.v.findings.filter(f => f.source === 'sanity').length,
+    lent.v && own.v ? `${lent.v.findings.filter(f => f.source === 'sanity').length} vs ${own.v.findings.filter(f => f.source === 'sanity').length}` : 'no report');
+}
+
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

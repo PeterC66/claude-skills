@@ -64,13 +64,19 @@
  *      sits inside is refused the same way, because it is a mistake every time
  *      -- unless you mean it, which is what --foreign-build says.
  *
- * `--foreign-build` exists for exactly one question, and that question is open:
- * may a TOWN's red-team answer verify a PLACE inside it? A place draws a subset
- * of its town's services and the red team is blind to our data either way, so
- * the independence argument survives; against it, a town answer is scoped to
- * *services serving the town* where a place asks *services calling at these
- * stops*. Until that is decided, the flag makes the borrowing deliberate,
- * loud and recorded instead of accidental and silent.
+ * `--foreign-build` exists for one question, and Peter DECIDED it on 2026-08-29:
+ * a TOWN's red-team answer MAY verify a PLACE inside it, and every HARD it
+ * produces is restated as a SOFT. The independence argument survives whole --
+ * the red team never saw our data either way, and blindness does not decay by
+ * being read twice. What does not survive is the SCOPE: a town answer is about
+ * *services serving the town*, a place asks *services calling at these stops*,
+ * so a town answer can be legitimately silent about a service reaching the place
+ * but not the centre. Evidence, then, and not a verdict.
+ *
+ * The copy this places in the run dir is STAMPED `_borrowedFrom`; the answer in
+ * its own build is never touched. verify_report.js reads that stamp and does the
+ * downgrading. Without --foreign-build a cross-map answer is refused outright,
+ * so borrowing is always deliberate and always recorded.
  *
  * EXIT CODES.  0 = reused, a redteam.json is now in the run dir.
  *             10 = must spawn the agent (this is the normal, expected outcome for
@@ -225,6 +231,19 @@ if (DRY) {
   console.log(`          --dry-run: would copy it to ${dest}`);
 } else if (path.resolve(best.file) === path.resolve(dest)) {
   console.log(`          already in place at ${dest}`);
+} else if (FOREIGN) {
+  /* A BORROWED answer is stamped on the COPY, never on the original in its own
+   * build (OA-141, decided 2026-08-29). verify_report.js reads `_borrowedFrom`
+   * and restates every red-team HARD as a SOFT: the answer is blind either way,
+   * so it is good evidence, but it is scoped to *services serving that map* and
+   * cannot settle a question about these stops on its own. Without the stamp the
+   * borrowing is invisible to every reader downstream, which is the whole failure
+   * this row is about, one file along. */
+  const j = JSON.parse(fs.readFileSync(best.file, 'utf8'));
+  j._borrowedFrom = { map: m.town || path.basename(BUILD), build: BUILD, run: best.dir, derivedAt: best.at, borrowedOn: today };
+  fs.writeFileSync(dest, JSON.stringify(j, null, 2) + '\n');
+  console.log(`          copied to ${dest}, STAMPED _borrowedFrom ${j._borrowedFrom.map}`);
+  console.log(`          Its findings will be SOFT, not blocking — that is the deal for a borrowed answer.`);
 } else {
   fs.copyFileSync(best.file, dest);
   console.log(`          copied to ${dest}`);

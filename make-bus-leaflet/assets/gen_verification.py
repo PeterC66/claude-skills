@@ -30,7 +30,7 @@ import sys
 from datetime import datetime
 
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, RGBColor, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -61,6 +61,27 @@ def set_cell(cell, text, *, bold=False, color=None, size=9, align=None):
     run.font.size = Pt(size)
     if color is not None:
         run.font.color.rgb = RGBColor.from_string(color)
+
+
+def set_col_widths(table, usable_width, weights):
+    """Fix each column to a proportional share of the page's usable width —
+    see gen_disagreements.py's copy of this helper for why `table.autofit`
+    alone isn't enough (it only autofits when Word itself opens the file;
+    the PDF is rendered by headless LibreOffice, which just splits the grid
+    evenly, cramping Finding/Evidence against ID/Severity/Route)."""
+    widths = [Emu(int(usable_width * w / sum(weights))) for w in weights]
+    table.autofit = False
+    table.allow_autofit = False
+    for row in table.rows:
+        for cell, w in zip(row.cells, widths):
+            cell.width = w
+    # Per-cell tcW alone isn't enough: python-docx leaves tblGrid at the
+    # equal-width columns it created the table with, and that's what decides
+    # layout wherever no cell in a column happens to override it (e.g. a
+    # short table with fewer rows than columns wide). Rewrite it to match.
+    grid = table._tbl.find(qn("w:tblGrid"))
+    for gridcol, w in zip(grid.findall(qn("w:gridCol")), widths):
+        gridcol.set(qn("w:w"), str(w.twips))
 
 
 def evidence_str(ev):
@@ -182,6 +203,12 @@ def main():
         fill = HARD_FILL if is_hard else SOFT_FILL
         for c in cells:
             shade(c, fill)
+
+    section = doc.sections[0]
+    usable = section.page_width - section.left_margin - section.right_margin
+    # ID / Severity / Route are short codes; Finding is the prose message
+    # and Evidence/source carries raw JSON, so they take the largest shares.
+    set_col_widths(table, usable, [0.5, 0.8, 1.0, 0.6, 2.6, 2.0])
 
     # summary sections
     if hard:

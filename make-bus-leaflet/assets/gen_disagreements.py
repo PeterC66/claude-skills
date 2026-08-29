@@ -35,7 +35,7 @@ import sys
 from datetime import datetime
 
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, RGBColor, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -96,6 +96,31 @@ def set_cell(cell, text, *, bold=False, color=None, size=9, align=None):
     run.font.size = Pt(size)
     if color is not None:
         run.font.color.rgb = RGBColor.from_string(color)
+
+
+def set_col_widths(table, usable_width, weights):
+    """Fix each column to a proportional share of the page's usable width
+    instead of leaving `table.autofit` to divide it evenly. Word applies its
+    own content-based autofit when a reader opens the .docx, but the
+    headless LibreOffice pass that makes the customer-facing PDF does not —
+    it renders the equal-width grid, so a column that is mostly short codes
+    (Route, Agree?) got the same width as one that carries a URL and a
+    resolution note, and the prose column wrapped to a tall, cramped strip
+    while the short columns sat mostly empty. Setting explicit weighted
+    widths fixes the PDF regardless of which engine renders it."""
+    widths = [Emu(int(usable_width * w / sum(weights))) for w in weights]
+    table.autofit = False
+    table.allow_autofit = False
+    for row in table.rows:
+        for cell, w in zip(row.cells, widths):
+            cell.width = w
+    # Per-cell tcW alone isn't enough: python-docx leaves tblGrid at the
+    # equal-width columns it created the table with, and that's what decides
+    # layout wherever no cell in a column happens to override it. Rewrite it
+    # to match.
+    grid = table._tbl.find(qn("w:tblGrid"))
+    for gridcol, w in zip(grid.findall(qn("w:gridCol")), widths):
+        gridcol.set(qn("w:w"), str(w.twips))
 
 
 def main():
@@ -170,6 +195,12 @@ def main():
         fill = AGREE_FILL if agree else CONFLICT_FILL
         for c in cells:
             shade(c, fill)
+
+    section = doc.sections[0]
+    usable = section.page_width - section.left_margin - section.right_margin
+    # Route / Agree? are short codes; Resolution / source carries a prose
+    # note plus two URLs, so it gets the largest share.
+    set_col_widths(table, usable, [0.7, 1.3, 1.0, 1.5, 1.5, 0.7, 2.0])
 
     if conflicts:
         doc.add_heading("Disagreements summary", level=1)

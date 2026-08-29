@@ -156,10 +156,66 @@ const measureText = (str, size) => String(str).length * size * 0.58;
 // 2026-08-06 and NOT propagated back to the two files it was copied from, so the
 // defect survived on every area external until St Ives VL14/9v/301o resurfaced it
 // on 2026-08-17. See make-bus-leaflet references/gotchas.md.
+/* DASH_CYCLE — the nominal 2.6mm on + 2.4mm off, kept as one number because the whole
+ * point below is to fit a WHOLE number of them into the line being stroked. */
+const DASH_ON = 2.6, DASH_OFF = 2.4, DASH_CYCLE = DASH_ON + DASH_OFF;
+/* dashFit — scale the dash pattern so the spoke ends on a cycle boundary (OA-160,
+ * fixed 2026-08-29).
+ *
+ * A flat `stroke-dasharray="2.6 2.4"` takes no account of the length it is stroking,
+ * so wherever the remainder lands inside the ON phase the final dash is truncated --
+ * and where the remainder is a small fraction of a millimetre what paints is a sliver
+ * PERPENDICULAR to the spoke, a 1px mark at 300dpi that reads as a stray hairline
+ * rather than as the end of a dashed line. Measured across every place external's
+ * ci-reference on 2026-08-29: 14 dashed spokes, 7 ending cleanly in a gap, 5 in a
+ * part-dash long enough to read as intentional, and 2 in a sliver under 0.1mm -- St
+ * Neots Town Centre's 66 spoke at 0.066mm and Beaconsfield Simpson Centre's at
+ * 0.090mm.
+ *
+ * It was invisible because the destination box covered the end of the spoke, which is
+ * the fault's real shape: dropping St Neots Town Centre's sub-label on v2.14 took that
+ * box from 20.6mm tall to 13.0mm and brought 1.29mm of spoke, tail included, out from
+ * under it. The <path> was byte-identical across both versions; only the <rect> moved.
+ * A defect can be CREATED by one change and REVEALED by a much later, unrelated one,
+ * and the second change gets the blame because it is the one in the diff.
+ *
+ * THE OBVIOUS TARGET IS THE WRONG ONE, and it was tried first: scaling so the spoke
+ * ends exactly on a cycle boundary took the estate's slivers from 2 to SIX. Ending on
+ * a boundary is the most fragile place to end, not the safest -- the coordinates are
+ * written to 2dp and the dasharray to 3dp, so the length that actually paints differs
+ * from the computed one by a few thousandths of a millimetre, and a hair past the
+ * boundary is a hair INTO the next dash. Godmanchester Ermine Street came out at a
+ * 0.0046mm tail, an order of magnitude finer than the defect being fixed.
+ *
+ * So aim for the MIDDLE OF A GAP instead, which is the point furthest from any ink:
+ * end the spoke a complete dash plus half a gap into its last cycle. In cycle
+ * fractions that target is `(ON + OFF/2) / CYCLE` = 0.76, so we want `len` to be
+ * `(n + 0.76)` scaled cycles. That leaves 1.2mm of gap on either side of where the
+ * line stops -- 260 times the rounding error -- so no representable rounding can put
+ * ink at the end of a spoke, and the last dash drawn is always a whole one.
+ *
+ * Both phases scale by the same factor, so the pattern keeps its 52/48 duty ratio
+ * exactly; the factor is within half a cycle spread over the spoke's whole length.
+ * The 12mm key sample below deliberately keeps the nominal 2.6/2.4: it is a sample of
+ * the pattern, not of a fitted spoke, and its own length was chosen (not arbitrary --
+ * see the key row) to read as a dashed line rather than as two squares.
+ */
+const DASH_TARGET = (DASH_ON + DASH_OFF / 2) / DASH_CYCLE;   // 0.76 — mid-gap
+function dashFit(len) {
+  const n = Math.max(0, Math.round(len / DASH_CYCLE - DASH_TARGET));
+  const k = len / ((n + DASH_TARGET) * DASH_CYCLE);
+  return `${(DASH_ON * k).toFixed(3)} ${(DASH_OFF * k).toFixed(3)}`;
+}
 function line(pts, color, w = 3.4, dashed = false) {
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' ');
   const cap = dashed ? 'butt' : 'round';
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dashed ? ' stroke-dasharray="2.6 2.4"' : ''}/>`);
+  let dash = '';
+  if (dashed) {
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    dash = ` stroke-dasharray="${dashFit(len)}"`;
+  }
+  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
 }
 function tick(x, y, color) { out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 /* design.badgeFit — a route key wider than its disc overflows it. Same defect, same
@@ -281,9 +337,32 @@ const HUB_H = 13;
 // and solve r(theta) = 1/sqrt((cos/a)^2+(sin/b)^2) for the direction each spoke actually
 // travels, so every spoke starts just outside the label box regardless of its angle.
 const HUB_A = HUB_W / 2 + 3, HUB_B = HUB_H / 2 + 3;
+/* THE FLOOR THAT CANCELLED THE ELLIPSE (OA-149, fixed 2026-08-29).
+ *
+ * This function used to end `Math.max(16, 1 / denom)`. `1/denom` is the ellipse's
+ * radius in the spoke's own direction and so ranges between HUB_B (9.5) and HUB_A;
+ * HUB_A is `HUB_W/2 + 3` and HUB_W has a 26mm floor, so on any place whose hub label
+ * fits the minimum box HUB_A is exactly 16 -- the floor and the computation's own
+ * MAXIMUM were the same number, and `Math.max` returned the floor for every bearing.
+ * Twelve lines of comment above described an ellipse that had not run since some
+ * later change moved HUB_W's floor to 26. Measured on the committed board
+ * 2026-08-28: five of six places had a constant r0 of 16.00 on every spoke, which is
+ * also why OA-060's badge ring came out exactly circular at 19.99-20.00mm.
+ *
+ * The floor is DELETED rather than re-tuned, because the ellipse already is the
+ * clear zone: HUB_A/HUB_B are the hub box's half-width/half-height PLUS 3mm, so
+ * every bearing keeps the same 3mm of air the pad was written to give it. A second
+ * floor on top of that could only ever spend map room, and on a near-vertical spoke
+ * it was spending 6.5mm of it.
+ *
+ * A guard written `Math.max(floor, computed)` is inert whenever `floor >=
+ * max(computed)`, and nothing about reading either line says so -- it needs the two
+ * numbers side by side. See "a floor that equals its own ceiling" in the failure
+ * shapes list.
+ */
 function hubEdge(dx, dy) {
   const denom = Math.sqrt((dx * dx) / (HUB_A * HUB_A) + (dy * dy) / (HUB_B * HUB_B));
-  return denom > 0 ? Math.max(16, 1 / denom) : Math.max(16, HUB_A, HUB_B);
+  return denom > 0 ? 1 / denom : Math.max(HUB_A, HUB_B);
 }
 function rayToRect(dx, dy) {
   let t = 1e9;
@@ -611,20 +690,42 @@ const LIMITED_KEY = DESIGN.limitedKeyLabel || 'Dashed \u2014 certain days only, 
 // given top-left corner and reports the panel size it needed. The size is independent of
 // (lx,ly) — every offset inside is relative — so it can be called once to measure and
 // again, after a placement is chosen, to actually draw.
+/* panelText — the legend panel's own width measure (OA-061, fixed 2026-08-29).
+ *
+ * Every `panelMaxX` line below used to call `measureText`, the characters x size x
+ * 0.58 estimate, while `font_metrics.js` -- real Arial advances -- was already
+ * required in this file and already used for `hubFit` and `badgeFit`. The legend
+ * panel never got it. Measured on all NINE shipped panels 2026-08-29, the panel
+ * claimed 7.6-21.3mm more than its widest line actually needs; 8mm of that is the
+ * intended padding in `bw` below, so what real metrics recover is 8-13mm on the eight
+ * whose longest line is prose, and nothing at all on High Wycombe Aldi, whose long
+ * note already fills the panel.
+ *
+ * `measureText` STAYS, and is still the right tool where it is still called: it is a
+ * deliberately generous estimate, and picking a word-wrap character count (below) is
+ * exactly the job an estimate erring wide should keep. What it was wrong for was
+ * sizing a box around type that has already been laid out.
+ *
+ * NOTE THE POPULATION. The 2026-08-29 measurement that sized this said "six place
+ * externals carry a ci-reference" and tabulated six. There are NINE: it globbed
+ * `Areas/*'/'Places/` and never looked in `Places/_standalone/`, where Ely Co-op and
+ * both Godmanchester Co-ops live. Walk for the fixtures, do not glob for them.
+ */
+const panelText = (str, size, bold) => FONT.textWidth(str, size, !!bold);
 function buildLegend(lx, ly) {
   const buf = [];
   const realOut = out;
   out = x => buf.push(x);
   let panelMaxX = lx, panelMaxY = ly - 4;
   out(`<text x="${lx}" y="${ly - 4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
-  panelMaxX = Math.max(panelMaxX, lx + measureText('Operators & services', 4.4));
+  panelMaxX = Math.max(panelMaxX, lx + panelText('Operators & services', 4.4, true));
   OPS.forEach((op, i) => {
     const yy = ly + i * 6.6; let bx = lx;
     // design.badgeFit: bx already walks left-to-right, so each badge takes the room it
     // actually needs and the next one starts after it (7.0 = 5.8mm disc + 1.2mm gap).
     op.routes.filter(r => !HIDDEN_ROUTES.has(r)).forEach(r => { const w = badgeXW(r, 2.9); badge(bx + 3 + w, yy, r, 2.9); bx += 7.0 + 2 * w; });
     out(`<text x="${bx + 2}" y="${(yy + 0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
-    panelMaxX = Math.max(panelMaxX, bx + 2 + measureText(op.name, 3.4));
+    panelMaxX = Math.max(panelMaxX, bx + 2 + panelText(op.name, 3.4));
     panelMaxY = Math.max(panelMaxY, yy + 3);
   });
   let ny = ly + OPS.length * 6.6 + 4;
@@ -633,7 +734,7 @@ function buildLegend(lx, ly) {
     badge(lx + 3 + _lw, ny, l.route, 2.9);
     const _loopLabel = l.label || 'local circular';
     out(`<text x="${lx + 8 + 2 * _lw}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(_loopLabel)}</text>`);
-    panelMaxX = Math.max(panelMaxX, lx + 8 + 2 * _lw + measureText(_loopLabel, 3.0));
+    panelMaxX = Math.max(panelMaxX, lx + 8 + 2 * _lw + panelText(_loopLabel, 3.0));
     panelMaxY = Math.max(panelMaxY, ny + 3);
     ny += 6.0;
   });
@@ -654,7 +755,7 @@ function buildLegend(lx, ly) {
   if (dests.some(b => b.limited && b.routes.some(r => !HIDDEN_ROUTES.has(r)))) {
     out(`<path d="M${lx.toFixed(2)} ${ny.toFixed(2)}h12.00" fill="none" stroke="#888" stroke-width="3.4" stroke-dasharray="2.6 2.4" stroke-linecap="butt"/>`);
     out(`<text x="${(lx + 14).toFixed(2)}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666" dominant-baseline="central">${esc(LIMITED_KEY)}</text>`);
-    panelMaxX = Math.max(panelMaxX, lx + 14 + measureText(LIMITED_KEY, 2.9));
+    panelMaxX = Math.max(panelMaxX, lx + 14 + panelText(LIMITED_KEY, 2.9));
     panelMaxY = Math.max(panelMaxY, ny + 3);
     ny += 6.0;
   }
@@ -665,7 +766,7 @@ function buildLegend(lx, ly) {
     const _maxChars = Math.max(20, Math.floor(_panelW / (2.9 * 0.58)));
     const _noteLines = wrapText(D.note, _maxChars);
     _noteLines.forEach((ln, i) => out(`<text x="${lx}" y="${(ny + 2 + i * 3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
-    panelMaxX = Math.max(panelMaxX, lx + Math.max(..._noteLines.map(ln => measureText(ln, 2.9))));
+    panelMaxX = Math.max(panelMaxX, lx + Math.max(..._noteLines.map(ln => panelText(ln, 2.9))));
     panelMaxY = Math.max(panelMaxY, ny + 2 + (_noteLines.length - 1) * 3.6 + 2);
   }
   out = realOut;
@@ -811,6 +912,164 @@ const legend = buildLegend(lx, ly);
 HARD.push([lx - 4 - 0.6, ly - 10 - 0.6, lx - 4 + legend.bw + 0.6, ly - 10 + legend.bh + 0.6, 'legend']);
 out(`<rect x="${(lx - 4).toFixed(2)}" y="${(ly - 10).toFixed(2)}" width="${legend.bw.toFixed(2)}" height="${legend.bh.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
 legend.buf.forEach(out);
+
+/* ---- design.howToUse: the "how to read this" panel (OA-056, built 2026-08-29) ----
+ *
+ * WHY THIS SHEET NEEDS IT MORE THAN THE TOWN'S, not less. The argument in
+ * gen_external_radial.js is that a hub-and-spoke diagram is an unfamiliar FORM to
+ * most people and that sheet is nothing but one. A place external is MORE of one: its
+ * spokes are aggregated DESTINATIONS rather than routes, which is a second unfamiliar
+ * idea on the same sheet, and the badges along a spoke are the buses that take you
+ * there rather than the line you are following.
+ *
+ * THE ROW THAT ASKED FOR THIS ARGUED THE OPPOSITE FOR FIVE DAYS. OA-056 used to read
+ * "five of the eight TOWN externals decline the panel rather than bury a destination,
+ * so a place ... may well not want it either". Measured 2026-08-28 against every
+ * town's latest S3: all eight carry `design.howToUse`, none declines it, and the
+ * panel has been ON BY DEFAULT in the radial since 2026-08-24 precisely because all
+ * eight had opted in. Nothing declines it and nothing ever did. Re-measure a row's
+ * headline claim before acting on it.
+ *
+ * ON BY DEFAULT here too, for the same reason and by the same rule -- and `false`
+ * refuses it. The words derive from the map's own data (invariant 1): the hub
+ * sentence names whatever this place is called, the journey-time bullet appears only
+ * where `minutesToDestination` exists, and the not-to-scale bullet only when the
+ * footer is not already saying it. Nothing new has to be authored per place.
+ *
+ * WHAT IS DELIBERATELY DIFFERENT FROM THE TOWN'S, AND IT WAS MEASURED RATHER THAN
+ * CHOSEN. The first cut derived the radial's five-to-seven bullets, conditioning two
+ * of them on `minutesToDestination` and on tick labels being drawn. Swept across all
+ * nine shipped place externals on 2026-08-29, that panel came out 99 x 49mm and
+ * legendSpot could not place it on SIX of the nine -- Beaconsfield Simpson Centre,
+ * Beaconsfield Waitrose, High Wycombe Aldi, Ely Co-op and both Godmanchester Co-ops
+ * all declined it rather than cover a destination.
+ *
+ * NARROWING THE COLUMN IS THE WRONG LEVER AND THE SWEEP SAYS SO. Widths 92/84/76/68/
+ * 60/52mm placed on 3/2/1/3/5/6 sheets -- NOT MONOTONIC, because a narrower column
+ * wraps into more lines and the panel gets TALLER, and it is a page device's HEIGHT
+ * that collides on a sheet whose spokes fan out horizontally. The radial's own
+ * comment records learning this in the other direction.
+ *
+ * THE LEVER IS THE BULLET COUNT. At the full 92mm: four bullets place on 3 of 9,
+ * THREE place on 9 OF 9, two add nothing further. So the default here is three.
+ *
+ * AND THAT IS THE SAME ANSWER THE TOWNS REACHED INDEPENDENTLY. All eight town
+ * externals pin `bullets` to a hand-picked three of the five the radial derives
+ * (OA-054), which had been read as eight separate local decisions. It is one general
+ * fact about this sheet family, arrived at twice by different routes.
+ *
+ * THE CONDITIONALS ARE GONE, not defaulted around. `minutesToDestination` is present
+ * on all nine and a tick label is drawn on all nine, so `_hasTimes` and its sibling
+ * were not discriminating between sheets -- they were constants wearing a condition,
+ * and each of them added a bullet that cost six sheets their panel. A branch no
+ * fixture can take the other way is a dark branch whether or not it is written as an
+ * `if`. `bullets` still overrides the lot for a place that wants its own words, which
+ * is where per-place content belongs.
+ */
+const HOWTO = DESIGN.howToUse === false ? null
+  : (DESIGN.howToUse == null || DESIGN.howToUse === true ? {} : DESIGN.howToUse);
+if (HOWTO) {
+  const HEAD = HOWTO.heading !== undefined ? HOWTO.heading : 'How to use this map';
+  // HUB_LABEL carries a newline where the hub BOX wants to break. In a sentence that
+  // is just whitespace, and it also makes one un-splittable token the wrapper chokes on.
+  const HUB_PROSE = String(HUB_LABEL).replace(/\s+/g, ' ').trim();
+  // THREE, and see the header: three place on all nine sheets and four on three of
+  // them. They are the reading procedure end to end — where to look, what to follow,
+  // what the badge on it means — and the third is worded for an AGGREGATED sheet,
+  // where a badge is the bus that takes you there rather than the line you are on.
+  const BULLETS = (Array.isArray(HOWTO.bullets) && HOWTO.bullets.length) ? HOWTO.bullets : [
+    'Find where you want to go, around the edge of the diagram.',
+    `Follow its coloured line in to ${HUB_PROSE} at the centre.`,
+    'The badges on that line are the buses that go there.',
+  ];
+  const HS = HOWTO.headingSize != null ? +HOWTO.headingSize : 4.4;   // matches the legend header
+  const BS = HOWTO.size != null ? +HOWTO.size : 3.2;                 // style-guide floor for body type
+  // WIDE AND SHORT, for the reason the radial records: it is a page device's HEIGHT
+  // that collides, because the spokes fan out horizontally. 92mm puts most bullets on
+  // one line. buildLegend's note wrap learned the same thing on 2026-08-06.
+  const CW = HOWTO.width != null ? +HOWTO.width : 92;                // content column, mm
+  const PAD = 3.4, LH = BS * 1.28, GAP = 1.3, IND = 2.9;
+  // Width-based wrap on the real Arial advances, not wrapText()'s character count — a
+  // bullet is a whole sentence and the 0.58 estimate is ~11% out on ordinary prose,
+  // which is the difference between four lines and five.
+  const wrapW = (text, maxMm) => {
+    const words = String(text).split(' '), lines = []; let cur = '';
+    for (const w of words) {
+      const t = cur ? cur + ' ' + w : w;
+      if (cur && FONT.textWidth(t, BS, false) > maxMm) { lines.push(cur); cur = w; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+  const WRAPPED = BULLETS.map(t => wrapW(t, CW - IND));
+  const bodyH = WRAPPED.reduce((a, ls) => a + ls.length * LH + GAP, 0) - GAP;
+  const PW = CW + PAD * 2;
+  const PH = PAD + (HEAD ? HS * 1.15 + 1.6 : 0) + bodyH + PAD;
+  // Content is a pure function of (px,py), like buildLegend — which is what makes
+  // building it twice safe when the placement search moves it.
+  const buildHowTo = (px, py) => {
+    const buf = [];
+    buf.push(`<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${PW.toFixed(2)}" height="${PH.toFixed(2)}" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>`);
+    let y = py + PAD;
+    if (HEAD) {
+      y += HS * 0.86;
+      buf.push(`<text x="${(px + PAD).toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${HS}" fill="#222">${esc(HEAD)}</text>`);
+      y += HS * 0.29 + 1.6;
+    }
+    WRAPPED.forEach(lines => {
+      y += BS * 0.78;
+      buf.push(`<text x="${(px + PAD).toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-size="${BS}" fill="#555">•</text>`);
+      lines.forEach((ln, i) => buf.push(`<text x="${(px + PAD + IND).toFixed(2)}" y="${(y + i * LH).toFixed(2)}" font-family="Arial" font-size="${BS}" fill="#333">${esc(ln)}</text>`));
+      y += (lines.length - 1) * LH + (LH - BS * 0.78) + GAP;
+    });
+    return buf;
+  };
+  // Default want-position: bottom-left, the white space these sheets already carry —
+  // the spokes fan out of a central hub and the legend lives top-left. FY1 is the
+  // frame bottom, which is the footer PLATE and not the paper (a QR block can push
+  // the plate up, and every free-floating device on this sheet works to it).
+  const HX0 = (HOWTO.at && HOWTO.at.x != null) ? +HOWTO.at.x : 10;
+  const HY0 = (HOWTO.at && HOWTO.at.y != null) ? +HOWTO.at.y : FY1 - PH;
+  let hx = HX0, hy = HY0, draw = true;
+  // A fully-specified `at` is a decision, so it opts out of the search — unlike
+  // legendAt, which is only a preference the search may overrule. The difference is
+  // that this panel can decline to appear, so "put it exactly here" has to mean it,
+  // or a place could set `at` and still get nothing.
+  const PINNED = !!(HOWTO.at && HOWTO.at.x != null && HOWTO.at.y != null);
+  if (HOWTO.place !== false && !PINNED) {
+    // The legend is furniture too and is already on the page; ART holds the ARTWORK's
+    // boxes and was snapshotted before the legend existed, so without this the search
+    // would happily park the panel on top of it. The legend gets first pick of the
+    // clear ground, which is right: it is mandatory and this panel is not.
+    ART.push([lx - 4, ly - 10, lx - 4 + legend.bw, ly - 10 + legend.bh, 'legend']);
+    const got = legendSpot(PW, PH, HX0, HY0);
+    if (got.moved) {
+      hx = HX0 + got.dx; hy = HY0 + got.dy;
+      process.stderr.write('howToUse: the configured spot covers ' + (got.wantSym * 100).toFixed(1)
+        + '% symbols / ' + (got.want * 100).toFixed(0) + '% route ink — moved ' + got.dx.toFixed(0) + ',' + got.dy.toFixed(0)
+        + ' mm to ' + hx.toFixed(0) + ',' + hy.toFixed(0) + '.\n');
+    } else if (got.nowhere) {
+      /*
+       * NOT DRAWN, rather than drawn where it does harm — the same parting of company
+       * with the legend the radial records. legendPlace's rule when nothing is clear
+       * is "leave it and warn", because a sheet with no legend is not a sheet. A help
+       * panel is different: the reader who loses a destination lozenge underneath it
+       * loses a destination, is given nothing to say it was ever there, and gains a
+       * paragraph telling them to look around the edge of the diagram for exactly the
+       * thing that has just been covered up.
+       */
+      draw = false;
+      process.stderr.write('howToUse: no position on this sheet leaves a ' + PW.toFixed(0) + 'x' + PH.toFixed(0)
+        + ' mm panel clear of every symbol, so it was NOT DRAWN rather than cover one. '
+        + 'Shrink it (design.howToUse.width, or fewer bullets), make room, or place it '
+        + 'deliberately with design.howToUse.at — which also switches this search off.\n');
+    }
+  }
+  if (draw) {
+    if (V2) HARD.push([hx - 0.6, hy - 0.6, hx + PW + 0.6, hy + PH + 0.6, 'howto']);
+    buildHowTo(hx, hy).forEach(out);
+  }
+}
 
 // ---- labels.engine:"v2" — deduplicate the stop names, then place them all at once ----
 if (V2) {

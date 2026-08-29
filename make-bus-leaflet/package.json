@@ -17,6 +17,7 @@
     "test:prove-red-design-keys": "node tools/prove-red-design-keys.js",
     "test:prove-red-attribution": "node tools/prove-red-attribution.js",
     "test:prove-red-redteam-source": "node tools/prove-red-redteam-source.js",
+    "test:prove-red-derive-frequency": "node tools/prove-red-derive-frequency.js",
     "gate:design-keys": "node tools/check-design-keys.js",
     "gate:attribution": "node tools/attribution-gate.js",
     "gate:extraction": "node tools/extraction-gate.js",

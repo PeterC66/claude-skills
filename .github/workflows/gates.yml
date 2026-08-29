@@ -80,6 +80,15 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-redteam-source.js
 
+      # OA-019: derive_frequency.js tiers a place's LINE WEIGHTS, and fed one of the
+      # three places whose S1 predates the frequency fields it returned "limited --
+      # ends mid-afternoon" for every lane, from no data at all. This cuts the guard
+      # out and requires the three guard tests to fail while the two CONTROLs hold
+      # -- one of which is the lane whose MEASURED window is legitimately empty.
+      - name: Prove the frequency stale-S1 guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-derive-frequency
+
   status:
     runs-on: ubuntu-latest
     steps:

@@ -112,6 +112,33 @@ function word(r) {
   return '';
 }
 
+// WHICH LANES ARE MEASURABLE AT ALL (OA-019, 2026-08-29).
+//
+// tier() and word() read five fields that only gtfs_query.py writes:
+// weeksActive, typicalDayJourneys, coreHeadwayMinutes, longestDaytimeGap and
+// typicalDayWindow. A place's S1 predates them if it was built by an older
+// gtfs_chains.py, and three of the twelve places on the estate still are --
+// Beaconsfield Simpson Centre, Beaconsfield Waitrose and High Wycombe Aldi, whose
+// gtfs-services.json carries tripsAtTownPerWeekSample and no frequencyBasis.
+//
+// Fed one of those, this file did not fail. tier() saw a null window and returned
+// 'limited'; word() compared the EMPTY STRING against '15:30', found it lower, and
+// returned "ends mid-afternoon". Every lane on all three sheets came out limited,
+// with a reason, from no data at all -- and --write would have drawn all 22 of them
+// at the 1.2 mm limited weight and printed a one-row Key saying so. That is a false
+// claim in ink, which is worse than the 1.7 mm default it would have replaced.
+//
+// The test is for the KEY, not its value: 'weeksActive' in s, not s.weeksActive !=
+// null. St Ives Bus Station's 301S measures weeksActive 12 and typicalDayWindow
+// ['',''] -- a real measurement of a service that does not run on weekdays -- and a
+// value test would have thrown that away with the schema-less ones.
+//
+// The fix for an unmeasured place is to re-run its P1 against the current engine,
+// not to widen this. Both High Wycombe boarding places already carry the fields, so
+// the Buckinghamshire feed produces them; only these three S1 runs are old.
+const FREQ_FIELDS = ['weeksActive', 'typicalDayJourneys', 'coreHeadwayMinutes', 'longestDaytimeGap', 'typicalDayWindow'];
+function measurable(s) { return FREQ_FIELDS.every((k) => k in s); }
+
 function tier(r) {
   if (r.wks != null && r.wks < 6) return 'limited';
   const f = hhmm(r.win[0]), l = hhmm(r.win[1]);
@@ -147,9 +174,14 @@ console.log('  lane    wks  day  head  worst  window          -> tier      (why)
 
 const freq = {};
 const skipped = [];
+const unmeasured = [];
 for (const lane of lanes) {
   const s = byRoute.get(lane);
   if (!s) { skipped.push(lane); continue; }
+  // Present in GTFS, but this S1 cannot say how often it runs. Left out of the map
+  // entirely rather than tiered, so the lane keeps the default weight and the sheet
+  // makes no claim -- see measurable() above.
+  if (!measurable(s)) { unmeasured.push(lane); continue; }
   const r = {
     wks: s.weeksActive,
     day: s.typicalDayJourneys,
@@ -175,6 +207,18 @@ console.log('\n  ' + Object.keys(freq).length + ' of ' + lanes.length + ' drawn 
 if (skipped.length) {
   console.log('  ! not in GTFS, left UNCLASSIFIED (they keep the default 1.7 mm): ' + skipped.join(', '));
   console.log('    Community and pre-book services are a judgement, not a default — set them by hand if wanted.');
+}
+if (unmeasured.length) {
+  console.log('  ! S1 carries no frequency fields for these, left UNCLASSIFIED: ' + unmeasured.join(', '));
+  console.log('    Their gtfs-services.json predates ' + FREQ_FIELDS.join('/') + '.');
+  console.log('    Re-run this place\'s P1 against the current engine, then re-run this.');
+}
+if (!Object.keys(freq).length) {
+  console.error('\nderive_frequency: not one lane could be tiered' +
+    (unmeasured.length ? ' — this place\'s S1 predates the frequency fields' +
+      (S1.frequencyBasis ? '' : ' (it has no frequencyBasis either)') + '.' : '.'));
+  console.error('  Refusing rather than reporting a tier nothing measured. Re-run P1 for ' + place + ' first.');
+  process.exit(2);
 }
 
 if (!WRITE) {

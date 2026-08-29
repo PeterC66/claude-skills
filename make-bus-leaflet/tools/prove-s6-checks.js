@@ -287,6 +287,49 @@ console.log('\n3. Direction — below two buffer stops it says unavailable, abov
     b.v ? JSON.stringify(b.v.findings.filter(f => f.route === '303').map(f => f.severity + '/' + f.category)) : 'no report');
 }
 
+/* ------------------------------------------------------- 3b. direction COVERAGE (OA-048) */
+console.log('\n3b. Direction coverage — the fraction that ran, and it must account for every route');
+{
+  /*
+   * WHY THIS PAIR EXISTS. Every case above asks whether a FINDING appears. None
+   * of them can ask how much of the check ran, and that turned out to be the
+   * bigger fact: measured across the eight towns on 2026-08-29, S-5 ran on 26
+   * of 95 displayed routes, and on High Wycombe and March it ran on none at all
+   * — while both reported a single soft `direction-unavailable` row identical in
+   * shape to St Ives' one-route gap.
+   *
+   * Worse, the row's own arithmetic was wrong in the flattering direction. High
+   * Wycombe said "not checkable on 26 of 34", which reads as 8 checked; the true
+   * figure was 0 of 34, because eight routes left the loop through two silent
+   * `continue`s and were counted nowhere. So the pair here is: the number exists
+   * and is non-zero where the check works, AND it accounts for every displayed
+   * route so it cannot drift kind again.
+   */
+  const d = stage('ramsey', 'dir-coverage');
+  const rj = readJ(d, 'routes.json'); delete rj._bootstrap; writeJ(d, 'routes.json', rj);
+  const a = verify(d);
+  const dc = a.v && a.v.summary && a.v.summary.directionCoverage;
+  check('the report says how much of the direction check ran', 'summary.directionCoverage with checked > 0 on Ramsey',
+    !!dc && dc.checked > 0, dc ? JSON.stringify(dc) : 'no directionCoverage in summary');
+  check('and the coverage arithmetic closes', 'checked + unavailable + skipped == displayed',
+    !!dc && dc.accountsForAll && dc.checked + dc.unavailable + dc.skipped === dc.displayed,
+    dc ? `${dc.checked}+${dc.unavailable}+${dc.skipped} vs ${dc.displayed}` : 'no directionCoverage');
+
+  /*
+   * The other half: a sheet where the check ran on NOTHING must be distinguishable
+   * from one where it ran on most things. A PLACE is that case by construction --
+   * no intown_cfg.json, so no ATCO prefix, so no buffer stop on any route, ever --
+   * which is why it is the honest fixture for it rather than a mutated town.
+   */
+  const p = verify(stage('place', 'dir-coverage-place'));
+  const pc = p.v && p.v.summary && p.v.summary.directionCoverage;
+  check('a sheet the check never ran on reports 0, not silence', 'directionCoverage.checked === 0 on a place',
+    !!pc && pc.checked === 0 && pc.pct === 0, pc ? JSON.stringify(pc) : 'no directionCoverage');
+  check('and its finding says ANY rather than N of M', 'a direction-unavailable finding with allBlind true',
+    !!p.v && p.v.findings.some(f => f.category === 'direction-unavailable' && f.evidence && f.evidence.allBlind === true),
+    p.v ? JSON.stringify(p.v.findings.filter(f => f.category === 'direction-unavailable').map(f => f.evidence && f.evidence.allBlind)) : 'no report');
+}
+
 /* ------------------------------------------------------------------ 4. truncated chain */
 console.log('\n4. Truncated chain — a chain that never leaves town cannot contradict a terminus');
 {

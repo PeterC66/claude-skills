@@ -541,14 +541,41 @@ for (const r of displayed) {
   }
 }
 
-// S-5: direction sanity — the drawn edge stop heads toward the terminus
+/* S-5: direction sanity — the drawn edge stop heads toward the terminus.
+ *
+ * COVERAGE IS COUNTED, NOT ASSUMED (OA-048, measured 2026-08-29). Every route
+ * that this check skips lands in `dirUnavailable` and is reported — but as ONE
+ * soft finding per town, so a town where the check runs on six routes of seven
+ * and a town where it runs on NONE score identically in every count anybody
+ * reads. Measured across the eight towns on 2026-08-29 the check was
+ * unavailable on 55 of 95 displayed routes — 57% — and on March it was
+ * unavailable on 7 of 7, a whole town whose direction sanity has never once
+ * been tested. It has produced zero HARDs and five SOFTs in its life.
+ *
+ * That is the "a metric shaped for one artefact" shape, so the fraction now goes
+ * into summary.directionCoverage and onto the console, where the next reader
+ * gets the number without re-deriving it. The count below is the only thing that
+ * knows it; `findings.length` cannot express a check that did not run. */
 const dirUnavailable = [];
+const dirChecked = [];
+/* Routes the loop never even considers. They were silent until 2026-08-29, and
+ * the silence made the check's own account of itself too flattering: High
+ * Wycombe reported "not checkable on 26 of 34", which reads as 8 checked, and
+ * the true figure was 0 of 34. Eight routes left through these two `continue`s
+ * and were counted nowhere. A circular route genuinely has no direction to
+ * check and is not a gap; a route with no chain is. Both are recorded, so
+ * checked + unavailable + skipped == displayed and the coverage figure below
+ * is an arithmetic identity rather than a claim. */
+const dirSkipped = [];
 if (anchorLL) {
   for (const r of displayed) {
-    if (CIRCULAR.has(r)) continue;
+    if (CIRCULAR.has(r)) { dirSkipped.push({ route: r, reason: 'circular' }); continue; }
     const seq = intownByNorm(r);
     const fe = fullEntry(r);
-    if (!seq || seq.length < 2 || !fe) continue;
+    if (!seq || seq.length < 2 || !fe) {
+      dirSkipped.push({ route: r, reason: !fe ? 'no-full-chain' : 'fewer-than-two-drawn-stops', drawnStops: seq ? seq.length : 0 });
+      continue;
+    }
     // Edge stop = the route's OUT-OF-TOWN continuation, i.e. a derive_intown BUFFER stop
     // (outside the town prefix / extraCore), not merely the farthest drawn stop. In an
     // elongated town the farthest drawn stop can be a core stop on the opposite side from
@@ -603,7 +630,14 @@ if (anchorLL) {
     let term = null, termD = -1;
     for (const a of fullAllStops(fe)) { if (!ll[a]) continue; const d = haversineKm(anchorLL, ll[a]); if (d > termD) { termD = d; term = a; } }
     if (term && !termCands.includes(term)) termCands.push(term);
-    if (!edge || !termCands.length || edgeD < 0.2) continue; // no meaningful buffer
+    if (!edge || !termCands.length || edgeD < 0.2) {
+      // Still a route the check said nothing about, so it is still uncovered.
+      // Counting only the two-buffer-stop refusal above would have flattered the
+      // coverage figure with the very routes it is meant to expose.
+      dirUnavailable.push({ route: r, bufferStops: edgeCands.length, drawnStops: seq.length, reason: 'no-meaningful-buffer' });
+      continue;
+    }
+    dirChecked.push(r);
     const bEdge = bearing(anchorLL, ll[edge]);
     let bTerm = null, diff = Infinity;
     for (const a of termCands) {
@@ -636,16 +670,29 @@ if (dirUnavailable.length) {
      */
     add('soft', 'direction-unavailable',
       `Direction not checkable on any route: this build declares no in-town ATCO prefix (intown_cfg.json is absent, which is normal for a PLACE), so nothing distinguishes an out-of-town stop from an in-town one and the check has no edge stop to reason from. It is unavailable here by construction, not failing. The independent direction-ish signal for a place is the red-team terminus comparison.`,
-      { routes: dirUnavailable, reason: 'no-intown-prefix', displayedRoutes: displayed.size }, null);
+      // allBlind is true here by construction, not by measurement: with no prefix
+      // there is no route this check can ever reach. Carried in the same field as
+      // the town branch so one reader can ask one question of both.
+      { routes: dirUnavailable, checkedRoutes: dirChecked, reason: 'no-intown-prefix', displayedRoutes: displayed.size, allBlind: true }, null);
   } else {
     const none = dirUnavailable.filter(d => d.bufferStops === 0).map(d => d.route);
     const one  = dirUnavailable.filter(d => d.bufferStops === 1).map(d => d.route);
+    const thin = dirUnavailable.filter(d => d.reason === 'no-meaningful-buffer').map(d => d.route);
     const bits = [];
     if (none.length) bits.push(`${none.join(', ')} (no buffer stop drawn, so the check would compare an in-town stop against the terminus)`);
     if (one.length) bits.push(`${one.join(', ')} (one buffer stop, so the selector returns it whichever way it points)`);
+    if (thin.length) bits.push(`${thin.join(', ')} (buffer stops within 200 m of the anchor, or no chain end far enough out to compare against)`);
+    /* NONE of them is different in kind from SOME of them, and until 2026-08-29
+     * the two produced the same single soft row. March is the live case: 7 of 7,
+     * a town whose direction sanity has never been tested at all, reading in
+     * every count exactly like St Ives' 1 of 9. */
+    const allBlind = dirChecked.length === 0;
     add('soft', 'direction-unavailable',
-      `Direction not checkable on ${dirUnavailable.length} of ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'}: ${bits.join('; ')}. The check needs at least two out-of-town buffer stops before the edge stop it picks means anything. Read those arms on _latest/internal.jpg instead — this is a limit of the check, not a fault in the sheet.`,
-      { routes: dirUnavailable, needed: 2, displayedRoutes: displayed.size }, null);
+      (allBlind
+        ? `Direction not checkable on ANY of the ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'} — this sheet has no direction check at all, not a partial one: ${bits.join('; ')}.`
+        : `Direction not checkable on ${dirUnavailable.length} of ${displayed.size} displayed route${displayed.size === 1 ? '' : 's'} (checked on ${dirChecked.length}: ${dirChecked.join(', ')}): ${bits.join('; ')}.`)
+      + ` The check needs at least two out-of-town buffer stops before the edge stop it picks means anything. Read those arms on _latest/internal.jpg instead — this is a limit of the check, not a fault in the sheet.`,
+      { routes: dirUnavailable, checkedRoutes: dirChecked, needed: 2, displayedRoutes: displayed.size, allBlind }, null);
   }
 }
 
@@ -969,6 +1016,27 @@ const out = {
     soft: soft().length,
     pass: hard().length === 0 && !UNCURATED,
     verdict: UNCURATED ? 'not-verified-uncurated-s1' : (hard().length === 0 ? 'pass' : 'blocked'),
+    /* How much of S-5 actually RAN (OA-048). A verdict of `pass` says nothing
+     * about the routes no check looked at, and this is the one check on the
+     * sheet that can be structurally unavailable rather than merely quiet — on
+     * a PLACE it is unavailable always, by construction, and has been for its
+     * whole life. Recorded so a reader of the file, and status.js after it, can
+     * see the denominator instead of inferring it from an absent finding. */
+    directionCoverage: {
+      checked: dirChecked.length,
+      unavailable: dirUnavailable.length,
+      // Circular routes and routes with no chain: not candidates, so not a gap
+      // in the same sense — but counted, because uncounted is how the old figure
+      // came out 8 routes too kind to itself.
+      skipped: dirSkipped.length,
+      skippedBy: dirSkipped.reduce((a, s) => (a[s.reason] = (a[s.reason] || 0) + 1, a), {}),
+      displayed: displayed.size,
+      pct: displayed.size ? Math.round(100 * dirChecked.length / displayed.size) : 0,
+      // checked + unavailable + skipped must equal displayed, or one of the exits
+      // above has gone quiet again. Recorded rather than asserted so a stale file
+      // still says which.
+      accountsForAll: dirChecked.length + dirUnavailable.length + dirSkipped.length === displayed.size,
+    },
   },
   findings,
 };
@@ -994,6 +1062,16 @@ if (UNCURATED) {
   console.log('        NOT a pass. Do the S1 pass and re-run without VERIFY_ALLOW_UNCURATED.');
 } else {
   console.log(`RESULT: ${out.summary.pass ? 'PASS ✓' : 'BLOCKED ✗'}  (${out.summary.hard} hard, ${out.summary.soft} soft)  → verification.json`);
+}
+// The coverage line prints next to the verdict on purpose: a PASS is a statement
+// about the checks that RAN, and S-5 is the one that can decline to run at all.
+const dc = out.summary.directionCoverage;
+const skipBits = Object.entries(dc.skippedBy).map(([k, n]) => `${n} ${k}`).join(', ');
+console.log(`        direction check ran on ${dc.checked}/${dc.displayed} displayed routes (${dc.pct}%)`
+  + (dc.checked === 0 ? ' — NONE, so this verdict says nothing about which way anything is drawn' : '')
+  + (skipBits ? `; ${dc.skipped} not candidates (${skipBits})` : ''));
+if (!dc.accountsForAll) {
+  console.log(`        WARNING: ${dc.checked}+${dc.unavailable}+${dc.skipped} != ${dc.displayed} — a route left S-5 by an unrecorded path, so the coverage figure understates the gap.`);
 }
 console.log(bar);
 

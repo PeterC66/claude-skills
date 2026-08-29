@@ -235,6 +235,13 @@ function gatePlace(p) {
   const m = readJson(path.join(p.dir, 'manifest.json'));
   const s4 = latestRunDir(m, p.dir, 'S4');
   const row = { name: p.name, town: p.town || '(standalone)', version: s4 ? s4.rec.version : null };
+  // S6 for a place, on the same terms as a town (OA-140). Computed before the
+  // NO-BUILD return so an unbuilt place still reports whether it was verified.
+  const ps6 = latestRunDir(m, p.dir, 'S6');
+  const pData = ['S1', 'S2', 'S3'].map(k => m.stages[k] && m.stages[k].runs.find(r => r.id === m.stages[k].latest)).filter(Boolean);
+  const pNewest = pData.reduce((acc, r) => (!acc || r.at > acc ? r.at : acc), null);
+  if (!ps6) { row.s6 = 'NEVER'; row.s6Age = null; }
+  else { row.s6 = ps6.rec.id; row.s6Age = daysSince(ps6.rec.at); row.s6Stale = pNewest && ps6.rec.at < pNewest; }
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; row.boarding = '-'; return row; }
   // The NO-SHEET judgement was applied to `external` in August 2026 and not to
   // `internal`, because at the time every place had an internal map. High Wycombe
@@ -665,9 +672,9 @@ async function main() {
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
   console.log('\n=== Places (' + places.length + ') ===');
-  const pw = [34, 18, 6, 9, 9, 9, 11, 26];
-  if (AS_MD) console.log('| Place | Town | Ver | Internal | External | Boarding | Quality | Keys |\n|---|---|---|---|---|---|---|---|');
-  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality', 'Keys'], pw));
+  const pw = [34, 18, 6, 9, 9, 9, 11, 26, 20, 8];
+  if (AS_MD) console.log('| Place | Town | Ver | Internal | External | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
+  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Internal', 'External', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));
   for (const r of placeRows) {
     // Names what is MISSING rather than a fraction, because the missing key is
     // the actionable half and 'freq+tiers' says which command to run.
@@ -675,7 +682,8 @@ async function main() {
       : r.keys.state === 'complete' ? 'all four'
       : r.keys.missing.length === PLACE_KEYS.length ? 'none of four'
       : 'no ' + r.keys.missing.join('/');
-    console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys], pw));
+    const ps6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
+    console.log(line([r.name, r.town, r.version || '-', r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
   }
   // Reported under the table, never in `bad` -- see placeKeys() for why.
   const drawing = placeRows.filter(r => r.keys && r.keys.state !== 'n/a');

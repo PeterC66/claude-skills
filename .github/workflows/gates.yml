@@ -30,6 +30,56 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The unit suite needs NO repository but this one, so it must not sit behind the
+  # cross-repo checkout: a CROSS_REPO_PAT2 expiry would otherwise take 423 tests
+  # down with the byte gates, and the token expires on a known date (22 Nov 2026).
+  # buses-data learned exactly this and split its `docs` job out for the same
+  # reason. Added 2026-08-29 with OA-141, on measuring that `node --test` had
+  # never run in CI at all -- 30 test files and 423 assertions whose only evidence
+  # of passing was somebody remembering to run them on the laptop they were
+  # written on. The three harnesses below are the ones that need no dataset and no
+  # built map; the rest stay in `status`, where their fixtures are.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout claude-skills (engine)
+        uses: actions/checkout@v4
+        with:
+          path: skills
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: skills/make-bus-leaflet/package-lock.json
+
+      - name: Install engine dependencies
+        working-directory: skills/make-bus-leaflet
+        run: npm ci
+
+      - name: Unit suite
+        working-directory: skills/make-bus-leaflet
+        run: npm test
+
+      # Falsification harnesses that need no other repository. Each breaks its own
+      # subject on purpose and asserts WHICH tests go red while a named CONTROL
+      # stays green -- a suite that only ever goes green proves nothing about the
+      # guard it is pointed at.
+      - name: Prove the build-warning severities can still go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-build-log.js
+
+      - name: Prove the route-number collision guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: python3 tools/prove-red-route-collision.py
+
+      # OA-141: redteam_source.js answered about the PARENT TOWN when run from a
+      # place's own root, and said nothing about it. This cuts both fixes out and
+      # requires the four guard tests to fail while the two CONTROLs hold.
+      - name: Prove the redteam-source ambiguity guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-redteam-source.js
+
   status:
     runs-on: ubuntu-latest
     steps:

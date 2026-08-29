@@ -559,6 +559,13 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // itself was: the board is already red for the deferred re-vendor above, so no
   // expected state changes colour today and nobody learns to ignore it.
   || driftRows.some(r => r.same === false || r.same === null)
+  // OA-057, GATED FROM 2026-08-29 and reported-only before that. The rule the
+  // column was held out under is that a check red on the day it lands gets muted
+  // within the week, and seven of the ten places that draw an internal sheet were
+  // short. OA-019's round two closed all seven, so the board is 10 of 10 and this
+  // goes red only for a place that LOSES a key or for a new place built without
+  // one -- which is the whole point of gating it now rather than later.
+  || placeRows.some(r => r.keys && r.keys.state === 'short')
   || qualityRows.some(r => r.status === 'REGRESSED')
   || engineStaleRows.length > 0;
 
@@ -702,16 +709,16 @@ async function main() {
     const peng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
     console.log(line([r.name, r.town, r.version || '-', peng, r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
   }
-  // Reported under the table, never in `bad` -- see placeKeys() for why.
+  // In `bad` since 2026-08-29 -- see the gate expression for why it was not before.
   const drawing = placeRows.filter(r => r.keys && r.keys.state !== 'n/a');
   const short = drawing.filter(r => r.keys.state === 'short');
   if (drawing.length) {
     const noFreq = short.filter(r => r.keys.missing.includes('freq') || r.keys.missing.includes('tiers')).length;
     const noTerm = short.filter(r => r.keys.missing.includes('termini')).length;
-    console.log('  completeness (OA-057, reported not gated): ' + (drawing.length - short.length) + ' of ' + drawing.length
+    console.log('  completeness (OA-057, GATED since 2026-08-29): ' + (drawing.length - short.length) + ' of ' + drawing.length
       + ' places that draw an internal sheet carry all four keys');
     if (short.length) console.log('    ' + noFreq + ' draw every service at the same weight, ' + noTerm
-      + ' have bare arrows at the frame exits -- derive_frequency.js / derive_termini.js, in ONE rebuild round (OA-019)');
+      + ' have bare arrows at the frame exits -- run derive_frequency.js and derive_termini.js with --write on the place, then rebuild it');
   }
 
   if (portalFixtureRows.length) {

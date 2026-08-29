@@ -81,7 +81,14 @@ function copyDir(from, to) {
 /* Build a one-town scratch Buses tree and, optionally, rename the town and
  * re-stamp its engine hash. `engine: null` leaves the donor's own stamp alone,
  * which is what makes case 1 a control rather than a fifth mutation. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null }) {
+/* `stripKeys` exists because the OA-057 fixture used to be free (2026-08-29).
+ * The case borrowed a REAL place that happened to be short of all four
+ * completeness keys, and on the day the rebuild round gave every place its keys
+ * the fixture stopped being short -- so the case reported SURVIVED and read as a
+ * gate that does not work, when what had actually happened is that the estate got
+ * better underneath it. A fixture built out of whatever the estate happens to look
+ * like today tests the estate, not the code. This one now MAKES the place short. */
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-'));
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -94,6 +101,14 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null }) {
     fs.mkdirSync(pd, { recursive: true });
     fs.copyFileSync(path.join(ps, 'manifest.json'), path.join(pd, 'manifest.json'));
     copyDir(path.join(ps, 'ci-reference'), path.join(pd, 'ci-reference'));
+    if (stripKeys) {
+      const rjPath = path.join(pd, 'ci-reference', 'routes.json');
+      const rj = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
+      delete rj.frequency; delete rj.panelGroups;
+      if (rj.design) delete rj.design.frequencyTiers;
+      if (rj.internalRoads) delete rj.internalRoads.termini;
+      fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
+    }
   }
   if (engine) {
     const rjPath = path.join(dst, 'ci-reference', 'routes.json');
@@ -186,18 +201,24 @@ const CASES = [
     what: 'the mechanism still works, with no live exception needed to show it',
   },
   {
-    /* OA-057. The place-completeness column is REPORTED and deliberately not in
-     * `bad`: seven of the ten places that draw an internal sheet are short today,
-     * and gating on it would put seven permanent reds on a board a real failure
-     * has to be spotted through. That is a contract, not a coincidence, and
-     * "tidy up the last one while we are here" is exactly how such a rule is
-     * lost -- it looks like housekeeping in review. This case fails the day
-     * somebody folds it in early, the same way quality_metrics_ink.test.js
-     * guards `labelsOverBadge`. When the rebuild round HAS run, the honest edit
-     * is to flip this case's expectation and say why. */
-    label: 'a place short of every completeness key stays GREEN',
-    make: { withPlace: 'Godmanchester Co-op Cambridge Road' },
-    expect: 0,
+    /* OA-057, FLIPPED 2026-08-29, which is what the previous version of this
+     * comment said the honest edit would be. It read: the column is REPORTED and
+     * deliberately not in `bad`, because seven of the ten places that draw an
+     * internal sheet were short and gating would put seven permanent reds on a
+     * board a real failure has to be spotted through -- and "tidy up the last one
+     * while we are here" is how such a rule gets lost, because it looks like
+     * housekeeping in review. The case existed to fail the day somebody folded it
+     * in early. OA-019's round two ran on 2026-08-29 and closed all seven, so the
+     * board is 10 of 10 and the reason to hold it out has gone. The case is kept
+     * rather than deleted, with its expectation inverted, so the column is now
+     * pinned the other way: it fails the day somebody quietly takes the gate back
+     * out. The [also] assertion is unchanged and still does the real work -- a
+     * green exit is also what a board that never FOUND the place would return, so
+     * it asserts the board saw the place and judged it short of all four keys. */
+    label: 'a place short of every completeness key now goes RED',
+    make: { withPlace: 'Godmanchester Co-op Cambridge Road', stripKeys: true },
+    expect: 1,
+    cause: 'keys',
     also: (json) => {
       const p = (json.places || []).find(r => r.name === 'Godmanchester Co-op Cambridge Road');
       if (!p) return 'the board never saw the place at all';
@@ -205,7 +226,7 @@ const CASES = [
       if (p.keys.missing.length !== 4) return 'expected all four keys missing, got ' + p.keys.missing.join('+');
       return null;
     },
-    what: 'OA-057 is reported, not gated, until the rebuild round has run',
+    what: 'OA-057 is GATED now the rebuild round has run -- and stays gated',
   },
   {
     label: 'Ramsey at some OTHER stale hash',
@@ -236,7 +257,15 @@ for (const c of CASES) {
   const colourOk = (code !== 0) === wantRed;
   /* A green case must name NO stale town; a red case must name exactly the one
    * it mutated. Either way the cause is checked, not just the colour. */
+  /* `cause: 'keys'` says this case expects a DIFFERENT gate to fire (2026-08-29).
+   * Every case here used to be about engine staleness, so a red exit that named
+   * no stale town could only be a wrong-cause red. The OA-057 completeness column
+   * became a gate on 2026-08-29 and its case now expects a red that names no
+   * stale town at all -- which the old test scored as RED, WRONG CAUSE. The
+   * discrimination is the point and is kept either way: a keys case must name NO
+   * stale town, so it still cannot pass by tripping the staleness gate instead. */
   const causeOk = stale === null ? false
+    : c.cause === 'keys' ? stale.length === 0
     : wantRed ? (stale.length === 1 && stale[0] === (c.make.town || DONOR))
               : stale.length === 0;
   /* A GREEN case needs more than a green exit: a map the board never FOUND is
@@ -269,5 +298,5 @@ if (failed) {
   console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the engine-staleness gate is not what status.js says it is.');
   process.exitCode = 1;
 } else {
-  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, an injected exception is exactly one town-and-hash pair wide, and the OA-057 completeness column is still reported rather than gated.');
+  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, an injected exception is exactly one town-and-hash pair wide, and the OA-057 completeness column is gated -- red for a place short of a key, and naming no stale town while it does it.');
 }

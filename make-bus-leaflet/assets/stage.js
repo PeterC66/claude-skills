@@ -52,6 +52,8 @@ const fs = require('fs');
 const path = require('path');
 
 const STAGE_NAME = { S1: 'services', S2: 'geometry', S3: 'config', S4: 'generate', S5: 'render', S6: 'verify' };
+// Stage order, for telling an ordinary downstream copy from a dirty upstream folder.
+const ORDER_OF = Object.keys(STAGE_NAME);
 const VERSIONED = new Set(['S4', 'S5']);
 
 const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
@@ -269,8 +271,26 @@ function main() {
     const dest = path.resolve(rest[1] || process.cwd());
     const shadowed = copyInto(path.join(townDir, r.dir), dest, new Set(r.outputs || []));
     console.log(`pulled ${st} (${r.id}) -> ${dest}`);
-    for (const f of shadowed)
-      console.log(`  kept the file already there: ${st}'s folder holds an undeclared "${f}" and did NOT overwrite it`);
+    /* WHICH SKIPS ARE WORTH SAYING OUT LOUD (narrowed the same day it was written).
+     * The guard is right to skip in both directions, but only one of them means the
+     * folder is dirty. A DOWNSTREAM folder holding an upstream file is ordinary and
+     * everywhere -- every S4 holds the S2 geometry it was built from -- so an S6 pull
+     * of S1,S2,S3,S4 printed 28 lines about files S2 had already, correctly, provided.
+     * That is exactly how a message stops being read. The interesting case is the one
+     * that cost Beaconsfield Waitrose its config: an EARLY stage's folder holding a
+     * file a LATER stage declares. The rest is counted, not listed. */
+    const owner = (f) => Object.keys(STAGE_NAME).filter((o) => {
+      const sx2 = m.stages[o];
+      if (!sx2 || !sx2.latest) return false;
+      const rr = sx2.runs.find((x) => x.id === sx2.latest);
+      return rr && (rr.outputs || []).includes(f);
+    });
+    const idx = (x) => ORDER_OF.indexOf(x);
+    const loud = shadowed.filter((f) => owner(f).some((o) => idx(o) > idx(st)));
+    for (const f of loud)
+      console.log(`  kept the file already there: ${st}'s folder holds an undeclared "${f}" that a LATER stage declares — go and look at that folder`);
+    const quiet = shadowed.length - loud.length;
+    if (quiet) console.log(`  (${quiet} undeclared upstream cop${quiet === 1 ? 'y' : 'ies'} in ${st}'s folder left alone; the owning stage had already supplied them)`);
     // Keep the on-map version stamp in step with the run dir it just landed in.
     // Silent when there is nothing to do (unversioned dest, no routes.json, or
     // already correct) — it should only speak when it changed something.

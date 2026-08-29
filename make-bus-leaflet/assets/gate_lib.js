@@ -35,7 +35,7 @@ function copyJsonsAndIcons(dataDir, destDir) {
 // schematize_internal.js / diagram_internal.js) against dataDir's json inputs,
 // in a clean temp workspace, with no overrides and no LEAFLET_DIR inherited.
 // Returns { ok, tmpDir, stderr }.
-function runGenerator(genPath, dataDir, { extraEnv = {} } = {}) {
+function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace = false } = {}) {
   const tmp = mkTmp();
   copyJsonsAndIcons(dataDir, tmp);
   const destGen = path.join(tmp, path.basename(genPath));
@@ -44,6 +44,29 @@ function runGenerator(genPath, dataDir, { extraEnv = {} } = {}) {
   delete env.LEAFLET_DIR;
   delete env.OVERRIDES_FILE;
   delete env.EDITOR_KEYS;
+  /* `overridesFromWorkspace` — SET OVERRIDES_FILE THE WAY THE ROLLOUT DOES.
+   *
+   * Deleting OVERRIDES_FILE above is right for every generator that reads its own
+   * cwd: copyJsonsAndIcons has already put the data dir's overrides.json into the
+   * workspace, so gen_internal.js finds it there and the gate reproduces the build.
+   *
+   * schematize_internal.js is the exception, and it is the one that matters here. It
+   * writes a NESTED `schematic/` workspace and runs gen_internal.js in that, and its
+   * copy list does not include overrides.json — so the forced POIs are silently
+   * dropped one level down. rollout_places.js knows this and passes OVERRIDES_FILE
+   * explicitly (its own comment at the call site says why); this gate did not, so it
+   * regenerated the sheet by a DIFFERENT PROCEDURE FROM THE ONE THAT BUILT THE
+   * REFERENCE and would have called the disagreement drift. Measured on High Wycombe
+   * Aldi, 2026-08-29: the regenerate lost `Tannery Road Ind Est` and moved two other
+   * labels around the hole it left.
+   *
+   * Set before extraEnv, so a caller that names its own OVERRIDES_FILE still wins.
+   * Absent file, absent variable — a place with no overrides.json gates exactly as
+   * it did before. */
+  if (overridesFromWorkspace) {
+    const ovf = path.join(tmp, 'overrides.json');
+    if (fs.existsSync(ovf)) env.OVERRIDES_FILE = ovf;
+  }
   Object.assign(env, extraEnv);
   const res = spawnSync(process.execPath, [destGen], { cwd: tmp, env, encoding: 'utf8' });
   return { ok: res.status === 0, tmpDir: tmp, stderr: res.stderr || '', stdout: res.stdout || '' };

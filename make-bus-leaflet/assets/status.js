@@ -160,7 +160,11 @@ function gateTown(t) {
   let routesJson = {};
   try { routesJson = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
   if (routesJson.internalSchematic) {
-    const g = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg')).status;
+    // Same as the place row below. INERT TODAY — no town carries an overrides.json,
+    // measured 2026-08-29 — and that is exactly why it goes in now: the first town
+    // to force a POI would otherwise reproduce the place fault, and leaving the
+    // known second instance of a fixed fault in place is how it comes back.
+    const g = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg'), { overridesFromWorkspace: true }).status;
     row.schematic = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-schematic.svg') : g;
   } else row.schematic = '-';
   if (routesJson.internalDiagram) {
@@ -242,7 +246,7 @@ function gatePlace(p) {
   const pNewest = pData.reduce((acc, r) => (!acc || r.at > acc ? r.at : acc), null);
   if (!ps6) { row.s6 = 'NEVER'; row.s6Age = null; }
   else { row.s6 = ps6.rec.id; row.s6Age = daysSince(ps6.rec.at); row.s6Stale = pNewest && ps6.rec.at < pNewest; }
-  if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; row.boarding = '-'; return row; }
+  if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; row.boarding = '-'; row.schematic = '-'; row.diagram = '-'; return row; }
 
   // The engine hash, on the same terms as a town (OA-161). The places table had
   // no Engine column where the towns table has had one since the hash existed,
@@ -290,6 +294,48 @@ function gatePlace(p) {
       : 'NO-SHEET';
     row.boarding = pBrd === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'boarding.svg') : pBrd;
   }
+  // The DERIVED SHEETS, on the same opt-in terms as a town (OA-170). A place got
+  // three sheet columns and a town four, because when gatePlace was written no
+  // place had a schematic. High Wycombe Aldi has had one since; it is committed to
+  // ci-reference, which makes it a tracked golden master, and nothing on this board
+  // ever opened it.
+  //
+  // IT HAD DRIFTED, AND NOT COSMETICALLY. OA-019's round three rebuilt it and the
+  // committed copy carried the TOWN's title -- `Buses within High Wycombe` on a
+  // place sheet, one of three places published on busmaps.uk -- and was missing the
+  // forced `Tannery Road Ind Est` POI label that rollout_places.js's own header
+  // names as the reason that tool exists. Both were corrected as a SIDE EFFECT of a
+  // round about something else, which is not a mechanism. This is the mechanism.
+  //
+  // Keyed off `routes.json.internalSchematic` exactly as the town is, so a place
+  // that never asked for a schematic shows '-' rather than a verdict about a sheet
+  // it never had, and any place that grows one later arrives already covered.
+  // PLACE_IGNORE applies for the same reason it does on internal.svg: the title and
+  // the "· Map v…" stamp are post-edited by build_internal_place.js.
+  //
+  // ADDED GREEN, and that was checked before it was added -- Aldi's schematic
+  // reproduces byte-for-byte as of buses-data 877e668. A gate that is red on the
+  // day it lands gets muted in its first week ([[feedback_a_new_gate_must_start_green]]).
+  //
+  // internalDiagram is here for symmetry and is inert today: no place opts in. That
+  // is deliberate -- leaving the known second instance of a fixed fault out is how
+  // it comes back, which is the argument the internal column above already carries.
+  if (routesJson.internalSchematic) {
+    // `overridesFromWorkspace` is what makes this green rather than red, and the
+    // reason is worth the line: the schematiser's nested workspace drops
+    // overrides.json, so rollout_places.js passes OVERRIDES_FILE explicitly when it
+    // BUILDS the sheet. A gate that regenerates by a different procedure from the
+    // build is measuring two things at once and calling the difference drift.
+    // NOT set on the diagram below, exactly as rollout_places.js does not set it
+    // there — diagram_internal.js copies its OWN diagram-overrides.json into the
+    // workspace as overrides.json, and OVERRIDES_FILE would shadow that file whole.
+    const g = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg'), { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true }).status;
+    row.schematic = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-schematic.svg') : g;
+  } else row.schematic = '-';
+  if (routesJson.internalDiagram) {
+    const g = gate(path.join(SK, 'diagram_internal.js'), s4.dir, 'internal-diagram.svg', path.join(s4.dir, 'internal-diagram.svg'), { ignoreLineRe: PLACE_IGNORE }).status;
+    row.diagram = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-diagram.svg') : g;
+  } else row.diagram = '-';
   row.keys = placeKeys(routesJson, row);
   return row;
 }
@@ -549,7 +595,11 @@ const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' &
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
     || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
-    || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
+    || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding)
+    // OA-170. Printing a column the exit code ignores is the shape this row was
+    // raised about one level up: a reference with the authority of a golden master
+    // and the coverage of a scratch copy.
+    || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
   || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external) || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
   // `null` is MISSING — the portal has no such file. It counted as fine until
   // 2026-08-18, which had it backwards: a vendored file that DIFFERS is stale
@@ -692,9 +742,9 @@ async function main() {
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
   console.log('\n=== Places (' + places.length + ') ===');
-  const pw = [34, 18, 6, 26, 9, 9, 9, 11, 26, 20, 8];
-  if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|');
-  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Engine', 'Internal', 'External', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));
+  const pw = [34, 18, 6, 26, 9, 9, 9, 9, 9, 11, 26, 20, 8];
+  if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Schematic | Diagram | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+  if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));
   for (const r of placeRows) {
     // Names what is MISSING rather than a fraction, because the missing key is
     // the actionable half and 'freq+tiers' says which command to run.
@@ -707,7 +757,7 @@ async function main() {
     // exception list for places and there should not be one until a measured
     // reason for it exists.
     const peng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
-    console.log(line([r.name, r.town, r.version || '-', peng, r.internal, r.external, r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
+    console.log(line([r.name, r.town, r.version || '-', peng, r.internal, r.external, r.schematic || '-', r.diagram || '-', r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
   }
   // In `bad` since 2026-08-29 -- see the gate expression for why it was not before.
   const drawing = placeRows.filter(r => r.keys && r.keys.state !== 'n/a');

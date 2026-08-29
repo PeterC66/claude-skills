@@ -30,7 +30,10 @@
  * clone actually has (S4-generate is gitignored), so the copy is also the form
  * the gate really runs against in CI.
  *
- * THE FOUR CASES, and why the last two are not padding. The exception added with
+ * THE CASES, and why none of them is padding. (There were four when this was
+ * written; the count in the summary line is computed, and this sentence is not.
+ * Two more arrived with OA-170 -- a control and a mutation for the place
+ * SCHEMATIC column, which had no gate above it at all until 2026-08-29.) The exception added with
  * the gate is keyed to a town AND an exact hash, so that it expires by itself
  * when Ramsey is rebuilt and cannot silently widen into "Ramsey is never
  * checked". That is a claim about behaviour, so it is tested like one: case 3
@@ -88,7 +91,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-'));
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -108,6 +111,30 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
       if (rj.design) delete rj.design.frequencyTiers;
       if (rj.internalRoads) delete rj.internalRoads.termini;
       fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
+    }
+  }
+  /* A PLACE THAT LIVES UNDER A TOWN, which `withPlace` above cannot express -- it
+   * only knows Places/_standalone. The schematic column (OA-170) has exactly one
+   * subject on the whole estate, High Wycombe Aldi, and it is town-nested. It is
+   * copied under the DONOR town rather than under a scratch High Wycombe, because a
+   * second town would need a town manifest of its own and the gate being tested does
+   * not read one; the Town column reads the donor's name and nothing judges it. */
+  if (withTownPlace) {
+    const pd = path.join(dst, 'Places', withTownPlace.place);
+    const ps = path.join(BUSES, 'Areas', withTownPlace.town, 'Places', withTownPlace.place);
+    fs.mkdirSync(pd, { recursive: true });
+    fs.copyFileSync(path.join(ps, 'manifest.json'), path.join(pd, 'manifest.json'));
+    copyDir(path.join(ps, 'ci-reference'), path.join(pd, 'ci-reference'));
+    if (mutateSchematic) {
+      /* One attribute on one label. NOT a line PLACE_IGNORE drops (it drops y="16"
+       * and y="208" -- the title and the version stamp), or this would mutate the
+       * sheet, the gate would rightly stay green, and the case would read as a gate
+       * failure when it was the fixture's fault. */
+      const sv = path.join(pd, 'ci-reference', 'internal-schematic.svg');
+      const txt = fs.readFileSync(sv, 'utf8');
+      const find = 'font-size="2.5"';
+      if (txt.split(find).length - 1 < 1) throw new Error('fixture no longer contains ' + find + ' -- pick another mutation');
+      fs.writeFileSync(sv, txt.replace(find, 'font-size="2.6"'));
     }
   }
   if (engine) {
@@ -229,6 +256,42 @@ const CASES = [
     what: 'OA-057 is GATED now the rebuild round has run -- and stays gated',
   },
   {
+    /* OA-170. The place schematic joined the board on 2026-08-29, and it is the only
+     * sheet kind that was ever committed to ci-reference with no gate above it: High
+     * Wycombe Aldi's had drifted to the TOWN's title and had lost a forced POI, on a
+     * map published on busmaps.uk, and the correction arrived as a side effect of a
+     * round about something else entirely.
+     *
+     * THE CONTROL IS NOT PADDING HERE. The column was red the first time it was
+     * added, and not because the sheet was wrong -- status.js regenerated it WITHOUT
+     * OVERRIDES_FILE while rollout_places.js builds it WITH one, so the two were
+     * running different procedures and calling the difference drift. This case is
+     * green only while they agree. */
+    label: 'control: a place schematic reproduces byte-for-byte',
+    make: { withTownPlace: { town: 'High Wycombe', place: 'High Wycombe Aldi' } },
+    expect: 0,
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === 'High Wycombe Aldi');
+      if (!p) return 'the board never saw the place at all';
+      if (p.schematic !== 'PASS') return 'the board saw it but its schematic read ' + p.schematic;
+      return null;
+    },
+    what: 'green here means the gate and the rollout build the sheet the same way',
+  },
+  {
+    label: 'a place schematic that no longer reproduces goes RED',
+    make: { withTownPlace: { town: 'High Wycombe', place: 'High Wycombe Aldi' }, mutateSchematic: true },
+    expect: 1,
+    cause: 'schematic',
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === 'High Wycombe Aldi');
+      if (!p) return 'the board never saw the place at all';
+      if (p.schematic !== 'DIFF') return 'the board saw it but its schematic read ' + p.schematic;
+      return null;
+    },
+    what: 'THE GATE ITSELF - this column exited 0 whatever the sheet said, until OA-170',
+  },
+  {
     label: 'Ramsey at some OTHER stale hash',
     make: { town: 'Ramsey', engine: 'deadbeef00' },
     expect: 1,
@@ -265,7 +328,7 @@ for (const c of CASES) {
    * discrimination is the point and is kept either way: a keys case must name NO
    * stale town, so it still cannot pass by tripping the staleness gate instead. */
   const causeOk = stale === null ? false
-    : c.cause === 'keys' ? stale.length === 0
+    : c.cause ? stale.length === 0
     : wantRed ? (stale.length === 1 && stale[0] === (c.make.town || DONOR))
               : stale.length === 0;
   /* A GREEN case needs more than a green exit: a map the board never FOUND is
@@ -298,5 +361,5 @@ if (failed) {
   console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the engine-staleness gate is not what status.js says it is.');
   process.exitCode = 1;
 } else {
-  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, an injected exception is exactly one town-and-hash pair wide, and the OA-057 completeness column is gated -- red for a place short of a key, and naming no stale town while it does it.');
+  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, an injected exception is exactly one town-and-hash pair wide, the OA-057 completeness column is gated, and the OA-170 place-schematic column is gated -- each of the last two red for its own fault, and naming no stale town while it does it.');
 }

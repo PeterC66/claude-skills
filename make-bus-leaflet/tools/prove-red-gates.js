@@ -100,6 +100,21 @@ const TARGETS = [
     to: 'const pad = 0.006;',
   },
   {
+    /* THE PLACE SCHEMATIC IS A DIFFERENT PATH FROM THE TOWN ONE ABOVE, and until
+     * 2026-08-29 status.js did not gate it at all (OA-170). It reaches the same
+     * generator through PLACE_IGNORE and, crucially, through OVERRIDES_FILE — High
+     * Wycombe Aldi forces two POIs, and the schematiser's nested workspace drops
+     * overrides.json unless it is passed explicitly. The control step below is what
+     * makes this target worth having: it fails if that stops being passed. */
+    sheet: 'internal-schematic.svg (place)',
+    gen: 'schematize_internal.js',
+    map: 'Areas/High Wycombe/Places/High Wycombe Aldi',
+    opts: { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true },
+    what: 'the geometry bounding box is padded ten times as far',
+    find: 'const pad = 0.0006;',
+    to: 'const pad = 0.006;',
+  },
+  {
     sheet: 'internal-diagram.svg',
     gen: 'diagram_internal.js',
     map: 'Areas/St Ives',
@@ -227,6 +242,38 @@ for (const t of TARGETS) {
   }
 }
 
+// ---- is the fix load-bearing, or is it decoration? -------------------------
+//
+// The target above proves the gate can go RED when the generator changes. It does
+// NOT prove that `overridesFromWorkspace` is doing anything — a no-op option would
+// pass the control and the mutation both, and the place schematic would go on being
+// gated by luck. So ask the opposite question once: WITHOUT the option, the same
+// unmutated generator must FAIL to reproduce the committed sheet.
+//
+// This is the whole of OA-170's finding stated as an assertion. The reference was
+// built by rollout_places.js, which passes OVERRIDES_FILE; a gate that does not is
+// regenerating by a different procedure and calling the difference drift. If this
+// row ever goes quiet, either the schematiser learned to carry overrides.json into
+// its own workspace — in which case delete this and the option together — or Aldi
+// stopped forcing a POI, and the gate has gone back to proving nothing.
+{
+  const dataDir = path.join(BUSES, 'Areas/High Wycombe/Places/High Wycombe Aldi', 'ci-reference');
+  const committed = path.join(dataDir, 'internal-schematic.svg');
+  const label = 'overrides are load-bearing High Wycombe Aldi';
+  if (!fs.existsSync(committed)) {
+    rows.push([label, 'NO REFERENCE', `${committed} is not on disk`]);
+    failures++;
+  } else {
+    const without = gate(path.join(ASSETS, 'schematize_internal.js'), dataDir, 'internal-schematic.svg', committed, { ignoreLineRe: PLACE_IGNORE });
+    if (without.status === 'PASS') {
+      rows.push([label, 'SURVIVED', 'the gate reproduces the sheet with OVERRIDES_FILE unset, so passing it proves nothing']);
+      failures++;
+    } else {
+      rows.push([label, 'caught (' + without.status + ')', 'without OVERRIDES_FILE the forced POI is dropped and the sheet does not reproduce']);
+    }
+  }
+}
+
 // ---- the portal arm --------------------------------------------------------
 let portalRan = 0;
 const portalEngine = path.join(PORTAL, 'engine');
@@ -301,5 +348,5 @@ if (KEEP) console.log(`\nmutated copies kept in ${scratch}`);
 else fs.rmSync(scratch, { recursive: true, force: true });
 
 console.log(`\n${rows.length - failures}/${rows.length} byte gates proven able to go red`
-  + ` — ${TARGETS.length} local sheet types, ${portalRan} portal-fixture gates.`);
+  + ` — ${TARGETS.length} local sheet types, 1 load-bearing-option control, ${portalRan} portal-fixture gates.`);
 process.exit(failures ? 1 : 0);

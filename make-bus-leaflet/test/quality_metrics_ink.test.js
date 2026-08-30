@@ -95,6 +95,35 @@ test('the raw total is left alone, so the frozen scorecard stays comparable', ()
   assert.strictEqual(m.labelsOverBadgeNet, 1);
 });
 
+/* ---- OA-148: the measure's own box, 2026-08-30 ---------------------------
+ *
+ * A road name is drawn ALONG its road, so at 40 degrees its axis-aligned box is
+ * a rectangle most of which the glyphs are nowhere near. This measure tested
+ * that box, so a badge parked in a corner of it was reported as ink under the
+ * name. Two of the thirteen placer-attributable hits on the board were exactly
+ * that, and neither is a defect.
+ *
+ * The two fixtures below are ONE label at ONE angle with the badge in two
+ * places, because that is what separates "the measure is exact" from "the
+ * measure stopped firing": the corner case must go, and the one genuinely under
+ * the glyphs must stay.
+ */
+const road = (x, y, t, deg) =>
+  `<text x="${x}" y="${y}" font-size="2.5" fill="#666" text-anchor="middle"`
+  + ` transform="rotate(${deg} ${x} ${y})">${t}</text>`;
+
+test('a badge in the CORNER of a rotated road name bounding box is not under it', () => {
+  // "Somersham Road" at 40 degrees spans (53.4,92.2)-(68.9,105.1); its bounding
+  // box reaches down to y=106.9 at x=51.9, which is 11mm of empty paper.
+  const m = analyse(sheet(badge(52.5, 105.5, '#4477aa', '5') + road(60, 100, 'Somersham Road', 40))).metrics;
+  assert.strictEqual(m.labelsOverBadge, 0, 'the glyphs are nowhere near it');
+});
+
+test('...and a badge genuinely under the same rotated name still counts', () => {
+  const m = analyse(sheet(badge(60.4, 99.5, '#4477aa', '5') + road(60, 100, 'Somersham Road', 40))).metrics;
+  assert.strictEqual(m.labelsOverBadge, 1, 'the exact test must not simply stop firing');
+});
+
 test('a label merely STARTING with the letters "to" is not a caption', () => {
   // "Tower Road" must not be excused by a prefix match. The sibling measure uses
   // /^to\s/ for the same reason and this fixture is what keeps the two honest.

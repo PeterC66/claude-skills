@@ -1146,10 +1146,26 @@ function analyse(svgPath) {
   // it tells a CAPTION from a place name, and it does not tell a caption on its
   // own badge from one on a neighbour's. Splitting that further needs the badge's
   // route identity, which is a separate measurement.
+  //
+  // AND THE TEST IS THE EXACT ONE, NOT THE BOUNDING BOX (2026-08-30, OA-148). This
+  // loop measured the label's AXIS-ALIGNED box, which for a road name at 35 degrees
+  // is a rectangle most of which the glyphs are nowhere near — so a badge in a
+  // corner of it was charged as ink under the name. Two of the thirteen
+  // placer-attributable hits were exactly that and neither is a defect: "Somersham
+  // Road" on St Ives internal-diagram at 35.5 degrees and "Downham Road" on Ely
+  // Co-op internal at -27.7. The separating-axis test below is already in this file
+  // and its own comment says it is "exact for the rotated road names, unlike an
+  // AABB" — the one measure that most needed it was the one not using it, which is
+  // the same shape as the split this measure printed only when it was non-zero.
+  // Estate figures on the day: 49/36/13 became 47/36/11.
   for (const L of mapLabels) {
-    const b = quadBox(growQuad(L.quad, T.haloPadMm));
+    const gq = growQuad(L.quad, T.haloPadMm);
     for (const g of badges) {
-      if (g.cx + g.rx > b.x0 && g.cx - g.rx < b.x1 && g.cy + g.ry > b.y0 && g.cy - g.ry < b.y1) {
+      // A disc and a stadium are both boxes here: `rx`/`ry` are the half-extents
+      // the badge loop above recorded, so this degenerates to the disc case.
+      const bq = [[g.cx - g.rx, g.cy - g.ry], [g.cx + g.rx, g.cy - g.ry],
+                  [g.cx + g.rx, g.cy + g.ry], [g.cx - g.rx, g.cy + g.ry]];
+      if (quadsOverlap(gq, bq)) {
         detail.labelOverBadge.push({ text: L.text, kind: L.kind, at: [+g.cx.toFixed(1), +g.cy.toFixed(1)] });
         break;                                   // one defect per label, not one per badge under it
       }

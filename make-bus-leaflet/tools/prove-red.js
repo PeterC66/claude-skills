@@ -609,6 +609,20 @@ const MUTATIONS = [
     find: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels",
     to: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels + (m.labelsOverBadge || 0)" },
 
+  // OA-148, 2026-08-30. The AABB is what this measure USED to test, and it was
+  // reporting two road names as sitting on badges their glyphs come nowhere near.
+  // The second mutation is the other direction and matters just as much: a test
+  // that never fires is also "exact".
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the label-over-badge test goes back to the bounding box, so a badge in the corner of a rotated road name is charged as ink beneath it',
+    find: "      if (quadsOverlap(gq, bq)) {",
+    to: "      const _bb = quadBox(gq); if (g.cx + g.rx > _bb.x0 && g.cx - g.rx < _bb.x1 && g.cy + g.ry > _bb.y0 && g.cy - g.ry < _bb.y1) {" },
+
+  { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
+    what: 'the label-over-badge test stops firing altogether, which an exactness fix would hide',
+    find: "      if (quadsOverlap(gq, bq)) {",
+    to: "      if (false && quadsOverlap(gq, bq)) {" },
+
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'an unmeasurable sheet is charged a defect for the measurement it could not take',
     find: "  if (m.badgeOverBadge > 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');",

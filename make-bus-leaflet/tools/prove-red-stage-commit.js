@@ -31,8 +31,14 @@ if (a < 0 || b < 0 || b < a) {
   process.exit(1);
 }
 const broken = src.slice(0, a) + src.slice(b);
-if (broken.includes('OA-106')) {
-  console.error('prove-red-stage-commit: the cut left OA-106 behind — the fixture is not broken.');
+// Assert on a phrase from inside the guard BODY, not on the action number.
+// This read `broken.includes('OA-106')` until 2026-08-30, which is a proxy: the
+// string can legitimately appear anywhere in the file, and the moment the
+// neighbouring run-dir containment guard was added citing OA-106 in its comment,
+// this tripped on text the cut was never meant to remove and reported a
+// perfectly good fixture as unbroken. Name something only the guard says.
+if (broken.includes('A manifest that advertises a sheet nobody wrote')) {
+  console.error('prove-red-stage-commit: the cut left the OA-106 guard behind — the fixture is not broken.');
   process.exit(1);
 }
 

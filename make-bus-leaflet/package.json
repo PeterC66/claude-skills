@@ -14,6 +14,7 @@
     "test:prove-red-stage-commit": "node tools/prove-red-stage-commit.js",
     "test:prove-red-stage-pull": "node tools/prove-red-stage-pull.js",
     "test:prove-red-stage-stamps": "node tools/prove-red-stage-stamps.js",
+    "test:prove-red-stage-run-dir": "node tools/prove-red-stage-run-dir.js",
     "test:prove-red-route-collision": "python tools/prove-red-route-collision.py",
     "test:prove-s6": "node tools/prove-s6-checks.js",
     "test:prove-red-design-keys": "node tools/prove-red-design-keys.js",

@@ -338,6 +338,34 @@ function main() {
     const runDir = path.resolve(rest[1] || die('commit needs <runDir>'));
     const id = path.basename(runDir);
     const relDir = path.relative(townDir, runDir).split(path.sep).join('/');
+    // Guard: a run dir belongs INSIDE the map's own folder, and the manifest
+    // records it as a relative path. `path.relative` will cheerfully describe
+    // somewhere else — it answers "how do I get there from here" and a `..`
+    // chain is a perfectly good answer — so without this, `commit` writes a dir
+    // that walks out of the repository and nothing downstream notices.
+    //
+    // FOUND IN THE DATA, not imagined. High Wycombe Aldi's manifest carried
+    //   "dir": "../../../../../Users/Peter/AppData/Local/Programs/Git/v1.1_2026-07-30_0359"
+    // for its S5 v1.1 run, written 2026-07-30. That is MSYS path mangling: a
+    // bare `/v1.1_2026-07-30_0359` argument in Git Bash is rewritten with the
+    // Git install prefix before node ever sees it, so `commit` was handed a real
+    // absolute path pointing at the Git installation. One row in 1,654 across
+    // all 20 manifests, and inert — every consumer resolves only the `latest`
+    // run and this was not it, and prune_runs.py walks the disk rather than the
+    // manifest, so nothing was ever steered outside the repo by it.
+    //
+    // WHY IT CANNOT RECUR THE SAME WAY, and why this guard is still worth having.
+    // The OA-106 existence check below would now stop that exact case, because
+    // the mangled path does not exist — but it stops it by accident, as a side
+    // effect of asking a different question, and only while the bogus path
+    // happens to be absent. A runDir that exists and is simply in the wrong place
+    // still records a `..`. This asks the question directly.
+    if (relDir === '' || relDir === '..' || relDir.startsWith('../') || path.isAbsolute(relDir))
+      die(`run dir is outside the map folder: ${runDir}\n`
+        + `  recorded as: ${relDir || '(the map folder itself)'}\n`
+        + `  A manifest dir must be relative to ${townDir} and stay inside it, like S4-generate/<id>.\n`
+        + `  In Git Bash, a leading-slash argument is rewritten with the Git install prefix —\n`
+        + `  pass the run dir as a repo path, or prefix with ./ , rather than /<id>.`);
     const outputs = f.outputs ? String(f.outputs).split(',').map(s => s.trim()).filter(Boolean) : [];
     const basedOn = {};
     if (f['based-on']) for (const pair of String(f['based-on']).split(';')) { const [k, v] = pair.split('='); if (k) basedOn[k.trim()] = (v || '').trim(); }

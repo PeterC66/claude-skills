@@ -405,6 +405,17 @@ function deltaE(a, b) {
 }
 
 // ----------------------------------------------------------------- analysing
+/* Perpendicular distance from a point to a line SEGMENT (not the infinite line):
+ * a spoke is a finite run, and a label beyond its end belongs to whatever is
+ * actually nearest rather than to the line it happens to be collinear with. */
+function segDistance(p, [a, b]) {
+  const vx = b[0] - a[0], vy = b[1] - a[1];
+  const len2 = vx * vx + vy * vy;
+  let t = len2 ? ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - (a[0] + t * vx), p[1] - (a[1] + t * vy));
+}
+
 function analyse(svgPath) {
   const svg = fs.readFileSync(svgPath, 'utf8');
   const P = parseSvg(svg);
@@ -587,7 +598,8 @@ function analyse(svgPath) {
   for (let i = 0; i < nameable.length; i++) for (let j = i + 1; j < nameable.length; j++) {
     if (nameable[i].text.trim() !== nameable[j].text.trim()) continue;
     const d = Math.hypot(nameable[i].x - nameable[j].x, nameable[i].y - nameable[j].y);
-    if (d < T.duplicateWithinMm) detail.duplicates.push({ text: nameable[i].text.trim(), gap: +d.toFixed(1) });
+    if (d < T.duplicateWithinMm) detail.duplicates.push({ text: nameable[i].text.trim(), gap: +d.toFixed(1),
+      at: [[nameable[i].x, nameable[i].y], [nameable[j].x, nameable[j].y]], size: nameable[i].size });
   }
   // A POI label is placed 2.6mm from its OWN icon's centre and the icon is
   // 4.2mm across, so every label touches its own symbol by construction —
@@ -932,6 +944,55 @@ function analyse(svgPath) {
   // would train everyone to ignore the quality report. Scoped to the one basename
   // so every other sheet is byte-for-byte unaffected.
   const isBoarding = base === 'boarding';
+
+  /* A REPEAT ON A DIFFERENT SPOKE IS THE DESIGN, NOT A DEFECT (OA-169, decided by
+   * Peter 2026-08-30). On a radial sheet a spoke is drawn to a destination, and a
+   * stop that several routes genuinely call at is named on each spoke it appears on
+   * — Beaconsfield Waitrose prints `St Mary's School` on five of them, because five
+   * routes really do call there. Counting that as a duplicate is counting the
+   * design, exactly as `labelsOverBadge` was counting `to X` captions before OA-148
+   * split them out, and the fix is the same: split the measure so the number moves
+   * only when the thing it names moves.
+   *
+   * SCOPED TO THE EXTERNAL SHEETS, the way isBoarding above is scoped to one
+   * basename, and for a stronger reason than tidiness. MEASURED 2026-08-30: an
+   * external sheet carries 9–73 ink segments and the nearest-line assignment is
+   * decisive (margins of 9–17mm); a town internal carries up to 14,745, and there
+   * every assignment came back with a margin of 0.0–0.4mm, which is noise. On a
+   * geographic map a name printed twice is a defect whatever line it is near, and
+   * this must not reach one.
+   *
+   * AMBIGUITY IS SCORED AS A DEFECT, and that is the argument rather than a
+   * concession. A label is treated as belonging to a spoke only when the
+   * SECOND-nearest line is at least one cap-height further away than the nearest —
+   * because if it is not, a READER cannot attribute the label to a spoke either,
+   * and a name a reader cannot attribute is a defect on its own terms. That is
+   * where the threshold comes from: the artwork's own type size, not a number
+   * chosen to make the total look better. It bites: St Ives' second `Boxworth` sits
+   * 0.1mm from being assigned the other way, and stays scored.
+   *
+   * WHAT IT CANNOT DO, said out loud the way OA-148's split says it: it assigns a
+   * label to the nearest DRAWN LINE, which is a spoke on these sheets but is not
+   * the same thing as knowing which service the label was emitted for. A generator
+   * that stamped the spoke onto the label would answer this exactly and needs a
+   * rollout to do it (OA-085's keyed layers, OA-118's argument about the cost). */
+  const isExternal = base === 'external';
+  const spokeInk = isExternal ? P.strokes.filter(st => st.w >= 1.2) : [];
+  const spokeOf = (pt, capHeight) => {
+    let seq = null, nearest = Infinity, second = Infinity;
+    for (const st of spokeInk) {
+      const d = segDistance(pt, st.seg);
+      if (d < nearest) { second = nearest; nearest = d; seq = st.seq; }
+      else if (d < second) second = d;
+    }
+    // Unambiguous only when the runner-up is a whole cap-height further off.
+    return (seq !== null && second - nearest >= capHeight) ? seq : null;
+  };
+  for (const dup of detail.duplicates) {
+    if (!isExternal || !dup.at) { dup.acrossSpokes = false; continue; }
+    const a = spokeOf(dup.at[0], dup.size), b = spokeOf(dup.at[1], dup.size);
+    dup.acrossSpokes = a !== null && b !== null && a !== b;
+  }
   const panelOnly = [];
   if (RJ && hasPanel && !isBoarding && Array.isArray(RJ.panelOrder) && RJ.palette) {
     const rides = {};
@@ -1292,6 +1353,7 @@ function analyse(svgPath) {
     labelLabelCollisions: detail.labelPairs.length,
     // An index legitimately names the same boarding point on many rows.
     duplicateLabels: isBoarding ? 0 : detail.duplicates.length,
+    duplicateAcrossSpokes: isBoarding ? 0 : (isExternal ? detail.duplicates.filter(d => d.acrossSpokes).length : null),
     labelIconCollisions: detail.labelIcon.length,
     iconBlobs: detail.iconPairs.length,
     textUnderFooter: detail.inFooter.length,
@@ -1339,6 +1401,13 @@ function analyse(svgPath) {
   // the placer can be held to, and it is the one to drive to zero before the
   // measure is folded into `hard`.
   m.labelsOverBadgeNet = m.labelsOverBadge === null ? null : m.labelsOverBadge - m.exitCaptionOverBadge;
+  /* And the same correction for a name repeated on two spokes (OA-169). Unlike the
+   * two above, THIS one is subtracted from a measure that is already scored, so the
+   * net figure is what `hard` counts — a split that left the scored number alone
+   * would report the design honestly and go on failing the sheet for it.
+   * `duplicateLabels` itself is left untouched so the frozen scorecard stays
+   * comparable, which is the convention the two lines above already follow. */
+  m.duplicateLabelsNet = m.duplicateLabels - (m.duplicateAcrossSpokes || 0);
 
   // Drops as a RATE, because the raw count is not comparable between sheets and
   // reading it as one would libel the towns the triage deliberately thinned.
@@ -1406,7 +1475,7 @@ function analyse(svgPath) {
    * `|| 0` on both, because null means "could not tell" -- an unreadable
    * routes.json, or a sheet type with no lozenges -- and an unmeasurable sheet
    * must not be charged for a defect nobody has established is there. */
-  m.hard = m.textUnderFooter + m.duplicateLabels + m.labelLabelCollisions
+  m.hard = m.textUnderFooter + m.duplicateLabelsNet + m.labelLabelCollisions
     + (m.symbolsUnderLegend || 0) + (m.unplacedLabels || 0)
     + (m.panelOnlyServices || 0) + m.strandedFeatureLabels
     + (m.badgeOverBadge || 0) + (m.lozengeOverlap || 0)
@@ -1418,7 +1487,10 @@ function analyse(svgPath) {
   if (m.pointLabelsOverInk > T.labelsOverInkFail) fails.push('point labels over route ink');
   else if (m.pointLabelsOverInk > 0) warns.push('point labels over route ink');
   if (m.labelLabelCollisions > 0) fails.push('labels overlapping');
-  if (m.duplicateLabels > 0) fails.push('duplicate labels');
+  if (m.duplicateLabelsNet > 0) fails.push('duplicate labels'
+    + (m.duplicateAcrossSpokes ? ' (' + m.duplicateAcrossSpokes + ' more repeat on a different spoke, which is the design)' : ''));
+  else if (m.duplicateAcrossSpokes > 0) warns.push(m.duplicateAcrossSpokes
+    + ' name' + (m.duplicateAcrossSpokes === 1 ? '' : 's') + ' repeated on a different spoke — reported, not scored (OA-169)');
   if (m.labelIconCollisions > 0) fails.push('labels over a foreign icon');
   if (m.iconBlobs > 0) fails.push('icon blobs');
   if (m.textUnderFooter > 0) fails.push('text under footer');
@@ -1557,7 +1629,7 @@ ${results.length} sheets · ${results.filter(r => r.fails.length).length} FAIL �
     if (!r.fails.length && !r.warns.length) continue;
     console.log('\n== ' + label(r.file) + '  [' + [...r.fails, ...r.warns].join(', ') + ']');
     if (r.detail.overInk.length) console.log('  over route ink: ' + r.detail.overInk.map(d => `"${d.text}" ${d.cover}%`).join(', '));
-    if (r.detail.duplicates.length) console.log('  duplicate labels: ' + r.detail.duplicates.map(d => `"${d.text}" x2 ${d.gap}mm apart`).join(', '));
+    if (r.detail.duplicates.length) console.log('  duplicate labels: ' + r.detail.duplicates.map(d => `"${d.text}" x2 ${d.gap}mm apart${d.acrossSpokes ? ' [different spokes — the design, not scored]' : ''}`).join(', '));
     if (r.detail.labelPairs.length) console.log('  label collisions: ' + r.detail.labelPairs.map(p => `"${p[0]}" x "${p[1]}"`).join(', '));
     if (r.detail.labelIcon.length) console.log('  label over icon: ' + r.detail.labelIcon.map(d => `"${d.text}"`).join(', '));
     if (r.detail.iconPairs.length) console.log('  icon blobs: ' + r.detail.iconPairs.map(d => `${d.gap}mm at ${d.at}`).join(', '));

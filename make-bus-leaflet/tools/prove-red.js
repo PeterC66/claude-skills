@@ -355,6 +355,21 @@ const MUTATIONS = [
     what: 'the module ends the run itself, taking the decision away from callers that end differently on purpose',
     find: '  return true;' + String.fromCharCode(10) + '}' + String.fromCharCode(10) + String.fromCharCode(10) + 'module.exports',
     to: '  process.exitCode = 1;' + String.fromCharCode(10) + '  return true;' + String.fromCharCode(10) + '}' + String.fromCharCode(10) + String.fromCharCode(10) + 'module.exports' },
+  { suite: 'quality_metrics_spokes.test.js', file: 'quality_metrics.js',
+    what: 'a repeat on a different spoke goes back to being scored (OA-169 reverted)',
+    find: '  m.duplicateLabelsNet = m.duplicateLabels - (m.duplicateAcrossSpokes || 0);',
+    to: '  m.duplicateLabelsNet = m.duplicateLabels;' },
+
+  { suite: 'quality_metrics_spokes.test.js', file: 'quality_metrics.js',
+    what: 'the spoke split escapes its scope and forgives duplicates on an INTERNAL sheet too',
+    find: "  const isExternal = base === 'external';",
+    to: '  const isExternal = true;' },
+
+  { suite: 'quality_metrics_spokes.test.js', file: 'quality_metrics.js',
+    what: 'a label equidistant between two spokes is called unambiguous anyway',
+    find: '    return (seq !== null && second - nearest >= capHeight) ? seq : null;',
+    to: '    return seq;' },
+
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'a re-wrapped label goes back to reading as a lost one (OA-171 reverted)',
     find: '  return parts && parts.length >= 2 ? parts : null;',

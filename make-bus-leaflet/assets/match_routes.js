@@ -26,6 +26,39 @@
 const fs = require('fs');
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const SNAP_M = 120, SERVICE_PEN = 1.6, LIVING_PEN = 1.3;
+/* HOW FAR A PROJECTED TICK MAY SIT FROM ITS OWN LINE BEFORE THE BUILD SAYS SO.
+ *
+ * The projection above is deliberate and it rests on an assumption the header does
+ * not state: that a route's two travel directions run along the SAME streets, so a
+ * stop on the other side of the road projects onto the line a few metres away. Where
+ * that holds, this is exactly right. Where a route runs a ONE-WAY LOOP through
+ * different streets, it is meaningless — and nothing said so, because a leg that
+ * routes cleanly through the vias it was given produces `fallbacks: []` whatever the
+ * ticks then do.
+ *
+ * Ramsey is the case that found it (OA-175, from the first genuine public report).
+ * The X31 and the 32 are built from a canonical direction covering 6 of their 16
+ * in-town stops; the other ten project onto the ends of that line between 544 m and
+ * 3,564 m from where they are, so the sheet shows no bus at all from Ramsey to Bury
+ * or Upwood. `fallbacks` was empty and every gate was green.
+ *
+ * MEASURED OVER ALL 81 DRAWN ROUTES IN THE ESTATE, 2026-08-30, because the obvious
+ * instrument is the wrong one. "A stop the built chain does not contain" sounds
+ * exact and fires on 69 of the 81 — it is the NORMAL case, since the in-town chain
+ * merges both directions by design. Distance is the instrument, and the worst
+ * projection per route ranks: 3564, 3564, 1477, 444, 444, 264, 226, 226, 182, 176,
+ * 176, 165, 154 x4, 150, 146, 108, 96, 81, 81, 68, 67 x4, 65, 60, 60, then a long
+ * tail under 50. The one real gap is 264 -> 444, so the threshold sits at 350: a
+ * factor of 1.33 above the highest thing it ignores and 1.27 below the lowest thing
+ * it names, rather than butted against either. Five routes report on the first run —
+ * Ramsey 32 and X31, Huntingdon 66, March 32 and X32 — which is a list somebody will
+ * read. Thirty would not have been.
+ *
+ * It is a WARNING and not a refusal on purpose. A sheet with one tick 400 m out is
+ * worth looking at; it is not worth refusing to draw, and a gate that blocks a build
+ * over a drawing imprecision is one that gets an override rather than a fix.
+ */
+const PROJ_WARN_M = +(process.env.MATCH_PROJ_WARN_M || 350);
 
 const RG = JSON.parse(fs.readFileSync(DIR + '/roads_geo.json', 'utf8'));
 const atco2ll = JSON.parse(fs.readFileSync(DIR + '/atco2ll.json', 'utf8'));
@@ -103,6 +136,14 @@ function dijkstra(src, dst) {
 
 // ---- match each drawn route ------------------------------------------------
 const OUT = { routes: {}, edgeWay: {} };
+// Stop names, for the warning below only — a bare ATCO code in a build warning is a
+// number somebody has to look up before they can tell whether it matters. Absent on a
+// place build, so the code is the fallback rather than a crash.
+const NAME = (() => {
+  try { return JSON.parse(fs.readFileSync(DIR + '/atco2name.json', 'utf8')); }
+  catch (e) { return {}; }
+})();
+const farReport = [];
 for (const r in INTOWN) {
   // Explicit no-line list: a service that only touches the town at one stop
   // (e.g. St Neots 69 = Eynesbury Tesco stop only, then a long non-stop run) or
@@ -178,7 +219,26 @@ for (const r in INTOWN) {
   const contEnd = !closedLoop && vias[vias.length - 1] !== can.stops[can.stops.length - 1];
   OUT.routes[r] = { pts: pts.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), edges, stopT, fallbacks, contStart, contEnd };
   const km = pts.reduce((s, p, i) => i ? s + kmLL(pts[i - 1], p) : 0, 0);
-  console.log(r + ': vias ' + vias.length + ', pts ' + pts.length + ', ' + km.toFixed(2) + ' km, fallbacks ' + fallbacks.length + (fallbacks.length ? ' [' + fallbacks.map(f => f.why).join('; ') + ']' : ''));
+  // The worst projection is recorded on every route, not only the ones that warn, so
+  // a later gate can read the number instead of recomputing it from the geometry.
+  const far = Object.entries(stopT).map(([a, v]) => ({ a, d: v.d }))
+    .sort((x, y) => y.d - x.d);
+  OUT.routes[r].projMaxM = far.length ? far[0].d : 0;
+  console.log(r + ': vias ' + vias.length + ', pts ' + pts.length + ', ' + km.toFixed(2) + ' km, fallbacks ' + fallbacks.length + (fallbacks.length ? ' [' + fallbacks.map(f => f.why).join('; ') + ']' : '') + ', worst tick ' + Math.round(OUT.routes[r].projMaxM) + ' m off the line');
+  const over = far.filter(x => x.d > PROJ_WARN_M);
+  if (over.length) {
+    farReport.push({ r, over });
+    console.error('match_routes: ' + r + ' — ' + over.length + ' of ' + far.length
+      + ' stop tick(s) sit more than ' + PROJ_WARN_M + ' m from the line they are drawn on, worst '
+      + Math.round(over[0].d) + ' m (' + (NAME[over[0].a] || over[0].a) + ').');
+    console.error('  The line is built from ONE direction and the ticks come from BOTH, so this is'
+      + ' what a one-way loop through different streets looks like: the drawn route does not go'
+      + ' where those stops are, and the sheet will show no service along that leg.');
+  }
+}
+if (farReport.length) {
+  console.error('match_routes: ' + farReport.length + ' route(s) draw a tick more than ' + PROJ_WARN_M
+    + ' m from their own line — ' + farReport.map(f => f.r).join(', ') + '. Look at the sheet before shipping it.');
 }
 fs.writeFileSync(DIR + '/routes_paths.json', JSON.stringify(OUT));
 console.log('routes_paths.json written: ' + Object.keys(OUT.routes).length + ' routes, ' + Object.keys(OUT.edgeWay).length + ' road edges used');

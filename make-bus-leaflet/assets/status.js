@@ -345,6 +345,83 @@ function gatePlace(p) {
   return row;
 }
 
+/* ---- IS THE COMMITTED FIXTURE THE CURRENT SHEET? (2026-08-30, OA-182) ------
+ *
+ * A byte gate against a FROZEN fixture is self-consistent by construction: the
+ * old engine reproduces the old sheet perfectly and the gate reports PASS about
+ * code that has not shipped. `Areas/_portal-fixture/README.md` says so in as
+ * many words and the trap has been walked into three times in three days — the
+ * radial round forgot the area fixture, the placer round forgot it again and was
+ * caught only by the portal PR's own verify job going red, and the place-index
+ * round found the PLACE fixture a version behind as well.
+ *
+ * The reason it keeps happening is that the two fixtures are refreshed by two
+ * different mechanisms and nothing pairs them: the place one has
+ * `scripts/refresh-place-fixture.mjs` in the portal, and the area one has a
+ * shell recipe in a README. This does not pair them either. What it does is put
+ * the fact in front of whoever is about to re-vendor, on the board they already
+ * run — which is the cheapest of the three fixes OA-182 listed.
+ *
+ * `Areas/_portal-fixture` is the only one it looks at; see the note on the
+ * function below for why the place one is neither comparable nor uncovered.
+ *
+ * AND IT IS A LAPTOP CHECK, NOT A CI ONE, WHICH IS STATED HERE BECAUSE THE
+ * OPPOSITE IS EASY TO ASSUME. It compares the committed fixture against the
+ * newest S5 render, and `S5-render/` is gitignored — so in a fresh
+ * `actions/checkout` there is no render to compare with, `latestRunDir` points
+ * at a folder that does not exist, and this returns no rows and gates nothing.
+ * That is not a bug to fix by tracking the renders (they are 88% of the repo's
+ * bulk and rebuildable); it is the honest shape of the question, which is *does
+ * this laptop hold a newer render than the fixture describes*. CI answers a
+ * different and equally necessary question — the portal PR's `verify` job
+ * regenerates from the committed fixture with the PR's own engine — and it is
+ * what caught the placer round. The two are complements, and this one exists
+ * because CI's version only speaks after the PR is open.
+
+ *
+ * It compares the fixture's committed sheets with the newest S5 render of the
+ * map they were cut from, BYTE FOR BYTE, rather than comparing version strings.
+ * A version number says which build wrote a file and not whether the bytes
+ * differ, and the fixture deliberately omits the JPGs, the svc_*.html evidence
+ * pages and build-warnings.txt — so a filename comparison would be permanently
+ * red and a gate that is red on day one gets muted in its first week.
+ */
+/* WHY ONLY THE AREA FIXTURE. `Places/_portal-fixture/<place>` is a DIFFERENT
+ * pack from that place's own S5 render — it carries base-overrides.json, the
+ * portal's name for a customer's edits, and its sheets are rendered with them —
+ * so comparing the two is wrong in principle. It is also already covered: the
+ * *Portal fixtures* table below runs the PORTAL's own vendored engine against
+ * that fixture and diffs it against the committed SVG, which is the stronger
+ * question. `Areas/_portal-fixture` is the one nothing asks about, and it is the
+ * one that has been forgotten twice. */
+function fixtureFreshness() {
+  const rows = [];
+  const fixDir = path.join(BUSES, 'Areas', '_portal-fixture', 'St Ives');
+  const townDir = path.join(BUSES, 'Areas', 'St Ives');
+  if (!exists(fixDir) || !exists(townDir)) return rows;
+  /* ASK THE MANIFEST WHICH RUN IS LATEST, never the directory listing sorted as
+   * strings. `v1.9_2026-08-18` sorts AFTER `v1.23_2026-08-30` one character in,
+   * and the first cut of this check duly compared a fresh fixture against a
+   * render from twelve days earlier and called it stale. latestRunDir() is how
+   * every other gate in this file asks the same question. */
+  const manifest = readJson(path.join(townDir, 'manifest.json'));
+  // latestRunDir returns {dir, rec}, not a path. Taking it for a string made this
+  // function return silently empty -- a check that prints nothing and gates on
+  // nothing, which is the one failure mode a freshness check must not have.
+  const latest = manifest && latestRunDir(manifest, townDir, 'S5');
+  const newest = latest && latest.dir;
+  if (!newest || !exists(newest)) return rows;
+  const stale = [];
+  for (const f of fs.readdirSync(fixDir)) {
+    if (!f.endsWith('.svg')) continue;
+    const src = path.join(newest, f);
+    if (!exists(src)) { stale.push(f + ' (no longer rendered)'); continue; }
+    if (!sameIgnoringLineEndings(path.join(fixDir, f), src)) stale.push(f);
+  }
+  rows.push({ label: 'Areas/_portal-fixture/St Ives', run: path.basename(newest), stale });
+  return rows;
+}
+
 // ---- portal fixture reproduction (uses the PORTAL's own vendored engine) --
 function gatePortalFixture() {
   const fixDir = path.join(BUSES, 'Places', '_portal-fixture');
@@ -507,6 +584,7 @@ const places = findPlaces(towns, BUSES);
 const townRows = towns.map(gateTown);
 const placeRows = places.map(gatePlace);
 const portalFixtureRows = gatePortalFixture();
+const freshnessRows = fixtureFreshness();
 const driftRows = portalDrift();
 
 // The quality ratchet (Phase 8 item 1). Measured off the ci-reference copies —
@@ -622,6 +700,13 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // one -- which is the whole point of gating it now rather than later.
   || placeRows.some(r => r.keys && r.keys.state === 'short')
   || qualityRows.some(r => r.status === 'REGRESSED')
+  // OA-182, GATED from the day it landed. The rule this project holds to is that
+  // a check which is red on its first run gets muted inside a week -- so the two
+  // committed fixtures were recut in the same change that added this, and the
+  // board is green on it now. What turns it red from here is exactly the thing
+  // that has slipped through three times in three days: an engine round that
+  // re-vendors and leaves a fixture describing the previous engine.
+  || freshnessRows.some(r => r.stale.length)
   || engineStaleRows.length > 0;
 
 
@@ -712,7 +797,7 @@ async function deploymentRow() {
 async function main() {
   const deploy = await deploymentRow();
   if (AS_JSON) {
-    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy }, null, 2));
+    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy }, null, 2));
     return bad || deploy.status === 'BEHIND';
   }
 
@@ -781,6 +866,21 @@ async function main() {
     const fw = [24, 9, 9, 9];
     console.log(line(['Fixture', 'Internal', 'External', 'Boarding'], fw));
     for (const r of portalFixtureRows) console.log(line([r.name, r.internal, r.external, r.boarding], fw));
+  }
+
+  if (freshnessRows.length) {
+    console.log('\n=== Committed portal fixtures vs the newest render (OA-182) ===');
+    for (const r of freshnessRows) {
+      if (!r.stale.length) { console.log('  current  ' + r.label + '  (' + r.run + ')'); continue; }
+      console.log('  STALE    ' + r.label + '  \u2014 ' + r.stale.join(', ')
+        + ' differ from ' + r.run);
+    }
+    if (freshnessRows.some(r => r.stale.length)) {
+      console.log('    A gate against a frozen fixture is self-consistent by construction: the old');
+      console.log('    engine reproduces the old sheet and PASS says nothing about what shipped.');
+      console.log('    Refresh: the place ones with the portal\'s scripts/refresh-place-fixture.mjs,');
+      console.log('    the area one with the recipe in Areas/_portal-fixture/README.md.');
+    }
   }
 
   if (driftRows.length) {

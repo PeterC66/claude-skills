@@ -91,7 +91,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, areaFixture = null }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-'));
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -136,6 +136,32 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
       if (txt.split(find).length - 1 < 1) throw new Error('fixture no longer contains ' + find + ' -- pick another mutation');
       fs.writeFileSync(sv, txt.replace(find, 'font-size="2.6"'));
     }
+  }
+  /* THE COMMITTED AREA FIXTURE (OA-182, 2026-08-30). fixtureFreshness() compares
+   * `Areas/_portal-fixture/St Ives`'s SVGs with the newest S5 render of
+   * `Areas/St Ives`, so a case for it needs both — and neither exists in a fresh
+   * clone, which is exactly why the gate is laptop-only and why this harness has
+   * to MAKE them rather than borrow them. `areaFixture: 'same' | 'differs'`.
+   *
+   * The render folder is NAMED FROM THE TOWN'S OWN MANIFEST, not invented: the
+   * check asks the manifest which S5 run is latest — a directory listing sorted
+   * as strings puts `v1.9` after `v1.23`, which is how the first cut of the check
+   * called a ten-minute-old fixture stale — so a scratch folder under any other
+   * name would be invisible to it and this case would report SURVIVED about a
+   * gate that works. */
+  if (areaFixture) {
+    const man = JSON.parse(fs.readFileSync(path.join(dst, 'manifest.json'), 'utf8'));
+    const s5 = man.stages && man.stages.S5;
+    const rec = s5 && (s5.runs || []).find(r => r.id === s5.latest);
+    if (!rec) throw new Error('prove-red-status: the donor manifest has no latest S5 run to name the scratch render after');
+    const runDir = path.join(dst, rec.dir);
+    fs.mkdirSync(runDir, { recursive: true });
+    const NEWEST = '<svg><!-- the newest render --></svg>';
+    fs.writeFileSync(path.join(runDir, 'internal.svg'), NEWEST);
+    const fix = path.join(root, 'Areas', '_portal-fixture', 'St Ives');
+    fs.mkdirSync(fix, { recursive: true });
+    fs.writeFileSync(path.join(fix, 'internal.svg'),
+      areaFixture === 'same' ? NEWEST : '<svg><!-- an OLDER render, frozen --></svg>');
   }
   if (engine) {
     const rjPath = path.join(dst, 'ci-reference', 'routes.json');
@@ -208,6 +234,45 @@ function statusWithException(town, engine) {
 }
 
 const CASES = [
+  {
+    /* OA-182, GATED from the day it landed (2026-08-30). Two cases and not one,
+     * because the interesting failure of a freshness check is not that it misses
+     * a stale fixture — it is that it fires on a FRESH one and gets muted inside
+     * the week. The first cut of this check did precisely that: it sorted version
+     * folders as strings, so `v1.9_2026-08-18` beat `v1.23_2026-08-30` and a
+     * fixture recut ten minutes earlier was reported stale. The control below is
+     * the case that would have caught it.
+     *
+     * The town is named 'St Ives' because the check names that fixture by name;
+     * the CONTENT is the donor's, which nothing in this gate reads. */
+    label: 'the committed area fixture matches the newest render',
+    make: { town: 'St Ives', areaFixture: 'same' },
+    expect: 0,
+    /* A green exit is also what a board that never LOOKED would return, and a
+     * freshness check that silently finds nothing is the exact failure this one
+     * had on its first run (it took latestRunDir's {dir, rec} for a path and
+     * returned no rows at all). So the control asserts the row exists. */
+    also: (json) => {
+      const rows = json.fixtureFreshness || [];
+      if (!rows.length) return 'the board reported no fixture-freshness row at all';
+      if (rows[0].stale.length) return 'it called a matching fixture stale: ' + rows[0].stale.join(', ');
+      return null;
+    },
+    what: 'a freshness check that cries wolf on a fresh fixture is muted in a week',
+  },
+  {
+    label: 'the committed area fixture is a version behind',
+    make: { town: 'St Ives', areaFixture: 'differs' },
+    expect: 1,
+    cause: 'fixture',
+    also: (json) => {
+      const rows = json.fixtureFreshness || [];
+      if (!rows.length) return 'the board went red without reporting a fixture row';
+      if (!rows[0].stale.includes('internal.svg')) return 'red, but not about internal.svg: ' + JSON.stringify(rows[0]);
+      return null;
+    },
+    what: 'OA-182 - a gate against a frozen fixture PASSes about code that never shipped',
+  },
   {
     label: 'control: donor town, its own current stamp',
     make: {},
@@ -320,7 +385,13 @@ for (const c of CASES) {
   const colourOk = (code !== 0) === wantRed;
   /* A green case must name NO stale town; a red case must name exactly the one
    * it mutated. Either way the cause is checked, not just the colour. */
-  /* `cause: 'keys'` says this case expects a DIFFERENT gate to fire (2026-08-29).
+  /* `cause: '<anything>'` says this case expects a DIFFERENT gate to fire, and
+   * the discrimination is kept either way: such a case must still name NO stale
+   * town, so it cannot pass by tripping the staleness gate instead, and its
+   * `also` says which gate it DID mean. 'keys' was the first (2026-08-29) and
+   * 'fixture' the second (2026-08-30, OA-182).
+   *
+   * `cause: 'keys'` says this case expects a DIFFERENT gate to fire (2026-08-29).
    * Every case here used to be about engine staleness, so a red exit that named
    * no stale town could only be a wrong-cause red. The OA-057 completeness column
    * became a gate on 2026-08-29 and its case now expects a red that names no

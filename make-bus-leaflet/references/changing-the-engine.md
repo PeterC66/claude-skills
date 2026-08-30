@@ -318,6 +318,26 @@ The table that used to sit here listed eleven files, and `status.js` listed the 
 node scripts/check-vendored.mjs --update
 ```
 
+### AND RE-CUT BOTH COMMITTED FIXTURES, IN THE SAME BREATH (OA-182)
+
+**There are two, they are refreshed by two different mechanisms, and nothing pairs them.** Re-vendoring makes the portal run the new code; the fixtures are what its byte gates compare against, and a fixture frozen alongside the change passes its own gate **by construction** — the old engine reproduces the old sheet perfectly and `verify` reports PASS about code that has not shipped. The area one was forgotten twice in three days: once caught by somebody reading an unrelated backlog row, once by a portal PR's `verify` job going red.
+
+Run both from the portal root (`C:\Claude\community-bus-maps`) unless stated; neither takes a placeholder except the render folder named in the second, which is the versioned S5 directory the rollout just wrote (`ls "Areas/St Ives/S5-render"`, newest last):
+
+```bash
+node scripts/refresh-place-fixture.mjs "C:/u3a St Ives/Using AI/Buses/Places/_portal-fixture/High Wycombe Aldi" --apply
+```
+
+The AREA one has no script yet — its recipe is in [`Areas/_portal-fixture/README.md`](../../../Using%20AI/Buses/Areas/_portal-fixture/README.md) in `buses-data` and is run from **that** repository's root. Then verify both with `FIXTURE_DIR` deliberately unset, so you are gating the committed fixtures and not whatever your `.env` points at:
+
+```bash
+BUSES_DIR="C:/u3a St Ives/Using AI/Buses" FIXTURE_DIR= npm run verify:area
+```
+
+**`status.js` now tells you when the area one has gone stale** and exits non-zero on it, so the board you already run before re-vendoring is the reminder. It is a laptop check by construction — `S5-render/` is gitignored, so a fresh CI checkout has no render to compare with — and CI answers the complementary question once the PR is open.
+
+**And push `buses-data` BEFORE opening the portal PR.** The fixtures live there, and the portal's `verify.yml` checks that repository out with no `ref:`, so the PR's engine is gated against whatever is on its `main` at that moment.
+
 ### ✅ CLOSED 2026-08-26 — A NEW MODULE is a hand-off the drift table could not warn you about, and now it can
 
 `gen_internal.js` gained a `require` of a new sibling, `lane_normals.js`, when `design.laneOrientation` was added. The requirement it creates is absolute and it is not a byte gate: **the portal must receive both files or neither.** The generator requires the module at load, before it reads a thing, so a portal that got `gen_internal.js` alone would throw on the first internal render of any map — area or place — whatever any config key said.

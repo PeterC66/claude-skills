@@ -241,3 +241,28 @@ npm run test:prove-red-stage-stamps
 Both stage harnesses used to write their broken copy into a temp folder. That worked for as long as `stage.js` had no relative `require`s, and stopped working the moment it gained two (`./sheet_stamps`, `./engine_version`): the copy died in the module loader before `main()` ran, and **all eight tests went red, controls included**. Every case failing is exactly what a falsification harness hopes to see, so the only thing that distinguished *the guard works* from *the file does not load* was the assertion that the CONTROLs must stay green.
 
 Both now write the copy into `assets/` beside its dependencies, under a dotted name, and delete it on `exit`. **The trigger is invisible and routine: adding a `require` to a CLI breaks every harness that relocates it.** After adding one, run the harnesses that copy it. Two more here copy a single file — `prove-red-derive-frequency.js` and `prove-red-redteam-source.js` — and both subjects have no relative requires today, which is the only reason they still work.
+
+## Prove the ROLLOUT STAMP verdict can go red — added 2026-08-30
+
+```bash
+npm run test:prove-red-rollout-stamp
+```
+
+`tools/prove-red-rollout-stamp.js` is the falsification of OA-179's third rollout verdict, `STAMP-STALE` — the case where a town's four sheets reproduce byte-for-byte but its `routes.json` still names the previous engine build, which `rolloutOne()` used to call `UP-TO-DATE`. **It is a harness this suite could not do without, because nothing else can ever see the verdict work.** The change writes nothing and does not move the exit code, so no gate goes red on it; and the whole estate is on the current engine today, so it cannot fire by accident either. The only way to see it is to provoke it.
+
+It does not cut a guard out of a copy. It builds a scratch `buses-data` tree from **tracked files only** — one town's `manifest.json`, its latest `S3-config` run and its `ci-reference/` — and runs the real `rollout.js` against it with `--buses`. `latestRunDir()` falls back to `ci-reference` when a run folder holds no `routes.json`, which is exactly what a fresh CI clone gets, so this harness runs in a checkout that has never built anything.
+
+Six cases, and **four of them are controls**:
+
+| Case | Fixture | Must report |
+|---|---|---|
+| A | town, stamp current | `UP-TO-DATE` — and the detail line must say the stamp was checked |
+| B | town, stamp is an old hash | `STAMP-STALE`, naming both hashes and the `--force` command |
+| C | town, no `engine` field at all | `UP-TO-DATE` — `(none)` is a map stamped before the hash existed, which `status.js` reports and never gates |
+| D | town, stale stamp **and** a sheet that really differs | anything but `STAMP-STALE` |
+| E | place, stamp current | `UP-TO-DATE` |
+| F | place, stamp is an old hash | `STAMP-STALE`, quoting the **place** template hash |
+
+**D is the case worth keeping.** The new test sits in front of the fast path, so a careless version answers `STAMP-STALE` for a town that also needs redrawing — turning a rebuild into a report and losing the work. D is green under the OLD code too, which is honest: it guards a future mistake rather than proving this change. **F is why the harness covers both tools.** `rollout_places.js` is a separate file with a separate hash function, and a place is measured against `computePlaceEngineVersion()` because a place gets its own template (OA-168); proving the town half and inferring the place half is the *satisfied by the other clause* shape this suite has already paid for. F asserts the message names the PLACE template, not the town's.
+
+Both findings were watched go red before being trusted: disabling the condition in `rollout.js` turns B's four assertions red and leaves A, C and D green; the same edit to `rollout_places.js` turns F red and leaves E green.

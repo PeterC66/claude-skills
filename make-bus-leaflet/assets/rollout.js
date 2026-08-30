@@ -47,6 +47,9 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
+// One value for the whole run, computed once, exactly as status.js does — the
+// two tools compare the same number against the same file (OA-179).
+const CURRENT_ENGINE = computeEngineVersion();
 const BUILDLOG = require('./build_log');
 // The printed sheet version (footer.js design.sheetVersion). Byte-identical
 // copies of this lived in BOTH rollouts until 2026-08-29 and in neither of the
@@ -126,9 +129,51 @@ function rolloutOne(t) {
   if (rj.internalDiagram) sheetGates.push(['internal-diagram',
     gate(path.join(SK, 'diagram_internal.js'), prevS4.dir, 'internal-diagram.svg', path.join(prevS4.dir, 'internal-diagram.svg'))]);
   const internalGate = sheetGates[0][1], externalGate = sheetGates[1][1];
+  /* AND THE STAMP, AS OF 2026-08-30 (OA-179). Four gates PASS means "no sheet
+   * would change"; it does not mean "nothing to do". `routes.json`'s `engine`
+   * field is a separate claim — WHICH engine build drew this — and until today
+   * this function never read it. On 2026-08-30 an engine round moved the
+   * template hash from 30fbffe221 to 7e59f923e5 while changing the drawn output
+   * of exactly one sheet in the estate: `rollout.js --all` reported seven towns
+   * UP-TO-DATE and one to rebuild, and `status.js` reported eight ENGINE STALE
+   * in the same minute. Both were right about what they measured. Since OA-151
+   * a stale stamp FAILS the board, so the state reported as needing nothing was
+   * a state in which the board exits non-zero — and the only tool that can clear
+   * it had just said there was nothing to clear.
+   *
+   * THIS REPORTS; IT DOES NOT WRITE, AND THAT IS THE WHOLE DESIGN. The obvious
+   * fix is a --stamp-only that rewrites `engine` on a map whose sheets gate
+   * PASS. Do not build it. `engine` means *which engine build drew this*;
+   * rewriting it without re-running the generators quietly converts it into
+   * *which engine reproduces this*, and those are different claims. The byte
+   * gate already answers the second; this field is the only record of the
+   * first, and it is what `track:engine` and the whole OA-130 tracking decision
+   * rest on. So the rebuild is real work and --force is the right way to ask
+   * for it; the bug was only ever that nobody was told.
+   *
+   * IT READS THE SAME FILE STATUS.JS READS — the latest S4 run's routes.json,
+   * not ci-reference — so the two tools cannot disagree about the input. And it
+   * excuses `(none)` and an absent field on status.js's terms: a map stamped
+   * before the hash existed is a different question, reported and never gated.
+   *
+   * IT DOES NOT MOVE THE EXIT CODE. status.js is the board and already gates
+   * this; a second red here adds no signal, and turning a tool you run to find
+   * out what to do into a tool that fails while telling you is how a check gets
+   * a --no-verify habit built around it. The summary line below names it
+   * loudly instead.
+   */
+  const stampedEngine = rj.engine;
+  if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE
+      && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE) {
+    return { name: t.name, status: 'STAMP-STALE',
+             detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current template is `
+                   + `${CURRENT_ENGINE} — status.js gates that as ENGINE STALE. Rebuild and re-stamp with:  `
+                   + `node rollout.js --town "${t.name}" --apply --force` };
+  }
   if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE) {
     return { name: t.name, status: 'UP-TO-DATE',
-             detail: sheetGates.map(([n]) => n).join('+') + ' already gate PASS against the current template' };
+             detail: sheetGates.map(([n]) => n).join('+')
+                   + ' already gate PASS against the current template, and the engine stamp is current' };
   }
 
   let routesJson = {};
@@ -153,7 +198,7 @@ function rolloutOne(t) {
   }
   copyFile(path.join(SK, 'gen_internal.js'), path.join(scratch, 'S4'));
   copyFile(path.join(SK, `gen_external_${style}.js`), path.join(scratch, 'S4'), 'gen_external.js');
-  const engineHash = computeEngineVersion();
+  const engineHash = CURRENT_ENGINE;
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
   // Dry-run parity: stamp the PREVIOUS run's identifier so the label-set diff below
   // compares like with like. Stamping the next one would report the version line as
@@ -323,6 +368,13 @@ for (const t of selected) {
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
+// OA-179. STAMP-STALE is easy to skim past in a per-town line, and it is the one
+// verdict that names a command the operator has to type. It repeats here.
+const stampStale = results.filter(r => r.status === 'STAMP-STALE');
+if (stampStale.length) console.log(
+  `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp — status.js gates these as ENGINE STALE, `
+  + `and this tool will not clear them without --force:\n  `
+  + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --force`).join('\n  '));
 const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
 if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} town(s) — the engine refused to draw something, or a label names nothing.`);
 const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED'].includes(r.status)) || (!APPLY && totalBlockers > 0);

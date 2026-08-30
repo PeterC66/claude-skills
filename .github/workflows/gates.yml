@@ -233,6 +233,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-sweep.js --buses "$GITHUB_WORKSPACE/buses-data"
 
+      # And falsify the ROLLOUT stamp verdict (OA-179). This one has to be here
+      # rather than in `unit`, because it needs a buses-data checkout — and it has
+      # to be SOMEWHERE, because nothing else in CI can ever see this verdict work:
+      # it writes nothing, it does not move an exit code, and the whole estate is on
+      # the current engine, so it never fires by accident. Six cases over both
+      # rollout tools, four of them controls. It builds its fixture from tracked
+      # files only (manifest + latest S3 + ci-reference), which is exactly what this
+      # checkout has.
+      - name: Prove the rollout stamp verdict can go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-rollout-stamp.js --buses "$GITHUB_WORKSPACE/buses-data"
+
       # And falsify the severity contract that decides whether a build may ship at
       # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that
       # has never been watched fail is a green light nobody has earned. Added

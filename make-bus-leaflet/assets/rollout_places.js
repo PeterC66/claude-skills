@@ -59,6 +59,8 @@ const { stampSheetVersion } = require('./sheet_stamps');
 // place map carried the town hash, so a change to gen_external_places.js left
 // all 12 of them reading `current` across a round that moved ink on nine.
 const { computePlaceEngineVersion, stampEngine } = require('./engine_version');
+// One value for the whole run, computed once, exactly as status.js does (OA-179).
+const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
@@ -169,8 +171,27 @@ function rolloutOnePlace(p) {
     : gate(GEN_BOARDING, prevS4.dir, 'boarding.svg', path.join(prevS4.dir, 'boarding.svg'));
   const ok = (g) => g.status === 'PASS' || g.status === 'SKIP';
   const shipped = [hadInternal && 'internal', hadExternal && 'external', wantsBoarding && 'boarding'].filter(Boolean);
+  // The built S4's routes.json is read again further down as `_s4rj`, for the
+  // stale-S3 refusal. The stamp question is asked BEFORE any of that, so it is
+  // read here and reused there rather than opened twice.
+  const _s4rjEarly = readJson(path.join(prevS4.dir, 'routes.json')) || {};
+  /* AND THE STAMP (OA-179) — see the long note in rollout.js's rolloutOne().
+   * Identical shape, identical reasoning, different template: a place is
+   * measured against computePlaceEngineVersion(), because a place gets its own
+   * template (OA-168) and comparing one against the town hash was a real bug.
+   * Reports only; writes nothing; does not move the exit code.
+   */
+  const stampedEngine = _s4rjEarly.engine;
+  if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE
+      && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE) {
+    return { name: p.name, status: 'STAMP-STALE',
+             detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current PLACE template `
+                   + `is ${CURRENT_PLACE_ENGINE} — status.js gates that as ENGINE STALE. Rebuild and re-stamp with:  `
+                   + `node rollout_places.js --place "${p.name}" --apply --force` };
+  }
   if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE) {
-    return { name: p.name, status: 'UP-TO-DATE', detail: shipped.join('+') + ' already gate PASS against the current template' };
+    return { name: p.name, status: 'UP-TO-DATE',
+             detail: shipped.join('+') + ' already gate PASS against the current template, and the engine stamp is current' };
   }
 
   // ---- build in a scratch workspace first (this is also the entire dry-run) ----
@@ -203,7 +224,7 @@ function rolloutOnePlace(p) {
   // The fix when this fires is to lift the value out of the built S4 into the S3
   // (`adopt_config.js --place ... --set-file`), never to let the rollout proceed.
   const _s3ir = (routesJson.internalRoads && typeof routesJson.internalRoads === 'object') ? routesJson.internalRoads : {};
-  const _s4rj = readJson(path.join(prevS4.dir, 'routes.json')) || {};
+  const _s4rj = _s4rjEarly;
   const _s4ir = (_s4rj.internalRoads && typeof _s4rj.internalRoads === 'object') ? _s4rj.internalRoads : {};
   const _onlyInS4 = Object.keys(_s4ir).filter(k => !(k in _s3ir)).map(k => 'internalRoads.' + k);
   if (_s4rj.frequency && !routesJson.frequency) _onlyInS4.push('frequency');
@@ -216,7 +237,7 @@ function rolloutOnePlace(p) {
             + ' and the S3 this would seed from does not — copy it into the S3 first (adopt_config --set-file), do not roll out over it' };
   }
 
-  const engineHash = computePlaceEngineVersion();
+  const engineHash = CURRENT_PLACE_ENGINE;
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
 
   const s4 = path.join(scratch, 'S4');
@@ -469,6 +490,12 @@ for (const p of selected) {
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
+// OA-179 — see rollout.js's identical block.
+const stampStale = results.filter(r => r.status === 'STAMP-STALE');
+if (stampStale.length) console.log(
+  `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp — status.js gates these as ENGINE STALE, `
+  + `and this tool will not clear them without --force:\n  `
+  + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --force`).join('\n  '));
 const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
 if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} place(s) — the engine refused to draw something, or a label names nothing.`);
 const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED'].includes(r.status)) || (!APPLY && totalBlockers > 0);

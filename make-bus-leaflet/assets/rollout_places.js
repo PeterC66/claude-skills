@@ -85,6 +85,32 @@ const NOTE = args.note || 'rollout: adopt current engine template (auto)';
 // workspace is deleted, so they can be measured and rendered rather than judged from
 // the label-set diff alone. Ignored with --apply (the sheets go to S4 anyway).
 const KEEP = typeof args.keep === 'string' ? args.keep : null;
+// --refresh-index [--asof YYYY-MM-DD]: ALSO re-run the boarding plan's two DATA
+// scripts, not just its generator. Off by default, and the default is the honest
+// one — a rollout is "same data, new engine", and re-deriving the index from a feed
+// that has moved would smuggle a data refresh into a change nobody asked for one in.
+//
+// WITHOUT IT, A CHANGE TO boarding_index.py OR naptan_stands.py CANNOT REACH A SHEET
+// AT ALL. `boarding_index.json` and `stands.json` live only in the S4 run, and
+// seedPrevS4 copies them forward from the previous one, so every rollout since the
+// files were first written has re-run gen_boarding.js against an index built by
+// whatever generator happened to be current that day. Measured 2026-08-30: three of
+// the four boarding sheets carried an index written by boarding_index.py v1.2 while
+// the engine was on v1.3, and 27 destinations across them had trip counts the current
+// generator computes differently. Nothing was red, because nothing was looking.
+//
+// `--asof` is passed straight to boarding_index.py and matters more than it looks:
+// counting "today" makes the index a fact about the build date rather than about the
+// registration the sheet will live on. Omit it and the tool refuses rather than
+// guessing, because a silently-dated index is the failure this flag exists to end.
+const REFRESH_INDEX = !!args['refresh-index'];
+const ASOF = typeof args.asof === 'string' ? args.asof : null;
+if (REFRESH_INDEX && !ASOF) {
+  console.error('rollout_places: --refresh-index needs --asof YYYY-MM-DD.');
+  console.error('  The index counts journeys in the registrations running on one date, and');
+  console.error('  "today" makes the sheet a fact about the build rather than about the feed.');
+  process.exit(2);
+}
 
 const STAGE_JS = path.join(SK, 'stage.js');
 function stage(cwd, ...cmdArgs) {
@@ -117,7 +143,39 @@ const GEN_EXTERNAL_PLACES = path.join(PSK, 'gen_external_places.js');
 // to itself: absent means the place declines the sheet, which is a valid answer and
 // not an error.
 const GEN_BOARDING = path.join(SK, 'gen_boarding.js');
+const NAPTAN_STANDS = path.join(SK, 'naptan_stands.py');
+const BOARDING_INDEX = path.join(SK, 'boarding_index.py');
+// The region comes off the index the previous run already wrote, not off a flag and
+// not off a default: `boarding_index.json.region` is the only place the pairing of
+// THIS place with THAT database is recorded, and every other entry point in the system
+// lost its privileged default region on 2026-08-21.
+// The last two non-empty lines of a failed run: naptan_stands.py's verdict and its
+// reason both land at the end of stdout, and a bare exit code says neither.
+const tailOf = (r) => ((r.stdout || '') + (r.stderr || ''))
+  .split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean).slice(-2).join(' / ');
+function refreshBoardingData(dir) {
+  const idx = readJson(path.join(dir, 'boarding_index.json')) || {};
+  const region = idx.region;
+  if (!region) return { ok: false, stderr: 'boarding_index.json names no region — cannot choose a GTFS database' };
+  const db = path.join(BUSES, '_gtfs', region);
+  const naptan = path.join(BUSES, '_gtfs', 'naptan.sqlite');
+  for (const f of [db, naptan]) {
+    if (!fs.existsSync(f)) return { ok: false, stderr: 'missing ' + f };
+  }
+  const py = (script, extra) => spawnSync('python',
+    [script, '--dir', dir, '--naptan', naptan, ...extra, '--write'], { encoding: 'utf8' });
+  // stands FIRST: boarding_index.py reads stands.json.
+  const rs = py(NAPTAN_STANDS, []);
+  if (rs.status !== 0) return { ok: false, stderr: 'naptan_stands.py: ' + tailOf(rs) };
+  const ri = py(BOARDING_INDEX, ['--db', db, '--asof', ASOF]);
+  if (ri.status !== 0) return { ok: false, stderr: 'boarding_index.py: ' + tailOf(ri) };
+  return { ok: true, stderr: '' };
+}
 function buildBoarding(dir) {
+  if (REFRESH_INDEX) {
+    const r = refreshBoardingData(dir);
+    if (!r.ok) return { ok: false, stdout: '', stderr: 'refresh-index failed — ' + r.stderr };
+  }
   copyFile(GEN_BOARDING, dir);
   return runNode(path.join(dir, 'gen_boarding.js'), dir, { SKILL_ASSETS: SK });
 }
@@ -166,7 +224,18 @@ function rolloutOnePlace(p) {
   // this tool created for itself before it could build one: a previous rollout whose
   // S4 has no boarding.svg at all, while the place's routes.json asks for one.
   const wantsBoarding = !!routesJson.boardingPlan;
+  //
+  // ...AND THE GATE CANNOT SEE A DATA-SCRIPT CHANGE, WHICH IS WHY --refresh-index
+  // BYPASSES IT. `gate()` re-runs gen_boarding.js against the S4's STORED
+  // boarding_index.json, so a sheet whose index is stale by two generator versions
+  // reproduces byte-for-byte and reports PASS. That is the correct answer to the
+  // question the gate asks ("does the current generator redraw this sheet?") and the
+  // wrong answer to the one a --refresh-index run is asking ("does the current
+  // generator, fed a freshly derived index, still draw this sheet?"). All four
+  // boarding places reported UP-TO-DATE on 2026-08-30 while three of them held an
+  // index a version behind — the fast path skipped the build that would have shown it.
   const boardingGate = !wantsBoarding ? { status: 'SKIP' }
+    : REFRESH_INDEX ? { status: 'REFRESH' }
     : !fs.existsSync(path.join(prevS4.dir, 'boarding.svg')) ? { status: 'MISSING' }
     : gate(GEN_BOARDING, prevS4.dir, 'boarding.svg', path.join(prevS4.dir, 'boarding.svg'));
   const ok = (g) => g.status === 'PASS' || g.status === 'SKIP';

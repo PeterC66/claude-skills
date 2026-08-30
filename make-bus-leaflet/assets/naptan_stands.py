@@ -39,6 +39,22 @@ shared with another stop in the same frame -- then neither device distinguishes 
 and there is nothing honest left to print. That, not "PARTIAL", is the real refusal
 condition, and it is much narrower.
 
+A THIRD DEVICE, ADDED 2026-08-30 (OA-030): THE COMPASS WORD ON THE FLAG. NaPTAN's
+Indicator is usually a positional hint -- "opp", "adj", "near" -- which is relative to
+a landmark the reader cannot see named and is rightly thrown away. But some flags
+print a COMPASS word, and on a sheet whose whole subject is direction that is exactly
+as checkable as a stand letter. So where a shared name is split by compass words that
+are present on EVERY member of the cluster and DISTINCT across it, the stops are
+identifiable and the label carries the word: "Mill Road (N-bound)".
+
+    class 'named'  shared name, distinct compass words -> print name + word
+
+The "every member" clause is what keeps it honest, and it is not free: measured over
+the register on 2026-08-30, 7,287 code-less stops sit in a cluster the compass word
+separates completely, and a further 1,771 sit in one where only some flags carry a
+word. The second group stays REFUSED -- a reader sent to the flag with no word has
+been given a name that matches all of them.
+
 VERDICTS
     OK          every served stop in frame is identifiable; the sheet can be built
     REFUSE      at least one is not; the sheet would be confidently wrong
@@ -100,7 +116,7 @@ import re
 import sqlite3
 import sys
 
-SCRIPT_VERSION = "1.1"
+SCRIPT_VERSION = "1.2"
 
 # Compass points NaPTAN uses in `Bearing`, to the words a sheet prints.
 COMPASS = {
@@ -172,18 +188,43 @@ def routes_by_stop(full):
     return out
 
 
-def tidy_name(common, indicator):
+COMPASS_INDICATOR = re.compile(r"(N|NE|E|SE|S|SW|W|NW)[- ]?bound", re.IGNORECASE)
+
+
+def compass_word(indicator):
+    """The compass word printed on a flag, normalised, or None.
+
+    NaPTAN's Indicator is mostly a positional hint -- "opp", "adj", "near", "outside"
+    -- which is relative to a landmark the reader cannot see named and is therefore
+    useless on a boarding sheet. A COMPASS word is different in kind: it is printed on
+    the flag itself, and a sheet whose entire subject is direction can hand it straight
+    to the reader. Returned lower-cased and hyphenated so "S-bound", "S bound" and
+    "Southbound" cannot be mistaken for three different flags.
+    """
+    m = COMPASS_INDICATOR.fullmatch((indicator or "").strip())
+    if not m:
+        return None
+    return "%s-bound" % m.group(1).upper()
+
+
+def tidy_name(common, indicator, disambiguate=False):
     """The printable name for a stop with no stand code.
 
     NaPTAN's CommonName is what is on the flag. The Indicator is appended only when
     it says something a reader can act on -- a compass bearing does, "opp"/"near" do
     not, because they are relative to a landmark the reader cannot see named.
+
+    APPENDED ONLY WHEN IT IS DOING WORK (`disambiguate`). Where the name is already
+    unique in the frame the compass word adds a qualifier the reader has to check for
+    nothing, and "The Busway, Station Road E-bound" is a worse instruction than "The
+    Busway, Station Road". It earns its place only where it is the thing separating
+    two flags that share a name.
     """
     nm = (common or "").strip()
-    ind = (indicator or "").strip()
-    if re.fullmatch(r"(N|NE|E|SE|S|SW|W|NW)[- ]?bound", ind, re.IGNORECASE):
+    if not disambiguate:
         return nm
-    return nm
+    word = compass_word(indicator)
+    return ("%s (%s)" % (nm, word)) if word else nm
 
 
 def main():
@@ -273,6 +314,36 @@ def main():
         nm = ((r["naptan"] or {}).get("CommonName") or "").strip().lower()
         name_counts[nm] = name_counts.get(nm, 0) + 1
 
+    # A SHARED NAME IS NOT AUTOMATICALLY A REFUSAL: THE FLAG MAY CARRY A COMPASS WORD
+    # (OA-030, widened 2026-08-30). Two stops both called "Mill Road", one printed
+    # "N-bound" and the other "S-bound", are as separable on the pavement as two
+    # lettered stands -- and this tool refused the whole sheet over them, on a sheet
+    # whose entire subject is which direction to travel in. Measured over the register
+    # on 2026-08-30: of 81,050 code-less stops sharing a name with a neighbour within
+    # 250 m, 7,287 are in a cluster where EVERY member carries a DISTINCT compass word.
+    #
+    # THE "EVERY MEMBER" CLAUSE IS THE HONEST PART, and it costs 1,771 more stops that
+    # this rule deliberately does not rescue. Where two of three flags say "N-bound"
+    # and "S-bound" and the third says nothing, a reader sent to the third has been
+    # given a name that matches all three; the sheet would be confidently wrong, which
+    # is the one thing refusal exists to prevent. So a cluster is rescued only when the
+    # compass word separates ALL of it, and otherwise the refusal stands.
+    compass_ok = set()
+    by_name = {}
+    for r in rows:
+        nap_row = r["naptan"] or {}
+        if (nap_row.get("stand") or "").strip():
+            continue  # a lettered stand does not need the name at all
+        nm = (nap_row.get("CommonName") or "").strip().lower()
+        if nm:
+            by_name.setdefault(nm, []).append(r)
+    for nm, group in by_name.items():
+        if len(group) < 2:
+            continue
+        words = [compass_word(((g["naptan"] or {}).get("Indicator"))) for g in group]
+        if all(words) and len(set(words)) == len(words):
+            compass_ok.update(g["atco"] for g in group)
+
     for r in rows:
         nap_row = r["naptan"] or {}
         stand = (nap_row.get("stand") or "").strip()
@@ -293,6 +364,12 @@ def main():
             r["class"] = "named"
             r["label"] = tidy_name(common, nap_row.get("Indicator"))
             r["why"] = "no stand code; CommonName is unique inside the frame"
+        elif common and r["atco"] in compass_ok:
+            r["class"] = "named"
+            r["label"] = tidy_name(common, nap_row.get("Indicator"), disambiguate=True)
+            r["why"] = ("no stand code; the name is shared with %d other stop(s) in frame but "
+                        "every one of them prints a different compass word on the flag"
+                        % (name_counts.get(common.lower(), 1) - 1))
         else:
             r["class"] = "unidentifiable"
             r["label"] = None

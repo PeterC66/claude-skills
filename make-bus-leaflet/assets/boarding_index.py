@@ -39,6 +39,15 @@ that costs them the shortest walk, so ties are broken on distance from the ancho
 then on trip count. Every alternative is still recorded in `alsoFrom`, so a later
 sheet can say "or from ..." without recomputing.
 
+...EXCEPT WHERE THE SHORTEST WALK IS A BAD TRADE. Shortest-walk-first is right until
+the difference is one printed minute and the service behind it is many times larger,
+at which point the sheet is quietly sending a reader to the wrong flag: High Wycombe
+Town Centre offered Marlow from a bay with five journeys a week over one with 317.
+A stand at most one minute further that gets NO FURTHER from the destination and
+carries more than three times the service is promoted over the nearer one. The
+arrival guard is what stops the same rule sending a Swavesey passenger to the Busway.
+See PROMOTE_MIN_RATIO below for the measurement (OA-028, 2026-08-30).
+
 USAGE. Run from a stage folder holding the place's geometry (an S2 dir, or S3/S4
 after `stage.js pull`). Needs `place.json` and `stands.json` (run `naptan_stands.py
 --write` first); finds the GTFS and NaPTAN databases by walking up to `_gtfs/`.
@@ -558,6 +567,33 @@ def main():
     # is the St Neots case: the 18 and the C2 call at the very same four stops in
     # Abbotsley, so the eleven-a-week service should win over the one-a-week.
     ARRIVAL_BAND_M = 400.0
+
+    # WHEN A BETTER-SERVED STAND IS ONE PRINTED MINUTE FURTHER, IT WINS (OA-028).
+    # The sort below puts `walkMin` first, so a nearer stand beat a better-served one
+    # however lopsided the trade. Measured over all four built sheets on 2026-08-30:
+    # High Wycombe High Street sent an Amersham passenger to Stop R (72 journeys a
+    # week) over Stop V (418, x5.8) and a Chesham one to Stop R (66) over Stop V (352,
+    # x5.3); High Wycombe Town Centre sent a Marlow passenger to Bay 15 -- FIVE
+    # journeys a week -- over Bay 9's 317, a factor of 63. All three cost one printed
+    # minute. That is the whole population: nothing else on any sheet trades a minute
+    # for more than double.
+    #
+    # THE ARRIVAL GUARD IS NOT OPTIONAL, and St Ives is why. Fen Drayton, Longstanton
+    # and Swavesey all show the same shape -- Bay 2 at 60 journeys a week against
+    # Cromwell Pl at 551, x9.2 -- and promoting them would be WRONG: Cromwell Pl is the
+    # Busway, which sets a passenger down 998 m, 816 m and 1,393 m from those villages
+    # (arrival bands 2, 2 and 3). The file's own note above already said frequency alone
+    # sends a Swavesey passenger to a halt a mile outside the village; this rule would
+    # have done exactly that had it looked only at trips. So a promoted option must get
+    # NO FURTHER from the destination than the one it displaces.
+    #
+    # THE RATIO SITS IN A GAP RATHER THAN ON A BOUNDARY. Ranked, the one-minute trades
+    # on the estate are x1.29, x1.29, x1.29, x2.00, x2.00, then x5.33, x5.81, x9.18 and
+    # x63.40. A threshold of 3 has nothing within a factor of 1.5 on either side, so it
+    # is not a number a single new stop can tip.
+    PROMOTE_MIN_RATIO = 3.0   # the further stand must carry MORE than this much service
+    PROMOTE_MAX_EXTRA_MIN = 1  # ...and be at most this many printed minutes further
+
     R_EARTH = 6371000.0
 
     def _metres(lat1, lon1, lat2, lon2):
@@ -642,6 +678,19 @@ def main():
         options.sort(key=lambda o: (o["walkMin"], o["arrivalBand"], -o["trips"],
                                     o["distM"], o["label"]))
         best = options[0]
+        # ...then let a MUCH better-served stand one minute further take it (OA-028).
+        # Ordered by the same key inside the promoted set, so the answer stays
+        # deterministic and a second qualifying stand cannot depend on dict order.
+        promoted = sorted(
+            (o for o in options[1:]
+             if o["walkMin"] <= best["walkMin"] + PROMOTE_MAX_EXTRA_MIN
+             and o["arrivalBand"] <= best["arrivalBand"]
+             and best["trips"] > 0
+             and o["trips"] > best["trips"] * PROMOTE_MIN_RATIO),
+            key=lambda o: (o["arrivalBand"], -o["trips"], o["walkMin"], o["distM"], o["label"]))
+        if promoted:
+            best = promoted[0]
+            options = [best] + [o for o in options if o is not best]
         total = sum(o["trips"] for o in options)
         if total < args.min_trips:
             continue

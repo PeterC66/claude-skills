@@ -859,6 +859,35 @@ const INTERCHANGE = new Set(['bus_station', 'ferry_terminal']);
 // one by default; boardingPlan.hereLabel names it for any other place that does.
 const HERE_PHRASE = (BP.hereLabel != null) ? (BP.hereLabel || null)
                   : (INTERCHANGE.has(PLACE.type) ? 'in the bus station' : null);
+/* WHO GETS THAT CAPTION IS A QUESTION ABOUT CONTAINMENT, NOT ABOUT METRES (OA-027).
+ *
+ * It used to be `distM <= 30`, and the constant was doing a job it cannot do. At High
+ * Wycombe High Street Stop R is 9 m out and Stop S is 31 m — the same pair of flags
+ * facing opposite ways across one street — so the rule split them by ONE METRE, while
+ * the sheet prints "1 min" for both and shows no difference at all.
+ *
+ * The obvious repair is to key it on `walkMin` instead, and that is WRONG, which is
+ * why the row it came from is not being followed to the letter. walkMin is
+ * max(1, round(m/80)), so "1 min" reaches 120 m — and at St Ives Bus Station, the one
+ * sheet where this caption is live today, 120 m takes in The Busway Station Road at
+ * 47 m. That stop is on Station Road and is NOT in the bus station; captioning it
+ * "in the bus station" is the exact error the whole sheet exists to prevent, and it
+ * would have been introduced by a change made to remove an arbitrary constant.
+ *
+ * So test the thing the phrase actually asserts. "You are already there" is a claim
+ * that the stop is INSIDE the place, and ANCHOR_AREAS is already exactly "the polygons
+ * that are this place" — built above from the anchor standing in them or from them
+ * carrying the place's own name. Point-in-polygon answers it exactly, at St Ives keeps
+ * the three bays and still refuses the Busway, and needs no threshold at all.
+ *
+ * The metres survive only as the fallback for a place with NO polygon — a shop, a
+ * street anchor, a school gate — where containment cannot be asked. There the constant
+ * is at least named and settable rather than buried in an expression.
+ */
+const HERE_WITHIN_M = (BP.hereWithinM != null) ? +BP.hereWithinM : 30;
+const alreadyThere = (s) => (ANCHOR_AREAS.length && Array.isArray(s.pos))
+  ? ANCHOR_AREAS.some(a => pointInRing(s.pos[0], s.pos[1], a.geometry))
+  : (s.distM <= HERE_WITHIN_M);
 /* OFF EVERYWHERE BY DEFAULT SINCE 2026-08-24, and the walk figures go with it.
  *
  * The tick was switched off at St Ives Bus Station because at an interchange the stands
@@ -1004,7 +1033,7 @@ for (const s of stands) {
   // the sheet prints the measured walk instead, which is never wrong.
   // HERE_PHRASE survives SHOW_WALK: it quotes no number, and what it is measured from is
   // the named place itself ("in the bus station"), not a tick the reader has to find.
-  const walk = (HERE_PHRASE && s.distM <= 30) ? HERE_PHRASE
+  const walk = (HERE_PHRASE && alreadyThere(s)) ? HERE_PHRASE
              : SHOW_WALK ? `${s.distM} m walk, about ${s.walkMin} min` : null;
   const facing = s.facing ? `buses face ${s.facing}` : null;
   // Built from the parts that survive, so the bearing can stand alone as the whole

@@ -23,11 +23,14 @@ influence:
        here from stop_times rather than read from boarding_index.json, so a bug in
        the index cannot pass by agreeing with itself.
 
-  S-3  NO LONGER WALK THAN NEEDED. If a different in-frame stop reaches the same
-       destination in fewer walking minutes -- the unit the sheet itself prints --
-       the reader is being sent further than they need to go. Not wrong, but worth
-       reporting. Deliberately NOT measured in metres: which of two stands the same
-       minute away to pick is the sheet's editorial call, not this file's.
+  S-3  NO LONGER WALK THAN NEEDED, UNLESS THE WALK BOUGHT SOMETHING. If a different
+       in-frame stop reaches the same destination in fewer walking minutes -- the unit
+       the sheet itself prints -- the reader is being sent further than they need to
+       go. Not wrong, but worth reporting. Deliberately NOT measured in metres: which
+       of two stands the same minute away to pick is the sheet's editorial call, not
+       this file's. Since 2026-08-30 it accepts one minute more walk where the stand
+       the sheet chose carries more than three times the service, counted HERE from
+       the feed rather than read from the index (OA-028).
 
   S-4  SHEET AGREES WITH INDEX. Every boarding label that actually appears in
        boarding.svg must be one NaPTAN sanctions, and every destination in the
@@ -61,7 +64,7 @@ import sys
 from collections import defaultdict
 from datetime import date
 
-SCRIPT_VERSION = "1.2"
+SCRIPT_VERSION = "1.3"
 
 
 def read_json(p):
@@ -277,6 +280,7 @@ def main():
         excluded = {str(r) for r in (_bp.get("excludeRoutes") or [])}
     except Exception:
         pass
+    served = {}
     if frame:
         tids = [r[0] for r in db.execute(
             "SELECT DISTINCT trip_id FROM stop_times WHERE stop_id IN (%s)" % ph, frame)]
@@ -297,9 +301,17 @@ def main():
             for i, sid in enumerate(seq):
                 if sid not in by_atco:
                     continue
+                seen_here = set()
                 for nxt in seq[i + 1:]:
                     for l in locality(nxt):
                         reach[l].add(sid)
+                        seen_here.add(l)
+                # ...and COUNT the trips, independently of boarding_index.json, so S-3
+                # below can weigh the trade the sheet made rather than only half of it.
+                # One trip counts once per destination however many of that
+                # destination's stops it goes on to call at.
+                for l in seen_here:
+                    served[(l, sid)] = served.get((l, sid), 0) + 1
 
     for d in dests:
         dest, atco = d["destination"], d.get("boardAtAtco")
@@ -326,10 +338,28 @@ def main():
                   if a in by_atco and by_atco[a]["walkMin"] < by_atco[atco]["walkMin"]]
         if nearer:
             n = min(nearer, key=lambda a: (by_atco[a]["walkMin"], by_atco[a]["distM"]))
-            soft("S-3", "%s: sheet sends the reader to %s (%d min, %d m) but %s (%d min, %d m) "
-                        "also reaches it"
-                 % (dest, d.get("boardAt"), by_atco[atco]["walkMin"], by_atco[atco]["distM"],
-                    by_atco[n]["label"], by_atco[n]["walkMin"], by_atco[n]["distM"]))
+            # A LONGER WALK BOUGHT WITH MUCH MORE SERVICE IS NOT A FINDING (OA-028).
+            # boarding_index.py promotes a stand at most one printed minute further
+            # when it carries more than three times the service and gets no further
+            # from the destination. Left alone, this check fired on all three of those
+            # promotions the day they shipped -- correct behaviour, reported as a
+            # defect, which is how a soft note gets muted within a week. It is the same
+            # widening the joint-parish case needed: what changes is what the checker
+            # ACCEPTS, never what the generator told it.
+            #
+            # THE COUNT IS THIS FILE'S OWN, not the index's, so the acceptance cannot be
+            # granted by the thing under test. It counts raw feed trips where the index
+            # counts calendar-weighted journeys a week, so the two numbers are not the
+            # same quantity and are not meant to be -- where they disagree at the margin
+            # the note still fires, which is the safe direction for a check to fail in.
+            extra_min = by_atco[atco]["walkMin"] - by_atco[n]["walkMin"]
+            mine, theirs = served.get((dest, atco), 0), served.get((dest, n), 0)
+            bought = (extra_min <= 1 and theirs > 0 and mine > theirs * 3)
+            if not bought:
+                soft("S-3", "%s: sheet sends the reader to %s (%d min, %d m) but %s (%d min, %d m) "
+                            "also reaches it"
+                     % (dest, d.get("boardAt"), by_atco[atco]["walkMin"], by_atco[atco]["distM"],
+                        by_atco[n]["label"], by_atco[n]["walkMin"], by_atco[n]["distM"]))
 
     # ---------------------------------------------------------------- S-4
     svg_path = os.path.join(folder, args.svg)

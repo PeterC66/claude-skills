@@ -862,7 +862,7 @@ const { featOv, featStyle, featSegs, drawFeature } = linearFeatures({
 // In label_placer.js, which owns the shared `placed` list every pass on this
 // sheet reserves into, both placers, and — as a lodger — the route-ink
 // contrast floor.
-const { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, placeLabel, inkOnWhite } = labelPlacer({
+const { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite } = labelPlacer({
   out, esc, Labeller, DESIGN, V2, IR, MX0, MY0, MX1, MY1, FOOTER_PLATE_TOP,
 });
 // Where a POI's symbol lands, and whether it is drawn at all — split out of poiMark so
@@ -1478,13 +1478,13 @@ if(CORE){
   const cx=(CORE.x0+CORE.x1)/2, cy=(CORE.y0+CORE.y1)/2;
   if(CORE.label) out(`<text x="${cx.toFixed(2)}" y="${(cy+(CORE.sublabel?-0.6:ts*0.36)).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${ts}" fill="#111" text-anchor="middle">${esc(CORE.label)}</text>`);
   if(CORE.sublabel) out(`<text x="${cx.toFixed(2)}" y="${(cy+ts*0.95).toFixed(2)}" font-family="Arial" font-size="${(ts*0.66).toFixed(2)}" fill="#555" text-anchor="middle">${esc(CORE.sublabel)}</text>`);
-  reserve(CORE.x0-0.5,CORE.y0-0.5,CORE.x1+0.5,CORE.y1+0.5);
+  reserve(CORE.x0-0.5,CORE.y0-0.5,CORE.x1+0.5,CORE.y1+0.5,'the core box');
 }
 out(`</g>`);
 
 // ---- reserve protected areas so labels avoid them ----
-reserve(197,0,297,210);                 // right service panel
-reserve(0,0,86,26);                     // title block
+reserve(197,0,297,210,'the services panel');
+reserve(0,0,86,26,'the title block');
 // ---- the north arrow --------------------------------------------------------
 // DEFAULT ON for internalRoads; internalRoads.northArrow:false suppresses it, and
 // {x,y,len,angle} positions it by hand. The whole device — its angle, its
@@ -1609,13 +1609,13 @@ function drawScaleDevice(spotSearch){
   // same grey as the towns' own map notes, which it usually sits beside. "town
   // centre scale" is an annotation ON the bar and stays lighter than it.
   if(SCALE_NOTE) out(`<text x="${(bx+(SCALE_M?SCALE_LEN/2:0)).toFixed(2)}" y="${(by+(SCALE_M?4.0:0)).toFixed(2)}" font-family="Arial" font-style="italic" font-size="2.4" fill="${SCALE_M?'#999':'#555'}"${SCALE_M?' text-anchor="middle"':''}>${esc(SCALE_NOTE)}</text>`);
-  reserve(...scaleBox(bx,by));
+  reserve(...scaleBox(bx,by),'the scale bar');
 }
 // The footer's backing plate is drawn LAST and covers whatever is beneath it, but no
 // placer knew it was there: 9 of the 31 sheets measured on 2026-08-15 had a label
 // printed and then erased by it. Shortening the frame (above) keeps the map out of the
 // band; this keeps the placers — which work in page mm, outside the clip — out too.
-if(FOOTER_SAFE) reserve(0,FOOTER_PLATE_TOP,297,210);
+if(FOOTER_SAFE) reserve(0,FOOTER_PLATE_TOP,297,210,'the footer plate');
 // design.printSafe also keeps the PLACER out of the trim margin. Fixing the
 // footer alone would have left the worse half untouched: the print check found
 // the credit at 3mm on every sheet, but also six sheets with a map label tighter
@@ -1624,8 +1624,8 @@ if(FOOTER_SAFE) reserve(0,FOOTER_PLATE_TOP,297,210);
 // edges. Reserved as four strips rather than by clamping candidate boxes so it
 // costs one rule and works for leader lines and two-line wraps alike.
 if(PRINT_SAFE!=null){
-  reserve(0,0,PRINT_SAFE,210); reserve(297-PRINT_SAFE,0,297,210);
-  reserve(0,0,297,PRINT_SAFE); reserve(0,210-PRINT_SAFE,297,210);
+  reserve(0,0,PRINT_SAFE,210,'the print-safe margin'); reserve(297-PRINT_SAFE,0,297,210,'the print-safe margin');
+  reserve(0,0,297,PRINT_SAFE,'the print-safe margin'); reserve(0,210-PRINT_SAFE,297,210,'the print-safe margin');
 }
 /* ---- features[].labelPos:"auto" — a feature label that sites itself ---------
  *
@@ -1765,7 +1765,7 @@ for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label 
   // town still carries one, describes a position the engine no longer chooses, so
   // it is deliberately not reserved here.
   if(isAuto(f)) continue;
-  if(f.labelReserve){ reserve(...f.labelReserve); continue; }
+  if(f.labelReserve){ reserve(...f.labelReserve,'a feature labelReserve box'); continue; }
   // A feature label is hand-placed (labelPos) and drawn at the very END of the
   // file, so without labelReserve nothing knows it is there and a map label lands
   // underneath it — High Wycombe printed "to Widmer End & Great Missenden" straight
@@ -1779,7 +1779,7 @@ for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label 
     if(lov.pos){ lx=lov.pos.x; ly=lov.pos.y; } else if(lov.offset){ lx+=lov.offset.dx; ly+=lov.offset.dy; }
     const w=FONT.textWidth(txt,sz,false), anc=lov.anchor||'start';
     const x0 = anc==='start'?lx : anc==='end'?lx-w : lx-w/2;
-    reserve(x0-0.5, ly-sz*FONT.CAP_HEIGHT-0.5, x0+w+0.5, ly+sz*FONT.DESCENDER+0.5);
+    reserve(x0-0.5, ly-sz*FONT.CAP_HEIGHT-0.5, x0+w+0.5, ly+sz*FONT.DESCENDER+0.5,'the "'+txt+'" feature label');
   }
 }
 // design.reserveIcons: POI symbols are drawn LAST (`pois.forEach(poiMark)`, below the
@@ -1800,7 +1800,96 @@ if((atco2ll[ANCHOR]||baseOv[ANCHOR]) && !CORE && !(ID && (ID.interchanges||[]).s
     `<rect x="${x-1.0}" y="${y-1.0}" width="2.0" height="2.0" rx="0.3" fill="#fff"/>`,
     `<text x="${x+2.6}" y="${y+1.0}" font-family="Arial" font-weight="bold" font-size="3.0" fill="#111" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(ANCHOR_LABEL)}</text>`].join('\n');
   out(gk('stop',ANCHOR,_a));
-  reserve(x-2,y-2,x+24,y+2);
+  // MEASURED, NOT GUESSED (2026-08-30, OA-148). This reserved to x+24 whatever the
+  // town's interchange is called — a 26 mm constant in front of a label that starts
+  // 2.6 mm right of the anchor and is as long as its name. "Huntingdon Bus Station"
+  // measures 34.33 mm at size 3 bold, so 12.93 mm of it was drawn in space nothing
+  // had claimed, and Huntingdon's schematic duly printed a route badge inside it.
+  // font_metrics.js has held real Arial advance widths since labeller.js was written.
+  reserve(x-2, y-2, x+2.6+FONT.textWidth(ANCHOR_LABEL,3.0,true)+0.5, y+2,
+          'an "'+ANCHOR_LABEL+'" interchange label');
+}
+
+/* ---- HAND-PLACED INK CLAIMS ITS SPACE HERE (2026-08-30, OA-148 / OA-124) -----
+ *
+ * Two things on this sheet are positioned by a person and not by a placer: a
+ * `mapNotes` entry, and an `internalDiagram.interchanges` lozenge. Both used to
+ * be DRAWN at their hand-authored position and only then reserve() their box —
+ * so every pass that ran before them believed that space was empty, and every
+ * pass that ran after them was told about a collision that had already happened.
+ * Six of the thirteen labels-over-badges on the board were map notes and three
+ * were lozenges: the Beaconsfield school-services block over a frame-exit badge,
+ * Ely Co-op's AJ2 footnote (the same overlap OA-124 recorded as damage from the
+ * lane flip), St Ives' Morrisons note, and the St Ives / St Neots station
+ * lozenges with a route badge printed inside them.
+ *
+ * The position is still the author's — the engine cannot know where a note about
+ * three routes stopping at Morrisons belongs, and a station lozenge marks a stop
+ * and has nowhere else to be. What changes is WHEN the space is claimed: here,
+ * with the icons and the interchange label, before a single badge or road name
+ * has been placed. That is the same move labeller.js makes for a `fixed` label,
+ * and the same one the feature-label auto pass makes at the end of this phase.
+ *
+ * And when the space was already taken by something claimed even earlier — the
+ * panel, the footer plate, the core box — it says so, by name, on stderr. A note
+ * that lands on the services panel cannot be fixed by anything in this file.
+ */
+const MAPNOTES=[];                              // resolved layout; drawn with the map, below
+for(const n of (RJ.mapNotes||[])){
+  let x,y;
+  if(n.at && (atco2ll[n.at]||baseOv[n.at])){ const p=XYS(n.at); x=p[0]; y=p[1]; } else { x=n.x||0; y=n.y||0; }
+  x+=(n.dx||0); y+=(n.dy||0);
+  const sz=n.size||2.4, anc=n.anchor||'start';
+  const charW=sz*0.52;
+  // Word-wrap long notes to the space actually available in the note's own direction
+  // (to the page edge on the open side of its anchor), instead of drawing one long line
+  // that runs off the page or gets clipped by the footer band. Short notes that already
+  // fit on one line are unaffected (lines.length===1, same output as before).
+  const avail = anc==='start' ? (294-6-x) : anc==='end' ? (x-6) : Math.min(x-6,294-6-x)*2;
+  const maxChars = Math.max(20, Math.floor(avail/charW));
+  const words=String(n.text).split(' '); const lines=[]; let cur='';
+  for(const wd of words){ if((cur+' '+wd).trim().length>maxChars){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }
+  if(cur.trim()) lines.push(cur.trim());
+  const lineGap=n.lineGap||sz*1.35;
+  // Catch the mistake that bit Beaconsfield Simpson Centre + Waitrose (2026-08-11): a
+  // mapNotes entry authored with a y so low it sits under the footer's backing plate,
+  // which is drawn on top later and visually swallows it. The engine can't know where
+  // it's SAFE to put a note (that depends on the town's route geometry), so it doesn't
+  // try to auto-relocate — it just warns loudly, the same way the panelCols row-pitch
+  // check does below, so the next occurrence is a build-time warning instead of a
+  // silent visual bug someone has to spot in a rendered JPG.
+  const lastLineY = y + (lines.length-1)*lineGap;
+  if (lastLineY > FOOTER_PLATE_TOP - 2) {
+    process.stderr.write('mapNotes: "'+String(n.text).slice(0,40)+(n.text.length>40?'\u2026':'')+'" ends at y='+lastLineY.toFixed(1)+', inside/near the footer plate (top '+FOOTER_PLATE_TOP.toFixed(1)+') \u2014 it will be hidden or look clipped. Move its y up (see Beaconsfield Simpson Centre/Waitrose routes.json for the fix).\n');
+  }
+  const rows=lines.map((ln,i)=>{
+    const ly=y+i*lineGap;
+    // Measured, not `ln.length*charW` — the same correction as the anchor label and
+    // the road names. The WRAP above still counts characters, deliberately: changing
+    // it would re-flow every note on the board, and it is a separate question from
+    // whether the box we claim is the box we draw.
+    const w=FONT.textWidth(ln,sz,false);
+    const bx = anc==='start'?x : anc==='end'?x-w : x-w/2;
+    return { ln, ly, box:[bx-0.4,ly-sz,bx+w+0.4,ly+1] };
+  });
+  for(const r of rows){
+    const on=whatBlocksInk(r.box);
+    if(on.length) process.stderr.write('mapNotes: "'+String(n.text).slice(0,40)+(n.text.length>40?'\u2026':'')+'" is drawn at '+x.toFixed(1)+','+r.ly.toFixed(1)+' across '+on.slice(0,3).join(', ')+(on.length>3?' and '+(on.length-3)+' more':'')+' \u2014 a note is placed by hand and the engine will not move it. Adjust its x/y (or dx/dy) in routes.json.\n');
+    reserve(r.box[0],r.box[1],r.box[2],r.box[3],'a map note');
+  }
+  MAPNOTES.push({ n, x, sz, anc, rows });
+}
+const LOZENGES=[];                              // internalDiagram interchange stations
+if(ID && IR) for(const ic of (ID.interchanges||[])){
+  const a2=ic.atco; if(!(atco2ll[a2]||baseOv[a2]))continue;
+  const [x,y]=XYS(a2); if(inCore([x,y]))continue;      // coreBox replaces it
+  const label=ic.label||atco2name[a2]||'';
+  const sz=ic.size||3.0, w=(ic.w!=null?ic.w:label.length*sz*0.58+5), h=ic.h!=null?ic.h:5.4;
+  const box=[x-w/2-0.5,y-h/2-0.5,x+w/2+0.5,y+h/2+0.5];
+  const on=whatBlocksInk(box);
+  if(on.length) process.stderr.write('internalDiagram.interchanges: the "'+label+'" lozenge is drawn at '+x.toFixed(1)+','+y.toFixed(1)+' across '+on.slice(0,3).join(', ')+' \u2014 a lozenge marks its stop and has nowhere else to go, so whatever is under it has to move.\n');
+  reserve(box[0],box[1],box[2],box[3],'an "'+label+'" interchange lozenge');
+  LOZENGES.push({ ic, x, y, w, h, label, sz, fill: ic.fill||'#1e7a46' });
 }
 
 // The eight compass keys labeller.js knows, 45° apart, anticlockwise from East in
@@ -1925,19 +2014,36 @@ if(IR && TRIM){
       // first, because this badge means "the route ends HERE" and a badge nudged
       // far enough to be clear is a badge that has stopped saying that.
       let bpx=px, bpy=py;
+      /* AND CLEAR OF EVERY OTHER KIND OF INK TOO (2026-08-30, OA-176).
+       *
+       * `badgeClash` compares badges with badges, which is what the paragraph
+       * above was about and is not what a reader sees. A member of the public
+       * read the Ramsey sheet from the outside and found the GP symbol printed
+       * over a route number, the RH2 badge sitting on other routes' lines, and
+       * the pharmacy symbol landing on an RH2 badge so that it reads "H2" — one
+       * fault, three times: this pass could not see a POI symbol, a map note, an
+       * interchange lozenge or the anchor label, because none of them is a badge.
+       * `overlaps` has known about all of them all along; nothing here asked it.
+       *
+       * The prefer-then-force shape is untouched, so no badge that got a spot
+       * stops getting one: probe() still returns false and the caller still draws
+       * at the terminus. What changes is which of the twenty-five candidate spots
+       * counts as clear. */
+      const freeAt=(cx,cy,w,h)=>!badgeClash(cx,cy,w,h,2.6);
       const probe=(w,h)=>{
-        if(!badgeClash(px,py,w,h,2.6)) return true;
+        if(freeAt(px,py,w,h)) return true;
         for(const d of [4.5,7,9.5]) for(let k=0;k<8;k++){
           const a=k*Math.PI/4, cx=px+Math.cos(a)*d, cy=py+Math.sin(a)*d;
           if(inCore([cx,cy])||!inFrame([cx,cy])) continue;
-          if(!badgeClash(cx,cy,w,h,2.6)){ bpx=cx; bpy=cy; return true; }
+          if(freeAt(cx,cy,w,h)){ bpx=cx; bpy=cy; return true; }
         }
         return false;
       };
       probe(2.6+badgeXWs(list,2.6), (list.length-1)/2*5.7+2.6);
       const bs=badgeStack(bpx,bpy,list,2.6);
       noteBadge(bpx,bpy,2.6+bs.xw,bs.h,2.6);
-      reserve(bpx-2.8-bs.xw,bpy-bs.h-0.2,bpx+2.8+bs.xw,bpy+bs.h+0.2);
+      reserve(bpx-2.8-bs.xw,bpy-bs.h-0.2,bpx+2.8+bs.xw,bpy+bs.h+0.2,
+              'the '+list.join('/')+' terminus badge');
     }
   }
   // -- consolidate frame-cut termini into ONE box per exit cluster (item 5,
@@ -2131,7 +2237,7 @@ if(IR && TRIM){
         // Solo rows keep the legacy call below unchanged (byte-identical).
         const rx0=bx+(0-(g.ms.length-1)/2)*BSx, rx1=lastX;
         g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BSx;
-          reserve(bxi-3.2-CXW,ry-3.2,bxi+3.2+CXW,ry+3.2); });
+          reserve(bxi-3.2-CXW,ry-3.2,bxi+3.2+CXW,ry+3.2,'the '+m.r+' frame-exit badge'); });
         const text='to '+g.label, sz=2.7, w=text.length*sz*0.52;
         if(LAB){
           // v2: a destination label is the single most useful string on the sheet —
@@ -2226,7 +2332,8 @@ if(IR && TRIM){
         bplaced.push(p); const bs=badgeStack(p[0],p[1],grp,2.4);
         noteBadge(p[0],p[1],2.4+bs.xw,bs.h,2.4);
         for(const g of grp) badged.add(g);
-        reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
+        reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1,
+                'the '+grp.join('/')+' route badge');
       }
       acc+=L;
     }
@@ -2271,13 +2378,17 @@ if(IR && TRIM){
           if(!inFrame(p)||inCore(p)) continue;
           const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
           if(avoid){
+            // Badges AND everything else already claimed — same widening as
+            // drawTermBadges() above, and the same guarantee: the second pass
+            // still forces, so a line that needs identifying still gets a badge.
             const gxw=badgeXWs(grp,2.4), gh=(grp.length-1)/2*5.3+2.3;
             if(badgeClash(p[0],p[1],2.4+gxw,gh,2.4)) continue;
           }
           const bs=badgeStack(p[0],p[1],grp,2.4);
           noteBadge(p[0],p[1],2.4+bs.xw,bs.h,2.4);
           for(const g of grp) badged.add(g);
-          bplaced.push(p); reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1);
+          bplaced.push(p); reserve(p[0]-2.5-bs.xw,p[1]-bs.h-0.1,p[0]+2.5+bs.xw,p[1]+bs.h+0.1,
+                                   'the '+grp.join('/')+' identifying badge');
           done=true; break;
         }
       }
@@ -2422,16 +2533,12 @@ if(ID && IR && TRIM){
       acc+=L;
     }
   }
-  // interchange lozenges — tube-style station boxes (Bus Station, Park & Ride)
-  for(const ic of (ID.interchanges||[])){
-    const a2=ic.atco; if(!(atco2ll[a2]||baseOv[a2]))continue;
-    const [x,y]=XYS(a2); if(inCore([x,y]))continue;      // coreBox replaces it
-    const label=ic.label||atco2name[a2]||'';
-    const sz=ic.size||3.0, w=(ic.w!=null?ic.w:label.length*sz*0.58+5), h=ic.h!=null?ic.h:5.4;
-    const fill=ic.fill||'#1e7a46';
-    out(`<rect x="${(x-w/2).toFixed(2)}" y="${(y-h/2).toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${(h/2).toFixed(2)}" fill="${fill}" stroke="#fff" stroke-width="0.7"/>`);
-    out(`<text x="${x.toFixed(2)}" y="${(y+sz*0.36).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${sz}" fill="#fff" text-anchor="middle">${esc(label)}</text>`);
-    reserve(x-w/2-0.5,y-h/2-0.5,x+w/2+0.5,y+h/2+0.5);
+  // interchange lozenges — tube-style station boxes (Bus Station, Park & Ride).
+  // Positioned, measured, warned about and RESERVED in the claim phase, far above;
+  // this paints them, on top of the lines they mark.
+  for(const L of LOZENGES){
+    out(`<rect x="${(L.x-L.w/2).toFixed(2)}" y="${(L.y-L.h/2).toFixed(2)}" width="${L.w.toFixed(2)}" height="${L.h.toFixed(2)}" rx="${(L.h/2).toFixed(2)}" fill="${L.fill}" stroke="#fff" stroke-width="0.7"/>`);
+    out(`<text x="${L.x.toFixed(2)}" y="${(L.y+L.sz*0.36).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${L.sz}" fill="#fff" text-anchor="middle">${esc(L.label)}</text>`);
   }
 }
 
@@ -2472,7 +2579,10 @@ if(IR && SKEL){
     cx0/=sw; cy0/=sw;
     let ang=Math.atan2(vy,vx)/2*180/Math.PI; if(ang>90)ang-=180; if(ang<-90)ang+=180;
     const label=ren(n);
-    const w=label.length*2.5*0.5;
+    // Measured, for the same reason as the anchor label above: a character-count
+    // guess put "Ramsey Road" at 13.75 mm when it draws 15.84, and the badge sitting
+    // in the 2.09 mm nobody claimed was one of OA-148's thirteen.
+    const w=FONT.textWidth(label,2.5,false);
     // multi-candidate search (same fallback pattern as placeLabel()): try the
     // whole-road weighted centroid first, then points spread along the road's
     // used length (projected onto its own mean bearing), so ONE local collision
@@ -2484,7 +2594,26 @@ if(IR && SKEL){
     const along=frac=>{ const target=frac*sw; let best=mids[0];
       for(const m of mids) if(Math.abs(m.t-target)<Math.abs(best.t-target)) best=m;
       return [best.x,best.y]; };
-    const cands=[[cx0,cy0]].concat([0.3,0.7,0.15,0.85,0.42,0.58].map(along));
+    /* THE SEVEN, THEN EVERY OTHER MIDPOINT (2026-08-30, OA-148 / OA-176).
+     *
+     * Measuring the box properly (above) makes it 2 mm wider than the guess, and
+     * on the first dry run that cost St Ives its "Ramsey Road" and "Somersham
+     * Road" outright — the pass drops a name when all its candidates are blocked,
+     * and a wider box blocks more easily. A truthful measurement that loses a
+     * named road is not an improvement, and the drop count is a number this
+     * project has already been blind to once.
+     *
+     * So the pass gets more places to look rather than a smaller box. The seven
+     * it always had come FIRST and in the same order, so any road name that
+     * placed at one of them still does; the rest of the road's own segment
+     * midpoints follow, in the along-bearing order `mids` is already sorted into,
+     * which is deterministic and costs nothing on a road that placed at its
+     * centroid. */
+    const seen7=new Set();
+    const cands=[[cx0,cy0]].concat([0.3,0.7,0.15,0.85,0.42,0.58].map(along))
+      .concat(mids.map(m=>[m.x,m.y]))
+      .filter(([px2,py2])=>{ const k=px2.toFixed(3)+','+py2.toFixed(3);
+        if(seen7.has(k)) return false; seen7.add(k); return true; });
     let ok=false, anyInFrame=false;
     // Two sweeps when design.reserveIcons is on: honour the symbols first, and only if
     // every candidate is blocked, repeat ignoring them — the same "gain, never lose"
@@ -2542,41 +2671,12 @@ for(const [road,as] of roads){
 // POIs (on top of lines)
 pois.forEach(poiMark);
 
-// ---- map notes (e.g. "300, 301 and 9 stop at Morrisons") — additive ----
-for(const n of (RJ.mapNotes||[])){
-  let x,y;
-  if(n.at && (atco2ll[n.at]||baseOv[n.at])){ const p=XYS(n.at); x=p[0]; y=p[1]; } else { x=n.x||0; y=n.y||0; }
-  x+=(n.dx||0); y+=(n.dy||0);
-  const sz=n.size||2.4, anc=n.anchor||'start';
-  const charW=sz*0.52;
-  // Word-wrap long notes to the space actually available in the note's own direction
-  // (to the page edge on the open side of its anchor), instead of drawing one long line
-  // that runs off the page or gets clipped by the footer band. Short notes that already
-  // fit on one line are unaffected (lines.length===1, same output as before).
-  const avail = anc==='start' ? (294-6-x) : anc==='end' ? (x-6) : Math.min(x-6,294-6-x)*2;
-  const maxChars = Math.max(20, Math.floor(avail/charW));
-  const words=String(n.text).split(' '); const lines=[]; let cur='';
-  for(const wd of words){ if((cur+' '+wd).trim().length>maxChars){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }
-  if(cur.trim()) lines.push(cur.trim());
-  const lineGap=n.lineGap||sz*1.35;
-  // Catch the mistake that bit Beaconsfield Simpson Centre + Waitrose (2026-08-11): a
-  // mapNotes entry authored with a y so low it sits under the footer's backing plate,
-  // which is drawn on top later and visually swallows it. The engine can't know where
-  // it's SAFE to put a note (that depends on the town's route geometry), so it doesn't
-  // try to auto-relocate — it just warns loudly, the same way the panelCols row-pitch
-  // check does below, so the next occurrence is a build-time warning instead of a
-  // silent visual bug someone has to spot in a rendered JPG.
-  const lastLineY = y + (lines.length-1)*lineGap;
-  if (lastLineY > FOOTER_PLATE_TOP - 2) {
-    process.stderr.write(`mapNotes: "${String(n.text).slice(0,40)}${n.text.length>40?'…':''}" ends at y=${lastLineY.toFixed(1)}, inside/near the footer plate (top ${FOOTER_PLATE_TOP.toFixed(1)}) — it will be hidden or look clipped. Move its y up (see Beaconsfield Simpson Centre/Waitrose routes.json for the fix).\n`);
-  }
-  lines.forEach((ln,i)=>{
-    const ly=y+i*lineGap;
-    const w=ln.length*charW;
-    const bx = anc==='start'?x : anc==='end'?x-w : x-w/2;
-    reserve(bx-0.4,ly-sz,bx+w+0.4,ly+1);
-    out(`<text x="${x.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" font-style="italic" fill="${n.color||'#333'}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(ln)}</text>`);
-  });
+// ---- map notes — drawn here, on top of the map; CLAIMED far above ----------
+// The layout, the wrap, the footer warning and the reservation all happened in the
+// claim phase. This pass only paints, so the box that was reserved and the glyphs
+// that are drawn cannot disagree — the same reason labeller.js renders its own text.
+for(const m of MAPNOTES) for(const r of m.rows){
+  out(`<text x="${m.x.toFixed(2)}" y="${r.ly.toFixed(2)}" font-family="Arial" font-size="${m.sz}" font-style="italic" fill="${m.n.color||'#333'}" text-anchor="${m.anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(r.ln)}</text>`);
 }
 
 // ---- terminus destination badges (opt-in: routes.json "internalTermini":true + "terminiLabels") ----
@@ -2613,7 +2713,7 @@ for(const f of FEATURES){
   const lov=ov.label||{}; const txt=lov.text!=null?lov.text:f.label;
   if(!txt) continue;
   const got = autoFeatureLabel(f, txt, f.labelSize||4);
-  if(got){ AUTOPOS[f.key]=got; reserve(...got.box); }
+  if(got){ AUTOPOS[f.key]=got; reserve(...got.box,'the "'+txt+'" feature label'); }
   else refuse('feature: label "'+txt+'" is set to labelPos:"auto", but no spot along its '
     +'drawn ink is both clear of other ink and big enough for the name — it was not drawn. '
     +'Shorten the label, or place it by hand with labelPos:{x,y}.');

@@ -216,8 +216,8 @@ const MUTATIONS = [
 
   { suite: 'label_placer.test.js', file: 'label_placer.js',
     what: "reserve stops telling the v2 solver, so v2 places labels over ink v1 would have dodged",
-    find: "  function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]); if(LAB) LAB.block([x0,y0,x1,y1]);}",
-    to: "  function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]);}" },
+    find: "    if(LAB) LAB.block([x0,y0,x1,y1],tag);}",
+    to: "    ;}" },
 
   { suite: 'label_placer.test.js', file: 'label_placer.js',
     what: "a manual label offset goes back through de-collision, so a hand-placed name moves",
@@ -594,6 +594,48 @@ const MUTATIONS = [
   // a measure is scored only once its board is empty, and the two ways to break it
   // are to quietly unscore one that was folded in, or to fold in one that is still
   // red. Both are one-line edits nobody would notice in review.
+  // OA-062 and OA-176 4.20, 2026-08-30. `prefer` was computed for 81 of 83 spokes
+  // and discarded at this class's door for a fortnight; the mutation that matters
+  // is the second, because a preference silently promoted to a rule looks like the
+  // fix working.
+  // OA-148, 2026-08-30. The chrome exclusion is the half a colour-only harness
+  // would miss: without it the warning is right about the collision and wrong
+  // about whether anybody should care, which is how a check gets muted.
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: 'reserve forgets the tag it was given, so every build warning names a coordinate instead of a thing',
+    find: "placedTags[placed.length-1]=tag||'';",
+    to: "placedTags[placed.length-1]='';" },
+
+  { suite: 'label_placer.test.js', file: 'label_placer.js',
+    what: 'the chrome exclusion goes, so a note deliberately drawn in the services panel is reported as a collision',
+    find: "  const whatBlocksInk=(b)=>placed.map((o,i)=>hit(b,o) && !CHROME.test(placedTags[i]||'')",
+    to: "  const whatBlocksInk=(b)=>placed.map((o,i)=>hit(b,o)" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the caller preferred direction is discarded again, which is the state OA-062 found',
+    find: "    if (!it.prefer) return 0;",
+    to: "    if (it.prefer || !it.prefer) return 0;" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the preferred direction becomes a rule rather than a cost, so a label sits on ink to obey it',
+    find: "  wPrefer: 2.5,",
+    to: "  wPrefer: 4000," },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the preference term charges a label that asked for nothing',
+    find: "    if (!it.prefer) return 0;",
+    to: "    if (!it.prefer) return this.o.wPrefer;" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'a leader goes back to starting at its own badge centre and is painted across the digit',
+    find: "          const lead2 = this._leader(it.at, b, it.own);",
+    to: "          const lead2 = this._leader(it.at, b);" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'a leader collapses to its far end, so the rim fix reads as done while no line is drawn',
+    find: "    let sx = at[0], sy = at[1];",
+    to: "    let sx = ex, sy = ey;" },
+
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'a badge printed on a badge stops counting as a hard defect, so the ratchet stops seeing it',
     find: "    + (m.badgeOverBadge || 0) + (m.lozengeOverlap || 0)",

@@ -184,6 +184,25 @@ for (const t of chosen) {
   fs.mkdirSync(dest, { recursive: true });
   for (const n of b.made) fs.copyFileSync(path.join(b.ws, n), path.join(dest, n));
   fs.copyFileSync(path.join(b.ws, 'routes.json'), path.join(dest, 'routes.json'));   // see the trap, above
+  /* AND THE SIDECARS, WHICH IS THE SAME TRAP ONE DOOR DOWN (2026-08-30).
+   *
+   * The header above explains at length why routes.json is copied out: without it
+   * every ink measure reads far too low and a scratch build once reported "labels
+   * over route ink" collapsing from 13 to 0, "which was pure fiction". The DROP
+   * count is read the same way, from `unplaced*.json` beside the SVG, and it was
+   * not being copied — so every preview sheet answered `unplacedLabels: 0`, and
+   * every "after" HARD figure taken off this tree was missing the whole drop count.
+   * Measured on Wisbech internal the day this was found: shipped 7 dropped and
+   * hard 8, preview 0 and 0, on sheets that differ by a handful of labels.
+   *
+   * The DEF column itself was never wrong — `defects` excludes drops on both sides
+   * by construction — which is exactly why this survived: the number the tool
+   * PRINTS is fair, and the number anybody computes from the tree it leaves behind
+   * is not. This is the shape OA-126 named: an absent sidecar reads as a clean
+   * zero rather than as "could not tell". */
+  for (const n of fs.readdirSync(b.ws)) {
+    if (/^unplaced.*\.json$/.test(n)) fs.copyFileSync(path.join(b.ws, n), path.join(dest, n));
+  }
   const before = metrics(b.made.map(n => path.join(b.s4.dir, n)).filter(fs.existsSync));
   const after = metrics(b.made.map(n => path.join(dest, n)));
   const M = (x) => (x && x.metrics) || {};

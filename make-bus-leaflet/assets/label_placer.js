@@ -2,7 +2,8 @@
  * label_placer.js — the reserved-box list, and what is allowed to sit where.
  *
  * CONTRACT. `labelPlacer(deps)` returns `{ placed, iconBoxes, hit, overlaps,
- * overlapsNoIcons, LAB, reserve, placeLabel, inkOnWhite }`. A factory, and
+ * overlapsNoIcons, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite }`. A
+ * factory, and
  * unlike the other extracted modules it OWNS MUTABLE STATE on purpose: the
  * whole point of `placed` is that one list is shared by every pass that claims
  * space on the sheet, and 31 call sites reserve into it. Handing it out as a
@@ -40,6 +41,12 @@ function labelPlacer(deps) {
     FOOTER_PLATE_TOP,        // where the footer starts painting over things
   } = deps;
   const placed=[];                 // [x0,y0,x1,y1]
+  // WHAT claimed each box, in the words the caller used. Parallel to `placed` and
+  // deliberately sparse: several sites push straight into `placed` rather than going
+  // through reserve(), and an untagged box still has coordinates somebody can go and
+  // look at. Added 2026-08-30 (OA-148) because "this note is drawn on something" is
+  // a warning that sends nobody anywhere.
+  const placedTags=[];
   // design.reserveIcons: boxes contributed by POI ICONS rather than by text. They are
   // ordinary members of `placed` for the first placement attempt, but a placer that
   // finds nowhere at all falls back to a second pass that ignores them — so a label
@@ -62,7 +69,38 @@ function labelPlacer(deps) {
   // sometimes the cheapest thing going (caught in the first St Ives v2 render).
   const LAB = V2 ? new Labeller({ page:[297,210], frame:{x0:MX0,y0:MY0,x1:MX1,y1:MY1},
                                   bounds:{x0:1, y0:1, x1:MX1+2, y1:FOOTER_PLATE_TOP-0.4} }) : null;
-  function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]); if(LAB) LAB.block([x0,y0,x1,y1]);}
+  function reserve(x0,y0,x1,y1,tag){placed.push([x0,y0,x1,y1]); placedTags[placed.length-1]=tag||'';
+    if(LAB) LAB.block([x0,y0,x1,y1],tag);}
+  // Everything a box would land on, named. `overlaps` answers yes or no, which is all
+  // a placer needs and not enough for a build warning a person has to act on.
+  const whatBlocks=(b)=>placed.map((o,i)=>hit(b,o)
+      ? (placedTags[i] || ('claimed space at '+o[0].toFixed(1)+','+o[1].toFixed(1)))
+      : null).filter(Boolean);
+  /* MAP INK, as opposed to the page's own chrome.
+   *
+   * `overlaps` is every reserved box, and most of them are furniture: the services
+   * panel, the title block, the footer plate, the four print-safe trim strips, the
+   * core box. A badge is already kept out of those by inFrame()/inCore() and by the
+   * frame itself, and asking it to avoid them as well moves badges for no reader's
+   * benefit — measured on 2026-08-30, doing so cost the board 10 HARD and three
+   * printed labels, most of it High Wycombe, for nothing anybody would see.
+   *
+   * What a reader DOES see is a badge printed on a symbol, on a hand-placed note or
+   * on a station lozenge — the three things a member of the public found on the
+   * Ramsey sheet from the outside (the GP symbol over a route number, the pharmacy
+   * over an RH2 badge so it reads "H2", the symbols over "New Road"). That is this
+   * set, and it is deliberately narrow. */
+  /* CHROME, as opposed to map ink: the page's own furniture. A hand-placed note
+   * drawn INSIDE the services panel column is somebody's deliberate footnote, not
+   * a collision — High Wycombe has four of them at x=200 — so a warning that names
+   * the panel is a warning that gets muted in its first week. Everything not on
+   * this list, including anything reserved without a tag, is treated as ink and IS
+   * worth naming: an untagged box is still something a reader will see. */
+  const CHROME=/^the (services panel|title block|footer plate|core box|print-safe margin|scale bar)$/;
+  const whatBlocksInk=(b)=>placed.map((o,i)=>hit(b,o) && !CHROME.test(placedTags[i]||'')
+      ? (placedTags[i] || (iconBoxes.has(o) ? 'a POI symbol'
+         : 'claimed space at '+o[0].toFixed(1)+','+o[1].toFixed(1)))
+      : null).filter(Boolean);
 
   /* A ROUTE COLOUR IS CHOSEN TO BE SEEN AS A 1.7 mm RIBBON, NOT READ AS 2.7 mm TYPE.
    *
@@ -140,7 +178,7 @@ function labelPlacer(deps) {
     out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" ${italic?'font-style="italic" ':''}fill="${col}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(text)}</text>`);
     return true;
   }
-  return { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, placeLabel, inkOnWhite };
+  return { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite };
 }
 
 module.exports = { labelPlacer };

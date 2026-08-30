@@ -16,6 +16,78 @@ const { Labeller, Grid, POSITIONS, DEFAULTS } = require('./_engine.js').load('la
 const page = () => new Labeller({ page: [100, 100] });
 const overlap = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
 
+/* ---- OA-062: `prefer` was computed for 81 of 83 spokes and thrown away ----
+ *
+ * gen_external_radial.js steers each spoke's stop labels onto the open side and
+ * packs the perpendicular into `prefer`. This class read sixteen item properties
+ * and that was not one of them, so every `side` in every town's config had done
+ * nothing since labels engine v2 became the default.
+ *
+ * A FIXTURE PER CLAUSE. The first proves it is READ (the label crosses to the
+ * asked-for side of a clean page, which the cartographic order would never
+ * choose); the second proves it is a PREFERENCE and not a rule (a preferred side
+ * buried in ink is abandoned); the third proves an absent `prefer` is byte-for-
+ * byte the old behaviour, because every internal sheet depends on that.
+ */
+test('a stated `prefer` direction moves the label to that side', () => {
+  const plain = page().add({ id: 'a', at: [50, 50], text: 'Fenstanton', size: 3 });
+  assert.strictEqual(plain.solve()[0].pos, 'E', 'premise: the free placer goes east');
+
+  const west = page().add({ id: 'a', at: [50, 50], text: 'Fenstanton', size: 3, prefer: [-1, 0] });
+  assert.strictEqual(west.solve()[0].pos, 'W', 'the caller asked for the other side');
+});
+
+test('...but it is a preference, not a rule, and yields to ink', () => {
+  const L = new Labeller({ page: [100, 100] });
+  // Paint the whole western half solid, then ask for west anyway.
+  for (let y = 20; y < 80; y += 0.4) L.stampSeg([2, y], [49, y], 1.2);
+  L.add({ id: 'a', at: [50, 50], text: 'Fenstanton', size: 3, prefer: [-1, 0] });
+  const [r] = L.solve();
+  assert.ok(r.placed, 'a preference must never cost a label');
+  assert.ok(r.b[0] >= 50, 'it crossed to the clear side rather than sitting on the ink');
+});
+
+test('a label with no `prefer` is costed exactly as before', () => {
+  const L = page().add({ id: 'a', at: [50, 50], text: 'Fenstanton', size: 3 });
+  const [r] = L.solve();
+  assert.strictEqual(L._preference(r.it, r.b), 0, 'the term must be inert when nothing asked');
+});
+
+/* ---- OA-176 4.20: a leader drawn out of the middle of its own badge -------
+ *
+ * Found from the outside, at magnification, on the Ramsey internal sheet: the
+ * leader starts at the disc's centre and labels are painted last, so it crosses
+ * the digit. Measured there — r=3.0 discs at x=158.22, leaders 5.01mm long, so
+ * three fifths of each one was drawn on the badge it came out of.
+ *
+ * The second assertion is the one that keeps this honest: a fix that simply
+ * stopped drawing leaders would satisfy the first.
+ */
+test('a leader starts at the rim of its own symbol, not at its centre', () => {
+  const L = new Labeller({ page: [100, 100] });
+  const own = [47, 47, 53, 53];                 // a 6mm badge centred on the point
+  // A band of claimed space around the point, deep enough that both close rings
+  // and the first leader ring are refused and only the outer one is clear.
+  L.block([30, 44, 70, 56]);
+  L.add({ id: 'a', at: [50, 50], text: 'Bury', size: 3, own });
+  const [r] = L.solve();
+  assert.ok(r.placed && r.leader, 'test premise: this label needed a leader');
+  const [sx, sy] = r.leader[0];
+  assert.ok(sx <= own[0] || sx >= own[2] || sy <= own[1] || sy >= own[3],
+    `the leader still starts inside the symbol, at ${sx.toFixed(2)},${sy.toFixed(2)}`);
+  assert.ok(Math.hypot(r.leader[1][0] - sx, r.leader[1][1] - sy) > 0.3,
+    'and it is still a line, not a fix that stopped drawing them');
+});
+
+test('a leader from a symbol-less point still starts at the point', () => {
+  const L = new Labeller({ page: [100, 100] });
+  L.block([30, 44, 70, 56]);
+  L.add({ id: 'a', at: [50, 50], text: 'Bury', size: 3 });
+  const [r] = L.solve();
+  assert.ok(r.placed && r.leader, 'test premise: this label needed a leader');
+  assert.deepStrictEqual(r.leader[0].map(v => +v.toFixed(4)), [50, 50]);
+});
+
 test('an unobstructed label takes the first cartographic preference', () => {
   const L = page().add({ id: 'a', at: [50, 50], text: 'Somersham', size: 3 });
   const [r] = L.solve();

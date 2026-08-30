@@ -52,6 +52,12 @@ const DEFAULTS = {
   wPos: 1.0,               // cost per step down the compass preference order
   wDist: 0.55,             // cost per mm beyond the nominal gap
   wAmbig: 9,               // cost for sitting nearer a foreign anchor than its own
+  wPrefer: 2.5,             // cost of ignoring a caller's preferred DIRECTION (`prefer`).
+                           // Above wPos (1.0 per step down the compass order), so a
+                           // stated side beats cartographic habit when both are free,
+                           // and below what a fifth of a box of route ink costs
+                           // (0.2 x wInk 34 = 6.8), so a spoke label still crosses to
+                           // the clear side rather than sitting on the line.
   wWrap: 2.2,              // cost of needing a second line
   wLeader: 14,             // cost of needing a leader line
   wFrame: 6,               // cost per mm of the box outside the soft frame
@@ -222,7 +228,9 @@ class Labeller {
    *   priority  higher goes first and gets the better spots (default 0)
    *   own       [x0,y0,x1,y1] this label's OWN symbol, exempt from the hard grid
    *   fixed     {x, y, anchor} skip placement entirely (a hand-placed override)
-   *   wrap      false to forbid the two-line form
+   *   prefer    [dx, dy] the direction the caller would rather the label sat in.
+ *             Costed at wPrefer, not enforced — see _preference().
+ *   wrap      false to forbid the two-line form
    *   leader    false to forbid a leader line
    *   bold/italic/fill/halo  passed straight back out for rendering
    */
@@ -332,8 +340,38 @@ class Labeller {
           + (cand.offDevice ? this.o.wOffDevice : 0)
           + this._frameCost(b)
           + this._ambiguity(it, b)
+          + this._preference(it, b)
           + hardPenalty;
     return c;
+  }
+
+  /*
+   * How far this box sits from the direction the CALLER asked for.
+   *
+   * `prefer` is a vector, not a compass key: gen_external_radial.js computes the
+   * perpendicular a spoke's stop labels should sit on — steered into the open
+   * space by the spoke's own `side` — and hands it over per label. Until
+   * 2026-08-30 this class read sixteen item properties and `prefer` was not one
+   * of them, so the value was computed correctly for 81 of the 83 spokes on the
+   * board and discarded one call later (OA-062). `labSide` went dead in the same
+   * breath, and every `side` in every town's config with it.
+   *
+   * Costed, never enforced. A preference that cannot be overridden is a rule,
+   * and the whole reason the free placer replaced the old one is that a stop
+   * label sometimes has to cross the line to find paper. Zero when the box is on
+   * the asked-for side, `wPrefer` when it is on the opposite one, and half that
+   * across.
+   */
+  _preference(it, b) {
+    if (!it.prefer) return 0;
+    const [ux, uy] = it.prefer;
+    const pl = Math.hypot(ux, uy);
+    if (!(pl > 1e-9)) return 0;
+    const vx = (b[0] + b[2]) / 2 - it.at[0], vy = (b[1] + b[3]) / 2 - it.at[1];
+    const vl = Math.hypot(vx, vy);
+    if (!(vl > 1e-9)) return 0;
+    const dot = (vx * ux + vy * uy) / (vl * pl);
+    return this.o.wPrefer * (1 - clamp(dot, -1, 1)) / 2;
   }
 
   // True when every hard cell the box touches lies inside the label's own symbol.
@@ -350,14 +388,48 @@ class Labeller {
     return true;
   }
 
-  // The leader from a point to a label box: shortest segment to the box edge, or
-  // null if it would be longer than leaderMax (an over-long leader is worse than
-  // no label — the reader has to hunt for what it points at).
-  _leader(at, b) {
+  /*
+   * The leader from a point to a label box: shortest segment to the box edge, or
+   * null if it would be longer than leaderMax (an over-long leader is worse than
+   * no label — the reader has to hunt for what it points at).
+   *
+   * IT STARTS AT THE SYMBOL'S RIM, NOT AT ITS CENTRE (2026-08-30, OA-176 4.20).
+   * A reader outside the project found this by looking at the Ramsey sheet at
+   * magnification: the leader begins at the exact centre of the badge disc, and
+   * labels are drawn last, so it is painted straight across the digit. Measured
+   * on that sheet — the 301, 303 and 305 terminus stack at x=158.22, discs of
+   * radius 3.0, leaders 5.01 mm long — three fifths of each leader was drawn on
+   * top of the badge it came out of.
+   *
+   * `own` is the box the caller already passes for a different reason (it is the
+   * label's exemption from the hard grid), and it is exactly the symbol the
+   * leader emerges from, so nothing new has to be plumbed through.
+   *
+   * The LENGTH test still measures from the point. leaderMax is about how far a
+   * reader's eye has to travel from the thing to its name, and that distance
+   * does not change because we stopped drawing the first three millimetres of it.
+   */
+  _leader(at, b, own) {
     const ex = clamp(at[0], b[0], b[2]), ey = clamp(at[1], b[1], b[3]);
     const len = Math.hypot(ex - at[0], ey - at[1]);
     if (len > this.o.leaderMax || len < 0.5) return null;
-    return { seg: [[at[0], at[1]], [ex, ey]], len };
+    let sx = at[0], sy = at[1];
+    if (own && at[0] >= own[0] && at[0] <= own[2] && at[1] >= own[1] && at[1] <= own[3]) {
+      // Walk from the point towards the box until we leave `own`; the smallest
+      // positive t at which the ray crosses one of its four sides.
+      const dx = ex - at[0], dy = ey - at[1];
+      let t = 0;
+      if (dx > 1e-9) t = Math.max(t, (own[2] - at[0]) / dx);
+      else if (dx < -1e-9) t = Math.max(t, (own[0] - at[0]) / dx);
+      if (dy > 1e-9) t = Math.max(t, (own[3] - at[1]) / dy);
+      else if (dy < -1e-9) t = Math.max(t, (own[1] - at[1]) / dy);
+      t = clamp(t, 0, 1);
+      sx = at[0] + dx * t; sy = at[1] + dy * t;
+      // A leader wholly inside its own symbol is not a leader; leave it at the
+      // point rather than emitting a zero-length path.
+      if (Math.hypot(ex - sx, ey - sy) < 0.35) { sx = at[0]; sy = at[1]; }
+    }
+    return { seg: [[sx, sy], [ex, ey]], len };
   }
   // Do two segments cross? Leaders that cross each other are the classic tell of
   // an automatic placer, and the plan asks for none.
@@ -416,7 +488,7 @@ class Labeller {
         // then could not use, and High Wycombe lost five more names than with two.
         for (const g of [this.o.gap * 2.1, this.o.gap * 3.0]) {
           const { b, lx, ly, lead } = this._box(it, form, list[pi], g);
-          const lead2 = this._leader(it.at, b);
+          const lead2 = this._leader(it.at, b, it.own);
           if (!lead2) continue;
           out.push({ form, pos: list[pi], pi, gap: g, box: b, lx, ly, lead,
                      leader: true, leaderLen: lead2.len, leaderSeg: lead2.seg });

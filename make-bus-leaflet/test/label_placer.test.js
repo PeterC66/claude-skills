@@ -40,6 +40,41 @@ const make = (over = {}) => {
 };
 const v2 = (over = {}) => make(Object.assign({ V2: true }, over));
 
+/* ---- whatBlocksInk: naming what a hand-placed thing landed on (OA-148) ----
+ *
+ * `overlaps` answers yes or no, which is all a placer needs and not enough for a
+ * warning a person has to act on: "this note is drawn on something" sends nobody
+ * anywhere. reserve() takes a tag; whatBlocksInk() reads it back.
+ *
+ * THE CHROME EXCLUSION IS THE HALF THAT MATTERS. High Wycombe deliberately draws
+ * four map notes inside the services panel column, and a warning that named the
+ * panel would have been wrong on its first run — which is how a check gets muted
+ * in its first week.
+ */
+test('reserve records what claimed the box, and whatBlocksInk reads it back', () => {
+  const { api } = make();
+  api.reserve(10, 10, 30, 20, 'the 5/17 terminus badge');
+  assert.deepStrictEqual(api.whatBlocksInk([15, 12, 18, 15]), ['the 5/17 terminus badge']);
+  assert.deepStrictEqual(api.whatBlocksInk([80, 80, 90, 90]), [], 'nothing there');
+});
+
+test('page chrome is deliberately NOT named — a note inside the panel is a design', () => {
+  const { api } = make();
+  api.reserve(197, 0, 297, 210, 'the services panel');
+  api.reserve(0, 0, 297, 5, 'the print-safe margin');
+  assert.deepStrictEqual(api.whatBlocksInk([200, 170, 260, 175]), [],
+    'the panel must not produce a warning');
+  assert.deepStrictEqual(api.whatBlocksInk([10, 1, 40, 4]), []);
+});
+
+test('an untagged claim is still named, by where it is', () => {
+  // Anything reserved without a tag is treated as ink, not as furniture: an
+  // untagged box is still something a reader will see.
+  const { api } = make();
+  api.reserve(120.25, 88.4, 140, 95);
+  assert.deepStrictEqual(api.whatBlocksInk([125, 90, 130, 92]), ['claimed space at 120.3,88.4']);
+});
+
 // ---- the box algebra --------------------------------------------------------
 
 test('hit is inclusive at the edges — boxes that merely touch DO collide', () => {

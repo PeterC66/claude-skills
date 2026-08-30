@@ -519,8 +519,28 @@ for(let _i=0;_i<EXT.length;_i++){
     if(V2){
       HARD.push([x-1.9,y-1.9,x+1.9,y+1.9,'tick']);
       ANCH.push([x,y,'stop:'+stops[i]+'@'+_key+'#'+i]);
-      REQS.push({ id:'stop:'+stops[i]+'@'+_key+'#'+i, at:[x,y], text:stops[i], size:2.9,
-                  own:[x-1.9,y-1.9,x+1.9,y+1.9], prefer:[perpx,perpy] });
+      /* design.labelPrefer — WHETHER THE STATED SIDE IS ACTED ON (2026-08-30, OA-062).
+       *
+       * `prefer` is computed here and was silently discarded by labeller.js, which
+       * read sixteen item properties and not that one, so every `side` in every
+       * town's config had done nothing since labels engine v2 became the default —
+       * 81 of the 83 spokes on the board. The labeller now honours it, and the
+       * mechanism is tested and mutation-proved.
+       *
+       * It is nevertheless OFF by default, and that is the measurement's own
+       * finding rather than caution. Values nobody has ever seen the effect of are
+       * not a setting, they are a guess: Ramsey states `side:"up"` on all six of
+       * its branches, which is what a config looks like when it has never done
+       * anything. Turning the whole board on at once was measured on 2026-08-30 —
+       * it improved no sheet's numbers, and it moved one of Ramsey's four "Bury"
+       * labels from 31.9 mm to 23.9 mm from another, turning a clean external
+       * sheet into a HARD defect. So the estate keeps today's placement byte for
+       * byte, and a town opts in when somebody has looked at its spokes and
+       * re-authored them. That is the invariant this engine holds anyway: absent
+       * config, byte-identical output. */
+      REQS.push(Object.assign({ id:'stop:'+stops[i]+'@'+_key+'#'+i, at:[x,y], text:stops[i], size:2.9,
+                  own:[x-1.9,y-1.9,x+1.9,y+1.9] },
+                DESIGN.labelPrefer ? { prefer:[perpx,perpy] } : {}));
       continue;
     }
     const lx=x+perpx*5.2, ly=y+perpy*5.2+0.9;

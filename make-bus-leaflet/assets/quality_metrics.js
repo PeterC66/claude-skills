@@ -1510,8 +1510,19 @@ function analyse(svgPath) {
   // badgeOverBadge and lozengeOverlap are SCORED as of 2026-08-28 — see the note
   // on m.hard above for why that waited until the board was empty, and why
   // labelsOverBadge has not followed them yet.
+  /* THE SPLIT IS ALWAYS PRINTED, AS OF 2026-08-30 (OA-148). It used to be
+   * conditional on `exitCaptionOverBadge` being truthy — so a sheet whose hits
+   * were ALL placer-attributable, which is the worst case and the only one worth
+   * acting on, printed the bare total and no split at all. Eight of the nine
+   * sheets carrying a net hit are exactly that shape. Reading the estate total
+   * off `--detail` therefore under-counted the net by eleven of thirteen and
+   * over-counted the captions' share, and it did so silently, because a missing
+   * parenthetical looks like a sheet with nothing to split rather than a sheet
+   * that is entirely the thing you are hunting. The suppression hid the number
+   * precisely where it was highest. `0 of them frame-exit captions` is two words
+   * longer and cannot lie by omission. */
   if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge'
-    + (m.exitCaptionOverBadge ? ' (' + m.exitCaptionOverBadge + ' of them frame-exit captions, ' + m.labelsOverBadgeNet + ' placer-attributable)' : ''));
+    + ' (' + m.exitCaptionOverBadge + ' of them frame-exit captions, ' + m.labelsOverBadgeNet + ' placer-attributable)');
   if (m.badgeOverBadge > 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');
   // OA-060, same treatment and the same reason: reported until the sheets are
   // clean, then folded in. `signature-lost` is louder than any count, because it

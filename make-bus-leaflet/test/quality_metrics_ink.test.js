@@ -103,6 +103,36 @@ test('a label merely STARTING with the letters "to" is not a caption', () => {
   assert.strictEqual(m.labelsOverBadgeNet, 1);
 });
 
+/* THE WARNING MUST CARRY THE SPLIT EVEN WHEN THERE ARE NO CAPTIONS (2026-08-30).
+ *
+ * The metrics were right from the day the split landed; the REPORT was not. The
+ * warning printed its parenthetical only when `exitCaptionOverBadge` was truthy,
+ * so a sheet whose hits were ALL placer-attributable — the worst case, and the
+ * only one worth acting on — printed the bare total and no split at all. Eight
+ * of the nine sheets carrying a net hit on 2026-08-30 were exactly that shape,
+ * so reading the estate figures off `--detail` gave 38/36/2 where the truth was
+ * 49/36/13. The suppression hid the number precisely where it was highest, and
+ * it did it silently: a missing parenthetical looks like a sheet with nothing to
+ * split, not like a sheet that is entirely the thing you are hunting.
+ *
+ * A measure can be correct and still lie in its report. This asserts the string,
+ * because the string is what anybody actually reads.
+ */
+test('the warning names the split even when NONE of the hits is a caption', () => {
+  const worst = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'Market Hill')));
+  const w = worst.warns.find((x) => /labels? printed over a route badge/.test(x));
+  assert.ok(w, 'the badge warning did not appear at all');
+  assert.match(w, /0 of them frame-exit captions, 1 placer-attributable/,
+    'a sheet with no captions must still say so — suppressing the split hides the all-placer case');
+
+  // The control: the mixed sheet still reports the same way, so this is a
+  // widening of the report and not a swap of one silence for another.
+  const mixed = analyse(sheet(badge(60, 100, '#4477aa', '5') + label(56, 101, 'to Newmarket')
+    + badge(60, 140, '#ee6677', '9') + label(56, 141, 'Market Hill')));
+  assert.match(mixed.warns.find((x) => /route badge/.test(x)),
+    /2 labels printed over a route badge \(1 of them frame-exit captions, 1 placer-attributable\)/);
+});
+
 test('an unreadable palette makes the split null too, not a clean zero', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-ink-nopal-split-'));
   fs.writeFileSync(path.join(dir, 'internal.svg'),

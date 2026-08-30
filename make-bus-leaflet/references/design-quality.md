@@ -336,6 +336,20 @@ Three findings from previewing all eight sheets, all of which changed the design
 
 Previewed on all eight: **three towns draw it with zero added defects** (St Ives, March, Ramsey — St Ives' soft count in fact falls 8 → 6), and **five decline it** (Huntingdon, Wisbech, St Neots, Beaconsfield, High Wycombe), whose sheets are unchanged. That is the real finding of item 3, and it contradicts the plan's assumption: our external sheets do **not** all carry usable white space bottom-left. Making room on those five is a composition question — `spokeSpread`, a tighter legend — not a wording one.
 
+**RE-MEASURED 2026-08-30 (OA-054, retired), and the middle rung is the new part.** The 2026-08-24 preview above split the estate three/five; the towns then each pinned a hand-picked **three** and all eight have drawn the panel ever since, so the backlog carried a row asking whether that three was a pin the derivation was fighting. It is not. Every town was re-rendered from its committed `ci-reference` with the current engine and `STRICT_GUARDS=1`, so a refusal is a non-zero exit rather than a quietly missing panel:
+
+| Bullets | Places on | Which towns refuse |
+|---|---|---|
+| three, as shipped | **8 of 8** | none |
+| five, the base set | **5 of 8** | High Wycombe, St Neots, Wisbech |
+| the derivation, unpinned | **3 of 8** | those three, plus Beaconsfield and Huntingdon |
+
+Two things to carry away. **Unpinning does not give five, it gives six**: `_hasTimes` is true for all eight towns, so the journey-time bullet always fires — *"adopt the two they never print"* and *"let the derivation run"* are different experiments, and only the second is what a fresh town gets. That bottom row also reproduces the 2026-08-24 preview's three/five split exactly, same towns, which is the closest thing to a control this measurement has. And **the three that do place have to move a long way to manage it** — St Ives' panel is shifted 103 mm from its configured spot, Ramsey's 94 mm, March's 61 mm.
+
+**The same number was reached from the other end on the PLACE external** (OA-056, retired 2026-08-29): six bullets could not be placed on six of nine sheets, narrowing the column made the panel *taller* and therefore worse, and three placed on 9 of 9. Two sheet families, two methods, one answer — three is not a compromise, it is the fit.
+
+**So the derivation is deliberately more generous than any sheet can take, and that is safe rather than sloppy.** A town that leaves `bullets` unset hits the `guardRefuse` above, which is BLOCKING under `STRICT_GUARDS` — and the portal sets that on every render that goes public. The next town learns at build time, loudly, rather than in review. **Do not write this finding into `gen_external_radial.js`**: that file is in the hashed engine closure, so even a comment moves the template hash and sends all eight towns ENGINE STALE. It was tried on 2026-08-30 and reverted for exactly that reason.
+
 ## The fit set — `internalRoads.fitMaxOffPath`
 
 Not a `design` key, and not opt-in: engine behaviour, because it is a correctness fix rather than a taste one.

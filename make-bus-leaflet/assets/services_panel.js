@@ -2,13 +2,18 @@
  * services_panel.js — the sheet's right-hand column: the Services list, the
  * pictogram Key, the frequency-tier rows and the fare note.
  *
- * CONTRACT. `drawServicesPanel(deps)` DRAWS and returns nothing. That is not a
- * simplification — it is the measured interface. Every one of the thirty-odd
- * names the block declares (`PX`, `py`, `PS`, `lastSubY`, `KROW_FIT`, `KEYROWS`
- * …) was checked for a use below the block and not one has one, so the panel is
- * a pure sink: it consumes the town and appends to the caller's document. The
- * only apparent exception is `py`, which reappears in the north arrow twelve
- * lines later as a block-scoped `const py=c` — a shadow, not this one.
+ * CONTRACT. `drawServicesPanel(deps)` draws, and returns `{x, x1, endY}` — the
+ * column it drew in and the y of the last thing it put in it. It returned NOTHING
+ * until 2026-08-30, and that was the measured interface: every one of the thirty-odd
+ * names the block declares (`PX`, `py`, `PS`, `lastSubY`, `KROW_FIT`, `KEYROWS` …)
+ * was checked for a use below the block and not one had one, so the panel was a pure
+ * sink. What changed is that something now wants to draw UNDER it — the numbered
+ * place index (OA-078) — and the bottom of this panel is four different values
+ * depending on which of the four list layouts ran, whether `frequencyTiers` added
+ * rows and whether there is a `fareNote`. The caller cannot compute that, and the
+ * alternative is a hand-authored y in every town's routes.json, which is exactly the
+ * class of ink OA-181 spent a day moving off the badges. Three values out is a
+ * narrower interface than one number in twenty configs.
  *
  * WHY IT IS ONE MODULE AND NOT FOUR. The list, the Key, the tier rows and the
  * fare note are four subjects, and `py` threads through all of them: each one
@@ -611,7 +616,12 @@ function drawServicesPanel(deps) {
     process.stderr.write(`key: ${rows} rows need ${want.toFixed(2)}mm pitch to clear the footer plate, below the 3.6mm pictogram floor — the Key is too long for this panel. Shorten it, or move it with panelCols.keyAt.\n`);
     return 3.6;
   })();
+  // The bottom of the panel, carried through the three blocks that can extend it.
+  // Each one updates it AFTER drawing, so the value is what was actually emitted
+  // rather than what the branch would have emitted had it run.
+  let endY = py + KFIRST + 1;
   key.forEach((kk,i)=>{const ky=py+KFIRST+(i%KEY_PER_COL)*KROW_FIT, kx=PX+3+Math.floor(i/KEY_PER_COL)*KEY_COLW;
+    if(ky+1>endY) endY=ky+1;
     out(icon(kk[0],kx,ky,2.0,ICON_INK,ICON_SET));
     // '3.0' as a STRING: the old code emitted the literal font-size="3.0", and
     // JS renders the number 3.0 as "3" — a one-character diff that fails all 27
@@ -651,6 +661,7 @@ function drawServicesPanel(deps) {
       const dash=st.dash?` stroke-dasharray="${st.dash}"`:'', cap=st.dash?'butt':'round';
       out(`<path d="M${(kx-2.0).toFixed(2)} ${ty.toFixed(2)}h4.00" fill="none" stroke="#555" stroke-width="${w}"${dash} stroke-linecap="${cap}"/>`);
       out(`<text x="${kx+4.0}" y="${(ty+1).toFixed(2)}" font-family="Arial" font-size="${PS?PS.sub:'3.0'}" fill="#222">${esc(st.label||FTIER_LABEL[t]||t)}</text>`);
+      if(ty+1>endY) endY=ty+1;
       ty+=KROW_FIT; KEYROWS++;
     }
     KEYROWS += 0.5;                                // the air, so the fare note clears it
@@ -665,7 +676,10 @@ function drawServicesPanel(deps) {
     if(cur.trim()) lines.push(cur.trim());
     out(`<rect x="${PX-2}" y="${fy-4.4}" width="95" height="${(lines.length*3.6+6).toFixed(1)}" rx="1.2" fill="#fff4c2"/>`);
     lines.forEach((ln,i)=>out(`<text x="${PX}" y="${fy+i*3.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#333">${esc(ln)}</text>`));
+    const fb = fy+(lines.length-1)*3.6+1.6;
+    if(fb>endY) endY=fb;
   }
+  return { x: PX, x1: (PRINT_SAFE!=null ? 297-PRINT_SAFE : 294), endY };
 }
 
 module.exports = { drawServicesPanel };

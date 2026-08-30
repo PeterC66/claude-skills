@@ -180,3 +180,63 @@ test('every coordinate is written to 2dp, so the sheet is byte-stable', () => {
   const svg = drawn(northArrow({ IR: { northArrow: { x: 1 / 3, y: 2 / 3 } }, theta: 0.1234567 }));
   assert.ok(!/\d\.\d{3}/.test(svg), 'an unrounded float here would move bytes on every re-render');
 });
+
+/* ---- OA-124: the compass gets a second look, once the labels are down ------
+ *
+ * site() runs BEFORE the solve, and that ordering is right: the arrow can go
+ * anywhere and a label cannot. What it cannot see from there is a `mustPlace`
+ * destination caption, which labeller.js costs heavily for entering a reserved
+ * box and never DROPS for it — so the arrow claims the blank corner and
+ * "to Chatteris" is printed straight through the N anyway. That collision sat on
+ * Ely Co-op internal from 2026-08-27 to 2026-08-30.
+ *
+ * Four clauses, four fixtures, because three of them can pass on a stub that
+ * simply always moves the arrow.
+ */
+const sited = (extra) => {
+  const A = northArrow(Object.assign({ IR: {}, theta: 0 }, extra || {}));
+  A.site(() => ({ x: 20, y: 20, auto: true, want: null }), () => {}, () => {});
+  return A;
+};
+// A search that always offers 60,60; and one that has nowhere to offer.
+const findsSpot = () => ({ x: 60, y: 60, auto: true, want: null });
+const findsNone = () => ({ x: null, y: null, auto: false, want: null });
+
+test('resite moves the compass when a label has actually landed on it', () => {
+  const A = sited();
+  const said = [];
+  assert.strictEqual(A.resite(findsSpot, () => true, m => said.push(m)), true);
+  assert.strictEqual(A.at.x, 60);
+  assert.strictEqual(A.at.y, 60);
+  assert.match(said.join(''), /moved to 60,60/);
+});
+
+test('...and leaves it exactly where it is when nothing landed on it', () => {
+  const A = sited();
+  const said = [];
+  assert.strictEqual(A.resite(findsSpot, () => false, m => said.push(m)), false);
+  assert.strictEqual(A.at.x, 20, 'the arrow moved for no reason, so every sheet re-renders');
+  assert.strictEqual(said.length, 0, 'a quiet sheet was given a warning');
+});
+
+test('...and says so, without moving, when there is nowhere clear left', () => {
+  const A = sited();
+  const said = [];
+  assert.strictEqual(A.resite(findsNone, () => true, m => said.push(m)), false);
+  assert.strictEqual(A.at.x, 20);
+  assert.match(said.join(''), /no clear spot left/);
+});
+
+test('a HAND-PINNED compass is never re-sited: a stated position is a decision', () => {
+  const A = northArrow({ IR: { northArrow: { x: 14, y: 150 } }, theta: 0 });
+  A.site(() => ({ x: 14, y: 150, auto: false, want: 0 }), () => {}, () => {});
+  assert.strictEqual(A.at.auto, false, 'premise: site() accepted the configured spot');
+  assert.strictEqual(A.resite(findsSpot, () => true, () => {}), false);
+  assert.strictEqual(A.at.x, 14, 'the town said where it wanted the compass and was overruled');
+});
+
+test('an arrow that is switched off is not re-sited either', () => {
+  const A = northArrow({ IR: { northArrow: false }, theta: 0 });
+  assert.strictEqual(A.on, false);
+  assert.strictEqual(A.resite(findsSpot, () => true, () => {}), false);
+});

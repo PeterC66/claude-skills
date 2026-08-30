@@ -30,6 +30,11 @@
  *    still cannot be placed is REPORTED (`unplaced()`), because today a dropped
  *    label leaves no trace in the SVG at all and we have no idea how much the
  *    maps are failing to say.
+ *  - And then, since 2026-08-30, offered a NUMBER instead of its name
+ *    (`indexPass()`, OA-078). A name that needs 84 mm and a number that needs 2.6
+ *    do not fail on the same sheet, so most of what the placer drops can still be
+ *    identified — by an ordinal on the map and a line in an index the caller
+ *    prints. `stillUnplaced()` is what is left after both passes.
  *
  * Invariants (changing-the-engine.md §1): zero dependencies beyond
  * font_metrics.js, no network, no filesystem reads, no Math.random, no Date, no
@@ -443,7 +448,15 @@ class Labeller {
   _candidates(it) {
     const forms = this._lines(it);
     const out = [];
-    const gaps = [this.o.gap, this.o.gap * 1.55];      // and a little further out
+    /* `it.gap` — THIS LABEL'S OWN NOMINAL DISTANCE FROM ITS POINT (2026-08-30,
+     * OA-078). The 2.6 mm default is the right distance for a NAME: far enough that
+     * the words are not touching the symbol, near enough that they belong to it. An
+     * index marker is not a name, it is a tick — two glyphs whose whole job is to
+     * be unmistakably attached to one symbol — and holding it 2.6 mm out on a
+     * saturated sheet is the difference between placing it and dropping it. Absent
+     * on every other caller, so every other label's candidate list is unchanged. */
+    const G0 = it.gap != null ? it.gap : this.o.gap;
+    const gaps = [G0, G0 * 1.55];                      // and a little further out
     /* `only`: an ORDERED shortlist of compass keys, for a label that belongs to a
      * repeated DEVICE rather than to a point on its own. The free placer is right
      * for a POI name — wherever it fits best is where it should go — and wrong for
@@ -486,7 +499,7 @@ class Labeller {
         // Two rings only. A third at 3.9x was tried and made things WORSE: the extra
         // reach let low-priority labels claim distant space that higher-value ones
         // then could not use, and High Wycombe lost five more names than with two.
-        for (const g of [this.o.gap * 2.1, this.o.gap * 3.0]) {
+        for (const g of [G0 * 2.1, G0 * 3.0]) {
           const { b, lx, ly, lead } = this._box(it, form, list[pi], g);
           const lead2 = this._leader(it.at, b, it.own);
           if (!lead2) continue;
@@ -587,15 +600,119 @@ class Labeller {
   unplaced() { return this.solve().filter(r => !r.placed).map(r => ({ id: r.id, text: r.it.text, at: r.it.at, reason: r.reason })); }
 
   /*
+   * indexPass — A NUMBER WHERE THE NAME WOULD NOT GO (2026-08-30, OA-078).
+   *
+   * `unplaced()` says a sheet failed to name 288 things board-wide. What it does
+   * NOT say is that the sheet still DREW all 288 of them: the icon is there, the
+   * name is not, and a reader sees an anonymous supermarket trolley. That is the
+   * real defect, and it is the one measure the drop count cannot express.
+   *
+   * Nottingham's city-centre map answers it by numbering the points and listing
+   * them at the side, and the reason that works is arithmetic rather than taste:
+   * *"Cambridge Fish Preservation and Angling Society Ltd. Managed Fishery"* is
+   * 68 characters and 84 mm of type, and `17` is two glyphs and 2.6 mm. A place
+   * with nowhere for its name almost always has somewhere for its number.
+   *
+   * SO THIS IS NOT A SECOND PLACER. It is the same one, run again over the labels
+   * that failed, with the text replaced by an ordinal. Every candidate position,
+   * every cost, the ink grid, the hard grid, the leader rules and the boxes
+   * already taken are the ones the main solve used — the numbers are simply
+   * cheaper to satisfy. Each accepted marker joins `placedBoxes`, so number 2
+   * avoids number 1 exactly as any two labels avoid each other.
+   *
+   * WHAT IT DELIBERATELY DOES NOT DO. It does not force. A point with no room for
+   * even two digits keeps its silence and stays in `unplaced()`, because a number
+   * stamped on top of a route line is a number a reader cannot read and cannot
+   * look up either — it would convert a visible failure into an invisible lie.
+   * And it does not renumber: `from` lets the caller keep one sequence across the
+   * three sheets of a town if it ever wants to, and the default is 1.
+   *
+   * Returns the rows the CALLER has to print somewhere — this class draws the
+   * markers and knows nothing about panels. `max` is how many the caller has room
+   * to list; anything past it is left unplaced and unnumbered rather than marked
+   * on the map and missing from the list, which is the one outcome worse than
+   * saying nothing.
+   */
+  indexPass(o) {
+    if (this._indexed) return this._indexed;
+    const opt = Object.assign({ size: 2.3, from: 1, max: Infinity, fill: '#111', gap: 1.7 }, o || {});
+    /* WHICH ONES GET A NUMBER is the main solve's own question, asked again. The
+     * comparator is `solve()`'s, verbatim: priority, then the longest name (which
+     * had the fewest places to go), then insertion order. When `max` bites, what
+     * is left behind is what the placer already ranked last, not whatever happened
+     * to be at the end of an array. */
+    const want = this.solve().filter(r => !r.placed && r.it.at).map(r => r.it);
+    want.sort((a, b) => (b.priority - a.priority) || (b.text.length - a.text.length) || (a.seq - b.seq));
+    const take = want.slice(0, opt.max === Infinity ? want.length : Math.max(0, opt.max | 0));
+    if (!take.length) { this._indexed = []; return this._indexed; }
+    /* PLACE ON THE WIDEST NUMBER, DRAW THE ACTUAL ONE. The box a marker needs
+     * depends on how many digits it ends up with, and the digits are not known
+     * until the survivors are counted — so every marker is placed against the
+     * widest ordinal this pass could issue, and the glyph drawn into it is never
+     * wider than that. The alternative, numbering first, forces a choice between a
+     * gap in the sequence (some marker did not fit) and a box narrower than the
+     * text, and this project has already paid for the second one twice. */
+    const widest = String(opt.from + take.length - 1).replace(/\d/g, '8');
+    const placed = [];
+    for (const src of take) {
+      const it = { id: 'idx:' + src.id, at: src.at, text: widest, size: opt.size,
+                   bold: true, wrap: false, leader: true, own: src.own, gap: opt.gap,
+                   fill: opt.fill, priority: 0, seq: this.items.length + placed.length };
+      const best = this._best(it, null);
+      if (!best) continue;                 // no room even for two digits: stays silent
+      const rec = this._record(it, best);
+      this.placedBoxes.push(rec);
+      placed.push({ src, rec });
+    }
+    /* NUMBERED ALPHABETICALLY, once the survivors are known. A reader arrives at
+     * this list from two directions — with a number off the map, wanting a name,
+     * and with a name in mind, wanting to know whether the map shows it — and an
+     * alphabetical list ordered by its own numbers answers both at once. Numbering
+     * in placement order would answer only the first. localeCompare is deliberately
+     * NOT used: this file may not depend on locale (same input, same bytes), so the
+     * sort is plain code-unit order with a case fold and a stable id tie-break. */
+    placed.sort((a, b) => {
+      const x = a.src.text.toUpperCase(), y = b.src.text.toUpperCase();
+      return x < y ? -1 : x > y ? 1 : (a.src.id < b.src.id ? -1 : a.src.id > b.src.id ? 1 : 0);
+    });
+    const rows = placed.map((e, i) => {
+      const n = opt.from + i;
+      e.rec.it.text = String(n);
+      e.rec.lines = [String(n)];
+      return { n, text: e.src.text, id: e.src.id, at: e.src.at, rec: e.rec };
+    });
+    this._indexed = rows;
+    return rows;
+  }
+
+  /* The markers, drawn through the same renderer as every other label. Empty
+   * before indexPass() has run, so a caller that never asks for an index emits
+   * exactly the bytes it emitted before this method existed. */
+  indexSvg(fmt) { return this._svgOf((this._indexed || []).map(r => r.rec), fmt); }
+
+  /* Everything indexPass() could not number either — the residue after both
+   * passes, and the honest denominator for "how much is this sheet not saying?" */
+  stillUnplaced() {
+    const done = new Set((this._indexed || []).map(r => r.id));
+    return this.unplaced().filter(u => !done.has(u.id));
+  }
+
+  /*
    * svg — render the solved labels. Kept here rather than in the caller so that
    * the box the placer reserved and the glyphs actually drawn can never disagree
    * about size, leading or anchor, which is the failure mode that produced
    * "to Cambridge" printed across its own badge.
    */
-  svg(fmt) {
+  svg(fmt) { return this._svgOf(this.solve(), fmt); }
+
+  /* The renderer, over any list of solved records. `svg()` hands it the main
+   * answer and `indexSvg()` hands it the index markers, so a number and a name
+   * are drawn by one piece of code and cannot drift apart in leading, anchor or
+   * halo — which is the whole reason this renderer lives in the placer. */
+  _svgOf(recs, fmt) {
     const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const out = [];
-    for (const r of this.solve()) {
+    for (const r of recs) {
       if (!r.placed) continue;
       const it = r.it;
       if (r.leader) {

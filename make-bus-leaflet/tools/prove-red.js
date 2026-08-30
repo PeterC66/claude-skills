@@ -1206,6 +1206,60 @@ const MUTATIONS = [
     find: "  return path.resolve(dir).split(/[\\\\/]+/).includes('Places');",
     to: "  return path.resolve(dir).includes('Places');" },
 
+  /* labeller.js indexPass -- the numbered place index (2026-08-30, OA-078). Four
+   * decisions compose into this pass and any three can be right while the fourth
+   * is wrong, so there is one mutation per decision. The third is the one that
+   * matters most: a pass that FORCED its markers would drive the drop count to
+   * zero and print numbers a reader can neither read nor look up, which is a
+   * ratcheted measure bought with a definition change. */
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the index is numbered in placement order, so the printed list cannot be scanned',
+    find: "    placed.sort((a, b) => {",
+    to: "    placed.reverse(); if (false) placed.sort((a, b) => {" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'each marker is sized to its OWN digits, so a two-digit ordinal overhangs the box that was reserved',
+    find: "    const widest = String(opt.from + take.length - 1).replace(/\\d/g, '8');",
+    to: "    const widest = String(opt.from + placed.length);" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the index pass FORCES its markers, so a number is stamped on reserved ink and the drop count falls for nothing',
+    find: "                   fill: opt.fill, priority: 0, seq: this.items.length + placed.length };",
+    to: "                   fill: opt.fill, priority: 0, mustPlace: true, seq: this.items.length + placed.length };" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: "a label's own `gap` is ignored, so an index marker is held at name distance and drops off a crowded sheet",
+    find: "    const G0 = it.gap != null ? it.gap : this.o.gap;",
+    to: "    const G0 = this.o.gap;" },
+
+  /* north_arrow.js resite -- the compass gets a second look (2026-08-30, OA-124).
+   * Both halves need a mutation, and they fail in opposite directions: one moves
+   * an arrow nothing landed on, which re-renders the whole estate for nothing;
+   * the other overrules a position a town stated on purpose. */
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: 'the compass is re-sited whether or not a label landed on it, so every sheet moves its arrow for nothing',
+    find: "    if(!hit(box(at.x, at.y))) return false;                  // nothing landed on it",
+    to: "    hit(box(at.x, at.y));" },
+
+  { suite: 'north_arrow.test.js', file: 'north_arrow.js',
+    what: 'a hand-pinned compass is re-sited too, so a stated internalRoads.northArrow:{x,y} is silently overruled',
+    find: "    if(!at.auto && NA.x!=null && NA.y!=null) return false;   // hand-pinned: a decision",
+    to: "    if(false) return false;" },
+
+  /* services_panel.js endY -- the panel stopped being a pure sink on 2026-08-30
+   * (OA-078) so that the place index knows where to start. An endY that is too
+   * HIGH prints the index on top of the Key and every byte gate stays green,
+   * because the panel's own ink is unchanged: nothing but this measures it. */
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'endY stops following the frequency-tier rows, so the place index is drawn on top of them',
+    find: "      if(ty+1>endY) endY=ty+1;",
+    to: "      if(false) endY=ty+1;" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'endY stops following the fare note, so the place index is drawn through it',
+    find: "    const fb = fy+(lines.length-1)*3.6+1.6;",
+    to: "    const fb = -Infinity;" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

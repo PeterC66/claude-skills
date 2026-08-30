@@ -107,7 +107,9 @@
 // The plumbing below is kept deliberately (footer.js says `version` is "still
 // accepted here (unused)" so existing call sites need not change) - do not read
 // it as evidence that the stamp renders.
-// Also additive (work in both models, no output when absent): mapNotes[],
+// Also additive (work in both models, no output when absent): mapNotes[] (each
+// {text, x|at, y, dx, dy, size, color, anchor, lineGap, w} — `w` is the wrap
+// width in mm, default the distance from x to the page edge),
 // panelGroups, panelRow, keyRow, panelBadge, fareNote.
 //   panelCols:{ cols:2, width:48, row:5.0, keyAt:{x,y} }
 //                                   // Multi-COLUMN Services panel, for a town with
@@ -1845,7 +1847,21 @@ for(const n of (RJ.mapNotes||[])){
   // (to the page edge on the open side of its anchor), instead of drawing one long line
   // that runs off the page or gets clipped by the footer band. Short notes that already
   // fit on one line are unaffected (lines.length===1, same output as before).
-  const avail = anc==='start' ? (294-6-x) : anc==='end' ? (x-6) : Math.min(x-6,294-6-x)*2;
+  /* `w` — THE NOTE'S OWN WRAP WIDTH, in mm (2026-08-30, OA-181).
+   *
+   * Without it the only lever a config author has over where a note wraps is its
+   * `x`, because `avail` is the distance from `x` to the page edge on the note's
+   * open side. That works when the note starts in the middle of the sheet and
+   * fails completely when it starts at the margin: Ely Co-op's AJ2 footnote is
+   * authored at x=6, which is the LARGEST avail there is, so its 120 characters
+   * ran 130 mm across the sheet and through a frame-exit badge, and there is no
+   * smaller x. The only lever left was to split one sentence into several
+   * mapNotes entries and hand-position each, which is more hand-authored ink of
+   * exactly the kind OA-181 is about. Absent => the distance to the edge, and
+   * every note on the board wraps where it wraps today.
+   */
+  const avail = n.w!=null ? n.w
+              : anc==='start' ? (294-6-x) : anc==='end' ? (x-6) : Math.min(x-6,294-6-x)*2;
   const maxChars = Math.max(20, Math.floor(avail/charW));
   const words=String(n.text).split(' '); const lines=[]; let cur='';
   for(const wd of words){ if((cur+' '+wd).trim().length>maxChars){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }
@@ -1872,8 +1888,18 @@ for(const n of (RJ.mapNotes||[])){
     const bx = anc==='start'?x : anc==='end'?x-w : x-w/2;
     return { ln, ly, box:[bx-0.4,ly-sz,bx+w+0.4,ly+1] };
   });
-  for(const r of rows){
-    const on=whatBlocksInk(r.box);
+  /* ASK ABOUT EVERY LINE FIRST, THEN CLAIM THEM (2026-08-30, OA-181).
+   *
+   * Warning and reserving in one loop makes a wrapped note report ITSELF: line 2
+   * is measured against a page on which line 1 has just been claimed, and
+   * consecutive lines overlap by design — the box is cap-height plus descender
+   * plus padding, which is a little more than the 1.35x leading between them. Ely
+   * Co-op's AJ2 footnote wrapped to two lines the moment it was given a `w` and
+   * immediately said it was "drawn across a map note", naming itself. A note's
+   * own lines are one block by construction and are not a collision. */
+  const blocking=rows.map(r=>whatBlocksInk(r.box));
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i], on=blocking[i];
     if(on.length) process.stderr.write('mapNotes: "'+String(n.text).slice(0,40)+(n.text.length>40?'\u2026':'')+'" is drawn at '+x.toFixed(1)+','+r.ly.toFixed(1)+' across '+on.slice(0,3).join(', ')+(on.length>3?' and '+(on.length-3)+' more':'')+' \u2014 a note is placed by hand and the engine will not move it. Adjust its x/y (or dx/dy) in routes.json.\n');
     reserve(r.box[0],r.box[1],r.box[2],r.box[3],'a map note');
   }
@@ -2014,22 +2040,34 @@ if(IR && TRIM){
       // first, because this badge means "the route ends HERE" and a badge nudged
       // far enough to be clear is a badge that has stopped saying that.
       let bpx=px, bpy=py;
-      /* AND CLEAR OF EVERY OTHER KIND OF INK TOO (2026-08-30, OA-176).
+      /* IT IS STILL BADGES AGAINST BADGES, AND THAT IS A DECISION (OA-176).
        *
-       * `badgeClash` compares badges with badges, which is what the paragraph
-       * above was about and is not what a reader sees. A member of the public
-       * read the Ramsey sheet from the outside and found the GP symbol printed
-       * over a route number, the RH2 badge sitting on other routes' lines, and
-       * the pharmacy symbol landing on an RH2 badge so that it reads "H2" — one
-       * fault, three times: this pass could not see a POI symbol, a map note, an
-       * interchange lozenge or the anchor label, because none of them is a badge.
-       * `overlaps` has known about all of them all along; nothing here asked it.
+       * This paragraph used to say that the pass had been widened to consult
+       * `overlaps` and so avoided symbols, notes and lozenges. **It had not**, and
+       * the line under it has always read `badgeClash`. The widening was built on
+       * 2026-08-30, measured board-wide, and reverted the same day because it cost
+       * 10 HARD and three printed labels — seven of the ten on High Wycombe
+       * internal alone — to remove a handful of visible overlaps: a forced badge
+       * nudged clear of a symbol lands where a label wanted to be, and on a
+       * saturated sheet the placer drops that label rather than moving it. The code
+       * went back and the prose did not, which is worse than no comment: a reader
+       * tracing why the C2 terminus badge sits inside St Neots' Church Street
+       * lozenge reads this, believes the pass already avoids one, and looks
+       * elsewhere. It did exactly that on 2026-08-30 (OA-181).
        *
-       * The prefer-then-force shape is untouched, so no badge that got a spot
-       * stops getting one: probe() still returns false and the caller still draws
-       * at the terminus. What changes is which of the twenty-five candidate spots
-       * counts as clear. */
-      const freeAt=(cx,cy,w,h)=>!badgeClash(cx,cy,w,h,2.6);
+       * ONE NARROW WIDENING DOES PAY, AND IT IS THE LOZENGE (2026-08-30, OA-181).
+       * An `internalDiagram.interchanges` lozenge is the one obstacle here that is
+       * (a) large — St Neots' *Church Street (Market Square)* is 55.46 mm wide,
+       * (b) opaque, so a badge under it is not merely crowded but INVISIBLE, and
+       * (c) already claimed in the claim phase, before anything competes. The C2
+       * terminus disc sat 5.5 mm inside that lozenge's left end and no reader
+       * could see the route number at all. Three sheets on the estate carry a
+       * lozenge, so this is nothing like the board-wide widening above: measured
+       * on the same instrument, it costs nothing anywhere else. `probe()` still
+       * forces if all twenty-five spots are taken, so no badge is ever lost. */
+      const LOZ=LOZENGES.map(z=>[z.x-z.w/2-0.5, z.y-z.h/2-0.5, z.x+z.w/2+0.5, z.y+z.h/2+0.5]);
+      const onLozenge=(cx,cy,w,h)=>LOZ.some(o=>!(cx+w<o[0]||cx-w>o[2]||cy+h<o[1]||cy-h>o[3]));
+      const freeAt=(cx,cy,w,h)=>!badgeClash(cx,cy,w,h,2.6) && !onLozenge(cx,cy,w,h);
       const probe=(w,h)=>{
         if(freeAt(px,py,w,h)) return true;
         for(const d of [4.5,7,9.5]) for(let k=0;k<8;k++){
@@ -2378,9 +2416,11 @@ if(IR && TRIM){
           if(!inFrame(p)||inCore(p)) continue;
           const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
           if(avoid){
-            // Badges AND everything else already claimed — same widening as
-            // drawTermBadges() above, and the same guarantee: the second pass
-            // still forces, so a line that needs identifying still gets a badge.
+            // Badges against badges, the same set drawTermBadges() uses and for the
+            // same measured reason — this comment claimed the wider set until
+            // 2026-08-30 and the call below never used it. The guarantee is the
+            // part that matters and is unchanged: the second pass still forces, so
+            // a line that needs identifying still gets a badge.
             const gxw=badgeXWs(grp,2.4), gh=(grp.length-1)/2*5.3+2.3;
             if(badgeClash(p[0],p[1],2.4+gxw,gh,2.4)) continue;
           }
@@ -2774,11 +2814,20 @@ if(LAB){
    *
    * Written for the compass; the scale bar is the second caller, which is why it
    * is a function rather than the inline loop it started as.
+   *
+   * `veto(b)` — an EXTRA obstacle the search knows nothing about, optional and
+   * absent for both original callers, so their answers are byte-identical. It
+   * exists because the compass is sited BEFORE the labels are solved (which is
+   * right — see north_arrow.js's header) and re-sited afterwards if one landed on
+   * it, and at that second moment the placed label boxes are the thing to avoid.
+   * They are not in `LAB.hard`, which holds what was reserved, not what was
+   * placed.
    */
-  const spotSearch = (boxOf, wantX, wantY, tol)=>{
+  const spotSearch = (boxOf, wantX, wantY, tol, veto)=>{
     const clearAt = (bx,by)=>{ const b=boxOf(bx,by);
       if(b[0]<MX0+1||b[2]>MX1-1||b[1]<MY0+1||b[3]>MY1-1) return null;
       if(LAB.hard.any(b)) return null;
+      if(veto && veto(b)) return null;
       return nav().ink.cover(b); };
     const want = (wantX!=null) ? clearAt(wantX, wantY) : null;
     if(wantX!=null && want!==null && want<=tol) return { x:wantX, y:wantY, auto:false, want };
@@ -2801,6 +2850,28 @@ if(LAB){
       +(r.placed?'-> '+r.x.toFixed(1)+','+r.y.toFixed(1)+'  ':'')+r.it.text);
   }
   out(LAB.svg());
+  /* THE COMPASS GETS A SECOND LOOK, NOW THAT THE LABELS ARE DOWN (OA-124).
+   *
+   * `site()` runs before the solve and takes the blank corner nearest a frame
+   * edge, and north_arrow.js's header defends that ordering: the arrow can go
+   * anywhere and a label cannot, so the arrow should pick first. What it cannot
+   * see from there is a `mustPlace` destination caption, which is costed heavily
+   * for entering a reserved box and never DROPPED for it — a destination is the
+   * answer to the question the sheet exists to answer. So the arrow claims the
+   * corner, and "to Chatteris" is printed straight through the N anyway, which is
+   * the collision OA-124 has carried on Ely Co-op internal since 2026-08-27 and
+   * the one moving Beaconsfield's note block produces a second time.
+   *
+   * Nothing here overrules the first pass. It fires only when a label has actually
+   * landed on the arrow, it searches with those label boxes vetoed, and it moves
+   * only if a clear spot exists — so a saturated sheet keeps exactly the output it
+   * has today, and a hand-pinned arrow is never moved at all. */
+  if(NORTH.on){
+    const LB = LAB.solve().filter(r=>r.placed && r.b).map(r=>r.b);
+    const hitsLabel = b => LB.some(o=>!(b[2]<o[0]||b[0]>o[2]||b[3]<o[1]||b[1]>o[3]));
+    NORTH.resite((boxOf,wx,wy,tol)=>spotSearch(boxOf,wx,wy,tol,hitsLabel),
+                 hitsLabel, m=>process.stderr.write(m));
+  }
   // design.exitDevice: a continuation that could not take any of its five inboard
   // positions took a foreign one instead, and that is the sheet quietly going back
   // to seven designs. Nothing measures it — the text IS placed and it is not over
@@ -2814,12 +2885,15 @@ if(LAB){
   }
   // A label the placer could not fit leaves NO trace in the SVG, which is why the
   // Phase 0 baseline could not measure silent drops at all. Write them down.
-  const un=LAB.unplaced();
-  if(un.length){
-    try{ fs.writeFileSync(DIR+'/unplaced.json', JSON.stringify(un,null,2)); }catch(e){}
-    process.stderr.write('labels: '+un.length+' could not be placed -> unplaced.json ('
-      + un.slice(0,6).map(u=>'"'+u.text+'"').join(', ') + (un.length>6?', ...':'') + ')\n');
-  } else { try{ fs.unlinkSync(DIR+'/unplaced.json'); }catch(e){} }
+  //
+  // WRITTEN AFTER THE INDEX PASS, NOT HERE (2026-08-30, OA-078). The list this
+  // file reports is "what the sheet does not say", and since the index pass a
+  // label with no room for its name can still be identified by a number. Reporting
+  // the pre-index list would name things the sheet now DOES say, and reporting only
+  // the post-index list without saying so would quietly shrink a ratcheted measure.
+  // Both are written, both are named on stderr, and the index needs the panel's
+  // bottom edge to know how many rows it can hold — so the whole report moves to
+  // after drawServicesPanel(). See writeLabelReports() near the foot of this file.
 }
 
 // title
@@ -2843,13 +2917,166 @@ for(const f of FEATURES) drawFeatureLabel(f);
 // The whole right-hand column is in services_panel.js: the Services list in its
 // four layouts, the pictogram Key, the frequency-tier rows and the fare note. It
 // draws through `out` and returns nothing — no name it declares is read below.
-drawServicesPanel({
+const PANEL = drawServicesPanel({
   out, esc, badge, badgeXWs, icon,
   OV, RJ, DESIGN, INTDESC, FONT,
   PANEL_SCALE_ON, PRINT_SAFE, FOOTER_SAFE, FOOTER_PLATE_TOP,
   CORR, CPAL, laneKey, TRIM, panelOrder, order, pois,
   FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET,
 });
+
+/* ---- THE NUMBERED PLACE INDEX (2026-08-30, OA-078) -------------------------
+ *
+ * 288 labels across the 52 committed sheets could not be placed, and every one of
+ * them left its ICON on the map: an anonymous trolley, an anonymous mortarboard,
+ * a park with no name. The reader cannot tell what it is and cannot tell that
+ * anything is missing either, which is why this was invisible for a month and why
+ * `unplaced.json` had to be invented to see it at all.
+ *
+ * `labeller.js`'s indexPass() offers each of them a NUMBER instead of its name,
+ * placed by the same solver against the same ink, and hands back the rows to
+ * print. This block prints them, in the panel column under whatever the Services
+ * panel finished with. It is the "somewhere for a displaced name to go" that
+ * OA-176 said the badge-avoidance widening needed before it could pay.
+ *
+ * HOW MANY IT ASKS FOR IS THE SPACE IT HAS, and that is deliberate. High Wycombe
+ * drops 53 names on one sheet and no A4 panel column holds 53 rows; a block that
+ * silently listed the first 20 would read as a complete index and be a lie. So the
+ * capacity is measured, the pass is asked for exactly that many, and the remainder
+ * is named on stderr as a count — which is a sheet saying out loud that it is the
+ * wrong size, and the argument OA-089 (a multi-sheet town) has been waiting for.
+ *
+ * `design.placeIndex:false` turns it off for a map that would rather keep the
+ * whitespace. Nothing else changes: a sheet with no dropped labels emits not one
+ * byte of this. */
+const PIDX = DESIGN.placeIndex;
+const IDXROWS = [];
+if(LAB && PIDX!==false && PANEL && PANEL.endY!=null){
+  const cfg = (PIDX && typeof PIDX==='object') ? PIDX : {};
+  const SZ = cfg.size!=null ? cfg.size : 2.5;         // the index row's type size
+  const PITCH = cfg.pitch!=null ? cfg.pitch : SZ*1.36;
+  const HEADSZ = cfg.headSize!=null ? cfg.headSize : 3.4;
+  const NUMW = cfg.numWidth!=null ? cfg.numWidth : 5.4;   // the number gutter
+  const X0 = PANEL.x, X1 = PANEL.x1;
+  const TOP = PANEL.endY + (cfg.gap!=null ? cfg.gap : 6.0);
+  const BOT = FOOTER_PLATE_TOP - 2.0;
+  const first = TOP + HEADSZ + 1.8;                    // baseline of row 1
+  /* HOW MANY ROWS FIT IS WALKED, NOT DIVIDED, AND IT ASKS whatBlocksInk (OA-078).
+   *
+   * The panel column is not empty below the Key. High Wycombe authors FOUR mapNotes
+   * at x=200 — "Also serving High Wycombe, not on this map:" and the three lines
+   * under it — which is a deliberate footnote inside the panel and is exactly why
+   * label_placer.js's CHROME list exempts the panel from the note warning. Dividing
+   * the distance to the footer plate would have printed the index straight through
+   * them; on the day this was written High Wycombe's index happened to be seven rows
+   * and stopped two millimetres short, which is luck and not a design.
+   *
+   * So the capacity is counted a row at a time and stops at the first row that lands
+   * on real ink. `whatBlocksInk` is the right question rather than `overlaps`,
+   * because `overlaps` says yes to the services-panel box itself — reserve(197,0,
+   * 297,210) — which is the column this block is deliberately drawn in. The probe
+   * uses the FULL column width even when two columns are about to be used, which
+   * makes it conservative in the only direction that matters. */
+  const rowBox=(y)=>[X0-0.5, y-SZ, X1, y+1];
+  let perCol=0;
+  if(!whatBlocksInk([X0-0.5, TOP, X1, TOP+HEADSZ+0.5]).length){
+    for(let y=first; y<=BOT; y+=PITCH){ if(whatBlocksInk(rowBox(y)).length) break; perCol++; }
+  }
+  if(perCol >= 2){
+    /* ASK FOR THE MOST THE BLOCK COULD HOLD, THEN USE THE FEWEST COLUMNS THAT HOLD
+     * WHAT CAME BACK. The column count decides how much width a name gets, and
+     * every column past the first is width taken away from every entry — so
+     * splitting a five-row list into two columns buys nothing and costs an
+     * ellipsis. Beaconsfield is the case: five entries, sixteen rows of room, and
+     * *St Mary and All Saints CofE Primary* was shortened to fit a half-width
+     * column that existed only because the code chose the columns before it knew
+     * how many rows there would be. The order below is the whole fix. */
+    const rows = LAB.indexPass({ size: (cfg.marker!=null?cfg.marker:2.3), max: perCol*2 });
+    const COLS = (cfg.cols!=null) ? cfg.cols : (rows.length > perCol ? 2 : 1);
+    const COLW = (X1-X0)/COLS, NAMEW = COLW - NUMW - 2.0;
+    if(rows.length){
+      out(LAB.indexSvg());                             // the markers, on the map
+      out(`<text x="${X0}" y="${(TOP+HEADSZ).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${HEADSZ}" fill="#111">${esc(cfg.heading||'Numbered on the map')}</text>`);
+      const cut=[];
+      rows.forEach((r,i)=>{
+        const c = Math.floor(i/perCol), rx = X0 + c*COLW;
+        const y = first + (i - c*perCol)*PITCH;
+        /* A NAME TOO LONG FOR ITS COLUMN IS SHORTENED, AND SAID SO. Ellipsis is a
+         * poor answer and it is the least poor one available: the alternatives are
+         * a second line (which makes the capacity depend on the layout that depends
+         * on the capacity) and a name printed across the column boundary. The full
+         * string is in indexed.json either way, and every shortened one is named on
+         * stderr so a town can shorten it deliberately in its own config. */
+        let t = r.text;
+        if(FONT.textWidth(t,SZ,false) > NAMEW){
+          while(t.length>4 && FONT.textWidth(t+'\u2026',SZ,false) > NAMEW) t=t.slice(0,-1);
+          t=t.replace(/[ ,.]+$/,'')+'\u2026'; cut.push(r.text);
+        }
+        out(`<text x="${(rx+NUMW-1.2).toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${SZ}" fill="#111" text-anchor="end">${r.n}</text>`);
+        out(`<text x="${(rx+NUMW).toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-size="${SZ}" fill="#222">${esc(t)}</text>`);
+        IDXROWS.push({ n:r.n, text:r.text, id:r.id, at:r.at });
+      });
+      if(cut.length) process.stderr.write('placeIndex: '+cut.length+' name'+(cut.length>1?'s':'')
+        +' too long for the index column and shortened with an ellipsis ('
+        + cut.slice(0,3).map(t=>'"'+t+'"').join(', ') + (cut.length>3?', ...':'')
+        + '). The full text is in indexed.json.\n');
+      /* WHICH CONSTRAINT BIT, because the two have opposite remedies. A sheet that
+       * filled the block is asking for more panel, or for a smaller Key, or — on
+       * High Wycombe, which drops fifty-three — for the multi-sheet town OA-089 has
+       * been arguing for. A sheet that did NOT fill it has names the placer could
+       * not fit even as two digits, which is a map-density problem and no amount of
+       * index will touch it. Reporting "n still unnamed" without saying which would
+       * send the reader at the wrong one. */
+      const left = LAB.stillUnplaced().length;
+      if(left && rows.length >= perCol*2) process.stderr.write('placeIndex: the index block is FULL at '
+        + rows.length + ' row' + (rows.length>1?'s':'') + ' (' + COLS + ' column' + (COLS>1?'s':'')
+        + ' of ' + perCol + ') and ' + left + ' more name' + (left>1?'s are':' is')
+        + ' still unnamed. This sheet is carrying more than an A4 panel can index.\n');
+      else if(left) process.stderr.write('placeIndex: ' + left + ' name' + (left>1?'s':'')
+        + ' could not be numbered either — the map has no room beside those symbols even '
+        + 'for two digits, and the index block still has '
+        + (perCol*2 - rows.length) + ' free row' + ((perCol*2-rows.length)===1?'':'s') + '.\n');
+    }
+  } else if(LAB.unplaced().length){
+    /* NAME WHAT IS IN THE WAY, because "no room" has two completely different causes
+     * and they have opposite remedies. High Wycombe Aldi has 18.6 mm of clear
+     * distance below its Key and five hand-authored notes sitting in it; Ely Co-op
+     * has minus ten, because its Key genuinely reaches the footer plate. A message
+     * that reported only the arithmetic sent a reader to shorten a Key that was not
+     * the problem. */
+    // De-duplicated: five map notes in a row are one answer to "what is in the way",
+    // not five, and "a map note, a map note, a map note and 2 more" reads as a bug.
+    const inTheWay = [...new Set(whatBlocksInk([X0-0.5, TOP, X1, Math.max(TOP+HEADSZ+0.5, BOT)]))];
+    process.stderr.write('placeIndex: this sheet drops '+LAB.unplaced().length+' label'
+      +(LAB.unplaced().length>1?'s':'')+' and there is no room for an index in the panel column. '
+      + (inTheWay.length
+          ? 'The space below the Key is taken by ' + inTheWay.slice(0,3).join(', ')
+            + (inTheWay.length>3 ? ' and '+(inTheWay.length-3)+' more' : '') + '.'
+          : 'The Key reaches the footer plate: ' + (BOT-first).toFixed(1) + 'mm are left below it.')
+      +' Move or shorten it if you would rather have the index, or set '
+      +'design.placeIndex:false to say the whitespace is deliberate.\n');
+  }
+}
+
+/* Both label reports, once the index is settled. `unplaced.json` is the RESIDUE —
+ * what this sheet still does not say — and `indexed.json` is what it says by
+ * number instead of by name. Splitting them is the only honest way to write either:
+ * the drop count is ratcheted in the quality ledger, so folding an indexed label
+ * into it silently would buy a target with a definition change. */
+if(LAB){
+  const still = LAB.stillUnplaced();
+  if(still.length){
+    try{ fs.writeFileSync(DIR+'/unplaced.json', JSON.stringify(still,null,2)); }catch(e){}
+  } else { try{ fs.unlinkSync(DIR+'/unplaced.json'); }catch(e){} }
+  if(IDXROWS.length){
+    try{ fs.writeFileSync(DIR+'/indexed.json', JSON.stringify(IDXROWS,null,2)); }catch(e){}
+  } else { try{ fs.unlinkSync(DIR+'/indexed.json'); }catch(e){} }
+  const all = LAB.unplaced().length;
+  if(all) process.stderr.write('labels: '+all+' could not be placed; '+IDXROWS.length
+    +' of them numbered in the place index, '+still.length+' still unnamed'
+    + (still.length ? ' -> unplaced.json (' + still.slice(0,6).map(u=>'"'+u.text+'"').join(', ')
+        + (still.length>6?', ...':'') + ')' : '') + '\n');
+}
 
 // ---- north arrow: the line, the arrowhead and the N (north_arrow.js) --------
 // Last, so it sits on top of everything; sited earlier, in the labels block, so

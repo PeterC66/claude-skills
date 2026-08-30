@@ -8,8 +8,13 @@ __pycache__/
 # Working backups (git history is the backup)
 *.bak
 
-# preview_design.js scratch output (default --out dir)
-make-bus-leaflet/assets/design-preview/
+# preview_design.js scratch output (its default --out is ./design-preview, which
+# is relative to the CWD -- so it lands under assets/ when the tool is run from
+# there and under the skill root when it is run from make-bus-leaflet, which is
+# where the documented command runs it. Only the first was ignored until
+# 2026-08-30, and a session that had previewed the estate was carrying 28
+# untracked sheets that `git add -A` would have swept into the next commit.
+design-preview/
 
 # Refactor-tool working state, not source: a recorded gate baseline and the two
 # dark-path sweeps. Each is a snapshot of ONE machine at ONE moment, and a

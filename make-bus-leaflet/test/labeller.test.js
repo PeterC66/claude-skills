@@ -252,3 +252,133 @@ test('the compass preference list is the one the costing indexes into', () => {
   assert.ok(DEFAULTS.wHard > DEFAULTS.wOffDevice,
     'overlapping a reserved symbol must cost more than leaving the device');
 });
+
+/* ---- OA-078: a NUMBER where the name would not go -------------------------
+ *
+ * 288 labels across the estate were dropped by the main solve, and every one of
+ * them left its ICON on the sheet: an anonymous trolley the reader cannot look
+ * up. indexPass() offers each one an ordinal instead, placed by the same solver.
+ *
+ * A FIXTURE PER CLAUSE, because the pass is a composition of four decisions and
+ * any three can be right while the fourth is wrong.
+ *
+ * AND THE FIXTURE HAD TO BE MEASURED INTO EXISTENCE. The first cut was four
+ * points in a tight cluster on a big page, which reads as crowded and is not:
+ * the relaxation sweep and the two leader rings between them placed all four
+ * names, so `unplaced()` was empty and every assertion below passed against
+ * nothing. What actually drops names is a ROW of points whose pitch is smaller
+ * than one name is wide — eight at 6 mm on a 70 mm page drops six of eight and
+ * still leaves room beside three of them for two digits, which is the only
+ * arrangement in which this pass can be observed doing its job at all.
+ */
+const crowd = () => {
+  const P = 70;
+  const L = new Labeller({ page: [P, P], frame: { x0: 0, y0: 0, x1: P, y1: P },
+                           bounds: { x0: 0, y0: 0, x1: P, y1: P } });
+  const A = 'Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel'.split(' ');
+  A.forEach((n, i) => L.add({ id: 'p' + i, at: [P / 2 - 7 * 6 / 2 + i * 6, P / 2],
+                              text: 'Wonderfully Long Place Name ' + n,
+                              size: 3, leader: false, wrap: false }));
+  return L;
+};
+
+test('indexPass numbers what the main solve dropped, and leaves the placed ones alone', () => {
+  const L = crowd();
+  const dropped = L.unplaced().map(u => u.text);
+  assert.ok(dropped.length >= 3, `premise: this row drops names — it dropped ${dropped.length}`);
+  const rows = L.indexPass();
+  assert.ok(rows.length >= 2, `nothing much was numbered (${rows.length}), so the pass proves nothing`);
+  for (const r of rows) assert.ok(dropped.includes(r.text), `${r.text} was already placed`);
+  // ...and the markers really are in the drawing, not merely in the return value.
+  const svg = L.indexSvg();
+  for (const r of rows) assert.match(svg, new RegExp('>' + r.n + '</text>'));
+});
+
+test('the index is numbered ALPHABETICALLY, so the printed list can be scanned', () => {
+  const rows = crowd().indexPass();
+  const byNumber = rows.slice().sort((a, b) => a.n - b.n).map(r => r.text.toUpperCase());
+  assert.deepStrictEqual(byNumber, byNumber.slice().sort(),
+    'the numbers do not run in the same order as the names, so the list is unscannable');
+  assert.deepStrictEqual(rows.map(r => r.n), rows.map((_, i) => i + 1), 'the sequence has a gap');
+});
+
+test('a marker is placed against the WIDEST ordinal the pass could issue', () => {
+  // Number 9's box must be no narrower than number 10's would have been, or a
+  // two-digit marker drawn into a one-digit box overhangs whatever is beside it.
+  //
+  // AND IT MUST START AT 8, WHICH IS THE WHOLE TEST. The first cut used the
+  // default `from: 1` on a fixture that numbers three rows, so the ordinals were
+  // 1, 2 and 3 — all one digit, all the same width — and a pass that sized every
+  // marker to its OWN digits satisfied it exactly. The mutation went uncaught and
+  // the assertion was measuring nothing. Numbering from 8 puts 9 and 10 in the
+  // same sequence, which is the only arrangement in which the two answers differ.
+  const rows = crowd().indexPass({ from: 8 });
+  assert.ok(rows.length >= 3, `need a run that crosses 9->10; got ${rows.length} rows`);
+  assert.ok(rows.some(r => String(r.n).length === 1) && rows.some(r => String(r.n).length === 2),
+    'the fixture never reached two digits, so this asserts nothing: ' + rows.map(r => r.n).join(','));
+  const w = rows.map(r => r.rec.b[2] - r.rec.b[0]);
+  assert.ok(Math.max(...w) - Math.min(...w) < 1e-9,
+    'markers were sized to their own digits: ' + w.join(', '));
+});
+
+test('a point with no room even for two digits keeps its silence', () => {
+  // The pass must not force. A number stamped on top of a route line is a number
+  // the reader can neither read nor look up — a visible failure turned invisible.
+  const L = new Labeller({ page: [12, 12], frame: { x0: 0, y0: 0, x1: 12, y1: 12 },
+                           bounds: { x0: 0, y0: 0, x1: 12, y1: 12 } });
+  L.hard.set(0, 0, 12, 12);                       // every cell reserved
+  L.add({ id: 'a', at: [6, 6], text: 'Somersham', size: 3 });
+  assert.strictEqual(L.unplaced().length, 1, 'premise: the name is dropped');
+  assert.strictEqual(L.indexPass().length, 0, 'a marker was forced onto reserved ink');
+  assert.strictEqual(L.stillUnplaced().length, 1, 'the residue lost the label it never numbered');
+});
+
+test('`max` leaves behind what the main solve already ranked last', () => {
+  const all = crowd().indexPass().length;
+  assert.ok(all >= 2, 'need at least two numbered rows for this to mean anything');
+  const one = crowd().indexPass({ max: 1 });
+  assert.strictEqual(one.length, 1, 'max was ignored');
+  // ...and the one kept is the highest-PRIORITY candidate, not the first in the
+  // array. Alphabetically 'Zulu' sorts last, so a pass that numbered in array
+  // order or in name order would keep something else.
+  const P = 70;
+  const L = new Labeller({ page: [P, P], frame: { x0: 0, y0: 0, x1: P, y1: P },
+                           bounds: { x0: 0, y0: 0, x1: P, y1: P } });
+  const A = 'Alpha Bravo Charlie Delta Echo Foxtrot Golf Zulu'.split(' ');
+  A.forEach((n, i) => L.add({ id: 'p' + i, at: [P / 2 - 7 * 6 / 2 + i * 6, P / 2],
+                              text: 'Wonderfully Long Place Name ' + n, priority: n === 'Zulu' ? 9 : 0,
+                              size: 3, leader: false, wrap: false }));
+  const dropped = L.unplaced().map(u => u.id);
+  if (dropped.includes('p7')) {
+    const kept = L.indexPass({ max: 1 });
+    assert.strictEqual(kept[0].id, 'p7', 'max kept an item the solve ranked below another');
+  }
+});
+
+test('stillUnplaced is the residue after BOTH passes, and unplaced() is not', () => {
+  const L = crowd();
+  const before = L.unplaced().length;
+  const rows = L.indexPass();
+  assert.strictEqual(L.unplaced().length, before, 'unplaced() must keep meaning what it meant');
+  assert.strictEqual(L.stillUnplaced().length, before - rows.length);
+  assert.ok(L.stillUnplaced().length >= 1, 'a residue of zero cannot tell the two apart');
+});
+
+test('a caller that never asks for an index changes not one byte', () => {
+  const a = crowd(), b = crowd();
+  b.indexPass();
+  assert.strictEqual(a.svg(), b.svg(), 'the index pass moved the main answer');
+  assert.strictEqual(a.indexSvg(), '', 'markers were drawn without indexPass()');
+});
+
+test('`gap` is read, and an absent one is the default distance', () => {
+  // The index marker asks to sit closer than a name would. Proving the option is
+  // READ needs a page where the two answers differ, not merely one where it fits.
+  const at = [50, 50];
+  const far = page().add({ id: 'a', at, text: 'X', size: 3 }).solve()[0];
+  const near = page().add({ id: 'a', at, text: 'X', size: 3, gap: 1.0 }).solve()[0];
+  assert.ok(near.x - at[0] < far.x - at[0] - 1e-9,
+    `gap ignored: default put the box at ${far.x}, gap:1.0 at ${near.x}`);
+  const dflt = page().add({ id: 'a', at, text: 'X', size: 3, gap: DEFAULTS.gap }).solve()[0];
+  assert.strictEqual(dflt.x, far.x, 'stating the default gap changed the answer');
+});

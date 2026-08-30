@@ -3,9 +3,9 @@
  *
  * CONTRACT. `northArrow({IR, theta})` returns the device: `on` (false when the
  * town has `internalRoads.northArrow:false`, or has no internalRoads at all),
- * `at` — the resolved base point, MUTABLE because the search below moves it —
- * `box(x,y)` for the whole footprint, `site(spotSearch, reserve, warn)` and
- * `draw(out)`. It reads no files, writes none, and touches the document only
+ * `at` — the resolved base point, MUTABLE because the two searches below move it —
+ * `box(x,y)` for the whole footprint, `site(spotSearch, reserve, warn)`,
+ * `resite(spotSearch, hit, warn)` and `draw(out)`. It reads no files, writes none, and touches the document only
  * through the `out` it is handed.
  * Extracted verbatim from gen_internal.js on 2026-08-27 (OA-129 Phase 3).
  *
@@ -54,6 +54,46 @@ function northArrow({ IR, theta }){
     reserve(...box(at.x, at.y));
   };
 
+  /* A SECOND LOOK, ONCE THE LABELS ARE DOWN (2026-08-30, OA-124).
+   *
+   * `site()` deliberately runs before the labels are solved, and the header above
+   * says why: the arrow gets first pick of what is blank because it can go
+   * anywhere and a label cannot. That is right for every label the placer is free
+   * to move, and wrong for the one kind it is not — a `mustPlace` destination
+   * caption, which labeller.js costs at `wHard` for entering a reserved box and
+   * never drops for it. The arrow takes the corner; the caption is printed through
+   * it regardless; and the reader gets "to Chatteris" across the N.
+   *
+   * So: if something actually landed on the footprint, look again knowing where
+   * the labels went, and move ONLY if there is somewhere clear. `hit(b)` names the
+   * problem or returns false; `spotSearch` is the caller's, already vetoing the
+   * placed label boxes. A hand-pinned arrow (`internalRoads.northArrow:{x,y}` that
+   * site() accepted) is left alone — a stated position is a decision, and this
+   * pass is for the automatic one. Nothing moves on a sheet with nowhere to move
+   * to, so an unchanged sheet stays byte-identical.
+   *
+   * The box site() reserved is deliberately NOT withdrawn. Everything that reads a
+   * reservation has already run by the time this fires, so withdrawing it would
+   * change nothing except to make the two passes disagree about what was claimed.
+   */
+  const resite = (spotSearch, hit, warn) => {
+    if(!on) return false;
+    if(!at.auto && NA.x!=null && NA.y!=null) return false;   // hand-pinned: a decision
+    if(!hit(box(at.x, at.y))) return false;                  // nothing landed on it
+    const got = spotSearch(box, null, null, 0.02);
+    if(got.x===null){
+      warn('northArrow: a label is printed through the compass at '+at.x+','+at.y
+        +' and there is no clear spot left to move it to. Set '
+        +'internalRoads.northArrow:{x,y} to a corner you are happy with, or '
+        +'internalRoads.northArrow:false.\n');
+      return false;
+    }
+    warn('northArrow: a label was placed across the compass at '+at.x+','+at.y
+      +' \u2014 moved to '+got.x+','+got.y+' (nearest clear corner, labels included).\n');
+    at.x=got.x; at.y=got.y; at.auto=true;
+    return true;
+  };
+
   /* The line, the arrowhead and the N, at whatever spot site() settled on. */
   const draw = (out) => {
     // Position resolved above: the configured {x,y} when it is clear, otherwise the
@@ -69,7 +109,7 @@ function northArrow({ IR, theta }){
     out(`<text x="${(tx+c*3).toFixed(2)}" y="${(ty+s*3+1).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="3.4" fill="#666" text-anchor="middle">N</text>`);
   };
 
-  return { on, at, box, len: LEN, angle: ANG, site, draw };
+  return { on, at, box, len: LEN, angle: ANG, site, resite, draw };
 }
 
 module.exports = { northArrow };

@@ -23,9 +23,15 @@
  *   footerSafe:false        0 maps — KROW_FIT's early return.
  *   fareNote                0 maps — the highlighted box is drawn by no sheet.
  *
- * The panel is a pure sink: `drawServicesPanel` returns nothing, so every
- * assertion here reads the lines it appended or the stderr it wrote. Both are
- * captured by `run()` below.
+ * The panel WAS a pure sink: it returned nothing, so every assertion here read
+ * the lines it appended or the stderr it wrote, both captured by `run()` below.
+ * Since 2026-08-30 (OA-078) it also returns `{x, x1, endY}`, because the numbered
+ * place index is drawn under it and the bottom of this panel is four different
+ * values depending on which list layout ran, whether `frequencyTiers` added rows
+ * and whether there is a `fareNote`. The last block in this file is that value,
+ * and it is tested against the ink actually emitted rather than against the
+ * arithmetic that produced it — which is the only way an endY can be wrong
+ * without any of the drawing being wrong.
  */
 'use strict';
 const test = require('node:test');
@@ -76,8 +82,9 @@ const run = (over = {}) => {
   const real = process.stderr.write.bind(process.stderr);
   let err = '';
   process.stderr.write = (s) => { err += s; return true; };
-  try { drawServicesPanel(deps); } finally { process.stderr.write = real; }
-  return { lines, svg: lines.join('\n'), err };
+  let ret;
+  try { ret = drawServicesPanel(deps); } finally { process.stderr.write = real; }
+  return { lines, svg: lines.join('\n'), err, ret };
 };
 
 // A named text element's font-size, as drawn. The panel is one long string of
@@ -347,4 +354,57 @@ test('the not-shown note falls back to the short form, then keeps the subtitle',
   });
   assert.match(nothing.err, /panel: service 1 draws no line, but its row has no room to say so/);
   assert.ok(!/xxx|yyy/.test(nothing.svg), 'neither note is drawn when neither fits');
+});
+
+// ---------------------------------------------------------------------------
+// endY — where the panel finished (OA-078). The index block is drawn under it.
+// ---------------------------------------------------------------------------
+
+// The lowest baseline of anything the panel actually emitted. Read off the ink,
+// not recomputed from the layout constants: a test that repeats the arithmetic
+// agrees with the code by construction and cannot catch the code being wrong.
+// The sheet writes many coordinates through toFixed(2), so the ink is quantised
+// to a hundredth of a millimetre and endY is not. Compare at that resolution.
+const ROUND = 0.01;
+const lowestInk = (svg) => {
+  let low = -Infinity;
+  for (const m of svg.matchAll(/<(?:text|path|rect)\b[^>]*?\sy="([-\d.]+)"/g)) low = Math.max(low, +m[1]);
+  for (const m of svg.matchAll(/<path\b[^>]*\sd="M[-\d.]+ ([-\d.]+)/g)) low = Math.max(low, +m[1]);
+  return low;
+};
+
+test('the panel reports the column it drew in and the y it finished at', () => {
+  const r = run();
+  assert.ok(r.ret && typeof r.ret === 'object', 'drawServicesPanel returned nothing');
+  assert.strictEqual(r.ret.x, 200, 'the default panel column starts at x=200');
+  assert.strictEqual(r.ret.x1, 292, 'PRINT_SAFE 5 puts the far edge at 297-5');
+  assert.ok(r.ret.endY > 0 && r.ret.endY < 187.6, `endY ${r.ret.endY} is not inside the panel`);
+});
+
+test('endY is at or below the last thing the panel drew, and not far below it', () => {
+  const r = run();
+  const ink = lowestInk(r.svg);
+  assert.ok(r.ret.endY >= ink - ROUND,
+    `endY ${r.ret.endY} is ABOVE the last ink at ${ink} — the index would be drawn on top of the Key`);
+  assert.ok(r.ret.endY - ink < 6,
+    `endY ${r.ret.endY} is ${(r.ret.endY - ink).toFixed(1)}mm below the last ink at ${ink} — that is wasted panel`);
+});
+
+test('endY follows the FREQUENCY TIER rows, which are drawn after the pictograms', () => {
+  const without = run();
+  const withTiers = run({ FTIER: { frequent: { mm: 4 }, limited: { mm: 1.6, dash: '2 2' } },
+                          RJ: { panelRow: 8, keyRow: 4.4, panelBadge: 4, internalDesc: undefined,
+                                frequency: { 1: 'frequent', 2: 'limited', 3: 'frequent' } } });
+  assert.ok(withTiers.ret.endY > without.ret.endY,
+    'the tier rows extend the panel and endY did not move');
+  assert.ok(withTiers.ret.endY >= lowestInk(withTiers.svg) - ROUND,
+    'endY is above the last tier row');
+});
+
+test('...and the FARE NOTE, which is drawn after those', () => {
+  const plain = run();
+  const fare = run({ RJ: { panelRow: 8, keyRow: 4.4, panelBadge: 4, internalDesc: undefined,
+                           fareNote: 'A single fare is capped at three pounds until the end of the year.' } });
+  assert.ok(fare.ret.endY > plain.ret.endY, 'the fare note extends the panel and endY did not move');
+  assert.ok(fare.ret.endY >= lowestInk(fare.svg) - ROUND, 'endY is above the fare note');
 });

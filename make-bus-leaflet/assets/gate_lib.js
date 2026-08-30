@@ -389,13 +389,24 @@ function detectExternalStyle(s4Dir) {
 // a config change can always be previewed with the same expression that commits
 // it. Refuses to create a missing path — a typo should be an error, not a new key
 // nothing reads. Returns a one-line change description, or null for a no-op.
+//
+// '+' IN FRONT OF THE PATH ADDS THE LEAF (2026-08-30, OA-181). The refusal above
+// is right and is unchanged for every path without it; what it also refused was
+// adding a key the engine has only just learned to read. `mapNotes[]` is an
+// array, so --set and --patch cannot reach inside it at all and --set-path is the
+// only route in — which left `mapNotes.0.w`, the wrap width OA-181 added,
+// reachable by nothing but hand-editing a committed S3. Only the LAST segment may
+// be created: a typo in the middle of the path is still an error, because a
+// mistyped parent is the mistake this guard was written for.
 function parseSetPath(s) {
+  const create = s.startsWith('+');
+  if (create) s = s.slice(1);
   const i = s.indexOf('=');
   if (i < 1) throw new Error("--set-path wants '<dotted.path>=<json>', got: " + s);
   const raw = s.slice(i + 1);
   let value;
   try { value = JSON.parse(raw); } catch (e) { value = raw; }   // bare words/strings are fine
-  return { path: s.slice(0, i), value };
+  return { path: s.slice(0, i), value, create };
 }
 function applySetPath(obj, spec) {
   const parts = spec.path.split('.');
@@ -406,7 +417,9 @@ function applySetPath(obj, spec) {
     o = o[k];
   }
   const last = /^\d+$/.test(parts[parts.length - 1]) ? +parts[parts.length - 1] : parts[parts.length - 1];
-  if (o == null || typeof o !== 'object' || !(last in o)) throw new Error('--set-path: no such path: ' + spec.path);
+  if (o == null || typeof o !== 'object') throw new Error('--set-path: no such path: ' + spec.path);
+  if (!(last in o) && !spec.create) throw new Error('--set-path: no such path: ' + spec.path
+    + " \u2014 prefix the expression with '+' if you mean to ADD it");
   if (JSON.stringify(o[last]) === JSON.stringify(spec.value)) return null;
   const was = JSON.stringify(o[last]);
   o[last] = spec.value;

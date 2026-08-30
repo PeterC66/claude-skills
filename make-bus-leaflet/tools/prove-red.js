@@ -1260,6 +1260,20 @@ const MUTATIONS = [
     find: "    const fb = fy+(lines.length-1)*3.6+1.6;",
     to: "    const fb = -Infinity;" },
 
+  /* gate_lib.js --set-path '+' (2026-08-30, OA-181). The guard and the escape
+   * hatch are one line apart, and breaking either is silent: one makes every
+   * typo a new key nothing reads, the other makes a new engine key unreachable
+   * from the only tool allowed to write a committed S3. */
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: "--set-path creates any missing leaf, so a typo becomes a new key nothing reads",
+    find: "  if (!(last in o) && !spec.create) throw new Error('--set-path: no such path: ' + spec.path",
+    to: "  if (false) throw new Error('--set-path: no such path: ' + spec.path" },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: "the '+' prefix is parsed off but never acted on, so a new key in an array element stays unreachable",
+    find: "  const create = s.startsWith('+');",
+    to: "  const create = false; if (s.startsWith('+')) s = s.slice(0);" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

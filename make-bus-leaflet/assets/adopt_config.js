@@ -43,7 +43,11 @@
  *                     --set-path 'internalDiagram.mapNotes.0.y=180'
  *                     --set-path 'features.1.style={"width":1.4}'
  *                   Refuses to create a missing path, so a typo is an error
- *                   rather than a new key nothing reads.
+ *                   rather than a new key nothing reads. Prefix the whole
+ *                   expression with '+' when you DO mean to add the last
+ *                   segment — the only way to reach a new key inside an array
+ *                   element, and how OA-181 reached mapNotes' new wrap width:
+ *                     --set-path '+mapNotes.0.w=110'
  *   --note "..."    the S3 commit note
  *   --apply         actually write and commit
  *

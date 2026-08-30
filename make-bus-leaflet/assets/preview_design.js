@@ -29,6 +29,10 @@
  *                     expression adopt_config.js takes, so what you preview is
  *                     what you commit:
  *                       --set-path 'internalDiagram.mapNotes.0.y=180'
+ *                     A leading '+' ADDS the last segment instead of refusing an
+ *                     unknown one, which is the only way to reach a NEW key
+ *                     inside an array element:
+ *                       --set-path '+mapNotes.0.w=110'
  *   --unset <path>    dotted path to delete, repeatable (e.g. internalRoads.northArrow)
  *   --render          also write JPGs beside the SVGs
  *   --keep            leave the build workspace on disk and print its path, for

@@ -192,8 +192,53 @@ test('--set-path reports what it changed, and stays quiet when nothing moved', (
 });
 
 test('--set-path parses a bare word as a string and JSON as JSON', () => {
-  assert.deepStrictEqual(G.parseSetPath('a.b=north'), { path: 'a.b', value: 'north' });
-  assert.deepStrictEqual(G.parseSetPath('a.b=false'), { path: 'a.b', value: false });
-  assert.deepStrictEqual(G.parseSetPath('a.b=-66'), { path: 'a.b', value: -66 });
+  // `create` joined the shape on 2026-08-30 (OA-181) and this is a deep-equal, so
+  // the third field is stated rather than tolerated: a spec object that grows a
+  // key nobody named is how two tools end up disagreeing about the same string.
+  assert.deepStrictEqual(G.parseSetPath('a.b=north'), { path: 'a.b', value: 'north', create: false });
+  assert.deepStrictEqual(G.parseSetPath('a.b=false'), { path: 'a.b', value: false, create: false });
+  assert.deepStrictEqual(G.parseSetPath('a.b=-66'), { path: 'a.b', value: -66, create: false });
+  assert.deepStrictEqual(G.parseSetPath('+a.b=-66'), { path: 'a.b', value: -66, create: true });
   assert.throws(() => G.parseSetPath('nothing-to-set'), /wants/);
+  assert.throws(() => G.parseSetPath('+nothing-to-set'), /wants/);
+});
+
+/* ---- --set-path, and the '+' that adds a leaf (2026-08-30, OA-181) ---------
+ *
+ * The refusal to create a missing path is the guard that turns a typo into an
+ * error. What it also did was make a NEW key inside an array element
+ * unreachable: mapNotes[] is an array, --set/--patch cannot descend into one,
+ * and --set-path was the only route in — so `mapNotes.0.w`, added the same day,
+ * could be written by nothing but a hand edit to a committed S3.
+ *
+ * Four clauses and four fixtures, and the third is the one that matters: the
+ * guard has to keep biting in the middle of the path, because a mistyped PARENT
+ * is the mistake it was written for and '+' must not buy silence about it.
+ */
+test("--set-path refuses an unknown leaf, and says how to mean it", () => {
+  const o = { mapNotes: [{ text: 'x', y: 185 }] };
+  assert.throws(() => G.applySetPath(o, G.parseSetPath('mapNotes.0.w=110')),
+    /no such path: mapNotes\.0\.w.*'\+'/s);
+  assert.deepStrictEqual(o, { mapNotes: [{ text: 'x', y: 185 }] }, 'it wrote anyway');
+});
+
+test("...and a leading '+' ADDS the last segment", () => {
+  const o = { mapNotes: [{ text: 'x', y: 185 }] };
+  const said = G.applySetPath(o, G.parseSetPath('+mapNotes.0.w=110'));
+  assert.strictEqual(o.mapNotes[0].w, 110);
+  assert.match(said, /^mapNotes\.0\.w: /, 'the change was not described');
+});
+
+test("...but only the LAST segment: a mistyped parent is still an error", () => {
+  const o = { mapNotes: [{ text: 'x' }] };
+  assert.throws(() => G.applySetPath(o, G.parseSetPath('+mapNotez.0.w=110')), /no such path: mapNotez/);
+  assert.throws(() => G.applySetPath(o, G.parseSetPath('+mapNotes.7.w=110')), /no such path: mapNotes\.7/);
+  assert.deepStrictEqual(o, { mapNotes: [{ text: 'x' }] }, 'a bad parent was created');
+});
+
+test("an existing leaf is unchanged by the '+', and a no-op still reports null", () => {
+  const o = { design: { placeIndex: false } };
+  assert.strictEqual(G.applySetPath(o, G.parseSetPath('+design.placeIndex=false')), null);
+  assert.strictEqual(G.applySetPath(o, G.parseSetPath('design.placeIndex=true')), 'design.placeIndex: false -> true');
+  assert.strictEqual(o.design.placeIndex, true);
 });

@@ -408,3 +408,78 @@ test('...and the FARE NOTE, which is drawn after those', () => {
   assert.ok(fare.ret.endY > plain.ret.endY, 'the fare note extends the panel and endY did not move');
   assert.ok(fare.ret.endY >= lowestInk(fare.svg) - ROUND, 'endY is above the fare note');
 });
+
+// ---------------------------------------------------------------------------
+// rhythm — the heading spacing, exported so a second caller cannot invent one
+// ---------------------------------------------------------------------------
+
+/* WHY THIS IS TESTED HERE AND NOT WHERE IT IS USED. The numbered place index
+ * (OA-078) draws a third section heading below this panel, in gen_internal.js,
+ * and its first cut spaced it by hand — 1.8 mm from the heading's baseline to
+ * the first entry's, which is the entry's cap-height and nothing else, so the
+ * heading sat closer to its list than the list's rows sat to each other. Peter
+ * found it on the shipped sheets. The fix was to export the formula rather than
+ * re-derive it, and what can silently rot after that is the EXPORT: a `rhythm`
+ * whose gapDown is not the one the panel itself uses would put the index on a
+ * rhythm of its own again, and every byte gate would stay green because the
+ * panel's own ink would be unchanged.
+ *
+ * So the assertion is not "gapDown returns 5.71". It is that the exported
+ * formula reproduces, from the emitted ink, the spacing the panel gives its OWN
+ * Key heading. Break the formula and this fails; change the formula deliberately
+ * and the panel moves with it, which is the whole point of sharing it. */
+
+// The baseline of the first row of a section, read off the drawn <text>.
+const baselineOf = (svg, words) => {
+  const m = new RegExp(`<text[^>]*\\by="([-\\d.]+)"[^>]*>${words}</text>`).exec(svg);
+  assert.ok(m, `no <text> reading ${JSON.stringify(words)} in the panel`);
+  return +m[1];
+};
+
+test('the panel hands out the heading rhythm it uses itself', () => {
+  const r = run();
+  const R = r.ret.rhythm;
+  assert.ok(R && typeof R.gapDown === 'function', 'drawServicesPanel returned no rhythm');
+  for (const k of ['CAP', 'DESC', 'AIR_BELOW_HEAD', 'AIR_ABOVE_HEAD']) {
+    assert.strictEqual(typeof R[k], 'number', `rhythm.${k} is missing`);
+  }
+  // Arial's real proportions and the panel's own air, stated so a silent edit shows up.
+  assert.strictEqual(R.CAP, 0.72);
+  assert.strictEqual(R.DESC, 0.21);
+  assert.strictEqual(R.AIR_BELOW_HEAD, 3.2);
+  assert.strictEqual(R.AIR_ABOVE_HEAD, 5.0);
+  assert.ok(Math.abs(R.gapDown(3.4, R.AIR_BELOW_HEAD, 2.5 * R.CAP) - 5.714) < 0.001,
+    'gapDown is no longer from*DESC + air + rise');
+});
+
+test('...and the Key heading on the drawn sheet really is that far above its first row', () => {
+  // The panel's own instance of the thing the index reuses. `Supermarket` is the
+  // first pictogram row of the fixture's Key, and RISE_KEY is what its symbol
+  // stands above the baseline — the pictogram, not the cap-height, because the
+  // pictogram is what the eye reads as the top of the row.
+  const r = run();
+  const R = r.ret.rhythm;
+  const head = baselineOf(r.svg, 'Key');
+  const row1 = baselineOf(r.svg, 'Supermarket') - 1;      // the row's text sits at ky+1
+  const RISE_KEY = Math.max(2.9 * R.CAP, 2.0 + 1);
+  const want = R.gapDown(5.0, R.AIR_BELOW_HEAD, RISE_KEY) - 1;   // KFIRST's own -1
+  assert.ok(Math.abs((row1 - head) - want) < 0.01,
+    `Key heading to first row is ${(row1 - head).toFixed(2)}mm, the exported rhythm says ${want.toFixed(2)}mm`);
+});
+
+test('a heading is further from its first row than the rows are from each other', () => {
+  // The property Peter actually reported, stated as a rule rather than a number:
+  // a heading closer to its list than the list's own pitch reads as the first
+  // item of the list. True of the Key here, and it is what the place index broke.
+  // keyCols:1, because the fixture's two Key rows sit SIDE BY SIDE in the default
+  // two columns and their pitch is therefore zero. The premise assertion below
+  // caught that on the first run, which is what it is for.
+  const r = run({ DESIGN: { keyCols: 1 } });
+  const head = baselineOf(r.svg, 'Key');
+  const row1 = baselineOf(r.svg, 'Supermarket');
+  const row2 = baselineOf(r.svg, 'Doctors / GP');
+  const pitch = row2 - row1;
+  assert.ok(pitch > 0, 'premise: the Key has at least two rows in ONE column');
+  assert.ok((row1 - head) > pitch,
+    `heading sits ${(row1 - head).toFixed(2)}mm above its first row but the rows are ${pitch.toFixed(2)}mm apart`);
+});

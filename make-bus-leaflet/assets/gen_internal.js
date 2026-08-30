@@ -2958,9 +2958,33 @@ if(LAB && PIDX!==false && PANEL && PANEL.endY!=null){
   const HEADSZ = cfg.headSize!=null ? cfg.headSize : 3.4;
   const NUMW = cfg.numWidth!=null ? cfg.numWidth : 5.4;   // the number gutter
   const X0 = PANEL.x, X1 = PANEL.x1;
-  const TOP = PANEL.endY + (cfg.gap!=null ? cfg.gap : 6.0);
+  /* SPACED ON THE PANEL'S OWN RHYTHM, not on a number chosen here (2026-08-30).
+   *
+   * `gapDown(from, air, rise)` is `from*DESC + air + rise`: the baseline-to-
+   * baseline distance that leaves `air` mm of clear space between one line's
+   * descenders and the topmost ink of the next. It is what sets `Services` above
+   * its first badge and `Key` above its first pictogram, and this heading is the
+   * third instance of the same thing.
+   *
+   * The first cut put the first entry 1.8 mm below the heading's baseline, which
+   * is `SZ * CAP` — the entry's cap-height alone, with the heading's descender
+   * and every millimetre of air left out. Under a 3.4 mm heading that is HALF the
+   * 3.4 mm pitch between the entries, so the heading read as the first item of
+   * its own list. Peter found it on the shipped sheets; the arithmetic says 5.71
+   * against 1.8. The gap ABOVE the heading was 2 mm tight for the same reason and
+   * is now `AIR_ABOVE_HEAD` like the Key's, so the two headings match. */
+  const RH = PANEL.rhythm;
+  /* EVERY y HERE IS A BASELINE, because gapDown() returns a baseline-to-baseline
+   * distance and the first attempt at this measured from the top of the heading's
+   * box instead. That put the first entry 5.71 - 3.4 = 2.31 mm below the heading
+   * rather than 5.71 — barely more than the 1.8 it was replacing, and invisible in
+   * the arithmetic, which was correct. It took a 300 dpi crop of the panel to see
+   * that nothing had really moved. */
+  const HEADBASE = (cfg.gap!=null) ? PANEL.endY + cfg.gap + HEADSZ
+                 : PANEL.endY + RH.gapDown(2.9, RH.AIR_ABOVE_HEAD, HEADSZ*RH.CAP);
+  const first = HEADBASE + RH.gapDown(HEADSZ, RH.AIR_BELOW_HEAD, SZ*RH.CAP);  // baseline of row 1
+  const TOP = HEADBASE - HEADSZ;                       // top of the heading's box, for the probe
   const BOT = FOOTER_PLATE_TOP - 2.0;
-  const first = TOP + HEADSZ + 1.8;                    // baseline of row 1
   /* HOW MANY ROWS FIT IS WALKED, NOT DIVIDED, AND IT ASKS whatBlocksInk (OA-078).
    *
    * The panel column is not empty below the Key. High Wycombe authors FOUR mapNotes
@@ -2996,7 +3020,7 @@ if(LAB && PIDX!==false && PANEL && PANEL.endY!=null){
     const COLW = (X1-X0)/COLS, NAMEW = COLW - NUMW - 2.0;
     if(rows.length){
       out(LAB.indexSvg());                             // the markers, on the map
-      out(`<text x="${X0}" y="${(TOP+HEADSZ).toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${HEADSZ}" fill="#111">${esc(cfg.heading||'Numbered on the map')}</text>`);
+      out(`<text x="${X0}" y="${HEADBASE.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${HEADSZ}" fill="#111">${esc(cfg.heading||'Numbered on the map')}</text>`);
       const cut=[];
       rows.forEach((r,i)=>{
         const c = Math.floor(i/perCol), rx = X0 + c*COLW;

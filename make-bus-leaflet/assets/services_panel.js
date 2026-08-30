@@ -2,8 +2,10 @@
  * services_panel.js — the sheet's right-hand column: the Services list, the
  * pictogram Key, the frequency-tier rows and the fare note.
  *
- * CONTRACT. `drawServicesPanel(deps)` draws, and returns `{x, x1, endY}` — the
- * column it drew in and the y of the last thing it put in it. It returned NOTHING
+ * CONTRACT. `drawServicesPanel(deps)` draws, and returns `{x, x1, endY, rhythm}`
+ * — the column it drew in, the y of the last thing it put in it, and the heading
+ * spacing formula so that whatever draws next below it lands on the same rhythm
+ * as `Services` and `Key` rather than inventing one. It returned NOTHING
  * until 2026-08-30, and that was the measured interface: every one of the thirty-odd
  * names the block declares (`PX`, `py`, `PS`, `lastSubY`, `KROW_FIT`, `KEYROWS` …)
  * was checked for a use below the block and not one had one, so the panel was a pure
@@ -679,7 +681,15 @@ function drawServicesPanel(deps) {
     const fb = fy+(lines.length-1)*3.6+1.6;
     if(fb>endY) endY=fb;
   }
-  return { x: PX, x1: (PRINT_SAFE!=null ? 297-PRINT_SAFE : 294), endY };
+  /* `rhythm` — the panel's heading spacing, handed out rather than copied.
+   * The numbered place index (OA-078) draws a third section heading below this
+   * panel, and its first cut spaced it by hand: 1.8 mm from the heading's
+   * baseline to the first entry's, which is `SZ * CAP` and nothing else — one
+   * term of the three below, so the heading sat closer to its list than the
+   * list's own rows sat to each other. Exporting the formula is what stops a
+   * fourth caller inventing a fifth answer. */
+  return { x: PX, x1: (PRINT_SAFE!=null ? 297-PRINT_SAFE : 294), endY,
+           rhythm: { gapDown, CAP, DESC, AIR_BELOW_HEAD, AIR_ABOVE_HEAD } };
 }
 
 module.exports = { drawServicesPanel };

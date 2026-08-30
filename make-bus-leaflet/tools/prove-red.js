@@ -1274,6 +1274,22 @@ const MUTATIONS = [
     find: "  const create = s.startsWith('+');",
     to: "  const create = false; if (s.startsWith('+')) s = s.slice(0);" },
 
+  /* services_panel.js `rhythm` (2026-08-30). The place index draws its heading on
+   * this formula instead of a number of its own, after the first cut put its first
+   * entry 1.8mm below the heading -- half the pitch between the entries. What can
+   * rot silently now is the EXPORT: a rhythm that is not the panel's own would put
+   * the index back on a spacing of its own with every byte gate green, because the
+   * panel's own ink would not move. */
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the exported rhythm drops the air below a heading, so anything drawing under the panel crowds its own first row',
+    find: "           rhythm: { gapDown, CAP, DESC, AIR_BELOW_HEAD, AIR_ABOVE_HEAD } };",
+    to: "           rhythm: { gapDown: (f,a,r)=>f*DESC+r, CAP, DESC, AIR_BELOW_HEAD, AIR_ABOVE_HEAD } };" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key heading is drawn on the row pitch instead of the heading rhythm, so it reads as the first item of its own list',
+    find: "  const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;",
+    to: "  const KFIRST = PS ? PS.sub*CAP : 5;" },
+
 ];
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));

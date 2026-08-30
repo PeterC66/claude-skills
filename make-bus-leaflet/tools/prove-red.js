@@ -530,7 +530,11 @@ const MUTATIONS = [
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: 'the file NAME drops out of the engine hash',
-    find: "h.update(name + '\\0');", to: 'h.update("");' },
+    // Re-anchored 2026-08-30: computePlaceEngineVersion() runs the same loop over
+    // the town closure, so the bare line now appears twice. The anchor carries the
+    // function head with it rather than being loosened.
+    find: "function computeEngineVersion(sk = SK) {\n  const h = crypto.createHash('sha256');\n  for (const name of engineFiles(sk)) {\n    const p = path.join(sk, name);\n    h.update(name + '\\0');",
+    to: "function computeEngineVersion(sk = SK) {\n  const h = crypto.createHash('sha256');\n  for (const name of engineFiles(sk)) {\n    const p = path.join(sk, name);\n    h.update(\"\");" },
 
   // Re-anchored 2026-08-28: sameIgnoringLineEndings stopped normalising inline
   // and now compares BYTES through line_endings.js, so the mutation has to break
@@ -852,12 +856,14 @@ const MUTATIONS = [
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: "path.join(__dirname,\"x.js\") is no longer followed, so font_metrics.js and qr.js leave the hash",
-    find: "  /path\\.join\\([^()]*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,             // path.join(<dir>, 'x.js')",
-    to: "  /path\\.NEVER\\([^()]*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,            // path.join(<dir>, 'x.js')" },
+    // Re-anchored 2026-08-30: the pattern gained one level of nested parens.
+    find: "  /path\\.join\\((?:[^()]|\\([^()]*\\))*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g, // path.join(<dir expr>, 'x.js')",
+    to: "  /path\\.NEVER\\((?:[^()]|\\([^()]*\\))*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g, // path.join(<dir expr>, 'x.js')" },
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: "the closure comes back in discovery order, so reordering two requires reports a different engine",
-    find: "  return [...seen].sort();",
+    // Re-anchored 2026-08-30: placeEngineFiles() ends with the same line.
+    find: "  // Sorted, so the hash cannot depend on the order the requires happen to appear\n  // in \u2014 an extraction reorders them constantly.\n  return [...seen].sort();",
     to: "  return [...seen];" },
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
@@ -1074,6 +1080,75 @@ const MUTATIONS = [
     what: "the busway footer states a date of its own again",
     find: "cross-checked with operators at bustimes.org${D.checkedAt ? `, ${D.checkedAt}` : ''}.`,",
     to: "cross-checked with operators at bustimes.org, June 2026.`," },
+
+  // dash_fit.js - extracted 2026-08-30 from three copies of the same primitive
+  // (OA-167). The whole reason it exists is that a comment saying "change one,
+  // change all three" failed TWICE, so the mutations below are what the comment
+  // could not be. Note the first one especially: it restores the design that was
+  // tried, measured and REJECTED, and a suite that stays green under it is a suite
+  // that would let the rejected design come back.
+  { suite: 'dash_fit.test.js', file: 'dash_fit.js',
+    what: 'the fit target goes back to a whole number of cycles - the design measured on 2026-08-29 and rejected, which took the estate from 2 slivers to SIX',
+    find: "const DASH_TARGET = (DASH_ON + DASH_OFF / 2) / DASH_CYCLE;",
+    to: "const DASH_TARGET = 1;" },
+
+  { suite: 'dash_fit.test.js', file: 'dash_fit.js',
+    what: 'tailInk always answers zero, so every pattern looks clean and the measure certifies whatever it is given',
+    find: "  return r < on ? r : 0;",
+    to: "  return 0;" },
+
+  { suite: 'dash_fit.test.js', file: 'dash_fit.js',
+    what: 'polylineLength measures the straight line between the ends instead of the drawn path, so a multi-point spoke is fitted to the wrong length',
+    find: "    len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);",
+    to: "    len = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]);" },
+
+  // build_log.js MEASURED - the third severity (OA-118, 2026-08-30). Two of the
+  // three below are about ORDER and ANCHORING rather than about the pattern, which
+  // is where this rule can actually go wrong: it is the one rule in that file that
+  // classifies on a prefix, and both of its neighbours are phrase rules.
+  { suite: 'build_log.test.js', file: 'build_log.js',
+    what: 'the phrase rules are consulted before the measurement prefix, so a measurement whose payload says "not drawn" is filed as a refusal and blocks the build',
+    find: "  if (MEASURED.test(String(line))) return 'MEASURED';\n  return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)\n          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';",
+    to: "  const base = (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)\n          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';\n  return base === 'WARN' && MEASURED.test(String(line)) ? 'MEASURED' : base;" },
+
+  { suite: 'build_log.test.js', file: 'build_log.js',
+    what: 'the measurement pattern loses its start anchor, so any message merely CONTAINING "measure:" is reclassified as a number and stops being read as a fault',
+    find: "const MEASURED = /^\\s*measure:\\s/;",
+    to: "const MEASURED = /measure:\\s/;" },
+
+  { suite: 'build_log.test.js', file: 'build_log.js',
+    what: 'measurements are counted with the warnings again, so every build reports more faults than it has the moment a number is recorded',
+    find: "  const nw = entries.length - nm;",
+    to: "  const nw = entries.length;" },
+
+  // engine_version.js - the PLACE template (OA-168, 2026-08-30). Every one of
+  // these leaves the TOWN hash working perfectly, which is exactly the state the
+  // row records: 12 place maps carried a current-looking stamp across a round that
+  // moved ink on nine of them.
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'the place closure is empty, so the place template collapses back onto the town one and a place-generator change is invisible again',
+    find: "  const queue = PLACE_ENGINE_FILES.slice();",
+    to: "  const queue = [];" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'a place stamp ignores the town closure, so a gen_internal.js change stops reaching the place sheet it actually draws',
+    find: "function computePlaceEngineVersion(sk = SK, psk = placeAssetsDir(sk)) {\n  const h = crypto.createHash('sha256');\n  for (const name of engineFiles(sk)) {",
+    to: "function computePlaceEngineVersion(sk = SK, psk = placeAssetsDir(sk)) {\n  const h = crypto.createHash('sha256');\n  for (const name of []) {" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'the place walk stops following requires, so a module the place generators share drops out of the place hash',
+    find: "        if (!seen.has(dep) && fs.existsSync(path.join(psk, dep))) queue.push(dep);",
+    to: "        if (false) queue.push(dep);" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'the dependency scanner cannot cross a nested paren again, so dash_fit.js drops out of the closure and the dashed-spoke pattern stops being hashed at all',
+    find: "  /path\\.join\\((?:[^()]|\\([^()]*\\))*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g, // path.join(<dir expr>, 'x.js')",
+    to: "  /path\\.join\\([^()]*?['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,             // path.join(<dir>, 'x.js')" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'isPlaceRun matches the word anywhere in the path instead of as a folder, so a town called Placesville is stamped with the place template',
+    find: "  return path.resolve(dir).split(/[\\\\/]+/).includes('Places');",
+    to: "  return path.resolve(dir).includes('Places');" },
 
 ];
 

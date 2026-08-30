@@ -151,70 +151,19 @@ const measureText = (str, size) => String(str).length * size * 0.58;
 // line reads as a string of blobs rather than a dash (Beaconsfield 380, St Neots 66).
 // Butt caps plus a dash length comfortably longer than the stroke width keep each
 // dash a crisp rectangle.
-// The SAME primitive, with the same numbers, lives in gen_external_busway.js and
-// gen_external_radial.js — change one, change all three. This fix was made here on
-// 2026-08-06 and NOT propagated back to the two files it was copied from, so the
-// defect survived on every area external until St Ives VL14/9v/301o resurfaced it
-// on 2026-08-17. See make-bus-leaflet references/gotchas.md.
-/* DASH_CYCLE — the nominal 2.6mm on + 2.4mm off, kept as one number because the whole
- * point below is to fit a WHOLE number of them into the line being stroked. */
-const DASH_ON = 2.6, DASH_OFF = 2.4, DASH_CYCLE = DASH_ON + DASH_OFF;
-/* dashFit — scale the dash pattern so the spoke ends on a cycle boundary (OA-160,
- * fixed 2026-08-29).
- *
- * A flat `stroke-dasharray="2.6 2.4"` takes no account of the length it is stroking,
- * so wherever the remainder lands inside the ON phase the final dash is truncated --
- * and where the remainder is a small fraction of a millimetre what paints is a sliver
- * PERPENDICULAR to the spoke, a 1px mark at 300dpi that reads as a stray hairline
- * rather than as the end of a dashed line. Measured across every place external's
- * ci-reference on 2026-08-29: 14 dashed spokes, 7 ending cleanly in a gap, 5 in a
- * part-dash long enough to read as intentional, and 2 in a sliver under 0.1mm -- St
- * Neots Town Centre's 66 spoke at 0.066mm and Beaconsfield Simpson Centre's at
- * 0.090mm.
- *
- * It was invisible because the destination box covered the end of the spoke, which is
- * the fault's real shape: dropping St Neots Town Centre's sub-label on v2.14 took that
- * box from 20.6mm tall to 13.0mm and brought 1.29mm of spoke, tail included, out from
- * under it. The <path> was byte-identical across both versions; only the <rect> moved.
- * A defect can be CREATED by one change and REVEALED by a much later, unrelated one,
- * and the second change gets the blame because it is the one in the diff.
- *
- * THE OBVIOUS TARGET IS THE WRONG ONE, and it was tried first: scaling so the spoke
- * ends exactly on a cycle boundary took the estate's slivers from 2 to SIX. Ending on
- * a boundary is the most fragile place to end, not the safest -- the coordinates are
- * written to 2dp and the dasharray to 3dp, so the length that actually paints differs
- * from the computed one by a few thousandths of a millimetre, and a hair past the
- * boundary is a hair INTO the next dash. Godmanchester Ermine Street came out at a
- * 0.0046mm tail, an order of magnitude finer than the defect being fixed.
- *
- * So aim for the MIDDLE OF A GAP instead, which is the point furthest from any ink:
- * end the spoke a complete dash plus half a gap into its last cycle. In cycle
- * fractions that target is `(ON + OFF/2) / CYCLE` = 0.76, so we want `len` to be
- * `(n + 0.76)` scaled cycles. That leaves 1.2mm of gap on either side of where the
- * line stops -- 260 times the rounding error -- so no representable rounding can put
- * ink at the end of a spoke, and the last dash drawn is always a whole one.
- *
- * Both phases scale by the same factor, so the pattern keeps its 52/48 duty ratio
- * exactly; the factor is within half a cycle spread over the spoke's whole length.
- * The 12mm key sample below deliberately keeps the nominal 2.6/2.4: it is a sample of
- * the pattern, not of a fitted spoke, and its own length was chosen (not arbitrary --
- * see the key row) to read as a dashed line rather than as two squares.
- */
-const DASH_TARGET = (DASH_ON + DASH_OFF / 2) / DASH_CYCLE;   // 0.76 — mid-gap
-function dashFit(len) {
-  const n = Math.max(0, Math.round(len / DASH_CYCLE - DASH_TARGET));
-  const k = len / ((n + DASH_TARGET) * DASH_CYCLE);
-  return `${(DASH_ON * k).toFixed(3)} ${(DASH_OFF * k).toFixed(3)}`;
-}
+// The dash pattern and its mid-gap fit now live in ONE place — make-bus-leaflet's
+// dash_fit.js — required below and shared with gen_external_radial.js and
+// gen_external_busway.js (OA-167). This file used to carry its own copy, with a
+// comment telling the reader to change all three, and that comment failed twice:
+// the 2026-08-06 butt-cap fix and the 2026-08-29 mid-gap fit were both made HERE
+// and neither reached the two files this one was copied from. The second left a
+// 0.0923mm sliver on St Ives' published town external for eleven days. Nothing
+// executes a comment; a require is executed on every build.
+const { dashFit, polylineLength } = require(path.join(path.dirname(_LABELLER), 'dash_fit.js'));
 function line(pts, color, w = 3.4, dashed = false) {
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' ');
   const cap = dashed ? 'butt' : 'round';
-  let dash = '';
-  if (dashed) {
-    let len = 0;
-    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-    dash = ` stroke-dasharray="${dashFit(len)}"`;
-  }
+  const dash = dashed ? ` stroke-dasharray="${dashFit(polylineLength(pts))}"` : '';
   out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
 }
 function tick(x, y, color) { out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }

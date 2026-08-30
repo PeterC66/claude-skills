@@ -229,3 +229,104 @@ test('...and normalising line endings does not blind the hash to a real edit', (
   const pairB = computeEngineVersion(seed(dir, { 'icons.js': 'ab' }));
   assert.notStrictEqual(pairA, pairB, 'a lone CR is content, not a line ending, and must survive the hash');
 }));
+
+/* ---- the PLACE template (OA-168, 2026-08-30) ------------------------------ */
+
+const EV = require('./_engine.js').load('engine_version.js');
+
+const seedPlace = (dir, overrides = {}) => {
+  for (const f of EV.PLACE_ENGINE_FILES) {
+    fs.writeFileSync(path.join(dir, f), overrides[f] != null ? overrides[f] : `// ${f}\n`);
+  }
+  return dir;
+};
+const twoDirs = (fn) => tmp(root => {
+  const town = fs.mkdirSync(path.join(root, 'town'), { recursive: true }) || path.join(root, 'town');
+  const place = fs.mkdirSync(path.join(root, 'place'), { recursive: true }) || path.join(root, 'place');
+  return fn(town, place);
+});
+
+test('a place map has its own template, and it is not the town one', () => twoDirs((town, place) => {
+  seed(town); seedPlace(place);
+  assert.notStrictEqual(EV.computePlaceEngineVersion(town, place), computeEngineVersion(town),
+    'two templates that agree are one template with extra steps');
+}));
+
+test('THE FAULT THIS ROW RECORDS: a place-generator change must move the PLACE hash and NOT the town one', () => twoDirs((town, place) => {
+  // Measured on the real engine 2026-08-29: OA-019 round three changed
+  // gen_external_places.js by 266 lines and moved ink on nine shipped sheets, and
+  // computeEngineVersion() returned 30fbffe221 before and after. All 12 place maps
+  // went on reading `current`.
+  seed(town); seedPlace(place);
+  const t0 = computeEngineVersion(town), p0 = EV.computePlaceEngineVersion(town, place);
+  seedPlace(place, { 'gen_external_places.js': '// gen_external_places.js\n// one more line\n' });
+  assert.strictEqual(computeEngineVersion(town), t0, 'a place generator is not part of the TOWN engine');
+  assert.notStrictEqual(EV.computePlaceEngineVersion(town, place), p0, 'and it IS part of the place engine');
+}));
+
+test('...and a town-engine change moves BOTH, because gen_internal.js draws a place sheet too', () => twoDirs((town, place) => {
+  // gen_internal_place.js is a pre-stage: it rewrites geometry into a workspace and
+  // runs the UNMODIFIED town generator there. A place stamp that ignored the town
+  // closure would be current and wrong in the other direction.
+  seed(town); seedPlace(place);
+  const t0 = computeEngineVersion(town), p0 = EV.computePlaceEngineVersion(town, place);
+  seed(town, { 'gen_internal.js': '// gen_internal.js\n// one more line\n' });
+  assert.notStrictEqual(computeEngineVersion(town), t0);
+  assert.notStrictEqual(EV.computePlaceEngineVersion(town, place), p0);
+}));
+
+test('the place walk follows requires, so a shared place module is hashed too', () => twoDirs((town, place) => {
+  // The place entry points reach almost everything through the TOWN skill today, so
+  // this branch is dark on the real tree — which is exactly why it is tested here
+  // rather than trusted. A place-local helper extracted out of gen_external_places.js
+  // would otherwise sit outside the place hash from the day it was written, which is
+  // the fault this whole row is about, one level down.
+  seed(town);
+  seedPlace(place, { 'gen_external_places.js': "const H = require('./place_helper.js');\n" });
+  fs.writeFileSync(path.join(place, 'place_helper.js'), '// v1\n');
+  const before = EV.computePlaceEngineVersion(town, place);
+  assert.ok(EV.placeEngineFiles(place).includes('place_helper.js'),
+    'a required place-local sibling must be in the place closure');
+  fs.writeFileSync(path.join(place, 'place_helper.js'), '// v2\n');
+  assert.notStrictEqual(EV.computePlaceEngineVersion(town, place), before,
+    'and editing it must move the place hash');
+}));
+
+/* The `place/` prefix on the place half is deliberate and is NOT asserted here.
+ * It was, briefly, with a mutation that dropped it — and that mutation SURVIVED.
+ * The two halves are hashed in a fixed order, so a filename appearing in both trees
+ * is already disambiguated by its position in the stream, and removing the prefix
+ * loses no information that any fixture can expose. The prefix stays because it
+ * makes the inputs readable when something prints them; the claim that it prevents
+ * a collision does not, because nothing could break it. A defence that cannot be
+ * falsified is a defence that was not doing anything, and asserting it would have
+ * been a green this suite had not earned. */
+
+test('a missing place generator hashes as MISSING rather than vanishing', () => twoDirs((town, place) => {
+  seed(town); seedPlace(place);
+  const before = EV.computePlaceEngineVersion(town, place);
+  fs.rmSync(path.join(place, 'gen_external_places.js'));
+  assert.notStrictEqual(EV.computePlaceEngineVersion(town, place), before,
+    'a partial vendor must be a different engine, not the same one');
+}));
+
+test('isPlaceRun follows the rule findPlaces() already enumerates by', () => {
+  // All three layouts a place is stored in, and a town, which must not match.
+  assert.strictEqual(EV.isPlaceRun('C:/x/Buses/Areas/St Ives/Places/St Ives Bus Station/S4-generate/v1.1'), true);
+  assert.strictEqual(EV.isPlaceRun('C:/x/Buses/Places/Ely Co-op/S4-generate/v1.1'), true);
+  assert.strictEqual(EV.isPlaceRun('C:/x/Buses/Places/_standalone/Ely Co-op/S4-generate/v1.1'), true);
+  assert.strictEqual(EV.isPlaceRun('C:/x/Buses/Areas/St Ives/S4-generate/v6.58'), false);
+  // A folder whose NAME merely contains the word is not a Places folder.
+  assert.strictEqual(EV.isPlaceRun('C:/x/Buses/Areas/Placesville/S4-generate/v1.1'), false);
+});
+
+test('dash_fit.js is inside the hashed closure, and it is the only file that proves the scanner', () => {
+  // The require idiom the two external generators use is
+  // `path.join(path.dirname(_LABELLER),'x.js')`, and the dependency scanner's
+  // path.join pattern could not cross a nested `(` until 2026-08-30. Every other
+  // file named that way is ALSO reached by a luckier route from gen_internal.js,
+  // so the closure was right by accident. dash_fit.js is named ONLY that way.
+  const files = engineFiles();
+  assert.ok(files.includes('dash_fit.js'),
+    'a hash that does not cover dash_fit.js cannot see a change to the dashed-spoke pattern');
+});

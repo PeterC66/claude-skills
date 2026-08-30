@@ -18,6 +18,10 @@ const FONT = require(path.join(path.dirname(_LABELLER),'font_metrics.js'));
 // Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
 // makes it load inside the portal as well as here.
 const { separateRow } = require(path.join(path.dirname(_LABELLER),'svg_primitives.js'));
+// dash_fit.js — the dashed-spoke pattern and its mid-gap fit, shared with
+// gen_external_busway.js and gen_external_places.js (OA-167). Resolved the same
+// sibling-then-SKILL_ASSETS way, so it loads from engine\dash_fit.js in the portal.
+const { dashFit, polylineLength } = require(path.join(path.dirname(_LABELLER),'dash_fit.js'));
 // STRICT_GUARDS, adopted 2026-08-28 (OA-045). Until then only gen_internal.js and
 // gen_boarding.js participated in the contract at all, so "STRICT_GUARDS is live"
 // was true of a third of the sheets we publish and the board did not say which
@@ -156,14 +160,19 @@ const measureText = (str, size, bold) => FONT.textWidth(str, size, !!bold);
 // drew 1.6+3.4=5.0 mm of ink separated by 2.2-3.4 = -1.2 mm of gap: the dashes
 // overlapped into one scalloped caterpillar and the line read as solid-but-lumpy.
 // Butt caps plus a gap comfortably wider than the stroke keep each dash a crisp
-// rectangle. Identical primitive and identical numbers in gen_external_busway.js
-// and gen_external_places.js — if you change one, change all three (this defect
-// was fixed in the places copy on 2026-08-06 and left unfixed in the two it was
-// copied FROM, which is why it resurfaced on St Ives VL14/9v/301o).
+// rectangle. The numbers, and the fit that keeps a spoke from ending in a sliver,
+// now live in ONE place — dash_fit.js — required by this file, by
+// gen_external_busway.js and by the place skill's gen_external_places.js. Until
+// 2026-08-30 this was three copies of the same primitive with a comment telling
+// the reader to change all three, and that comment failed twice: the 2026-08-06
+// butt-cap fix and the 2026-08-29 dash fit were each made in the places copy and
+// left out of this one, the second of them printing a 0.0923mm sliver on St Ives'
+// published external for eleven days (OA-167). Nothing executes a comment.
 function line(pts, color, w=3.4, dashed=false){
   const d = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
   const cap = dashed ? 'butt' : 'round';
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dashed?' stroke-dasharray="2.6 2.4"':''}/>`);
+  const dash = dashed ? ` stroke-dasharray="${dashFit(polylineLength(pts))}"` : '';
+  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
 }
 function tick(x,y,color){ out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 /* design.badgeFit — the same defect and the same fix as gen_internal.js, which
@@ -581,6 +590,7 @@ const LIMITED_KEY = DESIGN.limitedKeyLabel || 'Dashed — certain days only, che
 const LX0 = (D.legendAt && D.legendAt.x!=null) ? D.legendAt.x : 10;
 const LY0 = (D.legendAt && D.legendAt.y!=null) ? D.legendAt.y : 40;
 const _box = D.legendAt && D.legendAt.box;
+let _boxWarned = false;   // OA-157 — see buildLegend
 // auto-note any route that leaves town on more than one arm (e.g. "56 runs as
 // two arms — to Manea and to Wisbech"), or use D.externalNote to override.
 // Hoisted above buildLegend because its TEXT does not depend on where the legend
@@ -714,8 +724,47 @@ function buildLegend(lx, ly, dx, dy){
   out = realOut;
   // legendAt.box may override just one dimension (e.g. width, to steer clear of a spoke
   // label) — the other stays auto-sized to content instead of freezing at a stale value.
-  const bw = (_box && _box.w!=null) ? _box.w : (panelMaxX - lx + 8);
-  const bh = (_box && _box.h!=null) ? _box.h : (panelMaxY - (legendTopY-10) + 4);
+  //
+  // BUT IT MAY NOT SHRINK THE RESERVATION BELOW THE INK (OA-157, 2026-08-30). This box
+  // sizes three things at once: the white backing panel, the rectangle registered as a
+  // hard box for the label placer, and the rectangle legendPlace searches with. It has
+  // never sized the legend's CONTENT. Set it smaller than the content and the text keeps
+  // its full extent while all three shrink around it — measured on Wisbech at
+  // legendAt.box:{w:20,h:15}: the panel drew 20 x 15mm at (6,30), bottom edge y=45, and
+  // the legend's own text ran to y=155, 110mm below its own plate, printing over the
+  // spokes with nothing behind it. legendSpot() was handed the 20 x 15 rectangle, found
+  // it clear, and reported success.
+  //
+  // That is the named shape RESERVE FOR WHAT YOU WILL DRAW, arriving in the one place
+  // the engine offers an explicit override for the reservation — which is worse than
+  // the general case, because the override exists precisely to be reached for when the
+  // legend is in the way, the moment somebody is most likely to type a number that is
+  // too small.
+  //
+  // So grow it back and SAY SO, rather than refusing: the sheet still needs a legend,
+  // and a silent clamp would leave the person who typed the number believing it took.
+  // NOTHING ON THE ESTATE MOVES — measured 2026-08-30, the two towns that set a box
+  // both ask for more than their content (High Wycombe w=92 for 88.28mm, Wisbech w=78
+  // for 77.63mm) and neither sets h at all, so this starts green, which is the
+  // precondition every gate on this project needs.
+  const _contentW = panelMaxX - lx + 8;
+  const _contentH = panelMaxY - (legendTopY-10) + 4;
+  let bw = (_box && _box.w!=null) ? _box.w : _contentW;
+  let bh = (_box && _box.h!=null) ? _box.h : _contentH;
+  if(_box && (bw < _contentW || bh < _contentH)){
+    const asked = [];
+    if(bw < _contentW){ asked.push('w='+bw+' for '+_contentW.toFixed(1)+'mm of content'); bw = _contentW; }
+    if(bh < _contentH){ asked.push('h='+bh+' for '+_contentH.toFixed(1)+'mm of content'); bh = _contentH; }
+    // Once per build, not once per buildLegend() call — legendPlace builds it twice
+    // when it moves the legend, and the same config note twice is noise.
+    if(!_boxWarned){
+      _boxWarned = true;
+      process.stderr.write('legend: legendAt.box is smaller than the legend it backs — '+asked.join(', ')
+        +'. Grown back to the content. The box also sizes the rectangle legendPlace reserves and the '
+        +'hard box labels dodge, so a box smaller than the ink tells both searches a rectangle the '
+        +'legend does not occupy. To make the legend itself smaller, use legendWrap or fewer rows.\n');
+    }
+  }
   return { buf: legendBuf, x: lx-4, y: legendTopY-10, w: bw, h: bh };
 }
 /*

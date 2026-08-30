@@ -1089,7 +1089,24 @@ if(IR){
   const ORIENT=DESIGN.laneOrientation!==false
     ? LN.orientSegments(SEG,CORPAIRS,LN.chainPairs(SEG,{cosAngle:-1}))
     : {sign:null,components:0,conflicts:0,bridges:0};
-  if(process.env.DBG_LANES) console.error(`LANEFIELD on=${DESIGN.laneOrientation!==false} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0}`);
+  // UNCONDITIONAL since 2026-08-30 (OA-118), and re-worded from `LANEFIELD …` to
+  // the `measure: ` prefix build_log.js now classifies as MEASURED. Three things
+  // about this one line are the whole of that row's answer.
+  //
+  // It goes to a stream something READS. It was behind DBG_LANES, which means the
+  // number existed on every build and was recorded on none — and two separate
+  // attempts were then made to infer the same quantity from the drawn page, both
+  // disproved on rendered crops. `conflicts === 0` says the corridor has a
+  // consistent orientation and therefore no lane mirrors, by construction.
+  //
+  // `on=` is the half that makes the zero mean anything. With laneOrientation off,
+  // ORIENT is a stub of zeroes, so `conflicts=0` alone cannot tell "computed and
+  // clean" from "never computed" — a false zero of exactly the shape OA-126 names.
+  //
+  // The old wording had NO COLON, so it was not a message head: had it ever
+  // reached the log, build_log.js's parse() would have glued it onto the end of
+  // whatever message came before it.
+  console.error(`measure: lanes on=${DESIGN.laneOrientation!==false} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0}`);
   // A LATERAL conflict means two segments running alongside each other were
   // given contradictory directions and the corridor has no consistent
   // orientation to find -- so some lane bundles here keep the old mirrored

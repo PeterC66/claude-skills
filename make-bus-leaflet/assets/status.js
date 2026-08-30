@@ -28,10 +28,15 @@
 const fs = require('fs');
 const path = require('path');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
-const { computeEngineVersion } = require('./engine_version');
+const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
 
 const CURRENT_ENGINE = computeEngineVersion();
+// A place map is drawn by two generators the town closure does not reach, so it
+// gets its own template (OA-168). Comparing a place against CURRENT_ENGINE was
+// a check whose subject it could not see: it went on saying `current` through a
+// round that changed gen_external_places.js by 266 lines.
+const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
@@ -259,7 +264,7 @@ function gatePlace(p) {
   let placeRoutes = {};
   try { placeRoutes = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
   row.engine = placeRoutes.engine || '(none)';
-  row.engineCurrent = placeRoutes.engine === CURRENT_ENGINE;
+  row.engineCurrent = placeRoutes.engine === CURRENT_PLACE_ENGINE;
   // The NO-SHEET judgement was applied to `external` in August 2026 and not to
   // `internal`, because at the time every place had an internal map. High Wycombe
   // Town Centre (2026-08-23) is the first that does not -- it carries a boarding
@@ -741,7 +746,7 @@ async function main() {
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
-  console.log('\n=== Places (' + places.length + ') ===');
+  console.log('\n=== Places (' + places.length + ') === engine: current PLACE template = ' + CURRENT_PLACE_ENGINE);
   const pw = [34, 18, 6, 26, 9, 9, 9, 9, 9, 11, 26, 20, 8];
   if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Schematic | Diagram | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));

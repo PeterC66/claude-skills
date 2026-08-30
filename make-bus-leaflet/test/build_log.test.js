@@ -127,3 +127,79 @@ test('a message head may carry an underscore', () => {
   assert.strictEqual(e.length, 2);
   assert.deepStrictEqual(e.map(x => x.code), ['gen_internal_place', 'labels']);
 });
+
+/* ---- MEASURED, the third severity (OA-118, 2026-08-30) -------------------- */
+
+test('a measurement is its own severity, and not the mildest of the other two', () => {
+  // The point of the row: a number the engine records on every build is not a
+  // warning, and filing it as one is how a measurement stops being recorded at all.
+  assert.strictEqual(BL.severity('measure: lanes on=true segs=1204 lateral=50 components=3 bridges=0 conflicts=0 flipped=3953'), 'MEASURED');
+});
+
+test('MEASURED is judged on the PREFIX, and it is judged FIRST', () => {
+  // This is the one rule in the file that does not classify on a phrase, and the
+  // order matters: a measurement's payload is arbitrary text. If the phrase rules
+  // ran first, a count of undrawn labels would be filed as a refusal — the sheet
+  // would read as WRONG because something measured it.
+  assert.strictEqual(BL.severity('measure: labels total=44 not drawn=3'), 'MEASURED');
+  assert.strictEqual(BL.severity('measure: features named nothing=0'), 'MEASURED');
+  assert.strictEqual(BL.severity('measure: rows under the footer plate=0'), 'MEASURED');
+  // ...and the same words WITHOUT the prefix are still the refusals they were.
+  assert.strictEqual(BL.severity('feature: the river was not drawn'), 'BLOCKING');
+});
+
+test('a prefix that merely CONTAINS the word measure is not a measurement', () => {
+  assert.strictEqual(BL.severity('measurement: 3 labels moved'), 'WARN');
+  assert.strictEqual(BL.severity('labeller: we measure: 3 things'), 'WARN');
+});
+
+test('the log counts measurements APART from warnings', () => {
+  // Or every build reports more faults than it has — and since the lane
+  // measurement is unconditional, EVERY build has at least one. A count that
+  // inflates the moment a measurement is added is a count nobody trusts the
+  // next time it moves.
+  const e = BL.collect([{ source: 'gen_internal.js',
+    stderr: 'measure: lanes on=true conflicts=0 flipped=3953\n'
+          + 'northArrow: the configured spot is blocked — placed automatically\n'
+          + 'feature: the river was not drawn\n' }]);
+  assert.deepStrictEqual(e.map(x => x.severity), ['MEASURED', 'WARN', 'BLOCKING']);
+  const txt = BL.format(e);
+  // A blocking entry has always counted as a warning too — "2 warnings, 1
+  // blocking" is the existing contract and it is not changed here. What IS new is
+  // that the measurement is outside that total rather than inflating it.
+  assert.match(txt, /^2 warnings, 1 blocking, and 1 measurement\./m,
+    'the measurement is counted apart from the warnings, not added to them');
+  assert.match(txt, /--- MEASURED \(1\) ---/);
+});
+
+test('a measurement never blocks a build', () => {
+  // rollout.js stops on BLOCKING. A build that recorded a number and nothing else
+  // is a clean build.
+  const e = BL.collect([{ source: 'gen_internal.js', stderr: 'measure: lanes on=false conflicts=0\n', ok: true }]);
+  assert.strictEqual(BL.blocking(e).length, 0);
+});
+
+test('the lane measurement carries on=, which is what makes its zero mean anything', () => {
+  // With laneOrientation off, ORIENT is a stub of zeroes — so `conflicts=0` alone
+  // cannot tell "computed and clean" from "never computed". That is a FALSE ZERO
+  // of exactly the shape OA-126 names, and `on=` is the half most likely to be
+  // dropped as noise. This asserts the format, because the format is the contract.
+  const line = 'measure: lanes on=false segs=0 lateral=0 components=0 bridges=0 conflicts=0 flipped=0';
+  assert.strictEqual(BL.severity(line), 'MEASURED');
+  const e = BL.parse(line + '\n', 'gen_internal.js');
+  assert.strictEqual(e.length, 1);
+  assert.strictEqual(e[0].code, 'measure');
+  assert.match(e[0].text, /\bon=(true|false)\b/,
+    'a conflicts count with no on= flag cannot be read; see OA-126');
+});
+
+test('the old LANEFIELD wording had no colon, so it was not a message head at all', () => {
+  // Had it ever reached the log, parse() would have glued it onto the end of
+  // whatever message came before it. That is why the promotion re-worded it
+  // rather than simply unhiding it.
+  const glued = BL.parse('labeller: 2 leaders\nLANEFIELD on=true conflicts=0\n', 'x');
+  assert.strictEqual(glued.length, 1, 'a headless line is swallowed by the message before it');
+  const separate = BL.parse('labeller: 2 leaders\nmeasure: lanes on=true conflicts=0\n', 'x');
+  assert.strictEqual(separate.length, 2);
+  assert.deepStrictEqual(separate.map(x => x.severity), ['WARN', 'MEASURED']);
+});

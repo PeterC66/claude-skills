@@ -55,7 +55,10 @@ const BUILDLOG = require('./build_log');
 // BOTH now come from shared modules rather than living here, because living here
 // is how a hand-built S4 lost them both (OA-161) — see sheet_stamps.js.
 const { stampSheetVersion } = require('./sheet_stamps');
-const { computeEngineVersion, stampEngine } = require('./engine_version');
+// The PLACE template, not the town one (OA-168, 2026-08-30). Until then every
+// place map carried the town hash, so a change to gen_external_places.js left
+// all 12 of them reading `current` across a round that moved ink on nine.
+const { computePlaceEngineVersion, stampEngine } = require('./engine_version');
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
@@ -213,7 +216,7 @@ function rolloutOnePlace(p) {
             + ' and the S3 this would seed from does not — copy it into the S3 first (adopt_config --set-file), do not roll out over it' };
   }
 
-  const engineHash = computeEngineVersion();
+  const engineHash = computePlaceEngineVersion();
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
 
   const s4 = path.join(scratch, 'S4');

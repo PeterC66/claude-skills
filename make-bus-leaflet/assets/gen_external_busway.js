@@ -30,6 +30,10 @@ const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
   return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
        : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
 const { footerBand } = require(_FOOTER);
+// dash_fit.js — the dashed-spoke pattern and its mid-gap fit, shared with
+// gen_external_radial.js and gen_external_places.js (OA-167). footer.js resolves
+// out of the same folder, so its directory is where this lives too.
+const { dashFit, polylineLength } = require(path.join(path.dirname(_FOOTER),'dash_fit.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -74,14 +78,20 @@ function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]);}
 // drew 1.6+3.4=5.0 mm of ink separated by 2.2-3.4 = -1.2 mm of gap: the dashes
 // overlapped into one scalloped caterpillar and the line read as solid-but-lumpy.
 // Butt caps plus a gap comfortably wider than the stroke keep each dash a crisp
-// rectangle. Identical primitive and identical numbers in gen_external_radial.js
-// and gen_external_places.js — if you change one, change all three (this defect
-// was fixed in the places copy on 2026-08-06 and left unfixed in the two it was
-// copied FROM, which is why it resurfaced on St Ives VL14/9v/301o).
+// rectangle. The numbers, and the fit that keeps a spoke from ending in a sliver,
+// now live in ONE place — dash_fit.js — required by this file, by
+// gen_external_radial.js and by the place skill's gen_external_places.js. Until
+// 2026-08-30 this was three copies of the same primitive with a comment telling
+// the reader to change all three, and that comment failed twice: the 2026-08-06
+// butt-cap fix and the 2026-08-29 dash fit were each made in the places copy and
+// left out of this one (OA-167). No town draws this layout today, so neither fix
+// was ever visible here — which is exactly why a third copy would have drifted
+// again. Nothing executes a comment.
 function line(pts, color, w=3.4, dashed=false){
   const d = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
   const cap = dashed ? 'butt' : 'round';
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dashed?' stroke-dasharray="2.6 2.4"':''}/>`);
+  const dash = dashed ? ` stroke-dasharray="${dashFit(polylineLength(pts))}"` : '';
+  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
 }
 function tick(x,y,color){ out(`<circle cx="${x}" cy="${y}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 function badge(x,y,route,r=4.6){

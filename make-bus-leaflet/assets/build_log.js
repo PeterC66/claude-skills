@@ -14,7 +14,7 @@
 // into the run folder beside the artwork, and refuse to publish a build carrying a
 // warning that means the sheet is WRONG rather than merely tight.
 //
-// TWO SEVERITIES, and the line between them is deliberate.
+// THREE SEVERITIES, and the lines between them are deliberate.
 //
 //   BLOCKING — the sheet is wrong. Something the config asked for was refused and is
 //   absent from the artwork, a label was drawn somewhere it means nothing, or a device
@@ -24,10 +24,29 @@
 //   WARN — the sheet is tight, or a device moved itself, or the engine is reporting a
 //   judgement it made. Worth reading, never worth blocking a build over.
 //
+//   MEASURED — a NUMBER the engine records on every build, and never a fault at all
+//   (OA-118, added 2026-08-30). Not a quieter warning: a measurement that has to be
+//   phrased as a complaint to be written down is a measurement nobody records, and
+//   this project has now spent two rounds trying to infer from the drawn page a
+//   quantity the engine already held in a variable. `lane_normals.js`'s
+//   `orientSegments()` returns `{sign, components, conflicts, bridges}`, and a
+//   corridor with `conflicts === 0` has a consistent orientation and therefore no
+//   lane mirrors BY CONSTRUCTION — nothing needs to be read off the artwork.
+//   `quality_metrics.js` could not see a mirror, two detectors were written to find
+//   one from the geometry and BOTH were disproved on rendered crops, and the answer
+//   was in `gen_internal.js` behind a DBG_LANES flag the whole time.
+//
 // Classified on the MESSAGE, not on the prefix, so a guard added later inherits the
 // right severity without anyone remembering to come back here: any guard that says it
 // did not draw something is a refusal, and any guard that says a label names nothing
 // is the fourth question. Prefixes change; those two phrases are the contract.
+//
+// MEASURED IS THE ONE EXCEPTION, and it is the exception on purpose. It classifies on
+// a PREFIX, because the other rules read prose written for a person — which gets
+// reworded, which is exactly why they are phrase rules — whereas a measurement is a
+// structured record whose marker is part of its format. It is checked FIRST, so a
+// payload that happens to contain the words "not drawn" is still a measurement and
+// not a refusal.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -62,8 +81,13 @@ const OVERFLOWED = /\bunder the footer plate\b|\binside\/near the footer plate\b
 // all. Found while sweeping the estate for OA-065: ten runs exited non-zero and
 // every one was filed as "worth reading, never worth blocking a build over".
 const CRASHED = /^[A-Za-z]*Error:|^\s*at .+:\d+:\d+\)?$|\bis not vendored\b/m;
+// A MEASUREMENT (OA-118). The marker is the prefix, not a phrase — see the header.
+const MEASURED = /^\s*measure:\s/;
 
 function severity(line) {
+  // FIRST, and this order is load-bearing: a measurement's payload is arbitrary
+  // text and may legitimately contain any of the phrases below.
+  if (MEASURED.test(String(line))) return 'MEASURED';
   return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)
           || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';
 }
@@ -120,12 +144,20 @@ function format(entries) {
   if (!entries.length) return 'No warnings — every generator ran clean.\n';
   const lines = [];
   const nb = blocking(entries).length;
-  lines.push(`${entries.length} warning${entries.length === 1 ? '' : 's'}, ${nb} blocking.`);
+  // Measurements are counted APART from warnings, or every build reports more
+  // faults than it has — and since the lane measurement is unconditional, every
+  // build has at least one. A count that inflates the moment a measurement is
+  // added is a count nobody will trust the next time it moves.
+  const nm = entries.filter(e => e.severity === 'MEASURED').length;
+  const nw = entries.length - nm;
+  lines.push(`${nw} warning${nw === 1 ? '' : 's'}, ${nb} blocking`
+    + (nm ? `, and ${nm} measurement${nm === 1 ? '' : 's'}.` : '.'));
   lines.push('');
   lines.push('BLOCKING means the engine refused to draw something, or drew a label that names');
   lines.push('nothing — the sheet is wrong and the reader cannot tell. Fix the config it names.');
+  lines.push('MEASURED is a number this build recorded. It is never a fault.');
   lines.push('');
-  for (const sev of ['BLOCKING', 'WARN']) {
+  for (const sev of ['BLOCKING', 'WARN', 'MEASURED']) {
     const set = entries.filter(e => e.severity === sev);
     if (!set.length) continue;
     lines.push(`--- ${sev} (${set.length}) ---`);

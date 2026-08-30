@@ -57,7 +57,7 @@ const ORDER_OF = Object.keys(STAGE_NAME);
 const VERSIONED = new Set(['S4', 'S5']);
 
 const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
-const { computeEngineVersion, stampEngine } = require('./engine_version');
+const { computeEngineVersion, computePlaceEngineVersion, isPlaceRun, stampEngine } = require('./engine_version');
 
 function die(msg) { console.error('stage.js: ' + msg); process.exit(1); }
 
@@ -321,7 +321,13 @@ function main() {
     const dir = path.resolve(rest[0] || process.cwd());
     const rjp = path.join(dir, 'routes.json');
     if (!fs.existsSync(rjp)) die('no routes.json in ' + dir);
-    const hash = computeEngineVersion();
+    // Which template (OA-168): a place map is drawn by generators the town
+    // closure does not reach, and `stamps` is the one stamping path that is not
+    // already inside a rollout that knows which kind of map it is building. The
+    // rule is the one gate_lib.js's findPlaces() enumerates by — a `Places`
+    // segment in the path — so the two agree by construction rather than by
+    // being kept in step.
+    const hash = isPlaceRun(dir) ? computePlaceEngineVersion() : computeEngineVersion();
     const eng = stampEngine(rjp, hash);
     const stamp = stampSheetVersion(rjp, path.basename(dir));
     console.log(`engine: ${eng.status}${eng.from ? ' (was ' + eng.from + ')' : ''} -> ${hash}`);

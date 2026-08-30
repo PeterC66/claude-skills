@@ -85,6 +85,7 @@ It refuses, before touching anything, if:
 | `--kind` differs from the request | quota is per kind; reject and re-request rather than repurpose the row |
 | `--customer` names a different org | re-owning someone's map is not an import job — drop the flag |
 | the slug belongs to another map | pick another `--slug` |
+| there is no owning organisation | **new 2026-08-30.** A map with `customer_id NULL` is dropped by every PUBLIC query, so it can be submitted, reviewed and published, report `status=published`, and still serve a 404 — St Ives Bus Station did exactly that. In `--request` mode the owner comes from the request and this cannot happen; building a fresh row outside that mode now needs `--customer "Org"`. `--unowned` is the deliberate way past, and the owner can be set afterwards with `POST /api/admin/maps/<id>/owner` from the admin console (admin, needs a sign-in from the last 30 minutes, refuses a move that would overspend the receiving org's quota) |
 
 ### 3. Verify the baseline is byte-identical
 

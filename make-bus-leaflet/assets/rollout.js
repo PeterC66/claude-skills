@@ -45,7 +45,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, detectExternalStyle } = require('./gate_lib');
+const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, detectExternalStyle } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -162,6 +162,19 @@ function rolloutOne(t) {
    * a --no-verify habit built around it. The summary line below names it
    * loudly instead.
    */
+  /* AN UNRENDERED S4 IS NOT UP TO DATE, WHATEVER THE GATES SAY (OA-198). The row
+   * was written about rollout_places.js; this tool has the same stop after the same
+   * S4 commit, so it produces the same state and its fast path buries it the same
+   * way. Fixing one and not the other is how a guard covers a class once rather
+   * than completely. See unrenderedS4() in gate_lib.js. */
+  const unrendered = unrenderedS4(manifest);
+  if (unrendered) {
+    return { name: t.name, status: 'UNRENDERED',
+             detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
+                   + `version that has no JPG on disk. Finish it with:  `
+                   + `node rollout.js --town "${t.name}" --apply --force` };
+  }
+
   const stampedEngine = rj.engine;
   if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE
       && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE) {
@@ -377,5 +390,8 @@ if (stampStale.length) console.log(
   + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --force`).join('\n  '));
 const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
 if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} town(s) — the engine refused to draw something, or a label names nothing.`);
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+// UNRENDERED moves the exit code. The state it names was invisible precisely
+// because nothing failed, so a verdict that only printed would be the same
+// silence with a longer summary line.
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);

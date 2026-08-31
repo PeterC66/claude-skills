@@ -242,3 +242,65 @@ test("an existing leaf is unchanged by the '+', and a no-op still reports null",
   assert.strictEqual(G.applySetPath(o, G.parseSetPath('design.placeIndex=true')), 'design.placeIndex: false -> true');
   assert.strictEqual(o.design.placeIndex, true);
 });
+
+
+/* unrenderedS4 — a committed S4 with no S5 render (OA-198) -------------------
+ *
+ * The state is produced by both rollout tools' own blocking-warning stop, which
+ * sits between `stage commit S4` and `stage new S5`. Everything about it reads
+ * healthy: the manifest advertises the new S4, the current generator redraws its
+ * stored sheets byte-for-byte, every gate PASSES, and there is no JPG anywhere
+ * for the version being named. The next ordinary run then returns UP-TO-DATE and
+ * skips it, for ever.
+ *
+ * The assertion that matters is the NEGATIVE one. A helper that answered "not
+ * rendered" for everything would satisfy every case below but the first, and the
+ * first is the state all twelve places and all eight towns are actually in.
+ */
+const mani = (s4runs, s4latest, s5runs) => ({
+  stages: {
+    S4: s4runs === null ? undefined : { latest: s4latest, runs: s4runs },
+    S5: s5runs === null ? undefined : { latest: (s5runs.at(-1) || {}).id, runs: s5runs },
+  },
+});
+const run = (v) => ({ id: `v${v}_2026-08-31_0507`, version: v });
+
+test('a rendered S4 is not reported — the case every real map is in', () => {
+  const m = mani([run('1.16'), run('1.17')], 'v1.17_2026-08-31_0507', [run('1.16'), run('1.17')]);
+  assert.strictEqual(G.unrenderedS4(m), null);
+});
+
+test('an S4 committed with no S5 for it is reported, by version', () => {
+  const m = mani([run('1.16'), run('1.17')], 'v1.17_2026-08-31_0507', [run('1.16')]);
+  assert.strictEqual(G.unrenderedS4(m), '1.17');
+});
+
+test('...and it is the LATEST S4 that is asked about, not any of them', () => {
+  // 1.16 was rendered and 1.17 is the head. An older gap is somebody else's
+  // problem: the question is whether what the manifest advertises has a JPG.
+  const m = mani([run('1.15'), run('1.16'), run('1.17')], 'v1.16_2026-08-31_0507', [run('1.16')]);
+  assert.strictEqual(G.unrenderedS4(m), null);
+});
+
+test('no S5 stage at all is the same finding, not a crash', () => {
+  const m = mani([run('2.1')], 'v2.1_2026-08-31_0507', null);
+  assert.strictEqual(G.unrenderedS4(m), '2.1');
+});
+
+test('a place that has never built an S4 is not a finding', () => {
+  assert.strictEqual(G.unrenderedS4(mani(null, null, null)), null);
+  assert.strictEqual(G.unrenderedS4({}), null);
+  assert.strictEqual(G.unrenderedS4(null), null);
+});
+
+test('an S4 run with no version recorded is not a finding — it cannot answer', () => {
+  // Guessing the version out of the run id is exactly the reasoning this helper
+  // exists to avoid; a run that predates versioning is unanswerable, not broken.
+  const m = { stages: { S4: { latest: 'old', runs: [{ id: 'old' }] }, S5: { runs: [] } } };
+  assert.strictEqual(G.unrenderedS4(m), null);
+});
+
+test('the versions are compared as strings, so 1.10 is not 1.1', () => {
+  const m = mani([run('1.10')], 'v1.10_2026-08-31_0507', [run('1.1')]);
+  assert.strictEqual(G.unrenderedS4(m), '1.10');
+});

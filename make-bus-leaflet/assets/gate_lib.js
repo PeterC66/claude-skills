@@ -367,6 +367,46 @@ function latestRunDir(manifest, townDir, stage) {
   return { dir, rec: r };
 }
 
+/* IS THE LATEST COMMITTED S4 ACTUALLY RENDERED? (OA-198)
+ *
+ * Both rollout tools commit S4, then render S5 as a separate step, and both have
+ * a stop in between: a BLOCKING build warning returns REVIEW-NEEDED after the S4
+ * commit and before `stage new S5`. The state that leaves behind is the whole of
+ * this row. The manifest advertises the new S4, so `gate()` re-runs the current
+ * generator against the sheets stored in it, they reproduce byte-for-byte -- of
+ * course they do, that generator drew them -- and every byte gate PASSES. There
+ * is no JPG anywhere for the version the board is naming.
+ *
+ * AND THEN THE FAST PATH BURIES IT. On the next ordinary run, all sheets gate
+ * PASS, so the tool returns UP-TO-DATE and skips the place entirely. Nothing
+ * fails, nothing is red, and the S4 stays unrendered for ever. `--force` is the
+ * only thing that gets past it, because the fast path is the only guard that
+ * `!FORCE` disables -- which means the recovery from an unrendered S4 is a flag
+ * nobody has a reason to reach for, on a place nothing has reported.
+ *
+ * The question is asked of the VERSION, not of run ids or of file mtimes: an S5
+ * run is stamped with the version of the S4 it pulled, so "some S5 run carries
+ * the latest S4's version" is exactly the sentence "that S4 has been rendered",
+ * with no ordering assumption and no clock in it.
+ *
+ * Returns the unrendered version string, or null when all is well. A manifest
+ * with no S4 at all returns null: that is a place nothing has ever built, which
+ * is a different condition and one the callers already report.
+ */
+function unrenderedS4(manifest) {
+  const stages = (manifest && manifest.stages) || {};
+  const s4 = stages.S4;
+  if (!s4 || !s4.latest || !Array.isArray(s4.runs)) return null;
+  const latest = s4.runs.find(r => r.id === s4.latest);
+  if (!latest) return null;
+  // A run committed before versions were recorded cannot answer this question, and
+  // guessing from the run id would be the reasoning this helper exists to avoid.
+  if (latest.version === undefined || latest.version === null) return null;
+  const s5runs = (stages.S5 && Array.isArray(stages.S5.runs)) ? stages.S5.runs : [];
+  const rendered = s5runs.some(r => String(r.version) === String(latest.version));
+  return rendered ? null : String(latest.version);
+}
+
 // Detect which external generator template (radial vs busway) a town's own S3
 // gen_external.js currently plays back as, by trying both against the town's
 // own committed external.svg. Used to pick which template to gate/rollout
@@ -450,6 +490,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, detectExternalStyle,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

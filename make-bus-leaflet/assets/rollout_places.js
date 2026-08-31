@@ -49,7 +49,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
+const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4 } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
 // The printed sheet version (footer.js design.sheetVersion) and the engine hash.
 // BOTH now come from shared modules rather than living here, because living here
@@ -250,6 +250,20 @@ function rolloutOnePlace(p) {
    * template (OA-168) and comparing one against the town hash was a real bug.
    * Reports only; writes nothing; does not move the exit code.
    */
+  /* AN UNRENDERED S4 IS NOT UP TO DATE, WHATEVER THE GATES SAY (OA-198). This sits
+   * in FRONT of both fast-path returns, and in front of the stamp check too: a
+   * place whose S4 was committed and never rendered gates PASS on every sheet by
+   * construction, so both of those verdicts are reachable and both of them are
+   * wrong. See unrenderedS4() in gate_lib.js for how the state is produced -- it is
+   * this tool's own blocking-warning stop, twenty lines below the S4 commit. */
+  const unrendered = unrenderedS4(manifest);
+  if (unrendered) {
+    return { name: p.name, status: 'UNRENDERED',
+             detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
+                   + `version that has no JPG on disk. Finish it with:  `
+                   + `node rollout_places.js --place "${p.name}" --apply --force` };
+  }
+
   const stampedEngine = _s4rjEarly.engine;
   if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE
       && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE) {
@@ -567,5 +581,8 @@ if (stampStale.length) console.log(
   + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --force`).join('\n  '));
 const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
 if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} place(s) — the engine refused to draw something, or a label names nothing.`);
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+// UNRENDERED moves the exit code. The state it names was invisible precisely
+// because nothing failed, so a verdict that only printed would be the same
+// silence with a longer summary line.
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);

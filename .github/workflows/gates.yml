@@ -258,6 +258,19 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-rollout-stamp.js --buses "$GITHUB_WORKSPACE/buses-data"
 
+      # The same argument again, for the verdict that says a committed S4 was never
+      # rendered (OA-198). Both rollout tools commit S4 and render S5 as a separate
+      # step, with a blocking-warning stop in between; the state that stop leaves is
+      # a manifest advertising an S4 whose stored sheets every byte gate PASSES
+      # against, and no JPG anywhere. The fast path then reports UP-TO-DATE and
+      # skips the map for ever. Every map on the estate is rendered today, which is
+      # the silence this verdict has to keep, so the only way to see it work is to
+      # provoke it. Six cases, FOUR of them controls, over BOTH rollout tools —
+      # the row was written about places and towns have the identical stop.
+      - name: Prove the unrendered-S4 verdict can go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-unrendered.js --buses "$GITHUB_WORKSPACE/buses-data"
+
       # And falsify the severity contract that decides whether a build may ship at
       # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that
       # has never been watched fail is a green light nobody has earned. Added

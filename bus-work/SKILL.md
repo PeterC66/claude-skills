@@ -114,9 +114,18 @@ Nothing here is a new source of truth; it is a join over what already exists.
 |---|---|
 | the portal's own `src/worklist/index.js` — **imported locally, fetched (`GET /api/admin/worklist`) when remote; never re-implemented** | ranks 1–6 and 9: publish reviews, applications, map requests, awaiting-build, refresh flags, proposed updates. The admin console's To-do tab renders the same call, so the two cannot show different lists |
 | `_gtfs/upcoming/upcoming-report_<date>.md` | which towns have service changes coming, matched to maps by the *same rule* `check-upcoming-refreshes.mjs` uses |
+| each map's `refresh-reviews.json` | which of those refresh rows have ALREADY been adjudicated against the current scan and found not to need a rebuild. Suppresses the row and says so; a newer scan brings it back |
 | each town's `manifest.json` + `routes.json.engine` vs `engine_version.js` | which renders pre-date the current engine, and how stale S6 is |
 | `status.js --json` (only under `--gates`, or as pushed by `push-status.mjs`) | the expensive proof: regenerate everything and diff |
 | `Correspondence/CORR-nnn/` message headers, and each map's `local-decisions.json` | rank 2 a reply owed to a real person, rank 3 **a reply drafted and not sent**, rank 9 a question asked locally and never answered |
+
+**A refresh row you have answered can now be cleared without rebuilding the map (buses-data OA-205).** A `refresh` row is a JOIN against the newest scan report, so until 2026-08-31 nothing could clear one except doing the rebuild it asks for — and on 2026-08-31 all 40 High Wycombe items were worked to a conclusion, none of them needed a rebuild, and the row came back unchanged with the same 40 on it. If you adjudicate a scan and the sheet does not need to change, **record it**, from the `bus-work` assets folder (`C:\u3a St Ives\.claude\skills\bus-work\assets`); `--map` is the map's OWN folder, the one holding `manifest.json`, and `--scan` must name a report that exists under `_gtfs/upcoming/` or the command refuses:
+
+```bash
+node refresh_review.mjs --map "C:/u3a St Ives/Using AI/Buses/Areas/High Wycombe" --scan 2026-08-31 --verdict no-rebuild --by <this session's name> --note "what you found, in one sentence"
+```
+
+The row disappears and the worklist header says how many it suppressed and why — it is never silently dropped. **A newer scan brings it straight back**, because the match is on the scan date and nothing else, and `--verdict rebuild-needed` records the reading without silencing anything. **Adjudicating a town does NOT adjudicate a place inside it**: a place's frame draws a different set of services, so it keeps its own row and its own file.
 
 **The last three sources are read from THIS LAPTOP and are identical in every mode.** Only the portal queues change between `--local` and `--url`: a stale render, an upcoming BODS change and an unsent letter are facts about this disk, not about a portal. So the same correspondence row appearing in a dev run and again in a live run is **correct, and not duplication** — there is one draft on one disk, and it belongs to neither portal. If it ever appeared twice inside a single run, that would be a bug.
 | `Development Docs/commitments.json` | rank 4 **a dated commitment now OVERDUE**, rank 7 one inside its warning window. Silent outside it |
@@ -131,9 +140,11 @@ Prove it can go red, and go quiet, from `C:\u3a St Ives\.claude\skills\bus-work\
 
 ```bash
 node prove-red-correspondence.mjs
+node prove-red-commitments.mjs
+node prove-red-refresh-review.mjs
 ```
 
-Every case there is a pair: make the state and see the row, clear the state and see it gone. Appearing is only half of it — a row still nagging about a letter that went out last week is a row that gets ignored, and then so is every row beside it.
+Every case there is a pair: make the state and see the row, clear the state and see it gone. Appearing is only half of it — a row still nagging about a letter that went out last week is a row that gets ignored, and then so is every row beside it. **The third is the same argument turned round and is the more dangerous half**: a refresh row suppressed by a review that never lifts has been silently deleted, and nobody would find out — so its cases prove a NEWER scan brings the row back with the old review still sitting in the file, and that an unreadable review file fails safe rather than quiet.
 
 If a queue is missing from the list, fix the source that owns it — **a portal queue is fixed in `community-bus-maps/src/worklist/index.js`** (which fixes the admin console at the same time), a local-tree signal in `worklist.mjs`. Do not work around a gap by reading the admin console separately; that is the habit this skill exists to end.
 

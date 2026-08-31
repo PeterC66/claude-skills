@@ -511,6 +511,54 @@ const haveKey = (k) => items.some((i) => i.key === k);
 // scan report directly is what this side adds: the changes are visible here the
 // moment the report lands. Anything the portal has already flagged arrives above
 // with its own item, so skip it rather than print the town twice.
+/*
+ * HAS THIS MAP ALREADY BEEN ADJUDICATED AGAINST THIS SCAN? (buses-data OA-205)
+ *
+ * A refresh row is a JOIN against the newest scan report, so nothing can clear one
+ * except rebuilding the map. On 2026-08-31 all 40 High Wycombe items were worked to
+ * a conclusion and none of them needed a rebuild; the row came back unchanged, with
+ * the same 40 on it. `refresh_review.mjs` writes `<mapDir>/refresh-reviews.json`
+ * and this reads it.
+ *
+ * MATCHED ON THE SCAN DATE AND NOTHING ELSE, which is what makes the suppression
+ * safe: reviewing 2026-08-31 cannot silence 2026-09-30, because the row is rebuilt
+ * from whatever report is newest and the review names a date. A review of a scan
+ * that does not exist cannot be written at all — refresh_review.mjs refuses one.
+ *
+ * SUPPRESSED, AND COUNTED OUT LOUD. The row is not silently dropped: the header
+ * says how many were suppressed and against which scan, so a suppression that has
+ * gone wrong is visible in the one place somebody is already reading. A list that
+ * hides rows without saying so has the same problem as one carrying rows nobody can
+ * clear.
+ */
+const adjudicated = [];
+const reviewedAgainst = (mapDir, scanDate) => {
+  if (!mapDir || !scanDate) return null;
+  const f = path.join(mapDir, 'refresh-reviews.json');
+  if (!existsSync(f)) return null;
+  let j = null;
+  try { j = JSON.parse(readFileSync(f, 'utf8')); } catch { return null; }
+  const hit = (j.reviews || []).find((r) => r.scan === scanDate && r.verdict === 'no-rebuild');
+  return hit || null;
+};
+/*
+ * A PLACE HAS ITS OWN FILE, and this resolver is the reason that is true rather
+ * than hoped for. `townMaps()` below matches a place by its `subject` containing
+ * the town name, so `High Wycombe Aldi` gets a row out of the High Wycombe section
+ * of the scan — but its map folder is its OWN, so the town's review is not found
+ * for it. Adjudicating a town does not adjudicate a place whose frame is different
+ * and whose sheet draws a different set of services (OA-205 item 4).
+ */
+const localDirOf = (m) => {
+  if (m.kind === 'area') {
+    const t = tree.towns.find((x) => x.name.toLowerCase() === (m.name || '').toLowerCase());
+    return t ? t.dir : null;
+  }
+  const want = (m.name || '').toLowerCase();
+  const pl = tree.places.find((x) => x.name.toLowerCase() === want)
+    || tree.places.find((x) => want.includes(x.name.toLowerCase()));
+  return pl ? pl.dir : null;
+};
 const townMaps = (town) => {
   const lower = town.toLowerCase();
   return (portal ? portal.maps : []).filter((m) => m.built && (
@@ -523,6 +571,8 @@ if (upcoming) {
     const localTown = tree.towns.find((t) => t.name.toLowerCase() === s.town.toLowerCase());
     for (const m of maps) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
+      const seen = reviewedAgainst(localDirOf(m), upcoming.date);
+      if (seen) { adjudicated.push({ map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
@@ -546,6 +596,8 @@ if (upcoming) {
       });
     }
     if (!maps.length && localTown) {
+      const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
+      if (seenLocal) { adjudicated.push({ map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
         title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}`,
@@ -663,6 +715,10 @@ const meta = {
     demoHidden: SHOW_DEMO ? 0 : demoAll.length,
     byType: shown.reduce((a, i) => ({ ...a, [i.type]: (a[i.type] || 0) + 1 }), {}),
   },
+  // OA-205: which refresh rows were suppressed, and why. In the JSON as well as on
+  // the console, because a caller reading --json must not see a shorter list than a
+  // person does with no way to find out why.
+  adjudicated,
   warnings,
 };
 
@@ -685,6 +741,15 @@ console.log(bannerRule);
 console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
 console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${shown.length} item(s)\n`);
 for (const w of warnings) console.log(`  ! ${w}`);
+if (adjudicated.length) {
+  const scanSaid = upcoming ? upcoming.date : '?';
+  console.log('  ' + adjudicated.length + ' refresh row' + (adjudicated.length === 1 ? '' : 's')
+    + ' suppressed \u2014 already adjudicated against the ' + scanSaid + ' scan and found not to need a rebuild:');
+  for (const a of adjudicated) {
+    console.log('    ' + a.map + (a.by ? ' (' + a.by + ')' : '') + (a.note ? ' \u2014 ' + a.note.slice(0, 90) : ''));
+  }
+  console.log('');
+}
 if (warnings.length) console.log('');
 if (!SHOW_DEMO && demoAll.length) console.log(`  (${demoAll.length} demo-customer row${demoAll.length === 1 ? '' : 's'} hidden — --demo to show)\n`);
 

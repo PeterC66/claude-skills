@@ -587,9 +587,15 @@ for (const r of displayed) {
   }
   if (nMatched === 0 && chainNeverLeavesTown(fe)) {
     /*
-     * A TRUNCATED chain. Wisbech's `excel` holds only its 15 local stops, both ends
-     * inside Wisbech / Wisbech St Mary, while its declared termini are Peterborough
-     * and Norwich. "Neither declared terminus appears at the ends of its full chain"
+     * A TRUNCATED chain: both ends of every direction sit inside the town, while the
+     * declared termini are settlements beyond it. Wisbech's `excel` was the worked
+     * example — 15 local stops against declared termini of Peterborough and Norwich —
+     * until 2026-08-31, when that chain turned out to be truncated by the DATE its
+     * bustimes pull ran on rather than by anything about the route, and re-pulling it
+     * gave 95 stops running the full Peterborough–Norwich length. The shape below is
+     * still real and still worth suppressing; it just no longer has a live example in
+     * this estate, and prove-s6-checks.js now BUILDS one rather than borrowing it.
+     * "Neither declared terminus appears at the ends of its full chain"
      * is then perfectly true and says nothing about the sheet, which draws the route
      * correctly as two external spokes. The chain never left town, so it cannot
      * confirm OR contradict a terminus beyond it -- the check did not run.

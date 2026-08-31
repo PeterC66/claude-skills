@@ -353,7 +353,35 @@ console.log('\n3b. Direction coverage — the fraction that ran, and it must acc
 /* ------------------------------------------------------------------ 4. truncated chain */
 console.log('\n4. Truncated chain — a chain that never leaves town cannot contradict a terminus');
 {
+  /* BUILD the truncation; do not borrow it. Until 2026-08-31 this case simply used
+   * Wisbech's `excel` as it stood, because that chain happened to hold only its 15
+   * local stops — which was not a property of the route but the July S2 pull having
+   * been truncated by the date it ran on. Correcting that data (excel's chain is 95
+   * stops, Peterborough to Norwich) took the premise away and both checks here went
+   * red, on a build that had changed nothing about S6. A fixture that borrows a real
+   * object for the property under test holds only while nobody fixes the object. */
+  const TOWN = '0500FWISH';
+  /* Clip BOTH `directions` and `canonical`. verify_report's fullDirections() unions the
+   * two, so clipping only one leaves the other carrying the chain that does leave town
+   * and chainNeverLeavesTown() stays false — which is exactly the wrong-field mistake
+   * this case is meant to be about. */
+  const excelDirs = (full) => [
+    ...(full.excel.directions ? Object.values(full.excel.directions) : []),
+    ...(full.excel.canonical || []),
+  ].filter(d => d && Array.isArray(d.stops) && d.stops.length);
+  const clipToTown = (dirPath) => {
+    const full = readJ(dirPath, 'routes_full_atco.json');
+    for (const dir of excelDirs(full)) {
+      const kept = dir.stops.filter(a => a.startsWith(TOWN));
+      if (kept.length >= 2) dir.stops = kept;
+    }
+    full.excel.all = [...new Set(excelDirs(full).flatMap(x => x.stops))];
+    writeJ(dirPath, 'routes_full_atco.json', full);
+    return full;
+  };
+
   const d = stage('wisbech', 'trunc');
+  clipToTown(d);
   const a = verify(d);
   /* The fact asserted here has not changed — a chain that never leaves town does
    * not contradict a terminus — but since 2026-08-29 (OA-156) it is carried in
@@ -372,11 +400,12 @@ console.log('\n4. Truncated chain — a chain that never leaves town cannot cont
   // Extend the chain one stop beyond town: it now HAS left town, so the check
   // applies again and the same declared termini become a real contradiction.
   const c = stage('wisbech', 'trunc-loud');
-  const full = readJ(c, 'routes_full_atco.json'), ll = readJ(c, 'atco2ll.json');
-  const dirs = full.excel.directions ? Object.values(full.excel.directions) : full.excel.canonical;
+  const full = clipToTown(c);                 // same truncation, so the two cases differ by ONE stop
+  const ll = readJ(c, 'atco2ll.json');
   const outsider = '0500HTYDD001';            // Tydd, a locality that is not Wisbech
   ll[outsider] = [52.73, 0.15];
-  dirs[0].stops.push(outsider);
+  excelDirs(full)[0].stops.push(outsider);
+  full.excel.all = [...new Set(excelDirs(full).flatMap(x => x.stops))];
   writeJ(c, 'routes_full_atco.json', full); writeJ(c, 'atco2ll.json', ll);
   const b = verify(c);
   check('once the chain leaves town, the same data goes HARD', 'hard terminus on EXCEL',

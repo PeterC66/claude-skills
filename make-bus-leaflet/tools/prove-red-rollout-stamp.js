@@ -50,6 +50,39 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { scratchDir } = require('../assets/scratch');
+const { computeEngineVersion, computePlaceEngineVersion } = require('../assets/engine_version');
+
+/*
+ * STAMP THE FIXTURE WITH TODAY'S ENGINE, rather than borrowing whatever the estate
+ * happens to carry (2026-08-31).
+ *
+ * Cases A and E are CONTROLS: "the stamp is untouched, so the verdict must be
+ * UP-TO-DATE". They took the stamp from a real map's committed `ci-reference`, which
+ * makes them a claim about the ESTATE — that the borrowed map is currently built on
+ * the current engine — and not about the mechanism they exist to prove.
+ *
+ * It went red at 11:33 on 2026-08-31 and stayed red for every commit after, on a
+ * step that had nothing to do with any of them. The POI change moved the PLACE
+ * template hash to `cfc8e820e8` while all twelve places are stamped `76cfef4804`,
+ * so case E's control reported STAMP-STALE — correctly, about the estate — and case
+ * F's assertion about which hash is quoted failed for the same reason. Nothing was
+ * wrong with rollout_places.js.
+ *
+ * THIS IS THE THIRD TIME TODAY. `prove-red-status.js` had a case that depended on a
+ * live staleness exception (fixed in August by building its own), and then its ANCHOR
+ * and its DONOR TOWN still depended on today's estate and took buses-data CI down
+ * this morning. The shape is *the remedy stopped one level short*: a fixture built
+ * out of whatever the estate looks like today tests the estate, not the code.
+ *
+ * The town half is fixed too, and it is GREEN today — the eight towns happen to be
+ * current. Leaving it would be leaving the same trap set for whenever the town
+ * template next moves, which is the only reason the place half was ever red.
+ */
+function stampCurrent(routesPath, hash) {
+  const j = JSON.parse(fs.readFileSync(routesPath, 'utf8'));
+  j.engine = hash;
+  fs.writeFileSync(routesPath, JSON.stringify(j, null, 2));
+}
 
 const ROOT = path.join(__dirname, '..');
 const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
@@ -85,6 +118,7 @@ function buildFixture() {
   const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
   if (!rec) { console.error('prove-red-rollout-stamp: no latest S3 run in the manifest.'); process.exit(1); }
   fs.cpSync(path.join(srcTown, rec.dir), path.join(dst, rec.dir), { recursive: true });
+  stampCurrent(path.join(dst, 'ci-reference', 'routes.json'), computeEngineVersion());
   return tmp;
 }
 
@@ -211,6 +245,7 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     const s3 = man.stages && man.stages.S3;
     const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
     if (rec) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });
+    stampCurrent(path.join(dst, 'ci-reference', 'routes.json'), computePlaceEngineVersion());
     return tmp;
   }
   const placeRoutes = (tmp) => path.join(tmp, 'Areas', PLACE_TOWN, 'Places', PLACE, 'ci-reference', 'routes.json');

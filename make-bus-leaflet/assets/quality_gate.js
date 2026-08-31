@@ -308,7 +308,21 @@ function accept(busesDir, rows, ledgerPath) {
   const out = { recorded: new Date().toISOString().slice(0, 10), note: prev.note || DEFAULT_NOTE };
   if (prev.targets) out.targets = prev.targets;   // ahead of `sheets`, which is 300 lines long
   out.sheets = sheets;
-  fs.writeFileSync(ledgerPath, JSON.stringify(out, null, 2) + '\n');
+  /* ONE SPACE, because that is what the committed ledger is stored with and this
+   * function is the only thing that should ever write it.
+   *
+   * It has been TWO since 2026-08-25 (e0a530f), and the committed file has been one
+   * throughout, so every `--accept` reformatted all 468 lines and buried its real
+   * change in them. The visible cost is in the history: `099a2b9` and `c0fc71d`,
+   * both re-records, each land a tidy 21-line diff — because their authors ran the
+   * tool, saw an unreviewable diff, and applied the change to the file by hand
+   * instead. A generated file that people hand-edit to keep readable has stopped
+   * being generated, and the ratchet's whole defence is that "lowering a ceiling is
+   * a deliberate, reviewable commit". A reformat is not reviewable.
+   *
+   * The fix is here rather than in the file: reformatting 468 lines once would make
+   * this diff agree and leave every future one at the mercy of the same drift. */
+  fs.writeFileSync(ledgerPath, JSON.stringify(out, null, 1) + '\n');
 }
 
 module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal, partitionByCommitted, dirtyPaths, LEDGER_NAME };

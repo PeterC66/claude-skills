@@ -582,15 +582,21 @@ if (RUN_GATES && SK) {
 // writes the customer into `why` and sometimes the title, the local refresh
 // rows carry it in `who`. Test all three rather than pick one.
 //
-// ONE ROW THIS CANNOT CLASSIFY, and it is left visible on purpose. The
-// applications queue arrives as a ROLLUP -- "Decide 8 organisation
-// applications" -- and on the dev checkout seven of those eight are seeded
-// "Test <sector>" rows while the eighth, Ramsey Town Council, is real. Neither
-// half carries "(demo)", and hiding the row to be rid of the seven would hide
-// the one. Splitting it is the portal's job, in src/worklist/index.js, since
-// only it knows which application is which. Widening the pattern to /^Test /
-// would also hide a genuine applicant called Testwood Parish Council, which is
-// the wrong way for this to fail.
+// THE ROLLUP ROWS ARE THE PORTAL'S TO CLASSIFY, not this pattern's. An item
+// like "Decide 8 organisation applications" covers eight underlying records
+// and this tool sees only the sentence; if even one of the eight were real the
+// row would have to be shown, and if none are it must not be. Only the module
+// that built it can tell, so src/worklist/index.js splits that queue itself and
+// sets `demo` on the item -- which survives the spread where portal items are
+// added above, so this pattern never has to guess at it.
+//
+// That split exists because of a wrong answer given here on 2026-08-31: the
+// eight pending applications on the dev checkout are seven obvious
+// "Test <sector>" rows and one called "Ramsey Town Council", and the absence of
+// a "(demo)" suffix on the last one was read as evidence it was real. It is
+// seeded too (seed-demo.mjs), and the evidence that settles it is the ADDRESS
+// -- clerk@ramsey-tc.example, on an RFC 2606 reserved TLD that can never
+// receive mail. A name can look real. A reserved domain cannot be one.
 const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;

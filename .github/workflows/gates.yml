@@ -47,9 +47,26 @@ jobs:
         with:
           path: skills
 
+      # WHICH NODE? THE ONE THE PRODUCT RUNS (buses-data OA-209, 2026-08-31).
+      #
+      # This said 20 until 2026-08-31 while the deployment image has been
+      # `FROM node:24-slim` since August. A hardcoded major keeps passing after a
+      # base-image bump while quietly testing a runtime the product never runs --
+      # the same lesson buses-data's `gates.yml` and the portal's `verify.yml`
+      # both carry, and this was the third repository it had not reached.
+      #
+      # The `status` job below DERIVES the major from the portal's Dockerfile,
+      # which is the better pattern and the one to copy. This job cannot: it
+      # checks out `skills` alone, and reading the Dockerfile would mean giving
+      # the one job with NO secrets a cross-repo token -- so a CROSS_REPO_PAT2
+      # expiry would take the unit suite down with the byte gates, which is
+      # exactly the coupling the docs job in buses-data was split out to avoid.
+      # A literal that is WRONG and self-maintaining beats a literal that is
+      # right today and maintained by remembering; here the trade goes the other
+      # way, so it is written down instead.
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: skills/make-bus-leaflet/package-lock.json
 
@@ -252,9 +269,40 @@ jobs:
           echo "portal refs now visible to the vendoring row:"
           git -C community-bus-maps for-each-ref --format='  %(refname:short)  %(committerdate:relative)' refs/remotes/
 
+      # WHICH NODE? THE ONE THE PRODUCT RUNS (buses-data OA-209, 2026-08-31).
+      #
+      # Derived rather than pinned, copied from buses-data's own `gates.yml`,
+      # which learned it from the portal's `verify.yml`: "a hardcoded major keeps
+      # passing after a base-image bump while quietly testing the wrong runtime --
+      # a green check that has stopped meaning what its name says". This job
+      # already checks out `community-bus-maps` above, so the Dockerfile is here
+      # and there is nothing to pay for reading it.
+      #
+      # THE COST OF THE 20 THIS REPLACES WAS PRECISE, and it was coverage rather
+      # than red. `node:sqlite` arrived in Node 22, so on the runner
+      # `require('node:sqlite')` threw ERR_UNKNOWN_BUILTIN_MODULE and the two
+      # register arms of `prove-s6-checks.js` section 13 printed NOT RUN on every
+      # run ever made. The whole register path in `verify_report.js` -- the
+      # OA-038 gazetteer join -- was therefore exercised on exactly one machine,
+      # the laptop it was written on.
+      #
+      # Fails loudly if the FROM line cannot be read, because silently falling
+      # back to a default is the same bug wearing a different hat.
+      - name: What Node does the deployment image use?
+        id: nodever
+        working-directory: community-bus-maps
+        run: |
+          major=$(sed -n 's/^FROM node:\([0-9][0-9]*\).*/\1/p' Dockerfile | head -1)
+          if [ -z "$major" ]; then
+            echo "::error::could not read a Node major from community-bus-maps/Dockerfile's FROM line"
+            exit 1
+          fi
+          echo "  Dockerfile FROM node:$major-slim -> running the gates on Node $major"
+          echo "major=$major" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: ${{ steps.nodever.outputs.major }}
           cache: npm
           cache-dependency-path: skills/make-bus-leaflet/package-lock.json
 

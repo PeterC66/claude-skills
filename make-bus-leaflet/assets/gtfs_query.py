@@ -11,6 +11,26 @@ Emits the facts the make-bus-leaflet S1 stage needs (routes / operators / days /
 termini), straight from BODS open data. Geometry and community/pre-book (DRT)
 services are NOT covered here -- keep the bustimes/OSM pass for those.
 
+WHICH DAYS A ROUTE RUNS -- resolved, not declared (OA-204, fixed 2026-08-31)
+  GTFS lets TWO tables define the answer: `calendar` carries a weekday pattern and a
+  window, and `calendar_dates` adds and removes individual dates on top of it. Neither
+  is authoritative alone. `days`/`daysFlags` are therefore derived from the weekdays on
+  which the route actually carries a journey AT THE TOWN somewhere in the sampled window,
+  resolved through `_runs` -- the same expansion the frequency fields already used.
+
+  Until 2026-08-31 they were read from the `calendar` row's weekday columns, and
+  calendar_dates additions were folded in only for a service with NO calendar row. A
+  service filed Mon-Fri that adds every Saturday and Sunday as exceptions therefore read
+  **Mon-Fri**. High Wycombe's route 300 is exactly that -- a Mon-Fri base plus 263
+  additions covering every weekend of a nine-month registration -- and the operator runs
+  25 journeys on Sat 12 Sept 2026 and 12 on Sun 13 Sept. Taken at face value it would have
+  printed "no Sunday bus" onto a sheet where Sunday buses run, and no byte gate could see
+  it: the gate compares the drawing with ci-reference, not with the world.
+
+  `daysBasis` says which claim you are reading. Normally "resolved ..."; it falls back to
+  the DECLARED calendar pattern only when the sampled window holds no journey at all (a
+  seasonal route sampled out of season), which is a weaker claim and labelled as one.
+
 HOW OFTEN A ROUTE RUNS -- read this before using any number below
   `journeysPerWeek` is the honest one: real journeys calling at the town in a
   week, obtained by expanding each trip's calendar (and its calendar_dates
@@ -261,6 +281,13 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
     contested=[tid for ids in tied.values() if len(ids)>1 for tid in ids]
     sigs=_trip_signatures(cur, contested) if contested else {}
     weekly=[]; best_day=0; out_n=back_n=0; deps=[]; dupday={}
+    # Which weekdays this route ACTUALLY carries a journey at the town, anywhere in the
+    # sampled window. This is the honest answer to "what days does it run?" and it is free
+    # here, because the loop below already resolves every (service, date) through _runs --
+    # which is the only place calendar_dates is honoured. Deriving the days from the
+    # `calendar` row instead reports a Mon-Fri base with weekend calendar_dates additions
+    # as Mon-Fri; see the docstring and OA-204.
+    served=[0]*7
     # (week, weekday) -> [(minutes, direction)], for the day-shape fields below.
     # Weekdays only: a Saturday timetable is a different product, not a thin Tuesday.
     profiles={}
@@ -275,7 +302,7 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
                 if key in seen:            # the same journey, filed again
                     dupday[(wi,j)]=dupday.get((wi,j),0)+1; continue
                 seen.add(key)
-                n+=1; per_day[j]+=1
+                n+=1; per_day[j]+=1; served[j]=1
                 if j<5 and t["dep"]: profiles.setdefault((wi,j),[]).append((_mins(t["dep"]),str(t["dir"])))
                 if m is mondays[0]:
                     if str(t["dir"])=="1": back_n+=1
@@ -300,6 +327,7 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
       "firstDeparture":deps[0][:5] if deps else None,
       "lastDeparture":deps[-1][:5] if deps else None,
       "typicalDayDuplicates":dupday.get(best,0) if best else 0,
+      "servedFlags":served,
       **_day_shape(profiles.get(best) if best else None),
     }
 
@@ -337,6 +365,13 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
           SELECT DISTINCT t.service_id FROM trips t
           JOIN stop_times st ON st.trip_id=t.trip_id
           WHERE t.route_id IN ({ph}) AND {IN}{SVCF}""", rids)]
+        # The declared window, and the FALLBACK day pattern. These read `calendar` (plus, for
+        # a service that has no calendar row, its added dates) and are therefore the operator's
+        # DECLARATION, not what runs: a service filed Mon-Fri that adds every Saturday and
+        # Sunday through calendar_dates declares Mon-Fri and runs daily. The days actually
+        # published come from `servedFlags` below; this is used only when the sampled window
+        # contains no journey at all, so that a seasonal route sampled out of season still
+        # reports something rather than "?".
         flags=[0]*7; sd=set(); ed=set()
         for s in svc:
             rows=list(cur.execute("SELECT * FROM calendar WHERE service_id=?",(s,)))
@@ -344,10 +379,9 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
                 for i,dn in enumerate(DOW):
                     if c[dn]=="1": flags[i]=1
                 sd.add(c["start_date"]); ed.add(c["end_date"])
-            if not rows and asof:
+            if not rows:
                 # calendar_dates-only service (common for future/new routes): derive the running
-                # weekdays + window from its added dates. Only in --asof mode, to keep the default
-                # output byte-identical for the gated towns.
+                # weekdays + window from its added dates.
                 adds=[x[0] for x in cur.execute(
                     "SELECT date FROM calendar_dates WHERE service_id=? AND exception_type='1'",(s,))]
                 for dt in adds:
@@ -376,8 +410,17 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
           JOIN stop_times st ON st.trip_id=t.trip_id
           WHERE t.route_id IN ({ph}) AND {IN}{SVCF}""", rids))[0][0]
         freq=_journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays)
+        # OA-204. Prefer the RESOLVED days -- the weekdays this route actually carries a
+        # journey at the town somewhere in the sampled window, with calendar_dates honoured.
+        # Fall back to the declared calendar pattern only when the window holds no journey at
+        # all (a seasonal route sampled out of season), and say which was used, because
+        # "declared" and "observed" are two different claims and a reader cannot tell them
+        # apart from a day string alone.
+        served=freq.pop("servedFlags")
+        if any(served): flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"
+        else:           basis = "declared calendar pattern -- no journey at this town in the sampled window"
         out.append({"route":sn,"operator":" / ".join(sorted(d["ops"])),
-          "days":fmt_days(flags),"daysFlags":flags,
+          "days":fmt_days(flags),"daysFlags":flags,"daysBasis":basis,
           "validFrom":min(sd) if sd else None,"validTo":max(ed) if ed else None,
           "longName":" / ".join(sorted(d["long"])) if d["long"] else "",
           "headsigns":heads,"termini":sorted(ends),
@@ -390,7 +433,11 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
         s["possibleVariantOf"]=base[0] if base else None
     out.sort(key=lambda s:(len(s["route"]),s["route"]))
     con.close()
-    res={"town":town,"atcoPrefixes":prefixes,"near":near,"source":"BODS GTFS (east_anglia)",
+    # Name the dataset actually read. This said "(east_anglia)" unconditionally, so every
+    # Buckinghamshire and Bedfordshire pull ever written recorded the wrong region in the
+    # one field a later reader would use to check which feed a fact came from.
+    res={"town":town,"atcoPrefixes":prefixes,"near":near,
+         "source":"BODS GTFS (%s)"%os.path.splitext(os.path.basename(db))[0],
          "frequencyBasis":{
              "weeksSampled":len(mondays),
              "from":mondays[0].isoformat(),"to":(mondays[-1]+datetime.timedelta(6)).isoformat(),

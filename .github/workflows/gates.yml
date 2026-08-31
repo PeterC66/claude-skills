@@ -73,6 +73,19 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: python3 tools/prove-red-route-collision.py
 
+      # OA-204: gtfs_query.py read operating days from the `calendar` row and folded
+      # calendar_dates additions in only for a service with NO calendar row. GTFS lets
+      # both tables define the answer, so a Mon-Fri base that adds every weekend as an
+      # exception read Mon-Fri -- High Wycombe route 300, which would have printed 'no
+      # Sunday bus' onto a sheet where 12 Sunday journeys run. No byte gate could see it:
+      # the gate compares the drawing with ci-reference, not with the world. This harness
+      # re-runs the OLD derivation beside the new one and requires it to stay wrong, so
+      # the fix is shown to differ from the code that had the bug. Feed is synthetic and
+      # in-memory: no dataset, no built map. Added 2026-08-31.
+      - name: Prove the operating-days resolution can go red
+        working-directory: skills/make-bus-leaflet
+        run: python3 tools/prove-red-days-resolution.py
+
       # OA-141: redteam_source.js answered about the PARENT TOWN when run from a
       # place's own root, and said nothing about it. This cuts both fixes out and
       # requires the four guard tests to fail while the two CONTROLs hold.
@@ -309,6 +322,19 @@ jobs:
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: python3 tools/prove-red-route-collision.py
+
+      # OA-204: gtfs_query.py read operating days from the `calendar` row and folded
+      # calendar_dates additions in only for a service with NO calendar row. GTFS lets
+      # both tables define the answer, so a Mon-Fri base that adds every weekend as an
+      # exception read Mon-Fri -- High Wycombe route 300, which would have printed 'no
+      # Sunday bus' onto a sheet where 12 Sunday journeys run. No byte gate could see it:
+      # the gate compares the drawing with ci-reference, not with the world. This harness
+      # re-runs the OLD derivation beside the new one and requires it to stay wrong, so
+      # the fix is shown to differ from the code that had the bug. Feed is synthetic and
+      # in-memory: no dataset, no built map. Added 2026-08-31.
+      - name: Prove the operating-days resolution can go red
+        working-directory: skills/make-bus-leaflet
+        run: python3 tools/prove-red-days-resolution.py
 
       # OA-164, REPORTED not gated: eight files exist today, the pull guard already
       # stops them doing harm, and a check red on the day it lands gets muted. It is

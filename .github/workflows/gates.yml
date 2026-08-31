@@ -43,11 +43,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout claude-skills (engine)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: skills
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -200,12 +200,12 @@ jobs:
           exit $fail
 
       - name: Checkout claude-skills (engine)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: skills
 
       - name: Checkout buses-data
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: PeterC66/buses-data
           token: ${{ secrets.CROSS_REPO_PAT2 }}
@@ -222,7 +222,7 @@ jobs:
       # engine is ahead of the portal's main, which is exactly the state a
       # re-vendoring PR is in, and this row has never once been exercised.
       - name: Checkout community-bus-maps (portal, private)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: PeterC66/community-bus-maps
           token: ${{ secrets.CROSS_REPO_PAT2 }}
@@ -252,7 +252,7 @@ jobs:
           echo "portal refs now visible to the vendoring row:"
           git -C community-bus-maps for-each-ref --format='  %(refname:short)  %(committerdate:relative)' refs/remotes/
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload gate results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gate-results
           path: skills/make-bus-leaflet/gate-results.json

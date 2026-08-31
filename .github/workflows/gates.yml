@@ -131,6 +131,20 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-via-chain
 
+      # OA-200. The board's VENDORING verdict used to compare each skill source
+      # against the portal's WORKING TREE, so it was a claim about whichever branch
+      # a mutable local checkout happened to be on. On 2026-08-31 it named
+      # engine/place/gen_internal.js as DRIFTED while main was in sync, and the
+      # consequence a reader would have seen was a real complaint about a published
+      # sheet -- a re-vendor PR was one command from being opened. This builds a
+      # SYNTHETIC portal repository in the temp dir, so it needs neither the portal
+      # nor buses-data, and it falsifies itself: the two cases about which tree was
+      # read are re-run against a copy of status.js with the fix removed, and both
+      # must go red for their own named reason.
+      - name: Prove the portal vendoring verdict reads a ref, not a checkout
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-portal-drift
+
   status:
     runs-on: ubuntu-latest
     steps:

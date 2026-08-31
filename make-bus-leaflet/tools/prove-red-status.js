@@ -421,6 +421,44 @@ const CASES = [
   },
 ];
 
+/* ---- PREFLIGHT: is the ROOM green before any case runs? (OA-200) -----------
+ *
+ * Every case here judges an EXIT CODE, and the board's exit code answers about
+ * everything it can see — including the real portal, which this harness reads and
+ * does not own. Anything red out there reddens every case whose `expect` is 0,
+ * and `CONTROL RED` and `caught` are the same exit code seen from two different
+ * expectations. That is not hypothetical: on 2026-08-31 three of nine controls
+ * were red because the local portal checkout sat on a feature branch, the harness
+ * printed CONTROL RED in a column nobody read, and against a tree pinned at
+ * origin/main the same code was 11 of 11 green. A harness whose controls are red
+ * for an ambient reason is one whose FINDINGS cannot be trusted either.
+ *
+ * So the room is measured first, on a scratch Buses tree holding NO maps at all:
+ * nothing but the environment can colour that board, and a non-zero exit from it
+ * is a statement about the room and nothing else. It ABORTS rather than reporting,
+ * because the one thing already proved not to work is saying it in a column. Exit
+ * 2, not 1: "this harness could not run" is a different claim from "a gate does
+ * not work", and a caller that cannot tell them apart learns the wrong thing. */
+function preflight() {
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-preflight-'));
+  const { code, json } = board(empty);
+  if (!KEEP) fs.rmSync(empty, { recursive: true, force: true });
+  if (code === 0) return;
+
+  console.error('prove-red-status: the board is already red on an EMPTY tree, so nothing this harness');
+  console.error('reports would be about the gate it points at. Clear the room first, then re-run.\n');
+  const src = json && json.portalDriftSource;
+  if (src) {
+    console.error('  vendoring rows read from ' + (src.ref ? src.ref + ' ' + src.sha : 'THE WORKING TREE at ' + src.dir)
+      + ' · checkout on ' + (src.branch || '?') + ' @ ' + (src.head || '?'));
+  }
+  const drift = ((json && json.portalDrift) || []).filter(r => r.same === false || r.same === null);
+  for (const r of drift) console.error('  ' + (r.status || (r.same === null ? 'MISSING' : 'DRIFTED')).padEnd(10) + r.file + (r.note ? '  — ' + r.note : ''));
+  if (!drift.length) console.error('  (the vendoring rows are clean — read the board itself: node assets/status.js --no-quality --no-live)');
+  process.exit(2);
+}
+preflight();
+
 const rows = [];
 const kept = [];
 let failed = 0;

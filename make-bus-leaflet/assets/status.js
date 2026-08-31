@@ -28,6 +28,7 @@
 const fs = require('fs');
 const path = require('path');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, dataScriptDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
+const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
 
@@ -569,46 +570,148 @@ function gatePortalFixture() {
 // vendored?" — it cannot see the skill tree. THIS one runs on the laptop where
 // both trees exist and asks the other question, "has the source moved on
 // without us?". Neither can answer the other's.
+//
+// WHICH TREE THIS READS, AND WHY IT IS NOT THE DISK (OA-200, 2026-08-31). Until
+// that day this function read the portal's WORKING TREE, so its verdict was a
+// claim about whichever branch a mutable local checkout happened to be on. It
+// reported `DRIFTED  gen_internal.js -> engine\place\gen_internal.js` while
+// `main` was perfectly in sync: the checkout sat on `worklist-demo-applications`,
+// cut before the re-vendor merged. The named file was the place generator, the
+// skill change was OA-175's exitCaption(), and the consequence a reader would
+// have seen is the live place engine printing `to X` on both tails of a one-way
+// loop — which is CORR-001's point one, in writing, about a published sheet. A
+// re-vendor PR was one command away from being opened. The only thing that
+// stopped it was `vendor-engine.mjs --dry-run` answering `27 already current,
+// 0 would move`: two tools reading two different things, and nothing but their
+// disagreement to say which question each was answering.
+//
+// It now asks GIT for a named ref — `origin/main` where there is one, else HEAD
+// — which is the rule deploymentRow() below already follows, for the same
+// reason: the question this row is asked is *is the deployable engine stale*,
+// not *is it stale on whatever branch I am sitting on*. The ref it read is
+// printed beside the table and carried in --json, so the answer can never again
+// be quietly about something else. `origin/main` is only as fresh as the last
+// fetch, and that is deliberately not fixed here — a board must not have network
+// side effects — but it is not silent either: a stale `origin/main` makes the
+// Deployment row disagree with the live site, which is a red of its own.
+//
+// A LOCAL RE-VENDOR THAT HAS NOT MERGED IS ITS OWN STATUS, not a silent green.
+// `PENDING` means the ref differs and the working tree agrees — somebody has
+// vendored the file and the PR has not landed. It still gates, because until it
+// lands the deployable engine IS stale, but it says which of the two states it
+// is in, which the working-tree reading could not.
+
+// The portal ref this board's vendoring verdict is about. Null when there is no
+// portal checkout; `ref: null` when there is one and git cannot name anything in
+// it, in which case the caller falls back to the disk AND SAYS SO.
+function portalSource() {
+  if (!exists(PORTAL)) return null;
+  const has = (r) => !!gitIn(PORTAL, ['rev-parse', '--verify', '--quiet', r]);
+  const ref = has('origin/main') ? 'origin/main' : has('HEAD') ? 'HEAD' : null;
+  return {
+    ref,
+    sha: ref ? gitIn(PORTAL, ['rev-parse', '--short', ref]) : null,
+    branch: gitIn(PORTAL, ['rev-parse', '--abbrev-ref', 'HEAD']),
+    head: gitIn(PORTAL, ['rev-parse', '--short', 'HEAD']),
+    dir: PORTAL,
+  };
+}
+
+// One blob out of a ref, as BYTES. Buffer, not string: these are compared with
+// sameBytesIgnoringLineEndings, and a utf8 round-trip would rewrite every byte
+// that is not legal UTF-8 — the fault line_endings.js exists to document.
+function gitShow(dir, ref, relPath) {
+  try {
+    return require('child_process').execFileSync('git', ['show', ref + ':' + String(relPath).replace(/\\/g, '/')],
+      { cwd: dir, encoding: 'buffer', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+  } catch { return null; }
+}
+
 function portalDrift() {
-  if (!exists(PORTAL)) return [];
+  if (!exists(PORTAL)) return { source: null, rows: [] };
   const engineDir = path.join(PORTAL, 'engine');
-  const manifestPath = path.join(engineDir, 'vendored.json');
-  if (!exists(manifestPath)) {
-    return [{ file: 'engine/vendored.json', same: null,
+  const source = portalSource();
+  const ref = source && source.ref;
+
+  // The manifest comes out of the SAME tree as the files it describes. Reading
+  // the list from disk and the files from a ref would be a third way of being
+  // wrong, and the one hardest to spot: a file added to engine/ on a branch
+  // would be UNLISTED against a manifest that never named it.
+  const manifestBuf = ref ? gitShow(PORTAL, ref, 'engine/vendored.json') : null;
+  let manifest = null;
+  if (manifestBuf) { try { manifest = JSON.parse(manifestBuf.toString('utf8')); } catch { manifest = null; } }
+  else if (exists(path.join(engineDir, 'vendored.json'))) manifest = readJson(path.join(engineDir, 'vendored.json'));
+  if (!manifest) {
+    return { source, rows: [{ file: 'engine/vendored.json', same: null,
       status: 'NO-MANIFEST',
-      note: 'no manifest in the portal — nothing here can say which files are vendored' }];
+      note: 'no manifest in ' + (ref || 'the portal working tree') + ' — nothing here can say which files are vendored' }] };
   }
   const SKILL_ROOT = path.resolve(SK, '..', '..');   // …/.claude/skills
-  const manifest = readJson(manifestPath) || {};
   const entries = Array.isArray(manifest.files) ? manifest.files : [];
   const rows = [];
 
   for (const e of entries) {
-    const portalFile = path.join(engineDir, e.path);
     if (e.kind === 'portal-owned') continue;         // no source to compare against
+    const rel = 'engine/' + String(e.path).replace(/\\/g, '/');
     const skillFile = path.join(SKILL_ROOT, e.source || '');
-    rows.push({
-      file: (e.source ? path.basename(e.source) : '?') + ' -> ' + path.join('engine', e.path),
-      same: sameIgnoringLineEndings(skillFile, portalFile),
-    });
+    const label = (e.source ? path.basename(e.source) : '?') + ' -> ' + path.join('engine', e.path);
+    const diskFile = path.join(PORTAL, rel);
+    const skillBuf = exists(skillFile) ? fs.readFileSync(skillFile) : null;
+    const diskBuf = exists(diskFile) ? fs.readFileSync(diskFile) : null;
+    const refBuf = ref ? gitShow(PORTAL, ref, rel) : null;
+    const against = ref ? refBuf : diskBuf;
+    if (!skillBuf || !against) { rows.push({ file: label, same: null }); continue; }
+    const same = sameBytesIgnoringLineEndings(skillBuf, against);
+    const row = { file: label, same };
+    if (!same && diskBuf && sameBytesIgnoringLineEndings(skillBuf, diskBuf)) {
+      row.status = 'PENDING';
+      row.note = 'vendored in the working tree and not on ' + ref + ' yet';
+    }
+    rows.push(row);
   }
 
   // The population check. A .js under engine/ that the manifest does not name is
   // exactly the fault this rewrite is about, so it is red here as well as in the
   // portal's own check — the two components count the same set or neither does.
+  // Enumerated from the REF for the same reason the files are: walking the disk
+  // would name a file a feature branch had just added, which is the OA-200 shape
+  // wearing the population's coat rather than the content's.
   const listed = new Set(entries.map(e => String(e.path).replace(/\\/g, '/')));
-  const walk = (dir, prefix) => {
-    for (const name of fs.readdirSync(dir).sort()) {
-      const full = path.join(dir, name);
-      const rel = prefix ? prefix + '/' + name : name;
-      if (fs.statSync(full).isDirectory()) walk(full, rel);
-      else if (name.endsWith('.js') && !listed.has(rel)) {
-        rows.push({ file: path.join('engine', rel) + ' (not named in engine/vendored.json)', same: null, status: 'UNLISTED' });
-      }
+  const unlisted = (rel) => rows.push({ file: path.join('engine', rel) + ' (not named in engine/vendored.json)', same: null, status: 'UNLISTED' });
+  const tree = ref ? gitIn(PORTAL, ['ls-tree', '-r', '--name-only', ref, '--', 'engine']) : null;
+  if (tree !== null) {
+    for (const p of tree.split('\n').map(s => s.trim()).filter(Boolean)) {
+      if (!p.endsWith('.js')) continue;
+      const rel = p.replace(/^engine\//, '');
+      if (!listed.has(rel)) unlisted(rel);
     }
-  };
-  if (exists(engineDir)) walk(engineDir, '');
-  return rows;
+  } else if (exists(engineDir)) {
+    const walk = (dir, prefix) => {
+      for (const name of fs.readdirSync(dir).sort()) {
+        const full = path.join(dir, name);
+        const rel = prefix ? prefix + '/' + name : name;
+        if (fs.statSync(full).isDirectory()) walk(full, rel);
+        else if (name.endsWith('.js') && !listed.has(rel)) unlisted(rel);
+      }
+    };
+    walk(engineDir, '');
+  }
+  return { source, rows };
+}
+
+// One line saying which tree the table above is a statement about. It is printed
+// unconditionally, including when everything is in sync, because the whole cost
+// of OA-200 was that a verdict looked the same whichever tree produced it.
+function driftSourceLine(source) {
+  if (!source) return null;
+  if (!source.ref) {
+    return 'read from THE WORKING TREE at ' + source.dir + ' — git could not name a ref there, '
+      + 'so this is a claim about whatever is on that disk right now';
+  }
+  const onRef = source.head && source.sha && source.head === source.sha;
+  return 'read from ' + source.ref + ' ' + source.sha
+    + ' · checkout on ' + (source.branch || '?') + ' @ ' + (source.head || '?')
+    + (onRef ? '' : ' (a different commit — the table is about ' + source.ref + ', not about the checkout)');
 }
 
 // ---- run ---------------------------------------------------------------
@@ -618,7 +721,8 @@ const townRows = towns.map(gateTown);
 const placeRows = places.map(gatePlace);
 const portalFixtureRows = gatePortalFixture();
 const freshnessRows = fixtureFreshness();
-const driftRows = portalDrift();
+const drift = portalDrift();
+const driftRows = drift.rows;
 
 // The quality ratchet (Phase 8 item 1). Measured off the ci-reference copies —
 // what actually shipped — so a green byte gate and a green quality row are
@@ -868,7 +972,7 @@ async function main() {
   const deploy = await deploymentRow();
   const commit = commitmentRows();
   if (AS_JSON) {
-    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2));
+    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2));
     return bad || deploy.status === 'BEHIND' || commitBad(commit);
   }
 
@@ -967,6 +1071,8 @@ async function main() {
 
   if (driftRows.length) {
     console.log('\n=== Portal vendoring drift (skill -> portal, CRLF-safe) ===');
+    const srcLine = driftSourceLine(drift.source);
+    if (srcLine) console.log('  ' + srcLine);
     for (const r of driftRows) console.log('  ' + (r.status || (r.same === null ? 'MISSING' : r.same ? 'in sync' : 'DRIFTED')).padEnd(9) + r.file);
   }
 

@@ -883,6 +883,111 @@ console.log('\n12. missing-service — a borrowed answer is a superset, and the 
     JSON.stringify(lentMs.map(f => f.evidence && f.evidence.borrowedFrom)));
 }
 
+/* ------------------------- 13. the NaPTAN register behind the terminus check (OA-038) */
+console.log('\n13. The stop register — it may only ever REMOVE a terminus finding, never add one');
+{
+  /*
+   * OA-038, 2026-08-31. Two gazetteers were built on 2026-08-22 by concurrent
+   * sessions: this engine's hand-seeded `naptan_localities.json`, which had ONE
+   * entry, and `_gtfs/naptan.sqlite`, the DfT register with a locality and a parent
+   * for all 127,658 stops. verify_report.js now reads the register and keeps the
+   * hand file as the offline fallback.
+   *
+   * THIS CASE BUILDS ITS OWN REGISTER, and that is the point rather than an
+   * economy. `_gtfs/*.sqlite` is gitignored — 38 MB of rebuildable data in no
+   * repository — so a CI clone has no register at all, and a case that read the
+   * real one would be a check sited where its subject cannot exist: green for ever
+   * on the one machine that has the file and silently skipped everywhere else.
+   * Two rows of synthetic sqlite are enough, and they make the fixture say exactly
+   * what is being tested instead of borrowing an estate fact that can move.
+   *
+   * THE PAIR. One run, one invented terminus name, and the ONLY variable is what
+   * the register says. Quiet arm: the register resolves the chain-end token to
+   * that name, and the finding goes. Loud arm: the register resolves the same
+   * token to something else, and the finding stays. Without the loud arm the
+   * quiet one is satisfied by a register lookup that has stopped working.
+   *
+   * SCOPED TO source 'sanity', AND THE CONTROL IS WHY. Route 50 draws TWO terminus
+   * findings once its declared terminus is invented: the SANITY one, which asks
+   * whether the name reaches the chain-end locality code and is the only one the
+   * register feeds, and the REDTEAM one, which asks whether our terminus agrees
+   * with the settlements the red team gives and is a genuine HARD that must
+   * survive. Written unscoped, the quiet arm below failed on the hard row — the
+   * check catching the fixture rather than the code, which is the whole reason a
+   * loud arm is written first.
+   */
+  const sanityTerm = (v) => (v ? v.findings : []).filter(
+    (f) => f.category === 'terminus' && f.route === '50' && f.source === 'sanity');
+  const { DatabaseSync } = (() => {
+    const emit = process.emitWarning;
+    process.emitWarning = (w, ...rest) => {
+      const s = typeof w === 'string' ? w : (w && w.message) || '';
+      if (/SQLite is an experimental feature/.test(s)) return;
+      return emit.call(process, w, ...rest);
+    };
+    try { return require('node:sqlite'); } finally { process.emitWarning = emit; }
+  })();
+
+  // A one-table register with the columns verify_report.js actually selects.
+  // `localityToken` slices four letters out of an ATCO code after 4 digits and one
+  // letter, so 0500H<TOKEN>001 is how a row is addressed to a token.
+  function miniRegister(file, token, localityName) {
+    fs.rmSync(file, { force: true });
+    const db = new DatabaseSync(file);
+    db.exec('create table naptan (ATCOCode text, LocalityName text, ParentLocalityName text)');
+    const ins = db.prepare('insert into naptan values (?, ?, ?)');
+    ins.run('0500H' + token + '001', localityName, null);
+    ins.run('9999X' + 'ZZZZ' + '001', 'Somewhere With No Bearing On This', null);
+    db.close();
+    return file;
+  }
+
+  const TERMINUS = 'Zzyzxville';                    // in no gazetteer, real or invented
+  const d = stage('wisbech', 'gazetteer');
+  const vs = readJ(d, 'verified-services.json');
+  const svc = vs.services.find(t => String(t.route) === '50');
+  if (!svc) throw new Error('prove-s6-checks: fixture route 50 is gone from the Wisbech S1 — pick another drawn route, do not delete the case');
+  svc.termini = [TERMINUS];
+  writeJ(d, 'verified-services.json', vs);
+
+  // Arm 0 — NO register at all. This both establishes the finding exists to be
+  // removed and TELLS US THE KEY: the checker reports the chain-end tokens it
+  // compared against, so the register below is addressed from the checker's own
+  // evidence and cannot go stale when the geometry moves.
+  const bare = verify(d, { VERIFY_NAPTAN: path.join(TMP, 'no-such-register.sqlite') });
+  const f0 = sanityTerm(bare.v)[0];
+  check('with no register the invented terminus IS a finding', "a sanity terminus finding on 50",
+    !!f0, bare.v ? JSON.stringify(bare.v.findings.filter(f => f.route === '50').map(f => f.severity + '/' + f.category + '/' + f.source)) : 'no report');
+  const token = f0 && f0.evidence && (f0.evidence.chainEndTokens || [])[0];
+  check('and it names the chain-end token it compared against', 'evidence.chainEndTokens is non-empty',
+    !!token, f0 ? JSON.stringify(f0.evidence) : 'no finding to read a token from');
+
+  if (token) {
+    // QUIET ARM — the register says that token IS Zzyzxville.
+    const good = verify(d, { VERIFY_NAPTAN: miniRegister(path.join(TMP, 'reg-hit.sqlite'), token, TERMINUS) });
+    check('a register that resolves the token REMOVES the finding', 'no sanity terminus finding on 50',
+      sanityTerm(good.v).length === 0,
+      good.v ? JSON.stringify(good.v.findings.filter(f => f.route === '50').map(f => f.severity + '/' + f.category + '/' + f.source)) : 'no report');
+
+    // LOUD ARM — same run, same token, a register that says something else.
+    const bad = verify(d, { VERIFY_NAPTAN: miniRegister(path.join(TMP, 'reg-miss.sqlite'), token, 'Nowhereton') });
+    check('a register that does NOT resolve it leaves the finding standing', 'the sanity terminus finding on 50 survives',
+      sanityTerm(bad.v).length > 0,
+      bad.v ? JSON.stringify(bad.v.findings.filter(f => f.route === '50').map(f => f.severity + '/' + f.category + '/' + f.source)) : 'no report');
+
+    // AND THE ONE-DIRECTIONAL CLAIM, which is the whole safety argument for
+    // reading a file CI does not have: adding a source of TRUE to a boolean can
+    // only ever remove findings. Measured, not reasoned — the two runs above
+    // differ in nothing but the register, so any finding present with the
+    // resolving register and absent without it would be one this code invented.
+    const key = (f) => f.severity + '/' + f.category + '/' + (f.route || '-') + '/' + String(f.message).slice(0, 60);
+    const bareKeys = new Set((bare.v ? bare.v.findings : []).map(key));
+    const invented = (good.v ? good.v.findings : []).filter(f => !bareKeys.has(key(f)));
+    check('and it never ADDS a finding', 'no finding present with the register and absent without it',
+      invented.length === 0, JSON.stringify(invented.map(key)));
+  }
+}
+
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

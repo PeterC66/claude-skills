@@ -38,6 +38,10 @@
  *
  * Usage:  node verify_report.js            (in the S6 run dir, after pulling inputs)
  *         VERIFY_DIR=/path node verify_report.js
+ *         VERIFY_NAPTAN=/path/naptan.sqlite node verify_report.js
+ *                                          (the DfT stop register, for the terminus
+ *                                           check's localities — found by walking up
+ *                                           to `_gtfs/` when this is not set)
  *
  * Zero dependencies (Node core only).
  */
@@ -177,21 +181,117 @@ function placeToken(name) {               // "St Ives" -> "STIV", "Ramsey" -> "R
   const a = String(name).toUpperCase().replace(/[^A-Z]/g, '');
   return a.slice(0, 4) || null;
 }
-// Locality CODE -> settlement NAME(s), for the handful of NaPTAN codes that the 3-char
-// prefix rule below cannot reach (Cambridge is "CITY"). A code with no entry is
-// UNVERIFIABLE, never a mismatch — see naptan_localities.json's own comment.
+// Locality CODE -> settlement NAME(s). The HAND FILE is now the offline fallback
+// only: `_gtfs/naptan.sqlite` carries LocalityName and ParentLocalityName for every
+// stop in the DfT register, so where the register is on disk it answers this question
+// from data instead of from a file somebody remembered to seed. A code with no entry
+// on EITHER side is UNVERIFIABLE, never a mismatch — see naptan_localities.json's
+// own comment, which still governs.
 const LOCALITY_NAMES = (() => {
   try {
     const p = path.join(__dirname, 'naptan_localities.json');
     return JSON.parse(fs.readFileSync(p, 'utf8')).localities || {};
   } catch { return {}; }
 })();
+/*
+ * THE REGISTER, AND WHY THE JOIN IS ON OUR OWN TOKEN AND NOT ON NPTG (OA-038).
+ *
+ * Two gazetteers were built on 2026-08-22 by concurrent sessions and neither knew
+ * about the other: this file's hand-seeded `naptan_localities.json`, which had ONE
+ * entry (CITY -> Cambridge), and `_gtfs/naptan.sqlite`, 127,658 stops from the DfT
+ * register carrying a real locality name and parent for every one. The register is
+ * strictly better and it independently settled the route 69 question by giving
+ * Eynesbury a parent locality of St Neots. Left alone the two would have drifted.
+ *
+ * The join is NOT on `NptgLocalityCode`. That column holds the national code
+ * (E0043711), and the code this file compares against is the four-letter mnemonic
+ * `localityToken()` slices out of an ATCO code. Those are different code spaces and
+ * a lookup on the wrong one returns nothing at all — measured, and the reason this
+ * comment exists. So the map is keyed by running `localityToken()` over the
+ * register's OWN ATCOCode column: whatever token our rule computes for a chain end,
+ * the same rule computed the key. That makes the join exact by construction rather
+ * than by agreeing with NPTG's semantics, which it does not always do — an ATCO
+ * whose fifth character belongs to the mnemonic shifts the slice (1500 R AYLE ->
+ * "AYLE" for Rayleigh), and a shifted token still matches itself.
+ *
+ * THE REGISTER IS GITIGNORED, SO CI NEVER HAS ONE. `_gtfs/*.sqlite` is 38 MB of
+ * rebuildable data and is not in any repository, which means this whole path is
+ * inert on a fresh clone and the hand file is what answers there. Two consequences
+ * worth stating rather than discovering: a finding can legitimately appear in CI
+ * and not on the laptop, and a test of this code CANNOT borrow the real register --
+ * it has to build its own, which is what prove-s6-checks.js does through
+ * VERIFY_NAPTAN. A check sited where its subject cannot exist proves nothing.
+ *
+ * Only about 7,200 of the 127,658 stops produce a token at all: the pattern is a
+ * Cambridgeshire-style code and most areas (Buckinghamshire's 0400…) are numeric.
+ * That is not a gap. A chain end whose ATCO yields no token is one `localityToken()`
+ * already returns null for, so it was unverifiable before this change and still is.
+ *
+ * THIS CAN ONLY REMOVE FINDINGS, NEVER ADD ONE. nameMatchesLocality returns a
+ * boolean and a false is what raises a finding, so a new source of TRUE is
+ * one-directional. If the register is absent, unreadable, or built by a Node
+ * without node:sqlite, the lookup yields nothing and the pre-2026-08-31 behaviour
+ * stands — which is the safe direction to fail in.
+ */
+function findUp(startDir, ...rel) {
+  let d = path.resolve(startDir);
+  for (;;) {
+    const cand = path.join(d, ...rel);
+    if (fs.existsSync(cand)) return cand;
+    const parent = path.dirname(d);
+    if (parent === d) return null;
+    d = parent;
+  }
+}
+const REGISTER_NAMES = (() => {
+  let map = null;                          // built once, on first use
+  return (code) => {
+    if (map === null) {
+      map = new Map();
+      try {
+        // VERIFY_NAPTAN names the register explicitly; without it, walk up from the
+        // run directory to `_gtfs/` the way boarding_index.py's find_up does.
+        const db_path = process.env.VERIFY_NAPTAN || findUp(DIR, '_gtfs', 'naptan.sqlite');
+        if (!db_path || !fs.existsSync(db_path)) return [];
+        // node:sqlite is Node core but still flagged experimental, and its warning
+        // would land in the middle of an S6 console summary. Silence that ONE
+        // warning across the require, then hand emitWarning straight back.
+        const emit = process.emitWarning;
+        process.emitWarning = (w, ...rest) => {
+          const s = typeof w === 'string' ? w : (w && w.message) || '';
+          if (/SQLite is an experimental feature/.test(s)) return;
+          return emit.call(process, w, ...rest);
+        };
+        let DatabaseSync;
+        try { ({ DatabaseSync } = require('node:sqlite')); }
+        finally { process.emitWarning = emit; }
+        const db = new DatabaseSync(db_path, { readOnly: true });
+        const rows = db.prepare(
+          'select ATCOCode, LocalityName, ParentLocalityName from naptan'
+        ).all();
+        for (const r of rows) {
+          const t = localityToken(r.ATCOCode);
+          if (!t) continue;
+          let set = map.get(t);
+          if (!set) { set = new Set(); map.set(t, set); }
+          if (r.LocalityName) set.add(r.LocalityName);
+          if (r.ParentLocalityName) set.add(r.ParentLocalityName);
+        }
+        db.close();
+      } catch { /* no register, or no node:sqlite -- fall back to the hand file */ }
+    }
+    const s = map.get(code);
+    return s ? [...s] : [];
+  };
+})();
 // Does settlement `name` denote locality code `code`? Prefix rule first (STNE~STNS,
-// BUCK~BUCN), then the gazetteer for the irregulars.
+// BUCK~BUCN), then the REGISTER, then the hand file for anything the register on
+// this disk does not reach.
 function nameMatchesLocality(name, code) {
   const pt = placeToken(name);
   if (!pt || !code) return false;
   if (code === pt || code.slice(0, 3) === pt.slice(0, 3)) return true;
+  if (REGISTER_NAMES(code).some(n => placeToken(n) === pt)) return true;
   return (LOCALITY_NAMES[code] || []).some(n => placeToken(n) === pt);
 }
 function tokenize(s) {

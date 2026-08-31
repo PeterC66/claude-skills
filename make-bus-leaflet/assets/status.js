@@ -71,6 +71,25 @@ const DEPLOY_GRACE_HOURS = (args['deploy-grace-hours'] !== undefined && args['de
   ? Number(args['deploy-grace-hours'])
   : 12;
 
+// COMMITMENTS. The one class of work this board could not see: a thing we said
+// we would do, where nothing on disk changes if we never do it. The byte gates
+// watch artefacts, the ratchet watches quality, the deployment row watches the
+// live site -- all of them ask a question about something that EXISTS. "Did we
+// send that letter" has no artefact to interrogate, and open-actions.md files
+// such an item without chasing it: a row in a band of seventy is a filing
+// system, not a reminder. The backlog literally carries a row beginning
+// "Diary CROSS_REPO_PAT2's expiry" -- written as an instruction, into a
+// document that diarises nothing. This is the diary.
+//
+// Only OVERDUE is folded into `bad`. The amber window prints and stays green,
+// for the same reason the deploy grace exists: a board that goes red a month
+// early is one that gets ignored by the time it matters.
+//
+// --commitments-today <ISO> overrides today so the OVERDUE branch can be PROVED
+// to fire instead of being waited for; --no-commitments skips the section.
+const NO_COMMITMENTS = !!args['no-commitments'];
+const COMMITMENTS_TODAY = (typeof args['commitments-today'] === 'string') ? args['commitments-today'] : null;
+
 function exists(p) { return fs.existsSync(p); }
 
 function daysSince(isoDate) {
@@ -749,6 +768,39 @@ function gitIn(dir, args) {
   } catch { return null; }
 }
 
+// Read Development Docs/commitments.json and judge each entry against today.
+// Pure: no network, no git, no clock beyond `today`. Returns [] when the file is
+// absent, because a repo without one is not a repo in breach.
+function commitmentRows() {
+  if (NO_COMMITMENTS) return { status: 'skipped', why: '--no-commitments', rows: [] };
+  const f = path.join(BUSES, 'Development Docs', 'commitments.json');
+  if (!exists(f)) return { status: 'skipped', why: 'no commitments.json', rows: [] };
+  const doc = readJson(f);
+  if (!doc || !Array.isArray(doc.commitments)) {
+    // A file we cannot parse is a FAULT, not an empty list -- the silent-failure
+    // shape this project keeps paying for. Say so and fail the board.
+    return { status: 'UNREADABLE', why: 'commitments.json present but has no `commitments` array', rows: [] };
+  }
+  const todayMs = COMMITMENTS_TODAY ? Date.parse(COMMITMENTS_TODAY + 'T00:00:00Z') : Date.now();
+  const rows = doc.commitments.map((c) => {
+    const byMs = Date.parse(String(c.by) + 'T00:00:00Z');
+    if (!Number.isFinite(byMs)) return { ...c, state: 'UNDATED', days: null };
+    const days = Math.ceil((byMs - todayMs) / 86400000);
+    const warn = Number.isFinite(+c.warnDays) ? +c.warnDays : 14;
+    return { ...c, days, state: days < 0 ? 'OVERDUE' : days <= warn ? 'due soon' : 'ok' };
+  });
+  rows.sort((a, b) => (a.days == null ? -1 : b.days == null ? 1 : a.days - b.days));
+  return { status: 'read', rows };
+}
+
+// Only OVERDUE and UNDATED fail the board; an amber row is information, and an
+// UNREADABLE file is a fault rather than an empty list.
+function commitBad(c) {
+  if (!c || c.status === 'skipped') return false;
+  if (c.status === 'UNREADABLE') return true;
+  return c.rows.some(r => r.state === 'OVERDUE' || r.state === 'UNDATED');
+}
+
 async function deploymentRow() {
   if (NO_LIVE) return { status: 'skipped', why: '--no-live' };
   if (!exists(PORTAL)) return { status: 'skipped', why: 'no portal checkout to compare against' };
@@ -796,9 +848,10 @@ async function deploymentRow() {
 
 async function main() {
   const deploy = await deploymentRow();
+  const commit = commitmentRows();
   if (AS_JSON) {
-    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy }, null, 2));
-    return bad || deploy.status === 'BEHIND';
+    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2));
+    return bad || deploy.status === 'BEHIND' || commitBad(commit);
   }
 
   function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
@@ -905,6 +958,31 @@ async function main() {
   // Deployment drift is reported LAST, under the gates, because it is a
   // statement about a different thing: everything above asks "does the code
   // still produce what it produced", this asks "is any of that actually live".
+  // Commitments print above Deployment because they are the same KIND of row --
+  // a statement about the world rather than about the code -- and the older of
+  // the two questions: "did we do the thing we said" comes before "is what we
+  // wrote actually live".
+  if (commit.status !== 'skipped') {
+    console.log('\n=== Commitments (Development Docs/commitments.json) ===');
+    if (commit.status === 'UNREADABLE') {
+      console.log('  UNREADABLE   ' + commit.why);
+    } else if (!commit.rows.length) {
+      console.log('  none recorded');
+    } else {
+      for (const r of commit.rows) {
+        const when = r.days == null ? 'no date' : r.days < 0 ? Math.abs(r.days) + 'd OVERDUE' : r.days + 'd left';
+        const mark = r.state === 'OVERDUE' ? 'OVERDUE ' : r.state === 'due soon' ? 'due soon' : 'ok      ';
+        console.log('  ' + mark + '  ' + String(r.what || r.id) + '   (' + r.by + ', ' + when + ')');
+        if (r.state !== 'ok') {
+          if (r.why) console.log('      ' + r.why);
+          if (r.link) console.log('      ' + r.link);
+        }
+      }
+      const over = commit.rows.filter(r => r.state === 'OVERDUE' || r.state === 'UNDATED').length;
+      if (over) console.log('  ' + over + ' overdue. Do it, or move the date DELIBERATELY -- moving it is a decision, letting it slide is not.');
+    }
+  }
+
   console.log('\n=== Deployment (' + (deploy.url || LIVE_URL) + ') ===');
   if (deploy.status === 'current') {
     console.log('  current   live ' + deploy.deployed + ' == main ' + deploy.want);
@@ -921,7 +999,7 @@ async function main() {
     console.log('      npm run deploy');
   }
 
-  return bad || deploy.status === 'BEHIND';
+  return bad || deploy.status === 'BEHIND' || commitBad(commit);
 }
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is

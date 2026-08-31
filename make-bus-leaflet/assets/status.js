@@ -72,6 +72,22 @@ const DEPLOY_GRACE_HOURS = (args['deploy-grace-hours'] !== undefined && args['de
   ? Number(args['deploy-grace-hours'])
   : 12;
 
+// The SAME judgement, for the vendoring row, and for the same reason (2026-08-31).
+// A re-vendor sitting on a pushed branch is the deploy row's shape one step
+// earlier: somebody has done the work and it has not landed. "Re-vendored and
+// forgotten" is worth catching; "re-vendored eleven minutes ago and the PR is
+// open" is not, and calling both DRIFTED made every engine rollout redden two
+// repositories for the length of the rollout.
+//
+// It is deliberately the same default as the deploy grace. These are one
+// pipeline — vendor, merge, deploy — and a rollout that stalls stalls at one of
+// those three points; giving the stages different tolerances would only mean
+// remembering which is which. `--drift-grace-hours 0` must make an in-flight
+// re-vendor gate, which is how the red branch is proved rather than assumed.
+const DRIFT_GRACE_HOURS = (args['drift-grace-hours'] !== undefined && args['drift-grace-hours'] !== true)
+  ? Number(args['drift-grace-hours'])
+  : 12;
+
 // COMMITMENTS. The one class of work this board could not see: a thing we said
 // we would do, where nothing on disk changes if we never do it. The byte gates
 // watch artefacts, the ratchet watches quality, the deployment row watches the
@@ -626,6 +642,44 @@ function gatePortalFixture() {
 // vendored the file and the PR has not landed. It still gates, because until it
 // lands the deployable engine IS stale, but it says which of the two states it
 // is in, which the working-tree reading could not.
+//
+// AND SINCE 2026-08-31, A PUSHED BRANCH COUNTS AS EVIDENCE TOO — this is the
+// half that made every engine rollout redden two repositories for no fault.
+//
+// The push order is documented and correct: push `buses-data` BEFORE opening the
+// portal PR, so the portal's ref-less checkout of that repo gates against
+// matching fixtures. Doing it opens a window in which the skill and the data
+// repo are ahead of the portal's `origin/main`, and this row was right to call
+// that DRIFTED — and useless for saying so, because the remedy was already in
+// flight as an open PR. On 2026-08-31 both repositories' `status` jobs went red
+// inside that window, three minutes apart, and `buses-data`'s prove-red-status
+// harness refused to run at all because the room was red for a reason that was
+// not its subject. A repository that is routinely red for an expected reason is
+// one where a real red gets discounted; this project has already had gates.yml
+// red for 167 runs across twelve days with nobody reading it.
+//
+// So the evidence widens from "the working tree agrees" to "the working tree OR
+// SOME OTHER FETCHED REF agrees", and the row NAMES the ref carrying it. The
+// board cannot tell a branch with an open PR from a branch somebody abandoned —
+// that needs the GitHub API, and a board must not have network side effects, a
+// rule this file already keeps for `origin/main`. It does not have to: a DATE
+// answers the same question better. A re-vendor on a branch is amber while it is
+// younger than DRIFT_GRACE_HOURS and RED after, so an abandoned branch closes
+// its own hole and no credential is involved.
+//
+// THE WORKING-TREE CASE IS UNCHANGED AND STILL GATES, deliberately. Only a
+// committed ref carries an honest date; the alternative for uncommitted bytes is
+// a file mtime, and this estate has already decided not to infer freshness from
+// mtimes (the OA-206 orientation guard says so in as many words). An uncommitted
+// re-vendor is also the one state a second session cannot see, so it is the last
+// one that should be quietly forgiven.
+//
+// This is inert unless the refs are actually there, which is the trap it was
+// nearly shipped with. `actions/checkout` fetches ONE branch, so in CI
+// `refs/remotes/origin/*` holds `main` and nothing else, and a branch-aware rule
+// would have been a feature that could never fire in the only place the red
+// appeared. Both `gates.yml` workflows now fetch the portal's branch heads for
+// exactly this reason — see the step named beside this behaviour there.
 
 // The portal ref this board's vendoring verdict is about. Null when there is no
 // portal checkout; `ref: null` when there is one and git cannot name anything in
@@ -653,11 +707,47 @@ function gitShow(dir, ref, relPath) {
   } catch { return null; }
 }
 
+/* Every fetched remote-tracking ref EXCEPT the one the verdict is about, newest
+ * commit first, with its date. Computed once per run rather than per file: a
+ * rollout drifts several files at a time and they are all on the same branch.
+ *
+ * `refs/remotes/origin/HEAD` is excluded because it is a symbolic alias for the
+ * default branch — counting it would let `origin/main` answer as if it were a
+ * second, independent witness, which is the shape of asking one source twice
+ * and calling it corroboration. */
+let _otherRefs = null;
+function otherRemoteRefs(mainRef) {
+  if (_otherRefs) return _otherRefs;
+  const out = gitIn(PORTAL, ['for-each-ref', '--sort=-committerdate',
+    '--format=%(refname:short)%09%(committerdate:unix)', 'refs/remotes/']);
+  const skip = new Set([mainRef, 'origin/HEAD'].filter(Boolean));
+  _otherRefs = String(out || '').split('\n').map(s => s.trim()).filter(Boolean).map((line) => {
+    const [name, ts] = line.split('\t');
+    const secs = Number(ts);
+    return { ref: name, ageHours: Number.isFinite(secs) ? Math.floor((Date.now() / 1000 - secs) / 3600) : null };
+  }).filter(r => r.ref && !skip.has(r.ref));
+  return _otherRefs;
+}
+
+/* Does some other fetched ref already carry the current source for this file?
+ * Returns the NEWEST such ref, because a rollout's own branch is the newest
+ * thing in the repository and an older branch that happens to agree is the less
+ * informative answer. Null when nothing does — which is a real DRIFTED. */
+function vendoredOnOtherRef(rel, skillBuf) {
+  for (const cand of otherRemoteRefs(_driftMainRef)) {
+    const buf = gitShow(PORTAL, cand.ref, rel);
+    if (buf && sameBytesIgnoringLineEndings(skillBuf, buf)) return cand;
+  }
+  return null;
+}
+let _driftMainRef = null;
+
 function portalDrift() {
   if (!exists(PORTAL)) return { source: null, rows: [] };
   const engineDir = path.join(PORTAL, 'engine');
   const source = portalSource();
   const ref = source && source.ref;
+  _driftMainRef = ref;   // what otherRemoteRefs() must exclude from its witnesses
 
   // The manifest comes out of the SAME tree as the files it describes. Reading
   // the list from disk and the files from a ref would be a third way of being
@@ -692,6 +782,25 @@ function portalDrift() {
     if (!same && diskBuf && sameBytesIgnoringLineEndings(skillBuf, diskBuf)) {
       row.status = 'PENDING';
       row.note = 'vendored in the working tree and not on ' + ref + ' yet';
+    } else if (!same && ref) {
+      // The pushed-branch case. Asked only when the working tree does NOT already
+      // answer, so the cheaper local check keeps its meaning and a laptop
+      // mid-re-vendor is not re-labelled by a branch that happens to agree.
+      const found = vendoredOnOtherRef(rel, skillBuf);
+      if (found) {
+        row.status = 'PENDING';
+        row.pendingOn = found.ref;
+        row.ageHours = found.ageHours;
+        row.graceHours = DRIFT_GRACE_HOURS;
+        // Amber only while it is young. `ageHours == null` means git could not
+        // date the ref, and an undateable ref is treated as OVER the grace: this
+        // row must fail towards red, never towards silence.
+        row.inFlight = found.ageHours != null && found.ageHours < DRIFT_GRACE_HOURS;
+        row.note = 'vendored on ' + found.ref + ', not merged to ' + ref
+          + (found.ageHours == null ? ' — and git could not date it, so it is not being excused'
+             : ' — ' + found.ageHours + 'h old, grace ' + DRIFT_GRACE_HOURS + 'h')
+          + (row.inFlight ? '' : '. Past the grace: merge it or drop the branch.');
+      }
     }
     rows.push(row);
   }
@@ -897,7 +1006,11 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // and what it gates on. Safe to flip now for the same reason the exit code
   // itself was: the board is already red for the deferred re-vendor above, so no
   // expected state changes colour today and nobody learns to ignore it.
-  || driftRows.some(r => r.same === false || r.same === null)
+  // `inFlight` is set only by the pushed-branch case, and only inside the grace.
+  // Everything else that differs still gates exactly as it did: a plain DRIFTED,
+  // a working-tree PENDING, a MISSING file, and a branch re-vendor that has sat
+  // past DRIFT_GRACE_HOURS or that git could not date.
+  || driftRows.some(r => (r.same === false && !r.inFlight) || r.same === null)
   // OA-057, GATED FROM 2026-08-29 and reported-only before that. The rule the
   // column was held out under is that a check red on the day it lands gets muted
   // within the week, and seven of the ten places that draw an internal sheet were
@@ -1147,7 +1260,15 @@ async function main() {
     console.log('\n=== Portal vendoring drift (skill -> portal, CRLF-safe) ===');
     const srcLine = driftSourceLine(drift.source);
     if (srcLine) console.log('  ' + srcLine);
-    for (const r of driftRows) console.log('  ' + (r.status || (r.same === null ? 'MISSING' : r.same ? 'in sync' : 'DRIFTED')).padEnd(9) + r.file);
+    for (const r of driftRows) {
+      // An in-flight row is amber, so it says so in the verdict column rather
+      // than reading PENDING beside a row that gates and one that does not.
+      const verdict = r.inFlight ? 'pending' : (r.status || (r.same === null ? 'MISSING' : r.same ? 'in sync' : 'DRIFTED'));
+      console.log('  ' + verdict.padEnd(9) + r.file
+        + (r.pendingOn ? '  — on ' + r.pendingOn
+            + (r.ageHours == null ? ', undateable' : ', ' + r.ageHours + 'h old, grace ' + r.graceHours + 'h')
+            + (r.inFlight ? '' : ' — PAST THE GRACE') : ''));
+    }
   }
 
   if (qualityRows.length) {

@@ -80,13 +80,29 @@ const VENDORED = [
   { path: 'wrapper.js', kind: 'portal-owned', reason: 'a portal wrapper with no counterpart in the skills' },
 ];
 
+/* Commit with a CONTROLLED date. The grace rule is the only part of the
+ * vendoring row that contains a judgement about time, so the harness has to be
+ * able to put a commit on either side of the boundary. Both variables are set
+ * because git takes the committer date for `%(committerdate)`, which is what
+ * status.js sorts and ages by, and leaving the author date alone would make the
+ * fixture describe two different moments. */
+function commitAged(dir, message, ageHours) {
+  const when = new Date(Date.now() - ageHours * 3600 * 1000).toISOString();
+  execFileSync('git', ['commit', '--quiet', '-m', message], {
+    cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
+  });
+}
+
 /* Build a synthetic portal. `mainStale` decides what is committed on the ref the
- * board reads; `branch` puts the checkout somewhere else afterwards. Every knob
- * is one of the three trees the row is about, and nothing here touches the real
- * portal. */
+ * board reads; `branch` puts the checkout somewhere else afterwards; `revendorRef`
+ * pushes a re-vendor to a remote-tracking ref that is NOT the one the verdict is
+ * about, which is the open-PR window. Every knob is one of the trees the row is
+ * about, and nothing here touches the real portal. */
 function portalRepo({ mainStale = false, branch = null, branchStale = false,
                       unlistedOnMain = false, unlistedOnBranch = false,
-                      worktreeCurrent = false, noGit = false } = {}) {
+                      worktreeCurrent = false, noGit = false,
+                      revendorRef = null, revendorAgeHours = 0, revendorStale = false } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
   fs.mkdirSync(path.join(engine, 'place'), { recursive: true });
@@ -126,6 +142,28 @@ function portalRepo({ mainStale = false, branch = null, branchStale = false,
     git(dir, ['add', '-A']);
     git(dir, ['commit', '--quiet', '-m', 'the state of the feature branch']);
   }
+  /* A re-vendor PUSHED TO A BRANCH: origin/main is stale, and some OTHER
+   * remote-tracking ref carries the current source. This is the open-PR window
+   * the documented push order creates, and before 2026-08-31 it read DRIFTED —
+   * true, useless, and red on every engine rollout. The working tree is left on
+   * main's stale content on purpose, so the working-tree PENDING path cannot
+   * answer and only the branch rule can. */
+  if (revendorRef) {
+    git(dir, ['checkout', '--quiet', '-b', revendorRef]);
+    /* `revendorStale` makes this a branch that EXISTS and does not carry the
+     * fix — a different third content, so it matches neither origin/main nor the
+     * skill source. That is the control for the rule reading "is there a branch"
+     * when what it must read is "do these BYTES exist on a branch". */
+    fs.writeFileSync(path.join(engine, 'qr.js'),
+      revendorStale ? Buffer.concat([current(SOURCE_A), Buffer.from('\n// a branch that is not the re-vendor\n')])
+                    : current(SOURCE_A));
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'the re-vendor, sitting in an open PR', revendorAgeHours);
+    git(dir, ['update-ref', 'refs/remotes/origin/' + revendorRef, git(dir, ['rev-parse', 'HEAD'])]);
+    git(dir, ['checkout', '--quiet', 'main']);
+    git(dir, ['checkout', '--quiet', '--', '.']);
+  }
+
   /* An UNCOMMITTED re-vendor: the working tree holds the current source while the
    * ref does not. That is PENDING, and it is the one state the old reading called
    * green. */
@@ -139,11 +177,11 @@ function emptyBuses() {
   return scratchDir('prove-red-portal-drift-buses-');
 }
 
-function board(busesDir, portalDir, statusPath = STATUS) {
+function board(busesDir, portalDir, statusPath = STATUS, extra = []) {
   let out, code = 0;
   try {
     out = execFileSync(process.execPath,
-      [statusPath, '--buses', busesDir, '--portal', portalDir, '--no-quality', '--no-live', '--json'],
+      [statusPath, '--buses', busesDir, '--portal', portalDir, '--no-quality', '--no-live', '--json', ...extra],
       { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
   } catch (e) {
     if (typeof e.status !== 'number') throw e;
@@ -212,6 +250,86 @@ const CASES = [
     },
     what: 'the disk agreeing is not the deployable engine being current',
   },
+  /* THE 2026-08-31 ROW. A re-vendor pushed to a branch, origin/main still stale:
+   * the open-PR window the documented push order creates. Amber, not red — and
+   * the four cases after this one are what stop that from being a hole. */
+  {
+    label: 'a re-vendor pushed to a branch is amber, not DRIFTED',
+    make: { mainStale: true, revendorRef: 'revendor', revendorAgeHours: 0 },
+    expect: 0,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (!r) return 'no qr.js row at all';
+      if (r.status !== 'PENDING') return 'expected PENDING, got ' + statusOf(r);
+      if (r.inFlight !== true) return 'expected inFlight, got ' + JSON.stringify(r.inFlight);
+      // NAME the ref. A row that says "somewhere" is one nobody can act on, and
+      // asserting it is what stops the rule passing because some unrelated ref
+      // happened to agree.
+      if (r.pendingOn !== 'origin/revendor') return 'expected pendingOn origin/revendor, got ' + r.pendingOn;
+      return null;
+    },
+    what: 'the push order guarantees this window; calling it red reddened two repos on every rollout',
+  },
+  {
+    /* The same fixture, proved RED. This is the assertion that makes the case
+     * above mean something: without it, "expect 0" is satisfied by a board that
+     * stopped looking at the portal at all. */
+    label: '...and the SAME fixture goes red with --drift-grace-hours 0',
+    make: { mainStale: true, revendorRef: 'revendor', revendorAgeHours: 0 },
+    args: ['--drift-grace-hours', '0'],
+    expect: 1,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (r.status !== 'PENDING') return 'expected PENDING, got ' + statusOf(r);
+      if (r.inFlight !== false) return 'grace 0 must leave nothing in flight, got ' + JSON.stringify(r.inFlight);
+      return null;
+    },
+    what: 'the amber branch is a judgement about TIME, so it has to be provable at the boundary',
+  },
+  {
+    label: 'a re-vendor that has sat past the grace is RED again',
+    make: { mainStale: true, revendorRef: 'revendor', revendorAgeHours: 48 },
+    expect: 1,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (r.status !== 'PENDING') return 'expected PENDING, got ' + statusOf(r);
+      if (r.inFlight !== false) return 'a 48h-old branch must not be in flight';
+      if (!(r.ageHours >= 48)) return 'expected an age of at least 48h, got ' + r.ageHours;
+      return null;
+    },
+    what: 'an abandoned re-vendor branch closes its own hole; this is why no GitHub API is needed',
+  },
+  {
+    /* THE CONTROL THAT MATTERS MOST. The whole change is a way of NOT reporting
+     * something, so the case that must stay red is a genuine drift with no branch
+     * carrying the fix. If this ever goes green the rule has stopped discriminating
+     * and has become a way of never reporting drift at all. */
+    label: 'control: drift with NO branch carrying the fix is still RED',
+    make: { mainStale: true },
+    expect: 1,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (statusOf(r) !== 'DRIFTED') return 'expected DRIFTED, got ' + statusOf(r);
+      if (r.inFlight) return 'nothing is in flight here and the board says there is';
+      if (r.pendingOn) return 'no ref carries this fix, and the board named ' + r.pendingOn;
+      return null;
+    },
+    what: 'green here would mean the widening had swallowed the finding the row exists for',
+  },
+  {
+    /* The other direction: a branch that is NOT a re-vendor must not excuse
+     * anything. Same shape as the row above, but the branch carries main's stale
+     * content, so no ref anywhere holds the current source. */
+    label: 'control: an unrelated branch does not excuse a real drift',
+    make: { mainStale: true, revendorRef: 'unrelated', revendorStale: true },
+    expect: 1,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (r.inFlight) return 'an unrelated branch was treated as a re-vendor';
+      return null;
+    },
+    what: 'the witness is the BYTES on the ref, never the existence of a branch',
+  },
   {
     label: 'an engine .js on origin/main that the manifest never names',
     make: { unlistedOnMain: true },
@@ -262,7 +380,7 @@ function runCase(c, statusPath = STATUS) {
   const portal = portalRepo(c.make);
   const buses = emptyBuses();
   kept.push(portal, buses);
-  const { code, json } = board(buses, portal, statusPath);
+  const { code, json } = board(buses, portal, statusPath, c.args || []);
   const wantRed = c.expect !== 0;
   const colourOk = (code !== 0) === wantRed;
   const alsoWhy = json ? c.also(json, portal) : 'the board printed no parseable JSON';

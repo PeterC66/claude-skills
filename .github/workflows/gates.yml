@@ -228,6 +228,30 @@ jobs:
           token: ${{ secrets.CROSS_REPO_PAT2 }}
           path: community-bus-maps
 
+      # WITHOUT THIS THE PENDING RULE CANNOT FIRE HERE, WHICH IS THE ONLY PLACE
+      # IT MATTERS (2026-08-31). actions/checkout fetches ONE branch, so
+      # refs/remotes/origin holds `main` and nothing else. status.js treats a
+      # re-vendor found on another fetched ref as amber-while-young rather than
+      # DRIFTED -- the documented push order (buses-data BEFORE the portal PR)
+      # guarantees a window where the portal is legitimately behind, and calling
+      # that red made every engine rollout redden this workflow for no fault.
+      # Fetching only the branch TIPS, depth 1: this is a witness check, "do
+      # these bytes exist on some pushed branch", and it never needs history.
+      #
+      # It must not be able to fail the job on its own. A repository with no
+      # other branches is the normal case and returns nothing; a fetch that is
+      # refused leaves the refs absent, which reads DRIFTED -- the pre-2026-08-31
+      # verdict, and the safe direction to fail in. Neither is a reason to stop
+      # the run, so this step swallows its own status and says what it found.
+      - name: Fetch the portal's branch tips (so an open re-vendor reads pending, not DRIFTED)
+        run: |
+          git -C community-bus-maps fetch --depth=1 --no-tags origin '+refs/heads/*:refs/remotes/origin/*' || {
+            echo "::notice::could not fetch the portal's branch tips - an in-flight re-vendor will read DRIFTED, which is the old behaviour and not a new failure"
+            exit 0
+          }
+          echo "portal refs now visible to the vendoring row:"
+          git -C community-bus-maps for-each-ref --format='  %(refname:short)  %(committerdate:relative)' refs/remotes/
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20

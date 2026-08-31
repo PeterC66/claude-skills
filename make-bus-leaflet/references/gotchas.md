@@ -515,3 +515,17 @@ Measured on High Wycombe, 2026-08-31: route **300** (Redline, service `23008`) h
 - **`redgroupbuses.com` is JS-rendered and its date control is a GET form**, so the operator page for any date is `https://www.redgroupbuses.com/services/RLNE/<route>?direction=outbound&date=YYYY-MM-DD` — read it in the browser, not with curl.
 
 And do not settle it by writing your own calendar resolver. Ours disagreed with `gtfs_query.py` for a *third* reason: the `calendar` day columns are stored as the **strings** `'1'`/`'0'`, and `'0'` is truthy in Python, so every service read as running all seven days. Cast with `int()` if you must look, but the operator is the tie-breaker.
+
+## A hand-built S4 cannot be delivered if the town draws a schematic
+
+`npm run deliver` verifies the payload before it touches the live service, and for a town whose `routes.json` sets `internalSchematic` it fails there unless the payload carries generators:
+
+```
+— /app/engine/expert/gen_internal_schematic.js
+   ERROR: gen_internal.js not found (looked in run dir / SKILL_ASSETS / script dir)
+✗ pre-flight verify failed — the live service was NOT touched.
+```
+
+The documented fallback — *an area `--src` carrying no generators falls back to the vendored area engine* — **does not cover the schematic sheet**. Every previously delivered run carried `gen_internal.js`, `gen_external.js` and `schematize_internal.js` because `rollout.js` copies them in; a run built by hand through `stage.js` carries none. Tracked as OA-206, along with the sibling symptom that the same hand path loses `build-meta.json` (written only when `BUILD_META_DIR` is set, which only `rollout.js` sets) and silently omits `internal-schematic.svg` altogether.
+
+**Copy the three generators from the town's last delivered S5 run, not from `assets/`.** The shared skills checkout may have another session's half-finished engine in it — on 2026-08-31 `gen_internal.js` in the working tree differed from the committed engine while a neighbouring session worked on the POI round, and the engine hash moved four times in half an hour. Then prove the copies are the right ones before shipping: re-run them over the S4 run and require every sheet to reproduce **byte-for-byte**. That single check answers both questions at once — whether the generators match the payload, and whether the build itself used a clean engine rather than a neighbour's work in progress.

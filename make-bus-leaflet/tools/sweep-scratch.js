@@ -20,6 +20,10 @@
  * taken from `git show` of the pre-migration tree plus a scan of the portal's
  * suites, not typed from memory.
  *
+ * TWO PREFIXES ON THAT LIST ARE STILL LIVE, and that is deliberate: `bus-work`'s
+ * `commit-worklist-` and `corr-worklist-` are ESM in another skill and already
+ * remove their own directories, so they are swept but not migrated.
+ *
  * SEVERAL SESSIONS RUN AT ONCE HERE, and a suite mid-run owns one of these
  * directories. That is why nothing is removed under --older-than hours (default
  * 6), and why the row that raised this counted 3,191 and deleted none of them.

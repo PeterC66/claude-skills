@@ -53,6 +53,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { scratchDir } = require('../assets/scratch');
+const { computeEngineVersion, computePlaceEngineVersion } = require('../assets/engine_version');
 
 const ROOT = path.join(__dirname, '..');
 const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
@@ -92,7 +93,36 @@ function buildFixture(src, rel) {
   const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
   if (!rec) { console.error('prove-red-unrendered: no latest S3 run in ' + src + "'s manifest."); process.exit(1); }
   fs.cpSync(path.join(src, rec.dir), path.join(dst, rec.dir), { recursive: true });
+  /*
+   * STAMP THE FIXTURE WITH TODAY'S ENGINE (2026-08-31).
+   *
+   * This file borrows a real map's committed `ci-reference`, and the rollout tools it
+   * spawns check the engine stamp before they check anything else — so case C, the
+   * control that says "manifest untouched, therefore UP-TO-DATE", was a claim about
+   * the ESTATE: that the borrowed map is currently built on the current engine. It is
+   * not. The morning's POI change moved the PLACE template hash while all twelve
+   * places are stamped with the old one, so the control reported STAMP-STALE, exactly
+   * as it should have — about the estate, not about the code under test.
+   *
+   * This is the FOURTH instance of that shape in one day, and the second in this
+   * repository: `prove-red-status.js` had it in its ENGINE_STALE_ALLOWED anchor and
+   * its donor town, `prove-red-rollout-stamp.js` in cases A and E. The class is
+   * "a harness that spawns rollout.js or rollout_places.js over a borrowed fixture",
+   * and it is exactly these three files — `prove-red-attribution.js` and
+   * `prove-red-gates.js` also borrow a ci-reference and are unaffected, because they
+   * never run a tool that reads the stamp. Measured, not assumed: both were run and
+   * both are green.
+   */
+  stampCurrent(path.join(dst, 'ci-reference', 'routes.json'),
+    /Places/.test(rel) ? computePlaceEngineVersion() : computeEngineVersion());
   return { tmp, manifestPath: path.join(dst, 'manifest.json') };
+}
+
+function stampCurrent(routesPath, hash) {
+  if (!fs.existsSync(routesPath)) return;
+  const j = JSON.parse(fs.readFileSync(routesPath, 'utf8'));
+  j.engine = hash;
+  fs.writeFileSync(routesPath, JSON.stringify(j, null, 2));
 }
 
 function editManifest(manifestPath, fn) {

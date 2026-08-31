@@ -9,6 +9,10 @@
 // so one clean line per route carries all its stop ticks (the in-town chains
 // merge both travel directions and would zigzag if drawn directly).
 //
+// THAT LAST SENTENCE IS THE ASSUMPTION, and match_cfg.json's `viaChain` is the
+// escape hatch for the routes it is false about — see the block above
+// PROJ_WARN_M and the `viaChain` note beside MCFG.
+//
 // Sanity: a leg whose road path exceeds max(2.5 x crow-fly, crow + 0.6 km)
 // falls back to a straight chord and is reported. (Generous on purpose:
 // winding estate roads legitimately run 2-3.5x crow-fly between close stops —
@@ -64,10 +68,30 @@ const RG = JSON.parse(fs.readFileSync(DIR + '/roads_geo.json', 'utf8'));
 const atco2ll = JSON.parse(fs.readFileSync(DIR + '/atco2ll.json', 'utf8'));
 const FULL = JSON.parse(fs.readFileSync(DIR + '/routes_full_atco.json', 'utf8'));
 const INTOWN = JSON.parse(fs.readFileSync(DIR + '/routes_intown_atco.json', 'utf8'));
-// optional match_cfg.json: { viaPrefixes:{route:[ATCO prefixes]}, viaExclude:{route:[ATCOs]} }
+// optional match_cfg.json: { viaPrefixes:{route:[ATCO prefixes]}, viaExclude:{route:[ATCOs]},
+//                              viaChain:{route:'canonical'|'intown'} }
 // viaPrefixes restricts a route's via stops to the listed prefixes — use it to
 // drop variant-journey detours baked into the canonical chain (e.g. St Ives 9's
 // Hilton/Elsworth village loop) so the drawn line follows the MAIN journey.
+//
+// viaChain names WHICH CHAIN the polyline is built from, per route, and it exists
+// for the one-way loop (OA-193). 'canonical' is the default and the historic
+// behaviour: the first direction of the first sub-service. 'intown' builds the line
+// from the route's own DISPLAYED chain instead — the same list the ticks come from,
+// which merges both travel directions in visiting order. It is opt-in per route
+// because it is the wrong answer for an ordinary there-and-back route: that chain
+// doubles back on itself, so the line is drawn twice over the same road for no
+// reader's benefit. It is the RIGHT answer where the two directions run down
+// different streets, because the line and the ticks then come from one source and
+// the projection below has nothing left to get wrong.
+//
+// MEASURED ON RAMSEY, 2026-08-31, worst projected tick per route:
+//   canonical (today)         X31 3564 m   32 3564 m
+//   best-covering direction   X31 3442 m   32 3442 m   <- OA-193's obvious fix, and it fails
+//   intown                    X31   19 m   32   19 m
+// The middle row is why this is a config lever rather than a new default: picking a
+// better single direction is still picking one, and one direction cannot describe a
+// loop. Read the 350 m warning below for the list of routes worth setting it on.
 const MCFG = (function(){ try{ return JSON.parse(fs.readFileSync(DIR + '/match_cfg.json','utf8')); }catch(e){ return {}; } })();
 const [BS, BW, BN, BE] = RG.bbox;
 const inBbox = ll => ll[0] >= BS && ll[0] <= BN && ll[1] >= BW && ll[1] <= BE;
@@ -155,7 +179,13 @@ for (const r in INTOWN) {
   const full = FULL[r];
   const can = (full && ((full.canonical && full.canonical[0]) || full.directions[0])) || null;
   if (!can) { console.log(r + ': no full chain, skipped'); continue; }
-  let vias = can.stops.filter(a => atco2ll[a] && inBbox(atco2ll[a]));
+  // WHICH CHAIN THIS LINE IS BUILT FROM — see the viaChain note beside MCFG.
+  // The default is `can`, and a route with no viaChain entry takes exactly the path
+  // it always took, so no committed sheet moves because this option exists.
+  const VC = (MCFG.viaChain || {})[r] || 'canonical';
+  const chain = VC === 'intown' ? (INTOWN[r] || []) : can.stops;
+  if (VC === 'intown' && chain.length < 2) console.error('match_routes: ' + r + ' — viaChain "intown" but its displayed chain has ' + chain.length + ' stop(s); falling back to the canonical direction.');
+  let vias = (VC === 'intown' && chain.length >= 2 ? chain : can.stops).filter(a => atco2ll[a] && inBbox(atco2ll[a]));
   const vp = (MCFG.viaPrefixes || {})[r];
   if (vp) vias = vias.filter(a => vp.some(p => a.startsWith(p)));
   const vx = (MCFG.viaExclude || {})[r];
@@ -215,8 +245,19 @@ for (const r in INTOWN) {
   // does the full chain continue beyond the matched portion at either end?
   // (gen_internal draws an off-map continuation arrow at such ends even when
   // the path finishes inside the frame, e.g. a neighbouring village)
-  const contStart = !closedLoop && vias[0] !== can.stops[0];
-  const contEnd = !closedLoop && vias[vias.length - 1] !== can.stops[can.stops.length - 1];
+  // 'Is this end of the drawn line also an end of the ROUTE?' The canonical answer
+  // compares against the one direction the line was built from, which is right when
+  // that direction IS the route. Under viaChain 'intown' it is not: the drawn line
+  // is a loop assembled from both directions, so its two ends are the two ends of the
+  // DISPLAYED chain, and the question becomes whether either of them is a terminus of
+  // any direction the route runs. Ramsey's X31 arrives at Marriotts Drove and leaves
+  // at Daintree Road, neither of which is a terminus of anything — both continue to
+  // Peterborough, by different roads, which is what a one-way loop means and what the
+  // sheet has to draw two arrows to say.
+  const termini2 = new Set();
+  for (const d of (full.directions || [])) if (d.stops.length) { termini2.add(d.stops[0]); termini2.add(d.stops[d.stops.length - 1]); }
+  const contStart = !closedLoop && (VC === 'intown' ? !termini2.has(vias[0]) : vias[0] !== can.stops[0]);
+  const contEnd = !closedLoop && (VC === 'intown' ? !termini2.has(vias[vias.length - 1]) : vias[vias.length - 1] !== can.stops[can.stops.length - 1]);
   OUT.routes[r] = { pts: pts.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), edges, stopT, fallbacks, contStart, contEnd };
   const km = pts.reduce((s, p, i) => i ? s + kmLL(pts[i - 1], p) : 0, 0);
   // The worst projection is recorded on every route, not only the ones that warn, so

@@ -27,7 +27,8 @@
     "gate:extraction": "node tools/extraction-gate.js",
     "gate:dark-paths": "node tools/dark-paths.js",
     "gate:branch-coverage": "node tools/branch-coverage.js",
-    "test:prove-red-external-spokes": "python tools/prove-red-external-spokes.py"
+    "test:prove-red-external-spokes": "python tools/prove-red-external-spokes.py",
+    "test:prove-red-via-chain": "node tools/prove-red-via-chain.js"
   },
   "keywords": [],
   "author": "Peter Cooper",

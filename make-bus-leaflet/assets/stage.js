@@ -466,6 +466,105 @@ function main() {
             + `  Override with --force-stamps only if the absence is deliberate.`);
         }
         if (miss.length) console.log(`  WARNING: committing an S4 with no ${miss.join(' and no ')} (--force-stamps)`);
+
+        /* Guard (OA-206): an S4 must contain every sheet its OWN routes.json asked
+         * for. Wisbech's `internalSchematic: true` means the town ships three
+         * sheets; `schematize_internal.js` is a separate command, `rollout.js` runs
+         * it and a hand-built S4 does not, and on 2026-08-31 v3.1 was assembled,
+         * committed and byte-gated with `internal-schematic.svg` simply absent. The
+         * only thing that ever said so was `sync_ci_reference.js` reporting a
+         * DELETION against the golden master, and only because somebody read it.
+         *
+         * WHY ONLY THE OPT-IN SHEETS. `sheet_registry.js` calls `internal` and
+         * `external` unconditional, and for a town they are — but THREE place maps
+         * deliberately ship without them (High Wycombe High Street and Town Centre
+         * carry a boarding plan and nothing else, OA-035; St Ives Bus Station has no
+         * external radial yet, OA-037). Measured before writing this: requiring the
+         * unconditional pair would refuse all three of those maps' next commit for
+         * doing exactly what they were designed to do. An opt-in key is a
+         * DECLARATION the map itself made, so its absence cannot be a decision — it
+         * is the one form of this question with an unambiguous answer, which is the
+         * whole of the *deliberately absent, reported as broken* lesson.
+         *
+         * The byte gate cannot do this job, for the OA-161 reason: `ci-reference/`
+         * is seeded from the run, so a sheet missing from both sides agrees.
+         */
+        if (rj) {
+          const { declaredBy } = require('./sheet_registry');
+          const placeRun = isPlaceRun(runDir);
+          const wanted = declaredBy(rj, 'svg')
+            .filter(s => s.optIn)
+            .filter(s => s.level === 'both' || s.level === (placeRun ? 'place' : 'area'));
+          const gone = wanted.filter(s => !fs.existsSync(path.join(runDir, s.out)));
+          if (gone.length && !f['force-missing']) {
+            die(`${gone.length} sheet(s) this map ASKED FOR are not in ${id}:\n`
+              + gone.map(s => `    ${s.out}   (routes.json "${s.optIn}")`).join('\n') + '\n'
+              + `  routes.json declares them, so their absence is a build that fell short rather\n`
+              + `  than a design decision. rollout.js runs the extra generator; a hand-built S4\n`
+              + `  does not, and nothing downstream reports the gap — the byte gate seeds\n`
+              + `  ci-reference from this very run, so both sides agree that the sheet is not there.\n`
+              + `  Run the sheet's own generator in ${id}, then commit again:\n`
+              + `    node "%SK%\\schematize_internal.js"      (for internal-schematic.svg)\n`
+              + `  Override with --force-missing only if the absence is deliberate.`);
+          }
+          if (gone.length) console.log(`  WARNING: committing an S4 without ${gone.map(s => s.out).join(', ')} (--force-missing)`);
+        }
+
+        /* Guard (OA-206, second half): an AREA S4 must carry `build-meta.json`.
+         *
+         * `gen_internal.js` writes it only when `BUILD_META_DIR` is set, and only
+         * `rollout.js` sets it, so a hand-built S4 loses the one record of which way
+         * up the sheet was drawn. That is not cosmetic: PCA re-derives the rotation
+         * on every build, a route added next month can swing the whole sheet several
+         * degrees, and `freeze_orientation.js` reads this file to pin an orientation.
+         *
+         * THE FIX OA-206 ASKED FOR IS IN THE GENERATOR — write it always — and that
+         * is still the right fix. It is not made here because `gen_internal.js` is
+         * inside the engine template hash, so editing it marks all eight towns
+         * ENGINE STALE and demands an estate-wide rebuild, which today would
+         * supersede Wisbech's proposed-update #139 with the customer. This guard is
+         * the boundary half, available at no such cost: it cannot create the file,
+         * but it stops a build reaching the manifest without one.
+         *
+         * AND IT CHECKS THE DATE, because presence is not freshness. `seedPrevS4`
+         * copies every `.json` from the previous S4 forward, `build-meta.json`
+         * included, and `gen_internal.js` overwrites it only when the env var is set
+         * — so the carried-forward copy of a build weeks old satisfies a presence
+         * test while describing a different rotation. Both dates are written down
+         * (the run id carries one, `builtAt` the other), so nothing is inferred. It
+         * compares DAYS, and says so: a stale copy made the same day is invisible to
+         * it, and claiming otherwise would be the more expensive kind of wrong.
+         *
+         * PLACES ARE EXCLUDED, and that is structural rather than a let-off: the
+         * place engine has no build-meta path at all — `rollout_places.js` contains
+         * the string BUILD_META_DIR zero times — so a place without one is not a
+         * place that lost anything.
+         */
+        if (!isPlaceRun(runDir)) {
+          const bmp = path.join(runDir, 'build-meta.json');
+          const runDay = (id.match(/_(\d{4}-\d{2}-\d{2})_/) || [])[1] || null;
+          let why = null;
+          if (!fs.existsSync(bmp)) why = 'there is no build-meta.json in this run';
+          else if (runDay) {
+            let bm = null;
+            try { bm = JSON.parse(fs.readFileSync(bmp, 'utf8')); } catch (e) { bm = null; }
+            const built = bm && typeof bm.builtAt === 'string' ? bm.builtAt.slice(0, 10) : null;
+            if (!built) why = 'build-meta.json has no readable "builtAt"';
+            else if (built < runDay) why = `build-meta.json says builtAt ${built}, before this run's own date ${runDay} — it was carried forward by seedPrevS4, not written by this build`;
+          }
+          if (why && !f['force-meta']) {
+            die(`${id} has no orientation record: ${why}\n`
+              + `  build-meta.json records the rotation THIS build chose, and PCA re-derives that\n`
+              + `  rotation every time — a route added next month can swing the sheet several\n`
+              + `  degrees, and this file is how anyone would ever notice. freeze_orientation.js\n`
+              + `  reads it to pin a sheet.\n`
+              + `  Re-run the internal generator in the run dir with the variable set:\n`
+              + `    BUILD_META_DIR="${runDir}" node "%SK%\\gen_internal.js"\n`
+              + `  (rollout.js sets it for you; a hand-built S4 has to set it itself.)\n`
+              + `  Override with --force-meta only if the absence is deliberate.`);
+          }
+          if (why) console.log(`  WARNING: committing an area S4 with no orientation record — ${why} (--force-meta)`);
+        }
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;

@@ -50,6 +50,14 @@ function s4(town, rj, id) {
   fs.writeFileSync(path.join(d, 'internal.svg'), '<svg/>');
   fs.writeFileSync(path.join(d, 'routes.json'),
     JSON.stringify(Object.assign({ version: '9.9', town: 'Stampton' }, rj)));
+  // The orientation record an area S4 has to carry (OA-206). This file is about the
+  // PROVENANCE STAMPS guard, and a control for one guard has to be otherwise valid
+  // or it stops being a control and becomes a second copy of a different finding.
+  // Dated to match the run id, because the guard compares the two.
+  fs.writeFileSync(path.join(d, 'build-meta.json'), JSON.stringify({
+    generator: 'gen_internal.js', sheet: 'internal',
+    builtAt: ((id || 'v9.9_2026-08-29_1200').match(/_(\d{4}-\d{2}-\d{2})_/) || [, '2026-08-29'])[1] + 'T12:00:00.000Z',
+    rotationDeg: 0, orientationSource: 'auto', fixedOrientation: null }));
   return d;
 }
 const STAMPED = { engine: 'deadbeef01', design: { sheetVersion: 'build 9.9 · 29 Aug 2026' } };

@@ -78,9 +78,25 @@ const DEC = (s) => String(s)
   .replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(+d))
   .replace(/&amp;/g, '&');            // last, so &amp;lt; does not become <
 
+/*
+ * THE NAME CLASS HAS DIGITS IN IT, and until 2026-08-31 it did not (OA-207).
+ * `[a-zA-Z-]+` cannot match `x1`, so every `<line x1 y1 x2 y2>` on every sheet
+ * this tool has ever read parsed as a ZERO-LENGTH segment at the origin. Found
+ * while writing the falsification for the panel widening below: the synthetic
+ * spoke was drawn as a `<line>`, every assertion came back 0, and the control
+ * came back 0 as well — which is the only reason it was noticed rather than
+ * written off as a bug in the new code.
+ *
+ * INERT ON TODAY'S ESTATE, and said as a measurement rather than as a comfort:
+ * the eleven `<line>` elements in `ci-reference/` are one per internal sheet, the
+ * north arrow's tail at `#666` / 0.8mm, which `isRouteInk()` rejects on both
+ * counts. Every metric in this file is unchanged by the fix. It is repaired
+ * anyway, because the thing it made invisible is a route line — and a route line
+ * that cannot be seen is precisely what the widening below exists to find.
+ */
 const attrs = (tag) => {
   const o = {};
-  for (const m of tag.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)) o[m[1]] = m[2];
+  for (const m of tag.matchAll(/([a-zA-Z][a-zA-Z0-9-]*)="([^"]*)"/g)) o[m[1]] = m[2];
   return o;
 };
 
@@ -456,11 +472,39 @@ function analyse(svgPath) {
   // busiest half of the page. gen_external_radial.js emits the box with an exact
   // signature (fill-opacity 0.94, a #ccc hairline), so match that first and keep
   // the loose rule only as a fallback for sheets drawn by older engines.
-  const legendSig = hasPanel ? null : (P.rects.find(r =>
-    Math.abs(r.op - 0.94) < 1e-6 && r.stroked === '#ccc') || null);
-  const legend = legendSig || (hasPanel ? null : (P.rects.find(r =>
-    r.x1 - r.x0 > 30 && r.y1 - r.y0 > 15 && r.y0 < H * 0.5 &&
-    (r.x1 - r.x0) * (r.y1 - r.y0) < W * H / 3 && /fff|none|white/.test(r.fill)) || null));
+  //
+  // AND THE LEGEND IS NOT THE ONLY ONE (OA-207, 2026-08-31). `gen_external_radial.js`
+  // pins THREE opaque page-coordinate blocks, not one: the operators legend (line
+  // ~905), the `design.howToUse` help panel (~978) — which carries the IDENTICAL
+  // signature, so `.find()` was returning the legend and stopping — and the opt-in
+  // `stamp` note (~1115), which is `fill-opacity 0.9` with a `#b30000` hairline.
+  // Wisbech's teal 60 spoke to Downham Market runs under the help panel on both the
+  // shipped v2.7 and the new v3.1, and `routeLinesUnderLegend` said 0 on both,
+  // because the panel it was drawn under was the one this function could not see.
+  // Collect every page device, in document order, and measure what each of them
+  // buries. `panels[0]` is the legend when there is one, so everything below that
+  // still speaks of "the legend" is asking the same question it always did.
+  const isPageDevice = (r) =>
+    (Math.abs(r.op - 0.94) < 1e-6 && r.stroked === '#ccc') ||     // legend, howToUse
+    (Math.abs(r.op - 0.9) < 1e-6 && r.stroked === '#b30000');     // stamp note
+  const sigPanels = hasPanel ? [] : P.rects.filter(isPageDevice);
+  const panels = sigPanels.length ? sigPanels : (hasPanel ? [] : (() => {
+    const loose = P.rects.find(r =>
+      r.x1 - r.x0 > 30 && r.y1 - r.y0 > 15 && r.y0 < H * 0.5 &&
+      (r.x1 - r.x0) * (r.y1 - r.y0) < W * H / 3 && /fff|none|white/.test(r.fill));
+    return loose ? [loose] : [];
+  })());
+  // Name them for the --detail listing, so a finding says WHICH box buried it. The
+  // first 0.94/#ccc rect is the legend by document order (the generator emits it
+  // before it even builds the help panel); a #b30000 one is the stamp; anything
+  // else with the legend's signature is a later-added help panel.
+  let seenLegend = false;
+  for (const p of panels) {
+    if (Math.abs(p.op - 0.9) < 1e-6 && p.stroked === '#b30000') p.role = 'stamp';
+    else if (!seenLegend) { p.role = 'legend'; seenLegend = true; }
+    else p.role = 'panel';
+  }
+  const legend = panels[0] || null;
 
   // Ink that a label must not sit on: route ribbons, plus the river/railway.
   // The faint grey context road network is deliberately NOT included — labels
@@ -496,7 +540,13 @@ function analyse(svgPath) {
     // A fabricated defect is worse than none, so exclude it, exactly as the internal
     // sheets exclude everything right of the panel edge. (Found 2026-08-15 while
     // checking why Phase 4 had not moved that number.)
-    if (legend && t.x >= legend.x0 - 1 && t.x <= legend.x1 + 1 && t.y >= legend.y0 - 1 && t.y <= legend.y1 + 1) continue;
+    // WIDENED with the same OA-207 change, and it is the same fault facing the
+    // other way: the legend's own text was excluded and the help panel's was not,
+    // so every bullet of "How to use this map" was being counted as a map label
+    // standing in the middle of the diagram. That inflates `mapLabels`, which is
+    // the ledger's FLOOR, and it puts the panel's own prose in the running for
+    // over-ink and label-on-label defects it can never actually have.
+    if (panels.some(pn => t.x >= pn.x0 - 1 && t.x <= pn.x1 + 1 && t.y >= pn.y0 - 1 && t.y <= pn.y1 + 1)) continue;
     if (P.mapFrame && t.y < P.mapFrame.y0) continue;          // title block
     // Road names (grey, usually rotated, drawn ALONG the road they name) are a
     // different design problem from point labels: sitting on the line is what
@@ -530,39 +580,73 @@ function analyse(svgPath) {
    * exact rather than a guess: anything drawn before the legend rect is content
    * the legend is about to cover.
    */
-  if (legend) {
-    const LB = [legend.x0, legend.y0, legend.x1, legend.y1];
+  /*
+   * ONE PASS PER PANEL (OA-207). `seq` is what makes the question exact — anything
+   * drawn BEFORE a panel's rect is content that panel is about to cover — and each
+   * panel has its own `seq`, so the test has to be per panel rather than against
+   * the first one found. A symbol under two overlapping panels is one buried
+   * symbol, not two, so both lists are deduped on what was buried rather than on
+   * which box buried it.
+   */
+  const buried = new Set(), buriedRoute = new Set();
+  /*
+   * A page device's OWN CONTENTS are not artwork it buried, and once there is more
+   * than one device that has to be asked rather than assumed. The legend's text was
+   * safe by accident — it is emitted after its own rect and there was no later
+   * panel to test it against — but the help panel's bullets are emitted before the
+   * `stamp` note, and the two share the sheet's bottom-left corner by default, so a
+   * town that opts into a stamp would have been told its own help text was buried.
+   * Containment, not intersection: furniture sits wholly inside its own box.
+   */
+  const isFurniture = (bx, seq) => panels.some(q =>
+    q.seq < seq && bx[0] >= q.x0 - 1 && bx[1] >= q.y0 - 1 && bx[2] <= q.x1 + 1 && bx[3] <= q.y1 + 1);
+  for (const pan of panels) {
+    const LB = [pan.x0, pan.y0, pan.x1, pan.y1];
     const hits = (b) => !(b[2] < LB[0] || b[0] > LB[2] || b[3] < LB[1] || b[1] > LB[3]);
     for (const r of P.rects) {
-      if (r.seq >= legend.seq || r === legend) continue;
+      if (r.seq >= pan.seq || r === pan) continue;
       if (r.x1 - r.x0 > W * 0.5) continue;                       // the page background
       if (/none/.test(r.fill)) continue;
-      if (hits([r.x0, r.y0, r.x1, r.y1]))
-        detail.underLegend.push({ kind: 'box', at: [+r.x0.toFixed(1), +r.y0.toFixed(1)], fill: r.fill });
+      // Another page device is furniture, not artwork: the help panel sitting on
+      // the stamp note is a layout question, not a buried destination, and the
+      // placer is already told about the legend. Counting one as artwork the other
+      // hid would report a defect the reader cannot experience.
+      if (panels.includes(r)) continue;
+      if (isFurniture([r.x0, r.y0, r.x1, r.y1], r.seq)) continue;
+      if (hits([r.x0, r.y0, r.x1, r.y1]) && !buried.has(r.seq)) {
+        buried.add(r.seq);
+        detail.underLegend.push({ kind: 'box', at: [+r.x0.toFixed(1), +r.y0.toFixed(1)], fill: r.fill, under: pan.role });
+      }
     }
     for (const c of P.circles) {
-      if (c.seq >= legend.seq) continue;
-      if (hits([c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r]))
-        detail.underLegend.push({ kind: c.r >= 3 ? 'node' : 'tick', at: [+c.cx.toFixed(1), +c.cy.toFixed(1)] });
+      if (c.seq >= pan.seq) continue;
+      if (isFurniture([c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r], c.seq)) continue;
+      if (hits([c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r]) && !buried.has(c.seq)) {
+        buried.add(c.seq);
+        detail.underLegend.push({ kind: c.r >= 3 ? 'node' : 'tick', at: [+c.cx.toFixed(1), +c.cy.toFixed(1)], under: pan.role });
+      }
     }
     for (const t of P.texts) {
-      if (t.seq >= legend.seq) continue;
+      if (t.seq >= pan.seq) continue;
       const q = textQuad(t);
       const bx = [Math.min(...q.map(p => p[0])), Math.min(...q.map(p => p[1])),
                   Math.max(...q.map(p => p[0])), Math.max(...q.map(p => p[1]))];
-      if (hits(bx)) detail.underLegend.push({ kind: 'label', text: t.text, at: [+t.x.toFixed(1), +t.y.toFixed(1)] });
+      if (isFurniture(bx, t.seq)) continue;
+      if (hits(bx) && !buried.has(t.seq)) {
+        buried.add(t.seq);
+        detail.underLegend.push({ kind: 'label', text: t.text, at: [+t.x.toFixed(1), +t.y.toFixed(1)], under: pan.role });
+      }
     }
-    const seen = new Set();
     for (const s of P.strokes) {
-      if (s.seq >= legend.seq || !isRouteInk(s)) continue;
-      if (seen.has(s.seq)) continue;
+      if (s.seq >= pan.seq || !isRouteInk(s)) continue;
+      if (buriedRoute.has(s.seq)) continue;
       const [p, q] = s.seg;
       const n = Math.max(2, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.4));
       for (let i = 0; i <= n; i++) {
         const x = p[0] + (q[0] - p[0]) * i / n, y = p[1] + (q[1] - p[1]) * i / n;
         if (x >= LB[0] && x <= LB[2] && y >= LB[1] && y <= LB[3]) {
-          seen.add(s.seq);
-          detail.routeUnderLegend.push({ stroke: s.stroke, at: [+x.toFixed(1), +y.toFixed(1)] });
+          buriedRoute.add(s.seq);
+          detail.routeUnderLegend.push({ stroke: s.stroke, at: [+x.toFixed(1), +y.toFixed(1)], under: pan.role });
           break;
         }
       }
@@ -1663,6 +1747,12 @@ ${results.length} sheets · ${results.filter(r => r.fails.length).length} FAIL �
     if (r.detail.inFooter.length) console.log('  under footer: ' + r.detail.inFooter.map(d => `"${d.text}" y=${d.y} (band from ${d.footerTop})`).join(', '));
     if (r.detail.intoPanel.length) console.log('  into panel: ' + r.detail.intoPanel.map(d => `"${d.text}" +${d.over}mm`).join(', '));
     if (r.detail.tiny.length) console.log('  tiny text: ' + r.detail.tiny.map(d => `"${d.text}" ${d.size}mm`).join(', '));
+    // OA-207: both of these have been measured since 2026-08-16 and NEITHER had a
+    // --detail line, which is the same half-finished shape the OA-021 note below
+    // describes — the board could say "route lines behind the legend" and not say
+    // which line, or which of the sheet's three page devices was on top of it.
+    if (r.detail.underLegend.length) console.log('  buried under a page panel: ' + r.detail.underLegend.map(d => `${d.kind}${d.text ? ' "' + d.text + '"' : ''} at ${d.at} [under the ${d.under || 'legend'}]`).join(', '));
+    if (r.detail.routeUnderLegend.length) console.log('  route line behind a page panel: ' + r.detail.routeUnderLegend.map(d => `${d.stroke} at ${d.at} [under the ${d.under || 'legend'}]`).join(', '));
     // The seven added 2026-08-16 (§5.3 print check).
     if (r.detail.unplaced.length) console.log('  DROPPED by the placer: ' + r.detail.unplaced.map(d => `"${d.text}" (${d.reason})`).join(', '));
     if (r.detail.panelOnly.length) console.log('  in the panel, not on the map: ' + r.detail.panelOnly.map(d => `${d.route} ${d.colour}`).join(', '));

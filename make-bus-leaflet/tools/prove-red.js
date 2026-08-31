@@ -1325,6 +1325,32 @@ const MUTATIONS = [
     find: "  const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;",
     to: "  const KFIRST = PS ? PS.sub*CAP : 5;" },
 
+  /* OA-207. The two halves of the panel widening, mutated separately, because the
+   * second one is a PARSER fault that was found while writing the fixture for the
+   * first and has nothing to do with it. A single mutation covering both would let
+   * either fix rot while the other kept the suite green. */
+  { suite: 'quality_metrics_panels.test.js', file: 'quality_metrics.js',
+    what: 'only the FIRST pinned page device is measured, so the help panel and the stamp bury artwork silently again',
+    find: "  const sigPanels = hasPanel ? [] : P.rects.filter(isPageDevice);",
+    to: "  const sigPanels = hasPanel ? [] : P.rects.filter(isPageDevice).slice(0, 1);" },
+
+  { suite: 'quality_metrics_panels.test.js', file: 'quality_metrics.js',
+    what: 'the attribute-name class loses its digits, so every <line> parses as a zero-length segment at the origin',
+    find: "  for (const m of tag.matchAll(/([a-zA-Z][a-zA-Z0-9-]*)=\"([^\"]*)\"/g)) o[m[1]] = m[2];",
+    to: "  for (const m of tag.matchAll(/([a-zA-Z-]+)=\"([^\"]*)\"/g)) o[m[1]] = m[2];" },
+
+  /* OA-206. Both commit-time completeness guards. Each mutation neuters exactly one,
+   * so the controls in stage_completeness.test.js keep saying what they are for. */
+  { suite: 'stage_completeness.test.js', file: 'stage.js',
+    what: 'a declared sheet that was never drawn stops being a refusal, which is how Wisbech v3.1 shipped without its schematic',
+    find: "          const gone = wanted.filter(s => !fs.existsSync(path.join(runDir, s.out)));",
+    to: "          const gone = [];" },
+
+  { suite: 'stage_completeness.test.js', file: 'stage.js',
+    what: 'an area S4 with no orientation record commits anyway, so the rotation the build chose is lost with nothing said',
+    find: "          if (why && !f['force-meta']) {",
+    to: "          if (false) {" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

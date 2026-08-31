@@ -543,6 +543,32 @@ function gatePortalFixture() {
       ? gate(genBrd, dataDir, 'boarding.svg', path.join(dataDir, 'boarding.svg'), { extraEnv }).status
       : 'no-gen';
     row.boarding = fBrd === 'n/a' ? '-' : fBrd === 'NO-SHEET' ? 'MISSING' : fBrd;
+    /* IS THE FIXTURE'S STORED DATA WHAT THE SCRIPTS WOULD PRODUCE? (OA-188)
+     *
+     * The gate above asks "does the portal's engine redraw this fixture from its
+     * stored data", and the answer has always been yes — the fixture carries the
+     * very `boarding_index.json` the sheet was drawn from, so both sides of the
+     * comparison agree by construction. The question nobody was asking is whether
+     * that stored data is still what `boarding_index.py` would write today, and it
+     * cost a real check: `refresh-place-fixture.mjs` in the portal reported a
+     * boarding fixture `unchanged` while it was 924 bytes behind the sheet being
+     * shipped, because it too re-runs the generator against the fixture's own index.
+     * The fixture had to be re-staged by hand (buses-data `b9adaa5`).
+     *
+     * OA-188 said whatever gate answers this for a local place should answer it for
+     * the fixture too. It is the same function, `dataScriptDrift()`, on the same
+     * stamp: a claim written down at both ends, nothing inferred. It lands GREEN —
+     * both committed fixtures were measured clean before it was added, which is the
+     * precondition a gate has to meet or it is muted inside a week.
+     *
+     * It sits on the BUSES side rather than in the portal because this is the one
+     * tree that holds both the fixture and the scripts that derive its data; the
+     * portal vendors neither Python script and would need a second copy of the
+     * version numbers to ask at all, which is the "two lists that must agree" shape
+     * `sheet_registry.js` exists to refuse.
+     */
+    row.indexDrift = dataScriptDrift(dataDir);
+    if (row.indexDrift.length && row.boarding === 'PASS') row.boarding = 'INDEX-STALE';
     out.push(row);
   }
   return out;
@@ -841,7 +867,12 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
     // raised about one level up: a reference with the authority of a golden master
     // and the coverage of a scratch copy.
     || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
-  || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external) || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding))
+  || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
+    // INDEX-STALE gates here for the same reason it gates on a place (OA-188): every
+    // other check is correctly green in this state, so a column the exit code ignored
+    // would be exactly the decoration OA-151 took out of the Engine column.
+    || ['DIFF', 'FAIL', 'MISSING', 'INDEX-STALE'].includes(r.boarding)
+    || (r.indexDrift && r.indexDrift.length))
   // `null` is MISSING — the portal has no such file. It counted as fine until
   // 2026-08-18, which had it backwards: a vendored file that DIFFERS is stale
   // output, a vendored file that is ABSENT is a require that throws. The row was
@@ -1069,6 +1100,15 @@ async function main() {
     const fw = [24, 9, 9, 9];
     console.log(line(['Fixture', 'Internal', 'External', 'Boarding'], fw));
     for (const r of portalFixtureRows) console.log(line([r.name, r.internal, r.external, r.boarding], fw));
+    for (const r of portalFixtureRows.filter(r => r.indexDrift && r.indexDrift.length)) {
+      for (const d of r.indexDrift) {
+        console.log('  INDEX STALE (gating): fixture ' + r.name + ' -- ' + d.file + ' was written by ' + d.script
+          + ' v' + d.saidBy + ' and the script on disk is v' + d.current
+          + '. Neither the byte gate nor the portal\'s refresh-place-fixture.mjs can see this:'
+          + ' both redraw the sheet from THAT file.');
+      }
+      console.log('    re-derive the place, then re-stage the fixture from its ci-reference.');
+    }
   }
 
   if (freshnessRows.length) {

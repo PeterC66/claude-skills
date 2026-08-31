@@ -71,11 +71,47 @@ const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using A
 const pi = argv.indexOf('--portal');
 const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-bus-maps';
 
-/* The donor town. It must be one whose engine stamp is CURRENT, or the control
- * is red before anything is mutated and the whole run proves nothing. Ramsey is
- * deliberately NOT the donor for that reason — it is the one town that is
- * legitimately stale, and it is the subject of cases 3 and 4 instead. */
-const DONOR = 'Wisbech';
+/* The donor town. It must be one whose engine stamp is CURRENT, or the control is
+ * red before anything is mutated and the whole run proves nothing.
+ *
+ * IT IS NOW DERIVED, AND IT USED TO BE A NAME. It was 'Ramsey' until 2026-08-28,
+ * when Ramsey was rebuilt and the case that depended on its staleness broke; the
+ * remedy was to name a different town, 'Wisbech'. On 2026-08-31 Wisbech was given a
+ * dated staleness exception of its own — portal proposed-update #139 is with the
+ * customer — and the two fixture-freshness cases went red on a fact about Wisbech
+ * rather than about the gate. The same trap twice, moved one town along each time,
+ * with a comment above it saying exactly what the requirement was.
+ *
+ * So ASK, rather than remember: the donor is the first town, in name order, whose
+ * committed `engine` stamp equals the engine on disk right now. That is a claim
+ * written down at both ends and it cannot go stale. A run with no current town at
+ * all refuses loudly, because in that state every control here is red for the
+ * room's reason and reporting the cases would be worse than not running.
+ */
+const { computeEngineVersion } = require('../assets/engine_version');
+function pickDonor() {
+  const areas = path.join(BUSES, 'Areas');
+  const current = computeEngineVersion();
+  const tried = [];
+  for (const name of fs.readdirSync(areas).sort()) {
+    const rjp = path.join(areas, name, 'ci-reference', 'routes.json');
+    const mfp = path.join(areas, name, 'manifest.json');
+    if (!fs.existsSync(rjp) || !fs.existsSync(mfp)) continue;
+    let rj = null, mf = null;
+    try { rj = JSON.parse(fs.readFileSync(rjp, 'utf8')); mf = JSON.parse(fs.readFileSync(mfp, 'utf8')); } catch (e) { continue; }
+    // A latest S5 run as well: the areaFixture cases name their scratch render
+    // folder out of the manifest, and a town with no S5 cannot supply one.
+    const s5 = mf.stages && mf.stages.S5;
+    const hasS5 = !!(s5 && s5.latest && (s5.runs || []).some(r => r.id === s5.latest));
+    tried.push(`${name} @ ${rj.engine || '(none)'}${hasS5 ? '' : ' (no S5)'}`);
+    if (rj.engine === current && hasS5) return name;
+  }
+  throw new Error('prove-red-status: no town carries the current engine stamp ' + current
+    + ' AND a committed S5 run, so every control here would be red for the room\'s reason'
+    + ' rather than for the gate\'s.\n  Towns seen: ' + tried.join(', ')
+    + '\n  Rebuild a town onto the current engine, or run this after the next rollout.');
+}
+const DONOR = pickDonor();
 
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });
@@ -95,7 +131,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -153,6 +189,30 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
       const find = 'font-size="2.5"';
       if (txt.split(find).length - 1 < 1) throw new Error('fixture no longer contains ' + find + ' -- pick another mutation');
       fs.writeFileSync(sv, txt.replace(find, 'font-size="2.6"'));
+    }
+  }
+  /* THE PORTAL PLACE FIXTURE (OA-188's remaining half, 2026-08-31). gatePortalFixture()
+   * reads `Places/_portal-fixture/<name>` out of the Buses tree and runs the PORTAL's
+   * vendored engine against it, so a scratch case needs a real fixture folder copied
+   * whole — the portal side is the live one and is not mutated.
+   *
+   * `portalFixture: { name, ageIndex }`. Ageing the stored index rather than the sheet
+   * is the whole point: the sheet still redraws byte-for-byte, because the generator is
+   * fed that same file, which is exactly why the byte gate and the portal's own
+   * refresh-place-fixture.mjs both said nothing while a fixture was 924 bytes behind. */
+  if (portalFixture) {
+    const fs_ = path.join(BUSES, 'Places', '_portal-fixture', portalFixture.name);
+    const fd = path.join(root, 'Places', '_portal-fixture', portalFixture.name);
+    if (!fs.existsSync(fs_)) throw new Error('prove-red-status: no portal fixture named ' + portalFixture.name);
+    copyDir(fs_, fd);
+    if (portalFixture.ageIndex) {
+      const ip = path.join(fd, 'boarding_index.json');
+      if (!fs.existsSync(ip)) throw new Error('prove-red-status: that fixture has no boarding_index.json -- pick one with a boarding plan');
+      const j = JSON.parse(fs.readFileSync(ip, 'utf8'));
+      if (!/ v[\d.]+$/.test(String(j.generatedBy || '')))
+        throw new Error('prove-red-status: fixture boarding_index.json carries no "<script> v<n.n>" stamp: ' + j.generatedBy);
+      j.generatedBy = String(j.generatedBy).replace(/ v[\d.]+$/, ' v' + portalFixture.ageIndex);
+      fs.writeFileSync(ip, JSON.stringify(j, null, 2));
     }
   }
   /* THE COMMITTED AREA FIXTURE (OA-182, 2026-08-30). fixtureFreshness() compares
@@ -240,14 +300,34 @@ function statusWithException(town, engine) {
   copyDir(ASSETS, path.join(root, 'assets'));
   const f = path.join(root, 'assets', 'status.js');
   const src = fs.readFileSync(f, 'utf8');
-  const find = 'const ENGINE_STALE_ALLOWED = [];';
-  if (!src.includes(find)) {
-    throw new Error('prove-red-status: ENGINE_STALE_ALLOWED is no longer an empty literal in status.js, '
-      + 'so this case cannot inject its exception. Re-point it at whatever replaced it.');
+  /*
+   * THE ANCHOR MADE THE SAME MISTAKE THE CASE ALREADY LEARNED, one level up.
+   *
+   * The paragraph above says this case used to depend on a LIVE exception and
+   * broke when that exception was retired, and that building its own is what
+   * makes it a claim about the mechanism. True — but the anchor it built with was
+   * the literal string `const ENGINE_STALE_ALLOWED = [];`, which is a claim that
+   * the live list is EMPTY. On 2026-08-31 a real dated exception was added for
+   * Wisbech (portal proposed-update #139 with the customer), the anchor stopped
+   * matching, and this harness threw on every buses-data CI run — correctly
+   * refusing rather than reporting a case it could not inject, and red for a
+   * reason that had nothing to do with the gate under test.
+   *
+   * Replace the whole DECLARATION instead of a particular value of it, so the
+   * injected list is exactly one entry whatever the real one holds. The match is
+   * asserted to be unique: an anchor that silently matched twice would leave a
+   * second copy of the array and the mutation would not be what it says it is.
+   */
+  const DECL = /const ENGINE_STALE_ALLOWED = \[[^\]]*\];/g;
+  const hits = src.match(DECL) || [];
+  if (hits.length !== 1) {
+    throw new Error('prove-red-status: expected exactly one `const ENGINE_STALE_ALLOWED = [...];` '
+      + 'declaration in status.js, found ' + hits.length + '. This case injects its own exception by '
+      + 'replacing that whole declaration; re-point it at whatever replaced it.');
   }
   const one = "const ENGINE_STALE_ALLOWED = [{ town: '" + town + "', engine: '" + engine
     + "', since: '2026-08-28', why: 'injected by prove-red-status.js' }];";
-  fs.writeFileSync(f, src.replace(find, one));
+  fs.writeFileSync(f, src.replace(DECL, one));
   return { statusPath: f, root };
 }
 
@@ -416,6 +496,37 @@ const CASES = [
       return null;
     },
     what: 'THE GATE ITSELF - the sheet still redraws byte-for-byte, and the DATA is stale',
+  },
+  {
+    /* OA-188's remaining half. The CONTROL comes first for the reason the whole file
+     * is built around: this gate is being added to a table whose every row is already
+     * green, so "it stayed green" has to be shown to mean something before "it went
+     * red" is worth anything. */
+    label: 'control: a portal fixture whose stored index is current',
+    make: { portalFixture: { name: 'High Wycombe High Street' } },
+    expect: 0,
+    also: (json) => {
+      const f = (json.portalFixtures || []).find(r => r.name === 'High Wycombe High Street');
+      if (!f) return 'the board never saw the fixture at all';
+      if (f.boarding !== 'PASS') return 'the fixture boarding read ' + f.boarding + ', so this control proves nothing';
+      return null;
+    },
+    what: 'green here means the gate is quiet on the fixtures as they actually stand',
+  },
+  {
+    label: 'a portal fixture with a two-versions-behind index goes RED',
+    make: { portalFixture: { name: 'High Wycombe High Street', ageIndex: '0.9' } },
+    expect: 1,
+    cause: 'index',
+    also: (json) => {
+      const f = (json.portalFixtures || []).find(r => r.name === 'High Wycombe High Street');
+      if (!f) return 'the board never saw the fixture at all';
+      if (f.boarding !== 'INDEX-STALE') return 'the fixture boarding read ' + f.boarding + ', not INDEX-STALE';
+      if (!f.indexDrift || !f.indexDrift.length) return 'the cell said INDEX-STALE with no drift recorded behind it';
+      if (f.indexDrift[0].saidBy !== '0.9') return 'the drift names version ' + f.indexDrift[0].saidBy + ', not the one the fixture wrote';
+      return null;
+    },
+    what: 'THE GATE ITSELF - the portal fixture redraws byte-for-byte and its DATA is stale, which is what refresh-place-fixture.mjs called unchanged',
   },
   {
     label: 'Ramsey at some OTHER stale hash',

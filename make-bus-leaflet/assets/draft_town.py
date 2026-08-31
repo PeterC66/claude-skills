@@ -301,6 +301,35 @@ def gtfs_full_chains(db, routes, prefix):
         dirs = [{"name": g["name"], "stops": g["stops"]} for g in best.values()]
         out[route] = {"directions": dirs, "canonical": dirs,
                       "all": sorted(set(a for d in dirs for a in d["stops"]))}
+        # AND SAY WHICH IN-TOWN STOPS THE MODAL RULE JUST THREW AWAY (OA-175).
+        #
+        # One pattern per direction_id is right for the drawn line -- a minority
+        # timing variation should not put a detour on the map. But the docstring
+        # above says "not every timing variation", and a pattern that calls
+        # somewhere the modal one does not is not a timing variation at all: it is
+        # a STOP the town's map will not show. Ramsey's 32 has two Mon-Fri
+        # term-time trips into Abbey College, 08:30 in and 15:30 out, and the
+        # college was already on the sheet as a landmark -- so the sheet named the
+        # school and hid its bus, and a member of the public noticed.
+        #
+        # This does not add the stop, because adding it silently is the worse
+        # error: a tick on the line says "the bus calls here", and twice a day on
+        # school days is not what a reader takes from that. It NAMES it, with the
+        # trip count, so somebody decides. Measured on Ramsey, the whole town
+        # yields exactly one such stop on one of five routes, so this is a line or
+        # two of output and not a wall of it.
+        kept = set(a for d in dirs for a in d["stops"])
+        missed = {}
+        for tid in in_town:
+            for (sid,) in cur.execute(
+                    "SELECT stop_id FROM stop_times WHERE trip_id=?", (tid,)):
+                if sid.startswith(prefix) and sid not in kept:
+                    missed[sid] = missed.get(sid, 0) + 1
+        for sid, n in sorted(missed.items(), key=lambda kv: -kv[1]):
+            nm = cur.execute("SELECT stop_name FROM stops WHERE stop_id=?", (sid,)).fetchone()
+            print(f"  {route}: {nm[0] if nm else sid} ({sid}) is called at by {n} trip(s) in this "
+                  f"town but is on NO modal pattern, so it will not appear on the map. "
+                  f"Decide whether it should -- see OA-175.")
     con.close()
     if dropped_total:
         print(f"  chains scoped to {prefix}*: dropped {dropped_total} trip(s) on same-numbered "

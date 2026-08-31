@@ -385,11 +385,73 @@ function fromCorrespondence() {
   return out;
 }
 
+// ---- commitments: dated obligations with no other witness -------------------
+// The one class of work no OTHER source here can see. The portal ranks what its
+// own queues hold; the map tree ranks what its files say; the correspondence
+// source ranks a real person waiting. A letter WE chose to write, sitting in
+// Development Docs, is in none of those -- and nothing on disk changes if it is
+// never sent. status.js grew a Commitments section for exactly this and fails
+// the board once a date passes; this puts the same rows on the list Peter
+// actually works from, because a red CI email is only a reminder if it is read.
+//
+// DELIBERATELY QUIET UNTIL IT MATTERS. An entry that is comfortably in the
+// future is not work, and a worklist that prints everything is one nobody
+// finishes. Only OVERDUE (rank 4, YOUR MOVE) and due-soon (rank 7) are emitted;
+// an `ok` row prints nothing at all. Same rule the correspondence source
+// follows -- it says nothing when no reply is owed.
+function fromCommitments() {
+  const out = [];
+  const f = path.join(BUSES, 'Development Docs', 'commitments.json');
+  if (!existsSync(f)) return out;
+  let doc;
+  try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch {
+    // A file we cannot parse is a FAULT, not an empty list. Say so loudly
+    // rather than falling quiet -- falling quiet is the shape this whole
+    // section exists to prevent.
+    out.push({
+      key: 'commitments-unreadable', rank: 0, type: 'commitment',
+      title: 'commitments.json will not parse',
+      why: 'Nothing is watching any dated obligation while this is broken, and it will fail the board too.',
+      who: 'Peter', runbook: 'commitments',
+      do: [{ kind: 'chat', what: 'Open Development Docs/commitments.json and fix the JSON.' }],
+    });
+    return out;
+  }
+  if (!Array.isArray(doc.commitments)) return out;
+
+  const today = Date.now();
+  for (const c of doc.commitments) {
+    const byMs = Date.parse(String(c.by) + 'T00:00:00Z');
+    if (!Number.isFinite(byMs)) continue;
+    const days = Math.ceil((byMs - today) / 86400000);
+    const warn = Number.isFinite(+c.warnDays) ? +c.warnDays : 14;
+    if (days > warn) continue;
+
+    const overdue = days < 0;
+    const steps = [{ kind: 'chat', what: `Read ${c.link || 'Development Docs/commitments.json'} and do it.` }];
+    steps.push({ kind: 'chat', what: 'When it is done, DELETE its entry from Development Docs/commitments.json — the list stops being read the moment it keeps dead rows.' });
+    if (!overdue) steps.push({ kind: 'chat', what: 'If the date is wrong, move it deliberately. Moving a date is a decision; letting it slide is not.' });
+
+    out.push({
+      key: `commitment-${c.id}`, rank: overdue ? 4 : 7, type: 'commitment',
+      title: overdue
+        ? `${c.what} — ${Math.abs(days)}d OVERDUE (was due ${c.by})`
+        : `${c.what} — due ${c.by}, ${days}d left`,
+      why: c.why || 'A dated commitment with no other watcher.',
+      who: 'Peter', runbook: 'commitments',
+      ageDays: overdue ? Math.abs(days) : null,
+      do: steps,
+    });
+  }
+  return out;
+}
+
 // ---- build the ranked item list --------------------------------------------
 const portal = REMOTE ? await fromRemotePortal() : await fromLocalPortal();
 const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
+for (const it of fromCommitments()) add(it);
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
 // steps name their working directory symbolically ("portal") because the server

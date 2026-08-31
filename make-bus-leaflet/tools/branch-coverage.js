@@ -70,6 +70,7 @@ const { execFileSync } = require('child_process');
 const SK = path.join(__dirname, '..');
 const A = path.join(SK, 'assets');
 const GL = require(path.join(A, 'gate_lib.js'));
+const { scratchDir } = require('../assets/scratch');
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -88,7 +89,7 @@ for (const k of ['module', 'generator', 'marks', 'labels']) {
 }
 const SHEET = spec.sheet || 'internal.svg';
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'branchcov-'));
+const tmp = scratchDir('branchcov-');
 try {
   fs.cpSync(A, tmp, { recursive: true });
   const HITS = path.join(tmp, 'hits.log').split(path.sep).join('/');

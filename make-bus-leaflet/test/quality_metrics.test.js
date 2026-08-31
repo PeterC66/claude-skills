@@ -26,6 +26,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { analyse } = require('./_engine.js').load('quality_metrics.js');
+const { scratchDir } = require('../assets/scratch');
 
 // The smallest thing analyse() will accept as a sheet. The drop count comes from
 // the sidecar, so the artwork only has to parse.
@@ -34,7 +35,7 @@ const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm
 
 let seq = 0;
 function sheet(base, sidecarName, sidecarBody) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-drop-' + (seq++) + '-'));
+  const dir = scratchDir('qm-drop-' + (seq++) + '-');
   fs.writeFileSync(path.join(dir, base + '.svg'), SVG);
   if (sidecarName) fs.writeFileSync(path.join(dir, sidecarName), sidecarBody);
   return path.join(dir, base + '.svg');

@@ -11,6 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const QG = require('./_engine.js').load('quality_gate.js');
+const { scratchDir } = require('../assets/scratch');
 
 const sheet = (o = {}) => Object.assign({ labels: 100, hard: 5, soft: 10, drop: 2, def: 15, all: 15 }, o);
 
@@ -168,7 +169,7 @@ test('accept() carries the targets block forward', () => {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qg-'));
+  const dir = scratchDir('qg-');
   const ledger = path.join(dir, 'ledger.json');
   fs.writeFileSync(ledger, JSON.stringify({ recorded: '2026-08-25', note: 'keep me', targets: TARGETS, sheets: {} }));
   QG.accept(dir, [{ key: 'a · internal', now: sheet() }], ledger);

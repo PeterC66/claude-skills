@@ -78,6 +78,7 @@ const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
 const { seedPrevS4 } = require('./seed_prev_s4');
+const { scratchDir } = require('./scratch');
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
@@ -283,7 +284,7 @@ function rolloutOnePlace(p) {
   // internalDiagram) from the previous S3, and every other *.json from the
   // previous S4 (place.json, atco2ll.json, roads_geo.json, routes_paths.json,
   // destinations, etc — all S1/S2-derived and unchanged by an engine rollout).
-  const scratch = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rollout-place-'));
+  const scratch = scratchDir('rollout-place-');
   fs.mkdirSync(path.join(scratch, 'S4'));
   const s3Carry = ['routes.json', 'overrides.json', 'diagram-overrides.json'];
   for (const name of s3Carry) copyFile(path.join(prevS3.dir, name), path.join(scratch, 'S4'));

@@ -28,12 +28,13 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 // tools/prove-red-stage-run-dir.js points this at a copy with the guard removed.
 const STAGE = process.env.STAGE_JS || path.join(__dirname, '..', 'assets', 'stage.js');
 
 function newTown() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-rundir-'));
+  const dir = scratchDir('stage-rundir-');
   const r = spawnSync(process.execPath, [STAGE, 'init', dir, 'Testton'], { encoding: 'utf8' });
   assert.strictEqual(r.status, 0, 'init failed: ' + r.stderr);
   return dir;
@@ -65,7 +66,7 @@ test('CONTROL — an ordinary run dir inside the map folder still commits', () =
 // precisely what happened to High Wycombe Aldi.
 test('a run dir outside the map folder is refused', () => {
   const town = newTown();
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-outside-'));
+  const outside = scratchDir('stage-outside-');
   const d = path.join(outside, 'v1.1_2026-07-30_0359');
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, 'internal.jpg'), 'x');
@@ -77,7 +78,7 @@ test('a run dir outside the map folder is refused', () => {
 
 test('the refusal happens before the manifest is written', () => {
   const town = newTown();
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-outside-'));
+  const outside = scratchDir('stage-outside-');
   const d = path.join(outside, 'v1.2_2026-07-30_0400');
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, 'internal.jpg'), 'x');

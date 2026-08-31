@@ -54,6 +54,7 @@ const { execFileSync } = require('child_process');
 const sharp = require('sharp');
 const { analyse } = require('./quality_metrics');
 const { labelDiff, labelSet } = require('./gate_lib');
+const { scratchDir } = require('./scratch');
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : argv[i + 1]; };
@@ -219,7 +220,7 @@ function deltaRow(o, n, { dropUnknown = false } = {}) {
   const oldNames = git('ls-tree', '-r', '--name-only', REV).split('\n')
     .filter(l => l.includes('/ci-reference/'));
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'contact-old-'));
+  const tmp = scratchDir('contact-old-');
   const oldPath = {};
   for (const r of oldNames) {
     const dest = path.join(tmp, r);

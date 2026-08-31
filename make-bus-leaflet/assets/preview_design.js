@@ -55,6 +55,7 @@ const os = require('os');
 const { spawnSync } = require('child_process');
 const { SK, latestRunDir, readJson, findTowns, detectExternalStyle, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 const GEN = require(path.join(__dirname, 'sheet_registry.js'));
+const { scratchDir } = require('./scratch');
 
 function parseArgs(argv) {
   const f = { town: [], unset: [], 'feature-pos': [], 'set-path': [] };
@@ -116,7 +117,7 @@ const copy = (src, dst) => { if (fs.existsSync(src)) fs.copyFileSync(src, dst); 
 function build(t) {
   const s4 = latestRunDir(readJson(path.join(t.dir, 'manifest.json')), t.dir, 'S4');
   if (!s4) return null;
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'dq-'));
+  const ws = scratchDir('dq-');
   for (const n of fs.readdirSync(s4.dir)) {
     const p = path.join(s4.dir, n);
     if (!fs.statSync(p).isDirectory() && n.endsWith('.json')) fs.copyFileSync(p, path.join(ws, n));
@@ -223,7 +224,10 @@ for (const t of chosen) {
   if (args.render) for (const n of b.made) {
     spawnSync(process.execPath, [path.join(SK, 'render.js'), path.join(dest, n), path.join(dest, n.replace(/\.svg$/, '.jpg'))], { encoding: 'utf8' });
   }
-  if (args.keep) console.error('  workspace: ' + b.ws); else fs.rmSync(b.ws, { recursive: true, force: true });
+  // --keep prints the workspace to be looked at, so scratch.js's exit sweep must
+  // not take it away underneath the reader (OA-201).
+  if (args.keep) { require('./scratch').keepScratch(); console.error('  workspace: ' + b.ws); }
+  else fs.rmSync(b.ws, { recursive: true, force: true });
 }
 
 const KEYS = ['pointLabelsOverInk', 'labelLabelCollisions', 'labelIconCollisions', 'iconBlobs',

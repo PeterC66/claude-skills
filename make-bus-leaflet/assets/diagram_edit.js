@@ -16,6 +16,7 @@ const path = require('path');
 const http = require('http');
 const os = require('os');
 const { spawnSync } = require('child_process');
+const { scratchDir } = require('./scratch');
 
 const RUN = path.resolve(process.argv[2] || process.cwd());
 const PORT = +(process.argv[3] || 5180);
@@ -24,7 +25,7 @@ const DIAG = path.join(__dirname, 'diagram_internal.js');
 
 // preview sandbox: a temp copy of the run dir's inputs, so previews never
 // touch the real outputs (same principle as edit-server.js's temp overrides)
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'diagram-edit-'));
+const TMP = scratchDir('diagram-edit-');
 for (const f of fs.readdirSync(RUN)) {
   if (!/\.(json|js)$/.test(f)) continue;
   try { if (fs.statSync(path.join(RUN, f)).isFile()) fs.copyFileSync(path.join(RUN, f), path.join(TMP, f)); } catch (e) { }

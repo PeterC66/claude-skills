@@ -33,13 +33,14 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SK = path.join(__dirname, '..');
 const CHECKER = path.join(SK, 'tools/check-design-keys.js');
 const REAL_ASSETS = path.join(SK, 'assets');
 const REAL_DOC = path.join(SK, 'references/design-quality.md');
 
-const WORK = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-design-keys-'));
+const WORK = scratchDir('prove-red-design-keys-');
 const FIX_ASSETS = path.join(WORK, 'assets');
 const FIX_DOC = path.join(WORK, 'design-quality.md');
 const EMPTY = path.join(WORK, 'empty');

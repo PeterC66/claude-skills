@@ -23,6 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { analyse } = require('./_engine.js').load('quality_metrics.js');
+const { scratchDir } = require('../assets/scratch');
 
 const PAL = { A: '#4477aa', B: '#ee6677', C: '#228833' };
 
@@ -31,7 +32,7 @@ let seq = 0;
 // the map frame, so the panel column and the footer band are where analyse()
 // expects them and nothing here is excluded for sitting outside the map.
 function sheet(body, palette = PAL) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-ink-' + (seq++) + '-'));
+  const dir = scratchDir('qm-ink-' + (seq++) + '-');
   fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ palette }));
   fs.writeFileSync(path.join(dir, 'internal.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'
@@ -163,7 +164,7 @@ test('the warning names the split even when NONE of the hits is a caption', () =
 });
 
 test('an unreadable palette makes the split null too, not a clean zero', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-ink-nopal-split-'));
+  const dir = scratchDir('qm-ink-nopal-split-');
   fs.writeFileSync(path.join(dir, 'internal.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'
     + '<clipPath id="map"><rect x="6" y="30" width="190" height="155"/></clipPath>'
@@ -198,7 +199,7 @@ test('a disc that is not a route colour is not a badge', () => {
 });
 
 test('a sheet with no readable palette reports null, not a clean zero', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-ink-nopal-'));
+  const dir = scratchDir('qm-ink-nopal-');
   fs.writeFileSync(path.join(dir, 'internal.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 297 210">'
     + '<clipPath id="map"><rect x="6" y="30" width="190" height="155"/></clipPath>'
@@ -411,7 +412,7 @@ test('the detail reports how deep two badges actually interpenetrate', () => {
  * cannot see.
  */
 function extSheet(body) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-loz-' + (seq++) + '-'));
+  const dir = scratchDir('qm-loz-' + (seq++) + '-');
   fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ palette: PAL }));
   fs.writeFileSync(path.join(dir, 'external.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'

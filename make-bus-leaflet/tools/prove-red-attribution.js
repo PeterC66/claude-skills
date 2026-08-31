@@ -43,6 +43,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
@@ -51,6 +52,9 @@ const GATE = path.join(__dirname, 'attribution-gate.js');
 
 const argv = process.argv.slice(2);
 const KEEP = argv.includes('--keep');
+/* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
+ * the paths printed below would name directories that no longer exist. */
+if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
 
@@ -60,7 +64,7 @@ const PLACE_GEN = 'gen_external_places.js';
 /* A scratch copy of the five generators, so a mutation cannot reach the vendored
  * originals. Only the five are copied: the gate reads no other file from assets/. */
 function scratchAssets() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-attr-'));
+  const root = scratchDir('prove-red-attr-');
   const a = path.join(root, 'assets'), pa = path.join(root, 'place-assets');
   fs.mkdirSync(a); fs.mkdirSync(pa);
   for (const f of GEN_FILES) fs.copyFileSync(path.join(ASSETS, f), path.join(a, f));
@@ -72,7 +76,7 @@ function scratchAssets() {
  * that owes nothing — so the artefact half has something true to be right about
  * before it is made wrong. */
 function scratchBuses(extraSheet) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-attr-buses-'));
+  const root = scratchDir('prove-red-attr-buses-');
   const dst = path.join(root, 'Areas', 'Wisbech', 'ci-reference');
   fs.mkdirSync(dst, { recursive: true });
   const src = path.join(BUSES, 'Areas', 'Wisbech', 'ci-reference');

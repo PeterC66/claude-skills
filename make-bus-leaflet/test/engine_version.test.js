@@ -18,9 +18,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { computeEngineVersion, stampEngine, engineFiles, ENGINE_FILES } = require('./_engine.js').load('engine_version.js');
 const { ENGINE_DIR } = require('./_engine.js');
+const { scratchDir } = require('../assets/scratch');
 
 const tmp = (fn) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engver-'));
+  const dir = scratchDir('engver-');
   try { return fn(dir); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 };
 const seed = (dir, overrides = {}) => {
@@ -78,7 +79,7 @@ test('a name only mentioned in a comment is not followed', () => {
   // Over-inclusion is the safe direction for a hash, but not this safe: a
   // filename in prose would drag a whole generator in and move the stamp for
   // every town whenever somebody edited a comment.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engver-'));
+  const dir = scratchDir('engver-');
   try {
     for (const f of ENGINE_FILES) fs.writeFileSync(path.join(dir, f), '// ' + f + '\n');
     fs.writeFileSync(path.join(dir, 'decoy.js'), '// nothing requires this\n');
@@ -93,7 +94,7 @@ test('a required sibling that is not on disk is not hashed at all', () => {
   // something that was never there is a broken build, and the portal's
   // requireScan() is the check that names it; this one is about not inventing
   // a row here and calling the engine changed because of it.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engver-'));
+  const dir = scratchDir('engver-');
   try {
     for (const f of ENGINE_FILES) fs.writeFileSync(path.join(dir, f), '// ' + f + '\n');
     fs.writeFileSync(path.join(dir, 'gen_internal.js'), "require(_dep('ghost.js'));" + '\n');

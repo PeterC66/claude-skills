@@ -20,13 +20,14 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 // tools/prove-red-stage-commit.js points this at a copy with the guard removed,
 // so the suite can be watched failing against the code as it was before OA-106.
 const STAGE = process.env.STAGE_JS || path.join(__dirname, '..', 'assets', 'stage.js');
 
 function newTown() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-commit-'));
+  const dir = scratchDir('stage-commit-');
   const r = spawnSync(process.execPath, [STAGE, 'init', dir, 'Testton'], { encoding: 'utf8' });
   assert.strictEqual(r.status, 0, 'init failed: ' + r.stderr);
   return dir;

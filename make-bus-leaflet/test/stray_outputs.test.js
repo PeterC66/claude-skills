@@ -14,11 +14,12 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 const TOOL = path.join(__dirname, '..', 'assets', 'stray_outputs.js');
 
 function estate() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'strays-'));
+  return scratchDir('strays-');
 }
 function unit(root, rel, stages) {
   const dir = path.join(root, rel);

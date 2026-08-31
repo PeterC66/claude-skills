@@ -139,6 +139,18 @@ npm run test:prove-red-status
 
 **It refuses to run when the ROOM is red (OA-200, 2026-08-31).** Every case here judges an exit code, and the board's exit code answers about everything it can see — including the real portal, which this harness reads and does not own. Anything ambient reddens every case whose `expect` is `0`, and `CONTROL RED` and `caught` are the same exit code seen from two different expectations. Three of its nine controls were red on 2026-08-31 because the portal checkout sat on a feature branch, and the harness said so in a column nobody read. It now runs the board over an EMPTY scratch tree first — nothing but the environment can colour that — and **exits 2**, naming the drifted rows and the ref they were read from, rather than reporting. Exit 2 and not 1 on purpose: *this harness could not run* is a different claim from *a gate does not work*.
 
+## Where a test's scratch directory goes — one root, since 2026-08-31
+
+**Never call `fs.mkdtempSync(path.join(os.tmpdir(), '<prefix>-'))` again.** Use `require('../assets/scratch').scratchDir('<label>')`, which puts the directory under `<tmp>/busmaps-scratch/` and removes it when the process exits.
+
+The reason is a measurement (OA-201). On 2026-08-31 the OS temp folder on this laptop held **68,078** scratch directories under 47 unrelated prefixes, and one `npm test` run added **139** of them — `quality_metrics_ink`'s `sheet()` helper alone had left roughly 34,000, because it makes a directory per call and never removes one. The backlog row that raised it had counted 3,191 (the portal's `cbm-*`) and named the Windows SQLite-handle `EPERM` as the cause, which is true of those and of 4.7% of the total; the other 95% did not attempt cleanup at all. After the migration the same `npm test` run leaks **0**, and so does every falsification harness in `tools/`.
+
+Three things about the helper that matter when you use it:
+
+- **The exit sweep is belt and braces, not a replacement for your teardown.** A long suite that removes its own directory frees the disk while it runs rather than at the end of it, so keep doing that — `removeScratch(dir)` never throws, which is the point of it.
+- **A tool whose `--keep` means "look at this afterwards" must call `keepScratch()`**, or the sweep takes the evidence away. Every `--keep` in `tools/` now does; `BUSMAPS_SCRATCH_KEEP=1` does the same from outside the process.
+- **It does not fix the `EPERM`.** A directory holding a file the process still has open cannot be unlinked on Windows and will still be left behind — but it is left behind *inside one named root*, where `npm run sweep:scratch` can take it later. That command is a dry run until you add `--apply`, it will not touch anything younger than `--older-than` hours (default 6, because several sessions run here at once), and outside the root it knows only a **closed** list of the pre-migration prefixes, taken from `git show` of the old tree rather than typed from memory.
+
 ## Prove the VENDORING VERDICT reads a ref and not your checkout — added 2026-08-31
 
 ```bash

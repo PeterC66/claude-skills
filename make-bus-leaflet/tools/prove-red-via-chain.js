@@ -35,6 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const MATCH = path.join(__dirname, '..', 'assets', 'match_routes.js');
 let failures = 0;
@@ -86,7 +87,7 @@ const routes_full = {
 const routes_intown = { L1: CHAIN, L2: ['FIXT001', 'FIXT002', 'FIXT003', 'FIXT004'] };
 
 function run(matchJs, cfg) {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'viachain-'));
+  const d = scratchDir('viachain-');
   fs.writeFileSync(path.join(d, 'roads_geo.json'), JSON.stringify(roads_geo));
   fs.writeFileSync(path.join(d, 'atco2ll.json'), JSON.stringify(S));
   fs.writeFileSync(path.join(d, 'atco2name.json'),

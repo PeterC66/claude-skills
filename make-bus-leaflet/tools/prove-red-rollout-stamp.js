@@ -49,6 +49,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 const ROOT = path.join(__dirname, '..');
 const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
@@ -71,7 +72,7 @@ for (const need of ['manifest.json', 'ci-reference/routes.json', 'ci-reference/i
 }
 
 function buildFixture() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-rollout-stamp-'));
+  const tmp = scratchDir('prove-rollout-stamp-');
   const dst = path.join(tmp, 'Areas', TOWN);
   fs.mkdirSync(dst, { recursive: true });
   fs.copyFileSync(path.join(srcTown, 'manifest.json'), path.join(dst, 'manifest.json'));
@@ -195,7 +196,7 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
   fail(`no ci-reference/routes.json for the place ${PLACE} under ${srcPlace} — the place half is UNPROVEN, which is a failure, not a skip. Name another with --place / --place-town.`);
 } else {
   function buildPlaceFixture() {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-rollout-stamp-p-'));
+    const tmp = scratchDir('prove-rollout-stamp-p-');
     const townDst = path.join(tmp, 'Areas', PLACE_TOWN);
     fs.mkdirSync(townDst, { recursive: true });
     // findTowns() keys on the TOWN's manifest, and findPlaces() only walks

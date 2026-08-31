@@ -16,9 +16,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const G = require('./_engine.js').load('gate_lib.js');
+const { scratchDir } = require('../assets/scratch');
 
 const tmp = (fn) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatelib-'));
+  const dir = scratchDir('gatelib-');
   try { return fn(dir); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 };
 const put = (dir, name, text) => { const p = path.join(dir, name); fs.writeFileSync(p, text); return p; };

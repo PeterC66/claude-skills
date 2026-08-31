@@ -22,10 +22,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { load } = require('./_engine');
+const { scratchDir } = require('../assets/scratch');
 const { seedPrevS4 } = load('seed_prev_s4.js');
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'seed-prev-s4-'));
+  const root = scratchDir('seed-prev-s4-');
   const prevS4 = path.join(root, 'prevS4'), dest = path.join(root, 'dest');
   fs.mkdirSync(prevS4); fs.mkdirSync(dest);
   return { root, prevS4, dest };

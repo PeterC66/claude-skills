@@ -82,7 +82,11 @@ class StubQuery(object):
 
 def run_current(services, bods=BODS):
     """The diff_town in assets/ today, over a synthetic town."""
-    tmp = tempfile.mkdtemp()
+    # OA-201: one root for every scratch directory the estate makes, the same one
+    # assets/scratch.js owns, so `node tools/sweep-scratch.js` covers this too.
+    root = os.path.join(tempfile.gettempdir(), "busmaps-scratch")
+    os.makedirs(root, exist_ok=True)
+    tmp = tempfile.mkdtemp(prefix="route-collision-", dir=root)
     try:
         d = os.path.join(tmp, "S1-services", "2026-01-01_0000")
         os.makedirs(d)

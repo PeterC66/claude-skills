@@ -36,12 +36,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SK = path.join(__dirname, '..');
 const VERIFY = path.join(SK, 'assets', 'verify_report.js');
 
 const argv = process.argv.slice(2);
 const KEEP = argv.includes('--keep');
+/* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
+ * the paths printed below would name directories that no longer exist. */
+if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
 
@@ -61,7 +65,7 @@ const RUNS = {
   place: 'Areas/St Neots/Places/St Neots Town Centre/S6-verify/2026-08-21_1912',
 };
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-s6-'));
+const TMP = scratchDir('prove-s6-');
 let failures = 0, run = 0;
 
 /*

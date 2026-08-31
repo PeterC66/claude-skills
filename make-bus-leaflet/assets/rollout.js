@@ -57,6 +57,7 @@ const BUILDLOG = require('./build_log');
 // stamp at all (OA-161). One copy now, in sheet_stamps.js, reachable from the
 // stage boundary that enforces it.
 const { stampSheetVersion } = require('./sheet_stamps');
+const { scratchDir } = require('./scratch');
 
 function parseArgs(argv) {
   const f = { town: [] };
@@ -199,7 +200,7 @@ function rolloutOne(t) {
   // engine hash it just used into routes.json's "engine" field, so a pure
   // engine-only re-render needs no new S3 run at all (routes.json/overrides.json
   // are unchanged; only the generator + the stamp move).
-  const scratch = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rollout-'));
+  const scratch = scratchDir('rollout-');
   fs.mkdirSync(path.join(scratch, 'S4'));
   copyFile(path.join(prevS3.dir, 'routes.json'), path.join(scratch, 'S4'));
   copyFile(path.join(prevS3.dir, 'overrides.json'), path.join(scratch, 'S4')); // optional

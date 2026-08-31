@@ -25,6 +25,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'assets', 'redteam_source.js');
@@ -61,7 +62,7 @@ for (const gone of ['AMBIGUOUS', 'build examined', 'FOREIGN BUILD']) {
   }
 }
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-rts-'));
+const dir = scratchDir('prove-red-rts-');
 const copy = path.join(dir, 'redteam_source.js');
 fs.writeFileSync(copy, broken);
 

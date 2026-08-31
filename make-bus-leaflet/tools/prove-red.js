@@ -26,10 +26,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const KEEP = process.argv.includes('--keep');
+/* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
+ * the paths printed below would name directories that no longer exist. */
+if (KEEP) require('../assets/scratch').keepScratch();
 
 /* Each mutation names the file it breaks, the exact text it replaces, what it
  * replaces it with, and the test file that is supposed to object. `find` must
@@ -1292,7 +1296,7 @@ const MUTATIONS = [
 
 ];
 
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-'));
+const scratch = scratchDir('prove-red-');
 const engine = path.join(scratch, 'assets');
 fs.cpSync(ASSETS, engine, { recursive: true });
 

@@ -75,6 +75,9 @@ const ASSETS = path.join(SK, 'assets');
 
 const argv = process.argv.slice(2);
 const KEEP = argv.includes('--keep');
+/* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
+ * the paths printed below would name directories that no longer exist. */
+if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
 

@@ -23,6 +23,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 // tools/prove-red-redteam-source.js points this at a copy with the OA-141
 // changes cut out, so the suite can be watched failing against the code as it
@@ -58,7 +59,7 @@ function run(cwd, args = []) {
 /* Areas/<Town>/ with Areas/<Town>/Places/<Place>/ inside it — the nesting that
  * makes `../..` mean two different things depending on where you stand. */
 function estate() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redteam-src-'));
+  const root = scratchDir('redteam-src-');
   const town = makeBuild(root, 'Testton', { answer: '2026-08-20_1000', derivedAt: '2026-08-20' });
   const place = makeBuild(path.join(town, 'Places'), 'Testton Co-op');
   const townRun = path.join(town, 'S6-verify', '2026-08-20_1000');

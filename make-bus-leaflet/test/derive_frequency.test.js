@@ -22,6 +22,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SCRIPT = process.env.DERIVE_FREQUENCY_JS ||
   path.join(__dirname, '..', '..', 'make-place-bus-leaflet', 'assets', 'derive_frequency.js');
@@ -42,7 +43,7 @@ function legacy(route) {
 }
 
 function run(services, lanes, opts) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'derive-freq-'));
+  const dir = scratchDir('derive-freq-');
   const palette = {};
   for (const l of lanes) palette[l] = '#123456';
   fs.writeFileSync(path.join(dir, 'routes.json'),

@@ -11,11 +11,12 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
+const { scratchDir } = require('./scratch');
 
 const SK = __dirname; // …/make-bus-leaflet/assets
 
 function mkTmp() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
+  return scratchDir('gate-');
 }
 function rmTmp(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}

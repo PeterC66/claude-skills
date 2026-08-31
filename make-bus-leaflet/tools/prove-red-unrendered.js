@@ -52,6 +52,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 const ROOT = path.join(__dirname, '..');
 const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
@@ -81,7 +82,7 @@ for (const [what, dir] of [[TOWN, srcTown], [PLACE, srcPlace]]) {
 /** Copy one map's tracked skeleton into a scratch buses tree. `rel` is where the
  *  map sits under the tree, so a town and a place build the same way. */
 function buildFixture(src, rel) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-unrendered-'));
+  const tmp = scratchDir('prove-unrendered-');
   const dst = path.join(tmp, rel);
   fs.mkdirSync(dst, { recursive: true });
   fs.copyFileSync(path.join(src, 'manifest.json'), path.join(dst, 'manifest.json'));

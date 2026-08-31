@@ -55,6 +55,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
@@ -62,6 +63,9 @@ const STATUS = path.join(ASSETS, 'status.js');
 
 const argv = process.argv.slice(2);
 const KEEP = argv.includes('--keep');
+/* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
+ * the paths printed below would name directories that no longer exist. */
+if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
 const pi = argv.indexOf('--portal');
@@ -92,7 +96,7 @@ function copyDir(from, to) {
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
 function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null }) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-'));
+  const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
   fs.mkdirSync(dst, { recursive: true });
@@ -232,7 +236,7 @@ function board(busesDir, statusPath = STATUS, portalDir = PORTAL) {
  * proof that exceptions work. assets/ itself is not touched -- the whole folder
  * is copied first, the same way tools/prove-red.js does it. */
 function statusWithException(town, engine) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-engine-'));
+  const root = scratchDir('prove-red-status-engine-');
   copyDir(ASSETS, path.join(root, 'assets'));
   const f = path.join(root, 'assets', 'status.js');
   const src = fs.readFileSync(f, 'utf8');
@@ -440,7 +444,7 @@ const CASES = [
  * 2, not 1: "this harness could not run" is a different claim from "a gate does
  * not work", and a caller that cannot tell them apart learns the wrong thing. */
 function preflight() {
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-preflight-'));
+  const empty = scratchDir('prove-red-status-preflight-');
   const { code, json } = board(empty);
   if (!KEEP) fs.rmSync(empty, { recursive: true, force: true });
   if (code === 0) return;

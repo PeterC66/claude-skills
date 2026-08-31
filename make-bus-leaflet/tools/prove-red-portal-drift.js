@@ -43,11 +43,15 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { scratchDir } = require('../assets/scratch');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const STATUS = path.join(ASSETS, 'status.js');
 const KEEP = process.argv.includes('--keep');
+/* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
+ * the paths printed below would name directories that no longer exist. */
+if (KEEP) require('../assets/scratch').keepScratch();
 
 /* The two real skill files the synthetic manifest points at. They are named by
  * the manifest's `source`, which status.js resolves under …/.claude/skills — so
@@ -83,7 +87,7 @@ const VENDORED = [
 function portalRepo({ mainStale = false, branch = null, branchStale = false,
                       unlistedOnMain = false, unlistedOnBranch = false,
                       worktreeCurrent = false, noGit = false } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-portal-drift-'));
+  const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
   fs.mkdirSync(path.join(engine, 'place'), { recursive: true });
 
@@ -132,7 +136,7 @@ function portalRepo({ mainStale = false, branch = null, branchStale = false,
 /* An empty Buses tree, so that nothing but the portal can colour the board. A
  * tree with maps in it would let a byte gate answer for the vendoring row. */
 function emptyBuses() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-portal-drift-buses-'));
+  return scratchDir('prove-red-portal-drift-buses-');
 }
 
 function board(busesDir, portalDir, statusPath = STATUS) {
@@ -284,7 +288,7 @@ function runCase(c, statusPath = STATUS) {
  * requires both to fail. If a later edit makes them pass under `ref = null` they
  * have stopped testing the thing they are named for, and this says so. */
 function regressedStatus() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-portal-drift-engine-'));
+  const root = scratchDir('prove-red-portal-drift-engine-');
   const dst = path.join(root, 'assets');
   fs.mkdirSync(dst, { recursive: true });
   for (const e of fs.readdirSync(ASSETS, { withFileTypes: true })) {

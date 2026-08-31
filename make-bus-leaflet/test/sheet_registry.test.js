@@ -14,6 +14,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const GEN = require('../assets/sheet_registry.js');
+const { scratchDir } = require('../assets/scratch');
 
 /*
  * collect-maps.ps1 lives in the OTHER repository, and the two are laid out
@@ -80,7 +81,7 @@ test('every sheet declares a level, so the consumer check can never skip one sil
 
 function withPs1(mutate) {
   const src = fs.readFileSync(PS1, 'utf8');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sheet-reg-'));
+  const dir = scratchDir('sheet-reg-');
   const p = path.join(dir, 'collect-maps.ps1');
   fs.writeFileSync(p, mutate(src));
   return p;

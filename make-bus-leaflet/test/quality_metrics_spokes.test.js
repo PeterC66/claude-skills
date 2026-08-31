@@ -32,12 +32,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { analyse } = require('./_engine.js').load('quality_metrics.js');
+const { scratchDir } = require('../assets/scratch');
 
 let seq = 0;
 /* `base` is the whole discriminator, so it is a parameter here rather than a
  * constant: the same body is written as external.svg and as internal.svg. */
 function sheet(body, base = 'external') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qm-spoke-' + (seq++) + '-'));
+  const dir = scratchDir('qm-spoke-' + (seq++) + '-');
   fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ palette: { A: '#4477aa', B: '#ee6677' } }));
   fs.writeFileSync(path.join(dir, base + '.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'

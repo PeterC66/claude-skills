@@ -24,11 +24,12 @@ const os = require('os');
 const path = require('path');
 const QM = require('./_engine.js').load('quality_metrics.js');
 const QG = require('./_engine.js').load('quality_gate.js');
+const { scratchDir } = require('../assets/scratch');
 
 // A miniature Buses tree carrying BOTH place layouts and the one directory that
 // is deliberately excluded.
 function tree() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sheets-'));
+  const root = scratchDir('sheets-');
   const put = (rel) => {
     const p = path.join(root, rel);
     fs.mkdirSync(path.dirname(p), { recursive: true });

@@ -25,6 +25,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { scratchDir } = require('../assets/scratch');
 
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, '..', 'make-place-bus-leaflet', 'assets', 'derive_frequency.js');
@@ -67,7 +68,7 @@ for (const gone of ['measurable(', 'FREQ_FIELDS', 'not one lane could be tiered'
   }
 }
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-df-'));
+const dir = scratchDir('prove-red-df-');
 const copy = path.join(dir, 'derive_frequency.js');
 fs.writeFileSync(copy, broken);
 

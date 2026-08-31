@@ -266,3 +266,25 @@ Six cases, and **four of them are controls**:
 **D is the case worth keeping.** The new test sits in front of the fast path, so a careless version answers `STAMP-STALE` for a town that also needs redrawing — turning a rebuild into a report and losing the work. D is green under the OLD code too, which is honest: it guards a future mistake rather than proving this change. **F is why the harness covers both tools.** `rollout_places.js` is a separate file with a separate hash function, and a place is measured against `computePlaceEngineVersion()` because a place gets its own template (OA-168); proving the town half and inferring the place half is the *satisfied by the other clause* shape this suite has already paid for. F asserts the message names the PLACE template, not the town's.
 
 Both findings were watched go red before being trusted: disabling the condition in `rollout.js` turns B's four assertions red and leaves A, C and D green; the same edit to `rollout_places.js` turns F red and leaves E green.
+
+## Prove the ONE-WAY LOOP via chain can go red — added 2026-08-31
+
+```bash
+npm run test:prove-red-via-chain
+```
+
+`tools/prove-red-via-chain.js` falsifies `match_cfg.json`'s `viaChain` lever (OA-193). The fault it exists for **produces `fallbacks: []` and exit 0**: `match_routes.js` builds a route's line from ONE travel direction and projects the stop ticks from BOTH, so a route running a one-way loop through different streets routes perfectly through the vias it was handed while its ticks land hundreds of metres away. Ramsey's X31 and 32 pinned ten of sixteen ticks between 544 m and 3,564 m off their own line, the sheet showed no bus at all to Bury or Upwood, and every byte gate reproduced it exactly. So the instrument is `projMaxM`, and this harness watches it go both ways.
+
+**The fixture is a 1.1 km square one-way loop** — four roads, OUT along the north and east sides, BACK along the south and west, with two stops per side and a far terminus beyond each end — rather than a copy of Ramsey. Ramsey's geometry is not in a fresh clone, and a harness that skips is a harness nobody watches go red.
+
+| Case | Must report |
+|---|---|
+| 1 | default reproduces the fault — `projMaxM` 817 m, above the shipped 350 m warning |
+| 2 | `viaChain: "intown"` removes it — `projMaxM` 0 m |
+| 3 | a loop reports `contStart` AND `contEnd`: it leaves the frame twice |
+| 4 | a `viaChain` naming a DIFFERENT route leaves this one byte-identical — the claim the whole estate rests on |
+| 5 | **PROVE RED** — with the lever cut out of a copy of `match_routes.js`, case 2 must fail |
+
+Case 1's threshold is measured, not chosen: 500 m sits 1.63× below what the fixture produces and 1.43× above what the engine ships as its warning, so neither a small change to the fixture's proportions nor a small change to `PROJ_WARN_M` reddens it by accident. Butting it against either number is the fragile place.
+
+The separate claim that the lever is **inert by default** is not asserted here but measured against real data: re-running the shipped `match_routes.js` over Ramsey's committed S2 with no `match_cfg.json` reproduces `routes_paths.json` with `edgeWay` identical and the only per-route difference being `projMaxM` itself.

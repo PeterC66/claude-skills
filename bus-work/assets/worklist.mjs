@@ -225,10 +225,116 @@ function fromUpcomingReport() {
   return { file, date, ageDays: daysSince(date), sections };
 }
 
+// ---- correspondence: real people waiting on us -----------------------------
+//
+// ADDED 2026-08-31, and the reason it was added is the whole argument for it.
+// A reply to the first member of the public who ever wrote in was drafted on
+// the 30th and was still sitting unsent a day later. Eighty commits landed in
+// between. The BACKLOG work it raised was picked up promptly -- another session
+// read the open actions, claimed one and released half of it overnight --
+// because the backlog is indexed, checked in CI, and read by every session that
+// starts. The one step nothing could do for him had nothing watching it.
+//
+// That asymmetry is the point: everything Claude can do gets picked up by the
+// next session, so the ONLY step with no reminder is the human one. This source
+// exists to put the human step in the same list as everything else.
+//
+// It reads tracked files and nothing else -- no network, no portal, no email.
+function fromCorrespondence() {
+  const dir = path.join(BUSES, 'Correspondence');
+  if (!existsSync(dir)) return [];
+  const out = [];
+  let threads;
+  try {
+    threads = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && /^CORR-\d+$/.test(e.name)).map((e) => e.name).sort();
+  } catch { return []; }
+
+  for (const ref of threads) {
+    const tdir = path.join(dir, ref);
+    // NNN-YYYY-MM-DD-in|out-slug.md. The number orders the conversation; the
+    // date is when the message happened, which is what an age must count from.
+    const msgs = readdirSync(tdir)
+      .map((n) => /^(\d+)-(\d{4}-\d{2}-\d{2})-(in|out)-.*\.md$/.exec(n))
+      .filter(Boolean)
+      .map((m) => ({ file: m[0], seq: Number(m[1]), date: m[2], dir: m[3] }))
+      .sort((a, b) => a.seq - b.seq);
+    if (!msgs.length) continue;
+
+    // A label rather than a name: the thread record is written that way on
+    // purpose and this tool must not be the thing that leaks one.
+    let label = ref;
+    const readme = path.join(tdir, 'README.md');
+    if (existsSync(readme)) {
+      const m = /^#\s+CORR-\d+\s+[\u2014-]\s+(.+)$/m.exec(readFileSync(readme, 'utf8'));
+      if (m) label = `${ref} (${m[1].trim()})`;
+    }
+
+    const last = msgs[msgs.length - 1];
+    if (last.dir === 'in') {
+      out.push({
+        key: `corr-owed-${ref}`, rank: 2, type: 'correspondence',
+        title: `${label}: a reply is owed and not drafted`,
+        why: `Their message of ${last.date} is the last thing in the thread. A real person is waiting, and nothing has been written.`,
+        who: 'Claude drafts it, Peter sends it', runbook: 'correspondence',
+        ageDays: daysSince(last.date),
+        do: [{ kind: 'chat', what: `Open a chat and say: "triage ${ref}'s latest message and draft the reply".` }],
+      });
+      continue;
+    }
+
+    // An outbound message declares its own state in its header. Read it rather
+    // than infer it: "drafted" and "sent" look identical from the outside.
+    const head = readFileSync(path.join(tdir, last.file), 'utf8').slice(0, 4000);
+    const st = /\*\*Status:\*\*\s*([^\u00b7\n*]+)/.exec(head);
+    const status = st ? st[1].trim() : '';
+    if (/NOT SENT|DRAFTED/i.test(status)) {
+      out.push({
+        key: `corr-unsent-${ref}`, rank: 3, type: 'correspondence',
+        title: `${label}: reply drafted ${last.date}, NOT SENT`,
+        why: 'Only you can send it — there is no reply button on the portal and Claude has no access to email. Until it goes, the person has heard nothing.',
+        who: 'Peter', runbook: 'correspondence',
+        ageDays: daysSince(last.date),
+        do: [
+          { kind: 'shell', cwd: BUSES, cmd: `node Correspondence/to-email.mjs "Correspondence/${ref}/${last.file}"`, note: 'run it AFTER any edits you make' },
+          { kind: 'chat', what: 'Open the .html it writes, Ctrl+A, Ctrl+C, paste into the email. Add the salutation yourself.' },
+          { kind: 'chat', what: 'Then tell Claude it has gone, so the file becomes the sent record.' },
+        ],
+      });
+    }
+  }
+
+  // A question we asked and never got an answer to. WAITING ON OTHERS, not your
+  // move -- but invisible entirely until now, and one of these is a question the
+  // correspondent volunteered to go and research for us.
+  const areas = path.join(BUSES, 'Areas');
+  if (existsSync(areas)) {
+    for (const town of readdirSync(areas, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()) {
+      const f = path.join(areas, town, 'local-decisions.json');
+      if (!existsSync(f)) continue;
+      let doc;
+      try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
+      const asked = (doc.decisions || []).filter((d) => d?.answer?.state === 'asked');
+      if (!asked.length) continue;
+      const oldest = asked.map((d) => d.raised).filter(Boolean).sort()[0];
+      out.push({
+        key: `corr-asked-${town}`, rank: 9, type: 'correspondence',
+        title: `${town}: ${asked.length} question(s) asked locally and still unanswered`,
+        why: `${asked.map((d) => d.id).join(', ')} — nothing but a person on the ground can settle these, and the map is drawn on our own judgement until one does.`,
+        who: 'the local adviser', runbook: 'correspondence',
+        ageDays: oldest ? daysSince(oldest) : null,
+        do: [{ kind: 'chat', what: `Read Areas/${town}/local-decisions.json. Chase only if it has gone quiet — silence is not agreement, and it is not a refusal either.` }],
+      });
+    }
+  }
+  return out;
+}
+
 // ---- build the ranked item list --------------------------------------------
 const portal = REMOTE ? await fromRemotePortal() : await fromLocalPortal();
 const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
+for (const it of fromCorrespondence()) add(it);
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
 // steps name their working directory symbolically ("portal") because the server

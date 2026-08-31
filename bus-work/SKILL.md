@@ -104,8 +104,19 @@ Nothing here is a new source of truth; it is a join over what already exists.
 | `_gtfs/upcoming/upcoming-report_<date>.md` | which towns have service changes coming, matched to maps by the *same rule* `check-upcoming-refreshes.mjs` uses |
 | each town's `manifest.json` + `routes.json.engine` vs `engine_version.js` | which renders pre-date the current engine, and how stale S6 is |
 | `status.js --json` (only under `--gates`, or as pushed by `push-status.mjs`) | the expensive proof: regenerate everything and diff |
+| `Correspondence/CORR-nnn/` message headers, and each map's `local-decisions.json` | rank 2 a reply owed to a real person, rank 3 **a reply drafted and not sent**, rank 9 a question asked locally and never answered |
 
 **Ranks 0 and 8 also reach the portal itself** (item 3, 2026-08-08): `push-status.mjs` POSTs the same `status.js --json` output to `POST /api/admin/status`, the portal stores the latest snapshot, and `src/worklist/index.js` folds it into ranks 0/8 there too — so a failing gate or a stale engine shows on the admin console's To-do tab and to a remote reader, not only to whoever last ran `--gates` on this laptop. It is a snapshot, not a stream: stale until the next push. Rank 7 (a BODS-flagged town with no portal map) is not pushed — it still only comes from this tool reading `_gtfs/upcoming` directly.
+
+**Why correspondence is in here at all, added 2026-08-31.** A reply to the first member of the public who ever wrote in was drafted on the 30th and was still unsent a day later, with eighty commits in between. The backlog work that same message raised was picked up promptly — another session read the open actions, claimed one and released half of it overnight — because the backlog is indexed, checked in CI and read by every session that starts. **The one step nothing could do for him had nothing watching it.** That is the asymmetry: everything Claude can do is picked up by the next session, so the only step with no reminder is the human one, and it is the only step that a person on the other end is actually waiting on. Rank 3 is deliberately in the *someone is blocked* band rather than *your move* — because they are.
+
+Prove it can go red, and go quiet, from `C:\u3a St Ives\.claude\skills\bus-work\assets`:
+
+```bash
+node prove-red-correspondence.mjs
+```
+
+Every case there is a pair: make the state and see the row, clear the state and see it gone. Appearing is only half of it — a row still nagging about a letter that went out last week is a row that gets ignored, and then so is every row beside it.
 
 If a queue is missing from the list, fix the source that owns it — **a portal queue is fixed in `community-bus-maps/src/worklist/index.js`** (which fixes the admin console at the same time), a local-tree signal in `worklist.mjs`. Do not work around a gap by reading the admin console separately; that is the habit this skill exists to end.
 

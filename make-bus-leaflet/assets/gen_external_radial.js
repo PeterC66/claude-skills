@@ -883,6 +883,27 @@ const legendSpot = (w, h, wantX, wantY) => {
   if(wantSym <= 0 && best.ink >= wantInk - 1e-9) return { moved:false, want:wantInk, wantSym };
   return { moved:true, want:wantInk, wantSym, cov:best.ink, sym:0, dx:best.bx-wantX, dy:best.by-wantY };
 };
+/* A MOVE THAT DOES NOT REACH ZERO IS A RESIDUE, NOT A FIX (OA-207, 2026-08-31).
+ * Both pinned page devices below relocate themselves off the artwork and then
+ * report the move. Neither said what SURVIVED it, and on three towns something
+ * did: Wisbech's teal 60 to Downham Market runs full-strength, fades to a ghost
+ * for the width of the help panel, and returns to full teal on the far side.
+ * The build printed `moved 152,-16 mm to 162,142` and stopped there, so the one
+ * process that knew route ink was still underneath said nothing about it.
+ * `legendSpot()` only ever returns a position covering NO symbol, so `sym` is 0
+ * by construction and the residue that survives a move is route ink.
+ *
+ * THE MISSING NUMBER WAS ALREADY MISLEADING PEOPLE. OA-207's own write-up says
+ * the panel "still left 8% of route ink underneath" — but 8% was what the
+ * CONFIGURED spot covered, printed before the move. Measured on Wisbech, the
+ * ink that actually survives the move is 6%. The row misread its own evidence
+ * in precisely the way this silence causes: with only a before-figure on the
+ * line, the reader has nothing to attach the after-figure to and reuses the
+ * one number there is. Both figures are now printed, in that order. */
+const residue = (got) => (got.cov > 0
+  ? ' STILL over ' + (got.cov * 100).toFixed(0) + '% route ink there — a move that does not reach zero'
+    + ' leaves a line the reader has to trace under an opaque panel. quality_metrics.js names which line.'
+  : '');
 const hardMark = HARD.length;
 let LEG = buildLegend(LX0, LY0, 0, 0);
 if(LEGPLACE){
@@ -893,7 +914,7 @@ if(LEGPLACE){
     process.stderr.write('legend: the configured spot covers '+(got.wantSym*100).toFixed(1)
       +'% symbols / '+(got.want*100).toFixed(0)+'% route ink — moved '
       +got.dx.toFixed(0)+','+got.dy.toFixed(0)+' mm to '+LEG.x.toFixed(0)+','+LEG.y.toFixed(0)
-      +' ('+(got.sym*100).toFixed(1)+'% / '+(got.cov*100).toFixed(0)+'%).\n');
+      +' ('+(got.sym*100).toFixed(1)+'% / '+(got.cov*100).toFixed(0)+'%).'+residue(got)+'\n');
   } else if(got.nowhere){
     process.stderr.write('legend: no position on this sheet leaves a '+LEG.w.toFixed(0)+'x'+LEG.h.toFixed(0)
       +' mm legend clear of every symbol'+(got.wantSym>0 ? ', and where it sits covers '
@@ -1013,7 +1034,8 @@ if(HOWTO){
       hx = HX0 + got.dx; hy = HY0 + got.dy;
       process.stderr.write('howToUse: the configured spot covers '+(got.wantSym*100).toFixed(1)
         +'% symbols / '+(got.want*100).toFixed(0)+'% route ink — moved '+got.dx.toFixed(0)+','+got.dy.toFixed(0)
-        +' mm to '+hx.toFixed(0)+','+hy.toFixed(0)+'.\n');
+        +' mm to '+hx.toFixed(0)+','+hy.toFixed(0)
+        +' ('+((got.sym||0)*100).toFixed(1)+'% / '+((got.cov||0)*100).toFixed(0)+'%).'+residue(got)+'\n');
     } else if(got.nowhere){
       /*
        * NOT DRAWN, rather than drawn where it does harm. This is where an optional

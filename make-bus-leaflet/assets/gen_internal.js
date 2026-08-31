@@ -293,7 +293,7 @@ const DESIGN = RJ.design || {};
  * be resolved at build time — the published sheet lives on the portal, and a
  * generator that reached out to the network to find out which way up it was would
  * be both fragile and untestable. Instead the generator RECORDS the angle it used
- * (build-meta.json, written when BUILD_META_DIR is set), and freeze_orientation.js
+ * (build-meta.json, written on every build since OA-206), and freeze_orientation.js
  * turns that recorded number into an explicit `fixedOrientation: <deg>` here. The
  * config then says the angle out loud rather than referring to something absent.
  */
@@ -3206,19 +3206,28 @@ console.log('internal.svg', s.length, 'bytes; pois', pois.length, 'rotation°', 
 
 /* ---- build-meta.json — the facts this build chose, in machine-readable form ---
  *
- * WRITTEN ONLY WHEN `BUILD_META_DIR` IS SET, and deliberately so. rollout.js sets
- * it to the S4 run folder; the PORTAL never sets it, so the portal's own re-render
- * path writes nothing, drops no stray file into a map's data dir, and stays exactly
- * as byte-identical as it was. An opt-in write cannot regress a gate that does not
- * opt in.
+ * WRITTEN UNCONDITIONALLY, into `BUILD_META_DIR` when set and the CWD when not
+ * (OA-206, 2026-08-31). It was opt-in until then, and the opt-in was the bug: the
+ * ONLY caller that set the variable was rollout.js, so a HAND-BUILT S4 — the
+ * documented `stage.js new S4` + `gen_internal.js` path, and the path a monthly
+ * refresh takes — silently lost the one record of which way up the sheet was
+ * drawn. PCA re-derives the rotation on every build, so a route added next month
+ * can swing the whole sheet several degrees, and this file is how anyone would
+ * notice. A generator that knows a fact should write the fact down on EVERY route
+ * to the artefact, not only the one route that remembered to ask.
  *
- * WHY IT EXISTS AT ALL. The applied rotation was previously available only as a
- * formatted number inside a human-readable stdout line — so the only way to answer
- * "which way up is this sheet?" mechanically was to parse that sentence, which is
- * exactly the kind of brittleness that bites the moment someone rewords the log.
- * A generator that knows a fact should write the fact down.
+ * WHAT THAT CHANGES FOR THE PORTAL, stated plainly because the note this replaces
+ * promised the opposite. The portal spawns generators with `cwd: dataDir`
+ * (`src/render/renderMap.js`), so a portal render now drops this sidecar into the
+ * map's data dir. That is safe rather than merely tolerated: the sheet bytes are
+ * untouched, so the P0 reproduce gate is unaffected; `sheetsInPayloadDir()` filters
+ * a payload to `.svg` and cannot see it; and the write is inside the try/catch
+ * below, so a read-only data dir degrades to a stderr line instead of a failed
+ * render. `builtAt` is a timestamp, so this file is deliberately NOT part of any
+ * byte comparison — only the artwork is.
  */
-if (process.env.BUILD_META_DIR) {
+{
+  const metaDir = process.env.BUILD_META_DIR || process.cwd();
   const meta = {
     generator: 'gen_internal.js',
     sheet: 'internal',
@@ -3236,8 +3245,8 @@ if (process.env.BUILD_META_DIR) {
     fixedOrientation: DESIGN.fixedOrientation != null ? DESIGN.fixedOrientation : null,
   };
   try {
-    fs.mkdirSync(process.env.BUILD_META_DIR, { recursive: true });
-    fs.writeFileSync(path.join(process.env.BUILD_META_DIR, 'build-meta.json'),
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'build-meta.json'),
       JSON.stringify(meta, null, 2) + '\n');
   } catch (e) {
     // Never fail a build over the metadata sidecar — it is a convenience for

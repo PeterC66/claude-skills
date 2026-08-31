@@ -805,7 +805,24 @@ const qualityCell = (name) => {
 // applying, which is the behaviour to preserve: an entry here must name the town,
 // the exact engine hash it excuses and why, so it stops excusing anything the
 // moment that town is rebuilt.
-const ENGINE_STALE_ALLOWED = [];
+//
+// 2026-08-31 — one entry, and what it excuses is a CUSTOMER'S INBOX rather than
+// a map. OA-202/OA-066 moved the template hash to 622ff644d4 and seven of the
+// eight towns were rolled onto it the same hour. Wisbech was not, because
+// buses-68 had delivered it as portal proposed-update #139 twenty-five minutes
+// earlier and the customer had already been emailed: rebuilding it here would
+// have superseded the very version they are being asked to accept, and putting
+// that right would have meant a second "an update is ready" mail to the same
+// person inside the hour. The engine change is byte-neutral without a `tiers`
+// block and Wisbech has none, so the code that drew it and the code that would
+// draw it now produce identical artwork — the STAMP is the whole of what is
+// stale. Delete this entry once #139 is accepted or withdrawn and Wisbech has
+// been rolled; the hash key makes it stop excusing anything at that moment in
+// any case, and the board says so out loud when it does.
+const ENGINE_STALE_ALLOWED = [
+  { town: 'Wisbech', engine: 'cf683a815c', since: '2026-08-31',
+    why: 'portal proposed-update #139 is with the customer; a rebuild would supersede it' },
+];
 const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
 // '(none)' is a map stamped before the hash existed, not a map built from stale
 // code, and it is a different question — reported, never gated, exactly as the

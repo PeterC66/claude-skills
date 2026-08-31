@@ -918,15 +918,37 @@ console.log('\n13. The stop register — it may only ever REMOVE a terminus find
    */
   const sanityTerm = (v) => (v ? v.findings : []).filter(
     (f) => f.category === 'terminus' && f.route === '50' && f.source === 'sanity');
-  const { DatabaseSync } = (() => {
+  /*
+   * node:sqlite IS NOT EVERYWHERE, AND CI IS WHERE IT IS NOT. It arrived in Node
+   * 22 and this file was written on Node 24; the runner is on **Node 20**, where
+   * `require('node:sqlite')` throws ERR_UNKNOWN_BUILTIN_MODULE. Requiring it at
+   * the top of this block took the WHOLE harness down on the first push, after
+   * twelve sections had passed — measured, not foreseen, which is the point.
+   *
+   * So this resolves it defensively and the section SPLITS on the answer. The two
+   * register arms need the module and are reported NOT RUN by name when it is
+   * absent; the no-register arm needs nothing and runs everywhere, because that
+   * arm is the FALLBACK PATH — the one CI actually executes in `verify_report.js`,
+   * since `_gtfs/*.sqlite` is gitignored and no runner has a register either. A
+   * skip that quietly counted as a pass would be the exact failure this file
+   * exists to prevent, so the not-run lines are printed loudly and counted as
+   * neither.
+   */
+  const DatabaseSync = (() => {
     const emit = process.emitWarning;
     process.emitWarning = (w, ...rest) => {
       const s = typeof w === 'string' ? w : (w && w.message) || '';
       if (/SQLite is an experimental feature/.test(s)) return;
       return emit.call(process, w, ...rest);
     };
-    try { return require('node:sqlite'); } finally { process.emitWarning = emit; }
+    try { return require('node:sqlite').DatabaseSync; }
+    catch { return null; }
+    finally { process.emitWarning = emit; }
   })();
+  if (!DatabaseSync) {
+    console.log(`  NOT RUN  the two register arms — this Node (${process.version}) has no node:sqlite`);
+    console.log('           the no-register arm below still runs, and it is the path CI itself takes');
+  }
 
   // A one-table register with the columns verify_report.js actually selects.
   // `localityToken` slices four letters out of an ATCO code after 4 digits and one
@@ -962,7 +984,7 @@ console.log('\n13. The stop register — it may only ever REMOVE a terminus find
   check('and it names the chain-end token it compared against', 'evidence.chainEndTokens is non-empty',
     !!token, f0 ? JSON.stringify(f0.evidence) : 'no finding to read a token from');
 
-  if (token) {
+  if (token && DatabaseSync) {
     // QUIET ARM — the register says that token IS Zzyzxville.
     const good = verify(d, { VERIFY_NAPTAN: miniRegister(path.join(TMP, 'reg-hit.sqlite'), token, TERMINUS) });
     check('a register that resolves the token REMOVES the finding', 'no sanity terminus finding on 50',
@@ -985,6 +1007,17 @@ console.log('\n13. The stop register — it may only ever REMOVE a terminus find
     const invented = (good.v ? good.v.findings : []).filter(f => !bareKeys.has(key(f)));
     check('and it never ADDS a finding', 'no finding present with the register and absent without it',
       invented.length === 0, JSON.stringify(invented.map(key)));
+  } else if (token) {
+    /* THE FALLBACK IS NOT UNTESTED HERE, it is the only thing tested. With no
+     * node:sqlite the register lookup returns nothing on every call, so this
+     * asserts the documented safe direction: absent register => pre-2026-08-31
+     * behaviour, and the hand file still answers. */
+    const hand = JSON.parse(fs.readFileSync(path.join(SK, 'assets', 'naptan_localities.json'), 'utf8'));
+    check('with no node:sqlite the hand gazetteer is still loaded', 'naptan_localities.json parses and carries CITY',
+      !!(hand.localities && hand.localities.CITY), JSON.stringify(Object.keys(hand.localities || {})));
+    check('and the terminus check still runs and still reports', 'a sanity terminus finding on 50, and a verdict',
+      !!bare.v && sanityTerm(bare.v).length > 0,
+      bare.v ? JSON.stringify(bare.v.summary && bare.v.summary.terminusCoverage) : 'no report');
   }
 }
 

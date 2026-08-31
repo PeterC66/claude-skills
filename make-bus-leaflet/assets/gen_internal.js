@@ -1925,6 +1925,26 @@ if(ID && IR) for(const ic of (ID.interchanges||[])){
 // outboard positions and the opposite one are deliberately absent — see
 // design.exitDevice below.
 const COMPASS8=['E','NE','N','NW','W','SW','S','SE'];
+/* THE PREPOSITION ON A FRAME-EXIT CAPTION, and why it is not always 'to'.
+ *
+ * A route that runs both ways down the same streets leaves the frame once, and 'to X'
+ * is the whole truth about that tail: the bus goes to X along it and comes back from X
+ * along it. A ONE-WAY LOOP leaves the frame TWICE, by different roads, and only one of
+ * those tails is a departure. Ramsey's X31 arrives past Marriotts Drove and leaves past
+ * Daintree Road; captioning both 'to Peterborough' tells a reader standing at the first
+ * one that they can catch a bus to Peterborough there, and they cannot. The Ramsey
+ * reader who found the loop said so in the same message (OA-175 §3) and was right — it
+ * could not be settled then, because the line stopped halfway and an arrow sat where
+ * the drawing had ended rather than where the bus goes.
+ *
+ * So a configured terminus label may carry its own preposition, and one that does is
+ * printed as written. This is deliberately a WORDING rule and not a geometry one: which
+ * tail of a loop is the arrival is a fact about the timetable, the config author has it,
+ * and no amount of looking at the polyline recovers it. Nothing else changes — no
+ * committed label in the estate begins with 'to ' or 'from ' (88 of them, checked
+ * 2026-08-31 across all 8 towns), so every sheet built before this is byte-identical.
+ */
+const exitCaption = s => /^(?:to|from)\s/i.test(String(s)) ? String(s) : 'to ' + s;
 function inboardKeys(ox,oy){
   // `ox,oy` is the OUTWARD direction of the exit. Index 0 is that direction; +2 is
   // 90° anticlockwise from it, +4 straight back inboard, +6 90° clockwise.
@@ -2276,7 +2296,7 @@ if(IR && TRIM){
         const rx0=bx+(0-(g.ms.length-1)/2)*BSx, rx1=lastX;
         g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BSx;
           reserve(bxi-3.2-CXW,ry-3.2,bxi+3.2+CXW,ry+3.2,'the '+m.r+' frame-exit badge'); });
-        const text='to '+g.label, sz=2.7, w=text.length*sz*0.52;
+        const text=exitCaption(g.label), sz=2.7, w=text.length*sz*0.52;
         if(LAB){
           // v2: a destination label is the single most useful string on the sheet —
           // it is the answer to "where does this bus go?" — so it is queued at the
@@ -2736,7 +2756,7 @@ if(RJ.internalTermini && !IR){ const TL=RJ.terminiLabels||{};
     const txw=badgeXW(r,3.0);
     let t=0; while(tplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<6.5+txw) && t<8){ p=[p[0]+nx*4, p[1]+ny*4]; t++; }
     tplaced.push(p);
-    badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],'to '+TL[r],2.7,inkOnWhite(C[r]||'#333'),false,null); }
+    badge(p[0],p[1],r,3.0); placeLabel(p[0],p[1],exitCaption(TL[r]),2.7,inkOnWhite(C[r]||'#333'),false,null); }
 }
 
 // ---- resolve labelPos:"auto" ------------------------------------------------

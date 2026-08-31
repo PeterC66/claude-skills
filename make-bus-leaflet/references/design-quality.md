@@ -40,7 +40,7 @@ Measured over the 31 shipped sheets, before → after: **628 → 225 defects** (
 | `spokeSpread` | off | External sheets: spreads the spider's spokes evenly around the hub in their own bearing order, clamped to `maxShift` (default 30°) of the true bearing. `strength` < 1 blends. Section below. |
 | `badgeFit` | off | Draws a route badge as a **stadium** instead of a disc when its number is wider than the disc. Section below. |
 | `hubFit` | off | External sheets: sizes the hub box from its text instead of from a character count. Section below. |
-| `exitDevice` | off | **Built, measured, deliberately off.** One fixed design for every off-map continuation. It costs 15 defects to buy the consistency; see the section below before proposing it again. |
+| `exitDevice` | off | **Built, measured, off by default — and ON for exactly one map, Ely Co-op.** One fixed design for every off-map continuation. It costs 15 defects across the eight towns to buy the consistency; on the ten place internal sheets there is no estate-wide effect at all. See the section below before proposing it again. |
 | `iconSet` | off | `"grid"` swaps the twelve POI pictograms for the redrawn set: one 24 × 24 grid, one stroke weight, one corner radius, solid, each with a white casing. Pairs with `iconInk`, does not need it. Section below. |
 | `sheetUrl` | off | A short address printed in the footer band — the sheet's route back to the version that is current *now*. Prefixed `https://` for the QR when it has no scheme of its own. Section below. |
 | `sheetUrlLabel` | `"Check for a newer version:"` | The words before `sheetUrl`. `false` prints the address alone. |
@@ -66,7 +66,7 @@ Measured over the 31 shipped sheets, before → after: **628 → 225 defects** (
 
 ### `design.exitDevice` — built, measured, and deliberately OFF
 
-Plan §2.5 asked for one design for off-map continuations, on the observation that St Ives draws seven of them four different ways. **It is built and it is not switched on anywhere**, because measuring it showed the premise was wrong. Read this before proposing it again.
+Plan §2.5 asked for one design for off-map continuations, on the observation that St Ives draws seven of them four different ways. **It is off by default and switched on for exactly one map**, because measuring it showed the premise was wrong. Read this before proposing it again. (This sentence read *"it is not switched on anywhere"* until 2026-08-31, and that was false from 2026-08-21 onwards — see the place measurement below.)
 
 **What the four arrangements actually are.** Not arbitrary variation — the placer routing around ink that differs at each exit. Two facts about the geometry decide it:
 
@@ -88,6 +88,26 @@ Almost all of the rise is `pt/ink`, labels over route ink. Rendered at 300 dpi t
 **Decision, Peter, 2026-08-16: leave it alone.** Same shape as Phase 7's colour-group item — the plan expected to have to change something, and the measurement said not to.
 
 **What is in the engine, off:** `design.exitDevice:true` puts the "to X" text on the inboard half, square to the line, no leaders, preferring the perpendiculars; `labeller.js` gained `it.only` (an ordered shortlist of compass keys, with every other position kept as a last resort at `wOffDevice`, so a device can never *drop* a destination — the look is negotiable, the information is not); and `gen_internal.js` warns on stderr when an exit could not take an inboard position. Absent the key, output is byte-identical and all 27 gates pass. **If it is ever revived, the thing to fix first is the badge row, not the text** — every one of these positions is contested because the badge sits 5 mm back along a line that is still drawing.
+
+**AND THE PLACE MAPS, MEASURED 2026-08-31 (buses-data OA-020).** The flag was described as *"adopted for the place maps 2026-08-21"*, which was never true of the estate: of the twenty committed maps, **eighteen carry no `exitDevice` key at all**, `Ely Co-op` sets it `true`, and `St Ives Bus Station` sets it `false` — so one place map of ten had it on, not the place maps. All ten place internal sheets were then built both ways on the current engine and scored with `quality_metrics.js`:
+
+| place | defects, device ON | defects, device OFF |
+|---|---:|---:|
+| Beaconsfield Simpson Centre | 7 | **4** |
+| Beaconsfield Waitrose | 7 | **5** |
+| Ely Co-op | **3** | 5 |
+| Godmanchester Co-op Cambridge Road | **4** | 5 |
+| Godmanchester Co-op Ermine Street | 5 | **4** |
+| High Wycombe Aldi | 11 | **10** |
+| St Ives Bus Station | **1** | 3 |
+| St Neots Co-op | **3** | 4 |
+| St Neots Tesco Extra | 2 | 2 |
+| St Neots Town Centre | 4 | **3** |
+| **total** | **47** | **45** |
+
+**There is no place-wide effect to adopt or reject.** Four sheets improve, five worsen, one ties, the spread is ±2 defects a sheet, and the aggregate leans the same way the town verdict did, far more weakly. So the contradiction the row was filed about is not between towns and places — it is **between sheets**, and the setting is a per-sheet one whose default is off. Ely Co-op's `true` is justified on its own artefact (3 against 5) and that is now written down; before this it was [the only setting that disagrees](#designexitdevice--built-measured-and-deliberately-off) with no record of why.
+
+**One thing this measurement contradicts, and it is worth knowing.** `St Ives Bus Station` set `exitDevice:false` on 2026-08-23 after hitting the two labels the town verdict named. On today's engine that sheet measures **1 defect with the device and 3 without** — the opposite of the decision it carries. The decision is not being reversed here, because two defects on one sheet is not worth a rebuild and a re-baseline; it is recorded so that nobody reads the `false` as current evidence. **A measured verdict is only true of the engine that measured it**, and this engine has moved a long way since 2026-08-23.
 
 ### `design.iconSet` — the twelve pictograms on one grid
 

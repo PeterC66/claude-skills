@@ -32,6 +32,23 @@ influence:
        the sheet chose carries more than three times the service, counted HERE from
        the feed rather than read from the index (OA-028).
 
+  S-5  SAME REGISTRATIONS AS THE INDEX (OA-189, 2026-08-31). `boarding_index.py`
+       counts only the registrations running on its `--asof` date, and until this
+       version nothing here could. The two files were answering questions about
+       different populations: the checker was strictly more permissive, which is the
+       safe direction and is why nothing had gone wrong, but S-3 weighed a "three
+       times the service" trade with UNDATED counts against an index whose ratio is
+       dated. `--asof` fixes both halves. It defaults to the date the index recorded,
+       and where the index records none this reports a note rather than guessing --
+       an index built before boarding_index.py v1.4 carries no date at all.
+
+       IT NEVER RAISES A HARD FINDING, and that is deliberate. S-2's reachability
+       stays UNDATED, so no sheet can be failed by a calendar; the date's whole
+       effect is to count S-3's trips over the population the index used, and to
+       NAME any (destination, stand) pair the index carries that no live-on-that-date
+       trip supports. A checker that fails on a date is a checker that gets
+       `--no-verify`d, and then it is not checking the labels either.
+
   S-4  SHEET AGREES WITH INDEX. Every boarding label that actually appears in
        boarding.svg must be one NaPTAN sanctions, and every destination in the
        index must appear on the sheet. This is the one check that reads the
@@ -46,6 +63,7 @@ USAGE. Run from the stage folder holding boarding.svg and its inputs:
     python boarding_verify.py                     check, print a report
     python boarding_verify.py --db <path.sqlite>  name the GTFS region explicitly
     python boarding_verify.py --json boarding-verify.json   write the durable record
+    python boarding_verify.py --asof 2026-09-06   count the registrations live that day
 
 PROVE IT CAN GO RED before trusting it green (the paper's own house rule, and
 `feedback_prove_the_check_can_fail`): edit one letter in boarding_index.json and
@@ -64,7 +82,7 @@ import sys
 from collections import defaultdict
 from datetime import date
 
-SCRIPT_VERSION = "1.3"
+SCRIPT_VERSION = "1.4"
 
 
 def read_json(p):
@@ -91,6 +109,10 @@ def main():
     ap.add_argument("--naptan", default=None)
     ap.add_argument("--svg", default="boarding.svg")
     ap.add_argument("--json", default=None)
+    ap.add_argument("--asof", default=None, metavar="YYYY-MM-DD",
+                    help="count only registrations running that day; defaults to the "
+                         "date boarding_index.json records, and to undated where it "
+                         "records none")
     ap.add_argument("--self-test", action="store_true",
                     help="corrupt one label in memory and confirm S-1 catches it")
     args = ap.parse_args()
@@ -122,6 +144,30 @@ def main():
     dests = index.get("destinations") or []
     stands = index.get("stands") or []
     by_atco = {s["atco"]: s for s in stands}
+
+    # ---- WHICH DAY IS THIS SHEET ABOUT? (OA-189) ----------------------------
+    # `boarding_index.py` has taken --asof since it was written, because a feed
+    # carries registrations that have not started and counting them together
+    # doubles a route's journeys per week. It writes the date it used into
+    # `boarding_index.json` from v1.4 on. Read it from there by default: the
+    # checker's job is to describe the SAME population the sheet was built from,
+    # and the only file that knows which that was is the index itself.
+    #
+    # THE FALLBACK IS A NOTE, NOT A GUESS. Every index written before v1.4 records
+    # no date, and the build date of the run folder is not the same fact -- a sheet
+    # can be, and has been, built with --asof set to the day it goes on a wall. So
+    # where there is no recorded date this runs exactly as v1.3 did, undated and
+    # permissive, and says so in the report.
+    asof_src = "--asof"
+    asof = (args.asof or "").replace("-", "").strip()
+    if not asof:
+        asof = str(index.get("asof") or "").replace("-", "").strip()
+        asof_src = "boarding_index.json" if asof else None
+    if asof and (len(asof) != 8 or not asof.isdigit()):
+        sys.stderr.write("boarding_verify: --asof must be YYYY-MM-DD\n")
+        return 2
+    if not asof:
+        asof = None
 
     if args.self_test:
         # Flip one printed label to something NaPTAN does not say. If the checker
@@ -280,6 +326,21 @@ def main():
         excluded = {str(r) for r in (_bp.get("excludeRoutes") or [])}
     except Exception:
         pass
+    reach_asof = defaultdict(set)     # locality -> {atco}, live-on-asof trips only
+    # Live on `asof`, by the same test boarding_index.py applies (boarding_index.py
+    # ~line 364): a calendar row is off-window only when it carries BOTH dates and
+    # the day falls outside them. A service with no calendar row at all is counted
+    # LIVE here where the index drops it -- the checker staying the more permissive
+    # of the two is the safe direction, and S-5 is a note either way.
+    live_sid = None
+    if asof:
+        live_sid = set()
+        for sid, start, end in db.execute(
+                "SELECT service_id, start_date, end_date FROM calendar"):
+            s, e = str(start or ""), str(end or "")
+            if s and e and not (s <= asof <= e):
+                continue
+            live_sid.add(sid)
     served = {}
     if frame:
         tids = [r[0] for r in db.execute(
@@ -295,6 +356,13 @@ def main():
                 keep.append(t)
             tids = keep
         for t in tids:
+            live = True
+            if live_sid is not None:
+                row = db.execute("SELECT service_id FROM trips WHERE trip_id=?", (t,)).fetchone()
+                # A trip whose service_id is in no `calendar` row is left LIVE, per
+                # the note above: absent is not the same as expired.
+                live = (row is None) or (row[0] in live_sid) or (
+                    db.execute("SELECT 1 FROM calendar WHERE service_id=?", (row[0],)).fetchone() is None)
             seq = [r[0] for r in db.execute(
                 "SELECT stop_id FROM stop_times WHERE trip_id=? ORDER BY CAST(stop_sequence AS INTEGER)",
                 (t,))]
@@ -305,13 +373,16 @@ def main():
                 for nxt in seq[i + 1:]:
                     for l in locality(nxt):
                         reach[l].add(sid)
+                        if live:
+                            reach_asof[l].add(sid)
                         seen_here.add(l)
                 # ...and COUNT the trips, independently of boarding_index.json, so S-3
                 # below can weigh the trade the sheet made rather than only half of it.
                 # One trip counts once per destination however many of that
                 # destination's stops it goes on to call at.
-                for l in seen_here:
-                    served[(l, sid)] = served.get((l, sid), 0) + 1
+                if live:
+                    for l in seen_here:
+                        served[(l, sid)] = served.get((l, sid), 0) + 1
 
     for d in dests:
         dest, atco = d["destination"], d.get("boardAtAtco")
@@ -414,12 +485,29 @@ def main():
                 hard("S-4", "sheet draws bay glyph %r, which NaPTAN does not list as a stand "
                             "in this frame (sanctioned: %s)" % (t, ", ".join(sorted(sanctioned))))
 
+    # ---------------------------------------------------------------- S-5
+    if asof is None:
+        soft("S-5", "this index records no --asof date, so the sheet and this check are "
+                    "describing different sets of registrations; rebuild the index with "
+                    "boarding_index.py v1.4 or later, or pass --asof, to compare like "
+                    "with like")
+    else:
+        for d in dests:
+            dest, atco = d["destination"], d.get("boardAtAtco")
+            if atco in reach.get(dest, set()) and atco not in reach_asof.get(dest, set()):
+                soft("S-5", "%s: %s (%s) reaches it only on trips whose registration is not "
+                            "running on %s-%s-%s (%s)"
+                     % (dest, d.get("boardAt"), atco, asof[:4], asof[4:6], asof[6:], asof_src))
+
     # ---------------------------------------------------------------- report
     hards = [f for f in findings if f["severity"] == "HARD"]
     softs = [f for f in findings if f["severity"] == "SOFT"]
 
     print("# boarding_verify v%s — %s" % (SCRIPT_VERSION, place.get("name")))
     print("  register: %s   region: %s" % (os.path.basename(napath), os.path.basename(dbpath)))
+    print("  registrations: %s" % (
+        "counted as of %s-%s-%s (%s)" % (asof[:4], asof[4:6], asof[6:], asof_src)
+        if asof else "UNDATED — the index records no --asof (see S-5)"))
     print("  %d destination row(s), %d boarding point(s); sheet %s"
           % (len(dests), len(by_atco), "read" if svg_checked else "NOT FOUND (S-4 skipped)"))
     print()
@@ -450,6 +538,8 @@ def main():
                 "verifier": "boarding_verify.py v%s" % SCRIPT_VERSION,
                 "register": os.path.basename(napath),
                 "region": os.path.basename(dbpath),
+                "asof": ("%s-%s-%s" % (asof[:4], asof[4:6], asof[6:])) if asof else None,
+                "asofFrom": asof_src,
                 "checked": {"labels": checked_labels, "destinations": len(dests),
                             "boardingPoints": len(by_atco), "sheetRead": svg_checked},
                 "findings": findings,

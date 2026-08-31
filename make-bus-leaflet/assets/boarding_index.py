@@ -79,7 +79,7 @@ import sqlite3
 import sys
 from collections import defaultdict
 
-SCRIPT_VERSION = "1.3"
+SCRIPT_VERSION = "1.4"
 
 
 def read_json(path):
@@ -127,6 +127,25 @@ def resolve_db(folder, explicit, place):
     sys.stderr.write("  built regions: %s\n" % ", ".join(sorted(built)) or "(none)")
     sys.stderr.write("  re-run with --db <path to that region's .sqlite>\n")
     return None
+
+
+def _feed_version(dbpath):
+    """The BODS feed_version behind a region database, or None.
+
+    `gtfs_build.py` writes `_gtfs/feed_info_<region>.json` beside every database it
+    builds. Read it rather than the database: the version is a property of the
+    published feed, and nothing inside the sqlite carries it. Absent file, unreadable
+    file or a feed with no version all give None -- this records a fact when one is
+    available and never invents one.
+    """
+    try:
+        d = os.path.dirname(os.path.abspath(dbpath))
+        stem = os.path.splitext(os.path.basename(dbpath))[0]
+        info = read_json(os.path.join(d, "feed_info_%s.json" % stem))
+        return ((info.get("feed_info") or {}).get("feed_version")
+                or info.get("built") or None)
+    except Exception:
+        return None
 
 
 def main():
@@ -722,6 +741,15 @@ def main():
             "atco": s["atco"], "label": s["label"], "class": s["class"],
             "distM": s["distM"], "walkMin": s["walkMin"], "facing": s.get("facing"),
             "name": s.get("name"), "pos": s.get("gtfsPos"),
+            # THE STREET, CARRIED THROUGH RATHER THAN LOOKED UP TWICE (OA-034, v1.4).
+            # `naptan_stands.py` has written a full NaPTAN block per stop since the
+            # file was first written, `Street` included, and the sheet has never been
+            # able to print it: `gen_boarding.js` draws its key from THIS file, not
+            # from stands.json, and this view dropped every NaPTAN field but the
+            # CommonName. The alternative -- teaching the generator to open stands.json
+            # as well -- would give one drawing two sources, which is the shape that
+            # has cost this project a round before. One input, one drawing.
+            "street": ((s.get("naptan") or {}).get("Street") or None),
             "routes": sorted(v["routes"]), "destinations": sorted(v["destinations"]),
         })
 
@@ -748,6 +776,28 @@ def main():
             "place": place.get("name"),
             "homeLocality": home,
             "generatedBy": "boarding_index.py v%s" % SCRIPT_VERSION,
+            # THE DATE THIS INDEX IS ABOUT, WRITTEN DOWN (OA-189, v1.4).
+            # --asof has governed every count in this file since it was written, and
+            # until now the file did not say which date that was -- so `boarding_verify.py`,
+            # which re-derives the same reachability from `stop_times`, had no way to
+            # describe the same population and ran undated. The two were answering
+            # questions about different sets of registrations, invisibly, because the
+            # checker was the more permissive of the two and nothing had gone wrong yet.
+            # The build date of the run folder is NOT this fact: a sheet may be, and has
+            # been, built with --asof set to the day it goes on a wall rather than the
+            # day it was drawn. So it is recorded rather than inferred.
+            "asof": "%s-%s-%s" % (args.asof[:4], args.asof[4:6], args.asof[6:]),
+            # ...AND WHICH FEED IT COUNTED, WHICH `region` DOES NOT SAY (v1.4).
+            # `region` names a FILE, and that file is rebuilt in place every refresh.
+            # Measured on the day this was written: three of the four boarding indexes
+            # in the estate were built at 05:07 and the Buckinghamshire feed was rebuilt
+            # at 10:01, so High Wycombe High Street was shipping eleven destinations
+            # whose trip counts today's feed does not reproduce -- and every check in
+            # the estate was correctly green, because `generatedBy` was v1.3 on both
+            # sides and the byte gate redraws the sheet from the stored index however
+            # old it is. The fact was invisible for want of anybody writing it down.
+            # Recorded here, not gated here: the gate is OA-210.
+            "feed": _feed_version(dbpath),
             "region": os.path.basename(dbpath),
             "stands": stand_view,
             "destinations": dests,

@@ -64,6 +64,22 @@ Measured over the 31 shipped sheets, before → after: **628 → 225 defects** (
 | `sheetVersion` | off | The published version printed in the footer band, in the hole the QR code left behind. `rollout.js` stamps a **build** identifier here (`build 6.54 · 19 Aug 2026`), which is right for a map built in this tree and wrong on a public sheet — so the portal overrides it at render time with `LEAFLET_SHEET_VERSION`, giving `Map version 5.0` on a published sheet and `Draft 5.0 · <when>` on a download. Do not read this field as what the customer sees. |
 | `fixedOrientation` | off | Pins the internal map's rotation to a stated bearing in degrees, so a data refresh cannot quietly re-solve it. **Do not normalise the value into 0—360.** `-66` and `294` are the same bearing to a reader and different floats to the FPU, and the tidy-up moved the artwork: a sheet pinned at `-66` stopped reproducing the same bytes as the identical sheet built from `internalRoads.rotationDeg:-66`, which the byte gate would report as a regression that is nothing of the kind. `freeze_orientation.js` writes the applied angle back. **No map is pinned today** (OA-075). |
 
+### The footer's greys — THE RULE, written down 2026-08-31 (buses-data OA-043)
+
+The 2026-08-15 plan's §4.8 asked for a footer rule, having found *"three grey lines at two sizes plus a lighter copyright plus a third weight for `Valid from`"*. Two of those went when the engine build number came off the sheet on 2026-08-10, and the plan's closing note said what was left was **defensible — a decision to write the rule down or to flatten it to one grey, nearly nothing either way**. Written down, because flattening throws away a hierarchy that is doing real work.
+
+**Read against `footer.js` on 2026-08-31 and confirmed on a rendered sheet, and there are THREE greys, not the two the plan recorded.** The rule is by what the ink IS FOR, not by where it sits:
+
+| Grey | Weight & size | What it carries | Why |
+|---|---|---|---|
+| `#333` | **bold**, its own `urlSize` | the sheet's address (`busmaps.uk/m/…`) | the one line a reader might ACT on — the route back to the version that is current now |
+| `#666` | 2.8 mm | the attribution notes, and the words before the address (*"Latest version:"*) | what the data licences oblige us to print, and the label that explains the darkest thing on the band |
+| `#999` | 2.8 mm | `Valid from`, the sheet/build version, `Map design © BusMaps.uk` | metadata ABOUT this sheet rather than content ON it |
+
+**So the hierarchy is act › oblige › describe**, and a fourth level would have to earn its place against that. Two consequences for anyone editing the band: a new footer line belongs in one of these three by asking which of the three it is, not by picking a grey that looks right; and **`#333` is reserved for the address** — it is the only thing on the plate a reader is invited to do something with, and a second dark item would cost it that.
+
+**Note that the archived plan's own description of the footer is now incomplete** — it says "one size, 2.8 mm, in two greys", and the URL is neither 2.8 mm nor one of those two. It was written before `sheetUrl` and the QR block landed. Cite this table, not §4.8.
+
 ### `design.exitDevice` — built, measured, and deliberately OFF
 
 Plan §2.5 asked for one design for off-map continuations, on the observation that St Ives draws seven of them four different ways. **It is off by default and switched on for exactly one map**, because measuring it showed the premise was wrong. Read this before proposing it again. (This sentence read *"it is not switched on anywhere"* until 2026-08-31, and that was false from 2026-08-21 onwards — see the place measurement below.)

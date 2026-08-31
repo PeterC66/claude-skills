@@ -845,6 +845,23 @@ const qualityCell = (name) => {
 // stale. Delete this entry once #139 is accepted or withdrawn and Wisbech has
 // been rolled; the hash key makes it stop excusing anything at that moment in
 // any case, and the board says so out loud when it does.
+//
+// 2026-08-31, LATER THE SAME DAY — this entry has now survived a SECOND rollout,
+// and that it needed no edit is the design working rather than luck. OA-206 and
+// OA-207 moved the template to 37a9450d76 and the other seven towns went with it;
+// Wisbech did not, because #139 is still staged with the customer — read off the
+// live worklist, not assumed. The entry is keyed to the town AND the hash it
+// excuses, so it goes on excusing exactly Wisbech-at-cf683a815c however far the
+// current template moves ahead of it. DO NOT "update" the hash here to the current
+// one: that would excuse a town that had been rebuilt, which is the single thing
+// this list must never do.
+//
+// That second rollout was byte-neutral too — all 25 re-rendered sheets differed by
+// their version stamp and nothing else — so the paragraph above is still literally
+// true of the gap between the code that drew Wisbech and the code that would draw
+// it now. The standing consequence: anything that MOVES INK must not ride a rollout
+// while this entry stands, or the excuse quietly stops being true while a customer
+// is still deciding. OA-187 was held back on exactly that ground.
 const ENGINE_STALE_ALLOWED = [
   { town: 'Wisbech', engine: 'cf683a815c', since: '2026-08-31',
     why: 'portal proposed-update #139 is with the customer; a rebuild would supersede it' },

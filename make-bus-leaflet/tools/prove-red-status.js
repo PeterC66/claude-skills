@@ -91,7 +91,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, areaFixture = null }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-red-status-'));
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -125,6 +125,20 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
     fs.mkdirSync(pd, { recursive: true });
     fs.copyFileSync(path.join(ps, 'manifest.json'), path.join(pd, 'manifest.json'));
     copyDir(path.join(ps, 'ci-reference'), path.join(pd, 'ci-reference'));
+    /* OA-188 -- age the STORED DATA rather than the sheet. `boarding_index.json` is
+     * derived by `boarding_index.py` and stamped with the version that wrote it, and
+     * a sheet drawn from a two-versions-old index still reproduces byte-for-byte
+     * because the generator is fed that same file. Rewriting the stamp is exactly
+     * what three of the four boarding places actually looked like on 2026-08-30. */
+    if (ageIndex) {
+      const ip = path.join(pd, 'ci-reference', 'boarding_index.json');
+      if (!fs.existsSync(ip)) throw new Error('fixture has no boarding_index.json -- pick a place with a boarding plan');
+      const j = JSON.parse(fs.readFileSync(ip, 'utf8'));
+      if (!/ v[\d.]+$/.test(String(j.generatedBy || '')))
+        throw new Error('fixture boarding_index.json carries no "<script> v<n.n>" stamp: ' + j.generatedBy);
+      j.generatedBy = String(j.generatedBy).replace(/ v[\d.]+$/, ' v' + ageIndex);
+      fs.writeFileSync(ip, JSON.stringify(j, null, 2));
+    }
     if (mutateSchematic) {
       /* One attribute on one label. NOT a line PLACE_IGNORE drops (it drops y="16"
        * and y="208" -- the title and the version stamp), or this would mutate the
@@ -355,6 +369,49 @@ const CASES = [
       return null;
     },
     what: 'THE GATE ITSELF - this column exited 0 whatever the sheet said, until OA-170',
+  },
+  {
+    /* OA-188. The boarding sheet is drawn from `boarding_index.json`, which is
+     * DERIVED by `boarding_index.py` and only ever copied forward by `seedPrevS4`
+     * -- so no rollout has ever re-derived it. The byte gate above cannot see that:
+     * it asks whether the current GENERATOR redraws the sheet from that file, and
+     * the answer is yes however old the file is. On 2026-08-30 three of the four
+     * boarding sheets held an index a script version behind, 27 destinations across
+     * them had trip counts the current script computes differently, and status.js
+     * said PASS and rollout_places.js said UP-TO-DATE, both correctly.
+     *
+     * THE CONTROL IS THE HALF THAT KEEPS THE GATE ALIVE. Every boarding place on
+     * the estate is current today, which is the silence this gate has to keep; one
+     * that reddened a clean place would be muted inside the week, and the whole
+     * reason it could be added at all is that the arrears were cleared first. */
+    label: 'control: a boarding index written by the script on disk',
+    make: { withTownPlace: { town: 'St Ives', place: 'St Ives Bus Station' } },
+    expect: 0,
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === 'St Ives Bus Station');
+      if (!p) return 'the board never saw the place at all';
+      if (p.boarding !== 'PASS') return 'the board saw it but its boarding read ' + p.boarding;
+      if (p.indexDrift && p.indexDrift.length) return 'the board reported drift on a clean fixture: ' + JSON.stringify(p.indexDrift);
+      return null;
+    },
+    what: 'green here means the gate is quiet on the estate as it actually stands',
+  },
+  {
+    label: 'a boarding index two script versions behind goes RED',
+    make: { withTownPlace: { town: 'St Ives', place: 'St Ives Bus Station' }, ageIndex: '0.9' },
+    expect: 1,
+    cause: 'index',
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === 'St Ives Bus Station');
+      if (!p) return 'the board never saw the place at all';
+      // The SHEET still reproduces -- that is the entire point of the row, so a
+      // case that reddened the byte gate instead would be testing the wrong thing.
+      if (p.boarding !== 'INDEX-STALE') return 'the board saw it but its boarding read ' + p.boarding;
+      if (!p.indexDrift || !p.indexDrift.length) return 'the cell said INDEX-STALE with no drift recorded behind it';
+      if (p.indexDrift[0].saidBy !== '0.9') return 'the drift names version ' + p.indexDrift[0].saidBy + ', not the one the fixture wrote';
+      return null;
+    },
+    what: 'THE GATE ITSELF - the sheet still redraws byte-for-byte, and the DATA is stale',
   },
   {
     label: 'Ramsey at some OTHER stale hash',

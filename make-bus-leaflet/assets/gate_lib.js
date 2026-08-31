@@ -367,6 +367,72 @@ function latestRunDir(manifest, townDir, stage) {
   return { dir, rec: r };
 }
 
+/* IS A SHEET'S STORED DATA WHAT ITS DATA SCRIPT WOULD PRODUCE TODAY? (OA-188)
+ *
+ * A boarding sheet is drawn by `gen_boarding.js` from two JSON files that are
+ * derived, not authored: `boarding_index.json` (from `boarding_index.py`) and
+ * `stands.json` (from `naptan_stands.py`). Both live only in the S4 run, and
+ * `seedPrevS4` copies them forward, so no rollout has ever re-derived them --
+ * every boarding rollout re-ran the generator against an index built by whatever
+ * script version happened to be current the day that place was last touched.
+ *
+ * NOTHING WAS RED, AND THAT IS THE FINDING. The byte gate asks "does the current
+ * generator redraw this sheet from its stored data?" and the answer was correctly
+ * yes, so `status.js` reported all four boarding sheets PASS and
+ * `rollout_places.js` reported all four UP-TO-DATE. The question nobody was asking
+ * is "is the stored data what the current SCRIPT would produce?". Measured on
+ * 2026-08-30: three of the four carried an index written by boarding_index.py v1.2
+ * while the script on disk was v1.3, and 27 destinations across them had trip
+ * counts the current script computes differently. Only St Ives was current, and it
+ * was the only one with no drift -- the two facts are the same fact.
+ *
+ * This is the same shape as OA-130 (a delivered map running the generator it was
+ * imported with, for ever) but for the DATA half of the pipeline rather than the
+ * code half, which is why the byte gate cannot see it: the drift is upstream of
+ * the bytes it compares.
+ *
+ * Each script stamps its output with `generatedBy: "<script>.py v<n.n>"` and
+ * declares `SCRIPT_VERSION` at its top, so the claim is already written down at
+ * both ends and all this does is ask whether they agree. A file that is absent, a
+ * script that is absent, or a stamp in a shape this cannot read is NOT a finding:
+ * absent means the place has no boarding plan, and a gate that reddened every
+ * place without one would be muted in a week.
+ *
+ * Returns [] when all is well, or one {file, script, saidBy, current} per
+ * disagreement.
+ */
+const DATA_SCRIPTS = [
+  { json: 'boarding_index.json', script: 'boarding_index.py' },
+  { json: 'stands.json', script: 'naptan_stands.py' },
+];
+
+/** The SCRIPT_VERSION a data script declares, or null if it cannot be read. */
+function scriptVersion(scriptPath) {
+  if (!fs.existsSync(scriptPath)) return null;
+  const m = /^SCRIPT_VERSION\s*=\s*"([^"]+)"/m.exec(fs.readFileSync(scriptPath, 'utf8'));
+  return m ? m[1] : null;
+}
+
+function dataScriptDrift(s4Dir, assetsDir) {
+  const assets = assetsDir || SK;
+  const out = [];
+  for (const { json, script } of DATA_SCRIPTS) {
+    const jf = path.join(s4Dir, json);
+    if (!fs.existsSync(jf)) continue;                    // no boarding plan here
+    let said = null;
+    try {
+      const j = JSON.parse(fs.readFileSync(jf, 'utf8'));
+      const m = /\sv([\d.]+)\s*$/.exec(String(j.generatedBy || ''));
+      said = m ? m[1] : null;
+    } catch { said = null; }
+    if (!said) continue;                                 // written before the stamp existed
+    const current = scriptVersion(path.join(assets, script));
+    if (!current) continue;                              // cannot ask the question
+    if (said !== current) out.push({ file: json, script, saidBy: said, current });
+  }
+  return out;
+}
+
 /* IS THE LATEST COMMITTED S4 ACTUALLY RENDERED? (OA-198)
  *
  * Both rollout tools commit S4, then render S5 as a separate step, and both have
@@ -490,6 +556,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, detectExternalStyle,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, dataScriptDrift, detectExternalStyle,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

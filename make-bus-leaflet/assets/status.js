@@ -27,7 +27,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
+const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, dataScriptDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
 
@@ -317,6 +317,20 @@ function gatePlace(p) {
       ? gate(path.join(SK, 'gen_boarding.js'), s4.dir, 'boarding.svg', path.join(s4.dir, 'boarding.svg')).status
       : 'NO-SHEET';
     row.boarding = pBrd === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'boarding.svg') : pBrd;
+    /* AND IS THE STORED DATA WHAT THE SCRIPT WOULD PRODUCE TODAY? (OA-188)
+     *
+     * The verdict above is a byte gate, and a byte gate cannot see this: it asks
+     * whether the current GENERATOR redraws the sheet from its stored index, and
+     * the answer is yes however old the index is. On 2026-08-30 three of the four
+     * boarding sheets carried an index two script versions behind, with 27
+     * destinations whose trip counts the current script computes differently, and
+     * every check on this board said PASS.
+     *
+     * IT ONLY REPLACES A PASS. A sheet that genuinely DIFFs has a louder problem
+     * and that verdict must survive; the drift is named in the summary block
+     * either way, so nothing is hidden by the cell being the other finding. */
+    row.indexDrift = dataScriptDrift(s4.dir);
+    if (row.indexDrift.length && row.boarding === 'PASS') row.boarding = 'INDEX-STALE';
   }
   // The DERIVED SHEETS, on the same opt-in terms as a town (OA-170). A place got
   // three sheet columns and a town four, because when gatePlace was written no
@@ -697,7 +711,11 @@ const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' &
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
     || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
-    || ['DIFF', 'FAIL', 'MISSING'].includes(r.boarding)
+    // INDEX-STALE gates (OA-188). The whole character of the state is that every
+    // existing check is correctly green, so a column the exit code ignored would
+    // be the decoration OA-151 spent a row removing from the Engine column.
+    || ['DIFF', 'FAIL', 'MISSING', 'INDEX-STALE'].includes(r.boarding)
+    || (r.indexDrift && r.indexDrift.length)
     // OA-170. Printing a column the exit code ignores is the shape this row was
     // raised about one level up: a reference with the authority of a golden master
     // and the coverage of a scratch copy.
@@ -884,6 +902,17 @@ async function main() {
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
+  // OA-188 — named in full, because the cell can only hold a word. A drift that a
+  // DIFF verdict is masking is printed here too: the sheet has two problems and
+  // the cell can only say one of them.
+  const indexDriftRows = placeRows.filter(r => r.indexDrift && r.indexDrift.length);
+  for (const r of indexDriftRows) {
+    for (const d of r.indexDrift) {
+      console.log('  INDEX STALE (gating): ' + r.name + ' -- ' + d.file + ' was written by ' + d.script + ' v' + d.saidBy
+        + ' and the script on disk is v' + d.current + '. The byte gate cannot see this: it redraws the sheet from THAT file.');
+    }
+    console.log('    re-derive it with:  node rollout_places.js --place "' + r.name + '" --apply --force --refresh-index --asof <YYYY-MM-DD>');
+  }
   console.log('\n=== Places (' + places.length + ') === engine: current PLACE template = ' + CURRENT_PLACE_ENGINE);
   const pw = [34, 18, 6, 26, 9, 9, 9, 9, 9, 11, 26, 20, 8];
   if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Schematic | Diagram | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|');

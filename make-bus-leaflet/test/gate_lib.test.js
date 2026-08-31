@@ -304,3 +304,119 @@ test('the versions are compared as strings, so 1.10 is not 1.1', () => {
   const m = mani([run('1.10')], 'v1.10_2026-08-31_0507', [run('1.1')]);
   assert.strictEqual(G.unrenderedS4(m), '1.10');
 });
+
+
+/* dataScriptDrift — the stored data vs the script that derives it (OA-188) ----
+ *
+ * The byte gate asks whether the current GENERATOR redraws a boarding sheet from
+ * its stored index, and answers yes however old that index is. Three of the four
+ * boarding sheets carried an index two script versions behind on 2026-08-30, with
+ * 27 destinations whose trip counts the current script computes differently, and
+ * every check in the system was correctly green.
+ *
+ * The controls matter more than the finding here. This runs over every place on
+ * every board, and the estate is currently clean — so a helper that answered
+ * "drifted" for an absent file, an unstamped file, or a place with no boarding
+ * plan at all would turn eight towns and twelve places red on the day it landed,
+ * which is how a gate gets muted in its first week.
+ */
+const drifted = (dir, assets, opts = {}) => {
+  const put2 = (d, name, text) => fs.writeFileSync(path.join(d, name), text);
+  if (opts.index !== null) put2(dir, 'boarding_index.json', JSON.stringify({ generatedBy: opts.index }));
+  if (opts.stands !== undefined && opts.stands !== null) put2(dir, 'stands.json', JSON.stringify({ generatedBy: opts.stands }));
+  if (opts.script !== null) put2(assets, 'boarding_index.py', `SCRIPT_VERSION = "${opts.script}"\n`);
+  if (opts.standsScript) put2(assets, 'naptan_stands.py', `SCRIPT_VERSION = "${opts.standsScript}"\n`);
+  return G.dataScriptDrift(dir, assets);
+};
+const twoDirs = (fn) => tmp((d) => {
+  const data = path.join(d, 'data'), assets = path.join(d, 'assets');
+  fs.mkdirSync(data); fs.mkdirSync(assets);
+  return fn(data, assets);
+});
+
+test('an index written by the script on disk is not a finding', () => {
+  twoDirs((data, assets) => {
+    assert.deepStrictEqual(drifted(data, assets, { index: 'boarding_index.py v1.3', script: '1.3' }), []);
+  });
+});
+
+test('an index written by an OLDER script version is the finding', () => {
+  twoDirs((data, assets) => {
+    const d = drifted(data, assets, { index: 'boarding_index.py v1.2', script: '1.3' });
+    assert.strictEqual(d.length, 1);
+    assert.strictEqual(d[0].file, 'boarding_index.json');
+    assert.strictEqual(d[0].saidBy, '1.2');
+    assert.strictEqual(d[0].current, '1.3');
+  });
+});
+
+test('a NEWER stamp than the script is also a finding — the question is agreement', () => {
+  // It happens when a checkout is behind, and reading it as "fine, it is ahead"
+  // would be a gate that only looks one way down a road with traffic both ways.
+  twoDirs((data, assets) => {
+    assert.strictEqual(drifted(data, assets, { index: 'boarding_index.py v1.4', script: '1.3' }).length, 1);
+  });
+});
+
+test('a place with no boarding index is not a finding', () => {
+  twoDirs((data, assets) => {
+    assert.deepStrictEqual(drifted(data, assets, { index: null, script: '1.3' }), []);
+  });
+});
+
+test('an index with no generatedBy stamp is not a finding — it cannot answer', () => {
+  twoDirs((data, assets) => {
+    fs.writeFileSync(path.join(data, 'boarding_index.json'), JSON.stringify({ place: 'X' }));
+    fs.writeFileSync(path.join(assets, 'boarding_index.py'), 'SCRIPT_VERSION = "1.3"\n');
+    assert.deepStrictEqual(G.dataScriptDrift(data, assets), []);
+  });
+});
+
+test('an unparseable index is not a finding — that is a different fault', () => {
+  twoDirs((data, assets) => {
+    fs.writeFileSync(path.join(data, 'boarding_index.json'), '{ not json');
+    fs.writeFileSync(path.join(assets, 'boarding_index.py'), 'SCRIPT_VERSION = "1.3"\n');
+    assert.deepStrictEqual(G.dataScriptDrift(data, assets), []);
+  });
+});
+
+test('a missing script is not a finding — the question cannot be asked', () => {
+  twoDirs((data, assets) => {
+    assert.deepStrictEqual(drifted(data, assets, { index: 'boarding_index.py v1.2', script: null }), []);
+  });
+});
+
+test('stands.json is asked the same question, and both can drift at once', () => {
+  twoDirs((data, assets) => {
+    const d = drifted(data, assets, {
+      index: 'boarding_index.py v1.2', script: '1.3',
+      stands: 'naptan_stands.py v1.1', standsScript: '1.2',
+    });
+    assert.strictEqual(d.length, 2);
+    assert.deepStrictEqual(d.map((x) => x.file).sort(), ['boarding_index.json', 'stands.json']);
+  });
+});
+
+test('the real assets directory and the real committed indexes agree', () => {
+  // The control that cannot be faked by a fixture: every boarding place on the
+  // estate as it stands must be clean, or this gate is red on the day it lands.
+  const buses = 'C:/u3a St Ives/Using AI/Buses';
+  if (!fs.existsSync(buses)) return;                 // CI checks this via prove-red-status
+  const found = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      if (e.name === 'ci-reference') { found.push(p); continue; }
+      if (e.name === 'node_modules' || e.name === '.git') continue;
+      walk(p);
+    }
+  };
+  for (const top of ['Areas', 'Places']) {
+    const p = path.join(buses, top);
+    if (fs.existsSync(p)) walk(p);
+  }
+  for (const ref of found) {
+    assert.deepStrictEqual(G.dataScriptDrift(ref), [], `${ref} has drifted`);
+  }
+});

@@ -38,7 +38,10 @@ const write = (rel, text) => {
 };
 
 function items() {
-  const out = execFileSync('node', [TOOL, '--json', '--buses', root, '--portal', path.join(root, 'no-portal-here')],
+  // --local because worklist.mjs refuses to guess a portal since 2026-08-31.
+  // This harness has no portal at all -- that is the point of the --portal path
+  // below -- so it is asserting the LOCAL-tree sources, and says so.
+  const out = execFileSync('node', [TOOL, '--json', '--local', '--buses', root, '--portal', path.join(root, 'no-portal-here')],
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
   return JSON.parse(out).items.filter((i) => i.type === 'correspondence');
 }

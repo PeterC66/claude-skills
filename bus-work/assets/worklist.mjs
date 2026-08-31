@@ -14,10 +14,26 @@
  * data, and never calls the network except in --url (remote portal) mode.
  *
  * Usage:
- *   node worklist.mjs                 # ranked human list
+ *   node worklist.mjs                 # ranked human list — LIVE portal
+ *   node worklist.mjs --local         # the dev checkout instead (opt in)
  *   node worklist.mjs --json          # same items, machine-readable
  *   node worklist.mjs --gates         # + full byte-identical gate run (slow)
  *   node worklist.mjs --url https://busmaps.uk --cookie <cbm_session value>
+ *
+ * WHICH PORTAL — it will not guess (2026-08-31). Configure BUSMAPS_URL and
+ * BUSMAPS_COOKIE (in the portal's own .env is easiest; this tool loads it) and
+ * every run reads the live site. With neither set and no --local, this refuses
+ * and prints the two lines to add, rather than quietly opening the dev SQLite.
+ * It used to default to the dev checkout, and on 2026-08-31 a session asked for
+ * "the worklist", got that checkout, and presented a demo customer's publish
+ * review as the top blocked item. The banner said LOCAL — dev checkout the
+ * whole time. A header you have to read is not a guard.
+ *
+ * DEMO ROWS are hidden unless --demo, and never share a band with real work.
+ * That is the other half of the same fault: the mode was visible and the ROWS
+ * were not, so seven test organisation applications sat in SOMEONE IS BLOCKED
+ * and pushed the one real item — a member of the public owed a reply — to
+ * fourth. Anything whose title, reason or customer carries "(demo)" is demo.
  *
  * Sources, and where each flag/env comes from:
  *   --portal DIR   BUSMAPS_PORTAL   default C:\Claude\community-bus-maps
@@ -27,6 +43,8 @@
  *   --cookie TOK   BUSMAPS_COOKIE   the cbm_session cookie value for --url mode
  *                                   (the portal's admin API is cookie-authed;
  *                                   there is no operator token yet)
+ *   --local        (none)           read the dev checkout on purpose
+ *   --demo         (none)           include rows belonging to demo customers
  *
  * Zero dependencies (Node core only), matching stage.js / status.js convention.
  */
@@ -80,9 +98,46 @@ function loadPortalEnv(dir) {
 loadPortalEnv(PORTAL);
 
 const BUSES = path.resolve(args.buses || process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses');
-const URL_BASE = (args.url || process.env.BUSMAPS_URL || '').replace(/\/$/, '');
+// --local BEATS a configured BUSMAPS_URL, and this is not a detail. The whole
+// point of putting BUSMAPS_URL in the portal's .env is that it is always set --
+// so if the env still won, --local would be a flag that silently did nothing on
+// exactly the machine it was written for, which is how the first version of
+// this change behaved for about ten minutes. Contradicting yourself outright
+// (--local AND --url) is a refusal rather than a precedence rule.
+if (args.local && args.url) {
+  console.error('\n  --local and --url contradict each other. Pick one.\n');
+  process.exit(2);
+}
+const URL_BASE = args.local ? '' : (args.url || process.env.BUSMAPS_URL || '').replace(/\/$/, '');
 const COOKIE = args.cookie || process.env.BUSMAPS_COOKIE || '';
 const REMOTE = !!URL_BASE;
+const SHOW_DEMO = !!args.demo;
+
+// Refuse to GUESS which portal was meant. See "WHICH PORTAL" at the top of this
+// file. The exit is 2 rather than 1 so a caller can tell "you did not say which
+// portal" apart from "the run failed", and it prints on stderr so --json still
+// yields nothing parseable on stdout instead of a plausible wrong answer.
+if (!REMOTE && !args.local) {
+  const envFile = path.join(PORTAL, '.env');
+  console.error([
+    '',
+    '  Which portal? This tool will not guess.',
+    '',
+    '  For the LIVE site — sign in at https://busmaps.uk as an admin, copy the',
+    '  cbm_session cookie value (DevTools -> Application -> Cookies), and add',
+    `  two lines to ${envFile} — this tool reads it, and in the portal repo it`,
+    '  is gitignored, so the cookie stays off GitHub:',
+    '',
+    '      BUSMAPS_URL=https://busmaps.uk',
+    '      BUSMAPS_COOKIE=<the cbm_session value>',
+    '',
+    '  Then every run reads the live portal with no flag to remember.',
+    '',
+    '  For the DEV CHECKOUT, say so: node worklist.mjs --local',
+    '',
+  ].join('\n'));
+  process.exit(2);
+}
 
 // The make-bus-leaflet assets dir, wherever the skills tree actually lives.
 function findSkillAssets() {
@@ -458,8 +513,34 @@ if (RUN_GATES && SK) {
   }
 }
 
-items.sort((a, b) => a.rank - b.rank || (b.ageDays || 0) - (a.ageDays || 0) || a.key.localeCompare(b.key));
-const limited = args.limit ? items.slice(0, Number(args.limit)) : items;
+// ---- demo rows -------------------------------------------------------------
+// The seed data (scripts/seed-demo.mjs) names every fake customer "... (demo)",
+// and that suffix is the only thing separating a test row from a real one. It
+// reaches an item three ways depending on which source built it: the portal
+// writes the customer into `why` and sometimes the title, the local refresh
+// rows carry it in `who`. Test all three rather than pick one.
+//
+// ONE ROW THIS CANNOT CLASSIFY, and it is left visible on purpose. The
+// applications queue arrives as a ROLLUP -- "Decide 8 organisation
+// applications" -- and on the dev checkout seven of those eight are seeded
+// "Test <sector>" rows while the eighth, Ramsey Town Council, is real. Neither
+// half carries "(demo)", and hiding the row to be rid of the seven would hide
+// the one. Splitting it is the portal's job, in src/worklist/index.js, since
+// only it knows which application is which. Widening the pattern to /^Test /
+// would also hide a genuine applicant called Testwood Parish Council, which is
+// the wrong way for this to fail.
+const DEMO_RE = /\(demo\)/i;
+for (const it of items) {
+  if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
+}
+const demoAll = items.filter((i) => i.demo);
+const shown = SHOW_DEMO ? items : items.filter((i) => !i.demo);
+
+// Demo rows sort BELOW every real row regardless of rank -- a demo publish
+// review is not "someone is blocked", because nobody is.
+shown.sort((a, b) => (a.demo ? 1 : 0) - (b.demo ? 1 : 0)
+  || a.rank - b.rank || (b.ageDays || 0) - (a.ageDays || 0) || a.key.localeCompare(b.key));
+const limited = args.limit ? shown.slice(0, Number(args.limit)) : shown;
 
 // ---- output ----------------------------------------------------------------
 const meta = {
@@ -467,7 +548,11 @@ const meta = {
   portal: REMOTE ? { mode: 'remote', url: URL_BASE } : { mode: 'local', dir: PORTAL, dataDir: process.env.DATA_DIR || path.join(PORTAL, 'data') },
   buses: BUSES, engine: tree.currentEngine || null,
   upcomingReport: upcoming ? { date: upcoming.date, file: upcoming.file, towns: upcoming.sections.length } : null,
-  counts: { total: items.length, byType: items.reduce((a, i) => ({ ...a, [i.type]: (a[i.type] || 0) + 1 }), {}) },
+  counts: {
+    total: shown.length,
+    demoHidden: SHOW_DEMO ? 0 : demoAll.length,
+    byType: shown.reduce((a, i) => ({ ...a, [i.type]: (a[i.type] || 0) + 1 }), {}),
+  },
   warnings,
 };
 
@@ -477,6 +562,7 @@ if (AS_JSON) {
 }
 
 const BAND = { 0: 'BROKEN', 1: 'SOMEONE IS BLOCKED', 2: 'SOMEONE IS BLOCKED', 3: 'SOMEONE IS BLOCKED', 4: 'YOUR MOVE', 5: 'YOUR MOVE', 6: 'YOUR MOVE', 7: 'YOUR MOVE', 8: 'HOUSEKEEPING', 9: 'WAITING ON OTHERS' };
+const bandOf = (it) => (it.demo ? 'DEMO DATA — nobody is waiting on any of this' : BAND[it.rank]);
 
 // Which portal this run actually looked at is the single easiest thing to
 // misread once a real live site exists alongside the dev checkout — a bare
@@ -487,13 +573,14 @@ console.log(`\n${bannerRule}`);
 console.log(`  ${modeLabel}`);
 console.log(bannerRule);
 console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
-console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${items.length} item(s)\n`);
+console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${shown.length} item(s)\n`);
 for (const w of warnings) console.log(`  ! ${w}`);
 if (warnings.length) console.log('');
+if (!SHOW_DEMO && demoAll.length) console.log(`  (${demoAll.length} demo-customer row${demoAll.length === 1 ? '' : 's'} hidden — --demo to show)\n`);
 
 let band = null, n = 0;
 for (const it of limited) {
-  if (BAND[it.rank] !== band) { band = BAND[it.rank]; console.log(`── ${band} ${'─'.repeat(Math.max(0, 58 - band.length))}`); }
+  if (bandOf(it) !== band) { band = bandOf(it); console.log(`── ${band} ${'─'.repeat(Math.max(0, 58 - band.length))}`); }
   n++;
   const age = it.ageDays == null ? '' : `  [${it.ageDays}d]`;
   console.log(`\n${String(n).padStart(2)}. ${it.title}${age}`);
@@ -504,7 +591,7 @@ for (const it of limited) {
     else console.log(`    → ${d.what}`);
   }
 }
-console.log(`\n${limited.length === items.length ? '' : `(${items.length - limited.length} more) `}Nothing here needs a runbook: run /bus-work and pick a number.\n`);
+console.log(`\n${limited.length === shown.length ? '' : `(${shown.length - limited.length} more) `}Nothing here needs a runbook: run /bus-work and pick a number.\n`);
 
 /*
  * REMOTE PORTAL — the honest state of it.

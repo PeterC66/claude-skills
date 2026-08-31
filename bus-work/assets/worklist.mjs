@@ -18,16 +18,37 @@
  *   node worklist.mjs --local         # the dev checkout instead (opt in)
  *   node worklist.mjs --json          # same items, machine-readable
  *   node worklist.mjs --gates         # + full byte-identical gate run (slow)
- *   node worklist.mjs --url https://busmaps.uk --cookie <cbm_session value>
+ *   node worklist.mjs --url https://busmaps.uk --token <OPERATOR_TOKEN>
  *
  * WHICH PORTAL — it will not guess (2026-08-31). Configure BUSMAPS_URL and
- * BUSMAPS_COOKIE (in the portal's own .env is easiest; this tool loads it) and
+ * BUSMAPS_TOKEN (in the portal's own .env is easiest; this tool loads it) and
  * every run reads the live site. With neither set and no --local, this refuses
  * and prints the two lines to add, rather than quietly opening the dev SQLite.
  * It used to default to the dev checkout, and on 2026-08-31 a session asked for
  * "the worklist", got that checkout, and presented a demo customer's publish
  * review as the top blocked item. The banner said LOCAL — dev checkout the
  * whole time. A header you have to read is not a guard.
+ *
+ * PREFER THE TOKEN, AND THIS IS NOT A STYLE POINT (OA-203, 2026-08-31). A
+ * cbm_session value is a PERSON's live admin session. Only four portal routes
+ * sit behind step-up, so the same string that lets this tool print a list also
+ * approves organisations, invites admins, revokes anybody's sessions and mails
+ * every customer — and it was being kept in a file, indefinitely, renewed by
+ * its own use. The portal's 2026-08-20 security round had explicitly retired
+ * "the standing admin cookie kept in a file on the laptop"; this file put it
+ * back eleven days later, because nothing on either side named the other.
+ * OPERATOR_TOKEN reads the two lists this tool needs and does nothing else
+ * anywhere: GET only, those two routes only, refused everywhere else.
+ *
+ * The cookie is not, incidentally, short-lived — the portal's session window is
+ * seven days and SLIDES on use, so every live run here renewed it by a week.
+ * What kills it is signing out in the browser, which deletes the very row the
+ * copied value names. That is worth knowing before blaming an expiry.
+ *
+ * WHAT NEITHER CREDENTIAL BUYS is the operator half — accepting a staged
+ * refresh, withdrawing a publish request, changing a map's outputs. Those are
+ * writes behind a real session, and publishing is behind a 30-minute step-up
+ * anchored on SIGN-IN, which any stored credential fails by construction.
  *
  * DEMO ROWS are hidden unless --demo, and never share a band with real work.
  * That is the other half of the same fault: the mode was visible and the ROWS
@@ -40,9 +61,10 @@
  *   --buses  DIR   BUSES_DIR        default C:\u3a St Ives\Using AI\Buses
  *   --url    URL   BUSMAPS_URL      set => talk HTTP to a remote portal instead
  *                                   of opening the local SQLite
- *   --cookie TOK   BUSMAPS_COOKIE   the cbm_session cookie value for --url mode
- *                                   (the portal's admin API is cookie-authed;
- *                                   there is no operator token yet)
+ *   --token  TOK   BUSMAPS_TOKEN    the portal's OPERATOR_TOKEN, sent as an
+ *                                   Authorization: Bearer header. PREFER THIS.
+ *   --cookie TOK   BUSMAPS_COOKIE   a cbm_session value instead — the old way,
+ *                                   kept for a portal deployed before OA-203
  *   --local        (none)           read the dev checkout on purpose
  *   --demo         (none)           include rows belonging to demo customers
  *
@@ -110,6 +132,7 @@ if (args.local && args.url) {
 }
 const URL_BASE = args.local ? '' : (args.url || process.env.BUSMAPS_URL || '').replace(/\/$/, '');
 const COOKIE = args.cookie || process.env.BUSMAPS_COOKIE || '';
+const TOKEN = args.token || process.env.BUSMAPS_TOKEN || '';
 const REMOTE = !!URL_BASE;
 const SHOW_DEMO = !!args.demo;
 
@@ -123,15 +146,19 @@ if (!REMOTE && !args.local) {
     '',
     '  Which portal? This tool will not guess.',
     '',
-    '  For the LIVE site — sign in at https://busmaps.uk as an admin, copy the',
-    '  cbm_session cookie value (DevTools -> Application -> Cookies), and add',
-    `  two lines to ${envFile} — this tool reads it, and in the portal repo it`,
-    '  is gitignored, so the cookie stays off GitHub:',
+    '  For the LIVE site — use the portal\'s OPERATOR_TOKEN, which is a READ-ONLY',
+    '  credential for exactly the two lists this tool prints. Add two lines to',
+    `  ${envFile} — this tool reads it, and in the portal repo it is gitignored,`,
+    '  so the token stays off GitHub:',
     '',
     '      BUSMAPS_URL=https://busmaps.uk',
-    '      BUSMAPS_COOKIE=<the cbm_session value>',
+    '      BUSMAPS_TOKEN=<the value of OPERATOR_TOKEN on the host>',
     '',
     '  Then every run reads the live portal with no flag to remember.',
+    '',
+    '  A cbm_session cookie (BUSMAPS_COOKIE) still works for a portal deployed',
+    '  before OA-203. Prefer the token: a session cookie is a PERSON\'s admin',
+    '  login and can do everything an admin can, not just read a list.',
     '',
     '  For the DEV CHECKOUT, say so: node worklist.mjs --local',
     '',
@@ -196,13 +223,28 @@ async function fromLocalPortal() {
 }
 
 async function fromRemotePortal() {
-  if (!COOKIE) {
-    warnings.push('--url given but no --cookie / BUSMAPS_COOKIE — cannot authenticate to the remote portal.');
+  if (!TOKEN && !COOKIE) {
+    warnings.push('--url given but no --token / BUSMAPS_TOKEN (nor a --cookie) — cannot authenticate to the remote portal.');
     return null;
   }
+  // The token goes in a header and NEVER in the query string: Caddy's access log
+  // records the full request URI, so `?token=` writes a live credential in clear
+  // into a file under no retention rule. The portal removed that form on
+  // 2026-08-25 and this has never used it.
+  const auth = TOKEN
+    ? { authorization: `Bearer ${TOKEN}` }
+    : { cookie: `cbm_session=${COOKIE}` };
   const get = async (p) => {
-    const res = await fetch(`${URL_BASE}${p}`, { headers: { cookie: `cbm_session=${COOKIE}` } });
-    if (res.status === 401 || res.status === 403) throw new Error(`${p} -> ${res.status} (session cookie expired, or not an admin account?)`);
+    const res = await fetch(`${URL_BASE}${p}`, { headers: auth });
+    // The two credentials fail for different reasons and sending you to look at
+    // the wrong one costs an evening. A token 401 is nearly always the portal
+    // rather than the value: OPERATOR_TOKEN unset on the host, or a build that
+    // predates OA-203 and has never heard of it.
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(TOKEN
+        ? `${p} -> ${res.status} (is OPERATOR_TOKEN set on that host, does it match BUSMAPS_TOKEN, and is the deployed build newer than OA-203?)`
+        : `${p} -> ${res.status} (session cookie expired — did you sign out in the browser? — or not an admin account?)`);
+    }
     if (res.status === 404 && p.startsWith('/api/admin/worklist')) throw new Error('this portal predates /api/admin/worklist — upgrade it');
     if (!res.ok) throw new Error(`${p} -> ${res.status}`);
     return res.json();

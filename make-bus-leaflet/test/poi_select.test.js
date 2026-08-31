@@ -118,3 +118,95 @@ test('no poi block at all is a valid town, and two of the committed maps are one
   const out = selectPois([[node(52.3, -0.07, { amenity: 'townhall' })]], undefined);
   assert.deepStrictEqual(out, [{ cat: 'townhall', name: 'Town Hall', ll: [52.3, -0.07] }]);
 });
+
+/*
+ * TIERS — the customer's must / may / miss answer (OA-202, 2026-08-31).
+ *
+ * These ARE the safety net, unlike everything above them: not one committed map
+ * carried a `poi.tiers` block on the day the block was written, so the 20-map
+ * byte diff certifies exactly one property of it — that it changes nothing when
+ * absent — and says nothing whatever about what it does when present. The two
+ * that matter most are the ones a passing build cannot show you: a key that
+ * matched nothing did nothing, and a tier attached to a POI that de-duplication
+ * was about to throw away would have been recorded as applied while no sheet
+ * changed. That second one is why applyTiers runs LAST.
+ */
+test('tiers: absent means byte-identical, which is what lets it ship unrolled', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'school', name: 'Ash School' })]];
+  assert.deepStrictEqual(selectPois(els, {}), selectPois(els, { tiers: undefined }));
+});
+
+test('tiers: "miss" drops the POI at SELECTION, so it never reserves a box', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'school', name: 'Ash School' }),
+                node(52.9, -0.9, { amenity: 'school', name: 'Elm School' })]];
+  assert.deepStrictEqual(selectPois(els, { tiers: { 'school:Ash School': 'miss' } }).map(p => p.name),
+    ['Elm School']);
+});
+
+test('tiers: "must" marks the POI and leaves everything else alone', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'community_centre', name: 'The Hive' })]];
+  const out = selectPois(els, { tiers: { 'community:The Hive': 'must' } });
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].tier, 'must');
+  assert.strictEqual(out[0].name, 'The Hive');
+});
+
+test('tiers: "may" is the default and adds no tier field, so an unclassified map is unchanged', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'school', name: 'Ash School' })]];
+  assert.strictEqual(selectPois(els, { tiers: { 'school:Ash School': 'may' } })[0].tier, undefined);
+  assert.strictEqual(selectPois(els, {})[0].tier, undefined);
+});
+
+test('tiers: "as" renames, and the rename REPLACES the identity every override keys on', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'community_centre', name: 'Priory Centre Community Hall' })]];
+  const out = selectPois(els, { tiers: { 'community:Priory Centre Community Hall': { tier: 'must', as: 'Priory Centre' } } });
+  assert.strictEqual(out[0].name, 'Priory Centre');
+  assert.strictEqual(out[0].tier, 'must');
+});
+
+test('tiers: "as" alone renames without promoting, because a shorter name is not a claim about value', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'school', name: 'Ash Hill Primary School' })]];
+  const out = selectPois(els, { tiers: { 'school:Ash Hill Primary School': { as: 'Ash Hill' } } });
+  assert.strictEqual(out[0].name, 'Ash Hill');
+  assert.strictEqual(out[0].tier, undefined);
+});
+
+test('tiers: the key is read AFTER tidy and canon, not against the raw OSM name', () => {
+  const els = [[node(52.3, -0.07, { shop: 'supermarket', name: 'Co-op Food (Market Hill)' })]];
+  const cfg = { canon: [['co-?op', 'Co-op']], tiers: { 'shop:Co-op': 'miss' } };
+  assert.deepStrictEqual(selectPois(els, cfg), [], 'the tidied name is the identity');
+  const raw = { canon: [['co-?op', 'Co-op']], tiers: { 'shop:Co-op Food (Market Hill)': 'miss' } };
+  assert.strictEqual(selectPois(els, raw).length, 1, 'the raw name is not, and must be reported instead');
+});
+
+test('tiers: a key that matched nothing is REPORTED, never silently ignored', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'school', name: 'Ash School' })]];
+  const report = {};
+  selectPois(els, { tiers: { 'school:Ash School': 'must', 'shop:Nowhere': 'miss' } }, report);
+  assert.deepStrictEqual(report.unknownTierKeys, ['shop:Nowhere']);
+  assert.deepStrictEqual(report.tierCounts, { must: 1, may: 0, miss: 1 });
+});
+
+test('tiers run AFTER de-duplication, so a tier cannot attach to the copy being thrown away', () => {
+  // Two spellings of one shop, 20 m apart: dedup keeps the FIRST. Tiering earlier
+  // would have marked the SECOND and reported the key as applied, and no sheet
+  // would have changed. The key here names the survivor, which is the only
+  // identity that can reach a page.
+  const els = [[node(52.3000, -0.0700, { shop: 'supermarket', name: 'Co-op' }),
+                node(52.3001, -0.0700, { shop: 'supermarket', name: 'Co-op Food' })]];
+  assert.strictEqual(selectPois(els, {}).length, 1);
+  const report = {};
+  assert.deepStrictEqual(selectPois(els, { tiers: { 'shop:Co-op Food': 'miss' } }, report).map(p => p.name),
+    ['Co-op'], 'the discarded duplicate is not classifiable, because it is not on the sheet');
+  assert.deepStrictEqual(report.unknownTierKeys, ['shop:Co-op Food']);
+});
+
+test('tiers: a rename that collides is reported, because two POIs cannot share one key', () => {
+  const els = [[node(52.30, -0.07, { amenity: 'school', name: 'Ash Hill Primary' }),
+                node(52.90, -0.90, { amenity: 'school', name: 'Ash Hill Junior' })]];
+  const report = {};
+  const out = selectPois(els, { tiers: { 'school:Ash Hill Primary': { as: 'Ash Hill' },
+                                         'school:Ash Hill Junior': { as: 'Ash Hill' } } }, report);
+  assert.strictEqual(out.length, 2, 'both are still drawn — this reports, it does not repair');
+  assert.deepStrictEqual(report.renameCollisions, ['school:Ash Hill']);
+});

@@ -336,6 +336,37 @@ const MUTATIONS = [
     find: "  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
     to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
 
+  // poi_select.js applyTiers - the must / may / miss classification, added
+  // 2026-08-31 (OA-202). NOT covered by the byte gate in any degree: no
+  // committed map carried a `poi.tiers` block on the day it was written, so the
+  // 20-map diff certifies only that an absent block changes nothing. These five
+  // are the entire cover for what it does when present, and three of them guard
+  // properties whose failure mode is SILENCE rather than a wrong sheet.
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a "miss" is kept instead of dropped, so the answer the customer gave is inverted',
+    find: "    if(r.tier === 'miss') continue;                // never drawn, never reserved",
+    to: "    if(r.tier === 'missing') continue;                // never drawn, never reserved" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a "must" stops being marked, so the tier reaches the placer as an ordinary label',
+    find: "    if(r.tier === 'must') p.tier = 'must';",
+    to: "    if(r.tier === 'MUST') p.tier = 'must';" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a rename is accepted and then not applied, so the customer\'s own name never prints',
+    find: "    if(r.as) p.name = r.as;                        // a rename REPLACES the identity",
+    to: "    if(false) p.name = r.as;                        // a rename REPLACES the identity" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'an unmatched key is reported as matched, so a classification that did nothing looks applied',
+    find: "    report.unknownTierKeys = Object.keys(TIERS).filter(k=>!used.has(k));",
+    to: "    report.unknownTierKeys = [];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a colliding rename is not reported, so two POIs quietly share one override key',
+    find: "    report.renameCollisions = dup;",
+    to: "    report.renameCollisions = [];" },
+
   // strict_guards.js - extracted 2026-08-27 from two copies in gen_internal.js
   // and gen_boarding.js. The byte gate runs with the flag UNSET and no committed
   // map refuses anything, so none of this file is reachable from it; these four

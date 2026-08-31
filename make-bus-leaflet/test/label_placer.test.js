@@ -199,6 +199,33 @@ test('v1 refuses a label that fits NOWHERE on the page, and only under internalR
     'the classic model never had the page test, and keeping it that way is what makes the extraction inert');
 });
 
+/*
+ * mustPlace on v1 (OA-202). The `must` POI tier compiles to `priority: 10,
+ * mustPlace: true`, and v2 has honoured `mustPlace` since it was written. v1 had
+ * no way to express it at all, so the same routes.json would have forced a label
+ * on every sheet in the estate and silently dropped it on any town that selected
+ * `labels.engine: "v1"` — a config key whose meaning depended on which placer the
+ * town happened to have. No map runs v1 today, so the byte gate certifies none of
+ * this and these two assertions are the whole of its cover.
+ */
+test('v1 mustPlace accepts the overlap rather than drop the label', () => {
+  const { api, lines } = make();
+  api.reserve(80, 40, 120, 60);               // the same TEXT block that defeats the plain call
+  assert.strictEqual(api.placeLabel(100, 50, 'Hill'), false, 'the control: without the flag it still gives up');
+  assert.strictEqual(api.placeLabel(100, 50, 'Hill', 2.6, '#222', false, null, null, { mustPlace: true }), true);
+  assert.strictEqual(lines.length, 1, 'exactly one label was drawn, and it is the forced one');
+});
+
+test('v1 mustPlace relaxes the collision rule and NOT the frame', () => {
+  // The same 150-character string that fits nowhere on the page. mustPlace means
+  // "accept a collision", never "print off the sheet" — which is the same thing
+  // it means in v2, where an out-of-bounds candidate is refused whether or not
+  // the hard grid has been relaxed.
+  const { api, lines } = make();
+  assert.strictEqual(api.placeLabel(100, 50, 'x'.repeat(150), 2.6, '#222', false, null, null, { mustPlace: true }), false);
+  assert.deepStrictEqual(lines, []);
+});
+
 // ---- v2: queue, never drop --------------------------------------------------
 
 test('v2 queues the label and returns true even where v1 would have given up', () => {

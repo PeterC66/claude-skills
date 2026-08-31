@@ -37,6 +37,35 @@
  *   D5 congestion   - diagonal of the LARGEST CONNECTED cluster of those cells.
  *      extent (km)    Distinguishes a knot at the bus station (a fisheye lens
  *                     fixes it) from a trunk corridor (a lens cannot).
+ *   P  POIs selected - how many points of interest reach the internal sheet.
+ *                     Added 2026-08-31 (OA-202). The four metrics above are all
+ *                     about ROUTES, and the one variable that separates High
+ *                     Wycombe from every other town on the estate is not a route
+ *                     variable: it selects 171 POIs against St Ives' 34, its
+ *                     three internal sheets carry 150 of the estate's 206
+ *                     dropped labels, 98% of every dropped label anywhere is a
+ *                     POI — and this script scored it GREEN. An instrument that
+ *                     decides whether a town can be drawn at this size must be
+ *                     able to see the thing that is actually breaking the
+ *                     hardest map it has, or the next town is assessed by the
+ *                     same blindness.
+ *
+ *                     Every POI costs page area whether or not it is ever named:
+ *                     poiMark() draws the symbol unconditionally and only the
+ *                     NAME is conditional, so each one reserves a 4.2 x 4.2 mm
+ *                     box and a placer anchor before a single route line exists.
+ *                     P is reported alongside PI, that reservation as a share of
+ *                     the 190 x 155.1 mm map frame — 171 POIs claim about a tenth
+ *                     of the frame as no-go area, on OpenStreetMap's opinion of
+ *                     what matters. PI is a linear function of P because the
+ *                     frame is the same size for every town, which is the point:
+ *                     a big town does not get a bigger sheet.
+ *
+ *                     P is the SELECTED count, before poiSite()'s off-frame and
+ *                     coreBox exclusions, so it is an upper bound on what is
+ *                     drawn. That is the right quantity for a triage gate — the
+ *                     lever the remedy reaches for is fewer INPUTS — but it is
+ *                     not the drawn count and must not be quoted as one.
  *
  * INPUTS (all written by S2; the first is optional with a fallback)
  *   routes_paths.json       road-matched polylines  {routes:{key:{pts:[[lat,lon]..]}}}
@@ -48,7 +77,12 @@
  *   verified-services.json  optional (S1); tripsPerWeek/category drive rung 0
  *   palette.json            optional; reports the real colour-ambiguity ratio
  *   routes.json             optional (S3); honours internalCorridors when it
- *                           exists so a bundled town re-scores correctly
+ *                           exists so a bundled town re-scores correctly, and
+ *                           supplies the `poi` block P is measured under
+ *   osm.json / osm2.json    optional; the POI source. ABSENT MEANS UNKNOWN, and
+ *                           P is reported as `-` and banded on by nothing — a
+ *                           gate that cannot see its subject must say so rather
+ *                           than score a silent zero and call the town GREEN.
  */
 
 'use strict';
@@ -68,9 +102,28 @@ const PALETTE_HUES = 12;             // usable colour-blind-safe hues
 // "any one metric trips it" - deliberately NOT a blended index, because which
 // metric fails determines which remedy to reach for.
 const BANDS = {
-  amber: { R: 12, S: 120, K5: 0.50, D5: 1.6 },
-  red:   { R: 18, S: 200, K5: 0.80, D5: 3.5 }
+  amber: { R: 12, S: 120, K5: 0.50, D5: 1.6, P: 42 },
+  red:   { R: 18, S: 200, K5: 0.80, D5: 3.5, P: 110 }
 };
+
+/*
+ * P's two thresholds, and where they came from (2026-08-31, OA-202).
+ *
+ * Calibrated the same way the four above were — on the estate as built — and
+ * deliberately SITED IN THE GAPS rather than butted against a town, because a
+ * threshold that a real map sits exactly on is a threshold that flips on noise.
+ * The eleven maps carrying an internal sheet select, in order: 171, 64, 52, 51,
+ * 34, 29, 29, 28, 22, 7, 7. Amber at 42 sits between 34 and 51, clear of both by
+ * eight and nine. Red at 110 sits in the 64-to-171 chasm, clear by 46 and 61.
+ *
+ * That puts four maps at AMBER or worse and one at RED, which is the shape a
+ * useful threshold has. A band with exactly one member never has to be right
+ * about a second one, and is usually wrong about the first the moment a second
+ * arrives; a band with four has already been asked the question four times.
+ *
+ * AMBER does not stop a build — it says the POI load is worth a look before the
+ * sheet is drawn and worth a customer conversation before it is delivered.
+ */
 
 // ---------------------------------------------------------------- utilities
 function die(msg) { console.error('complexity_score: ' + msg); process.exit(1); }
@@ -227,6 +280,11 @@ function scorePaths(paths, stopCount) {
   return {
     R: keys.length,
     S: stopCount === null || stopCount === undefined ? null : stopCount,
+    // P does not vary with the route ladder — no rung drops a POI — so it is
+    // attached rather than recomputed, and every rung's `after` carries it. A
+    // rung that reported R and S falling while silently dropping P from view
+    // would let a town look like it had reached GREEN on a metric nobody scored.
+    P: poiLoad,
     K5: round(K5, 2),
     D5: round(D5, 2),
     maxLoad,
@@ -248,6 +306,8 @@ function band(m) {
     if (m.S !== null && m.S > limits.S) f.push('S=' + m.S + ' > ' + limits.S);
     if (m.K5 > limits.K5) f.push('K5=' + m.K5 + ' > ' + limits.K5);
     if (m.D5 > limits.D5) f.push('D5=' + m.D5 + ' > ' + limits.D5);
+    // null is UNKNOWN, never zero — see the header note on absent osm.json.
+    if (m.P !== null && m.P !== undefined && m.P > limits.P) f.push('P=' + m.P + ' > ' + limits.P);
     return f;
   };
   const red = fails(BANDS.red);
@@ -405,6 +465,30 @@ let pathsFile = readJson(dir, 'routes_paths.json', false);
 const cfg = readJson(dir, 'intown_cfg.json', false);
 const palette = readJson(dir, 'palette.json', false);
 const routesJson = readStageJson(dir, 'routes.json', ['S3']);
+
+/*
+ * P — the POI load, measured through the ENGINE'S OWN selection module rather
+ * than by a second implementation of the rules. poi_select.js is what
+ * gen_internal.js runs; a rule re-stated here would drift from it, and the whole
+ * value of this number is that it is the number the sheet will actually carry.
+ * It reads the same osm.json / osm2.json the generator does and the same `poi`
+ * block, including the customer's `tiers` answer, so a town that has classified
+ * its POIs re-scores on what is left rather than on what OSM offered.
+ */
+const FRAME_MM2 = 190 * 155.1;      // the internal sheet's clipPath rect
+const POI_BOX_MM2 = 4.2 * 4.2;      // icon(cat, x, y, 2.1) => a 4.2 mm box
+const poiLoad = (function () {
+  const sets = ['osm.json', 'osm2.json']
+    .filter(f => fs.existsSync(path.join(dir, f)))
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).elements; }
+                catch (e) { return null; } })
+    .filter(Boolean);
+  if (!sets.length) return null;     // unknown, not zero
+  try {
+    const { selectPois } = require('./poi_select.js');
+    return selectPois(sets, (routesJson && routesJson.poi) || {}).length;
+  } catch (e) { return null; }
+})();
 let services = null;
 const vs = readStageJson(dir, 'verified-services.json', ['S1']);
 if (vs && Array.isArray(vs.services)) services = vs.services;
@@ -594,7 +678,7 @@ function pushRung(rung, action, detail, data) {
   ladder.push({
     rung, action, detail,
     data: data || null,
-    after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5 },
+    after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5, P: m.P },
     band: b.band,
     stillFailing: b.failed
   });
@@ -685,13 +769,64 @@ if (intown && !cfgThin && ladder.length && ladder[ladder.length - 1].after.S !==
     detail: 'keep stops served by 2+ drawn lines, plus each line\'s end stops'
           + ' — routes.json "stopThinning": true',
     data: { stopThinning: true },
-    after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5 },
+    after: { R: m.R, S: m.S, K5: m.K5, D5: m.D5, P: m.P },
     band: b.band,
     stillFailing: b.failed
   });
 }
 
-const finalBand = ladder.length ? ladder[ladder.length - 1].band : verdict.band;
+/*
+ * Rung 2c - classify the POI load (OA-202).
+ *
+ * Every rung above it is something we can do to a town on our own: curate the
+ * service list, bundle co-running lines, suppress the core, thin the stops. This
+ * one is not, and that is why it is written as a rung rather than as advice. The
+ * only person who can say which points of interest matter in a town is somebody
+ * who lives there, so what this prints is a QUESTION and a worksheet to ask it
+ * with, not a predicted score. `after` is null on purpose: a modelled saving
+ * here would be this project guessing the answer to the one question it has
+ * decided it cannot answer, and a number in that column would be quoted.
+ *
+ * Offered whenever P is over the amber line, including on a town whose OTHER
+ * metrics are already GREEN — a sheet can be unreadable on POI load alone, which
+ * is the whole finding this metric came from.
+ */
+if (poiLoad !== null && poiLoad > BANDS.amber.P) {
+  const mute = (function () {
+    // POIs that draw a symbol and can never be named: poiMark()'s auto-name set
+    // is the six categories below, so everything else returns an unlabelled
+    // glyph. Not a proposal to drop them — a pharmacy symbol says "pharmacy"
+    // perfectly well without a name — but it IS the sharpest fact to hand a
+    // local, because it is the part of the load that is pure page area.
+    const AUTO = ['shop', 'leisure', 'school', 'park', 'community', 'allotments'];
+    try {
+      const { selectPois } = require('./poi_select.js');
+      const sets = ['osm.json', 'osm2.json']
+        .filter(f => fs.existsSync(path.join(dir, f)))
+        .map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).elements);
+      const sel = selectPois(sets, (routesJson && routesJson.poi) || {});
+      return sel.filter(q => !(AUTO.includes(q.cat) && q.name && q.name !== 'Park')).length;
+    } catch (e) { return null; }
+  })();
+  ladder.push({
+    rung: '2c',
+    action: 'classify the POIs with a local: must / may / miss (routes.json "poi": {"tiers": …})',
+    detail: poiLoad + ' POIs reserve ' + round(100 * poiLoad * POI_BOX_MM2 / FRAME_MM2, 1)
+          + '% of the map frame before a route line is drawn'
+          + (mute === null ? '' : ', and ' + mute + ' of them draw a symbol that is never named')
+          + ' — node poi_worksheet.js prints the list to ask about',
+    data: { poiWorksheet: true, P: poiLoad, mute: mute },
+    after: null,
+    band: 'unknown until a local answers'
+  });
+}
+
+// The last rung that was actually MODELLED. Rung 2c reports a question rather
+// than a score, so reading the band off the end of the ladder would replace a
+// real verdict with a sentence — which is precisely the substitution rung 2c
+// exists to refuse to make.
+const modelled = ladder.filter(l => l.after);
+const finalBand = modelled.length ? modelled[modelled.length - 1].band : verdict.band;
 if (finalBand !== 'GREEN' && metrics.R > PALETTE_HUES && !cfgPal.length) {
   ladder.push({
     rung: 3,
@@ -710,7 +845,11 @@ const out = {
   geometrySource: geomSource,
   geometryApproximate: /straight stop-to-stop/.test(geomSource),
   metrics: {
-    R: metrics.R, S: metrics.S, K5: metrics.K5, D5: metrics.D5,
+    R: metrics.R, S: metrics.S, K5: metrics.K5, D5: metrics.D5, P: metrics.P,
+    // PI - what those symbols reserve, as a share of the map frame. Derived from
+    // P and two constants, so it adds no information; it adds the UNITS the
+    // decision is actually made in, which a bare count does not carry.
+    poiFramePct: metrics.P === null ? null : round(100 * metrics.P * POI_BOX_MM2 / FRAME_MM2, 1),
     // present only when corridorPalette is configured: R is then distinct
     // COLOURS, and this is how many separate lines are actually drawn
     linesDrawn: metrics.linesDrawn !== undefined ? metrics.linesDrawn : undefined,
@@ -770,6 +909,9 @@ if (jsonOnly) {
   console.log('  S  drawn stops        ' + String(m.S === null ? '-' : m.S).padStart(6) + mark(m.S, 'S') + '  green <=' + BANDS.amber.S + '  red >' + BANDS.red.S);
   console.log('  K5 congested km2      ' + String(m.K5).padStart(6) + mark(m.K5, 'K5') + '  green <=' + BANDS.amber.K5 + '  red >' + BANDS.red.K5);
   console.log('  D5 congestion extent  ' + String(m.D5).padStart(6) + mark(m.D5, 'D5') + '  green <=' + BANDS.amber.D5 + '  red >' + BANDS.red.D5);
+  console.log('  P  POIs selected      ' + String(m.P === null ? '-' : m.P).padStart(6) + mark(m.P, 'P') + '  green <=' + BANDS.amber.P + '  red >' + BANDS.red.P +
+              (m.P === null ? '   (no osm.json here - POI load NOT measured, not zero)'
+                            : '   (' + m.poiFramePct + '% of the map frame reserved before any route line)'));
   console.log('');
   console.log('  worst cell carries ' + m.maxRoutesPerCell + ' routes; ' + m.congestedClusters +
               ' congested cluster(s), largest ' + m.largestClusterCells + ' cells');
@@ -795,7 +937,8 @@ if (jsonOnly) {
     for (const l of ladder) {
       const a = l.after
         ? ('R=' + l.after.R + '  S=' + (l.after.S === null ? '-' : l.after.S) +
-           '  K5=' + l.after.K5 + '  D5=' + l.after.D5)
+           '  K5=' + l.after.K5 + '  D5=' + l.after.D5 +
+           '  P=' + (l.after.P === null || l.after.P === undefined ? '-' : l.after.P))
         : '(not modelled)';
       console.log('    rung ' + l.rung + '  ' + l.action);
       console.log('             ' + l.detail);

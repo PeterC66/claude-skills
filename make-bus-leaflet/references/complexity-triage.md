@@ -15,7 +15,7 @@ High Wycombe (2026-07-28) passed every existing gate — S1 verified 46 services
 
 The full analysis, the research behind it and the strategy ladder are in `…\Buses\Development Docs\town-complexity-triage-plan_2026-07-28.md`.
 
-## The four metrics
+## The five metrics
 
 | | Metric | Definition | Why |
 |---|---|---|---|
@@ -23,6 +23,13 @@ The full analysis, the research behind it and the strategy ladder are in `…\Bu
 | **S** | drawn stops | distinct stops in `routes_intown_atco.json` | label load — ticks and names fighting for the same square centimetre |
 | **K5** | congested km² | area of ~111 m cells carrying ≥5 distinct routes | how much of the sheet is illegible |
 | **D5** | congestion extent | diagonal of the **largest connected** cluster of those cells | tells a knot from a trunk — see below |
+| **P** | POIs selected | points of interest reaching the internal sheet, from `poi_select.js` under the town's own `poi` block | page area claimed before a route line exists — added 2026-08-31, see below |
+
+**P was added because the other four are all about ROUTES, and the variable that was actually breaking the estate's hardest map is not a route variable (2026-08-31, OA-202).** High Wycombe selects 171 POIs against St Ives' 34; its three internal sheets carry 150 of the estate's 206 dropped labels; 98% of every dropped label anywhere on the estate is a POI, and 100% of the numbered place index is. This gate scored that town **GREEN**. An instrument that decides whether a town can be drawn at this size has to be able to see the thing that is breaking the hardest map it has, or the next town is assessed by the same blindness.
+
+Every POI costs page area whether or not it is ever named: `poiMark()` draws the symbol unconditionally and only the *name* is conditional, so each one reserves a 4.2 × 4.2 mm box and a placer anchor before anything else is drawn. The reported `poiFramePct` is that reservation against the 190 × 155.1 mm map frame — 171 symbols claim about a tenth of it, on OpenStreetMap's opinion of what matters. It is a linear function of P because **the frame is the same size for every town**, which is the point: a big town does not get a bigger sheet.
+
+**P is the SELECTED count**, taken before `poiSite()`'s off-frame and `coreBox` exclusions, so it is an upper bound on what a sheet draws. That is the right quantity for a triage gate — the lever the remedy reaches for is fewer INPUTS — but it is not the drawn count and must not be quoted as one. **An absent `osm.json` reports `-`, not `0`**, and is banded on by nothing: a gate that cannot see its subject has to say so rather than score a silent zero and call the town green.
 
 **D5 is the one that changes the remedy.** A compact knot (D5 < 1 km) is what a fisheye `lenses[]` was built for. A trunk corridor (D5 > 3 km) cannot be fixed by a lens at any strength — High Wycombe's congestion is a single 77-cell connected network spanning 6.2 km along the Wycombe valley, where 6–19 services share the same tarmac for kilometres.
 
@@ -32,9 +39,11 @@ Any one metric trips the band — deliberately not a blended index, because *whi
 
 | Band | Condition | What to do |
 |---|---|---|
-| **GREEN** | R ≤ 12 · S ≤ 120 · K5 ≤ 0.50 · D5 ≤ 1.6 | build normally |
+| **GREEN** | R ≤ 12 · S ≤ 120 · K5 ≤ 0.50 · D5 ≤ 1.6 · P ≤ 42 | build normally |
 | **AMBER** | any one over the green line | apply the ladder, note it in the S2 commit, **continue without pausing** |
-| **RED** | R > 18 · S > 200 · K5 > 0.80 · D5 > 3.5 | **stop.** Choose a strategy before building |
+| **RED** | R > 18 · S > 200 · K5 > 0.80 · D5 > 3.5 · P > 110 | **stop.** Choose a strategy before building |
+
+**P's two thresholds are sited in the GAPS between real maps, not butted against one.** The eleven maps carrying an internal sheet select, in order: 171, 64, 52, 51, 34, 29, 29, 28, 22, 7, 7. Amber at 42 sits between 34 and 51, clear of both by eight and nine; red at 110 sits in the 64-to-171 chasm, clear by 46 and 61. A threshold a real map sits exactly on is one that flips on noise. That puts **four maps at amber or worse and one at red**, which is the shape a useful threshold has — a band with exactly one member has never had to be right about a second, and is usually wrong about the first the moment a second arrives.
 
 **Only RED pauses.** If AMBER ever starts interrupting an ordinary town the gate will be ignored, which defeats it — the skill's "work autonomously, do not interview the user" rule still holds.
 
@@ -51,6 +60,21 @@ Any one metric trips the band — deliberately not a blended index, because *whi
 | High Wycombe v1.0 | 31 | 320 | 1.21 | 6.18 | **RED** (all four) |
 | **High Wycombe v2.1** (ladder applied) | **11** | **91** | **0** | **0** | **GREEN** |
 
+### What P changed, measured 2026-08-31 on every committed map
+
+| Town | P | frame % | Band before P | Band with P |
+|---|---|---|---|---|
+| High Wycombe | 171 | 10.2% | GREEN | **RED** (P) |
+| Huntingdon | 64 | 3.8% | GREEN | **AMBER** (P) |
+| Wisbech | 52 | 3.1% | RED (D5) | RED (D5, P) |
+| St Neots | 51 | 3.1% | GREEN | **AMBER** (P) |
+| St Ives | 34 | 2.0% | GREEN | GREEN |
+| Beaconsfield | 29 | 1.7% | AMBER (K5) | AMBER (K5) |
+| Ramsey | 29 | 1.7% | GREEN | GREEN |
+| March | 22 | 1.3% | GREEN | GREEN |
+
+Three towns changed band and one of them changed to red — which is the falsification this metric needed. A new term that reddened nobody would have proved only that it was inert, and one that reddened everybody would have been muted inside a week.
+
 **The ladder was walked end to end on High Wycombe on 2026-07-28** (rungs 0 → 1 → 2 → 2b → 3, all config) and the town came out **GREEN**, inside the envelope of the six accepted towns. Measured at each rung on the real geometry: rung 0 (drop the 9 sub-cliff services) 31→22 lines; rung 1 (three confirmed families) →14 lanes; rung 2 (600 m core box) K5/D5 →0; rung 2b →91 stops; rung 3 (11 corridor hues) R→11. **No split, no decline** — §1.3's prediction held. What it cost: three `gen_internal.js` fixes the rungs exposed (`coreBox.minRun`, the terminus-row frame clamp, `internalTitleColor`) and about two hours of config, most of it the palette re-assignment, exactly as P3 predicted.
 
 Beaconsfield reading amber is a **true positive**, not a mis-set threshold: its A40/Pyebush corridor is genuinely its most cluttered feature and it already carries a hand-added fisheye lens. Amber means "apply a remedy", which is what happened. The gate suggests bundling 104/105, which takes it green.
@@ -58,6 +82,16 @@ Beaconsfield reading amber is a **true positive**, not a mis-set threshold: its 
 **Re-calibrate as towns are added.** Each town's `complexity.json` makes that a data exercise.
 
 ## The remedy ladder
+
+**Rung 2c is not like the others, and that is deliberate.** Rungs 0, 1, 2 and 2b are all things this project can do to a town on its own — curate the service list, bundle co-running lines, suppress the core, thin the stops — so each one is re-scored on the real geometry and prints a predicted band. Rung 2c is *ask somebody who lives there which points of interest matter*, and its `after` is **null on purpose**: a modelled saving there would be this project guessing the answer to the one question it has decided it cannot answer, and a number in that column would be quoted. `finalBand` is therefore read off the last rung that was actually modelled, never off the end of the ladder.
+
+Rung 2c prints the command that produces the worksheet to ask with. Run it from the engine's own assets folder (`C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`); `--map` names a folder under the buses-data checkout and is not a placeholder:
+
+```bash
+node poi_worksheet.js --map "Areas/High Wycombe"
+```
+
+The answer comes back as `routes.json`'s `poi.tiers` — see [s3-config.md](s3-config.md). A `miss` there is the only lever that reduces P, and it is the only lever that reaches OA-089's 148 unnameable symbols at all: no placer change does, which is that row's own argument.
 
 Cheapest first. The script models rungs 0–2b on the real geometry and prints the predicted score for each; take them in order and stop at the first GREEN.
 

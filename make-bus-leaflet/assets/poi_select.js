@@ -26,8 +26,42 @@
  *                   then whole-name canonicalisation.
  *   6. de-duplicate by category plus either an identical name or a point within
  *      60 m, which is what collapses the same shop mapped as node and building.
+ *   7. tiers      — the customer's must / may / miss answer, plus rename.
  * Tidying runs BEFORE de-duplication on purpose: two spellings of one name are
  * only duplicates once they have been tidied to the same string.
+ *
+ * TIERS — must / may / miss, and why they sit HERE (OA-202, 2026-08-31).
+ * `poi.tiers` is an object keyed on the POI's identity, `"<cat>:<name>"`, the
+ * same key `internal.pois` overrides use. Each value is either the bare string
+ * `"must"` / `"may"` / `"miss"`, or `{ "tier": "...", "as": "display name" }`.
+ *
+ *   miss  dropped RIGHT HERE, at selection. That timing is the whole saving and
+ *         it is not interchangeable with the portal's render-time `hide`: a
+ *         symbol dropped at selection never reserves its 4.2 x 4.2 mm box, never
+ *         becomes a placer anchor, and never appears in ci-reference, the byte
+ *         gate or the quality ledger. A render-time hide leaves all three
+ *         describing a sheet nobody sees.
+ *   must  kept, and marked `tier:'must'` for the caller. gen_internal.js turns
+ *         that into `priority: 10, mustPlace: true` and prints the name whatever
+ *         its category. It is a strong preference, NOT a veto — the placer can
+ *         still fail to seat it, which is why gen_internal.js names any `must`
+ *         it dropped rather than letting the answer fail in silence.
+ *   may   today's behaviour exactly. The default for every POI nobody has
+ *         classified, which is what keeps this block byte-neutral when absent.
+ *
+ * KEYS ARE READ AFTER TIDYING AND AFTER DE-DUPLICATION — they are the identities
+ * that actually reach the page, and the ones the worksheet asks about — and a
+ * rename REPLACES the identity. `"as"` sets `p.name`, so from that point on the
+ * POI's key, for `internal.pois`, for `unplaced.json`, for `indexed.json` and
+ * for the byte gate, is the NEW name. One rule applied everywhere, rather than a
+ * display string that drifts from the thing it names. See applyTiers() for why
+ * the order is not negotiable, and for the collision a rename can still cause.
+ *
+ * A KEY THAT MATCHES NOTHING IS REPORTED, never ignored. Pass the optional third
+ * argument and `report.unknownTierKeys` lists every key that named no selected
+ * POI — a misremembered name, or one the tidy rules have already rewritten. A
+ * classification nobody has ever seen take effect is worse than no
+ * classification at all, because the customer believes it was applied.
  */
 'use strict';
 
@@ -58,7 +92,7 @@ function classify(t, poiCfg) {
 /** Two points closer than 60 m are the same place mapped twice. */
 const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;
 
-function selectPois(elementSets, poiCfg) {
+function selectPois(elementSets, poiCfg, report) {
   const POI = poiCfg || {};
   let pois=[];
   for(const elements of elementSets){
@@ -95,7 +129,58 @@ function selectPois(elementSets, poiCfg) {
     for(const q of dedup){ if(q.cat===p.cat && (q.name===p.name || near(q.ll,p.ll))){ continue outer; } }
     dedup.push(p);
   }
-  return dedup;
+  return applyTiers(dedup, POI, report);
 }
 
-module.exports = { classify, selectPois, near };
+/*
+ * tiers — the customer's must / may / miss answer, applied LAST.
+ *
+ * AFTER de-duplication, not before, and that ordering is the whole reason this
+ * is a function rather than three lines in the filter chain. De-duplication
+ * keeps the FIRST of a colliding pair: a tier applied earlier could be attached
+ * to the copy that is about to be thrown away, and the key would then be
+ * recorded as APPLIED while nothing on the sheet had changed. Running here means
+ * the keys this reads are exactly the identities that reach the page, which is
+ * also exactly what the worksheet asks the customer about.
+ *
+ * A `miss` is no more expensive here than it would have been earlier — nothing
+ * outside this module has seen the list yet, so a POI dropped on this line never
+ * reserves its box, never becomes an anchor and never reaches ci-reference.
+ */
+function applyTiers(pois, POI, report){
+  const TIERS = POI.tiers || null;
+  if(!TIERS) return pois;
+  const rule = v => (typeof v === 'string' ? { tier: v, as: null }
+                                           : { tier: (v && v.tier) || 'may', as: (v && v.as) || null });
+  const used = new Set();
+  const kept = [];
+  for(const p of pois){
+    const k = p.cat+':'+p.name;
+    if(!(k in TIERS)){ kept.push(p); continue; }
+    used.add(k);
+    const r = rule(TIERS[k]);
+    if(r.tier === 'miss') continue;                // never drawn, never reserved
+    if(r.as) p.name = r.as;                        // a rename REPLACES the identity
+    if(r.tier === 'must') p.tier = 'must';
+    kept.push(p);
+  }
+  if(report){
+    // A key nobody matched is the failure this whole block exists to avoid: the
+    // customer believes their answer was applied and no sheet ever changed.
+    report.unknownTierKeys = Object.keys(TIERS).filter(k=>!used.has(k));
+    // A rename can only collide AFTER the fact, because de-duplication has
+    // already run on the old names. Two POIs sharing one key share an override
+    // key and a placer anchor id, so say so rather than drawing them both.
+    const seen = new Set(), dup = [];
+    for(const p of kept){ const k=p.cat+':'+p.name; if(seen.has(k)) dup.push(k); else seen.add(k); }
+    report.renameCollisions = dup;
+    report.tierCounts = { must:0, may:0, miss:0 };
+    for(const k of Object.keys(TIERS)){
+      const t = rule(TIERS[k]).tier;
+      if(report.tierCounts[t] != null) report.tierCounts[t]++;
+    }
+  }
+  return kept;
+}
+
+module.exports = { classify, selectPois, applyTiers, near };

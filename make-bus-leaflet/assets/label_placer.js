@@ -172,6 +172,23 @@ function labelPlacer(deps) {
           if(!overlapsNoIcons(b)){ placed.push(b); chosen=c; break; }
         }
       }
+      /* mustPlace on v1 (OA-202). v2 has honoured `mustPlace` since it was
+       * written; v1 had no way to express it at all, so a POI the customer
+       * classified `must` would have been silently dropped on any sheet running
+       * `labels.engine:"v1"` while the same config forced it on every other
+       * sheet — a tier that meant one thing here and another there. It takes the
+       * first ON-PAGE candidate and accepts the overlap, which is exactly what
+       * `mustPlace` means in v2: relax the collision rule, never the frame.
+       *
+       * No sheet in the estate runs v1 today, so nothing here changes any
+       * committed byte; it is written because the alternative is a config key
+       * whose meaning depends on which placer a town happens to have selected. */
+      if(!chosen && opt && opt.mustPlace){
+        for(const c of cands){ const b=box(c);
+          if(!onPage(b)) continue;
+          placed.push(b); chosen=c; break;
+        }
+      }
     }
     if(!chosen){ return false; }                // give up rather than overlap
     const [lx,ly,anc]=chosen;

@@ -781,9 +781,23 @@ const POI = RJ.poi || {};
 // The rules, the filters and the de-duplication live in poi_select.js. Reading
 // stays here: the module is given elements, in file order, because that order
 // decides which of two duplicates survives.
+const poiReport = {};
 const pois = selectPois(
   ['osm.json','osm2.json'].map(f => JSON.parse(fs.readFileSync(DIR+'/'+f,'utf8')).elements),
-  POI);
+  POI, poiReport);
+/* A `poi.tiers` key that named nothing is the one way the customer's answer can
+ * fail in silence — they classified a place, and no sheet ever changed. Say so at
+ * build time, where whoever wrote the key is standing. */
+if((poiReport.unknownTierKeys||[]).length) process.stderr.write('poi.tiers: '
+  + poiReport.unknownTierKeys.length + ' key' + (poiReport.unknownTierKeys.length>1?'s':'')
+  + ' matched no POI on this sheet and did nothing — '
+  + poiReport.unknownTierKeys.map(k=>'"'+k+'"').join(', ')
+  + '. The key is "<category>:<name>" AFTER poi.tidy and poi.canon have run and after'
+  + ' de-duplication; poi_worksheet.js prints the keys this town actually has.'+GUARD_NL);
+if((poiReport.renameCollisions||[]).length) process.stderr.write('poi.tiers: a rename has'
+  + ' collided — ' + poiReport.renameCollisions.map(k=>'"'+k+'"').join(', ')
+  + ' now names more than one POI, so they share an override key and a placer anchor.'
+  + ' Give one of them a different "as", or classify one of them "miss".'+GUARD_NL);
 
 // ---------- projection: planar -> PCA rotate -> fit ----------
 // WHICH STOPS THE FRAME IS FITTED TO now lives in fit_set.js, with the Ramsey
@@ -937,13 +951,31 @@ function reserveIcons(){
     if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.k); }
   }
 }
+/* The `must` tier (poi.tiers — OA-202, and the key OA-066 had been waiting for).
+ * Three things follow from a customer saying a place matters, and they are one
+ * decision rather than three switches: the name is PRINTED whatever the category
+ * — a pharmacy is not in the auto-name set, and a local who says `must` about one
+ * means the name — it enters at `priority: 10`, so it is seated before the
+ * longest-name-wins heuristic reaches the crowded corners, and it carries
+ * `mustPlace`, which relaxes the hard grid rather than dropping the label to keep
+ * a symbol pristine.
+ *
+ * `mustPlace` IS NOT A VETO. The placer can still seat nothing — a candidate box
+ * outside the frame is refused whether or not the grid is relaxed — so the report
+ * at the foot of this file NAMES any `must` it dropped. A customer's answer that
+ * failed in silence is worse than one we never asked for. */
+const MUST = new Set();
 function poiMark(p){
   const s=poiSite(p); if(!s) return;
   const {k,o,x,y}=s;
   out(gk('poi',k,icon(p.cat,x,y,2.1,ICON_INK,ICON_SET)));
   const auto = ['shop','leisure','school','park','community','allotments'].includes(p.cat) && p.name && p.name!=='Park';
-  const showName = o.force===true || (auto && o.force!==false);
-  if(showName) placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,{id:'poi:'+k});
+  const must = p.tier==='must' && !!p.name;
+  const showName = o.force===true || must || (auto && o.force!==false);
+  if(!showName) return;
+  const opt = {id:'poi:'+k};
+  if(must){ opt.priority=10; opt.mustPlace=true; MUST.add('poi:'+k); }
+  placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,opt);
 }
 
 out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
@@ -3120,6 +3152,20 @@ if(LAB){
     +' of them numbered in the place index, '+still.length+' still unnamed'
     + (still.length ? ' -> unplaced.json (' + still.slice(0,6).map(u=>'"'+u.text+'"').join(', ')
         + (still.length>6?', ...':'') + ')' : '') + '\n');
+  /* A `must` the placer could not seat. Measured against LAB.unplaced() — every
+   * label the placer dropped — and NOT against `still`, because a `must` that
+   * survived only as an index ordinal did not get what the customer asked for
+   * either. mustPlace has no veto, so this warning is the only thing standing
+   * between a classified POI and an answer that failed without saying so. */
+  if(MUST.size){
+    const lost = LAB.unplaced().filter(u=>MUST.has(String(u.id)));
+    if(lost.length) process.stderr.write('poi.tiers: '+lost.length+' of '+MUST.size
+      +' "must" POI'+(lost.length>1?'s were':' was')+' still not placed on this sheet — '
+      + lost.map(u=>'"'+u.text+'"').join(', ')
+      + '. mustPlace relaxes the hard grid; it cannot invent space. Give it an'
+      + ' internal.pois pos/move override, shorten it with a tiers "as", or take'
+      + ' something else off the sheet.'+GUARD_NL);
+  }
 }
 
 // ---- north arrow: the line, the arrowhead and the N (north_arrow.js) --------

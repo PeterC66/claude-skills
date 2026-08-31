@@ -502,3 +502,16 @@ There are **four** states and each needs its own evidence: merged → deployed �
 - **`deliver-map.mjs`'s step-0 S6 gate refuses a map whose verification pre-dates its own data** — and giving every map a new S3 makes that true of every map that had recently PASSED, because those are exactly the ones with no dated deferral. Four were cleared by re-running S6 with a **reused** red-team answer (`redteam_source.js` said REUSE, so nothing was bought); the fifth took a dated deferral. Probe the gate across every map *before* starting: `checkS6()` from `scripts/lib/s6-freshness.mjs` is a read-only call, and a deferral in `scripts/s6-waivers.json` is matched on name and expiry alone.
 - **A place's S6 cannot be re-run from its manifest alone.** `verified-services.json` is not among a place's S1 outputs, so `stage.js pull S1` does not bring it and `verify_report.js` exits 2. Carry it forward from the previous S6 run when the place's S1 has not moved.
 - **`accept-publish --mint` was broken by its own comment.** The mint script is flattened to one line before `node -e`, and a `//` comment block added to it later commented out the rest — every mint died with `Unexpected end of input` over a wall of code. Fixed with a block comment and a guard that refuses to send a script still containing `//`.
+
+## A BODS "days" change may be half the calendar, not a service change
+
+`gtfs_query.py` derives `days`/`daysFlags` from the **`calendar` row's weekday flags**, and folds `calendar_dates` **additions** in only for a service that has *no* `calendar` row (and only under `--asof`). GTFS lets both tables define the answer, so a service filed as Mon–Fri that adds every Saturday and Sunday through `calendar_dates` is reported **Mon-Fri**.
+
+Measured on High Wycombe, 2026-08-31: route **300** (Redline, service `23008`) has a Mon–Fri base for 20260831–20270531 plus **263 additions** covering every weekend of the registration, and the operator runs 25 journeys on Sat 12 Sept and 12 on Sun 13 Sept. Taken at face value, the refresh would have downgraded 130 and 300 from "Daily" to "Mon-Fri" and **the byte gate would have passed it**, because the gate compares the drawing with `ci-reference/`, not with the world. Tracked as OA-204.
+
+**So: a days change on a route you already draw is a disagreement to resolve, never a fact to apply.** Take it to the operator's own timetable before touching `routes.json` — that is what the S1 "operator wins" rule is for, and it is the only thing that settled this one. Two specifics worth keeping:
+
+- **Redline publishes 130/130B/130D/130M/300/300M as ONE interleaved Aylesbury–High Wycombe timetable** (130 via The Red Lion, 300 via The Whip/Parkwood). Do not read either number's days in isolation.
+- **`redgroupbuses.com` is JS-rendered and its date control is a GET form**, so the operator page for any date is `https://www.redgroupbuses.com/services/RLNE/<route>?direction=outbound&date=YYYY-MM-DD` — read it in the browser, not with curl.
+
+And do not settle it by writing your own calendar resolver. Ours disagreed with `gtfs_query.py` for a *third* reason: the `calendar` day columns are stored as the **strings** `'1'`/`'0'`, and `'0'` is truthy in Python, so every service read as running all seven days. Cast with `int()` if you must look, but the operator is the tie-breaker.

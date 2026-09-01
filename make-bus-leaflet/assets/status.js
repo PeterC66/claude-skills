@@ -308,7 +308,24 @@ const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town ===
  * never be quieter than "we looked and it was fine". `gates.yml` fetches that one
  * commit by sha so the check can actually run there.
  */
+/* AND IT MUST NOT LEAK A WORKTREE PER RUN, which the first cut did.
+ *
+ * `git worktree add` REGISTERS the tree in `.git/worktrees/`, and scratch.js
+ * sweeps the directory at exit without telling git — so every board run left a
+ * stale registration behind and `git worktree list` grew by one each time. The
+ * board is run many times a day, by people and by CI. Measured immediately after
+ * the first version: one run, one leaked entry.
+ *
+ * Pruning BEFORE adding clears whatever a crashed or swept run left; removing at
+ * exit clears this one. Both are needed — prune alone leaves today's entry until
+ * tomorrow, and remove alone cannot clean up after a run that was killed. */
 const HELD_BACK_WT = new Map();          // commit -> { dir } | { error }
+const HELD_BACK_MADE = [];
+process.on('exit', () => {
+  for (const d of HELD_BACK_MADE) {
+    try { spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'remove', '--force', d], { stdio: 'ignore' }); } catch (e) {}
+  }
+});
 function heldBackEngineDir(name, engine) {
   const a = allowanceFor(name, engine);
   if (!a) return null;
@@ -317,8 +334,10 @@ function heldBackEngineDir(name, engine) {
   let out;
   try {
     const dir = path.join(scratchDir('held-back-engine-'), 'wt');
+    spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'prune'], { stdio: 'ignore' });
     const r = spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'add', '--quiet', '--detach', dir, a.commit],
       { encoding: 'utf8' });
+    if (r.status === 0) HELD_BACK_MADE.push(dir);
     if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git worktree add failed').trim().split('\n')[0]);
     const assets = path.join(dir, 'make-bus-leaflet', 'assets');
     const mod = path.join(assets, 'engine_version.js');

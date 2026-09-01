@@ -74,6 +74,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import * as conc from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -100,6 +101,12 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const AS_JSON = !!args.json;
 const RUN_GATES = !!args.gates;
+// OA-221 — the concurrency verdict. On by default: the whole point is that
+// Peter should not have to remember to ask for it.
+const SAFE_ONLY = !!args['safe-only'];
+const CONDITIONS_ONLY = !!args.conditions;
+const SHOW_CONDITIONS = !args['no-conditions'];
+const SELF_SESSION = (args.session && args.session !== true) ? String(args.session) : (process.env.BUS_SESSION || '');
 
 const PORTAL = path.resolve(args.portal || process.env.BUSMAPS_PORTAL || 'C:/Claude/community-bus-maps');
 
@@ -140,7 +147,9 @@ const SHOW_DEMO = !!args.demo;
 // file. The exit is 2 rather than 1 so a caller can tell "you did not say which
 // portal" apart from "the run failed", and it prints on stderr so --json still
 // yields nothing parseable on stdout instead of a plausible wrong answer.
-if (!REMOTE && !args.local) {
+// --conditions reads three working trees on this disk and never asks a portal
+// anything, so the which-portal refusal below must not stand in its way.
+if (!REMOTE && !args.local && !CONDITIONS_ONLY) {
   const envFile = path.join(PORTAL, '.env');
   console.error([
     '',
@@ -177,6 +186,51 @@ function findSkillAssets() {
   return cands.find((c) => existsSync(path.join(c, 'gate_lib.js'))) || null;
 }
 const SK = findSkillAssets();
+
+/*
+ * ---- OA-221: what is safe to do RIGHT NOW ---------------------------------
+ *
+ * Three working trees decide it, and the third one is easy to forget: the
+ * ENGINE repository, which is where every generator lives and which is a
+ * different repo from both this data tree and the portal. A build or a gate run
+ * while it is mid-edit measures somebody's work in progress.
+ *
+ * `git -C <assets dir> rev-parse --show-toplevel` finds it rather than a
+ * hard-coded path, because the skills tree is reached through a junction and the
+ * literal path differs depending on which of the two names you came in by.
+ */
+function findEngineRepo() {
+  const explicit = args.engine || process.env.BUS_ENGINE_REPO;
+  if (explicit) return path.resolve(explicit);
+  if (!SK) return null;
+  try {
+    const { execFileSync } = require('node:child_process');
+    const top = execFileSync('git', ['-C', SK, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return top ? path.resolve(top) : null;
+  } catch { return null; }
+}
+const conditions = conc.readConditions({
+  buses: BUSES, portal: PORTAL, engine: findEngineRepo(), selfSession: SELF_SESSION,
+});
+
+// `--conditions` answers "can I do anything at all right now?" without gathering
+// a single queue. It is the cheapest thing in this file and the one to reach for
+// before starting work, so it exits before any portal or map-tree read.
+if (CONDITIONS_ONLY) {
+  if (AS_JSON) { console.log(JSON.stringify({ conditions, standingTools: conc.STANDING_TOOLS.map((t) => ({ ...t, ...conc.assess(t.needs, conditions) })) }, null, 2)); process.exit(0); }
+  console.log('\n\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
+  for (const l of conc.formatConditions(conditions)) console.log(l);
+  console.log('\n\u2500\u2500 WHAT THAT MEANS FOR THE STANDING COMMANDS ' + '\u2500'.repeat(16));
+  for (const t of conc.STANDING_TOOLS) {
+    const { verdict, reasons } = conc.assess(t.needs, conditions);
+    console.log(`\n  ${conc.TAG[verdict].padEnd(16)}${t.what}`);
+    console.log(`  ${''.padEnd(16)}${t.cmd}`);
+    if (t.note) console.log(`  ${''.padEnd(16)}${t.note}`);
+    for (const r of reasons) console.log(`  ${''.padEnd(16)}\u2014 ${r.why}`);
+  }
+  console.log('\n  Run `node worklist.mjs` for the list itself; every row carries the same verdict.\n');
+  process.exit(0);
+}
 
 const warnings = [];
 const items = [];
@@ -695,8 +749,15 @@ const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
 }
+for (const it of items) it.safety = conc.classify(it, conditions);
+
 const demoAll = items.filter((i) => i.demo);
-const shown = SHOW_DEMO ? items : items.filter((i) => !i.demo);
+let shown = SHOW_DEMO ? items : items.filter((i) => !i.demo);
+// --safe-only is STRICT: only rows nothing contends. CHECK FIRST rows are
+// workable and are still hidden by it, because a flag called safe-only that
+// showed a row needing care would be the last flag anybody trusted here.
+const unsafeHidden = SAFE_ONLY ? shown.filter((i) => i.safety.verdict !== conc.SAFE).length : 0;
+if (SAFE_ONLY) shown = shown.filter((i) => i.safety.verdict === conc.SAFE);
 
 // Demo rows sort BELOW every real row regardless of rank -- a demo publish
 // review is not "someone is blocked", because nobody is.
@@ -719,6 +780,11 @@ const meta = {
   // the console, because a caller reading --json must not see a shorter list than a
   // person does with no way to find out why.
   adjudicated,
+  // OA-221. A caller reading --json must be able to see the same verdict a
+  // person does, and the evidence behind it -- otherwise the two disagree and
+  // only one of them gets read.
+  conditions,
+  safeOnly: SAFE_ONLY, unsafeHidden,
   warnings,
 };
 
@@ -740,6 +806,21 @@ console.log(`  ${modeLabel}`);
 console.log(bannerRule);
 console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
 console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${shown.length} item(s)\n`);
+if (SHOW_CONDITIONS) {
+  console.log('\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
+  for (const l of conc.formatConditions(conditions)) console.log(l);
+  const contended = conc.contentions(shown, conditions);
+  if (contended.length) {
+    console.log('');
+    for (const r of contended) {
+      console.log(`  ${conc.TAG[r.verdict].padEnd(16)}${conc.NEED_LABEL[r.need] || r.need}`);
+      console.log(`  ${''.padEnd(16)}${r.why}`);
+    }
+  } else {
+    console.log(`\n  ${conc.TAG[conc.SAFE].padEnd(16)}nothing on this list is contended \u2014 go ahead`);
+  }
+  console.log('');
+}
 for (const w of warnings) console.log(`  ! ${w}`);
 if (adjudicated.length) {
   const scanSaid = upcoming ? upcoming.date : '?';
@@ -759,6 +840,16 @@ for (const it of limited) {
   n++;
   const age = it.ageDays == null ? '' : `  [${it.ageDays}d]`;
   console.log(`\n${String(n).padStart(2)}. ${it.title}${age}`);
+  // The verdict sits directly under the title, above the explanation, because it
+  // is the thing being scanned for. A banner higher up the page is not a guard.
+  if (it.safety) {
+    if (it.safety.verdict === conc.SAFE) {
+      console.log(`    ${conc.TAG[conc.SAFE]} \u2014 it touches no shared working tree`);
+    } else {
+      const names = it.safety.reasons.map((r) => conc.NEED_LABEL[r.need] || r.need).join(', ');
+      console.log(`    ${conc.TAG[it.safety.verdict]} \u2014 ${names} (why, under CONDITIONS above)`);
+    }
+  }
   console.log(`    ${it.why}`);
   for (const d of it.do) {
     if (d.kind === 'shell') console.log(`    $ (in ${d.cwd})\n      ${d.cmd}${d.note ? `   # ${d.note}` : ''}`);
@@ -766,7 +857,10 @@ for (const it of limited) {
     else console.log(`    → ${d.what}`);
   }
 }
-console.log(`\n${limited.length === shown.length ? '' : `(${shown.length - limited.length} more) `}Nothing here needs a runbook: run /bus-work and pick a number.\n`);
+const tally = limited.reduce((a, i) => { a[i.safety.verdict] = (a[i.safety.verdict] || 0) + 1; return a; }, {});
+console.log(`\n${limited.length === shown.length ? '' : `(${shown.length - limited.length} more) `}Nothing here needs a runbook: run /bus-work and pick a number.`);
+console.log(`${tally[conc.SAFE] || 0} safe now \u00b7 ${tally[conc.CHECK] || 0} workable with care \u00b7 ${tally[conc.DELAY] || 0} better to delay${unsafeHidden ? `  (--safe-only hid ${unsafeHidden})` : ''}`);
+console.log(`Conditions and the standing commands: node worklist.mjs --conditions\n`);
 
 /*
  * REMOTE PORTAL — the honest state of it.

@@ -35,6 +35,20 @@ The same list is on the web at **`/app/admin` → To do** (the admin landing tab
 
 Read-only, safe to run at any time, and safe while the dev server is running (the portal DB is WAL). Add `--json` when you need to act on the fields, `--gates` to also run the full byte-identical gate sweep (slow — a minute or two; only worth it after an engine change or before a batch of deliveries).
 
+**Pass `--session <this session's name>` — the name `ListAgents` gives THIS session, `buses-29` rather than `Claude`.** It is the same name a backlog claim is made under, and without it the conditions block cannot tell your own claim from a neighbour's and says so. That is the one flag worth remembering; everything else has a default.
+
+### Is it safe to do this right now? — the concurrency verdict (OA-221, 2026-09-01)
+
+**Peter can run this at any hour and be told, rather than having to work it out.** Printing the list is read-only; *carrying an item through* writes into a working tree several sessions share, sometimes sweeps the whole estate, and sometimes deploys. So every row carries `SAFE NOW`, `CHECK FIRST` or `BETTER TO DELAY`, and a `CONDITIONS` block above the bands states each contended fact **once** — the three working trees (this one, the engine repo, the portal), which open actions other sessions have claimed today, and what that means. The rows then name what is contended instead of repeating the sentence; an early version printed the full reason on all nineteen rows and buried the titles it was meant to help you read.
+
+**Answer "can I do anything at all right now?" without gathering a single queue** with `node "%BW%\worklist.mjs" --conditions` — it reads three working trees on this disk, never asks a portal anything (so it works with no token configured), and classifies the standing commands that are *not* worklist rows: `--gates`, `push-status.mjs`, `rollout.js --apply`, `quality_gate.js --accept`, `npm run deliver`, `npm run deploy`. `--safe-only` filters the list itself, strictly — a `CHECK FIRST` row is workable and is still hidden by it.
+
+**What the three verdicts mean, and why only two things ever earn a delay.** `git status` cannot say *whose* uncommitted files those are — yours and a neighbour's look identical — so a dirty tree is always `CHECK FIRST`, meaning read what is actually there. `BETTER TO DELAY` is reserved for two recorded faults: an estate-wide sweep while `Areas/`, `Places/` or `ci-reference/` has uncommitted files (the `quality_gate.js --accept` case, which has happened), and a deliver or deploy while the portal checkout is off `main` (it is PR-per-change, so a feature branch is its normal state, and `npm run deploy` ships the checked-out commit).
+
+**A decision is never held back, and that is the most useful thing on the list.** A publish review, an organisation application, a map-request decision, a chase, and a drafted reply Peter has to send touch no working tree at all, so nothing happening on this machine can spoil them. When everything else says wait, those are what to offer.
+
+**It is falsified**, from this folder, no placeholders: `node prove-red-concurrency.mjs`. It builds throwaway git repositories to prove the reading is real, drives the rules over synthetic conditions to prove each verdict both appears and clears, and asserts a clean machine says go — which is the control that stops a rule returning `CHECK FIRST` for ever and passing every red case. It found a real fault on the day it was written: the estate-sweep rule was reading a flag stored beside the paths instead of the paths themselves.
+
 Against a **remote** portal, add `--url https://busmaps.uk --token <OPERATOR_TOKEN>` (or set `BUSMAPS_URL` / `BUSMAPS_TOKEN`). See "Remote portals" below — both reading and delivery work against the live site from this laptop (delivery proven end to end across all 13 sample maps on 2026-08-18). What has **no** laptop path is the operator half: accepting a staged refresh, withdrawing a publish request and changing a map’s outputs are HTTP endpoints needing a signed-in admin session, so they are browser work.
 
 **Which portal you are looking at — it will not guess, since 2026-08-31.** `BUSMAPS_URL` and `BUSMAPS_TOKEN` live in `C:\Claude\community-bus-maps\.env`, which `worklist.mjs` loads for itself, so the bare command reads the **live site** and there is no flag to remember. With neither set and no `--local`, the tool prints the two lines to add and exits 2 rather than opening the dev SQLite. The dev checkout is `--local`, which **beats a configured `BUSMAPS_URL`** — otherwise the flag would do nothing on precisely the machine it exists for. `--local --url` together is a refusal, not a precedence rule. Either credential is live: it belongs in that gitignored `.env`, never in a chat message or a command line that lands in shell history.
@@ -57,10 +71,13 @@ Both guards exist because of one run on 2026-08-31: a session asked for "the wor
 
 Present the result to Peter as a short numbered list — title, who's waiting, age. Do not paste the raw output wholesale; it is written for a terminal, and he wants the decision, not the dump. Lead with the bands in order: **BROKEN → SOMEONE IS BLOCKED → YOUR MOVE → HOUSEKEEPING → WAITING ON OTHERS**. **Say which portal it was in the first line of your answer** — "live portal" or "dev checkout" — because he cannot see the banner and every item below it means something different depending on the answer.
 
+**Say the conditions in that same first line**, in his register and in one clause — "nothing else is running, everything below is workable" or "another session has the portal on a branch, so the two delivery rows can wait". Then carry each row's verdict onto the row you present. He cannot see the terminal, so a verdict you leave in the tool's output is a verdict he does not have.
+
 ## Step 2 — Pick one
 
 - If the invocation already names one ("do the St Ives refresh", "build the Waitrose map", "/bus-work 3"), take it and skip the question.
 - Otherwise show the list and ask which — **one message, one question**. Recommend the top item unless something lower is obviously more urgent, and say why in a sentence.
+- **Prefer a `SAFE NOW` row when the top one is `BETTER TO DELAY`**, and say that is why. A held-back row is not dropped from the list and Peter can still choose it — the verdict is advice with its evidence attached, not a lock — but the recommendation should be something he can finish. If he takes a delayed row anyway, do the thing the reason names first: read the uncommitted files, or get the portal checkout back on `main`.
 - If the list is empty, say so plainly and stop. Do not invent work.
 
 ## Step 3 — Do it
@@ -120,6 +137,7 @@ Nothing here is a new source of truth; it is a join over what already exists.
 | each town's `manifest.json` + `routes.json.engine` vs `engine_version.js` | which renders pre-date the current engine, and how stale S6 is |
 | `status.js --json` (only under `--gates`, or as pushed by `push-status.mjs`) | the expensive proof: regenerate everything and diff |
 | `Correspondence/CORR-nnn/` message headers, and each map's `local-decisions.json` | rank 2 a reply owed to a real person, rank 3 **a reply drafted and not sent**, rank 9 a question asked locally and never answered |
+| `git status` / `git branch` in the three repositories, and the `selected:` line of every open action — read by `concurrency.mjs` | not a rank but a VERDICT on every row: what is safe to start right now, what to look at first, and what to leave until a neighbouring session has finished |
 
 **A refresh row you have answered can now be cleared without rebuilding the map (buses-data OA-205).** A `refresh` row is a JOIN against the newest scan report, so until 2026-08-31 nothing could clear one except doing the rebuild it asks for — and on 2026-08-31 all 40 High Wycombe items were worked to a conclusion, none of them needed a rebuild, and the row came back unchanged with the same 40 on it. If you adjudicate a scan and the sheet does not need to change, **record it**, from the `bus-work` assets folder (`C:\u3a St Ives\.claude\skills\bus-work\assets`); `--map` is the map's OWN folder, the one holding `manifest.json`, and `--scan` must name a report that exists under `_gtfs/upcoming/` or the command refuses:
 

@@ -16,6 +16,8 @@ The classifications:
   [ADD?]      a route now serves the town in BODS but isn't in our shipped set
   [RE-EVAL]   a route now serves the town in BODS that we'd previously marked 'does not serve'
   [WITHDRAWN?] a shipped route is gone from BODS (and isn't a community/DRT service) -> verify
+              A variant the town ships in its own right (High Wycombe's 1A, 1B, 32A) is NOT
+              gone just because it folded into its base number -- see fold_gtfs, OA-223.
   [COMMUNITY]  a shipped route is absent from BODS but is community/pre-book (expected; re-check on bustimes)
   [OPERATOR]  operator changed
   [DAYS]      operating days changed (only when both sides parse cleanly)
@@ -65,18 +67,36 @@ def fold_gtfs(services):
     only consulted when a route NUMBER carries more than one shipped service, which
     is the case the union cannot answer: Wisbech's two 46s are Stagecoach East and
     Lynx, and the union of their days describes neither of them. See OA-134.
+
+    `variantFlags` / `variantOps` / `ownFlags` are the same idea one level down, and
+    they exist because `variants` did not (OA-223, 2026-09-01). Folding is right --
+    it is what stops the report proposing 301S as a new service every month -- but a
+    town may SHIP a variant as a displayed service in its own right, with its own
+    palette colour, panel row and line: High Wycombe ships 1A, 1B and 32A that way.
+    For those the fold is the wrong grain twice over. The shipped entry matches no
+    key of the folded dict, so it was reported [WITHDRAWN?] every month while the bus
+    ran; and the base's week is the union of services the town separates, so 32
+    (Mon-Sat) plus 32A (Daily) read as a [DAYS] change on a route that had not
+    changed. `variants` was collected all along and read by nothing.
     """
     base={}
     for s in services:
         key=s["possibleVariantOf"] or s["route"]
         b=base.setdefault(key,{"route":key,"operators":set(),"flags":[0]*7,"variants":set(),
-                              "hasShape":False,"opFlags":{}})
+                              "hasShape":False,"opFlags":{},"ownFlags":[0]*7,
+                              "variantFlags":{},"variantOps":{}})
         b["operators"].add(s["operator"])
         of=b["opFlags"].setdefault(s["operator"],[0]*7)
         for i in range(7):
             b["flags"][i]|=s["daysFlags"][i]
             of[i]|=s["daysFlags"][i]
-        if s["possibleVariantOf"]: b["variants"].add(s["route"])
+        if s["possibleVariantOf"]:
+            b["variants"].add(s["route"])
+            vf=b["variantFlags"].setdefault(s["route"],[0]*7)
+            for i in range(7): vf[i]|=s["daysFlags"][i]
+            b["variantOps"].setdefault(s["route"],set()).add(s["operator"])
+        else:
+            for i in range(7): b["ownFlags"][i]|=s["daysFlags"][i]
         b["hasShape"]=b["hasShape"] or s["hasGtfsShape"]
     return base
 
@@ -97,10 +117,27 @@ def diff_town(db, name, cfg, town_dir):
     if cfg.get("near"): la,lo,km=cfg["near"]; near=(la,lo,km)
     res=gq.query(db, prefixes, near, name)
     gtfs=fold_gtfs(res["services"])
+    # variant route name -> the base it folded into, with its OWN flags and operators.
+    # This is what makes a shipped variant findable at all; see fold_gtfs. OA-223.
+    variant_index={}
+    for _r,_g in gtfs.items():
+        for _v in _g["variants"]:
+            variant_index[_v]=(_r,_g["variantFlags"].get(_v,[0]*7),_g["variantOps"].get(_v,set()))
     changes=[]
     # routes in GTFS now
     for r,g in gtfs.items():
         gdays=set(i for i in range(7) if g["flags"][i])
+        # A variant this town ships separately is checked on its own row below, so it
+        # must not also define the base's week -- otherwise 32 (Mon-Sat) is compared
+        # against 32 union 32A and reads Daily. Narrow only when something is left: a
+        # base that exists ONLY through variants keeps the union. OA-223.
+        unshipped=[v for v in g["variants"] if v not in shipped]
+        if len(unshipped)<len(g["variants"]):
+            f=list(g["ownFlags"])
+            for v in unshipped:
+                vf=g["variantFlags"].get(v,[0]*7)
+                for i in range(7): f[i]|=vf[i]
+            if any(f): gdays=set(i for i in range(7) if f[i])
         if r in shipped:
             rows=shipped[r]
             for sh in rows:
@@ -125,6 +162,10 @@ def diff_town(db, name, cfg, town_dir):
                     changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(gdays_e)}'"))
         elif r in not_serving:
             changes.append(("RE-EVAL", r, f"BODS now shows it serving the town ({fmt(gdays)}); we'd marked it 'does not serve'"))
+        elif g["variants"] and not unshipped and not any(g["ownFlags"]):
+            # The base NUMBER does not run: every service under it is a variant, and the
+            # town ships all of them. Proposing the base as a new route would invent one.
+            pass
         else:
             extra=f" [+ road geometry]" if g["hasShape"] else ""
             changes.append(("ADD?", r, f"new in BODS: {' / '.join(sorted(g['operators']))}, {fmt(gdays)}{extra}"))
@@ -133,6 +174,19 @@ def diff_town(db, name, cfg, town_dir):
         if r not in gtfs:
             for sh in rows:
                 label=ig.service_key(sh)
+                if r in variant_index:
+                    # Present in BODS, folded under its base. Check it on its OWN flags
+                    # and operators -- the fold's union describes the family, not this
+                    # service. OA-223.
+                    _base,vflags,vops=variant_index[r]
+                    shop=sh.get("operator") or ""
+                    matched=[o for o in vops if o in shop or shop in o]
+                    if not matched:
+                        changes.append(("OPERATOR", label, f"shipped '{sh.get('operator')}' vs BODS '{' / '.join(sorted(vops))}'"))
+                    sd=parse_days(sh.get("days")); vd=set(i for i in range(7) if vflags[i])
+                    if sd is not None and sd!=vd:
+                        changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(vd)}'"))
+                    continue
                 if is_community(sh.get("operator"), sh.get("source")):
                     changes.append(("COMMUNITY", label, f"absent from BODS as expected ({sh.get('operator')}); re-check on bustimes"))
                 else:

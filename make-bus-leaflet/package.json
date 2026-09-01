@@ -19,6 +19,7 @@
     "test:prove-red-stage-run-dir": "node tools/prove-red-stage-run-dir.js",
     "test:prove-red-route-collision": "python tools/prove-red-route-collision.py",
     "test:prove-red-days-resolution": "python tools/prove-red-days-resolution.py",
+    "test:prove-red-variant-fold": "python tools/prove-red-variant-fold.py",
     "test:prove-s6": "node tools/prove-s6-checks.js",
     "test:prove-red-design-keys": "node tools/prove-red-design-keys.js",
     "test:prove-red-attribution": "node tools/prove-red-attribution.js",

@@ -2,6 +2,8 @@
 
 `%TSK%` = town skill assets (shared engine). `%PSK%` = this skill's assets. Worked example folder: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra\` (v1.0).
 
+**Every block below runs in ONE shell session, started from the buses-data repository root (`C:\u3a St Ives\Using AI\Buses`).** The first block assigns `$PSK` and `$TSK` — the same two paths `%PSK%` and `%TSK%` name in the prose — and `cd`s into the place's parent folder; each block after it continues where the previous one left off, so the `cd`s accumulate and are not repeated. The only other placeholder is the place name itself, which is the map folder's name exactly as `manifest.json` has it.
+
 ```bash
 PSK="C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets"
 TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets"

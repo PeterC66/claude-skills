@@ -273,14 +273,14 @@ Anything else **throws** rather than falling back to auto, because a silent fall
 
 **Numbers are written through unnormalised, on purpose.** `-66` and `294` are the same bearing to a reader and *not* the same to the FPU — `Math.cos(-66°)` and `Math.cos(294°)` differ in the last bits. Normalising them would silently move the drawn coordinates and break byte-identity against the equivalent `internalRoads.rotationDeg`. Verified: a sheet built with `fixedOrientation: -66` is byte-identical to the same sheet built with `internalRoads.rotationDeg: -66`.
 
-**"Keep it the way the published sheet is" is a tool, not a config value.** A generator cannot resolve that at build time without asking the portal over the network, which would make the same `routes.json` produce different artwork depending on what happened to be published that day. Instead `gen_internal.js` **records the angle it used** in `build-meta.json` (written into the S4 run folder whenever `BUILD_META_DIR` is set — `rollout.js` sets it; the portal does not, so the portal's re-render path writes nothing and drops no stray file into a map's data dir), and:
+**"Keep it the way the published sheet is" is a tool, not a config value.** A generator cannot resolve that at build time without asking the portal over the network, which would make the same `routes.json` produce different artwork depending on what happened to be published that day. Instead `gen_internal.js` **records the angle it used** in `build-meta.json` (written into the S4 run folder whenever `BUILD_META_DIR` is set — `rollout.js` sets it; the portal does not, so the portal's re-render path writes nothing and drops no stray file into a map's data dir), and — run from `make-bus-leaflet`, with `--town` naming the map folder exactly as `Areas/` has it and no other placeholder:
 
 ```bash
-node freeze_orientation.js --town "St Neots"           # dry run, prints what it would write
-node freeze_orientation.js --town "St Neots" --apply   # writes design.fixedOrientation
-node freeze_orientation.js --town "March" --north --apply
-node freeze_orientation.js --town "March" --deg 12.5 --apply
-node freeze_orientation.js --town "March" --release --apply   # back to auto
+node assets/freeze_orientation.js --town "St Neots"           # dry run, prints what it would write
+node assets/freeze_orientation.js --town "St Neots" --apply   # writes design.fixedOrientation
+node assets/freeze_orientation.js --town "March" --north --apply
+node assets/freeze_orientation.js --town "March" --deg 12.5 --apply
+node assets/freeze_orientation.js --town "March" --release --apply   # back to auto
 ```
 
 Run from **anywhere**; paths resolve from `--buses`, which defaults to `C:\u3a St Ives\Using AI\Buses` — pass `--buses "<path to the buses-data repo>"` to point it elsewhere. `--town "<Town>"` names a folder under `Areas/`, `--place "<Place>"` one under `Places/`. It reads the newest `build-meta.json` under the map's `S4-generate/` runs and writes that number into `ci-reference/routes.json`, so the config **states the angle out loud** instead of referring to a sheet held somewhere else. It rebuilds nothing: the pin takes effect at the map's next build, which is the point — the current sheets already have that angle.

@@ -91,6 +91,8 @@ Two things the sweep found beside the row it was run for, and both are the kind 
 
 ## Prove the lane-mirror measure can tell the two renders apart
 
+Run from `make-bus-leaflet`, not from this folder, and with no placeholders:
+
 ```bash
 node tools/prove-lane-mirror.js
 ```

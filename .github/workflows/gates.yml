@@ -185,6 +185,89 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-portal-drift
 
+  # THE DOCUMENTS IN THIS REPOSITORY HAD NEVER BEEN CHECKED BY ANYTHING
+  # (buses-data OA-222, 2026-09-01). buses-data's `check-tables.mjs` had been
+  # widened six times -- Documentation/, Development Docs/, open-actions/,
+  # Correspondence/, _archive/ -- and every widening was within that repository.
+  # This repo holds the engine, three bus SKILL.md files and every reference page
+  # beside them: 337 table rows and 32 documents, none of them ever looked at, and
+  # it is the document set a session reads BEFORE doing any work at all. A row
+  # appended past the end of its table sat in `bus-work/SKILL.md` for a day, in
+  # the file documenting the tool that names that failure shape.
+  #
+  # WHY IT RUNS HERE AND NOT IN BUSES-DATA, which is where the checkers live. A
+  # check belongs in the suite that fires when its SUBJECT changes -- the rule
+  # OA-218 settled for the falsification harnesses, applied one repository along.
+  # Run only over there, a glued row committed here would land green here and
+  # redden buses-data's next unrelated run, which is the "rule that reddens the
+  # neighbour" shape this project has already paid for. The checkers are FETCHED
+  # rather than copied: a copy would be a checker owning someone else's rule, and
+  # the docs job in buses-data would drift away from this one silently.
+  #
+  # THE COST OF THE TOKEN IS ACCEPTED, not overlooked. This job cannot be in the
+  # secret-free tier the way `unit` is, because the checker it runs is in a
+  # private repository -- so a CROSS_REPO_PAT2 expiry (22 Nov 2026) takes it down
+  # with `status`. It is split out from `status` anyway, so a portal checkout
+  # failure or a byte-gate red does not hide a documentation finding, and it needs
+  # only ONE of the two repos that job needs.
+  #
+  # IT DID NOT LAND RED, and that was measured rather than hoped for. Pointed at
+  # this tree for the first time, `check-doc-links.mjs` reported 33 findings; 21
+  # were the checker's own -- its five folder-declaration forms were the five
+  # buses-data happens to use -- and the widenings that fixed them are falsified
+  # in `prove-red-doc-links.mjs` in both directions. The remaining 12 were real
+  # and were fixed first: two links that climbed out of this repository and
+  # resolved only on Peter's laptop, a dead same-document anchor, and commands
+  # naming a script by a path that ran from no documented folder.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout claude-skills (the documents under test)
+        uses: actions/checkout@v7
+        with:
+          path: skills
+
+      # Only Documentation/ -- the two checkers and their harnesses. buses-data
+      # carries the whole map estate and none of it is read here.
+      - name: Checkout the checkers from buses-data
+        uses: actions/checkout@v7
+        with:
+          repository: PeterC66/buses-data
+          token: ${{ secrets.CROSS_REPO_PAT2 }}
+          path: buses-data
+          sparse-checkout: Documentation
+
+      # Both checkers are dependency-free ESM reading only node:fs and node:path,
+      # so unlike the byte gates there is nothing to install and no runtime the
+      # product depends on. Pinned to match the `unit` job above rather than
+      # derived from the portal's Dockerfile, which would mean a third checkout.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Falsify both checkers BEFORE trusting either. They are being pointed at a
+      # new corpus, which is exactly when a checker that has quietly stopped
+      # objecting looks identical to a clean tree.
+      - name: Prove the table checker can go red
+        working-directory: buses-data
+        run: node Documentation/prove-red-tables.mjs
+
+      - name: Prove the doc-link checker can go red
+        working-directory: buses-data
+        run: node Documentation/prove-red-doc-links.mjs
+
+      # --tree, not --root: --root is flat by contract (prove-red-tables.mjs
+      # drives it and asserts an exact row count), and this repository nests its
+      # documents two deep and grows a folder whenever a skill is added.
+      - name: Tables are still tables
+        working-directory: buses-data
+        run: node Documentation/check-tables.mjs --tree "$GITHUB_WORKSPACE/skills"
+
+      # --root here, because THIS checker already walks recursively from it.
+      - name: Links, anchors, §n citations and documented commands
+        working-directory: buses-data
+        run: node Documentation/check-doc-links.mjs --root "$GITHUB_WORKSPACE/skills"
+
   status:
     runs-on: ubuntu-latest
     steps:

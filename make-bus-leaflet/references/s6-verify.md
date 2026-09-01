@@ -126,7 +126,7 @@ The blind red team is the most valuable input this stage has and it is **not an 
 
 Peter adjudicated it on 2026-08-22, wrote the evidence into S1's `verified-services.json`, and S6 went on reporting HARD — because there was nowhere to put the answer. **A known-wrong finding that cannot be recorded is the most dangerous kind of red**: it is re-litigated every run, it blocks delivery on a settled question, and the pressure it creates is to waive the town or mute the check, which is how a real finding eventually stops being read.
 
-**The fix is a declaration, not a smarter check** — same reasoning as [`notShown[]`](#a-service-that-is-deliberately-not-drawn-routesjson-notshown-added-2026-08-28-oa-049) above. Add it to `routes.json`:
+**The fix is a declaration, not a smarter check** — same reasoning as [`notShown[]`](#a-service-that-is-deliberately-not-drawn--routesjson-notshown-added-2026-08-28-oa-049) above. Add it to `routes.json`:
 
 ```json
 "redteamRejected": [

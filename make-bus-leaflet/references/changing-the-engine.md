@@ -85,6 +85,14 @@ npm run test:prove-red-status
 
 **Both of those harnesses assert the CAUSE and not just the colour**, and so should anything you add beside them. Four of the attribution harness's five cases would have gone red together if the gate merely threw at startup, and a colour-only harness would have scored all four as catches — a confident green about a gate that had stopped working entirely. Read the red run's JSON, or match the specific sentence, and report a third verdict for *red, wrong cause*. The same trap on the green side is a case whose subject the run never found: a board that never enumerated a place satisfies "this place must not turn the board red" perfectly. Assert what the run must have SEEN.
 
+```bash
+npm run gate:line-endings
+```
+
+**Is any tracked file CRLF or MIXED in THIS working tree?** (OA-174, added 2026-09-01.) `.gitattributes` has said `* text=auto eol=lf` since OA-073, so the index is all LF and every fresh checkout writes LF — but `eol=lf` acts at CHECKOUT, and a file already sitting on disk keeps whatever terminator it was first written with. Four were still here on 2026-09-01 in an otherwise all-LF tree. It costs a session that edits one with a script: a multi-line anchor written `
+` matches NOTHING, and a script that rejoins on `
+` buries its real change in a whole-file diff. `--fix` rewrites them through `assets/line_endings.js`, on the bytes, and **changes no committed byte** — all four came out with the blob hash they went in with. **It is deliberately NOT in CI**, because `actions/checkout` writes that tree by the same rule and every file there is LF by construction: it would be green for ever, which is the shape *a check sited where its subject cannot exist*. **Its first cut was exactly that anyway** — the parser used `attr/\S*\s*	`, which cannot cross the space inside `attr/text=auto eol=lf`, so it matched no line and reported the tree clean. Making a file CRLF on purpose and watching it stay green is the only reason that was found.
+
 **Adding a test:** load the module through `test/_engine.js` (`require('./_engine.js').load('labeller.js')`), never with a direct `require('../assets/…')` — that indirection is what lets the mutation runner point a suite at a broken copy through `ENGINE_DIR`.
 
 **What they cannot reach, and why that matters here.** The five big generators are top-to-bottom scripts that read their inputs and exit at load, so nothing in them can be required. Extracting a helper out of one is not a tidy-up: **21 files are inside `engine_version.js`'s hashed closure** and twenty-seven files in `assets/` are vendored into the portal and compared file-by-file, so it means §4's re-vendor in the same change.

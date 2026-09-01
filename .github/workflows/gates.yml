@@ -365,6 +365,21 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-s6-checks.js --buses "$GITHUB_WORKSPACE/buses-data"
 
+      # WHICH OF THESE BELONGS IN WHICH WORKFLOW (OA-218, 2026-09-01). The rule,
+      # which nothing stated until now: a harness that reads the buses-data map tree
+      # runs in BUSES-DATA's gates.yml, because that is the suite firing when the tree
+      # changes; one that needs only the engine runs here; one that needs both runs in
+      # both. The three below -- sweep, rollout-stamp, unrendered -- read that tree and
+      # ran ONLY here, so a recut fixture or a rolled town could break them and the
+      # suite that fires on exactly those changes was not looking. They now run in both.
+      #
+      # THE TEST THAT SETTLES IT IS NOT A GREP. Reading a script for `--buses` gets it
+      # wrong: prove-red-portal-drift.js passes that flag to a board it points at an
+      # empty tree it built itself, and does not read this estate at all. Run the
+      # harness against an EMPTY buses tree -- if it still passes, it does not read the
+      # repository and does not belong over there. Two of the five OA-218 first named
+      # were wrong, and that is the test that said so.
+      #
       # The sweep asks the one question the byte gate does not: could each map be
       # re-rendered under STRICT_GUARDS=1, which is what every portal render that
       # goes public sets. Its harness was the ONE falsification harness never wired

@@ -179,7 +179,7 @@ const _LABELLER = _dep('labeller.js');
 const { Labeller } = require(_LABELLER);
 const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois } = require(_dep('poi_select.js'));
+const { selectPois, printsName } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { svgPrimitives } = require(_dep('svg_primitives.js'));
@@ -774,7 +774,29 @@ const ORI = RJ.orientationRoute
 const PREFIX = RJ.atcoPrefix || String(ANCHOR).replace(/\d+$/,'');
 // POI rules (filter / tidy / canonicalise). All optional; absent => keep named
 // industrial, no name excludes, generic tidy only.
-const POI = RJ.poi || {};
+//
+// TIERS CAN ALSO ARRIVE FROM THE OVERRIDES LAYER (OA-212, 2026-09-01), as
+// `internal.poiTiers`, and the two are merged per key with the overrides
+// winning. This is what lets the portal's landmark chooser be a live control
+// rather than a form whose answer somebody transcribes: the portal never writes
+// `routes.json` — data flows one way from buses-data into its object store, and
+// every customer edit lives in `overrides.json` behind `safeSubset.js`.
+//
+// It is a SEPARATE key from `internal.pois`, deliberately. That one holds
+// `{hide,pos,move}` — render-time adjustments to a POI that has already been
+// selected — and a tier is not one of those: `miss` acts at selection, before
+// anything reserves a box. Sharing the key would have hidden the distinction
+// that the tier mechanism exists to make.
+//
+// ABSENT, THIS IS THE OLD OBJECT UNTOUCHED, which is what keeps the change
+// byte-inert for every map that has no answer yet — the merge allocates nothing
+// when there is nothing to merge.
+const POI = (function(){
+  const base = RJ.poi || {};
+  const ovt = OV.poiTiers;
+  if(!ovt || typeof ovt !== 'object' || !Object.keys(ovt).length) return base;
+  return Object.assign({}, base, { tiers: Object.assign({}, base.tiers || {}, ovt) });
+})();
 // ===========================================================================
 
 // ---------- classify POIs from raw OSM ----------
@@ -969,7 +991,7 @@ function poiMark(p){
   const s=poiSite(p); if(!s) return;
   const {k,o,x,y}=s;
   out(gk('poi',k,icon(p.cat,x,y,2.1,ICON_INK,ICON_SET)));
-  const auto = ['shop','leisure','school','park','community','allotments'].includes(p.cat) && p.name && p.name!=='Park';
+  const auto = printsName(p);   // the rule lives in poi_select.js — it had two copies
   const must = p.tier==='must' && !!p.name;
   const showName = o.force===true || must || (auto && o.force!==false);
   if(!showName) return;

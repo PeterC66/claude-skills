@@ -89,6 +89,30 @@ function classify(t, poiCfg) {
   return null;
 }
 
+/*
+ * WHICH CATEGORIES PRINT A NAME, in one place (OA-212, 2026-09-01).
+ *
+ * The other categories — pharmacy, GP, library, museum, townhall, industrial —
+ * draw a symbol the Key explains and nothing more. That matters to a customer
+ * far more than it looks: a symbol with no name costs exactly the same 4.2 mm
+ * square as one with a name, so "symbol only" is the sentence that makes a
+ * `miss` an obvious answer rather than a loss.
+ *
+ * IT LIVES HERE BECAUSE IT HAD ALREADY BEEN COPIED. The rule was written out
+ * twice — `gen_internal.js` decides `auto` with it, and `poi_worksheet.js` kept
+ * a hand-typed `AUTO_NAMED` beside it to print *symbol only* in the worksheet.
+ * Two copies of one rule, in two files, with nothing comparing them; the
+ * landmark chooser would have been a third. `park` carries a second clause —
+ * an unnamed green is called "Park" and names nothing — and that clause was in
+ * both copies too.
+ */
+const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];
+
+/** Does this POI's own name get printed beside its symbol, or is it symbol-only? */
+function printsName(p){
+  return AUTO_NAMED_CATS.includes(p.cat) && !!p.name && p.name !== 'Park';
+}
+
 /** Two points closer than 60 m are the same place mapped twice. */
 const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;
 
@@ -149,9 +173,36 @@ function selectPois(elementSets, poiCfg, report) {
  */
 function applyTiers(pois, POI, report){
   const TIERS = POI.tiers || null;
-  if(!TIERS) return pois;
   const rule = v => (typeof v === 'string' ? { tier: v, as: null }
                                            : { tier: (v && v.tier) || 'may', as: (v && v.as) || null });
+
+  /* CANDIDATES — every identity that got this far, whatever its tier, filled
+   * whether or not this town has classified anything.
+   *
+   * A `miss` LEAVES NO TRACE ANYWHERE DOWNSTREAM. That is the point of doing it
+   * here rather than at render time, and it is also the reason a caller that
+   * wants to OFFER the choice cannot read the answer back off the finished
+   * sheet: until 2026-09-01 the portal enumerated a map's POIs by running the
+   * generator and scraping `data-key` out of the SVG, so a POI somebody had
+   * classified `miss` was absent from the list, could not be shown as missed,
+   * and could never be turned back on. One-way controls are how a customer
+   * comes to distrust the whole panel.
+   *
+   * So the list of what COULD be drawn is published here, beside the list of
+   * what will be — same chain, same de-duplication, same tidy rules, no second
+   * code path to drift. It is read before the rename below, because the key a
+   * tier is written against is the identity as it stood BEFORE `as` replaced
+   * it, and a chooser that offered the new name would write a key that matches
+   * nothing. */
+  if(report){
+    report.candidates = pois.map(p => {
+      const k = p.cat + ':' + p.name;
+      const r = (TIERS && (k in TIERS)) ? rule(TIERS[k]) : { tier:'may', as:null };
+      return { key:k, cat:p.cat, name:p.name, ll:p.ll, tier:r.tier, as:r.as, printsName:printsName(p) };
+    });
+  }
+
+  if(!TIERS) return pois;
   const used = new Set();
   const kept = [];
   for(const p of pois){
@@ -183,4 +234,4 @@ function applyTiers(pois, POI, report){
   return kept;
 }
 
-module.exports = { classify, selectPois, applyTiers, near };
+module.exports = { classify, selectPois, applyTiers, near, AUTO_NAMED_CATS, printsName };

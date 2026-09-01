@@ -44,13 +44,16 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { selectPois } = require('./poi_select.js');
+const { selectPois, AUTO_NAMED_CATS, printsName } = require('./poi_select.js');
 
 // poiMark()'s auto-name set. Everything outside it draws a symbol the Key
 // explains and is NEVER named, whatever OpenStreetMap called it — which is the
 // single most useful fact to put in front of a local, because it is the part of
 // the load that is pure page area.
-const AUTO_NAMED = ['shop', 'leisure', 'school', 'park', 'community', 'allotments'];
+//
+// It was typed out again here, beside the identical list in gen_internal.js,
+// with nothing comparing the two. Both now read poi_select.js (OA-212).
+const AUTO_NAMED = AUTO_NAMED_CATS;
 const FRAME_MM2 = 190 * 155.1;     // the internal sheet's clipPath rect
 const POI_BOX_MM2 = 4.2 * 4.2;     // icon(cat, x, y, 2.1) => a 4.2 mm box
 const DEFAULT_BUSES = 'C:/u3a St Ives/Using AI/Buses';
@@ -155,7 +158,7 @@ if (F.all) {
   maps.sort((a, b) => b.pois.length - a.pois.length);
   console.log('POIs  frame%  never-named  dropped  classified   map');
   for (const m of maps) {
-    const mute = m.pois.filter(p => !(AUTO_NAMED.includes(p.cat) && p.name && p.name !== 'Park')).length;
+    const mute = m.pois.filter(p => !printsName(p)).length;
     const cls = Object.keys((m.cfg.poi && m.cfg.poi.tiers) || {}).length;
     console.log(String(m.pois.length).padStart(4)
       + (100 * m.pois.length * POI_BOX_MM2 / FRAME_MM2).toFixed(1).padStart(7) + '%'
@@ -172,7 +175,7 @@ const M = loadMap(mapDir);
 if (!M) { console.error('poi_worksheet: no osm.json under ' + mapDir + ' (looked in ci-reference/ then S2-geometry/)'); process.exit(1); }
 
 const name = path.basename(mapDir);
-const mute = M.pois.filter(p => !(AUTO_NAMED.includes(p.cat) && p.name && p.name !== 'Park'));
+const mute = M.pois.filter(p => !printsName(p));
 const pct = (100 * M.pois.length * POI_BOX_MM2 / FRAME_MM2).toFixed(1);
 const byCat = {};
 for (const p of M.pois) (byCat[p.cat] = byCat[p.cat] || []).push(p);

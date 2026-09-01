@@ -55,6 +55,13 @@ npm run test:prove-red-design-keys
 **Every `design.*` key the engine reads must have a row in the register**, and every row must name a key something still reads — the table under the *design* heading in `references/design-quality.md`. **Add the row in the same commit as the key.** Built 2026-08-28 (OA-142) because the register held **19** rows against **33** keys: six of the missing fourteen were discussed further down the same document, eight appeared nowhere in it, and `design.laneOrientation` had been promoted to a DEFAULT the day before without ever being named there. Nothing could catch it, because **a table with a Default column asserts completeness by construction** — there is no count to disagree with. So the checker prints its two counts even when it passes, and the harness re-counts the population by its own independent walk instead of believing the verdict. It fires in both directions: a key deleted from the engine and left in the document is the same staleness from the other end.
 
 ```bash
+npm run gate:line-ratchet
+npm run test:prove-red-line-ratchet
+```
+
+**The top-to-bottom generators may not GROW without saying so** (2026-09-02, buses-data OA-224 Tier 2.1). `tools/line-ratchet.json` records a line-count CEILING for each of the seven generator scripts plus `status.js` and `verify_report.js`, and the check fails when any file is over its ceiling, naming the file and both numbers. It exists because the 27 August refactor cut `gen_internal.js` from 3,933 lines to 2,550 and wrote the rule that new logic goes in a module (OA-001), and by 1 September the file was 3,293 -- up 29% in five days across thirteen commits, every one a legitimate feature, by sessions that had read the rule. A rule that lives only in prose is a wish. **Growing a generator is allowed; growing it silently is not**: when the new lines genuinely belong in the script, run `npm run gate:line-ratchet -- --accept` and commit the ledger IN THE SAME COMMIT as the growth, saying why in the message -- the same shape as `quality_gate.js --accept`. When they do not, write them as a module, which is what the rule always said. Shrinking a file passes and is reported as room to ratchet down. The count strips `\r` first, so CRLF and LF checkouts agree, and the harness re-counts every file by its own method and requires the checker's printed number to match -- its first run failed on that control, over a regex of its own, which is what a control is for. Neither file is in the engine hash.
+
+```bash
 npm run test:prove-red-route-collision
 ```
 

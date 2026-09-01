@@ -35,6 +35,8 @@
     "gate:dark-paths": "node tools/dark-paths.js",
     "gate:line-endings": "node tools/check-line-endings.js",
     "gate:branch-coverage": "node tools/branch-coverage.js",
+    "gate:line-ratchet": "node tools/line-ratchet.js",
+    "test:prove-red-line-ratchet": "node tools/prove-red-line-ratchet.js",
     "test:prove-red-external-spokes": "python tools/prove-red-external-spokes.py",
     "test:prove-red-via-chain": "node tools/prove-red-via-chain.js"
   },

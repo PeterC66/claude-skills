@@ -412,13 +412,11 @@ export function formatConditions(c) {
   // manufactures exactly the collision it exists to report. Say so rather than
   // let the row be read as a peer.
   const others = c.claims.filter((x) => !x.self);
-  if (others.length && !c.selfSession) {
-    L.push(`  ${'claimed'.padEnd(12)}(no --session given, so this cannot tell your own claim from a neighbour's)`);
-  }
   if (others.length) {
     const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}`;
     L.push(`  ${'claimed'.padEnd(12)}${say(others[0])}`);
     for (const x of others.slice(1)) L.push(`  ${''.padEnd(12)}${say(x)}`);
+    if (!c.selfSession) L.push(`  ${''.padEnd(12)}(one of those may be you — pass --session <this session's name> and it will drop it)`);
   } else {
     L.push(`  ${'claimed'.padEnd(12)}no open action is claimed by another session`);
   }

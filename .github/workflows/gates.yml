@@ -231,38 +231,22 @@ jobs:
         with:
           path: skills
 
-      # THE ENGINE A HELD-BACK TOWN WAS BUILT WITH (OA-214, 2026-09-01).
+      # NO STEP HERE FETCHES THE HELD-BACK ENGINE ANY MORE, AND THAT IS THE FIX
+      # (OA-217, 2026-09-01). status.js gates a held-back town against the engine it
+      # was BUILT with, which means checking that commit out of the skills clone --
+      # and actions/checkout clones one commit deep, so the object is not there. The
+      # first remedy was a step in this file that fetched the shas by name. It was
+      # written into ONE of the two workflows that run this suite, the sentence "CI
+      # is green on it" was true of that one, and the other went red about a sheet
+      # that was perfectly good.
       #
-      # status.js gates a town in ENGINE_STALE_ALLOWED against the engine it was
-      # BUILT with rather than the current one, which means checking that commit
-      # out of this clone. actions/checkout fetches ONE commit, so without this
-      # step the object is simply absent here and the board reports "cannot be
-      # gated" -- red, correctly, but red for a property of the CI machine rather
-      # than of the estate, which is the shape that gets a check muted.
-      #
-      # Only the commits the allowance actually names are fetched, by sha, so this
-      # costs one shallow fetch per live exception -- today, one -- rather than the
-      # whole history. It is deliberately NOT fatal: if the fetch fails the board
-      # still says exactly what it could not do, and that is a better failure than
-      # a workflow that dies before any gate runs.
-      #
-      # THERE ARE TWO COPIES OF THIS STEP AND NOTHING MAKES THEM AGREE. buses-data's
-      # gates.yml runs the same status.js over the same four repositories, on every
-      # push to the DATA. This step went in here on 2026-09-01 and not there, and the
-      # OA-214 retirement's "CI is green on it" was true of this side only -- the next
-      # push over there was red on Wisbech reading `fatal: invalid reference`, for a
-      # property of the runner rather than of the estate. If you change this step,
-      # change buses-data's too. buses-data OA-217 asks for something better than a
-      # comment, and until it lands this comment is the whole mechanism.
-      - name: Fetch the engines any held-back town is gated against
-        run: |
-          shas=$(grep -oE "commit: '[0-9a-f]{40}'" skills/make-bus-leaflet/assets/status.js                  | grep -oE '[0-9a-f]{40}' | sort -u)
-          if [ -z "$shas" ]; then echo "::notice::no held-back engine commits to fetch"; exit 0; fi
-          for sha in $shas; do
-            echo "fetching $sha"
-            git -C skills fetch --depth=1 --no-tags origin "$sha"               || echo "::notice::could not fetch $sha - status.js will report that it cannot gate that town"
-          done
-
+      # Two YAML files in two repositories held a setup requirement belonging to a
+      # function in a third, and nothing made them agree. So the function does it
+      # itself: a missing object is now a fetch and a retry inside status.js, timed
+      # out at 60s, reporting the original error if it cannot recover. On any clone
+      # that already has the commit it never runs. Falsified in prove-red-status.js,
+      # which runs above, against a genuinely one-deep clone -- and the mutation that
+      # removes the retry reproduces this workflow's 2026-09-01 red exactly.
       - name: Checkout buses-data
         uses: actions/checkout@v7
         with:

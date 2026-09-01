@@ -326,6 +326,43 @@ process.on('exit', () => {
     try { spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'remove', '--force', d], { stdio: 'ignore' }); } catch (e) {}
   }
 });
+/* IT FETCHES THE COMMIT ITSELF RATHER THAN ASKING CI TO (OA-217, 2026-09-01).
+ *
+ * A clone made by `actions/checkout` is one commit deep, so a held-back entry
+ * naming anything older is simply not in it and the worktree add says `fatal:
+ * invalid reference`. That is not a hypothetical: it made buses-data's gates
+ * workflow red on 2026-09-01 about a sheet that was perfectly good, while the
+ * same board on the laptop — whose clone has the whole history — said PASS.
+ *
+ * THE FIRST FIX WAS A WORKFLOW STEP, AND THE FIRST FIX WAS IN THE WRONG PLACE.
+ * The step that fetches the named shas was written into claude-skills' gates.yml
+ * and not into buses-data's, and the sentence "CI is green on it" was true of the
+ * one that had it. Two YAML files in two repositories held a setup requirement
+ * belonging to THIS function, and nothing made them agree. The remedy for that is
+ * not a third file comparing the two: it is for the code with the requirement to
+ * satisfy it, which is the same move OA-203 made when it gave the worklist tool a
+ * token of its own instead of documenting where to paste a cookie.
+ *
+ * So a missing object is now a fetch and a retry. On any clone that already has
+ * the commit — every laptop, and CI once the fetch has run — the first worktree
+ * add succeeds and nothing here touches the network at all. TIMED OUT at 60s
+ * because the alternative to a slow answer is no answer: this runs inside a gate
+ * whose job timeout is 25 minutes, and a fetch that hangs would spend all of it
+ * and report nothing. A failure of any kind leaves the ORIGINAL error, because
+ * "the commit is not here" is what the reader has to act on and "and the fetch
+ * did not help" is the footnote. */
+function fetchHeldBackCommit(sha) {
+  const remotes = spawnSync('git', ['-C', SKILLS_ROOT, 'remote'], { encoding: 'utf8' });
+  const first = ((remotes.stdout || '').trim().split('\n')[0] || '').trim();
+  if (remotes.status !== 0 || !first) return 'this clone has no remote to fetch it from';
+  const r = spawnSync('git', ['-C', SKILLS_ROOT, 'fetch', '--depth=1', '--no-tags', first, sha],
+    { encoding: 'utf8', timeout: 60000 });
+  if (r.error && r.error.code === 'ETIMEDOUT') return 'the fetch from ' + first + ' timed out after 60s';
+  if (r.status !== 0) return 'fetching it from ' + first + ' failed: '
+    + ((r.stderr || r.stdout || 'no reason given').trim().split('\n').pop() || '').slice(0, 160);
+  return null;
+}
+
 function heldBackEngineDir(name, engine) {
   const a = allowanceFor(name, engine);
   if (!a) return null;
@@ -335,10 +372,17 @@ function heldBackEngineDir(name, engine) {
   try {
     const dir = path.join(scratchDir('held-back-engine-'), 'wt');
     spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'prune'], { stdio: 'ignore' });
-    const r = spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'add', '--quiet', '--detach', dir, a.commit],
+    const add = () => spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'add', '--quiet', '--detach', dir, a.commit],
       { encoding: 'utf8' });
+    let r = add();
+    if (r.status !== 0) {
+      const why = fetchHeldBackCommit(a.commit);
+      if (!why) r = add();
+      else r.fetchNote = why;
+    }
     if (r.status === 0) HELD_BACK_MADE.push(dir);
-    if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git worktree add failed').trim().split('\n')[0]);
+    if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git worktree add failed').trim().split('\n')[0]
+      + (r.fetchNote ? ' — and ' + r.fetchNote : ''));
     const assets = path.join(dir, 'make-bus-leaflet', 'assets');
     const mod = path.join(assets, 'engine_version.js');
     if (!fs.existsSync(mod)) throw new Error('that commit has no make-bus-leaflet/assets/engine_version.js');

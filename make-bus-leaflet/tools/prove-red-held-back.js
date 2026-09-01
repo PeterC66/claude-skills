@@ -39,6 +39,20 @@
  *   D  held back, allowance names a WRONG one  -> exit 1         (a lying pair is refused)
  *   E  NOT held back, same altered sheet       -> exit 1         (the exception has not widened)
  *   F  held back, live gate already PASSES     -> exit 0         (no `commit` needed)
+ *   G  the commit is NOT IN THE CLONE           -> PASS, exit 0   (it fetches it)
+ *   H  the commit is nowhere to be had          -> exit 1         (and says the fetch failed)
+ *
+ * G AND H ARE ABOUT THE MACHINE, NOT THE ESTATE, AND THEY COST A DAY OF RED
+ * (OA-217, 2026-09-01). Every case above assumes the named commit is in the
+ * clone this runs in, which is true of every laptop and false of every
+ * `actions/checkout`, whose clone is one commit deep. buses-data's gates
+ * workflow went red on a perfectly good Wisbech reading `fatal: invalid
+ * reference` while this file was green on the machine it was written on and in
+ * the OTHER repository's CI, where a setup step happened to fetch the sha. The
+ * setup step is gone: status.js fetches the commit itself now, and G is the only
+ * place that path is ever taken -- on a laptop the first worktree add succeeds
+ * and the fetch never runs, which is the shape of a feature flag left on
+ * everywhere.
  *
  * B IS THE ONE THAT MATTERS AND A AND F ARE WHAT MAKE IT MEAN ANYTHING. A red
  * that is red in every arrangement proves nothing; F in particular guards the
@@ -116,7 +130,11 @@ function engineWith(entries) {
   return f;
 }
 
-function runBoard(statusPath, busesRoot) {
+/* `skillsRepo` — WHICH CLONE IS status.js ALLOWED TO LOOK IN. Defaults to the
+ * real one, which is what every case but G and H wants. Those two are about a
+ * clone that does not hold the commit, and a parameter is the only way to pose
+ * that question without moving the repository this file is running out of. */
+function runBoard(statusPath, busesRoot, skillsRepo = SKILLS_REPO) {
   /* POINT AT A PORTAL THAT IS NOT THERE, ON PURPOSE.
    *
    * Without this the scratch board reads the REAL portal checkout, and every
@@ -133,7 +151,7 @@ function runBoard(statusPath, busesRoot) {
     // assets/ lives in a temp folder that is no git repository, so without it the
     // worktree could never be made and every case would report "cannot look" for
     // a reason having nothing to do with the case.
-    env: Object.assign({}, process.env, { SKILLS_REPO }),
+    env: Object.assign({}, process.env, { SKILLS_REPO: skillsRepo }),
   });
   return { out: (r.stdout || '') + (r.stderr || ''), code: r.status };
 }
@@ -277,6 +295,59 @@ ${out.slice(0, 900)}`);
       else pass('did not ask the second question at all');
     }
   }
+}
+
+/* ---- G: the commit is not in the clone, and it goes and gets it --------- */
+console.log('\nG  held back, the commit is NOT in the clone — it must fetch it');
+{
+  /* A ONE-DEEP CLONE WITH A REMOTE THAT HAS THE REST, which is exactly what
+   * actions/checkout leaves behind and exactly the state buses-data's CI was in.
+   * Cloned over `file://` deliberately: --depth is SILENTLY IGNORED on a plain
+   * local path, so the obvious spelling gives a full clone and a case that proves
+   * nothing. Asserted rather than assumed — if the shallow clone turns out to
+   * hold the commit already, the fetch is never reached and a green here would be
+   * green about nothing. */
+  const shallow = path.join(scratchDir('prove-held-back-shallow-'), 'skills');
+  const url = 'file://' + SKILLS_REPO.replace(/\\/g, '/');
+  const cl = spawnSync('git', ['clone', '--quiet', '--depth', '1', url, shallow], { encoding: 'utf8' });
+  if (cl.status !== 0) {
+    console.log('  ..    could not make a one-deep clone of ' + SKILLS_REPO + ' ('
+      + ((cl.stderr || cl.stdout || '').trim().split('\n')[0]) + ') — skipped, and said so');
+  } else if (spawnSync('git', ['-C', shallow, 'cat-file', '-e', COMMIT + '^{commit}']).status === 0) {
+    fail('the one-deep clone already holds ' + COMMIT.slice(0, 7) + ', so the fetch is never reached. '
+      + '--depth is ignored on a local-path clone; check the file:// URL above still is one.');
+  } else {
+    pass('the clone genuinely does not hold ' + COMMIT.slice(0, 7));
+    const t = tree();
+    const { out, code } = runBoard(engineWith(ALLOW()), t.root, shallow);
+    if (!/PASS \(own engine\)/.test(out)) fail('it did not recover: ' + verdictOf(out)
+      + '\n' + out.slice(0, 900));
+    else pass('PASS (own engine) — it fetched the commit and gated against it');
+    if (code !== 0) fail('exit ' + code + ' — a commit that CAN be fetched must not redden the board');
+    else pass('exit 0');
+  }
+}
+
+/* ---- H: nowhere to be had — red, and it says the fetch was tried -------- */
+console.log('\nH  held back, the commit is nowhere to be had');
+{
+  /* A well-formed sha that is not an object anywhere, in a clone with no remote
+   * to ask. This is the honest end of G: the board must still be red, and it must
+   * distinguish "I could not find it" from "I did not look" — a reader who cannot
+   * tell those apart cannot tell a broken runner from a broken entry. */
+  const bare = path.join(scratchDir('prove-held-back-bare-'), 'skills');
+  fs.mkdirSync(bare, { recursive: true });
+  spawnSync('git', ['-C', bare, 'init', '--quiet'], { encoding: 'utf8' });
+  const sha = 'be5a1e00' + 'd0'.repeat(16);
+  const t = tree();
+  const { out, code } = runBoard(engineWith(ALLOW({ commit: sha })), t.root, bare);
+  if (code === 0) fail('exit 0 — a commit nobody can produce was not a finding');
+  else pass('exit ' + code);
+  if (!/CANNOT BE GATED/.test(out)) fail('the board does not say it could not check');
+  else pass('says it could not be gated');
+  if (!/no remote|fetch/i.test(out)) fail('it never said whether it tried to FETCH the commit, so a bad '
+    + 'runner and a bad entry read identically: ' + verdictOf(out));
+  else pass('says what became of the fetch');
 }
 
 console.log(failures

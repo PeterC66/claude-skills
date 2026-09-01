@@ -348,6 +348,19 @@ jobs:
       - name: Prove the held-back engine gate can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/buses-data"
+      # AND THE SAME EIGHT CASES ON THE FIXTURE THIS FILE BUILDS ITSELF (OA-219).
+      #
+      # Six of those cases need a town whose sheets do not reproduce under the current
+      # engine, and the estate supplies exactly one — Wisbech, held out of an
+      # ink-moving rollout while portal update #139 is with the customer. When that is
+      # answered it will supply none, and the harness falls back to synthesising a
+      # two-commit engine and redrawing a sheet with it. A fallback that first runs on
+      # the day it is needed is the shape this workflow has already paid for twice, so
+      # it runs on every push instead: about 80 seconds, and it is the difference
+      # between a fallback and a promise.
+      - name: Prove it on the fixture the harness builds itself
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/buses-data" --synthetic
 
       - name: Prove the byte gates can go red
         working-directory: skills/make-bus-leaflet

@@ -81,6 +81,8 @@ npm run test:prove-red-status
 
 **The board's VENDORING verdict, falsified against a portal it builds itself** (OA-200, added 2026-08-31). `npm run test:prove-red-portal-drift` writes a synthetic portal repository into the OS temp dir — a manifest, two vendored copies of real skill files, and a `refs/remotes/origin/main` written by hand — and drives the whole board over it, so it needs neither `community-bus-maps` nor `buses-data` and touches neither. Seven cases: the ref in sync, the ref stale, a re-vendor sitting uncommitted in the working tree (`PENDING`), an unlisted `.js` on the ref, an unlisted `.js` on a branch only, a portal with no git at all, and — the row itself — **a stale CHECKOUT while `origin/main` is clean, which must stay green**. It then **falsifies itself**: the two cases whose subject is *which tree was read* are re-run against a copy of `status.js` with OA-200 taken back out, and each must go red naming the row the old reading produced. That last assertion is not decoration — the first cut of it scored both as "goes red" while they were actually reading `MISSING`, because a copy of `assets/` in the temp dir resolves every manifest `source` to a path that does not exist. A harness that accepts any red is not a harness.
 
+**The red-team REUSE decision, falsified against the rule that bought three answers it did not need** (OA-166, added 2026-09-01). `npm run test:prove-red-redteam-fingerprint` puts `redteam_source.js`'s decision back to the pre-2026-09-01 pull-timestamp rule and requires its six guard tests to go red while two CONTROLs hold — an answer whose S1 never moved is still reused, and an answer past the 60-day window is still bought. It reverts by REPLACEMENT rather than by deletion, and syntax-checks the fixture before running it, because a fixture that does not parse reddens the controls too and a run where everything is red distinguishes nothing. Its sibling `test:prove-red-redteam-source` still falsifies the OA-141 ambiguity guard; the two cut different things out of the same file and each names what it cut.
+
 **Both of those harnesses assert the CAUSE and not just the colour**, and so should anything you add beside them. Four of the attribution harness's five cases would have gone red together if the gate merely threw at startup, and a colour-only harness would have scored all four as catches — a confident green about a gate that had stopped working entirely. Read the red run's JSON, or match the specific sentence, and report a third verdict for *red, wrong cause*. The same trap on the green side is a case whose subject the run never found: a board that never enumerated a place satisfies "this place must not turn the board red" perfectly. Assert what the run must have SEEN.
 
 **Adding a test:** load the module through `test/_engine.js` (`require('./_engine.js').load('labeller.js')`), never with a direct `require('../assets/…')` — that indirection is what lets the mutation runner point a suite at a broken copy through `ENGINE_DIR`.
@@ -352,21 +354,27 @@ node scripts/check-vendored.mjs --update
 
 ### AND RE-CUT BOTH COMMITTED FIXTURES, IN THE SAME BREATH (OA-182)
 
-**There are two, they are refreshed by two different mechanisms, and nothing pairs them.** Re-vendoring makes the portal run the new code; the fixtures are what its byte gates compare against, and a fixture frozen alongside the change passes its own gate **by construction** — the old engine reproduces the old sheet perfectly and `verify` reports PASS about code that has not shipped. The area one was forgotten twice in three days: once caught by somebody reading an unrelated backlog row, once by a portal PR's `verify` job going red.
+**There are two, and since 2026-09-01 both are a script.** Re-vendoring makes the portal run the new code; the fixtures are what its byte gates compare against, and a fixture frozen alongside the change passes its own gate **by construction** — the old engine reproduces the old sheet perfectly and `verify` reports PASS about code that has not shipped. The area one was forgotten twice in three days: once caught by somebody reading an unrelated backlog row, once by a portal PR's `verify` job going red.
 
-Run both from the portal root (`C:\Claude\community-bus-maps`) unless stated; neither takes a placeholder except the render folder named in the second, which is the versioned S5 directory the rollout just wrote (`ls "Areas/St Ives/S5-render"`, newest last):
+Run these two, in either order, and run BOTH. Neither takes a placeholder. The first is run from the portal root (`C:\Claude\community-bus-maps`); the second can be run from anywhere, because every path it needs is derived — and it asks the town's MANIFEST which S5 run is latest rather than a directory listing, which the recipe it replaces did not: a string sort puts `v1.9_2026-08-18` after `v1.23_2026-08-30` one character in, and that is the bug `status.js`'s own freshness check shipped with. Add `--check` to either to see what would change without writing; the area one exits 1 when the fixture is behind, the same verdict the board gives.
 
 ```bash
 node scripts/refresh-place-fixture.mjs "C:/u3a St Ives/Using AI/Buses/Places/_portal-fixture/High Wycombe Aldi" --apply
 ```
 
-The AREA one has no script yet — its recipe is in [`Areas/_portal-fixture/README.md`](../../../Using%20AI/Buses/Areas/_portal-fixture/README.md) in `buses-data` and is run from **that** repository's root. Then verify both with `FIXTURE_DIR` deliberately unset, so you are gating the committed fixtures and not whatever your `.env` points at:
+**`refresh_area_fixture.js` replaced a shell recipe in a README (OA-182).** A recipe is a thing you have to remember to run, which is a different category of guarantee from a thing you can run — and it was forgotten three times in three days, once caught only by portal PR #162's own `verify` job going red. The script was measured against the artefact rather than against "it ran": pointed at a scratch copy of the tree it reproduces the committed fixture **byte-for-byte**, it names a changed file, it removes a file the run no longer writes, and it excludes the same three things the README always did — the JPGs (rasterisation is platform-dependent by design, which is what `render-parity.yml` is for), `svc_*.html` and `build-warnings.txt`.
+
+```bash
+node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_area_fixture.js" --apply
+```
+
+Then verify both with `FIXTURE_DIR` deliberately unset, so you are gating the committed fixtures and not whatever your `.env` points at:
 
 ```bash
 BUSES_DIR="C:/u3a St Ives/Using AI/Buses" FIXTURE_DIR= npm run verify:area
 ```
 
-**`status.js` now tells you when the area one has gone stale** and exits non-zero on it, so the board you already run before re-vendoring is the reminder. It is a laptop check by construction — `S5-render/` is gitignored, so a fresh CI checkout has no render to compare with — and CI answers the complementary question once the PR is open.
+**`status.js` also tells you when the area one has gone stale** and exits non-zero on it, so the board you already run before re-vendoring is the reminder. It and `refresh_area_fixture.js` ask the same two questions the same way — `latestRunDir()` for which run, `sameIgnoringLineEndings()` for whether it matches — so the tool that WRITES the fixture and the check that JUDGES it cannot disagree about what current means. It is a laptop check by construction — `S5-render/` is gitignored, so a fresh CI checkout has no render to compare with — and CI answers the complementary question once the PR is open.
 
 **And push `buses-data` BEFORE opening the portal PR.** The fixtures live there, and the portal's `verify.yml` checks that repository out with no `ref:`, so the PR's engine is gated against whatever is on its `main` at that moment.
 

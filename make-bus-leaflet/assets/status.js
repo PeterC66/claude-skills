@@ -31,6 +31,30 @@ const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, late
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
+const { spawnSync } = require('child_process');
+const { scratchDir } = require('./scratch');
+/* THE SKILLS REPOSITORY, which OA-214 checks a held-back town's engine out of.
+ *
+ * Normally `assets/`'s grandparent — `SK` is `…/make-bus-leaflet/assets`. But it
+ * is found by WALKING UP FOR A `.git` rather than by counting two levels, and it
+ * takes an env override, for two reasons that are the same reason: this file is
+ * routinely run from somewhere that is not the repository. `tools/prove-red*.js`
+ * copy `assets/` into a scratch directory and run THAT copy, where the grandparent
+ * is a temp folder and no worktree can be made from it; the portal vendors these
+ * files into `engine/`, which is a different repo entirely. Guessing a path that
+ * happens to be right on one machine is how a check ends up reporting "cannot
+ * look" for a reason having nothing to do with its subject. */
+const SKILLS_ROOT = (() => {
+  if (process.env.SKILLS_REPO) return path.resolve(process.env.SKILLS_REPO);
+  let d = SK;
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(d, '.git'))) return d;
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  return path.resolve(SK, '..', '..');
+})();
 
 const CURRENT_ENGINE = computeEngineVersion();
 // A place map is drawn by two generators the town closure does not reach, so it
@@ -150,6 +174,163 @@ function judgeNoSheet(rec, basename) {
 }
 
 // ---- gate a single town -----------------------------------------------------
+// MOVED HERE 2026-09-01 (OA-214). This block used to sit beside the `bad`
+// computation, three hundred lines below, which was fine while it only excused a
+// STAMP. It now decides which ENGINE a town's sheets are gated against, so it has
+// to be initialised before gateTown() runs — a `const` referenced above its own
+// declaration is a TDZ throw, not a warning. The reasoning is unchanged and moves
+// with the data, because splitting the two is how an exception loses its why.
+
+// ---- engine staleness: which STALE stamps gate, and which one does not ------
+//
+// OA-151. `row.engineCurrent` has been computed since the hash existed, printed
+// in the Engine column, and then dropped on the floor: it was in neither `bad`
+// below nor the JSON verdict. That is the same "verdict computed and discarded"
+// shape as the twelve schematic/diagram sheet-gates folded in on 2026-08-27, one
+// rung further along — because until 2026-08-28 a Linux checkout computed a
+// DIFFERENT engine hash from the laptop that stamped the maps, so every town
+// printed `f83987f11b STALE` in CI while CI exited 0. The verdict was discarded
+// AND the value it was computed from had been invented by the checkout.
+//
+// WHY THERE IS AN EXCEPTION, AND WHY IT IS THIS NARROW. Folding this in
+// unconditionally turns the board red for Ramsey on its first run, and a gate
+// that is red on day one is a gate that gets muted — this project has paid for
+// that more than once, and it is why the quality TARGETS are still reported
+// rather than gated a few lines above. Ramsey is genuinely built from older code
+// rather than carrying a line-ending artefact, it is the only record that any map
+// was, and whether it stays a town at all is an open question (OA-072) — so
+// rebuilding it to clear the gate would be work on a map that may not survive.
+//
+// The exception is keyed to the TOWN AND THE EXACT HASH, so it expires by itself:
+// rebuild Ramsey on any engine and the pair stops matching, the exception stops
+// applying, and the row gates like every other. It cannot silently widen into
+// "Ramsey is never checked".
+// Empty on purpose. The one entry this ever held — Ramsey at d8eb6961c7, excused
+// because OA-072 asked whether Ramsey stayed a town at all — expired twice over on
+// 2026-08-28: OA-072 was answered "keep it", and Ramsey was then rebuilt from S1 as
+// v2.0 on the current engine. The board itself reported the exception as no longer
+// applying, which is the behaviour to preserve: an entry here must name the town,
+// the exact engine hash it excuses and why, so it stops excusing anything the
+// moment that town is rebuilt.
+//
+// 2026-08-31 — one entry, and what it excuses is a CUSTOMER'S INBOX rather than
+// a map. OA-202/OA-066 moved the template hash to 622ff644d4 and seven of the
+// eight towns were rolled onto it the same hour. Wisbech was not, because
+// buses-68 had delivered it as portal proposed-update #139 twenty-five minutes
+// earlier and the customer had already been emailed: rebuilding it here would
+// have superseded the very version they are being asked to accept, and putting
+// that right would have meant a second "an update is ready" mail to the same
+// person inside the hour. The engine change is byte-neutral without a `tiers`
+// block and Wisbech has none, so the code that drew it and the code that would
+// draw it now produce identical artwork — the STAMP is the whole of what is
+// stale. Delete this entry once #139 is accepted or withdrawn and Wisbech has
+// been rolled; the hash key makes it stop excusing anything at that moment in
+// any case, and the board says so out loud when it does.
+//
+// 2026-08-31, LATER THE SAME DAY — this entry has now survived a SECOND rollout,
+// and that it needed no edit is the design working rather than luck. OA-206 and
+// OA-207 moved the template to 37a9450d76 and the other seven towns went with it;
+// Wisbech did not, because #139 is still staged with the customer — read off the
+// live worklist, not assumed. The entry is keyed to the town AND the hash it
+// excuses, so it goes on excusing exactly Wisbech-at-cf683a815c however far the
+// current template moves ahead of it. DO NOT "update" the hash here to the current
+// one: that would excuse a town that had been rebuilt, which is the single thing
+// this list must never do.
+//
+// That second rollout was byte-neutral too — all 25 re-rendered sheets differed by
+// their version stamp and nothing else — so the paragraph above is still literally
+// true of the gap between the code that drew Wisbech and the code that would draw
+// it now. The standing consequence: anything that MOVES INK must not ride a rollout
+// while this entry stands, or the excuse quietly stops being true while a customer
+// is still deciding. OA-187 was held back on exactly that ground.
+//
+// 2026-09-01 — AND THAT IS NOW WHAT HAS HAPPENED, DELIBERATELY, SO READ THE ABOVE
+// AS HISTORY. OA-187 and OA-213 shipped together and they MOVE INK: the numbered
+// index block now fills, and its markers are drawn at 2.4 mm rather than 2.3.
+// Wisbech was held out of that rollout on Peter's explicit call, which is what the
+// paragraph above asks for — but the half of the excuse that said "the STAMP is the
+// whole of what is stale" is no longer true of this town. Measured, not assumed:
+// Wisbech internal would go HARD 9 -> 4 and its schematic 7 -> 2, with no change in
+// dropped labels, so the sheets #139 shows the customer are now genuinely older
+// artwork than the engine would draw, not merely an older stamp of the same
+// artwork. The entry still holds and for its ORIGINAL reason — a rebuild would
+// supersede a proposal somebody is still deciding on — but nobody may now cite
+// byte-neutrality for it. When #139 is accepted or withdrawn, Wisbech is a real
+// re-render and not a re-stamp. Measurement:
+// Development Docs/place-index-round_2026-09-01.md in buses-data.
+const ENGINE_STALE_ALLOWED = [
+  // `commit` is REQUIRED as of OA-214 and is not decoration: it is what lets the
+  // town be gated against its own engine instead of excused. An engine version is
+  // a hash of a closure of files and cannot be checked out; the commit can.
+  // Recording it when the entry is written costs nothing. Recovering it later cost
+  // a walk back through history recomputing the hash at every step, which is how
+  // this one was found on 2026-09-01 — and the board VERIFIES the pair on every
+  // run, so a wrong commit here is a refusal, never a wrong verdict.
+  { town: 'Wisbech', engine: 'cf683a815c', commit: '9347f7dee6061e5cae94377e9a1886bbfc7b6d30', since: '2026-08-31',
+    why: 'portal proposed-update #139 is with the customer; a rebuild would supersede it' },
+];
+const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
+const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town === name && a.engine === engine) || null;
+
+/*
+ * GATE A HELD-BACK TOWN AGAINST THE ENGINE IT WAS BUILT WITH (2026-09-01, OA-214).
+ *
+ * For one day this file answered "is this held-back town's artwork still right?"
+ * with "do not ask": the same allowance that excused the engine STAMP was widened
+ * to excuse the byte DIFF that followed from it, because OA-187/OA-213 moved ink
+ * and Wisbech was deliberately left behind. That kept the board readable and
+ * checked nothing. A genuine regression in Wisbech's committed sheets — a bad
+ * merge, a stray edit, a truncated file — would have been invisible for as long
+ * as a customer took to answer an email.
+ *
+ * The honest question is not "does this sheet reproduce under the CURRENT engine",
+ * which we already know it does not and have decided we do not mind. It is "does
+ * it still reproduce under the engine it was BUILT with", which is exact,
+ * falsifiable, and the thing a customer looking at that sheet is entitled to.
+ *
+ * WHY THE ENTRY NOW CARRIES A COMMIT. An engine version is a hash of a closure of
+ * files, not a commit, so `cf683a815c` on its own cannot be checked out. Mapping
+ * it back cost a walk through history recomputing the hash at each step; recording
+ * the commit at the moment the entry is written costs nothing and means nobody
+ * does that walk twice. `cf683a815c` is commit 9347f7d, found that way on
+ * 2026-09-01 and then VERIFIED rather than trusted — see below.
+ *
+ * IT VERIFIES THE PAIR BEFORE IT TRUSTS IT. A recorded commit that does not
+ * actually produce the recorded hash is a lie that would make every sheet gate
+ * against the wrong code and PASS or FAIL for reasons having nothing to do with
+ * the town. So the worktree's own engine version is computed and compared, and a
+ * mismatch refuses the check rather than reporting a verdict from it.
+ *
+ * AND IT CANNOT REACH THE NETWORK. `git worktree add` against objects already in
+ * this clone, or nothing. A board that fails on a train is a board nobody runs.
+ * Where the commit is absent — a shallow CI checkout is the real case — the town
+ * reports UNCHECKED, which is loud, and gates, because "we could not look" must
+ * never be quieter than "we looked and it was fine". `gates.yml` fetches that one
+ * commit by sha so the check can actually run there.
+ */
+const HELD_BACK_WT = new Map();          // commit -> { dir } | { error }
+function heldBackEngineDir(name, engine) {
+  const a = allowanceFor(name, engine);
+  if (!a) return null;
+  if (!a.commit) return { error: 'the allowance records no `commit`, so there is nothing to check out — add one beside `engine`' };
+  if (HELD_BACK_WT.has(a.commit)) return HELD_BACK_WT.get(a.commit);
+  let out;
+  try {
+    const dir = path.join(scratchDir('held-back-engine-'), 'wt');
+    const r = spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'add', '--quiet', '--detach', dir, a.commit],
+      { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git worktree add failed').trim().split('\n')[0]);
+    const assets = path.join(dir, 'make-bus-leaflet', 'assets');
+    const mod = path.join(assets, 'engine_version.js');
+    if (!fs.existsSync(mod)) throw new Error('that commit has no make-bus-leaflet/assets/engine_version.js');
+    const got = require(mod).computeEngineVersion(assets);
+    if (got !== engine) throw new Error(`commit ${a.commit.slice(0, 7)} produces engine ${got}, not the ${engine} this entry claims`);
+    out = { dir: assets, commit: a.commit };
+  } catch (e) { out = { error: e.message }; }
+  HELD_BACK_WT.set(a.commit, out);
+  return out;
+}
+
 function gateTown(t) {
   const m = readJson(path.join(t.dir, 'manifest.json'));
   const s4 = latestRunDir(m, t.dir, 'S4');
@@ -166,17 +347,51 @@ function gateTown(t) {
   row.engine = routesJsonEarly.engine || '(none)';
   row.engineCurrent = routesJsonEarly.engine === CURRENT_ENGINE;
 
+  /* A HELD-BACK TOWN GETS A SECOND QUESTION, NOT A DIFFERENT ONE (OA-214).
+   *
+   * Every town is gated against the LIVE engine first, exactly as it always has
+   * been. That is the right question and its answer is usually the end of it —
+   * including for a town in ENGINE_STALE_ALLOWED whose held-back change was
+   * byte-neutral, which is what every such entry was until 2026-09-01. Those
+   * still PASS here and need nothing new.
+   *
+   * Only when the live gate says DIFF on a held-back town is there a second
+   * question worth asking, and it is the honest one: does this sheet still
+   * reproduce under the engine it was BUILT with? For one day this file answered
+   * that by excusing the DIFF, which checked nothing at all.
+   *
+   * ORDERING THIS WAY IS WHAT KEEPS `commit` FROM BECOMING MANDATORY. Demanding
+   * it up front would turn every byte-neutral allowance red for want of a field
+   * it has never needed — and would have broken prove-red-status.js's own
+   * injected exception, which is how the mistake was caught. A commit is required
+   * exactly when the artwork actually moved, which is the only time it can help. */
+  const heldBack = row.engine !== '(none)' && !!allowanceFor(t.name, row.engine);
+  const ownEngine = () => (heldBack ? heldBackEngineDir(t.name, row.engine) : null);
+  const gateSheet = (gen, out, opts = {}) => {
+    const live = gate(path.join(SK, gen), s4.dir, out, path.join(s4.dir, out), opts).status;
+    if (live !== 'DIFF' || !heldBack) return live;
+    const own = ownEngine();
+    if (!own || own.error) {
+      row.heldBackUncheckable = (own && own.error) || 'no allowance found';
+      return live;                                   // still DIFF, and now also red for not looking
+    }
+    const again = gate(path.join(own.dir, gen), s4.dir, out, path.join(s4.dir, out),
+                       Object.assign({}, opts, { engineDir: own.dir })).status;
+    if (again === 'PASS') { row.gatedOnOwnEngine = own.commit; return 'PASS'; }
+    return again;                                    // a real regression in committed artwork
+  };
+
   // Same judgement as the place row below: no town is without an internal map today,
   // so this is inert -- and leaving the known second instance of a fixed fault in
   // place is how it comes back.
   const tInt = declares(s4.rec, 'internal.svg') || exists(path.join(s4.dir, 'internal.svg'))
-    ? gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg')).status
+    ? gateSheet('gen_internal.js', 'internal.svg')
     : 'NO-SHEET';
   row.internal = tInt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal.svg') : tInt;
 
   const style = detectExternalStyle(s4.dir);
   row.externalStyle = style;
-  const extGate = gate(path.join(SK, `gen_external_${style}.js`), s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status;
+  const extGate = gateSheet(`gen_external_${style}.js`, 'external.svg');
   row.external = extGate === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : extGate;
 
   // Optional pre-stage outputs, only gated if routes.json opted in.
@@ -205,11 +420,11 @@ function gateTown(t) {
     // measured 2026-08-29 — and that is exactly why it goes in now: the first town
     // to force a POI would otherwise reproduce the place fault, and leaving the
     // known second instance of a fixed fault in place is how it comes back.
-    const g = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg'), { overridesFromWorkspace: true }).status;
+    const g = gateSheet('schematize_internal.js', 'internal-schematic.svg', { overridesFromWorkspace: true });
     row.schematic = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-schematic.svg') : g;
   } else row.schematic = '-';
   if (routesJson.internalDiagram) {
-    const g = gate(path.join(SK, 'diagram_internal.js'), s4.dir, 'internal-diagram.svg', path.join(s4.dir, 'internal-diagram.svg')).status;
+    const g = gateSheet('diagram_internal.js', 'internal-diagram.svg');
     row.diagram = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-diagram.svg') : g;
   } else row.diagram = '-';
 
@@ -925,88 +1140,6 @@ const qualityCell = (name) => {
 // shape, one rung further along, where the gate genuinely runs and its answer is
 // discarded. Safe to add today because every one of those twelve currently reads
 // PASS or '-', so the set starts green rather than red-on-day-one.
-// ---- engine staleness: which STALE stamps gate, and which one does not ------
-//
-// OA-151. `row.engineCurrent` has been computed since the hash existed, printed
-// in the Engine column, and then dropped on the floor: it was in neither `bad`
-// below nor the JSON verdict. That is the same "verdict computed and discarded"
-// shape as the twelve schematic/diagram sheet-gates folded in on 2026-08-27, one
-// rung further along — because until 2026-08-28 a Linux checkout computed a
-// DIFFERENT engine hash from the laptop that stamped the maps, so every town
-// printed `f83987f11b STALE` in CI while CI exited 0. The verdict was discarded
-// AND the value it was computed from had been invented by the checkout.
-//
-// WHY THERE IS AN EXCEPTION, AND WHY IT IS THIS NARROW. Folding this in
-// unconditionally turns the board red for Ramsey on its first run, and a gate
-// that is red on day one is a gate that gets muted — this project has paid for
-// that more than once, and it is why the quality TARGETS are still reported
-// rather than gated a few lines above. Ramsey is genuinely built from older code
-// rather than carrying a line-ending artefact, it is the only record that any map
-// was, and whether it stays a town at all is an open question (OA-072) — so
-// rebuilding it to clear the gate would be work on a map that may not survive.
-//
-// The exception is keyed to the TOWN AND THE EXACT HASH, so it expires by itself:
-// rebuild Ramsey on any engine and the pair stops matching, the exception stops
-// applying, and the row gates like every other. It cannot silently widen into
-// "Ramsey is never checked".
-// Empty on purpose. The one entry this ever held — Ramsey at d8eb6961c7, excused
-// because OA-072 asked whether Ramsey stayed a town at all — expired twice over on
-// 2026-08-28: OA-072 was answered "keep it", and Ramsey was then rebuilt from S1 as
-// v2.0 on the current engine. The board itself reported the exception as no longer
-// applying, which is the behaviour to preserve: an entry here must name the town,
-// the exact engine hash it excuses and why, so it stops excusing anything the
-// moment that town is rebuilt.
-//
-// 2026-08-31 — one entry, and what it excuses is a CUSTOMER'S INBOX rather than
-// a map. OA-202/OA-066 moved the template hash to 622ff644d4 and seven of the
-// eight towns were rolled onto it the same hour. Wisbech was not, because
-// buses-68 had delivered it as portal proposed-update #139 twenty-five minutes
-// earlier and the customer had already been emailed: rebuilding it here would
-// have superseded the very version they are being asked to accept, and putting
-// that right would have meant a second "an update is ready" mail to the same
-// person inside the hour. The engine change is byte-neutral without a `tiers`
-// block and Wisbech has none, so the code that drew it and the code that would
-// draw it now produce identical artwork — the STAMP is the whole of what is
-// stale. Delete this entry once #139 is accepted or withdrawn and Wisbech has
-// been rolled; the hash key makes it stop excusing anything at that moment in
-// any case, and the board says so out loud when it does.
-//
-// 2026-08-31, LATER THE SAME DAY — this entry has now survived a SECOND rollout,
-// and that it needed no edit is the design working rather than luck. OA-206 and
-// OA-207 moved the template to 37a9450d76 and the other seven towns went with it;
-// Wisbech did not, because #139 is still staged with the customer — read off the
-// live worklist, not assumed. The entry is keyed to the town AND the hash it
-// excuses, so it goes on excusing exactly Wisbech-at-cf683a815c however far the
-// current template moves ahead of it. DO NOT "update" the hash here to the current
-// one: that would excuse a town that had been rebuilt, which is the single thing
-// this list must never do.
-//
-// That second rollout was byte-neutral too — all 25 re-rendered sheets differed by
-// their version stamp and nothing else — so the paragraph above is still literally
-// true of the gap between the code that drew Wisbech and the code that would draw
-// it now. The standing consequence: anything that MOVES INK must not ride a rollout
-// while this entry stands, or the excuse quietly stops being true while a customer
-// is still deciding. OA-187 was held back on exactly that ground.
-//
-// 2026-09-01 — AND THAT IS NOW WHAT HAS HAPPENED, DELIBERATELY, SO READ THE ABOVE
-// AS HISTORY. OA-187 and OA-213 shipped together and they MOVE INK: the numbered
-// index block now fills, and its markers are drawn at 2.4 mm rather than 2.3.
-// Wisbech was held out of that rollout on Peter's explicit call, which is what the
-// paragraph above asks for — but the half of the excuse that said "the STAMP is the
-// whole of what is stale" is no longer true of this town. Measured, not assumed:
-// Wisbech internal would go HARD 9 -> 4 and its schematic 7 -> 2, with no change in
-// dropped labels, so the sheets #139 shows the customer are now genuinely older
-// artwork than the engine would draw, not merely an older stamp of the same
-// artwork. The entry still holds and for its ORIGINAL reason — a rebuild would
-// supersede a proposal somebody is still deciding on — but nobody may now cite
-// byte-neutrality for it. When #139 is accepted or withdrawn, Wisbech is a real
-// re-render and not a re-stamp. Measurement:
-// Development Docs/place-index-round_2026-09-01.md in buses-data.
-const ENGINE_STALE_ALLOWED = [
-  { town: 'Wisbech', engine: 'cf683a815c', since: '2026-08-31',
-    why: 'portal proposed-update #139 is with the customer; a rebuild would supersede it' },
-];
-const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
 // '(none)' is a map stamped before the hash existed, not a map built from stale
 // code, and it is a different question — reported, never gated, exactly as the
 // Engine column has always shown it.
@@ -1037,11 +1170,23 @@ const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' &
  * which is a real check rather than an absence of one — that is OA-214, filed with
  * this change rather than after it. Peter took the split on the recommendation.
  */
-const HELD_BACK_DIFF_OK = (r) => engineStaleAllowed(r);
-const sheetBad = (r, v) => ['FAIL', 'MISSING', 'NO-BUILD'].includes(v) || (v === 'DIFF' && !HELD_BACK_DIFF_OK(r));
-const bad = townRows.some(r => sheetBad(r, r.internal)
-    || (String(r.external).startsWith('DIFF') ? !HELD_BACK_DIFF_OK(r) : (String(r.external).startsWith('FAIL') || r.external === 'MISSING'))
-    || sheetBad(r, r.schematic) || sheetBad(r, r.diagram))
+/* THE STOPGAP IS GONE (OA-214, retired 2026-09-01, the day after it landed).
+ *
+ * For one day a held-back town's DIFF was excused along with its stamp, which
+ * kept the board readable and checked nothing. A held-back town is now GATED
+ * AGAINST THE ENGINE IT WAS BUILT WITH — see heldBackEngineDir() above — so its
+ * verdicts mean what every other town's mean and need no special case here. A
+ * DIFF on that row is now a real regression in committed artwork and gates like
+ * any other.
+ *
+ * What DOES gate specially is being unable to look: `heldBackUncheckable` is set
+ * when the allowance names no commit, or names one this clone does not have, or
+ * names one that does not produce the hash it claims. "We could not check" must
+ * never be quieter than "we checked and it was fine", so it is red. */
+const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal)
+    || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
+    || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram)
+    || !!r.heldBackUncheckable)
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
     // INDEX-STALE gates (OA-188). The whole character of the state is that every
     // existing check is correctly green, so a column the exit code ignored would
@@ -1230,12 +1375,13 @@ async function main() {
     // staleness gates and which is the dated exception above — an exception nobody
     // can see on the board is one nobody will ever come back to.
     const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : (engineStaleAllowed(r) ? ' STALE (allowed)' : ' STALE'))) : '-';
-    // And the same for a DIFF that the same exception excuses (OA-214). An excused
-    // gate printed as a bare DIFF reads as a board that is red and being ignored;
-    // printed as 'DIFF (allowed)' it reads as what it is, and the note under the
-    // table says why. Nothing else is relabelled — FAIL and MISSING still gate.
-    const okd = (v) => (v === 'DIFF' && engineStaleAllowed(r)) ? 'DIFF (allowed)' : v;
-    const cells = [r.name, r.version || '-', eng, okd(r.internal), okd(ext), okd(r.schematic), okd(r.diagram), qualityCell(r.name), r.s6, s6age];
+    // A PASS ON A HELD-BACK TOWN IS A DIFFERENT CLAIM, so it is a different word
+    // (OA-214). The cell used to read 'DIFF (allowed)', which said "we are not
+    // checking this"; it now reads 'PASS (own engine)', which says the sheet
+    // reproduces under the code that drew it. Same width of answer, opposite
+    // meaning, and a reader must not have to remember which era they are in.
+    const own = (v) => (r.gatedOnOwnEngine && (v === 'PASS' || String(v).startsWith('PASS'))) ? v + ' (own engine)' : v;
+    const cells = [r.name, r.version || '-', eng, own(r.internal), own(ext), own(r.schematic), own(r.diagram), qualityCell(r.name), r.s6, s6age];
     console.log(line(cells, tw));
   }
 
@@ -1246,14 +1392,15 @@ async function main() {
     const row = townRows.find(r => r.name === a.town && r.engine === a.engine);
     if (row) {
       console.log('  engine staleness ALLOWED for ' + a.town + ' at ' + a.engine + ' since ' + a.since + ' -- ' + a.why);
-      // NAME WHAT THE EXCUSE IS COSTING, every time, not only in the source comment
-      // (OA-214). While a DIFF is being excused, NOTHING is checking this town's
-      // artwork — that is a bigger claim than "the stamp is behind" and the board
-      // has to make it out loud or the exception quietly becomes permanent.
-      const diffed = ['internal', 'external', 'schematic', 'diagram'].filter(k => String(row[k] || '').startsWith('DIFF'));
-      if (diffed.length) console.log('    ...and its BYTE GATE is excused too, on ' + diffed.join(', ')
-        + '. The held-back engine change MOVES INK, so these sheets are older ARTWORK, not an older stamp of the same artwork.'
-        + ' Nothing is checking them until ' + a.town + ' is rebuilt. See OA-214.');
+      // SAY WHICH ENGINE THE ROW'S VERDICTS CAME FROM (OA-214). A PASS beside an
+      // excused staleness is ambiguous until you know what it was measured
+      // against, and the previous version of this line had to admit that nothing
+      // was measuring it at all.
+      if (row.gatedOnOwnEngine) console.log('    ...and its sheets are GATED AGAINST THAT ENGINE, commit '
+        + row.gatedOnOwnEngine.slice(0, 7) + ' — so a PASS on this row means the committed artwork still reproduces'
+        + ' under the code that drew it. It is not being excused, it is being asked a different question.');
+      else if (row.heldBackUncheckable) console.log('    ...and its sheets CANNOT BE GATED: ' + row.heldBackUncheckable
+        + '. This row is red because nothing could look, which is not the same as a regression — but it must not be quieter than one.');
     }
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }

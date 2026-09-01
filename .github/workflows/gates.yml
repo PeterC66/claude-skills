@@ -231,6 +231,29 @@ jobs:
         with:
           path: skills
 
+      # THE ENGINE A HELD-BACK TOWN WAS BUILT WITH (OA-214, 2026-09-01).
+      #
+      # status.js gates a town in ENGINE_STALE_ALLOWED against the engine it was
+      # BUILT with rather than the current one, which means checking that commit
+      # out of this clone. actions/checkout fetches ONE commit, so without this
+      # step the object is simply absent here and the board reports "cannot be
+      # gated" -- red, correctly, but red for a property of the CI machine rather
+      # than of the estate, which is the shape that gets a check muted.
+      #
+      # Only the commits the allowance actually names are fetched, by sha, so this
+      # costs one shallow fetch per live exception -- today, one -- rather than the
+      # whole history. It is deliberately NOT fatal: if the fetch fails the board
+      # still says exactly what it could not do, and that is a better failure than
+      # a workflow that dies before any gate runs.
+      - name: Fetch the engines any held-back town is gated against
+        run: |
+          shas=$(grep -oE "commit: '[0-9a-f]{40}'" skills/make-bus-leaflet/assets/status.js                  | grep -oE '[0-9a-f]{40}' | sort -u)
+          if [ -z "$shas" ]; then echo "::notice::no held-back engine commits to fetch"; exit 0; fi
+          for sha in $shas; do
+            echo "fetching $sha"
+            git -C skills fetch --depth=1 --no-tags origin "$sha"               || echo "::notice::could not fetch $sha - status.js will report that it cannot gate that town"
+          done
+
       - name: Checkout buses-data
         uses: actions/checkout@v7
         with:
@@ -326,6 +349,13 @@ jobs:
       # the five generators, never assets/ itself. Added 2026-08-27 (OA-129
       # Phase 0) because the byte gate had never been watched go red for any of
       # the five sheet types, and the refactor's whole method rests on it.
+      # A held-back town is CHECKED against its own engine rather than excused, so
+      # that check needs falsifying like any other -- and more than most, because
+      # the thing it replaced was an excuse that could not go red at all.
+      - name: Prove the held-back engine gate can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/buses-data"
+
       - name: Prove the byte gates can go red
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-gates.js --buses "$GITHUB_WORKSPACE/buses-data"

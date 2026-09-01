@@ -36,12 +36,29 @@ function copyJsonsAndIcons(dataDir, destDir) {
 // schematize_internal.js / diagram_internal.js) against dataDir's json inputs,
 // in a clean temp workspace, with no overrides and no LEAFLET_DIR inherited.
 // Returns { ok, tmpDir, stderr }.
-function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace = false } = {}) {
+/* `engineDir` — WHICH ENGINE THE GENERATOR'S DEPENDENCIES COME FROM (OA-214).
+ *
+ * This used to hardcode `SKILL_ASSETS: SK`, the live assets directory, and that
+ * was fine while every caller also took its generator from there. It stopped
+ * being fine the moment status.js began gating a held-back town against an OLDER
+ * engine: it handed this function `gen_internal.js` from a worktree at that
+ * commit, and the generator then resolved labeller.js, footer.js and the rest
+ * through SKILL_ASSETS to the CURRENT ones. The result was a HYBRID — an old
+ * caller driving a new labeller — which is not the engine that drew the sheet and
+ * is not any engine that has ever existed.
+ *
+ * It was caught because the hybrid disagreed with itself: Wisbech's internal
+ * sheet reproduced (its index has fewer candidates than the block holds, so the
+ * new labeller's fill change is inert there, and the old caller still passed the
+ * old 2.3 mm marker size explicitly) while its SCHEMATIC did not. A PASS from a
+ * hybrid engine is worth nothing, and this one was one sheet away from being
+ * believed. `engineDir` defaults to `SK`, so every existing caller is unchanged. */
+function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace = false, engineDir = SK } = {}) {
   const tmp = mkTmp();
   copyJsonsAndIcons(dataDir, tmp);
   const destGen = path.join(tmp, path.basename(genPath));
   fs.copyFileSync(genPath, destGen);
-  const env = { ...process.env, SKILL_ASSETS: SK };
+  const env = { ...process.env, SKILL_ASSETS: engineDir };
   delete env.LEAFLET_DIR;
   delete env.OVERRIDES_FILE;
   delete env.EDITOR_KEYS;

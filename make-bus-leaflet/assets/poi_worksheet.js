@@ -21,6 +21,24 @@
  * to ask. This prints the list to ask WITH, and the JSON block to paste the
  * answer back INTO. It is the only step of that loop a tool can do.
  *
+ * DEMOTED 2026-09-01 (OA-212) — THIS IS NO LONGER WHAT WE SEND. It was tried on
+ * its first real reader and failed on its SHAPE rather than its facts: 171 rows
+ * times three choices in one flat list; TWO ways to answer the same question,
+ * the Answer column and the JSON block below it, with neither marked as the
+ * primary one; and a write-in column where tick boxes belong, even on paper. The
+ * framing was ours as well — this argues in page area, and a local is thinking
+ * about which places people navigate by.
+ *
+ * A town is now asked with the portal's landmark chooser, at
+ * `/app/maps/<id>/landmarks`, which puts three answers over the town's own
+ * streets and can answer a whole category at once.
+ *
+ * KEEP THIS, AND KEEP IT WORKING. It is the print fallback for anybody who
+ * genuinely needs paper, and it is the internal audit of what a town answered —
+ * `--all` prints one line per map and is the only view of the whole estate's POI
+ * load. What it is not, any more, is the thing that goes to a member of the
+ * public.
+ *
  * READ-ONLY except for the one file it is told to write. It runs the engine's
  * own `poi_select.js` over data already on disk — no network, no generator, no
  * stage folder touched. Running a generator to read a number overwrites the run

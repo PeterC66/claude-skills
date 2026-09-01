@@ -26,7 +26,7 @@ These are not hypothetical. Every one is a live item in `open-actions.md` or in 
 | 2 | **Naming a terminus or a stub** | A drawn leg whose far end is not a destination, so the ordinary arrow label would lie. | `internalRoads.termini` |
 | 3 | **Does this service count?** — seasonal, school-day, bank-holiday-only, pre-book, community | S1 finds a service that runs, but barely, or only at times a reader would not expect. | `routes[]` inclusion, `internalDesc` |
 | 4 | **Where does an unverifiable service board?** | A service outside BODS serving a place with lettered stands. | `boardingPlan` stand assignment |
-| 5 | **Which landmark must appear**, even where the placer would drop it | A locally important POI losing to the label placer every time. | `poi` must-place |
+| 5 | **Which landmark must appear**, even where the placer would drop it — and which should not be on the sheet at all | A locally important POI losing to the label placer every time; and the far commoner opposite, a sheet carrying places nobody navigates by. **Asked with the portal's landmark chooser since 2026-09-01** (OA-212), not by interview. | `poi.tiers` / `overrides.internal.poiTiers` |
 | 6 | **Exit destinations** — what does the arrow at the frame edge say? | A route leaving the frame toward somewhere with more than one reasonable name. | `destinations[]` |
 | 7 | **Area extent** — does this outlying village belong on the sheet? | A settlement on the edge of what the town would call "here". | frame / anchor / zoom |
 

@@ -91,7 +91,7 @@ Rung 2c prints the command that produces the worksheet to ask with. Run it from 
 node poi_worksheet.js --map "Areas/High Wycombe"
 ```
 
-The answer comes back as `routes.json`'s `poi.tiers` — see [s3-config.md](s3-config.md). A `miss` there is the only lever that reduces P, and it is the only lever that reaches OA-089's 148 unnameable symbols at all: no placer change does, which is that row's own argument.
+The answer comes back as `routes.json`'s `poi.tiers` — see [s3-config.md](s3-config.md). **Since 2026-09-01 a town is asked with the portal's landmark chooser rather than that worksheet** (`/app/maps/<id>/landmarks`), which writes the same answer at the overrides layer and hands back a `poi.tiers` block to paste here; the worksheet stays as the print fallback and the internal audit. The command below is still the way to *read* what a town currently has. A `miss` there is the only lever that reduces P, and it is the only lever that reaches OA-089's 148 unnameable symbols at all: no placer change does, which is that row's own argument.
 
 Cheapest first. The script models rungs 0–2b on the real geometry and prints the predicted score for each; take them in order and stop at the first GREEN.
 

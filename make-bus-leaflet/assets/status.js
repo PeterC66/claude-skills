@@ -1012,8 +1012,36 @@ const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.na
 // Engine column has always shown it.
 const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' && !r.engineCurrent && !engineStaleAllowed(r));
 
-const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
-    || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
+/* A TOWN HELD BACK FROM AN INK-MOVING ROLLOUT ALSO FAILS THE BYTE GATE, AND THAT
+ * IS NOT A SECOND FACT (2026-09-01, OA-214).
+ *
+ * ENGINE_STALE_ALLOWED excuses the engine STAMP. It was written when every held-
+ * back rollout was byte-neutral, so the stamp was genuinely the whole of what was
+ * stale and the byte gate stayed green on its own. OA-187/OA-213 broke that
+ * premise on purpose: they move ink, Wisbech was held out of the rollout while
+ * proposed-update #139 is with the customer, and its sheets therefore no longer
+ * reproduce under the current engine. The board went red on internal and
+ * internal-schematic and exited 1 — permanently, until a customer answers an email.
+ *
+ * A board that exits 1 for a reason everybody already knows is a board nobody
+ * reads, and this project has retired more than one check for exactly that. So the
+ * SAME allowance that excuses the stamp excuses the DIFF that follows from it, and
+ * it is deliberately no wider than that: it is keyed to the town AND the hash it is
+ * stale against, so the moment Wisbech is rebuilt on any engine the key stops
+ * matching and every gate re-arms with no edit here. DIFF only — FAIL, MISSING and
+ * NO-BUILD are not consequences of being held back and still gate.
+ *
+ * WHAT IT COSTS, stated because an excuse that hides its cost is the thing this
+ * comment is against: while it stands, nothing checks Wisbech's artwork at all. The
+ * right answer is to gate a held-back town against the engine it was BUILT with,
+ * which is a real check rather than an absence of one — that is OA-214, filed with
+ * this change rather than after it. Peter took the split on the recommendation.
+ */
+const HELD_BACK_DIFF_OK = (r) => engineStaleAllowed(r);
+const sheetBad = (r, v) => ['FAIL', 'MISSING', 'NO-BUILD'].includes(v) || (v === 'DIFF' && !HELD_BACK_DIFF_OK(r));
+const bad = townRows.some(r => sheetBad(r, r.internal)
+    || (String(r.external).startsWith('DIFF') ? !HELD_BACK_DIFF_OK(r) : (String(r.external).startsWith('FAIL') || r.external === 'MISSING'))
+    || sheetBad(r, r.schematic) || sheetBad(r, r.diagram))
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
     // INDEX-STALE gates (OA-188). The whole character of the state is that every
     // existing check is correctly green, so a column the exit code ignored would
@@ -1202,7 +1230,12 @@ async function main() {
     // staleness gates and which is the dated exception above — an exception nobody
     // can see on the board is one nobody will ever come back to.
     const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : (engineStaleAllowed(r) ? ' STALE (allowed)' : ' STALE'))) : '-';
-    const cells = [r.name, r.version || '-', eng, r.internal, ext, r.schematic, r.diagram, qualityCell(r.name), r.s6, s6age];
+    // And the same for a DIFF that the same exception excuses (OA-214). An excused
+    // gate printed as a bare DIFF reads as a board that is red and being ignored;
+    // printed as 'DIFF (allowed)' it reads as what it is, and the note under the
+    // table says why. Nothing else is relabelled — FAIL and MISSING still gate.
+    const okd = (v) => (v === 'DIFF' && engineStaleAllowed(r)) ? 'DIFF (allowed)' : v;
+    const cells = [r.name, r.version || '-', eng, okd(r.internal), okd(ext), okd(r.schematic), okd(r.diagram), qualityCell(r.name), r.s6, s6age];
     console.log(line(cells, tw));
   }
 
@@ -1211,7 +1244,17 @@ async function main() {
   // and this one is meant to be temporary.
   for (const a of ENGINE_STALE_ALLOWED) {
     const row = townRows.find(r => r.name === a.town && r.engine === a.engine);
-    if (row) console.log('  engine staleness ALLOWED for ' + a.town + ' at ' + a.engine + ' since ' + a.since + ' -- ' + a.why);
+    if (row) {
+      console.log('  engine staleness ALLOWED for ' + a.town + ' at ' + a.engine + ' since ' + a.since + ' -- ' + a.why);
+      // NAME WHAT THE EXCUSE IS COSTING, every time, not only in the source comment
+      // (OA-214). While a DIFF is being excused, NOTHING is checking this town's
+      // artwork — that is a bigger claim than "the stamp is behind" and the board
+      // has to make it out loud or the exception quietly becomes permanent.
+      const diffed = ['internal', 'external', 'schematic', 'diagram'].filter(k => String(row[k] || '').startsWith('DIFF'));
+      if (diffed.length) console.log('    ...and its BYTE GATE is excused too, on ' + diffed.join(', ')
+        + '. The held-back engine change MOVES INK, so these sheets are older ARTWORK, not an older stamp of the same artwork.'
+        + ' Nothing is checking them until ' + a.town + ' is rebuilt. See OA-214.');
+    }
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }
   if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');

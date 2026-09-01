@@ -22,6 +22,7 @@
     "test:prove-red-design-keys": "node tools/prove-red-design-keys.js",
     "test:prove-red-attribution": "node tools/prove-red-attribution.js",
     "test:prove-red-redteam-source": "node tools/prove-red-redteam-source.js",
+    "test:prove-red-redteam-fingerprint": "node tools/prove-red-redteam-fingerprint.js",
     "test:prove-red-derive-frequency": "node tools/prove-red-derive-frequency.js",
     "test:prove-red-rollout-stamp": "node tools/prove-red-rollout-stamp.js",
     "test:prove-red-unrendered": "node tools/prove-red-unrendered.js",

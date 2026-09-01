@@ -110,6 +110,16 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node tools/prove-red-redteam-source.js
 
+      # OA-166: the same tool decided REUSE from the S1/S2 pull TIMESTAMP, which is a
+      # proxy for the question it was asking. It bought three ~100k-token red teams it
+      # did not need -- a Wisbech S1 that only adjudicated the red team's own claim, an
+      # Aldi S1 whose registration windows moved and whose 12 services did not, and a
+      # Ramsey S2 that rebuilt drawn geometry. This reverts the decision to that rule
+      # and requires the six guard tests to fail while the two CONTROLs hold.
+      - name: Prove the redteam-source fingerprint can go red
+        working-directory: skills/make-bus-leaflet
+        run: node tools/prove-red-redteam-fingerprint.js
+
       # OA-019: derive_frequency.js tiers a place's LINE WEIGHTS, and fed one of the
       # three places whose S1 predates the frequency fields it returned "limited --
       # ends mid-afternoon" for every lane, from no data at all. This cuts the guard

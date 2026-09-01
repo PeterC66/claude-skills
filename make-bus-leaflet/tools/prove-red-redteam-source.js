@@ -48,7 +48,7 @@ function cut(src, start, end, what) {
 let broken = fs.readFileSync(SRC, 'utf8');
 broken = cut(broken,
   '/* AMBIGUITY GUARD (OA-141).',
-  '// When were the inputs the red team is diffed against last pulled?',
+  '/* WHAT THE ANSWER IS ABOUT (OA-166)',   // the next block down; the OA-141 guard ends here
   'the ambiguity guard');
 broken = cut(broken,
   '// Always say which folder that name came out of (OA-141).',

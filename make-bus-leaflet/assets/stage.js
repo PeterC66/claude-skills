@@ -25,6 +25,7 @@
  *   pull  <S1..S6> [destDir]           copy latest outputs of a stage into destDir (def cwd)
  *   latest <S1..S6>                    print latest run dir (abs) of a stage
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
+ *         [--tokens <n>]                 record what this stage cost the session
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
  *         and, for S4, refuses a routes.json carrying no "engine" hash or no
  *         "design.sheetVersion" build stamp (--force-stamps overrides)
@@ -34,6 +35,19 @@
  *   status                             print a manifest summary
  *   nextver [--bump major|minor]       print the version `new S4` would assign (no side effects)
  *   stampver [runDir]                  force routes.json "version" to match the run dir's v<N.N>
+ *
+ * WHAT A STAGE COST (OA-105, 2026-09-01). `new` now writes `pending: {id,
+ * startedAt}` onto the stage in manifest.json, and `commit` turns it into
+ * `startedAt` and `elapsedMin` on the run record and clears it. Two consequences
+ * worth knowing before they surprise you: **`new` now dirties manifest.json**,
+ * which it never did before, so a stage started and abandoned leaves one line
+ * saying so — which `status` prints as OPEN, and which is true rather than
+ * noise; and **a run committed before this landed, or a folder assembled by
+ * hand, carries no timing at all**, which reads as "not recorded" and never as
+ * zero. `--tokens <n>` records what the CALLER states and nothing estimates a
+ * value when it is absent: only the session knows what it spent, and a guessed
+ * cost would be indistinguishable from a measured one the moment it was in the
+ * file. Both rollouts get the timing for free — they drive `new` and `commit`.
  *
  * THE TWO S4 PROVENANCE STAMPS are separate from the version stamp below and
  * are enforced at `commit` (OA-161): "engine" says which generator drew a map,
@@ -242,7 +256,7 @@ function main() {
   if (cmd === 'nextver') { console.log(computeVersion(m, f.bump === 'major' ? 'major' : 'minor')); return; }
 
   if (cmd === 'new') {
-    const st = rest[0]; stage(st);
+    const st = rest[0]; const sx = stage(st);
     let id, dir;
     if (st === 'S4') { const v = computeVersion(m, f.bump === 'major' ? 'major' : 'minor'); id = `v${v}_${ts()}`; }
     else if (st === 'S5') {
@@ -252,6 +266,25 @@ function main() {
     } else { id = ts(); }
     dir = path.join(townDir, `${st}-${STAGE_NAME[st]}`, id);
     fs.mkdirSync(dir, { recursive: true });
+    /* WHAT DID THIS STAGE COST? (OA-105.) Nothing recorded it, and after the fact
+     * nothing CAN. The two obvious sources are both wrong: a run folder's mtime
+     * moves every time a generator writes into it, and the run ID's timestamp is
+     * LOCAL (`ts()`) while `at` is UTC (`isoNow()`), so subtracting one from the
+     * other is a daylight-saving bug waiting for a March morning -- on St Ives'
+     * 2026-06-05 S1 the id says 1830 and `at` says 17:38, which is eight minutes
+     * and looks like minus fifty-two.
+     *
+     * So the start is written down here, in UTC, in the same shape `at` uses, and
+     * `commit` subtracts like from like. It is kept on the STAGE rather than in the
+     * run folder because the folder's contents are the build's, not the
+     * bookkeeping's -- an extra file there would be swept into the next commit or
+     * named by the untracked-sibling hook, and gitignored run folders would lose it
+     * entirely. `commit` clears it, and only trusts it when it names THIS run: a
+     * stage started, abandoned and started again must not report the first one's
+     * clock. An absent or mismatched `pending` records no duration at all, never a
+     * guessed one. */
+    sx.pending = { id, startedAt: isoNow() };
+    saveManifest(townDir, m);
     console.log(dir);   // sole stdout line = absolute path of the new run dir
     return;
   }
@@ -400,6 +433,33 @@ function main() {
     if (absent.length) console.log(`  WARNING: recording ${absent.length} output(s) that do not exist (--force-missing): ${absent.join(', ')}`);
 
     const rec = { id, dir: relDir, at: isoNow(), outputs };
+
+    /* THE COST OF THE STAGE (OA-105). `startedAt` and `at` are both UTC minutes
+     * from `isoNow()`, so this subtracts like from like. Recorded only when the
+     * pending record names THIS run; otherwise the fields are simply absent, which
+     * is the honest answer for every run committed before 2026-09-01 and for any
+     * run whose folder was made by hand.
+     *
+     * TOKENS CANNOT BE MEASURED FROM IN HERE and are not estimated. A stage is
+     * driven by a session, and only the session knows what it spent, so `--tokens`
+     * records what the caller states and nothing invents a value when it is
+     * absent. A number written nowhere is better than a number written wrongly:
+     * an estimated cost would be indistinguishable from a measured one the moment
+     * it was in the file. */
+    const utc = (s) => Date.parse(String(s) + ':00Z');   // isoNow() is 'YYYY-MM-DDTHH:MM', UTC
+    const pend = sx.pending;
+    if (pend && pend.id === id && pend.startedAt) {
+      const from = utc(pend.startedAt), to = utc(rec.at);
+      if (Number.isFinite(from) && Number.isFinite(to) && to >= from) {
+        rec.startedAt = pend.startedAt;
+        rec.elapsedMin = Math.round((to - from) / 60000);
+      }
+    }
+    if (f.tokens != null) {
+      const t = Number(String(f.tokens).replace(/[_,]/g, ''));
+      if (!Number.isFinite(t) || t < 0) die('--tokens must be a non-negative number; got ' + JSON.stringify(f.tokens));
+      rec.tokens = Math.round(t);
+    }
     if (VERSIONED.has(st)) { const v = id.match(/^v(\d+\.\d+)_/); rec.version = v ? v[1] : null; }
 
     // Guard: never record a build whose printed version stamp disagrees with its
@@ -572,8 +632,13 @@ function main() {
     sx.runs = sx.runs.filter(r => r.id !== id); // replace if re-committing same dir
     sx.runs.push(rec);
     sx.latest = id;
+    // Cleared whether or not it was used: a pending record that outlives its commit
+    // would attach this run's clock to the NEXT one committed under the same id.
+    if (sx.pending && sx.pending.id === id) delete sx.pending;
     saveManifest(townDir, m);
-    console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)`);
+    const cost = [rec.elapsedMin != null ? rec.elapsedMin + ' min' : null,
+      rec.tokens != null ? rec.tokens.toLocaleString('en-GB') + ' tokens' : null].filter(Boolean).join(', ');
+    console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)${cost ? '  [' + cost + ']' : ''}`);
     return;
   }
 
@@ -583,7 +648,17 @@ function main() {
       const s = m.stages[k];
       const n = s.runs.length;
       const latest = s.latest || '(none)';
-      console.log(`  ${k} ${s.name.padEnd(9)} latest=${latest}${n ? `  [${n} run(s)]` : '  [no runs]'}`);
+      /* WHAT THE LATEST RUN COST (OA-105). Printed only when it is recorded —
+       * every run committed before 2026-09-01, and any folder made by hand, has
+       * no timing at all, and an absent duration must read as "not recorded"
+       * rather than as zero. A stage still open shows its pending clock, which is
+       * the one moment the number is actually useful while you wait for it. */
+      const r = s.runs.find(x => x.id === s.latest);
+      const cost = !r ? [] : [r.elapsedMin != null ? r.elapsedMin + ' min' : null,
+        r.tokens != null ? r.tokens.toLocaleString('en-GB') + ' tokens' : null].filter(Boolean);
+      console.log(`  ${k} ${s.name.padEnd(9)} latest=${latest}${n ? `  [${n} run(s)]` : '  [no runs]'}`
+        + (cost.length ? `  cost ${cost.join(', ')}` : '')
+        + (s.pending ? `  OPEN since ${s.pending.startedAt} (${s.pending.id})` : ''));
     }
     return;
   }

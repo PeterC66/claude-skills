@@ -245,6 +245,15 @@ jobs:
       # whole history. It is deliberately NOT fatal: if the fetch fails the board
       # still says exactly what it could not do, and that is a better failure than
       # a workflow that dies before any gate runs.
+      #
+      # THERE ARE TWO COPIES OF THIS STEP AND NOTHING MAKES THEM AGREE. buses-data's
+      # gates.yml runs the same status.js over the same four repositories, on every
+      # push to the DATA. This step went in here on 2026-09-01 and not there, and the
+      # OA-214 retirement's "CI is green on it" was true of this side only -- the next
+      # push over there was red on Wisbech reading `fatal: invalid reference`, for a
+      # property of the runner rather than of the estate. If you change this step,
+      # change buses-data's too. buses-data OA-217 asks for something better than a
+      # comment, and until it lands this comment is the whole mechanism.
       - name: Fetch the engines any held-back town is gated against
         run: |
           shas=$(grep -oE "commit: '[0-9a-f]{40}'" skills/make-bus-leaflet/assets/status.js                  | grep -oE '[0-9a-f]{40}' | sort -u)

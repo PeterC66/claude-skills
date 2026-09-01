@@ -52,7 +52,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const sharp = require('sharp');
-const { analyse } = require('./quality_metrics');
+const { analyse, findSheets } = require('./quality_metrics');
 const { labelDiff, labelSet } = require('./gate_lib');
 const { scratchDir } = require('./scratch');
 
@@ -68,18 +68,11 @@ const ONLY = flag('only', null);
 
 // ---------------------------------------------------------------- sheet lists
 
-function findSheets(busesDir) {
-  const out = [];
-  (function walk(d) {
-    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); }
-      else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);
-    }
-  })(path.join(busesDir, 'Areas'));
-  return out.sort();
-}
+// The sheet enumeration is quality_metrics.js's, not a local walk. Until 2026-09-02
+// this file kept its own copy, and that copy walked `Areas/` alone and did not skip
+// `_portal-fixture` -- the exact fault test/find_sheets.test.js records as having
+// happened three times in three other files. The three standalone places under
+// `Places/_standalone/` were therefore never on this page (OA-224 Tier 1.3).
 
 const git = (...a) => execFileSync('git', ['-C', BUSES, ...a], { encoding: 'utf8', maxBuffer: 1 << 28 });
 

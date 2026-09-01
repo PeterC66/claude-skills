@@ -45,8 +45,6 @@ const args = parseArgs(process.argv.slice(2));
 
 const PORTAL = path.resolve(args.portal || process.env.BUSMAPS_PORTAL || 'C:/Claude/community-bus-maps');
 const BUSES = path.resolve(args.buses || process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses');
-const URL_BASE = (args.url || process.env.BUSMAPS_URL || '').replace(/\/$/, '');
-const REMOTE = !!URL_BASE;
 
 // The portal's own .env is the authority on DATA_DIR / STATUS_TOKEN — read it
 // the same way worklist.mjs does, so this always targets the same database
@@ -62,6 +60,13 @@ function loadPortalEnv(dir) {
   }
 }
 loadPortalEnv(PORTAL);
+// Read AFTER the .env load, not before it. Until 2026-09-02 URL_BASE was
+// computed above loadPortalEnv, so BUSMAPS_URL set only in the portal's .env
+// was never seen: with no --url this script silently took the LOCAL path and
+// wrote the snapshot into the dev DATA_DIR while SKILL.md promised the
+// .env-driven remote. worklist.mjs always had the order right (OA-224, Tier 1.1).
+const URL_BASE = (args.url || process.env.BUSMAPS_URL || '').replace(/\/$/, '');
+const REMOTE = !!URL_BASE;
 const TOKEN = args.token || process.env.STATUS_TOKEN || '';
 
 function findSkillAssets() {

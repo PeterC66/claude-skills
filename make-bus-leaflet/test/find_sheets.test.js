@@ -71,3 +71,18 @@ test('only .svg files inside a folder actually named ci-reference count', () => 
   assert.ok(!got.some(p => p.endsWith('.json')), 'a sidecar is not a sheet');
   assert.ok(!got.some(p => p.includes('S4-generate')), 'a run folder is not the tracked mirror');
 });
+
+// A THIRD consumer, and this one keeps NO copy. contact_sheet.js is a top-to-bottom
+// script (it runs at load, so it cannot be required here); until 2026-09-02 it
+// carried its own findSheets() that walked `Areas/` alone and did not skip the
+// fixture — the fourth instance of the bug this file exists for. The invariant
+// for a script that cannot be loaded is a SOURCE one: it must import the shared
+// enumeration and must not define its own (OA-224 Tier 1.3).
+test('contact_sheet.js imports findSheets from quality_metrics and defines no copy of its own', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'assets', 'contact_sheet.js'), 'utf8');
+  assert.ok(/\{[^}]*\bfindSheets\b[^}]*\}\s*=\s*require\('\.\/quality_metrics'\)/.test(src),
+    'contact_sheet.js must destructure findSheets from ./quality_metrics');
+  assert.ok(!/function\s+findSheets\s*\(/.test(src), 'contact_sheet.js must not define its own findSheets()');
+  assert.ok(!/readdirSync\([^)]*'Areas'/.test(src) && !/path\.join\(busesDir, 'Areas'\)/.test(src),
+    'contact_sheet.js must not walk Areas/ itself');
+});

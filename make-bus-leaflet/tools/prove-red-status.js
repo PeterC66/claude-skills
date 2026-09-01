@@ -131,7 +131,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -251,6 +251,9 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
      * one is how a harness quietly stops testing the real thing. */
     fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
   }
+  // LAST, so it sees every boarding index the tree ended up with, from whichever
+  // branch above put it there (OA-210).
+  if (feedInfo) writeFeedInfo(root, feedInfo);
   return root;
 }
 
@@ -330,6 +333,51 @@ function statusWithException(town, engine) {
   fs.writeFileSync(f, src.replace(DECL, one));
   return { statusPath: f, root };
 }
+
+/* THE BODS FEED THE SCRATCH TREE IS SUPPOSED TO HAVE (OA-210).
+ *
+ * dataFeedDrift() compares `boarding_index.json.feed` against
+ * `_gtfs/feed_info_<region>.json`, and a scratch tree has no `_gtfs/` at all —
+ * so without this every case here would be a check sited where its subject
+ * cannot exist, returning "cannot tell" for ever and reporting green about a
+ * mechanism nothing had run. That is a shape this project has already paid for.
+ *
+ * The feed_version is taken FROM the index the tree actually holds rather than
+ * written as a literal, so 'match' is by construction a match and cannot rot when
+ * the estate is next refreshed. 'stale' bumps it, which is exactly what a feed
+ * rebuilt in place does. Passing nothing writes no `_gtfs/` and is the third
+ * case: absent must read as cannot-tell, never as a finding.
+ */
+function writeFeedInfo(root, mode) {
+  const found = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name === 'boarding_index.json') found.push(p);
+    }
+  })(root);
+  if (!found.length) throw new Error('prove-red-status: feedInfo asked for, but the scratch tree holds no boarding_index.json');
+  const gtfs = path.join(root, '_gtfs');
+  fs.mkdirSync(gtfs, { recursive: true });
+  let wrote = 0;
+  for (const p of found) {
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!j.feed || !j.region) throw new Error('prove-red-status: ' + p + ' carries no feed/region stamp — pick an index written by boarding_index.py v1.4 or later');
+    const region = String(j.region).replace(/\.sqlite$/i, '');
+    const version = mode === 'stale' ? String(j.feed).replace(/^\d{8}/, d => String(Number(d) + 1)) : String(j.feed);
+    if (mode === 'stale' && version === String(j.feed)) throw new Error('prove-red-status: could not bump the feed version ' + j.feed + ' — the mutation would be a no-op');
+    fs.writeFileSync(path.join(gtfs, 'feed_info_' + region + '.json'),
+      JSON.stringify({ built: '2026-09-01 00:00', feed_info: { feed_version: version } }, null, 1));
+    wrote++;
+  }
+  return wrote;
+}
+
+/* The one place on the estate with a boarding plan under a town, which is what
+ * `withTownPlace` can express. Named once so the four OA-210 cases below cannot
+ * drift apart from each other. */
+const FEED_PLACE = { town: 'St Ives', place: 'St Ives Bus Station' };
 
 const CASES = [
   {
@@ -527,6 +575,78 @@ const CASES = [
       return null;
     },
     what: 'THE GATE ITSELF - the portal fixture redraws byte-for-byte and its DATA is stale, which is what refresh-place-fixture.mjs called unchanged',
+  },
+  /* OA-210 — THE FEED HALF. dataScriptDrift() versions the derivation SCRIPT;
+   * these four are about the DATA. On the morning of 2026-08-31 three of the four
+   * boarding indexes were built at 05:07 and the Buckinghamshire feed was rebuilt
+   * in place at 10:01, and High Wycombe High Street shipped eleven destinations
+   * whose trip counts today's feed does not reproduce. Every check in the estate
+   * was green and every one of them was right — the byte gates redraw the sheet
+   * from the stored index, and dataScriptDrift() read v1.3 on both sides because
+   * the SCRIPT had not moved.
+   *
+   * ALL FOUR EXPECT EXIT 0, and that is the claim rather than a weakening of it:
+   * FEED-STALE is REPORTED and does not gate, because clearing it costs a
+   * re-count plus a rebuild and a monthly feed refresh (OA-091) would fire it on
+   * every boarding place every month. So the case cannot lean on the exit code
+   * at all, and `also` carries the whole weight — which is why the red one
+   * asserts the two VERSIONS as well as the cell. */
+  {
+    label: 'control: a boarding index counted from the feed that is on disk',
+    make: { withTownPlace: FEED_PLACE, feedInfo: 'match' },
+    expect: 0,
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === FEED_PLACE.place);
+      if (!p) return 'the board never saw the place at all';
+      if (p.boarding !== 'PASS') return 'the place boarding read ' + p.boarding + ', so this control proves nothing';
+      if (!p.feedDrift || p.feedDrift.length) return 'a matching feed was reported as drift';
+      return null;
+    },
+    what: 'green here means the check is quiet when the index counted the feed on disk',
+  },
+  {
+    label: 'a boarding index counted from a feed since rebuilt reads FEED-STALE',
+    make: { withTownPlace: FEED_PLACE, feedInfo: 'stale' },
+    expect: 0,
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === FEED_PLACE.place);
+      if (!p) return 'the board never saw the place at all';
+      // The SHEET still reproduces and the SCRIPT has not moved -- that is the
+      // whole row, so a case that reddened the byte gate or INDEX-STALE instead
+      // would be testing something else.
+      if (p.boarding !== 'FEED-STALE') return 'the board saw it but its boarding read ' + p.boarding;
+      if (!p.feedDrift || !p.feedDrift.length) return 'the cell said FEED-STALE with no drift recorded behind it';
+      const d = p.feedDrift[0];
+      if (d.said === d.current) return 'the drift names the same version on both sides, so the mutation did nothing';
+      return null;
+    },
+    what: 'THE CHECK ITSELF - the sheet redraws byte-for-byte, the script is current, and the DATA is of a feed that is gone',
+  },
+  {
+    label: 'no feed_info on disk reads as cannot-tell, not as a finding',
+    make: { withTownPlace: FEED_PLACE },                       // no feedInfo: the tree has no _gtfs at all
+    expect: 0,
+    also: (json) => {
+      const p = (json.places || []).find(r => r.name === FEED_PLACE.place);
+      if (!p) return 'the board never saw the place at all';
+      if (p.boarding !== 'PASS') return 'an unanswerable question became a finding: boarding read ' + p.boarding;
+      if (!p.feedDrift || p.feedDrift.length) return 'a feed nobody can read was reported as drift';
+      return null;
+    },
+    what: 'the same rule dataScriptDrift() adopted for an absent stamp - a board red for a fact nobody can act on is muted in a week',
+  },
+  {
+    label: 'a PORTAL FIXTURE whose index counted a feed since rebuilt reads FEED-STALE',
+    make: { portalFixture: { name: 'High Wycombe High Street' }, feedInfo: 'stale' },
+    expect: 0,
+    also: (json) => {
+      const f = (json.portalFixtures || []).find(r => r.name === 'High Wycombe High Street');
+      if (!f) return 'the board never saw the fixture at all';
+      if (f.boarding !== 'FEED-STALE') return 'the fixture boarding read ' + f.boarding + ', not FEED-STALE';
+      if (!f.feedDrift || !f.feedDrift.length) return 'the cell said FEED-STALE with no drift recorded behind it';
+      return null;
+    },
+    what: 'OA-210 asked what the PORTAL answer is - refresh-place-fixture.mjs regenerates from the fixture\'s own data and cannot see this; the buses tree asks it for both',
   },
   {
     label: 'Ramsey at some OTHER stale hash',

@@ -414,6 +414,58 @@ function scriptVersion(scriptPath) {
   return m ? m[1] : null;
 }
 
+/* AND WHICH FEED DID IT COUNT? (OA-210)
+ *
+ * dataScriptDrift() above versions the derivation SCRIPT and gates on it, which
+ * is the right first cut and is exactly half the question. The other half is the
+ * DATA. `region` in a boarding index names a FILE -- `buckinghamshire.sqlite` --
+ * and that file is rebuilt in place by every refresh, so the name is stable
+ * across the very change that matters.
+ *
+ * MEASURED, not imagined. On the morning of 2026-08-31 three of the four boarding
+ * indexes were built at 05:07 and the Buckinghamshire feed was rebuilt in place at
+ * 10:01. High Wycombe High Street was therefore shipping eleven destinations whose
+ * trip counts today's feed does not reproduce -- Beaconsfield 830 against 811,
+ * London 644 against 590, Loudwater 1141 against 1095, and eight more. Every check
+ * in the estate was green and every one of them was right: the byte gates ask
+ * whether the current generator redraws the sheet from its stored index, and
+ * dataScriptDrift() read v1.3 on both sides because the SCRIPT had not moved. Only
+ * the data had.
+ *
+ * `boarding_index.py` v1.4 records the feed_version it counted, so the claim is
+ * written down at both ends and this only asks whether they agree -- the same
+ * shape as the version stamp, one level up. An index with no `feed` key, an
+ * unreadable feed_info, or a `region` naming no feed file is NOT a finding: it is
+ * "cannot tell", and a board that reddened for a fact nobody can act on would be
+ * muted in a week. Same rule dataScriptDrift() adopted for an absent `generatedBy`.
+ *
+ * IT IS REPORTED AND DOES NOT GATE, and that is a decision rather than an
+ * omission. Clearing it costs `rollout_places.js --refresh-index --asof <date>`
+ * plus a rebuild, so a monthly feed refresh -- which is OA-091 -- would fire this
+ * on every boarding place every month. A cell that is red every month by design is
+ * the column everyone learns to ignore, and the cadence has to be settled before
+ * it can be a gate. Until then it says the true thing loudly and stops there.
+ *
+ * Returns [] when all is well, or one {file, said, current, region} per
+ * disagreement.
+ */
+function dataFeedDrift(dataDir, busesDir) {
+  const jf = path.join(dataDir, 'boarding_index.json');
+  if (!fs.existsSync(jf)) return [];                     // no boarding plan here
+  let j;
+  try { j = JSON.parse(fs.readFileSync(jf, 'utf8')); } catch { return []; }
+  const said = j.feed ? String(j.feed) : null;
+  if (!said) return [];                                  // written before the stamp existed
+  const region = String(j.region || '').replace(/\.sqlite$/i, '');
+  if (!region) return [];
+  const info = path.join(busesDir, '_gtfs', 'feed_info_' + region + '.json');
+  if (!fs.existsSync(info)) return [];                   // cannot ask the question
+  let current = null;
+  try { current = ((JSON.parse(fs.readFileSync(info, 'utf8')).feed_info) || {}).feed_version || null; } catch { current = null; }
+  if (!current) return [];
+  return String(current) === said ? [] : [{ file: 'boarding_index.json', said, current: String(current), region }];
+}
+
 function dataScriptDrift(s4Dir, assetsDir) {
   const assets = assetsDir || SK;
   const out = [];
@@ -557,6 +609,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, dataScriptDrift, detectExternalStyle,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, dataScriptDrift, dataFeedDrift, detectExternalStyle,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

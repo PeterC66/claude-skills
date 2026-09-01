@@ -27,7 +27,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, dataScriptDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
+const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
@@ -348,6 +348,14 @@ function gatePlace(p) {
      * either way, so nothing is hidden by the cell being the other finding. */
     row.indexDrift = dataScriptDrift(s4.dir);
     if (row.indexDrift.length && row.boarding === 'PASS') row.boarding = 'INDEX-STALE';
+    /* ...AND WHICH BODS FEED DID IT COUNT? (OA-210) The stamp above versions the
+     * SCRIPT; this one versions the DATA, which is the half that moved on
+     * 2026-08-31 while every check was green. Reported, not gating -- see
+     * dataFeedDrift()'s own header for why, and OA-091 for the cadence that has
+     * to be settled before it can be one. INDEX-STALE outranks it: a stale index
+     * is the louder problem and it is the one with a gate behind it. */
+    row.feedDrift = dataFeedDrift(s4.dir, BUSES);
+    if (row.feedDrift.length && row.boarding === 'PASS') row.boarding = 'FEED-STALE';
   }
   // The DERIVED SHEETS, on the same opt-in terms as a town (OA-170). A place got
   // three sheet columns and a town four, because when gatePlace was written no
@@ -585,6 +593,14 @@ function gatePortalFixture() {
      */
     row.indexDrift = dataScriptDrift(dataDir);
     if (row.indexDrift.length && row.boarding === 'PASS') row.boarding = 'INDEX-STALE';
+    /* OA-210 asked what the PORTAL's answer to the feed question is, since
+     * refresh-place-fixture.mjs regenerates a fixture from the fixture's own
+     * stored data and so cannot see this any more than the byte gate can. The
+     * answer is that the buses tree asks it for both, for the reason written
+     * above about the scripts: this is the one tree that holds the fixture, the
+     * derivation scripts AND `_gtfs/feed_info_<region>.json`. */
+    row.feedDrift = dataFeedDrift(dataDir, BUSES);
+    if (row.feedDrift.length && row.boarding === 'PASS') row.boarding = 'FEED-STALE';
     out.push(row);
   }
   return out;
@@ -1195,6 +1211,20 @@ async function main() {
     }
     console.log('    re-derive it with:  node rollout_places.js --place "' + r.name + '" --apply --force --refresh-index --asof <YYYY-MM-DD>');
   }
+  /* OA-210 — the feed half, named in full for the same reason as the script half:
+   * the cell can hold one word and a sheet can have both problems. Printed for the
+   * fixtures too, in the same pass, because the fixture rows are the ones nothing
+   * else can ask this of. NOT in `bad` — see dataFeedDrift()'s header. */
+  const feedDriftRows = [...placeRows, ...portalFixtureRows].filter(r => r.feedDrift && r.feedDrift.length);
+  for (const r of feedDriftRows) {
+    for (const d of r.feedDrift) {
+      console.log('  FEED STALE (reported, NOT gating): ' + r.name + ' -- boarding_index.json counted BODS feed ' + d.said
+        + ' and _gtfs/feed_info_' + d.region + '.json is now ' + d.current
+        + '. Its trip counts are of a feed that is no longer on disk; nothing else in the estate can see this.');
+    }
+    console.log('    re-count it with:  node rollout_places.js --place "' + r.name + '" --apply --force --refresh-index --asof <YYYY-MM-DD>');
+  }
+
   console.log('\n=== Places (' + places.length + ') === engine: current PLACE template = ' + CURRENT_PLACE_ENGINE);
   const pw = [34, 18, 6, 26, 9, 9, 9, 9, 9, 11, 26, 20, 8];
   if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Schematic | Diagram | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|');

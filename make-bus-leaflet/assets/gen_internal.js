@@ -3089,7 +3089,13 @@ if(LAB && PIDX!==false && PANEL && PANEL.endY!=null){
      * *St Mary and All Saints CofE Primary* was shortened to fit a half-width
      * column that existed only because the code chose the columns before it knew
      * how many rows there would be. The order below is the whole fix. */
-    const rows = LAB.indexPass({ size: (cfg.marker!=null?cfg.marker:2.3), max: perCol*2 });
+    /* THE DEFAULT IS THE LEGIBILITY FLOOR, 2.4 mm (OA-213) — it was 2.3, which is
+     * below it, and no town overrides `placeIndex.marker`, so that one constant was
+     * 27% of every hard defect on the board. `max` is the block's CAPACITY and the
+     * pass now fills it (OA-187): it used to be spent on candidates the map had no
+     * room for, which is how High Wycombe reported free rows and unnumbered names
+     * in the same sentence. */
+    const rows = LAB.indexPass({ size: (cfg.marker!=null?cfg.marker:2.4), max: perCol*2 });
     const COLS = (cfg.cols!=null) ? cfg.cols : (rows.length > perCol ? 2 : 1);
     const COLW = (X1-X0)/COLS, NAMEW = COLW - NUMW - 2.0;
     if(rows.length){

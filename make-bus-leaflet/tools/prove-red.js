@@ -1254,8 +1254,44 @@ const MUTATIONS = [
 
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'each marker is sized to its OWN digits, so a two-digit ordinal overhangs the box that was reserved',
-    find: "    const widest = String(opt.from + take.length - 1).replace(/\\d/g, '8');",
+    find: "    const widest = String(opt.from + Math.min(cap, take.length) - 1).replace(/\\d/g, '8');",
     to: "    const widest = String(opt.from + placed.length);" },
+
+  /* OA-187 (2026-09-01) — `max` stopped being an attempt budget and became the
+   * block's capacity. Four clauses, four mutations, and the first is the bug that
+   * was actually shipping: it restores the old slice verbatim. The others guard
+   * what the fix could plausibly have broken on its way in — an unbounded walk, a
+   * box reserved for an ordinal the pass cannot issue, and a walk that overruns
+   * the caller's block. */
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the index spends its rows on candidates that cannot be numbered, so the block is left part empty beside names it never tried (the OA-187 bug, restored)',
+    find: "    const take = want.slice(0, ceiling);",
+    to: "    const take = want.slice(0, cap);" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the attempt walk is unbounded, so a 260-name sheet runs the placer 260 times to fill a 12-row block',
+    find: "    const ceiling = Math.min(want.length, Math.max(cap * 4, cap + 40));",
+    to: "    const ceiling = want.length;" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the marker box is sized from the attempt ceiling, so every sheet reserves room for an ordinal the pass can never issue',
+    find: "    const widest = String(opt.from + Math.min(cap, take.length) - 1).replace(/\\d/g, '8');",
+    to: "    const widest = String(opt.from + take.length - 1).replace(/\\d/g, '8');" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the walk does not stop when the block is full, so more markers are drawn on the map than the caller has rows to list',
+    find: "      if (placed.length >= cap) break;      // the block is full: stop looking",
+    to: "      if (false) break;" },
+
+  /* OA-213 (2026-09-01) — the marker size stopped being a bare constant and became
+   * a relationship with quality_metrics.js's own legibility floor. That is the
+   * only reason this one is mutable at all: a lone 2.3 restated in two files has
+   * nothing to be wrong against, which is exactly how it survived a year and 27%
+   * of the board's hard defects. */
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the index marker drops back below the print-legibility floor, so every marker on every index sheet is a hard defect again',
+    find: "    const opt = Object.assign({ size: 2.4, from: 1, max: Infinity, fill: '#111', gap: 1.7 }, o || {});",
+    to: "    const opt = Object.assign({ size: 2.3, from: 1, max: Infinity, fill: '#111', gap: 1.7 }, o || {});" },
 
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'the index pass FORCES its markers, so a number is stamped on reserved ink and the drop count falls for nothing',

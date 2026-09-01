@@ -987,6 +987,21 @@ const qualityCell = (name) => {
 // it now. The standing consequence: anything that MOVES INK must not ride a rollout
 // while this entry stands, or the excuse quietly stops being true while a customer
 // is still deciding. OA-187 was held back on exactly that ground.
+//
+// 2026-09-01 — AND THAT IS NOW WHAT HAS HAPPENED, DELIBERATELY, SO READ THE ABOVE
+// AS HISTORY. OA-187 and OA-213 shipped together and they MOVE INK: the numbered
+// index block now fills, and its markers are drawn at 2.4 mm rather than 2.3.
+// Wisbech was held out of that rollout on Peter's explicit call, which is what the
+// paragraph above asks for — but the half of the excuse that said "the STAMP is the
+// whole of what is stale" is no longer true of this town. Measured, not assumed:
+// Wisbech internal would go HARD 9 -> 4 and its schematic 7 -> 2, with no change in
+// dropped labels, so the sheets #139 shows the customer are now genuinely older
+// artwork than the engine would draw, not merely an older stamp of the same
+// artwork. The entry still holds and for its ORIGINAL reason — a rebuild would
+// supersede a proposal somebody is still deciding on — but nobody may now cite
+// byte-neutrality for it. When #139 is accepted or withdrawn, Wisbech is a real
+// re-render and not a re-stamp. Measurement:
+// Development Docs/place-index-round_2026-09-01.md in buses-data.
 const ENGINE_STALE_ALLOWED = [
   { town: 'Wisbech', engine: 'cf683a815c', since: '2026-08-31',
     why: 'portal proposed-update #139 is with the customer; a rebuild would supersede it' },

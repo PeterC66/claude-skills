@@ -635,7 +635,15 @@ class Labeller {
    */
   indexPass(o) {
     if (this._indexed) return this._indexed;
-    const opt = Object.assign({ size: 2.3, from: 1, max: Infinity, fill: '#111', gap: 1.7 }, o || {});
+    /* 2.4 mm, NOT 2.3 (2026-09-01, OA-213). The marker used to be drawn at 2.3 mm,
+     * which is below `quality_metrics.js`'s own print-legibility floor of 2.4 —
+     * so every index marker on the estate was a HARD defect, 82 of them, 27% of
+     * the whole board. Measured across all 39 rebuildable sheets before it was
+     * taken: it removes 104 hard defects, takes all 21 index sheets off the
+     * sub-floor list, drops not one additional label anywhere, and costs a single
+     * extra point-label-over-ink. The floor itself is untouched — the artwork
+     * moved, which is the difference between fixing this and redefining it. */
+    const opt = Object.assign({ size: 2.4, from: 1, max: Infinity, fill: '#111', gap: 1.7 }, o || {});
     /* WHICH ONES GET A NUMBER is the main solve's own question, asked again. The
      * comparator is `solve()`'s, verbatim: priority, then the longest name (which
      * had the fewest places to go), then insertion order. When `max` bites, what
@@ -643,18 +651,43 @@ class Labeller {
      * to be at the end of an array. */
     const want = this.solve().filter(r => !r.placed && r.it.at).map(r => r.it);
     want.sort((a, b) => (b.priority - a.priority) || (b.text.length - a.text.length) || (a.seq - b.seq));
-    const take = want.slice(0, opt.max === Infinity ? want.length : Math.max(0, opt.max | 0));
-    if (!take.length) { this._indexed = []; return this._indexed; }
+    /* `max` IS A BLOCK CAPACITY, NOT AN ATTEMPT BUDGET (2026-09-01, OA-187).
+     *
+     * This used to slice `want` to `max` and try only those. Every candidate the
+     * map has no room for — no space beside the symbol even for two digits —
+     * spent one of the caller's ROWS and produced none, so a budget counted in
+     * attempts was being spent against a block measured in successes, and the two
+     * agree only on a sheet where nothing fails. They rarely do: High Wycombe's
+     * diagram reported `51 names could not be numbered either ... and the index
+     * block still has 5 free rows` — fifty-one candidates and five empty rows,
+     * with nothing tried. The sheet was contradicting itself in one sentence.
+     *
+     * So `cap` is what the caller can PRINT and the walk stops when the block is
+     * full, not when the attempts run out. `ceiling` is what keeps that from
+     * becoming unbounded: `want` can be 260 names on a dense sheet and `_best` is
+     * not free, so the attempts are still capped — just not at the same number as
+     * the block's capacity. It is deliberately generous rather than tuned; the
+     * measured case needed 43 attempts to fill 12 rows. */
+    const cap = opt.max === Infinity ? want.length : Math.max(0, opt.max | 0);
+    const ceiling = Math.min(want.length, Math.max(cap * 4, cap + 40));
+    const take = want.slice(0, ceiling);
+    if (!cap || !take.length) { this._indexed = []; return this._indexed; }
     /* PLACE ON THE WIDEST NUMBER, DRAW THE ACTUAL ONE. The box a marker needs
      * depends on how many digits it ends up with, and the digits are not known
      * until the survivors are counted — so every marker is placed against the
      * widest ordinal this pass could issue, and the glyph drawn into it is never
      * wider than that. The alternative, numbering first, forces a choice between a
      * gap in the sequence (some marker did not fit) and a box narrower than the
-     * text, and this project has already paid for the second one twice. */
-    const widest = String(opt.from + take.length - 1).replace(/\d/g, '8');
+     * text, and this project has already paid for the second one twice.
+     *
+     * It is sized from `cap`, NOT from `ceiling`: the highest ordinal this pass
+     * can ever issue is `from + min(cap, take.length) - 1`, because the walk below
+     * stops at `cap`. Widening it to the attempt ceiling would reserve a box for a
+     * number that cannot exist and move ink on every sheet for nothing. */
+    const widest = String(opt.from + Math.min(cap, take.length) - 1).replace(/\d/g, '8');
     const placed = [];
     for (const src of take) {
+      if (placed.length >= cap) break;      // the block is full: stop looking
       const it = { id: 'idx:' + src.id, at: src.at, text: widest, size: opt.size,
                    bold: true, wrap: false, leader: true, own: src.own, gap: opt.gap,
                    fill: opt.fill, priority: 0, seq: this.items.length + placed.length };

@@ -371,6 +371,124 @@ test('a caller that never asks for an index changes not one byte', () => {
   assert.strictEqual(a.indexSvg(), '', 'markers were drawn without indexPass()');
 });
 
+/* ---- OA-187: `max` is the block's CAPACITY, not a budget of attempts --------
+ *
+ * `crowd()` above cannot see this bug and no fixture built from it can. Every one
+ * of its candidates that gets tried either places or does not, and `max` only ever
+ * bites at the end of the list — so attempts and successes agree, which is exactly
+ * the one arrangement in which the old code was right.
+ *
+ * WHAT SEPARATES THEM is a candidate that SORTS FIRST and can never be numbered.
+ * The two `b*` points below sit inside a hard-reserved band with priority 9, so
+ * the comparator puts them at the head of `want` and `_best` refuses both — the
+ * shape High Wycombe reports on every build, where fifty-one names went unnumbered
+ * beside five free rows. Asked for two rows, the old code spent both attempts on
+ * them and printed nothing; this one walks on. The premise is asserted rather than
+ * assumed, because a fixture in which `b0`/`b1` turned out to be placeable would
+ * pass every assertion below while proving the opposite. */
+const blockedFirst = (nBlocked = 4) => {
+  const P = 70;
+  const L = new Labeller({ page: [P, P], frame: { x0: 0, y0: 0, x1: P, y1: P },
+                           bounds: { x0: 0, y0: 0, x1: P, y1: P } });
+  L.hard.set(0, 0, P, 10);                                  // a reserved band, top of the page
+  for (let i = 0; i < nBlocked; i++)
+    L.add({ id: 'b' + i, at: [8 + (i % 8) * 7, 5], text: 'Wonderfully Long Blocked Name ' + i,
+            priority: 9, size: 3, leader: false, wrap: false });
+  const A = 'Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel'.split(' ');
+  A.forEach((n, i) => L.add({ id: 'p' + i, at: [P / 2 - 7 * 6 / 2 + i * 6, P / 2],
+                              text: 'Wonderfully Long Place Name ' + n,
+                              size: 3, leader: false, wrap: false }));
+  return L;
+};
+
+test('`max` counts rows PRINTED, not candidates tried, so the block fills', () => {
+  // Premise 1: the two blocked points really do sort first.
+  const L0 = blockedFirst();
+  const want = L0.solve().filter(r => !r.placed && r.it.at).map(r => r.it);
+  want.sort((a, b) => (b.priority - a.priority) || (b.text.length - a.text.length) || (a.seq - b.seq));
+  assert.deepStrictEqual(want.slice(0, 2).map(i => i.id), ['b0', 'b1'],
+    'the blocked pair no longer heads the candidate list, so this fixture proves nothing');
+  // Premise 2: and they can never be numbered, however many attempts are allowed.
+  const everything = blockedFirst().indexPass({ max: 99 }).map(r => r.id);
+  assert.ok(!everything.includes('b0') && !everything.includes('b1'),
+    'a blocked point was numberable after all: ' + everything.join(','));
+  // The claim: two rows asked for, two rows printed — from further down the list.
+  const rows = blockedFirst().indexPass({ max: 2 });
+  assert.strictEqual(rows.length, 2,
+    'the block was left part empty while candidates remained: ' + rows.map(r => r.id).join(','));
+});
+
+test('the attempt walk is BOUNDED — a dense sheet does not run the placer 260 times', () => {
+  // The other half of the same change: not spending the caller's rows on failures
+  // must not become spending the whole afternoon on them. `_best` is the cost, so
+  // it is `_best` that is counted, and the ceiling is asserted as an exact number
+  // rather than "fewer than all" — a ceiling one candidate short of the list would
+  // satisfy the loose form and bound nothing.
+  const N = 60;
+  const L = blockedFirst(0);
+  L.hard.set(0, 0, 70, 70);                                 // nothing can be numbered at all
+  for (let i = 0; i < N; i++)
+    L.add({ id: 'q' + i, at: [4 + (i % 30) * 2, 20 + Math.floor(i / 30) * 8],
+            text: 'Wonderfully Long Place Name ' + i, size: 3, leader: false, wrap: false });
+  const cap = 1, ceiling = Math.max(cap * 4, cap + 40);      // 41
+  assert.ok(L.unplaced().length > ceiling,
+    `premise: the candidate list must be longer than the ceiling; it is ${L.unplaced().length}`);
+  let calls = 0;
+  const real = L._best.bind(L);
+  L._best = (...a) => { calls++; return real(...a); };
+  assert.strictEqual(L.indexPass({ max: cap }).length, 0, 'premise: nothing here can be numbered');
+  assert.strictEqual(calls, ceiling, `the walk was not bounded at ${ceiling}: it tried ${calls}`);
+});
+
+test('the marker box is sized from the CAPACITY, never from the attempt ceiling', () => {
+  // Widening the walk must not widen the ink. Asked for two rows from `from: 1`,
+  // the highest ordinal this pass can issue is 2 — one glyph — however many
+  // candidates it had to try to find them. Sizing the box from `take.length`
+  // instead would reserve room for a two-digit number that cannot exist, and move
+  // ink on every sheet that carries an index for nothing.
+  //
+  // AND THE CANDIDATE LIST MUST REACH TEN, which is the whole test. The first cut
+  // of this fixture had eight candidates, so the wrong answer was `String(8)` —
+  // one glyph, the same width as the right one — and the mutation that inverts
+  // this line SURVIVED the harness while the assertion below passed. Ten is where
+  // the two answers first differ, so the premise is asserted rather than trusted.
+  const L = blockedFirst();
+  assert.ok(L.unplaced().length >= 10,
+    `premise: fewer than ten candidates and the wrong answer is a one-digit box too, which asserts nothing (got ${L.unplaced().length})`);
+  const rows = blockedFirst().indexPass({ max: 2 });
+  assert.strictEqual(rows.length, 2, 'premise: two markers were drawn');
+  assert.ok(rows.every(r => String(r.n).length === 1), 'premise: both ordinals are one digit');
+  // THE CONTROL READS THE MARKER'S OWN SIZE rather than restating it. Naming the
+  // number here made this test fail the day OA-213 moved the default from 2.3 to
+  // 2.4 — it was measuring the size constant, which is not the property under
+  // test. What is under test is the WIDTH: one glyph or two.
+  const size = rows[0].rec.it.size;
+  const control = new Labeller({ page: [70, 70] })
+    .add({ id: 'c', at: [35, 35], text: '8', size, bold: true, wrap: false, gap: 1.7 })
+    .solve()[0];
+  const oneDigit = control.b[2] - control.b[0];
+  for (const r of rows) assert.ok(Math.abs((r.rec.b[2] - r.rec.b[0]) - oneDigit) < 1e-9,
+    `a one-digit marker reserved ${r.rec.b[2] - r.rec.b[0]}mm against a one-digit box of ${oneDigit}mm`);
+});
+
+test('an index marker is never drawn below the floor the quality gate enforces', () => {
+  // OA-213: the marker was 2.3 mm against a print-legibility floor of 2.4, so
+  // every index marker on the estate was a HARD defect — 82 of them, 27% of the
+  // whole board, for a year, in a number nothing compared to anything.
+  //
+  // THIS IS THE TEST THAT WOULD HAVE CAUGHT IT, and the reason it did not exist is
+  // that 2.3 was a bare constant: a lone number restated in two files has nothing
+  // to be wrong against. The floor is not restated here either — it is read from
+  // quality_metrics.js, the file that charges the defect — so the two can never
+  // again drift apart silently. If the floor rises, this goes red and the marker
+  // must follow it.
+  const { T } = require('./_engine.js').load('quality_metrics.js');
+  const rows = blockedFirst().indexPass({ max: 2 });
+  assert.ok(rows.length >= 1, 'premise: at least one marker was drawn');
+  for (const r of rows) assert.ok(r.rec.it.size >= T.minTextMm,
+    `an index marker is drawn at ${r.rec.it.size}mm against a legibility floor of ${T.minTextMm}mm`);
+});
+
 test('`gap` is read, and an absent one is the default distance', () => {
   // The index marker asks to sit closer than a name would. Proving the option is
   // READ needs a page where the two answers differ, not merely one where it fits.

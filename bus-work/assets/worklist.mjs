@@ -525,6 +525,24 @@ function fromCommitments() {
 
     const overdue = days < 0;
     const steps = [{ kind: 'chat', what: `Read ${c.link || 'Development Docs/commitments.json'} and do it.` }];
+    /*
+     * ASK WHETHER IT IS ALREADY DONE, and ask it FIRST after the instruction.
+     * This file watches in one direction only: it exists because nothing on
+     * disk changes when a letter is not sent, and the same is exactly true when
+     * Peter sends one. On 2026-09-01 this row said "Send the OSMF enquiry --
+     * due 2026-09-08, 7d left" a week after he had sent it, on 2026-08-25, and
+     * it would have gone on saying so until the date passed and turned the
+     * board red over a letter sitting in somebody's inbox.
+     *
+     * There is no read-back to add. The evidence is in his sent mail and it is
+     * not on this machine, so no check here can reach it. The only channel that
+     * exists is him telling a session -- which he will not do unprompted about
+     * a row he believes is finished, because from where he sits it IS finished.
+     * So the row asks. It costs one line when the answer is no, and the
+     * alternative is a list that lies confidently about the one class of work
+     * it was built to watch.
+     */
+    steps.push({ kind: 'chat', what: 'ALREADY DONE IT? Say so — nothing here can see your sent mail, and this row will keep asking until somebody tells it. Then retire the entry, and add the chase or the next step if one is now owed.' });
     steps.push({ kind: 'chat', what: 'When it is done, DELETE its entry from Development Docs/commitments.json — the list stops being read the moment it keeps dead rows.' });
     if (!overdue) steps.push({ kind: 'chat', what: 'If the date is wrong, move it deliberately. Moving a date is a decision; letting it slide is not.' });
 

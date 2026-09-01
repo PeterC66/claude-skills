@@ -98,6 +98,19 @@ writeCommitments([{ ...base, by: dayOffset(-5) }]);
 const od = expect('5d overdue', { key: 'commitment-letter', present: true, rank: 4 });
 if (od && !/OVERDUE/.test(od.title)) { bad++; console.log('        title does not say OVERDUE: ' + od.title); }
 
+// 5b. EVERY ROW ASKS WHETHER IT IS ALREADY DONE, and this is not cosmetic.
+//    On 2026-09-01 the OSMF row said "send it, 7d left" a week after Peter had
+//    sent it, because nothing on this disk changes when he sends an email. The
+//    only channel that exists is him saying so, and he will not say so about a
+//    row he believes is finished. So the row has to ask, in both bands.
+for (const [when, off] of [['inside the window', 3], ['overdue', -5]]) {
+  writeCommitments([{ ...base, by: dayOffset(off) }]);
+  const row = items().find((i) => i.key === 'commitment-letter');
+  const asks = row && row.do.some((d) => /ALREADY DONE IT\?/.test(d.what || ''));
+  console.log(`  ${asks ? 'RED  ' : 'MISS '} ${when}: the row asks whether it is already done`);
+  if (!asks) { bad++; console.log(`        steps were: ${row ? row.do.map((d) => d.what).join(' | ') : '(no row)'}`); }
+}
+
 // 6. THE ONE THAT MATTERS MOST: done means gone. Remove the entry and the row
 //    must vanish -- not linger, not go amber. A nag that outlives the work is
 //    how the whole list stops being read.

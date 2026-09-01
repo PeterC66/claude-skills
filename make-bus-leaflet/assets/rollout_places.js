@@ -257,8 +257,13 @@ function rolloutOnePlace(p) {
    * construction, so both of those verdicts are reachable and both of them are
    * wrong. See unrenderedS4() in gate_lib.js for how the state is produced -- it is
    * this tool's own blocking-warning stop, twenty lines below the S4 commit. */
+  /* AND IT HAS TO YIELD TO --force, OR ITS OWN REMEDY IS A NO-OP (2026-09-01) —
+   * the same fault, fixed in the same change as rollout.js's, because this guard
+   * and that one are one guard written twice and fixing either alone is how a
+   * remedy covers a class once rather than completely. The town side is where it
+   * was hit; see the paragraph there. */
   const unrendered = unrenderedS4(manifest);
-  if (unrendered) {
+  if (unrendered && !FORCE) {
     return { name: p.name, status: 'UNRENDERED',
              detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
                    + `version that has no JPG on disk. Finish it with:  `

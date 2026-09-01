@@ -149,8 +149,8 @@ function unrender(manifestPath) {
   return v;
 }
 
-function runTool(tool, tmp, nameFlag, name) {
-  const r = spawnSync(process.execPath, [tool, '--buses', tmp, nameFlag, name],
+function runTool(tool, tmp, nameFlag, name, extra = []) {
+  const r = spawnSync(process.execPath, [tool, '--buses', tmp, nameFlag, name, ...extra],
     { encoding: 'utf8', cwd: path.join(ROOT, 'assets') });
   return { out: (r.stdout || '') + (r.stderr || ''), code: r.status };
 }
@@ -266,7 +266,45 @@ console.log(`\nF  ${TOWN}, an older S4's render removed — the head is what mat
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+/* ---- G and H: the verdict must YIELD to the command it prints ----------
+ *
+ * ADDED 2026-09-01, AFTER IT BIT. Cases B and D prove the verdict FIRES and that
+ * it names `--apply --force` as the way to finish the map. Neither asked whether
+ * that command works — and it did not: the guard returned before the `!FORCE`
+ * test, so its own printed remedy reached the same line and got the same refusal,
+ * for ever. Hit for real during the OA-187/OA-213 rollout, when a transient
+ * file-open error killed High Wycombe between the S4 commit and the S5 render,
+ * producing exactly the state this verdict exists for, on a map that then could
+ * not be finished by the tool that made it.
+ *
+ * The shape is worth the two extra cases: a guard is not proved by watching it
+ * refuse. It is proved by watching it refuse AND watching the stated escape work,
+ * because a refusal nobody can satisfy is worse than no refusal — it stops the one
+ * tool that could repair the state. `--force` without `--apply` is a dry run, so
+ * these assert only that the verdict gets out of the way; what happens after is
+ * cases A to F's business.
+ */
+for (const [label, tool, src, rel, flag, name] of [
+  ['G', ROLLOUT, srcTown, path.join('Areas', TOWN), '--town', TOWN],
+  ['H', ROLLOUT_PLACES, srcPlace, path.join('Places', '_standalone', PLACE), '--place', PLACE],
+]) {
+  console.log(`\n${label}  ${name}, unrendered AND --force — the verdict must yield to its own remedy`);
+  const { tmp, manifestPath } = buildFixture(src, rel);
+  const v = unrender(manifestPath);
+  const plain = runTool(tool, tmp, flag, name);
+  if (verdict(plain.out, name) !== 'UNRENDERED') {
+    fail(`premise: without --force this fixture must report UNRENDERED, got ${verdict(plain.out, name)}. Nothing below means anything otherwise.`);
+  } else {
+    pass(`premise: UNRENDERED without --force (v${v})`);
+    const forced = runTool(tool, tmp, flag, name, ['--force']);
+    const got = verdict(forced.out, name);
+    if (got === 'UNRENDERED') fail(`--force still returns UNRENDERED, so the command this verdict PRINTS cannot clear it. A guard whose stated remedy is a no-op stops the only tool that could fix the state.\n${forced.out}`);
+    else pass(`${got} — --force gets past the verdict`);
+  }
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
 console.log(failures
   ? `\n${failures} FAILURE(S) — the UNRENDERED verdict is not doing what this file says it does.\n`
-  : '\nAll cases behaved: the verdict fires on the state that produced it, on BOTH tools, and stays quiet on the estate as it stands.\n');
+  : '\nAll cases behaved: the verdict fires on the state that produced it, on BOTH tools, stays quiet on the estate as it stands, and yields to the command it tells you to run.\n');
 process.exit(failures ? 1 : 0);

@@ -168,8 +168,18 @@ function rolloutOne(t) {
    * S4 commit, so it produces the same state and its fast path buries it the same
    * way. Fixing one and not the other is how a guard covers a class once rather
    * than completely. See unrenderedS4() in gate_lib.js. */
+  /* AND IT HAS TO YIELD TO --force, OR ITS OWN REMEDY IS A NO-OP (2026-09-01).
+   * This returned unconditionally, and the sentence it printed told you to re-run
+   * with `--apply --force` — which reached this same line and returned the same
+   * refusal, for ever. Hit for real on High Wycombe during the OA-187/OA-213
+   * rollout: a transient file-open error killed the run between the S4 commit and
+   * the S5 render, leaving exactly the state this guard is for, and the guard's
+   * advice could not clear it. A guard whose stated remedy cannot satisfy it is
+   * worse than no guard: it stops the one tool that could fix the state. --force
+   * is the whole vocabulary this file already has for "a human has read this", and
+   * every other stop here honours it. */
   const unrendered = unrenderedS4(manifest);
-  if (unrendered) {
+  if (unrendered && !FORCE) {
     return { name: t.name, status: 'UNRENDERED',
              detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
                    + `version that has no JPG on disk. Finish it with:  `

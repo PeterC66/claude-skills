@@ -37,6 +37,15 @@ const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
 // Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
 // makes it load inside the portal as well as here.
 const { separateRow } = require(path.join(path.dirname(_LABELLER), 'svg_primitives.js'));
+// STRICT_GUARDS, adopted 2026-09-02 (OA-224 Tier 1.4). gen_external_radial.js took the
+// contract on 2026-08-28 (OA-045) and this file is that generator's clone, so the one
+// refusal site it has -- the howToUse panel below, NOT DRAWN when nowhere is clear --
+// wrote to stderr and exited 0, which the portal's publish path never reads. Swept
+// before adopting: across the twelve committed place maps nothing here refuses, so
+// this starts green. Same resolution as the modules above, so the portal's
+// engine/place/ copy reaches engine/strict_guards.js.
+const { refuse: guardRefuse, report: reportRefusals } =
+  require(path.join(path.dirname(_LABELLER), 'strict_guards.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn || {};
@@ -1008,10 +1017,12 @@ if (HOWTO) {
        * thing that has just been covered up.
        */
       draw = false;
-      process.stderr.write('howToUse: no position on this sheet leaves a ' + PW.toFixed(0) + 'x' + PH.toFixed(0)
+      // refuse(), not stderr.write(): the message is unchanged; what was missing was the
+      // EXIT CODE, the only signal the portal's publish path reads (as in the radial).
+      guardRefuse('howToUse: no position on this sheet leaves a ' + PW.toFixed(0) + 'x' + PH.toFixed(0)
         + ' mm panel clear of every symbol, so it was NOT DRAWN rather than cover one. '
         + 'Shrink it (design.howToUse.width, or fewer bullets), make room, or place it '
-        + 'deliberately with design.howToUse.at — which also switches this search off.\n');
+        + 'deliberately with design.howToUse.at — which also switches this search off.');
     }
   }
   if (draw) {
@@ -1092,3 +1103,12 @@ function stampNote(cfg, x, y, align) {
 out('</svg>');
 fs.writeFileSync(DIR + '/external.svg', s);
 console.log('external.svg', s.length, 'bytes;', dests.length, 'destination spokes');
+
+// ---- STRICT_GUARDS: report the refusals as an exit code ----------------------
+// Last statement in the file, after the artwork is written, exactly as the radial
+// does it: a build that refused something is still worth LOOKING at, it is just
+// not worth publishing.
+if (reportRefusals('refused to draw something this config asked for -- see the'
+    + ' messages above. The sheet is incomplete and nothing on it says so.')) {
+  process.exitCode = 1;
+}

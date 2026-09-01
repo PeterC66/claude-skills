@@ -75,6 +75,19 @@ const { computeEngineVersion, computePlaceEngineVersion, isPlaceRun, stampEngine
 
 function die(msg) { console.error('stage.js: ' + msg); process.exit(1); }
 
+/* An ISO instant as a LOCAL YYYY-MM-DD. Run-directory ids are built from local time
+ * (see `ts()` below), so anything compared against one has to be on the same clock;
+ * slicing the first ten characters of an ISO string gives the UTC day instead, which
+ * is a different day for an hour of every BST night. Returns null on anything that is
+ * not a parseable instant, so a malformed builtAt still reads as "no readable date"
+ * rather than as a date that happens to sort low. */
+function localDay(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function ts() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -595,6 +608,20 @@ function main() {
          * compares DAYS, and says so: a stale copy made the same day is invisible to
          * it, and claiming otherwise would be the more expensive kind of wrong.
          *
+         * BOTH DAYS ARE LOCAL, and until 2026-09-02 one of them was not. The run id
+         * is built from local time by `new`; `builtAt` is an ISO instant ending in Z,
+         * and the guard read its day by slicing the first ten characters — the UTC
+         * day. Under BST that is an hour behind, so EVERY hand-built S4 committed
+         * between 00:00 and 01:00 local was refused with "carried forward by
+         * seedPrevS4" about a file the build had written seconds earlier. It happened
+         * on the High Wycombe v4.0 build at 00:08 on 2026-09-02, and the refusal
+         * printed a remedy — re-run the generator with BUILD_META_DIR set — which had
+         * already been done and could not help, because nothing the generator writes
+         * changes what timezone the reader is in. A guard whose printed remedy cannot
+         * clear it teaches people to reach for --force-meta, which is the one outcome
+         * this guard cannot afford. `localDay` converts the instant to the same clock
+         * the run id is on; the comparison is unchanged in every other respect.
+         *
          * PLACES ARE EXCLUDED, and that is structural rather than a let-off: the
          * place engine has no build-meta path at all — `rollout_places.js` contains
          * the string BUILD_META_DIR zero times — so a place without one is not a
@@ -608,7 +635,7 @@ function main() {
           else if (runDay) {
             let bm = null;
             try { bm = JSON.parse(fs.readFileSync(bmp, 'utf8')); } catch (e) { bm = null; }
-            const built = bm && typeof bm.builtAt === 'string' ? bm.builtAt.slice(0, 10) : null;
+            const built = bm && typeof bm.builtAt === 'string' ? localDay(bm.builtAt) : null;
             if (!built) why = 'build-meta.json has no readable "builtAt"';
             else if (built < runDay) why = `build-meta.json says builtAt ${built}, before this run's own date ${runDay} — it was carried forward by seedPrevS4, not written by this build`;
           }

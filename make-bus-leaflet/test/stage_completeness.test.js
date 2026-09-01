@@ -172,6 +172,50 @@ test('CONTROL: build-meta.json dated the same day as the run commits', () => {
 });
 
 /*
+ * BOTH DAYS MUST BE ON THE SAME CLOCK. The run id is built from LOCAL time; `builtAt`
+ * is an ISO instant ending in Z, and the guard used to read its day by slicing the
+ * first ten characters — the UTC day. East of Greenwich in summer that is the previous
+ * day for the first hour after local midnight, so a build written seconds earlier was
+ * refused as "carried forward by seedPrevS4", and the remedy the refusal printed could
+ * not clear it. High Wycombe v4.0, 00:08 BST on 2026-09-02.
+ *
+ * The fixture pins the timezone rather than relying on the machine's, so this case
+ * means the same thing on a CI runner in UTC as it does on the laptop in BST: an
+ * instant at 23:09Z is 00:09 the NEXT day in Europe/London, which is the run's own day.
+ */
+function commitTZ(mapDir, runDir, outputs, tz) {
+  return spawnSync(process.execPath,
+    [STAGE, 'commit', 'S4', runDir, '--outputs', outputs],
+    { cwd: mapDir, encoding: 'utf8', env: Object.assign({}, process.env, { TZ: tz }) });
+}
+
+test('build-meta.json written just after LOCAL midnight commits (UTC day is the day before)', () => {
+  const m = newMap('stage-complete-tz-', 'Plainton');
+  // RUN_ID's day is what s4() uses; write builtAt as the instant that is 00:09 local
+  // on that same day in Europe/London, i.e. 23:09Z on the day before.
+  const runDay = (RUN_ID.match(/_(\d{4}-\d{2}-\d{2})_/) || [])[1];
+  const eve = new Date(runDay + 'T00:00:00Z');
+  eve.setUTCDate(eve.getUTCDate() - 1);
+  const justAfterLocalMidnight = eve.toISOString().slice(0, 10) + 'T23:09:42.000Z';
+  const meta = JSON.stringify({ generator: 'gen_internal.js', sheet: 'internal',
+    builtAt: justAfterLocalMidnight, rotationDeg: -1 });
+  const d = s4(m, {}, { 'internal.svg': '<svg/>', 'build-meta.json': meta });
+  const r = commitTZ(m, d, 'internal.svg', 'Europe/London');
+  assert.strictEqual(r.status, 0,
+    'a build-meta written by THIS build, an hour into a BST morning, must not read as carried forward: ' + r.stderr);
+});
+
+test('and the guard still bites in that timezone: a genuinely older build-meta is REFUSED', () => {
+  const m = newMap('stage-complete-tz2-', 'Plainton');
+  const stale = JSON.stringify({ generator: 'gen_internal.js', sheet: 'internal',
+    builtAt: '2026-08-01T09:00:00.000Z', rotationDeg: 12.3 });
+  const d = s4(m, {}, { 'internal.svg': '<svg/>', 'build-meta.json': stale });
+  const r = commitTZ(m, d, 'internal.svg', 'Europe/London');
+  assert.notStrictEqual(r.status, 0, 'the fix must not have turned the guard off');
+  assert.match(r.stderr, /carried forward by seedPrevS4/);
+});
+
+/*
  * PLACES ARE EXCLUDED STRUCTURALLY, not as a let-off: rollout_places.js contains
  * the string BUILD_META_DIR zero times, so the place engine has no build-meta path
  * at all and a place without one has lost nothing. A guard that reddened all twelve

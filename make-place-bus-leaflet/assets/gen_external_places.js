@@ -55,6 +55,14 @@ const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRec
 // engine/place/ copy reaches engine/strict_guards.js.
 const { refuse: guardRefuse, report: reportRefusals } =
   require(path.join(path.dirname(_LABELLER), 'strict_guards.js'));
+
+// ---- main() ---------------------------------------------------------------
+// OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
+// is required, so a test can ask whether it LOADS without asking it to draw a
+// map. Nothing inside is re-indented -- the diff has to read as "a scope was
+// added". Why it was worth a hash move, and the fault that proves it:
+// make-bus-leaflet/test/generator_load.test.js.
+function main() {
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn || {};
@@ -1070,3 +1078,7 @@ if (reportRefusals('refused to draw something this config asked for -- see the'
     + ' messages above. The sheet is incomplete and nothing on it says so.')) {
   process.exitCode = 1;
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

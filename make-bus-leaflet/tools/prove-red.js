@@ -1174,11 +1174,6 @@ const MUTATIONS = [
     find: "cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ''}.`,",
     to: "cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ` (${D.validFrom})`}.`," },
 
-  { suite: 'provenance_date.test.js', file: 'gen_external_busway.js',
-    what: "the busway footer states a date of its own again",
-    find: "cross-checked with operators at bustimes.org${D.checkedAt ? `, ${D.checkedAt}` : ''}.`,",
-    to: "cross-checked with operators at bustimes.org, June 2026.`," },
-
   // dash_fit.js - extracted 2026-08-30 from three copies of the same primitive
   // (OA-167). The whole reason it exists is that a comment saying "change one,
   // change all three" failed TWICE, so the mutations below are what the comment
@@ -1495,7 +1490,7 @@ const MUTATIONS = [
     to: "const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, true);" },
 
   { suite: 'external_primitives.test.js', file: 'external_primitives.js',
-    what: 'the CORRECT wrap becomes the legacy one, so gen_external_busway.js starts drawing an empty first line too',
+    what: 'the CORRECT wrap becomes the legacy one - caught by the unit test alone, because no generator has called it since gen_external_busway.js was dropped',
     find: "const wrap = (label, max = 13) => splitTwoLines(label, max, true);",
     to: "const wrap = (label, max = 13) => splitTwoLines(label, max, false);" },
 
@@ -1572,6 +1567,33 @@ const MUTATIONS = [
     what: 'the fit margin default changes, and the pre-stages — which pass none — would lay every schematic out in a different frame',
     find: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:4) : 0;",
     to: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:5) : 0;" },
+
+  // generator_load.test.js - OA-224 Tier 4.1. Both of these are faults NO byte
+  // gate can see, which is the whole reason that suite exists. The first is the
+  // 2026-09-02 busway fault reproduced exactly: an undeclared helper called at
+  // load. The second is subtler and is the one that would make the wrap a
+  // decoration - a generator that exports main() AND still draws when required
+  // passes every other check in this repository, because a SPAWNED build behaves
+  // identically either way.
+  { suite: 'generator_load.test.js', file: 'gen_external_radial.js',
+    what: 'a generator calls an undeclared helper at load - the exact fault that made gen_external_busway.js unrunnable for a day with every gate green',
+    find: "const { footerBand, footerPlateTop } = require(_dep('footer.js'));",
+    to: "const { footerBand, footerPlateTop } = require(_dep('footer.js'));" + String.fromCharCode(10) + "const _oops = _notDeclaredAnywhere('svg_primitives.js');" },
+
+  { suite: 'generator_load.test.js', file: 'gen_external_radial.js',
+    what: 'the require.main guard goes, so requiring the generator DRAWS - main() is exported but the body never moved behind it',
+    find: "if (require.main === module) main();",
+    to: "main();" },
+
+  // The two above are both caught by "loads without throwing", because a generator
+  // that runs at require time dies looking for routes.json. This third one is the
+  // only mutation the THIRD assertion catches alone: a load-time side effect that
+  // throws nothing. Without it, "requiring a generator draws NOTHING" would be a
+  // test that had never been seen to go red.
+  { suite: 'generator_load.test.js', file: 'gen_external_radial.js',
+    what: 'a generator gains a harmless-looking side effect at load - it throws nothing, so only the silence assertion can see it',
+    find: "const { engineDep, siblingOf } = require(_EP);",
+    to: "const { engineDep, siblingOf } = require(_EP);" + String.fromCharCode(10) + "console.log('resolving engine deps');" },
 
 ];
 

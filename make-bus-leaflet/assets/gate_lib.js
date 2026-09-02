@@ -584,20 +584,25 @@ function unrenderedS4(manifest) {
   return rendered ? null : String(latest.version);
 }
 
-// Detect which external generator template (radial vs busway) a town's own S3
-// gen_external.js currently plays back as, by trying both against the town's
-// own committed external.svg. Used to pick which template to gate/rollout
-// with — it does not itself prove the template is current.
-function detectExternalStyle(s4Dir) {
-  const committed = path.join(s4Dir, 'external.svg');
-  if (!fs.existsSync(committed)) return null;
-  for (const style of ['radial', 'busway']) {
-    const gen = path.join(SK, `gen_external_${style}.js`);
-    if (!fs.existsSync(gen)) continue;
-    if (gate(gen, s4Dir, 'external.svg', committed).status === 'PASS') return style;
-  }
-  return 'radial';
-}
+// EXTERNAL_GENERATOR — there is exactly one external template, and this constant
+// is what replaced the function that used to CHOOSE between two (2026-09-02).
+//
+// `detectExternalStyle(s4Dir)` tried radial, then busway, against the town's own
+// committed external.svg and returned the one that reproduced it — falling back
+// to 'radial' when neither did. That fallback is the reason a broken generator
+// went unnoticed for a day: `gen_external_busway.js` threw ReferenceError at
+// load from 5816627, `gate()` reported that as not-a-PASS like any other byte
+// difference, and the fallback turned "this template cannot even be loaded" into
+// "this town must be radial, then". Every caller was handed a working answer and
+// the board stayed green. A chooser that cannot distinguish a WRONG ANSWER from
+// a BROKEN QUESTION will always prefer the reading that keeps it quiet, which is
+// why the fix is not a better fallback but one template and no choice at all.
+//
+// If a second external template is ever added, it does NOT come back as a probe:
+// the town says which it wants in routes.json (`externalLayout`), and a template
+// that fails to load is a refusal by name. Do not re-derive an answer the config
+// can state.
+const EXTERNAL_GENERATOR = 'gen_external_radial.js';
 
 // --set-path '<dotted>=<json>' — set ONE value in routes.json at a dotted path,
 // where a numeric segment indexes an array. The general form of --rail and
@@ -667,6 +672,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, dataScriptDrift, dataFeedDrift, detectExternalStyle,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

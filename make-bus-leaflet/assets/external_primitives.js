@@ -53,7 +53,8 @@ const { esc } = require(path.join(__dirname, 'svg_primitives.js'));
  * published artwork (codebase review 2026-09-01, engine F17).
  * `gen_external_busway.js` tested `!b && (a === '' || fits)`; the radial and the
  * place clone tested `fits && !b`. They agree on every label whose FIRST WORD
- * fits, and differ the moment one does not:
+ * fits, and differ the moment one does not. The busway generator was dropped on
+ * 2026-09-02, so the CORRECT spelling is the one no caller is left with:
  *
  *   "Hinchingbrooke", 14 characters, at max 13
  *     busway  -> ['Hinchingbrooke']                one line, drawn where it belongs
@@ -87,12 +88,20 @@ function splitTwoLines(label, max, firstWordTakesLineOne) {
 }
 
 /* The correct one: a first word longer than `max` still takes the first line.
- * gen_external_busway.js has always used this. */
+ * gen_external_busway.js was its only caller and was dropped 2026-09-02; see the
+ * note on wrapLegacyEmptyFirstLine below for why it stays. */
 const wrap = (label, max = 13) => splitTwoLines(label, max, true);
 
 /* The one with the empty first line, kept ONLY so gen_external_radial.js and
  * gen_external_places.js keep drawing what they draw today. Retire it with
  * OA-229; when its last caller goes, delete it and `splitTwoLines`'s flag. */
+// NOTHING CALLS `wrap` SINCE 2026-09-02, and that is a statement about the estate
+// rather than about this module. It was gen_external_busway.js's wrap -- the only
+// correct one of the three -- and that generator was dropped the same day. The
+// radial and the place external both take `wrapLegacyEmptyFirstLine`, so the
+// empty-first-line defect is now the ONLY wrap behaviour any sheet is drawn with.
+// `wrap` stays because it is the answer OA-229 adopts, and its unit test is the
+// only thing certifying it: no byte gate can reach code no generator calls.
 const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, false);
 
 /* externalPrimitives(deps) -> { line, tick, badgeHalfW, badgeXW, badgeXWs,

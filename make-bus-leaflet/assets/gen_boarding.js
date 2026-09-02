@@ -83,6 +83,14 @@ const FM = require(_dep('font_metrics.js'));
 // gen_internal.js, which carried the original of all of it.
 const { STRICT_GUARDS, refuse, report: reportRefusals } = require(_dep('strict_guards.js'));
 
+// ---- main() ---------------------------------------------------------------
+// OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
+// is required, so a test can ask whether it LOADS without asking it to draw a
+// map. Nothing inside is re-indented -- the diff has to read as "a scope was
+// added". Why it was worth a hash move, and the fault that proves it:
+// make-bus-leaflet/test/generator_load.test.js.
+function main() {
+
 // The data folder: --dir wins, then LEAFLET_DIR (what the portal and the skill's
 // own runners set), then the current directory. Before LEAFLET_DIR was honoured
 // this worked in the portal only because renderMap.js happens to spawn with
@@ -1483,3 +1491,7 @@ if (reportRefusals('refused to draw something this sheet was asked for.')) {
   process.exit(1);
 }
 process.exit(overflow > 0 ? 1 : 0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

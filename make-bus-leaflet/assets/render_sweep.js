@@ -64,7 +64,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
-  SK, rmTmp, runGenerator, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle,
+  SK, rmTmp, runGenerator, findTowns, findPlaces, readJson, latestRunDir, EXTERNAL_GENERATOR,
 } = require('./gate_lib');
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
@@ -153,7 +153,7 @@ function sheetsFor(dataDir, { isPlace, preferPackGen }) {
     // there is one; otherwise fall back to detecting the style from the sheet.
     const gen = preferPackGen && have('gen_external.js') ? path.join(dataDir, 'gen_external.js')
       : isPlace ? pick(PSK, 'gen_external_places.js')
-      : path.join(SK, `gen_external_${detectExternalStyle(dataDir) || 'radial'}.js`);
+      : path.join(SK, EXTERNAL_GENERATOR);
     sheets.push({ key: 'external', gen, out: 'external.svg' });
   }
   // The expert three are portal-owned (store.js `engine: 'expert'`): always the

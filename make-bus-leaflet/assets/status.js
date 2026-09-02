@@ -28,7 +28,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses, resolvePortal } = require('./cli');
-const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
+const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, EXTERNAL_GENERATOR, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
@@ -446,9 +446,7 @@ function gateTown(t) {
     : 'NO-SHEET';
   row.internal = tInt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal.svg') : tInt;
 
-  const style = detectExternalStyle(s4.dir);
-  row.externalStyle = style;
-  const extGate = gateSheet(`gen_external_${style}.js`, 'external.svg');
+  const extGate = gateSheet(EXTERNAL_GENERATOR, 'external.svg');
   row.external = extGate === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : extGate;
 
   // Optional pre-stage outputs, only gated if routes.json opted in.
@@ -1426,7 +1424,10 @@ async function main() {
   const tw = [16, 6, 26, 9, 16, 10, 8, 11, 20, 8];
   if (!AS_MD) console.log(line(['Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Quality', 'S6 latest', 'S6 age'], tw));
   for (const r of townRows) {
-    const ext = r.external + (r.externalStyle ? ` (${r.externalStyle})` : '');
+    // The `(radial)` suffix that used to sit here named which of two external
+    // templates drew the sheet. There is one, so the column said the same word
+    // on every row -- gate_lib's EXTERNAL_GENERATOR has the whole story.
+    const ext = r.external;
     const s6age = r.s6Age == null ? '' : `${r.s6Age}d${r.s6Stale ? ' STALE' : ''}`;
     // 'STALE (allowed)' rather than plain STALE, so the board says out loud which
     // staleness gates and which is the dated exception above — an exception nobody

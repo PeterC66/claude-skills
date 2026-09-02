@@ -2,14 +2,13 @@
   "note": "Ceilings on the top-to-bottom generator scripts and the two tools that grew with them. Written by tools/line-ratchet.js --accept; read by the same tool in CI. A file may not exceed its ceiling; raising one is a reviewed change committed WITH the growth it accepts. Why: buses-data OA-224 Tier 2.1 -- gen_internal.js went 2,550 -> 3,293 lines in the five days after the refactor that cut it, because the module-first rule (OA-001) had no instrument.",
   "recorded": "2026-09-02",
   "files": {
-    "../make-place-bus-leaflet/assets/gen_external_places.js": 1072,
-    "assets/diagram_internal.js": 1008,
-    "assets/gen_boarding.js": 1485,
-    "assets/gen_external_busway.js": 269,
-    "assets/gen_external_radial.js": 1096,
-    "assets/gen_internal.js": 3274,
-    "assets/schematize_internal.js": 875,
-    "assets/status.js": 1658,
+    "../make-place-bus-leaflet/assets/gen_external_places.js": 1084,
+    "assets/diagram_internal.js": 1038,
+    "assets/gen_boarding.js": 1497,
+    "assets/gen_external_radial.js": 1108,
+    "assets/gen_internal.js": 3286,
+    "assets/schematize_internal.js": 905,
+    "assets/status.js": 1659,
     "assets/verify_report.js": 1485
   }
 }

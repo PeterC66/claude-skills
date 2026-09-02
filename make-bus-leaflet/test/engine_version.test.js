@@ -35,8 +35,11 @@ test('the ENTRY POINTS are the files every town build runs unmodified', () => {
   // diagram_internal.js and schematize_internal.js joined 2026-09-02 (OA-230): they
   // draw the schematic and diagram sheets the byte gate certifies, and a change to
   // either used to re-stamp nothing.
+  // gen_external_busway.js left on 2026-09-02: dormant since St Ives moved to the
+  // radial template, drawn by zero sheets, and unrunnable for a day without a
+  // single gate noticing -- because nothing ran it.
   assert.deepStrictEqual(ENGINE_FILES,
-    ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js',
+    ['gen_internal.js', 'gen_external_radial.js', 'icons.js', 'lane_normals.js',
      'diagram_internal.js', 'schematize_internal.js']);
 });
 

@@ -28,6 +28,14 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+// ---- main() ---------------------------------------------------------------
+// OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
+// is required, so a test can ask whether it LOADS without asking it to draw a
+// map. Nothing inside is re-indented -- the diff has to read as "a scope was
+// added". Why it was worth a hash move, and the fault that proves it:
+// make-bus-leaflet/test/generator_load.test.js.
+function main() {
+
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const gen = path.join(DIR, 'gen_internal.js');
 if (!fs.existsSync(gen)) {
@@ -58,3 +66,7 @@ if (svg.includes('>' + emitted + '<')) {
 } else {
   console.log('internal.svg written (title token not matched; RJ.town=' + JSON.stringify(RJ.town) + ').');
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -177,13 +177,14 @@ test('rayToRect answers the nearest wall along the bearing', () => {
 test('neither external generator defines these primitives itself any more', () => {
   const files = [
     path.join(ENGINE_DIR, 'gen_external_radial.js'),
-    path.join(ENGINE_DIR, 'gen_external_busway.js'),
     path.join(PLACE_DIR, 'gen_external_places.js'),
   ].filter((f) => fs.existsSync(f));
-  assert.strictEqual(files.length, 3, 'a generator this test is about has moved or gone');
-  // tick and badge are NOT in this list: gen_external_busway.js keeps its own of
-  // both on purpose (its tick writes coordinates without .toFixed(2) and its
-  // badge is always a circle), and sharing either would move ink.
+  assert.strictEqual(files.length, 2, 'a generator this test is about has moved or gone');
+  // tick and badge are NOT in this list. They were shared by neither caller when
+  // this module was extracted, because the third external generator -- the busway
+  // one, dropped 2026-09-02 -- wrote its tick coordinates without .toFixed(2) and
+  // always drew a circular badge. The two that remain agree; unifying them is a
+  // live option now rather than one that would have moved ink.
   const OWN = [/^function line\(/, /^function wrap\(/, /^function stampNote\(/,
     /^function rayToRect\(/, /^function hubEdge\(/, /^const badgeHalfW =/];
   const offenders = [];

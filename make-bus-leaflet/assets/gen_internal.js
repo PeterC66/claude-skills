@@ -162,6 +162,14 @@ const _dep = engineDep(__dirname);
 // gen_boarding.js, which carried a second copy of all of it. The reasoning went
 // with the code; the paragraphs above are what a reader of THIS file needs.
 const { STRICT_GUARDS, NL: GUARD_NL, refuse, report: reportRefusals } = require(_dep('strict_guards.js'));
+
+// ---- main() ---------------------------------------------------------------
+// OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
+// is required, so a test can ask whether it LOADS without asking it to draw a
+// map. Nothing inside is re-indented -- the diff has to read as "a scope was
+// added". Why it was worth a hash move, and the fault that proves it:
+// make-bus-leaflet/test/generator_load.test.js.
+function main() {
 // ------------------------------------------------------------------------------
 // All DATA files are read from, and SVG written to, the TOWN WORKING FOLDER
 // (the current directory). Run this script from inside the town's folder.
@@ -3272,3 +3280,7 @@ if (reportRefusals('refused to draw something this config asked for -- see the'
     + ' messages above. The sheet is incomplete and nothing on it says so.')) {
   process.exitCode = 1;
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

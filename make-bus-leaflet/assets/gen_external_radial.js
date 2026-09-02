@@ -25,8 +25,9 @@ const { separateRow, esc } = require(_from('svg_primitives.js'));
 // and correcting that moves published artwork. OA-229 is the fix.
 const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('external_primitives.js'));
 // dash_fit.js is no longer required HERE: line() moved to external_primitives.js
-// on 2026-09-02 and that module requires it. It is still in the engine hash, via
-// gen_external_busway.js and via external_primitives.js itself.
+// on 2026-09-02 and that module requires it, which is now the ONLY way it reaches
+// the engine hash -- gen_external_busway.js was the other, and it was dropped the
+// same day.
 // STRICT_GUARDS, adopted 2026-08-28 (OA-045). Until then only gen_internal.js and
 // gen_boarding.js participated in the contract at all, so "STRICT_GUARDS is live"
 // was true of a third of the sheets we publish and the board did not say which
@@ -39,6 +40,14 @@ const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRec
 // relocating itself or a drop already counted by the sidecar. None of those is a
 // refusal and none becomes one here.
 const { refuse: guardRefuse, report: reportRefusals } = require(_from('strict_guards.js'));
+
+// ---- main() ---------------------------------------------------------------
+// OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
+// is required, so a test can ask whether it LOADS without asking it to draw a
+// map. Nothing inside is re-indented -- the diff has to read as "a scope was
+// added". Why it was worth a hash move, and the fault that proves it:
+// make-bus-leaflet/test/generator_load.test.js.
+function main() {
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -1094,3 +1103,7 @@ if (reportRefusals('refused to draw something this config asked for -- see the'
     + ' messages above. The sheet is incomplete and nothing on it says so.')) {
   process.exitCode = 1;
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

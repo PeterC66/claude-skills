@@ -192,8 +192,17 @@ def refresh_one_safe_town(town, cfg, db, town_dir, safe_changes, note, portal, p
     stage(town_dir, "pull", "S2", s4dir)
     stage(town_dir, "pull", "S3", s4dir)
     shutil.copy(os.path.join(SK, "gen_internal.js"), s4dir)
+    # There is ONE external template since 2026-09-02. This used to interpolate
+    # `externalLayout` into a filename, which meant an unknown value produced a
+    # "no such file" naming a generator nobody wrote. Refuse by name instead: a
+    # town asking for a template the engine does not have is a config error, and
+    # it should say so rather than fail three lines later.
     style = routes.get("externalLayout", "radial")
-    shutil.copy(os.path.join(SK, f"gen_external_{style}.js"), os.path.join(s4dir, "gen_external.js"))
+    if style != "radial":
+        return {"status": "FAIL",
+                "detail": f'routes.json externalLayout is "{style}"; the engine has only the radial '
+                          f'external template (gen_external_busway.js was dropped 2026-09-02)'}
+    shutil.copy(os.path.join(SK, "gen_external_radial.js"), os.path.join(s4dir, "gen_external.js"))
     subprocess.run(["node", os.path.join(SK, "engine_version.js"), "--stamp", os.path.join(s4dir, "routes.json")],
                     capture_output=True, text=True)  # item 3: stamp which engine build drew this
     ok, out, err = run_node(os.path.join(s4dir, "gen_internal.js"), s4dir)

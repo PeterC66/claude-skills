@@ -25,7 +25,7 @@
  *
  * UNTIL 2026-09-02 THIS SEARCH WAS SPELLED FOUR WAYS across five files: `_dep()`
  * in gen_internal.js and gen_boarding.js, two free-standing IIFEs in
- * gen_external_radial.js and one in gen_external_busway.js, and a
+ * gen_external_radial.js and one in gen_external_busway.js (dropped 2026-09-02), and a
  * `path.dirname(_LABELLER)` chain standing in for it for six further modules.
  * Four spellings of one rule is four places for it to drift, and the machine-
  * specific last resort was written out five times (codebase review 2026-09-01,

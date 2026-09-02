@@ -183,7 +183,7 @@ Two judgements worth knowing before changing it:
 | Ramsey external | 3 → 3 | 7 → **8** — gained `Colne` |
 | every other sheet | unchanged | unchanged |
 
-**Not done, deliberately: `gen_external_places.js`.** It is the one badge-drawing generator left on the old behaviour, because it is vendored to the portal's `engine/place/` and `font_metrics.js` is **not yet vendored there** — adding the require would throw at the portal's require time rather than fail a byte gate (the exact trap recorded in `changing-the-engine.md` §4). No place has a wide key today, and place *internal* sheets get the fix for free through `gen_internal.js`. Do it in Phase 8 alongside the re-vendor. `gen_external_busway.js` is likewise untouched, since §2 keeps it unedited and no town uses it.
+**Not done, deliberately: `gen_external_places.js`.** It is the one badge-drawing generator left on the old behaviour, because it is vendored to the portal's `engine/place/` and `font_metrics.js` is **not yet vendored there** — adding the require would throw at the portal's require time rather than fail a byte gate (the exact trap recorded in `changing-the-engine.md` §4). No place has a wide key today, and place *internal* sheets get the fix for free through `gen_internal.js`. Do it in Phase 8 alongside the re-vendor. `gen_external_busway.js` was likewise untouched, since §2 kept it unedited and no town used it — and on 2026-09-02 it was dropped altogether, having spent its last day unrunnable with every gate green.
 
 ### `design.hubFit` — the external hub box, sized from its text
 

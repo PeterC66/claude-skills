@@ -116,7 +116,8 @@ test('siblingOf does NOT search — it pins, even when the file is not there', (
 
 // The two pre-stages joined on 2026-09-02 (OA-230): they take projection.js and
 // internal_roads_config.js from the engine now, so they resolve like every entry point.
-const ENTRY_POINTS = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'gen_boarding.js',
+// gen_external_busway.js left this list on 2026-09-02 with the file itself.
+const ENTRY_POINTS = ['gen_internal.js', 'gen_external_radial.js', 'gen_boarding.js',
                       'diagram_internal.js', 'schematize_internal.js'];
 const BOOTSTRAP = [
   "const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');",

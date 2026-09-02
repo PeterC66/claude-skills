@@ -51,7 +51,7 @@ test('svgOpen() is character-for-character the line all four generators wrote ou
 test('no entry generator still carries the page size as a literal', () => {
   // The finding was twelve numbers that happened to be equal. This is the check
   // that they did not quietly become thirteen.
-  const files = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'gen_boarding.js'];
+  const files = ['gen_internal.js', 'gen_external_radial.js', 'gen_boarding.js'];
   const offenders = [];
   for (const f of files) {
     const src = fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8');

@@ -1,9 +1,9 @@
 /*
  * dash_fit.js — the dashed-spoke pattern, and the ONE place it is computed.
  *
- * WHY THIS FILE EXISTS, which is the whole point of it. Three generators draw a
- * dashed line — `gen_external_radial.js`, `gen_external_busway.js` and the place
- * skill's `gen_external_places.js` — and until 2026-08-30 each carried its own
+ * WHY THIS FILE EXISTS, which is the whole point of it. Three generators drew a
+ * dashed line — `gen_external_radial.js`, `gen_external_busway.js` (dropped
+ * 2026-09-02) and the place skill's `gen_external_places.js` — and each carried its own
  * copy of the `line()` primitive with the same numbers written out three times.
  * Each copy also carried a comment saying "change one, change all three". That
  * comment was written on 2026-08-06 after the FIRST time a fix to this primitive

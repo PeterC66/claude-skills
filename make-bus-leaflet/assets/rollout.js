@@ -46,7 +46,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, detectExternalStyle } = require('./gate_lib');
+const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -111,11 +111,10 @@ function rolloutOne(t) {
    * agree, which is the point. A town that configures neither key is unaffected
    * and the extra gates do not run.
    */
-  const style = detectExternalStyle(prevS4.dir);
   const rj = readJson(path.join(prevS4.dir, 'routes.json')) || {};
   const sheetGates = [
     ['internal', gate(path.join(SK, 'gen_internal.js'), prevS4.dir, 'internal.svg', path.join(prevS4.dir, 'internal.svg'))],
-    ['external', gate(path.join(SK, `gen_external_${style}.js`), prevS4.dir, 'external.svg', path.join(prevS4.dir, 'external.svg'))],
+    ['external', gate(path.join(SK, EXTERNAL_GENERATOR), prevS4.dir, 'external.svg', path.join(prevS4.dir, 'external.svg'))],
   ];
   if (rj.internalSchematic) sheetGates.push(['internal-schematic',
     gate(path.join(SK, 'schematize_internal.js'), prevS4.dir, 'internal-schematic.svg', path.join(prevS4.dir, 'internal-schematic.svg'))]);

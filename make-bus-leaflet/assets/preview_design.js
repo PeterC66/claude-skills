@@ -54,7 +54,7 @@ const path = require('path');
 const { parseArgs, resolveBuses } = require('./cli');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { SK, latestRunDir, readJson, findTowns, detectExternalStyle, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
+const { SK, latestRunDir, readJson, findTowns, EXTERNAL_GENERATOR, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 const GEN = require(path.join(__dirname, 'sheet_registry.js'));
 const { scratchDir } = require('./scratch');
 
@@ -121,7 +121,7 @@ function build(t) {
   fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
 
   copy(path.join(SK, 'gen_internal.js'), path.join(ws, 'gen_internal.js'));
-  copy(path.join(SK, `gen_external_${detectExternalStyle(s4.dir)}.js`), path.join(ws, 'gen_external.js'));
+  copy(path.join(SK, EXTERNAL_GENERATOR), path.join(ws, 'gen_external.js'));
 
   const made = [];
   let r = run(path.join(ws, 'gen_internal.js'), ws);

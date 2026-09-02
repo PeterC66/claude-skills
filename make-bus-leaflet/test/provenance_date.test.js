@@ -32,7 +32,7 @@ const path = require('node:path');
 const ASSETS = require('./_engine.js').ENGINE_DIR;
 
 // Every generator that draws an attribution band naming a cross-check.
-const GENERATORS = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js'];
+const GENERATORS = ['gen_internal.js', 'gen_external_radial.js'];
 
 // A month-and-year literal: the shape of the fault. Matched only OUTSIDE comments,
 // because the comments in these files deliberately quote the old string to explain

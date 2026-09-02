@@ -79,6 +79,14 @@ const _dep = engineDep(__dirname);
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
 const { esc } = require(_dep('svg_primitives.js'));
+
+// ---- main() ---------------------------------------------------------------
+// OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
+// is required, so a test can ask whether it LOADS without asking it to draw a
+// map. Nothing inside is re-indented -- the diff has to read as "a scope was
+// added". Why it was worth a hash move, and the fault that proves it:
+// make-bus-leaflet/test/generator_load.test.js.
+function main() {
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const RJ = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 if (!RJ.internalSchematic) { console.log('no internalSchematic config — nothing to do'); process.exit(0); }
@@ -121,18 +129,36 @@ const stopPts = [];
     if (a.startsWith(PREFIX) || xc.has(a)) stopPts.push(atco2ll[a]);
   }
 }
-// THE FRAME IS THE OLD ONE, ON PURPOSE (OA-230, 2026-09-02). Until today the forty
-// lines here were a copy of gen_internal.js's projection, commented "EXACT copy",
-// and the copy had drifted from projection.js in four ways: a flat 205 mm frame
-// bottom where every geographic sheet has run the footer-safe frame since
-// 2026-08-15, no design.fixedOrientation, no overrides.json rotation and no detail
-// lenses (engine F5, codebase review 2026-09-01). This call hands the real module
-// exactly what the copy computed -- no overrides, no fixed orientation, no lenses,
-// the 205 mm bottom -- so the extraction moved no byte on any of the 13 schematic
-// and diagram sheets. Adopting the module's real behaviour is a DRAWING change with
-// a version bump per sheet: it is OA-230's second half, taken to Peter with a
-// measurement rather than shipped here, and it is one edit -- hand the town's own
-// frame and lenses over instead of LEGACY_FRAME.
+// THE FRAME THE SOLVER LAYS OUT IN, AND IT IS A DECIDED RULE (OA-230, closed
+// 2026-09-02 by Peter on the measurement; reworded 2026-09-02, OA-224 Tier 4.1).
+//
+// Until 2026-09-02 the forty lines here were a copy of gen_internal.js's
+// projection, commented "EXACT copy", and the copy had drifted from projection.js
+// in four ways: a flat 205 mm frame bottom where every geographic sheet has run
+// the footer-safe frame since 2026-08-15, no design.fixedOrientation, no
+// overrides.json rotation and no detail lenses (engine F5, codebase review
+// 2026-09-01). This call hands the real module exactly what the copy computed, so
+// the extraction moved no byte on any of the 13 schematic and diagram sheets.
+//
+// THE ADOPTION WAS BUILT AND REJECTED, so this is not a deferral. The three sheets
+// it would move (High Wycombe's schematic and diagram, Ramsey's schematic) were
+// built in scratch against the town's real footer-safe frame -- plate top 188.10
+// mm, a 12.8% scale change on a height-bound fit -- each beside a control that
+// reproduced the committed sheet byte-for-byte. THE READER SEES THE SAME LAYOUT
+// EITHER WAY: the workspace gen_internal.js refits these pseudo-coordinates into
+// its own frame regardless, so the frame here changes only the SCALE at which the
+// solver's millimetre thresholds and the label placer's decisions are taken. That
+// showed up as a label reshuffle on the two High Wycombe sheets (6 lost / 5
+// gained; 2 lost / 1 gained) and nothing at all on Ramsey. Not worth three version
+// bumps, three re-renders, three S6 runs and a portal hand-off.
+//
+// So LEGACY_FRAME is what the pre-stage MEANS, not what it is stuck with: hand the
+// solver a stable frame of its own and let the workspace do the fitting. Passing
+// the town's fixedOrientation and overrides rotation through would be inert today
+// -- no schematic town sets either -- and that is the reason NOT to do it: an
+// inert pass-through is a silent behaviour change waiting for the first town that
+// does set one. pre_stages.test.js asserts these values, so the rule has an
+// instrument rather than a comment.
 const LEGACY_FRAME = { OV: {}, FIXED_ORIENTATION: null, FOOTER_SAFE: false, FOOTER_PLATE_TOP: null, DESIGN: {} };
 const _proj = projection(Object.assign({ stopPts, atco2ll, ANCHOR,
   IR: Object.assign({}, IR, { lenses: undefined }),      // the copy had no lens support
@@ -873,3 +899,7 @@ if (process.env.SCHEMATIZE_ONLY !== '1') {
     console.log('internal-schematic.svg written (render with render.js for the print JPG)');
   }
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

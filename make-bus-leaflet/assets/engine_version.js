@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /*
- * engine_version.js — content-hash the engine: the SEVEN entry points every town's
- * S4 build runs unmodified (gen_internal.js, gen_external_radial.js,
- * gen_external_busway.js, icons.js, lane_normals.js, and since 2026-09-02 the two
- * pre-stages diagram_internal.js and schematize_internal.js) AND every module
+ * engine_version.js — content-hash the engine: the entry points every town's S4
+ * build runs unmodified — ENGINE_FILES below is the list, and it is the list
+ * rather than a number here because this file has twice reported a count that
+ * stayed right while the NAMES went wrong — AND every module
  * they require, found by following the requires. gen_boarding.js is hashed too,
  * but into the PLACE template, because only a place has a boarding sheet. Item 3 of the 2026-08-04
  * process-efficiency plan; the closure replaced the flat list on 2026-08-27,
@@ -44,7 +44,12 @@ const SK = __dirname;
 // town, the byte gate certifies those sheets against the CURRENT template, and
 // until that day a change to either re-stamped nothing: a town's stamp said
 // `current` over a diagram drawn by code that no longer existed.
-const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js',
+// gen_external_busway.js LEFT this list on 2026-09-02 because the file left the
+// engine. It was the second external template, dormant since 2026-08-03 when St
+// Ives moved to the radial one, drawn by zero committed sheets, and it had been
+// unrunnable since 5816627 that morning -- a ReferenceError at load, invisible
+// to every gate, because nothing ran it. Peter's call: drop it, not repair it.
+const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'icons.js', 'lane_normals.js',
                       'diagram_internal.js', 'schematize_internal.js'];
 
 // ...and everything they require is hashed WITH them, found by following the

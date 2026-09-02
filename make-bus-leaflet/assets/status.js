@@ -1026,6 +1026,40 @@ function vendoredOnOtherRef(rel, skillBuf) {
   }
   return null;
 }
+
+// THE UN-VENDOR COUNTERPART OF PENDING (2026-09-02). The grace above understands a
+// file that MOVED on a pushed branch and not one that was REMOVED on it, and the
+// asymmetry made the whole estate go red for the length of a review.
+//
+// Dropping gen_external_busway.js (OA-224 Tier 4.1) deleted the engine file and the
+// manifest row together, in a skills commit and a portal PR. But the row list is read
+// from origin/main, which still carries the row until the PR merges, and the loop
+// short-circuits on a missing skill source before it ever reaches the grace: MISSING,
+// no grace, exit 2, and NOTHING that could be re-run green -- the only cure was the
+// merge. Every other kind of in-flight change has twelve hours.
+//
+// The witness required here is deliberately narrower than the one above, because
+// this direction can hide a REAL missing file rather than produce a spurious
+// finding. Both must be true on one pushed branch: the manifest no longer names the
+// row AT ALL, and the file is not in that branch's tree either. A branch that merely
+// edits the row, or that leaves the file behind, is no witness -- so a file deleted
+// from the skill tree by accident is still MISSING, immediately, which is the case
+// this whole check exists for. The grace expires like the other one.
+const normaliseEnginePath = (p) => 'engine/' + String(p).split(String.fromCharCode(92)).join('/');
+function unvendoredOnOtherRef(rel) {
+  for (const cand of otherRemoteRefs(_driftMainRef)) {
+    const mBuf = gitShow(PORTAL, cand.ref, 'engine/vendored.json');
+    if (!mBuf) continue;
+    let m = null;
+    try { m = JSON.parse(mBuf.toString('utf8')); } catch { continue; }
+    const files = Array.isArray(m.files) ? m.files : [];
+    const stillNamed = files.some((e) => normaliseEnginePath(e.path) === rel);
+    if (stillNamed) continue;                       // the row survives there: no witness
+    if (gitShow(PORTAL, cand.ref, rel)) continue;   // the file survives there: no witness
+    return cand;
+  }
+  return null;
+}
 let _driftMainRef = null;
 
 function portalDrift() {
@@ -1062,7 +1096,21 @@ function portalDrift() {
     const diskBuf = exists(diskFile) ? fs.readFileSync(diskFile) : null;
     const refBuf = ref ? gitShow(PORTAL, ref, rel) : null;
     const against = ref ? refBuf : diskBuf;
-    if (!skillBuf || !against) { rows.push({ file: label, same: null }); continue; }
+    if (!skillBuf || !against) {
+      // A row whose SKILL SOURCE is gone may be an un-vendor in flight; see
+      // unvendoredOnOtherRef. Anything else here is MISSING as it always was.
+      const gone = !skillBuf && ref ? unvendoredOnOtherRef(rel) : null;
+      if (gone) {
+        const inFlight = gone.ageHours != null && gone.ageHours < DRIFT_GRACE_HOURS;
+        rows.push({ file: label, same: null, status: 'PENDING', unvendor: true, inFlight,
+          pendingOn: gone.ref, ageHours: gone.ageHours, graceHours: DRIFT_GRACE_HOURS,
+          note: 'un-vendored on ' + gone.ref + ', not merged to ' + ref
+            + (inFlight ? '' : '. Past the grace: merge it or drop the branch.') });
+      } else {
+        rows.push({ file: label, same: null });
+      }
+      continue;
+    }
     const same = sameBytesIgnoringLineEndings(skillBuf, against);
     const row = { file: label, same };
     if (!same && diskBuf && sameBytesIgnoringLineEndings(skillBuf, diskBuf)) {
@@ -1269,7 +1317,13 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // Everything else that differs still gates exactly as it did: a plain DRIFTED,
   // a working-tree PENDING, a MISSING file, and a branch re-vendor that has sat
   // past DRIFT_GRACE_HOURS or that git could not date.
-  || driftRows.some(r => (r.same === false && !r.inFlight) || r.same === null)
+  //
+  // `same === null` GAINED THE SAME EXEMPTION on 2026-09-02, and only where
+  // unvendoredOnOtherRef found a witness. A row read from main whose skill source
+  // is gone used to be unconditionally red, so an UN-vendor in flight had no grace
+  // at all while a re-vendor in flight had twelve hours -- and nothing could clear
+  // it but the merge. A MISSING file with no such branch is red exactly as before.
+  || driftRows.some(r => r.same !== true && !r.inFlight)
   // OA-057, GATED FROM 2026-08-29 and reported-only before that. The rule the
   // column was held out under is that a check red on the day it lands gets muted
   // within the week, and seven of the ten places that draw an internal sheet were

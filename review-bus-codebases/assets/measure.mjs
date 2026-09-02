@@ -139,10 +139,14 @@ m.portalStructure = {
 note.portalStructure = 'the seams Tier 4 cuts along';
 
 // ---- 6. swallowed errors in the generators -------------------------------------
-const gens = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'gen_boarding.js', 'diagram_internal.js', 'schematize_internal.js']
+// gen_external_busway.js was dropped 2026-09-02 (OA-224 Tier 4.1). The .filter(exists)
+// meant this list degraded quietly rather than throwing, which is why the LABEL below
+// counts gens.length instead of saying a number: a measurement that names its own
+// population cannot go on describing a file that is gone.
+const gens = ['gen_internal.js', 'gen_external_radial.js', 'gen_boarding.js', 'diagram_internal.js', 'schematize_internal.js']
   .map(f => path.join(ENGINE, 'assets', f)).filter(exists);
 m.errors = {
-  'empty catch blocks (six generators)': gens.reduce((n, f) => n + countIn(f, /catch\s*(\(\s*\w*\s*\))?\s*\{\s*\}/g), 0),
+  [`empty catch blocks (${gens.length} generators)`]: gens.reduce((n, f) => n + countIn(f, /catch\s*(\(\s*\w*\s*\))?\s*\{\s*\}/g), 0),
   'bare except: (engine Python)': walk(path.join(ENGINE, 'assets'), { exts: ['.py'] }).reduce((n, f) => n + countIn(f, /^\s*except\s*:/gm), 0),
 };
 note.errors = 'places a fault is discarded';

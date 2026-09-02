@@ -118,8 +118,6 @@ const GENERATORS = [
     sheets: ['internal.svg', 'internal-schematic.svg', 'internal-diagram.svg'] },
   { file: path.join(ASSETS, 'gen_external_radial.js'), notesAnchor: 'const EXTERNAL_FOOTER_NOTES = [', open: '[',
     sheets: ['external.svg'] },
-  { file: path.join(ASSETS, 'gen_external_busway.js'), notesAnchor: 'out(footerBand({', open: '{',
-    sheets: ['external.svg'] },
   { file: path.join(ASSETS, 'gen_boarding.js'), notesAnchor: 'const FOOTER_OPTS = {', open: '{',
     sheets: ['boarding.svg'] },
   { file: path.join(PLACE_ASSETS, 'gen_external_places.js'), notesAnchor: 'const FOOTER_NOTES = ', open: 'line',

@@ -59,7 +59,15 @@ if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : undefined });
 
-const GEN_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'gen_boarding.js'];
+// The generators the attribution gate reads. NOT derived from ENGINE_FILES: that
+// list is what the HASH covers, which includes libraries that draw no footer, and
+// the two pre-stages, which inherit gen_internal.js's notes rather than owning
+// any. Kept explicit, and checked below -- because on 2026-09-02 this list still
+// named gen_external_busway.js after the file was dropped, and the harness died
+// with an ENOENT stack from fs.copyFileSync deep inside scratchAssets(). It ran
+// green on the laptop the whole time: this harness is scheduled by buses-data's
+// gates workflow and by neither of the engine's own suites.
+const GEN_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_boarding.js'];
 const PLACE_GEN = 'gen_external_places.js';
 
 /* A scratch copy of the five generators, so a mutation cannot reach the vendored
@@ -68,7 +76,16 @@ function scratchAssets() {
   const root = scratchDir('prove-red-attr-');
   const a = path.join(root, 'assets'), pa = path.join(root, 'place-assets');
   fs.mkdirSync(a); fs.mkdirSync(pa);
-  for (const f of GEN_FILES) fs.copyFileSync(path.join(ASSETS, f), path.join(a, f));
+  for (const f of GEN_FILES) {
+    const from = path.join(ASSETS, f);
+    if (!fs.existsSync(from)) {
+      console.error('prove-red-attribution: GEN_FILES names ' + f + ', which is not in ' + ASSETS + '.');
+      console.error('  A generator was removed and this list was not. Drop it here and from');
+      console.error('  tools/attribution-gate.js GENERATORS, which reads the same set.');
+      process.exit(2);
+    }
+    fs.copyFileSync(from, path.join(a, f));
+  }
   fs.copyFileSync(path.join(PLACE_ASSETS, PLACE_GEN), path.join(pa, PLACE_GEN));
   return { root, assets: a, placeAssets: pa };
 }

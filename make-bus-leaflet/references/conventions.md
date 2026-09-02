@@ -54,6 +54,19 @@ It is one of three, one per repository. The other two are `docs/CONVENTIONS.md` 
 
 **`python3`, not `python`.** Both resolve on this laptop; only `python3` resolves on the CI runner, and `python` is Python 2 on some machines. Every python script in `package.json` says `python3`.
 
+## A generator's body lives in `main()`, and its file must LOAD
+
+Every entry generator — the two in `ENGINE_FILES`, the boarding one, both pre-stages, both place ones — ends with:
+
+```js
+if (require.main === module) main();
+module.exports = { main };
+```
+
+Nothing inside `main()` is re-indented when a body moves into one (OA-224 Tier 4.1): the diff has to read as *a scope was added*, or the byte gate is the only thing left that can say the two are the same program. Both callers spawn a generator as a child process (`gate_lib.runGenerator` and the portal's `renderMap.js` both use `spawnSync`), so `require.main === module` holds for every real build.
+
+**The point of it is that a test can now REQUIRE a generator without it drawing a map**, which is what `test/generator_load.test.js` needs. That test exists because `gen_external_busway.js` spent a day throwing `ReferenceError` at load — through a re-vendor and a deploy — with `status.js` PASS, every sheet verdict green, every mutation caught and CI green in three repositories. None of those gates was broken: each asks *does the output still match*, and none can ask it of a generator no map runs. **So when you add an engine entry point, the population it belongs to is `engine_version.js`'s lists, and that test derives its subjects from them rather than from a list typed here.** Do not give a generator a load-time side effect — reading `routes.json`, writing a file, printing — outside `main()`; a mutation in `prove-red.js` exists for exactly that, because a generator that exports `main()` and still draws when required passes every other check in this repository.
+
 ## The engine is hashed — prose in `assets/` is not free
 
 A comment added to a file under `assets/` moves the template hash and puts every map in the estate STALE. Write the explanation in `references/` and point at it, unless the comment is genuinely about the line beneath it. `sizeMode` and every other `design.*` key must be in the register or `gate:design-keys` fails.

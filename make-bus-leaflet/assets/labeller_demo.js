@@ -19,7 +19,7 @@ const path = require('path');
 const { Labeller } = require(path.join(__dirname, 'labeller.js'));
 
 const OUT = process.argv[2] || process.cwd();
-const W = 297, H = 210;
+const { W, H } = require(path.join(__dirname, 'page.js'));
 const FRAME = { x0: 6, y0: 30, x1: 196, y1: 192 };
 const PALETTE = { A: '#0072b2', B: '#d55e00', C: '#009e73', D: '#cc79a7', E: '#7b3294' };
 
@@ -48,7 +48,7 @@ const SYMS = [
   ['Spring Common Academy', 20, 180], ['Kings Ripton Road Surgery', 192, 130],
 ];
 
-const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const { esc } = require(path.join(__dirname, 'svg_primitives.js'));   // the one copy — OA-224 Tier 3.4
 function scene() {
   const o = [`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`,
     `<rect width="${W}" height="${H}" fill="#ffffff"/>`,

@@ -123,20 +123,18 @@
 const fs = require('fs');
 const path = require('path');
 
-// SHARED CODE IS SELF-RESOLVING. This file runs in three places: in-place from
-// the skill's assets/ (siblings present), copied into a town's run folder (no
-// siblings), and from the portal's engine/place/ against a map's data dir (no
-// siblings either, but SKILL_ASSETS points at the vendored engine/ root). A
-// require that resolves here and throws there is a recorded failure shape, so
-// every shared dependency goes through this one resolver. Order: a sibling
-// file, then SKILL_ASSETS, then the skill's own path. Resolution does not
-// affect the SVG.
-const _dep = (name) => {
-  const local = path.join(__dirname, name);
+// SHARED CODE IS SELF-RESOLVING, because this file runs in three places and only
+// one of them has its siblings beside it. A require that resolves here and throws
+// there is a recorded failure shape, so every shared dependency goes through one
+// resolver -- engine_paths.js since 2026-09-02 (OA-224 Tier 3.4), whose header has
+// the three deployments and the reasoning that used to be here. The four lines
+// below are the bootstrap that finds THAT file: the one piece no module can own.
+const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   try { if (fs.existsSync(local)) return local; } catch (e) {}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/' + name;
-};
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep, siblingOf } = require(_EP);
+const _dep = engineDep(__dirname);
 
 // ---- STRICT_GUARDS -----------------------------------------------------------
 // A guard that REFUSES TO DRAW something the config asked for has not done its
@@ -177,7 +175,8 @@ const { icon } = require(_dep('icons.js'));
 const { footerBand, footerPlateTop } = require(_dep('footer.js'));
 const _LABELLER = _dep('labeller.js');
 const { Labeller } = require(_LABELLER);
-const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
+const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
+const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
 const { selectPois, printsName } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
@@ -879,7 +878,8 @@ for(const al of (OV.align||[])){
 const XYS=a=> baseXY(a);            // base accessor (anchor / road labels share one position)
 
 // ---------- svg helpers ----------
-const W=297,H=210; let s=''; const out=x=>{s+=x+'\n';};
+const { W, H, svgOpen } = require(_dep('page.js'));
+let s=''; const out=x=>{s+=x+'\n';};
 // The eight primitives every mark on this sheet is made of live in
 // svg_primitives.js, along with the design.badgeFit reasoning. They append
 // through `out` and return measurements, so the document stays here.
@@ -1000,7 +1000,7 @@ function poiMark(p){
   placeLabel(x,y,p.name,2.5,'#222',false,o.label||null,poiBox.get(k)||null,opt);
 }
 
-out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
+out(svgOpen(W, H));
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 out(`<clipPath id="map"><rect x="${MX0}" y="${MY0}" width="${MX1-MX0}" height="${MY1-MY0}"/></clipPath>`);
 

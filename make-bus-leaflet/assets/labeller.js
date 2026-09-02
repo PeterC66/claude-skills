@@ -46,6 +46,7 @@
 'use strict';
 const path = require('path');
 const FM = require(path.join(__dirname, 'font_metrics.js'));
+const { esc } = require(path.join(__dirname, 'svg_primitives.js'));   // the one copy — OA-224 Tier 3.4
 
 // ---------------------------------------------------------------- defaults
 // One object, so tuning is a one-line edit and a diff shows what moved.
@@ -743,7 +744,6 @@ class Labeller {
    * are drawn by one piece of code and cannot drift apart in leading, anchor or
    * halo — which is the whole reason this renderer lives in the placer. */
   _svgOf(recs, fmt) {
-    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const out = [];
     for (const r of recs) {
       if (!r.placed) continue;

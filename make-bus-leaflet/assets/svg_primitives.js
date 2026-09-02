@@ -30,6 +30,31 @@
  */
 'use strict';
 
+/* esc — XML-escape a value for a text node or an attribute. THE ONE COPY.
+ *
+ * It was defined in NINE files. The review counted eight (2026-09-01, engine
+ * F3): both external generators, gen_boarding, diagram_internal,
+ * schematize_internal, labeller, footer, and privately inside the factory below.
+ * The ninth, labeller_demo.js, was found by the census test rather than by a
+ * reader -- which is the argument for the census, since a count taken by eye is
+ * the thing that missed it. Nine identical bodies differing only in whitespace.
+ * Identical is the point: nothing here has ever gone wrong, and that is exactly
+ * why nine copies survived. The cost is
+ * not a present bug, it is that the day one of them has to learn about `"` or
+ * `'` (an attribute value this engine happens not to write yet) seven others
+ * quietly do not, and no test in this repository would say so.
+ *
+ * `&` is replaced FIRST and that ordering is not incidental: escaping `<` first
+ * would then have its own `&` escaped again into `&amp;lt;`.
+ *
+ * It lives here rather than in a new module for the reason `separateRow` does,
+ * written out in this file's header: a new file has to be vendored into the
+ * portal and wired into its engine layout before anything can load it, and a
+ * generator that resolves on this laptop and throws inside the portal is a
+ * failure this project has already shipped once. This file is vendored today.
+ */
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 function svgPrimitives(deps) {
   const {
     out,              // append one line to the document the CALLER owns
@@ -40,7 +65,8 @@ function svgPrimitives(deps) {
     badgeFit: BADGE_FIT,
     editorKeys: EDK,  // emit data-key attrs (EDITOR_KEYS=1) or not
   } = deps;
-  const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // esc is the module-level one above; the factory re-exports it so its callers
+  // (gen_internal.js destructures it) need no second require.
   // editor-only element keys (no-op unless EDITOR_KEYS=1, so normal output is unchanged)
   const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>` : inner;
   /* ---- design.badgeFit: a 4-character route key does not fit a disc ------------
@@ -232,4 +258,4 @@ function separateRow(items, lo, hi, gap) {
   return { centres: c, fits };
 }
 
-module.exports = { svgPrimitives, separateRow };
+module.exports = { svgPrimitives, separateRow, esc };

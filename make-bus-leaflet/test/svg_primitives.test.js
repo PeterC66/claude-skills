@@ -28,6 +28,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const { ENGINE_DIR } = require('./_engine.js');
 const { svgPrimitives } = require('./_engine.js').load('svg_primitives.js');
 const FONT = require('./_engine.js').load('font_metrics.js');
 
@@ -317,4 +320,56 @@ test('a row too wide for its bounds says so instead of pretending', () => {
 test('one box, and no boxes, are both handled', () => {
   assert.deepStrictEqual(separateRow([{ c: 50, hw: 5 }], 0, 300, 1), { centres: [50], fits: true });
   assert.deepStrictEqual(separateRow([], 0, 300, 1), { centres: [], fits: true });
+});
+
+/* ---- esc: the one copy (OA-224 Tier 3.4, engine F3) -------------------------
+ *
+ * It was defined in NINE files, all nine identical but for whitespace, and
+ * nothing had ever gone wrong — which is exactly why nine of them survived. The
+ * review counted eight; the census below found the ninth (labeller_demo.js) on
+ * its first run, which is the argument for having it. So what is asserted is not
+ * that it escapes (it always did) but the two things that go wrong LATER: that
+ * the factory's `esc` and the module's are the SAME FUNCTION rather than two
+ * that agree, and that no engine file has grown a tenth body. Identity is the strictly stronger claim: agreement has to be
+ * re-established every time either copy is edited, and identity cannot be lost
+ * without deleting the assignment. `find_sheets.test.js` made the same move on
+ * the estate walker three days earlier and the reasoning is the same.
+ */
+test('the factory hands back the module-level esc, not a second one', () => {
+  const p = require(path.join(ENGINE_DIR, 'svg_primitives.js'));
+  const made = p.svgPrimitives({
+    out: () => {}, palette: {}, textOn: {}, badgeLabel: (r) => r,
+    font: require(path.join(ENGINE_DIR, 'font_metrics.js')), badgeFit: true, editorKeys: false,
+  });
+  assert.strictEqual(made.esc, p.esc, 'the factory has its own copy again');
+});
+
+test('& is escaped FIRST, which is the ordering all nine copies had', () => {
+  const { esc } = require(path.join(ENGINE_DIR, 'svg_primitives.js'));
+  // Escaping < first would then escape its own & into &amp;lt; — the one way
+  // this four-line function can be got wrong.
+  assert.strictEqual(esc('<a & b>'), '&lt;a &amp; b&gt;');
+  assert.strictEqual(esc(null), 'null');           // String(), not a template
+  assert.strictEqual(esc(7), '7');
+});
+
+test('no engine file defines a second esc body', () => {
+  const dir = fs.readdirSync(ENGINE_DIR).filter((f) => f.endsWith('.js'));
+  const offenders = [];
+  for (const f of dir) {
+    if (f === 'svg_primitives.js') continue;
+    const src = fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8');
+    for (const line of src.split(/\r?\n/)) {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;          // prose may quote one
+      if (/\besc\s*=\s*\(?\s*t\s*\)?\s*=>/.test(line)) offenders.push(f + ': ' + line.trim());
+    }
+  }
+  // diagram_internal.js and schematize_internal.js are OUT of scope on purpose:
+  // they are outside the engine hash, they are Tier 4's merge (they already
+  // share 307 identical lines), and giving them a require here would be an edit
+  // to two files this commit otherwise does not touch.
+  const expected = ['diagram_internal.js', 'schematize_internal.js'];
+  assert.deepStrictEqual(
+    offenders.map((o) => o.split(':')[0]).sort(), expected,
+    'an esc body outside svg_primitives.js and the two pre-stages: ' + offenders.join(' | '));
 });

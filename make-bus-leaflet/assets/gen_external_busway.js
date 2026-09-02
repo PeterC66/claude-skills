@@ -25,15 +25,28 @@
 //   externalNote?     - extra source note line.
 const fs = require('fs');
 const path = require('path');
-const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
+// SHARED CODE IS SELF-RESOLVING: engine_paths.js has the search and the reasons.
+// The four lines below are the bootstrap that finds THAT, which is the one piece
+// no module can own. `_dep` searches; `_from` pins to a folder already resolved.
+const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
+  try { if (fs.existsSync(local)) return local; } catch (e) {}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep, siblingOf } = require(_EP);
+const _dep = engineDep(__dirname);
+const _FOOTER = _dep('footer.js');
 const { footerBand } = require(_FOOTER);
-// dash_fit.js — the dashed-spoke pattern and its mid-gap fit, shared with
-// gen_external_radial.js and gen_external_places.js (OA-167). footer.js resolves
-// out of the same folder, so its directory is where this lives too.
-const { dashFit, polylineLength } = require(path.join(path.dirname(_FOOTER),'dash_fit.js'));
+// dash_fit.js is no longer required HERE: line() moved to external_primitives.js
+// on 2026-09-02 and that module requires it. It is still in the engine hash.
+const { esc } = require(_from('svg_primitives.js'));   // the one copy — OA-224 Tier 3.4
+// wrap, line and stampNote are external_primitives.js since 2026-09-02 (OA-224
+// Tier 3.5), shared with gen_external_radial.js and the place external. THIS
+// file's wrap is the correct one -- the other two draw an empty first line for a
+// one-word label longer than the wrap width, and OA-229 is the fix for that.
+// tick() and badge() stay HERE: this sheet's tick writes its coordinates without
+// .toFixed(2) and its badge is always a circle with no badgeFit, so sharing
+// either would move ink rather than tidy anything.
+const { wrap, externalPrimitives } = require(_from('external_primitives.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -56,43 +69,19 @@ const HIDDEN_ROUTES = new Set();
 if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
 const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
 const EDK = process.env.EDITOR_KEYS==='1';
-const W = 297, H = 210;
+const { W, H, svgOpen } = require(_dep('page.js'));
 let s = '';
 const out = (x) => { s += x + '\n'; };
-const esc = (t) => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function wrap(label, max=13){ // split long labels into <=2 lines on a space
-  if (label.length<=max || label.includes('\n')) return label.split('\n');
-  const w=label.split(' '); let a='',b='';
-  for(const t of w){ if(!b && (a==='' || (a+' '+t).trim().length<=max)) a=(a+' '+t).trim(); else b=(b+' '+t).trim(); }
-  return b?[a,b]:[a];
-}
-
 // ---- de-collision (reserve boxes + greedy placement, like the internal map) ----
 const placed=[];
 const hits=(b)=>placed.some(o=>!(b[2]<o[0]||b[0]>o[2]||b[3]<o[1]||b[1]>o[3]));
 function reserve(x0,y0,x1,y1){placed.push([x0,y0,x1,y1]);}
 
 // ---- primitives -------------------------------------------------------------
-// dashed (limited-service) spokes use a BUTT cap, not round. A round cap adds w/2
-// of ink beyond EACH end of every dash, so at w=3.4 the old `round` + "1.6 2.2"
-// drew 1.6+3.4=5.0 mm of ink separated by 2.2-3.4 = -1.2 mm of gap: the dashes
-// overlapped into one scalloped caterpillar and the line read as solid-but-lumpy.
-// Butt caps plus a gap comfortably wider than the stroke keep each dash a crisp
-// rectangle. The numbers, and the fit that keeps a spoke from ending in a sliver,
-// now live in ONE place — dash_fit.js — required by this file, by
-// gen_external_radial.js and by the place skill's gen_external_places.js. Until
-// 2026-08-30 this was three copies of the same primitive with a comment telling
-// the reader to change all three, and that comment failed twice: the 2026-08-06
-// butt-cap fix and the 2026-08-29 dash fit were each made in the places copy and
-// left out of this one (OA-167). No town draws this layout today, so neither fix
-// was ever visible here — which is exactly why a third copy would have drifted
-// again. Nothing executes a comment.
-function line(pts, color, w=3.4, dashed=false){
-  const d = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
-  const cap = dashed ? 'butt' : 'round';
-  const dash = dashed ? ` stroke-dasharray="${dashFit(polylineLength(pts))}"` : '';
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
-}
+const { line, stampNote } = externalPrimitives({
+  out: (x) => out(x), palette: C, textOn: TXT, badgeLabel: blab, font: null,
+  badgeFit: false, badgeRadius: 4.6, onBadge: null,
+});
 function tick(x,y,color){ out(`<circle cx="${x}" cy="${y}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
 function badge(x,y,route,r=4.6){
   out(`<circle cx="${x}" cy="${y}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
@@ -132,7 +121,7 @@ function stopLabel(x,y,label,size=3.0,prefer='above',anchor='middle'){
 }
 
 // ---- canvas -----------------------------------------------------------------
-out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
+out(svgOpen(W, H));
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${C.B}">Buses from ${esc(D.town)} to nearby places</text>`);
 out(`<text x="10" y="24" font-family="Arial" font-size="5" fill="#444">(from ${esc(D.validFrom)})</text>`);
@@ -273,20 +262,6 @@ out(footerBand({
 }));
 
 // Optional "coming soon" / validity stamp (opt-in via routes.json "stamp"; absent => byte-identical).
-function stampNote(cfg,x,y,align){
-  if(!cfg) return;
-  const notes=Array.isArray(cfg.notes)?cfg.notes:(cfg.notes?[cfg.notes]:[]);
-  if(!notes.length && !cfg.asOf) return;
-  const HS=3.4,NS=3.0,AS=2.6,lh=3.7,pad=1.8;
-  const rows=[]; if(notes.length) rows.push([cfg.heading||'Coming soon',HS,'#b30000',true]);
-  notes.forEach(n=>rows.push([n,NS,'#222',false]));
-  if(cfg.asOf) rows.push(['Timetable correct as at '+cfg.asOf,AS,'#666',false]);
-  const wmm=Math.max(...rows.map(r=>r[0].length*(r[1]*0.56)))+pad*2, hmm=pad*2+lh*rows.length;
-  const bx=align==='end'?x-wmm:x, anc=align==='end'?'end':'start', tx=align==='end'?x-pad:x+pad;
-  out(`<rect x="${bx.toFixed(2)}" y="${(y-HS-pad+0.3).toFixed(2)}" width="${wmm.toFixed(2)}" height="${hmm.toFixed(2)}" rx="1.4" fill="#fff" fill-opacity="0.9" stroke="#b30000" stroke-width="0.4"/>`);
-  let cy=y;
-  rows.forEach((r,i)=>{ if(i) cy+=lh; out(`<text x="${tx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial"${r[3]?' font-weight="bold"':''} font-size="${r[1]}" fill="${r[2]}" text-anchor="${anc}">${esc(r[0])}</text>`); });
-}
 { const at=(D.stamp&&D.stamp.externalAt)||[10,188]; stampNote(D.stamp, at[0], at[1], 'start'); }
 
 out('</svg>');

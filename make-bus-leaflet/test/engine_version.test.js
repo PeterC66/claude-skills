@@ -321,13 +321,46 @@ test('isPlaceRun follows the rule findPlaces() already enumerates by', () => {
   assert.strictEqual(EV.isPlaceRun('C:/x/Buses/Areas/Placesville/S4-generate/v1.1'), false);
 });
 
-test('dash_fit.js is inside the hashed closure, and it is the only file that proves the scanner', () => {
-  // The require idiom the two external generators use is
-  // `path.join(path.dirname(_LABELLER),'x.js')`, and the dependency scanner's
-  // path.join pattern could not cross a nested `(` until 2026-08-30. Every other
-  // file named that way is ALSO reached by a luckier route from gen_internal.js,
-  // so the closure was right by accident. dash_fit.js is named ONLY that way.
+test('dash_fit.js is inside the hashed closure, whichever idiom names it', () => {
   const files = engineFiles();
   assert.ok(files.includes('dash_fit.js'),
     'a hash that does not cover dash_fit.js cannot see a change to the dashed-spoke pattern');
 });
+
+test('EVERY require idiom is followed, asserted on a fixture and not on the estate', () => tmp(dir => {
+  /* THIS TEST REPLACED ONE THAT WAS RIGHT BY ACCIDENT, TWICE OVER.
+   *
+   * The scanner's `path.join` pattern could not cross a nested `(` until
+   * 2026-08-30, which made it blind to `path.join(path.dirname(_LABELLER),
+   * 'x.js')` — the idiom the two external generators actually used. It went
+   * unnoticed because every file named that way was ALSO reached from
+   * gen_internal.js by a luckier route, until dash_fit.js was named ONLY that
+   * way and sat outside the hash. The test written that day pinned the nested
+   * pattern THROUGH dash_fit.js: it asserted the closure contained it, and the
+   * mutation that reverted the pattern turned it red.
+   *
+   * OA-224 Tier 3.4 then replaced that idiom with `_from('dash_fit.js')` — and
+   * the mutation SURVIVED, because dash_fit.js was now reached another way. The
+   * pattern was still needed (the place engine's clone still uses it) and
+   * nothing was left holding it. A scanner asserted through whatever the estate
+   * happens to write is a scanner that stops being asserted the day the estate
+   * writes something else, so this asserts each idiom against a source file
+   * written for the purpose. It is the same lesson as the module's own header:
+   * a scanner is proved by a name only it can find.
+   */
+  const IDIOMS = {
+    'a.js': "require(_dep('a.js'))",
+    'b.js': "require(_from('b.js'))",
+    'c.js': "require(path.join(__dirname, 'c.js'))",
+    'd.js': "require(path.join(path.dirname(_LABELLER), 'd.js'))",
+    'e.js': "require('./e')",
+    'f.js': "require(path.join(process.env.SKILL_ASSETS, 'f.js'))",
+  };
+  seed(dir);
+  fs.writeFileSync(path.join(dir, 'gen_internal.js'), Object.values(IDIOMS).join('\n') + '\n');
+  for (const name of Object.keys(IDIOMS)) fs.writeFileSync(path.join(dir, name), '// ' + name + '\n');
+  const found = engineFiles(dir);
+  for (const [name, how] of Object.entries(IDIOMS)) {
+    assert.ok(found.includes(name), name + ' is not followed: ' + how);
+  }
+}));

@@ -941,9 +941,16 @@ const MUTATIONS = [
   // complexity_ladder.js moved the hash not at all. labeller.js and footer.js had
   // never been in it. These four break the walk in the four ways that matter.
   { suite: 'engine_version.test.js', file: 'engine_version.js',
-    what: "the _dep idiom is no longer followed, so every module extracted from a generator falls back outside the hash",
-    find: "  /_dep\\(\\s*['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,                       // _dep('x.js')",
-    to: "  /_NEVER_MATCHES_\\(([\\w.-]+\\.js)\\)/g,                            // _dep('x.js')" },
+    what: "the _dep/_from idiom is no longer followed, so every module extracted from a generator falls back outside the hash",
+    // Re-anchored 2026-09-02 (OA-224 Tier 3.4): the two spellings became one
+    // alternation when the resolver moved to engine_paths.js.
+    find: "  /_(?:dep|from)\\(\\s*['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,               // _dep('x.js') / _from('x.js')",
+    to: "  /_NEVER_MATCHES_\\(([\\w.-]+\\.js)\\)/g,                            // _dep('x.js') / _from('x.js')" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: "only _dep is followed and not _from — the half-migration that dropped dash_fit.js out of the closure while the file COUNT stayed at 21",
+    find: "  /_(?:dep|from)\\(\\s*['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,               // _dep('x.js') / _from('x.js')",
+    to: "  /_dep\\(\\s*['\"]([\\w.-]+\\.js)['\"]\\s*\\)/g,                          // _dep('x.js') / _from('x.js')" },
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: "path.join(__dirname,\"x.js\") is no longer followed, so font_metrics.js and qr.js leave the hash",
@@ -1446,6 +1453,68 @@ const MUTATIONS = [
     what: 'a run folder gets counted as the tracked mirror, so the same map is measured twice and the S4 copy wins the sort',
     find: "      else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);",
     to: "      else if (e.name.endsWith('.svg')) out.push(p);" },
+
+  // engine_paths.js — one resolver, extracted 2026-09-02 (OA-224 Tier 3.4) from
+  // four spellings across five files. The search has never been wrong; these
+  // three break the properties a fifth spelling would have lost silently.
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: 'SKILL_ASSETS is preferred over a sibling, which is how a held-back gate builds a HYBRID engine that never existed',
+    find: "    try { if (fs.existsSync(local)) return local; } catch (e) {}\n    return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)",
+    to: "    if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, name);\n    try { if (fs.existsSync(local)) return local; } catch (e) {}\n    return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)" },
+
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: "the resolver anchors on ITS OWN folder rather than the caller's, so a generator copied beside a copied module reaches past it",
+    find: "    const local = path.join(callerDir, name);",
+    to: "    const local = path.join(__dirname, name);" },
+
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: 'siblingOf SEARCHES instead of pinning, so the labeller and its metrics table can come from two different engines',
+    find: "  return function from(name) { return path.join(dir, name); };",
+    to: "  return function from(name) { return engineDep(dir)(name); };" },
+
+  // page.js — the sheet's own size (OA-224 Tier 3.4, engine F15).
+  { suite: 'page.test.js', file: 'page.js',
+    what: 'the raster size is DERIVED from the mm size, moving every sheet by a third of a pixel',
+    find: "const RASTER_W = 3508, RASTER_H = 2480;",
+    to: "const RASTER_W = (W * 300) / 25.4, RASTER_H = (H * 300) / 25.4;" },
+
+  { suite: 'page.test.js', file: 'page.js',
+    what: 'the root <svg> loses its xmlns, which nothing but a renderer would notice',
+    find: "  return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${RASTER_W}\" height=\"${RASTER_H}\" viewBox=\"0 0 ${w} ${h}\">`;",
+    to: "  return `<svg width=\"${RASTER_W}\" height=\"${RASTER_H}\" viewBox=\"0 0 ${w} ${h}\">`;" },
+
+  // external_primitives.js — the radial's marks, shared with its clone (Tier 3.5).
+  // The FIRST of these is the one that matters: it is the whole claim that the
+  // extraction did not quietly correct the radial's wrap on its way past.
+  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
+    what: 'the legacy wrap is silently corrected, which moves published artwork on three sheets under cover of a refactor',
+    find: "const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, false);",
+    to: "const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, true);" },
+
+  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
+    what: 'the CORRECT wrap becomes the legacy one, so gen_external_busway.js starts drawing an empty first line too',
+    find: "const wrap = (label, max = 13) => splitTwoLines(label, max, true);",
+    to: "const wrap = (label, max = 13) => splitTwoLines(label, max, false);" },
+
+  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
+    what: "hubEdge ignores its floor, so the town sheet loses the 14mm guard the place sheet deliberately does not have",
+    find: "    return denom > 0 ? Math.max(floor, 1 / denom) : Math.max(floor, a, b);",
+    to: "    return denom > 0 ? 1 / denom : Math.max(a, b);" },
+
+  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
+    what: 'rayToRect returns the LAST wall it tested rather than the nearest, so a spoke overshoots the frame',
+    find: "    if (dy > 0) t = Math.min(t, (rect.y1 - hy) / dy); else if (dy < 0) t = Math.min(t, (rect.y0 - hy) / dy);",
+    to: "    if (dy > 0) t = (rect.y1 - hy) / dy; else if (dy < 0) t = (rect.y0 - hy) / dy;" },
+
+  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
+    what: 'onBadge is told the RADIUS instead of the half-width, so a stadium badge reserves a box narrower than it drew',
+    find: "    if (onBadge) onBadge(x, y, hw, r);",
+    to: "    if (onBadge) onBadge(x, y, r, r);" },
+
+  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
+    what: "the badge text is drawn at the radius rather than 0.95 of it, which is svg_primitives' rule and not this sheet's",
+    find: "font-size=\"${(r * 0.95).toFixed(2)}\" fill=\"${TXT[route] || '#fff'}\"",
+    to: "font-size=\"${r.toFixed(2)}\" fill=\"${TXT[route] || '#fff'}\"" },
 
 ];
 

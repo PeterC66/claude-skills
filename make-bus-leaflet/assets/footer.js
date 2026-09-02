@@ -8,7 +8,10 @@
 // version line is pinned to a fixed bottom offset rather than counted from the note, all four
 // map types keep an identical bottom-right corner regardless of how many note lines they need.
 const path = require('path');
-const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// esc — the one copy, in svg_primitives.js (OA-224 Tier 3.4). This module is only
+// ever loaded from an engine folder that holds its siblings, here and in the
+// portal's engine/ alike, so __dirname is the whole resolution it needs.
+const { esc } = require(path.join(__dirname, 'svg_primitives.js'));
 
 // Word-wrap each note to the available width (x1-x0) so a caller can hand over one long
 // string (e.g. place-external's concatenated attribution) without it running off the page

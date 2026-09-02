@@ -35,6 +35,12 @@
  * re-indented two spaces and otherwise unchanged.
  */
 'use strict';
+const path = require('path');
+// PAGE_W — the sheet width in mm, from page.js (OA-224 Tier 3.4). It was the bare
+// literal 297 at six arithmetic sites here, all of them `297 - printSafe` asking
+// where the printable area ends. The three left below are quoting the number to a
+// reader, not computing with it.
+const { W: PAGE_W } = require(path.join(__dirname, 'page.js'));
 
 function drawServicesPanel(deps) {
   const {
@@ -203,7 +209,7 @@ function drawServicesPanel(deps) {
   const NOT_SHOWN_SHORT = RJ.notShownNoteShort || 'not shown';
   function panelSub(routeKey, sub, x, size){
     if(PRINT_SAFE==null || !NOT_DRAWN.has(routeKey)) return sub;
-    const avail = (297-PRINT_SAFE) - x;
+    const avail = (PAGE_W-PRINT_SAFE) - x;
     for(const note of [NOT_SHOWN_NOTE, NOT_SHOWN_SHORT]){
       const t = sub ? sub+' · '+note : note;
       if(FONT.textWidth(t,size,false) <= avail) return t;
@@ -269,7 +275,7 @@ function drawServicesPanel(deps) {
     // was the column that did not fit the sheet. A guard on one edge wants all the
     // edges enumerated, again.
     {
-      const edge = PRINT_SAFE!=null ? 297-PRINT_SAFE : 297;
+      const edge = PRINT_SAFE!=null ? PAGE_W-PRINT_SAFE : PAGE_W;
       if(PX+nCol*cw > edge+0.01){
         const fit = Math.floor((edge-PX)/nCol*100)/100;
         if(PRINT_SAFE!=null){
@@ -457,7 +463,7 @@ function drawServicesPanel(deps) {
         // the trim: the town groups its panel by operator, so it never reaches the plain
         // branch that had just been given the measurement.
         const _gx=PX+10+2*PXW, _gsz=PS?PS.sub:2.8, _gtext=panelSub(r,d[1],_gx,_gsz);
-        const _gfz=(PRINT_SAFE==null)?_gsz:subFit(r,_gtext,_gx,_gsz,297-PRINT_SAFE);
+        const _gfz=(PRINT_SAFE==null)?_gsz:subFit(r,_gtext,_gx,_gsz,PAGE_W-PRINT_SAFE);
         out(`<text x="${_gx}" y="${py+3.0}" font-family="Arial" font-size="${_gfz}" fill="#555">${esc(_gtext)}</text>`);
         lastSubY=py+3.0;
       });
@@ -538,7 +544,7 @@ function drawServicesPanel(deps) {
     // subFit: one column, so the boundary is the print-safe trim (the sheet is 297mm
     // wide). With printSafe absent this keeps the old behaviour — nothing to measure to.
     const _sx=PX+10+2*PXW, _ssz=PS?PS.sub:2.8, _stext=panelSub(r,d[1],_sx,_ssz);
-    const _sfz=(PRINT_SAFE==null)?_ssz:subFit(r,_stext,_sx,_ssz,297-PRINT_SAFE);
+    const _sfz=(PRINT_SAFE==null)?_ssz:subFit(r,_stext,_sx,_ssz,PAGE_W-PRINT_SAFE);
     out(`<text x="${_sx}" y="${py+3.0}" font-family="Arial" font-size="${_sfz}" fill="#555">${esc(_stext)}</text>`);
     lastSubY=py+3.0;
   }
@@ -584,7 +590,7 @@ function drawServicesPanel(deps) {
    */
   const KEY_COLS = Math.max(1, Math.min(3, (DESIGN.keyCols|0) || 2));
   const KEY_PER_COL = Math.ceil(key.length / KEY_COLS) || 1;
-  const KEY_COLW = ((PRINT_SAFE!=null ? 297-PRINT_SAFE : 294) - PX - 3) / KEY_COLS;
+  const KEY_COLW = ((PRINT_SAFE!=null ? PAGE_W-PRINT_SAFE : 294) - PX - 3) / KEY_COLS;
   // The label baseline is ky+1, so the heading rule is applied there and the icon
   // centre follows from it — the same clear air under `Key` as under `Services`.
   const KFIRST = PS ? gapDown(PS.head,AIR_BELOW_HEAD,RISE_KEY)-1 : 5;
@@ -688,7 +694,7 @@ function drawServicesPanel(deps) {
    * term of the three below, so the heading sat closer to its list than the
    * list's own rows sat to each other. Exporting the formula is what stops a
    * fourth caller inventing a fifth answer. */
-  return { x: PX, x1: (PRINT_SAFE!=null ? 297-PRINT_SAFE : 294), endY,
+  return { x: PX, x1: (PRINT_SAFE!=null ? PAGE_W-PRINT_SAFE : 294), endY,
            rhythm: { gapDown, CAP, DESC, AIR_BELOW_HEAD, AIR_ABOVE_HEAD } };
 }
 

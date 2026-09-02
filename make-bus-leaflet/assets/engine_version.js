@@ -70,8 +70,17 @@ const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external
 // by two of the five entry points. **A scanner is not proved by the answer it gives;
 // it is proved by a name only it can find.** Measured before and after: the closure
 // goes from 20 files to 21, the one addition is dash_fit.js, and nothing is lost.
+//
+// THE `_from(...)` IDIOM WAS ADDED TO THIS LIST ON 2026-09-02, AND THE COUNT DID NOT
+// MOVE WHEN IT MATTERED (OA-224 Tier 3.4). Extracting the resolver into
+// engine_paths.js replaced `path.join(path.dirname(_LABELLER),'dash_fit.js')` with
+// `_from('dash_fit.js')`, which matched nothing here -- so dash_fit.js fell out of
+// the closure at the same moment engine_paths.js joined it, and the closure stayed
+// at exactly 21 files. A COUNT IS NOT A CHECK: only the NAMES showed the loss. This
+// is the second time this scanner has been blind to the idiom the external
+// generators actually use, and both times the answer looked right.
 const DEP_PATTERNS = [
-  /_dep\(\s*['"]([\w.-]+\.js)['"]\s*\)/g,                       // _dep('x.js')
+  /_(?:dep|from)\(\s*['"]([\w.-]+\.js)['"]\s*\)/g,               // _dep('x.js') / _from('x.js')
   /path\.join\((?:[^()]|\([^()]*\))*?['"]([\w.-]+\.js)['"]\s*\)/g, // path.join(<dir expr>, 'x.js')
   /require\(\s*['"]\.\/([\w.-]+?)(?:\.js)?['"]\s*\)/g,          // require('./x')
   /SKILL_ASSETS\s*,\s*['"]([\w.-]+\.js)['"]/g,                   // path.join(SKILL_ASSETS,'x.js')

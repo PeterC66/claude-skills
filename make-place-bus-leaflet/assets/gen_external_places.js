@@ -36,7 +36,16 @@ const { Labeller } = require(_LABELLER);
 const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
 // Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
 // makes it load inside the portal as well as here.
-const { separateRow } = require(path.join(path.dirname(_LABELLER), 'svg_primitives.js'));
+const { separateRow, esc } = require(path.join(path.dirname(_LABELLER), 'svg_primitives.js'));
+// external_primitives.js — line, tick, the badge family, stampNote, hubEdge and
+// rayToRect, shared with gen_external_radial.js, of which this file is a
+// reformatted clone (OA-224 Tier 3.5). Its header records the three places the
+// two copies differed and what each of them is a parameter for now. `wrap` is the
+// LEGACY one here on purpose: this sheet draws an empty first line for a one-word
+// label longer than the wrap width (both Godmanchester externals, Hinchingbrooke
+// Hospital), and correcting that moves published artwork. OA-229 is the fix.
+const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRectFor } =
+  require(path.join(path.dirname(_LABELLER), 'external_primitives.js'));
 // STRICT_GUARDS, adopted 2026-09-02 (OA-224 Tier 1.4). gen_external_radial.js took the
 // contract on 2026-08-28 (OA-045) and this file is that generator's clone, so the one
 // refusal site it has -- the howToUse panel below, NOT DRAWN when nowhere is clear --
@@ -128,13 +137,6 @@ let s = '';
 let out = x => { s += x + '\n'; };   // `let`, not `const`: the legend section below
                                       // redirects it into a buffer so its bounding box
                                       // can be measured before the backing panel is drawn.
-const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-function wrap(label, max = 13) {
-  if (label.length <= max || label.includes('\n')) return label.split('\n');
-  const w = label.split(' '); let a = '', b = '';
-  for (const t of w) { if ((a + ' ' + t).trim().length <= max && !b) a = (a + ' ' + t).trim(); else b = (b + ' ' + t).trim(); }
-  return b ? [a, b] : [a];
-}
 // wrapText — generic multi-line word wrap (from gen_external_radial.js), used for the
 // free-text note so a long sentence breaks onto further lines instead of running off
 // the panel as one unbounded line.
@@ -154,55 +156,32 @@ function wrapText(text, maxChars) {
 // panel never clips its own content.
 const measureText = (str, size) => String(str).length * size * 0.58;
 
-// ---- primitives (from gen_external_radial.js) -------------------------------
-// dashed (limited-service) spokes use a BUTT cap, not round: a round cap on a dash
-// shorter than the stroke width balloons each dash into a near-circle, so the whole
-// line reads as a string of blobs rather than a dash (Beaconsfield 380, St Neots 66).
-// Butt caps plus a dash length comfortably longer than the stroke width keep each
-// dash a crisp rectangle.
-// The dash pattern and its mid-gap fit now live in ONE place — make-bus-leaflet's
-// dash_fit.js — required below and shared with gen_external_radial.js and
-// gen_external_busway.js (OA-167). This file used to carry its own copy, with a
-// comment telling the reader to change all three, and that comment failed twice:
-// the 2026-08-06 butt-cap fix and the 2026-08-29 mid-gap fit were both made HERE
-// and neither reached the two files this one was copied from. The second left a
-// 0.0923mm sliver on St Ives' published town external for eleven days. Nothing
-// executes a comment; a require is executed on every build.
-const { dashFit, polylineLength } = require(path.join(path.dirname(_LABELLER), 'dash_fit.js'));
-function line(pts, color, w = 3.4, dashed = false) {
-  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' ');
-  const cap = dashed ? 'butt' : 'round';
-  const dash = dashed ? ` stroke-dasharray="${dashFit(polylineLength(pts))}"` : '';
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
-}
-function tick(x, y, color) { out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
-/* design.badgeFit — a route key wider than its disc overflows it. Same defect, same
- * fix and the same measuring rule as gen_external_radial.js: ask font_metrics.js for
- * the real Arial width rather than counting characters, and draw a stadium instead of
- * shrinking the type. The text here is 0.95 x the radius, so the fit test measures at
- * that size. badgeXW returns the EXTRA over the radius — 0 whenever the text fits and
- * 0 always when the key is absent — and every pitch below is written as the old
- * literal plus that extra, so an ungated place stays byte-identical. */
-const badgeHalfW = (route, r) => {
-  if (!BFIT) return r;
-  const w = FONT.textWidth(blab(route), r * 0.95, true);
-  return (w <= 2 * r - 0.3) ? r : w / 2 + 0.35 * r;
-};
-const badgeXW = (route, r) => BFIT ? badgeHalfW(route, r) - r : 0;
-const badgeXWs = (list, r) => BFIT ? Math.max(0, ...list.map(k => badgeXW(k, r))) : 0;
-function badge(x, y, route, r = 4.0) {
-  const hw = badgeHalfW(route, r);
-  HARD.push([x - hw - 0.4, y - r - 0.4, x + hw + 0.4, y + r + 0.4, 'badge']);
-  // Registered HERE rather than at the call site, so a badge cannot be drawn without
-  // the register hearing about it. hw/r are the half-extents quality_metrics.js reads
-  // back off the finished <circle>/<rect>; the 0.7 white stroke is outside both and is
-  // excluded by the measure too.
-  BADGES.push({ x, y, hw, hh: r });
-  if (hw > r) out(`<rect x="${(x - hw).toFixed(2)}" y="${(y - r).toFixed(2)}" width="${(2 * hw).toFixed(2)}" height="${(2 * r).toFixed(2)}" rx="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  else out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route] || '#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r * 0.95).toFixed(2)}" fill="${TXT[route] || '#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
-  return hw - r;
-}
+// ---- primitives -------------------------------------------------------------
+// line, tick, badgeHalfW/XW/XWs, badge and stampNote are make-bus-leaflet's
+// external_primitives.js since 2026-09-02 (OA-224 Tier 3.5). They were copied
+// from gen_external_radial.js, re-styled, and then fixed independently: the
+// 2026-08-06 butt-cap fix and the 2026-08-29 dash-fit were both made HERE and
+// neither reached the two files this one was copied from, the second leaving a
+// 0.0923mm sliver on St Ives' published town external for eleven days (OA-167).
+// dash_fit.js was carved out that day; this is the rest of the same job.
+//
+// `out` is passed as a CALL, not as the function: the legend section below
+// redirects `out` into a buffer and back, and a factory holding the old binding
+// would go on writing to the document while this file believed it was buffering.
+const { line, tick, badgeHalfW, badgeXW, badgeXWs, badge, stampNote } = externalPrimitives({
+  out: (x) => out(x), palette: C, textOn: TXT, badgeLabel: blab, font: FONT,
+  badgeFit: BFIT, badgeRadius: 4.0,
+  // Registered HERE rather than at the call site, so a badge cannot be drawn
+  // without the register hearing about it. Unlike the town radial this is
+  // unconditional -- design.legendPlace searches against HARD too, so gating it
+  // on v2 would leave a legendPlace-only sheet searching an empty obstacle set.
+  // hw/r are the half-extents quality_metrics.js reads back off the finished
+  // <circle>/<rect>; the 0.7 white stroke is outside both and is excluded there too.
+  onBadge: (x, y, hw, r) => {
+    HARD.push([x - hw - 0.4, y - r - 0.4, x + hw + 0.4, y + r + 0.4, 'badge']);
+    BADGES.push({ x, y, hw, hh: r });
+  },
+});
 // destNodeSize — the terminus-box dimensions, factored out of destNode so the legend's
 // collision search (below) can know a node's footprint before anything is drawn.
 function destNodeSize(label, sub, timeLabel) {
@@ -318,16 +297,10 @@ const HUB_A = HUB_W / 2 + 3, HUB_B = HUB_H / 2 + 3;
  * numbers side by side. See "a floor that equals its own ceiling" in the failure
  * shapes list.
  */
-function hubEdge(dx, dy) {
-  const denom = Math.sqrt((dx * dx) / (HUB_A * HUB_A) + (dy * dy) / (HUB_B * HUB_B));
-  return denom > 0 ? 1 / denom : Math.max(HUB_A, HUB_B);
-}
-function rayToRect(dx, dy) {
-  let t = 1e9;
-  if (dx > 0) t = Math.min(t, (RECT.x1 - HX) / dx); else if (dx < 0) t = Math.min(t, (RECT.x0 - HX) / dx);
-  if (dy > 0) t = Math.min(t, (RECT.y1 - HY) / dy); else if (dy < 0) t = Math.min(t, (RECT.y0 - HY) / dy);
-  return t;
-}
+// floor 0, not the radial's 14: the clone dropped that guard, and the comment
+// above says why. 0 is arithmetically the same as having no floor.
+const hubEdge = hubEdgeFor({ a: HUB_A, b: HUB_B, floor: 0 });
+const rayToRect = rayToRectFor({ rect: RECT, hx: HX, hy: HY });
 const dests = HIDDEN_ROUTES.size
   ? (D.destinations || []).map(b => Object.assign({}, b, { routes: (b.routes || []).filter(r => !HIDDEN_ROUTES.has(r)) })).filter(b => b.routes.length)
   : (D.destinations || []);
@@ -1083,21 +1056,6 @@ out(footerBand({
   ...FOOTER_OPTS
 }));
 
-// Optional "coming soon" / validity stamp (shared shape with the town generators).
-function stampNote(cfg, x, y, align) {
-  if (!cfg) return;
-  const notes = Array.isArray(cfg.notes) ? cfg.notes : (cfg.notes ? [cfg.notes] : []);
-  if (!notes.length && !cfg.asOf) return;
-  const HS = 3.4, NS = 3.0, AS = 2.6, lh = 3.7, pad = 1.8;
-  const rows = []; if (notes.length) rows.push([cfg.heading || 'Coming soon', HS, '#b30000', true]);
-  notes.forEach(n => rows.push([n, NS, '#222', false]));
-  if (cfg.asOf) rows.push(['Timetable correct as at ' + cfg.asOf, AS, '#666', false]);
-  const wmm = Math.max(...rows.map(r => r[0].length * (r[1] * 0.56))) + pad * 2, hmm = pad * 2 + lh * rows.length;
-  const bx = align === 'end' ? x - wmm : x, anc = align === 'end' ? 'end' : 'start', tx = align === 'end' ? x - pad : x + pad;
-  out(`<rect x="${bx.toFixed(2)}" y="${(y - HS - pad + 0.3).toFixed(2)}" width="${wmm.toFixed(2)}" height="${hmm.toFixed(2)}" rx="1.4" fill="#fff" fill-opacity="0.9" stroke="#b30000" stroke-width="0.4"/>`);
-  let cy = y;
-  rows.forEach((r, i) => { if (i) cy += lh; out(`<text x="${tx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial"${r[3] ? ' font-weight="bold"' : ''} font-size="${r[1]}" fill="${r[2]}" text-anchor="${anc}">${esc(r[0])}</text>`); });
-}
 { const at = (D.stamp && D.stamp.externalAt) || [10, 190]; stampNote(D.stamp, at[0], at[1], 'start'); }
 
 out('</svg>');

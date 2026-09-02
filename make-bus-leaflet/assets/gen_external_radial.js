@@ -4,24 +4,29 @@
 // (March has no guided-busway / P&R corridor, so this replaces the St Ives layout.)
 const fs = require('fs');
 const path = require('path');
-const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'footer.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
-const { footerBand, footerPlateTop } = require(_FOOTER);
-const _LABELLER = (()=>{ const local=path.join(__dirname,'labeller.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS,'labeller.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
+// SHARED CODE IS SELF-RESOLVING: engine_paths.js has the search and the reasons.
+// The four lines below are the bootstrap that finds THAT, which is the one piece
+// no module can own. `_dep` searches; `_from` pins to a folder already resolved,
+// which is what keeps the labeller and its metrics table in one engine.
+const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
+  try { if (fs.existsSync(local)) return local; } catch (e) {}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep, siblingOf } = require(_EP);
+const _dep = engineDep(__dirname);
+const { footerBand, footerPlateTop } = require(_dep('footer.js'));
+const _LABELLER = _dep('labeller.js');
 const { Labeller } = require(_LABELLER);
-const FONT = require(path.join(path.dirname(_LABELLER),'font_metrics.js'));
-// Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
-// makes it load inside the portal as well as here.
-const { separateRow } = require(path.join(path.dirname(_LABELLER),'svg_primitives.js'));
-// dash_fit.js — the dashed-spoke pattern and its mid-gap fit, shared with
-// gen_external_busway.js and gen_external_places.js (OA-167). Resolved the same
-// sibling-then-SKILL_ASSETS way, so it loads from engine\dash_fit.js in the portal.
-const { dashFit, polylineLength } = require(path.join(path.dirname(_LABELLER),'dash_fit.js'));
+const _from = siblingOf(_LABELLER);
+const FONT = require(_from('font_metrics.js'));
+const { separateRow, esc } = require(_from('svg_primitives.js'));
+// `wrap` here is the LEGACY one, deliberately: this sheet draws an empty first
+// line for a one-word label longer than the wrap width (St Ives' Hinchingbrooke),
+// and correcting that moves published artwork. OA-229 is the fix.
+const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('external_primitives.js'));
+// dash_fit.js is no longer required HERE: line() moved to external_primitives.js
+// on 2026-09-02 and that module requires it. It is still in the engine hash, via
+// gen_external_busway.js and via external_primitives.js itself.
 // STRICT_GUARDS, adopted 2026-08-28 (OA-045). Until then only gen_internal.js and
 // gen_boarding.js participated in the contract at all, so "STRICT_GUARDS is live"
 // was true of a third of the sheets we publish and the board did not say which
@@ -33,8 +38,7 @@ const { dashFit, polylineLength } = require(path.join(path.dirname(_LABELLER),'d
 // `spokeSpread`, `external labels` and the two `moved` messages are a device
 // relocating itself or a drop already counted by the sidecar. None of those is a
 // refusal and none becomes one here.
-const { refuse: guardRefuse, report: reportRefusals } =
-  require(path.join(path.dirname(_LABELLER), 'strict_guards.js'));
+const { refuse: guardRefuse, report: reportRefusals } = require(_from('strict_guards.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const D = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 const C = D.palette, TXT = D.textOn;
@@ -79,7 +83,7 @@ const DESIGN = D.design || {};
 // printSafe: keep drawn content this many mm from the trim. `false` => today's
 // geometry exactly; absent => 5. See footer.js's header.
 const PSAFE = DESIGN.printSafe === false ? null : (DESIGN.printSafe != null ? +DESIGN.printSafe : 5);
-const W = 297, H = 210;
+const { W, H, svgOpen } = require(_dep('page.js'));
 // Footer options and notes are hoisted to the top because the PLATE TOP has to be
 // known before any page furniture is placed, and design.sheetUrl/sheetQr can move
 // it. gen_internal.js has always computed this early for exactly that reason; this
@@ -110,13 +114,6 @@ const PLATE_TOP = footerPlateTop(FOOTER_OPTS);
 const FRAME_Y1 = Math.min(190, PLATE_TOP - 2);
 let s = '';
 let out = (x) => { s += x + '\n'; };
-const esc = (t) => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function wrap(label, max=13){
-  if (label.length<=max || label.includes('\n')) return label.split('\n');
-  const w=label.split(' '); let a='',b='';
-  for(const t of w){ if((a+' '+t).trim().length<=max && !b) a=(a+' '+t).trim(); else b=(b+' '+t).trim(); }
-  return b?[a,b]:[a];
-}
 // wrapMm — multi-line word wrap to a width in MILLIMETRES, measured on the real Arial
 // advances. Used for free-text notes (the "runs as two arms" note, etc.) so a long
 // sentence fits a panel width instead of running off it as one unbounded line.
@@ -155,53 +152,23 @@ function wrapMm(text, maxMm, size){
 const measureText = (str, size, bold) => FONT.textWidth(str, size, !!bold);
 
 // ---- primitives -------------------------------------------------------------
-// dashed (limited-service) spokes use a BUTT cap, not round. A round cap adds w/2
-// of ink beyond EACH end of every dash, so at w=3.4 the old `round` + "1.6 2.2"
-// drew 1.6+3.4=5.0 mm of ink separated by 2.2-3.4 = -1.2 mm of gap: the dashes
-// overlapped into one scalloped caterpillar and the line read as solid-but-lumpy.
-// Butt caps plus a gap comfortably wider than the stroke keep each dash a crisp
-// rectangle. The numbers, and the fit that keeps a spoke from ending in a sliver,
-// now live in ONE place — dash_fit.js — required by this file, by
-// gen_external_busway.js and by the place skill's gen_external_places.js. Until
-// 2026-08-30 this was three copies of the same primitive with a comment telling
-// the reader to change all three, and that comment failed twice: the 2026-08-06
-// butt-cap fix and the 2026-08-29 dash fit were each made in the places copy and
-// left out of this one, the second of them printing a 0.0923mm sliver on St Ives'
-// published external for eleven days (OA-167). Nothing executes a comment.
-function line(pts, color, w=3.4, dashed=false){
-  const d = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ');
-  const cap = dashed ? 'butt' : 'round';
-  const dash = dashed ? ` stroke-dasharray="${dashFit(polylineLength(pts))}"` : '';
-  out(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>`);
-}
-function tick(x,y,color){ out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.5" fill="#fff" stroke="${color}" stroke-width="1.1"/>`); }
-/* design.badgeFit — the same defect and the same fix as gen_internal.js, which
- * carries the full rationale. This sheet draws the SAME route keys, so a town
- * whose stop badges overflow overflows here too: Ramsey's "301S" is 8.9mm of
- * Arial Bold in the 8.0mm terminus badge and 6.4mm in the 5.8mm legend one. The
- * only difference is that here the text is 0.95 × the radius, not the radius, so
- * the fit test measures at that size.
- *
- * badgeXW returns the EXTRA over the radius — 0 whenever the text fits, and 0
- * always when the key is absent — and every pitch below is written as the old
- * literal plus that extra, so an ungated town stays byte-identical.
- */
+// line, tick, badgeHalfW/XW/XWs, badge and stampNote are external_primitives.js
+// since 2026-09-02 (OA-224 Tier 3.5), shared with the place skill's
+// gen_external_places.js -- a reformatted CLONE of this file, so a fix made in
+// one of them has twice reached only one. That module's header has the full
+// reasoning, including the three places the two copies actually differed.
+//
+// `out` is passed as a CALL, not as the function: the legend section below
+// redirects `out` into a buffer and back, and a factory holding the old binding
+// would go on writing to the document while this file believed it was buffering.
 const BFIT = DESIGN.badgeFit !== false;
-const badgeHalfW = (route,r)=>{
-  if(!BFIT) return r;
-  const w = FONT.textWidth(blab(route), r*0.95, true);
-  return (w <= 2*r-0.3) ? r : w/2 + 0.35*r;
-};
-const badgeXW = (route,r)=> BFIT ? badgeHalfW(route,r)-r : 0;
-const badgeXWs = (list,r)=> BFIT ? Math.max(0,...list.map(k=>badgeXW(k,r))) : 0;
-function badge(x,y,route,r=4.6){
-  const hw=badgeHalfW(route,r);
-  if(V2) HARD.push([x-hw-0.4, y-r-0.4, x+hw+0.4, y+r+0.4, 'badge']);
-  if(hw>r) out(`<rect x="${(x-hw).toFixed(2)}" y="${(y-r).toFixed(2)}" width="${(2*hw).toFixed(2)}" height="${(2*r).toFixed(2)}" rx="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  else out(`<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${r}" fill="${C[route]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
-  out(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial" font-weight="bold" font-size="${(r*0.95).toFixed(2)}" fill="${TXT[route]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(route))}</text>`);
-  return hw-r;
-}
+const { line, tick, badgeHalfW, badgeXW, badgeXWs, badge, stampNote } = externalPrimitives({
+  out: (x) => out(x), palette: C, textOn: TXT, badgeLabel: blab, font: FONT,
+  badgeFit: BFIT, badgeRadius: 4.6,
+  // This sheet reserves a badge's box only under the v2 placer; the place
+  // external reserves unconditionally and records the badge for measurement.
+  onBadge: (x, y, hw, r) => { if (V2) HARD.push([x - hw - 0.4, y - r - 0.4, x + hw + 0.4, y + r + 0.4, 'badge']); },
+});
 // measureNodeWidth — the terminus-lozenge width formula, factored out of townNode() so the
 // badge-clearance calc below can know a box's width BEFORE it's drawn (badges are placed back
 // from the terminus point; the box is drawn afterwards, on top, so an offset shorter than the
@@ -300,7 +267,7 @@ function townNode(x,y,label,h=11,timeLabel,at){
 }
 
 // ---- canvas -----------------------------------------------------------------
-out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
+out(svgOpen(W, H));
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.town)} to nearby places</text>`);
@@ -316,12 +283,7 @@ if(OV.hub){ HX=OV.hub.x; HY=OV.hub.y; }
 // enough for its box to clear the plate instead of relying on the clamp in townNode()
 // to drag it back, which would band every southern terminus onto one line.
 const RECT={x0:24,y0:34,x1:282,y1:Math.min(182, FRAME_Y1 - 7.5)};
-function rayToRect(dx,dy){             // distance from hub to inset rect along (dx,dy)
-  let t=1e9;
-  if(dx>0) t=Math.min(t,(RECT.x1-HX)/dx); else if(dx<0) t=Math.min(t,(RECT.x0-HX)/dx);
-  if(dy>0) t=Math.min(t,(RECT.y1-HY)/dy); else if(dy<0) t=Math.min(t,(RECT.y0-HY)/dy);
-  return t;
-}
+const rayToRect = rayToRectFor({ rect: RECT, hx: HX, hy: HY });   // hub to inset rect along (dx,dy)
 // Hub label box, measured FIRST (used to be measured only afterwards, purely to draw the
 // hub rectangle, while every spoke anchored to a flat 14mm circle regardless of the label's
 // real shape) so a long/thin label (Beaconsfield, Beaconsfield Simpson Centre) doesn't leave
@@ -363,10 +325,7 @@ const HUB_W = HUBFIT
 // r(theta) = 1/sqrt((cos/a)^2+(sin/b)^2) for each spoke's own bearing, so every spoke starts
 // just outside the label box regardless of angle, instead of all spokes sharing one radius.
 const HUB_A = HUB_W/2 + 3, HUB_B = HUB_H/2 + 3;
-function hubEdge(dx,dy){
-  const denom = Math.sqrt((dx*dx)/(HUB_A*HUB_A) + (dy*dy)/(HUB_B*HUB_B));
-  return denom>0 ? Math.max(14, 1/denom) : Math.max(14, HUB_A, HUB_B);
-}
+const hubEdge = hubEdgeFor({ a: HUB_A, b: HUB_B, floor: 14 });
 /* ---- design.spokeSpread — spread the spokes around the hub (plan §4.2) --------
  *
  * A radial spider is a tube map: spoke LENGTH already carries nothing (every
@@ -1121,23 +1080,6 @@ if(V2){
 // derived from it.
 out(footerBand({ ...FOOTER_OPTS, version: D.version, validFrom: D.validFrom || 'Summer 2026' }));
 
-// Optional "coming soon" / validity stamp. Opt-in via routes.json "stamp"
-// {heading?, notes:[...], asOf?, externalAt?:[x,y], internalAt?:[x,y]}. Absent => nothing
-// emitted (byte-identical for gated towns). Draw future-dated changes from the upcoming report.
-function stampNote(cfg,x,y,align){
-  if(!cfg) return;
-  const notes=Array.isArray(cfg.notes)?cfg.notes:(cfg.notes?[cfg.notes]:[]);
-  if(!notes.length && !cfg.asOf) return;
-  const HS=3.4,NS=3.0,AS=2.6,lh=3.7,pad=1.8;
-  const rows=[]; if(notes.length) rows.push([cfg.heading||'Coming soon',HS,'#b30000',true]);
-  notes.forEach(n=>rows.push([n,NS,'#222',false]));
-  if(cfg.asOf) rows.push(['Timetable correct as at '+cfg.asOf,AS,'#666',false]);
-  const wmm=Math.max(...rows.map(r=>r[0].length*(r[1]*0.56)))+pad*2, hmm=pad*2+lh*rows.length;
-  const bx=align==='end'?x-wmm:x, anc=align==='end'?'end':'start', tx=align==='end'?x-pad:x+pad;
-  out(`<rect x="${bx.toFixed(2)}" y="${(y-HS-pad+0.3).toFixed(2)}" width="${wmm.toFixed(2)}" height="${hmm.toFixed(2)}" rx="1.4" fill="#fff" fill-opacity="0.9" stroke="#b30000" stroke-width="0.4"/>`);
-  let cy=y;
-  rows.forEach((r,i)=>{ if(i) cy+=lh; out(`<text x="${tx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial"${r[3]?' font-weight="bold"':''} font-size="${r[1]}" fill="${r[2]}" text-anchor="${anc}">${esc(r[0])}</text>`); });
-}
 { const at=(D.stamp&&D.stamp.externalAt)||[10,188]; stampNote(D.stamp, at[0], at[1], 'start'); }
 
 out('</svg>');

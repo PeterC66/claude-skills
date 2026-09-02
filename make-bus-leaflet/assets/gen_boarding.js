@@ -61,15 +61,15 @@ const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] 
 // sits in the skill's assets folder beside them. The portal runs a generator from
 // its own engine folder against a map's data dir and passes SKILL_ASSETS, so the
 // __dirname-only form could never have rendered a boarding sheet there - it would
-// have thrown on the require, before reading a single input. Resolution order: a
-// sibling file, then SKILL_ASSETS, then the skill's own path. Resolution does not
-// affect the SVG.
-const _dep = (name) => {
-  const local = path.join(__dirname, name);
+// have thrown on the require, before reading a single input. The resolver lives in
+// engine_paths.js since 2026-09-02 (OA-224 Tier 3.4) and its header has the order
+// and the reasons; the four lines below are the bootstrap that finds THAT file.
+const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   try { if (fs.existsSync(local)) return local; } catch (e) {}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/' + name;
-};
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep } = require(_EP);
+const _dep = engineDep(__dirname);
 const FOOTER = require(_dep('footer.js'));
 const ICONS = require(_dep('icons.js'));
 const FM = require(_dep('font_metrics.js'));
@@ -130,7 +130,7 @@ if (STANDS.verdict !== 'OK') {
 /* ------------------------------------------------------------------ page */
 // Millimetres throughout, as every other generator does; the raster size is the
 // shared 3508x2480 (A4 landscape at 300 dpi) so render.js needs no special case.
-const W = 297, H = 210;
+const { W, H, svgOpen } = require(_dep('page.js'));
 const SAFE = 8;                       // print-safe margin, matches footer.js
 // PRINT LEGIBILITY FLOOR. quality_metrics.js counts EVERY text element below
 // 2.4 mm as a hard defect, so a sheet with 84 small labels scores 84 defects
@@ -139,7 +139,7 @@ const SAFE = 8;                       // print-safe margin, matches footer.js
 const MIN_TEXT = 2.4;
 const parts = [];
 const out = (s) => parts.push(s);
-const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const { esc } = require(_dep('svg_primitives.js'));   // the one copy — OA-224 Tier 3.4
 const f2 = (n) => (Math.round(n * 100) / 100).toString();
 
 /* --------------------------------------------------------------- palette */
@@ -223,7 +223,7 @@ if (!dests.length) { console.error('gen_boarding: the index is empty — nothing
 const TITLE = BP.title || `Where to catch your bus in ${PLACE.name || ''}`.trim();
 const SUBTITLE = BP.subtitle || '';
 
-out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
+out(svgOpen(W, H));
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 out(`<g font-family="Arial, Helvetica, sans-serif">`);
 

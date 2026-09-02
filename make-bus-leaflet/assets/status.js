@@ -27,6 +27,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses, resolvePortal } = require('./cli');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, detectExternalStyle, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
@@ -65,16 +66,9 @@ const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
-function parseArgs(argv) {
-  const f = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) f[argv[i].slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
 const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
-const PORTAL = path.resolve(args.portal || 'C:/Claude/community-bus-maps');
+const BUSES = resolveBuses(args);
+const PORTAL = resolvePortal(args);
 const AS_MD = !!args.md;
 const AS_JSON = !!args.json;
 const NO_QUALITY = !!args['no-quality'];

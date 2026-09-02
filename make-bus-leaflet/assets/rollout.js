@@ -44,6 +44,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, detectExternalStyle } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
@@ -59,17 +60,8 @@ const BUILDLOG = require('./build_log');
 const { stampSheetVersion } = require('./sheet_stamps');
 const { scratchDir } = require('./scratch');
 
-function parseArgs(argv) {
-  const f = { town: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--town') { f.town.push(argv[++i]); }
-    else if (a.startsWith('--')) { f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true; }
-  }
-  return f;
-}
-const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
+const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';

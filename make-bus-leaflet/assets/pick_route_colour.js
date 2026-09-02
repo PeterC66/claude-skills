@@ -27,17 +27,10 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 
-function parseArgs(argv) {
-  const f = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
 const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses(args);
 if (!args.town || !args.route) {
   console.error('usage: node pick_route_colour.js --town "<Town>" --route <key> [--pool "#hex,#hex,…"] [--buses <dir>]');
   process.exit(2);

@@ -51,25 +51,14 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 const os = require('os');
 const { spawnSync } = require('child_process');
 const { SK, latestRunDir, readJson, findTowns, detectExternalStyle, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 const GEN = require(path.join(__dirname, 'sheet_registry.js'));
 const { scratchDir } = require('./scratch');
 
-function parseArgs(argv) {
-  const f = { town: [], unset: [], 'feature-pos': [], 'set-path': [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--town') f.town.push(argv[++i]);
-    else if (a === '--unset') f.unset.push(argv[++i]);
-    else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
-    else if (a === '--set-path') f['set-path'].push(argv[++i]);
-    else if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
-const args = parseArgs(process.argv.slice(2));
+const args = parseArgs(process.argv.slice(2), { repeat: ['town', 'unset', 'feature-pos', 'set-path'] });
 // "<key>=<x>,<y>" -> {key,x,y}
 const featurePos = args['feature-pos'].map(s => {
   const m = /^([^=]+)=([-\d.]+),([-\d.]+)$/.exec(s);
@@ -79,7 +68,7 @@ const featurePos = args['feature-pos'].map(s => {
 let SETPATH;
 try { SETPATH = args['set-path'].map(parseSetPath); }
 catch (e) { console.error(e.message); process.exit(2); }
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses(args);
 /* --patch-file <path> — the same JSON, read from a UTF-8 FILE.
  *
  * Use this, not --patch, for anything containing an en-dash or a middot — which

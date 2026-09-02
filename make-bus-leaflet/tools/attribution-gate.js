@@ -58,13 +58,14 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolveBuses } = require('../assets/cli');
 
 const SK = path.join(__dirname, '..');
 
 const argv = process.argv.slice(2);
 const SOURCE_ONLY = argv.includes('--source-only');
 const flag = (name, dflt) => { const i = argv.indexOf('--' + name); return (i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[i + 1] : dflt; };
-const BUSES = flag('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: flag('buses') });
 /* --assets / --place-assets exist so prove-red-attribution.js can point this at
  * MUTATED COPIES of the five generators without touching assets/. Every file
  * under assets/ is vendored into the portal and hashed by status.js, so a

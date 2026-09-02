@@ -55,11 +55,12 @@ const sharp = require('sharp');
 const { analyse, findSheets } = require('./quality_metrics');
 const { labelDiff, labelSet } = require('./gate_lib');
 const { scratchDir } = require('./scratch');
+const { resolveBuses } = require('./cli');
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : argv[i + 1]; };
 
-const BUSES = flag('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: flag('buses') });
 const REV = flag('rev', '9ec8106');
 const OUT = flag('out', path.join(BUSES, 'Development Docs', 'then-and-now-contact-sheet.html'));
 const WIDTH = +flag('width', 1000);

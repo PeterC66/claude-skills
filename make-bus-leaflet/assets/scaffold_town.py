@@ -17,6 +17,7 @@ Region-agnostic: --db / $CAMBS_GTFS_DB picks the dataset; --buses-root picks whe
 town folders live; --region only tunes the geocode + report.
 """
 import argparse, os, sys, subprocess, json, shutil
+import cli   # OA-224 Tier 3.1: --buses-root, then BUSES_DIR, then the laptop
 import gtfs_regions as greg
 
 HERE=os.path.dirname(os.path.abspath(__file__))
@@ -33,10 +34,11 @@ def main():
     ap.add_argument("--region",default="Cambridgeshire")
     ap.add_argument("--centre")
     ap.add_argument("--radius-km",type=float,default=1.6)
-    ap.add_argument("--buses-root",default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--buses-root",default=None)
     ap.add_argument("--db", default=None,
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     a=ap.parse_args()
+    a.buses_root = cli.resolve_buses(a.buses_root)
     # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
     a.db = greg.resolve_db(a.db)
     try: sys.stdout.reconfigure(encoding="utf-8")

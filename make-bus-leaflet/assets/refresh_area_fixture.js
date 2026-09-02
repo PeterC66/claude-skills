@@ -58,12 +58,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { readJson, latestRunDir, sameIgnoringLineEndings } = require('./gate_lib');
+const { resolveBuses } = require('./cli');
 
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf(n); return (i >= 0 && argv[i + 1]) ? argv[i + 1] : d; };
 const APPLY = argv.includes('--apply');
 const TOWN = flag('--town', 'St Ives');
-const BUSES = path.resolve(flag('--buses', 'C:/u3a St Ives/Using AI/Buses'));
+const BUSES = resolveBuses({ buses: flag('--buses') });
 
 function die(msg) { console.error('refresh_area_fixture.js: ' + msg); process.exit(2); }
 

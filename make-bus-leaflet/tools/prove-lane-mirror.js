@@ -33,8 +33,9 @@ const fs = require('fs');
 const path = require('path');
 const G = require('../assets/gate_lib.js');
 const { analyse } = require('../assets/quality_metrics.js');
+const { parseArgs, resolveBuses } = require('../assets/cli');
 
-const BUSES = 'C:/u3a St Ives/Using AI/Buses';
+const BUSES = resolveBuses(parseArgs(process.argv.slice(2)));
 const GEN = path.join(G.SK, 'gen_internal.js');
 
 function sheets() {

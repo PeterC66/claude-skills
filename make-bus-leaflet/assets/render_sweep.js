@@ -43,7 +43,7 @@
  *
  * Usage — every argument below is a real path on this machine, no placeholders:
  *
- *   node assets/render_sweep.js --buses "C:/u3a St Ives/Using AI/Buses"
+ *   node assets/render_sweep.js --buses "<Buses dir>"
  *   node assets/render_sweep.js --store "C:/Claude/community-bus-maps/data/maps"
  *   node assets/render_sweep.js --buses "..." --drop-framing
  *   node assets/render_sweep.js --buses "..." --expect 20

@@ -1386,6 +1386,48 @@ const MUTATIONS = [
     what: 'an area S4 with no orientation record commits anyway, so the rotation the build chose is lost with nothing said',
     find: "          if (why && !f['force-meta']) {",
     to: "          if (false) {" },
+  /* OA-224 Tier 3.1. cli.js is the one parser and the one estate resolver, so it
+   * is the one place a mistake reaches nine scripts at once. Each mutation below
+   * is a change that LOOKS like a tidy-up and silently alters every caller. */
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'the environment variable is dropped, so BUSES_DIR stops working and every machine that is not this laptop is back where it started',
+    find: "  return path.resolve((typeof value === 'string' && value) || envValue || fallback);",
+    to: "  return path.resolve((typeof value === 'string' && value) || fallback);" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'the flag stops outranking the environment, so an explicit --buses is ignored whenever BUSES_DIR happens to be set',
+    find: "  return path.resolve((typeof value === 'string' && value) || envValue || fallback);",
+    to: "  return path.resolve(envValue || (typeof value === 'string' && value) || fallback);" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'a valueless --buses falls through to the default instead of refusing, so a typed flag is silently ignored rather than exiting 2',
+    find: "  if (value === true) die(`${flagName} needs a path`);",
+    to: "  if (value === true) value = null;" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'a repeat flag stops accumulating and keeps only the last, so `--town A --town B` rolls out one town',
+    find: "    if (repeat.includes(name)) { f[name].push(argv[++i]); continue; }",
+    to: "    if (repeat.includes(name)) { f[name] = [argv[++i]]; continue; }" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'an unused repeat flag is undefined rather than an empty array, so every caller that maps over it throws',
+    find: "  for (const name of repeat) f[name] = [];",
+    to: "  const _unusedRepeatInit = repeat;" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'a flag followed by another flag swallows it as a value, so `--apply --force` loses --force and --apply becomes the string "--force"',
+    find: "    f[name] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;",
+    to: "    f[name] = (argv[i + 1] !== undefined) ? argv[++i] : true;" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'readJson stops naming the file it could not parse, which is the whole reason gate_lib delegates to it',
+    find: "  catch (e) { throw new Error(`${file} is not valid JSON — ${e.message}`); }",
+    to: "  catch (e) { throw new Error(e.message); }" },
+
+  { suite: 'cli.test.js', file: 'cli.js',
+    what: 'a fallback swallows a SYNTAX error as well as an absent file, so a corrupt config reads as a default',
+    find: "  if (fallback !== undefined && !fs.existsSync(file)) return fallback;",
+    to: "  if (fallback !== undefined) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }" },
 
 ];
 

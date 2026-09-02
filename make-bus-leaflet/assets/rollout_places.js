@@ -48,6 +48,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4 } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
@@ -64,17 +65,8 @@ const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
-function parseArgs(argv) {
-  const f = { place: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--place') { f.place.push(argv[++i]); }
-    else if (a.startsWith('--')) { f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true; }
-  }
-  return f;
-}
-const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
+const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
 const { seedPrevS4 } = require('./seed_prev_s4');

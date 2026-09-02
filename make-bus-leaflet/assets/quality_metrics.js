@@ -1684,8 +1684,8 @@ const label = (p) => {
 function main() {
   const argv = process.argv.slice(2);
   const json = argv.includes('--json'), detail = argv.includes('--detail');
-  let buses = 'C:/u3a St Ives/Using AI/Buses';
-  const bi = argv.indexOf('--buses'); if (bi >= 0) buses = argv[bi + 1];
+  let buses = require('./cli').resolveBuses({});
+  const bi = argv.indexOf('--buses'); if (bi >= 0) buses = argv[bi + 1];   // the flag still wins
   let files = argv.filter(a => a.endsWith('.svg'));
   if (argv.includes('--all') || !files.length) files = findSheets(buses);
   if (!files.length) { console.error('no sheets found'); process.exit(2); }

@@ -66,6 +66,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { resolveBuses } = require('../assets/cli');
 
 const SK = path.join(__dirname, '..');
 const A = path.join(SK, 'assets');
@@ -76,7 +77,7 @@ const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
 };
-const BUSES = arg('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: arg('buses') });
 
 const specPath = process.argv[2];
 if (!specPath || specPath.startsWith('--')) {

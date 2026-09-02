@@ -69,6 +69,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { resolveBuses } = require('../assets/cli');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
@@ -79,7 +80,7 @@ const KEEP = argv.includes('--keep');
  * the paths printed below would name directories that no longer exist. */
 if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
-const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
+const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : undefined });
 
 /*
  * The mutation: disable the guard clause added on 2026-08-27, so gen_internal.js

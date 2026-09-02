@@ -35,24 +35,17 @@
  * find, for whoever wants that after the estate is clean.
  *
  * Run from anywhere; there are no placeholders:
- *   node stray_outputs.js --buses "C:/u3a St Ives/Using AI/Buses"
+ *   node stray_outputs.js --buses "<Buses dir>"      (or $BUSES_DIR — see cli.js)
  *   node stray_outputs.js --buses "<dir>" --json
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 
 const DIRN = { S1: 'S1-services', S2: 'S2-geometry', S3: 'S3-config', S4: 'S4-generate', S5: 'S5-render', S6: 'S6-verify' };
 const ORDER = Object.keys(DIRN);
 
-function parseArgs(argv) {
-  const f = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
 
 /* Every map on the board, found the way status.js finds them: a folder holding a
  * manifest.json. Deliberately NOT a list of known towns -- an enumeration that
@@ -101,7 +94,7 @@ function strays(unitDir) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses(args);
 if (!fs.existsSync(BUSES)) { console.error('stray_outputs: no such folder: ' + BUSES); process.exit(2); }
 
 const rows = [];

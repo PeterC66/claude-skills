@@ -71,8 +71,8 @@
 const fs = require('fs');
 const path = require('path');
 const { analyse } = require('./quality_metrics');
+const { resolveBuses } = require('./cli');
 
-const DEFAULT_BUSES = 'C:/u3a St Ives/Using AI/Buses';
 const LEDGER_NAME = path.join('Development Docs', 'quality-ledger.json');
 
 // Walks BOTH place layouts, not just the nested one. This searched `Areas/` alone
@@ -332,7 +332,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 if (require.main === module) {
   const argv = process.argv.slice(2);
   const gi = argv.indexOf('--buses');
-  const buses = path.resolve(gi >= 0 ? argv[gi + 1] : DEFAULT_BUSES);
+  const buses = resolveBuses({ buses: gi >= 0 ? argv[gi + 1] : undefined });
   const { ledgerPath, ledger, rows } = run(buses);
 
   if (argv.includes('--accept')) {

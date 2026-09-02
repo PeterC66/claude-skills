@@ -26,6 +26,7 @@ isn't imported into the portal, or when testing the S1-S5 chain in isolation).
 Zero third-party dependencies — stdlib + the sibling gtfs_*.py modules already in assets/.
 """
 import os, sys, json, glob, argparse, datetime, subprocess, shutil, tempfile
+import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gtfs_query as gq
@@ -230,12 +231,13 @@ def refresh_one_safe_town(town, cfg, db, town_dir, safe_changes, note, portal, p
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--root", default=None)
     ap.add_argument("--db", help="read every town from this one dataset, ignoring regions.json")
     ap.add_argument("--portal", default=r"C:\Claude\community-bus-maps")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--no-propose", action="store_true")
     a = ap.parse_args()
+    a.root = cli.resolve_buses(a.root)
 
     root = a.root
     gdir = os.path.join(root, "_gtfs")

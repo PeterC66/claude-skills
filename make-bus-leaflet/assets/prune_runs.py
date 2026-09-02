@@ -51,6 +51,7 @@ back to the old reassurance: the whole failure being fixed here is a tool assert
 something it had not checked.
 """
 import argparse, json, os, re, shutil, subprocess, sys, datetime
+import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop
 
 INPUT_STAGES  = ("S1-services", "S2-geometry")
 OUTPUT_STAGES = ("S4-generate", "S5-render")
@@ -177,12 +178,13 @@ def plan_stage(stage, runs, keep_inputs, keep_outputs):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--root", default=None)
     ap.add_argument("--area", help="limit to one area or place folder name")
     ap.add_argument("--keep-outputs", type=int, default=2)
     ap.add_argument("--keep-inputs", type=int, default=3)
     ap.add_argument("--apply", action="store_true")
     a = ap.parse_args()
+    a.root = cli.resolve_buses(a.root)
 
     root = os.path.abspath(a.root)
     if not os.path.isdir(root):

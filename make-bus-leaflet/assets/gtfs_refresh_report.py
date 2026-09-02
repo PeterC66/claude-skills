@@ -30,6 +30,7 @@ Usage:
   python gtfs_refresh_report.py [--root "<Buses folder>"] [--db <one dataset for every town>]
 """
 import os, sys, json, glob, argparse, datetime
+import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop
 import gtfs_query as gq
 import gtfs_regions as greg
 import index_guard as ig
@@ -202,10 +203,11 @@ def fmt(dayset):
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser()
-    ap.add_argument("--root", default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--root", default=None)
     ap.add_argument("--db", help="read EVERY town from this one dataset, ignoring regions.json "
                                  "(single-region or testing use)")
     a=ap.parse_args()
+    a.root = cli.resolve_buses(a.root)
     root=a.root; gdir=os.path.join(root,"_gtfs")
     prefixes=json.load(open(os.path.join(gdir,"town_prefixes.json"),encoding="utf-8"))
     groups,skipped=greg.plan(gdir, prefixes, a.db)

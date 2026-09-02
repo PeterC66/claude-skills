@@ -32,18 +32,12 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 const { findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
 const { lfBytes } = require('./line_endings');
 
-function parseArgs(argv) {
-  const f = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) f[argv[i].slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
 const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses(args);
 
 function syncOne(dir) {
   const manifestPath = path.join(dir, 'manifest.json');

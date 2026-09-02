@@ -48,12 +48,12 @@
  * placeholder, and --map is relative to --buses:
  *
  *   node poi_worksheet.js --map "Areas/High Wycombe"
- *   node poi_worksheet.js --map "Areas/High Wycombe" --buses "C:/u3a St Ives/Using AI/Buses"
+ *   node poi_worksheet.js --map "Areas/High Wycombe" --buses "<Buses dir>"
  *   node poi_worksheet.js --map "Places/_standalone/Ely Co-op" --out -    # stdout
  *   node poi_worksheet.js --all                                          # every map, summary only
  *
  *   --map    <dir>   the map folder, relative to --buses (default: none, with --all)
- *   --buses  <dir>   the buses-data checkout (default: C:/u3a St Ives/Using AI/Buses)
+ *   --buses  <dir>   the buses-data checkout; then $BUSES_DIR, then the laptop (cli.js)
  *   --out    <file>  where to write (default: <map>/poi-worksheet.md; "-" = stdout)
  *   --all            print one summary line per map and write nothing
  *
@@ -63,6 +63,7 @@
 const fs = require('fs');
 const path = require('path');
 const { selectPois, AUTO_NAMED_CATS, printsName } = require('./poi_select.js');
+const { resolveBuses } = require('./cli');
 
 // poiMark()'s auto-name set. Everything outside it draws a symbol the Key
 // explains and is NEVER named, whatever OpenStreetMap called it — which is the
@@ -74,7 +75,6 @@ const { selectPois, AUTO_NAMED_CATS, printsName } = require('./poi_select.js');
 const AUTO_NAMED = AUTO_NAMED_CATS;
 const FRAME_MM2 = 190 * 155.1;     // the internal sheet's clipPath rect
 const POI_BOX_MM2 = 4.2 * 4.2;     // icon(cat, x, y, 2.1) => a 4.2 mm box
-const DEFAULT_BUSES = 'C:/u3a St Ives/Using AI/Buses';
 
 function args(argv) {
   const f = {};
@@ -86,7 +86,7 @@ function args(argv) {
   return f;
 }
 const F = args(process.argv.slice(2));
-const BUSES = F.buses || DEFAULT_BUSES;
+const BUSES = resolveBuses(F);
 
 /*
  * WHERE THE DATA COMES FROM, and why ci-reference is preferred.

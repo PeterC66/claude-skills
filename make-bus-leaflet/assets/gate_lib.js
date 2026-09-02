@@ -355,7 +355,7 @@ function findPlaces(towns, busesDir) {
   }
   return places;
 }
-function readJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
+const { readJson } = require('./cli');   // one implementation, OA-224 Tier 3.1: it names the file in the error
 function latestRunDir(manifest, townDir, stage) {
   const s = manifest.stages && manifest.stages[stage];
   if (!s || !s.latest) return null;

@@ -64,24 +64,12 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, findTowns, findPlaces, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
-function parseArgs(argv) {
-  const f = { town: [], place: [], unset: [], 'feature-pos': [], 'set-path': [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--town') f.town.push(argv[++i]);
-    else if (a === '--place') f.place.push(argv[++i]);
-    else if (a === '--unset') f.unset.push(argv[++i]);
-    else if (a === '--feature-pos') f['feature-pos'].push(argv[++i]);
-    else if (a === '--set-path') f['set-path'].push(argv[++i]);
-    else if (a.startsWith('--')) f[a.slice(2)] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
-const args = parseArgs(process.argv.slice(2));
-const BUSES = path.resolve(args.buses || 'C:/u3a St Ives/Using AI/Buses');
+const args = parseArgs(process.argv.slice(2), { repeat: ['town', 'place', 'unset', 'feature-pos', 'set-path'] });
+const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 /* --set-file <path> — the same JSON, read from a UTF-8 FILE.
  *

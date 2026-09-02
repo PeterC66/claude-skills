@@ -16,8 +16,9 @@ Run from the skill's own folder (C:\\u3a St Ives\\.claude\\skills\\make-bus-leaf
 
     npm run test:prove-red-external-spokes
 
-The optional argument is the Buses repository root; it defaults to
-"C:/u3a St Ives/Using AI/Buses" and there are no other placeholders.
+The optional argument is the Buses repository root; without it the estate is
+resolved by assets/cli.py -- $BUSES_DIR, then the laptop -- and there are no
+other placeholders.
 
 It needs two things a fresh clone does NOT have -- Ramsey's committed
 ci-reference/ and _gtfs/naptan.sqlite, which is git-ignored and rebuilt by
@@ -29,7 +30,9 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUSES = (sys.argv[1] if len(sys.argv) > 1 else "C:/u3a St Ives/Using AI/Buses").rstrip("/\\")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"))
+import cli   # OA-224 Tier 3.1
+BUSES = cli.resolve_buses(sys.argv[1] if len(sys.argv) > 1 else None).rstrip("/\\")
 ASSETS = os.path.join(os.path.dirname(HERE), "assets")
 REF = BUSES + "/Areas/Ramsey/ci-reference/"
 NAPTAN = BUSES + "/_gtfs/naptan.sqlite"

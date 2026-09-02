@@ -54,12 +54,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { scratchDir } = require('../assets/scratch');
 const { computeEngineVersion, computePlaceEngineVersion } = require('../assets/engine_version');
+const { resolveBuses } = require('../assets/cli');
 
 const ROOT = path.join(__dirname, '..');
 const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
 const ROLLOUT_PLACES = path.join(ROOT, 'assets', 'rollout_places.js');
 const argOf = (n, d) => { const i = process.argv.indexOf('--' + n); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
-const BUSES = argOf('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: argOf('buses') });
 const TOWN = argOf('town', 'Ramsey');
 const PLACE = argOf('place', 'Ely Co-op');
 

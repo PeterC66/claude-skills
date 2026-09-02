@@ -37,6 +37,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { scratchDir } = require('../assets/scratch');
+const { resolveBuses } = require('../assets/cli');
 
 const SK = path.join(__dirname, '..');
 const VERIFY = path.join(SK, 'assets', 'verify_report.js');
@@ -47,7 +48,7 @@ const KEEP = argv.includes('--keep');
  * the paths printed below would name directories that no longer exist. */
 if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
-const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
+const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : undefined });
 
 // The runs these cases are built from. Each is a real stored S6 run, chosen
 // because it is the recorded instance of the thing being proved.

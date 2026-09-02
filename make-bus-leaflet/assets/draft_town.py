@@ -49,6 +49,7 @@ Usage:
       [--max-edge-km 2.5]
 """
 import argparse, json, math, os, re, shutil, sqlite3, subprocess, sys, time
+import cli   # OA-224 Tier 3.1: --buses-root, then BUSES_DIR, then the laptop
 import urllib.parse, urllib.request
 from datetime import date
 import gtfs_regions
@@ -576,7 +577,7 @@ def main():
     ap.add_argument("--radius-km", type=float, default=1.6)
     ap.add_argument("--max-edge-km", type=float, default=2.5,
                     help="town-edge cap for the drawn buffer stops (derive_intown)")
-    ap.add_argument("--buses-root", default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--buses-root", default=None)
     ap.add_argument("--naptan", default=None,
                     help="NaPTAN stop register; defaults to "
                          "<buses-root>/_gtfs/naptan.sqlite. It is what makes place "
@@ -584,6 +585,7 @@ def main():
     ap.add_argument("--db", default=None,
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     a = ap.parse_args()
+    a.buses_root = cli.resolve_buses(a.buses_root)
     # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
     a.db = gtfs_regions.resolve_db(a.db)
     try:

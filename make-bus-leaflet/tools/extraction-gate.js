@@ -38,6 +38,7 @@
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { resolveBuses } = require('../assets/cli');
 
 const SK = path.join(__dirname, '..');
 const BASE = path.join(SK, 'tools', '.extraction-gate-baseline.json');
@@ -46,7 +47,7 @@ const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
 };
-const BUSES = arg('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: arg('buses') });
 const PORTAL = arg('portal', 'C:/Claude/community-bus-maps');
 
 if (process.argv.includes('--show')) {

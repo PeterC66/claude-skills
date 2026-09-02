@@ -27,11 +27,12 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { resolveBuses } = require('./cli');
 
 const ARGV = process.argv.slice(2);
 const CHECK = ARGV.includes('--check');
 const bi = ARGV.indexOf('--buses');
-const BUSES = bi >= 0 ? ARGV[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
+const BUSES = resolveBuses({ buses: bi >= 0 ? ARGV[bi + 1] : undefined });
 const REG_TTF = 'C:/Windows/Fonts/arial.ttf';
 const BOLD_TTF = 'C:/Windows/Fonts/arialbd.ttf';
 const OUT = path.join(__dirname, 'font_metrics.js');

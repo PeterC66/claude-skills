@@ -55,6 +55,7 @@ Usage:
 Writes _gtfs/upcoming/snapshot_<date>.json, upcoming-report_<date>.md, upcoming-summary.txt.
 """
 import os, sys, json, glob, argparse, datetime, hashlib, sqlite3
+import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop
 import gtfs_regions as greg
 import gtfs_places as gplaces
 
@@ -282,7 +283,7 @@ def main():
     except Exception:
         pass
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default=r"C:\u3a St Ives\Using AI\Buses")
+    ap.add_argument("--root", default=None)
     ap.add_argument("--db")
     ap.add_argument("--ahead", type=int, default=90, help="look-ahead window in days for [ENDS?] (default 90)")
     ap.add_argument("--town", help="ad-hoc gate check: print just this town's upcoming changes to the "
@@ -296,6 +297,7 @@ def main():
     ap.add_argument("--no-places", action="store_true",
                     help="scan registered towns only, skipping discovered place maps (escape hatch).")
     a = ap.parse_args()
+    a.root = cli.resolve_buses(a.root)
     if a.town and a.place:
         ap.error("--town and --place are mutually exclusive")
     single = a.town or a.place

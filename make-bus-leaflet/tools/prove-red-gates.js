@@ -47,6 +47,7 @@ const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const { gate, PLACE_IGNORE, portalFixtureEnv } = require(path.join(ASSETS, 'gate_lib.js'));
 const { scratchDir } = require('../assets/scratch');
+const { resolveBuses } = require('../assets/cli');
 
 const argv = process.argv.slice(2);
 const KEEP = argv.includes('--keep');
@@ -54,7 +55,7 @@ const KEEP = argv.includes('--keep');
  * the paths printed below would name directories that no longer exist. */
 if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
-const BUSES = (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : 'C:/u3a St Ives/Using AI/Buses';
+const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : undefined });
 const pi = argv.indexOf('--portal');
 const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-bus-maps';
 

@@ -83,12 +83,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync, execFileSync } = require('node:child_process');
 const { scratchDir } = require('../assets/scratch');
+const { resolveBuses } = require('../assets/cli');
 
 const ROOT = path.join(__dirname, '..');
 const ASSETS = path.join(ROOT, 'assets');
 const SKILLS_REPO = path.resolve(ASSETS, '..', '..');
 const argOf = (n, d) => { const i = process.argv.indexOf('--' + n); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
-const BUSES = argOf('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: argOf('buses') });
 
 let failures = 0;
 const fail = (m) => { console.error('  FAIL  ' + m); failures++; };

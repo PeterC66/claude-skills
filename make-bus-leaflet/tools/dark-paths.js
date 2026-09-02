@@ -35,12 +35,13 @@ const crypto = require('crypto');
 
 const SK = path.join(__dirname, '..');
 const GL = require(path.join(SK, 'assets/gate_lib.js'));
+const { resolveBuses } = require('../assets/cli');
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
 };
-const BUSES = arg('buses', 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses({ buses: arg('buses') });
 const OUT = (which) => path.join(SK, 'tools', `.dark-paths-${which}.json`);
 
 const normErr = (e) => String(e)

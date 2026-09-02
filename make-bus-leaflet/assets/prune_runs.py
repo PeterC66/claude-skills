@@ -133,12 +133,37 @@ def find_builds(root):
 
 
 def load_pins(root):
+    """The pins, AND a check that each of them still names something.
+
+    A PIN THAT NAMES A PATH THAT IS GONE IS SILENT, and that is the fault this
+    guard closes (buses-data OA-224 Tier 5, cross-repo F9). `pinned_hits` counts
+    pins the walk actually met, so a pin left behind by a refreshed fixture is
+    simply never honoured: it protects nothing, it says nothing, and the run
+    still ends "Pins honoured: N" with a smaller N than the file has rows.
+    Measured on 2026-09-02: this file's first pin had named
+    `Areas/St Ives/S5-render/v6.21_2026-08-08_0508` since August while the
+    portal's FIXTURE_DIR had moved twice and become a LIST OF THREE, so the two
+    beside it were protected by nothing at all. The stale pin was the visible
+    half; the two unprotected fixtures were the half nobody could see.
+
+    Existence, not honouring, is the test. Two pins name committed fixture
+    FOLDERS (`Places/_portal-fixture/...`) that this walk never enters, so they
+    are correctly pinned and correctly never counted as hits.
+    """
     p = os.path.join(root, "retention-pins.json")
     if not os.path.exists(p): return set()
     data = json.load(open(p, encoding="utf-8"))
     pins = {os.path.normpath(x["path"]) for x in data.get("pins", [])}
     for ed in data.get("printed", {}).get("editions", []):
         if ed.get("path"): pins.add(os.path.normpath(ed["path"]))
+    missing = sorted(r for r in pins if not os.path.exists(os.path.join(root, r)))
+    if missing:
+        print("retention-pins.json names %d path(s) that are not there:" % len(missing), file=sys.stderr)
+        for r in missing:
+            print("  %s" % r.replace(os.sep, "/"), file=sys.stderr)
+        print("A pin protects nothing once its run is gone, and nothing else would have said so.", file=sys.stderr)
+        print("Re-point it at the run that replaced it, or delete the row - in the change that moved it.", file=sys.stderr)
+        sys.exit(1)
     return pins
 
 

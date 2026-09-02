@@ -4,6 +4,10 @@
   "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 — see ../LICENSE.",
   "private": true,
   "main": "index.js",
+  "//engines": "OA-224 Tier 5 (cross-repo F14/F15). Node was pinned five ways across three repositories and this package.json was the one with no pin at all, while its own gates.yml installs 24 and node:sqlite -- which the portal's store depends on -- is still flagged experimental. 24 rather than >=24 in spirit: the runtime is not a free variable here, and the portal's engines still says >=22, which is looser than anything that is actually tested and is named in all three conventions pages as the divergence this closes on the engine side.",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "test": "node --test",
     "test:prove-red": "node tools/prove-red.js",

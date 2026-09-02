@@ -16,8 +16,12 @@
  * the estate, held here for configs the estate does not have (a lens present, a
  * rotation set). The SOURCE half pins what the files say: that they call the
  * module, that the PCA line exists in only one file, and that LEGACY_FRAME still
- * says footerSafe:false — because flipping it is the one-line adoption, and it
- * must be a deliberate change to this test rather than a quiet edit.
+ * says footerSafe:false. That is the DECIDED rule, not a placeholder: on
+ * 2026-09-02 the three height-bound sheets were built with the footer-safe frame
+ * adopted and the reader saw the same layout, because the workspace gen_internal
+ * refits the pseudo-coordinates regardless; only labels reshuffled, one more
+ * unplaced on each of two sheets. Peter closed the adoption. Flipping the flag
+ * now is a regression, and this pin is what says so.
  */
 'use strict';
 const test = require('node:test');
@@ -110,7 +114,7 @@ for (const [name, RJ] of Object.entries(CONFIGS)) {
       assert.deepStrictEqual(b.XY(ll), a.XY(ll), 'XY differs at ' + ll);
       assert.deepStrictEqual(b.INV(b.XY(ll)), a.INV(a.XY(ll)), 'INV differs at ' + ll);
     }
-    assert.strictEqual(b.MY1, 205, 'the legacy frame bottom is 205 mm — adopting the footer-safe frame is OA-230 part two');
+    assert.strictEqual(b.MY1, 205, 'the legacy frame bottom is 205 mm — the frame the solver lays out in; the workspace refit makes it moot (decided 2026-09-02, not adopted)');
   });
 }
 
@@ -145,11 +149,11 @@ test('the PCA line lives in projection.js and nowhere else', () => {
   assert.deepStrictEqual(carriers, ['projection.js'], 'a second copy of the projection has appeared');
 });
 
-test('LEGACY_FRAME still says footerSafe:false and no lenses — flipping it is part two, and a test change', () => {
+test('LEGACY_FRAME still says footerSafe:false and no lenses — the decided rule; the workspace refit makes the frame moot', () => {
   for (const f of PRE_STAGES) {
     const src = read(f);
     assert.ok(src.includes('const LEGACY_FRAME = { OV: {}, FIXED_ORIENTATION: null, FOOTER_SAFE: false, FOOTER_PLATE_TOP: null, DESIGN: {} };'),
-      f + ': LEGACY_FRAME has changed — if that is the adoption, it needs its version bumps and this assertion rewritten');
+      f + ': LEGACY_FRAME has changed — the adoption was measured and closed on 2026-09-02; reopening it needs three version bumps and this assertion rewritten');
     assert.ok(src.includes('IR: Object.assign({}, IR, { lenses: undefined }),'), f + ' has started honouring lenses');
     assert.ok(!/MY1 = 205/.test(src), f + ' carries its own 205 again');
   }

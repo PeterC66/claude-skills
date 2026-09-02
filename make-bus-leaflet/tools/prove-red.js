@@ -1555,8 +1555,9 @@ const MUTATIONS = [
     to: "    if (seen.has(name)) continue;" },
 
   // The two pre-stages cannot be required, so the pin on their frame is a SOURCE
-  // pin: flipping footerSafe is the adoption (OA-230 part two), which is a drawing
-  // change with a version bump per sheet, and it must not happen as a quiet edit.
+  // pin: flipping footerSafe would be the adoption OA-230 measured and Peter closed
+  // on 2026-09-02 (the workspace refit makes the frame moot); it must not come back
+  // as a quiet edit.
   { suite: 'pre_stages.test.js', file: 'diagram_internal.js',
     what: 'the diagram pre-stage adopts the footer-safe frame without anyone deciding to',
     find: "const LEGACY_FRAME = { OV: {}, FIXED_ORIENTATION: null, FOOTER_SAFE: false, FOOTER_PLATE_TOP: null, DESIGN: {} };",

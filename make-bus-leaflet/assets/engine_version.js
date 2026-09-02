@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /*
- * engine_version.js — content-hash the engine: the five entry points every town's
+ * engine_version.js — content-hash the engine: the SEVEN entry points every town's
  * S4 build runs unmodified (gen_internal.js, gen_external_radial.js,
- * gen_external_busway.js, icons.js, lane_normals.js) AND every module they
- * require, found by following the requires. Item 3 of the 2026-08-04
+ * gen_external_busway.js, icons.js, lane_normals.js, and since 2026-09-02 the two
+ * pre-stages diagram_internal.js and schematize_internal.js) AND every module
+ * they require, found by following the requires. gen_boarding.js is hashed too,
+ * but into the PLACE template, because only a place has a boarding sheet. Item 3 of the 2026-08-04
  * process-efficiency plan; the closure replaced the flat list on 2026-08-27,
  * when ten extractions had moved most of the drawing code outside it.
  *
@@ -37,7 +39,13 @@ const SK = __dirname;
 // 2026-08-26: it is required by gen_internal.js and it decides where a lane is
 // drawn, so a hash that excluded it would go on reporting the same engine across
 // a change that moves ink -- a stamp that is current and wrong.
-const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js'];
+// diagram_internal.js and schematize_internal.js joined on 2026-09-02 (OA-230, Tier
+// 4.3 of the codebase review). They draw the schematic and diagram sheets of every
+// town, the byte gate certifies those sheets against the CURRENT template, and
+// until that day a change to either re-stamped nothing: a town's stamp said
+// `current` over a diagram drawn by code that no longer existed.
+const ENGINE_FILES = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js',
+                      'diagram_internal.js', 'schematize_internal.js'];
 
 // ...and everything they require is hashed WITH them, found by following the
 // requires rather than by keeping a second list beside this one.
@@ -86,13 +94,14 @@ const DEP_PATTERNS = [
   /SKILL_ASSETS\s*,\s*['"]([\w.-]+\.js)['"]/g,                   // path.join(SKILL_ASSETS,'x.js')
 ];
 
-/** Every engine file the entry points reach, transitively, sorted. */
-function engineFiles(sk = SK) {
+/** The transitive require closure of `entries` under `sk`, sorted. A name in
+ * `already` is neither added nor followed: it is hashed by another half. */
+function requireClosure(sk, entries, already = new Set()) {
   const seen = new Set();
-  const queue = ENGINE_FILES.slice();
+  const queue = entries.slice();
   while (queue.length) {
     const name = queue.shift();
-    if (seen.has(name)) continue;
+    if (seen.has(name) || already.has(name)) continue;
     seen.add(name);
     const p = path.join(sk, name);
     if (!fs.existsSync(p)) continue;               // a missing entry point still hashes, as MISSING
@@ -110,6 +119,9 @@ function engineFiles(sk = SK) {
   // in — an extraction reorders them constantly.
   return [...seen].sort();
 }
+
+/** Every engine file the entry points reach, transitively, sorted. */
+function engineFiles(sk = SK) { return requireClosure(sk, ENGINE_FILES); }
 
 // THE HASH IGNORES LINE ENDINGS, and that is not tidiness (2026-08-28).
 //
@@ -196,27 +208,20 @@ function placeAssetsDir(sk = SK) {
 
 /** The place entry points and their place-LOCAL siblings, sorted. Anything they
  * reach in the town skill is already in engineFiles() and is not repeated here. */
-function placeEngineFiles(psk = placeAssetsDir()) {
-  const seen = new Set();
-  const queue = PLACE_ENGINE_FILES.slice();
-  while (queue.length) {
-    const name = queue.shift();
-    if (seen.has(name)) continue;
-    seen.add(name);
-    const p = path.join(psk, name);
-    if (!fs.existsSync(p)) continue;
-    const src = fs.readFileSync(p, 'utf8');
-    for (const re of DEP_PATTERNS) {
-      re.lastIndex = 0;
-      let m;
-      while ((m = re.exec(src))) {
-        const dep = m[1].endsWith('.js') ? m[1] : m[1] + '.js';
-        if (!seen.has(dep) && fs.existsSync(path.join(psk, dep))) queue.push(dep);
-      }
-    }
-  }
-  return [...seen].sort();
-}
+function placeEngineFiles(psk = placeAssetsDir()) { return requireClosure(psk, PLACE_ENGINE_FILES); }
+
+// THE BOARDING GENERATOR IS A PLACE GENERATOR THAT LIVES IN THE TOWN FOLDER (OA-230,
+// 2026-09-02). gen_boarding.js draws the boarding-plan sheet, which only a place has,
+// and it sits in make-bus-leaflet/assets because that is where its dependencies are.
+// Nothing in the town closure requires it, so it was outside BOTH hashes: a change
+// to it re-stamped no map at all (changing-the-engine.md records exactly that,
+// measured on 2026-08-29). It is hashed here as a third half of the PLACE template,
+// under a `boarding/` prefix, with its own require closure MINUS anything the town
+// closure already covers -- footer.js is hashed once, as itself, not twice.
+const BOARDING_ENGINE_FILES = ['gen_boarding.js'];
+
+/** The boarding generator and what it alone reaches, sorted. */
+function boardingEngineFiles(sk = SK) { return requireClosure(sk, BOARDING_ENGINE_FILES, new Set(engineFiles(sk))); }
 
 function computePlaceEngineVersion(sk = SK, psk = placeAssetsDir(sk)) {
   const h = crypto.createHash('sha256');
@@ -229,6 +234,12 @@ function computePlaceEngineVersion(sk = SK, psk = placeAssetsDir(sk)) {
   for (const name of placeEngineFiles(psk)) {
     const p = path.join(psk, name);
     h.update('place/' + name + '\0');
+    h.update(fs.existsSync(p) ? lfBytes(fs.readFileSync(p)) : Buffer.from('MISSING'));
+    h.update('\0');
+  }
+  for (const name of boardingEngineFiles(sk)) {
+    const p = path.join(sk, name);
+    h.update('boarding/' + name + '\0');
     h.update(fs.existsSync(p) ? lfBytes(fs.readFileSync(p)) : Buffer.from('MISSING'));
     h.update('\0');
   }
@@ -286,4 +297,5 @@ if (require.main === module) {
 }
 
 module.exports = { computeEngineVersion, stampEngine, engineFiles, ENGINE_FILES,
-  computePlaceEngineVersion, placeEngineFiles, placeAssetsDir, isPlaceRun, PLACE_ENGINE_FILES };
+  computePlaceEngineVersion, placeEngineFiles, placeAssetsDir, isPlaceRun, PLACE_ENGINE_FILES,
+  boardingEngineFiles, BOARDING_ENGINE_FILES, requireClosure };

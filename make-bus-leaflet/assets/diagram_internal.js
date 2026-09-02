@@ -37,10 +37,20 @@
 //   features:{ "<key>": {labelPos,labelReserve,...} }  per-feature workspace overrides
 const fs = require('fs');
 const path = require('path');
+const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
+  try { if (fs.existsSync(local)) return local; } catch (e) {}
+  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
+       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep } = require(_EP);
+const _dep = engineDep(__dirname);
+// The projection, the internalRoads reading and esc are the ENGINE's, not copies
+// (OA-230, 2026-09-02); resolved the way every entry point resolves a sibling.
+const { projection } = require(_dep('projection.js'));
+const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
+const { esc } = require(_dep('svg_primitives.js'));
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const RJ = JSON.parse(fs.readFileSync(DIR + '/routes.json', 'utf8'));
 if (!RJ.internalDiagram) { console.log('no internalDiagram config — nothing to do'); process.exit(0); }
-if (!RJ.internalRoads) { console.error('internalDiagram needs internalRoads (route-path model) too'); process.exit(1); }
 const DG = Object.assign({ bendTurn: 50, maxBends: 3, edgeMin: 8, edgeMax: 55, gamma: 0.55,
   dirW: 30, lenW: 1.2, anchorW: 0.03, pinW: 50,
   mergeJn: 5, mergeEdge: 6, dropLoop: 12, weldLeg: 1.6, featureTol: 2,
@@ -49,12 +59,12 @@ const DG = Object.assign({ bendTurn: 50, maxBends: 3, edgeMin: 8, edgeMax: 55, g
 DG.stops = Object.assign({ junctionDist: 3, poiStopDist: 8, include: [], exclude: [] }, DG.stops || {});
 
 // ---- inputs ----------------------------------------------------------------
-const IR = (function () {   // same defaulting as gen_internal
-  const u = (RJ.internalRoads === true) ? {} : RJ.internalRoads;
-  const o = Object.assign({ stroke: 1.7, gap: 2.8 }, u);
-  o.focus = Object.assign({ coreKm: 1.1, comp: 0.5 }, u.focus || {});
-  return o;
-})();
+// internalRoads, defaulted by the SAME function gen_internal.js uses (OA-230). The
+// copy here defaulted three keys where the generator defaults nine, and refused an
+// ABSENT key that the generator has treated as "on" since 2026-08-04. `false` is
+// the classic model and still refuses: there is no road graph to schematize.
+const IR = internalRoadsConfig(RJ);
+if (!IR) { console.error('internalDiagram needs the roads model (route-path); internalRoads:false is the classic model and has none'); process.exit(1); }
 const atco2ll = JSON.parse(fs.readFileSync(DIR + '/atco2ll.json', 'utf8'));
 const routes = (function () {
   for (const f of ['routes_intown_atco.json', 'routes_atco.json']) {
@@ -69,7 +79,7 @@ const ANCHOR = RJ.anchor || '0500HSTIV002';
 const PREFIX = RJ.atcoPrefix || String(ANCHOR).replace(/\d+$/, '');
 const order = RJ.routeOrder || Object.keys(RJ.palette);
 
-// ---- projection: EXACT copy of gen_internal's internalRoads path -----------
+// ---- projection: the engine's own, projection.js (OA-230) -----------------
 // (planar -> config rotation -> fisheye compress -> fit). Rotation + fisheye
 // are baked into the diagram coordinates; the workspace runs gen_internal with
 // rotationDeg:0 + comp:1 so 45-deg legs stay exactly 45 deg.
@@ -81,44 +91,24 @@ const stopPts = [];
     if (a.startsWith(PREFIX) || xc.has(a)) stopPts.push(atco2ll[a]);
   }
 }
-const lat0 = stopPts.reduce((s, p) => s + p[0], 0) / stopPts.length;
-const k = Math.cos(lat0 * Math.PI / 180);
-const planar = ([lat, lon]) => [lon * k, -lat];
-const P = stopPts.map(planar);
-const mx = P.reduce((s, p) => s + p[0], 0) / P.length, my = P.reduce((s, p) => s + p[1], 0) / P.length;
-let sxx = 0, sxy = 0, syy = 0; for (const [x, y] of P) { const dx = x - mx, dy = y - my; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; }
-let theta = 0.5 * Math.atan2(2 * sxy, sxx - syy);
-if (IR.rotationDeg != null) theta = -IR.rotationDeg * Math.PI / 180;
-const cosT = Math.cos(-theta), sinT = Math.sin(-theta);
-const rot = ([x, y]) => { const dx = x - mx, dy = y - my; return [dx * cosT - dy * sinT, dx * sinT + dy * cosT]; };
-const tform0 = ll => rot(planar(ll));
-const O = (function () {
-  const fc = IR.focus.center;
-  if (Array.isArray(fc)) return tform0(fc);
-  if (fc !== 'centroid' && atco2ll[ANCHOR]) return tform0(atco2ll[ANCHOR]);
-  const t = stopPts.map(tform0); return [t.reduce((s, p) => s + p[0], 0) / t.length, t.reduce((s, p) => s + p[1], 0) / t.length];
-})();
-const R0 = IR.focus.coreKm / 111.32;
-const CPF = IR.focus.comp;
-const R1 = (IR.focus.midKm != null) ? IR.focus.midKm / 111.32 : null;
-const CPF2 = (IR.focus.outerComp != null) ? IR.focus.outerComp : CPF;
-function compress([x, y]) {
-  if (CPF >= 1 && R1 === null) return [x, y];
-  const dx = x - O[0], dy = y - O[1], r = Math.hypot(dx, dy);
-  if (r <= R0 || r === 0) return [x, y];
-  const nr = (R1 !== null && r > R1) ? R0 + (R1 - R0) * CPF + (r - R1) * CPF2 : R0 + (r - R0) * CPF;
-  return [O[0] + dx / r * nr, O[1] + dy / r * nr];
-}
-const tform = ll => compress(tform0(ll));
-const MX0 = 6, MX1 = 196, MY0 = 30, MY1 = 205;
-const allT = stopPts.map(tform);
-let minX = Math.min(...allT.map(p => p[0])), maxX = Math.max(...allT.map(p => p[0]));
-let minY = Math.min(...allT.map(p => p[1])), maxY = Math.max(...allT.map(p => p[1]));
-const pad = 0.0006; minX -= pad; maxX += pad; minY -= pad; maxY += pad;
-const FM = IR.fitMargin != null ? IR.fitMargin : 4;
-const sc = Math.min((MX1 - MX0 - 2 * FM) / (maxX - minX), (MY1 - MY0 - 2 * FM) / (maxY - minY));
-const offX = (MX1 - MX0 - (maxX - minX) * sc) / 2, offY = (MY1 - MY0 - (maxY - minY) * sc) / 2;
-const XY = ll => { const [x, y] = tform(ll); return [MX0 + offX + (x - minX) * sc, MY0 + offY + (y - minY) * sc]; };
+// THE FRAME IS THE OLD ONE, ON PURPOSE (OA-230, 2026-09-02). Until today the forty
+// lines here were a copy of gen_internal.js's projection, commented "EXACT copy",
+// and the copy had drifted from projection.js in four ways: a flat 205 mm frame
+// bottom where every geographic sheet has run the footer-safe frame since
+// 2026-08-15, no design.fixedOrientation, no overrides.json rotation and no detail
+// lenses (engine F5, codebase review 2026-09-01). This call hands the real module
+// exactly what the copy computed -- no overrides, no fixed orientation, no lenses,
+// the 205 mm bottom -- so the extraction moved no byte on any of the 13 schematic
+// and diagram sheets. Adopting the module's real behaviour is a DRAWING change with
+// a version bump per sheet: it is OA-230's second half, taken to Peter with a
+// measurement rather than shipped here, and it is one edit -- hand the town's own
+// frame and lenses over instead of LEGACY_FRAME.
+const LEGACY_FRAME = { OV: {}, FIXED_ORIENTATION: null, FOOTER_SAFE: false, FOOTER_PLATE_TOP: null, DESIGN: {} };
+const _proj = projection(Object.assign({ stopPts, atco2ll, ANCHOR,
+  IR: Object.assign({}, IR, { lenses: undefined }),      // the copy had no lens support
+  ZOOM: { corePct: 1.0, comp: 1.0 } }, LEGACY_FRAME));   // ZOOM is the classic model's; unread with IR set
+const { XY, MX0, MX1, MY0, MY1, theta } = _proj;
+const { minX, minY, sc, offX, offY } = _proj.viewport;
 const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc];
 const rll = v => +v.toFixed(8);
 
@@ -1002,7 +992,6 @@ if (process.env.DIAGRAM_ONLY !== '1') {
     process.stderr.write('diagram labels: ' + nDropped + ' could not be placed -> unplaced-diagram.json\n');
   } else { try { fs.unlinkSync(UN_OUT); } catch (e) {} }
   if (isPlace) {
-    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const emitted = 'Buses within ' + esc(RJ.town);
     const title = RJ.internalTitle || RJ.placeTitle || ('Buses serving ' + (RJ.placeShort || RJ.place || RJ.town));
     let svg = fs.readFileSync(OUT, 'utf8');

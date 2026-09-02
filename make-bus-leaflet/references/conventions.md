@@ -24,6 +24,7 @@ It is one of three, one per repository. The other two are `docs/CONVENTIONS.md` 
 - **stdout carries the answer** — verdicts, counts, the thing a caller might parse.
 - **stderr carries the reasons** — refusals, warnings, and anything explaining a non-zero exit.
 - **A successful run is allowed to speak.** Do not read stderr only on failure. `gen_internal.js` writes a build warning on a zero exit, and a caller reading stderr only when the exit code is non-zero never saw it — which is how a "must show" that could not be fitted reached a customer silently.
+- **The generators' own contract is written down in `assets/strict_guards.js`** (OA-230, 2026-09-02): which stream carries what and what each of `0`, `1`, `2` and `3` means for a generator and for the two pre-stages — including that a pre-stage whose `routes.json` does not opt in exits `0` having written nothing, which is not a failure and must not be reported as one.
 
 ## Flags
 

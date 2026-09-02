@@ -1225,8 +1225,9 @@ const MUTATIONS = [
   // moved ink on nine of them.
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: 'the place closure is empty, so the place template collapses back onto the town one and a place-generator change is invisible again',
-    find: "  const queue = PLACE_ENGINE_FILES.slice();",
-    to: "  const queue = [];" },
+    // Re-anchored 2026-09-02 (OA-230): the two walks became one requireClosure().
+    find: "function placeEngineFiles(psk = placeAssetsDir()) { return requireClosure(psk, PLACE_ENGINE_FILES); }",
+    to: "function placeEngineFiles(psk = placeAssetsDir()) { return requireClosure(psk, []); }" },
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: 'a place stamp ignores the town closure, so a gen_internal.js change stops reaching the place sheet it actually draws',
@@ -1235,8 +1236,10 @@ const MUTATIONS = [
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: 'the place walk stops following requires, so a module the place generators share drops out of the place hash',
-    find: "        if (!seen.has(dep) && fs.existsSync(path.join(psk, dep))) queue.push(dep);",
-    to: "        if (false) queue.push(dep);" },
+    // Re-anchored 2026-09-02 (OA-230): the shared walker's push line is the town
+    // mutation's anchor, so this one stops the place ENTRY from being walked at all.
+    find: "function placeEngineFiles(psk = placeAssetsDir()) { return requireClosure(psk, PLACE_ENGINE_FILES); }",
+    to: "function placeEngineFiles(psk = placeAssetsDir()) { return PLACE_ENGINE_FILES.slice().sort(); }" },
 
   { suite: 'engine_version.test.js', file: 'engine_version.js',
     what: 'the dependency scanner cannot cross a nested paren again, so dash_fit.js drops out of the closure and the dashed-spoke pattern stops being hashed at all',
@@ -1515,6 +1518,59 @@ const MUTATIONS = [
     what: "the badge text is drawn at the radius rather than 0.95 of it, which is svg_primitives' rule and not this sheet's",
     find: "font-size=\"${(r * 0.95).toFixed(2)}\" fill=\"${TXT[route] || '#fff'}\"",
     to: "font-size=\"${r.toFixed(2)}\" fill=\"${TXT[route] || '#fff'}\"" },
+
+  // internal_roads_config.js — the one reading of internalRoads (OA-230, 2026-09-02).
+  // Three readings disagreed about an ABSENT key; the estate cannot certify that
+  // case because every schematic town writes the block.
+  { suite: 'internal_roads_config.test.js', file: 'internal_roads_config.js',
+    what: 'an absent internalRoads key reads as the classic model again — the pre-stages refused it, the generator drew it',
+    find: "  if (raw === false) return null;",
+    to: "  if (raw == null || raw === false) return null;" },
+
+  { suite: 'internal_roads_config.test.js', file: 'internal_roads_config.js',
+    what: 'the focus defaults are dropped, so a town that sets only comp loses its 1.1 km core',
+    find: "  o.focus = Object.assign({}, FOCUS_DEFAULTS, u.focus || {});",
+    to: "  o.focus = Object.assign({}, u.focus || {});" },
+
+  { suite: 'internal_roads_config.test.js', file: 'internal_roads_config.js',
+    what: 'a drawn default moves — the lane gap — and nothing but this suite would say which',
+    find: "const IR_DEFAULTS = Object.freeze({ stroke: 1.7, gap: 2.8,",
+    to: "const IR_DEFAULTS = Object.freeze({ stroke: 1.7, gap: 2.9," },
+
+  // engine_version.js — the boarding half of the place template, and the two
+  // pre-stages as town entry points (OA-230, Tier 4.3).
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'the boarding generator drops out of the place hash again, so a boarding change re-stamps nothing',
+    find: "const BOARDING_ENGINE_FILES = ['gen_boarding.js'];",
+    to: "const BOARDING_ENGINE_FILES = [];" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'the boarding closure stops excluding the town closure, so footer.js is hashed twice and a town-only edit moves the place hash by two routes',
+    find: "function boardingEngineFiles(sk = SK) { return requireClosure(sk, BOARDING_ENGINE_FILES, new Set(engineFiles(sk))); }",
+    to: "function boardingEngineFiles(sk = SK) { return requireClosure(sk, BOARDING_ENGINE_FILES); }" },
+
+  { suite: 'engine_version.test.js', file: 'engine_version.js',
+    what: 'a name the other half already hashes is followed anyway, so the exclusion is decorative',
+    find: "    if (seen.has(name) || already.has(name)) continue;",
+    to: "    if (seen.has(name)) continue;" },
+
+  // The two pre-stages cannot be required, so the pin on their frame is a SOURCE
+  // pin: flipping footerSafe is the adoption (OA-230 part two), which is a drawing
+  // change with a version bump per sheet, and it must not happen as a quiet edit.
+  { suite: 'pre_stages.test.js', file: 'diagram_internal.js',
+    what: 'the diagram pre-stage adopts the footer-safe frame without anyone deciding to',
+    find: "const LEGACY_FRAME = { OV: {}, FIXED_ORIENTATION: null, FOOTER_SAFE: false, FOOTER_PLATE_TOP: null, DESIGN: {} };",
+    to: "const LEGACY_FRAME = { OV: {}, FIXED_ORIENTATION: null, FOOTER_SAFE: true, FOOTER_PLATE_TOP: 195.16, DESIGN: {} };" },
+
+  { suite: 'pre_stages.test.js', file: 'schematize_internal.js',
+    what: 'the schematic pre-stage starts honouring lenses without anyone deciding to',
+    find: "  IR: Object.assign({}, IR, { lenses: undefined }),      // the copy had no lens support",
+    to: "  IR: IR,      // the copy had no lens support" },
+
+  { suite: 'pre_stages.test.js', file: 'projection.js',
+    what: 'the fit margin default changes, and the pre-stages — which pass none — would lay every schematic out in a different frame',
+    find: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:4) : 0;",
+    to: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:5) : 0;" },
 
 ];
 

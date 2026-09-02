@@ -364,12 +364,12 @@ test('no engine file defines a second esc body', () => {
       if (/\besc\s*=\s*\(?\s*t\s*\)?\s*=>/.test(line)) offenders.push(f + ': ' + line.trim());
     }
   }
-  // diagram_internal.js and schematize_internal.js are OUT of scope on purpose:
-  // they are outside the engine hash, they are Tier 4's merge (they already
-  // share 307 identical lines), and giving them a require here would be an edit
-  // to two files this commit otherwise does not touch.
-  const expected = ['diagram_internal.js', 'schematize_internal.js'];
+  // diagram_internal.js and schematize_internal.js were the last two carriers,
+  // left out of the 2026-09-02 census on purpose because they sat outside the
+  // hash; OA-230 gave them the engine bootstrap the same day and they take esc
+  // from here now. The expected list is EMPTY, and stays so.
+  const expected = [];
   assert.deepStrictEqual(
     offenders.map((o) => o.split(':')[0]).sort(), expected,
-    'an esc body outside svg_primitives.js and the two pre-stages: ' + offenders.join(' | '));
+    'an esc body outside svg_primitives.js: ' + offenders.join(' | '));
 });

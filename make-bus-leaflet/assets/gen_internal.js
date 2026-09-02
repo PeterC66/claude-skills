@@ -181,6 +181,7 @@ const LN = require(_dep('lane_normals.js'));
 const { selectPois, printsName } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
+const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
 const { svgPrimitives } = require(_dep('svg_primitives.js'));
 const { linearFeatures } = require(_dep('linear_features.js'));
 const { labelPlacer } = require(_dep('label_placer.js'));
@@ -426,33 +427,13 @@ const routes  = (function(){
 // outside Cambridgeshire) simply has no such file — tolerate its absence (=> []).
 // features[] in routes.json supplies the real linear features either way.
 const river   = (function(){ try{ return JSON.parse(fs.readFileSync(DIR+'/river_geo.json','utf8')); }catch(e){ return []; } })();
-// ---- internalRoads config + data (2026-08-04: DEFAULT ON; absent key = standard
-// object, same as internalRoads:true. Only explicit `internalRoads:false` => null
-// => classic model.)
-const IR = (RJ.internalRoads === false) ? null : (function(){
-  const u = (RJ.internalRoads && RJ.internalRoads !== true) ? RJ.internalRoads : {};
-  const o = Object.assign({ stroke:1.7, gap:2.8, skeleton:'#e4e4e4', skeletonPad:1.3,
-    contextRoads:true, contextColor:'#f0f0f0', contextWidth:0.45,
-    roadLabelMax:12, badgeEvery:70 }, u);       // gap>=stroke+~1mm so bundled lanes read separately (see header)
-  o.focus = Object.assign({ coreKm:1.1, comp:0.5 }, u.focus||{});
-  /* A FOUR-LANE DEFAULT WAS TRIED HERE ON 2026-08-24 AND MEASURED WRONG. Peter asked
-   * whether the 2026-08-23 casing ceiling was "in the engine yet" — it was, but absent on
-   * every map, so it had never drawn anything. `3*gap + stroke + skeletonPad` = 11.4 mm
-   * looked like the obvious default, and on St Ives it is right: 7 segments of 756 clamp,
-   * all of them the short round-capped junction stubs that fuse into the grey lobe, and
-   * the crop is plainly better. It is wrong everywhere else. Beaconsfield clamps 235 of
-   * 897, and they are not stubs — 47 consecutive segments of Station Road carry six real
-   * parallel lanes for the length of the street, 46 of Amersham Road carry five, and
-   * capping those puts coloured ribbon OUTSIDE the grey along whole corridors. High
-   * Wycombe clamps 149, Wisbech 142, March 113.
-   *
-   * So the ceiling is genuinely per-map and has to be set from that map's own measured
-   * distribution — the widest LONG run, not a lane count. `DBG_CASE=2 node gen_internal.js`
-   * prints one line per segment (road name, bundle size, drawn lanes, width) and is how
-   * the numbers above were got. Left absent here on purpose: an engine default that is
-   * right for one town in eight is worse than no default, because it ships as correct.
-   * Recorded in Development Docs/review-triage_2026-08-24.md, item 2. */
-  return o; })();
+// ---- internalRoads config + data: read by internal_roads_config.js, the SAME
+// function the two pre-stages read it with (OA-230, 2026-09-02). DEFAULT ON since
+// 2026-08-04: an absent key is the standard object, `true` too; only an explicit
+// `internalRoads:false` gives null and the classic model. The nine defaults, and the
+// four-lane casing ceiling that was tried on 2026-08-24 and measured wrong, are
+// written up in that file.
+const IR = internalRoadsConfig(RJ);
 
 /* design.frequencyTiers — draw HOW USABLE a service is, not how many journeys it
  * runs (2026-08-17; Buses repo, Development Docs/frequency-tier-model_2026-08-17.md).

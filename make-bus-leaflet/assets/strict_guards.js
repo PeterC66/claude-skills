@@ -28,6 +28,33 @@
  * Making the refusal itself the exit code means every spawn path, present and
  * future, catches it through the error handling it already has.
  *
+ * THE STREAM AND EXIT-CODE CONTRACT, in words (OA-230, 2026-09-02; engine F13 and
+ * F14 of the codebase review). It was implied by this file and stated nowhere,
+ * while the two pre-stages inverted it (progress on stdout, 21 lines to 4) and
+ * the portal read stderr only on a non-zero exit. Every generator, the two
+ * pre-stages included:
+ *
+ *   stdout   progress and results for a person reading the run -- counts, what
+ *            was written where. A caller may discard it.
+ *   stderr   anything a caller must READ: refusals, build warnings, labels that
+ *            could not be placed. It is written on a ZERO exit too, so a caller
+ *            that reads stderr only on failure has already lost the "must show"
+ *            that did not fit.
+ *   exit 0   the sheet was written -- or, for a pre-stage whose routes.json does
+ *            not opt in (no internalSchematic / internalDiagram), nothing was
+ *            asked for: it says so on stdout and writes nothing. That is not a
+ *            failure and must not be reported as one.
+ *   exit 1   the run failed, or refused under STRICT_GUARDS; the reason is on
+ *            stderr. A pre-stage asked to run on the classic model
+ *            (internalRoads:false) exits 1: there is no road graph to draw.
+ *   exit 2   the invocation was wrong: a missing input, a layout the config asks
+ *            for that cannot be drawn at the type floor.
+ *   exit 3   gen_boarding.js only: the boarding plan is not configured, or the
+ *            stands cannot be named honestly -- declining, not failing.
+ *
+ * These are the codes references/conventions.md gives every script here; the
+ * generators earn the 1-against-2 distinction like everything else.
+ *
  * Extracted verbatim from gen_internal.js and gen_boarding.js on 2026-08-27
  * (OA-129 Phase 3). The two copies had drifted only in the wording of the final
  * sentence, which is why `report` takes it as an argument.

@@ -32,8 +32,12 @@ const seed = (dir, overrides = {}) => {
 test('the ENTRY POINTS are the files every town build runs unmodified', () => {
   // lane_normals.js was added 2026-08-26 with design.laneOrientation. These five
   // are only where the walk STARTS; what gets hashed is their transitive closure.
+  // diagram_internal.js and schematize_internal.js joined 2026-09-02 (OA-230): they
+  // draw the schematic and diagram sheets the byte gate certifies, and a change to
+  // either used to re-stamp nothing.
   assert.deepStrictEqual(ENGINE_FILES,
-    ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js']);
+    ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'icons.js', 'lane_normals.js',
+     'diagram_internal.js', 'schematize_internal.js']);
 });
 
 test('the hash follows the requires, so an extracted module is inside it', () => {
@@ -364,3 +368,41 @@ test('EVERY require idiom is followed, asserted on a fixture and not on the esta
     assert.ok(found.includes(name), name + ' is not followed: ' + how);
   }
 }));
+
+/* ---- the BOARDING half of the place template (OA-230, 2026-09-02) ---------- */
+
+test('THE FAULT OA-230 RECORDS: a boarding-generator change must move the PLACE hash and NOT the town one', () => twoDirs((town, place) => {
+  // changing-the-engine.md measured it on 2026-08-29: a stderr line added to
+  // gen_boarding.js re-stamped no map and track:engine reported nothing behind,
+  // because the file was outside both hashes.
+  seed(town); seedPlace(place);
+  fs.writeFileSync(path.join(town, 'gen_boarding.js'), '// gen_boarding.js\n');
+  const t0 = computeEngineVersion(town), p0 = EV.computePlaceEngineVersion(town, place);
+  fs.writeFileSync(path.join(town, 'gen_boarding.js'), '// gen_boarding.js\n// one more line\n');
+  assert.strictEqual(computeEngineVersion(town), t0, 'the boarding generator is not part of the TOWN engine');
+  assert.notStrictEqual(EV.computePlaceEngineVersion(town, place), p0, 'and it IS part of the place engine');
+}));
+
+test('the boarding closure is what gen_boarding.js ALONE reaches — a town file is hashed once, as itself', () => twoDirs((town, place) => {
+  seed(town, { 'gen_internal.js': "require(_dep('footer.js'));\n" });
+  fs.writeFileSync(path.join(town, 'footer.js'), '// footer.js\n');
+  fs.writeFileSync(path.join(town, 'boarding_only.js'), '// boarding_only.js\n');
+  fs.writeFileSync(path.join(town, 'gen_boarding.js'), "require(_dep('footer.js')); require(_dep('boarding_only.js'));\n");
+  assert.deepStrictEqual(EV.boardingEngineFiles(town), ['boarding_only.js', 'gen_boarding.js']);
+  assert.ok(engineFiles(town).includes('footer.js'), 'footer.js is hashed in the town half');
+}));
+
+test('a pre-stage change moves the TOWN hash (OA-230): the diagram a town serves was drawn by this code', () => tmp(dir => {
+  const base = computeEngineVersion(seed(dir));
+  fs.writeFileSync(path.join(dir, 'diagram_internal.js'), '// diagram_internal.js\n// one more line\n');
+  assert.notStrictEqual(computeEngineVersion(dir), base);
+}));
+
+test('on the real engine: gen_boarding.js is in the boarding half and its shared modules are not repeated there', () => {
+  const b = EV.boardingEngineFiles(ENGINE_DIR);
+  assert.ok(b.includes('gen_boarding.js'));
+  for (const f of ['footer.js', 'strict_guards.js', 'svg_primitives.js', 'page.js']) {
+    assert.ok(!b.includes(f), f + ' is in the town closure and must not be hashed twice');
+  }
+  assert.ok(!engineFiles(ENGINE_DIR).includes('gen_boarding.js'), 'a boarding change must not re-stamp every town');
+});

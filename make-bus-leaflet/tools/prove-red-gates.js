@@ -100,9 +100,17 @@ const TARGETS = [
     sheet: 'internal-schematic.svg',
     gen: 'schematize_internal.js',
     map: 'Areas/Huntingdon',
-    what: 'the geometry bounding box is padded ten times as far',
-    find: 'const pad = 0.0006;',
-    to: 'const pad = 0.006;',
+    /* Re-anchored 2026-09-02 (OA-230): the pre-stage's projection is projection.js
+     * now, so `pad` is no longer in this file. The first re-anchor tried the
+     * ADOPTION -- flipping LEGACY_FRAME to the footer-safe frame -- and it SURVIVED
+     * on all three sheets: a shorter frame changes only the vertical offset when
+     * the fit is width-bound, the solver is translation-invariant, and INV takes
+     * the same offset back out. An equivalent mutant, and a measurement OA-230's
+     * second half needed. This one stretches the pseudo-longitude the workspace is
+     * written in, which no refit can undo. */
+    what: 'the inverse projection stretches the pseudo-longitude by one percent, so every leg leaves its octant',
+    find: 'const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc];',
+    to: 'const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc * 1.01];',
   },
   {
     /* THE PLACE SCHEMATIC IS A DIFFERENT PATH FROM THE TOWN ONE ABOVE, and until
@@ -115,17 +123,33 @@ const TARGETS = [
     gen: 'schematize_internal.js',
     map: 'Areas/High Wycombe/Places/High Wycombe Aldi',
     opts: { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true },
-    what: 'the geometry bounding box is padded ten times as far',
-    find: 'const pad = 0.0006;',
-    to: 'const pad = 0.006;',
+    /* Re-anchored 2026-09-02 (OA-230): the pre-stage's projection is projection.js
+     * now, so `pad` is no longer in this file. The first re-anchor tried the
+     * ADOPTION -- flipping LEGACY_FRAME to the footer-safe frame -- and it SURVIVED
+     * on all three sheets: a shorter frame changes only the vertical offset when
+     * the fit is width-bound, the solver is translation-invariant, and INV takes
+     * the same offset back out. An equivalent mutant, and a measurement OA-230's
+     * second half needed. This one stretches the pseudo-longitude the workspace is
+     * written in, which no refit can undo. */
+    what: 'the inverse projection stretches the pseudo-longitude by one percent, so every leg leaves its octant',
+    find: 'const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc];',
+    to: 'const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc * 1.01];',
   },
   {
     sheet: 'internal-diagram.svg',
     gen: 'diagram_internal.js',
     map: 'Areas/St Ives',
-    what: 'the geometry bounding box is padded ten times as far',
-    find: 'const pad = 0.0006;',
-    to: 'const pad = 0.006;',
+    /* Re-anchored 2026-09-02 (OA-230): the pre-stage's projection is projection.js
+     * now, so `pad` is no longer in this file. The first re-anchor tried the
+     * ADOPTION -- flipping LEGACY_FRAME to the footer-safe frame -- and it SURVIVED
+     * on all three sheets: a shorter frame changes only the vertical offset when
+     * the fit is width-bound, the solver is translation-invariant, and INV takes
+     * the same offset back out. An equivalent mutant, and a measurement OA-230's
+     * second half needed. This one stretches the pseudo-longitude the workspace is
+     * written in, which no refit can undo. */
+    what: 'the inverse projection stretches the pseudo-longitude by one percent, so every leg leaves its octant',
+    find: 'const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc];',
+    to: 'const INV = ([x, y]) => [-(minY + (y - MY0 - offY) / sc), minX + (x - MX0 - offX) / sc * 1.01];',
   },
   {
     sheet: 'boarding.svg',

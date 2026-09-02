@@ -114,7 +114,10 @@ test('siblingOf does NOT search — it pins, even when the file is not there', (
 
 /* ---- source-level: the bootstrap, and the census of the laptop literal ---- */
 
-const ENTRY_POINTS = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'gen_boarding.js'];
+// The two pre-stages joined on 2026-09-02 (OA-230): they take projection.js and
+// internal_roads_config.js from the engine now, so they resolve like every entry point.
+const ENTRY_POINTS = ['gen_internal.js', 'gen_external_radial.js', 'gen_external_busway.js', 'gen_boarding.js',
+                      'diagram_internal.js', 'schematize_internal.js'];
 const BOOTSTRAP = [
   "const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');",
   "  try { if (fs.existsSync(local)) return local; } catch (e) {}",
@@ -122,14 +125,14 @@ const BOOTSTRAP = [
   "       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();",
 ].join('\n');
 
-test('all four entry points carry the SAME bootstrap, character for character', () => {
+test('all six entry points carry the SAME bootstrap, character for character', () => {
   for (const f of ENTRY_POINTS) {
     const src = fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8').replace(/\r\n/g, '\n');
     assert.ok(src.includes(BOOTSTRAP), f + ' does not carry the shared bootstrap verbatim');
   }
 });
 
-test('the laptop path is in the four bootstraps and engine_paths.js, and nowhere else in the engine', () => {
+test('the laptop path is in the six bootstraps and engine_paths.js, and nowhere else in the engine', () => {
   const LITERAL = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets';
   const allowed = new Set(ENTRY_POINTS.concat(['engine_paths.js']));
   const offenders = [];
@@ -142,7 +145,7 @@ test('the laptop path is in the four bootstraps and engine_paths.js, and nowhere
       if (line.includes(LITERAL) && !/^\s*(\/\/|\*|\/\*)/.test(line)) offenders.push(f + ': ' + line.trim());
     }
   }
-  assert.deepStrictEqual(offenders, [], 'a fifth copy of the last-resort path has appeared');
+  assert.deepStrictEqual(offenders, [], 'a seventh copy of the last-resort path has appeared');
 });
 
 test('engine_paths.js and page.js joined the hash closure and dash_fit.js stayed in it', () => {

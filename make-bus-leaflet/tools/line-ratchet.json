@@ -3,12 +3,12 @@
   "recorded": "2026-09-02",
   "files": {
     "../make-place-bus-leaflet/assets/gen_external_places.js": 1072,
-    "assets/diagram_internal.js": 1019,
+    "assets/diagram_internal.js": 1008,
     "assets/gen_boarding.js": 1485,
     "assets/gen_external_busway.js": 269,
     "assets/gen_external_radial.js": 1096,
-    "assets/gen_internal.js": 3293,
-    "assets/schematize_internal.js": 886,
+    "assets/gen_internal.js": 3274,
+    "assets/schematize_internal.js": 875,
     "assets/status.js": 1658,
     "assets/verify_report.js": 1485
   }

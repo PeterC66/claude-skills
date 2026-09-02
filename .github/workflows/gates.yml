@@ -84,7 +84,7 @@ jobs:
       # guard it is pointed at.
       - name: Prove the build-warning severities can still go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-build-log.js
+        run: npm run test:prove-red-build-log
 
       # The line-count ratchet (buses-data OA-224, Tier 2.1). gen_internal.js was cut
       # 3,933 -> 2,550 on 2026-08-27 with a written rule that new logic goes in a
@@ -98,9 +98,81 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run gate:line-ratchet
 
+      # THE 226-MUTATION SUITE, WHICH HAD NEVER RUN HERE. `npm test` above is
+      # `node --test` -- it proves the unit tests pass. This breaks the engine on
+      # purpose, 226 ways, and requires each mutation to redden the test that
+      # names it: it proves the unit tests can FAIL, which is the only thing that
+      # makes their green mean anything. `git log -S "prove-red.js"` over this
+      # file returns nothing, so until 2026-09-02 the only machine that had ever
+      # seen it was the one it was written on -- the exact fault OA-218 fixed for
+      # the OTHER two harnesses on 2026-08-28, one file short. Found by
+      # `gate:wiring` below, on its first run. ~90 s, no other repository.
+      - name: Prove the unit suite can go red (226 mutations)
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red
+
+      - name: Prove the S4 run-directory guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-run-dir
+
+      - name: Prove the design-key register check can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-design-keys
+
+      - name: Every design.* key the engine reads is in the register
+        working-directory: skills/make-bus-leaflet
+        run: npm run gate:design-keys
+
+      - name: Every tracked file is LF
+        working-directory: skills/make-bus-leaflet
+        run: npm run gate:line-endings
+
+      # The check that keeps this list honest. Every runnable tool must have an
+      # npm script, every test:/gate: script must be in a workflow step or
+      # declared with a reason, and CI must invoke each one THROUGH its script
+      # rather than rebuilding the command -- four python harnesses were `python`
+      # in package.json and `python3` here, so `npm run <name>` and the step of
+      # the same name were different commands.
+      # Falsify the scheduling check before trusting it. It is a check whose
+      # subject is OTHER checks being scheduled, so if it stops finding things it
+      # reports the healthiest possible state about a repository where nothing
+      # runs. Seven cases on scratch repositories under the temp dir, ~2 s. The
+      # one that matters is a control rather than a break: a tool named only in a
+      # COMMENT must still count as unscheduled, because this workflow is heavily
+      # commented and a grep over it would call every mention a schedule.
+      - name: Prove the scheduling check can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-wiring
+
+      - name: Every gate and harness is scheduled, and scheduled by name
+        working-directory: skills/make-bus-leaflet
+        run: npm run gate:wiring
+
+      # BUS-WORK'S FOUR HARNESSES, which ran nowhere but this laptop until
+      # 2026-09-02 (buses-data OA-224, Tier 2.3). Each builds its own scratch
+      # tree under the temp dir and imports node builtins only, so they need no
+      # install, no secrets and no other repository -- which is exactly why there
+      # was never a reason for them to be missing, only an absence of anywhere
+      # obvious to put them. bus-work now has a package.json that NAMES them.
+      - name: Prove the commitment reminders can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-commitments
+
+      - name: Prove the concurrency verdicts can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-concurrency
+
+      - name: Prove the correspondence reminders can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-correspondence
+
+      - name: Prove the refresh-review row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-refresh-review
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
-        run: python3 tools/prove-red-route-collision.py
+        run: npm run test:prove-red-route-collision
 
       # OA-204: gtfs_query.py read operating days from the `calendar` row and folded
       # calendar_dates additions in only for a service with NO calendar row. GTFS lets
@@ -113,7 +185,7 @@ jobs:
       # in-memory: no dataset, no built map. Added 2026-08-31.
       - name: Prove the operating-days resolution can go red
         working-directory: skills/make-bus-leaflet
-        run: python3 tools/prove-red-days-resolution.py
+        run: npm run test:prove-red-days-resolution
 
       # OA-223: gtfs_refresh_report.py folded 1A/1B into 1 and 32A into 32 -- right, and
       # what stops 301S being proposed as new every month -- recorded what it folded in
@@ -128,14 +200,14 @@ jobs:
       # Added 2026-09-01.
       - name: Prove the refresh report's variant fold can go red
         working-directory: skills/make-bus-leaflet
-        run: python3 tools/prove-red-variant-fold.py
+        run: npm run test:prove-red-variant-fold
 
       # OA-141: redteam_source.js answered about the PARENT TOWN when run from a
       # place's own root, and said nothing about it. This cuts both fixes out and
       # requires the four guard tests to fail while the two CONTROLs hold.
       - name: Prove the redteam-source ambiguity guard can go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-redteam-source.js
+        run: npm run test:prove-red-redteam-source
 
       # OA-166: the same tool decided REUSE from the S1/S2 pull TIMESTAMP, which is a
       # proxy for the question it was asking. It bought three ~100k-token red teams it
@@ -145,7 +217,7 @@ jobs:
       # and requires the six guard tests to fail while the two CONTROLs hold.
       - name: Prove the redteam-source fingerprint can go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-redteam-fingerprint.js
+        run: npm run test:prove-red-redteam-fingerprint
 
       # OA-019: derive_frequency.js tiers a place's LINE WEIGHTS, and fed one of the
       # three places whose S1 predates the frequency fields it returned "limited --
@@ -474,7 +546,7 @@ jobs:
 
       - name: Prove the byte gates can go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-gates.js --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-gates -- --buses "$GITHUB_WORKSPACE/buses-data"
 
       # Falsify the S6 verification checks too. Four of them were rewritten on
       # 2026-08-27 (OA-129 Phase 2) because they were manufacturing findings that
@@ -486,7 +558,7 @@ jobs:
       # are gitignored and CI has none of them.
       - name: Prove the S6 checks can still go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-s6-checks.js --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-s6 -- --buses "$GITHUB_WORKSPACE/buses-data"
 
       # WHICH OF THESE BELONGS IN WHICH WORKFLOW (OA-218, 2026-09-01). The rule,
       # which nothing stated until now: a harness that reads the buses-data map tree
@@ -514,7 +586,7 @@ jobs:
       # `git archive HEAD` rather than assumed.
       - name: Prove the render sweep can still go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-sweep.js --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-sweep -- --buses "$GITHUB_WORKSPACE/buses-data"
 
       # And falsify the ROLLOUT stamp verdict (OA-179). This one has to be here
       # rather than in `unit`, because it needs a buses-data checkout — and it has
@@ -526,7 +598,7 @@ jobs:
       # checkout has.
       - name: Prove the rollout stamp verdict can go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-rollout-stamp.js --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-rollout-stamp --buses "$GITHUB_WORKSPACE/buses-data"
 
       # The same argument again, for the verdict that says a committed S4 was never
       # rendered (OA-198). Both rollout tools commit S4 and render S5 as a separate
@@ -539,7 +611,7 @@ jobs:
       # the row was written about places and towns have the identical stop.
       - name: Prove the unrendered-S4 verdict can go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-unrendered.js --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-unrendered --buses "$GITHUB_WORKSPACE/buses-data"
 
       # And falsify the severity contract that decides whether a build may ship at
       # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that
@@ -550,7 +622,7 @@ jobs:
       # but this one, so it runs even when the cross-repo checkout is unavailable.
       - name: Prove the build-warning severities can still go red
         working-directory: skills/make-bus-leaflet
-        run: node tools/prove-red-build-log.js
+        run: npm run test:prove-red-build-log
 
       # A route NUMBER is not unique, and indexing on it is an index AND a silent
       # de-duplication that nothing distinguishes afterwards. Wisbech runs two 46s,
@@ -564,7 +636,7 @@ jobs:
       # ubuntu-latest already has python3. Added 2026-08-28 with OA-134/OA-097.
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
-        run: python3 tools/prove-red-route-collision.py
+        run: npm run test:prove-red-route-collision
 
       # OA-204: gtfs_query.py read operating days from the `calendar` row and folded
       # calendar_dates additions in only for a service with NO calendar row. GTFS lets
@@ -577,7 +649,7 @@ jobs:
       # in-memory: no dataset, no built map. Added 2026-08-31.
       - name: Prove the operating-days resolution can go red
         working-directory: skills/make-bus-leaflet
-        run: python3 tools/prove-red-days-resolution.py
+        run: npm run test:prove-red-days-resolution
 
       # OA-223: gtfs_refresh_report.py folded 1A/1B into 1 and 32A into 32 -- right, and
       # what stops 301S being proposed as new every month -- recorded what it folded in
@@ -592,7 +664,7 @@ jobs:
       # Added 2026-09-01.
       - name: Prove the refresh report's variant fold can go red
         working-directory: skills/make-bus-leaflet
-        run: python3 tools/prove-red-variant-fold.py
+        run: npm run test:prove-red-variant-fold
 
       # OA-164, REPORTED not gated: eight files exist today, the pull guard already
       # stops them doing harm, and a check red on the day it lands gets muted. It is

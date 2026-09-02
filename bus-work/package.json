@@ -1,0 +1,13 @@
+{
+  "name": "bus-work",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The BusMaps.uk worklist skill. This package.json exists to NAME its falsification harnesses so a workflow can schedule them, not to add dependencies — every one of them imports node builtins only, so `npm run` works here with no install. buses-data OA-224, Tier 2.3.",
+  "scripts": {
+    "test:prove-red-commitments": "node assets/prove-red-commitments.mjs",
+    "test:prove-red-concurrency": "node assets/prove-red-concurrency.mjs",
+    "test:prove-red-correspondence": "node assets/prove-red-correspondence.mjs",
+    "test:prove-red-refresh-review": "node assets/prove-red-refresh-review.mjs",
+    "test:prove-red": "npm run test:prove-red-commitments && npm run test:prove-red-concurrency && npm run test:prove-red-correspondence && npm run test:prove-red-refresh-review"
+  }
+}

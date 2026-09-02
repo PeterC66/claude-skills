@@ -201,6 +201,7 @@ A complete non-busway build lives in `…\Buses\Areas\March\` in the staged layo
 
 ## Reference files (load on demand)
 This SKILL.md is the orchestration spine; the deep detail lives in `references/` and is read when you reach that stage or feature:
+- **[references/conventions.md](references/conventions.md)** — flag names, exit codes, which stream carries what, the `--apply` / `--yes` vocabulary, the naming rule and the Node pin. One of three such pages, one per repository. Read it before adding a tool: `npm run gate:wiring` checks that every runnable tool has an npm script and that every gate is scheduled by name.
 - **[references/s1-services.md](references/s1-services.md)** — Stage 1 services + the disagreement audit (PDF/timetable reading, renumbering traps, audit schema).
 - **[references/s2-geometry.md](references/s2-geometry.md)** — Stage 2 geometry pulls (bustimes ATCO order, OSM stops/POIs/features, `bbox` MCP vs curl).
 - **[references/s3-config.md](references/s3-config.md)** — Stage 3 `routes.json` + the per-town generator edits (radial vs busway, `icons.js` require, `classify`/`desc`).

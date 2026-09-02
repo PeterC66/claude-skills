@@ -38,16 +38,18 @@ const { parseArgs, resolveBuses } = require('../assets/cli');
 const BUSES = resolveBuses(parseArgs(process.argv.slice(2)));
 const GEN = path.join(G.SK, 'gen_internal.js');
 
+/* The ci-reference folders that hold an internal sheet, from the ONE estate
+ * walker (OA-224 Tier 3.2). The copy this replaces excluded only `node_modules`
+ * — not `_portal-fixture` — so it and the four other copies of this walk did not
+ * all answer the same question, which is the whole fault the shared one exists
+ * to end. Nothing changes on today's estate, because the fixture keeps its
+ * sheets outside a `ci-reference/` folder; that is a property of the layout as
+ * it stands, not of the walk, and it is exactly the kind of accident this
+ * project has been caught by before. */
 function sheets() {
-  const out = [];
-  (function walk(d) {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); }
-      else if (e.name === 'internal.svg' && path.basename(d) === 'ci-reference') out.push(d);
-    }
-  })(BUSES);
-  return out.sort();
+  return [...new Set(G.findSheets(BUSES)
+    .filter(p => path.basename(p) === 'internal.svg')
+    .map(p => path.dirname(p)))].sort();
 }
 
 const rows = [];

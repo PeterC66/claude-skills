@@ -355,6 +355,47 @@ function findPlaces(towns, busesDir) {
   }
   return places;
 }
+/*
+ * findSheets — every SHEET on the board: the .svg files inside a folder actually
+ * named `ci-reference`, under both `Areas/` and `Places/`, sorted.
+ *
+ * OA-224 Tier 3.2, and the reason it is here rather than in a fourth file: this
+ * enumeration existed FIVE times and the same bug was written into it three
+ * times running. A walk that searched `Areas/` alone made the three maps under
+ * `Places/_standalone/` invisible to whatever was doing the walking — gate_lib's
+ * own findPlaces() had it until 2026-08-21, quality_gate.js fixed its copy on
+ * 2026-08-23 and wrote "same shape as the gap in gate_lib's findPlaces(), in a
+ * second file" in the comment, and quality_metrics.js's copy — the walk the
+ * `--all` CLI actually uses — was still short on 2026-08-28, so every board-wide
+ * figure that tool had ever printed was taken over a population three maps
+ * smaller than the board. contact_sheet.js was the fourth, fixed 2026-09-02.
+ *
+ * AN ENUMERATION IS A SILENT FILTER. It does not fail; it answers a smaller
+ * question and looks exactly like an answer to the whole one. Which is why the
+ * invariant worth holding is not "each walk is right" — that is what everyone
+ * believed three times — but that there is only ONE walk. `find_sheets.test.js`
+ * asserts identity, not agreement: `QM.findSheets === QG.findSheets === this`.
+ *
+ * `_portal-fixture` is excluded for the reason gtfs_places.py excludes it: it is
+ * a CI fixture reproduced byte-for-byte on purpose, not a map anybody reads.
+ * Excluded here even though the fixture keeps no `ci-reference/` folder today —
+ * a walker whose correctness depends on a layout staying as it is is the shape
+ * that produced the three misses above.
+ */
+function findSheets(busesDir) {
+  const out = [];
+  const walk = (d) => {
+    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules' && !PLACE_ROOT_EXCLUDE.has(e.name)) walk(p); }
+      else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);
+    }
+  };
+  walk(path.join(busesDir, 'Areas'));
+  walk(path.join(busesDir, 'Places'));
+  return out.sort();
+}
 const { readJson } = require('./cli');   // one implementation, OA-224 Tier 3.1: it names the file in the error
 function latestRunDir(manifest, townDir, stage) {
   const s = manifest.stages && manifest.stages[stage];
@@ -626,6 +667,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, dataScriptDrift, dataFeedDrift, detectExternalStyle,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, dataScriptDrift, dataFeedDrift, detectExternalStyle,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

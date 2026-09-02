@@ -1428,6 +1428,24 @@ const MUTATIONS = [
     what: 'a fallback swallows a SYNTAX error as well as an absent file, so a corrupt config reads as a default',
     find: "  if (fallback !== undefined && !fs.existsSync(file)) return fallback;",
     to: "  if (fallback !== undefined) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }" },
+  /* OA-224 Tier 3.2. The sheet enumeration, which existed five times and carried
+   * the same silent filter three times running. Now one function in gate_lib,
+   * so one mutation reaches every consumer — which is the point, and is also why
+   * it has to be shown to redden something. */
+  { suite: 'find_sheets.test.js', file: 'gate_lib.js',
+    what: 'the walk searches Areas/ alone again, so the three standalone places are measured by nothing — the bug that was written three times',
+    find: "  walk(path.join(busesDir, 'Places'));",
+    to: "  void busesDir;" },
+
+  { suite: 'find_sheets.test.js', file: 'gate_lib.js',
+    what: 'the CI fixture stops being excluded, so a byte-for-byte reproduction counts as a shipped map in every board-wide figure',
+    find: "      if (e.isDirectory()) { if (e.name !== 'node_modules' && !PLACE_ROOT_EXCLUDE.has(e.name)) walk(p); }",
+    to: "      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); }" },
+
+  { suite: 'find_sheets.test.js', file: 'gate_lib.js',
+    what: 'a run folder gets counted as the tracked mirror, so the same map is measured twice and the S4 copy wins the sort',
+    find: "      else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);",
+    to: "      else if (e.name.endsWith('.svg')) out.push(p);" },
 
 ];
 

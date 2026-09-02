@@ -59,6 +59,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { resolveBuses } = require('../assets/cli');
+const G = require('../assets/gate_lib');
 
 const SK = path.join(__dirname, '..');
 
@@ -157,24 +158,18 @@ function sourcesRead(g) {
   return SOURCES.filter(s => s.inputs.some(f => src.includes(f)));
 }
 
+/* The sheets, from the ONE estate walker (OA-224 Tier 3.2). This file kept a
+ * fifth copy of it, with its own exclusion list and its own depth limit, and the
+ * shape that copy is written in is the shape that has silently answered a
+ * smaller question three times in this project. It needs a map name and a sheet
+ * basename beside the path, which is a projection of the shared list rather than
+ * a reason to walk the tree again. */
 function findSheets(root) {
-  const out = [];
-  const walk = (dir, depth) => {
-    if (depth > 5) return;
-    let ents;
-    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of ents) {
-      if (!e.isDirectory()) continue;
-      const d = path.join(dir, e.name);
-      if (e.name === 'ci-reference') {
-        for (const f of fs.readdirSync(d)) if (f.endsWith('.svg')) out.push({ map: path.relative(root, dir), sheet: f, path: path.join(d, f) });
-      } else if (!e.name.startsWith('.') && !e.name.startsWith('S4-') && !e.name.startsWith('S5-') && !e.name.startsWith('S6-')) {
-        walk(d, depth + 1);
-      }
-    }
-  };
-  for (const top of ['Areas', 'Places']) walk(path.join(root, top), 0);
-  return out;
+  return G.findSheets(root).map(p => ({
+    map: path.relative(root, path.dirname(path.dirname(p))),
+    sheet: path.basename(p),
+    path: p,
+  }));
 }
 
 const failures = [];

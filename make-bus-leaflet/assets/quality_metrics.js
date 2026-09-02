@@ -1650,31 +1650,16 @@ function analyse(svgPath) {
 }
 
 // --------------------------------------------------------------------- CLI
-// THE THIRD COPY OF THE SAME ENUMERATION, and it was the one still short.
-// quality_gate.js fixed this on 2026-08-23 with a comment reading "same shape as
-// the gap in gate_lib's findPlaces(), in a second file" — and this, the walk the
-// `--all` CLI actually uses, was the third and nobody looked for it. Consequence,
-// measured 2026-08-28: every board-wide figure this tool has ever printed, the
-// "57 badge overprints across 46 sheets" of OA-021 included, was taken over a
-// population three maps short — Ely Co-op and the two Godmanchester Co-ops live
-// under `Places/_standalone/` and were measured by nothing. An enumeration is a
-// silent filter: it does not fail, it answers about a smaller board.
-// `_portal-fixture` is excluded for the reason quality_gate.js excludes it — it is
-// a CI fixture reproduced byte-for-byte on purpose, not a map anybody reads.
-function findSheets(busesDir) {
-  const out = [];
-  const walk = (d) => {
-    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '_portal-fixture') walk(p); }
-      else if (e.name.endsWith('.svg') && path.basename(d) === 'ci-reference') out.push(p);
-    }
-  };
-  walk(path.join(busesDir, 'Areas'));
-  walk(path.join(busesDir, 'Places'));
-  return out.sort();
-}
+// The sheet enumeration is gate_lib's, and this is a re-export rather than a
+// copy (OA-224 Tier 3.2). It was the THIRD copy of it and the one still short:
+// quality_gate.js fixed its own on 2026-08-23 with a comment reading "same shape
+// as the gap in gate_lib's findPlaces(), in a second file" -- and this, the walk
+// the `--all` CLI actually uses, was the third and nobody looked for it.
+// Consequence, measured 2026-08-28: every board-wide figure this tool had ever
+// printed, the "57 badge overprints across 46 sheets" of OA-021 included, was
+// taken over a population three maps short. `find_sheets.test.js` now asserts
+// IDENTITY rather than agreement, so a fourth copy cannot be written at all.
+const { findSheets } = require('./gate_lib');
 const label = (p) => {
   const parts = p.split(/[\\/]/); const sheet = path.basename(p, '.svg');
   const i = parts.indexOf('ci-reference');

@@ -34,6 +34,12 @@ It is one of three, one per repository. The other two are `docs/CONVENTIONS.md` 
 - `--quiet` suppresses the per-item chatter and keeps the verdict. `--json` prints the machine-readable form on stdout and nothing else on it.
 - Long flags only. A flag that takes a value takes it as the next argument. Keep an old flag working as an alias when you rename one — a flag name is an interface with CI, the runbooks, and a person's memory.
 
+## Enumerating the estate
+
+**There is one walk, and it lives in `gate_lib.js`.** `findTowns`, `findPlaces` and — since 2026-09-02, OA-224 Tier 3.2 — `findSheets` are the only enumerations of what is on the board; `quality_metrics.js` and `quality_gate.js` re-export `findSheets` rather than keeping a copy, and `contact_sheet.js`, `attribution-gate.js` and `prove-lane-mirror.js` import it. Never write a `readdirSync` walk over `Areas/` in a new tool.
+
+**An enumeration is a silent filter.** It does not fail; it answers a smaller question and looks exactly like an answer to the whole one. The same omission — searching `Areas/` alone, so the three maps under `Places/_standalone/` are invisible — was written into this system five times and shipped three, and the last time it meant every board-wide figure `quality_metrics.js` had ever printed was taken over a population three maps short. `test/find_sheets.test.js` now asserts **identity** (`QM.findSheets === QG.findSheets === gate_lib.findSheets`) rather than agreement, because agreement has to be re-established every time either copy is edited and identity cannot be lost without deleting the assignment.
+
 ## Naming and scheduling
 
 - `prove-red-<thing>.js` breaks `<thing>` on purpose and requires **each mutation to redden the assertion that names it**, with a control that must stay green. `check-<thing>.js` / `<thing>-gate.js` reads state and reports. `branch-coverage.<module>.js` is a **spec**, passed as an argument to `branch-coverage.js`; it runs nothing on its own.

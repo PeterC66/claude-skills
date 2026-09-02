@@ -12,7 +12,7 @@
  * exactly the shape it was written to catch, one level up, and it went green on
  * the same afternoon it went red, which is when a check is least trustworthy.
  *
- * Seven cases, each on a scratch repository under os.tmpdir() holding a
+ * Nine cases, each on a scratch repository under os.tmpdir() holding a
  * package.json, a tools/ folder and a gates.yml — never this checkout, so
  * nothing here can turn it green or red. ~2 s.
  *
@@ -33,10 +33,26 @@
  *                                                      would call a mention a
  *                                                      schedule and report the
  *                                                      whole repository clean
+ *   7  `npm run <name> --flag` with no `--`           -> a finding. npm reads
+ *                                                      the flag as its OWN
+ *                                                      config, warns on stderr
+ *                                                      and hands the script
+ *                                                      nothing
+ *  7b  the same step WITH `--`                        -> clean, so 7 tested the
+ *                                                      separator and not the
+ *                                                      flag
  *
  * Case 6 is the one that matters most, and it is a control rather than a break:
  * "ask what it reads, not what it mentions". A `grep` over gates.yml passes
  * every other case here and fails only this one.
+ *
+ * CASE 7 IS HERE BECAUSE IT HAPPENED, an hour after this file was written. The
+ * change that routed CI through the npm scripts matched a PREFIX of each `run:`
+ * line and left the trailing arguments dangling, so two steps became
+ * `npm run test:prove-red-rollout-stamp --buses "…"`. npm swallowed `--buses`,
+ * the tool fell back to its hardcoded laptop default, and CI failed on a Windows
+ * path. Failing was the lucky outcome: a tool whose default happened to be right
+ * would have gone GREEN while being handed nothing at all.
  */
 
 'use strict';
@@ -198,6 +214,29 @@ withTree({
   }
 });
 
+// 7 — a flag passed to npm instead of to the script -------------------------
+withTree({
+  tools: { ...SELF, 'prove-red-thing.js': null },
+  scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
+  steps: [SELF_STEP, 'npm run test:thing --buses "/somewhere"'],
+}, ({ code, out }) => {
+  if (code === 1 && /passes a flag to npm, not to the script/.test(out)) {
+    ok('`npm run <name> --flag` is a finding — npm eats the flag and the script is handed nothing');
+  } else {
+    fail(`a missing \`--\` separator was accepted (exit ${code})\n${out}`);
+  }
+});
+
+// 7b — the control: WITH the separator it is correctly wired ----------------
+withTree({
+  tools: { ...SELF, 'prove-red-thing.js': null },
+  scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
+  steps: [SELF_STEP, 'npm run test:thing -- --buses "/somewhere"'],
+}, ({ code, out }) => {
+  if (code === 0) ok('control for 7: with `--` the same step is clean, so case 7 tested the separator and not the flag');
+  else fail(`control for 7: a correctly separated step was reported (exit ${code})\n${out}`);
+});
+
 for (const t of made) fs.rmSync(t, { recursive: true, force: true });
 
 console.log('');
@@ -205,5 +244,5 @@ if (failures) {
   console.error(`prove-red-wiring: ${failures} case(s) did not behave as required.`);
   process.exit(1);
 }
-console.log('prove-red-wiring: all seven cases behaved as required.');
+console.log('prove-red-wiring: all nine cases behaved as required.');
 process.exit(0);

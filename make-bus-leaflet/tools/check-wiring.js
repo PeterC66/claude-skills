@@ -171,6 +171,27 @@ for (const name of gateScripts) {
       `      NOT_IN_CI with a reason saying what would have to change.`);
   }
 }
+// --- 3. `npm run <name> --flag` silently loses the flag ---------------------
+//
+// npm parses a `--flag` after the script name as an npm CONFIG option, not as an
+// argument to the script: it warns on stderr and passes the script nothing. The
+// separator is `--`. This is not hypothetical -- it is how this very check was
+// wired in on 2026-09-02: two steps became
+// `npm run test:prove-red-rollout-stamp --buses "..."`, npm ate `--buses`, the
+// tool fell back to its laptop default and CI failed on a Windows path. Worse
+// than failing: a tool whose default happens to be right would have gone GREEN
+// while being handed nothing.
+for (const line of runSteps) {
+  const m = line.match(/npm run ([\w:.-]+)\s+(--[\w-]+)/);
+  if (m && m[2] !== '--') {
+    findings.push(
+      `a workflow step passes a flag to npm, not to the script:\n` +
+      `      ${line}\n` +
+      `      npm reads "${m[2]}" as its own config and the script is handed nothing.\n` +
+      `      Write \`npm run ${m[1]} -- ${m[2]} ...\`.`);
+  }
+}
+
 for (const name of Object.keys(NOT_IN_CI)) {
   if (!gateScripts.includes(name)) {
     findings.push(`NOT_IN_CI names "${name}", which is not a script any more. Delete the entry.`);

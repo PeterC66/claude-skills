@@ -598,7 +598,7 @@ jobs:
       # checkout has.
       - name: Prove the rollout stamp verdict can go red
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-rollout-stamp --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-rollout-stamp -- --buses "$GITHUB_WORKSPACE/buses-data"
 
       # The same argument again, for the verdict that says a committed S4 was never
       # rendered (OA-198). Both rollout tools commit S4 and render S5 as a separate
@@ -611,7 +611,7 @@ jobs:
       # the row was written about places and towns have the identical stop.
       - name: Prove the unrendered-S4 verdict can go red
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-unrendered --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-unrendered -- --buses "$GITHUB_WORKSPACE/buses-data"
 
       # And falsify the severity contract that decides whether a build may ship at
       # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that

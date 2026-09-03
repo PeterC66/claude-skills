@@ -46,7 +46,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, EXTERNAL_GENERATOR } = require('./gate_lib');
+const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -154,6 +154,37 @@ function rolloutOne(t) {
    * a --no-verify habit built around it. The summary line below names it
    * loudly instead.
    */
+  /* THE DATA MAY HAVE MOVED, AND THEN THIS IS NOT AN ENGINE ROLLOUT AT ALL (OA-225).
+   * This build takes its CONFIG from the latest S3 and its GEOMETRY from the previous
+   * S4's frozen copies, so a town whose S2 has moved gets the new configuration over
+   * the old geometry — route 20 in High Wycombe's Services panel, palette and operator
+   * table, and no line on the map, on all four sheets, on 2026-09-01. The dry run's own
+   * headline was a GAIN-only label diff, which this tool does not block on, so --apply
+   * would have committed and rendered it; the thing that spoke up was services_panel.js
+   * next door. See staleInputs() in gate_lib.js for the measurement and both controls.
+   *
+   * IT GOES BEFORE THE FAST PATHS ON PURPOSE. UP-TO-DATE is what HIDES this: a town
+   * whose sheets still gate PASS is skipped entirely, so on a data change the tool's
+   * first answer is "nothing to do", and the only way past that used to be --force —
+   * whose documented meaning here is "I have reviewed the lost labels", not "use stale
+   * geometry". Asking first is what turns a silent wrong sheet into a refusal.
+   *
+   * --force still clears it, in the ordinary shape, because a guard whose stated remedy
+   * cannot satisfy it is worse than no guard (the OA-198 lesson two blocks down). What
+   * --force means HERE is named in the message: you are choosing to roll the old
+   * geometry forward. The remedy for everybody else is the documented build order. */
+  const moved = staleInputs(manifest);
+  if (moved.length && !FORCE) {
+    return { name: t.name, status: 'STALE-INPUTS',
+             detail: moved.map(x => `${x.stage} has moved to ${x.now}`
+                        + (x.was ? ` (this S4 was built on ${x.was})` : ' since this S4 was built')).join('; ')
+                   + ` — so this is a DATA change, not an engine-only re-render, and the geometry `
+                   + `this would roll forward is the previous build's. Go through `
+                   + `make-bus-leaflet/references/s4-s5-build-and-render.md (pull S2, then pull S3) in the `
+                   + `claude-skills repository. To roll the OLD geometry forward anyway:  `
+                   + `node rollout.js --town "${t.name}" --apply --force` };
+  }
+
   /* AN UNRENDERED S4 IS NOT UP TO DATE, WHATEVER THE GATES SAY (OA-198). The row
    * was written about rollout_places.js; this tool has the same stop after the same
    * S4 commit, so it produces the same state and its fast path buries it the same
@@ -279,7 +310,18 @@ function rolloutOne(t) {
   // rollout, and S3 no longer carries a generator copy to re-commit (item 3).
   // S4 pulls S3's data as-is, then the generators are copied in fresh from the
   // live template and the engine hash is stamped, same as the dry-run above.
-  const s4Dir = stage(t.dir, 'new', 'S4', '--bump', BUMP);
+  /* RECORD WHAT THIS BUILD WAS MADE FROM (OA-225). stage.js writes `basedOn` only when
+   * it is told, and neither rollout ever told it — which is why 9 of the 11 manifests on
+   * 2026-09-03 had no basedOn on their latest S4, and why the guard above has to fall
+   * back to timestamps at all. A tool that erases the provenance of its own output is the
+   * reason the next tool has to infer it. The ids named here are the ones `pull` will
+   * resolve: pull takes the stage's `latest`, which is exactly what prevS3/prevS2 are. */
+  const s2Latest = (manifest.stages && manifest.stages.S2 && manifest.stages.S2.latest) || null;
+  const s3Latest = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.latest) || null;
+  const basedOn = [s2Latest && `S2=${s2Latest}`, s3Latest && `S3=${s3Latest}`].filter(Boolean).join(';');
+  const s4Dir = basedOn
+    ? stage(t.dir, 'new', 'S4', '--bump', BUMP, '--based-on', basedOn)
+    : stage(t.dir, 'new', 'S4', '--bump', BUMP);
   stage(t.dir, 'pull', 'S2', s4Dir);
   stage(t.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
   copyFile(path.join(SK, 'gen_internal.js'), s4Dir);
@@ -390,10 +432,19 @@ if (stampStale.length) console.log(
   `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp — status.js gates these as ENGINE STALE, `
   + `and this tool will not clear them without --force:\n  `
   + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --force`).join('\n  '));
+// STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict
+// that names work the operator has to go and do somewhere else, and a per-map line
+// scrolls past. It is the one refusal here whose remedy is NOT this tool (OA-225).
+const staleIn = results.filter(r => r.status === 'STALE-INPUTS');
+if (staleIn.length) console.log(
+  `${staleIn.length} map(s) have had their S2/S3 DATA move since the S4 this would roll forward — that is a data `
+  + `change, and rolling it forward would put the new config over the old geometry. Rebuild them through `
+  + `make-bus-leaflet/references/s4-s5-build-and-render.md:\n  `
+  + staleIn.map(r => `  ${r.name}`).join('\n  '));
 const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
 if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} town(s) — the engine refused to draw something, or a label names nothing.`);
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);

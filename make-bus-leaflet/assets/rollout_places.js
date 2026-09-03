@@ -50,7 +50,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4 } = require('./gate_lib');
+const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
 // The printed sheet version (footer.js design.sheetVersion) and the engine hash.
 // BOTH now come from shared modules rather than living here, because living here
@@ -247,6 +247,24 @@ function rolloutOnePlace(p) {
    * template (OA-168) and comparing one against the town hash was a real bug.
    * Reports only; writes nothing; does not move the exit code.
    */
+  /* THE DATA MAY HAVE MOVED, AND THEN THIS IS NOT AN ENGINE ROLLOUT AT ALL (OA-225).
+   * The town side is where it was hit — High Wycombe, 2026-09-01, route 20 in the panel
+   * and no line on the map — and this tool seeds its scratch build from the previous S4
+   * in exactly the same way (seedPrevS4 below), so it produces exactly the same state.
+   * Fixing one and not the other is how a guard covers a class once rather than
+   * completely, which is the lesson the block directly beneath this one already carries.
+   * See staleInputs() in gate_lib.js, and the paragraph in rollout.js. */
+  const moved = staleInputs(manifest);
+  if (moved.length && !FORCE) {
+    return { name: p.name, status: 'STALE-INPUTS',
+             detail: moved.map(x => `${x.stage} has moved to ${x.now}`
+                        + (x.was ? ` (this S4 was built on ${x.was})` : ' since this S4 was built')).join('; ')
+                   + ` — so this is a DATA change, not an engine-only re-render, and the geometry `
+                   + `this would roll forward is the previous build's. Rebuild it through the documented `
+                   + `stage order (pull S2, then pull S3). To roll the OLD geometry forward anyway:  `
+                   + `node rollout_places.js --place "${p.name}" --apply --force` };
+  }
+
   /* AN UNRENDERED S4 IS NOT UP TO DATE, WHATEVER THE GATES SAY (OA-198). This sits
    * in FRONT of both fast-path returns, and in front of the stamp check too: a
    * place whose S4 was committed and never rendered gates PASS on every sheet by
@@ -431,7 +449,15 @@ function rolloutOnePlace(p) {
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
-  const s4Dir = stage(p.dir, 'new', 'S4', '--bump', BUMP);
+  /* RECORD WHAT THIS BUILD WAS MADE FROM (OA-225) — see the same block in rollout.js.
+   * Neither rollout passed --based-on until this change, so the field the staleness
+   * guard wants to read was missing on almost every map it would be asked about. */
+  const s2Latest = (manifest.stages && manifest.stages.S2 && manifest.stages.S2.latest) || null;
+  const s3Latest = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.latest) || null;
+  const basedOn = [s2Latest && `S2=${s2Latest}`, s3Latest && `S3=${s3Latest}`].filter(Boolean).join(';');
+  const s4Dir = basedOn
+    ? stage(p.dir, 'new', 'S4', '--bump', BUMP, '--based-on', basedOn)
+    : stage(p.dir, 'new', 'S4', '--bump', BUMP);
   stage(p.dir, 'pull', 'S1', s4Dir); // place.json is an S1 output (pipeline.md P4 note) — pull it explicitly, not just S2
   stage(p.dir, 'pull', 'S2', s4Dir);
   stage(p.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
@@ -581,10 +607,19 @@ if (stampStale.length) console.log(
   `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp — status.js gates these as ENGINE STALE, `
   + `and this tool will not clear them without --force:\n  `
   + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --force`).join('\n  '));
+// STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict
+// that names work the operator has to go and do somewhere else, and a per-map line
+// scrolls past. It is the one refusal here whose remedy is NOT this tool (OA-225).
+const staleIn = results.filter(r => r.status === 'STALE-INPUTS');
+if (staleIn.length) console.log(
+  `${staleIn.length} map(s) have had their S2/S3 DATA move since the S4 this would roll forward — that is a data `
+  + `change, and rolling it forward would put the new config over the old geometry. Rebuild them through `
+  + `make-bus-leaflet/references/s4-s5-build-and-render.md:\n  `
+  + staleIn.map(r => `  ${r.name}`).join('\n  '));
 const totalBlockers = results.reduce((n, r) => n + ((r.blockers || []).length), 0);
 if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) across ${results.filter(r => (r.blockers || []).length).length} place(s) — the engine refused to draw something, or a label names nothing.`);
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);

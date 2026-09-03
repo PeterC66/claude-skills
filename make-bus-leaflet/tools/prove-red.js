@@ -367,6 +367,47 @@ const MUTATIONS = [
     find: "    report.renameCollisions = dup;",
     to: "    report.renameCollisions = [];" },
 
+  // gate_lib.js staleInputs — the OA-225 guard. It sits in FRONT of both rollouts'
+  // UP-TO-DATE fast path, so a mutation that makes it silent does not degrade a
+  // warning, it restores the exact silence that shipped route 20 into High Wycombe's
+  // Services panel with no line on the map. Two of the three break it in the SAFE
+  // direction (it stops accusing) and one in the dangerous one (it accuses a build
+  // that is in step) — a guard wired this far forward has to be falsified both ways.
+  { suite: 'stale_inputs.test.js', file: 'gate_lib.js',
+    what: 'the clock comparison stops being strict, so an S2 committed inside its own S4 run reads as stale',
+    find: "    if (at && at > startedAt) out.push({ stage: st, was: null, now: sx.latest, how: 'timestamp' });",
+    to: "    if (at && at >= startedAt) out.push({ stage: st, was: null, now: sx.latest, how: 'timestamp' });" },
+
+  { suite: 'stale_inputs.test.js', file: 'gate_lib.js',
+    what: 'the exact signal stops accusing, so a recorded basedOn that no longer matches passes silently',
+    find: "      if (basedOn[st] !== sx.latest) out.push({ stage: st, was: basedOn[st], now: sx.latest, how: 'basedOn' });",
+    to: "      if (false) out.push({ stage: st, was: basedOn[st], now: sx.latest, how: 'basedOn' });" },
+
+  { suite: 'stale_inputs.test.js', file: 'gate_lib.js',
+    what: 'only the geometry stage is asked, so a moved CONFIG rolls forward unremarked',
+    find: "  for (const st of ['S2', 'S3']) {",
+    to: "  for (const st of ['S2']) {" },
+
+  // pick_route_colour.js — OA-226 moved WHERE it reads from and what it does with a
+  // route the sheet does not draw. The first of these breaks it in the direction the
+  // row was explicit about: the DEFAULT must go on reading ci-reference, because
+  // scoring against the artwork that actually ships is the reason it read the golden
+  // master in the first place, and that reason is easy to lose to the fix.
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'the default source drifts to the half-built run folder, and the tool stops scoring against what ships',
+    find: "  routes: source(args['routes-json'], S3, 'routes.json'),",
+    to: "  routes: source(args['routes-json'], S3 || stageDir('S3'), 'routes.json')," },
+
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'a route with no colour is treated as one that has one, which is the refusal the row is about',
+    find: "const isNew = !(route in PALETTE);",
+    to: "const isNew = false;" },
+
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'a shared edge stops being direction-free, so a route running the other way down a street reads as never touching it',
+    find: "const edgeKey = (e) => { const [a, b] = String(e).split('>'); return a < b ? a + '|' + b : b + '|' + a; };",
+    to: "const edgeKey = (e) => { const [a, b] = String(e).split('>'); return a + '|' + b; };" },
+
   // strict_guards.js - extracted 2026-08-27 from two copies in gen_internal.js
   // and gen_boarding.js. The byte gate runs with the flag UNSET and no committed
   // map refuses anything, so none of this file is reachable from it; these four

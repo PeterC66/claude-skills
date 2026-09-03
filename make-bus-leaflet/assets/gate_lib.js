@@ -601,6 +601,80 @@ function unrenderedS4(manifest) {
   return rendered ? null : String(latest.version);
 }
 
+/*
+ * staleInputs — has the DATA moved since the S4 this rollout would roll forward?
+ *
+ * WHY THIS EXISTS (OA-225). Both rollouts assemble their build by copying every
+ * `.json` out of the previous S4 run and pulling only `routes.json` from S3. That
+ * is deliberate and it is right for the job the tools were written for — an engine
+ * change is pure deterministic compute over data already on disk. What the header
+ * comment does not say is that the data on disk is the previous BUILD's, not the
+ * latest S2's.
+ *
+ * Run against a town whose S2 has moved, the tool produces the NEW configuration
+ * over the OLD geometry. On High Wycombe on 2026-09-01 that meant a sheet carrying
+ * route 20 in the Services panel, in the palette and in the operator table, with no
+ * line on the map, on all four sheets. It was caught by the guard next door —
+ * `services_panel.js` writes "badged in the Services panel but draws no line" to
+ * stderr — and not by either rollout, whose own dry-run headline was a GAIN-only
+ * label diff that neither tool blocks on.
+ *
+ * TWO THINGS MAKE IT WORTH A GUARD RATHER THAN A NOTE. The UP-TO-DATE branch HIDES
+ * it: a town whose sheets still gate PASS against the current template is skipped
+ * entirely, so on a data change the tool's first answer is "nothing to do", and the
+ * only way past that is --force — a flag whose documented meaning is "I have
+ * reviewed the lost labels", not "use stale geometry". And the failure is silent in
+ * the one direction that matters: a route ADDED to the config and missing from the
+ * geometry announces itself, while a route REMOVED from the geometry and still in
+ * the config draws from the old data and the panel says nothing at all.
+ *
+ * IT ASKS THE MANIFEST, WHICH ALREADY RECORDS BOTH, AND IT PREFERS THE EXACT
+ * SIGNAL. `stage.js new --based-on "S2=<id>;S3=<id>"` writes a run's inputs into
+ * its record, so where that field is present this is an id comparison and there is
+ * nothing to infer. Where it is ABSENT — which on 2026-09-03 was 9 of the 11 town
+ * and place manifests, because neither rollout passed --based-on until this change
+ * went in — it falls back to asking whether the latest S2/S3 run COMPLETED after
+ * the S4 started. That is the same sentence OA-225 wrote ("a town whose newest S2
+ * or S3 postdates the S4 being rolled forward"), and the comparison is strict:
+ * High Wycombe's v4.0 started at 23:08 and its S2 completed at 23:08, so `>=` would
+ * have refused a build that was perfectly in step.
+ *
+ * Measured over all 11 town and place manifests on 2026-09-03 before it was wired
+ * in: every one of them clean, so this refuses nothing that works today. Run
+ * against the state of 2026-09-01 — previous S4 v2.65 started 08:40, new S2
+ * committed at 22:33 — it fires, which is the case that produced the row.
+ *
+ * Returns [] when all is well, or one entry per moved stage:
+ *   { stage, was, now, how }   how is 'basedOn' (exact) or 'timestamp' (inferred)
+ * A manifest with no S4, or an S4 record that cannot be found, returns [] — that
+ * is a map nothing has ever built, which the callers already report as SKIP.
+ */
+function staleInputs(manifest) {
+  const stages = (manifest && manifest.stages) || {};
+  const s4 = stages.S4;
+  if (!s4 || !s4.latest || !Array.isArray(s4.runs)) return [];
+  const built = s4.runs.find(r => r.id === s4.latest);
+  if (!built) return [];
+  const basedOn = built.basedOn || null;
+  // The S4's own clock: when it STARTED, not when it finished. A build that takes
+  // five minutes must not be judged stale by an S2 committed inside its own run.
+  const startedAt = built.startedAt || built.at || null;
+  const out = [];
+  for (const st of ['S2', 'S3']) {
+    const sx = stages[st];
+    if (!sx || !sx.latest || !Array.isArray(sx.runs)) continue;
+    if (basedOn && basedOn[st]) {
+      if (basedOn[st] !== sx.latest) out.push({ stage: st, was: basedOn[st], now: sx.latest, how: 'basedOn' });
+      continue;
+    }
+    if (!startedAt) continue;              // nothing to compare against; say nothing
+    const rec = sx.runs.find(r => r.id === sx.latest);
+    const at = rec && rec.at;
+    if (at && at > startedAt) out.push({ stage: st, was: null, now: sx.latest, how: 'timestamp' });
+  }
+  return out;
+}
+
 // EXTERNAL_GENERATOR — there is exactly one external template, and this constant
 // is what replaced the function that used to CHOOSE between two (2026-09-02).
 //
@@ -689,6 +763,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, staleInputs, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

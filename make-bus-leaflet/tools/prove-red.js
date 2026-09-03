@@ -260,8 +260,8 @@ const MUTATIONS = [
 
   { suite: 'label_placer.test.js', file: 'label_placer.js',
     what: "the darkening loop loses its bound, so an unreachable floor hangs the build instead of returning",
-    find: "    for(let i=0; i<40 && 1.05/(_lum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }",
-    to: "    for(let i=0; i<8 && 1.05/(_lum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }" },
+    find: "    for(let i=0; i<40 && 1.05/(relLum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }",
+    to: "    for(let i=0; i<8 && 1.05/(relLum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }" },
 
   { suite: 'label_placer.test.js', file: 'label_placer.js',
     what: "the per-call contrast floor is ignored in favour of the design key",
@@ -1457,8 +1457,24 @@ const MUTATIONS = [
   // three break the properties a fifth spelling would have lost silently.
   { suite: 'engine_paths.test.js', file: 'engine_paths.js',
     what: 'SKILL_ASSETS is preferred over a sibling, which is how a held-back gate builds a HYBRID engine that never existed',
-    find: "    try { if (fs.existsSync(local)) return local; } catch (e) {}\n    return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)",
-    to: "    if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, name);\n    try { if (fs.existsSync(local)) return local; } catch (e) {}\n    return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)" },
+    find: "    const local = path.join(callerDir, name);\n    try { if (fs.existsSync(local)) return local; } catch (e) {}\n    if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, name);",
+    to: "    const local = path.join(callerDir, name);\n    if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, name);\n    try { if (fs.existsSync(local)) return local; } catch (e) {}" },
+
+  // The FOURTH arm, added 2026-09-03 (OA-232 Tier 3.1) so the place skill could
+  // stop carrying a resolver of its own. Cut it and a place asset with nothing set
+  // falls straight to one laptop's path — which is the state it was in before,
+  // held up by a private IIFE rather than by anything shared.
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: "the cross-skill arm goes, so a place asset with no SKILL_ASSETS falls straight to one laptop's path",
+    find: "    const acrossSkills = path.join(callerDir, ...CROSS_SKILL, name);\n    try { if (fs.existsSync(acrossSkills)) return acrossSkills; } catch (e) {}\n",
+    to: "" },
+
+  // spawnTarget — the pre-stages' rule, and the one property of it that dep() does
+  // not have: the RUN DIRECTORY, not the caller's folder, answers first.
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: "spawnTarget prefers SKILL_ASSETS over the RUN DIR, so a build's schematic spawns an engine other than its own",
+    find: "    const cand = [path.join(runDir, name),\n      process.env.SKILL_ASSETS && path.join(process.env.SKILL_ASSETS, name),\n      path.join(callerDir, name)].filter(Boolean);",
+    to: "    const cand = [process.env.SKILL_ASSETS && path.join(process.env.SKILL_ASSETS, name),\n      path.join(runDir, name),\n      path.join(callerDir, name)].filter(Boolean);" },
 
   { suite: 'engine_paths.test.js', file: 'engine_paths.js',
     what: "the resolver anchors on ITS OWN folder rather than the caller's, so a generator copied beside a copied module reaches past it",
@@ -1469,6 +1485,36 @@ const MUTATIONS = [
     what: 'siblingOf SEARCHES instead of pinning, so the labeller and its metrics table can come from two different engines',
     find: "  return function from(name) { return path.join(dir, name); };",
     to: "  return function from(name) { return engineDep(dir)(name); };" },
+
+  // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
+  // OA-135) from seven copies across five files. The danger this module creates is
+  // that it makes the three look like one, and every "tidy-up" toward one formula
+  // re-tunes ink on twenty sheets with every byte gate green until the render. So
+  // the mutations are the three collapses somebody would actually make.
+  { suite: 'wcag.test.js', file: 'wcag.js',
+    what: 'the brightness proxy gains a gamma decode, so the 0.62 ink test and the 0.75 icon-plate test both move',
+    find: "function rawLumBytes(r, g, b) {\n  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;",
+    to: "function rawLumBytes(r, g, b) {\n  const d = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };\n  return 0.2126 * d(r) + 0.7152 * d(g) + 0.0722 * d(b);" },
+
+  { suite: 'wcag.test.js', file: 'wcag.js',
+    what: 'an unknown colour reads as DARK rather than pale, so `none` and a named colour become ink',
+    find: "  if (!m) return 1;",
+    to: "  if (!m) return 0;" },
+
+  { suite: 'wcag.test.js', file: 'wcag.js',
+    what: 'relLum loses its gamma decode and silently becomes the brightness proxy, so the contrast floor stops meaning a contrast ratio',
+    find: "  const srgb = (v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));",
+    to: "  const srgb = (v) => v;" },
+
+  { suite: 'wcag.test.js', file: 'wcag.js',
+    what: 'the two raw spellings are unified onto one, which is the change that looks like tidying and is not',
+    find: "function rawLumUnit(r, g, b) {\n  return 0.2126 * r + 0.7152 * g + 0.0722 * b;",
+    to: "function rawLumUnit(r, g, b) {\n  return rawLumBytes(r * 255, g * 255, b * 255);" },
+
+  { suite: 'wcag.test.js', file: 'wcag.js',
+    what: 'lab() loses its chroma axes and becomes a lightness, so every route-vs-route and route-vs-river check goes quiet rather than red',
+    find: "  return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];",
+    to: "  return [116 * f(Y) - 16, 0, 0];" },
 
   // page.js — the sheet's own size (OA-224 Tier 3.4, engine F15).
   { suite: 'page.test.js', file: 'page.js',

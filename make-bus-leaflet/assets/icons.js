@@ -12,13 +12,20 @@
 // ribbon, while these solid glyphs hold their weight.
 //
 // Absent/any other value ⇒ the original palette, byte-identical.
+const path = require('path');
+// wcag.js — the raw weighted average of the sRGB BYTES, which is the number the
+// 0.75 plate threshold below is calibrated against. Resolved the way every
+// non-entry module here names a sibling: it was found by the generator's
+// resolver, so its own siblings are beside it. See wcag.js for why this is not
+// the same function as the relative luminance (OA-135).
+const { rawLumBytes } = require(path.join(__dirname, 'wcag.js'));
 const CHARCOAL = '#33383d', CHARCOAL_ACCENT = '#c62828';
 function inkify(svg) {
   return svg.replace(/(fill|stroke)="(#[0-9a-fA-F]{3,6})"/g, (m, k, c) => {
     const h = c.length === 4 ? '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] : c;
     const n = parseInt(h.slice(1), 16);
     const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    const lum = rawLumBytes(r, g, b);
     // A PALE fill is a backing plate, not a mark — recolouring it charcoal turns
     // the allotments glyph's bed into a solid black block. Send those to white.
     if (lum > 0.75) return `${k}="#ffffff"`;

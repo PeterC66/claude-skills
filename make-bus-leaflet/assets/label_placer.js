@@ -29,6 +29,13 @@
  */
 'use strict';
 
+const path = require('path');
+// wcag.js — the WCAG RELATIVE luminance, gamma-decoded, which is the only one of
+// the three luminances in this engine from which the contrast ratio below may
+// honestly be computed. Resolved the way labeller.js and services_panel.js name
+// a sibling. See wcag.js's header for the other two (OA-135).
+const { relLum } = require(path.join(__dirname, 'wcag.js'));
+
 function labelPlacer(deps) {
   const {
     out,             // append one line to the document the CALLER owns
@@ -120,9 +127,6 @@ function labelPlacer(deps) {
    * genuinely unreadable palette entries (yellow 1.95, cyan 1.84, grey 1.92, amber 2.25,
    * light cyan 2.21, orange 2.87) and leaves the rest of the board alone. */
   const INK_MIN_CONTRAST = (DESIGN.labelInkMinContrast != null) ? +DESIGN.labelInkMinContrast : 3.5;
-  const _srgb = v => v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
-  const _lum = hex => { const c=[1,3,5].map(i=>_srgb(parseInt(hex.substr(i,2),16)/255));
-    return 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2]; };
   const _scaleHex = (hex,f) => '#' + [1,3,5].map(i=>{
     const v = Math.max(0, Math.min(255, Math.round(parseInt(hex.substr(i,2),16)*f)));
     return v.toString(16).padStart(2,'0'); }).join('');
@@ -130,7 +134,7 @@ function labelPlacer(deps) {
     const floor = (min!=null) ? min : INK_MIN_CONTRAST;
     if(!/^#[0-9a-fA-F]{6}$/.test(String(hex))) return hex;
     let f = 1, out = hex;
-    for(let i=0; i<40 && 1.05/(_lum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }
+    for(let i=0; i<40 && 1.05/(relLum(out)+0.05) < floor; i++){ f *= 0.93; out = _scaleHex(hex, f); }
     return out;
   }
   // `self` = this label's OWN icon box, excluded from the collision test: placement puts a

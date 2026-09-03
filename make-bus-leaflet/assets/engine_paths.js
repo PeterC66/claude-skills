@@ -16,8 +16,8 @@
  * dependencies from __dirname alone and could never have drawn a sheet in the
  * portal — it would have thrown on the require, before reading an input.
  *
- * So the search is: a SIBLING first, then SKILL_ASSETS, then the skill's own
- * path as a last resort. Sibling-first is what lets `status.js` gate a held-back
+ * So the search is: a SIBLING first, then SKILL_ASSETS, then the place skill's
+ * way back across to this folder, then the skill's own path as a last resort. Sibling-first is what lets `status.js` gate a held-back
  * town against an OLDER engine — it hands the gate a generator from a worktree
  * at that commit and sets SKILL_ASSETS to that worktree's assets, and a search
  * that preferred SKILL_ASSETS over a copied sibling would build a HYBRID engine
@@ -57,13 +57,28 @@ const path = require('path');
  * what the five hand-written copies returned. */
 const ENGINE_HOME = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/';
 
+/* THE FOURTH ARM IS FOR THE PLACE SKILL, added 2026-09-03 (OA-232 Tier 3.1).
+ * make-place-bus-leaflet/assets/ is a FIFTH deployment the three arms above
+ * cannot serve: gen_external_places.js takes footer.js, labeller.js and five more
+ * from THIS folder, and when it runs in place — which is what
+ * `test/generator_load.test.js` does, on every CI run — it has no sibling and no
+ * SKILL_ASSETS, so the search would fall to a path that exists on one laptop.
+ * The place skill's own two resolver IIFEs carried this arm and that is why they
+ * could not simply be deleted; it is written here instead, once. It is tried
+ * BEFORE the laptop and only if it EXISTS, so it changes nothing for a town
+ * caller: from the engine's own folder it resolves to that same folder, and from
+ * a copied S4 workspace it does not exist and the laptop still answers. */
+const CROSS_SKILL = ['..', '..', 'make-bus-leaflet', 'assets'];
+
 /* engineDep(callerDir) -> dep(name) -> an absolute path to load `name` from. */
 function engineDep(callerDir) {
   return function dep(name) {
     const local = path.join(callerDir, name);
     try { if (fs.existsSync(local)) return local; } catch (e) {}
-    return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, name)
-         : ENGINE_HOME + name;
+    if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, name);
+    const acrossSkills = path.join(callerDir, ...CROSS_SKILL, name);
+    try { if (fs.existsSync(acrossSkills)) return acrossSkills; } catch (e) {}
+    return ENGINE_HOME + name;
   };
 }
 
@@ -83,4 +98,27 @@ function siblingOf(anchorPath) {
   return function from(name) { return path.join(dir, name); };
 }
 
-module.exports = { ENGINE_HOME, engineDep, siblingOf };
+/* spawnTarget(runDir, callerDir) -> find(name) -> the path to a file this
+ * process is about to SPAWN, or undefined if there is none. A THIRD rule, and
+ * the reason it is not dep(): its first arm is the RUN DIRECTORY, not the
+ * caller's folder, and it CHECKS every arm rather than returning an unverified
+ * path from the second.
+ *
+ * Both pre-stages run gen_internal.js as a child process after solving their
+ * geometry, and both spelled this search out (engine N24). The order is the
+ * point: the workspace's own copy is the generator that drew this build, so it
+ * wins over the engine the pre-stage happens to have been loaded from — which is
+ * what keeps a held-back town's schematic honest, the same property gate_lib.js's
+ * header records for dep()'s sibling-first arm. The caller says what to do when
+ * nothing answers, because the two say it differently and both messages name
+ * their own file. */
+function spawnTarget(runDir, callerDir) {
+  return function find(name) {
+    const cand = [path.join(runDir, name),
+      process.env.SKILL_ASSETS && path.join(process.env.SKILL_ASSETS, name),
+      path.join(callerDir, name)].filter(Boolean);
+    return cand.find((f) => { try { return fs.existsSync(f); } catch (e) { return false; } });
+  };
+}
+
+module.exports = { ENGINE_HOME, CROSS_SKILL, engineDep, siblingOf, spawnTarget };

@@ -66,8 +66,10 @@ const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] 
 // and the reasons; the four lines below are the bootstrap that finds THAT file.
 const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   try { if (fs.existsSync(local)) return local; } catch (e) {}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, 'engine_paths.js');
+  const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
+  try { if (fs.existsSync(across)) return across; } catch (e) {}
+  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
 const { engineDep } = require(_EP);
 const _dep = engineDep(__dirname);
 const FOOTER = require(_dep('footer.js'));

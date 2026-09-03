@@ -32,6 +32,9 @@ const path = require('path');
 const { parseArgs, resolveBuses } = require('./cli.js');   // the one parser and the one estate resolver (OA-232 Tier 2.5)
 
 const FM = require(path.join(process.env.SKILL_ASSETS || __dirname, 'font_metrics.js'));
+// The two colour questions this file asks, named apart in one module rather than
+// spelled out here for the third and fourth time in the engine (OA-135).
+const { rawLumUnit, lab } = require('./wcag.js');
 
 // ---------------------------------------------------------------- thresholds
 // Deliberately in one object: G1 asks Peter whether these are the right numbers,
@@ -391,29 +394,28 @@ function lum(col) {
   if (c.length === 4) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
   if (c.length !== 7) return 1;
   const r = parseInt(c.slice(1, 3), 16) / 255, g = parseInt(c.slice(3, 5), 16) / 255, b = parseInt(c.slice(5, 7), 16) / 255;
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // rawLumUnit, not the relative luminance: the 0.55/0.8 thresholds below are
+  // calibrated against the RAW weighted average, and this site divides each
+  // channel before the sum rather than after it, which is a different double.
+  // wcag.js keeps both spellings for exactly that reason (OA-135).
+  return rawLumUnit(r, g, b);
 }
 const isDark = (c) => lum(c) < 0.55;
 const isPale = (c) => lum(c) > 0.8;
 
 // CIE-Lab, for "do these two routes read as the same colour?". Luminance alone
 // is no use for that question — #CC3311 and #009988 have near-identical
-// luminance and could not look less alike. This is the same conversion
-// gen_internal.js uses for its route-vs-river warning (§5.2); the difference is
-// that this asks it of every PAIR of routes, which nothing has ever done.
+// luminance and could not look less alike. It is the same conversion
+// gen_internal.js uses for its route-vs-river warning (§5.2) — literally the same
+// now, wcag.js's lab(), rather than a third copy of it under a comment saying so
+// (OA-135); the difference is that this asks it of every PAIR of routes.
 function toLab(hex) {
   let c = String(hex || '').trim().toLowerCase();
   if (c in NAMED) c = NAMED[c];
   if (!c || c[0] !== '#') return null;
   if (c.length === 4) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
   if (c.length !== 7) return null;
-  const f = (i) => { const v = parseInt(c.substr(i, 2), 16) / 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; };
-  const r = f(1), g = f(3), b = f(5);
-  const X = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
-  const Y = r * 0.2126 + g * 0.7152 + b * 0.0722;
-  const Z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
-  const t = (v) => (v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
-  return [116 * t(Y) - 16, 500 * (t(X) - t(Y)), 200 * (t(Y) - t(Z))];
+  return lab(c);
 }
 function deltaE(a, b) {
   const A = toLab(a), B = toLab(b);

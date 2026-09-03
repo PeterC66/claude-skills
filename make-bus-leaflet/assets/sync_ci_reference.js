@@ -52,7 +52,7 @@ function syncOne(dir) {
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true });
   let n = 0;
-  // Only *.json (generator inputs, via gate_lib's copyJsonsAndIcons) and
+  // Only *.json (generator inputs, via gate_lib's copyJsons) and
   // *.svg (the reference output gate() diffs against) are ever read from
   // this folder — everything else an S4 run dir accumulates (saved bustimes
   // HTML pages, .ql overpass queries, stray scripts) is debug residue with

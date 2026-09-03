@@ -35,7 +35,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { ENGINE_DIR, load } = require('./_engine');
 
-const { engineDep, siblingOf, ENGINE_HOME } = load('engine_paths.js');
+const { engineDep, siblingOf, spawnTarget, ENGINE_HOME } = load('engine_paths.js');
 
 /* Two scratch folders standing in for "the workspace a generator was copied to"
  * and "the engine SKILL_ASSETS points at". */
@@ -74,7 +74,64 @@ test('with no sibling it takes SKILL_ASSETS, which is how it loads inside the po
   });
 });
 
-test('with neither it falls to the laptop, which rollout.js and render_sweep.js still rely on', () => {
+test('the cross-skill arm answers before the laptop, and it is the place skills only route', () => {
+  // OA-232 Tier 3.1. make-place-bus-leaflet/assets/ is a fifth deployment: its
+  // generator takes footer.js, labeller.js and five more from the TOWN folder,
+  // and running in place it has neither a sibling nor SKILL_ASSETS. Without this
+  // arm the search falls to a path that exists on one laptop — so on CI, where
+  // generator_load.test.js requires that file on every run, the only thing
+  // holding it up was a private IIFE in the place skill spelling the arm out for
+  // itself. That is what F10 and F22 actually were.
+  const s = scratch();
+  const skills = path.join(s.root, 'skills');
+  const town = path.join(skills, 'make-bus-leaflet', 'assets');
+  const place = path.join(skills, 'make-place-bus-leaflet', 'assets');
+  fs.mkdirSync(town, { recursive: true }); fs.mkdirSync(place, { recursive: true });
+  fs.writeFileSync(path.join(town, 'footer.js'), '// the town engines');
+  const dep = engineDep(place);
+  withSkillAssets(null, () => {
+    assert.strictEqual(dep('footer.js'), path.join(town, 'footer.js'));
+    // Tried only when it EXISTS, so a name the town folder does not have still
+    // reaches the last resort rather than a path that is not there. This is what
+    // makes the arm inert for every town caller.
+    assert.strictEqual(dep('nothing_here.js'), ENGINE_HOME + 'nothing_here.js');
+  });
+  // And it LOSES to SKILL_ASSETS, which is what keeps the portal and a held-back
+  // gate reading the engine they named rather than whatever is across the tree.
+  withSkillAssets(s.assets, () => {
+    assert.strictEqual(dep('footer.js'), path.join(s.assets, 'footer.js'));
+  });
+});
+
+test('spawnTarget is the pre-stages rule: RUN DIR first, and every arm is checked', () => {
+  // A THIRD rule, and deliberately not dep(). Both pre-stages spawn gen_internal.js
+  // after solving their geometry, and the workspace's own copy is the generator
+  // that drew this build, so it wins over the engine the pre-stage happens to have
+  // been loaded from. dep() would answer with the CALLER's folder first, and would
+  // hand back an unverified path from its SKILL_ASSETS arm; this one checks every
+  // arm and returns undefined when nothing is there, because the two callers say
+  // so differently and each message names its own file.
+  const s = scratch();
+  const runDir = path.join(s.root, 'S4'); fs.mkdirSync(runDir);
+  fs.writeFileSync(path.join(runDir, 'gen_internal.js'), '// the workspace copy');
+  fs.writeFileSync(path.join(s.assets, 'gen_internal.js'), '// the current engine');
+  fs.writeFileSync(path.join(s.caller, 'gen_internal.js'), '// beside the pre-stage');
+  const empty = path.join(s.root, 'empty'); fs.mkdirSync(empty);
+  withSkillAssets(s.assets, () => {
+    assert.strictEqual(spawnTarget(runDir, s.caller)('gen_internal.js'),
+      path.join(runDir, 'gen_internal.js'), 'the run dir must win');
+    assert.strictEqual(spawnTarget(empty, s.caller)('gen_internal.js'),
+      path.join(s.assets, 'gen_internal.js'), 'then SKILL_ASSETS');
+  });
+  withSkillAssets(null, () => {
+    assert.strictEqual(spawnTarget(empty, s.caller)('gen_internal.js'),
+      path.join(s.caller, 'gen_internal.js'), 'then the script folder');
+    // UNDEFINED, not a guess: the caller decides what to say and exits 1.
+    assert.strictEqual(spawnTarget(empty, empty)('gen_internal.js'), undefined);
+  });
+});
+
+test('with none of the three it falls to the laptop, which rollout.js still relies on', () => {
   const s = scratch();
   const dep = engineDep(s.caller);
   withSkillAssets(null, () => {
@@ -119,22 +176,73 @@ test('siblingOf does NOT search — it pins, even when the file is not there', (
 // gen_external_busway.js left this list on 2026-09-02 with the file itself.
 const ENTRY_POINTS = ['gen_internal.js', 'gen_external_radial.js', 'gen_boarding.js',
                       'diagram_internal.js', 'schematize_internal.js'];
+// THE PLACE SKILL JOINED ON 2026-09-03 (OA-232 Tier 3.1). Its generator carried
+// two PRIVATE resolver IIFEs, written before engine_paths.js existed and never
+// brought onto it, and the reason they could not simply be deleted is the fourth
+// arm: the hop across to this folder. That went INTO engine_paths.js and into the
+// bootstrap, so there is now ONE bootstrap across both skills and this test is
+// what says so. place_engine.js is the place skill's single copy for its eleven
+// build-time assets, which are never copied anywhere and can therefore share one;
+// gen_external_places.js is vendored to engine/place/ without it, so it keeps its
+// own — the same reason the five above keep theirs.
+const PLACE_BOOTSTRAPS = ['gen_external_places.js', 'place_engine.js'];
+// The last resort, spelled once for the two censuses below.
+const LAPTOP_LITERAL = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets';
 const BOOTSTRAP = [
   "const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');",
   "  try { if (fs.existsSync(local)) return local; } catch (e) {}",
-  "  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')",
-  "       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();",
+  "  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, 'engine_paths.js');",
+  "  const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');",
+  "  try { if (fs.existsSync(across)) return across; } catch (e) {}",
+  "  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();",
 ].join('\n');
 
-test('all six entry points carry the SAME bootstrap, character for character', () => {
+test('all seven bootstraps, across BOTH skills, are the same characters', () => {
   for (const f of ENTRY_POINTS) {
     const src = fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8').replace(/\r\n/g, '\n');
     assert.ok(src.includes(BOOTSTRAP), f + ' does not carry the shared bootstrap verbatim');
   }
+  const PLACE_DIR = load('engine_version.js').placeAssetsDir(ENGINE_DIR);
+  if (!fs.existsSync(PLACE_DIR)) {
+    // Announced rather than skipped silently: a mutation run copies the TOWN
+    // engine to a scratch folder and the place skill is not beside it there.
+    console.log('# engine_paths: the place assets folder is not at ' + PLACE_DIR
+      + ' — checking the five town bootstraps only (the expected shape under ENGINE_DIR=<scratch>)');
+    return;
+  }
+  for (const f of PLACE_BOOTSTRAPS) {
+    const p = path.join(PLACE_DIR, f);
+    assert.ok(fs.existsSync(p), 'place/' + f + ' is gone — is the place skill still on this bootstrap?');
+    const src = fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+    assert.ok(src.includes(BOOTSTRAP), 'place/' + f + ' does not carry the shared bootstrap verbatim');
+  }
 });
 
-test('the laptop path is in the six bootstraps and engine_paths.js, and nowhere else in the engine', () => {
-  const LITERAL = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets';
+test('no OTHER place asset reaches across on its own terms', () => {
+  // What F10 and F22 were: eleven build-time assets each with a private way back
+  // to this folder, four of them ending in an absolute path. They go through
+  // place_engine.js now, and this is the census that stops a twelfth starting a
+  // new spelling — over the folder, not over a list of the four that were wrong.
+  const PLACE_DIR = load('engine_version.js').placeAssetsDir(ENGINE_DIR);
+  if (!fs.existsSync(PLACE_DIR)) return;   // announced by the test above
+  const allowed = new Set(PLACE_BOOTSTRAPS);
+  const offenders = [];
+  for (const f of fs.readdirSync(PLACE_DIR)) {
+    if (!f.endsWith('.js') || allowed.has(f)) continue;
+    const src = fs.readFileSync(path.join(PLACE_DIR, f), 'utf8');
+    for (const line of src.split(/\r?\n/)) {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;      // a comment is not a resolution
+      if (line.includes(LAPTOP_LITERAL) || /'\.\.',\s*'\.\.',\s*'make-bus-leaflet'/.test(line)) {
+        offenders.push('place/' + f + ': ' + line.trim());
+      }
+    }
+  }
+  assert.deepStrictEqual(offenders, [],
+    'a place asset is reaching across on its own — require("./place_engine.js") instead');
+});
+
+test('the laptop path is in the five town bootstraps and engine_paths.js, and nowhere else in the engine', () => {
+  const LITERAL = LAPTOP_LITERAL;
   const allowed = new Set(ENTRY_POINTS.concat(['engine_paths.js']));
   const offenders = [];
   for (const f of fs.readdirSync(ENGINE_DIR)) {
@@ -157,7 +265,7 @@ test('engine_paths.js and page.js joined the hash closure and dash_fit.js stayed
   // names showed it, so assert the names.
   const { engineFiles } = load('engine_version.js');
   const files = engineFiles(ENGINE_DIR);
-  for (const name of ['engine_paths.js', 'page.js', 'dash_fit.js', 'svg_primitives.js', 'font_metrics.js']) {
+  for (const name of ['engine_paths.js', 'page.js', 'wcag.js', 'dash_fit.js', 'svg_primitives.js', 'font_metrics.js']) {
     assert.ok(files.includes(name), name + ' is not in the engine hash closure');
   }
 });

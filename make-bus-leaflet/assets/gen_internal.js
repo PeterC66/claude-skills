@@ -131,8 +131,10 @@ const path = require('path');
 // below are the bootstrap that finds THAT file: the one piece no module can own.
 const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   try { if (fs.existsSync(local)) return local; } catch (e) {}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, 'engine_paths.js');
+  const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
+  try { if (fs.existsSync(across)) return across; } catch (e) {}
+  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
 const { engineDep, siblingOf } = require(_EP);
 const _dep = engineDep(__dirname);
 
@@ -197,6 +199,12 @@ const { drawServicesPanel } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
+// wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
+// coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
+// the two ink tests below, whose 0.62 threshold is calibrated against the RAW
+// bytes and not against a relative luminance, and lab() for the route-vs-river
+// colour distance in §5.2.
+const { rawLumHex, lab: _lab } = require(_dep('wcag.js'));
 // The internal map's footer notes are built just above FOOTER_OPTS (search
 // INTERNAL_FOOTER_NOTES), not here. They used to be a fixed const at this line, and
 // could not stay one once the cross-check DATE became per-map (routes.json
@@ -695,13 +703,9 @@ const { CORR, CPAL, laneKey, colourShared, CBOX, THIN } = complexityLadder({ RJ,
 // purely on lightness, and a grey line is not mistakable for a river — so the test
 // is CLOSE IN Lab AND CLOSE IN HUE, with near-neutral colours excluded outright.
 {
-  const _srgb = h => [1,3,5].map(i=>parseInt(String(h).slice(i,i+2),16)/255)
-    .map(c => c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055,2.4));
-  const _f = t => t>0.008856 ? Math.cbrt(t) : (7.787*t+16/116);
-  const _lab = h => { const [r,g,b]=_srgb(h);
-    const X=(0.4124*r+0.3576*g+0.1805*b)/0.95047, Y=0.2126*r+0.7152*g+0.0722*b,
-          Z=(0.0193*r+0.1192*g+0.9505*b)/1.08883;
-    return [116*_f(Y)-16, 500*(_f(X)-_f(Y)), 200*(_f(Y)-_f(Z))]; };
+  // The Lab conversion is wcag.js's lab(), taken as _lab at the head of main().
+  // It sat here as nine lines, and pick_route_colour.js and quality_metrics.js
+  // each carried the same nine (OA-135).
   const water=(FEATURES||[]).filter(f=>(f.type==='river'||f.type==='canal') && (f.geo||[]).length)
     .map(f=>({key:f.key, colour:(f.style&&f.style.stroke) || (FEATURE_STYLES[f.type]||{}).stroke}));
   for(const w of water){ if(!/^#[0-9a-f]{6}$/i.test(w.colour||'')) continue;
@@ -1726,10 +1730,8 @@ let AUTOINK = null;
 function autoInk(){
   if(AUTOINK) return AUTOINK;
   const palette = new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
-  const lum = h => { const m=/^#([0-9a-f]{6})$/i.exec(h); if(!m) return 1;
-    const n=parseInt(m[1],16); return (0.2126*((n>>16)&255)+0.7152*((n>>8)&255)+0.0722*(n&255))/255; };
   AUTOINK = new Labeller({ page:[297,210] });
-  AUTOINK.stampSvg(s, (stroke,w)=> palette.has(String(stroke).toLowerCase()) || (w>=1.2 && lum(stroke)<0.62));
+  AUTOINK.stampSvg(s, (stroke,w)=> palette.has(String(stroke).toLowerCase()) || (w>=1.2 && rawLumHex(stroke)<0.62));
   return AUTOINK;
 }
 function autoFeatureLabel(f, txt, sz){
@@ -2831,9 +2833,7 @@ for(const f of FEATURES){
 // cannot drift from what is drawn the way a parallel bookkeeping list would.
 if(LAB){
   const palette=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
-  const lum=h=>{ const m=/^#([0-9a-f]{6})$/i.exec(h); if(!m) return 1;
-    const n=parseInt(m[1],16); return (0.2126*((n>>16)&255)+0.7152*((n>>8)&255)+0.0722*(n&255))/255; };
-  LAB.stampSvg(s, (stroke,w)=> palette.has(stroke) || (w>=1.2 && lum(stroke)<0.62));
+  LAB.stampSvg(s, (stroke,w)=> palette.has(stroke) || (w>=1.2 && rawLumHex(stroke)<0.62));
 
   /*
    * Find the north arrow a blank corner.

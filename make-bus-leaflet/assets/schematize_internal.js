@@ -70,14 +70,21 @@ const fs = require('fs');
 const path = require('path');
 const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   try { if (fs.existsSync(local)) return local; } catch (e) {}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
-const { engineDep } = require(_EP);
+  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, 'engine_paths.js');
+  const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
+  try { if (fs.existsSync(across)) return across; } catch (e) {}
+  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep, spawnTarget } = require(_EP);
 const _dep = engineDep(__dirname);
 // The projection, the internalRoads reading and esc are the ENGINE's, not copies
 // (OA-230, 2026-09-02); resolved the way every entry point resolves a sibling.
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
+// page.js — the sheet's own size, and how an SVG for it opens. The debug skeleton
+// below typed the root element out in full, which is the twelfth copy page.js was
+// written to end (engine N28); svgOpen() returns that string character for
+// character.
+const { svgOpen } = require(_dep('page.js'));
 const { esc } = require(_dep('svg_primitives.js'));
 
 // ---- main() ---------------------------------------------------------------
@@ -825,7 +832,7 @@ for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json']
 
 // ---- debug skeleton SVG (bare solved corridors, junction dots) --------------
 {
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 297 210">`;
+  let s = svgOpen();
   s += `<rect width="297" height="210" fill="#fff"/>`;
   s += `<rect x="${MX0}" y="${MY0}" width="${MX1 - MX0}" height="${MY1 - MY0}" fill="none" stroke="#ddd" stroke-width="0.3"/>`;
   for (const c of CORS)                     // original geography, light grey
@@ -857,10 +864,10 @@ console.log('workspace written: ' + WD);
 // assumptions that don't hold once the workspace subfolder is in play.
 if (process.env.SCHEMATIZE_ONLY !== '1') {
   const { spawnSync } = require('child_process');
-  const cand = [path.join(DIR, 'gen_internal.js'),
-    process.env.SKILL_ASSETS && path.join(process.env.SKILL_ASSETS, 'gen_internal.js'),
-    path.join(__dirname, 'gen_internal.js')].filter(Boolean);
-  const gen = cand.find(f => { try { return fs.existsSync(f); } catch (e) { return false; } });
+  // Run dir, then SKILL_ASSETS, then this script's folder — engine_paths.js's
+  // spawnTarget(), which is where that search now lives; both pre-stages wrote it
+  // out (engine N24). It is a THIRD rule, not dep(): see the header there.
+  const gen = spawnTarget(DIR, __dirname)('gen_internal.js');
   if (!gen) { console.error('gen_internal.js not found (looked in run dir / SKILL_ASSETS / script dir)'); process.exit(1); }
   const isPlace = fs.existsSync(path.join(DIR, 'gen_internal_place.js'));
   const env = { ...process.env };

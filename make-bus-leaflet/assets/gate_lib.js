@@ -21,15 +21,32 @@ function mkTmp() {
 function rmTmp(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
 }
-function copyJsonsAndIcons(dataDir, destDir) {
+/* THE WORKSPACE IS THE MAP'S DATA AND NOTHING ELSE (OA-232 Tier 3.1, 2026-09-03).
+ *
+ * This used to copy `icons.js` from SK — the LIVE assets directory — into the
+ * scratch beside the generator, and it was the very hybrid runGenerator's own
+ * header, four lines below, records being caught: a sibling WINS over
+ * SKILL_ASSETS, so gating a held-back town against the engine that drew it handed
+ * that old generator TODAY's icons.js. It reproduced anyway because the two
+ * happen to agree, which is what a latent hybrid looks like from the outside.
+ *
+ * Nothing needed the copy. Both requires of icons.js in this engine go through
+ * `_dep()` (gen_internal.js, gen_boarding.js), which finds it under SKILL_ASSETS
+ * = engineDir — the engine the caller asked for; and no map directory in the
+ * estate carries an icons.js of its own, measured across Areas/ and Places/.
+ *
+ * It was found by adding a dependency. icons.js took a require of wcag.js, and
+ * the copy delivered icons.js into a folder with no wcag.js beside it, so 22
+ * sheets went FAIL — not DIFF, FAIL, at require time. A copy list is a list you
+ * must remember to extend, and this file says elsewhere that such a list is not a
+ * control; the fix is not to keep a longer one. */
+function copyJsons(dataDir, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
   for (const name of fs.readdirSync(dataDir)) {
     const p = path.join(dataDir, name);
     if (fs.statSync(p).isDirectory()) continue;
     if (name.endsWith('.json')) fs.copyFileSync(p, path.join(destDir, name));
   }
-  const icons = path.join(SK, 'icons.js');
-  if (fs.existsSync(icons)) fs.copyFileSync(icons, path.join(destDir, 'icons.js'));
 }
 
 // Run `genPath` (a generator script — gen_internal.js / gen_external_*.js /
@@ -55,7 +72,7 @@ function copyJsonsAndIcons(dataDir, destDir) {
  * believed. `engineDir` defaults to `SK`, so every existing caller is unchanged. */
 function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace = false, engineDir = SK } = {}) {
   const tmp = mkTmp();
-  copyJsonsAndIcons(dataDir, tmp);
+  copyJsons(dataDir, tmp);
   const destGen = path.join(tmp, path.basename(genPath));
   fs.copyFileSync(genPath, destGen);
   const env = { ...process.env, SKILL_ASSETS: engineDir };
@@ -65,7 +82,7 @@ function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace 
   /* `overridesFromWorkspace` — SET OVERRIDES_FILE THE WAY THE ROLLOUT DOES.
    *
    * Deleting OVERRIDES_FILE above is right for every generator that reads its own
-   * cwd: copyJsonsAndIcons has already put the data dir's overrides.json into the
+   * cwd: copyJsons has already put the data dir's overrides.json into the
    * workspace, so gen_internal.js finds it there and the gate reproduces the build.
    *
    * schematize_internal.js is the exception, and it is the one that matters here. It

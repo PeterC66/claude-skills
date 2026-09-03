@@ -42,14 +42,11 @@ const RJ = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
 const route = String(args.route);
 if (!RJ.palette || !(route in RJ.palette)) { console.error('route ' + route + ' is not in ' + args.town + "'s palette"); process.exit(2); }
 
-// --- CIE76 over sRGB->Lab, the same maths as gen_internal.js's §5.2 check -----
-const srgb = h => [1, 3, 5].map(i => parseInt(String(h).slice(i, i + 2), 16) / 255)
-  .map(c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-const fx = t => t > 0.008856 ? Math.cbrt(t) : (7.787 * t + 16 / 116);
-const lab = h => { const [r, g, b] = srgb(h);
-  const X = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, Y = 0.2126 * r + 0.7152 * g + 0.0722 * b,
-        Z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
-  return [116 * fx(Y) - 16, 500 * (fx(X) - fx(Y)), 200 * (fx(Y) - fx(Z))]; };
+// --- CIE76 over sRGB->Lab -----------------------------------------------------
+// The conversion is wcag.js's lab(): it WAS "the same maths as gen_internal.js's
+// §5.2 check", written out again here and a third time in quality_metrics.js, and
+// a comment saying so is not the same as sharing it (OA-135).
+const { lab } = require('./wcag.js');
 const dE = (a, b) => { const A = lab(a), B = lab(b); return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); };
 
 // --- what else is on this sheet ----------------------------------------------

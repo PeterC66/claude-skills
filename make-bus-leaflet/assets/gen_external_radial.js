@@ -10,8 +10,10 @@ const path = require('path');
 // which is what keeps the labeller and its metrics table in one engine.
 const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   try { if (fs.existsSync(local)) return local; } catch (e) {}
-  return process.env.SKILL_ASSETS ? path.join(process.env.SKILL_ASSETS, 'engine_paths.js')
-       : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, 'engine_paths.js');
+  const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
+  try { if (fs.existsSync(across)) return across; } catch (e) {}
+  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
 const { engineDep, siblingOf } = require(_EP);
 const _dep = engineDep(__dirname);
 const { footerBand, footerPlateTop } = require(_dep('footer.js'));
@@ -947,16 +949,9 @@ if(HOWTO){
   // Width-based wrap using the real Arial advances, not wrapText()'s character
   // count — a bullet is a whole sentence, and the character estimate is ~11% out
   // on ordinary prose, which is the difference between four lines and five.
-  const wrapW = (text, maxMm) => {
-    const words = String(text).split(' '), lines = []; let cur = '';
-    for(const w of words){
-      const t = cur ? cur+' '+w : w;
-      if(cur && FONT.textWidth(t, BS, false) > maxMm){ lines.push(cur); cur = w; } else cur = t;
-    }
-    if(cur) lines.push(cur);
-    return lines;
-  };
-  const WRAPPED = BULLETS.map(t=>wrapW(t, CW-IND));
+  // This was a second copy of wrapMm() with the size closed over instead of
+  // passed; same loop, same measure, same lines (engine N27).
+  const WRAPPED = BULLETS.map(t=>wrapMm(t, CW-IND, BS));
   const bodyH = WRAPPED.reduce((a,ls)=>a + ls.length*LH + GAP, 0) - GAP;
   const PW = CW + PAD*2;
   const PH = PAD + (HEAD ? HS*1.15 + 1.6 : 0) + bodyH + PAD;

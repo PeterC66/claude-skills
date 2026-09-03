@@ -20,7 +20,9 @@ Worked examples on disk (each under its area, `…\Buses\Areas\<Town>\Places\`):
 Each map is an editable **SVG** rendered to a **300 dpi JPG** (3508×2480), A4 landscape, auto-versioned `vN.N`, via the shared `render.js`.
 
 ## Reuse map — what is shared vs new (read this first)
-Let **`TSK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`** (the TOWN skill's assets — the shared engine) and **`PSK` = this skill's `assets`**.
+Let **`TSK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`** (the TOWN skill's assets — the shared engine) and **`PSK` = this skill's `assets`**. Those are the paths on this laptop and they are what you TYPE in the commands below; **the code in this folder no longer contains them.** Since 2026-09-03 (OA-232 Tier 3.1) every asset here that needs something from the town skill goes through [`place_engine.js`](assets/place_engine.js) — this skill's one bootstrap onto the engine's `engine_paths.js`, which searches sibling, then `SKILL_ASSETS`, then across to `make-bus-leaflet/assets/`, then the laptop. `env TSK` still wins in `build_internal_place.js` and `build_internal_place_roads.js`; absent it they ask `place_engine.js` rather than joining the path themselves, which is what makes them follow `SKILL_ASSETS` as well.
+
+The two generators are the exception. `gen_external_places.js` and `gen_internal_place.js` are VENDORED into the portal at `engine/place/` without `place_engine.js` beside them, so the first carries the bootstrap itself and the second needs nothing from the town folder at load. `make-bus-leaflet/test/engine_paths.test.js` asserts that copy is byte-identical to the five in the town skill, and that no other asset here reaches across on its own terms.
 
 | Piece | Where | Status |
 |---|---|---|

@@ -6,7 +6,7 @@ This repository holds the skills. `make-bus-leaflet/assets/` **is the bus-map en
 
 **A generator change is not done when the gate passes. It is done when the portal has been re-vendored.**
 
-Thirty files under `make-bus-leaflet/assets/` and `make-place-bus-leaflet/assets/` exist as byte-for-byte copies in the portal's `engine/`, listed in `community-bus-maps/engine/vendored.json` with a CRLF-normalised SHA-256 each. Edit one here and the portal keeps running the old code until someone copies it across. `status.js` reports the drift; the portal's own `scripts/check-vendored.mjs` reports it from the other side.
+Files under `make-bus-leaflet/assets/` and `make-place-bus-leaflet/assets/` exist as byte-for-byte copies in the portal's `engine/`, listed in `community-bus-maps/engine/vendored.json` with a CRLF-normalised SHA-256 each — **the manifest is the count, and this sentence deliberately no longer holds a number.** The skills-side list once said eleven while the tree held sixteen, and one of the five nobody was watching had been stale for four days; this sentence then said "Thirty" on the day it became thirty-one. Edit one here and the portal keeps running the old code until someone copies it across. `status.js` reports the drift; the portal's own `scripts/check-vendored.mjs` reports it from the other side.
 
 Three traps inside that rule, all already paid for:
 

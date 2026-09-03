@@ -67,6 +67,25 @@ Nothing inside `main()` is re-indented when a body moves into one (OA-224 Tier 4
 
 **The point of it is that a test can now REQUIRE a generator without it drawing a map**, which is what `test/generator_load.test.js` needs. That test exists because `gen_external_busway.js` spent a day throwing `ReferenceError` at load — through a re-vendor and a deploy — with `status.js` PASS, every sheet verdict green, every mutation caught and CI green in three repositories. None of those gates was broken: each asks *does the output still match*, and none can ask it of a generator no map runs. **So when you add an engine entry point, the population it belongs to is `engine_version.js`'s lists, and that test derives its subjects from them rather than from a list typed here.** Do not give a generator a load-time side effect — reading `routes.json`, writing a file, printing — outside `main()`; a mutation in `prove-red.js` exists for exactly that, because a generator that exports `main()` and still draws when required passes every other check in this repository.
 
+## An extraction is the module PLUS a check on its callers
+
+**Ship the caller check in the same commit as the helper.** Measured on 2026-09-03, the day after OA-224 landed a dozen shared helpers: the two that arrived with a test asserting the callers ARE the helper — `gate_lib.findSheets` with an `===` identity test, and the portal's route table — were fully adopted. Every other helper was adopted exactly as far as its author happened to migrate the callers and no further. `cli.parseArgs` had fifteen callers and a test naming eight of them, while six more `argv.indexOf('--x')` bodies sat under `assets/` — one of them written the day after `cli.js` landed. "Use the helper" is a rule; a green test of the helper does not enforce it.
+
+Two shapes of check, and prefer the first where the callers can be enumerated:
+
+- **An identity assertion** — the caller's function IS the helper's, tested with `===`. `find_sheets.test.js` is the model.
+- **A census** — no file under a named folder contains the old idiom, outside an allowlist whose every entry carries a REASON. `test/cli.test.js`'s argv census and `test/stage_module.test.js`'s manifest census are the models. Three things make a census honest and it is easy to ship one without them: a **population check** (`scanned > 50`, or the readdir that found nothing passes), a **CONTROL** that the pattern really does match a live example, and a check that **every allowlist entry is still a file that still carries the idiom** — that last one went red on its first run in the portal, on an entry that was widening the allowlist for nothing.
+
+**An allowlist with reasons beats a looser rule.** A blanket "no escaper outside `html.js`" would have been red on day one over five legitimate SVG and XML cases, and a check that is red on day one is muted inside a week.
+
+**And a helper's docstring is what its own check is measured against.** `NOW_SQL` said "what goes in an INSERT/UPDATE", which excluded the `WHERE expires_at > …` comparisons it also owned — so a census over the literal produced false findings and the CENSUS was deleted rather than the sentence, leaving the constant with zero callers. When a check has to be abandoned because it is red on code that is clearly fine, ask which definition is wrong before deleting anything.
+
+## A harness that builds a scratch world derives EVERY population from its subject
+
+`tools/prove-red-redteam-source.js` copies one mutated file into a temp folder and runs the suite against it. On 2026-09-03 its subject gained a `require('./cli.js')` and the harness went `MODULE_NOT_FOUND` — which is the harness working, because a scratch world silently missing a dependency is how a mutation "survives" for the wrong reason. The portal's `prove-red-run-tests.mjs` failed the same day for the same reason, and there the lesson was already written in the file: its EXCLUDED list was parsed out of the runner "so this harness cannot go stale", and its PREFLIGHT list, eight lines above that comment, was typed.
+
+**So: when you add a dependency to anything a harness copies, grep for the harnesses that copy it. And when you write "read off the subject rather than copied" about one list, look at every other list in the same file before you leave.**
+
 ## The engine is hashed — prose in `assets/` is not free
 
 A comment added to a file under `assets/` moves the template hash and puts every map in the estate STALE. Write the explanation in `references/` and point at it, unless the comment is genuinely about the line beneath it. `sizeMode` and every other `design.*` key must be in the register or `gate:design-keys` fails.

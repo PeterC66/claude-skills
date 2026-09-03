@@ -101,6 +101,24 @@ def fold_gtfs(services):
         b["hasShape"]=b["hasShape"] or s["hasGtfsShape"]
     return base
 
+def sub_services(svc):
+    """The GTFS route names a shipped entry already stands for, from EITHER shape the
+    estate actually uses. `variants` is a dict on seven shipped entries
+    ({"subServices": [...], "note": ...}, e.g. Wisbech's `excel`) and a LIST of such
+    dicts on three (Ramsey's 301 carries [{"subServices": ["301S","301V","301X"]}]).
+    Reading only the dict form raised AttributeError on the first town with the list
+    form rather than quietly returning nothing, which is the better of the two failures
+    but is still a reason to normalise here instead of at each call site."""
+    v=svc.get("variants")
+    if isinstance(v, dict): v=[v]
+    if not isinstance(v, list): return []
+    out=[]
+    for entry in v:
+        if isinstance(entry, dict):
+            out.extend(entry.get("subServices") or [])
+    return out
+
+
 def diff_town(db, name, cfg, town_dir):
     vf=latest_verified(town_dir)
     if not vf: return None
@@ -113,7 +131,37 @@ def diff_town(db, name, cfg, town_dir):
     # the entry's own `key` (46, 46L), which is what tells the two apart. See OA-134.
     shipped=ig.group_by([s for s in vs.get("services",[]) if s.get("servesTown",True)],
                         key=lambda s: str(s["route"]))
+    # KNOWN AND DELIBERATELY NOT DRAWN, in whichever of the TWO places the town wrote it.
+    # `notOnLeaflet` is one convention (St Ives files route 101 there). The other is an
+    # ordinary `services` entry carrying `servesTown: false` -- Wisbech files X46 that way,
+    # with a note recording Peter's 2026-08-29 adjudication and its 2026-08-31 re-check.
+    # Only the first was read until 2026-09-03, and the second is worse than not being read:
+    # the `shipped` comprehension above drops a `servesTown: false` entry, so the route fell
+    # out of BOTH sets and came back as "[ADD?] new in BODS" -- of a service we have known
+    # about, and ruled on twice. X46's own note predicted the recurrence in as many words:
+    # "the monthly scan will keep flagging it as [NEW]". A recurring alarm that is factually
+    # wrong is the kind that teaches you to skim the section which will one day carry a real
+    # withdrawal, so both conventions now land on RE-EVAL, which is at least true.
     not_serving={x["route"] for x in vs.get("notOnLeaflet",[]) if x.get("servesTown") is False}
+    not_serving|={str(s["route"]) for s in vs.get("services",[]) if s.get("servesTown") is False}
+    # A SHIPPED CONSOLIDATION: one drawn route standing for several GTFS route names.
+    # Wisbech draws First's `excel` and records `variants.subServices: [A, B, C, D]`,
+    # because bustimes presents them as the single service "A, B, C, D - excel" and the
+    # public brand is `excel`. Nothing here read that field until 2026-09-03, so the diff
+    # compared route names literally and reported the same five-item lie every month:
+    # [ADD?] A, [ADD?] B, [ADD?] C -- routes we draw -- plus [WITHDRAWN?] excel, a route
+    # that runs. Read together those four items look exactly like a rebrand, which is how
+    # they were read on 2026-09-03 before the town's own file was opened.
+    #
+    # NOTE the direction of the fix. `subServices` makes the sub-names COVERED, never
+    # verified: a letter that stops running is still hidden by this, because the whole
+    # family folds onto one shipped entry whose days come from the union. That is the
+    # same trade fold_gtfs already makes for 32/32A, and it is the reason the consolidation
+    # has to be declared in the town's file by a person rather than guessed from the feed.
+    consolidated={}   # GTFS route name -> the shipped entry that already stands for it
+    for s in vs.get("services",[]):
+        for sub in sub_services(s):
+            consolidated[str(sub)]=s
     prefixes=cfg.get("prefixes"); near=None
     if cfg.get("near"): la,lo,km=cfg["near"]; near=(la,lo,km)
     res=gq.query(db, prefixes, near, name)
@@ -163,6 +211,9 @@ def diff_town(db, name, cfg, town_dir):
                     changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(gdays_e)}'"))
         elif r in not_serving:
             changes.append(("RE-EVAL", r, f"BODS now shows it serving the town ({fmt(gdays)}); we'd marked it 'does not serve'"))
+        elif r in consolidated:
+            # Drawn already, under the shipped entry that declares it a sub-service.
+            pass
         elif g["variants"] and not unshipped and not any(g["ownFlags"]):
             # The base NUMBER does not run: every service under it is a variant, and the
             # town ships all of them. Proposing the base as a new route would invent one.
@@ -187,6 +238,12 @@ def diff_town(db, name, cfg, town_dir):
                     sd=parse_days(sh.get("days")); vd=set(i for i in range(7) if vflags[i])
                     if sd is not None and sd!=vd:
                         changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(vd)}'"))
+                    continue
+                subs=[x for x in sub_services(sh) if str(x) in gtfs]
+                if subs:
+                    # Not withdrawn: the base name is a brand, and its journeys are in the
+                    # feed under the sub-service names this entry declares. `excel` reaches
+                    # here every month for exactly this reason and is running.
                     continue
                 if is_community(sh.get("operator"), sh.get("source")):
                     changes.append(("COMMUNITY", label, f"absent from BODS as expected ({sh.get('operator')}); re-check on bustimes"))

@@ -234,6 +234,21 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-variant-fold
 
+      # The MIRROR of the fold above, and the one that cost a wrong recommendation.
+      # That fix taught the report about variants the FEED folds together; this is a
+      # consolidation the TOWN declares, where one drawn route stands for several GTFS
+      # names. Wisbech draws First's `excel` and records subServices [A,B,C,D] because
+      # bustimes shows them as one service -- and nothing read that field, so the diff
+      # reported [ADD?] A/B/C plus [WITHDRAWN?] excel every month. Those four items read
+      # exactly like a rebrand, and on 2026-09-03 they were read that way, far enough to
+      # recommend rebuilding a town that was correct. The harness re-runs the OLD literal
+      # matching on the same fixture and requires it to stay wrong, and carries the
+      # complement the fix must not buy: when every sub-service really goes, the brand
+      # must still report withdrawn. Added 2026-09-03.
+      - name: Prove the refresh report's shipped consolidation can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-consolidation
+
       # OA-141: redteam_source.js answered about the PARENT TOWN when run from a
       # place's own root, and said nothing about it. This cuts both fixes out and
       # requires the four guard tests to fail while the two CONTROLs hold.
@@ -697,6 +712,21 @@ jobs:
       - name: Prove the refresh report's variant fold can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-variant-fold
+
+      # The MIRROR of the fold above, and the one that cost a wrong recommendation.
+      # That fix taught the report about variants the FEED folds together; this is a
+      # consolidation the TOWN declares, where one drawn route stands for several GTFS
+      # names. Wisbech draws First's `excel` and records subServices [A,B,C,D] because
+      # bustimes shows them as one service -- and nothing read that field, so the diff
+      # reported [ADD?] A/B/C plus [WITHDRAWN?] excel every month. Those four items read
+      # exactly like a rebrand, and on 2026-09-03 they were read that way, far enough to
+      # recommend rebuilding a town that was correct. The harness re-runs the OLD literal
+      # matching on the same fixture and requires it to stay wrong, and carries the
+      # complement the fix must not buy: when every sub-service really goes, the brand
+      # must still report withdrawn. Added 2026-09-03.
+      - name: Prove the refresh report's shipped consolidation can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-consolidation
 
       # OA-164, REPORTED not gated: eight files exist today, the pull guard already
       # stops them doing harm, and a check red on the day it lands gets muted. It is

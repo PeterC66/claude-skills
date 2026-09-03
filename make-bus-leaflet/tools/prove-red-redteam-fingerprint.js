@@ -71,20 +71,34 @@ span(
 
 // 2. No override flag. With this null, the BUY block fires on every reason and
 //    the override below it is unreachable, which is exactly its old state.
+// THE ANCHOR IS THE VARIABLE, NOT THE PARSER BEHIND IT (2026-09-03). This
+// matched `const REUSE_ANYWAY = argv.includes('--reuse-anyway')` until OA-232
+// Tier 2.5 moved the file onto `cli.parseArgs`, and then the harness went red
+// saying "could not find the start of the --reuse-anyway flag" -- red about a
+// change to the FLAG READER, in a harness whose subject is the OA-166 fingerprint
+// decision. An anchor is a claim about a line, so anchor on the shortest part
+// that is really about the subject.
 span(
-  "const REUSE_ANYWAY = argv.includes('--reuse-anyway')",
+  'const REUSE_ANYWAY = ',
   'function die(msg)',
   'const REUSE_ANYWAY = null;   // --reuse-anyway did not exist before OA-166' + NL + NL,
   'the --reuse-anyway flag');
 
 if (src.length === before) fail('the fixture is byte-identical to the source — nothing was reverted.');
-for (const gone of ['const fp = fingerprintPair(', "argv.includes('--reuse-anyway')"]) {
+for (const gone of ['const fp = fingerprintPair(', "'reuse-anyway' in FLAGS"]) {
   if (src.includes(gone)) fail(`the revert left ${JSON.stringify(gone)} reachable — the fixture is not broken.`);
 }
 
 const dir = scratchDir('prove-red-rtfp-');
 const copy = path.join(dir, 'redteam_source.js');
 fs.writeFileSync(copy, src);
+// The subject's siblings. This runs a reverted COPY out of a scratch folder, so
+// every module it requires by relative path has to be beside it -- the same fix
+// prove-red-redteam-source.js needed on the same day, and for the same reason:
+// a scratch world silently missing a dependency is how a mutation "survives".
+for (const sibling of ['cli.js']) {
+  fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
+}
 
 // A fixture that does not parse would redden the controls too, and a run where
 // everything is red says nothing about which half is the change.

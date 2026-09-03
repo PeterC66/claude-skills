@@ -33,6 +33,45 @@ Nothing else on the list matters while this is true: the engine no longer reprod
 
 ---
 
+## `draft-unsubmitted` — a saved version nobody sent for review
+
+**The row exists because nothing else watches this.** A draft is a version that was *saved* and never submitted, so it falls outside every queue at once: no publish request, no proposed update, and the map still reports `status=published` against the older version. It will not publish itself and nothing emails anybody that it is there. High Wycombe v8.1 sat for a day and a half, saved by Peter himself, while the public read v8.0. It ranks low, but it is usually the cheapest real work on the list — the making is already done, and what is left is a look and a decision.
+
+**Establish which of the two kinds it is first, because that decides how much of the sheet is in scope.** Only two acts create a draft. An **accepted refresh** bumps the MAJOR version and sets `data_change_json`: the service data itself moved, and everything on the sheet is in scope. A **customer or editor save** bumps the MINOR version and leaves `data_change_json` NULL: only the safe-subset overrides changed — route colours and landmark/POI tiers — so the services are untouched by construction, and the review is about the picture alone.
+
+**The read-only worklist token cannot tell you which.** `GET /api/maps` gives `currentVersion` against `publishedVersion` and stops there; the draft's content exists only in the live store. Read it over SSH. `<id>` below is the map's numeric id, which is the last segment of the worklist row's own URL — `/app/maps/3` is id `3` — and it is the only placeholder in either block:
+
+```powershell
+cd "C:\Claude\community-bus-maps"
+npm run ssh -- "docker compose exec -T portal node -e \"import('./src/db/index.js').then(m=>{const db=m.db||m.default;for(const r of db.prepare('SELECT id,created_at,major,minor,note,review_state,data_change_json,overrides_json FROM map_version WHERE map_id=<id> ORDER BY id DESC LIMIT 3').all()){console.log(r.id,'v'+r.major+'.'+r.minor,r.created_at,r.review_state,JSON.stringify(r.note));console.log('  data_change:',(r.data_change_json||'NULL').slice(0,200));console.log('  overrides:',(r.overrides_json||'').slice(0,400));}})\""
+```
+
+**`audit_log` says who saved it and when** — `action='version.save'` against that map — which matters more than it sounds: a draft saved by Peter is a decision he made and forgot to send, and a draft saved by a customer's editor is somebody waiting on us. Read it with the same shape of query, selecting `created_at, actor_email, action, detail_json FROM audit_log WHERE map_id=<id> ORDER BY id DESC LIMIT 6`.
+
+**For an overrides-only save, the whole review is a text diff of the two SVGs, and it is worth doing before opening a single image.** It names every label that appeared, disappeared or was truncated, which is exactly the class of change an overrides save can make and the only class it can make. Compare the draft's storage key against the published one — `<old>` and `<new>` are storage keys as they appear on disk, e.g. `v8.0` and `v8.1`, and `<sheet>` is `internal`, `external` or `internal-schematic`:
+
+```powershell
+cd "C:\Claude\community-bus-maps"
+npm run ssh -- "docker compose exec -T portal node -e \"const fs=require('fs');const d='/data/maps/<id>/renders/';const T=v=>(fs.readFileSync(d+v+'/<sheet>.svg','utf8').match(/>([^<>]+)</g)||[]).map(x=>x.slice(1,-1).trim()).filter(Boolean);const a=T('<old>'),b=T('<new>');const A=new Set(a),B=new Set(b);console.log('GONE:',[...A].filter(x=>!B.has(x)).join(' | '));console.log('ADDED:',[...B].filter(x=>!A.has(x)).join(' | '));\""
+```
+
+**Two things in that diff are findings and the rest is noise.** A label in GONE that is in neither ADDED nor the numbered index has been **lost** — the placer could not fit it after the reshuffle, and nothing gates this: `rollout.js` refuses to publish on a lost label, but an editor save has no such check, so the diff is the only place the question gets asked. And a string in ADDED ending in `…` is a **truncation**, which usually means the numbered index has outgrown one column and halved its width; it is legitimate output rather than a fault, but it cuts mid-word and Peter should be told which entries it hit rather than discover them on the sheet. Both were true of High Wycombe v8.1: `Godstowe` was lost from the schematic, and three index entries truncated across the two sheets.
+
+**Two absences are NOT findings, and both look alarming the first time.** A draft's render folder legitimately has no `places.json` — `writePlacesSidecar` is called at the moment the publish pointer moves, deliberately, so the sidecar describes exactly the sheet that was reviewed — and no `*-web.jpg`, because the screen-sized copies are derived from the print JPG on first request and cached beside it. Both appear on publishing. Likewise `facts.json` and any unaffected sheet will differ between the two versions while being substantively identical: `facts.json` differs only in `generatedAt`, and an untouched SVG only in its `Map version N.N` stamp. Diff them before reporting a change, because equal file SIZES with different hashes is exactly what a stamp swap looks like.
+
+**Then look at the sheets, at full resolution, the same as any other review.** The draft is not on the public site, so `Collected_latests` will not have it and the portal preview needs a signed-in session; copy the print JPG out of the store and open it. From the portal repo root, `<id>`, `<new>` and `<sheet>` are as above and `<local path>` is wherever you want the file:
+
+```powershell
+cd "C:\Claude\community-bus-maps"
+npm run ssh -- "docker compose cp portal:/data/maps/<id>/renders/<new>/<sheet>.jpg /tmp/draft.jpg"
+```
+
+Then `scp` it down using the `DEPLOY_HOST` and `DEPLOY_SSH_KEY` already in `.env`, and **delete `/tmp/draft.jpg` on the VPS afterwards** — it is a copy of a customer's unpublished sheet sitting in a world-readable directory.
+
+**It ends at Peter, exactly as `review` does.** Submitting a draft for review and approving it are the third approval gate, so prepare the evidence — what kind of draft, what the diff says, which labels moved, and the two sheets to look at — and stop. He submits from `/app/maps/<id>` and approves at `/app/review`. **Do not reach for `accept-publish-batch.mjs`**: it only ever sees PENDING proposed updates, and a saved draft is not one, so the batch script cannot see this row at all.
+
+---
+
 ## `application` — an organisation wants to join
 
 Also Peter's decision. Prepare it:

@@ -95,6 +95,7 @@ The types and where each ends up:
 | `refresh-local` | a town leaflet with no portal map | new S5 render + `_latest` refreshed |
 | `housekeeping` | engine-stale renders, missing S6 | rollout applied / S6 run |
 | `awaiting-customer` | staged, they haven't accepted | a nudge, or nothing |
+| `draft-unsubmitted` | a version saved and never sent for review | evidence prepared; Peter submits and approves |
 
 ## Step 4 — Close out
 

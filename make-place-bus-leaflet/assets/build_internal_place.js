@@ -20,8 +20,12 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const DIR = process.env.LEAFLET_DIR || process.cwd();
-const TSK = process.env.TSK || require('path').resolve(
-  __dirname, '..', '..', 'make-bus-leaflet', 'assets');
+// TSK — the town engine's assets folder. Through place_engine.js since 2026-09-03
+// (OA-232 Tier 3.1): the join this replaced went straight across the tree and so
+// ignored SKILL_ASSETS, the one arm that matters when the engine is not where the
+// layout says. env TSK still wins.
+const { TOWN_ASSETS, spawnTarget } = require('./place_engine.js');
+const TSK = process.env.TSK || TOWN_ASSETS;
 const RJ = JSON.parse(fs.readFileSync(path.join(DIR, 'routes.json'), 'utf8'));
 
 // gen_internal hard-requires these files; write empty stubs if a caller omitted them.
@@ -53,8 +57,10 @@ for (const [f, empty] of [['osm.json', '{"elements":[]}'], ['osm2.json', '{"elem
 // A default that has to be cancelled everywhere is a default in the wrong place.
 // assets/render_sweep.js --drop-framing is the check that fails if it returns.
 
-const gen = [path.join(DIR, 'gen_internal.js'), path.join(TSK, 'gen_internal.js')]
-  .find(f => fs.existsSync(f));
+// The same run-dir-first rule the two pre-stages use, from engine_paths.js: the
+// workspace's own copy is the generator that drew this build. This spelled two of
+// its three arms and skipped SKILL_ASSETS in the middle (OA-232 Tier 3.1).
+const gen = spawnTarget(DIR, TSK)('gen_internal.js');
 if (!gen) { console.error('build_internal_place: gen_internal.js not found (set env TSK)'); process.exit(1); }
 
 // Run the UNCHANGED town generator with cwd = DIR. Ensure LEAFLET_DIR points at DIR

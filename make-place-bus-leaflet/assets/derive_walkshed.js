@@ -16,10 +16,13 @@
 //              close-up. Core (in-walkshed) stops are always kept.
 //   skipRoutes: routes to omit from the close-up entirely (still valid on the external map).
 const fs = require('fs');
-const full = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const ll = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-const cfg = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
-const OUT = process.argv[5];
+// Positional, through the one parser — see aggregate_destinations.js's note.
+const { cli } = require('./place_engine.js');
+const a = cli.parseArgs(process.argv.slice(2))._;
+const full = cli.readJson(a[0]);
+const ll = cli.readJson(a[1]);
+const cfg = cli.readJson(a[2]);
+const OUT = a[3];
 
 const [CLAT, CLON] = cfg.center;
 const RAD = cfg.radiusM == null ? 500 : cfg.radiusM;

@@ -52,20 +52,20 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-// The town engine's collision guard. Sibling-relative first, absolute only as a
-// fallback -- a bare absolute path resolves on this laptop and nowhere else.
+// The town engine's collision guard, and the one argument parser, both through
+// place_engine.js — this skill's single bootstrap onto engine_paths.js (OA-232
+// Tier 3.1). The four lines this replaced were a private resolver ending in an
+// absolute path that resolves on one laptop (satellite F10); the stub on failure
+// is kept, because a missing guard here must not stop a build.
+const { dep, cli } = require('./place_engine.js');
 const { assertNoCollision } = (() => {
-  const sibling = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'index_guard.js');
-  try { return require(fs.existsSync(sibling) ? sibling
-    : 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/index_guard.js'); }
+  try { return require(dep('index_guard.js')); }
   catch (e) { return { assertNoCollision: () => {} }; }
 })();
 
-const argv = process.argv.slice(2);
-const has = (f) => argv.includes(f);
-const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] != null ? argv[i + 1] : d; };
-const WRITE = has('--write'), FORCE = has('--force');
-const DIR = path.resolve(val('--dir', '.'));
+const args = cli.parseArgs(process.argv.slice(2));
+const WRITE = args.write === true, FORCE = args.force === true;
+const DIR = path.resolve(typeof args.dir === 'string' ? args.dir : '.');
 
 // The settled styles, copied from measure_frequency_tiers_2026-08-17.py's TIER_STYLE
 // so a place's sheet and its town's sheet draw the same tier at the same weight.

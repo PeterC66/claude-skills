@@ -15,28 +15,40 @@
 //   localLoops?:[{route,label}], note?, stamp?
 const fs = require('fs');
 const path = require('path');
-const _FOOTER = (()=>{ const local=path.join(__dirname,'footer.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS,'footer.js');
-  const sibling = path.join(__dirname,'..','..','make-bus-leaflet','assets','footer.js');
-  try{ if(fs.existsSync(sibling)) return sibling; }catch(e){}
-  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/footer.js'; })();
-const { footerBand, footerPlateTop } = require(_FOOTER);
-// labeller.js + font_metrics.js — the shared placer and the real Arial metrics, resolved
-// the same way footer.js is (sibling first, then SKILL_ASSETS, which is how the portal's
-// vendored copy at engine\place\ reaches engine\labeller.js). REQUIRED at load time, as in
-// gen_internal.js: a partial vendor must throw here rather than quietly draw a stale sheet.
-const _LABELLER = (() => { const local = path.join(__dirname, 'labeller.js');
-  try{ if(fs.existsSync(local)) return local; }catch(e){}
-  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS,'labeller.js');
-  const sibling = path.join(__dirname,'..','..','make-bus-leaflet','assets','labeller.js');
-  try{ if(fs.existsSync(sibling)) return sibling; }catch(e){}
-  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/labeller.js'; })();
+// SHARED CODE IS SELF-RESOLVING, and since 2026-09-03 (OA-232 Tier 3.1) it is
+// self-resolving the SAME WAY the town skill's five entry points are. This file
+// carried two private resolver IIFEs — one for footer.js, one for labeller.js —
+// written before engine_paths.js existed and never brought onto it (satellite
+// F10, F22). They are the four lines below plus engine_paths.js, which has the
+// search, the three deployments and the reasons.
+//
+// THE FOURTH ARM IS THIS FILE'S. Those IIFEs had an arm the town's did not: a hop
+// ACROSS to make-bus-leaflet/assets/, which is the only thing that resolves when a
+// place generator runs in place with no SKILL_ASSETS — what
+// make-bus-leaflet/test/generator_load.test.js does on every CI run, on a machine
+// where the laptop path does not exist. That arm went INTO engine_paths.js and
+// into the shared bootstrap rather than being dropped, so all six entry points
+// across both skills now carry one bootstrap, character for character, and
+// test/engine_paths.test.js asserts it of this file too.
+const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
+  try { if (fs.existsSync(local)) return local; } catch (e) {}
+  if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, 'engine_paths.js');
+  const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
+  try { if (fs.existsSync(across)) return across; } catch (e) {}
+  return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
+const { engineDep, siblingOf } = require(_EP);
+const _dep = engineDep(__dirname);
+const { footerBand, footerPlateTop } = require(_dep('footer.js'));
+// labeller.js + font_metrics.js — the shared placer and the real Arial metrics.
+// REQUIRED at load time, as in gen_internal.js: a partial vendor must throw here
+// rather than quietly draw a stale sheet. font_metrics.js follows the labeller by
+// siblingOf() rather than searching, so the two cannot come from different
+// engines; engine_paths.js's header says why that is a different rule from _dep.
+const _LABELLER = _dep('labeller.js');
 const { Labeller } = require(_LABELLER);
-const FONT = require(path.join(path.dirname(_LABELLER), 'font_metrics.js'));
-// Same sibling-then-SKILL_ASSETS resolution as font_metrics above, which is what
-// makes it load inside the portal as well as here.
-const { separateRow, esc } = require(path.join(path.dirname(_LABELLER), 'svg_primitives.js'));
+const _from = siblingOf(_LABELLER);
+const FONT = require(_from('font_metrics.js'));
+const { separateRow, esc } = require(_from('svg_primitives.js'));
 // external_primitives.js — line, tick, the badge family, stampNote, hubEdge and
 // rayToRect, shared with gen_external_radial.js, of which this file is a
 // reformatted clone (OA-224 Tier 3.5). Its header records the three places the
@@ -45,7 +57,7 @@ const { separateRow, esc } = require(path.join(path.dirname(_LABELLER), 'svg_pri
 // label longer than the wrap width (both Godmanchester externals, Hinchingbrooke
 // Hospital), and correcting that moves published artwork. OA-229 is the fix.
 const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRectFor } =
-  require(path.join(path.dirname(_LABELLER), 'external_primitives.js'));
+  require(_from('external_primitives.js'));
 // STRICT_GUARDS, adopted 2026-09-02 (OA-224 Tier 1.4). gen_external_radial.js took the
 // contract on 2026-08-28 (OA-045) and this file is that generator's clone, so the one
 // refusal site it has -- the howToUse panel below, NOT DRAWN when nowhere is clear --
@@ -54,7 +66,7 @@ const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRec
 // this starts green. Same resolution as the modules above, so the portal's
 // engine/place/ copy reaches engine/strict_guards.js.
 const { refuse: guardRefuse, report: reportRefusals } =
-  require(path.join(path.dirname(_LABELLER), 'strict_guards.js'));
+  require(_from('strict_guards.js'));
 
 // ---- main() ---------------------------------------------------------------
 // OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it

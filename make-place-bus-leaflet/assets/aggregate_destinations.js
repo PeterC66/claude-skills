@@ -19,12 +19,18 @@
 //
 // Usage: node aggregate_destinations.js <routes_full.json> <atco2ll.json> <atco2name.json> <place.json> [clusterKm] [out]
 const fs = require('fs');
-const full = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const ll = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-const nm = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
-const place = JSON.parse(fs.readFileSync(process.argv[5], 'utf8'));
-const CLUSTER_KM = parseFloat(process.argv[6] || '1.2');
-const OUT = process.argv[7] || 'destinations.draft.json';
+// Positional, through the one parser: cli.parseArgs puts positionals in `_`, so
+// the six arguments below are unchanged and a `--flag` can be added later without
+// a second parser appearing here (OA-232 Tier 3.1, satellite F8). readJson names
+// the file it could not read, which `JSON.parse(fs.readFileSync(...))` does not.
+const { cli } = require('./place_engine.js');
+const a = cli.parseArgs(process.argv.slice(2))._;
+const full = cli.readJson(a[0]);
+const ll = cli.readJson(a[1]);
+const nm = cli.readJson(a[2]);
+const place = cli.readJson(a[3]);
+const CLUSTER_KM = parseFloat(a[4] || '1.2');
+const OUT = a[5] || 'destinations.draft.json';
 
 const PLAT = place.lat, PLON = place.lon;
 const WALK = (place.walkshedM || 500) / 1000;   // km — an end inside this is "the place itself"

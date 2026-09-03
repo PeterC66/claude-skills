@@ -72,6 +72,28 @@ const dir = scratchDir('prove-red-df-');
 const copy = path.join(dir, 'derive_frequency.js');
 fs.writeFileSync(copy, broken);
 
+/* THE SCRATCH WORLD MUST CARRY THE SUBJECT'S SIBLINGS, AND THE LIST IS DERIVED.
+ *
+ * The fixture is one file in an empty folder, so every `require('./x.js')` in it
+ * resolves to nothing and the run dies at load — which looks exactly like a
+ * mutation the tests noticed, and is not. This harness went red that way on
+ * 2026-09-03 the moment derive_frequency.js took `./place_engine.js`, and
+ * prove-red-run-tests.mjs and prove-red-redteam-source.js each went red the same
+ * way earlier in the same round.
+ *
+ * So the siblings are read OFF THE SUBJECT rather than listed here: a typed list
+ * beside a file that can grow a dependency is the thing that fails, and it fails
+ * silently in the direction of a false green if the harness is ever made
+ * tolerant. Copied verbatim — they are not part of what is being falsified. */
+for (const m of broken.matchAll(/require\(\s*'\.\/([\w.-]+\.js)'\s*\)/g)) {
+  const sib = path.join(path.dirname(SRC), m[1]);
+  if (!fs.existsSync(sib)) {
+    console.error(`prove-red-derive-frequency: derive_frequency.js requires ./${m[1]}, which is not beside it.`);
+    process.exit(1);
+  }
+  fs.copyFileSync(sib, path.join(dir, m[1]));
+}
+
 const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', TEST],
   { cwd: ROOT, encoding: 'utf8', env: { ...process.env, DERIVE_FREQUENCY_JS: copy } });
 const out = r.stdout + r.stderr;

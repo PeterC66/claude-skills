@@ -28,10 +28,20 @@ Usage:
 """
 import sqlite3, sys, json, argparse, os
 
+# The town engine's assets: SIBLING-RELATIVE FIRST, the absolute path only as a
+# fallback, which is the rule resolve_place.py already followed and this file did
+# not -- it inserted the absolute path AHEAD of everything, so on any machine but
+# one laptop it was an entry that resolved nothing, and on that one it beat a
+# checkout (OA-232 Tier 3.1, satellite F10). Insert order is reversed because
+# sys.path.insert(0, ...) puts each new entry in front of the last.
 HERE = os.path.dirname(os.path.abspath(__file__))
+for _cand in (r"C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets",
+              os.path.join(HERE, "..", "..", "make-bus-leaflet", "assets")):
+    if os.path.isdir(_cand):
+        sys.path.insert(0, _cand)
 sys.path.insert(0, HERE)
-sys.path.insert(0, r"C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets")
 import gtfs_query  # reuse the BODS facts query + haversine
+import cli         # the one estate resolver: the flag, then BUSES_DIR, then the laptop
 
 
 def town_stop_ids(cur, la, lo, km):
@@ -74,8 +84,11 @@ def longest_trip_per_direction(cur, route_ids, tset):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--near", required=True, help="lat,lon,km service radius")
+    # CAMBS_GTFS_DB still wins, as it always did; what it falls back to is now the
+    # estate cli.py resolves (BUSES_DIR, then the laptop) rather than the laptop
+    # written out here for the second time (OA-232 Tier 3.1).
     DEFAULT_DB = os.environ.get("CAMBS_GTFS_DB",
-                                r"C:\u3a St Ives\Using AI\Buses\_gtfs\cambridgeshire.sqlite")
+                                os.path.join(cli.resolve_buses(), "_gtfs", "cambridgeshire.sqlite"))
     ap.add_argument("--db", default=DEFAULT_DB)
     ap.add_argument("--out", default=".")
     ap.add_argument("--town", default="")

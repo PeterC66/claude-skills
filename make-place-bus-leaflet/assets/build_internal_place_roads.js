@@ -35,7 +35,9 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const DIR = process.env.LEAFLET_DIR || process.cwd();
-const TSK = process.env.TSK || path.resolve(__dirname, '..', '..', 'make-bus-leaflet', 'assets');
+// TSK through place_engine.js — see build_internal_place.js's note (OA-232 Tier 3.1).
+const { TOWN_ASSETS } = require('./place_engine.js');
+const TSK = process.env.TSK || TOWN_ASSETS;
 const PSK = __dirname;
 const roadMarginKm = process.argv[2] || process.env.ROADS_MARGIN_KM || '0.6';
 

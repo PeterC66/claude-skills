@@ -120,22 +120,34 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(n); return (i >= 0 && argv[i + 1]) ? argv[i + 1] : d; };
-const DRY = argv.includes('--dry-run');
-const FOREIGN = argv.includes('--foreign-build');
-const INTO = path.resolve(flag('--into', process.cwd()));
-const BUILD_GIVEN = argv.includes('--build');
-const BUILD = path.resolve(flag('--build', path.join(INTO, '..', '..')));
-const MAX_AGE = Number(flag('--max-age-days', '60'));
-const REUSE_ANYWAY = argv.includes('--reuse-anyway') ? String(flag('--reuse-anyway', '')).trim() : null;
+// The one parser (OA-232 Tier 2.5, the review's engine-pipeline N26). This file
+// was written on 2026-08-29 with its own `flag()`, whose value rule differed from
+// every other copy in one way that mattered here: it took the NEXT ARGUMENT
+// unconditionally, so `--reuse-anyway --dry-run` yielded the string `--dry-run`,
+// and the refusal below had to test `startsWith('--')` to catch it.
+// `cli.parseArgs` gives `true` for a flag with no value of its own, so that shape
+// arrives as an EMPTY reason and the same refusal fires on the first arm instead.
+// The second arm is kept: it costs a comparison and it is the one that would
+// notice if the shared parser's value rule ever changed under this file.
+const { parseArgs, readJson } = require('./cli.js');
+const FLAGS = parseArgs(process.argv.slice(2));
+const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
+const DRY = 'dry-run' in FLAGS;
+const FOREIGN = 'foreign-build' in FLAGS;
+const INTO = path.resolve(flag('into', process.cwd()));
+const BUILD_GIVEN = 'build' in FLAGS;
+const BUILD = path.resolve(flag('build', path.join(INTO, '..', '..')));
+const MAX_AGE = Number(flag('max-age-days', '60'));
+const REUSE_ANYWAY = 'reuse-anyway' in FLAGS ? String(flag('reuse-anyway', '')).trim() : null;
 
 function die(msg) { console.error('redteam_source.js: ' + msg); process.exit(2); }
 if (REUSE_ANYWAY !== null && (!REUSE_ANYWAY || REUSE_ANYWAY.startsWith('--'))) {
   die('--reuse-anyway needs a reason: --reuse-anyway "the S1 only re-derived frequency fields; no service fact moved".\n'
     + '  An override with no reason on it is indistinguishable from a bypass, which is the whole thing this flag exists to stop.');
 }
-const readJ = f => JSON.parse(fs.readFileSync(f, 'utf8'));
+// `cli.readJson` names the file in a parse error; the one-liner here said only
+// "Unexpected token }" about one of the estate's several hundred JSON files.
+const readJ = (f) => readJson(f);
 
 const manifestPath = path.join(BUILD, 'manifest.json');
 if (!fs.existsSync(manifestPath)) die(`no manifest.json at ${manifestPath}. Pass --build "<the town or place folder>".`);

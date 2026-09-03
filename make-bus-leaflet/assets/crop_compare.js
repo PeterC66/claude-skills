@@ -37,9 +37,12 @@ const sharp = require('sharp');
 
 const A4_W_MM = 297, A4_W_PX = 3508, PX_PER_MM = A4_W_PX / A4_W_MM;
 
+// The one parser (OA-232 Tier 2.5).
+const { parseArgs } = require('./cli.js');
 const argv = process.argv.slice(2);
+const FLAGS = parseArgs(argv);
 const pos = argv.filter(a => !a.startsWith('--'));
-const flag = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : argv[i + 1]; };
+const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
 const flags = (n) => argv.reduce((a, v, i) => (v === '--' + n ? a.concat(argv[i + 1]) : a), []);
 const [oldSvg, newSvg, prefix] = pos;
 if (!oldSvg || !newSvg || !prefix) {

@@ -155,7 +155,11 @@ function refreshBoardingData(dir) {
   for (const f of [db, naptan]) {
     if (!fs.existsSync(f)) return { ok: false, stderr: 'missing ' + f };
   }
-  const py = (script, extra) => spawnSync('python',
+  // `python3`, not `python` — the conventions page's rule, and this was the one
+  // spawn in the engine still saying `python` (OA-232 Tier 2.5). Both resolve on
+  // this laptop; only `python3` resolves on a CI runner, and `python` is Python 2
+  // on some machines.
+  const py = (script, extra) => spawnSync('python3',
     [script, '--dir', dir, '--naptan', naptan, ...extra, '--write'], { encoding: 'utf8' });
   // stands FIRST: boarding_index.py reads stands.json.
   const rs = py(NAPTAN_STANDS, []);

@@ -55,10 +55,13 @@ const sharp = require('sharp');
 const { analyse, findSheets } = require('./quality_metrics');
 const { labelDiff, labelSet } = require('./gate_lib');
 const { scratchDir } = require('./scratch');
-const { resolveBuses } = require('./cli');
+const { parseArgs, resolveBuses } = require('./cli');
 
+// The one parser (OA-232 Tier 2.5). `flag` keeps its name and its meaning; only
+// the loop behind it is gone.
 const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : argv[i + 1]; };
+const FLAGS = parseArgs(argv);
+const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
 
 const BUSES = resolveBuses({ buses: flag('buses') });
 const REV = flag('rev', '9ec8106');

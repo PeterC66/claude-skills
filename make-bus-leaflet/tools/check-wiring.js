@@ -84,6 +84,8 @@ const NOT_IN_CI = {
     'takes a spec file as its argument and answers a question about the committed maps, not a pass/fail',
   'test:prove-lane-mirror':
     'needs the buses estate AND renders every town twice — minutes, not seconds; run by hand when laneOrientation is touched',
+  'sweep:scratch':
+    'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
 };
 
 const args = process.argv.slice(2);
@@ -148,7 +150,21 @@ for (const file of Object.keys(NOT_A_TOOL)) {
 
 // --- 2. every gate and harness is scheduled, and scheduled BY NAME ---------
 
-const gateScripts = Object.keys(scripts).filter((n) => /^(test|gate):/.test(n));
+// EVERY SCRIPT THAT RUNS A FILE IN tools/, not every script whose NAME begins
+// test: or gate:.
+//
+// It was the prefix rule until 2026-09-03, and the 2026-09-03 review found what
+// that costs (engine-pipeline N27): `sweep:scratch` -> `tools/sweep-scratch.js`
+// was named, unscheduled and undeclared, and invisible to the check whose whole
+// job is to notice that. A NAME is a convention somebody has to remember; what a
+// script DOES is a fact. Any future harness registered under a third prefix
+// escaped the old rule the same way, silently, which is the failure mode this
+// file exists to end -- the same shape as the four python/python3 divergences
+// below, one level up.
+//
+// `npm test` (`node --test`) names no tools/ file and is correctly outside this:
+// it is the unit suite, and `gates.yml` runs it by name in the `unit` job.
+const gateScripts = Object.keys(scripts).filter((n) => /tools\/[\w.-]+\.(js|py)/.test(scripts[n]));
 for (const name of gateScripts) {
   const cmd = scripts[name];
   const target = (cmd.match(/tools\/[\w.-]+\.(js|py)/) || [])[0];
@@ -204,7 +220,7 @@ for (const name of Object.keys(NOT_IN_CI)) {
 
 const byStatus = (s) => rows.filter((r) => r.status === s).length;
 console.log(`check-wiring — ${ENGINE}`);
-console.log(`  ${toolFiles.length} file(s) in tools/, ${gateScripts.length} test:/gate: script(s)`);
+console.log(`  ${toolFiles.length} file(s) in tools/, ${gateScripts.length} script(s) running one of them`);
 console.log(`  scheduled by name: ${byStatus('npm run')}   rebuilt in the workflow: ${byStatus('REBUILT')}   not in CI: ${byStatus('absent')} (${Object.keys(NOT_IN_CI).length} declared)`);
 
 if (listAll) {

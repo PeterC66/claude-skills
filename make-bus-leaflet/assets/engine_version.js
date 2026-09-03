@@ -283,16 +283,22 @@ function stampEngine(routesJsonPath, hash) {
 }
 
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  const stampIdx = args.indexOf('--stamp');
+  // The one parser (OA-232 Tier 2.5, the review's engine-pipeline N29). Required
+  // HERE rather than at module scope on purpose: this file is what computes the
+  // engine hash, and a module-scope require of a sibling is the kind of edge the
+  // closure walk has to reason about. Inside the entry-point guard it is reached
+  // only when this file is run as a command.
+  const { parseArgs } = require('./cli.js');
+  const args = parseArgs(process.argv.slice(2));
+  const stampArg = typeof args.stamp === 'string' ? args.stamp : null;
   // --place selects the PLACE template (OA-168). --stamp INFERS it from the path,
   // so a place's routes.json cannot be stamped with the town hash by forgetting a
   // flag; --place still forces it, which is what the falsification harness needs.
-  const wantPlace = args.includes('--place') ||
-    (stampIdx !== -1 && args[stampIdx + 1] ? isPlaceRun(path.dirname(path.resolve(args[stampIdx + 1]))) : false);
+  const wantPlace = 'place' in args ||
+    (stampArg ? isPlaceRun(path.dirname(path.resolve(stampArg))) : false);
   const hash = wantPlace ? computePlaceEngineVersion() : computeEngineVersion();
-  if (stampIdx !== -1) {
-    const file = args[stampIdx + 1];
+  if ('stamp' in args) {
+    const file = stampArg;
     if (!file) { console.error('engine_version.js: --stamp needs a routes.json path'); process.exit(1); }
     const r = stampEngine(path.resolve(file), hash);
     console.log(r.status === 'ok' ? `engine already current (${hash})` : `engine ${r.status}: ${JSON.stringify(r.from)} -> ${JSON.stringify(r.to)}`);

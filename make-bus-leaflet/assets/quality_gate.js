@@ -71,7 +71,7 @@
 const fs = require('fs');
 const path = require('path');
 const { analyse } = require('./quality_metrics');
-const { resolveBuses } = require('./cli');
+const { parseArgs, resolveBuses } = require('./cli');
 
 const LEDGER_NAME = path.join('Development Docs', 'quality-ledger.json');
 
@@ -315,9 +315,12 @@ module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProg
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 if (require.main === module) {
+  // The one parser (OA-232 Tier 2.5). `resolveBuses` already read the flag, the
+  // environment and the one named default; what was hand-rolled here was only
+  // getting the flag's value out of argv.
   const argv = process.argv.slice(2);
-  const gi = argv.indexOf('--buses');
-  const buses = resolveBuses({ buses: gi >= 0 ? argv[gi + 1] : undefined });
+  const FLAGS = parseArgs(argv);
+  const buses = resolveBuses(FLAGS);
   const { ledgerPath, ledger, rows } = run(buses);
 
   if (argv.includes('--accept')) {

@@ -47,12 +47,17 @@ const { execFileSync } = require('child_process');
 function die(msg) { console.error('curate_services: ' + msg); process.exit(1); }
 
 // ---------------------------------------------------------------- args
-const argv = process.argv.slice(2);
-const opt = (name, dflt) => {
-  const i = argv.indexOf('--' + name);
-  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : dflt;
-};
-const has = name => argv.includes('--' + name);
+// The one parser (OA-232 Tier 2.5, from the review's engine-pipeline N26).
+// `opt` and `has` keep their names and their exact former meanings -- `opt`
+// returns the next argument when it is not itself a flag, `has` is true when the
+// flag appears at all -- so no call site below changes. What has gone is the
+// loop: `cli.parseArgs` gives `true` for a bare flag and the string for a valued
+// one, and these two lines are the adapter between that and the two shapes this
+// file already used.
+const { parseArgs } = require('./cli.js');
+const FLAGS = parseArgs(process.argv.slice(2));
+const opt = (name, dflt) => (typeof FLAGS[name] === 'string' ? FLAGS[name] : dflt);
+const has = (name) => name in FLAGS;
 
 const dir = path.resolve(opt('dir', process.cwd()));
 const apply = has('apply');

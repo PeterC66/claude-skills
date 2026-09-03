@@ -29,8 +29,11 @@ const UA='make-bus-leaflet/1.0 (bus leaflet project)';
 const ARGS=process.argv.slice(2).filter(a=>!a.startsWith('--'));
 const SLUGS=JSON.parse(fs.readFileSync(ARGS[0],'utf8'));
 const OUT=ARGS[1]; fs.mkdirSync(OUT,{recursive:true});
-const di=process.argv.indexOf('--dates');
-const DATES=di>=0&&process.argv[di+1]?process.argv[di+1].split(','):[null];
+// The one parser (OA-232 Tier 2.5). `--dates a,b` is a comma list; with no value
+// of its own it arrives as `true` and the single-null default stands, which is
+// what an absent flag did before.
+const DATES_FLAG=require('./cli.js').parseArgs(process.argv.slice(2)).dates;
+const DATES=typeof DATES_FLAG==='string'&&DATES_FLAG?DATES_FLAG.split(','):[null];
 
 async function getHtml(slug,date){
   const url='https://bustimes.org/services/'+slug+(date?'?date='+date:'');

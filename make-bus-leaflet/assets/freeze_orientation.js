@@ -42,16 +42,18 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_BUSES = 'C:\\u3a St Ives\\Using AI\\Buses';
+// The one parser and the one estate resolver (OA-232 Tier 2.5, the review's
+// engine-pipeline N26 and F6). This file held the LAST hard laptop default in
+// the engine -- `DEFAULT_BUSES`, with no `BUSES_DIR` read in front of it -- so on
+// any other machine `--buses` was the only way in and forgetting it failed
+// somewhere confusing rather than saying where it had looked. `resolveBuses`
+// asks the flag, then the environment, then the one named laptop path.
+const { parseArgs, resolveBuses } = require('./cli.js');
+const FLAGS = parseArgs(process.argv.slice(2));
+const arg = (name, fallback) => (typeof FLAGS[name] === 'string' ? FLAGS[name] : fallback);
+const has = (name) => name in FLAGS;
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf('--' + name);
-  return i > -1 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--')
-    ? process.argv[i + 1] : fallback;
-}
-const has = (name) => process.argv.includes('--' + name);
-
-const BUSES = arg('buses', DEFAULT_BUSES);
+const BUSES = resolveBuses(FLAGS);
 const town = arg('town', null);
 const place = arg('place', null);
 const APPLY = has('apply');

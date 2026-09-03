@@ -29,6 +29,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { parseArgs, resolveBuses } = require('./cli.js');   // the one parser and the one estate resolver (OA-232 Tier 2.5)
 
 const FM = require(path.join(process.env.SKILL_ASSETS || __dirname, 'font_metrics.js'));
 
@@ -1667,10 +1668,13 @@ const label = (p) => {
 };
 
 function main() {
+  // The one parser (OA-232 Tier 2.5). `resolveBuses` is the flag, then BUSES_DIR,
+  // then the one named default -- which is what the two lines below open-coded,
+  // in the wrong order: they resolved with NO flag and then overwrote the answer.
   const argv = process.argv.slice(2);
+  const FLAGS = parseArgs(argv);
   const json = argv.includes('--json'), detail = argv.includes('--detail');
-  let buses = require('./cli').resolveBuses({});
-  const bi = argv.indexOf('--buses'); if (bi >= 0) buses = argv[bi + 1];   // the flag still wins
+  const buses = resolveBuses(FLAGS);
   let files = argv.filter(a => a.endsWith('.svg'));
   if (argv.includes('--all') || !files.length) files = findSheets(buses);
   if (!files.length) { console.error('no sheets found'); process.exit(2); }

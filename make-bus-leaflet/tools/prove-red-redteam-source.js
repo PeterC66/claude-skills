@@ -65,6 +65,16 @@ for (const gone of ['AMBIGUOUS', 'build examined', 'FOREIGN BUILD']) {
 const dir = scratchDir('prove-red-rts-');
 const copy = path.join(dir, 'redteam_source.js');
 fs.writeFileSync(copy, broken);
+// The subject's siblings. This harness runs a MUTATED COPY of one file out of a
+// scratch folder, so every module that file requires by relative path has to be
+// beside it. `redteam_source.js` took its argument parsing onto `cli.js` on
+// 2026-09-03 (OA-232 Tier 2.5) and this harness went red with MODULE_NOT_FOUND
+// on the next run -- which is the harness working: a scratch world that silently
+// lacks a dependency is how a mutation "survives" for the wrong reason. Copied
+// rather than resolved from assets/ so the scratch world stays self-contained.
+for (const sibling of ['cli.js']) {
+  fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
+}
 
 const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', TEST],
   { cwd: ROOT, encoding: 'utf8', env: { ...process.env, REDTEAM_SOURCE_JS: copy } });

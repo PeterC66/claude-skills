@@ -141,11 +141,15 @@ function checkPowershellConsumer(ps1Path) {
 }
 
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  const i = args.indexOf('--basenames');
-  const c = args.indexOf('--check-consumers');
-  if (c !== -1) {
-    const p = args[c + 1];
+  // The one parser (OA-232 Tier 2.5, the review's engine-pipeline N29). A flag
+  // given with no value arrives as `true` rather than as `undefined`, which is
+  // why each read below asks for a string before using it.
+  const { parseArgs } = require('./cli.js');
+  const args = parseArgs(process.argv.slice(2));
+  const i = args.basenames;
+  const c = args['check-consumers'];
+  if (c !== undefined) {
+    const p = typeof c === 'string' ? c : '';
     if (!p) { console.error('sheet_registry.js: --check-consumers needs a path to collect-maps.ps1'); process.exit(1); }
     if (!fs.existsSync(p)) { console.error('sheet_registry.js: no such file: ' + p); process.exit(1); }
     const findings = checkPowershellConsumer(p);
@@ -157,7 +161,7 @@ if (require.main === module) {
     console.error('exactly like a map that never had one.');
     process.exit(1);
   }
-  if (i !== -1) console.log(basenames(args[i + 1] || 'svg').join('\n'));
+  if (i !== undefined) console.log(basenames(typeof i === 'string' ? i : 'svg').join('\n'));
   else for (const s of SHEETS) console.log(`${s.key.padEnd(10)} ${s.base.padEnd(20)} ${s.optIn ? 'opt-in via routes.json "' + s.optIn + '"' : 'always'}`);
 }
 

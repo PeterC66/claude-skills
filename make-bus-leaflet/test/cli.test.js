@@ -164,3 +164,51 @@ test('the migrated python scripts resolve through cli.py', () => {
     assert.ok(/cli\.resolve_buses\(/.test(src), `${name} does not call cli.resolve_buses`);
   }
 });
+
+/*
+ * THE CENSUS (OA-232 Tier 2.5, from the review's engine-pipeline M6 and N26).
+ *
+ * The test above asks whether the NAMED files still use the parser. That is a
+ * list, and a list only ever certifies what is on it: on 2026-09-03 the review
+ * found six more `argv.indexOf('--x')` bodies under assets/, none of them on it,
+ * one of them written the day after cli.js landed. This asks the closed question
+ * instead -- does ANY file under assets/ still open-code the idiom -- which is
+ * the difference between a helper that exists and a helper that is used.
+ *
+ * It is the same shape as `engine_indirection.test.js` and as the census in the
+ * portal's `test-db-dates.mjs`, and it is the review's own conclusion in one
+ * sentence: the unit of an extraction is not the module, it is the module plus
+ * the check on its callers.
+ *
+ * SCOPED TO assets/, not to tools/. The harnesses under tools/ still carry the
+ * idiom and are deliberately outside this: several of them build a scratch argv
+ * to feed a subject, and one -- render_sweep.js's sibling reasoning -- keeps its
+ * own parser because it WHITELISTS its flags and refusing an unknown one is a
+ * property worth having. Widening this to tools/ is a separate decision with its
+ * own allowlist, not a free tightening.
+ */
+const ARGV_IDIOM = /argv\.indexOf\('--/;
+
+test('no file under assets/ open-codes the argv parser', () => {
+  const files = fs.readdirSync(ENGINE_DIR).filter((f) => f.endsWith('.js'));
+  // The population check. Without it this passes for a readdir that found
+  // nothing, which is what an untested census looks like.
+  assert.ok(files.length > 50, `the census read only ${files.length} files under assets/`);
+  const offenders = files.filter((f) => ARGV_IDIOM.test(fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8')));
+  assert.deepStrictEqual(offenders, [],
+    `these still open-code the flag parser instead of requiring ./cli.js: ${offenders.join(', ')}`);
+});
+
+test('CONTROL: the census pattern really does match the idiom', () => {
+  // Without this the case above passes for a regex that matches nothing. The
+  // control is a live file rather than a string, so it also fails loudly if the
+  // last user of the idiom in tools/ is migrated and this control goes stale.
+  // From __dirname, NOT from ENGINE_DIR. `tools/prove-red.js` runs this suite
+  // against a scratch COPY of assets/, so ENGINE_DIR is a temp folder with no
+  // tools/ beside it -- this control read ENOENT there on its first mutation
+  // run. The test file itself is never copied, so its own folder is the repo.
+  const control = path.join(__dirname, '..', 'tools', 'attribution-gate.js');
+  assert.ok(ARGV_IDIOM.test(fs.readFileSync(control, 'utf8')),
+    'tools/attribution-gate.js no longer carries the idiom — pick another control, or widen the census to tools/');
+  assert.ok(ARGV_IDIOM.test("const i = argv.indexOf('--town');"));
+});

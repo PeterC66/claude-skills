@@ -144,6 +144,38 @@ def diff_town(db, name, cfg, town_dir):
     # withdrawal, so both conventions now land on RE-EVAL, which is at least true.
     not_serving={x["route"] for x in vs.get("notOnLeaflet",[]) if x.get("servesTown") is False}
     not_serving|={str(s["route"]) for s in vs.get("services",[]) if s.get("servesTown") is False}
+    # AND THE OTHER TWO CONVENTIONS, added 2026-09-03 after the first pair. There are FOUR
+    # ways a town records "we know about this route and deliberately do not draw it", and
+    # reading two of them left the worst case fully live. `verifiedNotDisplayed` is High
+    # Wycombe's: 18 entries, each {route, note}, the notes reading "school" sixteen times
+    # and "withdrawn" once -- that once is route 20, whose exclusion is argued in
+    # disagreements.json from the operator's own network review. It reported [ADD?] every
+    # month regardless, and on 2026-09-03 that row was read as a real public service missing
+    # from a sheet awaiting publication; the recommendation to send the map back was withdrawn
+    # only because somebody opened the town's file. `notDisplayed` is Huntingdon's older
+    # form, a bare list of route numbers with the reasoning in prose beside it.
+    #
+    # THEY BECOME RE-EVAL, NOT SILENCE, and the distinction is the point. A recorded decision
+    # should keep being surfaced -- an exclusion nobody re-reads is how a school service that
+    # has become a real public service stays off a sheet for ever -- but it must be surfaced
+    # as a decision to confirm, not as news. The message therefore carries the town's own
+    # recorded reason, so the next reader sees what was decided instead of re-deriving it
+    # from the feed, which is the exact step that went wrong three times in one session.
+    known_off={}   # route -> (which field recorded it, the reason it gives)
+    for entry in vs.get("verifiedNotDisplayed",[]):
+        if isinstance(entry,dict):
+            r=entry.get("route")
+            if r is not None:
+                known_off[str(r)]=("verifiedNotDisplayed", entry.get("note") or entry.get("reason") or "")
+        elif entry is not None:
+            known_off[str(entry)]=("verifiedNotDisplayed","")
+    for entry in vs.get("notDisplayed",[]):
+        if isinstance(entry,dict):
+            r=entry.get("route")
+            if r is not None:
+                known_off.setdefault(str(r),("notDisplayed", entry.get("note") or entry.get("reason") or ""))
+        elif entry is not None:
+            known_off.setdefault(str(entry),("notDisplayed",""))
     # A SHIPPED CONSOLIDATION: one drawn route standing for several GTFS route names.
     # Wisbech draws First's `excel` and records `variants.subServices: [A, B, C, D]`,
     # because bustimes presents them as the single service "A, B, C, D - excel" and the
@@ -211,6 +243,10 @@ def diff_town(db, name, cfg, town_dir):
                     changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(gdays_e)}'"))
         elif r in not_serving:
             changes.append(("RE-EVAL", r, f"BODS now shows it serving the town ({fmt(gdays)}); we'd marked it 'does not serve'"))
+        elif r in known_off:
+            field,why=known_off[r]
+            because=(" - recorded as: "+why.strip()) if why.strip() else ""
+            changes.append(("RE-EVAL", r, f"in BODS ({fmt(gdays)}); this town's {field} already says it is not drawn{because}. Confirm the decision still holds - it is NOT new."))
         elif r in consolidated:
             # Drawn already, under the shipped entry that declares it a sub-service.
             pass

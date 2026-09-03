@@ -214,6 +214,58 @@ check("empty subServices consolidates nothing and the brand still reports withdr
       kinds(empty, "ADD?") == ["A", "B", "C", "X46"] and kinds(empty, "WITHDRAWN?") == ["excel"],
       repr(empty))
 
+# ------- 8. verifiedNotDisplayed: the convention that fooled us on route 20
+# High Wycombe files 18 entries this way, {route, note}, sixteen of them "school" and one
+# "withdrawn" — route 20, whose exclusion is argued from the operator's own network review.
+# It reported [ADD?] every month anyway, and on 2026-09-03 that row was read as a real
+# service missing from a sheet awaiting publication.
+VND = [excel(["A", "B", "C", "D"]), svc("46", "Stagecoach East", "MTWTFS.")]
+
+
+def town_with(extra):
+    d = os.path.join(TMP, "town-x-%d" % town_with.n, "S1-services", "2026-09-01_0000")
+    town_with.n += 1
+    os.makedirs(d)
+    doc = {"town": "Wisbech", "verifiedOn": "2026-09-01", "services": VND}
+    doc.update(extra)
+    with open(os.path.join(d, "verified-services.json"), "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    return os.path.dirname(os.path.dirname(d))
+
+
+town_with.n = 0
+
+vnd = rr.diff_town(build_feed(["A", "B", "C", "46", "60", "X46"]), "Wisbech", CFG,
+                   town_with({"verifiedNotDisplayed": [{"route": "60", "note": "school"},
+                                                       {"route": "X46", "note": "withdrawn"}]}))["changes"]
+check("verifiedNotDisplayed is not reported as new", kinds(vnd, "ADD?") == [], repr(vnd))
+check("...it is RE-EVAL, carrying the town's own recorded reason",
+      sorted(kinds(vnd, "RE-EVAL")) == ["60", "X46"]
+      and any("school" in why for k, l, why in vnd if l == "60")
+      and any("withdrawn" in why for k, l, why in vnd if l == "X46"), repr(vnd))
+check("...and it says plainly that the route is NOT new",
+      all("NOT new" in why for k, l, why in vnd if k == "RE-EVAL"), repr(vnd))
+
+# --------------------- 9. notDisplayed: Huntingdon's older bare-string form
+nd = rr.diff_town(build_feed(["A", "B", "C", "46", "60"]), "Wisbech", CFG,
+                  town_with({"notDisplayed": ["60"]}))["changes"]
+check("a bare notDisplayed string is not reported as new",
+      kinds(nd, "ADD?") == [] and kinds(nd, "RE-EVAL") == ["60"], repr(nd))
+
+# -------------------------- 10. the harness still tells the fix from the bug
+# Membership, not equality: this fixture ALSO ships `excel` with subServices, so the old
+# matching cries ADD? for A/B/C too — that is case 2's subject, not this one. What this
+# case must show is that the two NEW conventions were among the false positives before.
+added_v, _ = old_literal(["A", "B", "C", "46", "60", "X46"], VND)
+check("OLD matching cries ADD? for both new conventions",
+      "60" in added_v and "X46" in added_v, repr(added_v))
+
+# ------- 11. the blind spot: a recorded exclusion must not invent a row when absent
+absent = rr.diff_town(build_feed(["A", "B", "C", "46"]), "Wisbech", CFG,
+                      town_with({"verifiedNotDisplayed": [{"route": "60", "note": "school"}]}))["changes"]
+check("a not-drawn route absent from the feed produces no row at all",
+      kinds(absent, "RE-EVAL") == [] and kinds(absent, "ADD?") == [], repr(absent))
+
 shutil.rmtree(TMP, ignore_errors=True)
 
 print()

@@ -74,24 +74,17 @@ const BUSES = resolveBuses(args);
 const PORTAL = resolvePortal(args);
 const AS_MD = !!args.md;
 const AS_JSON = !!args.json;
-// TWO OUTPUTS, ONE PASS (2026-09-03). Both CI workflows that run this board used
-// to invoke it TWICE per run -- once `--json > gate-results.json` for the
-// artifact, once `--md >> $GITHUB_STEP_SUMMARY` for the table a human reads --
-// and the second invocation re-walks all 20 maps, re-hashes the engine and
-// re-fetches the live version header to recompute an answer the first one
-// already had. Measured on the 2026-09-03 runs: 37 s of a 466 s job in
-// buses-data and 38 s of 314 s in claude-skills, on every one of 40-90 pushes a
-// day.
+// TWO OUTPUTS, ONE PASS (2026-09-03). Both CI workflows that run this board were
+// invoking it TWICE per run -- `--json` for the artifact, `--md` for the step
+// summary -- so the second invocation re-walked all 20 maps to recompute an
+// answer the first already had. `--json-out <file>` writes the payload to a file
+// and FALLS THROUGH to print the board, so one walk feeds both. `--json` keeps
+// its old meaning exactly, because that is what every other caller and both
+// prove-red harnesses pass. A file rather than a second stream: the board owns
+// stdout so a caller can append it to $GITHUB_STEP_SUMMARY.
 //
-// `--json-out <file>` writes the JSON payload to a file and then FALLS THROUGH
-// to print the board, so `--md --json-out gate-results.json` produces both from
-// one walk. `--json` keeps its old meaning exactly -- payload to stdout, no
-// board -- because that is what every other caller and both prove-red harnesses
-// pass, and changing what an existing flag does is not part of a cost fix.
-//
-// It is a FILE and not a second stream on purpose: the board goes to stdout so a
-// caller can append it to $GITHUB_STEP_SUMMARY, and a payload sharing that
-// stream would be markdown with a JSON document embedded in it.
+// The cost this was part of fixing, and the rules that came out of it, are in
+// buses-data's `Documentation/README - What CI costs and how to keep it cheap.md`.
 const JSON_OUT = typeof args['json-out'] === 'string' ? args['json-out'] : null;
 const NO_QUALITY = !!args['no-quality'];
 // Deployment drift (technical-audit_2026-08-25 N2). Default ON against the live

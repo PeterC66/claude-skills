@@ -81,7 +81,7 @@ node "Development Docs/open-actions/assemble.mjs" --check
 ```
 
 ```bash
-python "C:/Users/Peter/.claude/skills/stamp-docs/scripts/docstamp.py" --all
+python3 "C:/Users/Peter/.claude/skills/stamp-docs/scripts/docstamp.py" --all
 ```
 
 Then write the round into the project memory store (a `project_codebase_review_<date>` entry and a pointer in `MEMORY.md`), and release the claim.

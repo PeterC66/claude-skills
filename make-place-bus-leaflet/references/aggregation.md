@@ -18,8 +18,8 @@ The draft is a **starting point**, per the skill's "suggest, then confirm" rule.
 ## Journey times and intermediate stops — run after curation, not by hand
 Once `destinations[]` is settled, run both fillers (they only ever ADD fields, never overwrite, so they're safe to re-run after further edits):
 ```
-python "%TSK%\gtfs_duration.py" <ATCO_PREFIX...> --fill-place routes.json
-python "%PSK%\derive_stops.py" routes.json --dir .
+python3 "%TSK%\gtfs_duration.py" <ATCO_PREFIX...> --fill-place routes.json
+python3 "%PSK%\derive_stops.py" routes.json --dir .
 ```
 - `--fill-place` sets `minutesToDestination` (a number, e.g. `26`) on every destination lacking one — an approximate scheduled journey-time line drawn under the destination name (`gen_external_places.js`). Where several routes reach a destination it tries each and keeps the fastest with a confident sample, since that's the journey a rider would actually pick. Mirrors the town skill's `draft_town.py`-driven `--fill` (`s3-config.md` `external[].minutesToDestination`) and shares its gaps (round-trip services, DRT). Use `--near lat,lon,km` instead of an ATCO prefix for a place with no clean locality prefix.
 - `derive_stops.py` sets `stops` (an array, intermediates then the terminus last, matching `gen_external_radial.js`'s convention) on every **single-route** destination lacking one, by walking that route's chain (`routes_full_atco.json`/`atco2name.json` from P2) onward from the place's own stop. A destination reached by **more than one route is left alone** — there's no single unambiguous stop sequence to hang ticks off when several routes ride one spoke, so `gen_external_places.js` only draws ticks where `stops` is present.

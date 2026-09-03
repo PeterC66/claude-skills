@@ -119,7 +119,7 @@ Not a mutation harness. The question OA-118 asked was never "can something be co
 npm run test:prove-red-route-collision
 ```
 
-Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`; the npm script wraps `python tools/prove-red-route-collision.py` and takes no arguments.
+Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`; the npm script wraps `python3 tools/prove-red-route-collision.py` and takes no arguments.
 
 **A route NUMBER is not an identity, and indexing on one is an index AND a silent de-duplication that nothing distinguishes afterwards.** Wisbech runs two route 46s — Stagecoach East to March and Lynx to King's Lynn — so `{s["route"]: s for s in services}` turned eleven shipped services into ten entries. Measured on 2026-08-28: the monthly change scan had been diffing the *Lynx* 46 against BODS every month and had **never once checked the Stagecoach East one**. Nothing threw, nothing was missing, every route appeared exactly once, and the report looked complete — which is the whole difficulty. `verify_report.js` had the identical fault and was fixed on 2026-08-27; this harness exists because the fix needed to be shown to be a fix.
 

@@ -15,7 +15,7 @@ cd "St Neots Tesco Extra"
 ## P1 — place  (→ stage.js S1)
 ```bash
 S1=$(node "$TSK/stage.js" new S1); cd "$S1"
-python "$PSK/resolve_place.py" "Tesco Extra" --town "St Neots" --region "Cambridgeshire" --radius-m 500
+python3 "$PSK/resolve_place.py" "Tesco Extra" --town "St Neots" --region "Cambridgeshire" --radius-m 500
 #   -> Tesco Extra [shop/supermarket] 52.21023,-0.26990  (chosen)
 #   review place-candidates.json; --pick N if the auto-pick is wrong
 node "$TSK/stage.js" commit S1 "$S1" --outputs place.json,place-candidates.json,gtfs-services.json
@@ -29,7 +29,7 @@ cp "$S1/place.json" .                      # aggregate_destinations reads place.
 # For a place in ANOTHER GTFS region whose town is already built, point --db at its sqlite
 # (or `export CAMBS_GTFS_DB=…/buckinghamshire.sqlite` once for the session). No setup needed.
 # 1. standalone chains from GTFS (service radius 0.8 km)
-python "$PSK/gtfs_chains.py" --near "52.2102330,-0.2698983,0.8" --town "St Neots Tesco Extra"  # [--db PATH]
+python3 "$PSK/gtfs_chains.py" --near "52.2102330,-0.2698983,0.8" --town "St Neots Tesco Extra"  # [--db PATH]
 #   -> 6 routes: 18, 18A, C2, 150, 61EY, 69   (routes_full_atco/atco2ll/atco2name/gtfs-services)
 # 2. walkshed clip for the internal map
 cat > walkshed_cfg.json <<'EOF'

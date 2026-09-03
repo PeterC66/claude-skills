@@ -30,7 +30,7 @@ S6 is **dated, not versioned** — it verifies whatever the manifest currently p
    - If the agent returns prose around the JSON, keep only the JSON object.
    - It is acceptable to run the engine **without** `redteam.json` (sanity-only mode, `redteamPresent:false`) for a quick structural check, but a real verification pass needs the red-team.
 5. **Run the diff/sanity engine:** `node "%SK%\verify_report.js"` (reads `$S6`; set `VERIFY_DIR` to point elsewhere). It writes `verification.json`, prints a console summary, and exits **1** on any HARD finding, **3** if it refused because the S1 is an unreviewed draft (see below), **2** on a missing input, else 0.
-6. **Render the report:** `python "%SK%\gen_verification.py" verification.json` → `verification.docx` (mirrors `gen_disagreements.py`; red banner + HARD rows if blocked, green banner if PASS).
+6. **Render the report:** `python3 "%SK%\gen_verification.py" verification.json` → `verification.docx` (mirrors `gen_disagreements.py`; red banner + HARD rows if blocked, green banner if PASS).
 7. **Act on findings:**
    - **HARD** → the build is not trustworthy. Fix the upstream stage (re-run S1/S2/S3 as needed) and re-verify. Do **not** ship a leaflet with an open HARD finding.
    - **SOFT** → record them for the user / a follow-up; **do not** silently edit a reproduced baseline (per the skill's "record open issues, don't fix" rule). Genuine data corrections go through a new S1/S2/S3 run + a version bump, not an in-place edit.

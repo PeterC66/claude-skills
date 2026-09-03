@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "The deterministic bus-map engine: generators, labeller, renderer and gates. Licensed under this repository's Business Source License 1.1 — see ../LICENSE.",
   "private": true,
-  "main": "index.js",
-  "//engines": "OA-224 Tier 5 (cross-repo F14/F15). Node was pinned five ways across three repositories and this package.json was the one with no pin at all, while its own gates.yml installs 24 and node:sqlite -- which the portal's store depends on -- is still flagged experimental. 24 rather than >=24 in spirit: the runtime is not a free variable here, and the portal's engines still says >=22, which is looser than anything that is actually tested and is named in all three conventions pages as the divergence this closes on the engine side.",
+  "//main": "There is deliberately no `main`. This package is not required as a module by anything; it is a folder of scripts run by path and by npm script. It said `\"main\": \"index.js\"` until 2026-09-03 against no such file on disk — the 2026-09-03 review's engine-pipeline N29.",
+  "//engines": "OA-224 Tier 5 (cross-repo F14/F15). Node was pinned five ways across three repositories and this package.json was the one with no pin at all, while its own gates.yml installs 24 and node:sqlite -- which the portal's store depends on -- is still flagged experimental. The value below is `>=24`; this note used to add '24 rather than >=24 in spirit', which contradicted the line under it and is removed (the 2026-09-03 review, engine-pipeline N29). The runtime is not a free variable here, and the portal's engines still says >=22, which is looser than anything that is actually tested and is named in all three conventions pages as the divergence this closes on the engine side.",
   "engines": {
     "node": ">=24"
   },

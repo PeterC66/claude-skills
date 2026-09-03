@@ -25,13 +25,13 @@ Run from `make-bus-leaflet`:
 npm test
 ```
 
-**399 tests**, a few seconds, no network and no data tree needed. (This said *123 tests* until 2026-08-28, then *324*, then *352*, all on the same day — each true when written, and nothing reads a sentence to check it, so read the count off the run.) Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
+**Read the test count off the run** — it is on the `ℹ tests` line at the foot of the output, and no number appears in this paragraph on purpose. A few seconds, no network and no data tree needed. This line said *123 tests* until 2026-08-28, then *324*, then *352*, all on the same day; it then said *399* for six days while the suite reached 687, which is what a written count does when nothing reads a sentence to check it (the 2026-09-03 review, cross-repo F20). Then the falsification harnesses, which exist because a green check nobody has watched go red proves nothing — and, since 2026-08-27, because a check that has been made *quieter* needs proving it can still go loud:
 
 ```bash
 npm run test:prove-red
 ```
 
-Mutates a scratch copy of `assets/` and requires the unit suite to object — 169 mutations today, and again, read the number off the run rather than off this line.
+Mutates a scratch copy of `assets/` and requires the unit suite to object. **The mutation count is at the foot of that run too, and again no number is written here** — this line said *169* against an actual 260 measured on 2026-09-03, the same fault as the paragraph above and found in the same review.
 
 **Both of these now run in CI**, in the `gates` job of buses-data's `.github/workflows/gates.yml`, which they never had until 2026-08-28. They cost about two minutes together. A harness that only ever runs on the machine its subject was written on proves the check works in the one place it is least needed.
 

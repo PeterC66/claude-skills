@@ -50,9 +50,9 @@ It is one of three, one per repository. The other two are `docs/CONVENTIONS.md` 
 
 ## Node and Python
 
-**Node 24** — `gates.yml` installs 24 in the `unit` and `docs` jobs, and the `status` job reads the major version off the deployment image so it cannot drift from what actually serves the site. `package.json` here declares **no `engines` block at all**; that is a real gap and it is OA-224 Tier 5's "add `engines` to the engine's `package.json` and one Node 24 pin everywhere". It is named here rather than fixed here.
+**Node 24** — `gates.yml` installs 24 in the `unit` and `docs` jobs, and the `status` job reads the major version off the deployment image so it cannot drift from what actually serves the site. `package.json` here declares `"engines": { "node": ">=24" }`, added by OA-224 Tier 5 in `9ff82bb` with a `//engines` note saying why; this paragraph went on calling that a gap for two days afterwards and was corrected by the 2026-09-03 review (cross-repo F27). The portal's `engines` still says `>=22`, which is looser than anything that is actually tested, and that is the one divergence left.
 
-**`python3`, not `python`.** Both resolve on this laptop; only `python3` resolves on the CI runner, and `python` is Python 2 on some machines. Every python script in `package.json` says `python3`.
+**`python3`, not `python` — in `package.json` AND in the documents.** Both resolve on this laptop (checked: `python3 --version` and `python --version` both print 3.13.14); only `python3` resolves on the CI runner, and `python` is Python 2 on some machines. The rule used to be scoped to `package.json` and said nothing about prose, so the two `SKILL.md` files and four reference pages documented 27 commands a reader would copy as `python` — the 2026-09-03 review's engine-pipeline N31. They now say `python3`. Note what is NOT covered: the u3a handout skills in this repository still write `python`, deliberately, because they drive the Windows-Store interpreter through a long `AppData` path with its own documented quirks and none of them runs in CI.
 
 ## A generator's body lives in `main()`, and its file must LOAD
 

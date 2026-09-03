@@ -1652,6 +1652,82 @@ const MUTATIONS = [
     find: "const { engineDep, siblingOf } = require(_EP);",
     to: "const { engineDep, siblingOf } = require(_EP);" + String.fromCharCode(10) + "console.log('resolving engine deps');" },
 
+  // road_graph.js - OA-232 Tier 3.3, the graph the two internal pre-stages both
+  // build. Two of these break a branch NO COMMITTED MAP REACHES, which is the
+  // reason the module has a test at all: the thirteen diagram and schematic byte
+  // gates prove the extraction was inert on the estate as it stands, and can say
+  // nothing whatever about the arms that estate never takes.
+  //
+  // The two lsq/dpTol arms below are the exact damage the FIRST DRAFT of the
+  // module did by retyping those bodies from their shape instead of splicing
+  // them. Both would have compiled; both return plausible numbers for every
+  // well-posed system on the estate. They are here so that never passes again.
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'lsq stops tolerating a rank-deficient system, so an unconstrained corridor solves to Infinity and the sheet is drawn empty',
+    find: "    if (Math.abs(M[p * NV + c]) < 1e-12) continue;",
+    to: "    if (false) continue;" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'lsq back-substitutes through a zero pivot as well, the other half of the same fault',
+    find: "    R[c] = Math.abs(M[c * NV + c]) < 1e-12 ? 0 : s / M[c * NV + c];",
+    to: "    R[c] = s / M[c * NV + c];" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'dpTol loses its degenerate-segment arm, so a zero-length span divides by zero',
+    find: "    const d = L < 1e-9 ? Math.hypot(pts[i][0] - a[0], pts[i][1] - a[1])",
+    to: "    const d = false ? Math.hypot(pts[i][0] - a[0], pts[i][1] - a[1])" },
+
+  // THE SHAPE ARM. A spread reads as the obvious tidy-up of the two literals and
+  // is a different object: `ll: undefined` is a KEY, and these pre-stages
+  // serialise nodes. Nothing on the estate would have moved.
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'the two node literals become one spread, so the schematic gains an ll: undefined it never had',
+    find: "  const mkNode = withLatLon" + String.fromCharCode(10)
+        + "    ? ll => ({ mm: XY(ll), ll: [+ll[0], +ll[1]], adj: new Map() })" + String.fromCharCode(10)
+        + "    : ll => ({ mm: XY(ll), adj: new Map() });",
+    to: "  const mkNode = ll => ({ mm: XY(ll), ll: withLatLon ? [+ll[0], +ll[1]] : undefined, adj: new Map() });" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'an edge with no name gets undefined instead of null, which JSON.stringify drops rather than writes',
+    find: "    ? (a, b, name) => ({ a, b, name: name || null })",
+    to: "    ? (a, b, name) => ({ a, b, name: name || undefined })" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'addEdge stops refusing a duplicate, so every corridor gains a parallel edge and degree stops meaning anything',
+    find: "    if (na.adj.has(kb)) return;",
+    to: "    if (false) return;" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'the REP chains stop being flattened, so an absorbed node points at another absorbed node and its stops land nowhere',
+    find: "    for (const k of [...REP.keys()]) REP.set(k, resolve(k));",
+    to: "    for (const k of [...REP.keys()]) REP.set(k, REP.get(k));" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'warp returns the caller\u2019s own array rather than a copy, so a later write to the result mutates the input',
+    find: "    return sw ? [mm[0] + sx / sw, mm[1] + sy / sw] : mm.slice();",
+    to: "    return sw ? [mm[0] + sx / sw, mm[1] + sy / sw] : mm;" },
+
+  { suite: 'road_graph.test.js', file: 'road_graph.js',
+    what: 'angdist stops folding past 180, so a 20-degree turn the short way reads as 340',
+    find: "const angdist = (a, b) => { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };",
+    to: "const angdist = (a, b) => Math.abs(a - b) % 360;" },
+
+  // THE ADOPTION ARM, and the one the whole 2026-09-03 review is about. A
+  // pre-stage that grows its own copy of a shared function back is invisible to
+  // every byte gate and to every other assertion in road_graph.test.js, because
+  // the copy is the same arithmetic - until the day one of them is fixed.
+  { suite: 'road_graph.test.js', file: 'diagram_internal.js',
+    what: 'diagram_internal.js grows its own lsq back, identical to the shared one, and nothing drawn moves',
+    find: "const roadOps = roadGraph.graphOps({ XY, withLatLon: true, withName: true });",
+    to: "function lsq(NV, rows) { return new Float64Array(NV); }" + String.fromCharCode(10)
+      + "const roadOps = roadGraph.graphOps({ XY, withLatLon: true, withName: true });" },
+
+  { suite: 'road_graph.test.js', file: 'schematize_internal.js',
+    what: 'schematize_internal.js keeps its own junction contraction instead of calling the shared one',
+    find: "const _con = roadOps.contract(N, E, { mergeJn: SCH.mergeJn, mergeEdge: SCH.mergeEdge });",
+    to: "const _con = roadOps.contract(N, E, { mergeJn: SCH.mergeJn, mergeEdge: SCH.mergeEdge });" + String.fromCharCode(10)
+      + "if (false) { N = N2; E = E2; }" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

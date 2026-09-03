@@ -86,6 +86,19 @@ const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
 // character.
 const { svgOpen } = require(_dep('page.js'));
 const { esc } = require(_dep('svg_primitives.js'));
+// The road graph both internal pre-stages build (OA-232 Tier 3.3) — this file
+// and diagram_internal.js are one algorithm written twice. This one keeps
+// neither the lat/lon on a node nor the name on an edge, which is what the two
+// `false`s below say, and it calls its Douglas-Peucker `dp`, which is the whole
+// of the third difference.
+//
+// `roadGraph`, not `RG`: this file already has an `RG` — the parsed
+// roads_geo.json — declared INSIDE main(), where every one of these calls also
+// lives. The short alias was tried first and every call silently reached the
+// road data instead; `node --check` is quiet about it, because shadowing is
+// legal, and only the byte gate said so.
+const roadGraph = require(_dep('road_graph.js'));
+const { key6, angdist, lsq, dpTol: dp } = roadGraph;
 
 // ---- main() ---------------------------------------------------------------
 // OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
@@ -182,21 +195,11 @@ const rll = v => +v.toFixed(8);
 // ---- shared road graph from the matched routes (+ keyRoads) ----------------
 // Node identity = OSM node coordinates rounded to 6dp (routes_paths pts were
 // written at 6dp from the same roads_geo geometry, so keys match exactly).
-const key6 = ll => (+ll[0]).toFixed(6) + ',' + (+ll[1]).toFixed(6);
 let N = new Map();                         // key -> {mm:[x,y], adj:Map(key->edgeId)}
 let E = [];                                // edgeId -> {a,b} (a,b = node keys)
-function node(ll) {
-  const kk = key6(ll); let n = N.get(kk);
-  if (!n) { n = { mm: XY(ll), adj: new Map() }; N.set(kk, n); }
-  return kk;
-}
-function addEdge(ka, kb) {
-  if (ka === kb) return;
-  const na = N.get(ka);
-  if (na.adj.has(kb)) return;
-  const id = E.length; E.push({ a: ka, b: kb });
-  na.adj.set(kb, id); N.get(kb).adj.set(ka, id);
-}
+const roadOps = roadGraph.graphOps({ XY, withLatLon: false, withName: false });
+const node = ll => roadOps.node(N, ll);
+const addEdge = (ka, kb) => roadOps.addEdge(N, E, ka, kb);
 for (const r of order) {
   const o = RP.routes[r]; if (!o || !o.pts || o.pts.length < 2) continue;
   let prev = node(o.pts[0]);
@@ -238,55 +241,14 @@ console.log('graph: ' + N.size + ' nodes, ' + E.length + ' edges');
 // non-degree-2 (junction or dead-end stub) — a real edge confirms they're one
 // place, so it merges at a slightly longer reach and cleans up the stubs (a)
 // leaves behind. REP maps every absorbed original key to its final rep.
-let REP = new Map();                       // original key -> representative key
-if (SCH.mergeJn > 0 || SCH.mergeEdge > 0) {
-  let totalMerged = 0;
-  for (let pass = 0; pass < 6; pass++) {
-    const jk = [...N.entries()].filter(([k, n]) => n.adj.size !== 2).map(([k]) => k);
-    const uf = new Map(jk.map(k => [k, k]));
-    const find = k => { let r = k; while (uf.get(r) !== r) r = uf.get(r); uf.set(k, r); return r; };
-    for (let i = 0; i < jk.length; i++) for (let j = i + 1; j < jk.length; j++) {
-      const a = N.get(jk[i]).mm, b = N.get(jk[j]).mm;
-      if (Math.hypot(a[0] - b[0], a[1] - b[1]) < SCH.mergeJn) {
-        const ra = find(jk[i]), rb = find(jk[j]); if (ra !== rb) uf.set(ra, rb);
-      }
-    }
-    if (SCH.mergeEdge > 0) for (const e of E) {
-      const A = N.get(e.a), B = N.get(e.b);
-      if (A.adj.size === 2 || B.adj.size === 2) continue;     // both ends junction/stub
-      if (Math.hypot(A.mm[0] - B.mm[0], A.mm[1] - B.mm[1]) < SCH.mergeEdge) {
-        const ra = find(e.a), rb = find(e.b); if (ra !== rb) uf.set(ra, rb);
-      }
-    }
-    const clusters = new Map();
-    for (const k of jk) { const r = find(k); (clusters.get(r) || clusters.set(r, []).get(r)).push(k); }
-    const localRep = new Map(); let merged = 0;
-    for (const [r, ms] of clusters) if (ms.length > 1) {
-      merged += ms.length - 1;
-      const cx = ms.reduce((s, k) => s + N.get(k).mm[0], 0) / ms.length;
-      const cy = ms.reduce((s, k) => s + N.get(k).mm[1], 0) / ms.length;
-      for (const k of ms) if (k !== r) { REP.set(k, r); localRep.set(k, r); }
-      N.get(r).mm = [cx, cy];
-    }
-    if (!merged) break;
-    totalMerged += merged;
-    const rep = k => localRep.has(k) ? localRep.get(k) : k;   // this pass only
-    const N2 = new Map(), E2 = [];
-    for (const [k, n] of N) if (rep(k) === k) N2.set(k, { mm: n.mm, adj: new Map() });
-    for (const e of E) {
-      const a = rep(e.a), b = rep(e.b);
-      if (a === b || N2.get(a).adj.has(b)) continue;
-      const id = E2.length; E2.push({ a, b });
-      N2.get(a).adj.set(b, id); N2.get(b).adj.set(a, id);
-    }
-    N = N2; E = E2;
-  }
-  // flatten REP chains (orig -> rep1 -> rep2 ...) to a single final rep in N
-  const resolve = k => { let r = k; while (REP.has(r)) r = REP.get(r); return r; };
-  for (const k of [...REP.keys()]) REP.set(k, resolve(k));
-  if (totalMerged) console.log('contracted ' + totalMerged + ' junction node(s) (mergeJn '
-    + SCH.mergeJn + ' / mergeEdge ' + SCH.mergeEdge + 'mm); graph now ' + N.size + ' nodes, ' + E.length + ' edges');
-}
+// road_graph.js does the contraction (OA-232 Tier 3.3). The LOG LINE stays here
+// rather than moving with it: this one names its two thresholds and the
+// diagram's does not, and that wording belongs to whoever reads the output.
+const _con = roadOps.contract(N, E, { mergeJn: SCH.mergeJn, mergeEdge: SCH.mergeEdge });
+N = _con.N; E = _con.E;
+const REP = _con.REP;                      // original key -> representative key
+if (_con.totalMerged) console.log('contracted ' + _con.totalMerged + ' junction node(s) (mergeJn '
+  + SCH.mergeJn + ' / mergeEdge ' + SCH.mergeEdge + 'mm); graph now ' + N.size + ' nodes, ' + E.length + ' edges');
 
 if (process.env.DBG_PAIR) {                 // "keyA|keyB" — inspect two nodes post-contraction
   const [ka, kb] = process.env.DBG_PAIR.split('|');
@@ -295,22 +257,11 @@ if (process.env.DBG_PAIR) {                 // "keyA|keyB" — inspect two nodes
   if (N.get(ka) && N.get(kb)) console.error('  connected=' + N.get(ka).adj.has(kb) + ' dist=' + Math.hypot(N.get(ka).mm[0] - N.get(kb).mm[0], N.get(ka).mm[1] - N.get(kb).mm[1]).toFixed(3) + 'mm');
 }
 // ---- corridors: collapse degree-2 chains between junctions -----------------
-const deg = kk => N.get(kk).adj.size;
+const deg = kk => roadGraph.deg(N, kk);
 const corridors = [];                       // {chain:[key...], mm:[[x,y]...]}
 const eSeen = new Set();
-function walk(k0, k1) {                     // follow chain from junction k0 towards k1
-  const chain = [k0, k1];
-  eSeen.add(N.get(k0).adj.get(k1));
-  let prev = k0, cur = k1;
-  while (deg(cur) === 2) {
-    const nxt = [...N.get(cur).adj.keys()].find(x => x !== prev);
-    if (nxt == null) break;
-    const eid = N.get(cur).adj.get(nxt);
-    if (eSeen.has(eid)) break;
-    eSeen.add(eid); chain.push(nxt); prev = cur; cur = nxt;
-  }
-  return chain;
-}
+// follow chain from junction k0 towards k1
+const walk = (k0, k1) => roadGraph.walk(N, eSeen, k0, k1);
 for (const [kk, n] of N) {
   if (deg(kk) === 2) continue;              // start walks at junctions/ends only
   for (const nb of n.adj.keys()) {
@@ -387,17 +338,6 @@ const DUP = [];
 console.log('corridors: ' + CORS.length);
 
 // ---- simplify each corridor to straight legs (Douglas-Peucker) -------------
-function dp(pts, i0, i1, tol, keep) {
-  let bi = -1, bd = 0;
-  const a = pts[i0], b = pts[i1];
-  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
-  for (let i = i0 + 1; i < i1; i++) {
-    const d = L < 1e-9 ? Math.hypot(pts[i][0] - a[0], pts[i][1] - a[1])
-      : Math.abs((pts[i][0] - a[0]) * dy - (pts[i][1] - a[1]) * dx) / L;
-    if (d > bd) { bd = d; bi = i; }
-  }
-  if (bd > tol && bi > 0) { dp(pts, i0, bi, tol, keep); keep.push(bi); dp(pts, bi, i1, tol, keep); }
-}
 for (const c of CORS) {
   const keep = [0];
   dp(c.mm, 0, c.mm.length - 1, SCH.tol, keep);
@@ -458,7 +398,6 @@ console.log('solver: ' + SN.size + ' nodes, ' + LEGS.length + ' legs');
 // Two legs leaving one node on the SAME octant would draw on top of each other.
 // Re-assign distinct octants in cyclic bearing order, minimising length-weighted
 // angular deviation (long legs resist being pushed off their natural bearing).
-const angdist = (a, b) => { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
 const incid = new Map();                    // solver node -> [{leg, atU}]
 for (const lg of LEGS) {
   (incid.get(lg.u) || incid.set(lg.u, []).get(lg.u)).push({ leg: lg, atU: true });
@@ -517,29 +456,6 @@ console.log('direction conflicts remaining: ' + conflictsLeft + ' node(s)');
 // ---- weighted least-squares position solve ----------------------------------
 // Rows: perpendicular-to-octant (weight dirW, target 0), leg length along octant
 // (weight lenW, target max(len,minLeg)), anchor springs to geography (anchorW).
-function lsq(NV, rows) {                    // rows = [{cs:[[var,coef]...], t, w}]
-  const M = new Float64Array(NV * NV), R = new Float64Array(NV);
-  for (const { cs, t, w } of rows)
-    for (const [i, ci] of cs) { R[i] += w * ci * t; for (const [j, cj] of cs) M[i * NV + j] += w * ci * cj; }
-  // dense Gaussian elimination with partial pivoting (NV is a few hundred)
-  for (let c = 0; c < NV; c++) {
-    let p = c; for (let r2 = c + 1; r2 < NV; r2++) if (Math.abs(M[r2 * NV + c]) > Math.abs(M[p * NV + c])) p = r2;
-    if (Math.abs(M[p * NV + c]) < 1e-12) continue;
-    if (p !== c) { for (let j = c; j < NV; j++) { const t = M[c * NV + j]; M[c * NV + j] = M[p * NV + j]; M[p * NV + j] = t; } const t = R[c]; R[c] = R[p]; R[p] = t; }
-    const pv = M[c * NV + c];
-    for (let r2 = c + 1; r2 < NV; r2++) {
-      const f = M[r2 * NV + c] / pv; if (!f) continue;
-      for (let j = c; j < NV; j++) M[r2 * NV + j] -= f * M[c * NV + j];
-      R[r2] -= f * R[c];
-    }
-  }
-  for (let c = NV - 1; c >= 0; c--) {
-    let s = R[c];
-    for (let j = c + 1; j < NV; j++) s -= M[c * NV + j] * R[j];
-    R[c] = Math.abs(M[c * NV + c]) < 1e-12 ? 0 : s / M[c * NV + c];
-  }
-  return R;
-}
 {
   const ids = [...SN.keys()]; const idx = new Map(ids.map((d, i) => [d, i]));
   const rows = [];
@@ -653,17 +569,7 @@ for (const c of DUP) {
 }
 
 // ---- warp field for everything off the network ------------------------------
-const samples = [];
-for (const [id, n] of SN) samples.push({ o: n.mm0, d: [n.mm[0] - n.mm0[0], n.mm[1] - n.mm0[1]] });
-function warp(mm) {
-  let sw = 0, sx = 0, sy = 0;
-  for (const s of samples) {
-    const d2 = (mm[0] - s.o[0]) ** 2 + (mm[1] - s.o[1]) ** 2;
-    const w = 1 / (d2 + 9);
-    sw += w; sx += w * s.d[0]; sy += w * s.d[1];
-  }
-  return sw ? [mm[0] + sx / sw, mm[1] + sy / sw] : mm.slice();
-}
+const warp = roadGraph.makeWarp(SN);   // samples the SOLVED SN, so it is built here, not earlier
 
 // ---- write the workspace -----------------------------------------------------
 const WD = path.join(DIR, SCH.workDir);

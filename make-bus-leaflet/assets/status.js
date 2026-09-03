@@ -18,6 +18,9 @@
  *
  * Usage:
  *   node status.js [--buses "<Buses dir>"] [--portal "<portal repo dir>"] [--md] [--json] [--no-quality]
+ *   ...[--json-out <file>]                 write the JSON payload to <file> AND
+ *                                          print the board, so one walk feeds
+ *                                          both CI outputs (see JSON_OUT below)
  *   ...[--live <base url>] [--no-live]     (deployment drift; see deploymentRow below)
  *
  * Defaults (Peter's machine): --buses "C:\u3a St Ives\Using AI\Buses"
@@ -71,6 +74,25 @@ const BUSES = resolveBuses(args);
 const PORTAL = resolvePortal(args);
 const AS_MD = !!args.md;
 const AS_JSON = !!args.json;
+// TWO OUTPUTS, ONE PASS (2026-09-03). Both CI workflows that run this board used
+// to invoke it TWICE per run -- once `--json > gate-results.json` for the
+// artifact, once `--md >> $GITHUB_STEP_SUMMARY` for the table a human reads --
+// and the second invocation re-walks all 20 maps, re-hashes the engine and
+// re-fetches the live version header to recompute an answer the first one
+// already had. Measured on the 2026-09-03 runs: 37 s of a 466 s job in
+// buses-data and 38 s of 314 s in claude-skills, on every one of 40-90 pushes a
+// day.
+//
+// `--json-out <file>` writes the JSON payload to a file and then FALLS THROUGH
+// to print the board, so `--md --json-out gate-results.json` produces both from
+// one walk. `--json` keeps its old meaning exactly -- payload to stdout, no
+// board -- because that is what every other caller and both prove-red harnesses
+// pass, and changing what an existing flag does is not part of a cost fix.
+//
+// It is a FILE and not a second stream on purpose: the board goes to stdout so a
+// caller can append it to $GITHUB_STEP_SUMMARY, and a payload sharing that
+// stream would be markdown with a JSON document embedded in it.
+const JSON_OUT = typeof args['json-out'] === 'string' ? args['json-out'] : null;
 const NO_QUALITY = !!args['no-quality'];
 // Deployment drift (technical-audit_2026-08-25 N2). Default ON against the live
 // site; --no-live skips it entirely, --live <url> points it somewhere else.
@@ -1462,9 +1484,19 @@ async function deploymentRow() {
 async function main() {
   const deploy = await deploymentRow();
   const commit = commitmentRows();
-  if (AS_JSON) {
-    console.log(JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2));
-    return bad || deploy.status === 'BEHIND' || commitBad(commit);
+  if (AS_JSON || JSON_OUT) {
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2);
+    // `--json-out` writes the payload and FALLS THROUGH to the board below, so
+    // one walk feeds both the artifact and the step summary. `--json` prints and
+    // stops, which is what it has always done and what every other caller passes.
+    // Both return the same verdict expression -- the one at the end of the board
+    // path -- because `bad` is computed once, above this branch, on purpose.
+    if (JSON_OUT) {
+      fs.writeFileSync(JSON_OUT, payload + '\n');
+    } else {
+      console.log(payload);
+      return bad || deploy.status === 'BEHIND' || commitBad(commit);
+    }
   }
 
   function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }

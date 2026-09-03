@@ -22,6 +22,25 @@ name: Bus leaflet gates
 # preflights. Its predecessor CROSS_REPO_PAT is no longer named by any workflow
 # in any of the three repos (migrated 2026-08-24).
 
+# ONE RUN PER REF PER EVENT (2026-09-03). The portal's four workflows each grew
+# this block on 2026-09-03 (buses-data OA-232 Tier 2.3) and the two `gates.yml`
+# files -- the expensive ones -- were missed. Measured over the last 248 pushes
+# here: 18 runs (7%) were still going when the next push arrived, and over in
+# buses-data it was 77 of 246 (31%). A superseded run is not merely wasted; it can
+# finish AFTER the run that replaced it and be the last verdict a reader sees.
+# `cancel-in-progress` is safe for every job in this file because none of them
+# writes anything outside its own runner -- these are checks, not deploys.
+#
+# THE GROUP INCLUDES THE EVENT NAME, and that is load-bearing rather than tidy.
+# With only workflow+ref in the group, a push landing during a SCHEDULED run
+# cancels it -- and in buses-data's copy of this file the nightly run is now the
+# thing that guarantees the falsification harnesses execute at all. A push must
+# not be able to cancel the run that carries a guarantee, so `schedule`, `push`,
+# `pull_request` and `workflow_dispatch` each queue against themselves only.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -686,15 +705,26 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: node assets/stray_outputs.js --buses "$GITHUB_WORKSPACE/buses-data"
 
-      - name: Run gates (JSON)
+      # ONE WALK, BOTH OUTPUTS (2026-09-03). This was two steps -- `--json >
+      # gate-results.json` for the artifact, then `--md >> $GITHUB_STEP_SUMMARY`
+      # for the table a human reads -- and the second re-walked all 20 maps,
+      # re-hashed the engine and re-fetched the live version header to recompute
+      # an answer the first one already had. 38 s of a 314 s job here, 37 s of 466 s
+      # in buses-data, on every push. `--json-out` writes the payload to the file
+      # and carries on to print the board, so the two outputs come from one walk
+      # and cannot disagree.
+      #
+      # WHAT IS LOST, said plainly: the summary no longer appears when an EARLIER
+      # step failed, because there is no longer a second `always()` invocation to
+      # print it. buses-data's copy of this file documents that board as a trap
+      # rather than a feature -- it rendered "a full, green-looking board" while
+      # the tests above it were red, which is why that file's own comment says the
+      # step summary is NOT where to read the verdict from. A red gate still
+      # writes both outputs before exiting non-zero, which is the case that matters.
+      - name: Run gates (JSON + step summary)
         working-directory: skills/make-bus-leaflet
         run: |
-          node assets/status.js --buses "$GITHUB_WORKSPACE/buses-data" --portal "$GITHUB_WORKSPACE/community-bus-maps" --json > gate-results.json
-
-      - name: Gate summary
-        if: always()
-        working-directory: skills/make-bus-leaflet
-        run: node assets/status.js --buses "$GITHUB_WORKSPACE/buses-data" --portal "$GITHUB_WORKSPACE/community-bus-maps" --md >> "$GITHUB_STEP_SUMMARY"
+          node assets/status.js --buses "$GITHUB_WORKSPACE/buses-data" --portal "$GITHUB_WORKSPACE/community-bus-maps" --md --json-out gate-results.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload gate results
         if: always()

@@ -15,7 +15,8 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const G = require('./_engine.js').load('gate_lib.js');
+const { ENGINE_DIR, load } = require('./_engine.js');
+const G = load('gate_lib.js');
 const { scratchDir } = require('../assets/scratch');   // the HARNESS, not the subject
 const { busesDir, needsBuses } = require('./_buses');
 
@@ -425,4 +426,50 @@ test('the real assets directory and the real committed indexes agree', needsBuse
   for (const ref of found) {
     assert.deepStrictEqual(G.dataScriptDrift(ref), [], `${ref} has drifted`);
   }
+});
+
+/*
+ * EXTERNAL_GENERATOR is the ONE name, and this is a census, not an assertion
+ * about a function.
+ *
+ * Found on 2026-09-03 (OA-232 Tier 3.1) and it had been live for a day.
+ * `34c0d6c` replaced `detectExternalStyle()` with this constant and rewrote ONE
+ * of the three sites that had used its answer; the other two still read
+ * `gen_external_${style}.js` against a `style` nothing declared any more. Both
+ * are on rollout.js's REBUILD path, so `rollout.js --apply` threw
+ * `ReferenceError: style is not defined` for any town that reached it — which is
+ * every town, on the first re-stamp anybody tried.
+ *
+ * Nothing could see it. It is not a syntax error, so `node --check` is happy; the
+ * byte gates re-run the generators and never call rollout.js; `npm test` had no
+ * test that reaches the rebuild path; and the dry run stops at STAMP-STALE one
+ * line above the throw, so even `rollout.js --all` reported seven towns
+ * cheerfully and named the exact command that would fail. The same shape as
+ * `gen_external_busway.js`, whose story is in this file's own EXTERNAL_GENERATOR
+ * header: a path no artefact exercises is certified by nothing.
+ *
+ * A test that DROVE the rebuild would be the real answer and costs a workspace
+ * per town. This is the cheap half and it is the half that would have caught it:
+ * the name is built in one place, so nowhere else may build it.
+ */
+test('no engine file spells an external generator name for itself', () => {
+  const ALLOWED = new Set([
+    'gate_lib.js',        // where the constant is declared
+    'engine_version.js',  // ENGINE_FILES names it as a hashed entry point
+    'rollout_places.js',  // names the PLACE external generator, a different file
+  ]);
+  const offenders = [];
+  for (const f of fs.readdirSync(ENGINE_DIR)) {
+    if (!f.endsWith('.js') || ALLOWED.has(f)) continue;
+    const src = fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8');
+    src.split(/\r?\n/).forEach((line, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;          // a comment is not a call
+      // A template literal or a concatenation that BUILDS the name: the shape the
+      // chooser left behind. A bare mention of the real filename is fine — that is
+      // what engine_version.js and the require of the generator itself do.
+      if (/gen_external_(\$\{|['"]\s*\+)/.test(line)) offenders.push(f + ':' + (i + 1) + ' ' + line.trim());
+    });
+  }
+  assert.deepStrictEqual(offenders, [],
+    'an external generator name is being assembled — gate_lib.EXTERNAL_GENERATOR is the one name');
 });

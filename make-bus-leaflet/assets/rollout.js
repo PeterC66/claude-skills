@@ -212,7 +212,7 @@ function rolloutOne(t) {
     if (name.endsWith('.json') && name !== 'routes.json' && name !== 'overrides.json') fs.copyFileSync(p, path.join(scratch, 'S4', name));
   }
   copyFile(path.join(SK, 'gen_internal.js'), path.join(scratch, 'S4'));
-  copyFile(path.join(SK, `gen_external_${style}.js`), path.join(scratch, 'S4'), 'gen_external.js');
+  copyFile(path.join(SK, EXTERNAL_GENERATOR), path.join(scratch, 'S4'), 'gen_external.js');
   const engineHash = CURRENT_ENGINE;
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
   // Dry-run parity: stamp the PREVIOUS run's identifier so the label-set diff below
@@ -283,7 +283,7 @@ function rolloutOne(t) {
   stage(t.dir, 'pull', 'S2', s4Dir);
   stage(t.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
   copyFile(path.join(SK, 'gen_internal.js'), s4Dir);
-  copyFile(path.join(SK, `gen_external_${style}.js`), s4Dir, 'gen_external.js');
+  copyFile(path.join(SK, EXTERNAL_GENERATOR), s4Dir, 'gen_external.js');
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
   const realSaid = [];

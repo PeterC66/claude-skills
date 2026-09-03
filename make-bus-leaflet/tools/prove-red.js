@@ -1486,6 +1486,17 @@ const MUTATIONS = [
     find: "  return function from(name) { return path.join(dir, name); };",
     to: "  return function from(name) { return engineDep(dir)(name); };" },
 
+  // rollout.js — the external generator's name is built in ONE place. This is the
+  // fault as it actually stood for a day from 34c0d6c: `detectExternalStyle()` was
+  // replaced by a constant and two of its three call sites kept reading a `style`
+  // nothing declared, so `rollout.js --apply` threw ReferenceError for every town.
+  // Not a syntax error, on a path no gate exercises, one line past where the dry
+  // run stops — nothing but this census could see it.
+  { suite: 'gate_lib.test.js', file: 'rollout.js',
+    what: 'the external generator name is assembled again from a variable nothing declares, so every rebuild throws',
+    find: "copyFile(path.join(SK, EXTERNAL_GENERATOR), s4Dir, 'gen_external.js');",
+    to: "copyFile(path.join(SK, `gen_external_${style}.js`), s4Dir, 'gen_external.js');" },
+
   // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
   // OA-135) from seven copies across five files. The danger this module creates is
   // that it makes the three look like one, and every "tidy-up" toward one formula

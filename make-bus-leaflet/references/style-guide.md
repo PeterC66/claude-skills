@@ -148,7 +148,7 @@ Every line here is a defect the shipped sheets actually had.
 | `quality_metrics.js` | measures a finished sheet against the numeric rules above |
 | `quality_gate.js` + `status.js` | the ratchet: `HARD` and `drop` as ceilings, **`mapLabels` as a floor**, so no sheet can improve its score by printing less |
 | `crop_compare.js` | the other half, and not optional — **render it and look.** The artwork has overruled the numbers twice on this project and confirmed them once |
-| `gate.sh` / `status.js` byte gates | prove the generator is deterministic. **They say nothing about whether the sheet is any good** |
+| `gate.js` / `status.js` byte gates | prove the generator is deterministic. **They say nothing about whether the sheet is any good** |
 
 **A rule that no tool checks is a rule that will be broken.** Every numbered item in §9 was found either by a person looking at a print or by a measure written after the fact — and the ones found by printing were found because nobody had thought to ask that question, so there was no number to doubt. **The cheapest instrument in the project is a printer.**
 

@@ -37,7 +37,7 @@
  * sent to somebody directly, plus every stage record in between.
  *
  * Written into the RUN'S OWN routes.json rather than passed as an environment
- * variable, and that is the whole reason it works: gate.sh reproduces a sheet
+ * variable, and that is the whole reason it works: gate.js reproduces a sheet
  * from its data folder and nothing else, so a value in routes.json is
  * reproducible and a value in the environment would make every gate DIFF for
  * ever.

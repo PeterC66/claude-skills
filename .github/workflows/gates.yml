@@ -98,18 +98,31 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run gate:line-ratchet
 
-      # THE 226-MUTATION SUITE, WHICH HAD NEVER RUN HERE. `npm test` above is
+      # THE MUTATION SUITE, WHICH HAD NEVER RUN HERE. `npm test` above is
       # `node --test` -- it proves the unit tests pass. This breaks the engine on
-      # purpose, 226 ways, and requires each mutation to redden the test that
+      # purpose, once per mutation (read the count off the run, not off this
+      # comment -- it said 226 for five days after it was 249), and requires each
+      # mutation to redden the test that
       # names it: it proves the unit tests can FAIL, which is the only thing that
       # makes their green mean anything. `git log -S "prove-red.js"` over this
       # file returns nothing, so until 2026-09-02 the only machine that had ever
       # seen it was the one it was written on -- the exact fault OA-218 fixed for
       # the OTHER two harnesses on 2026-08-28, one file short. Found by
       # `gate:wiring` below, on its first run. ~90 s, no other repository.
-      - name: Prove the unit suite can go red (226 mutations)
+      - name: Prove the unit suite can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red
+
+      # The convention `_engine.js` and test/README.md have both stated since
+      # August, now with something enforcing it. A suite that requires its subject
+      # out of assets/ directly never sees the mutation copy, so it is green about
+      # code it never ran -- `seed_prev_s4`'s first draft did exactly that and both
+      # its mutations SURVIVED. The census runs in `npm test`; this proves it can
+      # fail, including the case where the mutation table has become unreadable and
+      # the JOIN has nothing left to join. ~5 s.
+      - name: Prove the engine-indirection census can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-engine-indirection
 
       - name: Prove the S4 run-directory guard can go red
         working-directory: skills/make-bus-leaflet

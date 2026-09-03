@@ -30,6 +30,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ASSETS = require('./_engine.js').ENGINE_DIR;
+const { busesDir, needsBuses } = require('./_buses');
 const SRC = fs.readFileSync(path.join(ASSETS, 'gen_internal.js'), 'utf8');
 
 // Extract the one-liner and evaluate it, rather than re-implementing the rule here.
@@ -70,15 +71,15 @@ test('only a whole leading word counts, so a place beginning with those letters 
   assert.strictEqual(exitCaption('Frome'), 'to Frome');
 });
 
-test('every terminus label committed in the estate is still in the fallback branch', () => {
+test('every terminus label committed in the estate is still in the fallback branch', needsBuses, () => {
   // The byte-identity claim this change was made under, asserted rather than
   // remembered: if a future config adds a label starting with "to "/"from ", that
   // sheet's bytes move and this test is the place that says so first. It reads the
   // repository beside the engine and skips when it is not there, because a fresh
-  // clone of claude-skills alone has no buses-data.
-  const BUSES = process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses';
-  const areas = path.join(BUSES, 'Areas');
-  if (!fs.existsSync(areas)) { console.log('  (skipped: no buses-data at ' + BUSES + ')'); return; }
+  // clone of claude-skills alone has no buses-data. It PRINTED a skip line and
+  // returned until 2026-09-03, which the runner still counted as a pass; the skip
+  // option is the form a summary can see. _buses.js resolves the tree.
+  const areas = path.join(busesDir(), 'Areas');
   const exitCaption = loadExitCaption();
   let checked = 0;
   for (const town of fs.readdirSync(areas)) {

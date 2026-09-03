@@ -1,6 +1,6 @@
 // gate_lib.js — shared byte-identical-gate machinery for status.js and rollout.js.
 //
-// Reproduces exactly what gate.sh / references/changing-the-engine.md describe by
+// Reproduces exactly what gate.js / references/changing-the-engine.md describe by
 // hand: copy a data dir's *.json + icons.js + a candidate generator into a temp
 // workspace, run the generator with cwd = that workspace (so LEAFLET_DIR || cwd
 // resolves there), diff the SVG it writes against a committed reference.

@@ -2,7 +2,7 @@
 /*
  * quality_metrics.js — measure whether a generated sheet is any GOOD.
  *
- * gate.sh proves a generator is DETERMINISTIC (same input => same bytes). It
+ * gate.js proves a generator is DETERMINISTIC (same input => same bytes). It
  * says nothing about whether the result is legible or well composed, so today
  * design quality is an opinion held one town at a time and can regress with
  * nothing complaining. This tool is the missing half: it reads a shipped SVG

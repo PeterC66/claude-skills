@@ -16,7 +16,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const G = require('./_engine.js').load('gate_lib.js');
-const { scratchDir } = require('../assets/scratch');
+const { scratchDir } = require('../assets/scratch');   // the HARNESS, not the subject
+const { busesDir, needsBuses } = require('./_buses');
 
 const tmp = (fn) => {
   const dir = scratchDir('gatelib-');
@@ -398,11 +399,15 @@ test('stands.json is asked the same question, and both can drift at once', () =>
   });
 });
 
-test('the real assets directory and the real committed indexes agree', () => {
+test('the real assets directory and the real committed indexes agree', needsBuses, () => {
   // The control that cannot be faked by a fixture: every boarding place on the
   // estate as it stands must be clean, or this gate is red on the day it lands.
-  const buses = 'C:/u3a St Ives/Using AI/Buses';
-  if (!fs.existsSync(buses)) return;                 // CI checks this via prove-red-status
+  //
+  // It used to hard-code the laptop path and `return` when it was absent, so on
+  // any machine but this one it was a PASSED test that had asserted nothing. The
+  // skip option reports it; _buses.js finds the tree the same way every test here
+  // does. CI additionally checks this ground via prove-red-status.
+  const buses = busesDir();
   const found = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

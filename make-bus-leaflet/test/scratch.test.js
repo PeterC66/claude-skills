@@ -25,9 +25,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const S = require('../assets/scratch');
+const { ENGINE_DIR, load } = require('./_engine.js');
+const S = load('scratch.js');
 
-const HELPER = path.resolve(__dirname, '..', 'assets', 'scratch.js').replace(/\\/g, '\\\\');
+/* Through ENGINE_DIR, in the parent AND in the children, because scratch.js is
+ * this suite's SUBJECT rather than its harness: a copy under a prove-red mutation
+ * has to be the copy both halves run, or the mutation lands in a file the test
+ * never opens and reports SURVIVED for a reason that is not about the code. */
+const HELPER = path.resolve(ENGINE_DIR, 'scratch.js').replace(/\\/g, '\\\\');
 
 /* Run a child that uses the helper and prints whatever it is asked to. Returns
  * the child's stdout, trimmed. */

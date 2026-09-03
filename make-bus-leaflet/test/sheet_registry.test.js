@@ -13,8 +13,9 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const GEN = require('../assets/sheet_registry.js');
-const { scratchDir } = require('../assets/scratch');
+const GEN = require('./_engine.js').load('sheet_registry.js');
+const { scratchDir } = require('../assets/scratch');   // the HARNESS, not the subject
+const { busesDir } = require('./_buses');
 
 /*
  * collect-maps.ps1 lives in the OTHER repository, and the two are laid out
@@ -29,11 +30,11 @@ const { scratchDir } = require('../assets/scratch');
 // falling back to whichever other tree happens to be on this disk. Answering about
 // a repository the caller did not name is how a check comes to describe the
 // neighbour instead of its subject.
-const PS1 = (process.env.BUSES_DIR
-  ? [path.join(process.env.BUSES_DIR, 'collect-maps.ps1')]
-  : [path.join(__dirname, '..', '..', '..', '..', 'Using AI', 'Buses', 'collect-maps.ps1'),
-     path.join(__dirname, '..', '..', '..', 'buses-data', 'collect-maps.ps1')]
-).find(p => fs.existsSync(p));
+const PS1 = (() => {
+  const B = busesDir();                       // one resolver for all three tests here
+  const p = B && path.join(B, 'collect-maps.ps1');
+  return p && fs.existsSync(p) ? p : undefined;
+})();
 
 const needsPs1 = { skip: PS1 ? false : 'collect-maps.ps1 not found beside this repo (set BUSES_DIR to point at buses-data)' };
 

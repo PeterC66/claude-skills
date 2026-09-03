@@ -9,7 +9,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { serviceKey, indexUnique, indexUniqueObj, assertNoCollision } =
-  require('../assets/index_guard');
+  require('./_engine.js').load('index_guard.js');
 
 // Wisbech, reduced to the part that matters.
 const WISBECH = [

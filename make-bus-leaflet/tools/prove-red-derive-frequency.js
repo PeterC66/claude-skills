@@ -94,9 +94,47 @@ for (const m of broken.matchAll(/require\(\s*'\.\/([\w.-]+\.js)'\s*\)/g)) {
   fs.copyFileSync(sib, path.join(dir, m[1]));
 }
 
+/* AND THE SCRATCH WORLD MUST BE TOLD WHERE THE ENGINE IS (2026-09-03).
+ *
+ * Copying the siblings is only half of it. `place_engine.js` does not require its
+ * own dependencies by a `./name.js` literal — it runs the six-arm bootstrap that
+ * finds `engine_paths.js`, and then `engineDep(__dirname)` for `cli.js` and the
+ * rest. From the scratch folder, arm 1 (beside me) and arm 3 (across the skills)
+ * both miss, so resolution falls to the LAST arm, which is a hardcoded absolute
+ * path to Peter's laptop. That arm exists on the laptop and cannot exist on a
+ * Linux runner.
+ *
+ * So this harness passed here and failed in CI, every run, from the moment
+ * derive_frequency.js took place_engine.js — red in claude-skills' unit job from
+ * 2e6f465 on 2026-09-03. The symptom is maximally misleading: `require` throws
+ * before a single test body runs, every test errors, and the harness reports
+ * "CONTROL went red — the cut broke ordinary use", which reads as a broken cut
+ * rather than a fixture that never loaded. Reproduced locally by pointing
+ * SKILL_ASSETS at a path that does not exist, which makes arm 2 return it
+ * unconditionally and takes the laptop arm out of reach: the output is identical
+ * to the runner's, down to which single guard test stays green.
+ *
+ * SKILL_ASSETS is arm 2 of both bootstraps and is exactly the lever for "the
+ * engine is not where the tree says", which is the scratch world's whole
+ * situation. It does not weaken the falsification: the only mutated file is
+ * derive_frequency.js, and the siblings were already being copied verbatim.
+ * The bootstrap itself is not the place to fix this — it is asserted
+ * byte-identical across seven files by test/engine_paths.test.js. */
 const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', TEST],
-  { cwd: ROOT, encoding: 'utf8', env: { ...process.env, DERIVE_FREQUENCY_JS: copy } });
+  { cwd: ROOT, encoding: 'utf8', env: { ...process.env, DERIVE_FREQUENCY_JS: copy, SKILL_ASSETS: path.join(ROOT, 'assets') } });
 const out = r.stdout + r.stderr;
+
+/* A FIXTURE THAT WOULD NOT LOAD IS NOT A FALSIFICATION, and until 2026-09-03 this
+ * harness could not say the difference. Both states show every test red; only one
+ * of them is evidence about the guard. Naming it costs three lines and would have
+ * turned the investigation above into one line of output. */
+if (/Cannot find module|ERR_MODULE_NOT_FOUND|ERR_UNKNOWN_BUILTIN_MODULE/.test(out)) {
+  console.error('prove-red-derive-frequency: the FIXTURE would not load — a require in the scratch');
+  console.error('  world resolved to nothing, so no test below ran the mutated code and none of it is');
+  console.error('  evidence about the guard. This is a harness fault, not a red guard.');
+  console.error('\n--- test output ---\n' + out);
+  process.exit(1);
+}
 
 /*
  * Parse the per-test verdicts rather than the exit code: "some failed" is not the

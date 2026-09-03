@@ -84,13 +84,24 @@ const laptop = /u3a St Ives|C:\/Claude\/|C:\\Claude\\/;
 const busesCode = walk(BUSES, { exts: ['.js', '.mjs', '.py', '.ps1'], skip: ['Areas', 'Places', 'node_modules', '_archive', 'Temp', '_gtfs'] });
 const skillsCode = walk(SKILLS, { exts: ['.js', '.mjs', '.py'], skip: ['node_modules', 'design-preview', '__pycache__'] });
 const portalCode = walk(PORTAL, { exts: ['.js', '.mjs'], skip: ['node_modules', 'data', 'backups'] });
+// Two counts per repo, because the 2026-09-03 run found the first one RISING (portal 17 -> 26)
+// for a reason that was a virtue: the conventions pages require every script's header to say
+// which folder it runs from, and that folder is the laptop's. A path in a comment is a
+// documented default; a path on a code line is a fallback that runs. Only the second is the
+// finding, so it is measured on its own. A code line is one not starting with //, #, * or /*.
+const codeLineNames = (p) => read(p).split(/\r?\n/).some(l => laptop.test(l) && !/^\s*(\/\/|#|\*|\/\*)/.test(l));
+const vendoredEngine = walk(path.join(PORTAL, 'engine'), { exts: ['.js'] });
 m.laptopPaths = {
   'files naming the laptop path (buses-data code)': filesMatching(busesCode, laptop).length,
   'files naming the laptop path (claude-skills code)': filesMatching(skillsCode, laptop).length,
   'files naming the laptop path (portal code)': filesMatching(portalCode, laptop).length,
-  'vendored engine files naming it (portal engine/)': filesMatching(walk(path.join(PORTAL, 'engine'), { exts: ['.js'] }), laptop).length,
+  'vendored engine files naming it (portal engine/)': filesMatching(vendoredEngine, laptop).length,
+  '  ...of which on a CODE line (buses-data)': busesCode.filter(codeLineNames).length,
+  '  ...of which on a CODE line (claude-skills)': skillsCode.filter(codeLineNames).length,
+  '  ...of which on a CODE line (portal)': portalCode.filter(codeLineNames).length,
+  '  ...of which on a CODE line (portal engine/)': vendoredEngine.filter(codeLineNames).length,
 };
-note.laptopPaths = 'files containing a hard-coded laptop path; target is zero outside stated defaults';
+note.laptopPaths = 'files containing the laptop path anywhere, then only on a code line (a header comment naming the folder to run from is the convention, not a finding)';
 
 // ---- 4. test wiring -----------------------------------------------------------
 const pkg = exists(path.join(PORTAL, 'package.json')) ? JSON.parse(read(path.join(PORTAL, 'package.json'))) : { scripts: {} };
@@ -99,6 +110,17 @@ const chainSegments = testScript.includes('&&') ? testScript.split('&&').length 
 const portalTests = portalScripts.filter(f => /[\\/]test-[^\\/]+\.mjs$/.test(f)).map(f => path.basename(f));
 const portalProveRed = portalScripts.filter(f => /[\\/]prove-red-[^\\/]+\.mjs$/.test(f)).map(f => path.basename(f));
 const notInChain = portalTests.filter(t => !testScript.includes(t)).length;
+// Since portal #197 (2026-09-02) `npm test` is `scripts/run-tests.mjs`, which DISCOVERS
+// test-*/prove-red-* by glob and takes each file's command from the package.json script that
+// owns it; a file no script owns runs as bare `node scripts/<file>` and is reported. So the
+// 'not in npm test' count above is 42 by construction under a runner and says nothing; the
+// question that survives is how many files the runner has to guess a command for, and how
+// many it skips. Both read the same sources the runner does.
+const ownerCount = (file) => Object.entries(pkg.scripts || {}).filter(([n]) => n !== 'test')
+  .filter(([, cmd]) => new RegExp('scripts/' + file.replace(/\./g, '\\.') + '(\\s|$)').test(String(cmd))).length;
+const runnerFiles = [...portalTests, ...portalProveRed];
+const runnerSrc = exists(path.join(PORTAL, 'scripts', 'run-tests.mjs')) ? read(path.join(PORTAL, 'scripts', 'run-tests.mjs')) : '';
+const excludedCount = (runnerSrc.match(/^\s*'(test|prove-red)-[^']+\.mjs':/gm) || []).length;
 const gatesYml = exists(path.join(SKILLS, '.github', 'workflows', 'gates.yml')) ? read(path.join(SKILLS, '.github', 'workflows', 'gates.yml')) : '';
 const enginePkg = exists(path.join(ENGINE, 'package.json')) ? JSON.parse(read(path.join(ENGINE, 'package.json'))) : { scripts: {} };
 const npmRunNames = Object.keys(enginePkg.scripts || {});
@@ -115,6 +137,8 @@ m.testWiring = {
   'portal test-*.mjs not in npm test': notInChain,
   'portal test-*.mjs': portalTests.length,
   'portal prove-red-*.mjs': portalProveRed.length,
+  'portal test/prove-red files with no owning npm script (runner guesses)': runnerFiles.filter(f => ownerCount(f) !== 1).length,
+  'portal test/prove-red files run-tests.mjs EXCLUDES': excludedCount,
   'engine tools/* files in no gates.yml step': engineToolFiles.filter(f => !toolNamed(f)).length,
   'engine tools/* files': engineToolFiles.length,
   'engine tests requiring ../assets/ directly': filesMatching(engineTests, /require\(['"]\.\.\/assets\//).length,

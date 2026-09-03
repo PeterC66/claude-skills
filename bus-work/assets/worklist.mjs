@@ -615,7 +615,35 @@ const haveKey = (k) => items.some((i) => i.key === k);
  * hides rows without saying so has the same problem as one carrying rows nobody can
  * clear.
  */
+/*
+ * COUNTED ONCE PER MAP, which the row path gets for free and this one does not.
+ * `townMaps()` matches a place by its `subject` CONTAINING the section's town, so a
+ * place whose own subject also contains its own section name matches twice: once
+ * from the parent town's section, once from its own. St Ives Bus Station is exactly
+ * that — subject "St Ives Bus Station" contains both "st ives" and "st ives bus
+ * station" — while St Neots Co-op is not, because its subject is only "St Neots".
+ *
+ * A duplicate ROW cannot happen, because `haveKey('refresh-<slug>')` sees the first
+ * one. But an ADJUDICATED map never adds a row, so that guard never arms and the
+ * second match pushed the same map onto this list again. Observed 2026-09-03: eleven
+ * suppressed maps reported as twelve. That is only a count, but the count is the
+ * whole oversight mechanism this block exists for — the header says how many were
+ * suppressed precisely so a suppression that has gone wrong is visible to whoever is
+ * already reading, and a list that cannot count cannot do that job.
+ *
+ * NOT COVERED BY prove-red-refresh-review.mjs, deliberately said out loud rather than
+ * left to be discovered: that harness runs with `--portal` at a directory which does
+ * not exist, so it exercises the `refresh-local` row and never reaches `townMaps()`
+ * at all. The local path cannot reproduce this — it resolves a section to a town by
+ * exact name, so a place's section matches no town and pushes nothing.
+ */
 const adjudicated = [];
+const adjudicatedSeen = new Set();
+const noteAdjudicated = (key, entry) => {
+  if (adjudicatedSeen.has(key)) return;
+  adjudicatedSeen.add(key);
+  adjudicated.push(entry);
+};
 const reviewedAgainst = (mapDir, scanDate) => {
   if (!mapDir || !scanDate) return null;
   const f = path.join(mapDir, 'refresh-reviews.json');
@@ -656,7 +684,7 @@ if (upcoming) {
     for (const m of maps) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
       const seen = reviewedAgainst(localDirOf(m), upcoming.date);
-      if (seen) { adjudicated.push({ map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
+      if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
@@ -681,7 +709,7 @@ if (upcoming) {
     }
     if (!maps.length && localTown) {
       const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
-      if (seenLocal) { adjudicated.push({ map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
+      if (seenLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
         title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}`,

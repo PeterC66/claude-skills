@@ -80,6 +80,18 @@ Two shapes of check, and prefer the first where the callers can be enumerated:
 
 **And a helper's docstring is what its own check is measured against.** `NOW_SQL` said "what goes in an INSERT/UPDATE", which excluded the `WHERE expires_at > …` comparisons it also owned — so a census over the literal produced false findings and the CENSUS was deleted rather than the sentence, leaving the constant with zero callers. When a check has to be abandoned because it is red on code that is clearly fine, ask which definition is wrong before deleting anything.
 
+## A pure move SPLICES the body; it never retypes it
+
+**Copy the function's text out of the file it is leaving. Do not write it out again from its shape, however small it looks.** OA-232 Tier 3.3 extracted nine functions the two internal pre-stages both carried, and the first draft retyped two of them: `lsq` came out as a dense Gauss-Jordan instead of the flat `Float64Array` forward elimination with its rank-deficiency `continue`, and `dpTol` lost the degenerate-segment arm that stops a zero-length span dividing by zero. Both compiled. Both return plausible numbers for every well-posed system in the estate, so the thirteen byte gates would have said nothing until a town happened to present a loose corridor. It was caught by diffing the new module against the source, which took a minute; measured afterwards over 20,000 random systems, the two `lsq`s differ by a relative 9.2e+5.
+
+**And check the diff is only the parameterisation you meant.** The splice is worth nothing if the edits around it are unreviewed — assert, in a script, that each spliced body is character-identical to its source modulo the substitutions you can name.
+
+## A short module alias can lose to a local of the same name, and `node --check` will not say so
+
+`diagram_internal.js` and `schematize_internal.js` each declare `const RG` — the parsed `roads_geo.json` — INSIDE `main()`. A new module-scope `const RG = require(_dep('road_graph.js'))` was therefore shadowed at every call site, because every call site is inside `main()`, and `RG.graphOps` resolved to the road data. **Shadowing is legal, so `node --check` is silent, the unit tests do not run the pre-stages, and the only thing that objected was the byte gate** — four diagram sheets went `FAIL`.
+
+**Grep the file for the alias before you introduce it**, in a 900-line file especially, and prefer a name that reads as what it is (`roadGraph`) over the two-letter form the file's own data objects already use. The general shape is in the failure-shapes list; the practical rule is that a two-letter alias in a long file is a collision waiting for a gate to find.
+
 ## A harness that builds a scratch world derives EVERY population from its subject
 
 `tools/prove-red-redteam-source.js` copies one mutated file into a temp folder and runs the suite against it. On 2026-09-03 its subject gained a `require('./cli.js')` and the harness went `MODULE_NOT_FOUND` — which is the harness working, because a scratch world silently missing a dependency is how a mutation "survives" for the wrong reason. The portal's `prove-red-run-tests.mjs` failed the same day for the same reason, and there the lesson was already written in the file: its EXCLUDED list was parsed out of the runner "so this harness cannot go stale", and its PREFLIGHT list, eight lines above that comment, was typed.

@@ -54,6 +54,10 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+// The one manifest reader (OA-232 Tier 2.4). This resolves the REAL stage.js,
+// not the scratch copy this harness mutates — reading back what the subject
+// wrote is a question about the manifest, not about the mutation.
+const { loadManifest } = require('../assets/stage.js');
 const { execFileSync } = require('node:child_process');
 const { scratchDir } = require('../assets/scratch');
 const { resolveBuses } = require('../assets/cli');
@@ -229,7 +233,7 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
    * name would be invisible to it and this case would report SURVIVED about a
    * gate that works. */
   if (areaFixture) {
-    const man = JSON.parse(fs.readFileSync(path.join(dst, 'manifest.json'), 'utf8'));
+    const man = loadManifest(dst);
     const s5 = man.stages && man.stages.S5;
     const rec = s5 && (s5.runs || []).find(r => r.id === s5.latest);
     if (!rec) throw new Error('prove-red-status: the donor manifest has no latest S5 run to name the scratch render after');

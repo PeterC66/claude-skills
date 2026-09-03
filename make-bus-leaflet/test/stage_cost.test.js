@@ -112,6 +112,12 @@ test('--tokens with no number is refused rather than recorded as true', () => {
   const town = newTown();
   const dir = started(town);
   const r = commit(town, dir, ['--tokens']);
-  assert.strictEqual(r.status, 1, 'a valueless --tokens was accepted:\n' + r.stdout + r.stderr);
+  // EXIT 2, not 1. `references/conventions.md` says 2 is "the SCRIPT was used
+  // wrongly" and 1 is "the thing being checked FAILED"; a valueless --tokens is
+  // the first. This asserted 1 until 2026-09-03, when stage.js's `die` moved onto
+  // `cli.die` and its five usage sites were separated from its fifteen refusals
+  // (OA-232 Tier 2.4). A caller that treats every non-zero as a build failure
+  // would otherwise report a typo as a broken map.
+  assert.strictEqual(r.status, 2, 'a valueless --tokens was not refused as a usage error:\n' + r.stdout + r.stderr);
   assert.match(r.stdout + r.stderr, /--tokens must be a non-negative number/);
 });

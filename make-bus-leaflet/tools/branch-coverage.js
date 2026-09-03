@@ -65,6 +65,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { loadManifest } = require('../assets/stage.js');   // the one manifest reader (OA-232 Tier 2.4)
 const { execFileSync } = require('child_process');
 const { resolveBuses } = require('../assets/cli');
 
@@ -124,7 +125,7 @@ try {
   const perMap = {};
   for (const m of maps) {
     let mani;
-    try { mani = JSON.parse(fs.readFileSync(path.join(m.d, 'manifest.json'), 'utf8')); } catch (e) { continue; }
+    try { mani = loadManifest(m.d); } catch (e) { continue; }   // loadManifest from stage.js — one reader (OA-232 Tier 2.4)
     const s4 = GL.latestRunDir(mani, m.d, 'S4');
     if (!s4 || !fs.existsSync(path.join(s4.dir, SHEET))) continue;
     try { fs.unlinkSync(HITS); } catch (e) {}

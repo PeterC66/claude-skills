@@ -52,6 +52,10 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+// The one manifest reader (OA-232 Tier 2.4). This resolves the REAL stage.js,
+// not the scratch copy this harness mutates — reading back what the subject
+// wrote is a question about the manifest, not about the mutation.
+const { loadManifest } = require('../assets/stage.js');
 const { scratchDir } = require('../assets/scratch');
 const { computeEngineVersion, computePlaceEngineVersion } = require('../assets/engine_version');
 const { resolveBuses } = require('../assets/cli');
@@ -89,7 +93,7 @@ function buildFixture(src, rel) {
   fs.mkdirSync(dst, { recursive: true });
   fs.copyFileSync(path.join(src, 'manifest.json'), path.join(dst, 'manifest.json'));
   fs.cpSync(path.join(src, 'ci-reference'), path.join(dst, 'ci-reference'), { recursive: true });
-  const man = JSON.parse(fs.readFileSync(path.join(dst, 'manifest.json'), 'utf8'));
+  const man = loadManifest(dst);
   const s3 = man.stages && man.stages.S3;
   const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
   if (!rec) { console.error('prove-red-unrendered: no latest S3 run in ' + src + "'s manifest."); process.exit(1); }

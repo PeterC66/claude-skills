@@ -31,6 +31,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { loadManifest } = require('../assets/stage.js');   // the one manifest reader (OA-232 Tier 2.4)
 const crypto = require('crypto');
 
 const SK = path.join(__dirname, '..');
@@ -62,7 +63,7 @@ function sweep(genPath) {
   const result = {};
   for (const m of maps) {
     let mani;
-    try { mani = JSON.parse(fs.readFileSync(path.join(m.dir, 'manifest.json'), 'utf8')); } catch (e) { continue; }
+    try { mani = loadManifest(m.dir); } catch (e) { continue; }   // loadManifest from stage.js — one reader (OA-232 Tier 2.4)
     const s4 = GL.latestRunDir(mani, m.dir, 'S4');
     if (!s4) { result[m.name] = { skip: 'no S4 run' }; continue; }
     if (!fs.existsSync(path.join(s4.dir, 'internal.svg'))) { result[m.name] = { skip: 'no internal sheet' }; continue; }

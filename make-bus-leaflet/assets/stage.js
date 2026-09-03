@@ -72,8 +72,20 @@ const VERSIONED = new Set(['S4', 'S5']);
 
 const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
 const { computeEngineVersion, computePlaceEngineVersion, isPlaceRun, stampEngine } = require('./engine_version');
+const { die: cliDie, parseArgs } = require('./cli.js');
 
-function die(msg) { console.error('stage.js: ' + msg); process.exit(1); }
+/*
+ * die — the refusal, through `cli.die` so there is one of them.
+ *
+ * THE CODE MATTERS AND IS NOT UNIFORM. `references/conventions.md` says 2 is
+ * "the SCRIPT was used wrongly" and 1 is "the thing being checked FAILED", and
+ * this file does both: `stage.js frobnicate` is a usage error, while "3 of 5
+ * declared outputs are not in this run" is a build that failed. Every call here
+ * defaulted to 1 until 2026-09-03, so a typo in a command name reported itself
+ * as a broken map (OA-232 Tier 2.4). The default stays 1 — most of the twenty
+ * calls below are refusals — and the five usage sites pass 2 explicitly.
+ */
+function die(msg, code = 1) { cliDie('stage.js: ' + msg, code); }
 
 /* An ISO instant as a LOCAL YYYY-MM-DD. Run-directory ids are built from local time
  * (see `ts()` below), so anything compared against one has to be on the same clock;
@@ -129,14 +141,22 @@ function backfillStages(m) {
   m.stages = ordered; // keep canonical S1..S6 order in the written file
   return changed;
 }
+/*
+ * parseFlags — `cli.parseArgs` with this file's own two names for its answer.
+ *
+ * The loop that was here was byte-for-byte the one `cli.js` owns, down to the
+ * corner they all share (a flag whose next argument is missing, empty or itself
+ * a flag takes the value `true`). `parseArgs` returns positionals as `_`; this
+ * file has always called them `rest` and every caller below says `rest`, so the
+ * shape is renamed rather than the call sites (OA-232 Tier 2.4).
+ */
 function parseFlags(args) {
-  const f = {}; const rest = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--')) { f[args[i].slice(2)] = (args[i + 1] && !args[i + 1].startsWith('--')) ? args[++i] : true; }
-    else rest.push(args[i]);
-  }
+  const f = parseArgs(args);
+  const rest = f._;
+  delete f._;
   return { f, rest };
 }
+
 /* AN UNDECLARED FILE MAY NOT CLOBBER ONE ALREADY IN THE DESTINATION (OA-164, 2026-08-29).
  *
  * `pull` copies the whole run FOLDER, while `commit` and the manifest speak only of
@@ -261,10 +281,10 @@ function main() {
   }
 
   const townDir = findTownDir();
-  if (!townDir) die('no manifest.json found above ' + process.cwd() + ' — run `stage.js init` first');
+  if (!townDir) die('no manifest.json found above ' + process.cwd() + ' — run `stage.js init` first', 2);
   const m = loadManifest(townDir);
   if (backfillStages(m)) saveManifest(townDir, m); // one-time migration for pre-S6 manifests
-  const stage = (s) => { if (!STAGE_NAME[s]) die('unknown stage ' + s + ' (use S1..S6)'); return m.stages[s]; };
+  const stage = (s) => { if (!STAGE_NAME[s]) die('unknown stage ' + s + ' (use S1..S6)', 2); return m.stages[s]; };
 
   if (cmd === 'nextver') { console.log(computeVersion(m, f.bump === 'major' ? 'major' : 'minor')); return; }
 
@@ -387,7 +407,7 @@ function main() {
 
   if (cmd === 'commit') {
     const st = rest[0]; const sx = stage(st);
-    const runDir = path.resolve(rest[1] || die('commit needs <runDir>'));
+    const runDir = path.resolve(rest[1] || die('commit needs <runDir>', 2));
     const id = path.basename(runDir);
     const relDir = path.relative(townDir, runDir).split(path.sep).join('/');
     // Guard: a run dir belongs INSIDE the map's own folder, and the manifest
@@ -470,7 +490,7 @@ function main() {
     }
     if (f.tokens != null) {
       const t = Number(String(f.tokens).replace(/[_,]/g, ''));
-      if (!Number.isFinite(t) || t < 0) die('--tokens must be a non-negative number; got ' + JSON.stringify(f.tokens));
+      if (!Number.isFinite(t) || t < 0) die('--tokens must be a non-negative number; got ' + JSON.stringify(f.tokens), 2);
       rec.tokens = Math.round(t);
     }
     if (VERSIONED.has(st)) { const v = id.match(/^v(\d+\.\d+)_/); rec.version = v ? v[1] : null; }
@@ -690,6 +710,27 @@ function main() {
     return;
   }
 
-  die('unknown command "' + (cmd || '') + '" — see header for usage');
+  die('unknown command "' + (cmd || '') + '" — see header for usage', 2);
 }
-main();
+/*
+ * THE ENTRY-POINT GUARD AND THE EXPORTS (OA-232 Tier 2.4, from the 2026-09-03
+ * review's engine-pipeline N25).
+ *
+ * This file is the one everything spawns, and it exported NOTHING — so seven
+ * other files re-implemented `JSON.parse(fs.readFileSync(<dir>/manifest.json))`
+ * inline, each with its own idea of what to do when the file is absent or
+ * malformed, and `findTownDir`'s upward walk existed in more than one place. A
+ * module with no exports is a module nobody can reuse, however good its
+ * functions are; `require`ing it used to RUN a stage command, which is why the
+ * question could not even be asked.
+ *
+ * `main()` now runs only when this file is the entry point, exactly as every
+ * generator does since OA-224 Tier 4.1 — and for the same reason: it is what
+ * lets a test require the module and check it draws nothing.
+ */
+if (require.main === module) main();
+
+module.exports = {
+  findTownDir, loadManifest, saveManifest, emptyStages, backfillStages,
+  STAGE_NAME, ORDER_OF, VERSIONED,
+};

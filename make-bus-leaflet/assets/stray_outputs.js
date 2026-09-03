@@ -41,6 +41,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
 const { parseArgs, resolveBuses } = require('./cli');
 
 const DIRN = { S1: 'S1-services', S2: 'S2-geometry', S3: 'S3-config', S4: 'S4-generate', S5: 'S5-render', S6: 'S6-verify' };
@@ -68,7 +69,9 @@ function findUnits(root) {
 
 function strays(unitDir) {
   let m;
-  try { m = JSON.parse(fs.readFileSync(path.join(unitDir, 'manifest.json'), 'utf8')); } catch (e) { return []; }
+  // loadManifest from stage.js — one reader (OA-232 Tier 2.4). The try/catch stays: a folder with no manifest, or a
+  // malformed one, is 'nothing to say about it here' rather than a crash.
+  try { m = loadManifest(unitDir); } catch (e) { return []; }
   const declared = {}, dirs = {};
   for (const st of ORDER) {
     const s = m.stages && m.stages[st];

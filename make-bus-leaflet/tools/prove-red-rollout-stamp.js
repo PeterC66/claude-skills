@@ -49,6 +49,10 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+// The one manifest reader (OA-232 Tier 2.4). This resolves the REAL stage.js,
+// not the scratch copy this harness mutates — reading back what the subject
+// wrote is a question about the manifest, not about the mutation.
+const { loadManifest } = require('../assets/stage.js');
 const { scratchDir } = require('../assets/scratch');
 const { computeEngineVersion, computePlaceEngineVersion } = require('../assets/engine_version');
 const { resolveBuses } = require('../assets/cli');
@@ -114,7 +118,7 @@ function buildFixture() {
   // The S3 run rolloutOne() seeds a rebuild from. Case D is the only case that
   // reaches it, and a missing one would make D return SKIP — a pass for the
   // wrong reason.
-  const man = JSON.parse(fs.readFileSync(path.join(dst, 'manifest.json'), 'utf8'));
+  const man = loadManifest(dst);
   const s3 = man.stages && man.stages.S3;
   const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
   if (!rec) { console.error('prove-red-rollout-stamp: no latest S3 run in the manifest.'); process.exit(1); }
@@ -242,7 +246,7 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     fs.mkdirSync(dst, { recursive: true });
     fs.copyFileSync(path.join(srcPlace, 'manifest.json'), path.join(dst, 'manifest.json'));
     fs.cpSync(path.join(srcPlace, 'ci-reference'), path.join(dst, 'ci-reference'), { recursive: true });
-    const man = JSON.parse(fs.readFileSync(path.join(dst, 'manifest.json'), 'utf8'));
+    const man = loadManifest(dst);
     const s3 = man.stages && man.stages.S3;
     const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
     if (rec) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });

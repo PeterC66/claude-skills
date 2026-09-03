@@ -20,6 +20,7 @@
 // edit and a skipped refresh, each caught only because Collected_latests was
 // stale against the newest S5-render — see project_bus_foolproofing_plan.md).
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
+const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
 const TOWN = process.argv[2] || process.cwd();
 // REFUSE A FOLDER THAT IS NOT A TOWN OR PLACE. There is no walking up: the dir
 // is taken verbatim, so running this from the Buses root with no argument used
@@ -41,7 +42,7 @@ fs.mkdirSync(OUT, { recursive: true });
 // newest S5 render dir from the manifest (fallback: newest S5-render/* by name)
 function latestS5() {
   try {
-    const m = JSON.parse(fs.readFileSync(path.join(TOWN, 'manifest.json'), 'utf8'));
+    const m = loadManifest(TOWN);   // loadManifest from stage.js — one reader (OA-232 Tier 2.4)
     const id = m.stages && m.stages.S5 && m.stages.S5.latest;
     if (id) { const d = path.join(TOWN, 'S5-render', id); if (fs.existsSync(d)) return d; }
   } catch (e) {}

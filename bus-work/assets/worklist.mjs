@@ -75,6 +75,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as conc from './concurrency.mjs';
+import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -89,15 +90,12 @@ process.emit = function (name, data, ...rest) {
 };
 
 // ---- args + config ---------------------------------------------------------
-function parseArgs(argv) {
-  const f = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (!argv[i].startsWith('--')) continue;
-    const k = argv[i].slice(2);
-    f[k] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
+// The parser, the two resolvers and the .env reader all come from ./engine.mjs,
+// which loads the ENGINE's own `cli.js` (OA-232 Tier 2.6). This skill owns the
+// BUSES_DIR / BUSMAPS_PORTAL convention -- `make-bus-leaflet/assets/cli.js` says
+// so in its header -- and until 2026-09-03 it reached the engine through bare
+// path literals and re-implemented the resolution it invented, with a second
+// copy of all three functions in push-status.mjs (satellite F12, cross-repo F30).
 const args = parseArgs(process.argv.slice(2));
 const AS_JSON = !!args.json;
 const RUN_GATES = !!args.gates;
@@ -108,25 +106,15 @@ const CONDITIONS_ONLY = !!args.conditions;
 const SHOW_CONDITIONS = !args['no-conditions'];
 const SELF_SESSION = (args.session && args.session !== true) ? String(args.session) : (process.env.BUS_SESSION || '');
 
-const PORTAL = path.resolve(args.portal || process.env.BUSMAPS_PORTAL || 'C:/Claude/community-bus-maps');
+const PORTAL = resolvePortal(args);
 
 // The portal's own .env is the authority on DATA_DIR / DB_PATH / BUSES_DIR (its
 // npm scripts load it with --env-file-if-exists). Read it so this tool always
 // looks at the same database the server does, rather than the repo default.
 // Real environment wins, so an explicit override still works.
-function loadPortalEnv(dir) {
-  const f = path.join(dir, '.env');
-  if (!existsSync(f)) return;
-  for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-    if (!m) continue;
-    const v = m[2].trim().replace(/^["']|["']$/g, '');
-    if (!(m[1] in process.env) && v) process.env[m[1]] = v;
-  }
-}
 loadPortalEnv(PORTAL);
 
-const BUSES = path.resolve(args.buses || process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses');
+const BUSES = resolveBuses(args);   // AFTER loadPortalEnv: BUSES_DIR is set in the portal's .env
 // --local BEATS a configured BUSMAPS_URL, and this is not a detail. The whole
 // point of putting BUSMAPS_URL in the portal's .env is that it is always set --
 // so if the env still won, --local would be a flag that silently did nothing on
@@ -175,17 +163,11 @@ if (!REMOTE && !args.local && !CONDITIONS_ONLY) {
   process.exit(2);
 }
 
-// The make-bus-leaflet assets dir, wherever the skills tree actually lives.
-function findSkillAssets() {
-  const cands = [
-    process.env.BUS_SKILL_ASSETS,
-    path.resolve(HERE, '..', '..', 'make-bus-leaflet', 'assets'),
-    'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets',
-    path.join(process.env.USERPROFILE || '', '.claude', 'skills', 'make-bus-leaflet', 'assets'),
-  ].filter(Boolean);
-  return cands.find((c) => existsSync(path.join(c, 'gate_lib.js'))) || null;
-}
-const SK = findSkillAssets();
+// The make-bus-leaflet assets dir, from ./engine.mjs -- one candidate list, and
+// one that probes for BOTH gate_lib.js and status.js. This file probed only the
+// first and push-status.mjs only the second, so on a tree holding one and not
+// the other the two tools could resolve different engine folders (F12).
+const SK = assetsDir();
 
 /*
  * ---- OA-221: what is safe to do RIGHT NOW ---------------------------------
@@ -349,10 +331,40 @@ function fromMapTree() {
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
     return row;
   });
+  /*
+   * S6 staleness is asked of a PLACE too, since 2026-09-03 (OA-232 Tier 2.6,
+   * the review's satellite F21).
+   *
+   * It was computed for towns only, in the identical eight lines above, and the
+   * place branch stopped at "is it built". So the three standalone places, which
+   * have no S6 run at all, and the nine nested ones whose answers date from
+   * 2026-08-28/29 never reached this board -- and S6 is the cross-model red team,
+   * the check that catches a route we draw that no longer runs. A place map is
+   * put in front of the public exactly like a town map is.
+   *
+   * The one thing a place gets that a town does not is `borrowed`. A place may
+   * reuse its parent town's blind answer (OA-141/OA-140, Peter's decision on
+   * 2026-08-29) and then every HARD it produces is restated as a SOFT, because a
+   * town answer is about services serving the TOWN where a place asks about
+   * services calling at THESE STOPS. That is evidence rather than a verdict, and
+   * a row that did not say so would read as a stronger result than it is.
+   */
   const places = findPlaces(findTowns(BUSES)).map((p) => {
     const m = readJson(path.join(p.dir, 'manifest.json'));
     const s4 = latestRunDir(m, p.dir, 'S4');
-    return { name: p.name, town: p.town, dir: p.dir, built: !!s4, version: s4 ? s4.rec.version : null };
+    const row = { name: p.name, town: p.town, dir: p.dir, built: !!s4, version: s4 ? s4.rec.version : null };
+    const s6 = latestRunDir(m, p.dir, 'S6');
+    const dataRuns = ['S1', 'S2', 'S3']
+      .map((k) => m.stages && m.stages[k] && m.stages[k].runs.find((r) => r.id === m.stages[k].latest))
+      .filter(Boolean);
+    const newestData = dataRuns.reduce((acc, r) => (!acc || r.at > acc ? r.at : acc), null);
+    row.s6 = s6 ? s6.rec.id : null;
+    row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
+    row.s6Age = s6 ? daysSince(s6.rec.at) : null;
+    // A standalone place has no parent town to borrow an answer from, so its S6
+    // is the only blind answer it will ever have.
+    row.standalone = !p.town;
+    return row;
   });
   return { towns, places, currentEngine: current };
 }
@@ -709,6 +721,32 @@ if (engineStale.length) {
     ],
   });
 }
+const s6StalePlaces = (tree.places || []).filter((p) => p.built && p.s6Stale);
+if (s6StalePlaces.length) {
+  /*
+   * The place half of the same row (OA-232 Tier 2.6, satellite F21). Its own
+   * item rather than a widening of the town one, because the ACTION differs: a
+   * nested place may borrow its parent town's red-team answer and cost nothing,
+   * a standalone place cannot and must buy one. Merging the two would print a
+   * single instruction that is wrong for one of the groups.
+   */
+  const standalone = s6StalePlaces.filter((p) => p.standalone);
+  const nested = s6StalePlaces.filter((p) => !p.standalone);
+  items.push({
+    key: 's6-stale-places', rank: 8, type: 'housekeeping',
+    title: `${s6StalePlaces.length} place map${s6StalePlaces.length === 1 ? '' : 's'} need an independent (S6) verification pass`,
+    why: s6StalePlaces.map((p) => `${p.name} (${p.s6 ? `${p.s6Age}d old, pre-dates the current data` : 'never run'})`).join(', ')
+      + '. This board asked the question of towns only until 2026-09-03, so these never appeared'
+      + (standalone.length ? `. ${standalone.length} of them ${standalone.length === 1 ? 'is' : 'are'} STANDALONE and cannot borrow a parent town's answer` : '')
+      + '.',
+    who: '\u2014', runbook: 'S6', towns: s6StalePlaces.map((p) => p.name),
+    do: [
+      ...(nested.length ? [{ kind: 'skill', what: `Run S6 for these nested places, one at a time: ${nested.map((p) => p.name).join(', ')}. Run redteam_source.js FIRST — a nested place may reuse its parent town's blind answer, and then every HARD it produces is restated as a SOFT (OA-141).` }] : []),
+      ...(standalone.length ? [{ kind: 'skill', what: `Run S6 for these STANDALONE places: ${standalone.map((p) => p.name).join(', ')}. There is no parent town to borrow from, so each needs its own blind answer — 89k–137k tokens apiece. Ask Peter before buying more than one.` }] : []),
+    ],
+  });
+}
+
 const s6Stale = tree.towns.filter((t) => t.built && t.s6Stale);
 if (s6Stale.length) {
   add({

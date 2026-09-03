@@ -29,37 +29,29 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-function parseArgs(argv) {
-  const f = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (!argv[i].startsWith('--')) continue;
-    const k = argv[i].slice(2);
-    f[k] = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
-  }
-  return f;
-}
+// The parser, the two resolvers and the .env reader come from ./engine.mjs,
+// which loads the ENGINE's own `cli.js` (OA-232 Tier 2.6). All three used to be
+// a second copy of worklist.mjs's, byte-identical after a whitespace strip
+// except for the one line that made the two disagree about where the engine is.
 const args = parseArgs(process.argv.slice(2));
 
-const PORTAL = path.resolve(args.portal || process.env.BUSMAPS_PORTAL || 'C:/Claude/community-bus-maps');
-const BUSES = path.resolve(args.buses || process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses');
+const PORTAL = resolvePortal(args);
 
 // The portal's own .env is the authority on DATA_DIR / STATUS_TOKEN — read it
 // the same way worklist.mjs does, so this always targets the same database
 // the server does. Real environment wins, so an explicit override still works.
-function loadPortalEnv(dir) {
-  const f = path.join(dir, '.env');
-  if (!existsSync(f)) return;
-  for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-    if (!m) continue;
-    const v = m[2].trim().replace(/^["']|["']$/g, '');
-    if (!(m[1] in process.env) && v) process.env[m[1]] = v;
-  }
-}
 loadPortalEnv(PORTAL);
+// AFTER the .env load, and that is a FIX, not a tidy-up (2026-09-03). BUSES was
+// resolved fifteen lines above this call until today, so a BUSES_DIR set only in
+// the portal's .env was never seen and this script fell through to the laptop
+// default — the identical fault to the URL_BASE one recorded below, in the same
+// file, found while moving both onto the shared resolvers (OA-232 Tier 2.6).
+// worklist.mjs has always had this order right.
+const BUSES = resolveBuses(args);
 // Read AFTER the .env load, not before it. Until 2026-09-02 URL_BASE was
 // computed above loadPortalEnv, so BUSMAPS_URL set only in the portal's .env
 // was never seen: with no --url this script silently took the LOCAL path and
@@ -69,16 +61,9 @@ const URL_BASE = (args.url || process.env.BUSMAPS_URL || '').replace(/\/$/, '');
 const REMOTE = !!URL_BASE;
 const TOKEN = args.token || process.env.STATUS_TOKEN || '';
 
-function findSkillAssets() {
-  const cands = [
-    process.env.BUS_SKILL_ASSETS,
-    path.resolve(HERE, '..', '..', 'make-bus-leaflet', 'assets'),
-    'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets',
-    path.join(process.env.USERPROFILE || '', '.claude', 'skills', 'make-bus-leaflet', 'assets'),
-  ].filter(Boolean);
-  return cands.find((c) => existsSync(path.join(c, 'status.js'))) || null;
-}
-const SK = findSkillAssets();
+// One candidate list, in ./engine.mjs, probing for BOTH gate_lib.js and
+// status.js -- this file probed only the second and worklist.mjs only the first.
+const SK = assetsDir();
 if (!SK) {
   console.error('make-bus-leaflet assets (status.js) not found — nothing to push. Set BUS_SKILL_ASSETS if the skills tree lives somewhere non-standard.');
   process.exit(1);

@@ -23,3 +23,11 @@ design-preview/
 make-bus-leaflet/tools/.extraction-gate-baseline.json
 make-bus-leaflet/tools/.dark-paths-before.json
 make-bus-leaflet/tools/.dark-paths-after.json
+
+# stamp-docs runtime state (machine-local: last-run timestamp and error log).
+# Moved here with the skill from claude-skills-personal on 2026-09-04 (buses-data
+# OA-244), where the same two lines had sat since the stamper was written. The
+# state file is an mtime gate over one machine's documents; a committed one
+# would tell the next machine it had already stamped files it has never seen.
+stamp-docs/.docstamp-state.json
+stamp-docs/docstamp.log

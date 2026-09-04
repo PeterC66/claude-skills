@@ -67,6 +67,9 @@ NEW_BLOCK = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s|\||#|>|<!--|```|---\s*$|===)")
 # lines. Name such a file explicitly if you really mean it.
 EXCLUDE_DIRS = {"node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build"}
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import policy as _shared_policy  # noqa: E402
+
 POLICY = pathlib.Path(__file__).resolve().parent.parent / "stamp-policy.json"
 
 
@@ -80,7 +83,8 @@ def policy_excludes(f: pathlib.Path) -> bool:
     if not POLICY.exists():
         return False
     try:
-        roots = json.loads(POLICY.read_text(encoding="utf-8")).get("roots", [])
+        # Through policy.py, so this tool skips exactly what the stamper skips.
+        roots = _shared_policy.load_policy(str(POLICY)).get("roots", [])
     except (json.JSONDecodeError, OSError):
         return False
     for root in roots:

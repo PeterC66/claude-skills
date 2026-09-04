@@ -42,6 +42,9 @@ import os
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import policy as _shared_policy  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -59,9 +62,11 @@ def repos_from_policy():
     The config travels with the path so the audit can apply the same exclusions
     the stamper does — see in_scope().
     """
-    policy = os.path.join(os.path.dirname(HERE), 'stamp-policy.json')
+    # Through policy.py so the baseline exclusions reach this audit too. Loading
+    # the JSON here would give the stamper and its auditor different scopes, which
+    # is the fault OA-235 is about, one level down.
     try:
-        data = json.load(open(policy, encoding='utf-8'))
+        data = _shared_policy.load_policy()
     except OSError:
         return []
     out, seen = [], set()
@@ -85,9 +90,11 @@ def repos_from_policy_all():
     none of the laptop paths exists, so that list is empty and every named repo
     would fall through to no exclusions at all.
     """
-    policy = os.path.join(os.path.dirname(HERE), 'stamp-policy.json')
+    # Through policy.py so the baseline exclusions reach this audit too. Loading
+    # the JSON here would give the stamper and its auditor different scopes, which
+    # is the fault OA-235 is about, one level down.
     try:
-        data = json.load(open(policy, encoding='utf-8'))
+        data = _shared_policy.load_policy()
     except OSError:
         return []
     out = []

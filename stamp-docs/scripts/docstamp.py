@@ -43,6 +43,10 @@ import subprocess
 import sys
 import traceback
 
+# Same directory; imported by module name so it works however this file is invoked.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import policy as _shared_policy  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL_DIR = os.path.dirname(HERE)
 DEFAULT_POLICY = os.path.join(SKILL_DIR, "stamp-policy.json")
@@ -81,8 +85,11 @@ def pptx_stamp_text(major, minor, d):
 
 
 def load_policy(path):
-    with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    # Through policy.py, so that `baselineExcludeDirNames` is folded into every
+    # root's own list in ONE place. Three scripts read those exclusions and a
+    # baseline each of them unions for itself is the same "written once per place"
+    # fault the baseline exists to remove -- see scripts/policy.py (OA-235).
+    return _shared_policy.load_policy(path)
 
 
 def state_path(policy_file):

@@ -41,13 +41,27 @@
     "stamp. Added 2026-08-31."
   ],
 
+  "_baselineComment": [
+    "Directories that are never a document in ANY repository. Every root inherits",
+    "these; a root's own excludeDirNames holds only what is local to it. Two kinds of",
+    "reason live here and it matters which: .git, node_modules, dist, coverage and",
+    "build are NOT DOCUMENTS; worktrees and scratch are NOT OURS TO WRITE TO -- a",
+    "worktree is full of real documents and the objection is ownership. Added",
+    "2026-09-04 for buses-data OA-235, after the three roots had drifted to lists",
+    "sharing only .git: 60 of the portal root's 90 markdown files were inside",
+    "worktrees, and two sessions running --all stamped each other's in-flight work.",
+    "The reasoning, and why this is a module rather than a key each caller reads,",
+    "is in scripts/policy.py."
+  ],
+  "baselineExcludeDirNames": [".git", "node_modules", "worktrees", "scratch", "dist", "coverage", "build"],
+
   "roots": [
     {
       "name": "buses",
       "path": "C:/u3a St Ives/Using AI/Buses",
       "checkoutDirNames": ["buses-data", "Buses"],
       "extensions": [".md", ".pptx"],
-      "excludeDirNames": ["node_modules", ".git", "_latest", "_archive", "worktrees", "open-actions"],
+      "excludeDirNames": ["_latest", "_archive", "open-actions"],
       "excludeDirPatterns": ["S[1-6]-*"],
       "excludeGlobs": [
         "_gtfs/refresh-report_*.md",
@@ -59,7 +73,7 @@
       "path": "C:/Claude/community-bus-maps",
       "checkoutDirNames": ["community-bus-maps"],
       "extensions": [".md"],
-      "excludeDirNames": ["node_modules", ".git", "data", "dist", "coverage", "staged", "_archive", "CHANGELOG.d"],
+      "excludeDirNames": ["data", "staged", "_archive", "CHANGELOG.d"],
       "excludeDirPatterns": [],
       "excludeGlobs": []
     },
@@ -68,7 +82,7 @@
       "path": "C:/Claude/community-bus-maps-ops",
       "checkoutDirNames": ["community-bus-maps-ops"],
       "extensions": [".md"],
-      "excludeDirNames": [".git"],
+      "excludeDirNames": [],
       "excludeDirPatterns": [],
       "excludeGlobs": []
     }

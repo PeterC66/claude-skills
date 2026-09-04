@@ -1087,11 +1087,19 @@ if(IR){
   const CD = COR.dist!=null?COR.dist:2.4;                     // max lateral mm to co-bundle
   const CA = Math.cos((COR.angle!=null?COR.angle:22)*Math.PI/180); // max bearing deviation
   const orderIdx={}; order.forEach((r,k)=>{orderIdx[r]=k;});
+  // design.laneRibbon — the ribbon-cable lane order (OA-176 4.21, 2026-09-04):
+  // smoothed headings, short-beside-long pairing, 'continue' chain edges, an
+  // alongside reference and mitred vertices, all in lane_normals.js and each
+  // documented there. OPT-IN, absent ⇒ byte-identical, inert without the field.
+  const RIBBON = DESIGN.laneRibbon===true && DESIGN.laneOrientation!==false;
+  const RIBBON_W = 1.0;                                        // mm either side of a segment's midpoint
   const SEG=[];
   for(const r of order){ const o=RPP[r]; if(!o)continue; const Pp=o.P;
+    const H=RIBBON?LN.smoothHeadings(Pp,RIBBON_W):null;
     for(let i=0;i<Pp.length-1;i++){ const a=Pp[i],b=Pp[i+1];
       const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy); if(L<1e-6)continue;
-      SEG.push({r,i,ax:a[0],ay:a[1],ux:dx/L,uy:dy/L,L,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2}); } }
+      const [ux,uy]=H?H[i]:[dx/L,dy/L];
+      SEG.push({r,i,ax:a[0],ay:a[1],ux,uy,L,mx:(a[0]+b[0])/2,my:(a[1]+b[1])/2}); } }
   const pSeg=(px,py,s)=>{ let t=(px-s.ax)*s.ux+(py-s.ay)*s.uy; if(t<0)t=0; else if(t>s.L)t=s.L;
     const cx=s.ax+s.ux*t, cy=s.ay+s.uy*t; return Math.hypot(px-cx,py-cy); };
   // MEMR = ROUTE-level membership (who physically co-runs here).
@@ -1118,8 +1126,11 @@ if(IR){
   for(let si=0;si<SEG.length;si++){ const s=SEG[si]; const set=new Set([s.r]);
     for(let ui=0;ui<SEG.length;ui++){ if(ui===si)continue; const u=SEG[ui];
       if(Math.abs(s.ux*u.ux+s.uy*u.uy)<CA)continue;             // not near-parallel
-      if(pSeg(s.mx,s.my,u)>CD)continue;                         // s mid far from u
-      if(pSeg(u.mx,u.my,s)>CD)continue;                         // u mid far from s
+      if(pSeg(s.mx,s.my,u)>CD || pSeg(u.mx,u.my,s)>CD){         // a mid far from the other
+        // the reciprocal midpoint test cannot pair a short segment with a long
+        // one (lane_normals.js, liesAlongside); under the ribbon key a segment
+        // lying wholly beside the other still pairs
+        if(!RIBBON || !(LN.liesAlongside(s,u,CD)||LN.liesAlongside(u,s,CD))) continue; }
       if(ui>si) CORPAIRS.push([si,ui]);                         // each pair once
       if(u.r===s.r)continue;
       set.add(u.r); }
@@ -1159,7 +1170,7 @@ if(IR){
   // That second number is the one that means "this corridor has no consistent
   // orientation to find", and it is what the S4 warning below reads.
   const ORIENT=DESIGN.laneOrientation!==false
-    ? LN.orientSegments(SEG,CORPAIRS,LN.chainPairs(SEG,{cosAngle:-1}))
+    ? LN.orientSegments(SEG,CORPAIRS,LN.chainPairs(SEG,{cosAngle:-1}),{chainRel:RIBBON?'continue':'heading'})
     : {sign:null,components:0,conflicts:0,bridges:0};
   // UNCONDITIONAL since 2026-08-30 (OA-118), and re-worded from `LANEFIELD …` to
   // the `measure: ` prefix build_log.js now classifies as MEASURED. Three things
@@ -1178,7 +1189,7 @@ if(IR){
   // The old wording had NO COLON, so it was not a message head: had it ever
   // reached the log, build_log.js's parse() would have glued it onto the end of
   // whatever message came before it.
-  console.error(`measure: lanes on=${DESIGN.laneOrientation!==false} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0}`);
+  console.error(`measure: lanes on=${DESIGN.laneOrientation!==false} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0} ribbon=${RIBBON}`);
   // A LATERAL conflict means two segments running alongside each other were
   // given contradictory directions and the corridor has no consistent
   // orientation to find -- so some lane bundles here keep the old mirrored
@@ -1209,7 +1220,10 @@ if(IR){
   // whole bundle around its centreline so its lanes crossed for no visible
   // reason. The sign now comes from the corridor's own orientation field, which
   // no polyline's digitisation direction can move. See lane_normals.js.
-  const refDir=LN.makeRefDir(SEG,segIdxByRoute,ORIENT.sign);
+  const refDir=LN.makeRefDir(SEG,segIdxByRoute,ORIENT.sign,RIBBON?{cosAngle:CA}:{});
+  // (r, polyline index) -> SEG index, for the ribbon key's fallback: when r0 has
+  // no segment alongside, the route's OWN oriented heading is the normal's axis.
+  const segAt={}; for(let si=0;si<SEG.length;si++){ (segAt[SEG[si].r]=segAt[SEG[si].r]||{})[SEG[si].i]=si; }
   // -- context roads (named side streets, very light) under everything
   if(IR.contextRoads){
     for(const w of RG.ways){ if(!w.tags.name)continue;
@@ -1234,13 +1248,21 @@ if(IR){
       // take the same offset and overdraw into a single visible line here. Where
       // they diverge this segment simply has no sibling and they separate again.
       if(arr && arr.length>1){ const so=(arr.indexOf(laneKey(r))-(arr.length-1)/2)*IR.gap;
-        const ox=Pp[i+1][0]-Pp[i][0], oy=Pp[i+1][1]-Pp[i][1];  // own heading (fallback)
+        let ox=Pp[i+1][0]-Pp[i][0], oy=Pp[i+1][1]-Pp[i][1];    // own heading (fallback)
+        // ribbon key: the SMOOTHED own heading, so the axis the parallel filter
+        // and the fallback use is the street's and not a junction node's jitter
+        if(RIBBON && segAt[r] && segAt[r][i]!=null){ ox=SEG[segAt[r][i]].ux; oy=SEG[segAt[r][i]].uy; }
         // normal from the bundle's reference route (arr[0]) local heading, so ALL
         // lanes share one smoothly-varying normal here -> no side-swaps on curves,
         // no pinch at stops. r0's heading is continuous along its own polyline, so
         // NO hemisphere flip is needed (a flip would reverse lane order mid-curve,
         // i.e. make co-running lines cross over) -- use the raw perpendicular.
-        const [dx0,dy0]=refDir(arr[0],(Pp[i][0]+Pp[i+1][0])/2,(Pp[i][1]+Pp[i+1][1])/2,ox,oy);
+        let [dx0,dy0]=refDir(arr[0],(Pp[i][0]+Pp[i+1][0])/2,(Pp[i][1]+Pp[i+1][1])/2,ox,oy);
+        // ribbon key: r0 had no segment alongside this one (its lead is a family
+        // member's, or it turned off) — take the route's own heading, oriented
+        // by its own sign, which is on-axis and corridor-consistent by construction
+        if(RIBBON && !refDir.last.parallel && ORIENT.sign){ const si=segAt[r]&&segAt[r][i];
+          const sg=(si!=null?ORIENT.sign[si]:1)||1; dx0=ox*sg; dy0=oy*sg; }
         const L=Math.hypot(dx0,dy0)||1; const nx=-dy0/L, ny=dx0/L;
         sx=nx*so; sy=ny*so;
         // DBG_LANES=1: one line per bundled segment -- the lane offset actually
@@ -1259,6 +1281,9 @@ if(IR){
       v.push([sx,sy]); }
     SH[r]=Pp.map((p,i)=>{ let sx,sy;
       if(i===0){[sx,sy]=v[0];} else if(i===Pp.length-1){[sx,sy]=v[v.length-1];}
+      else if(RIBBON){ [sx,sy]=LN.laneVertex(v[i-1],v[i],{                 // mitre: lanes keep their gap round a corner,
+        la:Math.hypot(Pp[i][0]-Pp[i-1][0],Pp[i][1]-Pp[i-1][1]),            // held to the segments it sits between
+        lb:Math.hypot(Pp[i+1][0]-Pp[i][0],Pp[i+1][1]-Pp[i][1]) }); }
       else { sx=(v[i-1][0]+v[i][0])/2; sy=(v[i-1][1]+v[i][1])/2; }
       return [p[0]+sx+ro.dx, p[1]+sy+ro.dy]; });
   }

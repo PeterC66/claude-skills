@@ -186,3 +186,112 @@ test('makeRefDir hands back the caller\'s fallback for a route it has no segment
   const refDir = LN.makeRefDir([], {}, null);
   assert.deepStrictEqual(refDir('Z', 0, 0, 0.6, 0.8), [0.6, 0.8]);
 });
+
+// ---------------------------------------------------------------------------
+// design.laneRibbon (OA-176 4.21, 2026-09-04) — the ribbon-cable lane order.
+// Five behaviours, each opt-in, each a property the census of 2026-09-04
+// measured before it was built: 693 off-axis normals, 160 one-segment blips,
+// and a bundle mirroring at every bridged corner sharper than a right angle.
+
+test('a chain edge under "continue" keeps a route on its side through a sharp corner; "heading" mirrors it', () => {
+  // A route turning 120 degrees at a corner nothing else touches. The chain
+  // edge is the only thing joining the two segments. Under the old relation the
+  // sign of the dot product is negative and the second segment is flipped —
+  // which for a lane means the whole bundle swaps sides at the corner. High
+  // Wycombe's 32 and 34 do exactly that at x=158, y=112 (107 degrees).
+  const segs = [seg('A', 0, 0, 0, 10, 0), seg('A', 1, 10, 0, 5, 8.66)];
+  const chain = LN.chainPairs(segs, { cosAngle: -1 });
+  const heading = LN.orientSegments(segs, [], chain);
+  const cont = LN.orientSegments(segs, [], chain, { chainRel: 'continue' });
+  assert.deepStrictEqual([...heading.sign], [1, -1], 'the old relation flips at a sharp corner');
+  assert.deepStrictEqual([...cont.sign], [1, 1], 'the ribbon keeps its side');
+});
+
+test('under "continue" the lateral structure still wins: a route beside itself is with AND against its corridor', () => {
+  // The out-and-back case. Lateral pairs say the two legs share a corridor and
+  // face opposite ways; the chain edge is a bridge only and cannot override
+  // that. A ribbon that ignored the lateral pair would draw the two legs in
+  // mirror-image order, which is the 111-site defect laneOrientation removed.
+  const segs = [seg('A', 0, 0, 0, 10, 0), seg('A', 1, 10, 0.4, 0, 0.4)];
+  const r = LN.orientSegments(segs, [[0, 1]], LN.chainPairs(segs, { cosAngle: -1 }), { chainRel: 'continue' });
+  assert.deepStrictEqual([...r.sign], [1, -1]);
+  assert.strictEqual(r.bridges, 0, 'the chain edge was dropped, not applied');
+});
+
+test('makeRefDir with cosAngle takes the reference segment that runs ALONGSIDE, not the nearest one', () => {
+  // r0 has a segment heading east right beside the asking point and a segment
+  // heading north a little further off. The asking segment heads north. The
+  // nearest-by-midpoint choice is the east one, and its normal would put a lane
+  // offset along the route rather than across it.
+  const segs = [seg('R', 0, 0, 0, 10, 0), seg('R', 1, 12, 0, 12, 10)];
+  const plain = LN.makeRefDir(segs, { R: [0, 1] }, null);
+  const ribbon = LN.makeRefDir(segs, { R: [0, 1] }, null, { cosAngle: CFG.cosAngle });
+  const [px, py] = plain('R', 5, 1, 0, 1);
+  const [rx, ry] = ribbon('R', 5, 1, 0, 1);
+  assert.ok(Math.abs(px) > 0.9 && Math.abs(py) < 0.1, 'unfiltered: the nearest, heading east');
+  assert.ok(Math.abs(rx) < 0.1 && Math.abs(ry) > 0.9, 'filtered: the one alongside, heading north');
+  assert.strictEqual(ribbon.last.parallel, true);
+  assert.strictEqual(ribbon.last.at, 1);
+});
+
+test('makeRefDir with cosAngle says when nothing alongside exists, and then returns the nearest as before', () => {
+  const segs = [seg('R', 0, 0, 0, 10, 0)];
+  const ribbon = LN.makeRefDir(segs, { R: [0] }, null, { cosAngle: CFG.cosAngle });
+  const [rx] = ribbon('R', 5, 1, 0, 1);
+  assert.strictEqual(ribbon.last.parallel, false, 'the caller is told, so it can use its own heading');
+  assert.ok(Math.abs(rx) > 0.9, 'and the answer is the old one, not a fabricated vector');
+});
+
+test('a short segment lying wholly beside a long one is a corridor neighbour under `alongside`', () => {
+  // The reciprocal midpoint test refuses this pair: the long segment's midpoint
+  // is 4 mm along from the short one, measured to its nearest end. 160
+  // one-segment blips on the estate were counted before smoothing was found to
+  // be the larger cause; this closes the length half of it.
+  const long = seg('A', 0, 0, 0, 10, 0);
+  const short = seg('B', 0, 9, 1, 9.3, 1);
+  assert.strictEqual(LN.corridorNeighbours(long, short, CFG), false, 'the midpoint test alone refuses it');
+  assert.strictEqual(LN.corridorNeighbours(long, short, { ...CFG, alongside: true }), true);
+  assert.strictEqual(LN.liesAlongside(short, long, CFG.dist), true);
+  const past = seg('C', 0, 10.5, 1, 11, 1);            // beyond the long one's end
+  assert.strictEqual(LN.corridorNeighbours(long, past, { ...CFG, alongside: true }), false, 'end to end is not alongside');
+});
+
+test('laneVertex is the mitre point at a corner, so lanes keep their gap, and the average where the sides agree', () => {
+  // A right-angle turn with the lane 2 mm off both segments: the mitre sits
+  // 2·√2 mm along the bisector, and is 2 mm from each offset line. The average
+  // is √2 mm along the bisector and only 1.41 mm from each line — every lane in
+  // the bundle closing up by the same 71%.
+  const v = LN.laneVertex([0, -2], [2, 0]);
+  assert.ok(Math.abs(Math.hypot(v[0], v[1]) - 2 * Math.SQRT2) < 1e-9, 'mitre length');
+  assert.ok(Math.abs(v[0] - 2) < 1e-9 && Math.abs(v[1] + 2) < 1e-9, 'and it is 2 mm from each offset line');
+  assert.deepStrictEqual(LN.laneVertex([0, -2], [0, -2]), [0, -2], 'the same offset on both sides is left alone');
+  assert.deepStrictEqual(LN.laneVertex([0, -2], [0, 2]), [0, 0], 'opposing offsets (a mirror) fall back to the average');
+});
+
+test('laneVertex holds the mitre to the segments it sits between, so a short segment cannot fold', () => {
+  // The right-angle mitre above reaches 2 mm along each segment. Between a
+  // 10 mm segment and a 1 mm one that reach is 2x the short segment's length:
+  // its two vertices would cross and the lane would draw a notch. The reach is
+  // held to half the short segment, and never below the plain average.
+  const free = LN.laneVertex([0, -2], [2, 0], { la: 10, lb: 10 });
+  const part = LN.laneVertex([0, -2], [2, 0], { la: 10, lb: 3 });
+  const held = LN.laneVertex([0, -2], [2, 0], { la: 10, lb: 1 });
+  assert.ok(Math.abs(Math.hypot(free[0], free[1]) - 2 * Math.SQRT2) < 1e-9, 'room enough: the full mitre');
+  const reach = (v) => Math.hypot(v[0], v[1]) * Math.sin(Math.PI / 4);   // along either segment
+  assert.ok(Math.abs(reach(part) - 1.5) < 1e-9, 'a 3 mm segment: the reach is held to half of it');
+  assert.ok(Math.abs(reach(held) - 1) < 1e-9, 'a 1 mm segment: the plain average, which reaches 1 mm, is the floor');
+  assert.deepStrictEqual(held, [1, -1], 'never shorter than the average');
+});
+
+test('smoothHeadings reads a segment over ±w mm of the polyline, so a junction node\'s jitter is the street\'s heading', () => {
+  // Three points then a 0.1 mm wobble then a straight run: the raw heading of
+  // the wobble segment is 45 degrees off; over ±1 mm it is the street's.
+  const pts = [[0, 0], [5, 0], [5.07, 0.07], [10, 0.07]];
+  const raw = Math.atan2(0.07, 0.07) * 180 / Math.PI;
+  assert.ok(Math.abs(raw - 45) < 1e-6, 'the raw wobble really is 45 degrees');
+  const H = LN.smoothHeadings(pts, 1.0);
+  assert.strictEqual(H.length, 3);
+  assert.ok(Math.abs(H[1][1]) < 0.05, 'the wobble now reads as the street, within 3 degrees');
+  assert.ok(Math.abs(H[0][0] - 1) < 1e-9 && Math.abs(H[0][1]) < 1e-9, 'a segment longer than 2w reads exactly its own heading');
+  assert.strictEqual(LN.smoothHeadings([[0, 0]], 1.0), null);
+});

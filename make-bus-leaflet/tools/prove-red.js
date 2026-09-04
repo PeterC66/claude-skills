@@ -520,6 +520,37 @@ const MUTATIONS = [
     find: "    if (union(i, j, rel(segs[i], segs[j])) === 'conflict') conflicts++;",
     to: '    union(i, j, rel(segs[i], segs[j]));' },
 
+  // design.laneRibbon (OA-176 4.21) - one mutation per behaviour the key adds
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'a chain edge under "continue" goes back to mirroring the bundle at a sharp corner',
+    find: "    union(i, j, chainRel === 'continue' ? 1 : rel(segs[i], segs[j]));",
+    to: '    union(i, j, rel(segs[i], segs[j]));' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'the parallel filter is dropped, so the normal comes from the nearest segment heading anywhere',
+    find: '      if (filter && Math.abs(s.ux * ox + s.uy * oy) < cosAngle) continue;',
+    to: '      if (false) continue;' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'a short segment beside a long one is never a corridor neighbour again',
+    find: '  return !!alongside && (liesAlongside(a, b, dist) || liesAlongside(b, a, dist));',
+    to: '  return false;' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'the lane vertex goes back to the average, so lanes close up at every corner',
+    find: '  return [mx * f, my * f];',
+    to: '  return [mx, my];' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'the mitre stops being held to its segments, and a short segment folds again',
+    find: '  if (reach > 1e-9 && reach * f > room) f = Math.max(1, room / reach);',
+    to: '  if (false) f = 1;' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'headings stop being smoothed, and a junction node is jittering again',
+    find: '    const a = at(m - w), b = at(m + w);',
+    to: '    const a = points[i], b = points[i + 1];' },
+
   { suite: 'font_metrics.test.js', file: 'font_metrics.js',
     what: 'an unmapped glyph costs nothing',
     find: 'const FALLBACK = 0.556;', to: 'const FALLBACK = 0;' },

@@ -214,8 +214,6 @@ const okRow = (key = 'a · internal') => ({ key, now: sheet(), status: 'ok', why
  * them. What stays here is what is specific to the QUALITY ledger: which rows
  * have to explain themselves, and what accept() does with the answer. */
 
-
-
 test('the quality ledger makes exactly its REGRESSED rows explain themselves', () => {
   // A ceiling going UP is a sheet printing fewer labels, carrying more hard
   // defects, or dropping more names. A NEW row and an ok row never need a note.

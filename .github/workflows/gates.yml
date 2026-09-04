@@ -343,6 +343,35 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-portal-drift
 
+      # THE FILE-HYGIENE CHECKER NOW LIVES HERE (buses-data OA-241, 2026-09-04),
+      # and it is in the SECRET-FREE tier deliberately. It was written in
+      # buses-data, which is private; this repository and the portal are public,
+      # so a private checker could not be run by either without CROSS_REPO_PAT2 --
+      # and hanging a hygiene check off that token is exactly the coupling the
+      # `docs` job below has to accept and this job exists to avoid. Moved here,
+      # all three repositories fetch it with no secret at all. `tools/README.md`
+      # says what is left: check-tables.mjs and check-doc-links.mjs are the same
+      # move again, not yet done, which is why `docs` still takes the token.
+      #
+      # FALSIFY IT FIRST. 24 cases, and each of the three exemption CLASSES is
+      # broken in BOTH directions -- widening an exemption produces a false PASS
+      # rather than a false finding, which is the half check-doc-links.mjs paid
+      # for on 2026-09-01. Two of those cases exist only because the move made the
+      # exemptions a repository's own `.file-hygiene.json`: a repo with no
+      # declaration gets the BARE rules rather than a free pass, and a declaration
+      # that does not parse is a refusal rather than a silent fallback.
+      - name: Prove the file-hygiene checker can go red
+        working-directory: skills
+        run: node tools/prove-red-file-hygiene.mjs
+
+      # NOT the mixed-line-ending half, which cannot fire here and is not meant
+      # to: actions/checkout builds a uniform tree by construction, so mixed EOL
+      # is a property of a WORKING TREE that only a pre-commit hook can ask about.
+      # This step is genuinely narrower than the checker it runs.
+      - name: Files carry no BOM, no trailing whitespace, no missing newline
+        working-directory: skills
+        run: node tools/check-file-hygiene.mjs
+
   # THE DOCUMENTS IN THIS REPOSITORY HAD NEVER BEEN CHECKED BY ANYTHING
   # (buses-data OA-222, 2026-09-01). buses-data's `check-tables.mjs` had been
   # widened six times -- Documentation/, Development Docs/, open-actions/,

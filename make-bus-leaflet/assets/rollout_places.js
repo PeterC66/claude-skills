@@ -52,6 +52,11 @@ const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
+// The self-crossing check (buses-data OA-240). One place map has a schematic --
+// High Wycombe Aldi -- and the town rollout's copy of this wiring would have
+// certified only towns. Both tools call the one helper; `rollout_crossings.test.js`
+// is the check on that. Non-blocking by construction, and outside the hash closure.
+const { crossingWarnings } = require('./schematic_crossings');
 // The printed sheet version (footer.js design.sheetVersion) and the engine hash.
 // BOTH now come from shared modules rather than living here, because living here
 // is how a hand-built S4 lost them both (OA-161) — see sheet_stamps.js.
@@ -383,6 +388,7 @@ function rolloutOnePlace(p) {
     // deletes it) — same trap, documented in changing-the-engine.md §4.
     const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4, 'overrides.json') });
     said.push({ source: 'schematic', stderr: r.stderr, ok: r.ok });
+    said.push({ source: 'crossings', stderr: crossingWarnings(s4).join('\n'), ok: true });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
   }
   if (routesJson.boardingPlan) {
@@ -505,6 +511,7 @@ function rolloutOnePlace(p) {
     copyFile(path.join(SK, 'schematize_internal.js'), s4Dir);
     const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4Dir, 'overrides.json') });
     realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok });
+    realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('\n'), ok: true });
     if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg');
   }
   if (routesJson.boardingPlan) {

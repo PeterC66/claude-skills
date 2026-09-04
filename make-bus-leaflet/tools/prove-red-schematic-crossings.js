@@ -51,6 +51,10 @@ const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const SUITE = 'schematic_crossings.test.js';
 const SUBJECT = 'schematic_crossings.js';
+/* The second half: the check is only worth having if something RUNS it, and the
+ * census that says so needs falsifying exactly as much as the detector does. A
+ * mutation may name its own `file` and `suite`; both default to the pair above. */
+const WIRING = 'rollout_crossings.test.js';
 const KEEP = process.argv.includes('--keep');
 if (KEEP) keepScratch();
 
@@ -112,6 +116,39 @@ const MUTATIONS = [
     to: "const { die, resolveBuses } = require('./cli');" + String.fromCharCode(10)
       + "function parseArgs(a) { return { _: a }; }" },
 
+  // ---- the WIRING. Nothing above notices if no rollout ever calls the detector.
+  { file: 'rollout.js', suite: WIRING,
+    what: 'the town rollout stops checking the real S4 it is about to commit',
+    find: "realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('" + String.fromCharCode(92) + "n'), ok: true });",
+    to: '' },
+
+  { file: 'rollout_places.js', suite: WIRING,
+    what: 'the PLACE rollout stops checking, and only towns stay covered',
+    find: "    realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('" + String.fromCharCode(92) + "n'), ok: true });"
+      + String.fromCharCode(10),
+    to: '' },
+
+  { file: 'rollout_places.js', suite: WIRING,
+    what: 'the place rollout grows its own copy of the geometry beside the shared one',
+    find: "const { crossingWarnings } = require('./schematic_crossings');",
+    to: "const { crossingWarnings } = require('./schematic_crossings');" + String.fromCharCode(10)
+      + 'function segSepM() { return 0; }' },
+
+  { file: SUBJECT, suite: WIRING,
+    what: 'the warning is reworded into a refusal, so it silently BLOCKS three published maps',
+    find: '      out.push(`crossings: route ${r.route} is drawn crossing itself at ${c.atI} x ${c.atJ}, `',
+    to: '      out.push(`crossings: route ${r.route} was not drawn correctly at ${c.atI} x ${c.atJ}, `' },
+
+  { file: SUBJECT, suite: WIRING,
+    what: 'an unreadable run throws instead of reporting, and takes the rollout down with it',
+    find: '  try { res = analyseRun(runDir); } catch (e) { return [',
+    to: '  if (true) { res = analyseRun(runDir); } else { return [' },
+
+  { file: SUBJECT, suite: WIRING,
+    what: 'the threshold stops applying, so every bus doubling back reaches the build log',
+    find: '      if (c.sepM <= sepM) continue;',
+    to: '      if (false) continue;' },
+
   // THE CONTROL. Same arithmetic, different order. It must stay GREEN.
   { equivalent: true,
     what: 'the four endpoint distances are minimised in a different order — the same answer',
@@ -123,42 +160,45 @@ const scratch = scratchDir('prove-red-schematic-crossings-');
 const engine = path.join(scratch, 'assets');
 fs.cpSync(ASSETS, engine, { recursive: true });
 
-const runSuite = () => spawnSync(process.execPath, ['--test', '--test-reporter=spec', path.join(SK, 'test', SUITE)],
+const runSuite = (suite) => spawnSync(process.execPath, ['--test', '--test-reporter=spec', path.join(SK, 'test', suite)],
   { cwd: SK, env: { ...process.env, ENGINE_DIR: engine }, encoding: 'utf8' });
 
 /* The baseline. Without it, every "the suite noticed" below could be the COPY
  * failing rather than the mutation — which is the shape of a harness that
  * reports a clean sweep while proving nothing at all. */
-const base = runSuite();
-if (base.status !== 0) {
-  console.error(`BASELINE FAILED: ${SUITE} is red against an unmutated copy of the engine.`);
-  console.error(base.stdout || base.stderr);
-  if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
-  process.exit(1);
+for (const suite of [...new Set(MUTATIONS.map((m) => m.suite || SUITE))]) {
+  const base = runSuite(suite);
+  if (base.status !== 0) {
+    console.error(`BASELINE FAILED: ${suite} is red against an unmutated copy of the engine.`);
+    console.error(base.stdout || base.stderr);
+    if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
+    process.exit(1);
+  }
 }
 
-const p = path.join(engine, SUBJECT);
 const rows = [];
 let survived = 0, broken = 0;
 
 for (const m of MUTATIONS) {
+  const p = path.join(engine, m.file || SUBJECT);
+  const suite = m.suite || SUITE;
   const original = fs.readFileSync(p, 'utf8');
   const hits = original.split(m.find).length - 1;
   if (hits !== 1) {
-    rows.push(['ANCHOR', m.what, `the text to replace appears ${hits} times, not once`]);
+    rows.push(['ANCHOR', m.what, `${m.file || SUBJECT}: the text to replace appears ${hits} times, not once`]);
     broken++;
     continue;
   }
   fs.writeFileSync(p, original.replace(m.find, m.to));
-  const r = runSuite();
+  const r = runSuite(suite);
   fs.writeFileSync(p, original);
   const green = r.status === 0;
   const first = green ? '' : (r.stdout.match(/^✖ (.+?) \(/m) || [, '(a test)'])[1];
   if (m.equivalent) {
     if (green) rows.push(['ok', m.what, 'stayed green, as an equivalent mutant must']);
-    else { rows.push(['OVER-PINNED', m.what, `${SUITE} went red on a change that cannot alter an answer: ${first}`]); survived++; }
+    else { rows.push(['OVER-PINNED', m.what, `${suite} went red on a change that cannot alter an answer: ${first}`]); survived++; }
   } else if (green) {
-    rows.push(['SURVIVED', m.what, `${SUITE} stayed green`]);
+    rows.push(['SURVIVED', m.what, `${suite} stayed green`]);
     survived++;
   } else {
     rows.push(['caught', m.what, first]);
@@ -166,7 +206,7 @@ for (const m of MUTATIONS) {
 }
 
 const w = (s, n) => String(s).padEnd(n).slice(0, n);
-console.log(`\nMutation testing — ${SUBJECT}, one deliberate break at a time against a scratch copy of assets/\n`);
+console.log(`\nMutation testing — the self-crossing detector and its wiring, one deliberate break at a time\n`);
 console.log(w('verdict', 13) + w('what was broken', 88) + 'which test objected');
 console.log('-'.repeat(160));
 for (const [v, what, detail] of rows) console.log(w(v, 13) + w(what, 88) + detail);

@@ -52,6 +52,13 @@ const { computeEngineVersion, stampEngine } = require('./engine_version');
 // two tools compare the same number against the same file (OA-179).
 const CURRENT_ENGINE = computeEngineVersion();
 const BUILDLOG = require('./build_log');
+// The self-crossing check (buses-data OA-240). A rollout is the ONLY place this
+// question can be asked: the schematic workspace lives in an S4 run folder and
+// nowhere else, so `ci-reference/` cannot feed it and CI's clone has nothing to
+// read. It is outside the engine hash closure and so is this file, so wiring it
+// here costs no rollout of its own. Non-blocking by construction -- see
+// crossingWarnings() -- because three published maps carry one today.
+const { crossingWarnings } = require('./schematic_crossings');
 // The printed sheet version (footer.js design.sheetVersion). Byte-identical
 // copies of this lived in BOTH rollouts until 2026-08-29 and in neither of the
 // other two routes into an S4, which is how a hand-built build shipped with no
@@ -270,6 +277,7 @@ function rolloutOne(t) {
     copyFile(path.join(SK, 'schematize_internal.js'), s4);
     const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK });
     said.push({ source: 'schematic', stderr: r.stderr, ok: r.ok });
+    said.push({ source: 'crossings', stderr: crossingWarnings(s4).join('\n'), ok: true });
     if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
   }
   if (routesJson.internalDiagram) {
@@ -348,7 +356,7 @@ function rolloutOne(t) {
   // output just vanished from the commit with no error surfaced. Caught when High Wycombe,
   // Beaconsfield, St Neots and St Ives all lost internal-diagram.svg (St Ives also
   // internal-schematic.svg) across a rollout --all --apply.
-  if (routesJson.internalSchematic) { copyFile(path.join(SK, 'schematize_internal.js'), s4Dir); const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok }); if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
+  if (routesJson.internalSchematic) { copyFile(path.join(SK, 'schematize_internal.js'), s4Dir); const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok }); realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('\n'), ok: true }); if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
   if (routesJson.internalDiagram) { copyFile(path.join(SK, 'diagram_internal.js'), s4Dir); const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'diagram', stderr: r3.stderr, ok: r3.ok }); if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg'); }
   // The log goes in the run folder BESIDE the artwork it describes, and is committed
   // as an output — so "what did the engine say when it drew this?" is answerable

@@ -252,6 +252,42 @@ function analyseRun(runDir) {
   return { routes: out };
 }
 
+/*
+ * The same finding, phrased for `build_log.js` — one line per crossing over the
+ * threshold, ready to be handed to `BUILDLOG.collect()` as a generator's stderr.
+ * Empty when there is nothing to say, which is what a clean run must produce.
+ *
+ * BOTH ROLLOUT TOOLS CALL THIS, and neither has its own copy: the unit of an
+ * extraction on this project is the module PLUS a check on its callers, and
+ * `rollout_crossings.test.js`'s census is that check. A rollout is the only place
+ * this question can be asked at all — the schematic workspace exists in an S4 run
+ * folder and nowhere else, so CI's clone cannot see it.
+ *
+ * IT IS DELIBERATELY PHRASED SO THAT `severity()` READS IT AS `WARN`. The words
+ * that make an entry BLOCKING are "not drawn", "names nothing", "has no geometry"
+ * and the overflow and crash shapes, and this says none of them. As at 2026-09-04
+ * three published maps carry a Class A crossing; a blocking warning would stop
+ * their next build the day it was written, including the rollout this rides on.
+ * Promoting it is one word in this string, and it belongs in the change that
+ * fixes the solver.
+ */
+function crossingWarnings(runDir, { sepM = DEFAULT_SEP_M } = {}) {
+  let res;
+  try { res = analyseRun(runDir); } catch (e) { return ['crossings: the self-crossing check could not read this run — ' + e.message]; }
+  if (!res) return [];
+  const out = [];
+  for (const r of res.routes) {
+    if (r.error) { out.push(`crossings: route ${r.route} — ${r.error}`); continue; }
+    for (const c of r.crossings) {
+      if (c.sepM <= sepM) continue;
+      out.push(`crossings: route ${r.route} is drawn crossing itself at ${c.atI} x ${c.atJ}, `
+        + `where the two stretches are ${c.sepM.toFixed(0)} m apart on the ground (OA-240). `
+        + `The geographic sheet does not cross there; in one colour at one width this reads as a junction.`);
+    }
+  }
+  return out;
+}
+
 // ---- the sweep --------------------------------------------------------------
 
 /** Every map on the estate with a manifest, town and place alike, as {name, dir}. */
@@ -327,7 +363,7 @@ function main() {
 
 module.exports = {
   selfCrossings, properCross, newCrossings, segSepM, cluster,
-  analyseRun, roadName, everyMap, CLUSTER, DEFAULT_SEP_M,
+  analyseRun, roadName, everyMap, crossingWarnings, CLUSTER, DEFAULT_SEP_M,
 };
 
 if (require.main === module) main();

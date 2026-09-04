@@ -32,6 +32,8 @@ The stamp carries a short hash of the document's **own content with the stamp re
 
 ## Commands
 
+Every command on this page runs from `stamp-docs` — this skill's own folder in the `claude-skills` repository, where `scripts/` and `stamp-policy.json` sit beside each other. There are no placeholders except the quoted paths, which are the documents or folders to act on.
+
 ```bash
 python scripts/docstamp.py --check              # audit; exits 1 if anything is missing or stale
 python scripts/docstamp.py --list               # what is in scope
@@ -48,7 +50,7 @@ Add `--dry-run` to any of them, or `--root buses|portal|ops` to narrow.
 
 The house rule (`~/.claude/CLAUDE.md`) is that a newline in Markdown means a semantic break — end of paragraph, next heading, next list item, next table row — and never "the line got long". Hard wrapping is invisible to a reader but corrupts the diff: reflow one sentence and every following line in the paragraph is rewritten, so a one-word change reads as a rewritten section.
 
-`scripts/reflow_md.py` unwraps prose that broke the rule. It is a **manual** tool — no hook runs it, and it has no default scope, so it only looks at the paths you name.
+`scripts/reflow_md.py` unwraps prose that broke the rule. It is a **manual** tool — no hook runs it, and it has no default scope, so it only looks at the paths you name. Run it from `stamp-docs`, and `<path>` is the document or folder to unwrap.
 
 ```bash
 python scripts/reflow_md.py "<path>"              # dry run, the default

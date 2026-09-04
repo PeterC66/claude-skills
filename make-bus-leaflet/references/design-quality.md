@@ -558,7 +558,7 @@ Everything above is written about the town sheets, and until 2026-08-16 that is 
 
 ## Changing any of this
 
-Never on one town. Every judgement in this document was made by rebuilding all eight and looking at the table:
+Never on one town. Every judgement in this document was made by rebuilding all eight and looking at the table. **Folder:** doesn't matter — the command names the generator by an absolute path, so run it from anywhere. The `--patch` argument is the design key to vary, and it is the only placeholder:
 
 ```bash
 node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/preview_design.js" --all --patch '{"design":{"iconInk":"charcoal"}}'

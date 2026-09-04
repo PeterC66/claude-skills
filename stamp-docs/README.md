@@ -48,7 +48,7 @@ Markdown paragraphs are written as one continuous line each, however long. Line 
 
 That looks like a fussy preference and isn't. Wrapping is invisible when you read the document, but it wrecks the record of what changed: alter one word early in a paragraph and every line after it shifts, so a one-word correction shows up looking like a rewritten section, and a real change hides in the noise.
 
-Unlike the stamping, nothing does this automatically. When a document needs unwrapping, there is a tool that does it:
+Unlike the stamping, nothing does this automatically. When a document needs unwrapping, there is a tool that does it — run it from `stamp-docs`, and the quoted argument is the document or folder to unwrap:
 
 ```bash
 python scripts/reflow_md.py --apply "<the document or folder>"
@@ -68,7 +68,7 @@ It cannot put wrapping back. There is no undo beyond your own version control.
 
 ## For whoever maintains this
 
-The tools are `scripts/docstamp.py` (stamping, hook-driven), `scripts/reflow_md.py` (Markdown paragraphs, hand-run) and `scripts/check_committed_stamps.py` (audits what is in `HEAD`, not on disk); scope lives in `stamp-policy.json` and all three honour it; `SKILL.md` has the commands, the design, and the gotchas. To check the current state of everything:
+The tools are `scripts/docstamp.py` (stamping, hook-driven), `scripts/reflow_md.py` (Markdown paragraphs, hand-run) and `scripts/check_committed_stamps.py` (audits what is in `HEAD`, not on disk); scope lives in `stamp-policy.json` and all three honour it; `SKILL.md` has the commands, the design, and the gotchas. To check the current state of everything, run these two from `stamp-docs` — no placeholders:
 
 ```bash
 python scripts/docstamp.py --check

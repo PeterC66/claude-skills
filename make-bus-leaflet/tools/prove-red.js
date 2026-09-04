@@ -599,37 +599,55 @@ const MUTATIONS = [
     to: 'JSON.stringify(out, null, 2)' },
 
   { suite: 'quality_gate.test.js', file: 'quality_gate.js',
-    what: 'accept() stops refusing a REGRESSED sheet with no note, so a raised ceiling goes in unexplained',
-    find: '  const missing = unnotedRegressions(rows, notes);',
-    to: '  const missing = [];' },
+    what: 'no sheet has to explain itself, so a raised quality ceiling goes in unexplained',
+    find: "const regressedKeys = (rows) => rows.filter(r => r.status === 'REGRESSED').map(r => r.key);",
+    to: 'const regressedKeys = () => [];' },
 
-  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
-    what: 'a new note REPLACES the sheet\'s existing one instead of being appended to it',
+  // ledger_notes.js — the grammar and the refusal shared by quality_gate.js and
+  // tools/line-ratchet.js. The line-ratchet half of the same contract lives in
+  // tools/prove-red-line-ratchet.js, because this harness copies assets/ and
+  // cannot reach a file in tools/.
+  { suite: 'ledger_notes.test.js', file: 'ledger_notes.js',
+    what: 'a new note REPLACES the entry\'s existing one instead of being appended to it',
     find: '  return existing ? existing + NOTE_SEP + para : para;',
     to: '  return para;' },
 
-  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
-    what: '--note splits on the LAST equals, so a note containing one loses its head into the sheet key',
+  { suite: 'ledger_notes.test.js', file: 'ledger_notes.js',
+    what: '--note splits on the LAST equals, so a note containing one loses its head into the key',
     find: "  const i = s.indexOf('=');",
     to: "  const i = s.lastIndexOf('=');" },
 
-  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
-    what: 'two notes for one sheet stop being refused, so one of them is silently dropped',
+  { suite: 'ledger_notes.test.js', file: 'ledger_notes.js',
+    what: 'two notes for one key stop being refused, so one of them is silently dropped',
     find: '    if (Object.prototype.hasOwnProperty.call(notes, key)) {',
     to: '    if (false) {' },
 
-  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
-    what: 'a note whose sheet key is a typo is accepted and does nothing',
-    find: '  const stray = notesForNoRow(rows, notes);',
-    to: '  const stray = [];' },
+  { suite: 'ledger_notes.test.js', file: 'ledger_notes.js',
+    what: 'a raise with no note stops being a fault, and the whole refusal is off',
+    find: '  const missing = mustExplain.filter(k => !notes[k]);',
+    to: '  const missing = [];' },
 
-  // The ORDER of the two refusals, which is not a tidiness question: both fire on
-  // a mistyped key, and the missing-note one sends a session hunting for a note it
+  { suite: 'ledger_notes.test.js', file: 'ledger_notes.js',
+    what: 'a note whose key is a typo is accepted and does nothing',
+    find: "  if (stray.length) return { code: 'NOTE_FOR_NO_ROW', keys: stray };",
+    to: '  if (false) return null;' },
+
+  // The ORDER of the two faults, which is not a tidiness question: both fire on a
+  // mistyped key, and the missing-note one sends a session hunting for a note it
   // is holding in its hand.
-  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
-    what: 'the typo refusal defers to the missing-note one, so a mistyped key is reported as an absent note',
-    find: '  const stray = notesForNoRow(rows, notes);',
-    to: '  const stray = unnotedRegressions(rows, notes).length ? [] : notesForNoRow(rows, notes);' },
+  { suite: 'ledger_notes.test.js', file: 'ledger_notes.js',
+    what: 'the typo fault defers to the missing-note one, so a mistyped key is reported as an absent note',
+    find: "  if (stray.length) return { code: 'NOTE_FOR_NO_ROW', keys: stray };",
+    to: "  if (stray.length && !mustExplain.filter(k => !notes[k]).length) return { code: 'NOTE_FOR_NO_ROW', keys: stray };" },
+
+  // The adoption arm, and the one the whole extraction is for. A caller that
+  // grows its own parser back is the same arithmetic until the day one of them is
+  // fixed, and no other assertion in either suite can see it.
+  { suite: 'ledger_notes.test.js', file: 'quality_gate.js',
+    what: 'quality_gate.js grows its own note parser back, identical to the shared one, and nothing it writes changes',
+    find: "const { parseNoteArg, parseNoteFile, collectNotes, appendNote, noteFault } = NOTES;",
+    to: "const { parseNoteFile, collectNotes, appendNote, noteFault } = NOTES;" + String.fromCharCode(10)
+      + "const parseNoteArg = (s) => { const i = s.indexOf('='); return { key: s.slice(0, i), text: s.slice(i + 1) }; };" },
 
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'mustPlace loses its second, relaxed pass',

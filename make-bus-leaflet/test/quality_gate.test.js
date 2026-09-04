@@ -208,59 +208,23 @@ function fixture(prevSheet = { labels: 100, hard: 5, soft: 10, drop: 2, def: 15,
 const regressed = (key = 'a · internal') => ({ key, now: sheet({ hard: 9 }), status: 'REGRESSED', why: ['HARD 5 -> 9'] });
 const okRow = (key = 'a · internal') => ({ key, now: sheet(), status: 'ok', why: [] });
 
-test('parseNoteArg splits on the FIRST equals, so a note may contain one', () => {
-  // "HARD 4 -> 5, drop=5" is the shape a real note takes. Splitting on the last
-  // `=` would move the head of the sentence into the sheet key and then refuse
-  // it as a sheet nobody has heard of.
-  const n = QG.parseNoteArg('a · internal=ACCEPTED: HARD 4 -> 5, drop=5');
-  assert.strictEqual(n.key, 'a · internal');
-  assert.strictEqual(n.text, 'ACCEPTED: HARD 4 -> 5, drop=5');
-});
+/* The grammar, the dated append and the ORDER of the two refusals now live in
+ * assets/ledger_notes.js, shared with tools/line-ratchet.js, and are tested in
+ * test/ledger_notes.test.js — including the check that this file still calls
+ * them. What stays here is what is specific to the QUALITY ledger: which rows
+ * have to explain themselves, and what accept() does with the answer. */
 
-test('parseNoteArg refuses a value that is not "<key>=<text>"', () => {
-  for (const bad of ['no equals sign at all', '=text with no key', 'key with no text=', '=', 42, undefined]) {
-    assert.throws(() => QG.parseNoteArg(bad), /--note/, JSON.stringify(bad) + ' was accepted');
-  }
-});
 
-test('a note file is one note per line, and names the line it could not read', () => {
-  const parsed = QG.parseNoteFile('# a comment\n\na · internal=first\nb · external=second\n');
-  assert.deepStrictEqual(parsed.map(n => n.key), ['a · internal', 'b · external']);
-  // A line that cannot be read must NOT be skipped: a silently ignored line is a
-  // note somebody believes they supplied, and the refusal then fires at a session
-  // looking straight at it.
-  assert.throws(() => QG.parseNoteFile('a · internal=fine\nrubbish\n'), /line 2/);
-});
 
-test('collectNotes merges the flags and the file, and refuses two notes for one sheet', () => {
-  const merged = QG.collectNotes(['a · internal=from a flag'], 'b · external=from the file\n');
-  assert.deepStrictEqual(merged, { 'a · internal': 'from a flag', 'b · external': 'from the file' });
-  assert.deepStrictEqual(QG.collectNotes(), {}, 'no notes at all is an empty object, not a throw');
-  assert.throws(() => QG.collectNotes(['a=one', 'a=two']), /two notes supplied for the same sheet/);
-  assert.throws(() => QG.collectNotes(['a=one'], 'a=two\n'), /two notes supplied for the same sheet/,
-    'a flag and a file colliding is the same fault as two flags');
-});
-
-test('appendNote adds a dated paragraph and keeps what was there', () => {
-  const out = QG.appendNote('2026-08-30, the placer round: ...', 'ACCEPTED DELIBERATELY: ...', '2026-09-04');
-  assert.strictEqual(out, '2026-08-30, the placer round: ...\n\n2026-09-04, ACCEPTED DELIBERATELY: ...');
-  assert.strictEqual(QG.appendNote(null, 'first thing said', '2026-09-04'), '2026-09-04, first thing said',
-    'a sheet with no note yet gets the paragraph on its own');
-  assert.strictEqual(QG.appendNote(undefined, 'x', '2026-09-04'), '2026-09-04, x');
-});
-
-test('appendNote does not date a paragraph that already opens with a date', () => {
-  const out = QG.appendNote('older', '2026-09-01, measured the day before', '2026-09-04');
-  assert.strictEqual(out, 'older\n\n2026-09-01, measured the day before');
-});
-
-test('unnotedRegressions names only the REGRESSED rows with no note', () => {
+test('the quality ledger makes exactly its REGRESSED rows explain themselves', () => {
+  // A ceiling going UP is a sheet printing fewer labels, carrying more hard
+  // defects, or dropping more names. A NEW row and an ok row never need a note.
   const rows = [regressed('a'), regressed('b'), okRow('c'), { key: 'd', now: sheet(), status: 'NEW', why: [] }];
-  assert.deepStrictEqual(QG.unnotedRegressions(rows, {}), ['a', 'b']);
-  assert.deepStrictEqual(QG.unnotedRegressions(rows, { a: 'why' }), ['b']);
-  assert.deepStrictEqual(QG.unnotedRegressions(rows, { a: 'why', b: 'why' }), [],
-    'a NEW row and an ok row never need one — only a RAISED ceiling does');
+  assert.deepStrictEqual(QG.regressedKeys(rows), ['a', 'b']);
+  assert.deepStrictEqual(QG.noteFaultFor(rows, {}), { code: 'UNNOTED_RAISE', keys: ['a', 'b'] });
+  assert.strictEqual(QG.noteFaultFor(rows, { a: 'why', b: 'why' }), null);
 });
+
 
 test('accept() REFUSES a REGRESSED sheet with no note, and writes nothing at all', () => {
   // The guarantee is in accept(), not only in the CLI: a caller reaching this
@@ -268,7 +232,7 @@ test('accept() REFUSES a REGRESSED sheet with no note, and writes nothing at all
   const f = fixture();
   const before = f.raw();
   assert.throws(() => QG.accept(f.dir, [regressed()], f.ledger, { today: '2026-09-04' }),
-    e => e.code === 'UNNOTED_REGRESSION' && e.keys.join() === 'a · internal');
+    e => e.code === 'UNNOTED_RAISE' && e.keys.join() === 'a · internal');
   assert.strictEqual(f.raw(), before, 'the ledger was written despite the refusal');
   fsn.rmSync(f.dir, { recursive: true, force: true });
 });

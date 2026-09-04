@@ -62,14 +62,14 @@ Every brief is read-only and says so. Reviewers report in one shape: what to pre
 
 **6. Backlog and commitment.** Update the backlog row's body with what this run found and what is left; file a new row only for work the plan cannot hold. Then re-date the `codebase-review` entry in `Development Docs/commitments.json`: after the next OA-224 tier while tiers remain, otherwise fourteen days from today. Delete-and-re-add is the convention there, not a done flag.
 
-**7. Checks, stamp, commit, memory.** From the buses-data root, `C:\u3a St Ives\Using AI\Buses`, with no placeholders, run the four documentation checkers and the backlog check, re-stamp, stage by name, read the staged diff as its own command, and commit with a pathspec. Every command below is run from that folder:
+**7. Checks, stamp, commit, memory.** From the buses-data root, `C:\u3a St Ives\Using AI\Buses`, with no placeholders, run the four documentation checkers and the backlog check — two of them live in `claude-skills` since 2026-09-04 (buses-data OA-246) and are named by an absolute path that is real rather than a placeholder, and each reads the repository it is RUN FROM, re-stamp, stage by name, read the staged diff as its own command, and commit with a pathspec. Every command below is run from that folder:
 
 ```bash
-node Documentation/check-tables.mjs
+node "C:/u3a St Ives/.claude/skills/tools/check-tables.mjs"
 ```
 
 ```bash
-node Documentation/check-doc-links.mjs
+node "C:/u3a St Ives/.claude/skills/tools/check-doc-links.mjs"
 ```
 
 ```bash

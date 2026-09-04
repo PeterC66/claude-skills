@@ -44,6 +44,11 @@ const MIGRATED_JS = {
   'preview_design.js': ['town', 'unset', 'feature-pos', 'set-path'],
   'rollout.js': ['town'],
   'rollout_places.js': ['place'],
+  // Not a migration -- new on 2026-09-04 (buses-data OA-240), written onto the
+  // shared parser from the start. It is here for its REPEAT flags: --town and
+  // --place are how a sweep is narrowed to one map, and losing either turns
+  // `--town A --town B` from two maps into one, silently.
+  'schematic_crossings.js': ['town', 'place'],
   'status.js': [],
   'stray_outputs.js': [],
   'sync_ci_reference.js': [],

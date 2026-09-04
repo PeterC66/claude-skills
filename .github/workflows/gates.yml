@@ -143,6 +143,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-engine-indirection
 
+      # The octolinear schematizer has no non-crossing constraint, so it can draw a
+      # route crossing itself where the ground does not (buses-data OA-240). The
+      # detector is standalone and deliberately OUTSIDE the engine hash closure --
+      # `schematic_crossings.test.js` holds that line -- so it costs no rollout. It
+      # runs here rather than in `status`: `ci-reference/` mirrors an S4 run but
+      # carries no `schematic/` workspace, so the estate sweep has nothing to read
+      # in a fresh clone and the suite works on fixtures it builds itself. Thirteen
+      # mutations plus an equivalent-mutant control that must stay green. ~15 s.
+      - name: Prove the schematic self-crossing detector can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-schematic-crossings
+
       - name: Prove the S4 run-directory guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-run-dir

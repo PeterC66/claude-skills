@@ -75,10 +75,21 @@ seed();
  * So the growth cases run against a ledger this harness owns, where the only file
  * out of line is the one the case put out of line. The CONTROL still uses the real
  * ledger — that is where the real estate belongs.
+ *
+ * AND IT DROPS THE NOTES BLOCK, which is the same fault one turn further on and was
+ * found on 2026-09-04 (OA-247), the first day any file carried a real note. `--accept`
+ * APPENDS a dated paragraph to whatever note a file already has — correctly, that is
+ * the point of it — so case 8, which asserts the note in the ledger is exactly the
+ * one it just wrote, started failing about a real note that had nothing to do with
+ * it. Three cases depended on the real ledger's CONTENTS rather than on the
+ * checker's behaviour, and each of the three broke the first time the estate said
+ * something it had never said before. A harness owns its fixture or it does not have
+ * one.
  */
 function seedLevel() {
   seed();
   const level = { ...real, files: {} };
+  delete level.notes;
   for (const rel of FILES) level.files[rel] = myCount(DST(rel));
   fs.writeFileSync(LEDGER, JSON.stringify(level, null, 2) + '\n');
   return level;
@@ -131,6 +142,12 @@ const BIG = FILES.reduce((a, b) => (real.files[a] >= real.files[b] ? a : b));
 
 // ---- 1. growth ---------------------------------------------------------------
 {
+  // seedLevel, not seed: `+3 over the ceiling` is only true if BIG started AT its
+  // ceiling, which is a fact about the estate and not about the checker. On
+  // 2026-09-04 BIG was +23 over from another session's commit and this case failed
+  // saying `+26`, which is the harness reporting a true fact about the tree as its
+  // own breakage — exactly what seedLevel exists to stop.
+  seedLevel();
   fs.appendFileSync(DST(BIG), '// grown\n// grown\n// grown\n');
   const r = run();
   check('1. three appended lines go RED', r.code === 1, r.out);
@@ -202,6 +219,7 @@ const NOTE_TEXT = 'the three lines are the AW1 branch and they belong in the scr
 
 // ---- 7. a raise with no note is refused, and the ledger does not move --------
 {
+  seedLevel();   // `+3` is the growth this case made, not the growth the estate had
   fs.appendFileSync(DST(BIG), '// grown\n// grown\n// grown\n');
   const before = fs.readFileSync(LEDGER, 'utf8');
   const r = run('--accept');
@@ -232,6 +250,7 @@ const NOTE_TEXT = 'the three lines are the AW1 branch and they belong in the scr
 }
 // ---- 9. a mistyped path is reported as a typo, not as an absent note ---------
 {
+  seedLevel();   // so the only file needing a note is the one this case grew
   fs.appendFileSync(DST(BIG), '// grown\n// grown\n// grown\n');
   const r = run('--accept', '--note', BIG + '.typo=' + NOTE_TEXT);
   check('9. a note naming a file the ledger does not is REFUSED', r.code === 2, r.out);

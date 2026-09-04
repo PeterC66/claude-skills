@@ -202,71 +202,40 @@ function judgeNoSheet(rec, basename) {
 // AND the value it was computed from had been invented by the checkout.
 //
 // WHY THERE IS AN EXCEPTION, AND WHY IT IS THIS NARROW. Folding this in
-// unconditionally turns the board red for Ramsey on its first run, and a gate
-// that is red on day one is a gate that gets muted — this project has paid for
-// that more than once, and it is why the quality TARGETS are still reported
-// rather than gated a few lines above. Ramsey is genuinely built from older code
-// rather than carrying a line-ending artefact, it is the only record that any map
-// was, and whether it stays a town at all is an open question (OA-072) — so
-// rebuilding it to clear the gate would be work on a map that may not survive.
+// unconditionally would have turned the board red for a town built from genuinely
+// older code, and a gate that is red on day one is a gate that gets muted — this
+// project has paid for that more than once, and it is why the quality TARGETS are
+// still reported rather than gated a few lines above.
 //
-// The exception is keyed to the TOWN AND THE EXACT HASH, so it expires by itself:
-// rebuild Ramsey on any engine and the pair stops matching, the exception stops
-// applying, and the row gates like every other. It cannot silently widen into
-// "Ramsey is never checked".
-// Empty on purpose. The one entry this ever held — Ramsey at d8eb6961c7, excused
-// because OA-072 asked whether Ramsey stayed a town at all — expired twice over on
-// 2026-08-28: OA-072 was answered "keep it", and Ramsey was then rebuilt from S1 as
-// v2.0 on the current engine. The board itself reported the exception as no longer
-// applying, which is the behaviour to preserve: an entry here must name the town,
-// the exact engine hash it excuses and why, so it stops excusing anything the
-// moment that town is rebuilt.
+// FOUR RULES, EACH LEARNED FROM AN ENTRY THAT HAS SINCE EXPIRED — Ramsey at
+// d8eb6961c7 (OA-072, rebuilt 2026-08-28) and Wisbech at cf683a815c (portal
+// update #139, cleared by OA-240 on 2026-09-04). The entries are gone; the rules
+// are why the list still works, and the tellings are in git and in buses-data's
+// round records rather than here. Condensed 2026-09-04 under OA-247, to pay for
+// the entry below in lines instead of raising a ceiling — the same trade 54d22cd
+// made that morning.
 //
-// 2026-08-31 — one entry, and what it excuses is a CUSTOMER'S INBOX rather than
-// a map. OA-202/OA-066 moved the template hash to 622ff644d4 and seven of the
-// eight towns were rolled onto it the same hour. Wisbech was not, because
-// buses-68 had delivered it as portal proposed-update #139 twenty-five minutes
-// earlier and the customer had already been emailed: rebuilding it here would
-// have superseded the very version they are being asked to accept, and putting
-// that right would have meant a second "an update is ready" mail to the same
-// person inside the hour. The engine change is byte-neutral without a `tiers`
-// block and Wisbech has none, so the code that drew it and the code that would
-// draw it now produce identical artwork — the STAMP is the whole of what is
-// stale. Delete this entry once #139 is accepted or withdrawn and Wisbech has
-// been rolled; the hash key makes it stop excusing anything at that moment in
-// any case, and the board says so out loud when it does.
-//
-// 2026-08-31, LATER THE SAME DAY — this entry has now survived a SECOND rollout,
-// and that it needed no edit is the design working rather than luck. OA-206 and
-// OA-207 moved the template to 37a9450d76 and the other seven towns went with it;
-// Wisbech did not, because #139 is still staged with the customer — read off the
-// live worklist, not assumed. The entry is keyed to the town AND the hash it
-// excuses, so it goes on excusing exactly Wisbech-at-cf683a815c however far the
-// current template moves ahead of it. DO NOT "update" the hash here to the current
-// one: that would excuse a town that had been rebuilt, which is the single thing
-// this list must never do.
-//
-// That second rollout was byte-neutral too — all 25 re-rendered sheets differed by
-// their version stamp and nothing else — so the paragraph above is still literally
-// true of the gap between the code that drew Wisbech and the code that would draw
-// it now. The standing consequence: anything that MOVES INK must not ride a rollout
-// while this entry stands, or the excuse quietly stops being true while a customer
-// is still deciding. OA-187 was held back on exactly that ground.
-//
-// 2026-09-01 — AND THAT IS NOW WHAT HAS HAPPENED, DELIBERATELY, SO READ THE ABOVE
-// AS HISTORY. OA-187 and OA-213 shipped together and they MOVE INK: the numbered
-// index block now fills, and its markers are drawn at 2.4 mm rather than 2.3.
-// Wisbech was held out of that rollout on Peter's explicit call, which is what the
-// paragraph above asks for — but the half of the excuse that said "the STAMP is the
-// whole of what is stale" is no longer true of this town. Measured, not assumed:
-// Wisbech internal would go HARD 9 -> 4 and its schematic 7 -> 2, with no change in
-// dropped labels, so the sheets #139 shows the customer are now genuinely older
-// artwork than the engine would draw, not merely an older stamp of the same
-// artwork. The entry still holds and for its ORIGINAL reason — a rebuild would
-// supersede a proposal somebody is still deciding on — but nobody may now cite
-// byte-neutrality for it. When #139 is accepted or withdrawn, Wisbech is a real
-// re-render and not a re-stamp. Measurement:
-// Development Docs/place-index-round_2026-09-01.md in buses-data.
+//   1. AN ENTRY IS KEYED TO THE TOWN AND THE EXACT HASH, so it expires by itself:
+//      rebuild that town on any engine and the pair stops matching, the exception
+//      stops applying, and the row gates like every other. It cannot silently
+//      widen into "this town is never checked", and the board says so out loud at
+//      the moment it stops applying.
+//   2. NEVER "UPDATE" A HASH HERE to the current one. That would excuse a town
+//      that had been rebuilt, which is the single thing this list must never do.
+//      An entry is expected to survive rollouts unedited; that it needs no edit is
+//      the design working rather than luck.
+//   3. BYTE-NEUTRALITY EXPIRES, AND THE ENTRY DOES NOT. An excuse resting on "the
+//      STAMP is the whole of what is stale" stops being true the first time a
+//      rollout MOVES INK past the held town — which happened to Wisbech on
+//      2026-09-01 (OA-187/OA-213: HARD 9 -> 4 internal, 7 -> 2 schematic; measured
+//      in Development Docs/place-index-round_2026-09-01.md in buses-data). The
+//      entry may still stand for its original reason, but nobody may go on citing
+//      byte-neutrality for it. So: anything that moves ink must not ride a rollout
+//      while an entry stands, or the excuse quietly stops being true while a
+//      customer is still deciding.
+//   4. WHAT AN ENTRY EXCUSES IS SOMETIMES A CUSTOMER'S INBOX rather than a map.
+//      Rebuilding a town whose proposed update is already staged with the customer
+//      supersedes the version they are being asked to accept.
 const ENGINE_STALE_ALLOWED = [
   // `commit` is REQUIRED as of OA-214 and is not decoration: it is what lets the
   // town be gated against its own engine instead of excused. An engine version is

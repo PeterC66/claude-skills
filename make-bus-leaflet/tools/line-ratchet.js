@@ -46,6 +46,27 @@
  * Lowering a ceiling needs no note: the ratchet only makes the expensive
  * direction expensive.
  *
+ * BUT LOWERING IS NOT FREE FOR EVERY FILE, AND THIS IS THE THING TO KNOW BEFORE
+ * REACHING FOR IT (2026-09-04, buses-data OA-247). The house rule is *a comment is
+ * not free under a ratchet* — prose counts, so pay for growth by cutting prose
+ * rather than by raising a ceiling. That rule is right for `status.js`,
+ * `verify_report.js` and this tool, and it is WRONG for the six files in the
+ * engine-hash closure. `engine_version.js` hashes whole file bytes, so deleting a
+ * single comment line from `gen_internal.js` moves the town engine hash — measured
+ * that day, 6614965db0 -> 7c9b8820c1 — which marks all 18 sheet-drawing maps stale
+ * and buys an estate re-render and a portal re-vendor for the sake of one line.
+ * `gen_external_places.js` is the same in the PLACE closure.
+ *
+ * So the decision is per file, and `ENGINE_FILES` (plus its require closure) is the
+ * dividing line:
+ *
+ *   * IN the closure  — accept the growth with a note. Ratchet DOWN only inside a
+ *     change that is already moving the hash, where the trim is free.
+ *   * OUT of it       — pay in lines first. On the day this was written the same
+ *     commit did both: `status.js` grew 21 lines for a dated allowance and paid
+ *     for them by condensing 31 lines of narrative about two allowances that had
+ *     already expired, so its ceiling came DOWN 1738 -> 1728.
+ *
  * THIS FILE IS OUTSIDE THE ENGINE HASH. `engine_version.js` hashes the require
  * closure of the entry generators; nothing here is required by any of them, so
  * adding or editing this tool moves no map's `engine` stamp. `ledger_notes.js`

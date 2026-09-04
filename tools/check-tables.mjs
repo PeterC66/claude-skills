@@ -190,17 +190,39 @@ function enumeratedDirs(root, entry) {
   return [base, ...subs.map((n) => path.join(base, n) + path.sep)];
 }
 
-const DECL = declaration(REPO_ROOT);
+/* NOTHING BELOW IS EVALUATED UNDER --root OR --tree, and that is not an
+ * optimisation. Those modes name a TREE, and the repository you happen to be
+ * standing in is then irrelevant — but `untrackedByCheckers` asks git about it,
+ * and git rightly refuses when the cwd is not a repository at all. It bit within
+ * hours of the move: buses-data's CI checks its three repositories into
+ * SUBDIRECTORIES of the workspace, so the workspace root is not a repository,
+ * and every one of the harness's twelve --root/--tree cases died on a `git
+ * ls-files` about a folder none of them had asked about. It could not bite
+ * before the move, when this constant came from `import.meta.url` and therefore
+ * always named a real repository; and it did NOT bite in claude-skills' CI,
+ * whose step runs from inside its checkout — the same code, green in one CI and
+ * red in the other, which is the tell.
+ *
+ * The general form is the one this move has now paid for twice: A MODE THAT
+ * NAMES A TREE MUST NOT DEPEND ON THE REPOSITORY YOU ARE STANDING IN. See
+ * *The flag that named a tree and dropped the tree's own declaration* in
+ * buses-data's failure-shapes list, which is the same fault in the other
+ * checker. */
+const DEFAULT_CORPUS = rootArg === -1 && treeArg === -1;
+
+const DECL = DEFAULT_CORPUS
+  ? declaration(REPO_ROOT)
+  : { declared: false, dirs: [], enumerate: [], excluded: new Map() };
 /* What the declaration already reaches, repo-relative, so the git enumeration
  * adds only what it does not. A prefix covers everything beneath it, which is
  * why declaring `Development Docs` also covers `Development Docs/open-actions`. */
 const COVERED_BY_DECLARATION = [...DECL.dirs, ...DECL.enumerate.map((e) => e.dir)];
 
-const DEFAULT_DIRS = [...new Set([
+const DEFAULT_DIRS = DEFAULT_CORPUS ? [...new Set([
   ...DECL.dirs.map((d) => path.join(REPO_ROOT, d) + path.sep),
   ...DECL.enumerate.flatMap((e) => enumeratedDirs(REPO_ROOT, e)),
   ...untrackedByCheckers(REPO_ROOT, COVERED_BY_DECLARATION),
-])];
+])] : [];
 /* EXCLUSIONS, WITH A REASON EACH, and a stale one is a hard error rather than a
  * silent pass — the same contract `run-tests.mjs` uses in the portal, and the
  * one `.file-hygiene.json`'s `notOurs` uses. It exists because a repository's
@@ -222,8 +244,9 @@ const EXCLUDED = DECL.excluded;
  * that wrong turned every one of prove-red-tables.mjs's twelve cases into
  * "exited 2" and reddened claude-skills' docs job, which is the sharper lesson:
  * a guard that fires outside its own subject is not a stricter check, it is a
- * broken one. */
-const DEFAULT_CORPUS = rootArg === -1 && treeArg === -1;
+ * broken one. `EXCLUDED` is empty outside the default corpus anyway, now that
+ * the declaration is not even read there; the loop keeps its guard because the
+ * two facts should not have to be true at once for this to be correct. */
 for (const rel of DEFAULT_CORPUS ? EXCLUDED.keys() : []) {
   if (!existsSync(path.join(REPO_ROOT, rel))) {
     console.error(`check-tables: ${REPO_ROOT}/.doc-tables.json excludes ${rel}, which is not there any more — remove the exclusion or fix the path.`);

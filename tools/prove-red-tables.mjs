@@ -380,5 +380,44 @@ console.log('\nAn `enumerate` folder grows a subfolder nobody listed:\n');
   r.done();
 }
 
+/* --root AND --tree FROM A CWD THAT IS NOT A REPOSITORY AT ALL.
+ *
+ * Every case above runs from wherever the harness was started, which on a laptop
+ * and in claude-skills' CI is inside a git repository — so for a day this
+ * harness could not tell the difference between a checker that ignores the cwd
+ * under --root and one that quietly asks git about it. buses-data's CI checks
+ * its three repositories into SUBDIRECTORIES of the workspace, so the step's cwd
+ * is not a repository, and all twelve of those cases died on a `git ls-files`
+ * about a folder none of them had named. The same code, green in one CI and red
+ * in the other.
+ *
+ * The rule is A MODE THAT NAMES A TREE MUST NOT DEPEND ON THE REPOSITORY YOU ARE
+ * STANDING IN, and the only way to assert it is to stand somewhere that is not
+ * one. `os.tmpdir()` is that place on every platform. */
+console.log('\nPointed at a tree from a cwd that is no repository:\n');
+{
+  const dir = mkdtempSync(path.join(tmpdir(), 'tables-outside-'));
+  mkdirSync(path.join(dir, 'nested'), { recursive: true });
+  writeFileSync(path.join(dir, 'top.md'), PLAIN, 'utf8');
+  writeFileSync(path.join(dir, 'nested', 'buried.md'),
+    glue(HOUSE, '| **First** | something | Team |', '| **Second** | something else | Internal |'), 'utf8');
+  const from = mkdtempSync(path.join(tmpdir(), 'not-a-repo-'));
+  const at = (args) => {
+    const r = spawnSync(process.execPath, [CHECKER, ...args], { cwd: from, encoding: 'utf8' });
+    return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+  };
+  const asRoot = at(['--root', dir]);
+  const outside = /(\d+) table rows across (\d+) documents/.exec(asRoot.out);
+  report(asRoot.code === 0 && !!outside && outside[2] === '1',
+    `--root read the tree it was given (${outside ? outside[2] + ' document' : 'nothing'}) and asked git nothing about the cwd`
+    + (asRoot.code === 0 ? '' : `  <-- exited ${asRoot.code}\n${asRoot.out}`), 'GREEN');
+  const asTree = at(['--tree', dir]);
+  report(asTree.code === 1 && /nested\/buried\.md/.test(asTree.out),
+    '--tree still found the glued row, standing outside every repository'
+    + (asTree.code === 1 ? '' : `  <-- exited ${asTree.code}\n${asTree.out}`));
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(from, { recursive: true, force: true });
+}
+
 console.log(`\n${failed ? `${failed} CASE${failed === 1 ? '' : 'S'} COULD NOT BE FALSIFIED` : 'Every fault was watched go red, every control stayed green, the row count is what it claims, and the default corpus was measured rather than assumed.'}`);
 process.exitCode = failed ? 1 : 0;

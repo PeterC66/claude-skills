@@ -566,5 +566,25 @@ console.log('\nThe default corpus, resolved from the repository it is run from:\
     + (pointed.code === 0 ? '' : `  <-- exited ${pointed.code}\n${pointed.out}`), 'GREEN');
 }
 
+/* --root FROM A CWD THAT IS NOT A REPOSITORY, the pair of the case
+ * prove-red-tables.mjs carries. This checker survived the fault its sibling had
+ * — its git enumeration is already skipped when the whole tree is walked — and
+ * that is precisely why the case belongs here: the property is worth pinning
+ * where it currently holds, not only where it once broke. */
+console.log('\nPointed at a tree from a cwd that is no repository:\n');
+{
+  const dir = fixture({
+    'doc.md': '# Doc\n\nSee [the target](target.md#1-first-section).\n',
+  });
+  const from = mkdtempSync(path.join(tmpdir(), 'not-a-repo-'));
+  const r = spawnSync(process.execPath, [CHECKER, '--root', dir], { cwd: from, encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(from, { recursive: true, force: true });
+  report(r.status === 0 && /documents checked/.test(out),
+    '--root read the tree it was given and asked git nothing about the cwd'
+    + (r.status === 0 ? '' : `  <-- exited ${r.status}\n${out}`), 'GREEN');
+}
+
 console.log(`\n${failed ? `${failed} CHECK${failed === 1 ? '' : 'S'} COULD NOT BE FALSIFIED` : 'Every check was watched go red, every control stayed green, the portability cases behave the same on any platform, and the default corpus was counted rather than assumed.'}`);
 process.exitCode = failed ? 1 : 0;

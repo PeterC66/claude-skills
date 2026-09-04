@@ -6,11 +6,18 @@ name: Bus leaflet gates
 # push or the nightly schedule over there.
 #
 # Requires the CROSS_REPO_PAT2 secret, added here as a repo secret: a GitHub PAT
-# with read access to BOTH private repos this workflow checks out --
-# PeterC66/buses-data AND PeterC66/community-bus-maps. Naming only the first is
-# what caused this workflow to be red from 2026-08-04 to 2026-08-24: the token in
-# the store could read buses-data and could not see the portal, so the run died at
-# the portal checkout having gated nothing. Widen the token, not this list.
+# with read access to PeterC66/buses-data, which is the ONE private repository
+# this workflow checks out. It needed the portal too until 2026-09-03, when that
+# repository was made public; the token line and the preflight row for it were
+# removed on 2026-09-04 (buses-data OA-236).
+#
+# THE HISTORY IS KEPT BECAUSE THE FAILURE MODE HAS NOT CHANGED. Naming only one
+# repo when two were needed is what made this workflow red from 2026-08-04 to
+# 2026-08-24: the token in the store could read buses-data and could not see the
+# portal, so the run died at the portal checkout having gated nothing. A token
+# that cannot see a repository fails identically to an expired one. If a future
+# checkout adds a private repository, widen the token AND this preflight, and do
+# not assume a green run means the credential is right.
 #
 # ONE token, FOUR stores, and they renew together: buses-data Actions,
 # claude-skills Actions, community-bus-maps Actions, community-bus-maps
@@ -468,7 +475,7 @@ jobs:
           PAT: ${{ secrets.CROSS_REPO_PAT2 }}
         run: |
           if [ -z "$PAT" ]; then
-            echo "::error::CROSS_REPO_PAT2 is not set on this repository. Add it under Settings -> Secrets and variables -> Actions, with read access to PeterC66/buses-data and PeterC66/community-bus-maps."
+            echo "::error::CROSS_REPO_PAT2 is not set on this repository. Add it under Settings -> Secrets and variables -> Actions, with read access to PeterC66/buses-data."
             exit 1
           fi
           # Ask the credential when it dies rather than trusting a date typed
@@ -485,7 +492,13 @@ jobs:
             echo "::warning::GitHub reported no token-expiry header, so the date in this file's header comment is unverified."
           fi
           fail=0
-          for repo in PeterC66/buses-data PeterC66/community-bus-maps; do
+          # NARROWED WITH THE CHECKOUT ABOVE (OA-236). This asked whether the
+          # token could read the portal, which it no longer needs to — and the
+          # question had become unanswerable anyway: a public repository returns
+          # 200 to any valid credential, so a token with no access to it would
+          # have passed this check. A preflight that cannot fail is worse than no
+          # preflight, because it reads as coverage.
+          for repo in PeterC66/buses-data; do
             code=$(curl -s -o /dev/null -w '%{http_code}'               -H "Authorization: Bearer $PAT"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$repo")
             if [ "$code" = "200" ]; then
               echo "  ok   $repo"
@@ -534,11 +547,21 @@ jobs:
       # RED FOR REAL from here: the portal fixture rows DIFF whenever the vendored
       # engine is ahead of the portal's main, which is exactly the state a
       # re-vendoring PR is in, and this row has never once been exercised.
-      - name: Checkout community-bus-maps (portal, private)
+      # NO TOKEN, SINCE 2026-09-04 (buses-data OA-236). This step passed
+      # CROSS_REPO_PAT2 because the portal was private; it was made PUBLIC on
+      # 2026-09-03 to stop GitHub billing its Actions minutes, and a public
+      # repository needs no credential to clone. Removing the line does not close
+      # a hole — there is no exploitable path here, measured: neither public
+      # repository has a pull_request_target, workflow_run or issue_comment
+      # trigger, and GitHub withholds secrets from fork PRs. It shrinks the number
+      # of places a credential that can read a PRIVATE repository is named in a
+      # file anybody on the internet can read, which is the cheap half of the same
+      # idea. The two buses-data checkouts above keep their token because
+      # buses-data is private and stays private: it holds Correspondence/.
+      - name: Checkout community-bus-maps (portal, public since 2026-09-03)
         uses: actions/checkout@v7
         with:
           repository: PeterC66/community-bus-maps
-          token: ${{ secrets.CROSS_REPO_PAT2 }}
           path: community-bus-maps
 
       # WITHOUT THIS THE PENDING RULE CANNOT FIRE HERE, WHICH IS THE ONLY PLACE

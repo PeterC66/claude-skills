@@ -275,8 +275,29 @@ const ENGINE_STALE_ALLOWED = [
   // a walk back through history recomputing the hash at every step, which is how
   // this one was found on 2026-09-01 — and the board VERIFIES the pair on every
   // run, so a wrong commit here is a refusal, never a wrong verdict.
-  // EMPTY as of 2026-09-04, and that is the normal state -- an allowance goes when its
-  // reason does. The last (Wisbech at cf683a815c, portal update #139) went with OA-240.
+  // It was EMPTY for part of 2026-09-04, which is the normal state -- an allowance
+  // goes when its reason does. The one before this (Wisbech at cf683a815c, portal
+  // update #139) went with OA-240 the same morning.
+  //
+  // HIGH WYCOMBE IS HELD BECAUSE ITS NEXT BUILD SHIPS SOMEBODY ELSE'S CHANGE.
+  // OA-229's rollout re-rendered 19 of the 20 maps on 2026-09-04 and stopped at
+  // this one. Not because the engine change touches it -- measured, it does not:
+  // its external gates PASS under the corrected wrap, no POI is un-deleted by
+  // OA-234, and OA-238's nameless-pharmacy default is overridden by this town's
+  // own `"pharmacy:": "may"`, so all four sheets would have been byte-identical.
+  // What is waiting in its S3 is the 171-POI landmark answer a local gave, copied
+  // off the live store into `routes.json` on 2026-09-03 (buses-data 5b971e1) and
+  // never built: 145 keys, 140 `may`, FIVE `must` of which one was already in the
+  // built S4. `rollout.js` takes config from the latest S3, so the first rebuild
+  // for any reason at all applies those four new `must` promotions -- a net THREE
+  // printed labels off the internal sheet on a page OA-208 already calls
+  // saturated. That is a customer-facing content change and it is entitled to its
+  // own version bump, its own note and somebody looking at the artwork; it is not
+  // entitled to ride inside a bump whose stated reason is an engine fix.
+  // Clearing it is OA-233's business, and the byte gate below still asks the
+  // honest question of this town in the meantime.
+  { town: 'High Wycombe', engine: 'e05a4f0cfb', commit: 'bc355a1feaf7a3924283f08d7d3ea25be90fed00', since: '2026-09-04',
+    why: 'its S3 holds an unbuilt 171-POI landmark answer (5b971e1); building it is OA-233’s decision, not this rollout’s' },
 ];
 const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
 const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town === name && a.engine === engine) || null;

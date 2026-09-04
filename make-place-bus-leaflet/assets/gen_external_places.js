@@ -53,10 +53,11 @@ const { separateRow, esc } = require(_from('svg_primitives.js'));
 // rayToRect, shared with gen_external_radial.js, of which this file is a
 // reformatted clone (OA-224 Tier 3.5). Its header records the three places the
 // two copies differed and what each of them is a parameter for now. `wrap` is the
-// LEGACY one here on purpose: this sheet draws an empty first line for a one-word
-// label longer than the wrap width (both Godmanchester externals, Hinchingbrooke
-// Hospital), and correcting that moves published artwork. OA-229 is the fix.
-const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRectFor } =
+// ONLY one as of 2026-09-04 (OA-229). Until then this sheet took
+// `wrapLegacyEmptyFirstLine`, which drew an empty first line for a one-word label
+// longer than the wrap width -- Hinchingbrooke Hospital, on both published
+// Godmanchester externals. Correcting it moved those two sheets' bytes.
+const { wrap, externalPrimitives, hubEdgeFor, rayToRectFor } =
   require(_from('external_primitives.js'));
 // STRICT_GUARDS, adopted 2026-09-02 (OA-224 Tier 1.4). gen_external_radial.js took the
 // contract on 2026-08-28 (OA-045) and this file is that generator's clone, so the one

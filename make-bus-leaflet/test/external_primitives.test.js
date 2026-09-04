@@ -30,7 +30,7 @@ const { ENGINE_DIR, load } = require('./_engine');
 
 const EP = load('external_primitives.js');
 const FONT = load('font_metrics.js');
-const { wrap, wrapLegacyEmptyFirstLine, externalPrimitives, hubEdgeFor, rayToRectFor } = EP;
+const { wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = EP;
 
 /* The place skill, resolved from THIS folder and not from ENGINE_DIR: the
  * mutation harness copies only the town assets/, so a scratch run must still
@@ -61,32 +61,79 @@ test('out is resolved at CALL time, so a caller may redirect it mid-sheet', () =
   assert.match(buf[0], /cx="3.00"/);
 });
 
-/* ---- 2. the two wraps ---- */
+/* ---- 2. the wrap ---- */
 
-test('the two wraps agree on every label whose first word fits', () => {
-  for (const [label, max] of [['St Neots', 13], ['Fen Drayton Lakes', 13], ['Cambridge', 13],
-    ['Huntingdon Bus Station', 13], ['a b c d e f g h i j', 5], ['x', 1]]) {
-    assert.deepStrictEqual(wrap(label, max), wrapLegacyEmptyFirstLine(label, max),
-      'they disagree on ' + JSON.stringify(label) + ' at max ' + max);
+/* There were two of these until 2026-09-04, and the second was a live defect kept
+ * on purpose so an extraction could claim nothing moved. OA-229 deleted it and
+ * pointed both generators here, which moved ink on three published sheets. What
+ * survives is the CASE LIST: the whole population of the bug is a label whose
+ * first word is longer than the width it is given, because the width is a
+ * character count and not a measurement. Ask that of every new destination. */
+
+test('THE FAULT THIS FIXED: a one-word label longer than the wrap width takes line one', () => {
+  // "Hinchingbrooke" is 14 characters and was the destination on all three sheets
+  // that carried the empty element — St Ives' external and both Godmanchester
+  // place externals. The wrong answer was ['', 'Hinchingbrooke']: a real
+  // <text></text> element taking a line's worth of leading, with the name pushed
+  // 2mm down a box sized for two lines.
+  assert.deepStrictEqual(wrap('Hinchingbrooke', 13), ['Hinchingbrooke']);
+  assert.notDeepStrictEqual(wrap('Hinchingbrooke', 13), ['', 'Hinchingbrooke'],
+    'the empty first line is the defect OA-229 removed');
+  // With a second word the old form put BOTH on line two — a line the caller's
+  // width formula had been told would be at most `max` characters.
+  assert.deepStrictEqual(wrap('Cambridgeshire Guided', 13), ['Cambridgeshire', 'Guided']);
+  // No line this returns is ever empty, which is the property the SVG cares about.
+  for (const label of ['Hinchingbrooke', 'Cambridgeshire Guided', 'Peterborough', 'A', 'Wolverhampton']) {
+    for (const line of wrap(label, 13)) assert.notStrictEqual(line, '', label + ' emitted an empty line');
   }
 });
 
-test('THE FAULT: a one-word label longer than the wrap width', () => {
-  // "Hinchingbrooke" is 14 characters and the destination on three published
-  // sheets — St Ives' external and both Godmanchester place externals.
-  assert.deepStrictEqual(wrap('Hinchingbrooke', 13), ['Hinchingbrooke']);
-  assert.deepStrictEqual(wrapLegacyEmptyFirstLine('Hinchingbrooke', 13), ['', 'Hinchingbrooke']);
-  // And with a second word, the legacy form puts BOTH on line two — a line the
-  // caller's width formula was told would be at most `max` characters.
-  assert.deepStrictEqual(wrap('Cambridgeshire Guided', 13), ['Cambridgeshire', 'Guided']);
-  assert.deepStrictEqual(wrapLegacyEmptyFirstLine('Cambridgeshire Guided', 13), ['', 'Cambridgeshire Guided']);
+test('a label whose first word fits is unaffected — the cases the two forms always agreed on', () => {
+  assert.deepStrictEqual(wrap('St Neots', 13), ['St Neots']);
+  assert.deepStrictEqual(wrap('Cambridge', 13), ['Cambridge']);
+  assert.deepStrictEqual(wrap('Fen Drayton Lakes', 13), ['Fen Drayton', 'Lakes']);
+  assert.deepStrictEqual(wrap('Huntingdon Bus Station', 13), ['Huntingdon', 'Bus Station']);
+  assert.deepStrictEqual(wrap('a b c d e f g h i j', 5), ['a b c', 'd e f g h i j']);
 });
 
-test('a label at or under the width, or already broken by hand, is passed through by both', () => {
-  for (const f of [wrap, wrapLegacyEmptyFirstLine]) {
-    assert.deepStrictEqual(f('Ramsey', 13), ['Ramsey']);
-    assert.deepStrictEqual(f('Long name here\nsecond', 13), ['Long name here', 'second'],
-      'an explicit newline wins over the width, in both');
+test('a label at or under the width, or already broken by hand, is passed through', () => {
+  assert.deepStrictEqual(wrap('Ramsey', 13), ['Ramsey']);
+  assert.deepStrictEqual(wrap('Long name here\nsecond', 13), ['Long name here', 'second'],
+    'an explicit newline wins over the width');
+});
+
+test('the legacy wrap is GONE from the exports, not merely unused', () => {
+  // It was exported and named for three days so that no caller could inherit the
+  // bug by writing `wrap`. Both callers now write `wrap`, so the name must not
+  // come back: a re-export would be a second spelling of a primitive this project
+  // has already paid for having three of (dash_fit.js, OA-167). The assertion is
+  // on the EXPORTS and not on the source text, because the file's own header is
+  // entitled to go on explaining what was deleted and why.
+  assert.strictEqual(EP.wrapLegacyEmptyFirstLine, undefined);
+  assert.deepStrictEqual(Object.keys(EP).sort(),
+    ['externalPrimitives', 'hubEdgeFor', 'rayToRectFor', 'wrap']);
+});
+
+/* The require statement, and only that — a comment saying which export this file
+ * USED to take is history worth keeping, and a grep over the whole source would
+ * forbid writing it down. */
+const destructuredFrom = (file, mod) => {
+  const src = fs.readFileSync(file, 'utf8');
+  const m = src.match(new RegExp('const\\s*\\{([^}]*)\\}\\s*=\\s*[\\s\\S]{0,40}?require\\([^)]*' + mod + '[^)]*\\)'));
+  assert.ok(m, path.basename(file) + ' has no destructuring require of ' + mod);
+  return m[1].split(',').map(s => s.trim()).filter(Boolean);
+};
+
+test('BOTH generators take the corrected wrap, by name', () => {
+  // The whole shape of OA-229 is that one module was right and its two callers
+  // asked for the wrong export. Reading the require is the only way to ask that:
+  // the byte gate proves what the sheets look like, not which symbol was imported.
+  for (const f of [path.join(ENGINE_DIR, 'gen_external_radial.js'),
+                   path.join(PLACE_DIR, 'gen_external_places.js')]) {
+    const names = destructuredFrom(f, 'external_primitives\\.js');
+    assert.ok(names.includes('wrap'), path.basename(f) + ' does not take `wrap`');
+    assert.ok(!names.some(n => /wrapLegacy/.test(n)),
+      path.basename(f) + ' still imports the legacy wrap: ' + names.join(', '));
   }
 });
 

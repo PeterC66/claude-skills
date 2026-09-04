@@ -22,10 +22,12 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);
 const FONT = require(_from('font_metrics.js'));
 const { separateRow, esc } = require(_from('svg_primitives.js'));
-// `wrap` here is the LEGACY one, deliberately: this sheet draws an empty first
-// line for a one-word label longer than the wrap width (St Ives' Hinchingbrooke),
-// and correcting that moves published artwork. OA-229 is the fix.
-const { wrapLegacyEmptyFirstLine: wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('external_primitives.js'));
+// `wrap` is the ONLY one as of 2026-09-04 (OA-229). Until then this sheet took
+// `wrapLegacyEmptyFirstLine`, which drew an empty first line for a one-word label
+// longer than the wrap width -- St Ives' Hinchingbrooke, on the published sheet.
+// Correcting it moved this sheet's bytes, which is why it needed a rollout of its
+// own rather than riding inside the extraction that found it.
+const { wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('external_primitives.js'));
 // dash_fit.js is no longer required HERE: line() moved to external_primitives.js
 // on 2026-09-02 and that module requires it, which is now the ONLY way it reaches
 // the engine hash -- gen_external_busway.js was the other, and it was dropped the

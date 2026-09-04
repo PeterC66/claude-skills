@@ -210,3 +210,128 @@ test('tiers: a rename that collides is reported, because two POIs cannot share o
   assert.strictEqual(out.length, 2, 'both are still drawn — this reports, it does not repair');
   assert.deepStrictEqual(report.renameCollisions, ['school:Ash Hill']);
 });
+
+/* ------------------------------------------------------------------------- *
+ * OA-234 and OA-238, landed together on 2026-09-04 inside OA-229's rollout.
+ *
+ * They are two halves of one silence. De-duplication compared two BLANK names
+ * and found them equal, so the second unnamed chemist in a town was deleted at
+ * any distance whatever — no candidate, no chooser row, no key, no error. And
+ * the fix for that is what makes the second half necessary: once both survive,
+ * a default of `may` would draw two nameless symbols nobody asked for, and a
+ * default of "drop" would offer the local one row and lose the other, which is
+ * the same silence arrived at deliberately.
+ *
+ * `classify()` supplies a fallback name for every category except `pharmacy` and
+ * `gp`, so those two tags are the entire population of both rows. Everything
+ * below uses them for that reason and not for flavour.
+ * ------------------------------------------------------------------------- */
+
+test('OA-234: two unnamed POIs of one category, far apart, are TWO — they used to be one', () => {
+  // The exact measurement the row was re-diagnosed on: 5.5 km apart, both
+  // nameless. Before the fix this returned a single {cat:'pharmacy', name:''}.
+  const els = [[node(52.30, -0.07, { amenity: 'pharmacy' }),
+                node(52.35, -0.07, { amenity: 'pharmacy' })]];
+  const report = {};
+  selectPois(els, {}, report);
+  assert.strictEqual(report.candidates.length, 2,
+    'the second unnamed pharmacy is deleted again — this is the OA-234 regression');
+  assert.deepStrictEqual(report.candidates.map(c => c.key), ['pharmacy:', 'pharmacy:']);
+});
+
+test('OA-234: 60 m still collapses two unnamed POIs, because that is the same place mapped twice', () => {
+  // The control. near() is the question the blank-name arm was always meant to be
+  // asking, and removing the name arm must not have removed that one.
+  const els = [[node(52.3000, -0.0700, { amenity: 'pharmacy' }),
+                node(52.3001, -0.0700, { amenity: 'pharmacy' })]];
+  const report = {};
+  selectPois(els, {}, report);
+  assert.strictEqual(report.candidates.length, 1);
+});
+
+test('OA-234: two NAMED POIs of one category far apart are still two (the untouched control)', () => {
+  const els = [[node(52.30, -0.07, { shop: 'supermarket', name: 'Aldi' }),
+                node(52.35, -0.07, { shop: 'supermarket', name: 'Lidl' })]];
+  assert.deepStrictEqual(selectPois(els, {}).map(p => p.name), ['Aldi', 'Lidl']);
+});
+
+test('OA-234: two candidates sharing one key are REPORTED, which was unreachable before', () => {
+  const els = [[node(52.30, -0.07, { amenity: 'pharmacy' }),
+                node(52.35, -0.07, { amenity: 'pharmacy' })]];
+  const report = {};
+  selectPois(els, {}, report);
+  assert.deepStrictEqual(report.duplicateCandidateKeys, ['pharmacy:'],
+    'the key both survivors share has to be said out loud — nothing downstream can hold two');
+  // Named POIs cannot collide here: dedup already removed equal names.
+  const clean = {};
+  selectPois([[node(52.30, -0.07, { shop: 'supermarket', name: 'Aldi' })]], {}, clean);
+  assert.deepStrictEqual(clean.duplicateCandidateKeys, []);
+});
+
+test('OA-238: a nameless POI is NOT DRAWN by default, in a town that has classified nothing', () => {
+  // Huntingdon and St Neots are exactly this case — no poi.tiers block at all —
+  // and they are the two sheets the estate loses a symbol on. An early return on a
+  // missing tiers block would have made this change do nothing where it matters.
+  const els = [[node(52.30, -0.07, { amenity: 'pharmacy' }),
+                node(52.31, -0.07, { amenity: 'doctors' }),
+                node(52.32, -0.07, { shop: 'supermarket', name: 'Aldi' })]];
+  assert.deepStrictEqual(selectPois(els, {}).map(p => p.name), ['Aldi'],
+    'the nameless chemist and surgery keep their box for a glyph nobody chose');
+});
+
+test('OA-238: and it is STILL OFFERED — the row survives in candidates, marked miss', () => {
+  // The half that makes this Peter's answer rather than "just drop them". A POI
+  // absent from report.candidates could not be shown to the local as missed and
+  // could never be turned back on.
+  const els = [[node(52.30, -0.07, { amenity: 'pharmacy' })]];
+  const report = {};
+  selectPois(els, {}, report);
+  assert.strictEqual(report.candidates.length, 1);
+  assert.deepStrictEqual(
+    { key: report.candidates[0].key, tier: report.candidates[0].tier, printsName: report.candidates[0].printsName },
+    { key: 'pharmacy:', tier: 'miss', printsName: false });
+});
+
+test('OA-238: naming it with "as" promotes it, which is one of the two answers the local has', () => {
+  const els = [[node(52.30, -0.07, { amenity: 'pharmacy' })]];
+  const out = selectPois(els, { tiers: { 'pharmacy:': { as: 'Boots' } } });
+  assert.deepStrictEqual(out.map(p => p.name), ['Boots'],
+    'an object with no explicit tier reads as may, so naming it draws it');
+});
+
+test('OA-238: an explicit answer beats the default in BOTH directions', () => {
+  const els = [[node(52.30, -0.07, { amenity: 'pharmacy' })]];
+  // High Wycombe's routes.json says exactly this, which is why the estate loses
+  // two symbols under this change and not the three the row predicted.
+  const report = {};
+  assert.strictEqual(selectPois(els, { tiers: { 'pharmacy:': 'may' } }, report).length, 1);
+  assert.deepStrictEqual(report.namelessKeptByTier, ['pharmacy:'],
+    'a sheet that disagrees with the default has to say so at build time');
+  assert.strictEqual(selectPois(els, { tiers: { 'pharmacy:': 'must' } })[0].tier, 'must');
+  // and a miss on a named POI is unchanged
+  assert.deepStrictEqual(
+    selectPois([[node(52.30, -0.07, { shop: 'supermarket', name: 'Aldi' })]], { tiers: { 'shop:Aldi': 'miss' } }), []);
+});
+
+test('OA-238: a nameless POI kept by default reports NOTHING, so the note means what it says', () => {
+  // The control for namelessKeptByTier. Every named POI in an unclassified town
+  // must leave it empty, or the message fires on every build of every town and is
+  // muted inside a week.
+  const report = {};
+  selectPois([[node(52.30, -0.07, { shop: 'supermarket', name: 'Aldi' }),
+               node(52.31, -0.07, { amenity: 'pharmacy' })]], {}, report);
+  assert.deepStrictEqual(report.namelessKeptByTier, []);
+});
+
+test('OA-238 did not disturb the no-tiers path for named POIs', () => {
+  // The early `if(!TIERS) return pois` had to go so the nameless default could
+  // reach an unclassified town. This is the assertion that removing it changed
+  // nothing else: a town with no tiers block still gets exactly its named POIs,
+  // in order, untouched, and with no tier property on any of them.
+  const els = [[node(52.30, -0.07, { shop: 'supermarket', name: 'Aldi' }),
+                node(52.35, -0.07, { amenity: 'library' }),
+                node(52.36, -0.07, { amenity: 'school', name: 'Ash School' })]];
+  assert.deepStrictEqual(selectPois(els, {}), selectPois(els, { tiers: undefined }));
+  assert.deepStrictEqual(selectPois(els, {}).map(p => [p.cat, p.name, p.tier]),
+    [['shop', 'Aldi', undefined], ['library', 'Library', undefined], ['school', 'Ash School', undefined]]);
+});

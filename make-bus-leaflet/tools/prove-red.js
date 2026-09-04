@@ -367,6 +367,32 @@ const MUTATIONS = [
     find: "    report.renameCollisions = dup;",
     to: "    report.renameCollisions = [];" },
 
+  /* poi_select.js OA-234 and OA-238, landed together 2026-09-04 inside OA-229's
+   * rollout. All four failure modes here are SILENCE — a POI that is deleted, one
+   * that is drawn when nobody asked, a shared key nobody is told about, and a town
+   * overriding the default without saying so. Only the third has any byte-gate
+   * cover at all, and only on the two sheets that lose a symbol; the rest is
+   * these four mutations. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'two blank names compare equal again, so the second unnamed chemist in a town is deleted at any distance - no candidate, no chooser row, no key, no error (OA-234)',
+    find: "    for(const q of dedup){ if(q.cat===p.cat && ((q.name===p.name && p.name) || near(q.ll,p.ll))){ continue outer; } }",
+    to: "    for(const q of dedup){ if(q.cat===p.cat && (q.name===p.name || near(q.ll,p.ll))){ continue outer; } }" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a nameless POI defaults to drawn again, so a bare glyph nobody chose takes a full 4.2mm box on three towns (OA-238)',
+    find: "  const defaultRule = p => ({ tier: p.name ? 'may' : 'miss', as: null });",
+    to: "  const defaultRule = p => ({ tier: 'may', as: null });" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'two candidates sharing one key are not reported, which is the collision OA-234 made reachable and nothing downstream can hold',
+    find: "    report.duplicateCandidateKeys = dupK;",
+    to: "    report.duplicateCandidateKeys = [];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a town that overrides the nameless default is not named, so a sheet disagreeing with the default does it in silence',
+    find: "    report.namelessKeptByTier = pois.filter(p => !p.name && explicit(p) && ruleFor(p).tier !== 'miss')",
+    to: "    report.namelessKeptByTier = [].filter(p => !p.name && explicit(p) && ruleFor(p).tier !== 'miss')" },
+
   // gate_lib.js staleInputs — the OA-225 guard. It sits in FRONT of both rollouts'
   // UP-TO-DATE fast path, so a mutation that makes it silent does not degrade a
   // warning, it restores the exact silence that shipped route 20 into High Wycombe's
@@ -1643,17 +1669,17 @@ const MUTATIONS = [
     to: "  return `<svg width=\"${RASTER_W}\" height=\"${RASTER_H}\" viewBox=\"0 0 ${w} ${h}\">`;" },
 
   // external_primitives.js — the radial's marks, shared with its clone (Tier 3.5).
-  // The FIRST of these is the one that matters: it is the whole claim that the
-  // extraction did not quietly correct the radial's wrap on its way past.
+  // There were TWO wraps here until OA-229 landed on 2026-09-04, and two mutations
+  // guarding the difference between them: one saying the extraction had not
+  // quietly corrected the defect, one saying the correct spelling had not quietly
+  // acquired it. There is ONE wrap now, so there is one mutation — put the defect
+  // back. Unlike its two predecessors this one is also caught by the byte gate,
+  // because both generators now call it; `wrap` has stopped being code that no
+  // sheet can reach, which is the whole point of the row.
   { suite: 'external_primitives.test.js', file: 'external_primitives.js',
-    what: 'the legacy wrap is silently corrected, which moves published artwork on three sheets under cover of a refactor',
-    find: "const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, false);",
-    to: "const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, true);" },
-
-  { suite: 'external_primitives.test.js', file: 'external_primitives.js',
-    what: 'the CORRECT wrap becomes the legacy one - caught by the unit test alone, because no generator has called it since gen_external_busway.js was dropped',
-    find: "const wrap = (label, max = 13) => splitTwoLines(label, max, true);",
-    to: "const wrap = (label, max = 13) => splitTwoLines(label, max, false);" },
+    what: 'the empty first line comes back - a one-word label longer than the wrap width is pushed onto line two, leaving a real <text></text> element taking a line of leading on three published sheets',
+    find: "    if (!b && (fits || a === '')) a = (a + ' ' + t).trim();",
+    to: "    if (!b && fits) a = (a + ' ' + t).trim();" },
 
   { suite: 'external_primitives.test.js', file: 'external_primitives.js',
     what: "hubEdge ignores its floor, so the town sheet loses the 14mm guard the place sheet deliberately does not have",

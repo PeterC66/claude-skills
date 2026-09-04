@@ -24,9 +24,12 @@
  *   4. unnamed greens — always dropped; a park called "Park" names nothing.
  *   5. tidy       — generic bracket/suffix strip, then per-town suffix rules,
  *                   then whole-name canonicalisation.
- *   6. de-duplicate by category plus either an identical name or a point within
- *      60 m, which is what collapses the same shop mapped as node and building.
- *   7. tiers      — the customer's must / may / miss answer, plus rename.
+ *   6. de-duplicate by category plus either an identical NON-EMPTY name or a
+ *      point within 60 m, which is what collapses the same shop mapped as node
+ *      and building. Two blank names are not a match (OA-234) — they used to be,
+ *      and the second unnamed chemist in a town was deleted at any distance.
+ *   7. tiers      — the customer's must / may / miss answer, plus rename, over a
+ *      default that is `may` for a named POI and `miss` for a nameless one.
  * Tidying runs BEFORE de-duplication on purpose: two spellings of one name are
  * only duplicates once they have been tidied to the same string.
  *
@@ -46,8 +49,15 @@
  *         its category. It is a strong preference, NOT a veto — the placer can
  *         still fail to seat it, which is why gen_internal.js names any `must`
  *         it dropped rather than letting the answer fail in silence.
- *   may   today's behaviour exactly. The default for every POI nobody has
+ *   may   drawn as it always was. The default for every NAMED POI nobody has
  *         classified, which is what keeps this block byte-neutral when absent.
+ *
+ * THE DEFAULT FOR A POI WITH NO NAME IS `miss` (OA-238, 2026-09-04), and it is
+ * the one place this block is not byte-neutral when absent. Only `pharmacy` and
+ * `gp` can reach here nameless — every other category has a fallback name from
+ * `classify()` — and a nameless symbol costs a full box for a glyph nobody chose.
+ * It is still listed in `report.candidates` so the local can name it or confirm
+ * the miss; an explicit answer in `poi.tiers` overrides the default either way.
  *
  * KEYS ARE READ AFTER TIDYING AND AFTER DE-DUPLICATION — they are the identities
  * that actually reach the page, and the ones the worksheet asks about — and a
@@ -147,10 +157,26 @@ function selectPois(elementSets, poiCfg, report) {
     for(const [re,to] of TIDY) p.name = p.name.replace(re,to);
     for(const [re,to] of CANON) if(re.test(p.name)) p.name=to;
   }
-  // de-duplicate by cat+name, and collapse near-duplicate points (<60 m)
+  /* de-duplicate by cat+name, and collapse near-duplicate points (<60 m).
+   *
+   * `p.name &&` IS LOAD-BEARING (OA-234, 2026-09-04). Without it two POIs whose
+   * names are both '' compare EQUAL by name, so the second unnamed pharmacy in a
+   * town was deleted here at ANY distance whatever — it never became a candidate,
+   * never reached the landmark chooser, never got a symbol and never got a key,
+   * because there was no second POI. Measured directly rather than read: two
+   * unnamed `amenity=pharmacy` 5.5 km apart came out as one, while two NAMED
+   * supermarkets the same distance apart came out as two.
+   *
+   * The blank case belongs to `near()` alone, which is the question this arm was
+   * always meant to be asking: 60 m means *the same place mapped twice*. Two
+   * survivors then share the key `pharmacy:` — a real collision, and the one the
+   * row was originally filed about — so applyTiers REPORTS it below rather than
+   * this line hiding it. Measured over all 18 sheet-drawing maps' latest S2
+   * sweeps on 2026-09-04: zero POIs un-deleted anywhere, so the fix is byte-inert
+   * on today's estate and is here for the town that gets a second one. */
   const dedup=[];
   outer: for(const p of pois){
-    for(const q of dedup){ if(q.cat===p.cat && (q.name===p.name || near(q.ll,p.ll))){ continue outer; } }
+    for(const q of dedup){ if(q.cat===p.cat && ((q.name===p.name && p.name) || near(q.ll,p.ll))){ continue outer; } }
     dedup.push(p);
   }
   return applyTiers(dedup, POI, report);
@@ -176,6 +202,32 @@ function applyTiers(pois, POI, report){
   const rule = v => (typeof v === 'string' ? { tier: v, as: null }
                                            : { tier: (v && v.tier) || 'may', as: (v && v.as) || null });
 
+  /* THE DEFAULT IS NOT ALWAYS `may` ANY MORE (OA-238, Peter's decision 2026-09-03).
+   *
+   * A POI with no name prints nothing beside its symbol — `classify()` supplies a
+   * fallback name for every category except `pharmacy` and `gp`, so the whole
+   * population of this rule is a chemist or a surgery OpenStreetMap has not named.
+   * It costs the same 4.2 x 4.2 mm box and the same placer anchor as a named one,
+   * for a bare glyph nobody chose. So it defaults to NOT DRAWN.
+   *
+   * IT IS STILL OFFERED, and that is the half that makes this Peter's answer
+   * rather than the "just drop them" he was offered. It stays in
+   * `report.candidates` — the list the portal's landmark chooser enumerates —
+   * carrying `tier:'miss'`, so the person who lives there sees the row, can give
+   * it a name with `as` (which promotes it, because `rule()` reads an object with
+   * no explicit tier as `may`) or can confirm the `miss`. A POI absent from that
+   * list could not be shown as missed and could never be turned back on, which is
+   * the one-way control the block below already warns about.
+   *
+   * AN EXPLICIT ANSWER STILL WINS, in both directions. This is a DEFAULT, and a
+   * town that has classified `"pharmacy:"` keeps whatever it said. High Wycombe
+   * says `"may"`, which is why the estate loses two symbols under this change and
+   * not three — see report.namelessKeptByTier below, which exists so that is
+   * visible at build time rather than being something a reader has to know. */
+  const defaultRule = p => ({ tier: p.name ? 'may' : 'miss', as: null });
+  const explicit = p => !!(TIERS && ((p.cat + ':' + p.name) in TIERS));
+  const ruleFor = p => (explicit(p) ? rule(TIERS[p.cat + ':' + p.name]) : defaultRule(p));
+
   /* CANDIDATES — every identity that got this far, whatever its tier, filled
    * whether or not this town has classified anything.
    *
@@ -197,25 +249,47 @@ function applyTiers(pois, POI, report){
   if(report){
     report.candidates = pois.map(p => {
       const k = p.cat + ':' + p.name;
-      const r = (TIERS && (k in TIERS)) ? rule(TIERS[k]) : { tier:'may', as:null };
+      const r = ruleFor(p);
       return { key:k, cat:p.cat, name:p.name, ll:p.ll, tier:r.tier, as:r.as, printsName:printsName(p) };
     });
+    /* TWO CANDIDATES SHARING ONE KEY, which only became possible on 2026-09-04
+     * (OA-234). Until then de-duplication deleted the second unnamed POI of a
+     * category, so this list could not have had a duplicate in it — which is why
+     * the measurement that reported "duplicate keys: none" for every town could
+     * never have said anything else. Now the second one survives, and two POIs
+     * keyed `pharmacy:` share an override key, a tier answer and a placer anchor
+     * id. That is a real problem and it is REPORTED rather than silently
+     * collapsed, because the alternative is the deletion this row removed.
+     * `renameCollisions` below cannot cover it: it runs only for a town with a
+     * `poi.tiers` block, and it looks at names AFTER renaming. */
+    const seenK = new Set(), dupK = [];
+    for(const p of pois){
+      const k = p.cat + ':' + p.name;
+      if(seenK.has(k)){ if(!dupK.includes(k)) dupK.push(k); } else seenK.add(k);
+    }
+    report.duplicateCandidateKeys = dupK;
+    // A nameless POI that is drawn only because this town's config says so. Not a
+    // fault — it is the customer's answer — but it is the one case where the sheet
+    // disagrees with the default, so say which town and which key.
+    report.namelessKeptByTier = pois.filter(p => !p.name && explicit(p) && ruleFor(p).tier !== 'miss')
+                                    .map(p => p.cat + ':' + p.name);
   }
 
-  if(!TIERS) return pois;
   const used = new Set();
   const kept = [];
   for(const p of pois){
     const k = p.cat+':'+p.name;
-    if(!(k in TIERS)){ kept.push(p); continue; }
-    used.add(k);
-    const r = rule(TIERS[k]);
+    // No early return on a missing TIERS block any more: the nameless default
+    // above has to apply to a town that has classified nothing, and Huntingdon
+    // and St Neots — the two the estate loses a symbol on — are exactly that.
+    if(explicit(p)) used.add(k);
+    const r = ruleFor(p);
     if(r.tier === 'miss') continue;                // never drawn, never reserved
     if(r.as) p.name = r.as;                        // a rename REPLACES the identity
     if(r.tier === 'must') p.tier = 'must';
     kept.push(p);
   }
-  if(report){
+  if(report && TIERS){
     // A key nobody matched is the failure this whole block exists to avoid: the
     // customer believes their answer was applied and no sheet ever changed.
     report.unknownTierKeys = Object.keys(TIERS).filter(k=>!used.has(k));

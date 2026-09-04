@@ -47,62 +47,52 @@ const path = require('path');
 const { dashFit, polylineLength } = require(path.join(__dirname, 'dash_fit.js'));
 const { esc } = require(path.join(__dirname, 'svg_primitives.js'));
 
-/* Split a label onto at most two lines at a space. TWO NAMES, ON PURPOSE.
+/* Split a label onto at most two lines at a space. ONE NAME SINCE 2026-09-04.
  *
- * The three copies did not agree, and the disagreement is a live defect on
- * published artwork (codebase review 2026-09-01, engine F17).
+ * There were TWO for three days, and the second one was a defect kept alive on
+ * purpose. The three original copies of this primitive did not agree:
  * `gen_external_busway.js` tested `!b && (a === '' || fits)`; the radial and the
  * place clone tested `fits && !b`. They agree on every label whose FIRST WORD
- * fits, and differ the moment one does not. The busway generator was dropped on
- * 2026-09-02, so the CORRECT spelling is the one no caller is left with:
+ * fits, and part company the moment one does not:
  *
  *   "Hinchingbrooke", 14 characters, at max 13
  *     busway  -> ['Hinchingbrooke']                one line, drawn where it belongs
  *     radial  -> ['', 'Hinchingbrooke']            an EMPTY first line, and the
  *                                                  name pushed 2mm down its box
  *
- * MEASURED across the whole estate on 2026-09-02, by switching the radial to the
- * busway form and running the byte gate: ONE of the 98 sheet verdicts moved, St
- * Ives' external, and a grep for the empty element `>` `</text>` finds it on
- * exactly three published sheets — St Ives external and both Godmanchester place
- * externals, all three of them the destination "Hinchingbrooke". So it is a real
- * defect, on three live sheets, and it is small.
+ * The busway generator was dropped on 2026-09-02, so from that day the WRONG
+ * one was the only behaviour any sheet was drawn with. Tier 3.5 of the codebase
+ * review extracted both rather than correcting either, because correcting it
+ * moves ink on published artwork and that does not belong inside a commit whose
+ * whole claim is that nothing moved — so `wrap` was the answer waiting for its
+ * rollout and `wrapLegacyEmptyFirstLine` was what shipped. OA-229 is that
+ * rollout, and this is the correction: one function, the right one, and the
+ * `firstWordTakesLineOne` flag gone with the caller that wanted it false.
  *
- * WHICH IS WHY THERE ARE TWO FUNCTIONS AND NOT ONE. Correcting it is a DRAWING
- * change: three sheets move, each needs a version bump, a re-render and a
- * re-verify, and the town one is published. Folding that into an extraction
- * whose whole claim is "nothing moved" would put a fix inside the one commit
- * that cannot be read for one. So the extraction keeps each caller's present
- * behaviour exactly, the wrong behaviour is NAMED rather than defaulted — no
- * caller inherits it by writing `wrap` — and the correction is [OA-229].
+ * WHAT IT COST TO LEAVE, measured on the estate rather than read: a real
+ * `<text …></text>` element carrying a line's worth of leading, on THREE
+ * published sheets — St Ives' external and both Godmanchester place externals,
+ * all three of them the destination "Hinchingbrooke". Switching the radial and
+ * running the byte gate moved exactly one of the 98 town sheet verdicts.
+ *
+ * THE QUESTION TO ASK OF A NEW DESTINATION is whether its first word is longer
+ * than the width it is given — the width is a CHARACTER count, not a
+ * measurement, so a long one-word place name is the whole population of this
+ * bug and `test/external_primitives.test.js` is where the case list lives.
  */
-function splitTwoLines(label, max, firstWordTakesLineOne) {
+const wrap = (label, max = 13) => {
   if (label.length <= max || label.includes('\n')) return label.split('\n');
   const w = label.split(' '); let a = '', b = '';
   for (const t of w) {
     const fits = (a + ' ' + t).trim().length <= max;
-    if (!b && (fits || (firstWordTakesLineOne && a === ''))) a = (a + ' ' + t).trim();
+    // `a === ''` is the whole fix: a first word wider than the line still TAKES
+    // the first line, rather than being pushed onto the second and leaving an
+    // empty element behind it.
+    if (!b && (fits || a === '')) a = (a + ' ' + t).trim();
     else b = (b + ' ' + t).trim();
   }
   return b ? [a, b] : [a];
-}
-
-/* The correct one: a first word longer than `max` still takes the first line.
- * gen_external_busway.js was its only caller and was dropped 2026-09-02; see the
- * note on wrapLegacyEmptyFirstLine below for why it stays. */
-const wrap = (label, max = 13) => splitTwoLines(label, max, true);
-
-/* The one with the empty first line, kept ONLY so gen_external_radial.js and
- * gen_external_places.js keep drawing what they draw today. Retire it with
- * OA-229; when its last caller goes, delete it and `splitTwoLines`'s flag. */
-// NOTHING CALLS `wrap` SINCE 2026-09-02, and that is a statement about the estate
-// rather than about this module. It was gen_external_busway.js's wrap -- the only
-// correct one of the three -- and that generator was dropped the same day. The
-// radial and the place external both take `wrapLegacyEmptyFirstLine`, so the
-// empty-first-line defect is now the ONLY wrap behaviour any sheet is drawn with.
-// `wrap` stays because it is the answer OA-229 adopts, and its unit test is the
-// only thing certifying it: no byte gate can reach code no generator calls.
-const wrapLegacyEmptyFirstLine = (label, max = 13) => splitTwoLines(label, max, false);
+};
 
 /* externalPrimitives(deps) -> { line, tick, badgeHalfW, badgeXW, badgeXWs,
  * badge, stampNote }. A factory, not free functions, because six of the seven
@@ -214,4 +204,4 @@ function rayToRectFor({ rect, hx, hy }) {
   };
 }
 
-module.exports = { wrap, wrapLegacyEmptyFirstLine, externalPrimitives, hubEdgeFor, rayToRectFor };
+module.exports = { wrap, externalPrimitives, hubEdgeFor, rayToRectFor };

@@ -275,8 +275,15 @@ const ENGINE_STALE_ALLOWED = [
   // a walk back through history recomputing the hash at every step, which is how
   // this one was found on 2026-09-01 — and the board VERIFIES the pair on every
   // run, so a wrong commit here is a refusal, never a wrong verdict.
-  { town: 'Wisbech', engine: 'cf683a815c', commit: '9347f7dee6061e5cae94377e9a1886bbfc7b6d30', since: '2026-08-31',
-    why: 'portal proposed-update #139 is with the customer; a rebuild would supersede it' },
+  //
+  // EMPTY as of 2026-09-04, and that is the normal state. The last entry held
+  // Wisbech at cf683a815c while portal proposed-update #139 was with the
+  // customer; #139 was accepted, Wisbech was rebuilt to v3.2 on the current
+  // engine under OA-240, and the board printed NO LONGER APPLIES against the
+  // entry on its own -- which is what that branch is for, and this is the first
+  // time it has been seen to fire. An allowance that outlives its reason is dead
+  // text printing a reason that is no longer true, so it goes when the reason
+  // does rather than at the next tidy-up.
 ];
 const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
 const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town === name && a.engine === engine) || null;

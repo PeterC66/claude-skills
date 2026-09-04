@@ -27,7 +27,12 @@
  *     flyover in the town is charged to the schematizer;
  *   - measure the separation on the schematic instead of the ground, and every
  *     finding scores zero, because at a crossing the two strands meet;
- *   - drop the clustering, and one X reads as thirty-one findings.
+ *   - drop the clustering, and one X reads as thirty-one findings;
+ *   - and, added 2026-09-04 with the wedge threshold: SUBTRACT TOO MUCH. A second
+ *     threshold that can only ever remove findings has exactly one way of being
+ *     wrong, and it is the way that leaves nothing behind to notice it. Widen it,
+ *     measure the wedge on the wrong strand, or let a missing scale collapse every
+ *     wedge to zero, and the detector reports a clean estate for ever.
  *
  * None of the three shows up as an error. All three produce a full-looking
  * report. So each is broken here on purpose and the suite has to object.
@@ -76,8 +81,8 @@ const MUTATIONS = [
     to: '  const fresh = selfCrossings(sch)' },
 
   { what: 'the separation is measured on the SCHEMATIC, where the two strands meet by definition',
-    find: '      return { i, j, sepM: segSepM(geo[i], geo[i + 1], geo[j], geo[j + 1]) };',
-    to: '      return { i, j, sepM: segSepM(sch[i], sch[i + 1], sch[j], sch[j + 1]) };' },
+    find: '        sepM: segSepM(geo[i], geo[i + 1], geo[j], geo[j + 1]),',
+    to: '        sepM: segSepM(sch[i], sch[i + 1], sch[j], sch[j + 1]),' },
 
   { what: 'closeness on EITHER strand joins a cluster, so two distinct crossings merge into one',
     find: '      if (Math.abs(pairs[a].i - pairs[b].i) <= CLUSTER && Math.abs(pairs[a].j - pairs[b].j) <= CLUSTER) {',
@@ -100,8 +105,8 @@ const MUTATIONS = [
     to: '      // the premise is no longer checked' },
 
   { what: 'analyseRun applies the threshold itself, so nobody can ask what it threw away',
-    find: '    const found = newCrossings(g.pts, s.pts);',
-    to: '    const found = newCrossings(g.pts, s.pts).filter((c) => c.sepM > DEFAULT_SEP_M);' },
+    find: '    const found = newCrossings(g.pts, s.pts, mmPerUnit);',
+    to: '    const found = newCrossings(g.pts, s.pts, mmPerUnit).filter((c) => c.sepM > DEFAULT_SEP_M);' },
 
   { what: 'the run always exits 0, so a finding cannot fail anything that calls it',
     find: '  process.exit(errors.length || over.length ? 1 : 0);',
@@ -145,11 +150,48 @@ const MUTATIONS = [
     to: '  if (true) { res = analyseRun(runDir); } else { return [' },
 
   { file: SUBJECT, suite: WIRING,
-    what: 'the threshold stops applying, so every bus doubling back reaches the build log',
-    find: '      if (c.sepM <= sepM) continue;',
-    to: '      if (false) continue;' },
+    what: 'the ground threshold stops applying, so every bus doubling back reaches the build log',
+    find: '      if (c.sepM <= sepM || c.excMM < excMM) continue;',
+    to: '      if (c.excMM < excMM) continue;' },
+
+  // ---- THE WEDGE. A threshold that only subtracts, so every mutation below is a
+  // way of subtracting the real finding along with the retraces.
+  { what: 'the wedge threshold is widened past a real X, so the reported fault stops being reported',
+    find: 'const DEFAULT_EXC_MM = THINNEST_ROUTE_MM / 2;',
+    to: 'const DEFAULT_EXC_MM = THINNEST_ROUTE_MM * 100;' },
+
+  { what: 'the page scale is dropped, so every wedge measures zero and nothing is ever a finding',
+    find: '  const mmPerUnit = pageScale(S.routes || {});',
+    to: '  const mmPerUnit = 0;' },
+
+  { what: 'the wedge is the WIDER of the two strands, so a stub darting across a long leg scores as an X',
+    find: '  return Math.min(off(a, b, c, d), off(c, d, a, b));',
+    to: '  return Math.max(off(a, b, c, d), off(c, d, a, b));' },
+
+  { what: 'the wedge is measured at the NEARER end of the other strand, so a real X shrinks to nothing',
+    find: '    return Math.max(perp(q), perp(r));',
+    to: '    return Math.min(perp(q), perp(r));' },
+
+  { what: 'the page scale is taken from one route, so a short route magnifies its own retraces',
+    find: '  for (const r of Object.values(routes)) for (const p of r.pts) { if (p[1] < lo) lo = p[1]; if (p[1] > hi) hi = p[1]; }',
+    to: "  const one = Object.values(routes)[0] || { pts: [] };" + String.fromCharCode(10)
+      + '  for (const p of one.pts) { if (p[1] < lo) lo = p[1]; if (p[1] > hi) hi = p[1]; }' },
+
+  { what: 'a cluster is scored by its FIRST wedge rather than its widest, so an X hides behind the retraces beside it',
+    find: '    const excMM = g.reduce((m, p) => Math.max(m, p.excMM), 0);',
+    to: '    const excMM = g[0].excMM;' },
+
+  { file: SUBJECT, suite: WIRING,
+    what: 'the rollout stops applying the wedge threshold, and every retrace reaches the build log again',
+    find: '      if (c.sepM <= sepM || c.excMM < excMM) continue;',
+    to: '      if (c.sepM <= sepM) continue;' },
 
   // THE CONTROL. Same arithmetic, different order. It must stay GREEN.
+  { equivalent: true,
+    what: 'the wedge takes the perpendicular by the other sign convention — the same distance',
+    find: '    const perp = (z) => Math.abs((z[1] - u[1]) * (-dy / L) + (z[0] - u[0]) * (dx / L)) * k;',
+    to: '    const perp = (z) => Math.abs((z[1] - u[1]) * (dy / L) - (z[0] - u[0]) * (dx / L)) * k;' },
+
   { equivalent: true,
     what: 'the four endpoint distances are minimised in a different order — the same answer',
     find: '  return Math.min(ptSegM(A, C, D), ptSegM(B, C, D), ptSegM(C, A, B), ptSegM(D, A, B));',

@@ -7,12 +7,16 @@
  *   node assets/schematic_crossings.js --buses "<dir>" --town "Wisbech"
  *   node assets/schematic_crossings.js --dir "<an S4 run folder>"
  *   node assets/schematic_crossings.js --buses "<dir>" --json
- *   node assets/schematic_crossings.js --buses "<dir>" --sep 150 --all
+ *   node assets/schematic_crossings.js --buses "<dir>" --sep 150 --exc 0.6 --all
  *
  * Run from `make-bus-leaflet/`. `--sep` is the ground-separation threshold in
- * METRES (default 150, see THE THRESHOLD below); `--all` prints the sub-threshold
- * findings too; `--town`/`--place` repeat and narrow the sweep; `--dir` points at
- * one S4 run folder instead of an estate. There are no other parameters.
+ * METRES (default 150, see THE FIRST THRESHOLD below) and `--exc` is the drawn-
+ * excursion threshold in page MILLIMETRES (default 0.6, half the thinnest line a
+ * route is drawn with; see THE SECOND THRESHOLD); a crossing has to clear BOTH to
+ * be a finding. `--all` prints
+ * the ones that cleared neither; `--town`/`--place` repeat and narrow the sweep;
+ * `--dir` points at one S4 run folder instead of an estate. There are no other
+ * parameters.
  *
  * Exit 0 when no route crosses itself above the threshold, 1 when one does,
  * 2 on a usage error. stdout carries the answer; stderr carries refusals.
@@ -51,7 +55,7 @@
  * arrays differ in length is reported as a fault of its own rather than skipped,
  * because that would mean the premise above had quietly stopped holding.
  *
- * THE THRESHOLD, and why there is one at all. Two stretches of the same route
+ * THE FIRST THRESHOLD, and why there is one at all. Two stretches of the same route
  * hundreds of metres apart, drawn touching, is a topological falsehood: in one
  * colour at one width it does not read as a crossing, it reads as a four-way
  * junction, and the reader cannot tell which way the bus goes. Two stretches
@@ -74,6 +78,66 @@
  * agrees: the 456 m and 409 m ones are plainly visible in the rendered JPG at
  * 300 dpi, and the 9 m one could not be found on the sheet at all. Re-measure
  * before moving this number, and move it for a reason from the artwork.
+ *
+ * THE SECOND THRESHOLD, and the reading the first one alone got wrong (2026-09-04,
+ * buses-1a). Ground separation asks how far apart the two strands are IN THE TOWN.
+ * It does not ask how far apart they are ON THE SHEET, and for a schematic those
+ * are different questions: putting two distant stretches of road onto one line is
+ * what a tube map is FOR. `properCross` already says so — "a route that retraces
+ * a street has not crossed itself, it has repeated itself" — and excludes the case
+ * by a zero determinant. FLOATING POINT DEFEATS THAT EXCLUSION. Step 6 maps each
+ * point onto its leg by arc-length fraction, so a retraced leg's two passes land on
+ * the same line to about 1e-8 of a degree rather than exactly on it, the determinant
+ * comes out at 1e-20 instead of 0, and the retrace is counted as a crossing.
+ *
+ * That is not a rare corner. Of the 99 clustered new crossings on the estate on
+ * 2026-09-04, NINETY-FOUR open a wedge under 0.6 mm and most of them measure
+ * 0.0006 mm or less — a hundredth of a pixel at the 300 dpi these sheets render at.
+ * They are not faint. They are not drawn at all.
+ *
+ * WHERE THE NUMBER CAME FROM — the ink, not a fit to the cases in front of it. The
+ * yardstick for "can this be seen as a crossing" is the WIDTH OF THE LINE DRAWING
+ * IT: two strands whose wedge is narrower than their own stroke still overlap
+ * everywhere across the crossing, and never separate into the four arms that make
+ * one read as a junction. Every schematic on the estate draws its routes at 1.2,
+ * 1.7 or 2.2 mm, so half of the THINNEST of those — 0.6 mm — is the most conservative
+ * threshold that holds on every sheet: on a 2.2 mm route a 0.6 mm wedge is 27% of
+ * the stroke and still invisible, so this errs toward reporting.
+ *
+ * As a fraction of the stroke each route is actually drawn with, the crossings that
+ * clear the ground test read:
+ *
+ *   High Wycombe 34   0.261 mm on a 2.2 mm line   12%
+ *   High Wycombe 32   0.261 mm on a 1.7 mm line   15%
+ *   Beaconsfield 380  0.367 mm on a 1.2 mm line   31%
+ *   Wisbech 66 v3.1   0.938 mm on a 2.2 mm line   43%   <- the one Peter reported
+ *
+ * Re-measure before moving this number, and move it for a reason from the artwork.
+ *
+ * WHY THE FIX IS HERE AND NOT IN properCross. The natural repair is a tolerance on
+ * that zero determinant, and it is the wrong place: `selfCrossings` runs over the
+ * GEOGRAPHIC path too, and the set difference depends on that side staying exact.
+ * Loosening the primitive would quietly change which crossings the geography is
+ * credited with. The wedge is measured instead, on the schematic, where the ink is.
+ *
+ * IT STILL CATCHES THE ONE CROSSING A PERSON EVER REPORTED, which is the test that
+ * matters for a threshold that only ever REMOVES findings. Wisbech 66 on the
+ * published v3.1 sheet — the sheet Peter read — crosses at 42.9 deg and opens a wedge
+ * of 0.938 mm, eleven pixels, at 456 m of ground separation. Every other crossing on
+ * that same sheet measures 0.0000 mm. The two tests are a CONJUNCTION, so adding
+ * this one can only ever drop a finding, and the finding it drops is one that was
+ * never on the page.
+ *
+ * WHAT THIS MEANS FOR HIGH WYCOMBE AND BEACONSFIELD, which OA-240 recorded as
+ * needing a non-crossing constraint in the solver. They do not. All six of their
+ * Class A crossings are this artefact: four of High Wycombe's cross at 0.001 deg
+ * with a 0.0000 mm wedge, and Beaconsfield's two at 0.011 deg and on a 0.09 mm stub.
+ * Measured a second way, from the other end: the schematizer introduces no leg-pair
+ * crossing at all in Beaconsfield, and the DRAWN sheets carry the same self-crossing
+ * count as their geographic twins (High Wycombe 34: five on each; 32: three
+ * geographic against two schematic). The visible weaves on both towns are lane-order
+ * artefacts along a retraced corridor, they are on the geographic sheet too, and
+ * they belong to OA-176 point 4.21 rather than here.
  *
  * THE NINTH MAP. OA-240's own sweep said eight, because it walked `Areas/` and
  * `Places/` from the disk. This walks `findTowns` + `findPlaces` from gate_lib,
@@ -114,6 +178,23 @@ const { loadManifest } = require('./stage.js');
 const CLUSTER = 12;
 /** Default ground separation, in metres, above which a new crossing is a finding. */
 const DEFAULT_SEP_M = 150;
+/* The narrowest stroke any route is drawn with anywhere on the estate, in page
+ * millimetres. Measured off all nine schematic sheets on 2026-09-04: every one of
+ * them draws its routes at 1.2, 1.7 or 2.2 mm. */
+const THINNEST_ROUTE_MM = 1.2;
+/* Default drawn excursion, in page millimetres, below which a new crossing is not
+ * a finding because it is not DRAWN as one. Half the thinnest route line on the
+ * estate: a wedge narrower than that leaves the two strands' ink overlapping
+ * across the whole crossing, so it cannot open into the four arms that make a
+ * crossing read as a junction. See THE SECOND THRESHOLD in the header. */
+const DEFAULT_EXC_MM = THINNEST_ROUTE_MM / 2;
+/* The map frame is 190 mm wide on every sheet in the estate — 205 of them
+ * checked, every `clipPath id="map"` rect carries width="190" and only the
+ * height varies. gen_internal fits with min(190/spanLon, height/spanLat), so
+ * taking the width alone OVER-states the scale wherever the height binds, and a
+ * crossing therefore measures larger than it draws. That is the safe direction
+ * for a threshold that is allowed to drop a finding. */
+const FRAME_MM = 190;
 
 // ---- geometry ---------------------------------------------------------------
 
@@ -170,6 +251,38 @@ function segSepM(a, b, c, d) {
   return Math.min(ptSegM(A, C, D), ptSegM(B, C, D), ptSegM(C, A, B), ptSegM(D, A, B));
 }
 
+/* HOW BIG IS THE CROSSING, on the page? Two segments that cross at a hair's
+ * width of an angle are one line, not two: the wedge they open is below the
+ * resolution the sheet is printed at and no reader can see it. This measures the
+ * height of that wedge in page millimetres — for each strand, how far the OTHER
+ * strand's two ends reach off its line, taking the larger of the two ends; and
+ * then the SMALLER of the two strands' answers, because a crossing is only as
+ * visible as its shallower side.
+ *
+ * `k` is millimetres per unit of the schematic's pseudo-longitude (see FRAME_MM).
+ * Both strands are read in the schematic frame, which is the frame the ink is in;
+ * the ground separation above is read in the geographic one. They are different
+ * questions and they need different frames. */
+function excursionMM(a, b, c, d, k) {
+  const off = (u, v, q, r) => {
+    const dx = v[1] - u[1], dy = v[0] - u[0], L = Math.hypot(dx, dy);
+    if (!L) return 0;
+    const perp = (z) => Math.abs((z[1] - u[1]) * (-dy / L) + (z[0] - u[0]) * (dx / L)) * k;
+    return Math.max(perp(q), perp(r));
+  };
+  return Math.min(off(a, b, c, d), off(c, d, a, b));
+}
+
+/* Millimetres per unit of pseudo-longitude, from every point on the sheet. The
+ * span has to be taken over ALL routes and not one of them: the fit that put the
+ * ink on the page saw the whole map, and a single short route would scale its own
+ * crossings up by however much of the sheet it happens to miss. */
+function pageScale(routes) {
+  let lo = Infinity, hi = -Infinity;
+  for (const r of Object.values(routes)) for (const p of r.pts) { if (p[1] < lo) lo = p[1]; if (p[1] > hi) hi = p[1]; }
+  return hi > lo ? FRAME_MM / (hi - lo) : 0;
+}
+
 // ---- the finding ------------------------------------------------------------
 
 /* One visible X is many index pairs. Single-link on both indices at once: a pair
@@ -190,7 +303,13 @@ function cluster(pairs) {
   pairs.forEach((p, n) => { const r = find(n); if (!by.has(r)) by.set(r, []); by.get(r).push(p); });
   return [...by.values()].map((g) => {
     const worst = g.reduce((m, p) => (p.sepM > m.sepM ? p : m), g[0]);
-    return { i: worst.i, j: worst.j, sepM: worst.sepM, pairs: g.length };
+    // Both scores are cluster MAXIMA. The widest separation and the biggest
+    // excursion need not be the same pair — one X drawn between two long legs
+    // raises pairs at its shallow tips as well as at its middle — and taking the
+    // largest of each is the reading that keeps a real finding rather than
+    // averaging it away.
+    const excMM = g.reduce((m, p) => Math.max(m, p.excMM), 0);
+    return { i: worst.i, j: worst.j, sepM: worst.sepM, excMM, pairs: g.length };
   }).sort((a, b) => b.sepM - a.sepM);
 }
 
@@ -198,12 +317,16 @@ function cluster(pairs) {
  * by the widest ground separation in its cluster. `geo` and `sch` are the two
  * `pts` arrays; they must be the same length and the caller checks that.
  * Returns [] when the schematizer introduced nothing. */
-function newCrossings(geo, sch) {
+function newCrossings(geo, sch, mmPerUnit = 0) {
   const had = new Set(selfCrossings(geo));
   const fresh = selfCrossings(sch).filter((k) => !had.has(k))
     .map((k) => {
       const [i, j] = k.split(':').map(Number);
-      return { i, j, sepM: segSepM(geo[i], geo[i + 1], geo[j], geo[j + 1]) };
+      return {
+        i, j,
+        sepM: segSepM(geo[i], geo[i + 1], geo[j], geo[j + 1]),
+        excMM: excursionMM(sch[i], sch[i + 1], sch[j], sch[j + 1], mmPerUnit),
+      };
     });
   return cluster(fresh);
 }
@@ -232,6 +355,7 @@ function analyseRun(runDir) {
   const schF = path.join(runDir, 'schematic', 'routes_paths.json');
   if (!fs.existsSync(schF) || !fs.existsSync(geoF)) return null;
   const G = readJson(geoF), S = readJson(schF);
+  const mmPerUnit = pageScale(S.routes || {});
   const out = [];
   for (const r of Object.keys(S.routes || {})) {
     const g = G.routes && G.routes[r], s = S.routes[r];
@@ -240,7 +364,7 @@ function analyseRun(runDir) {
       out.push({ route: r, error: `index-for-index comparison is off: geographic ${g.pts.length} points, schematic ${s.pts.length}` });
       continue;
     }
-    const found = newCrossings(g.pts, s.pts);
+    const found = newCrossings(g.pts, s.pts, mmPerUnit);
     if (!found.length) continue;
     out.push({
       route: r,
@@ -271,7 +395,7 @@ function analyseRun(runDir) {
  * Promoting it is one word in this string, and it belongs in the change that
  * fixes the solver.
  */
-function crossingWarnings(runDir, { sepM = DEFAULT_SEP_M } = {}) {
+function crossingWarnings(runDir, { sepM = DEFAULT_SEP_M, excMM = DEFAULT_EXC_MM } = {}) {
   let res;
   try { res = analyseRun(runDir); } catch (e) { return ['crossings: the self-crossing check could not read this run — ' + e.message]; }
   if (!res) return [];
@@ -279,7 +403,7 @@ function crossingWarnings(runDir, { sepM = DEFAULT_SEP_M } = {}) {
   for (const r of res.routes) {
     if (r.error) { out.push(`crossings: route ${r.route} — ${r.error}`); continue; }
     for (const c of r.crossings) {
-      if (c.sepM <= sepM) continue;
+      if (c.sepM <= sepM || c.excMM < excMM) continue;
       out.push(`crossings: route ${r.route} is drawn crossing itself at ${c.atI} x ${c.atJ}, `
         + `where the two stretches are ${c.sepM.toFixed(0)} m apart on the ground (OA-240). `
         + `The geographic sheet does not cross there; in one colour at one width this reads as a junction.`);
@@ -302,6 +426,8 @@ function main() {
   const args = parseArgs(process.argv.slice(2), { repeat: ['town', 'place'] });
   const sepM = args.sep === undefined ? DEFAULT_SEP_M : Number(args.sep);
   if (!Number.isFinite(sepM) || sepM < 0) die('--sep needs a distance in metres', 2);
+  const excMM = args.exc === undefined ? DEFAULT_EXC_MM : Number(args.exc);
+  if (!Number.isFinite(excMM) || excMM < 0) die('--exc needs a distance in page millimetres', 2);
 
   let maps;
   if (args.dir) {
@@ -332,38 +458,43 @@ function main() {
   const over = [], under = [];
   for (const r of report) {
     if (r.error) continue;
-    for (const c of r.crossings) (c.sepM > sepM ? over : under).push(Object.assign({ map: r.map, route: r.route }, c));
+    for (const c of r.crossings) {
+      (c.sepM > sepM && c.excMM >= excMM ? over : under).push(Object.assign({ map: r.map, route: r.route }, c));
+    }
   }
   over.sort((a, b) => b.sepM - a.sepM);
   under.sort((a, b) => b.sepM - a.sepM);
 
   if (args.json) {
-    console.log(JSON.stringify({ sepM, maps: maps.length, over, under, errors }, null, 2));
+    console.log(JSON.stringify({ sepM, excMM, maps: maps.length, over, under, errors }, null, 2));
   } else {
     const line = (c) => `  ${c.map} ${c.route}: ${c.sepM.toFixed(0)} m apart on the ground, `
+      + `${c.excMM.toFixed(3)} mm of wedge on the page, `
       + `drawn crossing at index ${c.i} (${c.atI}) x ${c.j} (${c.atJ})`
       + (c.pairs > 1 ? ` [${c.pairs} segment pairs]` : '');
     for (const e of errors) console.error(`schematic_crossings: ${e.map} ${e.route}: ${e.error}`);
     if (!over.length) {
-      console.log(`schematic_crossings: no route is drawn crossing itself more than ${sepM} m from itself.`);
+      console.log(`schematic_crossings: no route is drawn crossing itself more than ${sepM} m from itself `
+        + `with a wedge of ${excMM.toFixed(3)} mm or more on the page.`);
     } else {
       console.log(`schematic_crossings (OA-240) — ${over.length} crossing(s) the geography does not make, `
-        + `over ${sepM} m apart on the ground:`);
+        + `over ${sepM} m apart on the ground and drawn wide enough to see:`);
       over.forEach((c) => console.log(line(c)));
     }
     if (args.all) {
-      console.log(`\nBelow the threshold — a bus doubling back, not a falsehood (${under.length}):`);
+      console.log(`\nBelow the threshold — a bus doubling back, or a wedge too narrow to draw (${under.length}):`);
       under.forEach((c) => console.log(line(c)));
     } else if (under.length) {
-      console.log(`(${under.length} more within ${sepM} m — doubling back at a turn or terminus; --all to see them.)`);
+      console.log(`(${under.length} more within ${sepM} m or under ${excMM.toFixed(3)} mm of wedge — doubling back at a turn, or a retrace too narrow to draw; --all to see them.)`);
     }
   }
   process.exit(errors.length || over.length ? 1 : 0);
 }
 
 module.exports = {
-  selfCrossings, properCross, newCrossings, segSepM, cluster,
-  analyseRun, roadName, everyMap, crossingWarnings, CLUSTER, DEFAULT_SEP_M,
+  selfCrossings, properCross, newCrossings, segSepM, excursionMM, pageScale, cluster,
+  analyseRun, roadName, everyMap, crossingWarnings,
+  CLUSTER, DEFAULT_SEP_M, DEFAULT_EXC_MM, FRAME_MM, THINNEST_ROUTE_MM,
 };
 
 if (require.main === module) main();

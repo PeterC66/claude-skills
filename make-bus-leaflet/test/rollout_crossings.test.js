@@ -85,6 +85,12 @@ const CLEAN = [[52.000, 0.000], [52.000, 0.010], [52.005, 0.010], [52.005, 0.000
 const CROSSED = CLEAN.map((p, i) => (i === 3 ? [51.998, 0.000] : p));
 const NEAR = [[52.000, 0.000], [52.000, 0.010], [52.0005, 0.010], [52.0005, 0.000], [52.001, 0.000]];
 const NEAR_CROSSED = NEAR.map((p, i) => (i === 3 ? [51.9995, 0.000] : p));
+/* Two DIFFERENT roads 445 m apart on the ground, which the schematizer put on one
+ * line and left 1e-8 of a degree off it -- a retrace, and the shape 94 of the
+ * estate's 99 new crossings actually have. It clears the ground threshold easily,
+ * because running two distant streets down one line is what a tube map is for. */
+const RETRACE = [[52.000, 0.000], [52.000, 0.010], [52.004, 0.010], [52.004, 0.000]];
+const RETRACE_SCH = [[52.000, 0.000], [52.000, 0.010], [52.00000001, 0.010], [51.99999999, 0.000]];
 
 test('crossingWarnings says nothing about a run with no schematic, and nothing about a clean one', () => {
   const none = fs.mkdtempSync(path.join(os.tmpdir(), 'rc-run-'));
@@ -104,6 +110,19 @@ test('crossingWarnings applies the threshold — a bus doubling back is not a bu
   assert.strictEqual(crossingWarnings(near, { sepM: 10 }).length, 1,
     'and the threshold must still be the thing deciding it');
   fs.rmSync(near, { recursive: true, force: true });
+});
+
+test('crossingWarnings applies the WEDGE threshold too - a retrace is not a build warning', () => {
+  // The second threshold, at the place the rollout reads it. Both thresholds have
+  // to be applied HERE and not only in the CLI, or the build log gets a different
+  // answer from the sweep -- and this one is the dangerous direction, because a
+  // threshold that only subtracts fails silently.
+  const rt = makeRun(RETRACE, RETRACE_SCH);
+  assert.deepStrictEqual(crossingWarnings(rt), [],
+    'a retrace opens no wedge, so it must not reach the build log however far apart the roads are');
+  assert.strictEqual(crossingWarnings(rt, { excMM: 0 }).length, 1,
+    'and the WEDGE threshold must be the thing deciding it, not the ground one');
+  fs.rmSync(rt, { recursive: true, force: true });
 });
 
 test('a Class A crossing produces one line, naming the distance', () => {

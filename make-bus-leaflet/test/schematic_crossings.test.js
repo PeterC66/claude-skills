@@ -44,7 +44,8 @@ const { spawnSync } = require('node:child_process');
 const { load, ENGINE_DIR } = require('./_engine');
 
 const SC = load('schematic_crossings.js');
-const { selfCrossings, properCross, newCrossings, segSepM, cluster, analyseRun, roadName } = SC;
+const { selfCrossings, properCross, newCrossings, segSepM, excursionMM, pageScale,
+  cluster, analyseRun, roadName } = SC;
 const TOOL = path.join(ENGINE_DIR, 'schematic_crossings.js');
 
 /* A clean rectangle-and-tail: out east, north, back west, then north again.
@@ -71,6 +72,27 @@ const NEAR_CLEAN = [
   [52.001, 0.000],
 ];
 const NEAR_CROSSED = NEAR_CLEAN.map((p, i) => (i === 3 ? [51.9995, 0.000] : p));
+/* THE CASE THE FIRST THRESHOLD ALONE GOT WRONG. A route that runs the length of
+ * one street and comes back down it — out east, back west — with the return pass off
+ * the outbound line by 1e-8 of a degree, which is the order of the arc-length
+ * interpolation error the schematizer's step 6 leaves behind. `properCross` means
+ * to exclude this ("a route that retraces a street has not crossed itself, it has
+ * repeated itself") and cannot, because the determinant comes out at 1e-20 rather
+ * than at 0. The two stretches ARE hundreds of metres apart on the ground, so the
+ * ground threshold passes it straight through; only the wedge it opens on the page
+ * says what it is. */
+const RETRACE_GEO = [
+  [52.000, 0.000],
+  [52.000, 0.010],
+  [52.004, 0.010],
+  [52.004, 0.000],
+];
+const RETRACE_SCH = [
+  [52.000, 0.000],
+  [52.000, 0.010],
+  [52.00000001, 0.010],
+  [51.99999999, 0.000],
+];
 
 test('properCross: an X crosses, and nothing that merely touches does', () => {
   const A = [0, 0], B = [1, 1], C = [0, 1], D = [1, 0];
@@ -141,19 +163,25 @@ test('segSepM is the MINIMUM distance between the segments, not between their fi
 test('clustering: one X is one finding, two X\'s are two', () => {
   // Twelve index pairs walking together, as one visible crossing between two
   // simplified legs actually produces.
-  const walk = Array.from({ length: 12 }, (_, n) => ({ i: 100 + n, j: 200 - n, sepM: 300 + n }));
+  const walk = Array.from({ length: 12 }, (_, n) => ({ i: 100 + n, j: 200 - n, sepM: 300 + n, excMM: n }));
   const one = cluster(walk);
   assert.strictEqual(one.length, 1, 'a walking run of pairs is one crossing');
   assert.strictEqual(one[0].pairs, 12, 'the raw pair count is kept, not thrown away');
   assert.strictEqual(one[0].sepM, 311, 'a cluster is scored by its WIDEST separation');
+  // And by its widest WEDGE, which need not be the same pair. One X drawn
+  // between two long legs raises pairs at its shallow tips as well as at its
+  // middle, and a retraced corridor raises a dozen that open nothing at all; a
+  // cluster scored by whichever happened to come first would hide a real
+  // crossing behind the retraces lying beside it.
+  assert.strictEqual(one[0].excMM, 11, 'a cluster is scored by its WIDEST wedge');
   // Two runs far apart on both strands stay two.
-  const two = cluster(walk.concat(walk.map((p) => ({ i: p.i + 400, j: p.j + 400, sepM: 50 }))));
+  const two = cluster(walk.concat(walk.map((p) => ({ i: p.i + 400, j: p.j + 400, sepM: 50, excMM: 0 }))));
   assert.strictEqual(two.length, 2);
   assert.deepStrictEqual(two.map((c) => c.pairs), [12, 12]);
   assert.ok(two[0].sepM > two[1].sepM, 'clusters come back worst first');
   // Near on ONE strand and far on the other is still two crossings: a long leg
   // can be crossed twice by two quite different stretches of the same route.
-  const split = cluster([{ i: 100, j: 200, sepM: 400 }, { i: 101, j: 900, sepM: 400 }]);
+  const split = cluster([{ i: 100, j: 200, sepM: 400, excMM: 1 }, { i: 101, j: 900, sepM: 400, excMM: 1 }]);
   assert.strictEqual(split.length, 2, 'closeness on both strands is required, not either');
 });
 
@@ -256,6 +284,84 @@ test('the CLI: --json carries both sides of the threshold, and a usage error exi
   assert.strictEqual(usage.status, 2);
   assert.match(usage.stderr, /--sep needs a distance in metres/);
   assert.strictEqual(run(['--dir']).status, 2, '--dir with nothing after it is a usage error');
+});
+
+test('excursionMM: how wide the wedge opens, not how far apart the roads are', () => {
+  // 1 mm per unit, so the numbers below read as millimetres directly.
+  // A square's two diagonals: a 90 deg X, and each strand's ends stand a long
+  // way off the other's line.
+  const X = excursionMM([0, 0], [10, 10], [0, 10], [10, 0], 1);
+  assert.ok(Math.abs(X - 10 / Math.SQRT2) < 1e-9,
+    `a 90 deg X across a 10-unit square opens 10/root2, got ${X}`);
+  // The same crossing, but one strand is a stub: it darts across and is gone
+  // before it has parted from the other by anything a printer could resolve.
+  // A wedge is only as wide as its SHALLOWER side, which is why the minimum of
+  // the two is taken rather than the maximum.
+  const stub = excursionMM([0, 0], [10, 10], [4.9, 5.1], [5.1, 4.9], 1);
+  assert.ok(stub < 0.2, `a stub crossing a long leg opens almost nothing, got ${stub}`);
+  // ASYMMETRY IS THE POINT, and a square cannot show it. This strand starts a
+  // whisker on one side of the other and finishes a long way past it: read at
+  // its NEAR end the crossing measures nothing, read at its far end it is the
+  // width of the page. The wedge a reader sees is the far one, so the larger of
+  // the two ends is the answer and the smaller is the bug.
+  const lop = excursionMM([0, 0], [0, 10], [-0.1, 5], [9, 6], 1);
+  assert.ok(lop > 4, `a lopsided crossing is as wide as its FAR end, got ${lop}`);
+  // Near-collinear: the retrace. Two segments 0.001 deg from parallel are one
+  // line as far as any sheet is concerned.
+  const flat = excursionMM([0, 0], [10, 0], [8, 0.0001], [2, -0.0001], 1);
+  assert.ok(flat < 0.01, `a retrace opens nothing, got ${flat}`);
+  // A degenerate segment cannot define a direction, and must not throw or
+  // produce a NaN that would compare false against every threshold and so
+  // silently drop the finding.
+  assert.strictEqual(excursionMM([0, 0], [0, 0], [1, 1], [2, 2], 1), 0);
+});
+
+test('pageScale reads the whole sheet, not one route', () => {
+  // The fit that put the ink on the page saw every route at once. Scaling a
+  // short route by its own span would magnify its wedges by however much of the
+  // sheet it happens to miss, which is the shape of a check that fires on the
+  // shortest route in the town and nowhere else.
+  const routes = { 9: { pts: [[0, 0], [0, 1]] }, 10: { pts: [[0, 0], [0, 4]] } };
+  assert.strictEqual(pageScale(routes), SC.FRAME_MM / 4);
+  assert.strictEqual(pageScale({ 9: { pts: [[0, 2], [1, 2]] } }), 0, 'a sheet with no width scores nothing');
+});
+
+test('THE RETRACE IS NOT A CROSSING, however far apart the two stretches are on the ground', () => {
+  // The whole of the second threshold, in one fixture. Both passes are the same
+  // street; the ground separation between the two named segments is hundreds of
+  // metres, because that is what running a street twice means, and it sails over
+  // the 150 m mark. The wedge is what says it is not a crossing.
+  const dir = makeRun(RETRACE_GEO, RETRACE_SCH);
+  const c = analyseRun(dir).routes[0].crossings[0];
+  assert.ok(c.sepM > SC.DEFAULT_SEP_M,
+    `a retrace clears the GROUND threshold, which is the point (got ${c.sepM.toFixed(0)} m)`);
+  assert.ok(c.excMM < SC.DEFAULT_EXC_MM,
+    `and opens no wedge worth drawing (got ${c.excMM.toFixed(4)} mm)`);
+  assert.deepStrictEqual(SC.crossingWarnings(dir), [], 'so it reaches no build log');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('a REAL X still clears both thresholds — the second one only ever removes findings', () => {
+  // The guard on the guard. A threshold that can only subtract has exactly one
+  // way of being wrong, and it is the way that leaves nothing behind to notice
+  // it: dropping the fault it was written for. CLEAN/CROSSED is the transversal
+  // crossing an octant re-assignment makes, and it has to survive.
+  const dir = makeRun(CLEAN, CROSSED);
+  const c = analyseRun(dir).routes[0].crossings[0];
+  assert.ok(c.sepM > SC.DEFAULT_SEP_M, `over the ground threshold (got ${c.sepM.toFixed(0)} m)`);
+  assert.ok(c.excMM >= SC.DEFAULT_EXC_MM, `and over the wedge threshold (got ${c.excMM.toFixed(3)} mm)`);
+  assert.strictEqual(SC.crossingWarnings(dir).length, 1);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the wedge threshold is half the thinnest line any route is drawn with', () => {
+  // Not a number fitted to the cases in front of it. Every schematic on the
+  // estate draws its routes at 1.2, 1.7 or 2.2 mm; a wedge narrower than half
+  // the thinnest of those leaves the two strands' ink overlapping across the
+  // whole crossing. Pinned so that moving it has to be a decision.
+  assert.strictEqual(SC.THINNEST_ROUTE_MM, 1.2);
+  assert.strictEqual(SC.DEFAULT_EXC_MM, 0.6);
+  assert.strictEqual(SC.FRAME_MM, 190);
 });
 
 test('schematic_crossings.js is outside the engine hash closure', () => {

@@ -12,11 +12,16 @@
  *   node quality_gate.js --accept       # re-record the ledger from today
  *   node quality_gate.js --json
  *   node quality_gate.js --accept --include-uncommitted
+ *   node quality_gate.js --accept --note "Huntingdon · schematic=why it got worse"
+ *   node quality_gate.js --accept --note-file notes.txt
  *
  * --accept HOLDS BACK any sheet whose ci-reference is not committed, and says
  * which. This tool writes a SHARED ledger and sessions here run concurrently;
  * see the comment above partitionByCommitted() for the run that made that
  * necessary. --include-uncommitted overrides it deliberately.
+ *
+ * --accept REFUSES A REGRESSED ROW WITH NO NOTE, and there is no flag that
+ * turns that off. See the comment above unnotedRegressions().
  *
  * WHY A LEDGER AND NOT A THRESHOLD. The plan says "gate HARD at 0". That is the
  * destination, not a gate that can be switched on today: the board carries 139
@@ -71,7 +76,7 @@
 const fs = require('fs');
 const path = require('path');
 const { analyse } = require('./quality_metrics');
-const { parseArgs, resolveBuses } = require('./cli');
+const { parseArgs, die, resolveBuses } = require('./cli');
 
 const LEDGER_NAME = path.join('Development Docs', 'quality-ledger.json');
 
@@ -271,7 +276,163 @@ function partitionByCommitted(busesDir, rows) {
   return { clean, held, unknown: false };
 }
 
-function accept(busesDir, rows, ledgerPath) {
+// ---- the WHY, written by the tool that writes the numbers -------------------
+// EVERY PER-SHEET NOTE IN THIS LEDGER WAS TYPED INTO THE FILE BY HAND, and the
+// cost of that is in the history rather than in any check: `099a2b9`, `bd9693e`,
+// `bba5946`, `b82218d` and `bec2cd7` are five ledger commits that each rewrote
+// about 460 of the file's 468 lines. The change in every one of them was a
+// paragraph; the diff was the whole file, because a hand-typed note goes in at
+// whatever indent the editor offers and `accept()` writes ONE space. A commit
+// whose diff cannot be read is the exact failure the ratchet exists to prevent —
+// "lowering a ceiling is a deliberate, reviewable commit" is the sentence in
+// DEFAULT_NOTE, and an unreviewable diff makes it false.
+//
+// So the note is now an INPUT to --accept and goes in through accept()'s own
+// writer. Nothing else formats this file, and the indent cannot be flipped by
+// the person supplying the prose because they never open it.
+//
+//   --note "<sheet key>=<text>"   repeatable, once per sheet
+//   --note-file <path>            the same grammar, one per line
+//
+// The sheet key is the one the report prints — `Huntingdon · schematic` — so it
+// can be copied off the run that refused.
+
+/*
+ * parseNoteArg — "<sheet key>=<text>" into its two halves, splitting on the
+ * FIRST `=`. A sheet key is `<town> · <basename>` and cannot contain one; a note
+ * very well might ("HARD 4 -> 5, drop=5"), and splitting on the last `=` would
+ * quietly move the head of the sentence into the key and then refuse it as an
+ * unknown sheet.
+ */
+function parseNoteArg(s) {
+  if (typeof s !== 'string') throw new Error('--note needs a value of the form "<sheet key>=<text>"');
+  const i = s.indexOf('=');
+  const key = i < 0 ? '' : s.slice(0, i).trim();
+  const text = i < 0 ? '' : s.slice(i + 1).trim();
+  if (!key || !text) throw new Error('--note must read "<sheet key>=<text>", not ' + JSON.stringify(s));
+  return { key, text };
+}
+
+/*
+ * parseNoteFile — the same grammar, one note per line. Blank lines and lines
+ * beginning `#` are skipped so a file can be annotated and kept between runs;
+ * everything else must parse, because a line silently ignored here is a note
+ * somebody believes they supplied. One line per note, not a paragraph block:
+ * these notes run to several hundred words and the house style for prose in this
+ * project is already one continuous line per paragraph.
+ */
+function parseNoteFile(text) {
+  const out = [];
+  const lines = String(text).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) continue;
+    try { out.push(parseNoteArg(line)); }
+    catch { throw new Error('line ' + (i + 1) + ' of the note file must read "<sheet key>=<text>", not ' + JSON.stringify(lines[i])); }
+  }
+  return out;
+}
+
+/*
+ * collectNotes — the flags and the file into one { key: text }. Pure: it takes
+ * the file's TEXT, not its path, so the parsing can be tested without a disk.
+ *
+ * A duplicate key is REFUSED rather than merged or last-wins. Two notes for one
+ * sheet is a session that has lost track of what it is recording, and silently
+ * dropping one of them writes a ceiling whose stated reason is not the reason.
+ */
+function collectNotes(noteArgs = [], fileText = null) {
+  const notes = {};
+  const add = ({ key, text }) => {
+    if (Object.prototype.hasOwnProperty.call(notes, key)) {
+      throw new Error('two notes supplied for the same sheet: ' + JSON.stringify(key));
+    }
+    notes[key] = text;
+  };
+  for (const a of noteArgs || []) add(parseNoteArg(a));
+  if (fileText !== null && fileText !== undefined) for (const n of parseNoteFile(fileText)) add(n);
+  return notes;
+}
+
+/*
+ * appendNote — a DATED PARAGRAPH on the end of what the sheet already says.
+ *
+ * Appending, never replacing. Every long note in this ledger is a stack of dated
+ * acceptances, and the one underneath is what says which state the one above was
+ * measured from — Huntingdon's internal row carries three, and the third is only
+ * readable because the first two are still there. `\n\n` is the separator the
+ * existing entries use.
+ *
+ * The date is prefixed here rather than left to the caller, because a note whose
+ * date is typed by hand is a date that can be wrong; text that already opens
+ * with an ISO date is left alone so a session recording yesterday's measurement
+ * can say so.
+ */
+const NOTE_SEP = '\n\n';
+function appendNote(existing, text, today) {
+  const para = /^\d{4}-\d{2}-\d{2}/.test(text) ? text : today + ', ' + text;
+  return existing ? existing + NOTE_SEP + para : para;
+}
+
+/*
+ * unnotedRegressions — the keys --accept must refuse, and THERE IS NO BYPASS.
+ *
+ * A REGRESSED row is a ceiling being RAISED: the sheet now prints fewer labels,
+ * or carries more hard defects, or drops more names than the ledger allows. The
+ * ratchet's entire claim is that this cannot happen quietly, and until now the
+ * only thing standing between a raise and silence was whether the session
+ * remembered to write a sentence. Read this file's `sheets` block: the rows that
+ * carry a note read "ACCEPTED DELIBERATELY" and then say what was traded for
+ * what, and they are the rows a later session can act on. The rows with no note
+ * are numbers nobody can now explain.
+ *
+ * No `--force`, no `--no-note`, and deliberately not covered by
+ * `--include-uncommitted` either. A flag that switches a justification off is a
+ * flag that gets typed at 6pm, and the thing being switched off is the only
+ * durable record of why the board got worse. The note can be one line; it cannot
+ * be nothing.
+ */
+function unnotedRegressions(rows, notes = {}) {
+  return rows.filter(r => r.status === 'REGRESSED' && !notes[r.key]).map(r => r.key);
+}
+
+/* notesForNoRow — a note whose key matches nothing being recorded. A typo in a
+ * sheet key would otherwise leave the refusal above firing at a session that is
+ * looking straight at the note it supplied. */
+function notesForNoRow(rows, notes = {}) {
+  const keys = new Set(rows.map(r => r.key));
+  return Object.keys(notes).filter(k => !keys.has(k));
+}
+
+function accept(busesDir, rows, ledgerPath, opts = {}) {
+  const notes = opts.notes || {};
+  const today = opts.today || new Date().toISOString().slice(0, 10);
+
+  // BOTH REFUSALS ARE HERE, not only in the CLI, and that is what makes the one
+  // above a property of the tool rather than of the code path somebody used. The
+  // CLI checks them first so it can print a longer message naming the held-back
+  // sheets; these throw so that a caller reaching accept() directly — a test, a
+  // future orchestrator — cannot record an unexplained raise by another door.
+  // A STRAY KEY IS CHECKED FIRST, and the order is the whole point of the check.
+  // A mistyped sheet key leaves the note attached to nothing, so the refusal
+  // below fires — and reports "this sheet carries no note" to a session looking
+  // straight at the note it supplied. Naming the typo is the actionable message;
+  // naming the absence is a wild goose chase.
+  const stray = notesForNoRow(rows, notes);
+  if (stray.length) {
+    const e = new Error('note supplied for ' + stray.length + ' sheet(s) not being recorded: ' + stray.join(', '));
+    e.code = 'NOTE_FOR_NO_ROW';
+    e.keys = stray;
+    throw e;
+  }
+  const missing = unnotedRegressions(rows, notes);
+  if (missing.length) {
+    const e = new Error('REFUSING to record ' + missing.length + ' REGRESSED sheet(s) with no note: ' + missing.join(', '));
+    e.code = 'UNNOTED_REGRESSION';
+    e.keys = missing;
+    throw e;
+  }
+
   let prev = {};
   if (fs.existsSync(ledgerPath)) { try { prev = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')); } catch {} }
   const prevSheets = prev.sheets || {};
@@ -282,9 +443,14 @@ function accept(busesDir, rows, ledgerPath) {
   // accepted silently, which is the same adoption by a slower route.
   for (const [k, v] of Object.entries(prevSheets)) sheets[k] = v;
   for (const r of rows) {
-    sheets[r.key] = r.now;
+    // A COPY of the measurement, not the caller's own object: this loop now
+    // writes a `note` key, and writing it onto `r.now` would put ledger prose
+    // into the row the caller is still holding.
+    sheets[r.key] = { ...r.now };
     const carried = prevSheets[r.key] && prevSheets[r.key].note;
-    if (carried) sheets[r.key].note = carried;
+    const added = notes[r.key];
+    const note = added ? appendNote(carried, added, today) : carried;
+    if (note) sheets[r.key].note = note;
   }
   // `targets` is carried forward for the same reason the notes are, and it
   // matters more: --accept runs after a change that improved things, which is
@@ -310,7 +476,9 @@ function accept(busesDir, rows, ledgerPath) {
   fs.writeFileSync(ledgerPath, JSON.stringify(out, null, 1) + '\n');
 }
 
-module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal, partitionByCommitted, dirtyPaths, LEDGER_NAME };
+module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal,
+  partitionByCommitted, dirtyPaths, parseNoteArg, parseNoteFile, collectNotes, appendNote, unnotedRegressions,
+  notesForNoRow, LEDGER_NAME };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -319,7 +487,9 @@ if (require.main === module) {
   // environment and the one named default; what was hand-rolled here was only
   // getting the flag's value out of argv.
   const argv = process.argv.slice(2);
-  const FLAGS = parseArgs(argv);
+  // `--note` ACCUMULATES: one sheet per flag, so a run that raises three ceilings
+  // passes three of them. Everything else here is a plain long flag.
+  const FLAGS = parseArgs(argv, { repeat: ['note'] });
   const buses = resolveBuses(FLAGS);
   const { ledgerPath, ledger, rows } = run(buses);
 
@@ -335,9 +505,49 @@ if (require.main === module) {
       process.exit(2);
     }
 
+    if (FLAGS['note-file'] === true) die('--note-file needs a path');
+    let notes;
+    try {
+      const fileText = typeof FLAGS['note-file'] === 'string'
+        ? fs.readFileSync(path.resolve(FLAGS['note-file']), 'utf8') : null;
+      notes = collectNotes(FLAGS.note, fileText);
+    } catch (e) { die(e.message); }
+
     const use = force ? rows : clean;
-    accept(buses, use, ledgerPath);
-    console.log(`recorded ${use.length} sheets into ${ledgerPath}`);
+
+    // The refusals, printed at length rather than thrown. accept() refuses the
+    // same rows on the same tests, in the same order — see the comments there —
+    // so this block is the MESSAGE and not the guarantee.
+    const stray = notesForNoRow(use, notes);
+    if (stray.length) {
+      console.error('REFUSING to --accept: a note was supplied for ' + stray.length + ' sheet(s) not being recorded.');
+      for (const k of stray) {
+        console.error('  ' + k + (held.some(r => r.key === k)
+          ? '   — HELD BACK: its ci-reference is not committed, so it is not being recorded'
+          : '   — no sheet of that key; copy it from the report\'s sheet column'));
+      }
+      process.exit(2);
+    }
+    const missing = unnotedRegressions(use, notes);
+    if (missing.length) {
+      console.error(`REFUSING to --accept: ${missing.length} sheet(s) have REGRESSED and carry no note.`);
+      for (const k of missing) {
+        const r = use.find(x => x.key === k);
+        console.error('  ' + k + '   ' + r.why.join('; '));
+      }
+      console.error('');
+      console.error('A REGRESSED row RAISES a ceiling, and this ledger\'s whole claim is that a raise is');
+      console.error('a deliberate, reviewable commit. Say what was traded for what:');
+      console.error('  --note "' + missing[0] + '=ACCEPTED DELIBERATELY: ..."');
+      console.error('or put one line per sheet in a file and pass --note-file <path>.');
+      console.error('There is no flag that switches this off.');
+      process.exit(2);
+    }
+
+    accept(buses, use, ledgerPath, { notes, today: todayISO() });
+    const noted = Object.keys(notes).length;
+    console.log(`recorded ${use.length} sheets into ${ledgerPath}`
+      + (noted ? ` — ${noted} dated note(s) appended` : ''));
 
     if (held.length && !force) {
       console.log(`\nHELD BACK ${held.length} sheet(s) whose ci-reference is not committed:`);
@@ -382,5 +592,8 @@ if (require.main === module) {
 
   console.log(`\n${rows.length} sheets · ${bad.length} REGRESSED · ${rows.filter(r => r.status === 'BETTER').length} better · ${nu.length} new`);
   if (nu.length) console.log('Run --accept to record the current figures as the ceiling.');
+  // Said HERE and not only at the refusal, so the requirement is known before the
+  // command is typed rather than after it has been refused.
+  if (bad.length) console.log('--accept will REFUSE a REGRESSED row with no --note "<sheet key>=<why>". There is no bypass.');
   process.exit(bad.length ? 1 : 0);
 }

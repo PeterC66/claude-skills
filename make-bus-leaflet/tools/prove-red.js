@@ -586,6 +586,51 @@ const MUTATIONS = [
     find: '  if (prev.targets) out.targets = prev.targets;',
     to: '  if (false) out.targets = prev.targets;' },
 
+  // THE NOTE ARM. Five ledger commits (099a2b9, bd9693e, bba5946, b82218d,
+  // bec2cd7) each rewrote about 460 of 468 lines because the per-sheet prose was
+  // typed into the file by hand at the wrong indent, and nothing ever required
+  // the prose in the first place. The first mutation below is that exact bug, and
+  // it is the reason the indent assertion is not decoration: a reformat is a green
+  // ledger and an unreviewable diff, which is the one state this file cannot see
+  // for itself.
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'the ledger indent goes back to two spaces, so every --accept reformats all 468 lines',
+    find: 'JSON.stringify(out, null, 1)',
+    to: 'JSON.stringify(out, null, 2)' },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'accept() stops refusing a REGRESSED sheet with no note, so a raised ceiling goes in unexplained',
+    find: '  const missing = unnotedRegressions(rows, notes);',
+    to: '  const missing = [];' },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'a new note REPLACES the sheet\'s existing one instead of being appended to it',
+    find: '  return existing ? existing + NOTE_SEP + para : para;',
+    to: '  return para;' },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: '--note splits on the LAST equals, so a note containing one loses its head into the sheet key',
+    find: "  const i = s.indexOf('=');",
+    to: "  const i = s.lastIndexOf('=');" },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'two notes for one sheet stop being refused, so one of them is silently dropped',
+    find: '    if (Object.prototype.hasOwnProperty.call(notes, key)) {',
+    to: '    if (false) {' },
+
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'a note whose sheet key is a typo is accepted and does nothing',
+    find: '  const stray = notesForNoRow(rows, notes);',
+    to: '  const stray = [];' },
+
+  // The ORDER of the two refusals, which is not a tidiness question: both fire on
+  // a mistyped key, and the missing-note one sends a session hunting for a note it
+  // is holding in its hand.
+  { suite: 'quality_gate.test.js', file: 'quality_gate.js',
+    what: 'the typo refusal defers to the missing-note one, so a mistyped key is reported as an absent note',
+    find: '  const stray = notesForNoRow(rows, notes);',
+    to: '  const stray = unnotedRegressions(rows, notes).length ? [] : notesForNoRow(rows, notes);' },
+
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'mustPlace loses its second, relaxed pass',
     find: 'for (const relax of (it.mustPlace ? [false, true] : [false]))',

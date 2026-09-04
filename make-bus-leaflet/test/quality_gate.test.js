@@ -179,3 +179,157 @@ test('accept() carries the targets block forward', () => {
   assert.ok(after.sheets['a · internal'], 'the sheet figures should still be re-recorded');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+/*
+ * NOTES, AND THE REFUSAL THAT NEEDS THEM.
+ *
+ * Two faults, one cause. The ledger's per-sheet prose was typed into the file by
+ * hand, so it went in at the editor's indent while accept() writes ONE space:
+ * five commits (099a2b9, bd9693e, bba5946, b82218d, bec2cd7) each rewrote about
+ * 460 of 468 lines to land one paragraph, and the diff that was supposed to BE
+ * the review was unreadable. And nothing ever required the paragraph at all, so
+ * a raised ceiling with no explanation cost nothing to record.
+ *
+ * The tests below hold both ends: the note goes in through accept()'s own
+ * writer, and accept() will not record a REGRESSED row without one.
+ */
+
+const fsn = require('node:fs');
+const pathn = require('node:path');
+
+// A ledger on disk with one sheet already recorded, and a row that has regressed
+// against it. Returned rather than asserted on, so each test says its own thing.
+function fixture(prevSheet = { labels: 100, hard: 5, soft: 10, drop: 2, def: 15, all: 15, note: 'first note' }) {
+  const dir = scratchDir('qg-note-');
+  const ledger = pathn.join(dir, 'ledger.json');
+  fsn.writeFileSync(ledger, JSON.stringify({ recorded: '2026-08-25', note: 'top', sheets: { 'a · internal': prevSheet } }, null, 1) + '\n');
+  return { dir, ledger, read: () => JSON.parse(fsn.readFileSync(ledger, 'utf8')), raw: () => fsn.readFileSync(ledger, 'utf8') };
+}
+const regressed = (key = 'a · internal') => ({ key, now: sheet({ hard: 9 }), status: 'REGRESSED', why: ['HARD 5 -> 9'] });
+const okRow = (key = 'a · internal') => ({ key, now: sheet(), status: 'ok', why: [] });
+
+test('parseNoteArg splits on the FIRST equals, so a note may contain one', () => {
+  // "HARD 4 -> 5, drop=5" is the shape a real note takes. Splitting on the last
+  // `=` would move the head of the sentence into the sheet key and then refuse
+  // it as a sheet nobody has heard of.
+  const n = QG.parseNoteArg('a · internal=ACCEPTED: HARD 4 -> 5, drop=5');
+  assert.strictEqual(n.key, 'a · internal');
+  assert.strictEqual(n.text, 'ACCEPTED: HARD 4 -> 5, drop=5');
+});
+
+test('parseNoteArg refuses a value that is not "<key>=<text>"', () => {
+  for (const bad of ['no equals sign at all', '=text with no key', 'key with no text=', '=', 42, undefined]) {
+    assert.throws(() => QG.parseNoteArg(bad), /--note/, JSON.stringify(bad) + ' was accepted');
+  }
+});
+
+test('a note file is one note per line, and names the line it could not read', () => {
+  const parsed = QG.parseNoteFile('# a comment\n\na · internal=first\nb · external=second\n');
+  assert.deepStrictEqual(parsed.map(n => n.key), ['a · internal', 'b · external']);
+  // A line that cannot be read must NOT be skipped: a silently ignored line is a
+  // note somebody believes they supplied, and the refusal then fires at a session
+  // looking straight at it.
+  assert.throws(() => QG.parseNoteFile('a · internal=fine\nrubbish\n'), /line 2/);
+});
+
+test('collectNotes merges the flags and the file, and refuses two notes for one sheet', () => {
+  const merged = QG.collectNotes(['a · internal=from a flag'], 'b · external=from the file\n');
+  assert.deepStrictEqual(merged, { 'a · internal': 'from a flag', 'b · external': 'from the file' });
+  assert.deepStrictEqual(QG.collectNotes(), {}, 'no notes at all is an empty object, not a throw');
+  assert.throws(() => QG.collectNotes(['a=one', 'a=two']), /two notes supplied for the same sheet/);
+  assert.throws(() => QG.collectNotes(['a=one'], 'a=two\n'), /two notes supplied for the same sheet/,
+    'a flag and a file colliding is the same fault as two flags');
+});
+
+test('appendNote adds a dated paragraph and keeps what was there', () => {
+  const out = QG.appendNote('2026-08-30, the placer round: ...', 'ACCEPTED DELIBERATELY: ...', '2026-09-04');
+  assert.strictEqual(out, '2026-08-30, the placer round: ...\n\n2026-09-04, ACCEPTED DELIBERATELY: ...');
+  assert.strictEqual(QG.appendNote(null, 'first thing said', '2026-09-04'), '2026-09-04, first thing said',
+    'a sheet with no note yet gets the paragraph on its own');
+  assert.strictEqual(QG.appendNote(undefined, 'x', '2026-09-04'), '2026-09-04, x');
+});
+
+test('appendNote does not date a paragraph that already opens with a date', () => {
+  const out = QG.appendNote('older', '2026-09-01, measured the day before', '2026-09-04');
+  assert.strictEqual(out, 'older\n\n2026-09-01, measured the day before');
+});
+
+test('unnotedRegressions names only the REGRESSED rows with no note', () => {
+  const rows = [regressed('a'), regressed('b'), okRow('c'), { key: 'd', now: sheet(), status: 'NEW', why: [] }];
+  assert.deepStrictEqual(QG.unnotedRegressions(rows, {}), ['a', 'b']);
+  assert.deepStrictEqual(QG.unnotedRegressions(rows, { a: 'why' }), ['b']);
+  assert.deepStrictEqual(QG.unnotedRegressions(rows, { a: 'why', b: 'why' }), [],
+    'a NEW row and an ok row never need one — only a RAISED ceiling does');
+});
+
+test('accept() REFUSES a REGRESSED sheet with no note, and writes nothing at all', () => {
+  // The guarantee is in accept(), not only in the CLI: a caller reaching this
+  // function directly must not be able to record an unexplained raise.
+  const f = fixture();
+  const before = f.raw();
+  assert.throws(() => QG.accept(f.dir, [regressed()], f.ledger, { today: '2026-09-04' }),
+    e => e.code === 'UNNOTED_REGRESSION' && e.keys.join() === 'a · internal');
+  assert.strictEqual(f.raw(), before, 'the ledger was written despite the refusal');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});
+
+test('accept() records a REGRESSED sheet once a note is supplied, appending to what was there', () => {
+  const f = fixture();
+  QG.accept(f.dir, [regressed()], f.ledger, { notes: { 'a · internal': 'ACCEPTED DELIBERATELY: four routes became five' }, today: '2026-09-04' });
+  const row = f.read().sheets['a · internal'];
+  assert.strictEqual(row.hard, 9, 'the new ceiling should be recorded');
+  assert.strictEqual(row.note, 'first note\n\n2026-09-04, ACCEPTED DELIBERATELY: four routes became five');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});
+
+test('accept() refuses a note for a sheet it is not recording', () => {
+  // A mistyped sheet key would otherwise do nothing while the refusal above still
+  // fired, at a session holding the note it thought it had supplied.
+  const f = fixture();
+  assert.throws(() => QG.accept(f.dir, [okRow()], f.ledger, { notes: { 'a · internl': 'typo' }, today: '2026-09-04' }),
+    e => e.code === 'NOTE_FOR_NO_ROW' && e.keys.join() === 'a · internl');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});
+
+test('a typo in the sheet key is reported AS a typo, not as a missing note', () => {
+  // Both refusals fire on this input and only one of them is useful. Naming the
+  // absence sends a session hunting for a note it is holding in its hand; naming
+  // the key it got wrong is the fix. The order of the two checks is the test.
+  const f = fixture();
+  assert.throws(() => QG.accept(f.dir, [regressed()], f.ledger, { notes: { 'a · internl': 'why' }, today: '2026-09-04' }),
+    e => e.code === 'NOTE_FOR_NO_ROW');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});
+
+test('a note may be added to a sheet that has not regressed', () => {
+  // The refusal is one-way: a note is REQUIRED on a raise and ALLOWED anywhere.
+  // Recording why a ceiling came DOWN is worth as much to a later reader.
+  const f = fixture();
+  QG.accept(f.dir, [okRow()], f.ledger, { notes: { 'a · internal': 'why it improved' }, today: '2026-09-04' });
+  assert.strictEqual(f.read().sheets['a · internal'].note, 'first note\n\n2026-09-04, why it improved');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});
+
+test('the ledger is written with a ONE-space indent, whatever the note says', () => {
+  // This is the fault the whole feature exists for: the committed file is stored
+  // at one space, and a note typed in by hand arrives at two or four, so every
+  // subsequent --accept reformats all 468 lines and buries its real change. The
+  // note now goes in through this writer, so the indent is not the author's to
+  // get wrong — and this assertion is what says so.
+  const f = fixture();
+  QG.accept(f.dir, [regressed()], f.ledger, { notes: { 'a · internal': 'a paragraph' }, today: '2026-09-04' });
+  const lines = f.raw().split('\n');
+  assert.strictEqual(lines[1].slice(0, 2), ' "', 'top-level keys must be indented by exactly one space, got ' + JSON.stringify(lines[1].slice(0, 4)));
+  const sheetsAt = lines.findIndex(l => l.startsWith(' "sheets"'));
+  assert.ok(sheetsAt > 0, 'no sheets block');
+  assert.strictEqual(lines[sheetsAt + 1].slice(0, 3), '  "', 'a sheet key must be indented by exactly two spaces');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});
+
+test('accept() does not write the note onto the caller\'s own row', () => {
+  const f = fixture();
+  const row = regressed();
+  QG.accept(f.dir, [row], f.ledger, { notes: { 'a · internal': 'prose' }, today: '2026-09-04' });
+  assert.strictEqual(row.now.note, undefined, 'ledger prose leaked into the measurement the caller is holding');
+  fsn.rmSync(f.dir, { recursive: true, force: true });
+});

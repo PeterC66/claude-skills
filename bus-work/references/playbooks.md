@@ -231,6 +231,26 @@ Same regeneration, no portal step. These towns are printed sheets used outside t
 
 ---
 
+## `landmarks` — a town's landmark answer is owed somewhere (buses-data OA-233)
+
+Two rows share this playbook, and they are the two halves of one journey: a customer answers must / may / miss on the portal's `/landmarks` page, the answer has to reach the town's own source data, and the source then has to be built. Neither half is visible to a byte gate — the gate reads a build's own `routes.json` — which is how High Wycombe's answer sat committed and unbuilt for two days in September 2026 with every board green.
+
+**`landmark-owed-<slug>` — the portal holds an answer the town's source lacks.** From `make-bus-leaflet/assets/` (the engine's own folder), with `--town` the folder name under `Areas/` and nothing else required:
+
+```bash
+node poi_tiers_sync.js --town "High Wycombe"
+```
+
+It prints ADDED, CHANGED (with both values), the source-only keys it will keep, and the UNREACHABLE keys it will not write — an `industrial:*` key under `poi.industrialKeep "none"` is dropped before tiers run, so writing it would only produce an `unknownTierKeys` warning at build time. If the lines are the customer's answer, re-run with `--apply`: it writes a NEW S3 run through `stage.js` with a note, and the row below takes over. A portal older than 2026-09-05 answers 404 and the row is not raised; the worklist header says how many towns were skipped and why.
+
+**`landmark-unbuilt-<slug>` — the source carries an answer the latest build has not drawn.** A dry run first, from the same folder:
+
+```bash
+node rollout.js --town "High Wycombe"
+```
+
+Read the label-set diff. A `must` on a full sheet displaces `may` labels — that is what the word means — so look at the artwork where the losses are before accepting them, then `--apply --bump major --note "..."` with a note that says whose answer this is and what moved. It is a content change and gets its own version; do not let it ride inside an engine rollout (that is why `status.js` carried a dated allowance for High Wycombe from 2026-09-04 to 2026-09-05). Expect the quality ratchet to object on a saturated sheet, and accept its rows with a note only after reading the crops.
+
 ## `housekeeping` — engine-stale renders, missing S6
 
 ### Engine-stale

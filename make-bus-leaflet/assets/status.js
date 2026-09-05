@@ -246,25 +246,14 @@ const ENGINE_STALE_ALLOWED = [
   // run, so a wrong commit here is a refusal, never a wrong verdict.
   // An allowance goes when its reason does, so an EMPTY list is the normal state.
   //
-  // HIGH WYCOMBE IS HELD BECAUSE ITS NEXT BUILD SHIPS SOMEBODY ELSE'S CHANGE.
-  // OA-229's rollout re-rendered 19 of the 20 maps on 2026-09-04 and stopped at
-  // this one. Not because the engine change touches it -- measured, it does not:
-  // its external gates PASS under the corrected wrap, no POI is un-deleted by
-  // OA-234, and OA-238's nameless-pharmacy default is overridden by this town's
-  // own `"pharmacy:": "may"`, so all four sheets would have been byte-identical.
-  // What is waiting in its S3 is the 171-POI landmark answer a local gave, copied
-  // off the live store into `routes.json` on 2026-09-03 (buses-data 5b971e1) and
-  // never built: 145 keys, 140 `may`, FIVE `must` of which one was already in the
-  // built S4. `rollout.js` takes config from the latest S3, so the first rebuild
-  // for any reason at all applies those four new `must` promotions -- a net THREE
-  // printed labels off the internal sheet on a page OA-208 already calls
-  // saturated. That is a customer-facing content change and it is entitled to its
-  // own version bump, its own note and somebody looking at the artwork; it is not
-  // entitled to ride inside a bump whose stated reason is an engine fix.
-  // Clearing it is OA-233's business, and the byte gate below still asks the
-  // honest question of this town in the meantime.
-  { town: 'High Wycombe', engine: 'e05a4f0cfb', commit: 'bc355a1feaf7a3924283f08d7d3ea25be90fed00', since: '2026-09-04',
-    why: 'its S3 holds an unbuilt 171-POI landmark answer (5b971e1); building it is OA-233’s decision, not this rollout’s' },
+  // The list was last non-empty from 2026-09-04 to 2026-09-05, for High Wycombe:
+  // the 2026-09-04 estate rollout (OA-229) held it back because its S3 carried an
+  // unbuilt 171-POI landmark answer (buses-data 5b971e1) that would otherwise have
+  // ridden inside a bump whose stated reason was an engine fix. OA-233 built it as
+  // v5.0 on 2026-09-05, on the same engine as the rest of the estate, and the
+  // entry went with its reason. The shape is worth keeping in mind: a content
+  // change waiting in S3 is invisible to every byte gate, because the gate reads
+  // the S4's OWN routes.json -- bus-work's landmark-answer source is what raises it.
 ];
 const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.name && a.engine === r.engine);
 const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town === name && a.engine === engine) || null;

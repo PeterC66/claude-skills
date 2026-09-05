@@ -37,8 +37,10 @@
  * its own use. The portal's 2026-08-20 security round had explicitly retired
  * "the standing admin cookie kept in a file on the laptop"; this file put it
  * back eleven days later, because nothing on either side named the other.
- * OPERATOR_TOKEN reads the two lists this tool needs and does nothing else
- * anywhere: GET only, those two routes only, refused everywhere else.
+ * OPERATOR_TOKEN reads the two lists this tool needs — three reads since
+ * 2026-09-05, when GET /api/maps/:id/poi-tiers joined them for the landmark
+ * rows (OA-233) — and does nothing else anywhere: GET only, those routes only,
+ * refused everywhere else.
  *
  * The cookie is not, incidentally, short-lived — the portal's session window is
  * seven days and SLIDES on use, so every live run here renewed it by a week.
@@ -76,6 +78,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
+import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -741,6 +744,65 @@ if (upcoming) {
 
 // (Rank 6 / 9 — proposed updates waiting on a customer — arrive from the portal
 // above, along with the review, application, request and build queues.)
+
+// 7 — a town's landmark answer is owed somewhere (buses-data OA-233, 2026-09-05).
+//
+// Two rows, one join, and neither existed until a customer's answer sat committed
+// and unbuilt for two days with every board green. The portal's answer lives in
+// its overrides; the town's source is its latest S3; the sheet is its latest S4.
+// The byte gate reads the S4's OWN routes.json, so an answer that has reached S3
+// and not S4 is invisible to it — which is the row that would have raised High
+// Wycombe. The comparison is the engine's `compareTiers()`, not a copy of it, so
+// an `industrial:*` key under industrialKeep "none" is unreachable here exactly as
+// it is at build time, and this cannot raise a row nothing can clear.
+//
+// Remote: one GET per area map on `/api/maps/:id/poi-tiers`, admitted by the same
+// OPERATOR_TOKEN as the two lists. Local: the store's overrides.json and the pack's
+// routes.json, read directly. A portal older than the route answers 404 and the
+// town is SKIPPED and counted in the header, never silently omitted.
+const landmarkAnswers = await (async () => {
+  if (!SK || !portal) return { items: [], checked: 0, skipped: [] };
+  const { compareTiers } = require(path.join(SK, 'poi_tiers_sync.js'));
+  const { readJson: rj, latestRunDir: lrd } = require(path.join(SK, 'gate_lib.js'));
+  const dataDir = process.env.DATA_DIR || path.join(PORTAL, 'data');
+  const readTown = (dir) => {
+    let m; try { m = rj(path.join(dir, 'manifest.json')); } catch { return null; }
+    const s3 = lrd(m, dir, 'S3'); if (!s3) return null;
+    let routes; try { routes = rj(path.join(s3.dir, 'routes.json')); } catch { return null; }
+    const poi = routes.poi || {};
+    const s4 = lrd(m, dir, 'S4');
+    let s4Tiers;
+    if (s4) { try { s4Tiers = (rj(path.join(s4.dir, 'routes.json')).poi || {}).tiers || {}; } catch { s4Tiers = undefined; } }
+    return { s3Tiers: poi.tiers || {}, s4Tiers, poiCfg: poi, s3Id: s3.rec.id, s4Version: s4 ? s4.rec.version : null };
+  };
+  const blocks = new Map();
+  if (REMOTE && TOKEN) {
+    await Promise.all(portal.maps.filter((m) => m.kind === 'area').map(async (m) => {
+      try {
+        const res = await fetch(`${URL_BASE}/api/maps/${m.id}/poi-tiers`, { headers: { authorization: `Bearer ${TOKEN}` } });
+        blocks.set(m.id, res.ok ? await res.json() : null);
+      } catch { blocks.set(m.id, null); }
+    }));
+  }
+  const readBlock = (m) => {
+    if (REMOTE) return blocks.has(m.id) ? blocks.get(m.id) : null;
+    const ovPath = path.join(dataDir, 'maps', String(m.id), 'overrides.json');
+    const packPath = path.join(dataDir, 'maps', String(m.id), 'data', 'routes.json');
+    let ov = {}, pack = {};
+    try { ov = JSON.parse(readFileSync(ovPath, 'utf8')); } catch { /* no overrides yet */ }
+    try { pack = ((JSON.parse(readFileSync(packPath, 'utf8')).poi || {}).tiers) || {}; } catch { /* no pack */ }
+    const saved = (ov.internal && ov.internal.poiTiers) || {};
+    return { tiers: { ...pack, ...saved } };
+  };
+  return landmarkAnswerItems({
+    maps: portal.maps, towns: tree.towns, readBlock, readTown, compareTiers,
+    syncCmd: 'node poi_tiers_sync.js',
+  });
+})();
+for (const it of landmarkAnswers.items) {
+  add({ ...it, do: it.do.map((d) => (d.kind === 'shell' && d.cwd === 'engine-assets' ? { ...d, cwd: SK } : d)) });
+}
+if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared — ${landmarkAnswers.skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows

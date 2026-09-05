@@ -326,6 +326,9 @@ export function needsOf(item) {
   if (key.startsWith('s6-stale') || key.startsWith('nobuild-')) return ['buses-tree', 'engine'];
   if (key.startsWith('corr-owed-')) return ['buses-tree'];
   if (key.startsWith('corr-unsent-') || key.startsWith('corr-asked-')) return [];
+  // OA-233: pulling an answer writes a new S3 run; building it runs the engine over the tree.
+  if (key.startsWith('landmark-owed-')) return ['buses-tree'];
+  if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'engine'];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

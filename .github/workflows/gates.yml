@@ -232,6 +232,12 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-complexity-band
 
+      # buses-data OA-233 (2026-09-05): the two landmark-answer rows, and the wire
+      # that adds them, asserted on the source of the wire as well as the module.
+      - name: Prove the landmark-answer rows can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-landmark-answers
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

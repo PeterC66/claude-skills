@@ -48,7 +48,11 @@ The config-driven keys the generators read (2026-06-07 — the per-town code edi
 
   It is a **separate override key from `internal.pois`** on purpose. That one holds `{hide, pos, move}` — render-time adjustments to a POI already selected — and a tier is not one of those. Sharing the key would have hidden exactly the distinction the row above draws.
 
-  **The answer therefore lives in two places, deliberately**, and neither is the only copy: the portal layer is what takes effect live and survives a monthly refresh the way route colours do, and the chooser's *Copy for our records* button hands back a `poi.tiers` block for this file, so a rebuild from source does not lose it. Getting a town's answer back into `Areas/<Town>/S3-config/routes.json` is a real step, not a tidy-up.
+  **The answer therefore lives in two places, deliberately**, and neither is the only copy: the portal layer is what takes effect live and survives a monthly refresh the way route colours do, and the same block comes back to this file through `poi_tiers_sync.js` (OA-233, 2026-09-05), which reads it over the portal's `GET /api/maps/:id/poi-tiers`, prints what would change, and under `--apply` writes a NEW S3 run carrying the merge — so a rebuild from source does not lose it, and the arrival is a manifest entry rather than a paste. The chooser's *Copy for our records* button still hands the block to the clipboard for the case where no portal can be reached. Getting a town's answer back into `Areas/<Town>/S3-config/routes.json` is a real step, not a tidy-up, and since 2026-09-05 bus-work raises a row when it is owed and another when the source carries an answer the latest build has not drawn. Run the sync from `make-bus-leaflet/assets/`; `--town` is the folder name under `Areas/` and there are no other required parameters:
+
+```bash
+node poi_tiers_sync.js --town "High Wycombe"
+```
 
   **A `miss` HERE makes the POI invisible to the portal's older enumerator**, which lists a map's POIs by rendering the sheet and reading `data-key` back out. Nothing is drawn for a missed place, so it is absent from that list — which is why the portal enumerates candidates from `poi_select.js` directly (`enumerateCandidatesFromDir`) and validates a save against the UNION of drawn and candidate. Measured, and narrower than it sounds: a `miss` in the *overrides* layer does not do this, because the enumerating render uses base overrides only.
 

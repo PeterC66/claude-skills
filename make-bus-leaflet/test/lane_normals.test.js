@@ -295,3 +295,87 @@ test('smoothHeadings reads a segment over ±w mm of the polyline, so a junction 
   assert.ok(Math.abs(H[0][0] - 1) < 1e-9 && Math.abs(H[0][1]) < 1e-9, 'a segment longer than 2w reads exactly its own heading');
   assert.strictEqual(LN.smoothHeadings([[0, 0]], 1.0), null);
 });
+
+// ---------------------------------------------------------------------------
+// design.laneRibbon, second half (OA-176 4.24, 2026-09-05) — a route's own
+// out-and-back drawn once. Each case is a shape High Wycombe's 34 has, and two
+// of them are the wrong folds it produced first: the out leg dragged onto the
+// arrival road because a junction vertex vouched for the run, and a route
+// dragged onto a corner it merely passed.
+const FOLD = { dist: 2.4, cosAngle: CFG.cosAngle };
+const near = (p, q, tol = 1e-6) => Math.abs(p[0] - q[0]) < tol && Math.abs(p[1] - q[1]) < tol;
+
+test('a return leg beside its own out leg is folded onto it, tip and rejoin included, with the vertex count kept', () => {
+  // out east along y=0, a 1.5 mm turning loop, back west along y=1.5
+  const pts = [[0, 0], [4, 0], [8, 0], [12, 0], [13, 0.75], [12, 1.5], [8, 1.5], [4, 1.5], [0, 1.5], [0, 6]];
+  const { points, moved } = LN.foldRetrace(pts, FOLD);
+  assert.strictEqual(points.length, pts.length, 'stopT indices survive');
+  for (let k = 0; k <= 3; k++) assert.ok(near(points[k], pts[k]), 'the out leg does not move');
+  assert.ok(near(points[4], pts[4]), 'the loop vertex heads ACROSS the leg and is not part of it');
+  assert.ok(near(points[5], [12, 0]), 'the first return vertex, level with the tip, snaps onto the tip');
+  for (let k = 6; k <= 7; k++) assert.ok(near(points[k], [pts[k][0], 0]), `return vertex ${k} lies on the out leg`);
+  assert.ok(near(points[8], [0, 0]), 'the rejoin snaps onto the corner the out leg began at');
+  assert.ok(near(points[9], [0, 6]), 'the road onward is left alone');
+  assert.strictEqual(moved.length, 4);
+  assert.strictEqual(moved[0].k, 5);
+});
+
+test('two streets 4 mm apart are not a retrace, and a leg running the SAME way beside an earlier one is not either', () => {
+  const streets = [[0, 0], [10, 0], [10, 4], [0, 4]];               // out east, back west, 4 mm apart: within reach, never within dist
+  assert.strictEqual(LN.foldRetrace(streets, FOLD).moved.length, 0);
+  const parallel = [[0, 0], [10, 0], [10, 8], [0, 8], [0, 1.5], [3, 1.5], [7, 1.5], [10, 1.5]];   // the second east leg is beside the first, same direction
+  const r = LN.foldRetrace(parallel, FOLD);
+  assert.ok(near(r.points[5], [3, 1.5]) && near(r.points[6], [7, 1.5]), 'parallel is not antiparallel: nothing folds');
+  assert.strictEqual(r.moved.length, 0);
+});
+
+test('a retrace that opens out past the bundling distance is folded to the reach, not cut off at the distance', () => {
+  // out east along y=0; back west, 1.5 mm off at the foot widening to 3.5 mm
+  const pts = [[0, 0], [5, 0], [10, 0], [10, 1.5], [7, 2.2], [4, 2.9], [1, 3.5]];
+  const full = LN.foldRetrace(pts, FOLD);
+  for (let k = 3; k <= 6; k++) assert.ok(Math.abs(full.points[k][1]) < 1e-6, `vertex ${k} at ${pts[k][1]} mm is folded`);
+  const tight = LN.foldRetrace(pts, { ...FOLD, reach: FOLD.dist });
+  assert.ok(Math.abs(tight.points[3][1]) < 1e-6 && Math.abs(tight.points[4][1]) < 1e-6, 'within dist: folded');
+  assert.ok(near(tight.points[5], pts[5]) && near(tight.points[6], pts[6]), 'beyond it: left, when reach is the distance');
+});
+
+test('a run must be vouched for by a vertex within the distance of a leg INTERIOR, not by a junction it starts near', () => {
+  // arrival north along x=4 to the junction (4,10); a jog west; the out leg
+  // south along x=0, antiparallel to the arrival and 4 mm from it. Its first
+  // vertex is 2 mm from the junction, the arrival's end — that must not fold
+  // the out leg onto the arrival road.
+  const pts = [[4, 0], [4, 5], [4, 10], [0.5, 11], [0, 9], [0, 6], [0, 3], [0, 0]];
+  const r = LN.foldRetrace(pts, FOLD);
+  assert.strictEqual(r.moved.length, 0, 'the out leg stays on its own street');
+});
+
+test('a route passing a corner it once turned, heading back, is not dragged onto the corner', () => {
+  // north along x=0 to (0,10), east to (10,10); later south along x=1.5 from
+  // (1.5, 16) to (1.5, 11): every vertex clamps to the corner (0,10), none
+  // projects onto a leg. High Wycombe's 34 at x=100.7, y=107.
+  const pts = [[0, 0], [0, 10], [10, 10], [10, 20], [1.5, 20], [1.5, 16], [1.5, 13], [1.5, 11]];
+  const r = LN.foldRetrace(pts, FOLD);
+  assert.strictEqual(r.moved.length, 0);
+  // ...whereas turning west at (1.5, 11) IS running back along the east leg,
+  // 1 mm off it, and that one vertex folds onto the leg's interior
+  const back = LN.foldRetrace(pts.concat([[-5, 11]]), FOLD);
+  assert.strictEqual(back.moved.length, 1);
+  assert.ok(near(back.points[7], [1.5, 10]));
+});
+
+test('a third pass lands on the one line, because the target is the fold so far and not the original', () => {
+  // out east y=0, back west y=1.5, out east again y=3: the third leg is 1.5 mm
+  // from the second leg's ORIGINAL position and 3 mm from the first.
+  const pts = [[0, 0], [5, 0], [10, 0], [9, 1.5], [4, 1.5], [1, 1.5], [1, 3], [4, 3], [9, 3]];
+  const r = LN.foldRetrace(pts, FOLD);
+  for (let k = 3; k <= 8; k++) assert.ok(Math.abs(r.points[k][1]) < 1e-6, `vertex ${k} is on y=0, not y=1.5`);
+  assert.strictEqual(r.moved.length, 6);
+});
+
+test('foldRetrace with fewer than two segments, or nothing to fold, returns a copy and no moves', () => {
+  const one = LN.foldRetrace([[0, 0], [5, 0]], FOLD);
+  assert.deepStrictEqual(one.points, [[0, 0], [5, 0]]); assert.strictEqual(one.moved.length, 0);
+  const straight = [[0, 0], [5, 0], [10, 0], [15, 3]];
+  const r = LN.foldRetrace(straight, { ...FOLD, w: 1.0 });
+  assert.deepStrictEqual(r.points, straight); assert.notStrictEqual(r.points, straight);
+});

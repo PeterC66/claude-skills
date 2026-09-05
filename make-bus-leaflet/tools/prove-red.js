@@ -551,6 +551,34 @@ const MUTATIONS = [
     find: '    const a = at(m - w), b = at(m + w);',
     to: '    const a = points[i], b = points[i + 1];' },
 
+  // design.laneRibbon, second half (OA-176 4.24) - the fold. Three of these are
+  // the wrong folds High Wycombe's 34 produced first, kept as mutations so the
+  // suite would refuse them a second time.
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'a junction vertex clamped to a segment end can vouch for a run, and the out leg folds onto the arrival road',
+    find: '      while (j <= n && (c = cand(j, points))) { asDigitised[j] = c; fold = fold || (c.inside && c.d <= dist); j++; }',
+    to: '      while (j <= n && (c = cand(j, points))) { asDigitised[j] = c; fold = fold || (c.d <= dist); j++; }' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'the reach collapses to the distance, and the top of a retrace that opens out is left as a V',
+    find: '  const R = reach == null ? 2 * dist : reach;',
+    to: '  const R = dist;' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'a run 4 mm away is folded for being within reach, never having come within the distance',
+    find: '      while (j <= n && (c = cand(j, points))) { asDigitised[j] = c; fold = fold || (c.inside && c.d <= dist); j++; }',
+    to: '      while (j <= n && (c = cand(j, points))) { asDigitised[j] = c; fold = fold || c.inside; j++; }' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'the fold targets the original polyline, so a third pass lands where the second leg used to be',
+    find: '    const c = cand(k, out);',
+    to: '    const c = cand(k, points);' },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: 'parallel counts as antiparallel, and a leg running the same way beside an earlier one is folded onto it',
+    find: '    const anti = (hx, hy) => hs.some(h => h[0] * hx + h[1] * hy < -cosAngle);',
+    to: '    const anti = (hx, hy) => hs.some(h => Math.abs(h[0] * hx + h[1] * hy) > cosAngle);' },
+
   { suite: 'font_metrics.test.js', file: 'font_metrics.js',
     what: 'an unmapped glyph costs nothing',
     find: 'const FALLBACK = 0.556;', to: 'const FALLBACK = 0;' },

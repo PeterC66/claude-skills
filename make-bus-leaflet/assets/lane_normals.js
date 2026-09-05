@@ -435,4 +435,143 @@ function smoothHeadings(points, w) {
   return out;
 }
 
-module.exports = { pointSegDist, corridorNeighbours, liesAlongside, chainPairs, orientSegments, makeRefDir, laneVertex, smoothHeadings };
+/*
+ * Draw a route's own out-and-back ONCE (OA-176 4.24, 2026-09-05): a later leg
+ * of a polyline that runs back along an earlier leg of the same polyline is
+ * moved onto it, vertex by vertex. Same number of points out as in, so
+ * `stopT`'s (i, t) indices survive; the moved vertices are reported so a trace
+ * can name them.
+ *
+ * WHY A LANE RULE CANNOT DO THIS. The ribbon key's orientation field gives every
+ * segment a side of travel and asks that lateral neighbours agree. High
+ * Wycombe's 34 goes down a spur and comes back on a road 2 mm from the one it
+ * went out on and 2.1 mm from the road it ARRIVED on: the return leg is a
+ * corridor neighbour of both, must oppose the first and agree with the second,
+ * and the route travels arrival → out → return, which is an odd cycle. Every
+ * assignment of sides flips somewhere, so the crossing moves and does not go
+ * (the lane-ribbon round, 2026-09-04). Beaconsfield's five-route town-centre
+ * loop is the same shape at five lanes; Huntingdon's 303 at x=142, y=96 is it
+ * at one, a 2 mm spike to a stop and back. A retrace drawn as ONE line has no
+ * return leg to be anybody's neighbour, and the cycle is gone by construction —
+ * which is what the reader's "draw a shared section once" means for a single
+ * route, and why 4.21 and 4.24 are one proposal.
+ *
+ * WHAT COUNTS AS THE RETURN LEG. Later onto earlier, always: the out leg is the
+ * part of the polyline the route reached first and it does not move, so a stop
+ * on it stays where the map-matcher put it. A vertex is a CANDIDATE when the
+ * segment arriving at it or the one leaving it is within `cosAngle` of
+ * ANTIPARALLEL to some earlier segment that does not touch it, and the nearest
+ * point of that segment, ends included, is within `reach`. Headings are read
+ * over ±`w` mm (smoothHeadings), for the same reason the rest of the key does:
+ * a junction node's 0.1 mm segment is noise. Consecutive candidates form a RUN,
+ * and the run is folded whole or not at all, on ONE condition read off the
+ * polyline as digitised: some vertex of it lies within `dist`, the bundling
+ * distance, of the INTERIOR of its target. Both halves of that are load-bearing,
+ * and each was found on High Wycombe's 34 by folding the wrong thing first.
+ *
+ *   - `dist` says whether the leg is a retrace at all; `reach`, default twice
+ *     `dist`, says how far a leg that IS one may open before it is two streets.
+ *     The spur's two legs are 1.3 mm apart at the foot and 3.5 mm by the
+ *     junction, because the return road converges on the out road only at the
+ *     top; a fold that stopped at 2.4 mm merged the bottom half and left the V
+ *     the reader reported standing on the top half. A run that never comes
+ *     within `dist` is never folded, so a road 4 mm away is not folded for
+ *     being 4 mm away.
+ *   - INTERIOR, because the ends of a segment are where every street a route
+ *     uses meets every other. The out leg starts 2 mm from the junction the
+ *     arrival road ends at, and runs 4 mm from that road, antiparallel: with a
+ *     clamped end allowed to vouch for the run, the out leg itself folded 4 mm
+ *     east onto the road the route arrived by. A run whose every vertex clamps
+ *     to an end is likewise a route passing a corner it once turned, heading
+ *     the other way (the 34 at x=100.7, y=107, seven vertices), not a leg.
+ *
+ * Ends are still included, so the return leg's first vertex after the turning
+ * loop snaps onto the out leg's tip and the leg rejoining where the out leg
+ * began snaps onto that corner — a single line rather than a line with a 2 mm
+ * diagonal at each end — but a vertex clamped to an end moves only within
+ * `dist`, so the road the route takes onward from the junction is left where
+ * it is, and an interior target is preferred to a nearer end for the same
+ * reason.
+ *
+ * A candidate is antiparallel to its target both as the target was digitised
+ * and as it now lies: a segment whose far vertex has already been folded is a
+ * connector across the fold, and its original heading no longer says where it
+ * runs. A vertex already on its target is not counted as moved.
+ *
+ * FOLDED GEOMETRY IS THE TARGET, not the original: a third pass over the same
+ * street (out, back, out again) is antiparallel to the second leg, which has
+ * already moved onto the first, so it lands on the one line rather than where
+ * the second leg used to be. Earlier segments are final by the time a vertex is
+ * asked about, because every vertex before it has been decided; the run's two
+ * conditions are read ahead on the original polyline, which is what decides
+ * whether the leg is a retrace, and the positions come from the fold so far.
+ *
+ * WHAT IT ALSO FOLDS, deliberately. A one-way pair — out along one street and
+ * back along its parallel neighbour — is geometrically this shape and is folded
+ * when the two come within `dist`. That is the reader's proposal applied
+ * exactly, and it is why the key stays opt-in per map: a map whose one-way loop
+ * is worth its 2 mm (Ramsey's X31/32, drawn on purpose on 2026-08-31) declines
+ * the key. A stop on the folded leg is drawn on the earlier one, up to `reach`
+ * from where it is.
+ */
+function foldRetrace(points, { dist, cosAngle, w = 0, reach } = {}) {
+  const n = points.length - 1;
+  const out = points.map(p => [p[0], p[1]]);
+  const moved = [];
+  if (n < 2) return { points: out, moved };
+  const R = reach == null ? 2 * dist : reach;
+  const H = w > 0 ? smoothHeadings(points, w) : null;
+  const head = (i) => {
+    if (H) return H[i];
+    const dx = points[i + 1][0] - points[i][0], dy = points[i + 1][1] - points[i][1], L = Math.hypot(dx, dy) || 1;
+    return [dx / L, dy / L];
+  };
+  const straight = (i, j) => { const a = head(i), b = head(j); return a[0] * b[0] + a[1] * b[1] >= cosAngle; };
+  // the nearest earlier segment vertex k runs back along, read off `P` (the
+  // original polyline for the run's verdict, the folded one for its position)
+  const cand = (k, P) => {
+    const hs = [head(k - 1)]; if (k < n) hs.push(head(k));
+    const anti = (hx, hy) => hs.some(h => h[0] * hx + h[1] * hy < -cosAngle);
+    const px = points[k][0], py = points[k][1];
+    let best = null;
+    for (let i = 0; i <= k - 2; i++) {                       // earlier, and not touching vertex k
+      const ax = P[i][0], ay = P[i][1], dx = P[i + 1][0] - ax, dy = P[i + 1][1] - ay, L = Math.hypot(dx, dy);
+      if (L < 1e-9) continue;                                // a leg already folded to a point
+      if (!anti(dx / L, dy / L) || (H && !anti(H[i][0], H[i][1]))) continue;
+      let t = ((px - ax) * dx + (py - ay) * dy) / (L * L);
+      // interior, or level with a vertex the earlier leg runs straight through:
+      // two legs digitised from the same nodes project onto shared vertices
+      const inside = (t > 1e-9 && t < 1 - 1e-9)
+        || (Math.abs(t) <= 1e-9 && i > 0 && straight(i - 1, i))
+        || (Math.abs(t - 1) <= 1e-9 && i + 1 <= k - 2 && straight(i, i + 1));
+      if (t < 0) t = 0; else if (t > 1) t = 1;               // ends included
+      const cx = ax + dx * t, cy = ay + dy * t, d = Math.hypot(px - cx, py - cy);
+      if (d > R) continue;
+      // an interior target beats a nearer end: a vertex beside a leg belongs to
+      // the leg, not to the corner of some other segment it happens to pass
+      if (!best || (inside && !best.inside) || (inside === best.inside && d < best.d)) best = { d, cx, cy, i, inside };
+    }
+    return best;
+  };
+  let runEnd = 0, fold = false;                              // the current run's verdict, read ahead once
+  const asDigitised = new Array(n + 1);                      // each run vertex's candidate on the original polyline
+  for (let k = 1; k <= n; k++) {
+    if (k > runEnd) {                                        // a new run begins here, or no run
+      let j = k, c; fold = false;
+      while (j <= n && (c = cand(j, points))) { asDigitised[j] = c; fold = fold || (c.inside && c.d <= dist); j++; }
+      runEnd = j - 1;
+      if (runEnd < k) continue;
+    }
+    if (!fold) continue;
+    const c = cand(k, out);
+    // a vertex beside the leg follows it out to `reach`; one clamped to an end
+    // moves only if it was within `dist` as digitised, so the tip and the rejoin
+    // close up and the road the route takes onward from the junction is left
+    // where it is. As digitised, because the fold so far has already carried the
+    // leg's end away from a corner vertex that belongs with it.
+    if (c && c.d > 1e-9 && (c.inside || asDigitised[k].d <= dist)) { out[k] = [c.cx, c.cy]; moved.push({ k, i: c.i, d: c.d, from: [points[k][0], points[k][1]], to: [c.cx, c.cy] }); }
+  }
+  return { points: out, moved };
+}
+
+module.exports = { pointSegDist, corridorNeighbours, liesAlongside, chainPairs, orientSegments, makeRefDir, laneVertex, smoothHeadings, foldRetrace };

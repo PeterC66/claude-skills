@@ -1,12 +1,12 @@
 {
   "note": "Ceilings on the top-to-bottom generator scripts and the two tools that grew with them. Written by tools/line-ratchet.js --accept; read by the same tool in CI. A file may not exceed its ceiling; raising one is a reviewed change committed WITH the growth it accepts. Why: buses-data OA-224 Tier 2.1 -- gen_internal.js went 2,550 -> 3,293 lines in the five days after the refactor that cut it, because the module-first rule (OA-001) had no instrument. From 2026-09-04 a RAISE must say why: --accept refuses a file over its ceiling without --note \"<path>=<text>\" (or --note-file), and appends that text as a dated paragraph to the optional \"notes\" block below, keyed by the same path as \"files\". The tool writes the note; never type one into this file by hand, which is how the quality ledger came to have five commits that each rewrote 460 of its 468 lines. Ratcheting DOWN needs no note.",
-  "recorded": "2026-09-04",
+  "recorded": "2026-09-05",
   "files": {
     "../make-place-bus-leaflet/assets/gen_external_places.js": 1097,
     "assets/diagram_internal.js": 953,
     "assets/gen_boarding.js": 1499,
     "assets/gen_external_radial.js": 1106,
-    "assets/gen_internal.js": 3334,
+    "assets/gen_internal.js": 3345,
     "assets/schematize_internal.js": 818,
     "assets/status.js": 1728,
     "assets/verify_report.js": 1485
@@ -14,6 +14,6 @@
   "notes": {
     "../make-place-bus-leaflet/assets/gen_external_places.js": "2026-09-04, +1: comment only, the same OA-229 wrap note as gen_external_radial.js. This file is in the PLACE engine-hash closure, so the same rule applies: a comment here is a re-render of every place map.",
     "assets/gen_external_radial.js": "2026-09-04, +2: comment only. The three lines saying which wrap this sheet takes became five saying that there is now only one and why the correction needed its own rollout (OA-229). Same closure argument as gen_internal.js -- the town hash covers whole file bytes, so cutting two comment lines to hold the ceiling would restamp the estate.",
-    "assets/gen_internal.js": "2026-09-04, +23: two operator warnings OA-234 added a reachable fault for (duplicateCandidateKeys) and OA-238's namelessKeptByTier, each a guard comment plus a stderr line, beside the two warnings already there. Not extracted, and the ceiling not ratcheted down instead, because this file is IN THE ENGINE-HASH CLOSURE: measured 2026-09-04, dropping a single comment line moves the town hash 6614965db0 -> 7c9b8820c1 and marks all 18 sheet-drawing maps stale. Trimming prose here costs an estate re-render and a portal re-vendor, so it is only ever done inside a change that is already moving the hash.\n\n2026-09-04, OA-176 4.21: design.laneRibbon, an opt-in key already moving the town hash; the five behaviours live in lane_normals.js and only their wiring is here"
+    "assets/gen_internal.js": "2026-09-04, +23: two operator warnings OA-234 added a reachable fault for (duplicateCandidateKeys) and OA-238's namelessKeptByTier, each a guard comment plus a stderr line, beside the two warnings already there. Not extracted, and the ceiling not ratcheted down instead, because this file is IN THE ENGINE-HASH CLOSURE: measured 2026-09-04, dropping a single comment line moves the town hash 6614965db0 -> 7c9b8820c1 and marks all 18 sheet-drawing maps stale. Trimming prose here costs an estate re-render and a portal re-vendor, so it is only ever done inside a change that is already moving the hash.\n\n2026-09-04, OA-176 4.21: design.laneRibbon, an opt-in key already moving the town hash; the five behaviours live in lane_normals.js and only their wiring is here\n\n2026-09-05, OA-176 4.24, +11: the fold's wiring (design.laneRibbon's second half) and one branch carrying a folded-to-a-point segment's lane offset; the fold itself is foldRetrace() in lane_normals.js. Accepted rather than paid for in prose because this change already moves the town hash."
   }
 }

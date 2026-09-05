@@ -1093,6 +1093,13 @@ if(IR){
   // documented there. OPT-IN, absent ⇒ byte-identical, inert without the field.
   const RIBBON = DESIGN.laneRibbon===true && DESIGN.laneOrientation!==false;
   const RIBBON_W = 1.0;                                        // mm either side of a segment's midpoint
+  // ...and its second half (4.24, 2026-09-05): a route's own return leg is folded
+  // onto its out leg BEFORE anything reads the polyline, so a retrace is one line
+  // and has no second line to be a corridor neighbour of. lane_normals.js says why.
+  let FOLDED=0;
+  if(RIBBON) for(const r of order){ const o=RPP[r]; if(!o)continue;
+    const f=LN.foldRetrace(o.P,{dist:CD,cosAngle:CA,w:RIBBON_W}); o.P=f.points; FOLDED+=f.moved.length;
+    if(process.env.DBG_LANES) for(const m of f.moved) console.error(`FOLD ${r}	k=${m.k}	onto=${m.i}	d=${m.d.toFixed(2)}	from=${m.from[0].toFixed(2)},${m.from[1].toFixed(2)}	to=${m.to[0].toFixed(2)},${m.to[1].toFixed(2)}	fr=${inFrame(m.from)?1:0}`); }
   const SEG=[];
   for(const r of order){ const o=RPP[r]; if(!o)continue; const Pp=o.P;
     const H=RIBBON?LN.smoothHeadings(Pp,RIBBON_W):null;
@@ -1189,7 +1196,7 @@ if(IR){
   // The old wording had NO COLON, so it was not a message head: had it ever
   // reached the log, build_log.js's parse() would have glued it onto the end of
   // whatever message came before it.
-  console.error(`measure: lanes on=${DESIGN.laneOrientation!==false} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0} ribbon=${RIBBON}`);
+  console.error(`measure: lanes on=${DESIGN.laneOrientation!==false} segs=${SEG.length} lateral=${CORPAIRS.length} components=${ORIENT.components} bridges=${ORIENT.bridges} conflicts=${ORIENT.conflicts} flipped=${ORIENT.sign?ORIENT.sign.reduce((a,b)=>a+(b<0?1:0),0):0} ribbon=${RIBBON} folded=${FOLDED}`);
   // A LATERAL conflict means two segments running alongside each other were
   // given contradictory directions and the corridor has no consistent
   // orientation to find -- so some lane bundles here keep the old mirrored
@@ -1278,6 +1285,10 @@ if(IR){
             +`	own=${(ox/(Math.hypot(ox,oy)||1)).toFixed(3)},${(oy/(Math.hypot(ox,oy)||1)).toFixed(3)}`
             +`	fr=${inFrame([(Pp[i][0]+Pp[i+1][0])/2,(Pp[i][1]+Pp[i+1][1])/2])?1:0}`); }
         }
+      // ribbon key: a segment folded to a point (the tip of a retrace) has no
+      // bundle and would offset 0, notching the lane at the tip; it carries its
+      // predecessor's offset so the two legs meet where they were drawn
+      else if(RIBBON && !arr && i>0){ [sx,sy]=v[i-1]; }
       v.push([sx,sy]); }
     SH[r]=Pp.map((p,i)=>{ let sx,sy;
       if(i===0){[sx,sy]=v[0];} else if(i===Pp.length-1){[sx,sy]=v[v.length-1];}

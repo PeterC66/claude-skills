@@ -84,6 +84,8 @@ const NOT_IN_CI = {
     'takes a spec file as its argument and answers a question about the committed maps, not a pass/fail',
   'test:prove-lane-mirror':
     'needs the buses estate AND renders every town twice — minutes, not seconds; run by hand when laneOrientation is touched',
+  'census:lanes':
+    'needs the buses estate AND renders every internal sheet on it — minutes, not seconds — and answers a question (how the offsetter treats each sheet, OA-176 4.21) rather than a pass/fail; run by hand when lane offsets, laneRibbon or a corridor family are touched. Its tool had no npm script from 2026-09-04 to 2026-09-05, and this check was red on every push in between',
   'sweep:scratch':
     'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
 };

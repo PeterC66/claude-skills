@@ -235,10 +235,10 @@ Same regeneration, no portal step. These towns are printed sheets used outside t
 
 Two rows share this playbook, and they are the two halves of one journey: a customer answers must / may / miss on the portal's `/landmarks` page, the answer has to reach the town's own source data, and the source then has to be built. Neither half is visible to a byte gate — the gate reads a build's own `routes.json` — which is how High Wycombe's answer sat committed and unbuilt for two days in September 2026 with every board green.
 
-**`landmark-owed-<slug>` — the portal holds an answer the town's source lacks.** From `make-bus-leaflet/assets/` (the engine's own folder), with `--town` the folder name under `Areas/` and nothing else required:
+**`landmark-owed-<slug>` — the portal holds an answer the town's source lacks.** From `SK` (the engine's own folder), with `--town` the folder name under `Areas/` and nothing else required:
 
 ```bash
-node poi_tiers_sync.js --town "High Wycombe"
+node "%SK%\poi_tiers_sync.js" --town "High Wycombe"
 ```
 
 It prints ADDED, CHANGED (with both values), the source-only keys it will keep, and the UNREACHABLE keys it will not write — an `industrial:*` key under `poi.industrialKeep "none"` is dropped before tiers run, so writing it would only produce an `unknownTierKeys` warning at build time. If the lines are the customer's answer, re-run with `--apply`: it writes a NEW S3 run through `stage.js` with a note, and the row below takes over. A portal older than 2026-09-05 answers 404 and the row is not raised; the worklist header says how many towns were skipped and why.
@@ -246,7 +246,7 @@ It prints ADDED, CHANGED (with both values), the source-only keys it will keep, 
 **`landmark-unbuilt-<slug>` — the source carries an answer the latest build has not drawn.** A dry run first, from the same folder — **and it needs `--force`, every time.** The sync above has just written a new S3 run, so `rollout.js` sees S3 moved since the latest S4 and refuses with STALE-INPUTS; that guard (OA-225) exists for S1/S2 moving, and `--force` is its named remedy for the case where only the config moved. Confirm S2 has not moved first — the town's `manifest.json` `stages.S2.latest` against the S2 the sheets were last built from — because with a moved S2 a forced rollout draws the new config over old geometry, which is exactly the fault OA-225 records. Measured on the first real run (High Wycombe, 2026-09-05): the playbook's own dry run, as written until then, refused; S2 was unchanged; the forced one drew the answer.
 
 ```bash
-node rollout.js --town "High Wycombe" --force
+node "%SK%ollout.js" --town "High Wycombe" --force
 ```
 
 Read the label-set diff. A `must` on a full sheet displaces `may` labels — that is what the word means — so look at the artwork where the losses are before accepting them, then `--apply --bump major --note "..."` with a note that says whose answer this is and what moved. It is a content change and gets its own version; do not let it ride inside an engine rollout (that is why `status.js` carried a dated allowance for High Wycombe from 2026-09-04 to 2026-09-05). Expect the quality ratchet to object on a saturated sheet, and accept its rows with a note only after reading the crops.

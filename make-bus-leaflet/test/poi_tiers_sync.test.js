@@ -11,9 +11,12 @@
  */
 const test = require('node:test');
 const assert = require('node:assert');
-const path = require('node:path');
 
-const S = require(path.join(__dirname, '..', 'assets', 'poi_tiers_sync.js'));
+// Through _engine.js, never a direct path: a prove-red scratch copy of assets/ is
+// what must run here, or this suite is green about code it never loaded (the rule
+// engine_indirection.test.js enforces — and its census did not see the
+// path.join form this file first used, which is why that census now looks for it).
+const S = require('./_engine.js').load('poi_tiers_sync.js');
 
 test('a bare string and an object with no `as` are the same rule, and denorm gives the string back', () => {
   assert.deepStrictEqual(S.normRule('must'), { tier: 'must', as: null });

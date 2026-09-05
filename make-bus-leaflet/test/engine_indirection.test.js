@@ -61,6 +61,19 @@ const files = fs.readdirSync(TEST_DIR).filter((f) => f.endsWith('.js')).sort();
  * pattern out and the check went red on itself, which is the cheapest possible
  * demonstration that it reads what it says it reads. */
 const DIRECT = /require\(\s*'\.\.\/assets\/([A-Za-z0-9_./-]+?)'\s*\)/g;
+/* THE SAME REACH, SPELLED WITH path.join (2026-09-05, buses-data OA-233). A new
+ * suite loaded its subject by joining __dirname with '..', 'assets' and the file
+ * name, and this census, which knew only the '../assets/' literal, passed it — the
+ * exact bypass the paragraph above describes, in a spelling nobody had used
+ * before. A census is only as closed as the forms it enumerates; this is the
+ * second one. (Not spelled out here in full, for the reason the paragraph above
+ * gives: this file may not quote the form it forbids.) It matches the REQUIRE of
+ * such a path only: eleven suites build the same path to spawn stage.js or to
+ * test that a file exists, which loads nothing into this process, and a census
+ * that went red on all of them on its first day would have been muted by the
+ * second. Whether a spawn should go through ENGINE_DIR too is a separate question
+ * and this line does not answer it. */
+const DIRECT_JOIN = /require\(\s*path\.join\(\s*__dirname\s*,\s*'\.\.'\s*,\s*'assets'\s*,\s*'([A-Za-z0-9_./-]+?)'\s*\)\s*\)/g;
 
 const EXEMPT_FILES = new Set([
   '_engine.js',   // it documents the form it replaces, and it is the indirection
@@ -74,6 +87,10 @@ test('no suite reaches into assets/ except for the named harness modules', () =>
     for (const m of src.matchAll(DIRECT)) {
       const mod = m[1].replace(/\.js$/, '');
       if (!(mod in HARNESS)) offenders.push(`${f} requires ../assets/${m[1]} directly`);
+    }
+    for (const m of src.matchAll(DIRECT_JOIN)) {
+      const mod = m[1].replace(/\.js$/, '');
+      if (!(mod in HARNESS)) offenders.push(`${f} reaches assets/${m[1]} through path.join(__dirname, '..', 'assets', …)`);
     }
   }
   assert.deepStrictEqual(offenders, [], offenders.join('\n  ') +

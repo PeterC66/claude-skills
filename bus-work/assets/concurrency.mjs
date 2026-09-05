@@ -329,6 +329,13 @@ export function needsOf(item) {
   // OA-233: pulling an answer writes a new S3 run; building it runs the engine over the tree.
   if (key.startsWith('landmark-owed-')) return ['buses-tree'];
   if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'engine'];
+  // OA-251: the row's own action is `gh run view --log-failed`, which reads a
+  // GitHub run and touches no tree here. Whatever the FIX turns out to need is
+  // the fix's business, and will be classified by whatever row that becomes.
+  // Empty on purpose and load-bearing: --safe-only hides every non-SAFE row, and
+  // the one row that must never be hidden from a session looking for something
+  // safe to do is the one saying the repository is broken.
+  if (key.startsWith('ci-red-')) return [];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

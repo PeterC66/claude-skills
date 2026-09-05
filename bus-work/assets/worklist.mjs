@@ -78,6 +78,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
+import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -108,6 +109,11 @@ const RUN_GATES = !!args.gates;
 const SAFE_ONLY = !!args['safe-only'];
 const CONDITIONS_ONLY = !!args.conditions;
 const SHOW_CONDITIONS = !args['no-conditions'];
+// OA-251 — is any repository standing red in CI. ON BY DEFAULT, for the same
+// reason the concurrency verdict is: the failure this replaces is nobody being
+// told, and a flag you have to remember is not a fix for that. It costs one
+// `gh run list` per repository and fails soft to a warning.
+const NO_CI = args['no-ci'] || process.env.BUS_WORKLIST_NO_CI === '1';
 const SELF_SESSION = (args.session && args.session !== true) ? String(args.session) : (process.env.BUS_SESSION || '');
 
 const PORTAL = resolvePortal(args);
@@ -866,6 +872,37 @@ if (s6Stale.length) {
     who: '—', runbook: 'S6', towns: s6Stale.map((t) => t.name),
     do: [{ kind: 'skill', what: `Run make-bus-leaflet stage S6 for: ${s6Stale.map((t) => t.name).join(', ')}. One town at a time — each needs a human call on its HARD findings.` }],
   });
+}
+
+// ---- CI state (OA-251) -----------------------------------------------------
+// THE ONE SOURCE HERE WHOSE ONLY OTHER CHANNEL WAS PETER'S INBOX. Everything
+// else on this list is read from a working tree or the portal's database; a
+// repository standing red in GitHub Actions was visible only as an email, and on
+// 2026-09-05 that channel was measured at ~25 failure mails a day with
+// claude-skills red on 21 consecutive runs -- so each push mailed him about a
+// red it had inherited, under its own commit message. The three findings
+// underneath were fixed because a session went looking, not because anyone was
+// told.
+//
+// Three `gh run list` calls, one per repository, plus one `gh run view` for each
+// repository that is actually red. Every failure mode is a warning: no gh, no
+// network, no auth and no origin all leave the rest of the list intact. It is
+// skipped entirely with --no-ci.
+//
+// It does NOT overlap `--gates` below. That runs status.js here and asks whether
+// the engine still reproduces a committed map; this asks whether the last run
+// GitHub actually performed is still failing. Either can be true without the
+// other -- a checker that runs only in CI, or a cross-repo pairing, is invisible
+// to the local gate by construction.
+const CI_DIRS = [
+  { name: 'buses-data', dir: BUSES },
+  { name: 'claude-skills', dir: findEngineRepo() },
+  { name: 'community-bus-maps', dir: PORTAL },
+].filter((d) => d.dir);
+if (!NO_CI) {
+  const ci = gatherCiState({ dirs: CI_DIRS });
+  for (const it of ciRows(ci.states)) add(it);
+  for (const w of ci.warnings) warnings.push(w);
 }
 
 // ---- optional: the expensive proof -----------------------------------------

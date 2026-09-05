@@ -274,8 +274,10 @@ async function main() {
     : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable not written. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
   const newDir = writeNewS3(info, merged, note);
   console.log(`\n  wrote and committed a new S3 run: ${newDir}`);
-  console.log('  Next: a rollout dry run reads the latest S3 —');
-  console.log(`    node rollout.js --town "${town}" --buses "${buses}"`);
+  console.log('  Next: a rollout dry run reads the latest S3 — and it WILL refuse with STALE-INPUTS, because this run');
+  console.log('  is S3 moving. When S2 has not moved since the latest S4 (manifest.json: stages.S2.latest), --force is');
+  console.log('  the intended answer: the geometry it rolls forward is the same geometry. Check S2, then:');
+  console.log(`    node rollout.js --town "${town}" --force --buses "${buses}"`);
 }
 
 module.exports = { normRule, normTiers, denormRule, unreachableKeys, compareTiers, mergeTiers, findPortalMap, portalCredentials, fetchPortalBlock };

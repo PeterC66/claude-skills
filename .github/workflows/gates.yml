@@ -96,6 +96,16 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
+      # TEMPORARY, AND REMOVED BY THE VERY NEXT COMMIT (buses-data OA-251).
+      # The one claim in OA-251 that no amount of reasoning settles is whether
+      # run-name reaches the failure EMAIL'S SUBJECT or only the run listing and
+      # the Checks tab. This step exists to send exactly one such email, from the
+      # public repository where a run costs nothing, under a commit whose subject
+      # begins [expected-red]. If you are reading this on main, it should not be
+      # here -- say so.
+      - name: OA-251 deliberate red, proving the marker reaches the email subject
+        run: exit 1
+
       - name: Checkout claude-skills (engine)
         uses: actions/checkout@v7
         with:

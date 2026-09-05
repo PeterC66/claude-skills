@@ -45,6 +45,18 @@ import { spawnSync } from 'node:child_process';
 export const MARKER = '[expected-red]';
 
 /*
+ * WHAT THE MARKER LOOKS LIKE BY THE TIME IT REACHES HERE, which is not what a
+ * session typed. `gh run list` reports `displayTitle` as the commit subject only
+ * while a workflow has no `run-name`; once it has one -- as all six here now do
+ * -- displayTitle IS the resolved run name, so the raw marker never appears and
+ * the workflow's own sentence appears instead. Both are matched, so this module
+ * is right about a repository whose workflows carry the run-name expression and
+ * about one whose do not. Measured on run 33966... of claude-skills, the first
+ * push after the expression landed.
+ */
+export const PREDICTED_NAME = 'EXPECTED RED';
+
+/*
  * How long a predicted red is allowed to stand before it is ranked as broken
  * anyway. Six hours is chosen to be shorter than a working day and longer than
  * any legitimate cross-repo pairing: the ordering trap in buses-data's CLAUDE.md
@@ -126,7 +138,8 @@ export function summarise(runs, { now = Date.now() } = {}) {
 
   const since = Date.parse(oldestRed.createdAt);
   const hoursRed = Number.isNaN(since) ? null : (now - since) / 3600000;
-  const predicted = typeof newest.displayTitle === 'string' && newest.displayTitle.includes(MARKER);
+  const label = `${newest.displayTitle || ''} ${newest.name || ''}`;
+  const predicted = label.includes(MARKER) || label.includes(PREDICTED_NAME);
 
   return {
     verdict: 'red',
@@ -213,7 +226,9 @@ export function gatherCiState({ dirs, run = sh, now = Date.now(), limit = 40 } =
     const branch = defaultBranch(dir, run);
 
     const r = run('gh', ['-R', slug, 'run', 'list', '--branch', branch, '--limit', String(limit),
-      '--json', 'conclusion,status,createdAt,displayTitle,databaseId,url,workflowName']);
+      // `name` as well as `displayTitle`: with a run-name expression the two are
+      // the same string, without one they differ, and the marker can be in either.
+      '--json', 'conclusion,status,createdAt,displayTitle,name,databaseId,url,workflowName']);
     if (r.status !== 0) {
       const msg = (r.stderr || '').trim().split('\n')[0] || `exit ${r.status}`;
       warnings.push(`CI state: could not read ${slug} — ${msg}`);

@@ -1,7 +1,7 @@
 name: Bus leaflet gates
 
 # OA-251: a GitHub "Run failed" email names the RUN, so a commit subject that
-# carries [expected-red] says so in the email's SUBJECT line and Peter can
+# BEGINS [expected-red] says so in the email's SUBJECT line and Peter can
 # delete it unread. No marker means nobody predicted it. This buys grace and
 # not amnesty: bus-work's ci_state.mjs ranks a marked red at 8 for six hours
 # and at 0 BROKEN after that, so it cannot become a way to leave CI red. It is
@@ -9,10 +9,15 @@ name: Bus leaflet gates
 # ordering trap in buses-data's CLAUDE.md is fixed by pushing in the right
 # order, never by labelling the result.
 #
+# IT MUST START THE SUBJECT, and startsWith is why. head_commit.message is the
+# WHOLE message, body and all: the first version of this used contains(), and
+# it fired on the very first commit here -- whose body merely described the
+# convention. A paragraph about the marker can never begin with it.
+#
 # head_commit is null on pull_request, schedule and workflow_dispatch, where
-# contains() casts it to '' and the workflow's own name below is used.
+# startsWith() casts it to '' and the workflow's own name below is used.
 run-name: >-
-  ${{ contains(github.event.head_commit.message, '[expected-red]')
+  ${{ startsWith(github.event.head_commit.message, '[expected-red]')
   && 'EXPECTED RED - a session predicted this, no action'
   || 'Bus leaflet gates' }}
 

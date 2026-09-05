@@ -122,6 +122,18 @@ console.log('\n6. the marker buys grace, not amnesty');
 
   const inherited = [run('failure', 1, 'an ordinary commit'), run('failure', 3, `the marked one ${MARKER}`)];
   check('the marker excuses only the run that CARRIES it, never a later inheritor', summarise(inherited, { now: NOW }).excused === false);
+
+  // WHAT THE MARKER LOOKS LIKE ONCE run-name RESOLVES IT. With a run-name
+  // expression, `gh run list` reports displayTitle as the RUN NAME -- the raw
+  // marker is gone and the workflow's sentence is there instead. Found on the
+  // first real push after the expression landed (2026-09-05), not reasoned about.
+  const resolved = [run('failure', 1, 'EXPECTED RED - a session predicted this, no action'), run('success', 9)];
+  check('a run whose NAME the workflow already resolved is recognised', summarise(resolved, { now: NOW }).predicted === true);
+  check('…and is excused while fresh', summarise(resolved, { now: NOW }).excused === true);
+  const nameOnly = [{ ...run('failure', 1, 'some commit'), name: 'EXPECTED RED - a session predicted this, no action' }, run('success', 9)];
+  check('the marker is read from `name` as well as `displayTitle`', summarise(nameOnly, { now: NOW }).predicted === true);
+  const innocent = [run('failure', 1, 'Document how EXPECTED reds are RED flagged'), run('success', 9)];
+  check('…and prose that merely contains both words separately does not trigger it', summarise(innocent, { now: NOW }).predicted === false);
 }
 
 console.log('\n7. truncation is stated, not guessed');
@@ -201,9 +213,18 @@ console.log('\n10. every workflow that runs on push carries the run-name marker'
       for (let j = i + 1; j < lines.length && !/^\S/.test(lines[j]); j++) if (/^\s{2}push:\s*$/.test(lines[j])) onPush = true;
       if (!onPush) continue;
       seen += 1;
-      check(`${t.name}/${f} runs on push and its run-name names ${MARKER}`,
-        /^run-name:/m.test(src) && src.includes(MARKER),
-        /^run-name:/m.test(src) ? `run-name present but does not mention ${MARKER}` : 'no run-name: at column 0');
+      // startsWith AND NOT contains, and this assertion is the whole reason the
+      // section is worth its lines. head_commit.message is the entire message,
+      // so `contains` matches a commit whose BODY merely discusses the marker --
+      // which is exactly what happened on the first push that carried this
+      // expression, mislabelling a green run EXPECTED RED. A future workflow
+      // copied from an older one is red here rather than quietly wrong.
+      const anchored = src.includes("startsWith(github.event.head_commit.message, '[expected-red]')");
+      check(`${t.name}/${f} runs on push and its run-name is anchored on ${MARKER}`,
+        /^run-name:/m.test(src) && anchored,
+        !/^run-name:/m.test(src) ? 'no run-name: at column 0'
+          : src.includes("contains(github.event.head_commit.message") ? 'uses contains(), which also matches the commit BODY — must be startsWith()'
+            : `run-name present but does not test ${MARKER}`);
     }
   }
   check('at least one workflow was actually read — a scan that finds none proves nothing', seen > 0, String(seen));

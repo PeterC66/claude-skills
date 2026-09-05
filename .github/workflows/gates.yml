@@ -96,21 +96,6 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      # TEMPORARY (buses-data OA-251). SECOND ATTEMPT: the first one, 6f44bb6,
-      # was CANCELLED rather than failed, because the commit that removed it
-      # arrived while it was still running and this file's own
-      # `cancel-in-progress` killed it -- and GitHub sends no email for a
-      # cancelled run, so the one thing the exercise existed to produce was the
-      # thing the revert destroyed. The concurrency block above says in as many
-      # words that a push must not cancel the run carrying a guarantee; it was
-      # written about the nightly schedule and applies here exactly.
-      #
-      # So: NOTHING is pushed to this repository until this run reaches
-      # `failure`. If you are reading this on main, that wait is over and this
-      # step should already be gone -- say so.
-      - name: OA-251 deliberate red, proving the marker reaches the email subject
-        run: exit 1
-
       - name: Checkout claude-skills (engine)
         uses: actions/checkout@v7
         with:

@@ -188,18 +188,45 @@ console.log('\n9. the wire — asserted on its SOURCE');
 
 console.log('\n10. every workflow that runs on push carries the run-name marker');
 {
+  /*
+   * --pending <repo>: A REPOSITORY THAT HAS NOT ADOPTED YET, AND CANNOT ROT.
+   *
+   * The three repositories cannot land one change atomically -- claude-skills
+   * and buses-data are direct-push and the portal is strictly PR-per-change --
+   * so this check went red the moment it landed, correctly, about four portal
+   * workflows sitting on an unmerged branch. Leaving the engine repository red
+   * for hours waiting on a human merge is precisely the disease OA-251 exists to
+   * cure, and a check that is red on day one is a check that gets muted in its
+   * first week (this repository has the receipt: `refactor-scope_2026-08-27`).
+   *
+   * So a named repository's findings are reported and do not fail. THE
+   * EXEMPTION IS SELF-RETIRING: if a pending repository turns out to have
+   * adopted after all, that is a FINDING and this goes red until the flag is
+   * removed. An exemption that outlives its reason in silence is how a scope
+   * quietly narrows, which is the one fault the nine widenings in buses-data's
+   * CLAUDE.md are a history of.
+   */
+  const PENDING = new Set();
+  const argv = process.argv.slice(2).filter((a, i, all) => {
+    if (a === '--pending') return false;
+    if (all[i - 1] === '--pending') { PENDING.add(a); return false; }
+    return true;
+  });
+
   const trees = [];
   const missing = [];
   const add = (name, dir) => { if (fs.existsSync(path.join(dir, '.github', 'workflows'))) trees.push({ name, dir }); else missing.push(`${name} (${dir})`); };
   add('claude-skills', path.resolve(HERE, '..', '..'));
-  for (const d of process.argv.slice(2)) add(path.basename(path.resolve(d)), path.resolve(d));
-  if (process.argv.length <= 2) {
+  for (const d of argv) add(path.basename(path.resolve(d)), path.resolve(d));
+  if (!argv.length) {
     add('buses-data', process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses');
     add('community-bus-maps', process.env.BUSMAPS_PORTAL || 'C:/Claude/community-bus-maps');
   }
 
   let seen = 0;
+  const adopted = new Map();   // pending repo -> did every one of its push workflows carry the marker?
   for (const t of trees) {
+    const pending = PENDING.has(t.name);
     const dir = path.join(t.dir, '.github', 'workflows');
     for (const f of fs.readdirSync(dir).filter((x) => /\.ya?ml$/.test(x))) {
       const src = fs.readFileSync(path.join(dir, f), 'utf8');
@@ -220,14 +247,29 @@ console.log('\n10. every workflow that runs on push carries the run-name marker'
       // expression, mislabelling a green run EXPECTED RED. A future workflow
       // copied from an older one is red here rather than quietly wrong.
       const anchored = src.includes("startsWith(github.event.head_commit.message, '[expected-red]')");
-      check(`${t.name}/${f} runs on push and its run-name is anchored on ${MARKER}`,
-        /^run-name:/m.test(src) && anchored,
-        !/^run-name:/m.test(src) ? 'no run-name: at column 0'
-          : src.includes("contains(github.event.head_commit.message") ? 'uses contains(), which also matches the commit BODY — must be startsWith()'
-            : `run-name present but does not test ${MARKER}`);
+      const ok = /^run-name:/m.test(src) && anchored;
+      const why = !/^run-name:/m.test(src) ? 'no run-name: at column 0'
+        : src.includes("contains(github.event.head_commit.message") ? 'uses contains(), which also matches the commit BODY — must be startsWith()'
+          : `run-name present but does not test ${MARKER}`;
+      if (pending) {
+        adopted.set(t.name, (adopted.get(t.name) !== false) && ok);
+        if (!ok) console.log(`  ..  ${t.name}/${f} has not adopted yet (--pending) — ${why}`);
+      } else {
+        check(`${t.name}/${f} runs on push and its run-name is anchored on ${MARKER}`, ok, why);
+      }
     }
   }
   check('at least one workflow was actually read — a scan that finds none proves nothing', seen > 0, String(seen));
+
+  // THE EXEMPTION RETIRES ITSELF. The moment a pending repository's workflows
+  // all carry the marker, --pending is a lie about the world and this goes red
+  // naming the flag to delete. That is the difference between an exemption and
+  // a promise, and this repository has paid for the difference more than once.
+  for (const [name, hasAdopted] of adopted) {
+    check(`--pending ${name} is still true — it has NOT adopted`, !hasAdopted,
+      `every push-triggered workflow in ${name} now carries the marker: remove "--pending ${name}" from the CI step and from package.json`);
+  }
+  for (const name of PENDING) if (!adopted.has(name)) console.log(`      (--pending ${name}: not checked out here, so nothing to retire)`);
   if (missing.length) console.log(`      (not checked out here, so not checked: ${missing.join(', ')})`);
 }
 

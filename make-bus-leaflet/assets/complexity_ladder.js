@@ -54,17 +54,35 @@
 // The config KEY is always the lead: it keys the colour, the overrides and the
 // badge-stack order, regardless of how the member list happens to be written.
 // Shared by internalCorridors (rung 1) and corridorPalette (rung 3).
+//
+// A family may carry a STYLE (OA-176 4.24, 2026-09-05), object form only:
+//   { "303": { "routes": ["305"], "style": "alternate" } }     one line, colour blocks
+//   { "303": { "routes": ["305"], "style": "parallel"  } }     touching parallels, no gap
+// A styled family keeps EVERY member's own colour — aliasColours() skips it — and
+// still takes ONE lane, so the lane machinery is unchanged; gen_internal.js draws
+// the shared stretch once more on top, in every member's colour, from the group
+// leader's geometry. That is the reader's proposal for the 303 and 305 between
+// Huntingdon and Ramsey, whose S1 says the two must not be colour-merged: the
+// plain bundle buys the lane at the price of identity, the styled one keeps both.
+// `block` (mm, alternate only) is the length of one colour block; absent ⇒ 3.
+// An unknown style is refused rather than drawn as the plain bundle, because a
+// typo that silently recolours the 305 green is exactly the merge S1 forbids.
+const STYLES = new Set(['alternate','parallel']);
 function parseFamilies(raw){
   if(!raw || raw===true) return null;
-  const fam={}, lead={};
+  const fam={}, lead={}, style={};
   for(const k of Object.keys(raw)){
     const v=raw[k];
     const members=Array.isArray(v)?v:((v&&v.routes)||[]);
     const list=[k].concat(members.filter(r=>r!==k));
     if(list.length<2) continue;
     fam[k]=list; for(const m of list) lead[m]=k;
+    if(v && !Array.isArray(v) && v.style!=null){
+      if(!STYLES.has(v.style)) throw new Error('internalCorridors '+k+': style "'+v.style+'" is not one of '+[...STYLES].join(', '));
+      style[k]={ kind:v.style, block:(v.block!=null && +v.block>0) ? +v.block : 3 };
+    }
   }
-  return Object.keys(fam).length?{fam,lead}:null;
+  return Object.keys(fam).length?{fam,lead,style}:null;
 }
 
 // Colour aliasing. Only routes ALREADY in the palette are touched, so
@@ -75,6 +93,7 @@ function parseFamilies(raw){
 function aliasColours(g, C, TXT){ if(!g) return;
   for(const l of Object.keys(g.fam)) for(const m of g.fam[l]){
     if(m===l) continue;
+    if(g.style && g.style[l]) continue;                  // a styled family keeps its colours
     if(m in C) C[m] = C[l];
     if(TXT && (m in TXT)) TXT[m] = TXT[l];
   }
@@ -109,6 +128,10 @@ function complexityLadder({ RJ, C, TXT }){
   // BADGES, so the badge pass below guarantees every colour-grouped line at least
   // one badge rather than letting collision detection drop it silently.
   const CPAL = parseFamilies(RJ.corridorPalette);
+  // a style keeps members' colours, and rung 3 exists to share one; the two
+  // cannot both be meant, so a style on a colour group is refused rather than
+  // read as a bundle that quietly stopped recolouring
+  if(CPAL && Object.keys(CPAL.style).length) throw new Error('corridorPalette '+Object.keys(CPAL.style).join(', ')+': style belongs to internalCorridors, not to a colour group');
   aliasColours(CPAL, C, TXT);
   // A route whose colour is shared with another DRAWN LINE (rung 3, or a rung-1
   // family that has diverged). Used to guarantee a badge.

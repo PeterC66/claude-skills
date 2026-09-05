@@ -574,4 +574,72 @@ function foldRetrace(points, { dist, cosAngle, w = 0, reach } = {}) {
   return { points: out, moved };
 }
 
-module.exports = { pointSegDist, corridorNeighbours, liesAlongside, chainPairs, orientSegments, makeRefDir, laneVertex, smoothHeadings, foldRetrace };
+/*
+ * THE SHARED SECTION DRAWN ONCE (OA-176 4.24, 2026-09-05) — three small pieces
+ * gen_internal.js composes for an internalCorridors family that carries a
+ * `style`. The family already takes one lane; what these add is the drawing of
+ * the stretch where its members co-run, once, in every member's colour, from
+ * the group leader's geometry. They are here rather than in the generator so
+ * that each can be asserted on its own: the generator is gated byte-for-byte
+ * and no committed map carries a style yet, so without these tests the code
+ * would be dark to every gate (feedback_the_gate_that_could_only_see_what_runs).
+ */
+
+/*
+ * The maximal runs of consecutive segments that share one group. `groupAt(i)`
+ * answers for segment i with an array (the members co-running there, leader
+ * first) or null (nothing to draw). Two segments belong to one run when their
+ * arrays are equal member for member — a family of three that drops to two
+ * starts a new run, so the dash period restarts rather than tiling a group of
+ * two with a pattern cut for three.
+ */
+function sharedRuns(count, groupAt) {
+  const runs = []; let cur = null;
+  for (let i = 0; i < count; i++) {
+    const g = groupAt(i); const key = g ? g.join('\u0000') : null;
+    if (key != null && cur && cur.key === key) { cur.i1 = i; continue; }
+    cur = null; if (key == null) continue;
+    cur = { i0: i, i1: i, key, group: g }; runs.push(cur);
+  }
+  return runs.map(({ i0, i1, group }) => ({ i0, i1, group }));
+}
+
+/*
+ * A polyline moved `d` mm to the left of its direction of travel (page y runs
+ * down, so the left normal of heading (ux,uy) is (-uy,ux)); negative d is the
+ * right. Ends take their segment's normal; interior vertices are mitred by
+ * laneVertex() and held to the segments they sit between, exactly as the lane
+ * offsetter treats a lane under design.laneRibbon, so a pair of touching
+ * parallels keeps its gap round a corner rather than opening on the outside of
+ * the bend. A zero-length segment inherits its predecessor's normal.
+ */
+function offsetPolyline(pts, d) {
+  const n = pts.length; if (n < 2) return pts.map(p => [p[0], p[1]]);
+  const v = [], len = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = pts[i + 1][0] - pts[i][0], dy = pts[i + 1][1] - pts[i][1], L = Math.hypot(dx, dy); len.push(L);
+    v.push(L < 1e-9 ? (v[i - 1] || [0, 0]) : [-dy / L * d, dx / L * d]);
+  }
+  return pts.map((p, i) => {
+    const o = i === 0 ? v[0] : i === n - 1 ? v[n - 2] : laneVertex(v[i - 1], v[i], { la: len[i - 1], lb: len[i] });
+    return [p[0] + o[0], p[1] + o[1]];
+  });
+}
+
+/*
+ * The stroke-dasharray for member j of n on a shared stretch drawn as colour
+ * blocks of `block` mm: one block on, the other n-1 off, and the j-th block of
+ * each period. The PHASE IS IN THE ARRAY — a leading zero-length dash and a gap
+ * of j blocks — rather than in stroke-dashoffset, because the portal's SVG
+ * allowlist (src/public/svgSanitise.js) admits stroke-dasharray and not the
+ * offset: a phase dropped on the web would put every member's blocks in the
+ * same place and leave one colour on the shared stretch. Butt caps are the
+ * caller's job; with round caps the zero-length dash prints a dot.
+ */
+function alternation(n, j, block) {
+  const f = x => +x.toFixed(2);
+  const P = n * block, phase = j * block;
+  return phase > 0 ? `0 ${f(phase)} ${f(block)} ${f(P - block - phase)}` : `${f(block)} ${f(P - block)}`;
+}
+
+module.exports = { pointSegDist, corridorNeighbours, liesAlongside, chainPairs, orientSegments, makeRefDir, laneVertex, smoothHeadings, foldRetrace, sharedRuns, offsetPolyline, alternation };

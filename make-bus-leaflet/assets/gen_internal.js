@@ -1507,6 +1507,28 @@ if(IR){
     out(`<path d="${L.d}" fill="none" stroke="${(DESIGN.routeCasing&&DESIGN.routeCasing.color)||'#ffffff'}" stroke-width="${(fw(L.r)+CASE*2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
   for(const L of RLINES)
     out(gk('route',L.r,`<path d="${L.d}" fill="none" stroke="${C[L.r]}" stroke-width="${fw(L.r)}"${fdash(L.r)} stroke-linecap="${fcap(L.r)}" stroke-linejoin="round"/>`));
+  // internalCorridors `style` — THE SHARED SECTION DRAWN ONCE (OA-176 4.24,
+  // 2026-09-05). A styled family keeps every member's colour (complexity_ladder.js)
+  // and takes one lane, so where its members co-run their solid lines lie on one
+  // centreline and the last in draw order hides the rest. That stretch is drawn
+  // once more here, on top, from the group LEADER's geometry — the members'
+  // polylines coincide to 0.01 mm on 81 of Ramsey's 82 shared segments, measured
+  // 2026-09-05 — as n colour blocks tiling one period (alternate) or n touching
+  // parallels centred on the lane (parallel). Each member's phase is written into
+  // its dash array (lane_normals.js alternation() says why). Where a member runs
+  // alone nothing is drawn here: its own solid line already is. A tier's dash
+  // (frequencyTiers.dash) is not carried onto the shared stretch.
+  if(CORR && CORR.style) for(const r of order){ const tr=TRIM[r]; if(!tr||tr.pts.length<2)continue;
+    const st=CORR.lead[r] && CORR.style[CORR.lead[r]]; if(!st)continue;
+    const runs=LN.sharedRuns(tr.pts.length-1, i=>{ const g=famAt(r,segIdxOf(tr,i)); return (g[0]===r && g.length>1) ? g : null; });
+    for(const run of runs){ const g=run.group;
+      for(const rn of clipOutCore(tr.pts.slice(run.i0, run.i1+2))){ if(rn.length<2)continue;
+        if(st.kind==='alternate'){ const W=Math.max(...g.map(fw)), d=pathD(rn);
+          g.forEach((m,j)=>out(gk('shared',g[0]+'/'+m,`<path d="${d}" fill="none" stroke="${C[m]}" stroke-width="${W}" stroke-dasharray="${LN.alternation(g.length,j,st.block)}" stroke-linecap="butt" stroke-linejoin="round"/>`)));
+        } else { const tot=g.reduce((a,m)=>a+fw(m),0); let at=-tot/2;
+          for(const m of g){ const o=at+fw(m)/2; at+=fw(m);
+            out(gk('shared',g[0]+'/'+m,`<path d="${pathD(LN.offsetPolyline(rn,o))}" fill="none" stroke="${C[m]}" stroke-width="${fw(m)}" stroke-linecap="round" stroke-linejoin="round"/>`)); } }
+      } } }
   // -- stop ticks ON the route lines (one per physical stop, first route wins;
   //    stops[ATCO].pos override moves the tick)
   const tickSeen=new Set();
@@ -2510,7 +2532,7 @@ if(IR && TRIM){
   if(CPAL || CORR){
     for(const r of order){
       if(badged.has(r)) continue;
-      const shared = colourShared(r) || (CORR && CORR.lead[r] && soloEligible.has(r));
+      const shared = colourShared(r) || (CORR && CORR.lead[r] && !CORR.style[CORR.lead[r]] && soloEligible.has(r)); // a styled family's colours still identify it
       if(!shared) continue;
       const tr=TRIM[r]; if(!tr||tr.pts.length<2) continue;
       // walk to the mid-point of the drawn line, then outwards, for the first
@@ -2606,9 +2628,9 @@ if((CORR || CPAL) && RP && RP.routes){
     }
     const weak=members.filter(x=>x.drawn && x.sharedFraction<rep.sharedMin).map(x=>x.route);
     rep.families.push({ lead, routes:fam, members, weakMembers:weak });
-    console.log('  corridor '+fam.join('/')+'  '+members.map(x=>x.route+' '
+    console.log('  corridor '+fam.join('/')+(CORR.style[lead]?' ('+CORR.style[lead].kind+', colours kept)':'')+'  '+members.map(x=>x.route+' '
       +(x.drawn?Math.round(x.sharedFraction*100)+'%':'not drawn')).join('  '));
-    if(weak.length) console.error('CORRIDOR WARNING '+fam.join('/')+': '+weak.join(', ')
+    if(weak.length && !CORR.style[lead]) console.error('CORRIDOR WARNING '+fam.join('/')+': '+weak.join(', ')
       +' co-run with the family over <'+Math.round(rep.sharedMin*100)+'% of their route — the rest '
       +'is now a second same-coloured line going somewhere else, which is worse than two colours. '
       +'Reconsider this bundle.');

@@ -1025,6 +1025,36 @@ const MUTATIONS = [
     find: "    for(const wd of words){ if((cur+' '+wd).trim().length>38){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }",
     to: "    for(const wd of words){ if((cur+' '+wd).trim().length>48){ lines.push(cur.trim()); cur=wd; } else cur+=' '+wd; }" },
 
+  // The shared section drawn once (OA-176 4.24, 2026-09-05): a styled
+  // internalCorridors family keeps its colours and takes one lane, and the
+  // stretch where its members co-run is drawn once more from the leader's
+  // geometry. No committed map carries a style, so these five are the only
+  // thing under the code until one does.
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a styled family is colour-aliased like a plain one, so the 305 is drawn green — the merge Ramsey's S1 forbids",
+    find: "    if(g.style && g.style[l]) continue;                  // a styled family keeps its colours",
+    to: "    if(false) continue;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "an unknown style is read as the plain bundle instead of refused, so a typo silently recolours a member",
+    find: "      if(!STYLES.has(v.style)) throw new Error(",
+    to: "      if(false) throw new Error(" },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: "every member's blocks land in the same place — the phase is lost, which is what a dropped stroke-dashoffset would do on the web",
+    find: "  return phase > 0 ? `0 ${f(phase)} ${f(block)} ${f(P - block - phase)}` : `${f(block)} ${f(P - block)}`;",
+    to: "  return `${f(block)} ${f(P - block)}`;" },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: "a run continues across a change of group, so a period cut for three members tiles a stretch shared by two",
+    find: "    if (key != null && cur && cur.key === key) { cur.i1 = i; continue; }",
+    to: "    if (key != null && cur) { cur.i1 = i; continue; }" },
+
+  { suite: 'lane_normals.test.js', file: 'lane_normals.js',
+    what: "the parallel is offset to the RIGHT of travel, so the members' order across the lane is mirrored",
+    find: "    v.push(L < 1e-9 ? (v[i - 1] || [0, 0]) : [-dy / L * d, dx / L * d]);",
+    to: "    v.push(L < 1e-9 ? (v[i - 1] || [0, 0]) : [dy / L * d, -dx / L * d]);" },
+
   // complexity_ladder.js - extracted 2026-08-27 from gen_internal.js. MEASURED
   // the same day across the 18 maps that draw an internal sheet: only THREE
   // declare corridor families and only ONE - High Wycombe - sets coreBox,

@@ -14,6 +14,10 @@
  * `--buses` names the buses-data root (BUSES_DIR or the laptop default stand in
  * for it). `--ribbon` forces `design.laneRibbon: true` into a scratch copy of
  * each sheet's config, so the two runs are the before and after of that key.
+ * `--family <lead>:<member>[,<member>] --style alternate|parallel` forces a
+ * styled internalCorridors family into the same scratch copy (OA-176 4.24, the
+ * shared section drawn once), replacing any family that already names the lead;
+ * pair it with `--only` and `--tag`, because a family is a fact about ONE sheet.
  * `--only <text>` keeps the sheets whose path contains it. `--out <dir>` says
  * where the rendered SVG, its routes.json and the trace go (default: a folder
  * under the system temp dir, named for the variant), so crop_compare.js can be
@@ -58,8 +62,10 @@ const { parseArgs, resolveBuses } = require('../assets/cli.js');
 
 const FLAGS = parseArgs(process.argv.slice(2));
 const BUSES = resolveBuses(FLAGS);
-const FORCE = FLAGS.ribbon === true;
-const VAR = typeof FLAGS.tag === 'string' ? FLAGS.tag : (FORCE ? 'ribbon' : 'live');
+const FAMILY = typeof FLAGS.family === 'string' ? FLAGS.family : null;
+const STYLE = typeof FLAGS.style === 'string' ? FLAGS.style : 'alternate';
+const FORCE = FLAGS.ribbon === true || !!FAMILY;
+const VAR = typeof FLAGS.tag === 'string' ? FLAGS.tag : (FAMILY ? 'family' : FORCE ? 'ribbon' : 'live');
 const ONLY = typeof FLAGS.only === 'string' ? FLAGS.only : null;
 const OUT = path.join(typeof FLAGS.out === 'string' ? FLAGS.out : path.join(os.tmpdir(), 'busmaps-lane-census'), VAR);
 const CA = Math.cos(22 * Math.PI / 180);
@@ -84,7 +90,9 @@ for (const dir of dirs) {
     fs.mkdirSync(data, { recursive: true });
     for (const f of fs.readdirSync(dir)) if (f.endsWith('.json')) fs.copyFileSync(path.join(dir, f), path.join(data, f));
     const rj = JSON.parse(fs.readFileSync(path.join(data, 'routes.json'), 'utf8'));
-    rj.design = rj.design || {}; rj.design.laneRibbon = true;
+    if (FLAGS.ribbon === true) { rj.design = rj.design || {}; rj.design.laneRibbon = true; }
+    if (FAMILY) { const [lead, rest] = FAMILY.split(':'); rj.internalCorridors = rj.internalCorridors || {};
+      rj.internalCorridors[lead] = { routes: (rest || '').split(',').filter(Boolean), style: STYLE }; }
     fs.writeFileSync(path.join(data, 'routes.json'), JSON.stringify(rj, null, 2));
   }
   const run = G.runGenerator(GEN, data, { extraEnv: { DBG_LANES: '1' }, overridesFromWorkspace: place });

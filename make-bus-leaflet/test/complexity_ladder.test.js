@@ -281,3 +281,44 @@ test('a route with no chain is skipped rather than throwing', () => {
                           laneKey: r => r, ANCHOR: 'HUB' });
   assert.ok(keep.has('A'));
 });
+
+// ------------------------------------------------ a family with a style (OA-176 4.24)
+// The shared section drawn once: a styled family keeps every member's colour and
+// still takes one lane. Ramsey's S1 says the 303 must not be colour-merged with
+// the 305, so the difference between these and the plain bundle is the whole point.
+test('a styled family is parsed with its style and a default block length', () => {
+  const g = parseFamilies({ 303: { routes: ['305'], style: 'alternate' } });
+  assert.deepStrictEqual(g.fam, { 303: ['303', '305'] });
+  assert.deepStrictEqual(g.style, { 303: { kind: 'alternate', block: 3 } });
+  const h = parseFamilies({ 303: { routes: ['305'], style: 'parallel', block: 2 } });
+  assert.deepStrictEqual(h.style, { 303: { kind: 'parallel', block: 2 } });
+});
+
+test('a plain family, in either spelling, carries no style', () => {
+  assert.deepStrictEqual(parseFamilies({ 1: ['1A'] }).style, {});
+  assert.deepStrictEqual(parseFamilies({ 1: { routes: ['1A'] } }).style, {});
+});
+
+test('an unknown style is refused, not drawn as the plain bundle', () => {
+  assert.throws(() => parseFamilies({ 303: { routes: ['305'], style: 'stripy' } }), /style "stripy"/,
+    'a typo that silently recoloured the 305 green would be exactly the merge S1 forbids');
+});
+
+test('a styled family keeps its colours; a plain family beside it is still aliased', () => {
+  const C = Object.assign(palette(), { 303: '#228833', 305: '#CCBB44' });
+  aliasColours(parseFamilies({ 303: { routes: ['305'], style: 'alternate' }, 1: ['1A'] }), C, null);
+  assert.strictEqual(C['305'], '#CCBB44', 'the styled member keeps its own colour');
+  assert.strictEqual(C['1A'], C['1'], 'the plain family next to it is aliased as before');
+});
+
+test('a styled family still takes ONE lane', () => {
+  const L = complexityLadder({ RJ: { internalCorridors: { 303: { routes: ['305'], style: 'parallel' } } },
+    C: { 303: '#228833', 305: '#CCBB44' }, TXT: null });
+  assert.strictEqual(L.laneKey('305'), '303');
+  assert.strictEqual(L.CORR.style['303'].kind, 'parallel');
+});
+
+test('a style on a corridorPalette group is refused', () => {
+  assert.throws(() => complexityLadder({ RJ: { corridorPalette: { 31: { routes: ['41'], style: 'alternate' } } },
+    C: palette(), TXT: null }), /corridorPalette 31/);
+});

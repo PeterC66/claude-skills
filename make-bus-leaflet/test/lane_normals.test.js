@@ -379,3 +379,55 @@ test('foldRetrace with fewer than two segments, or nothing to fold, returns a co
   const r = LN.foldRetrace(straight, { ...FOLD, w: 1.0 });
   assert.deepStrictEqual(r.points, straight); assert.notStrictEqual(r.points, straight);
 });
+
+// ------------------------------------------------ the shared section drawn once (OA-176 4.24)
+// Three pieces gen_internal.js composes for a styled internalCorridors family.
+// No committed map carries a style, so these are the only thing under the code.
+test('sharedRuns: consecutive segments with the same group are one run; a change of group starts another', () => {
+  const groups = [null, ['303', '305'], ['303', '305'], ['303', '305', '301'], null, ['303', '305']];
+  const runs = LN.sharedRuns(groups.length, i => groups[i]);
+  assert.deepStrictEqual(runs.map(r => [r.i0, r.i1, r.group.join('/')]),
+    [[1, 2, '303/305'], [3, 3, '303/305/301'], [5, 5, '303/305']],
+    'a family of three that drops to two restarts the run, so the dash period restarts');
+});
+
+test('sharedRuns: nothing shared is no runs at all', () => {
+  assert.deepStrictEqual(LN.sharedRuns(4, () => null), []);
+});
+
+test('offsetPolyline moves a straight line by d to the LEFT of travel, and keeps every vertex', () => {
+  const pts = [[0, 0], [10, 0], [20, 0]];                       // travelling +x; page y runs down
+  const left = LN.offsetPolyline(pts, 1.5);
+  assert.deepStrictEqual(left.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), [[0, 1.5], [10, 1.5], [20, 1.5]],
+    'left of +x on a y-down page is +y, the same normal the lane offsetter uses');
+  const right = LN.offsetPolyline(pts, -1.5);
+  assert.deepStrictEqual(right.map(p => p[1]), [-1.5, -1.5, -1.5]);
+  assert.strictEqual(left.length, pts.length);
+});
+
+test('offsetPolyline mitres a right-angle corner so the parallel keeps its gap round the bend', () => {
+  const pts = [[0, 0], [10, 0], [10, 10]];
+  const o = LN.offsetPolyline(pts, 1);
+  // the corner vertex of a line 1 mm to the left of +x then +y is at (9, 1)
+  assert.deepStrictEqual(o[1].map(v => +v.toFixed(6)), [9, 1]);
+  assert.deepStrictEqual(o[0].map(v => +v.toFixed(6)), [0, 1]);
+  assert.deepStrictEqual(o[2].map(v => +v.toFixed(6)), [9, 10]);
+});
+
+test('alternation: the n members’ dash arrays tile one period exactly once, and the phase is in the array', () => {
+  // render each member's pattern over one period and check every point is
+  // painted by exactly one member — the property a dropped stroke-dashoffset
+  // would break, which is why the phase is written into the array instead
+  const n = 3, block = 3, P = n * block;
+  const painted = new Array(P * 10).fill(0);
+  for (let j = 0; j < n; j++) {
+    const arr = LN.alternation(n, j, block).split(' ').map(Number);
+    assert.ok(arr.length % 2 === 0, 'an even-length array, so the pattern is not doubled by the renderer');
+    assert.strictEqual(+arr.reduce((a, b) => a + b, 0).toFixed(6), P, 'each member’s array sums to the period');
+    let at = 0, on = true;
+    for (const len of arr) { if (on) for (let x = at * 10; x < (at + len) * 10; x++) painted[x]++; at += len; on = !on; }
+  }
+  assert.ok(painted.every(c => c === 1), 'every point of the period is painted by exactly one member');
+  assert.strictEqual(LN.alternation(2, 0, 3), '3 3', 'the leader needs no phase');
+  assert.strictEqual(LN.alternation(2, 1, 3), '0 3 3 0', 'the second member’s phase is a zero-length dash then a gap of one block');
+});

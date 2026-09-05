@@ -116,6 +116,23 @@ What the generator actually does — worth knowing, because it decides how you u
 
 Get the candidate list from `curate_services.js` (see [s2-geometry.md](s2-geometry.md)); it prints a paste-ready block. **They are candidates, never decisions.**
 
+##### `style` on a family — the shared section drawn once, colours kept (OA-176 4.24, 2026-09-05)
+
+```json
+"internalCorridors": { "303": { "routes": ["305"], "style": "alternate" } }
+```
+*(or `"style": "parallel"`; `"block": 3` sets the length in mm of one colour block under `alternate`)*
+
+The plain bundle above buys its lane at the price of identity: every member wears the lead's colour. A family with a `style` keeps **every member's own colour** and still takes **one lane**, and on the stretch where its members actually co-run the generator draws the group leader's geometry once more on top, in every member's colour — as `n` colour blocks tiling one period (`alternate`, the reader's "closely alternating square colour blocks"), or as `n` touching parallels centred on the lane with no gap between them (`parallel`, the Underground's Circle / Hammersmith & City / Metropolitan). Where a member runs alone nothing extra is drawn, because its own solid line already is; where the group changes — a family of three dropping to two — the period restarts. It is the answer for two DIFFERENT routes sharing a corridor for most of their length, which is exactly the case the plain bundle is wrong for: Ramsey's S1 of 2026-08-28 says the 303 reaches Chatteris and must not be merged with the 305, and this is how the pair costs one lane instead of two without merging them. Measured on Ramsey's corridor south of the town centre, six lanes became five, and the crops are in `Development Docs/shared-section-crops_2026-09-05/` in the Buses repository.
+
+What to know before using it:
+
+- **Object form only.** The bare-array spelling has nowhere to put the word, and an unknown style is **refused** rather than read as the plain bundle — a typo that quietly recoloured the 305 green would be the merge S1 forbids. A style on a `corridorPalette` group is refused for the same reason: rung 3 exists to share a colour.
+- **The phase of each member's blocks is written INTO its dash array**, not into `stroke-dashoffset`, because the portal's SVG allowlist (`src/public/svgSanitise.js`) admits `stroke-dasharray` and not the offset; a phase dropped on the web would put every member's blocks in one place and leave one colour on the shared stretch. If you ever add the offset attribute to the allowlist, this is the reason it was avoided.
+- **The overlay is drawn from the LEADER's geometry**, so the members' polylines have to coincide on the shared stretch. Ramsey's do to 0.01 mm on 81 of 82 segments, because both were map-matched onto the same ways; a pair that co-bundles only by the 2.4 mm corridor test would show the member's own solid line beside the overlay. Read `DBG_LANES=1`'s `LANE` trace or `tools/lane-census.js --family 303:305 --style alternate` before adopting it on a pair you have not measured.
+- **Badges are unchanged**: the leader still badges the stack of members present, each badge in its own colour, and the guaranteed-badge pass leaves a styled family alone because its colours still identify it. `corridors_report.json` still measures the family's overlap but the *worse than two colours* warning does not fire for a styled family, whose weak member costs nothing.
+- **A tier's dash (`frequencyTiers.dash`) is not carried onto the shared stretch**, and `panelCorridors` lists a styled family as one lane under the lead as it does a plain one.
+
 #### `coreBox` — rung 2, LIVE since P3 (2026-07-28)
 
 ```json

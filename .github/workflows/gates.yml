@@ -1,26 +1,5 @@
 name: Bus leaflet gates
 
-# OA-251: a GitHub "Run failed" email names the RUN, so a commit subject that
-# BEGINS [expected-red] says so in the email's SUBJECT line and Peter can
-# delete it unread. No marker means nobody predicted it. This buys grace and
-# not amnesty: bus-work's ci_state.mjs ranks a marked red at 8 for six hours
-# and at 0 BROKEN after that, so it cannot become a way to leave CI red. It is
-# for a red a session has decided to accept for a few minutes -- the cross-repo
-# ordering trap in buses-data's CLAUDE.md is fixed by pushing in the right
-# order, never by labelling the result.
-#
-# IT MUST START THE SUBJECT, and startsWith is why. head_commit.message is the
-# WHOLE message, body and all: the first version of this used contains(), and
-# it fired on the very first commit here -- whose body merely described the
-# convention. A paragraph about the marker can never begin with it.
-#
-# head_commit is null on pull_request, schedule and workflow_dispatch, where
-# startsWith() casts it to '' and the workflow's own name below is used.
-run-name: >-
-  ${{ startsWith(github.event.head_commit.message, '[expected-red]')
-  && 'EXPECTED RED - a session predicted this, no action'
-  || 'Bus leaflet gates' }}
-
 # Mirror of buses-data's workflow of the same name, triggered from this side
 # (the engine repo) instead. Runs the same status.js gate suite so an engine
 # change gets checked immediately rather than waiting for the next buses-data
@@ -259,13 +238,9 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-landmark-answers
 
-      # buses-data OA-251 (2026-09-05): the CI-red row. Ten sections over run
-      # FIXTURES -- no gh, no network, no GitHub account -- because the verdict is
-      # what can be wrong, not whether the GitHub CLI works. Section 10 reads the
-      # workflow files themselves and is the only assertion here with a subject
-      # outside this repository: run from the `unit` job it sees claude-skills'
-      # own gates.yml alone and SAYS which trees it could not see, and the
-      # `status` job below runs it again over all three checkouts.
+      # buses-data OA-251 (2026-09-05): the CI-red worklist row. Nine sections over
+      # run FIXTURES -- no gh, no network, no GitHub account -- because the verdict
+      # is what can be wrong, not whether the GitHub CLI works.
       - name: Prove the CI-red row can go red
         working-directory: skills/bus-work
         run: npm run test:prove-red-ci-state
@@ -854,31 +829,3 @@ jobs:
         with:
           name: gate-results
           path: skills/make-bus-leaflet/gate-results.json
-
-      # THE SAME HARNESS AGAIN, AND THE SECOND RUN IS THE ONE THAT MATTERS
-      # (buses-data OA-251). The `unit` job above runs it too, but that job checks
-      # out claude-skills alone, so its section 10 can only read ONE repository's
-      # workflows and says as much. This job has all three checkouts, so it is the
-      # only place the claim "every workflow that runs on push carries the
-      # expected-red marker" can actually be tested -- a workflow added to the
-      # portal without one is red HERE and nowhere else. Node builtins only, so it
-      # needs no install and costs about two seconds.
-      #
-      # `!cancelled()` for the reason the documentation steps in buses-data carry
-      # it: a byte gate red above must not hide this finding. Read it as
-      # load-bearing, not boilerplate.
-      #
-      # `--pending community-bus-maps` UNTIL PR #242 MERGES, and it deletes
-      # itself. The three repositories cannot land one change atomically -- two
-      # are direct-push and the portal is strictly PR-per-change -- so this step
-      # went red the hour it landed, truthfully, about four portal workflows
-      # sitting on an unmerged branch. Leaving the engine repository red waiting
-      # on a human merge is the exact disease OA-251 exists to cure. The flag
-      # reports those findings without failing, AND goes red the moment the
-      # portal HAS adopted, naming itself as the thing to delete -- so it is an
-      # exemption rather than a promise. Falsified in both directions on
-      # throwaway trees before it was used here.
-      - name: Every push-triggered workflow in all three repos carries the expected-red marker
-        if: ${{ !cancelled() }}
-        working-directory: skills/bus-work
-        run: npm run test:prove-red-ci-state -- "$GITHUB_WORKSPACE/buses-data" "$GITHUB_WORKSPACE/community-bus-maps" --pending community-bus-maps

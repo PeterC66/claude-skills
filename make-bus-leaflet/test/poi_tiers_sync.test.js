@@ -53,6 +53,22 @@ test('an `as` that differs is a change even when the tier agrees — a rename is
   assert.strictEqual(c.owed, true);
 });
 
+test('a portal answer with NO `as` keeps the source’s rename — an absent rename is no opinion, not a removal (found live, 2026-09-05)', () => {
+  const source = { 'community:Bellfield': { tier: 'may', as: 'Bellfield House Community Centre' } };
+  // The same tier, no rename: nothing is owed and the correction survives.
+  const same = S.compareTiers(source, { 'community:Bellfield': { tier: 'may' } }, {});
+  assert.strictEqual(same.owed, false);
+  assert.deepStrictEqual(same.same, ['community:Bellfield']);
+  // A new tier, no rename: the tier is owed and the merge carries the rename with it.
+  const promoted = S.compareTiers(source, { 'community:Bellfield': { tier: 'must' } }, {});
+  assert.deepStrictEqual(promoted.changed[0].to, { tier: 'must', as: 'Bellfield House Community Centre' });
+  const m = S.mergeTiers(source, { 'community:Bellfield': { tier: 'must' } }, {});
+  assert.deepStrictEqual(m['community:Bellfield'], { tier: 'must', as: 'Bellfield House Community Centre' });
+  // A portal rename that differs still wins — the portal HAS an opinion.
+  const renamed = S.mergeTiers(source, { 'community:Bellfield': { tier: 'may', as: 'Bellfield Hub' } }, {});
+  assert.deepStrictEqual(renamed['community:Bellfield'], { tier: 'may', as: 'Bellfield Hub' });
+});
+
 test('industrial keys are UNREACHABLE under industrialKeep "none" and reachable otherwise', () => {
   const portal = { 'industrial:Cressex': { tier: 'miss' }, 'shop:Asda': { tier: 'must' } };
   assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'none' }), ['industrial:Cressex']);

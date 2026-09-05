@@ -82,6 +82,23 @@ function denormRule(r) {
 const sameRule = (a, b) => a.tier === b.tier && (a.as || null) === (b.as || null);
 
 /**
+ * The portal's word on ONE key, read against the source's. The tier is the
+ * portal's; the rename is the portal's only when it HAS one. Found on the first
+ * real run (2026-09-05): High Wycombe's source carries `as: "Bellfield House
+ * Community Centre"`, set here before the chooser existed to correct an
+ * OpenStreetMap spelling, and the portal's overrides hold that key as a bare
+ * `may` — nobody typed a rename there because the delivered pack never showed
+ * one. "Portal wins" would have dropped the correction silently, which is the
+ * exact trap OA-233 warned about in the tier dimension, arriving in the `as`
+ * dimension instead. An absent `as` in the portal is no opinion, not a removal;
+ * a customer who wants a rename gone can only do that from the chooser once the
+ * pack carries it, and then the portal WILL have an opinion.
+ */
+function resolveRule(src, por) {
+  return { tier: por.tier, as: por.as || (src && src.as) || null };
+}
+
+/**
  * Keys the selector removes BEFORE applyTiers() sees them, given the town's
  * `poi` config. Today that is one rule: `industrial:*` under industrialKeep
  * "none". Add a rule here when poi_select.js grows another pre-tier cull, and
@@ -107,10 +124,11 @@ function compareTiers(sourceTiers, portalTiers, poiCfg) {
   const src = normTiers(sourceTiers), por = normTiers(portalTiers);
   const unreachable = new Set(unreachableKeys(por, poiCfg));
   const added = [], changed = [], same = [];
-  for (const [k, r] of Object.entries(por)) {
+  for (const [k, r0] of Object.entries(por)) {
     if (unreachable.has(k)) continue;
-    if (!(k in src)) added.push(k);
-    else if (sameRule(src[k], r)) same.push(k);
+    if (!(k in src)) { added.push(k); continue; }
+    const r = resolveRule(src[k], r0);
+    if (sameRule(src[k], r)) same.push(k);
     else changed.push({ key: k, from: src[k], to: r });
   }
   const sourceOnly = Object.keys(src).filter((k) => !(k in por));
@@ -123,7 +141,7 @@ function mergeTiers(sourceTiers, portalTiers, poiCfg) {
   const skip = new Set(unreachableKeys(por, poiCfg));
   const merged = {};
   for (const [k, r] of Object.entries(src)) merged[k] = r;
-  for (const [k, r] of Object.entries(por)) if (!skip.has(k)) merged[k] = r;
+  for (const [k, r] of Object.entries(por)) if (!skip.has(k)) merged[k] = resolveRule(src[k], r);
   const out = {};
   for (const k of Object.keys(merged).sort()) out[k] = denormRule(merged[k]);
   return out;

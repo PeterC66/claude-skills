@@ -89,7 +89,7 @@ The types and where each ends up:
 | `type` | What it is | Ends with |
 |---|---|---|
 | `gate` | the engine no longer reproduces a committed map | diagnosed; nothing else ships until it is |
-| `review` · `application` · `request-decision` | one of the **three approval gates** | Peter decides in the portal UI — **never decide for him** |
+| `review` · `application` · `request-decision` | one of the **three approval gates** | Peter decides in the portal UI — **never decide for him**. An AREA request carries the town's **complexity band** off its newest S2 run, or says UNSCORED with the S1→S2 step that scores it for free (buses-data OA-088); RED is the pipeline's one *not a single-sheet town* verdict, and approval is the quota gate, so the band belongs BEFORE the decision |
 | `build` | an approved request with no map yet | map imported, v1.0 verified byte-identical |
 | `refresh` | a portal map whose services are changing | proposed update staged for the customer |
 | `refresh-local` | a town leaflet with no portal map | new S5 render + `_latest` refreshed |
@@ -138,6 +138,7 @@ Nothing here is a new source of truth; it is a join over what already exists.
 | each town's `manifest.json` + `routes.json.engine` vs `engine_version.js` | which renders pre-date the current engine, and how stale S6 is |
 | `status.js --json` (only under `--gates`, or as pushed by `push-status.mjs`) | the expensive proof: regenerate everything and diff |
 | `Correspondence/CORR-nnn/` message headers, and each map's `local-decisions.json` | rank 2 a reply owed to a real person, rank 3 **a reply drafted and not sent**, rank 9 a question asked locally and never answered |
+| each town's newest S2 run, `complexity.json` — read by `complexity_band.mjs` | the **complexity band** on an area map request or build row (rank 3/4): GREEN, AMBER, RED with the measure that tripped it, or UNSCORED. The portal cannot score a town (it holds no bus data); this machine can, without spending quota. Peter's guide had promised him this at gate two since 2026-08-21 and nothing did it until 2026-09-05 |
 | `Development Docs/commitments.json` | rank 4 **a dated commitment now OVERDUE**, rank 7 one inside its warning window. Silent outside it |
 | `git status` / `git branch` in the three repositories, and the `selected:` line of every open action — read by `concurrency.mjs` | not a rank but a VERDICT on every row: what is safe to start right now, what to look at first, and what to leave until a neighbouring session has finished |
 

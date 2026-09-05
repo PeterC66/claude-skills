@@ -75,6 +75,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as conc from './concurrency.mjs';
+import { annotateRequest } from './complexity_band.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -582,7 +583,24 @@ for (const it of fromCommitments()) add(it);
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
 // steps name their working directory symbolically ("portal") because the server
 // cannot know where this laptop keeps the repo; resolve it here.
-for (const it of (portal ? portal.items : [])) {
+/*
+ * AN AREA REQUEST CARRIES THE TOWN'S COMPLEXITY BAND, OR SAYS IT IS UNSCORED
+ * (buses-data OA-088). Approval is the quota gate and the S2 gate runs after
+ * it, so RED — the pipeline's one "not a single-sheet town" verdict — used to
+ * be found only once the slot was spent. The portal cannot score a town; this
+ * machine can, for free, and Peter's guide has promised him the band at gate
+ * two since 21 August. The band comes off the town's newest S2 run by its
+ * manifest; a town with none gets the step that scores it without spending
+ * anything. A place request, and every other item, comes through untouched.
+ */
+const portalMapById = new Map((portal ? portal.maps : []).map((m) => [String(m.id), m]));
+const townDirFor = (name) => {
+  const t = tree.towns.find((x) => x.name.toLowerCase() === String(name || '').toLowerCase());
+  return t ? t.dir : null;
+};
+for (const it0 of (portal ? portal.items : [])) {
+  const mapId = /^(?:request|build)-(\d+)$/.exec(it0.key || '');
+  const it = mapId ? annotateRequest(it0, portalMapById.get(mapId[1]) || null, townDirFor) : it0;
   add({ ...it, do: it.do.map((d) => (d.kind === 'shell' && d.cwd === 'portal' ? { ...d, cwd: PORTAL } : d)) });
 }
 const haveKey = (k) => items.some((i) => i.key === k);

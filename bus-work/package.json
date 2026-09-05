@@ -8,6 +8,7 @@
     "test:prove-red-concurrency": "node assets/prove-red-concurrency.mjs",
     "test:prove-red-correspondence": "node assets/prove-red-correspondence.mjs",
     "test:prove-red-refresh-review": "node assets/prove-red-refresh-review.mjs",
-    "test:prove-red": "npm run test:prove-red-commitments && npm run test:prove-red-concurrency && npm run test:prove-red-correspondence && npm run test:prove-red-refresh-review"
+    "test:prove-red-complexity-band": "node assets/prove-red-complexity-band.mjs",
+    "test:prove-red": "npm run test:prove-red-commitments && npm run test:prove-red-concurrency && npm run test:prove-red-correspondence && npm run test:prove-red-refresh-review && npm run test:prove-red-complexity-band"
   }
 }

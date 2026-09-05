@@ -228,6 +228,10 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-refresh-review
 
+      - name: Prove the complexity band on a map request can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-complexity-band
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

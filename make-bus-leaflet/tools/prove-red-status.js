@@ -136,7 +136,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -256,6 +256,23 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
      * one is how a harness quietly stops testing the real thing. */
     fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
   }
+  /* A CORRIDOR FAMILY THE FAMILY READER REFUSES (2026-09-05). `parseFamilies()`
+   * throws on a style it does not know, deliberately: a typo that silently
+   * recolours a route is the merge the S1 forbids. That makes it the honest way
+   * to make `quality.run()` throw without breaking the engine, which is what the
+   * two quality cases need -- the real crash they stand for was
+   * `ms is not iterable`, and that shape is fixed and cannot be reproduced.
+   * `null` writes a VALID styled family instead, which is the control: the same
+   * object form, read successfully, so a green here is not just "no styles". */
+  if (badFamily !== undefined && badFamily !== null) {
+    const rjPath = path.join(dst, 'ci-reference', 'routes.json');
+    const rj = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
+    const keys = Object.keys(rj.palette || {});
+    if (keys.length >= 2) {
+      rj.internalCorridors = { [keys[0]]: { routes: [keys[1]], style: badFamily } };
+      fs.writeFileSync(rjPath, JSON.stringify(rj, null, 2));
+    }
+  }
   // LAST, so it sees every boarding index the tree ended up with, from whichever
   // branch above put it there (OA-210).
   if (feedInfo) writeFeedInfo(root, feedInfo);
@@ -268,11 +285,23 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
  * nothing to do with engine stamps. The PORTAL is the real one and is only read
  * — the vendoring-drift rows are part of `bad`, so a green control here is also
  * a statement that the portal is in sync, which is the honest reading of it. */
-function board(busesDir, statusPath = STATUS, portalDir = PORTAL) {
+function board(busesDir, statusPath = STATUS, portalDir = PORTAL, withQuality = false) {
   let out, code = 0;
+  /* Built in one piece rather than spliced by index: the first cut of this
+   * inserted --no-quality at position 4 and landed it BETWEEN --portal and its
+   * value, so the board read no portal at all and the preflight refused to run.
+   * A flag list assembled by position is one rename away from that every time. */
+  const flags = [statusPath, '--buses', busesDir, '--portal', portalDir,
+                 ...(withQuality ? [] : ['--no-quality']), '--no-live', '--json'];
+  /* --no-quality is the DEFAULT here and the two quality cases turn it back on.
+   * The comment above used to say a scratch tree has no ledger and so the gate
+   * cannot run; that is half right — a MISSING ledger is tolerated by
+   * quality_gate.run(), which then records no ceilings and reports every sheet
+   * as new. What a scratch tree cannot do is REGRESS, which is why the ratchet
+   * is off for every case about engine staleness. Its crash is a different
+   * question and needs it on. */
   try {
-    out = execFileSync(process.execPath,
-      [statusPath, '--buses', busesDir, '--portal', portalDir, '--no-quality', '--no-live', '--json'],
+    out = execFileSync(process.execPath, flags,
       { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
   } catch (e) {
     if (typeof e.status !== 'number') throw e;
@@ -385,6 +414,49 @@ function writeFeedInfo(root, mode) {
 const FEED_PLACE = { town: 'St Ives', place: 'St Ives Bus Station' };
 
 const CASES = [
+  {
+    /* THE RATCHET THAT WENT ABSENT RATHER THAN RED (2026-09-05).
+     *
+     * status.js wraps quality.run() in a try/catch that sets `qualityRows = []`
+     * and prints one line on stderr. Two things followed from that and neither
+     * was visible: `[].some(r => r.status === 'REGRESSED')` is FALSE, so a crash
+     * contributed nothing to the exit code, and the whole report block is guarded
+     * on `qualityRows.length`, so the step summary — the thing anybody reads —
+     * simply lost the section. When claude-skills 5582750 gave a corridor family
+     * an object form that quality_metrics.js could not read, the ratchet stopped
+     * measuring all 52 sheets and the board would have said nothing about it on
+     * a green run. It happened to be red for engine staleness at the time, which
+     * is the only reason anybody looked.
+     *
+     * So the gate under test here is not the ratchet. It is the claim that a
+     * ratchet which did not RUN is red — that an absent measurement is a verdict
+     * and not a pass. The control matters as much as the mutation: a valid styled
+     * family must still be read, or this passes by refusing every object form. */
+    label: 'CONTROL a VALID styled corridor family is read and the ratchet runs',
+    make: { badFamily: null },
+    quality: true,
+    expect: 0,
+    also: (json) => {
+      if (json.qualityError) return 'the gate threw on a valid config: ' + json.qualityError;
+      if (!Array.isArray(json.quality) || !json.quality.length) return 'the ratchet reported no sheet at all, so its green says nothing';
+      return null;
+    },
+    what: 'a fix that refused every object form would look exactly like a fix that read them',
+  },
+  {
+    label: 'a corridor family the reader REFUSES takes the ratchet down, and the board goes red',
+    make: { badFamily: 'zigzag' },
+    quality: true,
+    expect: 1,
+    cause: 'quality',
+    also: (json) => {
+      if (!json.qualityError) return 'red, but the board did not record that the ratchet threw';
+      if (!/style/.test(json.qualityError)) return 'red about something else: ' + json.qualityError;
+      if (json.quality && json.quality.length) return 'it claims to have measured sheets after a crash';
+      return null;
+    },
+    what: 'before this, a ratchet that threw left NO section and NO exit code — it was gone, not failing',
+  },
   {
     /* OA-182, GATED from the day it landed (2026-08-30). Two cases and not one,
      * because the interesting failure of a freshness check is not that it misses
@@ -714,7 +786,7 @@ for (const c of CASES) {
    * that does not exist, which leaves exactly the towns section this case
    * exists to judge. The other four cases still run against the real portal. */
   const portalFor = inj ? path.join(root, '__no-portal__') : PORTAL;
-  const { code, json } = board(root, inj ? inj.statusPath : STATUS, portalFor);
+  const { code, json } = board(root, inj ? inj.statusPath : STATUS, portalFor, !!c.quality);
   const stale = json && Array.isArray(json.engineStale) ? json.engineStale.map(r => r.town) : null;
   const wantRed = c.expect !== 0;
   const colourOk = (code !== 0) === wantRed;

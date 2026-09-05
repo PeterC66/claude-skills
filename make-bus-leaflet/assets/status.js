@@ -244,9 +244,7 @@ const ENGINE_STALE_ALLOWED = [
   // a walk back through history recomputing the hash at every step, which is how
   // this one was found on 2026-09-01 — and the board VERIFIES the pair on every
   // run, so a wrong commit here is a refusal, never a wrong verdict.
-  // It was EMPTY for part of 2026-09-04, which is the normal state -- an allowance
-  // goes when its reason does. The one before this (Wisbech at cf683a815c, portal
-  // update #139) went with OA-240 the same morning.
+  // An allowance goes when its reason does, so an EMPTY list is the normal state.
   //
   // HIGH WYCOMBE IS HELD BECAUSE ITS NEXT BUILD SHIPS SOMEBODY ELSE'S CHANGE.
   // OA-229's rollout re-rendered 19 of the 20 maps on 2026-09-04 and stopped at
@@ -1203,6 +1201,11 @@ const driftRows = drift.rows;
 // statements about the same bytes.
 let qualityRows = [];
 let qualityTargets = [];
+// A CRASH IS RED. `qualityRows` going empty is indistinguishable from a clean
+// estate -- `[].some()` is false and the report block is guarded on its length --
+// so from claude-skills 5582750 the ratchet was ABSENT, not failing, on one
+// stderr line nobody reads. Skipping a measurement is a verdict (2026-09-05).
+let qualityError = null;
 if (!NO_QUALITY) {
   try {
     const q = quality.run(BUSES);
@@ -1211,7 +1214,7 @@ if (!NO_QUALITY) {
     // never folded into `bad` below: this board fails on regression, and a
     // target that reddens the board on the day it is written gets muted.
     qualityTargets = quality.targetProgress(q.rows, q.ledger.targets, new Date().toISOString().slice(0, 10));
-  } catch (e) { qualityRows = []; qualityTargets = []; console.error('quality gate skipped: ' + e.message); }
+  } catch (e) { qualityRows = []; qualityTargets = []; qualityError = e.message; console.error('quality gate skipped: ' + e.message); }
 }
 // Sheets belonging to one town/place, so a row can sit beside its byte-gate row.
 const qualityFor = (name) => qualityRows.filter(r => r.key.startsWith(name + ' · '));
@@ -1337,6 +1340,7 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // one -- which is the whole point of gating it now rather than later.
   || placeRows.some(r => r.keys && r.keys.state === 'short')
   || qualityRows.some(r => r.status === 'REGRESSED')
+  || qualityError !== null
   // OA-182, GATED from the day it landed. The rule this project holds to is that
   // a check which is red on its first run gets muted inside a week -- so the two
   // committed fixtures were recut in the same change that added this, and the
@@ -1468,7 +1472,7 @@ async function main() {
   const deploy = await deploymentRow();
   const commit = commitmentRows();
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1633,6 +1637,10 @@ async function main() {
     }
   }
 
+  // On stdout, because the crash's only trace was a stderr line CI sends to the job
+  // log while the step summary -- the thing anybody reads -- simply lost the section.
+  if (qualityError) console.log('\n=== Quality ratchet ===\n  NOT MEASURED, the gate threw: ' + qualityError
+    + '\n  No sheet was checked against its ceiling. An absent measurement is RED, not a pass.');
   if (qualityRows.length) {
     const moved = qualityRows.filter(r => r.status !== 'ok');
     console.log('\n=== Quality ratchet (' + qualityRows.length + ' sheets, ledger: ' + quality.LEDGER_NAME + ') ===');

@@ -602,6 +602,27 @@ const MUTATIONS = [
     find: 'if (r.ok === false &&', to: 'if (false &&' },
 
   // --- the two ink-on-ink measures, added 2026-08-28 (OA-021, OA-118) ---
+  /* THE FAMILY READER, PUT BACK THE WAY IT WAS (2026-09-05). These two lines
+   * hand-rolled `for (const x of ms)` and threw `ms is not iterable` the moment a
+   * corridor family arrived in its {routes, style} object form — which took the
+   * whole quality ratchet down across the estate, silently, because status.js
+   * catches the throw. The mutation restores the old parse; the suite must notice.
+   * Written as a mutation and not left as "we watched it go red once", because the
+   * thing that failed here was a SECOND reader of a shape the engine already knew,
+   * and the next one will be written by somebody who never read this file. */
+  { suite: 'quality_metrics_families.test.js', file: 'quality_metrics.js',
+    what: 'the panel-only check parses corridor families itself again, so the object form throws',
+    find: "    for (const [lead, list] of Object.entries(familyMembers(RJ.internalCorridors))) for (const x of list) if (x !== lead) rides[x] = lead;",
+    to: "    for (const [lead, ms] of Object.entries(RJ.internalCorridors || {})) for (const x of ms) rides[x] = lead;" },
+
+  /* And the other direction: a fix that suppressed EVERY route in a family,
+   * lead included, would pass every object-form case above and quietly stop
+   * reporting a lead that is drawn nowhere. */
+  { suite: 'quality_metrics_families.test.js', file: 'quality_metrics.js',
+    what: 'a family lead is excused along with its members, so an undrawn lead stops being reported',
+    find: "for (const x of list) if (x !== lead) rides[x] = lead;",
+    to: "for (const x of list) rides[x] = lead;" },
+
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'a badge printed on a badge stops counting',
     find: '    if (over <= T.badgeOverlapMm) continue;',

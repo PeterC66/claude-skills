@@ -35,6 +35,9 @@ const FM = require(path.join(process.env.SKILL_ASSETS || __dirname, 'font_metric
 // The two colour questions this file asks, named apart in one module rather than
 // spelled out here for the third and fourth time in the engine (OA-135).
 const { rawLumUnit, lab } = require('./wcag.js');
+// The ONE reader of a corridor family, shared with the drawing engine so that a
+// new family shape cannot be understood by the generator and not by the measure.
+const { parseFamilies } = require('./complexity_ladder.js');
 
 // ---------------------------------------------------------------- thresholds
 // Deliberately in one object: G1 asks Peter whether these are the right numbers,
@@ -1082,9 +1085,19 @@ function analyse(svgPath) {
   }
   const panelOnly = [];
   if (RJ && hasPanel && !isBoarding && Array.isArray(RJ.panelOrder) && RJ.palette) {
+    // A family is EITHER a member array or a {routes, style} object — the styled
+    // form arrived with OA-176 4.24 and is the only way to say "drawn once, in
+    // both colours". Read it through complexity_ladder's parseFamilies(), which
+    // is the engine's own reader, rather than a second parse here: the two lines
+    // this replaced hand-rolled `for (const x of ms)` and threw `ms is not
+    // iterable` on every sheet in the estate the morning Ramsey adopted the
+    // styled form, which status.js catches into a ratchet that reports nothing.
+    // `fam[lead]` includes the lead itself; only MEMBERS ride, because a lead is
+    // judged on its own ink like any other route.
     const rides = {};
-    for (const [lead, ms] of Object.entries(RJ.internalCorridors || {})) for (const x of ms) rides[x] = lead;
-    for (const [lead, ms] of Object.entries(RJ.corridorPalette || {})) for (const x of ms) if (!rides[x]) rides[x] = lead;
+    const familyMembers = raw => { const g = parseFamilies(raw); return g ? g.fam : {}; };
+    for (const [lead, list] of Object.entries(familyMembers(RJ.internalCorridors))) for (const x of list) if (x !== lead) rides[x] = lead;
+    for (const [lead, list] of Object.entries(familyMembers(RJ.corridorPalette))) for (const x of list) if (x !== lead && !rides[x]) rides[x] = lead;
     const inked = new Set(P.strokes.filter(s => s.w >= 1.2).map(s => s.stroke));
     for (const key of RJ.panelOrder) {
       const c = String(RJ.palette[key] || '').toLowerCase();

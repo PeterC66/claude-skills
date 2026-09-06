@@ -28,6 +28,8 @@
 //   dirW:30 lenW:1.2 anchorW:0.03 pinW:50    solver weights
 //   mergeJn:5 mergeEdge:6 dropLoop:12 weldLeg:1.6   graph cleanup (mm)
 //   featureTol:2     linear-feature point thinning, mm (river keeps its winding)
+//   featureStitch:0.5     weld a feature's OSM ways into chains BEFORE mapping, mm
+//   featureStitchTurn:75  reject a weld that turns more than this at the join (deg)
 //   workDir:"diagram"
 //   stops:{ include:[ATCO...], exclude:[ATCO...], junctionDist:3, poiStopDist:8 }
 //   interchanges:[{atco,label?,w?}]        station lozenges (render, ID-gated)
@@ -54,6 +56,7 @@ const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
 // written to end (engine N28); svgOpen() returns that string character for
 // character.
 const { svgOpen } = require(_dep('page.js'));
+const { stitchSegs } = require(_dep('linear_features.js'));
 const { esc } = require(_dep('svg_primitives.js'));
 // The road graph both internal pre-stages build (OA-232 Tier 3.3) — this file
 // and schematize_internal.js are one algorithm written twice, and the three
@@ -80,6 +83,7 @@ if (!RJ.internalDiagram) { console.log('no internalDiagram config — nothing to
 const DG = Object.assign({ bendTurn: 50, maxBends: 3, edgeMin: 8, edgeMax: 55, gamma: 0.55,
   dirW: 30, lenW: 1.2, anchorW: 0.03, pinW: 50,
   mergeJn: 5, mergeEdge: 6, dropLoop: 12, weldLeg: 1.6, featureTol: 2,
+  featureStitch: 0.5, featureStitchTurn: 75,
   poiSnapDist: 22, featureDamp: 0.35, workDir: 'diagram' },
   RJ.internalDiagram === true ? {} : RJ.internalDiagram);
 DG.stops = Object.assign({ junctionDist: 3, poiStopDist: 8, include: [], exclude: [] }, DG.stops || {});
@@ -644,9 +648,19 @@ const segInt = (p1, p2, a, b) => {
 // where it crosses the solved network, similarity-transform each span between
 // consecutive crossings (keeps the real winding shape locally), warp fallback
 // when it never crosses a route.
-function mapFeatureSeg(mmSeg) {
+// Arc-lengths of a polyline's vertices — the line's own metric, shared by the
+// crossing search and the span mapper so both index it the same way.
+function featureArc(mmSeg) {
   const cum = [0];
   for (let j = 0; j < mmSeg.length - 1; j++) cum.push(cum[j] + Math.hypot(mmSeg[j + 1][0] - mmSeg[j][0], mmSeg[j + 1][1] - mmSeg[j][1]));
+  return cum;
+}
+// Where this polyline crosses the solved network, deduped along its own arc so a
+// bundle of parallel route segments counts once. Its OWN function so the build-time
+// report asks EXACTLY the question the mapper asks: a second implementation of "does
+// it cross" would be free to disagree with the one that decides the ink.
+function featureCrossings(mmSeg, cum) {
+  cum = cum || featureArc(mmSeg);
   const crossings = [];
   for (let j = 0; j < mmSeg.length - 1; j++) {
     const p1 = mmSeg[j], p2 = mmSeg[j + 1];
@@ -661,10 +675,15 @@ function mapFeatureSeg(mmSeg) {
       });
     }
   }
-  if (!crossings.length) return mmSeg.map(warp);
   crossings.sort((x, y) => x.arc - y.arc);
   const CR = [];      // dedupe crossings from bundled/parallel net segments
   for (const c of crossings) if (!CR.length || c.arc - CR[CR.length - 1].arc > 2) CR.push(c);
+  return CR;
+}
+function mapFeatureSeg(mmSeg, crossings) {
+  const cum = featureArc(mmSeg);
+  const CR = crossings || featureCrossings(mmSeg, cum);
+  if (!CR.length) return mmSeg.map(warp);
   const sim = (P0, P1, Q0, Q1) => {
     const vx = P1[0] - P0[0], vy = P1[1] - P0[1];
     const wx = Q1[0] - Q0[0], wy = Q1[1] - Q0[1];
@@ -788,13 +807,32 @@ const wjson = (f, o) => fs.writeFileSync(path.join(WD, f), JSON.stringify(o));
   let fgeo = {}; try { fgeo = JSON.parse(fs.readFileSync(DIR + '/features_geo.json', 'utf8')); } catch (e) { }
   const out = {};
   for (const kf in fgeo) {
-    out[kf] = fgeo[kf].map(seg => {
-      const mm = seg.map(p => XY(p));
-      const mapped = mm.length < 2 ? mm.map(warp) : mapFeatureSeg(mm);
+    // STITCH BEFORE MAPPING (OA-059). mapFeatureSeg() gives each polyline its own
+    // transform, so two OSM ways that met in reality stop meeting on the sheet, and
+    // one crossing no route falls to warp() — a third transform again. Measured on
+    // the shipped St Ives v6.70 diagram: the river is seven ways forming ONE chain
+    // through five joins, and three of the five arrived broken, by up to 18% of the
+    // river's own width across the page, with 767 mm of the 958 mm drawn flung off
+    // the page. Welding first means one transform per real line — the rule
+    // linear_features.js already applies at DRAW time, its own stitchSegs, imported
+    // rather than copied so the maxTurn guard is not re-derived by hand.
+    const mmSegs = fgeo[kf].map(seg => seg.map(p => XY(p)));
+    const chains = DG.featureStitch ? stitchSegs(mmSegs, DG.featureStitch, DG.featureStitchTurn) : mmSegs;
+    let noCross = 0;
+    out[kf] = chains.map(mm => {
+      const cr = mm.length < 2 ? [] : featureCrossings(mm);
+      if (mm.length >= 2 && !cr.length) noCross++;
+      const mapped = mm.length < 2 ? mm.map(warp) : mapFeatureSeg(mm, cr);
       if (mapped.length < 3) return mapped.map(p => INV(p).map(rll));
       const keep = [0]; dpTol(mapped, 0, mapped.length - 1, DG.featureTol, keep); keep.push(mapped.length - 1);
       return [...new Set(keep)].sort((a, b) => a - b).map(i => INV(mapped[i]).map(rll));
     });
+    // The line that would have caught OA-059 the day it shipped, and neither half
+    // of it is visible in a byte count or a label diff: ways outnumbering chains
+    // means the feature is arriving in pieces, and a chain crossing no route is on
+    // warp() — which is how one St Ives way ended at y = -263.76 mm on a 210 mm page.
+    console.log(`feature ${kf}: ${fgeo[kf].length} way(s) -> ${chains.length} chain(s)`
+      + (noCross ? `, ${noCross} crossing no route (warp fallback)` : ''));
   }
   wjson('features_geo.json', out);
 }

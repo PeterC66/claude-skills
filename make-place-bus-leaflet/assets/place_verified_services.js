@@ -98,5 +98,35 @@ const out = {
   }),
 };
 
+/*
+ * A PLACE MAY NOW SAY "WE KNOW ABOUT THIS ROUTE AND DELIBERATELY DO NOT DRAW IT"
+ * (Peter's decision, 2026-09-06, buses-data OA-262 item 3).
+ *
+ * Until today it could not, and this was measured rather than assumed: 86
+ * `missing-service` findings across nine places on their latest stored S6, of
+ * which 53 are a borrowed answer's superset and already labelled -- but the other
+ * 33 are on places that BOUGHT their own red-team answer, where an adjudication
+ * made once came back as news on the next run. That is the shape that had
+ * Huntingdon's red team name the same seven routes on two consecutive answers.
+ *
+ * THE SAME FIELD, NOT A FIFTH CONVENTION. `known_off.js` reads whatever
+ * `verified-services.json` it is handed and does not care whether a town curated
+ * it or this adapter built it, so carrying the town field through means one name,
+ * one shape, one reader, one set of words in the report -- and
+ * `check-exclusion-fields.mjs` covers places for free, which a new field would
+ * not have done.
+ *
+ * IT IS DECLARED IN S3 `routes.json`, NOT IN S1. A place's S1 is
+ * `gtfs-services.json`, generated from BODS on every pull; a decision written
+ * there would be overwritten by the next one. `routes.json` is the place's
+ * hand-curated file and already carries `notShown[]` -- which is a DIFFERENT
+ * sentence and stays exactly as it is: `notShown[]` means "on the panel with no
+ * line drawn", `notOnLeaflet[]` means "off the sheet altogether".
+ */
+if (Array.isArray(routes.notOnLeaflet) && routes.notOnLeaflet.length) {
+  out.notOnLeaflet = routes.notOnLeaflet;
+  console.log(`carried ${routes.notOnLeaflet.length} notOnLeaflet entr(y/ies) through from routes.json`);
+}
+
 fs.writeFileSync('verified-services.json', JSON.stringify(out, null, 2) + '\n');
 console.log(`wrote verified-services.json (${out.services.length} service(s), adapted from gtfs-services.json)`);

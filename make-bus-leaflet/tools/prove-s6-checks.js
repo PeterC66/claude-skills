@@ -1226,6 +1226,11 @@ console.log('\n16. serves-town — "we include it" only where a sheet actually d
   const fa = (a.v ? a.v.findings : []).find(f => f.category === 'serves-town' && f.route === 'T7');
   check('a route the sheet DRAWS still says we include and draw it', 'message says "we include it and draw it"',
     !!fa && /we include it and draw it/.test(fa.message), fa ? fa.message.slice(0, 120) : 'no serves-town finding on T7');
+  /* SEVERITY FOLLOWS THE SHEET (Peter, 2026-09-06, OA-004 q5). Drawn blocks; the
+   * pair below asserts both halves, because a change that made everything soft
+   * would pass the undrawn half on its own. */
+  check('and a DRAWN route still BLOCKS', 'the T7 serves-town finding is hard',
+    !!fa && fa.severity === 'hard', fa ? fa.severity : 'no finding');
 
   /*
    * The other state, BUILT rather than borrowed: a route in our verified set that
@@ -1253,6 +1258,11 @@ console.log('\n16. serves-town — "we include it" only where a sheet actually d
   const fb = (b.v ? b.v.findings : []).find(f => f.category === 'serves-town' && f.route === R);
   check('the finding is still RAISED, not silenced', 'a serves-town finding exists on ' + R,
     !!fb, b.v ? JSON.stringify(b.v.findings.filter(f => f.route === R).map(f => f.severity + '/' + f.category)) : 'no report');
+  check('but an UNDRAWN route does not block', `the ${R} serves-town finding is soft`,
+    !!fb && fb.severity === 'soft', fb ? fb.severity : 'no finding');
+  check('and the run therefore PASSES on it', 'exit 0, verdict pass',
+    b.code === 0 && b.v && b.v.summary.pass === true,
+    b.v ? `exit ${b.code}, verdict ${b.v.summary.verdict}, hard ${b.v.summary.hard}` : `exit ${b.code}, no report`);
   check('a route no sheet draws (' + R + ') is not described as included', 'message does NOT claim we include it',
     !!fb && !/we include it/.test(fb.message), fb ? fb.message.slice(0, 140) : 'no serves-town finding on ' + R);
   check('and it says what IS true — nothing here draws it', 'message says no sheet draws it, evidence displayed:false',
@@ -1325,6 +1335,66 @@ console.log('\n17. Corridor families — a styled family keeps its colours, and 
   const reverted = rowsOf(b.v, '303')[0];
   check('removing the style brings the same-coloured wording back', 'the 303 row reverts to the bundle wording',
     !!reverted && /second same-coloured line/.test(reverted.message), reverted ? reverted.message.slice(0, 140) : 'no finding');
+}
+/* ------- 18. a PLACE can now say "known, and deliberately off" (OA-262 item 3) */
+console.log('\n18. Place exclusions — notOnLeaflet[] declared in a place\'s routes.json reaches the report');
+{
+  /*
+   * Until 2026-09-06 a place had nowhere to record that a route serving the parent
+   * town is knowingly off this sheet, so an adjudication made once came back as an
+   * inclusion candidate on every later run. Measured across the estate that day:
+   * 86 missing-service findings over nine places, 53 of them a borrowed answer's
+   * superset (already labelled), and 33 on places that BOUGHT their own answer.
+   *
+   * Peter's decision was the SAME field rather than a fifth convention, so
+   * `place_verified_services.js` carries `notOnLeaflet[]` through from the place's
+   * S3 routes.json into the verified-services.json it builds, where known_off.js
+   * reads it exactly as it reads a town's.
+   *
+   * The route is not hard-coded: the case takes whatever the place's own run
+   * reports as a missing-service and declares THAT, so it keeps working when the
+   * fixture's data moves. It throws if there is none, rather than passing on a
+   * declaration that silences nothing.
+   */
+  const base = stage('place', 'place-known-off-base');
+  const a0 = verify(base);
+  const missing = (a0.v ? a0.v.findings : []).filter(f => f.category === 'missing-service');
+  if (!missing.length) {
+    throw new Error('fixture assumption broken: the place run reports no missing-service, so there is nothing for a declaration to convert — pick another place, do not delete the case');
+  }
+  const R = String(missing[0].route);
+  const REASON = 'INJECTED BY prove-s6-checks.js — a place-level decision, not a real one.';
+
+  const d = stage('place', 'place-known-off');
+  const rj = readJ(d, 'routes.json');
+  rj.notOnLeaflet = [{ route: R, reason: REASON, servesTown: true }];
+  writeJ(d, 'routes.json', rj);
+  /* Rebuild verified-services.json so the adapter sees the declaration: stage()
+   * runs the adapter only when the file is absent, and it wrote one already. */
+  fs.rmSync(path.join(d, 'verified-services.json'), { force: true });
+  const adapter = path.join(SK, '..', 'make-place-bus-leaflet', 'assets', 'place_verified_services.js');
+  const ar = spawnSync(process.execPath, [adapter], { cwd: d, encoding: 'utf8' });
+  if (ar.status !== 0) throw new Error(`place adapter failed:\n${ar.stdout}${ar.stderr}`);
+
+  check('the adapter carries the declaration into verified-services.json', `notOnLeaflet names ${R}`,
+    (readJ(d, 'verified-services.json').notOnLeaflet || []).some(e => String(e.route) === R),
+    JSON.stringify(readJ(d, 'verified-services.json').notOnLeaflet || null));
+
+  const a = verify(d);
+  check('and the lead becomes a known-off carrying the place\'s own words', `soft known-off on ${R} quoting the reason`,
+    a.v && a.v.findings.some(f => f.category === 'known-off' && String(f.route) === R
+      && f.severity === 'soft' && new RegExp(REASON.slice(0, 30)).test(f.message)),
+    a.v ? JSON.stringify(a.v.findings.filter(f => String(f.route) === R).map(f => f.severity + '/' + f.category)) : 'no report');
+  check('it is no longer reported as news', `no missing-service on ${R}`,
+    a.v && !a.v.findings.some(f => f.category === 'missing-service' && String(f.route) === R),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
+
+  /* THE ARM THAT MATTERS. A declaration must silence ONLY what it names -- the
+   * whole risk of this change is a place quietly muting its own inclusion leads. */
+  const others = missing.map(f => String(f.route)).filter(x => x !== R);
+  check('and it silences nothing else', `the other ${others.length} missing-service row(s) survive`,
+    a.v && others.every(x => a.v.findings.some(f => f.category === 'missing-service' && String(f.route) === x)),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
 }
 console.log('\n' + '='.repeat(78));
 console.log(failures

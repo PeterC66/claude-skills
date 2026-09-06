@@ -1261,7 +1261,21 @@ if (redteam) {
           add('soft', 'redteam-rejected', `${base} This claim was checked and REJECTED on ${rej.entry.decidedOn} by ${rej.entry.decidedBy}: ${rej.entry.why}${rej.entry.evidence ? ' Evidence: ' + rej.entry.evidence + '.' : ''}${rej.entry.recheckBy ? ' Re-check by ' + rej.entry.recheckBy + '.' : ' The entry carries no re-check date, so it is reported in full on every run rather than fading out.'} Our drawn data gives the route ${drawnStops} stop(s) in the town.`,
             { ...evidence, rejection: rej.entry }, r, 'redteam');
         } else {
-          add('hard', 'serves-town', base, evidence, r, 'redteam');
+          /*
+           * SEVERITY FOLLOWS THE SHEET, NOT THE FACT (Peter's decision, 2026-09-06,
+           * buses-data OA-004 question 5). Drawn => HARD: a reader is being shown a
+           * bus the red team says does not serve the town, which is the case that
+           * strands somebody. NOT drawn => SOFT: still raised, and it is a real
+           * curation lead, but nothing a reader can see is wrong so it must not
+           * block a delivery. Same rule as the X46 adjudication -- exclude by
+           * default only where being wrong strands a passenger.
+           *
+           * The two rejection arms above keep HARD deliberately and are NOT this
+           * question: an EXPIRED rejection is somebody's own re-check date having
+           * passed, and R-1b is a rejection that may have become wrong. Both are
+           * about the state of an adjudication, not about what the sheet draws.
+           */
+          add(isDisplayed ? 'hard' : 'soft', 'serves-town', base, evidence, r, 'redteam');
         }
       }
       continue;

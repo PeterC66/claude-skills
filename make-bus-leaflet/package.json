@@ -25,6 +25,8 @@
     "test:prove-red-days-resolution": "python3 tools/prove-red-days-resolution.py",
     "test:prove-red-variant-fold": "python3 tools/prove-red-variant-fold.py",
     "test:prove-red-consolidation": "python3 tools/prove-red-consolidation.py",
+    "test:prove-red-not-in-bods": "python3 tools/prove-red-not-in-bods.py",
+    "test:prove-known-off-parity": "node tools/prove-known-off-parity.js",
     "test:prove-s6": "node tools/prove-s6-checks.js",
     "test:prove-red-design-keys": "node tools/prove-red-design-keys.js",
     "test:prove-red-attribution": "node tools/prove-red-attribution.js",

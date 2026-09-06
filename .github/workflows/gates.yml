@@ -292,6 +292,28 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-consolidation
 
+      # OA-259: the only escape from [WITHDRAWN?] for a shipped route missing from the feed
+      # was is_community(), which guesses from nine substrings in the OPERATOR'S NAME. It
+      # fails on the first commercial counterexample -- Whippet's X1, absent from the ITM
+      # East Anglia extract while nine other Whippet routes are in it -- so Huntingdon would
+      # have sat on the towns-to-review list for ever over a service that runs. The
+      # replacement is a DECLARATION, and this requires it to silence nothing without a
+      # reason, nothing past its recheckBy, and nothing over a route the feed carries.
+      # Added 2026-09-06.
+      - name: Prove the notInBods declaration can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-not-in-bods
+
+      # OA-259, the other half: the FOUR conventions a town uses for "known and not drawn"
+      # are read by two checkers that cannot share a runtime, so the rule is written twice.
+      # A comment saying they agree is a claim about a JOIN, and this is the join -- one
+      # fixture through both, plus every real town file. It found a genuine disagreement on
+      # its first run: the Python iterated a dict's KEYS where the JS checked isArray.
+      # Added 2026-09-06.
+      - name: Prove both checkers read the exclusion conventions the same way
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-known-off-parity
+
       # OA-141: redteam_source.js answered about the PARENT TOWN when run from a
       # place's own root, and said nothing about it. This cuts both fixes out and
       # requires the four guard tests to fail while the two CONTROLs hold.
@@ -794,6 +816,32 @@ jobs:
       - name: Prove the refresh report's shipped consolidation can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-consolidation
+
+      # OA-259: the only escape from [WITHDRAWN?] for a shipped route missing from the feed
+      # was is_community(), which guesses from nine substrings in the OPERATOR'S NAME. It
+      # fails on the first commercial counterexample -- Whippet's X1, absent from the ITM
+      # East Anglia extract while nine other Whippet routes are in it -- so Huntingdon would
+      # have sat on the towns-to-review list for ever over a service that runs. The
+      # replacement is a DECLARATION, and this requires it to silence nothing without a
+      # reason, nothing past its recheckBy, and nothing over a route the feed carries.
+      # Added 2026-09-06.
+      - name: Prove the notInBods declaration can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-not-in-bods
+
+      # OA-259, the other half: the FOUR conventions a town uses for "known and not drawn"
+      # are read by two checkers that cannot share a runtime, so the rule is written twice.
+      # A comment saying they agree is a claim about a JOIN, and this is the join -- one
+      # fixture through both, plus every real town file. It found a genuine disagreement on
+      # its first run: the Python iterated a dict's KEYS where the JS checked isArray.
+      # Added 2026-09-06.
+      - name: Prove both checkers read the exclusion conventions the same way
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-known-off-parity
+        env:
+          # This job checks out buses-data, so the REAL half must run here rather than
+          # skip: BUSES_DIR set is a promise the harness now fails on if it is wrong.
+          BUSES_DIR: ${{ github.workspace }}/buses-data
 
       # OA-164, REPORTED not gated: eight files exist today, the pull guard already
       # stops them doing harm, and a check red on the day it lands gets muted. It is

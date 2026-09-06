@@ -19,6 +19,9 @@ The classifications:
               A variant the town ships in its own right (High Wycombe's 1A, 1B, 32A) is NOT
               gone just because it folded into its base number -- see fold_gtfs, OA-223.
   [COMMUNITY]  a shipped route is absent from BODS but is community/pre-book (expected; re-check on bustimes)
+  [NOT-IN-BODS] a shipped route is absent from BODS and the town DECLARES that it is, with a
+              reason and optionally a recheckBy -- see declared_not_in_bods (OA-259). Expected.
+  [NOT-IN-BODS?] that declaration over a route the feed DOES carry: stale, delete it
   [OPERATOR]  operator changed
   [DAYS]      operating days changed (only when both sides parse cleanly)
 
@@ -37,6 +40,11 @@ import index_guard as ig
 
 DOW=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 COMMUNITY_HINTS=["villager","fact","community","minibus","dial","demand","voluntary","cvs","car scheme"]
+# Tags that are EXPECTED AND EXPLAINED, so a town carrying only these is not on the
+# towns-to-review list. A module constant rather than a literal inside main() because
+# tools/prove-red-not-in-bods.py asserts against it: a harness that re-implements the
+# filter it is testing agrees with itself and proves nothing about the report.
+NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS")
 
 def parse_days(s):
     """Best-effort: freeform shipped 'days' string -> set of 0..6, or None if not parseable."""
@@ -56,6 +64,100 @@ def is_community(operator, source):
     if (source or "").lower().startswith("bustimes-community"): return True
     op=(operator or "").lower()
     return any(h in op for h in COMMUNITY_HINTS)
+
+def declared_not_in_bods(sh, today):
+    """A shipped service DECLARING that its absence from BODS is expected.
+
+    Until 2026-09-06 the only escape from [WITHDRAWN?] was is_community() above, which
+    infers the answer from nine substrings in the OPERATOR'S NAME. That is a guess about
+    a brand, and it fails on the first counterexample -- which arrived that day. Whippet's
+    X1 "Blue Arrow" (Cambridge Parkside - Huntingdon - Peterborough Westgate, Mon-Sat,
+    five journeys each way since 26 January 2026) is absent from the ITM East Anglia
+    extract while NINE other Whippet routes are in it. It is a plain commercial express,
+    so no hint fires, and Huntingdon would have sat on the towns-to-review list every
+    month over a service that is running fine. A recurring alarm that is factually wrong
+    is the kind that teaches you to skim the section which will one day carry a real
+    withdrawal -- which is what the X46 comment forty lines down already says.
+
+    So: a DECLARATION, not a smarter guess, the same shape as routes.json's notShown[]
+    and redteamRejected[]. On the service entry:
+
+        "notInBods": {"why": "...", "since": "2026-09-06", "recheckBy": "2027-03-01"}
+
+    `why` is required and `recheckBy` is optional. AN UNEXPLAINED DECLARATION SILENCES
+    NOTHING, because an undated, unexplained exclusion is precisely the mute button this
+    exists to avoid being; and a `recheckBy` that has passed stops silencing too, exactly
+    as it does for a redteamRejected entry and for a portal s6-waivers deferral. The
+    stale direction -- declared absent, and now present in the feed -- is checked
+    separately by the caller, because it needs the feed and this does not.
+
+    Returns (verdict, detail) with verdict in {None, "honoured", "expired", "malformed"}.
+    """
+    d=sh.get("notInBods")
+    if d is None: return (None,"")
+    if not isinstance(d,dict):
+        return ("malformed","`notInBods` is not an object; it needs at least {\"why\": \"...\"}")
+    why=(d.get("why") or d.get("reason") or "").strip()
+    if not why:
+        return ("malformed","`notInBods` records no `why`, so it silences nothing - say why the feed does not carry it")
+    rb=(d.get("recheckBy") or "").strip()
+    if rb and rb < today:
+        return ("expired",f"{why} (but its recheckBy {rb} has passed, so it no longer silences anything - re-check, then move the date or drop the route)")
+    return ("honoured",why + (f"; re-check by {rb}" if rb else ""))
+
+# The FOUR conventions a town uses for "we know about this route and deliberately do not
+# draw it", in one place, mirroring assets/known_off.js line for line. The two cannot share
+# a runtime -- one checker is Python and the other JavaScript -- so they are held together
+# by tools/prove-known-off-parity.js, which feeds one fixture through both and fails when
+# the route sets differ. Two implementations of one rule is OA-135's shape; a JOIN is the
+# only thing that can check a claim that they agree.
+#
+# The order is the precedence: the first field to name a route wins, so a town writing the
+# same route into two conventions gets one answer rather than a coin toss.
+KNOWN_OFF_FIELDS=("notOnLeaflet","verifiedNotDisplayed","notDisplayed","excluded")
+
+def known_off_reason(entry):
+    """`notOnLeaflet` writes its prose in `note`, the other three in `reason`, and High
+    Wycombe adds a `detail` beside a one-word `reason` ("school", "withdrawn") where the
+    detail is the half a reader needs. Accept all of them rather than making eight town
+    files agree on a key name."""
+    head=(entry.get("note") or entry.get("reason") or "")
+    tail=(entry.get("detail") or "")
+    if head and tail and head!=tail: return f"{head} — {tail}"
+    return str(head or tail or "")
+
+def known_off_routes(vs):
+    """-> ({route as the file spells it: (field, reason)}, [entries naming no route]).
+
+    Entries with no `route` are returned separately rather than dropped: Beaconsfield's
+    `notDisplayed` carries a {"group": "Dedicated school services"} block naming a CLASS,
+    and counting it as declared would make a whole school fleet look ruled on when nothing
+    can match a route against it.
+
+    `notOnLeaflet` entries with servesTown FALSE are deliberately left out. That is the one
+    case both checkers already read, and each raises something louder on it -- RE-EVAL here,
+    a serves-town-conflict in S6. Folding them in would quietly demote an existing finding.
+    """
+    found={}; skipped=[]
+    for field in KNOWN_OFF_FIELDS:
+        entries=vs.get(field)
+        # A LIST, or nothing. Iterating a dict here yields its KEYS, so a town that wrote
+        # `"notDisplayed": {...}` instead of `[{...}]` invented routes called "route" and
+        # "reason" -- found by tools/prove-known-off-parity.js on its first run, which is
+        # the whole argument for a JOIN rather than a comment saying the two agree.
+        if not isinstance(entries,list): continue
+        for entry in entries:
+            if isinstance(entry,(str,int)):
+                r=str(entry)
+                if r: found.setdefault(r,(field,""))
+                continue
+            if not isinstance(entry,dict): continue
+            if field=="notOnLeaflet" and entry.get("servesTown") is False: continue
+            r=entry.get("route")
+            if r is None or r=="":
+                skipped.append((field,entry)); continue
+            found.setdefault(str(r),(field,known_off_reason(entry)))
+    return found,skipped
 
 def latest_verified(town_dir):
     cands=sorted(glob.glob(os.path.join(town_dir,"S1-services","*","verified-services.json")))
@@ -119,7 +221,10 @@ def sub_services(svc):
     return out
 
 
-def diff_town(db, name, cfg, town_dir):
+def diff_town(db, name, cfg, town_dir, today=None):
+    # `today` is a parameter and not a call so that a harness can drive an expired
+    # `recheckBy` deterministically; main passes the real date it already computed.
+    today=today or datetime.date.today().isoformat()
     vf=latest_verified(town_dir)
     if not vf: return None
     vs=json.load(open(vf,encoding="utf-8"))
@@ -161,21 +266,11 @@ def diff_town(db, name, cfg, town_dir):
     # as a decision to confirm, not as news. The message therefore carries the town's own
     # recorded reason, so the next reader sees what was decided instead of re-deriving it
     # from the feed, which is the exact step that went wrong three times in one session.
-    known_off={}   # route -> (which field recorded it, the reason it gives)
-    for entry in vs.get("verifiedNotDisplayed",[]):
-        if isinstance(entry,dict):
-            r=entry.get("route")
-            if r is not None:
-                known_off[str(r)]=("verifiedNotDisplayed", entry.get("note") or entry.get("reason") or "")
-        elif entry is not None:
-            known_off[str(entry)]=("verifiedNotDisplayed","")
-    for entry in vs.get("notDisplayed",[]):
-        if isinstance(entry,dict):
-            r=entry.get("route")
-            if r is not None:
-                known_off.setdefault(str(r),("notDisplayed", entry.get("note") or entry.get("reason") or ""))
-        elif entry is not None:
-            known_off.setdefault(str(entry),("notDisplayed",""))
+    # FOUR OF THEM SINCE 2026-09-06, not two, and the fourth was read by nothing at all:
+    # `excluded` is Ramsey's, three routes each carrying a reason somebody researched, and
+    # `notOnLeaflet` with servesTown NOT false is the shape a town uses to say "it does
+    # serve us and we still do not draw it". See known_off() and OA-259.
+    known_off,_ko_skipped=known_off_routes(vs)
     # A SHIPPED CONSOLIDATION: one drawn route standing for several GTFS route names.
     # Wisbech draws First's `excel` and records `variants.subServices: [A, B, C, D]`,
     # because bustimes presents them as the single service "A, B, C, D - excel" and the
@@ -281,10 +376,31 @@ def diff_town(db, name, cfg, town_dir):
                     # feed under the sub-service names this entry declares. `excel` reaches
                     # here every month for exactly this reason and is running.
                     continue
-                if is_community(sh.get("operator"), sh.get("source")):
+                verdict,detail=declared_not_in_bods(sh, today)
+                if verdict=="honoured":
+                    changes.append(("NOT-IN-BODS", label, f"absent from BODS, and the town's file says so: {detail}"))
+                elif verdict=="expired":
+                    changes.append(("WITHDRAWN?", label, f"shipped ({sh.get('operator')}, {sh.get('days')}) and gone from BODS. {detail}"))
+                elif verdict=="malformed":
+                    changes.append(("WITHDRAWN?", label, f"shipped ({sh.get('operator')}, {sh.get('days')}) but gone from BODS - verify. {detail}"))
+                elif is_community(sh.get("operator"), sh.get("source")):
                     changes.append(("COMMUNITY", label, f"absent from BODS as expected ({sh.get('operator')}); re-check on bustimes"))
                 else:
                     changes.append(("WITHDRAWN?", label, f"shipped ({sh.get('operator')}, {sh.get('days')}) but gone from BODS - verify"))
+    # THE DECLARATION CHECKED THE OTHER WAY, so it cannot become a mute button. A
+    # `notInBods` over a route the feed DOES carry is silencing a question that has
+    # already answered itself, and the next reader takes it for a live adjudication and
+    # stops asking -- the same argument as verify_report.js's S-1d and R-1b. Actionable,
+    # because the fix is to delete the field. Its own pass rather than an `else` in the
+    # loop above: the loop only visits routes that are ABSENT, which is exactly the case
+    # this cannot see.
+    for rows in shipped.values():
+        for sh in rows:
+            if sh.get("notInBods") is None: continue
+            r=str(sh["route"])
+            if r in gtfs or r in variant_index or any(str(x) in gtfs for x in sub_services(sh)):
+                changes.append(("NOT-IN-BODS?", ig.service_key(sh),
+                                "declares `notInBods`, but the feed carries it - the declaration is stale, delete it"))
     return {"file":vf,"verifiedOn":vs.get("verifiedOn"),"changes":changes}
 
 def fmt(dayset):
@@ -316,10 +432,13 @@ if __name__=="__main__":
         for town,cfg in g["towns"]:
             town_dir=os.path.join(root,"Areas",town)
             if not os.path.isdir(town_dir): continue
-            d=diff_town(g["db"],town,cfg,town_dir)
+            d=diff_town(g["db"],town,cfg,town_dir,today)
             if d is None:
                 summary.append(f"  {town}: no shipped data"); continue
-            actionable=[c for c in d["changes"] if c[0] not in ("COMMUNITY",)]
+            # NOT-IN-BODS joins COMMUNITY as expected-and-explained: the town has said in
+            # its own file why the feed does not carry the route. NOT-IN-BODS? stays
+            # actionable -- it is the stale-declaration arm, and the fix is a deletion.
+            actionable=[c for c in d["changes"] if c[0] not in NON_ACTIONABLE]
             if actionable: total_actionable+=len(actionable); towns_to_review.append(town)
             verdict = "NO CHANGE" if not d["changes"] else (f"{len(actionable)} to review" if actionable else "only expected community gaps")
             summary.append(f"  {town}: {verdict}")

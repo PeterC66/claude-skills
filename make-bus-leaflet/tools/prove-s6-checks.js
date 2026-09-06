@@ -1022,6 +1022,109 @@ console.log('\n13. The stop register — it may only ever REMOVE a terminus find
   }
 }
 
+/* ------------------- 14. known-off: the four exclusion conventions (OA-259) */
+console.log('\n14. known-off — a route the town has already ruled off is a decision to confirm, not news');
+{
+  /*
+   * OA-259, 2026-09-06. Eight town files use four conventions to say "we know
+   * about this route and deliberately do not draw it", and verify_report.js read
+   * exactly one of them, only in the `servesTown:false` direction — so a
+   * truthfully written exclusion was invisible and the route came back a
+   * `missing-service` inclusion candidate on every run. Huntingdon's red team
+   * named the same seven routes on both its runs at 89k–137k tokens an answer.
+   *
+   * THE FIXTURE ROUTE IS DISCOVERED, NOT TYPED. Case 12 already establishes that
+   * the Wisbech fixture yields missing-service rows; which routes they are about
+   * depends on that town's red team and its curation, both of which move. Taking
+   * the route off the baseline run means this case cannot quietly stop testing
+   * anything the day Wisbech's leads change — the same trap case 1 and case 10
+   * record from the other side.
+   */
+  const base = verify(stage('wisbech', 'ko-base')).v;
+  const baseMs = (base ? base.findings : []).filter(f => f.category === 'missing-service');
+  check('the fixture really produces a missing-service row to declare against', 'at least one missing-service finding',
+    baseMs.length > 0, `${baseMs.length} — without one this case proves nothing`);
+  const R = baseMs.length ? baseMs[0].route : null;
+
+  const REASON = 'FIXTURE REASON — injected by prove-s6-checks.js, not a real ruling about this route';
+  const declare = (name, field, entry) => {
+    const d = stage('wisbech', name);
+    const vs = readJ(d, 'verified-services.json');
+    vs[field] = [...(vs[field] || []), entry];
+    writeJ(d, 'verified-services.json', vs);
+    return verify(d).v;
+  };
+  const rows = (v, cat, route) => (v ? v.findings : []).filter(f =>
+    f.category === cat && (route === undefined || f.route === route));
+
+  // THE QUIET ARM, once per convention. All four must reach the same answer,
+  // because the whole complaint was that they did not.
+  for (const field of ['notOnLeaflet', 'verifiedNotDisplayed', 'notDisplayed', 'excluded']) {
+    const v = R ? declare(`ko-${field}`, field, { route: R, reason: REASON }) : null;
+    check(`${field} is read`, `route ${R} is no longer a missing-service inclusion candidate`,
+      !!v && rows(v, 'missing-service', R).length === 0,
+      v ? JSON.stringify(rows(v, 'missing-service', R).map(f => f.severity)) : 'no report');
+    check(`${field} still REPORTS, carrying the town's own words`, `a soft known-off on ${R} quoting the recorded reason`,
+      !!v && rows(v, 'known-off', R).some(f => f.severity === 'soft' && String(f.message).includes(REASON)),
+      v ? JSON.stringify(rows(v, 'known-off', R).map(f => f.severity + ': ' + String(f.message).slice(0, 70))) : 'no report');
+  }
+
+  /*
+   * THE CONTROL, and it is one arm rather than four because counting the OTHER
+   * missing-service rows is not one here: Wisbech's fixture yields exactly one
+   * lead, so "the others are unchanged" would be 0 against 0 and would hold for
+   * a checker that deleted every finding it saw. Declaring a route nobody has
+   * mentioned is the control that cannot be vacuous — the row it must NOT touch
+   * is the one row that exists.
+   */
+  if (R) {
+    const unrelated = declare('ko-unrelated', 'notDisplayed', { route: 'ZZ99', reason: REASON });
+    check('declaring an unrelated route silences nothing', `the missing-service row on ${R} survives it`,
+      !!unrelated && rows(unrelated, 'missing-service', R).length === 1 && rows(unrelated, 'known-off', R).length === 0,
+      unrelated ? JSON.stringify(rows(unrelated, 'missing-service').concat(rows(unrelated, 'known-off')).map(f => f.severity + '/' + f.category + '/' + f.route)) : 'no report');
+  }
+
+  /*
+   * LOUD ARM 1 — the mute button. A declaration over a route the sheet DRAWS is
+   * HARD, and the red team is not consulted: the drawn set alone settles it.
+   * Route 50 is drawn by Wisbech (case 11 drives its days off the same fixture),
+   * and the assertion below proves the fixture really draws it rather than
+   * assuming so.
+   */
+  const drawnV = declare('ko-abuse', 'notDisplayed', { route: '50', reason: REASON });
+  check('declaring a route the sheet DRAWS is HARD', 'hard known-off on 50, naming the drawn stop count',
+    !!drawnV && rows(drawnV, 'known-off', '50').some(f => f.severity === 'hard' && /\d+ stops/.test(f.message)),
+    drawnV ? JSON.stringify(rows(drawnV, 'known-off', '50').map(f => f.severity + ': ' + String(f.message).slice(0, 80))) : 'no report');
+
+  /*
+   * LOUD ARM 2 — the precedence that must NOT change. `notOnLeaflet` with
+   * `servesTown:false` had the one reader S6 already possessed, and it raises
+   * the louder `serves-town-conflict`. Folding it into known-off would have
+   * demoted an existing finding to a quieter one while appearing to add a
+   * feature, which is the worst kind of regression this harness can catch.
+   */
+  if (R) {
+    const notServeV = declare('ko-notserve', 'notOnLeaflet', { route: R, servesTown: false, reason: REASON });
+    check('servesTown:false keeps its louder finding', `serves-town-conflict on ${R}, and no known-off`,
+      !!notServeV && rows(notServeV, 'serves-town-conflict', R).length > 0 && rows(notServeV, 'known-off', R).length === 0,
+      notServeV ? JSON.stringify(rows(notServeV, 'serves-town-conflict', R).concat(rows(notServeV, 'known-off', R)).map(f => f.severity + '/' + f.category)) : 'no report');
+  }
+
+  /*
+   * LOUD ARM 3 — an entry that names no route. Beaconsfield's `notDisplayed`
+   * carries a `{group: "Dedicated school services"}` block. It is a reasonable
+   * thing for a person to write and nothing can match a route against it, so it
+   * must be reported and must silence nothing.
+   */
+  const groupV = declare('ko-group', 'notDisplayed', { group: 'Dedicated school services', reason: REASON });
+  check('an entry naming a CLASS rather than a route is reported', 'a soft known-off quoting the group name',
+    !!groupV && rows(groupV, 'known-off').some(f => f.severity === 'soft' && /Dedicated school services/.test(f.message)),
+    groupV ? JSON.stringify(rows(groupV, 'known-off').map(f => f.severity + ': ' + String(f.message).slice(0, 70))) : 'no report');
+  check('and it silences nothing', `all ${baseMs.length} missing-service row(s) survive it`,
+    !!groupV && rows(groupV, 'missing-service').length === baseMs.length,
+    groupV ? `${rows(groupV, 'missing-service').length} vs ${baseMs.length}` : 'no report');
+}
+
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

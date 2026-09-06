@@ -48,6 +48,7 @@
 const fs = require('fs');
 const path = require('path');
 const { assertNoCollision } = require('./index_guard');
+const { knownOff } = require('./known_off');
 
 const DIR = process.env.VERIFY_DIR || process.cwd();
 const P = (f) => path.join(DIR, f);
@@ -434,6 +435,26 @@ const CIRCULAR = new Set((intownCfg.circular || []).map(normRoute));
 const NOT_SHOWN = new Set((routes.notShown || []).map(normRoute));
 
 /*
+ * A ROUTE THE TOWN HAS ALREADY RULED OFF -- the same argument as `notShown[]` above,
+ * one file to the left (OA-259, 2026-09-06). That key is about a route the sheet
+ * CARRIES with no line; this is about one the sheet does not carry and somebody
+ * decided it should not. `verified-services.json` has four ways to say it and S6 read
+ * one, only in the `servesTown:false` direction -- so written truthfully the entry was
+ * invisible and the route came back a `missing-service` inclusion candidate every run.
+ * Huntingdon's red team named the same seven routes on both its runs at 89k-137k tokens
+ * an answer. No new key: the towns had written it, four ways, and the READER was
+ * missing. Why four, and the parity harness that holds the JS and Python halves
+ * together: assets/known_off.js. Full argument: references/s6-verify.md.
+ */
+const KNOWN_OFF = new Map();
+const KNOWN_OFF_SKIPPED = [];
+{
+  const k = knownOff(verified);
+  for (const [route, rec] of k.found) KNOWN_OFF.set(normRoute(route), { ...rec, route });
+  KNOWN_OFF_SKIPPED.push(...k.skipped);
+}
+
+/*
  * THE RED TEAM WAS CHECKED AND IS WRONG -- a DECLARATION, not an inference.
  *
  * The blind red team is the most valuable input this stage has and it is not an
@@ -534,6 +555,32 @@ for (const d of NOT_SHOWN) {
       `routes.json declares route ${d} is not shown on this map, but the sheet does not carry it at all — no palette entry and no panel row. The entry is stale.`,
       { route: d, drawnStops: drawn.length, inDisplayed: false }, d);
   }
+}
+
+/*
+ * S-1d: the same both-directions guard, and the half that needs no red team. ONE arm,
+ * not two: `notShown[]`'s stale arm is meaningful because a declared route the sheet
+ * does not carry is a leftover, whereas here that IS the declaration's point and the
+ * arm would fire on all 18 of High Wycombe's entries every run. What remains is the
+ * abuse case -- a route declared off that the sheet DRAWS, settled by the drawn set
+ * alone.
+ */
+for (const [norm, rec] of KNOWN_OFF) {
+  const drawn = intownByNorm(norm) || [];
+  if (drawn.length >= 2) {
+    add('hard', 'known-off',
+      `${rec.field} declares route ${rec.route} is deliberately not carried (${rec.reason || 'no reason recorded'}), but the drawn set gives it ${drawn.length} stops — the sheet draws it. Either the declaration is stale, or it is silencing a finding about a route that is on the sheet.`,
+      { route: rec.route, field: rec.field, reason: rec.reason || null, drawnStops: drawn.length }, rec.route);
+  }
+}
+
+/* S-1e: an entry naming a CLASS rather than a route -- Beaconsfield's
+ * `{group: "Dedicated school services"}`. Nothing can match a route against it, so it
+ * is reported rather than letting a whole fleet look adjudicated. */
+for (const s of KNOWN_OFF_SKIPPED) {
+  add('soft', 'known-off',
+    `${s.field} carries an entry with no \`route\`${s.entry.group ? ` (group: "${s.entry.group}")` : ''} — it names a class of services rather than one route, so nothing can match a red-team finding against it. Every service it means is still an inclusion candidate as far as this report is concerned.`,
+    { field: s.field, entry: s.entry });
 }
 
 /*
@@ -1284,6 +1331,17 @@ if (redteam) {
       add('soft', 'serves-town-conflict',
         `We list route ${r} as NOT serving the town (${notServe[r].note || notServe[r].reason || 'excluded'}), but the red-team finds it DOES${rt.notes ? ' — ' + rt.notes : ''}. Re-examine.`,
         { route: r, ours: { servesTown: false, note: notServe[r].note || notServe[r].reason || null }, redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
+      continue;
+    }
+    if (KNOWN_OFF.has(r)) {                 // the town has already ruled on it
+      /* NOT a silence: the row appears carrying the town's OWN words, so the reader
+       * confirms a decision instead of meeting the route as news for the eighth time.
+       * The abuse case is S-1d above, which asks the red team nothing. */
+      const rec = KNOWN_OFF.get(r);
+      add('soft', 'known-off',
+        `Red-team lists route ${r} (${rt.operator || '?'}) serving the town; the town's \`${rec.field}\` already rules it off — ${rec.reason || 'no reason recorded, which is itself worth fixing'}. Confirm the decision still holds${rt.notes ? ' against: ' + rt.notes : ''}.`,
+        { route: r, ours: { field: rec.field, reason: rec.reason || null },
+          redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
       continue;
     }
     /*

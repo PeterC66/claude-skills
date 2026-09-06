@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { knownOff } = require('../assets/known_off');
+const { knownOff, CANONICAL_FIELD, DEPRECATED_FIELDS } = require('../assets/known_off');
 
 const SK = path.join(__dirname, '..');
 let failures = 0, ran = 0;
@@ -56,8 +56,10 @@ function pythonAnswer(verified) {
     'import gtfs_refresh_report as rr',
     `vs = json.load(open(${JSON.stringify(f)}, encoding="utf-8"))`,
     'found, skipped = rr.known_off_routes(vs)',
-    'print(json.dumps({"found": {k: list(v) for k, v in found.items()},',
-    '                  "skipped": [s[0] for s in skipped]}, sort_keys=True))',
+    'print(json.dumps({"found": {k: [v[0], v[1], v[2]] for k, v in found.items()},',
+    '                  "skipped": sorted([s[0], s[2]] for s in skipped),',
+    '                  "canonical": rr.KNOWN_OFF_CANONICAL,',
+    '                  "deprecated": list(rr.KNOWN_OFF_DEPRECATED)}, sort_keys=True))',
   ].join('\n');
   const r = spawnSync('python3', ['-c', code], { encoding: 'utf8' });
   if (r.status !== 0) throw new Error('python side failed:\n' + (r.stdout || '') + (r.stderr || ''));
@@ -68,8 +70,13 @@ function pythonAnswer(verified) {
  * not as two differently-shaped objects one of us happened to normalise. */
 function jsAnswer(verified) {
   const { found, skipped } = knownOff(verified);
-  const out = { found: {}, skipped: skipped.map(s => s.field).sort() };
-  for (const [route, rec] of found) out.found[route] = [rec.field, rec.reason];
+  const out = {
+    found: {},
+    skipped: skipped.map(s => [s.field, s.deprecated]).sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1)),
+    canonical: CANONICAL_FIELD,
+    deprecated: DEPRECATED_FIELDS,
+  };
+  for (const [route, rec] of found) out.found[route] = [rec.field, rec.reason, rec.deprecated];
   return out;
 }
 
@@ -79,8 +86,13 @@ function compare(label, verified) {
   try { py = pythonAnswer(verified); } catch (e) { check(label, false, String(e.message).slice(0, 160)); return; }
   const jsKeys = Object.keys(js.found).sort(), pyKeys = Object.keys(py.found).sort();
   const same = JSON.stringify(jsKeys) === JSON.stringify(pyKeys)
-    && jsKeys.every(k => js.found[k][0] === py.found[k][0] && js.found[k][1] === py.found[k][1])
-    && JSON.stringify(js.skipped) === JSON.stringify(py.skipped.slice().sort());
+    // field, reason AND the deprecated flag, because the whole point of the flag is that
+    // a gate acts on it: two readers disagreeing about which field is canonical would
+    // make that gate fire in one repository and not the other.
+    && jsKeys.every(k => JSON.stringify(js.found[k]) === JSON.stringify(py.found[k]))
+    && JSON.stringify(js.skipped) === JSON.stringify(py.skipped)
+    && js.canonical === py.canonical
+    && JSON.stringify(js.deprecated) === JSON.stringify(py.deprecated);
   check(label, same, same ? `${jsKeys.length} route(s), ${js.skipped.length} skipped`
     : `js ${JSON.stringify(js)}\n         py ${JSON.stringify(py)}`);
 }

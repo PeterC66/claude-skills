@@ -63,8 +63,16 @@ TODAY = "2026-09-06"
 TMP = tempfile.mkdtemp(prefix="prove-red-not-in-bods-")
 
 # Huntingdon's real shape, reduced: one route the feed carries, and the three it does not.
+# X2S and X2V exist so that the SHADOWED-FILENAME assertion below can actually fire. The
+# code path that had the bug is the one narrowing a base route's week when the town ships
+# some of its variants and not others, so the fixture has to ship X2S and leave X2V
+# unshipped -- without both, that loop never runs and the assertion is a check incapable
+# of failing, which is worse than no check. Verified by re-introducing the bug and
+# watching this harness go red.
 FEED = {
     "X2":   ("Whippet Coaches", "MTWTFS."),
+    "X2S":  ("Whippet Coaches", "M...F.."),
+    "X2V":  ("Whippet Coaches", ".....S."),
     "X1":   ("Whippet Coaches", "MTWTFS."),
     "VL14": ("Villager Minibus Sharnbrook", "M......"),
 }
@@ -136,7 +144,18 @@ def svc(route, operator, mask, **kw):
 
 def run(feed_routes, services, today=TODAY):
     res = rr.diff_town(build_feed(feed_routes), "Huntingdon", CFG, town_dir(services), today)
+    # THE RETURNED `file` MUST BE THE FILE IT READ. It is not decoration: it is the only
+    # thing in the result that says WHICH S1 run an answer is about, and on 2026-09-06 it
+    # was a daysFlags list on every town with an unshipped variant, because a loop inside
+    # diff_town used the same name. Nothing printed it, so nothing noticed. Asserted here
+    # rather than in a case of its own, so every case below checks it for free.
+    global FILE_OK
+    if not (isinstance(res.get("file"), str) and res["file"].endswith("verified-services.json")):
+        FILE_OK = repr(res.get("file"))[:80]
     return res["changes"]
+
+
+FILE_OK = None
 
 
 def tag_of(changes, route):
@@ -154,21 +173,22 @@ def ship(x1_extra=None):
     x1 = svc("X1", "Whippet Coaches", "MTWTFS.")
     if x1_extra is not None:
         x1["notInBods"] = x1_extra
-    return [svc("X2", "Whippet Coaches", "MTWTFS."), x1,
+    return [svc("X2", "Whippet Coaches", "MTWTFS."),
+            svc("X2S", "Whippet Coaches", "M...F.."), x1,
             svc("VL14", "Villager Minibus Sharnbrook", "M......")]
 
 
 print("Falsifying the notInBods declaration in the monthly refresh report\n")
 
 print("1. CONTROL — with no declaration the alarm still fires")
-c1 = run(["X2"], ship())
+c1 = run(["X2", "X2S", "X2V"], ship())
 check("a shipped commercial route absent from the feed is [WITHDRAWN?]",
       tag_of(c1, "X1") == "WITHDRAWN?", "got %s" % tag_of(c1, "X1"))
 check("and the town would therefore be on the towns-to-review list",
       "WITHDRAWN?" not in rr.NON_ACTIONABLE)
 
 print("\n2. THE QUIET ARM — a declaration with a reason is honoured, and quotes the town")
-c2 = run(["X2"], ship({"why": "not in the ITM East Anglia extract while nine other Whippet routes are",
+c2 = run(["X2", "X2S", "X2V"], ship({"why": "not in the ITM East Anglia extract while nine other Whippet routes are",
                        "since": "2026-09-06"}))
 check("the tag becomes [NOT-IN-BODS]", tag_of(c2, "X1") == "NOT-IN-BODS", "got %s" % tag_of(c2, "X1"))
 check("and the row carries the town's own words, not ours",
@@ -181,28 +201,28 @@ check("and a declared route and an inferred one are told apart",
       tag_of(c2, "X1") != tag_of(c2, "VL14"))
 
 print("\n4. LOUD — a declaration with no reason silences nothing")
-c4 = run(["X2"], ship({"since": "2026-09-06"}))
+c4 = run(["X2", "X2S", "X2V"], ship({"since": "2026-09-06"}))
 check("[WITHDRAWN?] still fires", tag_of(c4, "X1") == "WITHDRAWN?", "got %s" % tag_of(c4, "X1"))
 check("and the row says which field is missing", "`why`" in msg_of(c4, "X1"), msg_of(c4, "X1")[:90])
 
 print("\n5. LOUD — a declaration that is not an object at all silences nothing")
-c5 = run(["X2"], ship(True))
+c5 = run(["X2", "X2S", "X2V"], ship(True))
 check("[WITHDRAWN?] still fires", tag_of(c5, "X1") == "WITHDRAWN?", "got %s" % tag_of(c5, "X1"))
 check("and the row says what the field should be", "object" in msg_of(c5, "X1"), msg_of(c5, "X1")[:90])
 
 print("\n6. LOUD — a recheckBy that has passed stops silencing, and names the date")
-c6 = run(["X2"], ship({"why": "absent from the extract", "recheckBy": "2026-01-01"}))
+c6 = run(["X2", "X2S", "X2V"], ship({"why": "absent from the extract", "recheckBy": "2026-01-01"}))
 check("[WITHDRAWN?] returns", tag_of(c6, "X1") == "WITHDRAWN?", "got %s" % tag_of(c6, "X1"))
 check("and the expiry is named", "2026-01-01" in msg_of(c6, "X1"), msg_of(c6, "X1")[:110])
 
 print("\n7. THE COMPLEMENT — a recheckBy still in the future is honoured")
-c7 = run(["X2"], ship({"why": "absent from the extract", "recheckBy": "2027-03-01"}))
+c7 = run(["X2", "X2S", "X2V"], ship({"why": "absent from the extract", "recheckBy": "2027-03-01"}))
 check("[NOT-IN-BODS] holds", tag_of(c7, "X1") == "NOT-IN-BODS", "got %s" % tag_of(c7, "X1"))
 check("and the row tells the reader when to look again",
       "2027-03-01" in msg_of(c7, "X1"), msg_of(c7, "X1")[:110])
 
 print("\n8. LOUD — the stale direction: declared absent from a feed that carries it")
-c8 = run(["X2", "X1"], ship({"why": "absent from the extract"}))
+c8 = run(["X2", "X2S", "X2V", "X1"], ship({"why": "absent from the extract"}))
 check("the declaration is reported as stale", tag_of(c8, "X1") == "NOT-IN-BODS?", "got %s" % tag_of(c8, "X1"))
 check("and it is actionable, because the fix is to delete the field",
       "NOT-IN-BODS?" not in rr.NON_ACTIONABLE)
@@ -214,6 +234,10 @@ check("[NOT-IN-BODS] is expected-and-explained", "NOT-IN-BODS" in rr.NON_ACTIONA
 check("[COMMUNITY] still is too, unchanged", "COMMUNITY" in rr.NON_ACTIONABLE)
 check("and nothing else was quietly added", set(rr.NON_ACTIONABLE) == {"COMMUNITY", "NOT-IN-BODS"},
       str(rr.NON_ACTIONABLE))
+
+print("\n10. THE FIELD THAT SAYS WHICH FILE THE ANSWER IS ABOUT")
+check("every diff_town above returned its source path, not something else",
+      FILE_OK is None, "got %s" % FILE_OK)
 
 print("\n" + "=" * 78)
 if FAILURES:

@@ -112,9 +112,18 @@ def declared_not_in_bods(sh, today):
 # the route sets differ. Two implementations of one rule is OA-135's shape; a JOIN is the
 # only thing that can check a claim that they agree.
 #
+# ONE FIELD TO WRITE, THREE TO READ (2026-09-06, the second half of OA-259). notOnLeaflet
+# is canonical; the other three are READ-ONLY ALIASES, still parsed for ever so that a file
+# written before that day keeps working, but written by nothing new -- which
+# tools/check-exclusion-fields.mjs enforces over every tracked town file. All four towns
+# using an alias were migrated the same day, so that gate is green because the estate is
+# clean rather than because it is lenient. Reading costs nothing; writing is what costs.
+#
 # The order is the precedence: the first field to name a route wins, so a town writing the
 # same route into two conventions gets one answer rather than a coin toss.
-KNOWN_OFF_FIELDS=("notOnLeaflet","verifiedNotDisplayed","notDisplayed","excluded")
+KNOWN_OFF_CANONICAL="notOnLeaflet"
+KNOWN_OFF_DEPRECATED=("verifiedNotDisplayed","notDisplayed","excluded")
+KNOWN_OFF_FIELDS=(KNOWN_OFF_CANONICAL,)+KNOWN_OFF_DEPRECATED
 
 def known_off_reason(entry):
     """`notOnLeaflet` writes its prose in `note`, the other three in `reason`, and High
@@ -127,7 +136,7 @@ def known_off_reason(entry):
     return str(head or tail or "")
 
 def known_off_routes(vs):
-    """-> ({route as the file spells it: (field, reason)}, [entries naming no route]).
+    """-> ({route: (field, reason, deprecated)}, [(field, entry, deprecated)] for entries naming no route).
 
     Entries with no `route` are returned separately rather than dropped: Beaconsfield's
     `notDisplayed` carries a {"group": "Dedicated school services"} block naming a CLASS,
@@ -149,14 +158,14 @@ def known_off_routes(vs):
         for entry in entries:
             if isinstance(entry,(str,int)):
                 r=str(entry)
-                if r: found.setdefault(r,(field,""))
+                if r: found.setdefault(r,(field,"",field!=KNOWN_OFF_CANONICAL))
                 continue
             if not isinstance(entry,dict): continue
             if field=="notOnLeaflet" and entry.get("servesTown") is False: continue
             r=entry.get("route")
             if r is None or r=="":
-                skipped.append((field,entry)); continue
-            found.setdefault(str(r),(field,known_off_reason(entry)))
+                skipped.append((field,entry,field!=KNOWN_OFF_CANONICAL)); continue
+            found.setdefault(str(r),(field,known_off_reason(entry),field!=KNOWN_OFF_CANONICAL))
     return found,skipped
 
 def latest_verified(town_dir):
@@ -311,8 +320,14 @@ def diff_town(db, name, cfg, town_dir, today=None):
         if len(unshipped)<len(g["variants"]):
             f=list(g["ownFlags"])
             for v in unshipped:
-                vf=g["variantFlags"].get(v,[0]*7)
-                for i in range(7): f[i]|=vf[i]
+                # `_vflags`, not `vf`: `vf` is this function's SOURCE FILENAME, set at the
+                # top and returned as `file`. This loop shadowed it, so every town with an
+                # unshipped variant returned a daysFlags list where a path belonged --
+                # found 2026-09-06 by printing the field while migrating the exclusion
+                # conventions. Nothing consumed it (the report prints verifiedOn, not
+                # file), which is exactly why it survived since OA-223.
+                _vflags=g["variantFlags"].get(v,[0]*7)
+                for i in range(7): f[i]|=_vflags[i]
             if any(f): gdays=set(i for i in range(7) if f[i])
         if r in shipped:
             rows=shipped[r]
@@ -339,7 +354,7 @@ def diff_town(db, name, cfg, town_dir, today=None):
         elif r in not_serving:
             changes.append(("RE-EVAL", r, f"BODS now shows it serving the town ({fmt(gdays)}); we'd marked it 'does not serve'"))
         elif r in known_off:
-            field,why=known_off[r]
+            field,why,_dep=known_off[r]
             because=(" - recorded as: "+why.strip()) if why.strip() else ""
             changes.append(("RE-EVAL", r, f"in BODS ({fmt(gdays)}); this town's {field} already says it is not drawn{because}. Confirm the decision still holds - it is NOT new."))
         elif r in consolidated:

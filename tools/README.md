@@ -13,6 +13,10 @@ Everything else in this repository is a skill. This folder is for a check that *
 | [`prove-red-file-hygiene.mjs`](prove-red-file-hygiene.mjs) | Breaks each hygiene fault on purpose and insists the checker notices — and breaks each **exemption** on purpose and insists it does not. 24 cases |
 | [`prove-red-tables.mjs`](prove-red-tables.mjs) | Glues rows together, strands one past its table, and asserts WHICH test objected — plus the row and document COUNTS, because coverage was that checker's own bug twice |
 | [`prove-red-doc-links.mjs`](prove-red-doc-links.mjs) | Breaks each of the five link checks on purpose, with a control that exercises every one correctly and must stay green |
+| [`check-exclusion-fields.mjs`](check-exclusion-fields.mjs) | A town says *we know about this route and deliberately do not draw it* in `notOnLeaflet[]`. Three older spellings are still READ for ever and may no longer be WRITTEN; this fails a repository whose town files still write one, at the LATEST S1 run of each map only |
+| [`prove-red-exclusion-fields.mjs`](prove-red-exclusion-fields.mjs) | Builds a throwaway git repository per case and breaks the gate on purpose. Its load-bearing case is that a SUPERSEDED S1 run is left alone: an older run is a dated record, and a gate demanding it be rewritten would argue with the reason the aliases are read at all. 24 assertions |
+
+**The fourth checker is not about documents at all**, and that is deliberate rather than untidy. `check-exclusion-fields.mjs` reads `verified-services.json` — bus data, in `buses-data` — and lives here for the same reason as the other three: this repository is public, so nothing has to fetch it across a token. Its rule is shared (both engine readers agree on which field is canonical) while its subject belongs to one repository, so the CHECKER runs from buses-data's own `gates.yml` and the HARNESS from this one's. That split is buses-data OA-218's rule applied twice in one change: a check belongs in the suite that fires when its subject changes.
 
 ## Why it lives here and not where it was written
 

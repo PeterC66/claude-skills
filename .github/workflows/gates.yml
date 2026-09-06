@@ -470,6 +470,19 @@ jobs:
         working-directory: skills
         run: node tools/prove-red-doc-links.mjs
 
+      # OA-259, second half (2026-09-06). check-exclusion-fields.mjs runs in buses-data's
+      # own gates.yml, because its subject is that repository's town files; this harness
+      # runs HERE, because its subject is the checker. The gate went green on the day it
+      # landed — the five files using a deprecated exclusion field were migrated in the
+      # same round — so it has never been seen to go red anywhere else, and its
+      # load-bearing case is the one that keeps the migration honest: a SUPERSEDED S1 run
+      # must be left alone, because an older run is a dated record and rewriting one would
+      # be a lie about the past told to satisfy a gate about the present.
+      - name: Prove the exclusion-field gate can go red
+        if: ${{ !cancelled() }}
+        working-directory: skills
+        run: node tools/prove-red-exclusion-fields.mjs
+
       # --tree, not --root: --root is flat by contract (prove-red-tables.mjs
       # drives it and asserts an exact row count), and this repository nests its
       # documents two deep and grows a folder whenever a skill is added.

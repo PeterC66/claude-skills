@@ -1,6 +1,6 @@
 /*
- * known_off.js — the four ways a town's `verified-services.json` says
- * "we know about this route and deliberately do not draw it", read in one place.
+ * known_off.js — how a town's `verified-services.json` says "we know about this
+ * route and deliberately do not draw it": ONE field to write, FOUR to read.
  *
  * WHY THIS IS ITS OWN FILE (OA-259, 2026-09-06). Eight town files use FIVE
  * conventions for that one sentence, and on the day this was written the two
@@ -11,6 +11,11 @@
  *   verifiedNotDisplayed[]                 High Wycombe (18)     refresh: yes   S6: NO
  *   notDisplayed[]                         St Neots, Beaconsfield refresh: yes  S6: NO
  *   excluded[]                             Ramsey (3)            refresh: NO    S6: NO
+ *
+ * That table is the state ON THAT MORNING and is kept as the argument rather than
+ * as a description: by the evening all four were read the same way by both, and
+ * the three deprecated ones were empty across the estate. The towns named in it
+ * migrated the same day — see the block below.
  *
  * So the commonest case had nowhere to go. A service that genuinely serves the
  * town and that we deliberately do not carry is INVISIBLE to S6 written
@@ -42,13 +47,36 @@
  */
 
 /*
+ * ONE FIELD TO WRITE, THREE TO READ (2026-09-06, the second half of OA-259).
+ *
+ * `notOnLeaflet[]` is the canonical field and the only one anything should write
+ * from now on. The other three are READ-ONLY ALIASES: still parsed, for ever, so
+ * a file written before this day keeps working and so an S6 report about an old
+ * run still says what it always said — but nothing new goes in them, and
+ * `tools/check-exclusion-fields.mjs` fails a repository whose tracked town files
+ * use one. All four town files that did were migrated the same day, so that gate
+ * is green because the estate is clean rather than because it is lenient.
+ *
+ * WHY CONVERGE AT ALL, when the readers were made to agree hours earlier. Making
+ * four spellings behave identically removes the bug; it does not remove the
+ * question. A person writing a new town still has to pick, a reviewer still has
+ * to know all four, and the next reader of a diff still cannot tell "moved to the
+ * modern field" from "meant something different". The parity harness is what made
+ * the convergence safe to attempt — it can prove a migration changed no answer.
+ *
+ * WHY NOT DELETE THE ALIASES. `git` holds every S1 run this estate has ever
+ * built and S6 re-runs against old ones; a reader that throws on a 2026-07 file
+ * would make history unreadable to buy nothing. Reading is free. Writing is what
+ * costs, and that is what the gate stops.
+ *
  * The order is the precedence, and it matches `gtfs_refresh_report.py`'s
  * `setdefault` semantics: the first field to name a route wins, so a town that
  * writes the same route into two conventions gets one answer rather than a
- * coin toss. `notOnLeaflet` leads because it is the structured one and the only
- * one S6 could already read.
+ * coin toss. The canonical field leads.
  */
-const FIELDS = ['notOnLeaflet', 'verifiedNotDisplayed', 'notDisplayed', 'excluded'];
+const CANONICAL_FIELD = 'notOnLeaflet';
+const DEPRECATED_FIELDS = ['verifiedNotDisplayed', 'notDisplayed', 'excluded'];
+const FIELDS = [CANONICAL_FIELD, ...DEPRECATED_FIELDS];
 
 /*
  * `notOnLeaflet` writes its prose in `note`; the other three write it in
@@ -90,7 +118,7 @@ function knownOff(verified) {
       // is worth having and worth being able to see is reasonless.
       if (typeof entry === 'string' || typeof entry === 'number') {
         const r = String(entry);
-        if (r && !found.has(r)) found.set(r, { field, reason: '', entry: { route: r } });
+        if (r && !found.has(r)) found.set(r, { field, deprecated: field !== CANONICAL_FIELD, reason: '', entry: { route: r } });
         continue;
       }
       if (!entry || typeof entry !== 'object') continue;
@@ -100,14 +128,14 @@ function knownOff(verified) {
       // priority rather than quietly demoting it to a SOFT about a decision.
       if (field === 'notOnLeaflet' && entry.servesTown === false) continue;
       if (entry.route === undefined || entry.route === null || entry.route === '') {
-        skipped.push({ field, entry });
+        skipped.push({ field, deprecated: field !== CANONICAL_FIELD, entry });
         continue;
       }
       const r = String(entry.route);
-      if (!found.has(r)) found.set(r, { field, reason: reasonOf(entry), entry });
+      if (!found.has(r)) found.set(r, { field, deprecated: field !== CANONICAL_FIELD, reason: reasonOf(entry), entry });
     }
   }
   return { found, skipped };
 }
 
-module.exports = { knownOff, reasonOf, FIELDS };
+module.exports = { knownOff, reasonOf, FIELDS, CANONICAL_FIELD, DEPRECATED_FIELDS };

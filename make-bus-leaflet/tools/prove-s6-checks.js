@@ -1173,6 +1173,41 @@ console.log('\n15. Slashed route keys — `18/18A` is our 18, and a slashed rout
   check('a slashed route we really do not carry still fires', 'missing-service on 77/77A',
     has(b.v, 'soft', 'missing-service', '77/77A'),
     b.v ? JSON.stringify(b.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
+
+  /*
+   * AN EXACT KEY MUST OUTRANK A SLASHED NEAR-MISS. This is the guarantee the
+   * SECOND PASS exists to give: a widened index would let the two compete on Map
+   * insertion order, which is not a rule at all.
+   *
+   * The fixture puts both in front of it -- the red team's real `18/18A` plus an
+   * injected exact `18`, same operator, with days nothing else could produce --
+   * and asserts the DAYS finding quotes the exact entry. If pairing ever prefers
+   * the slashed one, the quoted days change and this goes red.
+   *
+   * A NOTE ON WHAT IS DELIBERATELY *NOT* CHECKED HERE. A slash also appears
+   * inside a BRAND -- `61EY (St Neots/Eynesbury Town Shuttle)`, and High Wycombe
+   * Aldi's `the airline (badged LGW/LHR/OXF)`; nine of twenty maps carry a
+   * slashed key and two of those slashes are brand-internal. `routeKeys` calls
+   * `baseRoute` FIRST so the bracket goes before the split, but a case asserting
+   * that CANNOT FAIL and was removed after being written: pass 1 pairs 61EY on
+   * the bracket-stripped key before any slash logic runs, so the assertion stayed
+   * green with the split deliberately broken to operate on the raw string. A
+   * check that cannot go red is worse than no check, because it reads like cover.
+   */
+  const c2 = stage('stneots', 'slash-exact-wins');
+  const rt2 = readJ(c2, 'redteam.json');
+  const slashed18 = (rt2.services || []).find(s => String(s.route) === '18/18A');
+  if (!slashed18) throw new Error('fixture assumption broken: no `18/18A` in the St Neots redteam.json');
+  const ODD = 'Sun only (INJECTED BY prove-s6-checks.js)';
+  rt2.services.push({ route: '18', operator: slashed18.operator, servesTown: true,
+    termini: slashed18.termini, days: ODD, confidence: 'high',
+    notes: 'INJECTED BY prove-s6-checks.js — the EXACT key, which must outrank the slashed one beside it.' });
+  writeJ(c2, 'redteam.json', rt2);
+  const e = verify(c2);
+  const daysRow = (e.v ? e.v.findings : []).find(f => f.category === 'days' && f.route === '18');
+  check('an exact red-team key outranks a slashed near-miss', `the days finding on 18 quotes the EXACT entry ("${ODD}")`,
+    !!daysRow && String(daysRow.evidence && daysRow.evidence.redteam) === ODD,
+    daysRow ? JSON.stringify(daysRow.evidence) : 'no days finding on 18');
 }
 
 /* ------- 16. serves-town says what is true of THIS sheet (OA-262 item 1) */

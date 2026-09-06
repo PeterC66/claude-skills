@@ -175,18 +175,15 @@ const normRoute = (r) => String(r == null ? '' : r).toUpperCase().replace(/\s+/g
 const ourKey    = (s) => normRoute(s && (s.key || s.route));
 const baseRoute = (r) => { const n = normRoute(r); return n.replace(/\(.*\)$/, '') || n; };
 /*
- * THEIRS, SECOND SHAPE. `baseRoute` strips the brand a red team writes in
- * brackets and leaves a SLASHED variant list alone, so `18/18A`, `32/32A` and
- * `36/36S` key on names no town has ever carried. St Neots draws 18 and declares
- * 18A a `subServices` variant IN THE SAME FILE, and was told in one run that
- * 18/18A was a missing service AND that its own 18 was unconfirmed -- one route,
- * two findings, contradicting each other (`Areas/St Neots/S6-verify/
- * 2026-09-06_0722`, F017 and F008; OA-262 item 2).
+ * THEIRS, SECOND SHAPE (OA-262 item 2). A red team also writes a SLASHED variant
+ * list -- `18/18A`, `32/32A`, `67 / 67B` -- which the bracket strip leaves alone,
+ * so it keys on a name no town carries. St Neots draws 18 and declares 18A a
+ * `subServices` variant in the same file, and one run reported 18/18A missing AND
+ * its own 18 unconfirmed: one route, two findings, contradicting each other.
  *
- * The FULL key comes first and the parts after it, because a slashed name we
- * genuinely do not carry must still be reported under the name the red team
- * wrote rather than under half of it. That ordering is what the falsification
- * case "a slashed route we really do not have still fires" holds in place.
+ * FULL key first, parts after, so a slashed name we genuinely do not carry is
+ * still reported under the name they wrote rather than half of it -- the arm
+ * prove-s6-checks.js s15 holds, because widening a match SILENCES findings.
  */
 const routeKeys = (r) => {
   const b = baseRoute(r);
@@ -1030,23 +1027,18 @@ if (dirUnavailable.length) {
   const corr = readJSON('corridors_report.json', true);
   /*
    * A STYLED FAMILY KEEPS EVERY MEMBER'S OWN COLOUR, WHICH IS THE ONE THING THIS
-   * FINDING USED TO ASSERT IT DOES NOT (OA-249).
+   * FINDING USED TO ASSERT IT DOES NOT (OA-249). Since OA-176 4.24 an
+   * `internalCorridors` entry may be `{routes,style}` rather than a bare array, and
+   * for one of those "a second same-coloured line going elsewhere" is false --
+   * Ramsey's 303 keeps its green over the 64% it does not share. The generator's
+   * stderr warning was muted for a styled family in that change; this was not.
    *
-   * Since OA-176 4.24 an `internalCorridors` entry may be written as
-   * `{routes:[...], style:"alternate"}` rather than a bare array, and for such a
-   * family the sentence "the rest draws as a second same-coloured line going
-   * elsewhere" is false: Ramsey's 303 keeps its green over the 64% it does not
-   * share, exactly as it did before the family existed. The generator's own stderr
-   * warning was muted for a styled family in that same change; this finding was
-   * not, and Ramsey v3.7's F003 has read wrongly ever since.
-   *
-   * READ FROM `routes.json`, NOT FROM THE REPORT. Putting `style` into
-   * corridors_report.json would have been the obvious fix and is the more expensive
-   * one: that file is an S4 output mirrored into `ci-reference/` for every map, so
-   * adding a field moves a tracked artefact on every town with a family and needs a
-   * re-sync and a re-accept. The report already carries `lead`, and `lead` IS the
-   * key into `internalCorridors` -- the answer was reachable from an input S6
-   * already loads, and no byte moves.
+   * READ FROM `routes.json`, NOT FROM THE REPORT. Adding `style` to
+   * corridors_report.json was the obvious fix and the expensive one: that file is an
+   * S4 output mirrored into `ci-reference/` for every map, so it needs a re-sync and
+   * a re-accept estate-wide. The report already carries `lead`, and `lead` IS the
+   * key into `internalCorridors` -- reachable from an input S6 loads, and no byte
+   * moves. Before denormalising into a shared artefact, check the join keys.
    */
   const familyStyle = (lead) => {
     const ic = (routes && routes.internalCorridors) || {};
@@ -1063,11 +1055,9 @@ if (dirUnavailable.length) {
       const worst = (fam.members || []).filter(m => fam.weakMembers.includes(m.route));
       const style = familyStyle(fam.lead);
       const shares = worst.map(m => `${m.route} ${Math.round((m.sharedFraction || 0) * 100)}%`).join(', ');
-      /* Reported either way, and SOFT either way. Skipping the styled case was the
-       * other option OA-249 offered and it throws away the number: a family whose
-       * member shares a third of its route is worth a human look even when the
-       * drawing is honest, because the question it raises is whether the family
-       * earns its place -- which is information, not a defect. */
+      /* Reported either way, SOFT either way. Skipping the styled case was OA-249's
+       * other option and it throws away the number: a member sharing a third of its
+       * route is worth a look even when the drawing is honest. */
       add('soft', 'weak-corridor-bundle',
         style
           ? `internalCorridors groups ${fam.routes.join('/')} as a family, and ${fam.weakMembers.join(', ')} co-run with it over less than ${Math.round((corr.sharedMin || 0.6) * 100)}% of their route (${shares}). The family carries style "${style}", so every member keeps its own colour and the unshared stretch draws alone in that colour, as it would with no family at all — this is the size of the shared stretch, not a defect. Worth confirming the family still earns its place.`
@@ -1159,15 +1149,14 @@ if (redteam) {
   const rtExclGroups = group(rtExcluded, s => s.route);
   const pairedRt = new Map(), pairedExcl = new Map();
   /*
-   * PASS 1 pairs on the key BOTH sides wrote, exactly as this did before.
-   *
-   * PASS 2 offers each still-unpaired group of ours the red-team entries filed
-   * under a SLASHED key one of whose parts is our key -- see `routeKeys`. It is
-   * a second pass rather than a widened index for two reasons, and both are
-   * failure modes rather than tidiness: an exact match must always outrank a
-   * slashed near-miss, and one `18/18A` must not be handed to two different
-   * routes of ours, which a widened index would do silently to a town carrying
-   * both 18 and 18A as top-level services.
+   * PASS 1 pairs on the key BOTH sides wrote, as before. PASS 2 offers each
+   * still-unpaired group the entries filed under a SLASHED key one of whose parts
+   * is our key. A second pass rather than a widened index, for two failure modes:
+   * an exact match must outrank a slashed near-miss, and one `18/18A` must not be
+   * handed to two of our routes -- which a widened index does silently to a town
+   * carrying both 18 and 18A. One entry reaches ONE route, so a red team naming
+   * three (High Wycombe's "LGW / LHR / OXF") is heard by the first only; the rest
+   * still report as not-confirmed, which is weaker than the truth but not silence.
    */
   for (const [base, ours] of ourGroups) {
     for (const [k, v] of pairGroups(ours, rtGroups.get(base) || [], true)) pairedRt.set(k, v);
@@ -1239,20 +1228,16 @@ if (redteam) {
         /*
          * `servesTown` IS A FACT ABOUT THE WORLD; `displayed` IS A DECISION ABOUT A
          * SHEET, and this sentence conflated them (OA-262 item 1). It said "but we
-         * include it" on any disagreement, whether or not a sheet drew the route --
-         * so both Beaconsfield place sheets carried it directly above their own
-         * evidence block reading `displayed: false, drawnStops: 0`, and neither
-         * sheet's `routeOrder` has ever contained 624.
+         * include it" on any disagreement, drawn or not, sitting directly above its
+         * own evidence reading `displayed: false, drawnStops: 0` -- which is where
+         * OA-004's fortnight-long claim that two published sheets drew a closed-door
+         * school service came from. The finding is correctly raised either way, so
+         * no verdict was ever wrong and nothing automated could have caught it.
          *
-         * That sentence is where OA-004's fortnight-long claim that two published
-         * sheets drew a closed-door school service came from. No verdict was ever
-         * wrong -- the finding is correctly raised either way -- which is exactly
-         * why no gate and no reader of a verdict could have caught it.
-         *
-         * Three real states, and only the first deserves the original wording. The
-         * third -- we neither draw it nor claim it -- has nothing to say and never
-         * reaches here: the `if (isDisplayed || vs.servesTown)` guard above is what
-         * makes that true, so do not weaken it without reading this.
+         * Three states; only the first keeps the original wording. The third -- we
+         * neither draw it nor claim it -- never reaches here, because of the
+         * `if (isDisplayed || vs.servesTown)` guard above. Do not weaken that guard
+         * without reading this: it turns silence into the wrong sentence.
          */
         const why  = ev.reason ? ' (' + ev.reason + ')' : '';
         const base = isDisplayed
@@ -1426,14 +1411,9 @@ if (redteam) {
     if (rt.servesTown === false) continue;
     if (rtConsumed.has(rt)) continue;       // already paired with one of ours above
     const r = baseRoute(rt.route);
-    /*
-     * A leftover slashed key has to reach these three tables too, or the pairing
-     * fix above only half-lands: a red team writing `301S/301V` for two routes we
-     * declare as sub-services of 301, or `18/18A` where the town has ruled 18A
-     * off, would still arrive here as news. `r` stays the name THEY wrote, so the
-     * row a reader sees quotes the red team rather than our half of it; only the
-     * LOOKUP is widened. (OA-262 item 2.)
-     */
+    /* A leftover slashed key must reach these three tables too, or the pairing fix
+     * above half-lands and `301S/301V` arrives as news despite both being declared
+     * sub-services. Only the LOOKUP widens: `r` stays the name THEY wrote. */
     const lookup = (t) => routeKeys(rt.route).find(k => (t instanceof Map ? t.has(k) : Object.prototype.hasOwnProperty.call(t, k)));
     const rAlias = lookup(aliasOf);
     if (rAlias) {                           // it's a sub-service of one of ours

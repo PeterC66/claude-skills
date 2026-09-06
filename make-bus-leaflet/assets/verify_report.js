@@ -174,6 +174,26 @@ const normRoute = (r) => String(r == null ? '' : r).toUpperCase().replace(/\s+/g
  */
 const ourKey    = (s) => normRoute(s && (s.key || s.route));
 const baseRoute = (r) => { const n = normRoute(r); return n.replace(/\(.*\)$/, '') || n; };
+/*
+ * THEIRS, SECOND SHAPE. `baseRoute` strips the brand a red team writes in
+ * brackets and leaves a SLASHED variant list alone, so `18/18A`, `32/32A` and
+ * `36/36S` key on names no town has ever carried. St Neots draws 18 and declares
+ * 18A a `subServices` variant IN THE SAME FILE, and was told in one run that
+ * 18/18A was a missing service AND that its own 18 was unconfirmed -- one route,
+ * two findings, contradicting each other (`Areas/St Neots/S6-verify/
+ * 2026-09-06_0722`, F017 and F008; OA-262 item 2).
+ *
+ * The FULL key comes first and the parts after it, because a slashed name we
+ * genuinely do not carry must still be reported under the name the red team
+ * wrote rather than under half of it. That ordering is what the falsification
+ * case "a slashed route we really do not have still fires" holds in place.
+ */
+const routeKeys = (r) => {
+  const b = baseRoute(r);
+  if (!b.includes('/')) return [b];
+  const parts = b.split('/').map(p => normRoute(p)).filter(p => p && p !== b);
+  return [b, ...parts];
+};
 function localityToken(atco) {           // 0500H<LLLL>nnn -> "LLLL"
   const m = String(atco).match(/^[0-9]{4}[A-Z]([A-Z]{4})/);
   return m ? m[1] : null;
@@ -1008,13 +1028,51 @@ if (dirUnavailable.length) {
 // (a town with no corridorPalette / internalCorridors never writes one).
 {
   const corr = readJSON('corridors_report.json', true);
+  /*
+   * A STYLED FAMILY KEEPS EVERY MEMBER'S OWN COLOUR, WHICH IS THE ONE THING THIS
+   * FINDING USED TO ASSERT IT DOES NOT (OA-249).
+   *
+   * Since OA-176 4.24 an `internalCorridors` entry may be written as
+   * `{routes:[...], style:"alternate"}` rather than a bare array, and for such a
+   * family the sentence "the rest draws as a second same-coloured line going
+   * elsewhere" is false: Ramsey's 303 keeps its green over the 64% it does not
+   * share, exactly as it did before the family existed. The generator's own stderr
+   * warning was muted for a styled family in that same change; this finding was
+   * not, and Ramsey v3.7's F003 has read wrongly ever since.
+   *
+   * READ FROM `routes.json`, NOT FROM THE REPORT. Putting `style` into
+   * corridors_report.json would have been the obvious fix and is the more expensive
+   * one: that file is an S4 output mirrored into `ci-reference/` for every map, so
+   * adding a field moves a tracked artefact on every town with a family and needs a
+   * re-sync and a re-accept. The report already carries `lead`, and `lead` IS the
+   * key into `internalCorridors` -- the answer was reachable from an input S6
+   * already loads, and no byte moves.
+   */
+  const familyStyle = (lead) => {
+    const ic = (routes && routes.internalCorridors) || {};
+    let e = Object.prototype.hasOwnProperty.call(ic, lead) ? ic[lead] : undefined;
+    if (e === undefined) {                  // config keys are written by hand; pair on the normalised number
+      const k = Object.keys(ic).find(x => normRoute(x) === normRoute(lead));
+      if (k !== undefined) e = ic[k];
+    }
+    return (e && typeof e === 'object' && !Array.isArray(e) && e.style) ? String(e.style) : null;
+  };
   if (corr) {
     for (const fam of (corr.families || [])) {
       if (!fam.weakMembers || !fam.weakMembers.length) continue;
       const worst = (fam.members || []).filter(m => fam.weakMembers.includes(m.route));
+      const style = familyStyle(fam.lead);
+      const shares = worst.map(m => `${m.route} ${Math.round((m.sharedFraction || 0) * 100)}%`).join(', ');
+      /* Reported either way, and SOFT either way. Skipping the styled case was the
+       * other option OA-249 offered and it throws away the number: a family whose
+       * member shares a third of its route is worth a human look even when the
+       * drawing is honest, because the question it raises is whether the family
+       * earns its place -- which is information, not a defect. */
       add('soft', 'weak-corridor-bundle',
-        `internalCorridors bundles ${fam.routes.join('/')} as one drawn line, but ${fam.weakMembers.join(', ')} co-run with the family over less than ${Math.round((corr.sharedMin || 0.6) * 100)}% of their route. The rest draws as a second same-coloured line going elsewhere.`,
-        { lead: fam.lead, routes: fam.routes, weak: fam.weakMembers,
+        style
+          ? `internalCorridors groups ${fam.routes.join('/')} as a family, and ${fam.weakMembers.join(', ')} co-run with it over less than ${Math.round((corr.sharedMin || 0.6) * 100)}% of their route (${shares}). The family carries style "${style}", so every member keeps its own colour and the unshared stretch draws alone in that colour, as it would with no family at all — this is the size of the shared stretch, not a defect. Worth confirming the family still earns its place.`
+          : `internalCorridors bundles ${fam.routes.join('/')} as one drawn line, but ${fam.weakMembers.join(', ')} co-run with the family over less than ${Math.round((corr.sharedMin || 0.6) * 100)}% of their route. The rest draws as a second same-coloured line going elsewhere.`,
+        { lead: fam.lead, routes: fam.routes, weak: fam.weakMembers, style: style || null,
           overlap: worst.map(m => `${m.route}=${m.sharedFraction}`) },
         fam.lead, 'corridors_report');
     }
@@ -1100,9 +1158,35 @@ if (redteam) {
   const rtGroups     = group(rtServices, s => s.route);
   const rtExclGroups = group(rtExcluded, s => s.route);
   const pairedRt = new Map(), pairedExcl = new Map();
+  /*
+   * PASS 1 pairs on the key BOTH sides wrote, exactly as this did before.
+   *
+   * PASS 2 offers each still-unpaired group of ours the red-team entries filed
+   * under a SLASHED key one of whose parts is our key -- see `routeKeys`. It is
+   * a second pass rather than a widened index for two reasons, and both are
+   * failure modes rather than tidiness: an exact match must always outrank a
+   * slashed near-miss, and one `18/18A` must not be handed to two different
+   * routes of ours, which a widened index would do silently to a town carrying
+   * both 18 and 18A as top-level services.
+   */
   for (const [base, ours] of ourGroups) {
     for (const [k, v] of pairGroups(ours, rtGroups.get(base) || [], true)) pairedRt.set(k, v);
     for (const [k, v] of pairGroups(ours, rtExclGroups.get(base) || [], false)) pairedExcl.set(k, v);
+  }
+  const slashTaken = new Set();
+  const slashedFor = (groups, base) => {
+    const out = [];
+    for (const [k, v] of groups) {
+      if (k === base || !k.includes('/') || !routeKeys(k).includes(base)) continue;
+      for (const s of v) if (!slashTaken.has(s)) out.push(s);
+    }
+    return out;
+  };
+  for (const [base, ours] of ourGroups) {
+    const free = ours.filter(o => !pairedRt.has(o));
+    if (free.length) for (const [k, v] of pairGroups(free, slashedFor(rtGroups, base), true)) { pairedRt.set(k, v); slashTaken.add(v); }
+    const freeX = ours.filter(o => !pairedExcl.has(o));
+    if (freeX.length) for (const [k, v] of pairGroups(freeX, slashedFor(rtExclGroups, base), false)) { pairedExcl.set(k, v); slashTaken.add(v); }
   }
   const rtConsumed = new Set([...pairedRt.values()]);
   /* The red-team terminus comparison keeps its own coverage buckets, separate
@@ -1152,7 +1236,28 @@ if (redteam) {
         // -- two findings contradicting each other about one entry.
         if (rej) REDTEAM_REJECTION_USED.add(normRoute(r));
         const drawnStops = (intownByNorm(r) || []).length;
-        const base = `Red-team says route ${r} does NOT serve the town${ev.reason ? ' (' + ev.reason + ')' : ''}, but we include it${isDisplayed ? ' and draw it' : ''}.`;
+        /*
+         * `servesTown` IS A FACT ABOUT THE WORLD; `displayed` IS A DECISION ABOUT A
+         * SHEET, and this sentence conflated them (OA-262 item 1). It said "but we
+         * include it" on any disagreement, whether or not a sheet drew the route --
+         * so both Beaconsfield place sheets carried it directly above their own
+         * evidence block reading `displayed: false, drawnStops: 0`, and neither
+         * sheet's `routeOrder` has ever contained 624.
+         *
+         * That sentence is where OA-004's fortnight-long claim that two published
+         * sheets drew a closed-door school service came from. No verdict was ever
+         * wrong -- the finding is correctly raised either way -- which is exactly
+         * why no gate and no reader of a verdict could have caught it.
+         *
+         * Three real states, and only the first deserves the original wording. The
+         * third -- we neither draw it nor claim it -- has nothing to say and never
+         * reaches here: the `if (isDisplayed || vs.servesTown)` guard above is what
+         * makes that true, so do not weaken it without reading this.
+         */
+        const why  = ev.reason ? ' (' + ev.reason + ')' : '';
+        const base = isDisplayed
+          ? `Red-team says route ${r} does NOT serve the town${why}, but we include it and draw it.`
+          : `Red-team says route ${r} does NOT serve the town${why}. No sheet here draws it — it is in neither routeOrder nor the palette, and our drawn data gives it ${drawnStops} in-town stop(s) — while our verified set records \`servesTown: true\`. So this is a disagreement about the FACT, and no reader of this sheet is being shown the route.`;
         const evidence = { route: r, ours: { servesTown: vs.servesTown, displayed: isDisplayed, drawnStops }, redteam: { servesTown: ev.servesTown, reason: ev.reason || null } };
         if (rej && rej.expired) {
           // A dated re-check that has come due stops silencing, exactly as an
@@ -1321,23 +1426,36 @@ if (redteam) {
     if (rt.servesTown === false) continue;
     if (rtConsumed.has(rt)) continue;       // already paired with one of ours above
     const r = baseRoute(rt.route);
-    if (aliasOf[r]) {                       // it's a sub-service of one of ours
+    /*
+     * A leftover slashed key has to reach these three tables too, or the pairing
+     * fix above only half-lands: a red team writing `301S/301V` for two routes we
+     * declare as sub-services of 301, or `18/18A` where the town has ruled 18A
+     * off, would still arrive here as news. `r` stays the name THEY wrote, so the
+     * row a reader sees quotes the red team rather than our half of it; only the
+     * LOOKUP is widened. (OA-262 item 2.)
+     */
+    const lookup = (t) => routeKeys(rt.route).find(k => (t instanceof Map ? t.has(k) : Object.prototype.hasOwnProperty.call(t, k)));
+    const rAlias = lookup(aliasOf);
+    if (rAlias) {                           // it's a sub-service of one of ours
       add('soft', 'sub-service',
-        `Red-team lists ${r} separately; we model it as a variant of ${aliasOf[r]} — confirm the variant routeing/days are captured.`,
-        { route: r, parent: aliasOf[r], redteam: { termini: rt.termini, days: rt.days, notes: rt.notes || null } }, r, 'redteam');
+        `Red-team lists ${r} separately; we model it as a variant of ${aliasOf[rAlias]} — confirm the variant routeing/days are captured.`,
+        { route: r, parent: aliasOf[rAlias], redteam: { termini: rt.termini, days: rt.days, notes: rt.notes || null } }, r, 'redteam');
       continue;
     }
-    if (notServe[r]) {                      // WE say it doesn't serve town; red-team says it does
+    const rNotServe = lookup(notServe);
+    if (rNotServe) {                        // WE say it doesn't serve town; red-team says it does
+      const ns = notServe[rNotServe];
       add('soft', 'serves-town-conflict',
-        `We list route ${r} as NOT serving the town (${notServe[r].note || notServe[r].reason || 'excluded'}), but the red-team finds it DOES${rt.notes ? ' — ' + rt.notes : ''}. Re-examine.`,
-        { route: r, ours: { servesTown: false, note: notServe[r].note || notServe[r].reason || null }, redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
+        `We list route ${r} as NOT serving the town (${ns.note || ns.reason || 'excluded'}), but the red-team finds it DOES${rt.notes ? ' — ' + rt.notes : ''}. Re-examine.`,
+        { route: r, ours: { servesTown: false, note: ns.note || ns.reason || null }, redteam: { operator: rt.operator, termini: rt.termini, days: rt.days, confidence: rt.confidence || null, notes: rt.notes || null } }, r, 'redteam');
       continue;
     }
-    if (KNOWN_OFF.has(r)) {                 // the town has already ruled on it
+    const rKnownOff = lookup(KNOWN_OFF);
+    if (rKnownOff) {                        // the town has already ruled on it
       /* NOT a silence: the row appears carrying the town's OWN words, so the reader
        * confirms a decision instead of meeting the route as news for the eighth time.
        * The abuse case is S-1d above, which asks the red team nothing. */
-      const rec = KNOWN_OFF.get(r);
+      const rec = KNOWN_OFF.get(rKnownOff);
       add('soft', 'known-off',
         `Red-team lists route ${r} (${rt.operator || '?'}) serving the town; the town's \`${rec.field}\` already rules it off — ${rec.reason || 'no reason recorded, which is itself worth fixing'}. Confirm the decision still holds${rt.notes ? ' against: ' + rt.notes : ''}.`,
         { route: r, ours: { field: rec.field, reason: rec.reason || null },

@@ -1125,6 +1125,172 @@ console.log('\n14. known-off — a route the town has already ruled off is a dec
     groupV ? `${rows(groupV, 'missing-service').length} vs ${baseMs.length}` : 'no report');
 }
 
+/* -------------------- 15. a SLASHED red-team route (OA-262 item 2) */
+console.log('\n15. Slashed route keys — `18/18A` is our 18, and a slashed route we really lack still fires');
+{
+  /*
+   * `baseRoute` strips a bracketed BRAND and left a slashed VARIANT LIST alone,
+   * so a red team writing `18/18A` keyed on a name no town has ever carried. The
+   * town that pays for it draws 18 and declares 18A a `subServices` variant in
+   * the SAME FILE, and got told 18/18A was missing AND that its own 18 was
+   * unconfirmed — one route, two findings, disagreeing with each other.
+   *
+   * The fixture is not injected: the St Neots red team really does write
+   * `18/18A`, on both stored runs. So the case ASSERTS that assumption rather
+   * than trusting it, and dies loudly if a future answer stops exhibiting it.
+   */
+  const d = stage('stneots', 'slash-quiet');
+  const rt0 = readJ(d, 'redteam.json');
+  if (!(rt0.services || []).some(s => String(s.route) === '18/18A')) {
+    throw new Error('fixture assumption broken: the St Neots redteam.json no longer writes `18/18A` — find another slashed key, do not delete the case');
+  }
+  const v0 = readJ(d, 'verified-services.json');
+  if (!(v0.services || []).some(s => String(s.route) === '18')) {
+    throw new Error('fixture assumption broken: St Neots no longer carries route 18');
+  }
+  const a = verify(d);
+  const slashRows = (a.v ? a.v.findings : []).filter(f => f.category === 'missing-service' && String(f.route).indexOf('18') === 0);
+  check('a slashed red-team key pairs with the route we carry', 'no missing-service on 18/18A',
+    a.v && slashRows.length === 0,
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
+  check('and our own route is not then reported unconfirmed', 'no not-confirmed on 18',
+    a.v && !has(a.v, 'soft', 'not-confirmed', '18'),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.route === '18').map(f => f.severity + '/' + f.category)) : 'no report');
+
+  /*
+   * THE ARM THAT MATTERS. Widening a MATCH silences findings, so the failure mode
+   * of this fix is a `missing-service` that quietly stops firing — and a route
+   * whose number merely contains a slash must still be reported, under the name
+   * the red team wrote rather than under half of it.
+   */
+  const c = stage('stneots', 'slash-loud');
+  const rt = readJ(c, 'redteam.json');
+  rt.services.push({ route: '77/77A', operator: 'Whippet Coaches', servesTown: true,
+    termini: ['St Neots', 'Nowhere'], days: 'Mon-Sat', confidence: 'high',
+    notes: 'INJECTED BY prove-s6-checks.js — not a real service. A slashed key neither of whose halves we carry must still be reported.' });
+  writeJ(c, 'redteam.json', rt);
+  const b = verify(c);
+  check('a slashed route we really do not carry still fires', 'missing-service on 77/77A',
+    has(b.v, 'soft', 'missing-service', '77/77A'),
+    b.v ? JSON.stringify(b.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
+}
+
+/* ------- 16. serves-town says what is true of THIS sheet (OA-262 item 1) */
+console.log('\n16. serves-town — "we include it" only where a sheet actually draws it');
+{
+  /*
+   * The message asserted "but we include it" on any servesTown disagreement,
+   * whether or not the sheet drew the route, and sat directly above its own
+   * evidence block reading `displayed: false, drawnStops: 0`. That sentence put a
+   * false claim into the backlog for a fortnight, and no verdict was ever wrong —
+   * so only a case that reads the MESSAGE can hold the fix in place.
+   */
+  const drawnCase = stage('wisbech', 'serves-drawn');
+  injectServesTownFalse(drawnCase, 'T7');
+  const a = verify(drawnCase);
+  const fa = (a.v ? a.v.findings : []).find(f => f.category === 'serves-town' && f.route === 'T7');
+  check('a route the sheet DRAWS still says we include and draw it', 'message says "we include it and draw it"',
+    !!fa && /we include it and draw it/.test(fa.message), fa ? fa.message.slice(0, 120) : 'no serves-town finding on T7');
+
+  /*
+   * The other state, BUILT rather than borrowed: a route in our verified set that
+   * no sheet draws. Wisbech's X46 is verified and absent from routeOrder and
+   * palette; the case finds such a route, asserts one exists, and sets
+   * servesTown itself — so it proves the wording even after somebody adjudicates
+   * X46 one way or the other.
+   */
+  const undrawn = stage('wisbech', 'serves-undrawn');
+  const rj = readJ(undrawn, 'routes.json');
+  const drawn = new Set([...(rj.routeOrder || []), ...Object.keys(rj.palette || {})]);
+  const vj = readJ(undrawn, 'verified-services.json');
+  const off = (vj.services || []).find(s => !drawn.has(String(s.route)));
+  if (!off) throw new Error('fixture assumption broken: every Wisbech verified service is now drawn — pick another town, do not delete the case');
+  const R = String(off.route);
+  off.servesTown = true;
+  writeJ(undrawn, 'verified-services.json', vj);
+  const rt = readJ(undrawn, 'redteam.json');
+  rt.excluded = (rt.excluded || []).filter(e => String(e.route) !== R);
+  rt.excluded.push({ route: R, operator: off.operator, servesTown: false,
+    reason: 'INJECTED BY prove-s6-checks.js — not a real claim about this route.' });
+  rt.services = (rt.services || []).filter(s => String(s.route) !== R);
+  writeJ(undrawn, 'redteam.json', rt);
+  const b = verify(undrawn);
+  const fb = (b.v ? b.v.findings : []).find(f => f.category === 'serves-town' && f.route === R);
+  check('the finding is still RAISED, not silenced', 'a serves-town finding exists on ' + R,
+    !!fb, b.v ? JSON.stringify(b.v.findings.filter(f => f.route === R).map(f => f.severity + '/' + f.category)) : 'no report');
+  check('a route no sheet draws (' + R + ') is not described as included', 'message does NOT claim we include it',
+    !!fb && !/we include it/.test(fb.message), fb ? fb.message.slice(0, 140) : 'no serves-town finding on ' + R);
+  check('and it says what IS true — nothing here draws it', 'message says no sheet draws it, evidence displayed:false',
+    !!fb && /No sheet here draws it/.test(fb.message) && fb.evidence && fb.evidence.ours.displayed === false,
+    fb ? JSON.stringify({ m: fb.message.slice(0, 90), d: fb.evidence && fb.evidence.ours }) : 'no finding');
+}
+
+/* ---------------- 17. a STYLED corridor family (OA-249) */
+console.log('\n17. Corridor families — a styled family keeps its colours, and the finding must say so');
+{
+  /*
+   * Since OA-176 4.24 an `internalCorridors` entry may be `{routes,style}`, and
+   * for a styled family "the rest draws as a second same-coloured line going
+   * elsewhere" is the one thing that is NOT true — every member keeps its own
+   * colour. Ramsey v3.7's F003 read that way on the 303/305 pair that was built
+   * to keep both colours.
+   *
+   * corridors_report.json is an S4 output and `stage()` seeds S1/S2/S3 only, so
+   * the report is BUILT here — which is what this harness's own rule asks for,
+   * and lets ONE run carry a styled family and a plain one side by side. Ramsey's
+   * config really does style 303 and leave 301 bare; the case asserts both.
+   */
+  const report = {
+    town: 'Ramsey', measure: 'INJECTED BY prove-s6-checks.js', sharedMin: 0.6,
+    families: [
+      { lead: '303', routes: ['303', '305'], weakMembers: ['303'],
+        members: [{ route: '303', drawn: true, cells: 58, sharedFraction: 0.362, weakestAgainst: '305' },
+                  { route: '305', drawn: true, cells: 22, sharedFraction: 0.955, weakestAgainst: '303' }] },
+      { lead: '301', routes: ['301', '301S'], weakMembers: ['301S'],
+        members: [{ route: '301', drawn: true, cells: 21, sharedFraction: 1, weakestAgainst: null },
+                  { route: '301S', drawn: true, cells: 9, sharedFraction: 0.31, weakestAgainst: '301' }] },
+    ],
+    colours: { drawnLines: 7, distinctColours: 7, ambiguity: 1, corridorPalette: false },
+  };
+  const d = stage('ramsey', 'corr-styled');
+  const rj = readJ(d, 'routes.json');
+  const ic = rj.internalCorridors || {};
+  if (!ic['303'] || Array.isArray(ic['303']) || ic['303'].style !== 'alternate') {
+    throw new Error('fixture assumption broken: Ramsey no longer styles the 303 family — restyle another family or move the case, do not delete it');
+  }
+  if (!Array.isArray(ic['301'])) throw new Error('fixture assumption broken: Ramsey 301 is no longer a bare (unstyled) family');
+  writeJ(d, 'corridors_report.json', report);
+  const a = verify(d);
+  const rowsOf = (v, lead) => (v ? v.findings : []).filter(f => f.category === 'weak-corridor-bundle' && f.route === lead);
+  const styled = rowsOf(a.v, '303')[0], plain = rowsOf(a.v, '301')[0];
+  check('a styled family is still REPORTED', 'a soft weak-corridor-bundle on 303',
+    !!styled && styled.severity === 'soft', styled ? styled.severity : 'no finding');
+  check('but not as a second same-coloured line', 'message drops the same-coloured wording',
+    !!styled && !/second same-coloured line/.test(styled.message), styled ? styled.message.slice(0, 140) : 'no finding');
+  check('and it names the style and the shared fraction', 'message quotes "alternate" and 36%',
+    !!styled && /alternate/.test(styled.message) && /36%/.test(styled.message), styled ? styled.message.slice(0, 200) : 'no finding');
+  check('the style reaches the evidence too', 'evidence.style === "alternate"',
+    !!styled && styled.evidence && styled.evidence.style === 'alternate',
+    styled ? JSON.stringify(styled.evidence && styled.evidence.style) : 'no finding');
+
+  /* THE ARM THAT MATTERS, and it is in the SAME run: an unstyled family with an
+   * equally weak member must still get the original wording. A fix that simply
+   * softened this finding for everybody would pass every check above. */
+  check('an unstyled family in the same run still says same-coloured', 'the 301 row keeps the original wording',
+    !!plain && /second same-coloured line/.test(plain.message), plain ? plain.message.slice(0, 140) : 'no finding on 301');
+
+  /* And the same family with its style REMOVED reverts — so the wording is keyed
+   * on the config, not on the route number. */
+  const c = stage('ramsey', 'corr-unstyled');
+  const cj = readJ(c, 'routes.json');
+  cj.internalCorridors['303'] = ['305'];
+  writeJ(c, 'routes.json', cj);
+  writeJ(c, 'corridors_report.json', report);
+  const b = verify(c);
+  const reverted = rowsOf(b.v, '303')[0];
+  check('removing the style brings the same-coloured wording back', 'the 303 row reverts to the bundle wording',
+    !!reverted && /second same-coloured line/.test(reverted.message), reverted ? reverted.message.slice(0, 140) : 'no finding');
+}
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

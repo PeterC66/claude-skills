@@ -70,11 +70,56 @@ if (owed && !/the test correspondent/.test(owed.title)) {
   console.log('  MISS  it did not pick the label out of the thread README'); bad++;
 } else if (owed) console.log('  GREEN it named the thread by its label, not by a person');
 
+// 1b. A THREAD MAY DECLARE ITSELF FINISHED, and then an inbound last message
+// raises nothing. CORR-002 ended on "Thank you, I have forwarded it" and was
+// reported as a person waiting for 18 days at rank 2, above every row anything
+// could actually finish, while its own record said nothing was outstanding.
+//
+// This is a suppression, so it is the dangerous direction -- the failure it
+// could introduce is a reminder that never fires. Every case below is
+// therefore a pair, and THREE of the four are the refusals.
+const record = (status, stamped) =>
+  `# CORR-901 — the test correspondent\n\n`
+  + (stamped ? `<!-- docstamp v1.0 | ${stamped} | sha=deadbeef -->\n` : '')
+  + `**Opened:** 1 August 2026 · **Status:** ${status}\n`;
+
+write('Correspondence/CORR-901/README.md', record('dormant and in good standing', '2026-08-05'));
+expect('a thread record declaring it dormant, stamped after the message, raises nothing',
+  { key: 'corr-owed-CORR-901', present: false });
+
+// The one that stops this becoming a reminder that never fires: they wrote
+// again. The stamp falls behind the new message on its own, with no upkeep.
+write('Correspondence/CORR-901/README.md', record('dormant and in good standing', '2026-07-31'));
+expect('the same declaration, stamped BEFORE the message, is not believed',
+  { key: 'corr-owed-CORR-901', present: true, rank: 2 });
+
+// An undated declaration proves nothing about which message it covers.
+write('Correspondence/CORR-901/README.md', record('dormant and in good standing', null));
+expect('a declaration with no stamp at all is not believed',
+  { key: 'corr-owed-CORR-901', present: true, rank: 2 });
+
+// The vocabulary is closed. Open prose must keep nagging -- this is the exact
+// wording CORR-003 uses, emphasis and all.
+write('Correspondence/CORR-901/README.md', record('**open, and the ball is with them.**', '2026-08-05'));
+expect('an "open" declaration keeps the row', { key: 'corr-owed-CORR-901', present: true, rank: 2 });
+
+write('Correspondence/CORR-901/README.md', '# CORR-901 — the test correspondent\n');
+
 // 2. an unsent draft after it => the owed row goes, an unsent row arrives
 const draft = `**From:** BusMaps.uk · **Status:** DRAFTED, NOT SENT · **Channel:** email\n\n---\n\nDear all.\n`;
 write('Correspondence/CORR-901/002-2026-08-02-out-reply.md', draft);
 expect('drafting a reply clears "reply owed"', { key: 'corr-owed-CORR-901', present: false });
 expect('an unsent draft raises "NOT SENT"', { key: 'corr-unsent-CORR-901', present: true, rank: 3 });
+
+// 2b. THE HUMAN STEP IS NOT SUPPRESSIBLE. A thread record is prose we write,
+// and rank 3 is the one row on this whole board that a person on the other end
+// is actually waiting on. Marking a thread dormant must never take an unsent
+// letter off the list -- that would be this source deleting the only reminder
+// it exists to raise.
+write('Correspondence/CORR-901/README.md', record('closed', '2026-09-01'));
+expect('declaring the thread closed does NOT hide an unsent draft',
+  { key: 'corr-unsent-CORR-901', present: true, rank: 3 });
+write('Correspondence/CORR-901/README.md', '# CORR-901 — the test correspondent\n');
 
 // 3. sending it must make the row GO AWAY. This is the half that matters.
 write('Correspondence/CORR-901/002-2026-08-02-out-reply.md', draft.replace('DRAFTED, NOT SENT', 'SENT 2026-08-03'));

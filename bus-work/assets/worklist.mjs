@@ -228,6 +228,10 @@ if (CONDITIONS_ONLY) {
 const warnings = [];
 const items = [];
 const add = (it) => items.push(it);
+// Threads that declared themselves finished, so no "reply owed" row was raised.
+// Surfaced in both outputs for the same reason `adjudicated` is: a suppression
+// nobody can see is how a board starts lying.
+const correspondenceSettled = [];
 
 const daysSince = (v) => {
   if (!v) return null;
@@ -414,6 +418,32 @@ function fromUpcomingReport() {
 // exists to put the human step in the same list as everything else.
 //
 // It reads tracked files and nothing else -- no network, no portal, no email.
+//
+// A thread record may declare the conversation finished. The vocabulary is
+// CLOSED on purpose: matching arbitrary prose would silence a thread that is
+// genuinely open, and a suppression rule that guesses wrong is worse than no
+// rule, because it is invisible. Everything outside this list keeps nagging.
+const SETTLED = /^(dormant|closed|settled)\b/i;
+
+// The status a thread record declares about ITSELF, if it declares one at all,
+// and only when the record is at least as new as the message in question.
+// Returns the declared text, or '' for "say nothing, raise the row".
+function threadSettled(record, lastInboundDate) {
+  if (!record) return '';
+  const st = /\*\*Status:\*\*(.*)$/m.exec(record);
+  if (!st) return '';
+  // Strip leading emphasis: these records write both "**Status:** dormant ..."
+  // and "**Status:** **open, and the ball is with them.**".
+  const status = st[1].replace(/^[\s*_]+/, '').trim();
+  if (!SETTLED.test(status)) return '';
+  // The stamp is written by the Stop hook after any edit, so it dates the
+  // record. A declaration older than the message it is supposed to cover has
+  // not seen that message, and proves nothing.
+  const stamp = /<!--\s*docstamp\s+v[\d.]+\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|/.exec(record);
+  if (!stamp || stamp[1] < lastInboundDate) return '';
+  return status;
+}
+
 function fromCorrespondence() {
   const dir = path.join(BUSES, 'Correspondence');
   if (!existsSync(dir)) return [];
@@ -438,14 +468,39 @@ function fromCorrespondence() {
     // A label rather than a name: the thread record is written that way on
     // purpose and this tool must not be the thing that leaks one.
     let label = ref;
+    let record = '';
     const readme = path.join(tdir, 'README.md');
     if (existsSync(readme)) {
-      const m = /^#\s+CORR-\d+\s+[\u2014-]\s+(.+)$/m.exec(readFileSync(readme, 'utf8'));
+      record = readFileSync(readme, 'utf8');
+      const m = /^#\s+CORR-\d+\s+[\u2014-]\s+(.+)$/m.exec(record);
       if (m) label = `${ref} (${m[1].trim()})`;
     }
 
     const last = msgs[msgs.length - 1];
     if (last.dir === 'in') {
+      // A courtesy acknowledgement is still an inbound message, so direction
+      // alone cannot answer "is a reply owed". CORR-002 ended on "Thank you, I
+      // have forwarded it" and this source called that a person waiting for 18
+      // days, at rank 2, above every row anything could actually finish. The
+      // thread record already answered the question in prose nobody read.
+      //
+      // So read the declaration -- the same move the outbound branch below
+      // already makes, and for the same reason: read it rather than infer it.
+      // TWO things must hold, and the second is the one that stops this
+      // becoming a reminder that never fires:
+      //
+      //   1. the status begins with a word from a CLOSED list. Any other
+      //      prose, a missing field and a missing README all still raise the
+      //      row, so an unknown declaration fails towards nagging.
+      //   2. the record's docstamp is dated on or after this message. That is
+      //      what proves the curator wrote "dormant" having SEEN it. When they
+      //      write again the stamp falls behind the new message on its own and
+      //      the row comes back with no upkeep at all.
+      const settled = threadSettled(record, last.date);
+      if (settled) {
+        correspondenceSettled.push({ ref, label, since: last.date, status: settled });
+        continue;
+      }
       out.push({
         key: `corr-owed-${ref}`, rank: 2, type: 'correspondence',
         title: `${label}: a reply is owed and not drafted`,
@@ -982,6 +1037,9 @@ const meta = {
   // the console, because a caller reading --json must not see a shorter list than a
   // person does with no way to find out why.
   adjudicated,
+  // Which threads declared themselves finished, and what they said. Same
+  // argument as `adjudicated` directly above.
+  correspondenceSettled,
   // OA-221. A caller reading --json must be able to see the same verdict a
   // person does, and the evidence behind it -- otherwise the two disagree and
   // only one of them gets read.
@@ -1030,6 +1088,14 @@ if (adjudicated.length) {
     + ' suppressed \u2014 already adjudicated against the ' + scanSaid + ' scan and found not to need a rebuild:');
   for (const a of adjudicated) {
     console.log('    ' + a.map + (a.by ? ' (' + a.by + ')' : '') + (a.note ? ' \u2014 ' + a.note.slice(0, 90) : ''));
+  }
+  console.log('');
+}
+if (correspondenceSettled.length) {
+  console.log('  ' + correspondenceSettled.length + ' thread' + (correspondenceSettled.length === 1 ? '' : 's')
+    + ' ended on an inbound message and raised nothing — the thread record declares the conversation finished:');
+  for (const s of correspondenceSettled) {
+    console.log('    ' + s.label + ' — last heard ' + s.since + ' — "' + s.status.slice(0, 70) + '"');
   }
   console.log('');
 }

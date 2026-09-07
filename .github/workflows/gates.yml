@@ -304,6 +304,19 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-not-in-bods
 
+      # OA-269: [TIMETABLE] fires on routingHash OR tripCount and printed ONE sentence for
+      # both -- "stops/frequency changed (trips P -> C)". routingHash means the road moved;
+      # tripCount is the field gtfs_query.py's own docstring forbids tiering, weighting or
+      # drawing from, because it counts service_id splits rather than journeys. Reading the
+      # two as one cost a wrong verdict: St Neots Co-op was adjudicated rebuild-needed off
+      # "trips 161 -> 126" while journeysPerWeek held at 326. In the other direction 7 of
+      # the 21 findings on the 2026-08-31 scan printed an UNCHANGED count as their evidence.
+      # This requires the message to name which trigger fired, and requires the count
+      # trigger to survive -- dropping it is the wrong fix. Added 2026-09-07.
+      - name: Prove the TIMETABLE trigger message can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-timetable-trigger
+
       # OA-259, the other half: the FOUR conventions a town uses for "known and not drawn"
       # are read by two checkers that cannot share a runtime, so the rule is written twice.
       # A comment saying they agree is a claim about a JOIN, and this is the join -- one
@@ -841,6 +854,19 @@ jobs:
       - name: Prove the notInBods declaration can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-not-in-bods
+
+      # OA-269: [TIMETABLE] fires on routingHash OR tripCount and printed ONE sentence for
+      # both -- "stops/frequency changed (trips P -> C)". routingHash means the road moved;
+      # tripCount is the field gtfs_query.py's own docstring forbids tiering, weighting or
+      # drawing from, because it counts service_id splits rather than journeys. Reading the
+      # two as one cost a wrong verdict: St Neots Co-op was adjudicated rebuild-needed off
+      # "trips 161 -> 126" while journeysPerWeek held at 326. In the other direction 7 of
+      # the 21 findings on the 2026-08-31 scan printed an UNCHANGED count as their evidence.
+      # This requires the message to name which trigger fired, and requires the count
+      # trigger to survive -- dropping it is the wrong fix. Added 2026-09-07.
+      - name: Prove the TIMETABLE trigger message can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-timetable-trigger
 
       # OA-259, the other half: the FOUR conventions a town uses for "known and not drawn"
       # are read by two checkers that cannot share a runtime, so the rule is written twice.

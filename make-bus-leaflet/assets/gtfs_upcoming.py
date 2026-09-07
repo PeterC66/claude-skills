@@ -253,6 +253,47 @@ def forward_findings(routes, prev_routes, feed_start, today, ahead):
     return out
 
 
+def timetable_message(prev_trips, cur_trips, routing_moved, count_moved):
+    """The [TIMETABLE] sentence, saying WHICH of the two triggers fired (OA-269).
+
+    The finding raises on `routingHash` differing OR `tripCount` differing, and until
+    2026-09-07 it printed one sentence for both -- "stops/frequency changed (trips P -> C)
+    - re-check routing & times". The two are not of equal worth and the reader could not
+    tell them apart.
+
+    `routingHash` is a SHA-1 over the set of distinct stop sequences, so a move in it means
+    the road actually moved: that is the trigger worth acting on, and it keeps the
+    re-check instruction. `tripCount` is `len(distinct trip_id)`, the same quantity
+    gtfs_query.py exports as `tripPatternsAtTown`, whose docstring says it is NOT a rate,
+    understates by x2.0 to x5.7 depending on how many `service_id`s the operator split
+    their timetable into, and must never be tiered, weighted, sorted or drawn from. So a
+    move in the count alone is a registration fact, not a frequency measurement, and the
+    message must not invite the reader to read it as one.
+
+    It cost a wrong verdict: St Neots Co-op was adjudicated `rebuild-needed` on 2026-08-31
+    off "trips 161 -> 126", a 22% cut. Re-measured on 2026-09-07, `journeysPerWeek` had
+    held at 326 and `coreHeadwayMinutes` at 30 -- the operator re-registered the same
+    service under fewer `service_id`s and nothing a reader sees moved. In the other
+    direction, 7 of the 21 findings on that scan printed an UNCHANGED count as their
+    evidence (201 -> 201, 199 -> 199, 75 -> 75, 53 -> 53, three at 2 -> 2); those fired on
+    the routing hash alone and the number beside them was noise.
+
+    The count trigger is deliberately KEPT. A count move is weak evidence but it is not no
+    evidence -- it is how a re-registration becomes visible at all, and a route whose trips
+    genuinely halve while its stop sequences hold is a real change the routing hash cannot
+    see. The defect was the undifferentiated sentence, not the trigger.
+    """
+    trips = f"registered trip rows {prev_trips} -> {cur_trips}"
+    if routing_moved and count_moved:
+        return f"stop sequences changed ({trips}) - re-check routing & times"
+    if routing_moved:
+        return (f"stop sequences changed (registered trip rows unchanged at {cur_trips}) "
+                "- re-check routing & times")
+    return (f"stop sequences UNCHANGED; {trips} - the same service registered under a "
+            "different number of service_ids. This count is not a rate and says nothing "
+            "about frequency; check journeysPerWeek / coreHeadwayMinutes before re-tiering")
+
+
 def diff_findings(cur_routes, prev_routes):
     """Month-over-month [APPEARED]/[WITHDRAWN]/[OPERATOR]/[DAYS]/[TIMETABLE]/[NEW THIS MONTH]."""
     out = []
@@ -272,8 +313,11 @@ def diff_findings(cur_routes, prev_routes):
             out.append(("OPERATOR", sn, f"'{' / '.join(p.get('operators', []))}' -> '{' / '.join(c['operators'])}'"))
         if c["days"] != p.get("days"):
             out.append(("DAYS", sn, f"'{p.get('days','?')}' -> '{c['days']}'"))
-        if c.get("routingHash") != p.get("routingHash") or c.get("tripCount") != p.get("tripCount"):
-            out.append(("TIMETABLE", sn, f"stops/frequency changed (trips {p.get('tripCount','?')} -> {c['tripCount']}) - re-check routing & times"))
+        routing_moved = c.get("routingHash") != p.get("routingHash")
+        count_moved = c.get("tripCount") != p.get("tripCount")
+        if routing_moved or count_moved:
+            out.append(("TIMETABLE", sn, timetable_message(p.get("tripCount", "?"), c["tripCount"],
+                                                           routing_moved, count_moved)))
     return out
 
 

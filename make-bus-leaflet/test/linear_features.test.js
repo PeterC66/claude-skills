@@ -214,6 +214,47 @@ test('railStitch REFUSES a join that doubles back — the St Neots station throa
   assert.strictEqual(casings.length, 2, 'left as two paths rather than chained into a fold');
 });
 
+test('railStitch REFUSES a hairpin between two ways that share a START — the double-track case', () => {
+  const { api, lines } = make();
+  // OSM maps a double-track railway as TWO ways, and where both are drawn in the
+  // same direction they share a start node and an end node. Chaining them start
+  // to start folds the line back over itself: Beaconsfield's diagram shipped for
+  // one build with the railway running out to x=21 and straight back, a 179.8
+  // degree turn measured on the drawn sheet, which is a thing no railway does.
+  //
+  // Peter saw it in the picture. It is the SAME fold the St Neots throat test
+  // above refuses, arriving through a different one of stitchSegs' four join
+  // cases -- and that case measured its turn one vertex too early, at the last
+  // point of A rather than at the point where the direction actually reverses,
+  // so the guard read the gentle turn along A and let a 180 through. Three of
+  // the four cases were right; the untested one was the wrong one.
+  //
+  // railMerge is off for the same reason it is off above: with it on the
+  // returning half is absorbed and the sheet comes out right for another reason.
+  api.drawFeature(feat({
+    type: 'railway', style: { rail: 'chequer', railMerge: 0 },
+    geo: [[[0, 0], [10, 0]], [[0, 0.2], [10, 0.2]]],
+  }));
+  const casings = lines[0].split('\n').filter((l) => l.includes('#4a4a4a'));
+  assert.strictEqual(casings.length, 2, 'left as two paths rather than folded into a hairpin');
+});
+
+test('control: two ways that share a START and genuinely carry on still JOIN', () => {
+  const { api, lines } = make();
+  // The other half of the fix above, and the one that matters more: moving that
+  // join case's turn measurement by one vertex could have made it refuse
+  // everything, and a stitch that never stitches passes the test above while
+  // undoing the whole of OA-059. Here the two ways leave the shared node in
+  // OPPOSITE directions -- one west, one east -- which is one line broken into two
+  // ways at a node, not a double track. It must still become a single path.
+  api.drawFeature(feat({
+    type: 'railway', style: { rail: 'chequer', railMerge: 0 },
+    geo: [[[0, 0], [-10, 0]], [[0, 0.1], [10, 0.4]]],
+  }));
+  const casings = lines[0].split('\n').filter((l) => l.includes('#4a4a4a'));
+  assert.strictEqual(casings.length, 1, 'two ways became one path');
+});
+
 test('railMerge keeps the longest line and TRIMS a parallel one, rather than dropping it whole', () => {
   const { api, lines } = make();
   // A siding 0.5mm alongside for the first 20mm — inside railMerge's 1.5mm

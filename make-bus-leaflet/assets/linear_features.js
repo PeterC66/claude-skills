@@ -75,7 +75,15 @@ function stitchSegs(segs, tol, maxTurn){
       const cands=[];
       if(near(A[A.length-1],B[0]))               cands.push([A.concat(B.slice(1)), A.length-1]);
       if(near(A[A.length-1],B[B.length-1]))      cands.push([A.concat(B.slice(0,-1).reverse()), A.length-1]);
-      if(near(A[0],B[0]))                        cands.push([A.slice(1).reverse().concat(B), A.length-2]);
+      // A.length-1, NOT A.length-2. A[0] is dropped as the duplicate of B[0], so the
+      // merged line is A[n-1]..A[1] then B[0]..B[m-1] and the vertex where the
+      // direction REVERSES is B[0], at index n-1. Reading n-2 measured the last turn
+      // along A instead — gentle by construction — so a 180 degree fold passed the
+      // guard. Beaconsfield's diagram shipped one build with the railway running out
+      // to x=21 and straight back at 179.8 degrees; Peter saw it in the picture,
+      // 2026-09-07. Three of these four cases were right and the untested one was the
+      // wrong one: the St Neots throat test above drives the end-to-start case.
+      if(near(A[0],B[0]))                        cands.push([A.slice(1).reverse().concat(B), A.length-1]);
       if(near(A[0],B[B.length-1]))               cands.push([B.concat(A.slice(1)), B.length-1]);
       for(const [m,jn] of cands){
         if(turnAt(m, jn) > maxTurn) continue;

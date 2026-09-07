@@ -65,7 +65,11 @@
       "excludeDirPatterns": ["S[1-6]-*"],
       "excludeGlobs": [
         "_gtfs/refresh-report_*.md",
-        "_gtfs/upcoming/*"
+        "_gtfs/upcoming/*",
+        "loop/adhoc/*",
+        "loop/blocked/*",
+        "loop/runs/*",
+        "loop/NEXT.md"
       ]
     },
     {

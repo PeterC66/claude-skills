@@ -1409,10 +1409,24 @@ if(IR){
       const p0x=Pp[i][0]+nX, p0y=Pp[i][1]+nY, p1x=Pp[i+1][0]+nX, p1y=Pp[i+1][1]+nY;
       if(wRaw>_wmax)_wmax=wRaw;      // the UNCAPPED maximum, so DBG_CASE can size the cap
       // DBG_CASE=2: per-segment casing report (road name, geometric bundle size,
-      // drawn lanes, final width, centre offset) -- companion to DBG_TRIM/DBG_LABELS.
+      // drawn lanes, final width, SEGMENT LENGTH, centre offset) -- companion to
+      // DBG_TRIM/DBG_LABELS.
+      //
+      // len is here for OA-064 and it is the discriminator that report was missing.
+      // skeletonMaxW is set on St Ives (11.5) and Ely Co-op (18.5) and is the WRONG
+      // instrument on Beaconsfield, March, High Wycombe and Wisbech, where the wide
+      // bands are named streets carrying five to seven real lanes for their length
+      // and a ceiling would narrow the road below its own traffic. Width alone
+      // cannot tell those two apart: a 39 mm junction stub and a 39 mm high street
+      // print the same line here. A round-capped disc per segment is only excess ink
+      // where the segment is SHORT relative to its own width -- len/w near or under
+      // 1 is a disc, not a road -- so the ratio is what says which towns want a
+      // ceiling and which want the run drawn as one path with caps at its true ends.
       if(process.env.DBG_CASE==='2' && inFrame(M)){ const nm=(RP.edgeWay[c]&&RP.edgeWay[c].name)||'?';
         const dn=bundle.filter(s=>drawnCovers(s,M)).length;
-        console.error('CASE '+nm+' bundle='+nb+' drawn='+dn+' w='+w.toFixed(2)+' mid='+mid.toFixed(2)); }
+        const len=Math.hypot(Pp[i+1][0]-Pp[i][0], Pp[i+1][1]-Pp[i][1]);
+        console.error('CASE '+nm+' bundle='+nb+' drawn='+dn+' w='+w.toFixed(2)
+          +' len='+len.toFixed(2)+' len/w='+(len/(w||1)).toFixed(2)+' mid='+mid.toFixed(2)); }
       SKEL.push({c, p:Pp[i], q:Pp[i+1], name:(RP.edgeWay[c]&&RP.edgeWay[c].name)||null});
       out(`<path d="M${p0x.toFixed(2)} ${p0y.toFixed(2)}L${p1x.toFixed(2)} ${p1y.toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${w.toFixed(2)}" stroke-linecap="round"/>`);
     } }

@@ -164,18 +164,23 @@ const MUTATIONS = [
 
   { suite: 'linear_features.test.js', file: 'linear_features.js',
     what: "railStitch chains any two ways that touch, so the St Neots station throat folds back on itself again",
-    find: "          if(turnAt(m, jn) > maxTurn) continue;",
-    to: "          if(false) continue;" },
+    find: "        if(turnAt(m, jn) > maxTurn) continue;",
+    to: "        if(false) continue;" },
+
+  { suite: 'linear_features.test.js', file: 'linear_features.js',
+    what: "the start-to-start join measures its turn one vertex early again, so a double track folds into a hairpin",
+    find: "cands.push([A.slice(1).reverse().concat(B), A.length-1]);",
+    to: "cands.push([A.slice(1).reverse().concat(B), A.length-2]);" },
 
   { suite: 'linear_features.test.js', file: 'linear_features.js',
     what: "railMerge keeps every trimmed stretch, so short floating fragments survive",
-    find: "        if(kept.some(k=>ptToPoly(p,k)<=tol)){ if(segLen(run)>=minRun) runs.push(run); run=[]; }",
-    to: "        if(kept.some(k=>ptToPoly(p,k)<=tol)){ if(run.length) runs.push(run); run=[]; }" },
+    find: "      if(kept.some(k=>ptToPoly(p,k)<=tol)){ if(segLen(run)>=minRun) runs.push(run); run=[]; }",
+    to: "      if(kept.some(k=>ptToPoly(p,k)<=tol)){ if(run.length) runs.push(run); run=[]; }" },
 
   { suite: 'linear_features.test.js', file: 'linear_features.js',
     what: "railMerge stops trimming and keeps a partly-coincident siding whole, re-doubling the main line",
-    find: "      for(const r of runs) kept.push(dropCollinear(r, 0.02));",
-    to: "      if(runs.length) kept.push(s);" },
+    find: "    for(const r of runs) kept.push(dropCollinear(r, 0.02));",
+    to: "    if(runs.length) kept.push(s);" },
 
   { suite: 'linear_features.test.js', file: 'linear_features.js',
     what: "a feature hidden by override is drawn anyway - every place sheet gets its river back",

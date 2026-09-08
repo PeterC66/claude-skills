@@ -929,6 +929,60 @@ if (s6Stale.length) {
   });
 }
 
+/*
+ * 8 — housekeeping: S6 CLAIMS (buses-data OA-273, 2026-09-08). The rows above ask
+ * whether a red team has been RUN; this asks what became of what it SAID. A claim —
+ * the red team names a bus we do not carry, or denies one we do — must have a home:
+ * the map's own notOnLeaflet/redteamRejected, its parent town's file, or an entry in
+ * service-facts.json at the buses root. Two rows can come out of one verdict and
+ * they are different work: UNCOVERED (or a decided fact no sheet has learned) is a
+ * fault to fix now; QUEUED is the question queue Peter works, one at a time.
+ *
+ * Delegated to tools/check-s6-claims.mjs rather than re-implemented, and run here
+ * because this laptop is the only place verification.json exists. A checker that
+ * cannot run is a warning, not silence.
+ */
+{
+  const checker = SK ? path.join(SK, '..', '..', 'tools', 'check-s6-claims.mjs') : null;
+  if (!checker || !existsSync(checker)) warnings.push('S6 claims not counted — tools/check-s6-claims.mjs not found beside the engine.');
+  else {
+    const { spawnSync } = require('node:child_process');
+    const r = spawnSync(process.execPath, [checker, '--json', '--require-reports', '--root', BUSES], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    let v = null;
+    try { v = JSON.parse(r.stdout); } catch { warnings.push(`S6 claims not counted — check-s6-claims.mjs printed no verdict (exit ${r.status}).`); }
+    if (v) {
+      const faults = (v.uncovered || []).length + ((v.register && v.register.findings) || []).length + ((v.register && v.register.silences) || []).length;
+      if (v.red) {
+        add({
+          key: 's6-claims-uncovered', rank: 8, type: 'housekeeping',
+          title: `${faults} S6 claim${faults === 1 ? ' has' : 's have'} no home, or a decision no sheet has learned`,
+          why: [
+            ...(v.uncovered || []).map((u) => `${u.map}: ${u.route}${u.operator ? ` (${u.operator})` : ''} — ${u.category}, no notOnLeaflet, no redteamRejected, no register entry`),
+            ...((v.register && v.register.silences) || []).map((s) => `${s.map} is silent about ${s.route} though ${s.id} decided it`),
+            ...((v.register && v.register.findings) || []).map((f) => f.text),
+            ...(v.reports === 0 ? ['no map had a verification.json on this disk, so nothing was checked'] : []),
+          ].join('; ') + '. A claim written nowhere is re-bought at 89k–137k tokens on the next S6.',
+          who: '—', runbook: 'S6', towns: [...new Set([...(v.uncovered || []).map((u) => u.map), ...((v.register && v.register.silences) || []).map((s) => s.map)])],
+          do: [
+            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'the remedy on each row' },
+            { kind: 'skill', what: 'Give each claim a home: a service-facts.json entry (queued is enough), or the map\'s own notOnLeaflet[] / redteamRejected[] if the answer is already known. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
+          ],
+        });
+      }
+      const qids = [...new Set((v.queued || []).map((q) => q.id))];
+      if (qids.length) {
+        add({
+          key: 's6-claims-queued', rank: 8, type: 'housekeeping',
+          title: `${qids.length} service fact${qids.length === 1 ? '' : 's'} queued in service-facts.json, awaiting a decision`,
+          why: qids.join(', ') + ' — each is a question written down about a bus a red team named. The queue is worked one entry at a time: verify against the operator\'s own site or BODS, write the decision in the register, then the map\'s own field.',
+          who: 'Peter, or a session applying a decided OA-004 default', runbook: 'S6', towns: [...new Set((v.queued || []).map((q) => q.map))],
+          do: [{ kind: 'skill', what: `Work the queued entries in service-facts.json (${qids.join(', ')}): for each, answer its \`question\`, apply its \`default\` only if it names a decided OA-004 default, record decidedOn/decidedBy/outcome/reason/evidence/recheckBy, then write the map's notOnLeaflet[] or verified set. Runbook: s6-verify.md, "What happens to a claim".` }],
+        });
+      }
+    }
+  }
+}
+
 // ---- CI state (OA-251) -----------------------------------------------------
 // THE ONE SOURCE HERE WHOSE ONLY OTHER CHANNEL WAS PETER'S INBOX. Everything
 // else on this list is read from a working tree or the portal's database; a

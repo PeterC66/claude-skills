@@ -1205,6 +1205,10 @@ if (!NO_QUALITY) {
     qualityTargets = quality.targetProgress(q.rows, q.ledger.targets, new Date().toISOString().slice(0, 10));
   } catch (e) { qualityRows = []; qualityTargets = []; qualityError = e.message; console.error('quality gate skipped: ' + e.message); }
 }
+// S6 claims (buses-data OA-273): every service claim on every latest S6 report has a
+// home, and service-facts.json contradicts no map. The whole argument is in
+// s6_claims.js; this board runs the coverage half because only this laptop can.
+const s6Claims = require('./s6_claims.js').measure(BUSES);
 // Sheets belonging to one town/place, so a row can sit beside its byte-gate row.
 const qualityFor = (name) => qualityRows.filter(r => r.key.startsWith(name + ' · '));
 const qualityCell = (name) => {
@@ -1337,7 +1341,11 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // that has slipped through three times in three days: an engine round that
   // re-vendors and leaves a fixture describing the previous engine.
   || freshnessRows.some(r => r.stale.length)
-  || engineStaleRows.length > 0;
+  || engineStaleRows.length > 0
+  // OA-273: a claim with no home, a decided fact over a silent map, or a checker
+  // that could not run. Green on the day it landed because the register was
+  // written and Ely Co-op's S3 carried its two decisions first.
+  || require('./s6_claims.js').isRed(s6Claims);
 
 
 // ---- deployment drift: is the LIVE site running what main says? ------------
@@ -1461,7 +1469,7 @@ async function main() {
   const deploy = await deploymentRow();
   const commit = commitmentRows();
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1640,6 +1648,10 @@ async function main() {
       + '   (node quality_gate.js --accept to re-record)');
     for (const line of quality.targetLines(qualityTargets)) console.log(line);
   }
+
+  // S6 claims (OA-273): printed whether or not anything is wrong — the queued
+  // count is the queue Peter works. Section text and why: s6_claims.js.
+  require('./s6_claims.js').printSection(s6Claims);
 
   // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
   // computed once, above the JSON branch, so both output forms agree — see there.

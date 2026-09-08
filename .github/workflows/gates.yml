@@ -496,6 +496,19 @@ jobs:
         working-directory: skills
         run: node tools/prove-red-exclusion-fields.mjs
 
+      # buses-data OA-273 (2026-09-08). check-s6-claims.mjs asks whether every S6 claim —
+      # a red-team claim about a SERVICE rather than artwork — has a home, and whether
+      # the service-facts register contradicts any town file. Its coverage half can only
+      # run on the laptop (verification.json is gitignored); its register half runs in
+      # buses-data's gates.yml. This harness runs HERE because its subject is the
+      # checker: a claim with no home is red, a parent town's decision reaches its
+      # places, a decided entry over a silent map is red, and --register-only says what
+      # it did not look at.
+      - name: Prove the S6 claims gate can go red
+        if: ${{ !cancelled() }}
+        working-directory: skills
+        run: node tools/prove-red-s6-claims.mjs
+
       # --tree, not --root: --root is flat by contract (prove-red-tables.mjs
       # drives it and asserts an exact row count), and this repository nests its
       # documents two deep and grows a folder whenever a skill is added.

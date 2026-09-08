@@ -93,7 +93,7 @@ The types and where each ends up:
 | `build` | an approved request with no map yet | map imported, v1.0 verified byte-identical |
 | `refresh` | a portal map whose services are changing | proposed update staged for the customer |
 | `refresh-local` | a town leaflet with no portal map | new S5 render + `_latest` refreshed |
-| `housekeeping` | engine-stale renders, missing S6 | rollout applied / S6 run |
+| `housekeeping` | engine-stale renders, missing S6, **S6 claims** — a red-team claim about a service with no home, or the queue of `service-facts.json` entries awaiting a decision (buses-data OA-273) | rollout applied / S6 run / every claim has a home and the queue is worked one entry at a time |
 | `awaiting-customer` | staged, they haven't accepted | a nudge, or nothing |
 | `draft-unsubmitted` | a version saved and never sent for review | evidence prepared; Peter submits and approves |
 

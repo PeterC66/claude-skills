@@ -336,6 +336,13 @@ export function needsOf(item) {
   // the one row that must never be hidden from a session looking for something
   // safe to do is the one saying the repository is broken.
   if (key.startsWith('ci-red-')) return [];
+  // OA-283: the row's own action is "read loop/blocked/<ref>.md and decide". That
+  // is a decision, like a drafted reply or an application — it touches no working
+  // tree, and whatever the ANSWER turns out to need belongs to the row that
+  // answer becomes. Empty for the same load-bearing reason as `ci-red-` above:
+  // --safe-only hides every non-SAFE row, and a session looking for something
+  // safe to do is exactly who should see that the loop has stopped and why.
+  if (key.startsWith('loop-blocked-')) return [];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

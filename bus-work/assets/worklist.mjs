@@ -80,6 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
+import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -923,6 +924,15 @@ for (const it of landmarkAnswers.items) {
 }
 if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared — ${landmarkAnswers.skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
 
+// The scheduled loop's own outbound channel (OA-283). It writes loop/blocked/
+// and stops; until this source nothing Peter runs read that folder, and one of
+// its files was contradicting a row on this very list. `loop/` is gitignored, so
+// absent is the normal state everywhere but this laptop — see loop_blocked.mjs.
+// The holds are applied AFTER every source has run, below, because a hold names
+// a row this file may not have added yet.
+const loopBlocked = loopBlockedItems({ files: readBlockedDir(path.join(BUSES, 'loop', 'blocked')) });
+for (const it of loopBlocked.items) add(it);
+
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows
 // that bury the four things a person is actually waiting on.
@@ -1113,6 +1123,18 @@ if (RUN_GATES && SK) {
 // seeded too (seed-demo.mjs), and the evidence that settles it is the ADDRESS
 // -- clerk@ramsey-tc.example, on an RFC 2606 reserved TLD that can never
 // receive mail. A name can look real. A reserved domain cannot be one.
+// OA-283 — a blocked file may name the rows it contradicts, and every source has
+// now run, so the rows exist to be named. Annotating rather than dropping is the
+// point: `loop/blocked/st-ives-v10.2-river.md` contradicts `draft-1`, and a row
+// that vanished would take its age, its URL and any explanation with it. A hold
+// that matched nothing is a stale `Blocks:` and is said out loud, for the reason
+// `adjudicated` is printed — a suppression nobody can see is how a board starts
+// lying, and an annotation nobody can see is the same fault one step earlier.
+const heldRows = applyHolds(items, loopBlocked.holds);
+for (const h of heldRows.unmatched) {
+  warnings.push(`loop/blocked/${h.file} names worklist row \`${h.key}\`, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
+}
+
 const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
@@ -1231,6 +1253,19 @@ for (const it of limited) {
     }
   }
   console.log(`    ${it.why}`);
+  // OA-283. A hold goes ABOVE the commands and gates them, because the question
+  // it answers is whether to act at all — which is upstream of how. The row keeps
+  // its place, its age and its link; what it loses is the ability to be read as
+  // an instruction. Without this the St Ives row said "Send v10.2 for review"
+  // while a blocked file said in terms that v10.2 must not be sent.
+  if (it.onHold && it.onHold.length) {
+    for (const h of it.onHold) {
+      console.log(`    ⚠ ON HOLD — ${h.headline}`);
+      if (h.need) console.log(`      ${h.need}`);
+      console.log(`      Raised by the scheduled loop; the whole argument is in loop/blocked/${h.file}`);
+    }
+    console.log(`    Only once that is settled:`);
+  }
   for (const d of it.do) {
     if (d.kind === 'shell') console.log(`    $ (in ${d.cwd})\n      ${d.cmd}${d.note ? `   # ${d.note}` : ''}`);
     else if (d.kind === 'portal-ui') console.log(`    → ${d.what}  ${d.url}`);

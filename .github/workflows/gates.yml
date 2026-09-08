@@ -245,6 +245,19 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-ci-state
 
+      # buses-data OA-283 (2026-09-08): the scheduled loop's loop/blocked/ rows and
+      # the hold one of them can place on another row. ITS SUBJECT DOES NOT SURVIVE
+      # actions/checkout -- `loop/` is gitignored in buses-data apart from its
+      # README, so the folder is ABSENT here by construction and this step can only
+      # ever exercise the silence. That is worth having (the silence is a
+      # requirement, and a throw would break every board), but it is not the whole
+      # check: the harness builds real folders under the temp dir so the rows and
+      # the hold are falsified too, and a mutation sweep on this laptop watched all
+      # eight mutations go red. Read this step as proving the module, not the estate.
+      - name: Prove the loop/blocked/ rows and holds can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-loop-blocked
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

@@ -49,6 +49,32 @@ Read-only, safe to run at any time, and safe while the dev server is running (th
 
 **It is falsified**, from this folder, no placeholders: `node prove-red-concurrency.mjs`. It builds throwaway git repositories to prove the reading is real, drives the rules over synthetic conditions to prove each verdict both appears and clears, and asserts a clean machine says go — which is the control that stops a rule returning `CHECK FIRST` for ever and passing every red case. It found a real fault on the day it was written: the estate-sweep rule was reading a flag stored beside the paths instead of the paths themselves.
 
+### The scheduled loop holds a lock, and this is where you see it (OA-287, 2026-09-08)
+
+**The loop takes `loop/LOCK.d` before it does a unit of work, and until now nothing you run could see it.** A tick takes the lock at step 3 of its stored prompt, writes its name and a lease into `holder`, and a later tick refuses to steal from any holder whose first line is not a `sched-` name. That half was written, falsified and deployed. The other half did not exist: this skill never mentioned the lock, `concurrency.mjs` never read it, and an ad-hoc manual prompt was told nothing — so a session started at 20:05 walked straight into a tick that took the lock at 20:00 and was forty minutes into an S6 red team. **A mutex taught to one party is not a mutex, it is a log.**
+
+**And it could not have been fixed by reading `git status` harder.** `loop/` is gitignored, so the lock directory can never appear as an uncommitted file in the `buses-tree` verdict; the one signal a manual session already consulted was blind to the loop's existence by construction. It is now the `loop-lock` resource, so a live tick shows up as `BETTER TO DELAY` on every row that touches the shared trees, named in the same `CONDITIONS` block as everything else.
+
+**Take the lock yourself before heavy work, and release it afterwards.** Not for ordinary document or backlog work — several sessions run here at once and must keep doing so, and a lock meaning *I am working in this repository* would serialise sessions that coexist fine on the stage-by-name and pathspec discipline, which is how it would come to be routed around. Take it for the work that cannot tolerate a second writer: **an S1–S6 map build, an estate sweep or rollout, `quality_gate.js --accept`, or an engine change.** From the buses repository root, `C:\u3a St Ives\Using AI\Buses`, with no placeholders:
+
+```bash
+mkdir "loop/LOCK.d"
+```
+
+A non-zero exit means somebody already holds it. Then write `loop/LOCK.d/holder` with **your session name first** — the name `ListAgents` gives this session — then the time, and a second line `expires:` at most ninety minutes ahead. Release with this exact string, from the same folder, **relative and not absolute**, because both allow rules are written relative and the absolute form is a fresh permission prompt at the worst possible moment:
+
+```bash
+rm -rf loop/LOCK.d
+```
+
+**Releasing is the part you owe.** A tick never steals from a name that is not a tick's — a session sitting idle is indistinguishable from an abandoned one, and idle is the normal case — so your lock cannot expire under you, and the price of that safety is that an abandoned one stalls the loop until Peter deletes the directory by hand.
+
+**What each verdict means when it names `loop-lock`.** A live tick, or another session, is `BETTER TO DELAY` with the holder and its age. A lock held by **you** is `SAFE NOW`, which is the control the harness exists to protect: without it the rule would block its own holder for ever while passing every red case. A **tick's** lock past its lease is also `SAFE NOW`, deliberately — the loop runs its conditions check at step 2 and takes the lock at step 3, and step 3 is where the steal rule lives, so a `CHECK FIRST` here would stop the next tick before it reached the line entitled to recover a crashed run. A **person's** lock past its lease is `CHECK FIRST`: nothing will clear it for you, so go and read it. Held with an unreadable `holder` is `CHECK FIRST` too — the directory is the lock and the file is only the courtesy.
+
+**The portal rows deliberately do not carry it**, and that is a fact about the loop rather than a judgement: a tick never pushes — a deny rule in buses-data's settings, observed refusing — so it can neither deliver a map nor deploy the portal, and cannot contend for either. If the loop is ever allowed to push, the assertion in the harness is what should go red.
+
+**It is falsified**, from this folder, no placeholders: `node prove-red-loop-lock.mjs`. It builds throwaway lock directories to prove the reading is real, then drives the rule over synthetic conditions. Watched go red before the rule existed — fifteen cases, with all four greens already passing, which is the shape that matters: the greens are the ways this rule could quietly break something that already works.
+
 Against a **remote** portal, add `--url https://busmaps.uk --token <OPERATOR_TOKEN>` (or set `BUSMAPS_URL` / `BUSMAPS_TOKEN`). See "Remote portals" below — both reading and delivery work against the live site from this laptop (delivery proven end to end across all 13 sample maps on 2026-08-18). What has **no** laptop path is the operator half: accepting a staged refresh, withdrawing a publish request and changing a map’s outputs are HTTP endpoints needing a signed-in admin session, so they are browser work.
 
 **Which portal you are looking at — it will not guess, since 2026-08-31.** `BUSMAPS_URL` and `BUSMAPS_TOKEN` live in `C:\Claude\community-bus-maps\.env`, which `worklist.mjs` loads for itself, so the bare command reads the **live site** and there is no flag to remember. With neither set and no `--local`, the tool prints the two lines to add and exits 2 rather than opening the dev SQLite. The dev checkout is `--local`, which **beats a configured `BUSMAPS_URL`** — otherwise the flag would do nothing on precisely the machine it exists for. `--local --url` together is a refusal, not a precedence rule. Either credential is live: it belongs in that gitignored `.env`, never in a chat message or a command line that lands in shell history.

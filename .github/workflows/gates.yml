@@ -258,6 +258,21 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-blocked
 
+      # buses-data OA-287 (2026-09-08): the scheduled loop's mutex, loop/LOCK.d,
+      # read so that a MANUAL session can see it. SAME CHECKOUT PROBLEM AS THE STEP
+      # ABOVE and one degree worse -- `loop/` is gitignored in buses-data, so the
+      # lock is ABSENT here by construction, and a rule that threw or delayed on a
+      # missing folder would take every board down everywhere but that laptop. The
+      # harness builds real lock directories under the temp dir for the rest. Its
+      # four GREEN cases are the ones to read: held-by-me, a stale tick's lock, a
+      # row that needs nothing, and no loop/ at all. Each is a way this rule could
+      # silently break something that already works -- the second would have
+      # disabled the loop's own crash recovery by stopping a tick at step 2 before
+      # it reached the steal rule at step 3.
+      - name: Prove the scheduled loop's lock verdict can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-loop-lock
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

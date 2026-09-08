@@ -57,6 +57,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { readLoopLock, fmtMin } from './loop_lock.mjs';
 
 // ---- verdicts --------------------------------------------------------------
 export const SAFE = 'safe';
@@ -212,6 +213,12 @@ export function readConditions({ buses, portal, engine, selfSession, now = Date.
     at: new Date(now).toISOString(),
     repos,
     claims: buses ? readClaims(buses, selfSession) : [],
+    /* OA-287. The one fact here that git cannot supply: `loop/` is gitignored,
+     * so a held lock can never reach the `buses-tree` verdict as an uncommitted
+     * file, and every reader of that verdict was blind to the loop by
+     * construction. Absent when there is no buses tree to look in, which is the
+     * normal case in a harness fixture and in CI. */
+    loopLock: buses ? readLoopLock(buses, { selfSession, now }) : null,
     peers: readPeerActivity({ windowMin: peerWindowMin, projectsDir, now }),
     selfSession: selfSession || null,
   };
@@ -268,6 +275,47 @@ const RULES = {
     return [SAFE, null];
   },
 
+  /*
+   * OA-287. The scheduled loop's mutex, read from the one place it exists.
+   *
+   * THE THREE GREENS BELOW ARE LOAD-BEARING AND EACH IS A DIFFERENT MISTAKE
+   * THIS RULE COULD MAKE.
+   *
+   *   Held by ME is SAFE, or the rule blocks its own holder for ever — and it
+   *   would then pass every red case in the harness while being useless. Same
+   *   shape the estate-sweep rule was caught in on the day that harness was
+   *   written.
+   *
+   *   A TICK's lock past its lease is SAFE, and this one is not obvious. The
+   *   loop runs the conditions check at step 2 and takes the lock at step 3,
+   *   and step 3 is where the steal rule lives. A CHECK FIRST here would stop
+   *   the next tick before it ever reached the line entitled to recover a
+   *   crashed run — this rule would have disabled the loop's own crash
+   *   recovery. So it stays quiet and leaves that decision where the design
+   *   puts it. The facts remain in `conditions.loopLock` for anyone reading.
+   *
+   *   ABSENT is SAFE. This runs in harness fixtures, in a fresh clone and in
+   *   CI, none of which have a `loop/` folder at all, and every synthetic world
+   *   in prove-red-concurrency.mjs omits the field entirely.
+   *
+   * A PERSON's lock past its lease is CHECK FIRST rather than SAFE, because a
+   * tick never steals from a name that is not a tick's: nothing will clear it
+   * for you, and an idle session looks exactly like an abandoned one.
+   */
+  'loop-lock': (c) => {
+    const L = c.loopLock;
+    if (!L || !L.present) return [SAFE, null];
+    if (L.mine) return [SAFE, null];
+    if (!L.readable) return [CHECK, 'loop/LOCK.d is held and its holder file cannot be read — something took the loop\'s lock without saying who; read the directory before you start anything that writes'];
+    const who = L.name || 'an unnamed holder';
+    const age = L.ageMin === null ? 'for an unknown time' : `${fmtMin(L.ageMin)} ago`;
+    if (L.isTick && L.expired) return [SAFE, null];
+    if (L.expired) {
+      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it`];
+    }
+    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file`];
+  },
+
   'portal-deploy': (c) => {
     const p = c.repos.portal;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
@@ -292,12 +340,31 @@ export const NEED_LABEL = {
   'estate-sweep': 'an estate-wide sweep',
   'portal-write': 'delivery to the live portal',
   'portal-deploy': 'a portal deploy',
+  'loop-lock': "the scheduled loop's lock",
 };
+
+/*
+ * OA-287. WHICH WORK THE LOOP CAN CONTEND FOR, and it is a fact about the loop
+ * rather than a judgement about risk. A tick works the shared local trees; it
+ * NEVER pushes — a deny rule in buses-data's settings, observed refusing — so it
+ * can neither deliver a map nor deploy the portal, and the two portal resources
+ * are genuinely not contended. If the loop is ever allowed to push, the harness
+ * assertion that a deploy does not carry the lock is what should go red.
+ */
+const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep']);
 
 export function assess(needs, conditions) {
   let verdict = SAFE;
   const reasons = [];
-  for (const need of needs || []) {
+  /* OA-287, and stated ONCE here rather than added to a dozen returns in
+   * needsOf(). Attaching it at the boundary is what keeps the empty list empty:
+   * `ci-red-` and `loop-blocked-` rows return [] on purpose so that --safe-only
+   * can never hide the row saying the repository is broken or that the loop has
+   * stopped, and a guard written case by case is exactly how that gets undone by
+   * somebody adding the thirteenth case. */
+  const list = [...(needs || [])];
+  if (list.some((n) => LOOP_CONTENDS.has(n))) list.unshift('loop-lock');
+  for (const need of list) {
     const rule = RULES[need];
     if (!rule) continue;
     const [v, why] = rule(conditions);

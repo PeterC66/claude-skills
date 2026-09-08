@@ -60,7 +60,8 @@
 //
 // THE RULE TRAVELS; THE SCOPE STAYS HOME. The corpus is no longer four folder
 // names from one repository held in a const here. It is resolved against the
-// repository the checker is run FROM -- `process.cwd()` -- and that repository
+// repository ENCLOSING the folder the checker is run from -- OA-275 step 2,
+// where `process.cwd()` used to be -- and that repository
 // declares its own `dirs` and `files` in the `.doc-links.json` at its root,
 // beside the `resolveFromRoot` that file already carried. See `declaration()`.
 //
@@ -74,6 +75,7 @@
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { untrackedFiles } from './lib/tracked-docs.mjs';
+import { enclosingRepoRoot } from './lib/repo-root.mjs';
 
 /* --root <dir> scans that directory instead of this repository's doc set. It
  * exists for prove-red-doc-links.mjs, which builds a tree of deliberately
@@ -105,12 +107,16 @@ import { untrackedFiles } from './lib/tracked-docs.mjs';
 
 const rootArg = process.argv.indexOf('--root');
 const FIXTURE = rootArg > -1 ? path.resolve(process.argv[rootArg + 1]) : null;
-/* THE REPOSITORY BEING CHECKED, which used to be the one this file sat in and is
- * now the one it was run from. `--root <dir>` is unchanged and still means
+/* THE REPOSITORY BEING CHECKED, which used to be the one this file sat in, then
+ * the one it was run from, and is now THE ONE ENCLOSING the folder it was run
+ * from (buses-data OA-275 step 2). `process.cwd()` reads as "the repository you
+ * are standing in" and is not that: run from a subfolder it silently narrows the
+ * corpus and reports green, which is the one fault this checker's own history is
+ * a list of. See lib/repo-root.mjs. `--root <dir>` is unchanged and still means
  * something narrower: scan exactly that tree and read no declaration, which is
  * what prove-red-doc-links.mjs drives over a temp folder that is not a git
  * repository at all. */
-const ROOT = FIXTURE || path.resolve(process.cwd());
+const ROOT = FIXTURE || enclosingRepoRoot();
 const VERBOSE = process.argv.includes('--verbose');
 
 /* ASSEMBLED FRAGMENTS RESOLVE THEIR LINKS FROM THE REPOSITORY ROOT (W2,

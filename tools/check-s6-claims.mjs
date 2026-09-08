@@ -71,6 +71,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { enclosingRepoRoot } from './lib/repo-root.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -84,7 +85,13 @@ for (const a of argv) {
   }
 }
 const rootIdx = argv.indexOf('--root');
-const ROOT = rootIdx >= 0 ? argv[rootIdx + 1] : process.cwd();
+/* WITH NO `--root`, THE SUBJECT IS THE ENCLOSING REPOSITORY (buses-data OA-275
+ * step 2). This checker is the one that proved the point: run from
+ * `Areas/Beaconsfield` — where every stage-engine call leaves the shell — it
+ * reported `2 map(s) tracked; 11 claim(s) — UNCOVERED 11`, and from the
+ * repository root, same commit, `20 map(s) tracked … every claim has a home`.
+ * Both name a real directory and count real maps. See lib/repo-root.mjs. */
+const ROOT = rootIdx >= 0 ? argv[rootIdx + 1] : enclosingRepoRoot();
 if (rootIdx >= 0 && (!ROOT || ROOT.startsWith('--'))) { console.error('check-s6-claims: --root needs a directory'); process.exit(2); }
 const AS_JSON = argv.includes('--json');
 const REQUIRE_REPORTS = argv.includes('--require-reports');

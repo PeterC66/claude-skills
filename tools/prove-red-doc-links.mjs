@@ -474,7 +474,11 @@ report(d4.code === 2 && /does not parse/.test(d4.out),
  * -- the path CI and a hook actually take -- and assert the DOCUMENT COUNT as
  * well as the verdict, because a verdict alone cannot express a corpus that
  * quietly shrank. */
-function repoFixture(files, { staged = true } = {}) {
+/* `from` STARTS THE CHECKER SOMEWHERE ELSE INSIDE THE SAME REPOSITORY, which is
+ * the only thing separating "the repository this is about" from "the folder I am
+ * standing in". Defaulting to the root is what every case here did before
+ * OA-275, and it is why none of them could see the fault. */
+function repoFixture(files, { staged = true, from = '' } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'doclinks-repo-'));
   for (const [name, body] of Object.entries(files)) {
     const p = path.join(dir, name);
@@ -483,7 +487,7 @@ function repoFixture(files, { staged = true } = {}) {
   }
   spawnSync('git', ['-C', dir, 'init', '-q'], { encoding: 'utf8' });
   if (staged) spawnSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' });
-  const r = spawnSync(process.execPath, [CHECKER], { cwd: dir, encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [CHECKER], { cwd: path.join(dir, from), encoding: 'utf8' });
   rmSync(dir, { recursive: true, force: true });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
@@ -564,6 +568,39 @@ console.log('\nThe default corpus, resolved from the repository it is run from:\
   rmSync(dir, { recursive: true, force: true });
   report(pointed.code === 0, 'under --root, the tree’s own resolveFromRoot is still honoured'
     + (pointed.code === 0 ? '' : `  <-- exited ${pointed.code}\n${pointed.out}`), 'GREEN');
+}
+
+/* STARTED IN A SUBFOLDER OF THE REPOSITORY (buses-data OA-275 step 2).
+ *
+ * The corpus comes from the ENCLOSING repository rather than from the folder the
+ * checker was started in. Every case above starts at the repository root, where
+ * the two cannot differ — and the caller most likely to be somewhere else is the
+ * scheduled loop, because the stage engine takes its cwd as its subject and
+ * leaves the shell inside a map folder.
+ *
+ * The dead link is put at the repository ROOT and the checker started two
+ * folders down, so this discriminates by VERDICT: reading the cwd, `git -C
+ * <subfolder> ls-files` answers with that subfolder alone, the dead link is
+ * outside the corpus, and the run is green. Measured on the day: run from
+ * `make-bus-leaflet/`, the real checker reported ten findings that did not
+ * exist; it now reports the repository's 45 documents and none. */
+console.log('\nStarted two folders down, inside the same repository:\n');
+{
+  const below = repoFixture({
+    'README.md': '# Root\n\nSee [nothing at all](no-such-file.md).\n',
+    /* DELIBERATELY LINKLESS. An earlier draft had this document link up to the
+     * root, and under the old behaviour that went red as "a link that climbs
+     * out of the repository" — the right verdict for the wrong reason, which
+     * would have left the verdict half of this case unable to discriminate. */
+    'deep/inside/fine.md': '# Fine\n\nNothing here to check.\n',
+  }, { from: path.join('deep', 'inside') });
+  report(below.code === 1 && /README\.md/.test(below.out),
+    'L1  the dead link at the repository root was found from two folders down'
+    + (below.code === 1 ? '' : `  <-- exited ${below.code}\n${below.out}`));
+  const n = counted(below.out);
+  report(!!n && n.corpus === 2,
+    `it read ${n ? n.corpus : 'no'} documents from the subfolder — the whole repository, not the folder it stood in`,
+    'GREEN');
 }
 
 /* --root FROM A CWD THAT IS NOT A REPOSITORY, the pair of the case

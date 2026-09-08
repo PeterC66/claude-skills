@@ -263,6 +263,14 @@ function repo(files, { staged = true } = {}) {
       const r = spawnSync(process.execPath, [CHECKER, ...args], { cwd: dir, encoding: 'utf8' });
       return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
     },
+    /* THE SAME RUN, STANDING SOMEWHERE ELSE INSIDE THE SAME REPOSITORY. Every
+     * case above starts at the repository root, which is the one place where
+     * `process.cwd()` and "the repository this is about" cannot disagree — so
+     * none of them could see OA-275. */
+    runFrom(sub, args = []) {
+      const r = spawnSync(process.execPath, [CHECKER, ...args], { cwd: path.join(dir, sub), encoding: 'utf8' });
+      return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+    },
     done() { rmSync(dir, { recursive: true, force: true }); },
   };
 }
@@ -378,6 +386,51 @@ console.log('\nAn `enumerate` folder grows a subfolder nobody listed:\n');
     'the new thread folder was scanned — enumerated at run time, not written down'
     + (grown.code === 1 ? '' : `  <-- exited ${grown.code}\n${grown.out}`));
   r.done();
+}
+
+/* STANDING IN A SUBFOLDER OF THE REPOSITORY (buses-data OA-275 step 2).
+ *
+ * The corpus is resolved from the ENCLOSING repository, not from the folder the
+ * checker happens to be started in. Every default-corpus case above runs at the
+ * repository root, where the two are the same thing, so for a fortnight this
+ * harness was blind to the one way the scope could still be narrowed silently —
+ * and it is not a contrived way: the stage engine takes its cwd as its subject,
+ * so any session that runs an S1–S6 stage and then a checker is standing in a
+ * map folder.
+ *
+ * The fault is put at the repository ROOT and the checker started two folders
+ * down, so the case discriminates by VERDICT and not only by a count: reading
+ * the cwd, `git -C <subfolder> ls-files` answers with that subfolder's files
+ * alone, the glued row is outside the corpus, and the run is GREEN. */
+console.log('\nStarted two folders down, inside the same repository:\n');
+{
+  const r = repo({ 'broken.md': BROKEN, 'deep/nested/fine.md': PLAIN });
+  const below = r.runFrom(path.join('deep', 'nested'));
+  report(below.code === 1 && /broken\.md/.test(below.out),
+    'the glued row at the repository root was found from two folders down'
+    + (below.code === 1 ? '' : `  <-- exited ${below.code}\n${below.out}`));
+  const fromBelow = /(\d+) table rows across (\d+) documents/.exec(below.out);
+  const atRoot = /(\d+) table rows across (\d+) documents/.exec(r.run().out);
+  report(!!fromBelow && !!atRoot && fromBelow[1] === atRoot[1] && fromBelow[2] === atRoot[2],
+    `the same corpus either way — ${fromBelow ? `${fromBelow[1]} rows across ${fromBelow[2]}` : 'nothing'} from the subfolder, ${atRoot ? `${atRoot[1]} across ${atRoot[2]}` : 'nothing'} from the root`,
+    'GREEN');
+  r.done();
+}
+
+/* AND THE FALLBACK DOES NOT REACH FOR SOMEBODY ELSE'S REPOSITORY. With no
+ * enclosing repository at all the subject is the cwd, exactly as before, and
+ * this checker's own precondition — a corpus git can say nothing about is a
+ * refusal, never a clean total — is what must then speak. */
+console.log('\nThe default corpus from a folder in no repository at all:\n');
+{
+  const from = mkdtempSync(path.join(tmpdir(), 'not-a-repo-'));
+  writeFileSync(path.join(from, 'broken.md'), BROKEN, 'utf8');
+  const r = spawnSync(process.execPath, [CHECKER], { cwd: from, encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  rmSync(from, { recursive: true, force: true });
+  report(r.status !== 0 && /tracks no \.md|cannot ask git/.test(out),
+    'no enclosing repository — it refused about the cwd rather than borrowing another tree'
+    + (r.status !== 0 ? '' : `  <-- exited 0\n${out}`));
 }
 
 /* --root AND --tree FROM A CWD THAT IS NOT A REPOSITORY AT ALL.

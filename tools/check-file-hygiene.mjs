@@ -51,6 +51,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { enclosingRepoRoot } from './lib/repo-root.mjs';
 
 /* AN UNKNOWN FLAG IS REFUSED BY NAME, exit 2 — never ignored. The house rule,
  * bought on 2026-09-02 when `check-doc-links.mjs --tree <dir>` accepted a flag
@@ -74,7 +75,14 @@ const TAKES_VALUE = new Set(['--root']);
 
 const rootArg = process.argv.indexOf('--root');
 const staged = process.argv.includes('--staged');
-const ROOT = path.resolve(rootArg > -1 ? process.argv[rootArg + 1] : process.cwd());
+/* WITH NO `--root`, THE SUBJECT IS THE ENCLOSING REPOSITORY rather than the
+ * folder you happen to be standing in (buses-data OA-275 step 2). The corpus
+ * comes from `git ls-files`, so a cwd one folder down used to produce a
+ * confident "all clean" over a fraction of the tree with nothing in the wording
+ * to say so. `--root <dir>` still names a TREE, resolved from the cwd exactly as
+ * before, because that is what the harness drives over a temp folder that is no
+ * repository at all. See lib/repo-root.mjs. */
+const ROOT = rootArg > -1 ? path.resolve(process.argv[rootArg + 1]) : enclosingRepoRoot();
 
 /* A BOM is load-bearing in a PowerShell script and noise everywhere else.
  * Windows PowerShell 5.1 reads a BOM-LESS file as ANSI, so the first em dash

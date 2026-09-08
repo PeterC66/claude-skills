@@ -72,6 +72,16 @@ function run(root) {
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 
+/* THE SAME RUN, STARTED INSIDE A MAP RATHER THAN AT THE REPOSITORY ROOT. Every
+ * case here starts at the root, where "the folder I am in" and "the estate I am
+ * asking about" cannot differ — and a session that has just run an S1 stage is
+ * never at the root, because the stage engine takes its cwd as its subject
+ * (buses-data OA-275). */
+function runFrom(root, sub) {
+  const r = spawnSync(process.execPath, [CHECKER], { cwd: path.join(root, sub), encoding: 'utf8' });
+  return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
 const clean = { town: 'Fixture', services: [{ route: '1', servesTown: true }], notOnLeaflet: [{ route: '99', note: 'a real exclusion, in the canonical field' }] };
 
 console.log('Falsifying check-exclusion-fields.mjs\n');
@@ -183,6 +193,27 @@ console.log('\n11. An unknown flag is a usage error, not a silent default');
   const r = spawnSync(process.execPath, [CHECKER, '--all'], { cwd: root, encoding: 'utf8' });
   check('exit 2 and the known flags are listed', r.status === 2 && /known: --root/.test((r.stdout || '') + (r.stderr || '')),
     `exit ${r.status}`);
+}
+
+console.log('\n12. STARTED INSIDE A MAP — the estate is the enclosing repository, not the cwd (OA-275 step 2)');
+{
+  /* THE ESTATE IS THE SUBJECT AND ONE TOWN IS NOT. The fixture puts the
+   * deprecated field in a town the starting folder is NOT inside, so reading the
+   * cwd the gate sees a clean single map and exits 0 — a green verdict about a
+   * fraction of its subject, with nothing in the wording to say which fraction.
+   * That is the shape this whole family of checkers exists to prevent, arrived
+   * at through the cwd rather than through a scope list. */
+  const root = repo('cwd-inside-a-map', [
+    ['Areas/Clean', '2026-09-01_0000', clean],
+    ['Areas/Stale', '2026-09-01_0000', { ...clean, notDisplayed: [{ route: 'W9', reason: 'occasional excursion' }] }],
+  ]);
+  const below = runFrom(root, path.join('Areas', 'Clean', 'S1-services', '2026-09-01_0000'));
+  check('started in a clean town\'s own S1 run folder: the OTHER town\'s deprecated field is still found',
+    below.code === 1 && /notDisplayed/.test(below.out) && /Areas\/Stale/.test(below.out.split('\\').join('/')),
+    `exit ${below.code}: ${below.out.split('\n').find(l => l.includes('notDisplayed')) || below.out.trim().slice(0, 120)}`);
+  check('and it checked the whole estate — 2 maps, the same as from the root',
+    /2 map\(s\) checked/.test(below.out) && /2 map\(s\) checked/.test(run(root).out),
+    below.out.split('\n').find(l => l.includes('map(s) checked')));
 }
 
 console.log('\n' + '='.repeat(78));

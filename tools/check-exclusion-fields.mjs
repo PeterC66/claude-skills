@@ -39,6 +39,7 @@
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { enclosingRepoRoot } from './lib/repo-root.mjs';
 
 const CANONICAL = 'notOnLeaflet';
 const DEPRECATED = ['verifiedNotDisplayed', 'notDisplayed', 'excluded'];
@@ -52,7 +53,14 @@ for (const a of argv) {
   }
 }
 const rootIdx = argv.indexOf('--root');
-const ROOT = rootIdx >= 0 ? argv[rootIdx + 1] : process.cwd();
+/* WITH NO `--root`, THE SUBJECT IS THE ENCLOSING REPOSITORY (buses-data OA-275
+ * step 2). The corpus below is `git ls-files` run at ROOT, so a cwd one folder
+ * down used to answer about that folder alone — and the folder a session is most
+ * likely to be standing in is a MAP folder, because the stage engine takes its
+ * cwd as its subject and leaves the shell there. A gate about the estate,
+ * answered about one town, is green for the wrong reason and says nothing about
+ * it. See lib/repo-root.mjs. */
+const ROOT = rootIdx >= 0 ? argv[rootIdx + 1] : enclosingRepoRoot();
 if (rootIdx >= 0 && !ROOT) { console.error('check-exclusion-fields: --root needs a directory'); process.exit(2); }
 
 /*

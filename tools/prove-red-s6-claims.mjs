@@ -102,6 +102,15 @@ function run(root, ...flags) {
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 
+/* THE SAME RUN, STARTED SOMEWHERE ELSE INSIDE THE SAME ESTATE. Every case above
+ * starts at the repository root, which is the one place where "the folder I am
+ * standing in" and "the repository this is about" cannot differ — and the
+ * stage engine never leaves the shell there (buses-data OA-275). */
+function runFrom(root, sub, ...flags) {
+  const r = spawnSync(process.execPath, [CHECKER, ...flags], { cwd: path.join(root, sub), encoding: 'utf8' });
+  return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+}
+
 const claim = (route, category = 'missing-service', operator = 'Fixture Buses') =>
   ({ category, route, evidence: { route, redteam: { operator } } });
 const decided = (id, route, scope, extra = {}) => ({
@@ -254,6 +263,32 @@ console.log('\n11. --json carries the same verdict, and an unknown flag is a usa
   check('parses, red, one uncovered claim named', !!j && j.red === true && j.uncovered.length === 1 && j.uncovered[0].route === '77' && j.claims === 1, r.out.slice(0, 120));
   const r2 = spawnSync(process.execPath, [CHECKER, '--all'], { cwd: root, encoding: 'utf8' });
   check('exit 2 and the known flags are listed', r2.status === 2 && /known: --root/.test((r2.stdout || '') + (r2.stderr || '')), `exit ${r2.status}`);
+}
+
+console.log('\n13. STARTED IN A RUN FOLDER — the estate is the enclosing repository, not the cwd (OA-275 step 2)');
+{
+  /* THIS IS THE OBSERVED FAULT, NOT A CONTRIVED ONE. `stage.js`,
+   * `redteam_source.js` and `verify_report.js` take their cwd as their SUBJECT
+   * and have no directory argument, so every S1–S6 call is made from a map or a
+   * run folder and leaves the shell there. Run from `Areas/Beaconsfield` on
+   * 2026-09-08 this checker reported `2 map(s) tracked; 11 claim(s) — UNCOVERED
+   * 11`; from the repository root, same commit, `20 map(s) tracked … every claim
+   * has a home`. Both name a real directory and count real maps, and the wrong
+   * one is the red — which is the better half of the accident, because the same
+   * mechanism silently narrows the corpus of a checker that then reports GREEN.
+   *
+   * The fixture is the parent-town shape, because that is what a narrowed
+   * corpus destroys: the place's claim is answered by a file one folder ABOVE
+   * the place, so a checker scoped to the place cannot see the answer and the
+   * claim reads as a new question. */
+  const t = town('Wycombe', { services: [{ route: '1' }], notOnLeaflet: [{ route: '604', reason: 'school' }] }, { routeOrder: ['1'] }, null);
+  const p = place('Wycombe', 'Aldi', { routeOrder: ['2'] }, [claim('604')]);
+  const root = repo('cwd-run-folder', [t, p], EMPTY);
+  const where = path.join('Areas', 'Wycombe', 'Places', 'Aldi', 'S6-verify', '2026-09-01_0000');
+  const below = runFrom(root, where);
+  check('started in the place\'s own S6 run folder: still exit 0, the parent town was read', below.code === 0 && /parent-exclusion 1/.test(below.out), `exit ${below.code}: ${below.out.split('\n').find(l => l.includes('map(s) tracked')) || below.out.trim().slice(0, 120)}`);
+  check('and it counted the whole estate — 2 maps, the same as from the root', /2 map\(s\) tracked/.test(below.out) && /2 map\(s\) tracked/.test(run(root).out), below.out.split('\n').find(l => l.includes('map(s) tracked')));
+  check('the line it prints names the repository root, not the folder it was started in', new RegExp(`check-s6-claims — ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s`).test(below.out), below.out.split('\n')[0]);
 }
 
 console.log('\n' + '='.repeat(78));

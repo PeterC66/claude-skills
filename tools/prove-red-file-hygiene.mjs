@@ -151,5 +151,51 @@ for (const [what, files, expect, decl] of CASES) {
   else console.log('ok    CONTROL — --root is still accepted');
 }
 
-console.log(`\nprove-red-file-hygiene: ${CASES.length + 6} cases, ${failed} failed.`);
+/* THE DEFAULT CORPUS, AND IT IS THE ENCLOSING REPOSITORY (buses-data OA-275
+ * step 2). Every case above drives `--root <dir>`, so until now nothing here had
+ * ever exercised the path a person or a hook actually takes — the checker with
+ * no flags at all, resolving its own subject. That subject used to be
+ * `process.cwd()`, which is the folder you happen to be standing in rather than
+ * the repository you are asking about, and the two differ for exactly the caller
+ * that cannot notice: the scheduled loop, whose stage-engine work leaves the
+ * shell inside a map folder.
+ *
+ * The fault is planted at the repository ROOT and the checker started two
+ * folders down. Reading the cwd, `git ls-files` there answers with the subfolder
+ * alone and the run is a clean exit 0 — so this case discriminates by VERDICT,
+ * not merely by a count that moved. */
+function bareRun(files, from = '') {
+  const dir = mkdtempSync(path.join(tmpdir(), 'hygiene-cwd-'));
+  execFileSync('git', ['-C', dir, 'init', '-q']);
+  execFileSync('git', ['-C', dir, 'config', 'user.email', 'x@y.z']);
+  execFileSync('git', ['-C', dir, 'config', 'user.name', 'x']);
+  writeFileSync(path.join(dir, '.gitattributes'), '* -text\n', 'utf8');
+  for (const [name, body] of Object.entries(files)) {
+    const p = path.join(dir, name);
+    mkdirSync(path.dirname(p), { recursive: true });
+    writeFileSync(p, body, 'utf8');
+  }
+  execFileSync('git', ['-C', dir, 'add', '-A']);
+  const r = spawnSync(process.execPath, [CHECKER], { cwd: path.join(dir, from), encoding: 'utf8' });
+  rmSync(dir, { recursive: true, force: true });
+  return { code: r.status, out: (r.stdout || '') + (r.stderr || ''), dir };
+}
+{
+  const planted = { 'bad.md': '# Doc\n\nA line with a space.   \n', 'deep/inside/ok.md': CLEAN };
+  const below = bareRun(planted, path.join('deep', 'inside'));
+  if (below.code !== 1 || !below.out.includes('TRAILING-WS') || !below.out.includes('bad.md')) {
+    fail('the default corpus from two folders down', `expected a TRAILING-WS finding naming bad.md, got exit ${below.code}\n      ${below.out.trim()}`);
+  } else console.log('ok    started two folders down — the fault at the repository root was still found');
+
+  /* AND THE SAME CORPUS EITHER WAY, because a checker that merely reached
+   * FURTHER than the cwd would pass the assertion above while reading some
+   * other tree. The count is what pins it to this repository and no other. */
+  const atRoot = bareRun(planted);
+  const n = (out) => (/(\d+) text file\(s\) tracked/.exec(out) || [])[1];
+  if (!n(below.out) || n(below.out) !== n(atRoot.out)) {
+    fail('the same corpus either way', `subfolder read ${n(below.out)} file(s), root read ${n(atRoot.out)}\n      ${below.out.trim()}`);
+  } else console.log(`ok    the same corpus either way — ${n(below.out)} tracked file(s) from both`);
+}
+
+console.log(`\nprove-red-file-hygiene: ${CASES.length + 8} cases, ${failed} failed.`);
 process.exit(failed ? 1 : 0);

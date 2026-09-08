@@ -29,11 +29,12 @@
 //
 // THE RULE TRAVELS; THE SCOPE STAYS HOME. A checker three repositories run must
 // not carry one repository's folder names, so the corpus is no longer a list of
-// literals in this file. It is resolved against the repository the checker is
-// run FROM -- `process.cwd()` -- and declared by that repository in a
-// `.doc-tables.json` at its root. See `declaration()` below.
+// literals in this file. It is resolved against the repository ENCLOSING the
+// folder the checker is run from -- OA-275 step 2, where `process.cwd()` used to
+// be -- and declared by that repository in a `.doc-tables.json` at its root. See
+// `declaration()` below.
 //
-// Run it from the repository root of whichever repository you are checking. The
+// Run it from anywhere inside the repository you are checking. The
 // path below is a real path on this machine, not a placeholder:
 //   node "C:/u3a St Ives/.claude/skills/tools/check-tables.mjs"
 //
@@ -42,6 +43,7 @@
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { untrackedByCheckers } from './lib/tracked-docs.mjs';
+import { enclosingRepoRoot } from './lib/repo-root.mjs';
 import path from 'node:path';
 
 /* --root <dir> checks that folder instead of this one. It exists for
@@ -139,8 +141,16 @@ function dirsUnder(dir) {
  *
  * From git rather than a walk, for the reasons in lib/tracked-docs.mjs: S4/S5/S6
  * run folders are gitignored apart from their README, and a session mid-build
- * has scratch markdown across the estate. */
-const REPO_ROOT = path.resolve(process.cwd());
+ * has scratch markdown across the estate.
+ *
+ * AND IT IS THE ENCLOSING REPOSITORY, NOT THE FOLDER YOU HAPPEN TO BE IN
+ * (buses-data OA-275 step 2). `process.cwd()` was one forgotten `cd` away from a
+ * confident total over a smaller population, which is precisely the fault the
+ * eight widenings above are a history of — and the caller most likely to forget
+ * is the scheduled loop, whose commonest work leaves the shell inside a map
+ * folder. See lib/repo-root.mjs. `--root` and `--tree` name a TREE and are
+ * untouched: nothing below this line is evaluated under either. */
+const REPO_ROOT = enclosingRepoRoot();
 
 /* A file that does not parse is a REFUSAL rather than a silent fallback -- a
  * declaration nobody can read must not look like a repository that made none.

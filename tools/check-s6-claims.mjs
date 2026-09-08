@@ -45,8 +45,9 @@
  * tree in which no map has an S6 report, and a check over zero reports is green for
  * ever — the shape buses-data's CLAUDE.md names as "the subject that does not
  * survive actions/checkout". So this half runs on the laptop, from `status.js` and
- * the `bus-work` worklist, and `--require-reports` is how a local caller makes "we
- * found nothing to check" red rather than quiet. CI passes `--register-only` and its
+ * the `bus-work` worklist; `--require-reports` is how the worklist makes "we found
+ * nothing to check" red rather than quiet, and the board deliberately omits it (see
+ * make-bus-leaflet/assets/s6_claims.js — it also runs over harness fixtures). CI passes `--register-only` and its
  * step name says so.
  *
  * THE REGISTER HALF runs everywhere. `service-facts.json` parses; every entry
@@ -124,6 +125,10 @@ try {
   tracked = execFileSync('git', ['ls-files', '-z', '*manifest.json'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     .split('\0').filter(Boolean);
 } catch (e) {
+  // A usage error, exit 2 — but under --json it is also an ANSWER the board can read:
+  // status.js runs over harness fixtures and scratch trees that are not repositories,
+  // and "this is not a repository" must be distinguishable from "the checker crashed".
+  if (AS_JSON) console.log(JSON.stringify({ root: path.resolve(ROOT), notARepository: true, maps: 0, reports: 0, claims: 0, uncovered: [], queued: [], coveredBy: {}, register: { present: false, facts: 0, queued: 0, decided: 0, findings: [], silences: [] }, red: false, why: `could not list tracked files in ${ROOT} — ${e.message.split('\n')[0]}` }, null, 2));
   console.error(`check-s6-claims: could not list tracked files in ${ROOT} — ${e.message}`);
   console.error('  Run it from the root of a git repository, or pass --root <dir>.');
   process.exit(2);

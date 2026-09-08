@@ -236,6 +236,16 @@ console.log('\n10. An unreadable file is REPORTED, never skipped into silence');
   check('a verification.json that will not parse is red and named', r.code === 1 && /verification.json\n\s+could not be parsed as JSON — its claims could not be counted/.test(r.out), `exit ${r.code}`);
 }
 
+console.log('\n12. A tree that is not a repository is a usage error (exit 2) — and under --json also a readable answer, so a board can tell it from a crash');
+{
+  const root = path.join(TMP, 'not-a-repo'); mkdirSync(root, { recursive: true });
+  const r = run(root);
+  check('exit 2 without --json', r.code === 2 && /could not list tracked files/.test(r.out), `exit ${r.code}`);
+  const r2 = spawnSync(process.execPath, [CHECKER, '--json'], { cwd: root, encoding: 'utf8' });
+  let j = null; try { j = JSON.parse(r2.stdout); } catch { /* left null */ }
+  check('exit 2 with --json, and the JSON says notARepository and red:false', r2.status === 2 && !!j && j.notARepository === true && j.red === false, `exit ${r2.status}: ${(r2.stdout || '').slice(0, 80)}`);
+}
+
 console.log('\n11. --json carries the same verdict, and an unknown flag is a usage error');
 {
   const root = repo('json', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'] }, [claim('77')])], EMPTY);

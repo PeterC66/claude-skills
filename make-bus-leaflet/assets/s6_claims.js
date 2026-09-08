@@ -24,16 +24,44 @@ const { spawnSync } = require('child_process');
 
 const CHECKER = path.join(__dirname, '..', '..', 'tools', 'check-s6-claims.mjs');
 
-/** Run the checker over `busesDir`. Returns { verdict, error }; exactly one is non-null. */
+/**
+ * Run the checker over `busesDir`. Returns { verdict, error }; exactly one is non-null.
+ *
+ * WITHOUT --require-reports, deliberately. This board also runs in CI and inside
+ * every prove-red-*.mjs harness, over checkouts and fixture estates that hold no
+ * verification.json at all, and the first push of this section reddened three of
+ * those harnesses' CONTROLS (2026-09-08, claude-skills run 34189147998). A board
+ * that is red because it found nothing to look at cannot be told from one that
+ * found a fault, and the harnesses are right to refuse it. The laptop-only "found
+ * nothing" red belongs to the worklist, which passes the flag itself.
+ */
 function measure(busesDir) {
-  if (!fs.existsSync(CHECKER)) return { verdict: null, error: 'tools/check-s6-claims.mjs is not beside the engine at ' + CHECKER };
-  const r = spawnSync(process.execPath, [CHECKER, '--json', '--require-reports', '--root', busesDir], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  // A scratch copy of the engine — every prove-red-*.js harness builds one, two
+  // folders deep with no tools/ beside it — has no checker to run. That is "nothing
+  // to gate here", reported and not red: the floor before this section existed was
+  // no check at all, and buses-data's own gates.yml runs the checker directly.
+  if (!fs.existsSync(CHECKER)) return { verdict: { notARepository: true, why: 'tools/check-s6-claims.mjs is not beside this engine at ' + CHECKER, register: { present: false, findings: [], silences: [] }, reports: 0, uncovered: [], red: false }, error: null };
+  const r = spawnSync(process.execPath, [CHECKER, '--json', '--root', busesDir], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   try { return { verdict: JSON.parse(r.stdout), error: null }; }
   catch (e) { return { verdict: null, error: 'check-s6-claims.mjs printed no verdict (exit ' + r.status + '): ' + String(r.stderr || r.stdout || e.message).trim().slice(0, 300) }; }
 }
 
+/**
+ * Is there NOTHING here to gate — no register and no report? True of every CI
+ * checkout and every harness fixture; never true of the real estate, where the
+ * register is tracked. Such a tree is reported, not reddened: buses-data's own
+ * gates.yml runs the checker directly and refuses an absent register there, which
+ * is the one place that question has a truthful answer.
+ */
+function nothingToGate(v) {
+  if (!v) return false;
+  if (v.notARepository) return true;   // a scratch tree or a harness fixture, not an estate
+  return !v.register.present && v.reports === 0 && (v.uncovered || []).length === 0 && (v.register.silences || []).length === 0
+    && (v.register.findings || []).every(f => f.kind === 'missing');
+}
+
 /** Does the measurement need attention — a claim with no home, a silent map, or a checker that could not run. */
-function isRed({ verdict, error }) { return error !== null || !!(verdict && verdict.red); }
+function isRed({ verdict, error }) { return error !== null || !!(verdict && verdict.red && !nothingToGate(verdict)); }
 
 /**
  * Print the section. Printed whether or not anything is wrong, because the count
@@ -48,6 +76,11 @@ function printSection({ verdict, error }, log = console.log) {
     return;
   }
   const v = verdict;
+  if (nothingToGate(v)) {
+    log('  NOTHING TO GATE HERE: ' + (v.notARepository ? 'not a git repository (' + v.why + ')' : 'no service-facts.json and no S6 report in this tree') + ' — a CI checkout or a fixture, not the estate.');
+    log('  buses-data\'s own gates.yml runs the checker directly and refuses an absent register there.');
+    return;
+  }
   const by = Object.entries(v.coveredBy || {}).map(([k, n]) => k + ' ' + n).join(', ') || 'none';
   log('  ' + v.reports + ' map(s) with an S6 report, ' + v.claims + ' claim(s): ' + by);
   if (v.mapsWithoutReport && v.mapsWithoutReport.length) log('  no report on disk: ' + v.mapsWithoutReport.map(x => x.map + ' (' + x.why + ')').join('; '));
@@ -60,4 +93,4 @@ function printSection({ verdict, error }, log = console.log) {
   else log('  every claim has a home, and the register contradicts no map.');
 }
 
-module.exports = { measure, isRed, printSection, CHECKER };
+module.exports = { measure, isRed, printSection, nothingToGate, CHECKER };

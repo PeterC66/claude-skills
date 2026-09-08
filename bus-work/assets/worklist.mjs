@@ -444,6 +444,13 @@ function threadSettled(record, lastInboundDate) {
   return status;
 }
 
+// A markdown link target percent-encodes a space, and this estate's paths are
+// full of them. A target that is not valid encoding is used as written rather
+// than thrown away -- the existence test below is what decides either way.
+function decodeMaybe(s) {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 function fromCorrespondence() {
   const dir = path.join(BUSES, 'Correspondence');
   if (!existsSync(dir)) return [];
@@ -501,6 +508,36 @@ function fromCorrespondence() {
         correspondenceSettled.push({ ref, label, since: last.date, status: settled });
         continue;
       }
+      // A REPLY MAY BE FILED IN ANOTHER THREAD'S FOLDER, and until 2026-09-08
+      // this source could not see one. CORR-002 message 010 forwarded somebody
+      // else's suggestion; the answer was addressed to HER and copied to him,
+      // so it is CORR-005 message 002 -- the same rule that keeps CORR-002
+      // message 008 in his folder because it was written to the forwarder.
+      // Nothing was owed and the row said a real person was waiting with
+      // nothing written, at rank 2, above every row anything could finish.
+      //
+      // Declared, not inferred, and the declaration is CHECKABLE, which is what
+      // makes it stronger than the prose test above: the inbound message names
+      // the file that answers it, and the pointer must RESOLVE. A stale or
+      // mistyped path silences nothing. No docstamp test is needed either --
+      // the field lives inside the message it is about, so it cannot be a
+      // declaration written before the thing it claims to cover.
+      //
+      // Either a markdown link -- which is what a reader wants and what
+      // check-doc-links.mjs already verifies -- or a bare relative path.
+      const answered = /\*\*Answered by:\*\*\s*(?:\[[^\]]*\]\(\s*([^)\s]+)\s*\)|([^·\n*]+))/m
+        .exec(readFileSync(path.join(tdir, last.file), 'utf8').slice(0, 4000));
+      const target = answered ? decodeMaybe((answered[1] || answered[2] || '').trim()) : '';
+      if (target && existsSync(path.resolve(tdir, target))) {
+        // Named rather than dropped: a suppression somebody can see. The reply
+        // raises its own "NOT SENT" row in the thread it actually lives in, so
+        // repeating it here would print the same letter twice.
+        correspondenceSettled.push({
+          ref, label, since: last.date,
+          status: `answered elsewhere — ${target}`,
+        });
+        continue;
+      }
       out.push({
         key: `corr-owed-${ref}`, rank: 2, type: 'correspondence',
         title: `${label}: a reply is owed and not drafted`,
@@ -514,10 +551,30 @@ function fromCorrespondence() {
 
     // An outbound message declares its own state in its header. Read it rather
     // than infer it: "drafted" and "sent" look identical from the outside.
+    //
+    // IT DECLARES IT IN TWO PLACES, AND READING ONLY ONE MISSED A REAL LETTER.
+    // The convention writes the state in the `**Status:**` field AND in the H1
+    // title -- "# CORR-005 . message 002 -- outbound, 8 September 2026 --
+    // DRAFTED, NOT SENT". On 2026-09-08 only 3 of the estate's 12 outbound
+    // messages carried the field at all, while 10 of 12 carried the H1, and
+    // CORR-005 message 002 carried the H1 ALONE. So the reply to the Shelfords
+    // correspondent -- drafted, unsent, with three people copied on it --
+    // raised nothing on this board, which is precisely the reminder-that-never-
+    // fires this source was written to prevent. A human opening the file sees
+    // the answer in its first line; the tool was reading a key nothing wrote.
+    //
+    // Both sites are read, and EITHER declaring it unsent raises the row. That
+    // is the same failure direction the inbound branch above takes: an unknown
+    // or contradictory declaration nags rather than going quiet, because a
+    // nag costs a reminder nobody needed and the silence costs a person
+    // forgotten. \b matters -- without it "redrafted" in a SENT title would
+    // nag for ever, which is the failure at the other end of this trade.
     const head = readFileSync(path.join(tdir, last.file), 'utf8').slice(0, 4000);
     const st = /\*\*Status:\*\*\s*([^\u00b7\n*]+)/.exec(head);
+    const h1 = /^#\s+.*$/m.exec(head);
     const status = st ? st[1].trim() : '';
-    if (/NOT SENT|DRAFTED/i.test(status)) {
+    const declared = [status, h1 ? h1[0] : ''].filter(Boolean);
+    if (declared.some((d) => /\bNOT SENT\b|\bDRAFTED\b/i.test(d))) {
       out.push({
         key: `corr-unsent-${ref}`, rank: 3, type: 'correspondence',
         title: `${label}: reply drafted ${last.date}, NOT SENT`,
@@ -1147,7 +1204,8 @@ if (adjudicated.length) {
 }
 if (correspondenceSettled.length) {
   console.log('  ' + correspondenceSettled.length + ' thread' + (correspondenceSettled.length === 1 ? '' : 's')
-    + ' ended on an inbound message and raised nothing — the thread record declares the conversation finished:');
+    + ' ended on an inbound message and raised nothing — either the thread record declares the'
+    + ' conversation finished, or the message names the reply that answers it in another thread:');
   for (const s of correspondenceSettled) {
     console.log('    ' + s.label + ' — last heard ' + s.since + ' — "' + s.status.slice(0, 70) + '"');
   }

@@ -242,13 +242,32 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   // cleared, whose remedy is deleting the blocked file. Both branches asserted,
   // and the `boardComplete` gate between them, because a single-branch check here
   // would pass on the version that caused the fault.
+  // THREE branches, not two. The first fix asked `!!portal` — did a source return
+  // something — which is not the question; the question is whether the board knows
+  // about the row the hold NAMES. On --local the dev checkout returns an object,
+  // so a run that emitted ZERO draft-* rows still concluded a LIVE draft had
+  // cleared. Both of the then-existing cases passed on that version, which is why
+  // the local branch is asserted by name and why `&& REMOTE` is asserted as a
+  // literal: it is the whole of the authority test today.
   for (const lit of [
-    'const boardComplete = !!portal;',
-    'warnings.push(boardComplete',
+    'const boardAuthoritative = !!portal && REMOTE;',
+    'if (boardAuthoritative) {',
+    '} else if (!portal) {',
     'the portal queues were skipped, so every row that source would have raised is missing',
-    'NOT evidence the row has cleared',
+    'it read the DEV CHECKOUT, not the live portal, so a live draft is absent here by construction',
   ]) check(`worklist.mjs RUNS: ${lit.slice(0, 56)}`, liveLine(lit), 'absent, or commented out');
-  check('the CONFIDENT stale wording survives for a complete board', liveLine('Either the row has cleared and the blocked file can go, or the key is wrong.'));
+  // COUNTED, not merely present. Both non-authoritative branches must carry the
+  // safety phrase, and a bare liveLine() is satisfied by either — so deleting it
+  // from one branch passed, which a mutation run demonstrated. An assertion that
+  // one of two things is true is not an assertion about both.
+  const safetyLines = src.split('\n').filter((l) => l.includes('NOT evidence the row has cleared') && !l.trim().startsWith('//') && !l.trim().startsWith('*')).length;
+  check('BOTH non-authoritative branches carry "NOT evidence the row has cleared"', safetyLines === 2, `found on ${safetyLines} live line(s), expected 2`);
+  check('the CONFIDENT stale wording survives for an authoritative board', liveLine('Either the row has cleared and the blocked file can go, or the key is wrong.'));
+  // The mutation this is really about: `!!portal` alone. Asserting the literal
+  // with `&& REMOTE` is what makes dropping it red, and a substring test would
+  // not — `!!portal` is a substring of `!!portal && REMOTE`.
+  check('MUTATION CONTROL — the authority test is not `!!portal` alone',
+    !liveLine('const boardAuthoritative = !!portal;'), 'a local board would be treated as authoritative');
 
   check('the ON HOLD marker is present at all', iHold >= 0, 'not found in worklist.mjs');
   check('the do-loop anchor is present at all', iDo >= 0, 'not found in worklist.mjs');

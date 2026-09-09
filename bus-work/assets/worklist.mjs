@@ -1142,15 +1142,38 @@ if (RUN_GATES && SK) {
 //
 // It is the worse direction, too. Acting on "the row has cleared" means deleting
 // `st-ives-v10.2-river.md` — the one thing standing between Peter and publishing
-// a sheet whose river is in seven fragments. So when the board is INCOMPLETE the
+// a sheet whose river is in seven fragments. So when the board cannot answer, the
 // warning reports exactly that and draws no conclusion: name the floor, and
 // refuse a fallback that goes below what saying nothing would have given.
+//
+// THERE WAS A FOURTH CAUSE AND THE FIRST FIX DID NOT CATCH IT (buses-73, same
+// evening). `!!portal` asks *did a source return something*, which is not the
+// question — the question is *does this board know about the thing the hold
+// NAMES*. On `--local` the dev checkout returns an object, so `!!portal` was
+// true, and the run printed the confident wording about a hold on the LIVE
+// portal's draft v10.2, which is not in the dev SQLite at all. Measured: that run
+// banners LOCAL, emits ZERO `draft-*` rows, and still concluded the row had
+// cleared. A completeness test that measures the wrong completeness is worse than
+// none, because it reads as the guard being in place.
+//
+// That is this estate's named shape *"the portal" means the VPS* — never the
+// laptop's dev copy, whose rows read exactly like real ones — and both of
+// tonight's faults are instances of it. So the confident sentence now requires
+// the board to be AUTHORITATIVE for the row: a portal source reached, and it the
+// live one. Every `draft-*` row comes from that source, so REMOTE is the whole
+// test today; if a blocked file ever names a row from another source, carry the
+// source on the hold and compare, rather than widening this.
 const heldRows = applyHolds(items, loopBlocked.holds);
-const boardComplete = !!portal;
+const boardAuthoritative = !!portal && REMOTE;
 for (const h of heldRows.unmatched) {
-  warnings.push(boardComplete
-    ? `loop/blocked/${h.file} names worklist row \`${h.key}\`, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`
-    : `loop/blocked/${h.file} names worklist row \`${h.key}\` and this run could not check it: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
+  const named = `loop/blocked/${h.file} names worklist row \`${h.key}\``;
+  if (boardAuthoritative) {
+    warnings.push(`${named}, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
+  } else if (!portal) {
+    warnings.push(`${named} and this run could not check it: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
+  } else {
+    warnings.push(`${named} and this run cannot check it: it read the DEV CHECKOUT, not the live portal, so a live draft is absent here by construction. NOT evidence the row has cleared — re-run against the live portal before acting on this one.`);
+  }
 }
 
 const DEMO_RE = /\(demo\)/i;

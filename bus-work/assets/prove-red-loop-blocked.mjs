@@ -275,6 +275,52 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
     `hold at ${iHold}, do-loop at ${iDo}`);
 }
 
+console.log('\n14. a Blocks field with MORE FIELDS after it on the same line');
+{
+  // The live fault, 2026-09-09. `field()` took `[^\n]*` — everything to the end
+  // of the line — so a header line in the house style, where several bolded
+  // fields share one line separated by ` · `, fed the whole tail into the split
+  // and produced one bogus hold per word: `·`, `**Commit:**`, `c00d273`, `on`,
+  // `main`, `unpushed`, and the URL. Ten warnings, and the reader has to work out
+  // which of the eleven keys was the real one. The hold itself still attached,
+  // which is why nothing went visibly wrong and why this is worth a case: the
+  // damage is to the WARNING channel, whose whole job is to say when a hold did
+  // nothing, and which was crying wolf ten times over.
+  const dir = path.join(tmp, 'trailing-fields', 'loop', 'blocked');
+  mk(dir, 'push-claude-skills-c00d273.md',
+    '# The claude-skills CI red is FIXED and committed, but only you can push it\n\n' +
+    '**Raised by:** `sched-0615`, 2026-09-09 · **Blocks:** `ci-red-PeterC66/claude-skills` · ' +
+    '**Commit:** `c00d273` on `main`, unpushed · ' +
+    '**Failing run:** https://github.com/PeterC66/claude-skills/actions/runs/34312598961\n\n' +
+    '## What is needed from you\n\n**Push `claude-skills`.**\n');
+  const r = loopBlockedItems({ files: readBlockedDir(dir) });
+  check('EXACTLY one hold, not one per word', r.holds.length === 1, JSON.stringify(r.holds.map((h) => h.key)));
+  check('and it is the real key', r.holds[0].key === 'ci-red-PeterC66/claude-skills', r.holds[0].key);
+  // The truncation must not eat the fields it stops at. `Raised by` is the first
+  // field on that same line, and the row's AGE comes out of it — so a fix that
+  // stopped the value at the wrong place would silently move every such row's age
+  // to mtime, which is the failure the stated-date branch exists to avoid.
+  check('the stated date still decides the age', parseBlocked(readBlockedDir(dir)[0]).raisedOn === '2026-09-09',
+    String(parseBlocked(readBlockedDir(dir)[0]).raisedOn));
+  check('raisedBy stops at the next field', !r.items[0].raisedBy.includes('Blocks'), r.items[0].raisedBy);
+  check('raisedBy keeps its own value', r.items[0].raisedBy.includes('sched-0615'), r.items[0].raisedBy);
+}
+
+console.log('\n15. CONTROL — the truncation does not narrow a well-formed file');
+{
+  // Cases 1 and 11 already drive the two shapes this could break, but they run
+  // against fixtures written before the fix and a reader cannot tell that from
+  // here. Restated as one control, because a truncation bug's signature is a hold
+  // that quietly stops existing, and every other case in this file would still
+  // pass if `field()` returned the empty string for a value on its own line.
+  const dir = path.join(tmp, 'control-own-line', 'loop', 'blocked');
+  mk(dir, 'own-line.md', '# Holds one\n\n**Raised by:** `sched-1715`, 2026-09-08\n\n**Blocks:** `draft-1`\n');
+  const r = loopBlockedItems({ files: readBlockedDir(dir) });
+  check('a Blocks field alone on its line still holds', r.holds.length === 1 && r.holds[0].key === 'draft-1', JSON.stringify(r.holds));
+  check('a Raised by field alone on its line still dates the row', parseBlocked(readBlockedDir(dir)[0]).raisedOn === '2026-09-08',
+    String(parseBlocked(readBlockedDir(dir)[0]).raisedOn));
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(bad ? `\n${bad} check(s) FAILED\n` : '\nAll checks passed.\n');
 process.exit(bad ? 1 : 0);

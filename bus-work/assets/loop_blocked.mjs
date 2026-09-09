@@ -58,10 +58,26 @@ function plain(s, max = 320) {
 }
 
 /** The value of a `**Field:**` line, or ''. The blocked files' own house style. */
+/* Read one `**Name:** value` field.
+ *
+ * THE VALUE ENDS AT THE NEXT FIELD, NOT AT THE END OF THE LINE. The house style
+ * puts several fields on one header line separated by ` · `, and taking `[^\n]*`
+ * swallowed every field after this one. For `Blocks` that is not cosmetic: the
+ * value is then split on whitespace, so on 2026-09-09 a real file yielded eleven
+ * holds — the true key plus `·`, `**Commit:**`, `c00d273`, `on`, `main`,
+ * `unpushed` and a URL — and the board printed ten "names a worklist row that is
+ * not on the board today" warnings. The hold still attached, so nothing looked
+ * broken; what broke was the channel that exists to say when a hold did NOT
+ * attach, and a warning that cries wolf ten times is one nobody reads the
+ * eleventh time. Falsified by cases 14 and 15 of prove-red-loop-blocked.mjs.
+ */
 function field(text, name) {
   const re = new RegExp(`\\*\\*${name}:\\*\\*\\s*([^\\n]*)`, 'i');
   const m = re.exec(text);
-  return m ? m[1].trim() : '';
+  if (!m) return '';
+  // Stop at the next `**Something:**` on the same line, then drop the ` · `
+  // separator the house style leaves behind.
+  return m[1].split(/\*\*[^*\n]+:\*\*/)[0].replace(/[\s·]+$/, '').trim();
 }
 
 /**

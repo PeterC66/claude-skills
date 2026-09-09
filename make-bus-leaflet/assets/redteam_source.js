@@ -230,7 +230,72 @@ function serviceFacts(file) {
   ]);
   // Sorted, so a re-derivation that merely reorders the array is not a change.
   rows.sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
-  return { n: rows.length, hash: crypto.createHash('sha1').update(JSON.stringify(rows)).digest('hex').slice(0, 12) };
+  // `rows` is kept as well as the hash (OA-270): the hash decides, and the rows
+  // are what let the BUY say WHICH fact moved instead of only that one did.
+  return { n: rows.length, rows, hash: crypto.createHash('sha1').update(JSON.stringify(rows)).digest('hex').slice(0, 12) };
+}
+
+/* WHAT MOVED (OA-270, 2026-09-09) --------------------------------------------
+ *
+ * `CHANGED` on its own cannot tell a stop RELABEL from a re-route, and the
+ * difference decides whether ~100k tokens are worth spending. Beaconsfield
+ * Simpson Centre and Beaconsfield Waitrose each differed between their two eras
+ * in exactly one string -- NaPTAN appended the hail-and-ride indicator `HaR` to a
+ * stop's display name on route 624, a school service neither sheet has ever drawn
+ * -- and reading that off the output was impossible: it took replicating
+ * `serviceFacts` by hand to see it. So both would have been told to buy, on a
+ * display string.
+ *
+ * This does not soften the decision. The fingerprint still decides and a changed
+ * terminus is still a CHANGE, because a terminus genuinely moving is precisely a
+ * fact the answer is about. What it buys is that the reader can now answer it
+ * with `--reuse-anyway "<reason>"`, on the record, instead of by hand. */
+const FIELDS = ['route', 'operator', 'days', 'termini', 'headsigns'];
+const svcLabel = r => [r[0], r[1]].filter(Boolean).join(' ') || '(unnamed service)';
+const q = v => `"${v}"`;
+
+function fieldDiff(x, y) {
+  const out = [];
+  for (let i = 0; i < FIELDS.length; i++) {
+    const a = x[i], b = y[i];
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      const gone = a.filter(v => !b.includes(v)), came = b.filter(v => !a.includes(v));
+      // One out and one in is the relabel shape, and it is worth printing as a
+      // substitution rather than as a removal beside an addition.
+      out.push(gone.length === 1 && came.length === 1
+        ? `${FIELDS[i]}: ${q(gone[0])} → ${q(came[0])}`
+        : `${FIELDS[i]}: ${gone.map(v => '−' + q(v)).concat(came.map(v => '+' + q(v))).join(', ')}`);
+    } else out.push(`${FIELDS[i]}: ${q(a)} → ${q(b)}`);
+  }
+  return out;
+}
+
+function whatMoved(a, b) {
+  const key = r => JSON.stringify(r);
+  const A = a.rows.map(key), B = b.rows.map(key);
+  // Multiset difference, not a set one: a route can legitimately appear twice
+  // (OA-274 found exactly that), so an identical pair on both sides must cancel
+  // once rather than for ever.
+  const inB = new Map(); for (const s of B) inB.set(s, (inB.get(s) || 0) + 1);
+  const removed = []; for (const s of A) { if (inB.get(s)) inB.set(s, inB.get(s) - 1); else removed.push(JSON.parse(s)); }
+  const inA = new Map(); for (const s of A) inA.set(s, (inA.get(s) || 0) + 1);
+  const added = []; for (const s of B) { if (inA.get(s)) inA.set(s, inA.get(s) - 1); else added.push(JSON.parse(s)); }
+  const lines = [], pool = added.slice();
+  for (const r of removed) {
+    // Pair on the route, then on fewest differing fields, and CHOOSE rather than
+    // assume: two entries under one route is the case that broke verify_report.
+    let best = -1, bestN = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      if (pool[i][0] !== r[0]) continue;
+      const n = fieldDiff(r, pool[i]).length;
+      if (n < bestN) { bestN = n; best = i; }
+    }
+    if (best < 0) { lines.push(`${svcLabel(r)} — no longer in the newer file`); continue; }
+    lines.push(`${svcLabel(r)} — ${fieldDiff(r, pool.splice(best, 1)[0]).join('; ')}`);
+  }
+  for (const r of pool) lines.push(`${svcLabel(r)} — only in the newer file`);
+  return lines;
 }
 
 const s1Runs = () => {
@@ -251,14 +316,73 @@ const s1Latest = () => s1Runs().find(r => r.id === ((m.stages && m.stages.S1) ||
 const s1AsOf = date => s1Runs().filter(r => r.at && r.at <= date)
   .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : (a.id < b.id ? 1 : -1)))[0] || null;
 
+/* WHERE AN ERA'S SERVICES FILE ACTUALLY IS (OA-270, 2026-09-09) --------------
+ *
+ * Both sides used to resolve as `path.join(<the S1 run's dir>, f)`. That is right
+ * for a town and wrong for every PLACE built before OA-158: its P1 run wrote
+ * `place.json` and `place-candidates.json`, and `gtfs-services.json` landed in the
+ * P2/S2 run minutes later. Eight of the twenty maps carrying a manifest have an S1
+ * run with no services file while a run of the same era has one, and all eight are
+ * places. The tool found nothing, said CANNOT TELL, and fell back to the pull
+ * timestamp -- the exact proxy OA-166 exists to replace -- which then bought a
+ * ~100k-token blind answer apiece for Simpson Centre and Waitrose.
+ *
+ * THIS IS NOT "ALSO LOOK IN S2", which OA-270 says explicitly not to do. Drawn
+ * geometry is no part of a service fact and nothing here reads any file but the
+ * NAMED services file. What changed is only how that file is LOCATED: from the
+ * manifest's own `outputs` list, which records what each run actually wrote,
+ * rather than from an assumed stage. A services file sitting in a folder whose
+ * run record does not claim it is not read -- what is being resolved is a
+ * declaration, and a folder walk would be the widening.
+ *
+ * AN ERA IS AN S1 RUN: that pull, and everything derived from it before the next
+ * pull. So another run may supply this era's file when it declares the file and
+ * its date falls in [this S1, the next S1). Dates only, because a manifest `at` is
+ * sometimes a date and sometimes a date+time; a run sharing its day with the next
+ * pull therefore falls outside, which reads as CANNOT TELL rather than as the
+ * wrong era, and CANNOT TELL is the safe answer here.
+ */
+const stageRuns = () => {
+  const out = [];
+  const stages = m.stages || {};
+  for (const st of Object.keys(stages)) {
+    for (const r of ((stages[st] || {}).runs || [])) {
+      if (!r || !r.id || !r.dir) continue;
+      out.push({
+        stage: st, id: r.id, at: String(r.at || '').slice(0, 10),
+        dir: path.join(BUILD, r.dir),
+        outputs: Array.isArray(r.outputs) ? r.outputs.map(String) : null,
+      });
+    }
+  }
+  return out;
+};
+
+function eraFile(era, file) {
+  const own = path.join(era.dir, file);
+  if (fs.existsSync(own)) return { stage: 'S1', run: era.id, path: own };
+  const next = s1Runs().filter(r => r.at && r.at > era.at).sort((a, b) => (a.at < b.at ? -1 : 1))[0];
+  const cands = stageRuns()
+    .filter(r => r.stage !== 'S1' && r.outputs && r.outputs.includes(file))
+    .filter(r => r.at && r.at >= era.at && (!next || r.at < next.at))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : (a.id < b.id ? -1 : 1)));
+  for (const c of cands) {
+    const p = path.join(c.dir, file);
+    if (fs.existsSync(p)) return { stage: c.stage, run: c.id, path: p };
+  }
+  return null;
+}
+
 function fingerprintPair(answerDate) {
   const now = s1Latest(), then = s1AsOf(answerDate);
   if (!now || !then) return { ok: false, why: 'the manifest names no S1 run on both sides of the answer' };
   for (const f of ['gtfs-services.json', 'verified-services.json']) {
-    const a = serviceFacts(path.join(then.dir, f)), b = serviceFacts(path.join(now.dir, f));
-    if (a && b) return { ok: true, file: f, then, now, a, b, same: a.hash === b.hash };
+    const fa = eraFile(then, f), fb = eraFile(now, f);
+    if (!fa || !fb) continue;
+    const a = serviceFacts(fa.path), b = serviceFacts(fb.path);
+    if (a && b) return { ok: true, file: f, then, now, thenFrom: fa, nowFrom: fb, a, b, same: a.hash === b.hash };
   }
-  return { ok: false, why: 'neither gtfs-services.json nor verified-services.json is readable in BOTH S1 runs (' + then.id + ' and ' + now.id + ')' };
+  return { ok: false, why: 'neither gtfs-services.json nor verified-services.json is declared and readable in BOTH eras (S1 ' + then.id + ' and S1 ' + now.id + ')' };
 }
 
 // The FALLBACK input, used only when no fingerprint can be taken: when were the
@@ -322,9 +446,17 @@ const reasons = [];
  * expensive should never leave the operator wondering which rule it used. */
 const fp = fingerprintPair(best.at);
 if (fp.ok) {
-  console.log(`  service facts      : ${fp.file}  S1 ${fp.then.id} (${fp.a.n} svc, ${fp.a.hash}) vs S1 ${fp.now.id} (${fp.b.n} svc, ${fp.b.hash})`);
+  // Say which run each era's file was READ from when it was not the S1 run itself
+  // (OA-270). A place of the pre-OA-158 era declares it in P2, and a reader who
+  // cannot see that cannot check the comparison.
+  const from = s => (s.stage === 'S1' ? '' : ` (file from ${s.stage} ${s.run})`);
+  console.log(`  service facts      : ${fp.file}  S1 ${fp.then.id}${from(fp.thenFrom)} (${fp.a.n} svc, ${fp.a.hash}) vs S1 ${fp.now.id}${from(fp.nowFrom)} (${fp.b.n} svc, ${fp.b.hash})`);
   console.log(`                       route, operator, days, termini, headsigns — ${fp.same ? 'UNCHANGED' : 'CHANGED'}`);
   if (!fp.same) {
+    const moved = whatMoved(fp.a, fp.b);
+    const head = moved.slice(0, 6);
+    head.forEach((line, i) => console.log(`${i === 0 ? '  what moved         : ' : '                       '}${line}`));
+    if (moved.length > head.length) console.log(`                       … and ${moved.length - head.length} more`);
     reasons.push(`the service facts moved between S1 ${fp.then.id} and S1 ${fp.now.id} — route, operator, days, termini or headsigns differ, and that is exactly what the answer is about`);
   }
 } else {

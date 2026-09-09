@@ -132,8 +132,14 @@ console.log(`guard tests  : ${guards.length}  (must all FAIL)`);
 let bad = false;
 // The counts are asserted as well as the verdicts. A test file that lost its
 // guard cases would otherwise report a tidy, meaningless green.
+// 2 and 9 since OA-270 (2026-09-09), which added three cases: an era whose
+// services file the manifest declares in a later stage, a BUY that says WHICH
+// fact moved, and the widening guard — a services file the manifest does not
+// declare is not read. That third one is a control in spirit and is counted with
+// the guards, because this fixture removes the CANNOT TELL message it asserts on
+// along with everything else the fingerprint prints.
 if (controls.length !== 2) { console.error(`FAIL: expected 2 CONTROL tests, found ${controls.length}`); bad = true; }
-if (guards.length !== 6) { console.error(`FAIL: expected 6 guard tests, found ${guards.length}`); bad = true; }
+if (guards.length !== 9) { console.error(`FAIL: expected 9 guard tests, found ${guards.length}`); bad = true; }
 for (const n of controls) if (failed.has(n)) { console.error(`FAIL: CONTROL went red — the revert broke ordinary use, so nothing below is evidence: ${n}`); bad = true; }
 for (const n of guards) if (passed.has(n)) { console.error(`FAIL: guard test stayed green under the OLD rule — it is not testing the change: ${n}`); bad = true; }
 

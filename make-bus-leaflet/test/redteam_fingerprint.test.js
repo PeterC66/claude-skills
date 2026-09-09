@@ -76,16 +76,26 @@ function estate(opts = {}) {
   // `now: null`, which is the case where the run exists and carries no services file.
   if ('now' in opts) runs.push({ id: 'r2', at: day(2) });
   fs.mkdirSync(dir, { recursive: true });
+  /* WHERE THE OLDER SIDE'S FILE SITS (OA-270). A place built before OA-158 wrote
+   * no services file into its P1/S1 run at all — `gtfs-services.json` landed in
+   * the P2/S2 run minutes later. `thenStage: 'S2'` is that era, and `declare`
+   * says whether the manifest's `outputs` names the file, which is the only thing
+   * the tool is allowed to resolve from. */
+  const thenStage = opts.thenStage || 'S1';
+  const g1 = { id: 'g1', dir: 'S2-geometry/g1', at: day(10) + 'T09:30' };
+  if (thenStage === 'S2' && opts.declare !== false) g1.outputs = ['gtfs-services.json'];
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
     town: 'Testton',
     stages: {
       S1: { latest: runs[runs.length - 1].id, runs: runs.map(r => ({ id: r.id, dir: 'S1-services/' + r.id, at: r.at + 'T09:00' })) },
-      S2: { latest: 'g1', runs: [{ id: 'g1', dir: 'S2-geometry/g1', at: day(10) + 'T09:00' }] },
+      S2: { latest: 'g1', runs: [g1] },
     },
   }, null, 1));
   for (const [id, services] of [['r1', opts.then], ['r2', opts.now]]) {
     if (!services) continue;
-    const rd = path.join(dir, 'S1-services', id);
+    const rd = (id === 'r1' && thenStage === 'S2')
+      ? path.join(dir, 'S2-geometry', 'g1')
+      : path.join(dir, 'S1-services', id);
     fs.mkdirSync(rd, { recursive: true });
     fs.writeFileSync(path.join(rd, 'gtfs-services.json'),
       JSON.stringify({ town: 'Testton', services }, null, 1));
@@ -188,4 +198,68 @@ test('--reuse-anyway with no reason is refused', () => {
   const r = run(freshRun(e.build), ['--dry-run', '--build', e.build, '--reuse-anyway']);
   assert.strictEqual(r.code, 2, `a blank override was accepted (exit ${r.code}):\n${r.out}`);
   assert.match(r.out, /needs a reason/);
+});
+
+/* OA-270 — the two defects that made the fingerprint unavailable to every place
+ * map of the pre-OA-158 era, and unreadable when it WAS available.
+ *
+ * Eight of the twenty maps carrying a manifest have an S1 run with no services
+ * file while an S2 run of the same era has one, and all eight are places: their
+ * P1 run wrote `place.json` and `place-candidates.json`, and `gtfs-services.json`
+ * landed in P2 minutes later. Looking only in the S1 folder found nothing, so the
+ * tool said CANNOT TELL and fell back to the pull timestamp — the exact proxy
+ * OA-166 exists to replace — and the fallback then bought a ~100k-token answer.
+ */
+
+test('an era whose services file landed in S2 is still fingerprinted (OA-270)', () => {
+  // Beaconsfield Simpson Centre's shape: S1 2026-07-21_2041 outputs place.json and
+  // place-candidates.json only; S2 2026-07-21_2044 outputs gtfs-services.json.
+  const e = estate({ then: TWO, now: TWO, thenStage: 'S2' });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.strictEqual(r.code, 0,
+    `the older era's services file is in its S2 run and the facts have not moved, and it still bought (exit ${r.code}):\n${r.out}`);
+  assert.match(r.out, /UNCHANGED/);
+  assert.match(r.out, /file from S2 g1/,
+    'it must say WHICH run it read the era out of, or the reader cannot check it:\n' + r.out);
+});
+
+test('a stop relabel is NAMED, not just reported as CHANGED (OA-270)', () => {
+  // The whole difference between Simpson Centre's two eras was one string: NaPTAN
+  // appended the hail-and-ride indicator `HaR` to a stop's display name on route
+  // 624, a school service neither Beaconsfield place has ever drawn. `CHANGED`
+  // alone cannot tell a relabel from a re-route, so the reader could not answer it
+  // with --reuse-anyway without redoing by hand what the tool already knows.
+  const e = estate({
+    then: [svc('624', 'Carousel Buses', '?', { termini: ['Deanfield Avenue', 'Hart Street'] })],
+    now: [svc('624', 'Carousel Buses', '?', { termini: ['Deanfield Avenue HaR', 'Hart Street'] })],
+  });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.strictEqual(r.code, 10, `expected BUY (10), got ${r.code}\n${r.out}`);
+  assert.match(r.out, /CHANGED/);
+  assert.match(r.out, /what moved/, 'it reported that something moved and not what:\n' + r.out);
+  assert.match(r.out, /624/);
+  assert.match(r.out, /termini/);
+  assert.match(r.out, /"Deanfield Avenue" → "Deanfield Avenue HaR"/,
+    'the reader has to see both spellings to judge a relabel:\n' + r.out);
+});
+
+test('an S2 services file the manifest does not DECLARE is not read (OA-270)', () => {
+  /* The dangerous direction. The fix locates a named file by what the manifest's
+   * own `outputs` says was written; it does not widen the fingerprint to a
+   * geometry stage. A file sitting in an S2 folder that the run record does not
+   * claim to have written is not this era's declaration, and reading it anyway
+   * would be the widening OA-270 says explicitly not to do. CANNOT TELL is the
+   * safe answer, and it buys.
+   *
+   * NOT NAMED `CONTROL`, though that is what it is in spirit, and the reason is
+   * worth the line: prove-red-redteam-fingerprint.js reverts the WHOLE OA-166
+   * decision, and the reverted code prints no `CANNOT TELL` at all — there is no
+   * fingerprint to fail to take. So this case does go red under that harness and
+   * has to be counted with the guards, and calling it a control would make the
+   * harness fail with "the revert broke ordinary use". What it guards is a
+   * widening rather than a narrowing, which is the direction that fails silently. */
+  const e = estate({ then: TWO, now: TWO, thenStage: 'S2', declare: false });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.match(r.out, /CANNOT TELL/, 'it read a file the manifest never declared:\n' + r.out);
+  assert.strictEqual(r.code, 10, `an undeclared file became a REUSE (exit ${r.code}):\n${r.out}`);
 });

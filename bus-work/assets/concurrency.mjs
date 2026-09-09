@@ -410,6 +410,15 @@ export function needsOf(item) {
   // --safe-only hides every non-SAFE row, and a session looking for something
   // safe to do is exactly who should see that the loop has stopped and why.
   if (key.startsWith('loop-blocked-')) return [];
+  // OA-288: the row's action is "commit or revert what git status names", or
+  // "delete loop/STOP", or "read the newest run file". None of that writes to a
+  // shared tree, and the same load-bearing argument as `ci-red-` and
+  // `loop-blocked-` applies with more force here: --safe-only hides every
+  // non-SAFE row, and a row saying THE LOOP HAS STOPPED must never be the one
+  // hidden from a session looking for something safe to do. It is also the row
+  // most likely to be ABOUT a dirty tree, so classifying it by the tree it
+  // reports on would suppress it exactly when it is right.
+  if (key === 'loop-idle') return [];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

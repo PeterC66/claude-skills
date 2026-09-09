@@ -81,6 +81,7 @@ import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
+import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -932,6 +933,26 @@ if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkA
 // a row this file may not have added yet.
 const loopBlocked = loopBlockedItems({ files: readBlockedDir(path.join(BUSES, 'loop', 'blocked')) });
 for (const it of loopBlocked.items) add(it);
+
+// IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
+// the last one with no reader: `loop/blocked/` says these items need you and
+// `loop/LOCK.d` says a tick is running now, but when the loop is HALTED there is
+// no lock, so `conditions.loopLock` reports `present: false` — identical to
+// health. On 2026-09-09 it stopped four ticks running, three of them on a still
+// tree left by a finished experiment, and nothing on this board said so.
+//
+// The causes come from `conditions`, which this run has already gathered, so the
+// row cannot contradict the CONDITIONS block printed above it. The measurement
+// itself opens no file: `loop/runs/` is one file per tick named with its date,
+// time and feed, and `none` is exactly a tick that stopped before dispatch.
+const loopIdle = loopRunItems({
+  health: loopHealth({ runs: readRuns(path.join(BUSES, 'loop', 'runs')) }),
+  stopFile: existsSync(path.join(BUSES, 'loop', 'STOP')),
+  treeDirty: !!(conditions.repos.buses && conditions.repos.buses.dirty),
+  heldBy: (conditions.loopLock && conditions.loopLock.name) || null,
+  busesDir: BUSES,
+});
+for (const it of loopIdle) add(it);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows

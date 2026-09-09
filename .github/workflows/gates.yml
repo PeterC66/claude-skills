@@ -273,6 +273,21 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-lock
 
+      # buses-data OA-288 (2026-09-09): is the loop DOING anything. The third fact
+      # about it, after "these items need you" (OA-283) and "a tick is running now"
+      # (OA-287) -- and the one nothing read, because a HALTED loop holds no lock,
+      # so loop_lock reports present:false, which is what it reports when all is
+      # well. Same checkout caveat as its two siblings: `loop/runs/` is gitignored,
+      # so this step can only ever exercise the SILENCE here, and the harness
+      # builds real directories under the temp dir for everything else. Read its
+      # three GREEN cases first -- a working tick clears the row, one stop is below
+      # the threshold, and a merely OLD newest run raises nothing at all, because
+      # the scheduler fires only while the desktop app is open and "nothing since
+      # 01:15" is every morning. A row that nags daily is one nobody reads.
+      - name: Prove the halted-loop row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-loop-runs
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

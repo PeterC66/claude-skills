@@ -148,9 +148,9 @@ console.log('\n== refresh_review.mjs: can it refuse? ==');
 
 function writeAttempt(args) {
   try {
-    execFileSync('node', [REVIEW, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    return { code: 0 };
-  } catch (e) { return { code: e.status, err: String(e.stderr || '') }; }
+    const out = execFileSync('node', [REVIEW, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return { code: 0, out: String(out || '') };
+  } catch (e) { return { code: e.status, out: String(e.stdout || ''), err: String(e.stderr || '') }; }
 }
 
 // 8. A scan that does not exist. This is the failure that would be invisible: a
@@ -190,6 +190,111 @@ function writeAttempt(args) {
   if (!wrote) { bad++; console.log(`        exit ${r.code}: ${(r.err || '').slice(0, 200)}`); }
 }
 expect('...and the row it wrote is the one the worklist honours', 'refresh-local-Dorking', false);
+
+/* ---- the history a re-adjudication displaces (buses-data OA-290) ----------
+ *
+ * `refresh_review.mjs` REPLACES a review of the same scan, and it must: worklist.mjs
+ * suppresses on (scan, verdict === 'no-rebuild') by finding ONE review per scan, and
+ * two entries for one scan with opposite verdicts would leave the board's behaviour
+ * decided by whichever `.find()` reached first. But until 2026-09-09 the replaced
+ * entry was DROPPED, while the `_readme` the same script stamps into the same file
+ * promised "APPEND, never rewrite: the history is the point". One real note went that
+ * way — 900 characters explaining why Huntingdon's row had stood for six days,
+ * recoverable afterwards only from commit e1a5102.
+ *
+ * So the cases below are about the RECORD, not the verdict: the displaced entry has
+ * to survive inside the entry that displaced it, the chain has to keep accumulating,
+ * the tool has to say out loud what it is displacing, and none of it may change what
+ * worklist.mjs joins on. The bug's whole signature was that nothing failed, so each
+ * case was watched go red against the pre-fix script before the fix was written.
+ */
+console.log('\n== what happens to the adjudication a re-adjudication replaces? ==');
+
+const NOTE_1 = '400 and AW1 are an open curation decision parked on 2026-07-12 — the row must stay up';
+const NOTE_2 = 'AW1 is now in the displayed set and 400 has a structured notOnLeaflet entry';
+const NOTE_3 = 'third reading, and the two above must both still be here';
+
+const readReviews = (townDir) => JSON.parse(fs.readFileSync(path.join(townDir, 'refresh-reviews.json'), 'utf8'));
+const check = (label, ok, detail) => {
+  console.log(`  ${ok ? 'KEPT ' : 'LOST '} ${label}`);
+  if (!ok) { bad++; console.log(`        ${detail}`); }
+};
+
+clearReview(dorking);
+// The writer refuses a scan with no report on disk (case 8), so the second scan
+// these cases use needs one. It is OLDER than the current report, which is what
+// worklist.mjs reads, so nothing above changes behaviour.
+writeScan(OLDER, ['Dorking', 'Epsom']);
+
+// 12. CONTROL, and it has to come first: a FIRST review of a scan carries no
+//     `superseded` key at all. Without this, a tool that stamped an empty array on
+//     every entry would satisfy every case below.
+{
+  writeAttempt(['--map', dorking, '--scan', OLDER, '--verdict', 'no-rebuild', '--by', 'test', '--note', 'a different scan entirely']);
+  const r = writeAttempt(['--map', dorking, '--scan', SCAN, '--verdict', 'rebuild-needed', '--by', 'buses-7f', '--note', NOTE_1]);
+  const j = readReviews(dorking);
+  const cur = j.reviews.find((x) => x.scan === SCAN);
+  const ok = r.code === 0 && cur && !('superseded' in cur);
+  check('CONTROL: a first review of a scan has no superseded[] on it', ok,
+    `exit ${r.code}; entry was ${JSON.stringify(cur)}`);
+}
+
+// 13. THE CASE OA-290 WAS RAISED FOR. Re-adjudicate the SAME scan the other way, and
+//     the reasoning behind the verdict being overturned must still be in the file.
+//     Losing it is not a lost status field: it is the evidence somebody assembled,
+//     and the reason a verdict was reversed is exactly what a later reader needs.
+{
+  const r = writeAttempt(['--map', dorking, '--scan', SCAN, '--verdict', 'no-rebuild', '--by', 'sched-0533', '--note', NOTE_2]);
+  const j = readReviews(dorking);
+  const cur = j.reviews.find((x) => x.scan === SCAN);
+  const sup = (cur && cur.superseded) || [];
+  check('the displaced note survives inside the entry that displaced it',
+    r.code === 0 && sup.length === 1 && sup[0].note === NOTE_1 && sup[0].verdict === 'rebuild-needed' && sup[0].by === 'buses-7f',
+    `exit ${r.code}; superseded[] was ${JSON.stringify(sup)}`);
+
+  // 14. And the tool must SAY what it displaced. Printing "replaced scan X as
+  //     no-rebuild" while silently discarding 900 characters of somebody else's
+  //     reasoning is the half that is indefensible under either design.
+  const said = /rebuild-needed/.test(r.out) && /buses-7f/.test(r.out);
+  check('the tool names the verdict and the author it displaced, on stdout', said,
+    `stdout was: ${JSON.stringify(r.out)}`);
+}
+
+// 15. The join worklist.mjs makes is UNCHANGED — still exactly one review per scan,
+//     so the board reads the current verdict and not a superseded one. This is the
+//     whole reason the history goes inside the entry rather than beside it.
+{
+  const j = readReviews(dorking);
+  const forScan = j.reviews.filter((x) => x.scan === SCAN);
+  check('still exactly ONE review entry for that scan', forScan.length === 1,
+    `saw ${forScan.length}: ${JSON.stringify(j.reviews.map((x) => x.scan))}`);
+}
+expect('...and the board honours the CURRENT verdict, not the superseded one', 'refresh-local-Dorking', false);
+
+// 16. A THIRD reading keeps BOTH earlier ones. A chain that only ever holds the
+//     immediately-previous entry loses the middle of a three-step reversal, which is
+//     the same bug one step further along.
+{
+  const r = writeAttempt(['--map', dorking, '--scan', SCAN, '--verdict', 'rebuild-needed', '--by', 'test', '--note', NOTE_3]);
+  const cur = readReviews(dorking).reviews.find((x) => x.scan === SCAN);
+  const notes = ((cur && cur.superseded) || []).map((s) => s.note);
+  check('a third adjudication keeps BOTH earlier notes, oldest first',
+    r.code === 0 && notes.length === 2 && notes[0] === NOTE_1 && notes[1] === NOTE_2,
+    `exit ${r.code}; superseded notes were ${JSON.stringify(notes)}`);
+  check('...and a superseded entry does not nest its own superseded[]',
+    ((cur && cur.superseded) || []).every((s) => !('superseded' in s)),
+    `superseded[] was ${JSON.stringify((cur && cur.superseded) || [])}`);
+}
+
+// 17. A review of a DIFFERENT scan is untouched by all of that. The unit of
+//     supersession is one scan, and the file's other adjudications are other events.
+{
+  const other = readReviews(dorking).reviews.find((x) => x.scan === OLDER);
+  check('a review of a different scan keeps its own note and gains nothing',
+    !!other && other.note === 'a different scan entirely' && !('superseded' in other),
+    `entry was ${JSON.stringify(other)}`);
+}
+clearReview(dorking);
 
 fs.rmSync(root, { recursive: true, force: true });
 if (bad) { console.log(`\n${bad} case(s) behaved wrongly.`); process.exit(1); }

@@ -62,6 +62,11 @@ const README = [
   'APPEND, never rewrite: the history is the point. Written by refresh_review.mjs in',
   'the bus-work skill, which refuses a scan date that names no report on disk.',
   '',
+  'Re-adjudicating one scan is a correction, not a second event, so it REPLACES that',
+  'scan\'s entry — the board must find exactly one review per scan. The entry it',
+  'displaces is kept in full, oldest first, in "superseded" on the entry that',
+  'displaced it. Nothing this script writes is ever discarded (buses-data OA-290).',
+  '',
   'A place has its OWN file. Adjudicating a town does not adjudicate a place inside',
   'it, whose frame is different and whose sheet draws a different set of services.',
 ];
@@ -87,7 +92,13 @@ const load = () => {
 if (has('list')) {
   const j = load();
   if (!j.reviews.length) { console.log(`${target}: nothing recorded`); process.exit(0); }
-  for (const r of j.reviews) console.log(`  scan ${r.scan}  ${r.verdict.padEnd(14)} by ${r.by || '?'}  ${r.note || ''}`);
+  for (const r of j.reviews) {
+    console.log(`  scan ${r.scan}  ${r.verdict.padEnd(14)} by ${r.by || '?'}  ${r.note || ''}`);
+    // A superseded entry that only exists in the file is half a fix: the reason a
+    // verdict was reversed has to be readable from the tool that reversed it.
+    for (const s of r.superseded || [])
+      console.log(`       superseded  ${(s.verdict || '?').padEnd(14)} by ${s.by || '?'}  ${s.note || ''}`);
+  }
   process.exit(0);
 }
 
@@ -127,12 +138,53 @@ const entry = {
 };
 const note = flag('note');
 if (note) entry.note = note;
-// Replace a review of the SAME scan rather than stacking duplicates — re-adjudicating
-// one scan is a correction, not a second event.
+/*
+ * Replace a review of the SAME scan rather than stacking duplicates — re-adjudicating
+ * one scan is a correction, not a second event, and `worklist.mjs` suppresses on
+ * (scan, verdict === 'no-rebuild') by finding ONE review per scan. Two entries for one
+ * scan with opposite verdicts would leave the board's behaviour decided by whichever
+ * one a `.find()` reached first, which is worse than either.
+ *
+ * BUT THE DISPLACED ENTRY IS KEPT, INSIDE THE ONE THAT DISPLACED IT (buses-data
+ * OA-290). Until 2026-09-09 it was simply dropped, while the `_readme` this same
+ * script stamps into the same file promised "APPEND, never rewrite: the history is
+ * the point" — the file carried, in its own header, a promise about its contents that
+ * the tool writing it did not keep. It cost a real note: `sched-0533` re-adjudicated
+ * Huntingdon on 2026-09-09 and removed 900 characters explaining why that row had
+ * stood for six days, recoverable afterwards only from commit `e1a5102`. An
+ * adjudication note is not a status field — it is evidence somebody assembled, and
+ * the reason a verdict was reversed is exactly what a later reader needs.
+ *
+ * `superseded[]` goes INSIDE the current entry rather than beside it so the join
+ * `worklist.mjs` makes is untouched: still exactly one review per scan, still the
+ * current verdict. Oldest first, and flat — a displaced entry's own chain is spliced
+ * in ahead of it rather than nested, or a three-step reversal buries its middle.
+ */
 const was = j.reviews.findIndex((r) => r.scan === scan);
-if (was >= 0) j.reviews[was] = entry; else j.reviews.push(entry);
+let displaced = null;
+if (was >= 0) {
+  const prev = j.reviews[was];
+  const { superseded: chain, ...body } = prev;
+  const history = [...(Array.isArray(chain) ? chain : []), body];
+  if (history.length) entry.superseded = history;
+  displaced = prev;
+  j.reviews[was] = entry;
+} else j.reviews.push(entry);
 j.reviews.sort((a, b) => (a.scan < b.scan ? -1 : 1));
 j._readme = README;
 writeFileSync(target, JSON.stringify(j, null, 1) + '\n');
 console.log(`${was >= 0 ? 'replaced' : 'recorded'} scan ${scan} as ${verdict} in ${target}`);
+/*
+ * SAY WHAT WAS DISPLACED. Printing "replaced scan X as no-rebuild" while silently
+ * moving somebody else's reasoning out of view is the half that is indefensible under
+ * any design — the only signal the 2026-09-09 loss ever gave was the word "replaced".
+ */
+if (displaced) {
+  const note = displaced.note || '';
+  console.log(`  it displaced: ${displaced.verdict} by ${displaced.by || '?'}`
+    + (displaced.at ? ` at ${displaced.at}` : '')
+    + (note ? ` — ${note.length} characters of note` : ' — no note'));
+  if (note) console.log(`    "${note.length > 160 ? note.slice(0, 157) + '...' : note}"`);
+  console.log(`  kept in full under superseded[] on the new entry (${entry.superseded.length} now), not dropped.`);
+}
 if (verdict === 'no-rebuild') console.log('  worklist.mjs will suppress this map\'s refresh row while that is the current scan.');

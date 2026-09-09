@@ -59,6 +59,13 @@
  * a St Ives sheet and a Huntingdon sheet that disagreed about whether VL14 was a
  * bus, and it was not two decisions: it was one decision and one silence.
  *
+ * AND IT ENUMERATES WHAT A DECIDED `include` STILL OWES (buses-data OA-285). That
+ * outcome says the service should be ON the sheet at the next rebuild, so the
+ * `notOnLeaflet[]` entry that satisfies the silence check is the UNFINISHED state
+ * rather than the finished one, and nothing counted the waiting ones. Printed, never
+ * red: whether the note was written at the rebuild is a question about the Services
+ * panel, and which artefact answers it is undecided.
+ *
  * FROM `git ls-files` FOR THE TRACKED INPUTS, from the disk for the reports. The
  * manifests, S1 files and S3 files are what the repository carries; the reports are
  * a property of this working tree, which is the whole point of the split above.
@@ -264,6 +271,43 @@ for (const f of facts) {
   }
 }
 
+// ---- what a decided INCLUDE still owes (buses-data OA-285) ---------------------
+// The silence check above is satisfied by a map DECLARING the route, and for an
+// `outcome: off` that declaration IS the finished state. For an `include` it is the
+// UNFINISHED one: the entry says the service should appear on the sheet at the NEXT
+// rebuild, and `notOnLeaflet[]` is only where it waits until then. So the gate is
+// green in both cases and green means opposite things — and until this landed nothing
+// enumerated the waiting ones. The instruction existed as English inside a `reason`
+// and a `drawing`, in a file no rebuild reads out loud, and the row that had named it
+// left the board the moment the entry was decided.
+//
+// ENUMERATION ONLY, AND NEVER RED. Whether the note was actually written at the
+// rebuild is a question about the Services panel, which lives in S3 config and in the
+// drawn SVG rather than in any field the register can see; which artefact answers it
+// is the hard half of OA-285 and is undecided. What is reported is only what can be
+// READ today, and BOTH answers are reachable: `waiting` while the map still declares
+// the route off, `carried` once the map lists it — so this count can say "none of
+// them" as well as "all of them", which is what makes it worth printing.
+const owed = [];
+for (const f of facts) {
+  if (!f || f.status !== 'decided' || f.outcome !== 'include' || !Array.isArray(f.scope)) continue;
+  const names = f.scope.includes('*') ? maps.map(m => m.name) : f.scope;
+  for (const name of names) {
+    const d = decl.get(name);
+    if (!d) continue;                     // an unknown scope name is already a register finding above
+    const keys = [...keysOf(f.route), ...(Array.isArray(f.aliases) ? f.aliases.flatMap(keysOf) : [])];
+    const carried = keys.some(k => d.services.has(k) || d.routeOrder.has(k));
+    const offKey = keys.find(k => d.off.has(k));
+    if (!carried && !offKey) continue;    // SILENT, and the check above has already said so
+    owed.push({
+      id: f.id, route: f.route, map: name, state: carried ? 'carried' : 'waiting',
+      where: carried ? null : d.off.get(offKey).where,
+      owes: (f.drawing && typeof f.drawing === 'object' && f.drawing[name]) || null,
+    });
+  }
+}
+const owedWaiting = owed.filter(o => o.state === 'waiting');
+
 // ---- the coverage half ---------------------------------------------------------
 const claims = [];          // every claim, with how it is covered or that it is not
 let reports = 0, mapsWithoutReport = [], unreadableReports = [];
@@ -318,7 +362,7 @@ if (AS_JSON) {
     root: path.resolve(ROOT), maps: maps.length, reports, mapsWithoutReport, unreadableReports, unreadableDecls,
     claims: claims.length, uncovered, queued: queued.map(l => ({ map: l.map, route: l.route, id: l.covered.id })),
     coveredBy: claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
-    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, findings: registerFindings, silences },
+    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, findings: registerFindings, silences, owed },
     registerOnly: REGISTER_ONLY, requireReports: REQUIRE_REPORTS, red,
   }, null, 2));
 } else {
@@ -332,6 +376,13 @@ if (AS_JSON) {
   }
   console.log(`\ncheck-s6-claims — ${path.resolve(ROOT)}`);
   console.log(`  ${maps.length} map(s) tracked; register: ${register ? `${facts.length} fact(s), ${facts.filter(f => f && f.status === 'queued').length} queued, ${facts.filter(f => f && f.status === 'decided').length} decided` : 'ABSENT'}`);
+  if (owed.length) {
+    console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to put the service on the sheet, of ${owed.length} in the register — enumeration, not a finding (OA-285):`);
+    for (const o of owed) {
+      console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}`);
+      if (o.owes) console.log(`          owes: ${o.owes}`);
+    }
+  }
   if (REGISTER_ONLY) console.log('  coverage half NOT RUN (--register-only): S6 reports are a property of a working tree and this run did not look for them.');
   else {
     console.log(`  ${reports} map(s) had an S6 report on this disk${mapsWithoutReport.length ? `; ${mapsWithoutReport.length} had none (${mapsWithoutReport.map(x => `${x.map}: ${x.why}`).join('; ')})` : ''}`);

@@ -1057,6 +1057,37 @@ if (s6Stale.length) {
           ],
         });
       }
+      /*
+       * A DECIDED `include` IS A DEBT, AND DECIDING IT TOOK IT OFF THIS LIST
+       * (buses-data OA-285). `outcome: include` says the service should appear on
+       * the sheet at the NEXT rebuild; until then the map declares it in
+       * notOnLeaflet[] so S6 knows it is known, which satisfies the checker's
+       * silence test exactly as an `off` does. So the queued row that named the
+       * question disappeared when it was answered and nothing replaced it, and the
+       * instruction survived only as English inside the register.
+       *
+       * The row is the ENUMERATION half only. Whether the note was actually written
+       * at the rebuild is a question about the Services panel and is undecided; this
+       * says what is owed and to which map, and it drops off by itself when a map
+       * stops declaring the route off.
+       */
+      const owed = ((v.register && v.register.owed) || []).filter((o) => o.state === 'waiting');
+      const carried = ((v.register && v.register.owed) || []).filter((o) => o.state === 'carried');
+      if (owed.length || carried.length) {
+        add({
+          key: 's6-claims-owed', rank: 8, type: 'housekeeping',
+          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} owe${owed.length === 1 ? 's' : ''} a line on the next rebuild of ${[...new Set(owed.map((o) => o.map))].join(', ') || 'a map'}`,
+          why: [
+            ...owed.map((o) => `${o.id}: ${o.map} — ${o.owes || `${o.route} is decided \`include\` and the map still declares it off`}`),
+            ...carried.map((o) => `${o.id}: ${o.map} now lists ${o.route}, so the note looks written — the register entry can be closed`),
+          ].join('; ') + '. An `include` is a decision the sheet has not learned yet: nothing rebuilds on its own, and no byte moves until somebody does.',
+          who: 'a session, at the next rebuild of that map', runbook: 'S6', towns: [...new Set([...owed, ...carried].map((o) => o.map))],
+          do: [
+            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each debt and where it is declared off' },
+            { kind: 'skill', what: 'At the next rebuild of each map above, write the Services-panel or map-notes line the register entry describes — its `reason` and `drawing` say what it must carry — and take the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
+          ],
+        });
+      }
       const qids = [...new Set((v.queued || []).map((q) => q.id))];
       if (qids.length) {
         add({

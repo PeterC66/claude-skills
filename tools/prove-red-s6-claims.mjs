@@ -291,6 +291,45 @@ console.log('\n13. STARTED IN A RUN FOLDER — the estate is the enclosing repos
   check('the line it prints names the repository root, not the folder it was started in', new RegExp(`check-s6-claims — ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s`).test(below.out), below.out.split('\n')[0]);
 }
 
+console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red, and able to answer "none" (buses-data OA-285)');
+{
+  /* THE CONTROL COMES FIRST, because this section ADDS output rather than a
+   * finding, and the direction that gets a check muted is a line printed about
+   * every decided entry. An `off` is FINISHED when the map declares the route
+   * off; an `include` is UNFINISHED in exactly the same state, and only the
+   * second may appear. */
+  const offMap = (route) => town('Fixture', { services: [{ route: '1' }], notOnLeaflet: [{ route, note: 'awaiting the next rebuild' }] }, { routeOrder: ['1'] }, null);
+  const carries = town('Fixture', { services: [{ route: '1' }, { route: 'TIGER' }] }, { routeOrder: ['1', 'TIGER'] }, null);
+
+  const rOff = run(repo('owed-control-off', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'off' })] }));
+  check('CONTROL: a decided `off` in the same state is green and says NOTHING about a rebuild', rOff.code === 0 && !/WAITING on a rebuild/.test(rOff.out), `exit ${rOff.code}`);
+  const rNothing = run(repo('owed-control-nothing', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'nothing' })] }));
+  check('CONTROL: so is a decided `nothing`', rNothing.code === 0 && !/WAITING on a rebuild/.test(rNothing.out), `exit ${rNothing.code}`);
+
+  const r = run(repo('owed-include', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include', drawing: { Fixture: 'a Services-panel line carrying the booking number' } })] }));
+  check('an `include` whose map still declares it off is ENUMERATED and still exit 0 — this is not a finding', r.code === 0 && /1 decided "include" entry is WAITING on a rebuild/.test(r.out), `exit ${r.code}: ${r.out.split('\n').find(l => l.includes('WAITING')) || ''}`);
+  check('the row names the entry, the map, the route and the file the exclusion is written in', /SF-001  Fixture  TIGER — waiting; still declared off in Areas.Fixture.S1-services.2026-09-01_0000.verified-services.json/.test(r.out), r.out.split('\n').find(l => l.includes('SF-001')));
+  check('and it carries what the register says is owed, so the reader does not have to open the file', /owes: a Services-panel line carrying the booking number/.test(r.out), '');
+
+  /* THE COUNT MUST BE ABLE TO ANSWER "NONE OF THEM" — the shape recorded as
+   * "the count that equalled the total". Once the map lists the route, the same
+   * register entry reads as paid rather than disappearing from the output. */
+  const rPaid = run(repo('owed-paid', [carries], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include' })] }));
+  check('once the map LISTS the route the same entry reads 0 waiting, and says the entry can be closed', rPaid.code === 0 && /0 decided "include" entries are WAITING/.test(rPaid.out) && /the map now lists this route/.test(rPaid.out), `exit ${rPaid.code}: ${rPaid.out.split('\n').find(l => l.includes('WAITING')) || ''}`);
+
+  /* A SILENT map is the OTHER check's business and must not be double-reported
+   * here, or the same fault would print twice under two different names. */
+  const rSilent = run(repo('owed-silent', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'] }, null)], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include' })] }));
+  check('a SILENT map is red as a silence and is NOT also listed as owed', rSilent.code === 1 && /SILENT/.test(rSilent.out) && !/WAITING on a rebuild/.test(rSilent.out), `exit ${rSilent.code}`);
+
+  const rJson = run(repo('owed-json', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include' })] }), '--json');
+  let j = null; try { j = JSON.parse(rJson.out); } catch { /* left null */ }
+  check('--json carries register.owed, which is how the board and the worklist read it', !!j && Array.isArray(j.register.owed) && j.register.owed.length === 1 && j.register.owed[0].id === 'SF-001' && j.register.owed[0].state === 'waiting' && j.red === false, rJson.out.slice(0, 120));
+
+  const rCi = run(repo('owed-register-only', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include' })] }), '--register-only');
+  check('and CI sees it too: the debt is register-half work, so --register-only prints it', rCi.code === 0 && /1 decided "include" entry is WAITING/.test(rCi.out), `exit ${rCi.code}`);
+}
+
 console.log('\n' + '='.repeat(78));
 rmSync(TMP, { recursive: true, force: true });
 if (failures) {

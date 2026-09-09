@@ -89,6 +89,16 @@ function printSection({ verdict, error }, log = console.log) {
   for (const f of (v.register.findings || [])) log('  REGISTER   ' + f.text);
   for (const s of (v.register.silences || [])) log('  SILENT     ' + s.map + ' says nothing about ' + s.route + ' (' + s.id + ')');
   if (v.queued && v.queued.length) log('  queued: ' + [...new Set(v.queued.map(q => q.id))].join(', ') + ' — questions written down, not yet answered');
+  // A decided `include` is a DEBT on the next rebuild, and the checker's silence test
+  // is green the moment the map declares the route off -- which for this outcome is
+  // the unfinished state (buses-data OA-285). Printed here, never red: the board says
+  // what is owed, and whether the note was written at the rebuild is undecided.
+  const owed = (v.register && v.register.owed) || [];
+  if (owed.length) {
+    const waiting = owed.filter(o => o.state === 'waiting');
+    log('  owed at the NEXT REBUILD: ' + owed.map(o => o.id + ' (' + o.map + (o.state === 'carried' ? ' — now carried, close the entry' : '') + ')').join(', ')
+      + ' — ' + waiting.length + ' of ' + owed.length + ' still off the sheet. A decided "include" is not on a map until a rebuild writes it.');
+  }
   if (v.red) log('  RED — a claim with no home, or a decision no sheet has learned. Run tools/check-s6-claims.mjs from the buses root for the remedy on each row.');
   else log('  every claim has a home, and the register contradicts no map.');
 }

@@ -47,10 +47,23 @@ const TICK_NAME_RE = /^sched-/;
  * unknown rather than to a throw or to a confident wrong answer. */
 const ISO_RE = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/;
 
+/* NO ISO MATCH MEANS NULL, and the fall-through this replaced is the reason
+ * the comment above is worth its length. Until 2026-09-09 an unmatched line was
+ * handed whole to `Date.parse`, and the holder's first line BEGINS WITH THE
+ * SESSION NAME: V8's legacy parser reads `buses-04` as 2001-03-31 and
+ * `buses-85 (interactive session, Peter at the keyboard)` as 1985-01-01. That
+ * is the "confident wrong answer" the comment forbids, and it was not
+ * cosmetic — `takenAt` came back non-null, so the mtime fallback below was
+ * never reached, a lock taken nine minutes earlier printed as 365434h old and
+ * permanently expired, and the sentence `concurrency.mjs` builds from it told
+ * Peter to delete a live session's mutex. A stated unknown is what is wanted
+ * here: return null, and let the caller fall back to the directory mtime that
+ * the atomic `mkdir` set. */
 function parseWhen(text) {
   if (!text) return null;
   const m = ISO_RE.exec(text);
-  const t = Date.parse(m ? m[0].replace(' ', 'T') : text);
+  if (!m) return null;
+  const t = Date.parse(m[0].replace(' ', 'T'));
   return Number.isFinite(t) ? t : null;
 }
 

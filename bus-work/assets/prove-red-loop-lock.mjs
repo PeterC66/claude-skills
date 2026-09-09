@@ -101,8 +101,40 @@ ok(noExp.expired === true && noExp.overdueMin === 10, 'and 100 minutes in, a 90-
 
 const garbled = readLoopLock(tree({ lock: true, holder: 'buses-04 some time yesterday\nexpires: soon\n' }), { now: NOW });
 ok(garbled.name === 'buses-04' && garbled.isTick === false, 'a name that is not a tick is not treated as one');
-ok(garbled.takenSource === 'mtime', 'an unparseable time falls back to the directory mtime, which the atomic mkdir set');
-ok(garbled.expiresSource === 'fallback', 'and an unparseable expires: falls back too');
+
+/* THE POPULATION IS THE POINT, NOT THE VERDICT. Until 2026-09-09 the single
+ * case above passed for a reason unrelated to the property it names:
+ * `parseWhen` fell through to `Date.parse` on the WHOLE first line, and the
+ * three words `some time yesterday` are what defeated V8's legacy date parser
+ * — not the absence of a timestamp. A bare `buses-04` parsed as 2001-03-31,
+ * and the real holder line of 2026-09-09, `buses-85 (interactive session,
+ * Peter at the keyboard)`, as 1985-01-01. The worklist then told Peter that a
+ * lock taken nine minutes earlier had been held for 365434h and that he should
+ * delete it. So the fixture is now the POPULATION — every shape a holder's
+ * first line actually takes on this disk — rather than the one shape that
+ * happened to be safe. */
+const garbledFirstLines = [
+  ['buses-04 some time yesterday', 'trailing prose that defeats Date.parse'],
+  ['buses-04', 'a bare session name — Date.parse read this as 2001-03-31'],
+  ['buses-85 (interactive session, Peter at the keyboard)', 'the real 2026-09-09 line — Date.parse read this as 1985-01-01'],
+  ['buses-73 working on OA-289', 'a name plus what the session is doing'],
+  ['buses-8b: reply SENT', 'a name with a colon and a status'],
+];
+for (const [first, what] of garbledFirstLines) {
+  const g = readLoopLock(tree({ lock: true, holder: `${first}\nexpires: soon\n` }), { now: NOW });
+  ok(g.takenSource === 'mtime', `no parseable time (${what}): falls back to the directory mtime, which the atomic mkdir set`,
+    `takenSource=${g.takenSource}, takenAt=${g.takenAt === null ? 'null' : iso(g.takenAt)}`);
+  ok(g.expiresSource === 'fallback', `and an unparseable expires: falls back too (${what})`);
+}
+
+/* THE CONTROL, and it is why the fix is a narrowing rather than a deletion.
+ * Every real holder line puts the NAME first and the timestamp after it, so
+ * refusing to parse a line that carries no ISO match must not also refuse the
+ * one that carries an ISO match mid-line. */
+const midline = readLoopLock(tree({ lock: true, holder: `sched-1215 (scheduled tick) taken ${iso(NOW - 9 * 60000)}\nexpires: ${iso(NOW + 81 * 60000)}\n` }), { now: NOW });
+ok(midline.takenSource === 'holder' && midline.ageMin === 9, 'a timestamp written AFTER the name and some prose is still read off the holder',
+  `takenSource=${midline.takenSource}, ageMin=${midline.ageMin}`);
+ok(midline.expiresSource === 'holder' && midline.expired === false, 'and its expires: line is read off the holder too');
 
 const mine = readLoopLock(tree({ lock: true, holder: held('buses-73', NOW - 5 * 60000, NOW + 85 * 60000) }), { selfSession: 'buses-73', now: NOW });
 ok(mine.mine === true, 'a holder naming this session is recognised as mine');

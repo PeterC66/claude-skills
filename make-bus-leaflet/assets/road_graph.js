@@ -72,6 +72,56 @@ function dpTol(pts, i0, i1, tol, keep) {
   if (bd > tol && bi > 0) { dpTol(pts, i0, bi, tol, keep); keep.push(bi); dpTol(pts, bi, i1, tol, keep); }
 }
 
+/** Douglas-Peucker that NEVER SIMPLIFIES ACROSS A PIN. Returns the kept indices,
+ *  sorted, always including index 0, the last index, and every pin.
+ *
+ *  WHY THIS EXISTS. `dpTol` measures every vertex against the chord between the
+ *  two ends of the range it is given, so the longer that range, the wider the
+ *  band inside which detail is discarded. That is the correct behaviour for a
+ *  line whose two ends are the only thing known about it, and the wrong one for
+ *  a line that is PINNED at known-correct points along its length — the diagram
+ *  sheet's linear features are pinned wherever they cross the solved bus
+ *  network, and simplifying across a pin throws away the shape between two
+ *  places the line is known to pass through.
+ *
+ *  It did exactly that. OA-059 (2026-09-06) welded a feature's OSM ways into one
+ *  chain before mapping, which cured a real fragmentation fault, and left the
+ *  simplification running once over the welded result. So the chord that had
+ *  spanned one OSM way came to span the whole river: measured on St Ives, the
+ *  diagram river fell from 30 control points across five fragments to 12 in one
+ *  chain, and its drawn course stopped matching the schematic sheet's — never
+ *  reaching east of x = 187 mm where the schematic reaches 262, and ending
+ *  heading west where the real river heads south-east. Peter rejected portal
+ *  v11.0 at review for that, on sight, which is the only check that caught it:
+ *  the byte gates all passed, because they compare a build against itself.
+ *
+ *  WITH NO PINS IT IS EXACTLY `dpTol`, deliberately — a feature that crosses no
+ *  route has nothing known about it but its ends, and must keep the behaviour it
+ *  has today. That equivalence is asserted in road_graph.test.js rather than
+ *  reasoned about, because it is the whole of this change's blast radius on
+ *  every map that has no crossings.
+ *
+ *  @param {Array<[number,number]>} pts   the polyline
+ *  @param {number[]} pins                indices into `pts` that must survive
+ *  @param {number} tol                   perpendicular tolerance
+ *  @returns {number[]}                   kept indices, ascending
+ */
+function dpPinned(pts, pins, tol) {
+  const n = pts.length;
+  if (n < 3) return pts.map((_, i) => i);
+  // Interior pins only: 0 and n-1 are always kept and a pin outside the line is
+  // a caller bug that must not silently widen a span. Sorted and deduped,
+  // because two crossings can land on the same output vertex.
+  const inner = (pins || []).filter(i => Number.isInteger(i) && i > 0 && i < n - 1);
+  const bounds = [...new Set([0, ...inner, n - 1])].sort((a, b) => a - b);
+  const keep = [bounds[0]];
+  for (let b = 0; b < bounds.length - 1; b++) {
+    dpTol(pts, bounds[b], bounds[b + 1], tol, keep);
+    keep.push(bounds[b + 1]);
+  }
+  return [...new Set(keep)].sort((a, b) => a - b);
+}
+
 /** Smallest absolute angle between two bearings, in degrees. */
 const angdist = (a, b) => { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
 
@@ -246,4 +296,4 @@ function graphOps({ XY, withLatLon = false, withName = false }) {
   return { node, addEdge, contract };
 }
 
-module.exports = { key6, dpTol, angdist, lsq, makeWarp, deg, walk, graphOps };
+module.exports = { key6, dpTol, dpPinned, angdist, lsq, makeWarp, deg, walk, graphOps };

@@ -623,5 +623,95 @@ console.log('\nPointed at a tree from a cwd that is no repository:\n');
     + (r.status === 0 ? '' : `  <-- exited ${r.status}\n${out}`), 'GREEN');
 }
 
+/* ---------- L4: A TARGET GIT IGNORES (buses-data OA-292) ----------
+ *
+ * THE INVERSION OF A FAILURE SHAPE THIS ESTATE ALREADY NAMES. *The subject that
+ * does not survive `actions/checkout`* says a check whose subject is a property
+ * of a WORKING TREE is green in CI for ever. This is the same join read the
+ * other way: a link into gitignored territory resolves on the machine that wrote
+ * it and is dead in every checkout, so it is green HERE for ever and the only
+ * instrument that has ever found one is a billed CI red. `buses-data`'s
+ * `OA-291.md` cited a `loop/blocked/…` file that way on 2026-09-09; run at that
+ * commit from the repository root this checker reported no dead links, and CI
+ * reported one and exited 1.
+ *
+ * These run in a throwaway git repository, because a `.gitignore` means nothing
+ * without one. THE CONTROLS COME FIRST, deliberately: a rule that ADDS a finding
+ * class is the direction in which a false positive gets the whole check muted in
+ * its first week, which is what the 2026-09-01 widening cost — 33 findings of
+ * which 21 were the checker's own. */
+console.log('\nA link whose target git ignores — alive here, dead in every checkout:\n');
+{
+  const green = repoFixture({
+    '.gitignore': 'scratch/\n',
+    'README.md': '# Root\n\nSee [the guide](docs/guide.md).\n',
+    'docs/guide.md': '# Guide\n\nAll well.\n',
+  });
+  report(green.code === 0, 'an ordinary link to a tracked file is untouched by the new class'
+    + (green.code === 0 ? '' : `  <-- exited ${green.code}\n${green.out}`), 'GREEN');
+}
+{
+  /* THE CASE THAT DECIDES THE IMPLEMENTATION. `loop/README.md` is tracked and
+   * `loop/` is ignored, and `.gitignore` re-includes files inside otherwise
+   * ignored map folders all over this estate — `manifest.json`, `redteam.json`,
+   * every `*.docx`. Asking whether the FOLDER is ignored would condemn every one
+   * of them. The question is only ever about the FILE, `git check-ignore`
+   * answers it about the file, and the negation makes this green. Eleven live
+   * links in `buses-data` ride on this case. */
+  const reincluded = repoFixture({
+    '.gitignore': 'loop/*\n!loop/README.md\n',
+    'README.md': '# Root\n\nSee [the loop](loop/README.md).\n',
+    'loop/README.md': '# Loop\n\nTracked, inside an ignored folder.\n',
+    'loop/runs/note.md': '# A run file\n\nIn no checkout, and nothing links to it.\n',
+  });
+  report(reincluded.code === 0, 'a tracked file re-included inside an ignored folder stays green'
+    + (reincluded.code === 0 ? '' : `  <-- exited ${reincluded.code}\n${reincluded.out}`), 'GREEN');
+}
+{
+  const red = repoFixture({
+    '.gitignore': 'loop/*\n!loop/README.md\n',
+    'README.md': '# Root\n\nSee [the hold](loop/blocked/thing.md).\n',
+    'loop/README.md': '# Loop\n\nTracked.\n',
+    'loop/blocked/thing.md': '# A hold\n\nOn this disk and in no checkout.\n',
+  });
+  const named = red.out.includes('[L4 ');
+  report(red.code === 1 && named,
+    'L4  a link into ignored territory is found, on a file that is really there'
+    + (red.code === 1 ? (named ? '' : '  <-- failed, but never named L4') : `  <-- exited ${red.code}\n${red.out}`));
+}
+{
+  /* AND IT IS NOT L1 WEARING A NEW HAT. L1 means the path is WRONG; this means
+   * the path is RIGHT and unreachable. A reader told "does not exist" about a
+   * file they can open goes looking for a bug in the checker. */
+  const red = repoFixture({
+    '.gitignore': 'loop/*\n',
+    'README.md': '# Root\n\nSee [the hold](loop/blocked/thing.md).\n',
+    'loop/blocked/thing.md': '# A hold\n\nOn this disk and in no checkout.\n',
+  });
+  const asL1 = /\[L1 /.test(red.out);
+  report(!asL1 && /ignore/.test(red.out),
+    'it is reported as its own class rather than as a dead path'
+    + (asL1 ? '  <-- reported L1, which says the wrong thing about it' : ''));
+}
+{
+  /* THE OTHER HALF OF THE CLASS, and the one a verdict cannot express: a tree
+   * where git cannot be asked at all must SAY so rather than report a clean run
+   * over a question it never put. Same principle as the site-path and %VAR%
+   * counts — a check that covers less than it claims is only acceptable when it
+   * says how much less. `--root` from a cwd that is no repository is exactly
+   * that tree, and it is the shape the harness cases above all run in. */
+  const dir = fixture({
+    'doc.md': '# Doc\n\nSee [the target](target.md#1-first-section).\n',
+  });
+  const from = mkdtempSync(path.join(tmpdir(), 'not-a-repo-'));
+  const r = spawnSync(process.execPath, [CHECKER, '--root', dir], { cwd: from, encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(from, { recursive: true, force: true });
+  report(r.status === 0 && /not checked against .gitignore/.test(out),
+    'a tree git cannot be asked about says how many targets went unchecked'
+    + (r.status === 0 ? '' : `  <-- exited ${r.status}\n${out}`), 'GREEN');
+}
+
 console.log(`\n${failed ? `${failed} CHECK${failed === 1 ? '' : 'S'} COULD NOT BE FALSIFIED` : 'Every check was watched go red, every control stayed green, the portability cases behave the same on any platform, and the default corpus was counted rather than assumed.'}`);
 process.exitCode = failed ? 1 : 0;

@@ -32,8 +32,15 @@
 //   L1  a relative link resolves to a file that exists
 //   L2  a `#fragment` matches a real heading in the target
 //   L3  a `§n` citation names a section the target actually has
+//   L4  that file is in the REPOSITORY and not merely on this disk
 //   C1  a fenced `bash` block has a folder declared for it somewhere above
 //   C2  a script named by a `node`/`python` command in such a block exists
+//
+// L4 IS THE FOURTH CLASS OF ROT AND IT ARRIVED LAST (buses-data OA-292, added
+// 2026-09-09). A link into gitignored territory resolves here and nowhere else,
+// so it is the mirror of the working-tree checks that are green in CI for ever:
+// this one is green on the laptop for ever, and until now the only thing that
+// could find it was a billed CI red. See the L4 block by the run loop.
 //
 // SINCE 2026-08-28 THE HOUSE STYLE ASKS FOR ANCHORS (OA-139). Cite a section as
 // [the heading](target.md#the-heading), not as prose naming it. That is not a
@@ -73,6 +80,7 @@
 // and names file and line for each finding, so it can gate a commit or a CI run.
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { untrackedFiles } from './lib/tracked-docs.mjs';
 import { enclosingRepoRoot } from './lib/repo-root.mjs';
@@ -346,6 +354,11 @@ const namesAnExistingFile = (p) => {
 const findings = [];
 const advisories = [];
 const siteLinks = [];   /* `/route` links — a site path, not a file; counted, never failed */
+/* Every relative link that resolved to a real file inside this repository, kept
+ * so git can be asked about the whole batch once at the end rather than per
+ * link. See the L4 block after the run loop. */
+const resolvedTargets = [];
+let ignoreUnasked = 0;
 let legal = 0;   /* licence/statute clauses skipped — reported, never failed */
 const say = (file, line, code, why, extra) =>
   findings.push({ file, line, code, why, extra });
@@ -544,6 +557,11 @@ function checkLinks(doc) {
         say(rel(doc.file), line, 'L1', `link target does not exist: ${decodeURIComponent(rawPath)}`);
         continue;
       }
+      /* IT EXISTS HERE. Whether it exists in the REPOSITORY is a different
+       * question, and it is the one nothing on this laptop was asking — see the
+       * L4 block after the run loop. Collected rather than answered, because the
+       * answer costs one `git check-ignore` for the whole run. */
+      resolvedTargets.push({ file: rel(doc.file), line, shown: decodeURIComponent(rawPath), target });
       if (!frag) continue;
       if (!target.endsWith('.md') || !statSync(target).isFile()) continue;
       const t = load(target);
@@ -797,8 +815,66 @@ for (const file of corpus.concat(archived)) {
     console.log(`  ${String(findings.length - before).padStart(3)} findings  ${path.relative(ROOT, file).replace(/\\/g, '/')}`);
 }
 
+/* ---------- L4: the target is here and is in no checkout ---------- */
+
+/* THE INVERSION OF A SHAPE THIS PROJECT ALREADY NAMES (buses-data OA-292).
+ * *The subject that does not survive `actions/checkout`* says a check whose
+ * subject is a property of a WORKING TREE is green in CI for ever. Read the join
+ * the other way and you get this: a link into GITIGNORED territory resolves on
+ * the machine that wrote it and exists in no clone, no CI checkout and nothing
+ * GitHub renders — so it is green HERE for ever, and the only instrument that
+ * has ever found one is a red CI run on the estate's one private repository,
+ * where every run is billed. `buses-data`'s `OA-291.md` linked to a
+ * `loop/blocked/…` file on 2026-09-09; from the repository root this checker
+ * said no dead links, and CI at the same commit said L1 and exited 1.
+ *
+ * SO THIS CLASS ONLY EVER FIRES HERE, AND THAT IS THE WHOLE POINT. In a
+ * checkout the ignored file is simply absent, so the same link is an ordinary
+ * L1 and CI was always going to catch it — expensively, after the push. L4 is
+ * the same verdict bought on the laptop, at the hook, for one `git` call.
+ *
+ * It is A NEW CLASS RATHER THAN A WIDENING OF L1, because the two say opposite
+ * things to the reader: L1 means the path is wrong, and this means the path is
+ * right and unreachable. Telling somebody a file they can open does not exist
+ * sends them to look for a bug in the checker.
+ *
+ * THE QUESTION IS ABOUT THE FILE AND NEVER ABOUT THE FOLDER. `loop/README.md` is
+ * tracked inside an ignored `loop/`, and this estate's `.gitignore` re-includes
+ * files inside otherwise ignored map folders everywhere — `manifest.json`,
+ * `redteam.json`, every `*.docx`. `git check-ignore` honours the negations, so
+ * it answers exactly the question asked and the re-included files stay green.
+ *
+ * ONE CALL FOR THE WHOLE RUN, NUL-separated in both directions so a path with a
+ * space or a `#` in it is not a special case. Exit 0 means some path is ignored,
+ * 1 means none is, and anything else — 128 for "not a git repository", which is
+ * what `--root` at a scratch tree gets — means the question could not be put.
+ * That case is COUNTED AND REPORTED rather than passed over: a check that covers
+ * less than it claims is only honest if it says how much less, which is the same
+ * rule the site-path and %VAR% lines below already follow.
+ *
+ * A FORCE-ADDED FILE — tracked despite matching an ignore rule — would be a
+ * false positive here, and there is no guard for it because it does not exist:
+ * `git ls-files -z | git check-ignore --stdin -z` returned nothing in all three
+ * repositories on 2026-09-09. If one ever appears, this is the line to widen. */
+if (resolvedTargets.length) {
+  const shown = resolvedTargets.map((t) => path.relative(ROOT, t.target).replace(/\\/g, '/'));
+  const r = spawnSync('git', ['-C', ROOT, 'check-ignore', '--stdin', '-z'],
+    { input: shown.join('\0') + '\0', encoding: 'utf8' });
+  if (r.error || (r.status !== 0 && r.status !== 1)) {
+    ignoreUnasked = resolvedTargets.length;
+  } else {
+    const ignored = new Set((r.stdout || '').split('\0').filter(Boolean));
+    resolvedTargets.forEach((t, i) => {
+      if (!ignored.has(shown[i])) return;
+      say(t.file, t.line, 'L4', `link target is ignored by git: ${t.shown}`,
+        'it is on this disk and in no checkout — a clone, CI and GitHub all 404 on it. Name it in backticks and say where it lives, or track the file');
+    });
+  }
+}
+
 const NAME = {
   L1: 'dead link', L2: 'dead anchor', L3: 'section citation',
+  L4: 'link into ignored territory',
   C1: 'command without a folder', C2: 'command names a missing script',
 };
 
@@ -825,6 +901,9 @@ if (advisories.length) {
   if (advisories.length > 12) console.log(`  … and ${advisories.length - 12} more`);
   console.log('  These do not fail the check. Name the document beside the § if you want one covered.');
 }
+
+if (ignoreUnasked)
+  console.log(`\n${ignoreUnasked} link target${ignoreUnasked === 1 ? '' : 's'} not checked against .gitignore — git could not be asked here, so nothing says whether any of them is missing from a checkout. This line reads 0 in any repository.`);
 
 if (legal)
   console.log(`\n${legal} licence or statute clause citation${legal === 1 ? '' : 's'} skipped — a § preceded by ODbL, GDPR or the like belongs to a document we did not write.`);

@@ -1457,6 +1457,40 @@ if (redteam) {
       continue;
     }
     /*
+     * A SECOND RED-TEAM ENTRY ON A ROUTE WE ALREADY CARRY is a disagreement about
+     * the OPERATOR, not a service we are missing (OA-274 fault 1, 2026-09-09).
+     *
+     * Ely Co-op's blind answer wrote route 9 twice -- Stagecoach East, medium
+     * confidence, off a CPCA article about shared commercial and subsidised
+     * journeys, and A2B Bus and Coach, high confidence, off the BODS
+     * registration. The pairing above is deliberately one-to-one, so our single
+     * route 9 took one of them and the other arrived here and was reported
+     * "absent from our verified set -- inclusion candidate". The sheet draws
+     * route 9. The report contradicted its own inputs, which is the shape this
+     * check exists to avoid.
+     *
+     * The fall-through asked *did this entry pair?* where the question is *do we
+     * carry this route at all?*. A leftover is the NORMAL shape of a second entry
+     * rather than evidence of a missing service, so the route index decides and
+     * the operator arm gets to say the true thing.
+     *
+     * It is the LOOKUP that widens, exactly as in the three arms above: a slashed
+     * key reaches our plain one, and `r` stays the name THEY wrote. A route
+     * neither of whose keys we carry is untouched and still fires missing-service
+     * -- the arm prove-s6-checks.js s15 and s19 hold, because a widened match
+     * silences findings and that is the direction this must not fail in.
+     */
+    const ourSame = routeKeys(rt.route).map(k => ourGroups.get(k)).find(g => g && g.length);
+    if (ourSame) {
+      const oursOps = [...new Set(ourSame.map(o => o.operator).filter(Boolean))];
+      add('soft', 'operator',
+        `Route ${r} operator differs: the red-team names a SECOND operator "${rt.operator || '?'}" on a route we already carry as ${oursOps.length ? oursOps.map(o => `"${o}"`).join(' / ') : 'an entry naming no operator'}. It is not a missing service — the route is in our verified set — so confirm which operator runs it${rt.notes ? ' against: ' + rt.notes : '.'}`,
+        { route: r, ours: oursOps, redteam: rt.operator || null, secondEntry: true,
+          confidence: rt.confidence || null, notes: rt.notes || null,
+          redteamTermini: rt.termini || null, redteamDays: rt.days || null }, r, 'redteam');
+      continue;
+    }
+    /*
      * A BORROWED ANSWER IS A SUPERSET, AND THE ROW HAS TO SAY SO (OA-156 source
      * two, 2026-08-29). A place inside a mapped town borrows that town's blind
      * answer under OA-141, and the town answer is about services serving the

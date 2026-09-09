@@ -1439,6 +1439,141 @@ console.log('\n18. Place exclusions — notOnLeaflet[] declared in a place\'s ro
     a.v && others.every(x => a.v.findings.some(f => f.category === 'missing-service' && String(f.route) === x)),
     a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
 }
+/* ---- 19. a SECOND red-team entry on a route we carry (OA-274 fault 1) */
+console.log('\n19. Two red-team entries, one route number — the second is an operator disagreement, not a missing service');
+{
+  /*
+   * Ely Co-op's blind answer wrote route 9 twice, Stagecoach East and A2B Bus and
+   * Coach. The pairing is one-to-one, so our single route 9 took one and the other
+   * fell through as "absent from our verified set -- inclusion candidate" about a
+   * route the sheet draws: the report contradicting its own inputs.
+   *
+   * The fault is INJECTED rather than borrowed. Ely Co-op's own run is the recorded
+   * instance, but a fixture whose subject is whatever the estate happens to be
+   * wrong about today is one that curation retires -- which is exactly what SF-012
+   * did to route 68 and 12 checks in this file on 2026-09-09. So the case picks
+   * whatever route this fixture already pairs on, asserts that it does, and adds a
+   * second entry naming an operator nothing runs.
+   */
+  const d = stage('wisbech', 's19-second-operator');
+  const vs = readJ(d, 'verified-services.json');
+  const rt = readJ(d, 'redteam.json');
+  const ourRoutes = new Set((vs.services || []).map(s => String(s.route).toUpperCase()));
+  const paired = (rt.services || []).map(s => String(s.route).toUpperCase()).find(r => ourRoutes.has(r));
+  if (!paired) throw new Error('fixture assumption broken: the Wisbech red team and our verified set no longer name any route in common, so there is nothing for a SECOND entry to be second to — pick another fixture, do not delete the case');
+  const OP = 'Nonesuch Coaches Ltd';
+
+  // CONTROL FIRST: unmutated, this route is paired and quiet in both categories.
+  const a0 = verify(d);
+  check('the fixture pairs the route before anything is injected', `no missing-service and no operator finding on ${paired}`,
+    a0.v && !a0.v.findings.some(f => String(f.route) === paired && (f.category === 'missing-service' || f.category === 'operator')),
+    a0.v ? JSON.stringify(a0.v.findings.filter(f => String(f.route) === paired).map(f => f.severity + '/' + f.category)) : 'no report');
+
+  const rt2 = readJ(d, 'redteam.json');
+  rt2.services.push({ route: paired, operator: OP, servesTown: true,
+    termini: ['Wisbech Horsefair Bus Station', 'Nowhere In Particular'], days: 'Mon-Sat', confidence: 'medium',
+    notes: 'INJECTED BY prove-s6-checks.js — not a real claim about any route. The case needs a SECOND entry on an already-paired route to exist by construction.' });
+  writeJ(d, 'redteam.json', rt2);
+  /* THE LOUD ARM IN THE SAME RUN: a route we genuinely do not carry must still be
+   * reported. Widening the lookup SILENCES findings, so this control is the whole
+   * reason the change is safe to make. */
+  const LEAD = injectMissingService(d);
+  const a = verify(d);
+
+  check('a second entry on a route we draw is not reported as missing', `no missing-service on ${paired}`,
+    a.v && !a.v.findings.some(f => f.category === 'missing-service' && String(f.route) === paired),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
+  check('it reaches the operator arm instead', `a soft operator finding on ${paired} naming "${OP}"`,
+    a.v && a.v.findings.some(f => f.severity === 'soft' && f.category === 'operator'
+      && String(f.route) === paired && f.message.includes(OP)),
+    a.v ? JSON.stringify(a.v.findings.filter(f => String(f.route) === paired).map(f => f.severity + '/' + f.category)) : 'no report');
+  check('and the row says which side is which', 'the evidence carries our operator(s) and theirs',
+    a.v && a.v.findings.some(f => f.category === 'operator' && String(f.route) === paired
+      && f.evidence && f.evidence.secondEntry === true && f.evidence.redteam === OP
+      && Array.isArray(f.evidence.ours)),
+    a.v ? JSON.stringify((a.v.findings.find(f => f.category === 'operator' && String(f.route) === paired) || {}).evidence || null) : 'no report');
+  check('a route we really do not carry still fires', `missing-service on ${LEAD}`,
+    has(a.v, 'soft', 'missing-service', LEAD),
+    a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
+}
+/* ---- 20. a PLACE's declaration beats its own inference (OA-274 fault 2) */
+console.log('\n20. servesTown — a place\'s notOnLeaflet declaration outranks the stop-presence inference');
+{
+  /*
+   * `place_verified_services.js` writes `servesTown: true` on every service,
+   * because its whole input is "routes with a stop inside the walkshed" -- an
+   * INFERENCE. A `notOnLeaflet[]` entry saying `servesTown: false` is a DECISION,
+   * and the two used to disagree silently: the declaration reached known_off.js
+   * while the inferred true stayed in services[], so verify_report's
+   * `if (isDisplayed || vs.servesTown)` guard kept firing. Ely Co-op's AJ2 --
+   * adjudicated 2026-09-08 as register entry SF-003 -- came back every run.
+   *
+   * Wholly injected, on a route number nothing carries, so nothing about this case
+   * depends on what any place happens to draw today.
+   */
+  const R = 'ZZ9', OP = 'Nonesuch Coaches Ltd';
+  const REASON = 'INJECTED BY prove-s6-checks.js — a place-level decision, not a real one.';
+  /* Build a staged place dir carrying a synthetic undrawn service the red team
+   * says does not serve the town. `decl` is what goes in notOnLeaflet[], or null
+   * for the no-declaration control. */
+  const build = (name, decl) => {
+    const d = stage('place', name);
+    const g = readJ(d, 'gtfs-services.json');
+    if ((g.services || []).some(s => String(s.route).toUpperCase() === R)) throw new Error(`fixture assumption broken: the place now carries a real route ${R} — pick another absent number, do not delete the case`);
+    const rj = readJ(d, 'routes.json');
+    const drawn = new Set([...(rj.routeOrder || []), ...Object.keys(rj.palette || {})]);
+    if (drawn.has(R)) throw new Error(`fixture assumption broken: route ${R} is now DRAWN by the place config`);
+    g.services.push({ route: R, operator: OP, days: 'Mon-Fri', termini: ['Nowhere In Particular'], headsigns: [] });
+    writeJ(d, 'gtfs-services.json', g);
+    if (decl) { rj.notOnLeaflet = [decl]; writeJ(d, 'routes.json', rj); }
+    const rt = readJ(d, 'redteam.json');
+    rt.excluded = (rt.excluded || []).concat([{ route: R, operator: OP, servesTown: false,
+      reason: 'INJECTED BY prove-s6-checks.js — not a real claim about any route.' }]);
+    writeJ(d, 'redteam.json', rt);
+    // Rebuild verified-services.json so the adapter sees both the new service and
+    // the declaration: stage() runs the adapter only when the file is absent.
+    fs.rmSync(path.join(d, 'verified-services.json'), { force: true });
+    const adapter = path.join(SK, '..', 'make-place-bus-leaflet', 'assets', 'place_verified_services.js');
+    const ar = spawnSync(process.execPath, [adapter], { cwd: d, encoding: 'utf8' });
+    if (ar.status !== 0) throw new Error(`place adapter failed:\n${ar.stdout}${ar.stderr}`);
+    return d;
+  };
+  const stFor = (d) => {
+    const e = (readJ(d, 'verified-services.json').services || []).find(s => String(s.route).toUpperCase() === R);
+    return e ? e.servesTown : 'absent';
+  };
+  const stRows = (v) => (v ? v.findings : []).filter(f => f.category === 'serves-town' && String(f.route) === R);
+
+  // CONTROL: undeclared, the finding fires. Without this the case cannot go red.
+  const base = build('s20-undeclared', null);
+  const b = verify(base);
+  check('the adapter still infers servesTown from stop presence', `${R} is servesTown:true when nothing declares otherwise`,
+    stFor(base) === true, String(stFor(base)));
+  check('and the serves-town finding fires', `a serves-town finding on ${R}`,
+    stRows(b.v).length === 1, JSON.stringify(stRows(b.v).map(f => f.severity)) + ' / ' + (b.v ? 'report' : 'no report'));
+
+  // THE CASE: an explicit servesTown:false is a decision, and it wins.
+  const decl = build('s20-declared-false', { route: R, reason: REASON, servesTown: false });
+  const c = verify(decl);
+  check('an explicit servesTown:false reaches the services[] entry', `${R} is servesTown:false in verified-services.json`,
+    stFor(decl) === false, String(stFor(decl)));
+  check('and the finding stops being re-raised', `no serves-town finding on ${R}`,
+    stRows(c.v).length === 0, JSON.stringify(stRows(c.v).map(f => f.severity + '/' + f.message.slice(0, 60))));
+
+  /*
+   * THE ARM THAT MATTERS. This change writes `false` over an inference, so its
+   * failure mode is a place quietly disclaiming every route it declares off --
+   * and the commoner declaration is a route that really does call here and is
+   * simply not drawn (Ely Co-op's TIGERONDEMAND). A declaration with no
+   * `servesTown` key must change nothing.
+   */
+  const silent = build('s20-declared-silent', { route: R, reason: REASON });
+  const s = verify(silent);
+  check('a declaration that says nothing about servesTown changes nothing', `${R} is still servesTown:true`,
+    stFor(silent) === true, String(stFor(silent)));
+  check('and the serves-town finding still fires on it', `a serves-town finding on ${R} survives the declaration`,
+    stRows(s.v).length === 1, JSON.stringify(stRows(s.v).map(f => f.severity)));
+}
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

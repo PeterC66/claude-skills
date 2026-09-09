@@ -126,6 +126,36 @@ const out = {
 if (Array.isArray(routes.notOnLeaflet) && routes.notOnLeaflet.length) {
   out.notOnLeaflet = routes.notOnLeaflet;
   console.log(`carried ${routes.notOnLeaflet.length} notOnLeaflet entr(y/ies) through from routes.json`);
+  /*
+   * A DECLARATION BEATS AN INFERENCE, AND UNTIL NOW IT COULD NOT (OA-274 fault 2,
+   * 2026-09-09).
+   *
+   * Every entry in `services[]` above is written `servesTown: true` because this
+   * adapter's whole input is "routes with a stop inside the walkshed" -- stop
+   * presence, an INFERENCE. A `notOnLeaflet[]` entry that says `servesTown: false`
+   * is a DECISION somebody made and wrote down, and the two disagreed silently:
+   * the declaration reached `known_off.js` and the inferred `true` stayed in the
+   * matching services[] row, so `verify_report.js`'s `if (isDisplayed ||
+   * vs.servesTown)` guard kept firing and Ely Co-op's AJ2 -- a school service
+   * with no BODS calendar, no stop near the Co-op and 0 in-town stops in our
+   * drawn data, adjudicated on 2026-09-08 as register entry SF-003 -- came back
+   * on every run.
+   *
+   * ONLY an explicit `servesTown: false` does this. The commoner case is a route
+   * that really does call here and is simply off the sheet (Ely Co-op's
+   * TIGERONDEMAND, a real bookable DRT service with no fixed route to draw), and
+   * writing `false` for those would assert something nobody decided.
+   */
+  const off = new Set(routes.notOnLeaflet
+    .filter(e => e && e.servesTown === false)
+    .map(e => normRoute(e.route)));
+  if (off.size) {
+    let n = 0;
+    for (const s of out.services) {
+      if (off.has(normRoute(s.route)) && s.servesTown !== false) { s.servesTown = false; n++; }
+    }
+    console.log(`  ${n} service(s) set servesTown:false — declared off in notOnLeaflet[], which is a decision and outranks the stop-presence inference`);
+  }
 }
 
 fs.writeFileSync('verified-services.json', JSON.stringify(out, null, 2) + '\n');

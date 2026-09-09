@@ -1130,9 +1130,27 @@ if (RUN_GATES && SK) {
 // that matched nothing is a stale `Blocks:` and is said out loud, for the reason
 // `adjudicated` is printed — a suppression nobody can see is how a board starts
 // lying, and an annotation nobody can see is the same fault one step earlier.
+//
+// A HOLD THAT MATCHED NOTHING HAS THREE POSSIBLE CAUSES AND THE FIRST DRAFT
+// NAMED ONLY TWO. It said "either the row has cleared and the blocked file can
+// go, or the key is wrong", which is a claim about the blocked file — and it
+// fired on 2026-09-09 for a hold that was working perfectly, because the portal
+// was unreachable that run. `fromRemotePortal()` warns and returns null, every
+// `draft-*` row with it, and `draft-1` is then "not on the board" in a sense
+// that says nothing whatever about the blocked file. Reproduced deliberately
+// with `--url https://busmaps.invalid`: both warnings, in that order.
+//
+// It is the worse direction, too. Acting on "the row has cleared" means deleting
+// `st-ives-v10.2-river.md` — the one thing standing between Peter and publishing
+// a sheet whose river is in seven fragments. So when the board is INCOMPLETE the
+// warning reports exactly that and draws no conclusion: name the floor, and
+// refuse a fallback that goes below what saying nothing would have given.
 const heldRows = applyHolds(items, loopBlocked.holds);
+const boardComplete = !!portal;
 for (const h of heldRows.unmatched) {
-  warnings.push(`loop/blocked/${h.file} names worklist row \`${h.key}\`, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
+  warnings.push(boardComplete
+    ? `loop/blocked/${h.file} names worklist row \`${h.key}\`, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`
+    : `loop/blocked/${h.file} names worklist row \`${h.key}\` and this run could not check it: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
 }
 
 const DEMO_RE = /\(demo\)/i;

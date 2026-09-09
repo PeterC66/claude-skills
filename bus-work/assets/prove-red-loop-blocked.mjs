@@ -235,6 +235,21 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   // that silently becomes vacuous, which is this file's own subject.
   const iHold = src.indexOf('⚠ ON HOLD —');
   const iDo = src.indexOf("if (d.kind === 'shell') console.log");
+  // A hold that matched nothing has THREE causes, and the wire must not name two
+  // of them when the third is live. The stale-hold warning fired on 2026-09-09
+  // for a hold that was working, because the portal was unreachable that run and
+  // every `draft-*` row went with it — and its text told the reader the row had
+  // cleared, whose remedy is deleting the blocked file. Both branches asserted,
+  // and the `boardComplete` gate between them, because a single-branch check here
+  // would pass on the version that caused the fault.
+  for (const lit of [
+    'const boardComplete = !!portal;',
+    'warnings.push(boardComplete',
+    'the portal queues were skipped, so every row that source would have raised is missing',
+    'NOT evidence the row has cleared',
+  ]) check(`worklist.mjs RUNS: ${lit.slice(0, 56)}`, liveLine(lit), 'absent, or commented out');
+  check('the CONFIDENT stale wording survives for a complete board', liveLine('Either the row has cleared and the blocked file can go, or the key is wrong.'));
+
   check('the ON HOLD marker is present at all', iHold >= 0, 'not found in worklist.mjs');
   check('the do-loop anchor is present at all', iDo >= 0, 'not found in worklist.mjs');
   check('the hold is rendered above the do steps', iHold >= 0 && iDo >= 0 && iHold < iDo,

@@ -103,6 +103,34 @@ function injectServesTownFalse(dir, route = 'T7') {
   fs.writeFileSync(path.join(dir, 'redteam.json'), JSON.stringify(rt, null, 1));
 }
 
+/* The same move for the other direction: tell the staged red team about a service
+ * the sheet does not draw and the town has not ruled off, so a `missing-service`
+ * lead exists BY CONSTRUCTION. Three sections need one — 5, 12 and 14 — and until
+ * 2026-09-09 all three borrowed Wisbech's real lead, route 68, which was the only
+ * one that town had. SF-012 then decided 68 (FACT's Tesco Bus is real, and open to
+ * all) and wrote it into notOnLeaflet[], which correctly turned the lead into a
+ * `known-off` and left the three sections with nothing to test: 12 of 101 checks
+ * went red on a checker that was behaving exactly as designed. A fixture whose
+ * subject is whatever the estate happens to be wrong about today is one that
+ * curation retires. Fails loudly if the synthetic route ever becomes real. */
+function injectMissingService(dir, route = '987') {
+  const routes = JSON.parse(fs.readFileSync(path.join(dir, 'routes.json'), 'utf8'));
+  const drawn = new Set([...(routes.routeOrder || []), ...Object.keys(routes.palette || {})]);
+  if (drawn.has(route)) throw new Error(`prove-s6-checks: fixture route ${route} is now DRAWN by the Wisbech config — it was chosen because nothing carries it, so pick another absent route, do not delete the case`);
+  const vs = JSON.parse(fs.readFileSync(path.join(dir, 'verified-services.json'), 'utf8'));
+  for (const field of ['notOnLeaflet', 'verifiedNotDisplayed', 'notDisplayed', 'excluded']) {
+    if ((vs[field] || []).some((e) => String(e.route) === route)) throw new Error(`prove-s6-checks: fixture route ${route} is now declared in Wisbech's ${field}[] — it was chosen because no convention names it, so pick another absent route, do not delete the case`);
+  }
+  const rt = JSON.parse(fs.readFileSync(path.join(dir, 'redteam.json'), 'utf8'));
+  rt.excluded = (rt.excluded || []).filter((e) => String(e.route) !== route);
+  rt.services = (rt.services || []).filter((sv) => String(sv.route) !== route);
+  rt.services.push({ route, operator: 'Stagecoach East', termini: ['Wisbech Horsefair Bus Station', 'Nowhere In Particular'],
+    days: 'Mon-Fri', servesTown: true, confidence: 'high', sources: ['operator-site'],
+    notes: 'INJECTED BY prove-s6-checks.js — not a real claim about any route. The case needs a missing-service lead to exist by construction rather than by borrowing whatever the estate happens to be wrong about today.' });
+  fs.writeFileSync(path.join(dir, 'redteam.json'), JSON.stringify(rt, null, 1));
+  return route;
+}
+
 function stage(runKey, name) {
   const buildDir = path.join(BUSES, path.dirname(path.dirname(RUNS[runKey])));
   const s6 = path.join(BUSES, RUNS[runKey]);
@@ -418,6 +446,7 @@ console.log('\n4. Truncated chain — a chain that never leaves town cannot cont
 console.log('\n5. Route keys — a branded name is not a second route, and a duplicate number is');
 {
   const d = stage('wisbech', 'keys');
+  const LEAD = injectMissingService(d);
   const a = verify(d);
   check('a branded red-team route is not double-counted', 'no missing-service whose route holds a bracket',
     a.v && !a.v.findings.some(f => f.category === 'missing-service' && /[()]/.test(String(f.route))),
@@ -427,11 +456,13 @@ console.log('\n5. Route keys — a branded name is not a second route, and a dup
   check('both same-numbered routes are checked, on their own keys', 'a finding carrying route 46L',
     a.v && a.v.findings.some(f => f.route === '46L'), 'none');
 
-  // A service the red team really did find and we really do not carry must still
-  // be reported. Wisbech's 68 (FACT) is exactly that, and is the highest-value
-  // output of the stage.
-  check('a genuinely missing service still fires', 'missing-service on route 68',
-    has(a.v, 'soft', 'missing-service', '68'),
+  // A service the red team found and we neither draw nor have ruled off must
+  // still be reported — the highest-value output of the stage, and the thing the
+  // pairing above must not swallow. The lead is injected rather than borrowed:
+  // this check named Wisbech's route 68 until SF-012 decided it on 2026-09-08,
+  // at which point the case stopped testing anything and said so in red.
+  check('a genuinely missing service still fires', `missing-service on route ${LEAD}`,
+    has(a.v, 'soft', 'missing-service', LEAD),
     a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'missing-service').map(f => f.route)) : 'no report');
 }
 
@@ -863,7 +894,9 @@ console.log('\n12. missing-service — a borrowed answer is a superset, and the 
    * same path and are real (OA-050) — so the pair is: the row carries the reason
    * when borrowed, and does NOT claim a borrow when the answer is the map's own.
    */
-  const own = verify(stage('wisbech', 'ms-own')).v;
+  const ownDir = stage('wisbech', 'ms-own');
+  injectMissingService(ownDir);
+  const own = verify(ownDir).v;
   const ownMs = (own ? own.findings : []).filter(f => f.category === 'missing-service');
   check('the fixture really produces a missing-service row to begin with', 'at least one missing-service finding',
     ownMs.length > 0, `${ownMs.length} — without one this case proves nothing`);
@@ -872,6 +905,7 @@ console.log('\n12. missing-service — a borrowed answer is a superset, and the 
     JSON.stringify(ownMs.map(f => f.evidence && f.evidence.borrowedFrom)));
 
   const d = stage('wisbech', 'ms-lent');
+  injectMissingService(d);
   const rt = readJ(d, 'redteam.json');
   rt._borrowedFrom = { map: 'Somewhere Else', build: '/elsewhere', run: '2026-08-26_0700', derivedAt: '2026-08-26', borrowedOn: '2026-08-29' };
   writeJ(d, 'redteam.json', rt);
@@ -1039,8 +1073,16 @@ console.log('\n14. known-off — a route the town has already ruled off is a dec
    * the route off the baseline run means this case cannot quietly stop testing
    * anything the day Wisbech's leads change — the same trap case 1 and case 10
    * record from the other side.
+   *
+   * DISCOVERY WAS NOT ENOUGH, and 2026-09-09 is when that showed. Discovering the
+   * route protects against the lead CHANGING; it does nothing when there is no
+   * lead at all, which is what SF-012 produced by deciding route 68 — Wisbech's
+   * only one — into notOnLeaflet[]. The lead is now injected by construction and
+   * still read off the baseline run, so both failure modes are covered.
    */
-  const base = verify(stage('wisbech', 'ko-base')).v;
+  const baseDir = stage('wisbech', 'ko-base');
+  injectMissingService(baseDir);
+  const base = verify(baseDir).v;
   const baseMs = (base ? base.findings : []).filter(f => f.category === 'missing-service');
   check('the fixture really produces a missing-service row to declare against', 'at least one missing-service finding',
     baseMs.length > 0, `${baseMs.length} — without one this case proves nothing`);
@@ -1049,6 +1091,7 @@ console.log('\n14. known-off — a route the town has already ruled off is a dec
   const REASON = 'FIXTURE REASON — injected by prove-s6-checks.js, not a real ruling about this route';
   const declare = (name, field, entry) => {
     const d = stage('wisbech', name);
+    injectMissingService(d);
     const vs = readJ(d, 'verified-services.json');
     vs[field] = [...(vs[field] || []), entry];
     writeJ(d, 'verified-services.json', vs);

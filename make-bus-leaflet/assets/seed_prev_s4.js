@@ -71,4 +71,44 @@ function seedPrevS4(destDir, prevS4Dir, s3Carry) {
   return { carried, shadowed, skipped };
 }
 
-module.exports = { seedPrevS4 };
+/**
+ * Assemble a rollout's S4 build directory — the ONE sequence, used by BOTH halves
+ * of BOTH rollouts (OA-239).
+ *
+ * WHY THIS EXISTS ON TOP OF seedPrevS4. OA-013 made the two halves pick the same
+ * WINNER when both held a file. It did not make them read the same FILES. The dry
+ * run assembled its scratch from the previous S4 alone; the apply pulled the
+ * stages first and seeded over the top. So a file the LATEST S2 declares and the
+ * previous S4 does not have was in the apply and absent from the dry run — and in
+ * `rollout.js`, which had no seedPrevS4 on its apply path at all, the divergence
+ * ran both ways: the dry run had the previous S4's copy of every geometry file and
+ * its undeclared extras (`roads_geo.json`, `routes_paths.json`, `boarding_index.json`),
+ * and the apply had the latest S2's copy and no extras. The label diff a human
+ * reads, the GAIN/LOST verdict the tool blocks on and the sheets that ship were
+ * three statements about two different builds.
+ *
+ * THE DIRECTION OF THE FIX, because it is not the one the action proposed. The
+ * obvious move is to make the DRY RUN read what the apply reads. It is the wrong
+ * one: `rollout.js`'s own STALE-INPUTS refusal tells the operator that `--force`
+ * will *"roll the OLD geometry forward anyway"*, and `--force` is the only window
+ * in which the two halves can differ at all — OA-225's guard refuses every other
+ * one. The dry run was the half keeping that promise. So the APPLY is corrected to
+ * the rollout rule seedPrevS4 already states — same data, new engine, the previous
+ * S4's copy wins — and both halves now call this function with the same arguments.
+ * Divergence stops being something two lists have to agree about and becomes
+ * unrepresentable.
+ *
+ * @param {object}   o
+ * @param {string}   o.dest      the directory being assembled (scratch S4, or the real run dir)
+ * @param {string}   o.prevS4Dir the previous S4 run folder
+ * @param {string[]} o.s3Carry   filenames the S3 owns; never taken from S4
+ * @param {string[]} o.stages    stages to pull, in order — ['S2','S3'] for a town, ['S1','S2','S3'] for a place
+ * @param {(stage: string, dest: string) => void} o.pull  runs `stage.js pull <stage> <dest>`
+ * @returns {{carried: string[], shadowed: string[], skipped: string[]}} from seedPrevS4
+ */
+function assembleS4Inputs({ dest, prevS4Dir, s3Carry, stages, pull }) {
+  for (const st of stages) pull(st, dest);
+  return seedPrevS4(dest, prevS4Dir, s3Carry);
+}
+
+module.exports = { seedPrevS4, assembleS4Inputs };

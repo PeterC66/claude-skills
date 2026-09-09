@@ -74,7 +74,11 @@ const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
-const { seedPrevS4 } = require('./seed_prev_s4');
+const { assembleS4Inputs } = require('./seed_prev_s4');
+
+/* A PLACE PULLS S1 AS WELL AS S2 AND S3 — place.json is an S1 output. Named once
+ * here because both halves take it and OA-239 is the action about them drifting. */
+const PULL_STAGES = ['S1', 'S2', 'S3'];
 const { scratchDir } = require('./scratch');
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
@@ -308,11 +312,21 @@ function rolloutOnePlace(p) {
   // internalDiagram) from the previous S3, and every other *.json from the
   // previous S4 (place.json, atco2ll.json, roads_geo.json, routes_paths.json,
   // destinations, etc — all S1/S2-derived and unchanged by an engine rollout).
+  /* THE SCRATCH BUILD PULLS THE STAGES TOO, SINCE 2026-09-09 (OA-239). OA-013 made
+   * the two halves pick the same WINNER when both held a file; it did not make them
+   * read the same FILES. This half assembled from the previous S4 alone, so a file
+   * the latest S1/S2/S3 declares and the previous S4 does not hold was in the apply
+   * and absent from the dry run. Same call, same arguments, both halves — see
+   * assembleS4Inputs in seed_prev_s4.js. Measured inert on all eleven places the day
+   * it landed: no pulled stage holds a file the previous S4 lacks. */
   const scratch = scratchDir('rollout-place-');
   fs.mkdirSync(path.join(scratch, 'S4'));
   const s3Carry = ['routes.json', 'overrides.json', 'diagram-overrides.json'];
-  for (const name of s3Carry) copyFile(path.join(prevS3.dir, name), path.join(scratch, 'S4'));
-  seedPrevS4(path.join(scratch, 'S4'), prevS4.dir, s3Carry);
+  assembleS4Inputs({
+    dest: path.join(scratch, 'S4'), prevS4Dir: prevS4.dir,
+    s3Carry, stages: PULL_STAGES,
+    pull: (st, dest) => stage(p.dir, 'pull', st, dest),
+  });
   // REFUSE TO SEED FROM AN S3 THE BUILT S4 DISAGREES WITH. The comment on
   // buildInternal() says routes.json's internalRoads block arrives "already stamped
   // with fitExtra etc from the original build" — true of the S4 copy, and NOT true of
@@ -464,9 +478,9 @@ function rolloutOnePlace(p) {
   const s4Dir = basedOn
     ? stage(p.dir, 'new', 'S4', '--bump', BUMP, '--based-on', basedOn)
     : stage(p.dir, 'new', 'S4', '--bump', BUMP);
-  stage(p.dir, 'pull', 'S1', s4Dir); // place.json is an S1 output (pipeline.md P4 note) — pull it explicitly, not just S2
-  stage(p.dir, 'pull', 'S2', s4Dir);
-  stage(p.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
+  // PULL_STAGES leads with S1 because place.json is an S1 output (pipeline.md P4
+  // note) and `pull S2` would never bring it; pull S3 also syncs routes.json's
+  // printed version stamp to this run's v<N.N>.
   // roads_geo.json/routes_paths.json (and anything else build_internal_place_roads.js
   // wrote) are S4-GENERATED, not registered S2 outputs — `stage.js pull S2` never
   // brings them in, so a real (non-scratch) apply run was missing them entirely
@@ -481,7 +495,14 @@ function rolloutOnePlace(p) {
   // would not make. St Ives Bus Station is the recorded case; seed_prev_s4.js
   // carries the account. `shadowed` names every file where the two disagreed, so
   // the choice is stated rather than silently made.
-  const seeded = seedPrevS4(s4Dir, prevS4.dir, s3Carry);
+  // AND NOW IT IS LITERALLY THE SAME CALL, not two calls that agree (OA-239): the
+  // pulls and the seed are one function, so the scratch build above and this one
+  // cannot read different files even if somebody edits one of them.
+  const seeded = assembleS4Inputs({
+    dest: s4Dir, prevS4Dir: prevS4.dir,
+    s3Carry, stages: PULL_STAGES,
+    pull: (st, dest) => stage(p.dir, 'pull', st, dest),
+  });
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
   if (seeded.shadowed.length) {

@@ -66,6 +66,16 @@ const { crossingWarnings } = require('./schematic_crossings');
 // stage boundary that enforces it.
 const { stampSheetVersion } = require('./sheet_stamps');
 const { scratchDir } = require('./scratch');
+// ONE assembly sequence for both halves of the rollout (OA-239).
+const { assembleS4Inputs } = require('./seed_prev_s4');
+
+/* WHICH STAGES A TOWN PULLS, AND WHICH FILES ITS S3 OWNS — named once, because
+ * both halves take them and the whole point of OA-239 is that they cannot drift
+ * apart. A town pulls S2 and S3 (a place also pulls S1 for place.json; see
+ * rollout_places.js). S3_CARRY is the list seedPrevS4 must never take from the
+ * previous S4: routes.json is stamped per run and overrides.json is the operator's. */
+const PULL_STAGES = ['S2', 'S3'];
+const S3_CARRY = ['routes.json', 'overrides.json'];
 
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
 const BUSES = resolveBuses(args);
@@ -98,9 +108,17 @@ function copyFile(src, destDir, name) {
 
 function rolloutOne(t) {
   const manifest = readJson(path.join(t.dir, 'manifest.json'));
+  const prevS2 = latestRunDir(manifest, t.dir, 'S2');
   const prevS3 = latestRunDir(manifest, t.dir, 'S3');
   const prevS4 = latestRunDir(manifest, t.dir, 'S4');
-  if (!prevS3 || !prevS4) return { name: t.name, status: 'SKIP', detail: 'no committed S3/S4 to roll forward from' };
+  /* S2 IS IN THIS TEST SINCE 2026-09-09 (OA-239), and it is not a new requirement —
+   * the apply has always run `stage.js pull S2`, which dies when the stage has no
+   * committed run, so a town without one crashed the tool halfway through instead
+   * of being skipped. Now that BOTH halves pull, the dry run would meet it first;
+   * saying SKIP up front is the same verdict the apply already implied. Every one of
+   * the twenty maps on the estate has a committed S2, so this is a guard rather than
+   * a change of behaviour anybody will see. */
+  if (!prevS2 || !prevS3 || !prevS4) return { name: t.name, status: 'SKIP', detail: 'no committed S2/S3/S4 to roll forward from' };
 
   /* Already current? Check the existing PASS/DIFF gate before doing any work.
    *
@@ -239,16 +257,23 @@ function rolloutOne(t) {
   // engine hash it just used into routes.json's "engine" field, so a pure
   // engine-only re-render needs no new S3 run at all (routes.json/overrides.json
   // are unchanged; only the generator + the stamp move).
+  /* THE SCRATCH BUILD AND THE APPLY ASSEMBLE BY THE SAME CALL (OA-239). Until
+   * 2026-09-09 this was a hand-rolled loop over the previous S4 and the apply below
+   * was `pull S2` + `pull S3` with no seedPrevS4 at all, so the two halves read
+   * DIFFERENT files whenever S2 had moved: the dry run had the previous S4's
+   * geometry, the apply had the latest S2's, and the label diff a human reads
+   * described a build that would never be made. See assembleS4Inputs in
+   * seed_prev_s4.js for why the APPLY was the half corrected — this tool's own
+   * STALE-INPUTS refusal promises the operator that `--force` rolls the OLD
+   * geometry forward, and `--force` is the only window in which the two can differ.
+   * s3Carry is the town list; rollout_places.js passes its own. */
   const scratch = scratchDir('rollout-');
   fs.mkdirSync(path.join(scratch, 'S4'));
-  copyFile(path.join(prevS3.dir, 'routes.json'), path.join(scratch, 'S4'));
-  copyFile(path.join(prevS3.dir, 'overrides.json'), path.join(scratch, 'S4')); // optional
-  // S4 workspace = S2 geometry jsons (from the previous S4, since S2 is unchanged) + routes.json/overrides.json above
-  for (const name of fs.readdirSync(prevS4.dir)) {
-    const p = path.join(prevS4.dir, name);
-    if (fs.statSync(p).isDirectory()) continue;
-    if (name.endsWith('.json') && name !== 'routes.json' && name !== 'overrides.json') fs.copyFileSync(p, path.join(scratch, 'S4', name));
-  }
+  assembleS4Inputs({
+    dest: path.join(scratch, 'S4'), prevS4Dir: prevS4.dir,
+    s3Carry: S3_CARRY, stages: PULL_STAGES,
+    pull: (st, dest) => stage(t.dir, 'pull', st, dest),
+  });
   copyFile(path.join(SK, 'gen_internal.js'), path.join(scratch, 'S4'));
   copyFile(path.join(SK, EXTERNAL_GENERATOR), path.join(scratch, 'S4'), 'gen_external.js');
   const engineHash = CURRENT_ENGINE;
@@ -330,8 +355,21 @@ function rolloutOne(t) {
   const s4Dir = basedOn
     ? stage(t.dir, 'new', 'S4', '--bump', BUMP, '--based-on', basedOn)
     : stage(t.dir, 'new', 'S4', '--bump', BUMP);
-  stage(t.dir, 'pull', 'S2', s4Dir);
-  stage(t.dir, 'pull', 'S3', s4Dir); // also syncs routes.json's printed version stamp to this run's v<N.N>
+  // pull S3 also syncs routes.json's printed version stamp to this run's v<N.N>.
+  // THE SAME CALL AS THE SCRATCH BUILD ABOVE (OA-239) — it was two bare pulls and
+  // no seedPrevS4 until 2026-09-09, which is the divergence that action is about.
+  // Measured inert on all nine towns the day it landed: every .json the previous S4
+  // holds that a pulled stage also holds is byte-identical except `routes.json`,
+  // which S3_CARRY excludes by construction; the rest are sidecars the generators
+  // write-or-unlink (`unplaced*.json`, `indexed.json`, `build-meta.json`).
+  const seeded = assembleS4Inputs({
+    dest: s4Dir, prevS4Dir: prevS4.dir,
+    s3Carry: S3_CARRY, stages: PULL_STAGES,
+    pull: (st, dest) => stage(t.dir, 'pull', st, dest),
+  });
+  if (seeded.shadowed.length) {
+    console.log(`  ${t.name}: ${seeded.shadowed.length} file(s) existed in a pulled stage with different content and the previous S4's copy was used — ${seeded.shadowed.join(', ')}. That is the rollout rule (same data, new engine); if one of them SHOULD be refreshed, re-run the stage that owns it and commit before rolling out.`);
+  }
   copyFile(path.join(SK, 'gen_internal.js'), s4Dir);
   copyFile(path.join(SK, EXTERNAL_GENERATOR), s4Dir, 'gen_external.js');
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);

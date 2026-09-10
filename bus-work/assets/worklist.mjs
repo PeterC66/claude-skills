@@ -1088,13 +1088,38 @@ if (s6Stale.length) {
           ],
         });
       }
-      const qids = [...new Set((v.queued || []).map((q) => q.id))];
+      /*
+       * READ THE REGISTER, NOT THE CLAIMS (2026-09-10). This row asks "what
+       * questions are open", and until today it answered it from `v.queued`,
+       * which is the list of red-team CLAIMS that a queued entry happens to
+       * cover. A queued entry with no claim behind it therefore appeared
+       * nowhere: OA-004 decision 4 makes a fact about a service estate-wide, so
+       * an entry may be queued about a town no red team has read. SF-015 — Tiger
+       * on Demand at March, `raisedBy: []` — was queued and then enumerated by
+       * nothing Peter runs, while the checker's own text output said "2 queued"
+       * and this row said one. The count and the list were in the same JSON
+       * object and disagreed. `register.queuedFacts` is the register's own list;
+       * `v.queued` is kept as the fallback for an older checker beside a newer
+       * worklist, which is the pairing a vendored tool actually produces.
+       */
+      const qFacts = (v.register && Array.isArray(v.register.queuedFacts)) ? v.register.queuedFacts : null;
+      const qids = qFacts ? [...new Set(qFacts.map((q) => q.id))] : [...new Set((v.queued || []).map((q) => q.id))];
+      const qTowns = qFacts
+        ? [...new Set(qFacts.flatMap((q) => (q.maps && q.maps.length ? q.maps : (q.scope || []).filter((s) => s !== '*'))))]
+        : [...new Set((v.queued || []).map((q) => q.map))];
+      /* `=== false`, never `!q.claimed`: null means the checker did not look
+       * (--register-only), and "not looked at" must not print as "nobody raised
+       * it". This board always runs the coverage half, so null should not reach
+       * here — which is exactly why it is worth being explicit about. */
+      const qUnclaimed = qFacts ? qFacts.filter((q) => q.claimed === false) : [];
       if (qids.length) {
         add({
           key: 's6-claims-queued', rank: 8, type: 'housekeeping',
           title: `${qids.length} service fact${qids.length === 1 ? '' : 's'} queued in service-facts.json, awaiting a decision`,
-          why: qids.join(', ') + ' — each is a question written down about a bus a red team named. The queue is worked one entry at a time: verify against the operator\'s own site or BODS, write the decision in the register, then the map\'s own field.',
-          who: 'Peter, or a session applying a decided OA-004 default', runbook: 'S6', towns: [...new Set((v.queued || []).map((q) => q.map))],
+          why: qids.join(', ') + ' — each is a question written down about a bus, most of them named by a red team.'
+            + (qUnclaimed.length ? ` ${qUnclaimed.map((q) => q.id).join(', ')} ${qUnclaimed.length === 1 ? 'was' : 'were'} queued with NO claim behind ${qUnclaimed.length === 1 ? 'it' : 'them'} — an estate-wide fact about a service whose sheet no red team has read — so this row is the only thing that enumerates ${qUnclaimed.length === 1 ? 'it' : 'them'}.` : '')
+            + ' The queue is worked one entry at a time: verify against the operator\'s own site or BODS, write the decision in the register, then the map\'s own field.',
+          who: 'Peter, or a session applying a decided OA-004 default', runbook: 'S6', towns: qTowns,
           do: [{ kind: 'skill', what: `Work the queued entries in service-facts.json (${qids.join(', ')}): for each, answer its \`question\`, apply its \`default\` only if it names a decided OA-004 default, record decidedOn/decidedBy/outcome/reason/evidence/recheckBy, then write the map's notOnLeaflet[] or verified set. Runbook: s6-verify.md, "What happens to a claim".` }],
         });
       }

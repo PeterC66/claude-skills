@@ -351,6 +351,37 @@ if (!REGISTER_ONLY) {
 }
 const uncovered = claims.filter(l => !l.covered);
 const queued = claims.filter(l => l.covered && l.covered.by === 'register-queued');
+
+/*
+ * THE QUEUE IS THE REGISTER'S, NOT THE RED TEAM'S (buses-data, 2026-09-10).
+ * `queued` above is a list of CLAIMS — things an S6 report said, that a queued
+ * register entry happens to answer. It is the right population for "what did the
+ * red team say and where did it go", and it is the WRONG one for "what questions
+ * are open", because a queued entry may have been written with no claim behind it
+ * at all: OA-004 decision 4 makes a fact about a service estate-wide, so a session
+ * may queue a question about a town whose sheet no red team has ever read.
+ * SF-015 (Tiger on Demand at March) is exactly that — `raisedBy: []` — and it was
+ * invisible to `worklist.mjs`, which built its `s6-claims-queued` row from
+ * `queued` and so counted one open question where the register held two. It sat
+ * unenumerated from the day it was written; nothing Peter runs would ever have
+ * named it. `register.queued` was already the honest COUNT here and the board did
+ * not read it, so the count and the list disagreed in the same JSON object.
+ * `queuedFacts` is that list, and it is emitted whether or not a claim reaches it.
+ */
+const queuedFacts = facts.filter(f => f && f.status === 'queued').map(f => ({
+  id: f.id, route: f.route, scope: Array.isArray(f.scope) ? f.scope : [], question: f.question || null,
+  /*
+   * `claimed` IS null, NOT false, WHEN NOTHING LOOKED. Under --register-only the
+   * coverage half does not run and `queued` is empty by construction, so a
+   * `.some()` here would report every entry as raised by no claim — a negative
+   * from a search that was never shown to be capable of finding anything, which
+   * is the shape this estate has recorded more than once. The first draft of this
+   * field did exactly that and told the reader, in prose, that SF-008 was raised
+   * by no claim; SF-008 is raised by three. null means "not looked at".
+   */
+  claimed: REGISTER_ONLY ? null : queued.some(l => l.covered.id === f.id),
+  maps: [...new Set(queued.filter(l => l.covered.id === f.id).map(l => l.map))],
+}));
 const unreadableDecls = maps.flatMap(m => decl.get(m.name).unreadable);
 
 // ---- verdict ------------------------------------------------------------------
@@ -362,7 +393,7 @@ if (AS_JSON) {
     root: path.resolve(ROOT), maps: maps.length, reports, mapsWithoutReport, unreadableReports, unreadableDecls,
     claims: claims.length, uncovered, queued: queued.map(l => ({ map: l.map, route: l.route, id: l.covered.id })),
     coveredBy: claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
-    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, findings: registerFindings, silences, owed },
+    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, findings: registerFindings, silences, owed },
     registerOnly: REGISTER_ONLY, requireReports: REQUIRE_REPORTS, red,
   }, null, 2));
 } else {
@@ -376,6 +407,15 @@ if (AS_JSON) {
   }
   console.log(`\ncheck-s6-claims — ${path.resolve(ROOT)}`);
   console.log(`  ${maps.length} map(s) tracked; register: ${register ? `${facts.length} fact(s), ${facts.filter(f => f && f.status === 'queued').length} queued, ${facts.filter(f => f && f.status === 'decided').length} decided` : 'ABSENT'}`);
+  if (queuedFacts.length) {
+    console.log(`  ${queuedFacts.length} QUEUED register ${queuedFacts.length === 1 ? 'entry is' : 'entries are'} awaiting a decision — enumeration, not a finding:`);
+    for (const q of queuedFacts) {
+      const how = q.claimed === null ? 'whether any claim raised it was NOT CHECKED (--register-only reads no S6 report)'
+        : q.claimed ? `raised by a claim on ${q.maps.join(', ')}`
+          : 'RAISED BY NO CLAIM: no S6 report names it, so only this line and the register enumerate it';
+      console.log(`      ${q.id}  ${q.route}  scope ${q.scope.join(', ') || '(none)'} — ${how}`);
+    }
+  }
   if (owed.length) {
     console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to put the service on the sheet, of ${owed.length} in the register — enumeration, not a finding (OA-285):`);
     for (const o of owed) {

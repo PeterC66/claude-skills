@@ -330,6 +330,106 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
   check('and CI sees it too: the debt is register-half work, so --register-only prints it', rCi.code === 0 && /1 decided "include" entry is WAITING/.test(rCi.out), `exit ${rCi.code}`);
 }
 
+/* ---------------------------------------------------------------------------
+ * THE QUEUED ENTRY NO CLAIM REACHES — the population, not the verdict.
+ *
+ * `queued` in the JSON is a list of CLAIMS covered by a queued entry, and for a
+ * year that was also the list the worklist board built its "questions awaiting a
+ * decision" row from. The two are not the same population: OA-004 decision 4
+ * makes a fact about a service estate-wide, so an entry can be queued about a
+ * town no red team has read, and such an entry produced no claim and therefore no
+ * row. SF-015 (Tiger on Demand at March, `raisedBy: []`) sat that way, while the
+ * checker's own text said "2 queued" and the board said one.
+ *
+ * BOTH DIRECTIONS, because the fix is a widening and a widening's own failure
+ * mode is counting something twice: the unclaimed entry must appear AND be marked
+ * unclaimed, and the claimed one must still be marked claimed and still name its
+ * maps. The control that matters most is the last: a register with nothing queued
+ * must produce an EMPTY list, not an absent field — the shape recorded as *the
+ * count that equalled the total*.
+ * ------------------------------------------------------------------------- */
+{
+  console.log('\nqueued register entries are enumerated whether or not a claim reaches them');
+
+  const silentTown = town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'] }, null);
+  const claimingTown = town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'] }, [claim('TIGER')]);
+
+  /* No S6 report anywhere, so no claim can exist; the entry is queued all the same.
+   * The coverage half DOES run here — that is what makes `claimed:false` an
+   * answer rather than an absence. See the --register-only pair at the end. */
+  const rNone = run(repo('queued-no-claim', [silentTown], { facts: [queued('SF-050', 'TIGER', ['Fixture'])] }), '--json');
+  let jNone = null; try { jNone = JSON.parse(rNone.out); } catch { /* left null */ }
+  check('a queued entry that NO claim reaches is still in register.queuedFacts',
+    !!jNone && Array.isArray(jNone.register.queuedFacts) && jNone.register.queuedFacts.length === 1 && jNone.register.queuedFacts[0].id === 'SF-050',
+    rNone.out.slice(0, 140));
+  /* Every dereference below is guarded. A harness that THROWS on a broken subject
+   * still exits non-zero, so the gate is red either way — but it stops before the
+   * later cases run, and a second fault hiding behind the first is exactly what a
+   * falsification suite exists to prevent. Found by breaking this checker on
+   * purpose: the first draft crashed here instead of printing five more results. */
+  const qf0 = (jNone && jNone.register && (jNone.register.queuedFacts || [])[0]) || null;
+  check('and it is marked claimed:false with no maps, so the reader is not told a red team named it',
+    !!qf0 && qf0.claimed === false && Array.isArray(qf0.maps) && qf0.maps.length === 0, qf0 ? JSON.stringify(qf0) : '(no entry at all)');
+  check('THE OLD LIST STILL MISSES IT — `queued` is claims, and this is what the board used to read',
+    !!jNone && Array.isArray(jNone.queued) && jNone.queued.length === 0,
+    'if this ever becomes non-empty the two fields have merged and the comment above is wrong');
+  /* The text half is its OWN run: `--json` suppresses the prose entirely, and the
+   * first draft of this case asserted on prose in a --json run and failed. Which
+   * is the harness doing its job — the assertion was wrong, not the checker. */
+  const rNoneText = run(repo('queued-no-claim-text', [silentTown], { facts: [queued('SF-050', 'TIGER', ['Fixture'])] }));
+  check('the text output names it too, and says in words that nothing else enumerates it',
+    /SF-050 {2}TIGER {2}scope Fixture — RAISED BY NO CLAIM/.test(rNoneText.out), rNoneText.out.split('\n').find((l) => l.includes('SF-050')) || '(no line mentioning SF-050)');
+  check('and it is enumeration rather than a finding: still exit 0', rNone.code === 0 && rNoneText.code === 0, `exit ${rNone.code}/${rNoneText.code}`);
+
+  /* CONTROL: the ordinary shape, where an S6 report did raise it. */
+  const rClaimed = run(repo('queued-with-claim', [claimingTown], { facts: [queued('SF-050', 'TIGER', ['Fixture'])] }), '--json');
+  let jClaimed = null; try { jClaimed = JSON.parse(rClaimed.out); } catch { /* left null */ }
+  const qc0 = (jClaimed && jClaimed.register && (jClaimed.register.queuedFacts || [])[0]) || null;
+  check('CONTROL: a queued entry a claim DOES reach is marked claimed:true and names the map',
+    !!qc0 && jClaimed.register.queuedFacts.length === 1 && qc0.claimed === true && (qc0.maps || []).join() === 'Fixture',
+    qc0 ? JSON.stringify(qc0) : rClaimed.out.slice(0, 140));
+  check('CONTROL: and the claims list still carries it, so nothing the old row read was taken away',
+    !!jClaimed && (jClaimed.queued || []).length === 1 && jClaimed.queued[0].id === 'SF-050', '');
+
+  /* CONTROL: the count must be able to answer "none of them". */
+  const rEmpty = run(repo('queued-none', [silentTown], { facts: [decided('SF-051', 'TIGER', ['Fixture'], { outcome: 'nothing' })] }), '--json', '--register-only');
+  let jEmpty = null; try { jEmpty = JSON.parse(rEmpty.out); } catch { /* left null */ }
+  check('CONTROL: a register with nothing queued gives an EMPTY list and an empty count, not a missing field',
+    !!jEmpty && !!jEmpty.register && Array.isArray(jEmpty.register.queuedFacts) && jEmpty.register.queuedFacts.length === 0 && jEmpty.register.queued === 0, '');
+  check('CONTROL: and prints no queued section at all', !/QUEUED register/.test(rEmpty.out), '');
+
+  /* THE JOIN. The count and the list live in the same object and disagreed for as
+   * long as one was read and the other was not; assert they cannot again. */
+  const rTwo = run(repo('queued-two', [claimingTown], { facts: [queued('SF-050', 'TIGER', ['Fixture']), queued('SF-051', 'OTHER', ['Elsewhere'])] }), '--json', '--register-only');
+  let jTwo = null; try { jTwo = JSON.parse(rTwo.out); } catch { /* left null */ }
+  const twoReg = (jTwo && jTwo.register) || null;
+  check('THE JOIN: register.queued (the count) equals register.queuedFacts.length (the list), which is the disagreement that hid SF-015',
+    !!twoReg && twoReg.queued === 2 && (twoReg.queuedFacts || []).length === 2,
+    `count ${twoReg && twoReg.queued}, list ${twoReg && (twoReg.queuedFacts || []).length}`);
+  check('and an entry whose scope names no tracked map is in the list anyway — that scope is why SF-015 vanished',
+    !!twoReg && (twoReg.queuedFacts || []).some((q) => q.id === 'SF-051'), '');
+
+  /* THE NEGATIVE FROM A SEARCH THAT NEVER RAN. --register-only reads no S6
+   * report, so `queued` is empty by CONSTRUCTION there and a naive
+   * `queued.some(...)` reports every entry as raised by nobody. The first draft
+   * of this field did that and printed it about SF-008 on the real estate, which
+   * is raised by three claims. So under --register-only the answer is null and
+   * the prose says it did not look — the distinction between "no" and "did not
+   * ask" being the whole point. Both directions, on the SAME fixture. */
+  const fixtureClaimed = { facts: [queued('SF-050', 'TIGER', ['Fixture'])] };
+  const rRegOnly = run(repo('queued-register-only-null', [claimingTown], fixtureClaimed), '--json', '--register-only');
+  let jReg = null; try { jReg = JSON.parse(rRegOnly.out); } catch { /* left null */ }
+  const qr0 = (jReg && jReg.register && (jReg.register.queuedFacts || [])[0]) || null;
+  check('--register-only reports claimed:null — "not looked at", not "nobody raised it"',
+    !!qr0 && qr0.claimed === null, qr0 ? JSON.stringify(qr0) : '(no entry at all)');
+  const rRegOnlyText = run(repo('queued-register-only-text', [claimingTown], fixtureClaimed), '--register-only');
+  check('and its prose says so, instead of asserting a negative it did not measure',
+    /SF-050.*was NOT CHECKED \(--register-only reads no S6 report\)/.test(rRegOnlyText.out) && !/RAISED BY NO CLAIM/.test(rRegOnlyText.out),
+    rRegOnlyText.out.split('\n').find((l) => l.includes('SF-050')) || '(no line mentioning SF-050)');
+  check('CONTROL, same fixture, coverage half RUN: the claim is found and the answer is claimed:true',
+    !!qc0 && qc0.claimed === true, 'if this were false the null above would be hiding a real miss rather than an unasked question');
+}
+
 console.log('\n' + '='.repeat(78));
 rmSync(TMP, { recursive: true, force: true });
 if (failures) {

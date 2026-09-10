@@ -68,6 +68,23 @@ const RIVER = `# St Ives: the river fault is FIXED, but portal draft v10.2 still
 Not read by anything.
 `;
 
+// The same file after somebody rewrote its heading into the past tense. Every
+// field the parser reads is still there EXCEPT the one that carries the reason.
+const PAST_TENSE = `# St Ives: the river fault is FIXED, but portal draft v10.2 still carries it — do not send v10.2 for review
+
+**Raised by:** \`sched-1715\`, 2026-09-08 · **Feed:** adhoc
+
+**Blocks:** \`draft-1\`
+
+## What was needed from Peter — ANSWERED 2026-09-10, kept for the record
+
+**Deliver a fresh St Ives build to the portal before anything is sent for review.**
+
+## Where this stands
+
+The open question is whether to publish v11.0 anyway.
+`;
+
 const SF008 = `# SF-008 — does the Beaconsfield Town Bus still run?
 
 **Raised by:** \`sched-1915\`, 8 September 2026 · **Register entry:** SF-008
@@ -319,6 +336,34 @@ console.log('\n15. CONTROL — the truncation does not narrow a well-formed file
   check('a Blocks field alone on its line still holds', r.holds.length === 1 && r.holds[0].key === 'draft-1', JSON.stringify(r.holds));
   check('a Raised by field alone on its line still dates the row', parseBlocked(readBlockedDir(dir)[0]).raisedOn === '2026-09-08',
     String(parseBlocked(readBlockedDir(dir)[0]).raisedOn));
+}
+
+console.log('\n16. provenance but NO "What is needed" section — the shape the real hold took on 2026-09-10');
+{
+  // `loop/blocked/st-ives-v10.2-river.md` was edited that morning so its heading
+  // read "## What was needed from Peter — ANSWERED … kept for the record". Past
+  // tense, so the heading no longer matched, `need` fell through to the
+  // **Raised by:** line, and the board printed that row's whole reason as
+  // "sched-1715, 2026-09-08". Nobody could have seen it: the edit was for
+  // readability and the join it broke is two files away.
+  //
+  // Case 1 has asserted `why is NOT the provenance line` since this harness was
+  // written and it could NEVER have gone red, because every fixture that reached
+  // it HAD the section — the assertion existed and its population did not. That
+  // is this project's *assertion that passed on absence*, and the fix is a
+  // fixture rather than a cleverer assertion.
+  const dir = path.join(tmp, 'past-tense', 'loop', 'blocked');
+  mk(dir, 'st-ives-v10.2-river.md', PAST_TENSE);
+  const r = loopBlockedItems({ files: readBlockedDir(dir) });
+  check('one row', r.items.length === 1, `got ${r.items.length}`);
+  check('why is NOT the provenance line', !r.items[0].why.includes('sched-1715'), r.items[0].why.slice(0, 60));
+  check('why falls back to the sentence naming the file',
+    r.items[0].why.includes('loop/blocked/st-ives-v10.2-river.md'), r.items[0].why.slice(0, 80));
+  // The provenance is not lost, only demoted: loopBlockedItems' own comment says
+  // it is a fact about the row rather than a reason to act, and --json carries it.
+  check('the provenance is still CARRIED on the row', r.items[0].raisedBy.includes('sched-1715'), r.items[0].raisedBy);
+  check('the hold still attaches', r.holds.length === 1 && r.holds[0].key === 'draft-1', JSON.stringify(r.holds));
+  check('the stated date still dates the row', r.items[0].ageDays !== null, String(r.items[0].ageDays));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

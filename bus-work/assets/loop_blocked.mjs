@@ -115,7 +115,13 @@ export function parseBlocked(f) {
     ref,
     file: f.name,
     headline: h1 ? plain(h1[1], 200) : ref,
-    need: plain(firstPara) || plain(raisedBy) || '',
+    // NOT `|| plain(raisedBy)`, which it was until 2026-09-10. That fallback
+    // contradicted loopBlockedItems' own rule three functions down — *the
+    // provenance is deliberately NOT folded into `why`* — and it won, silently:
+    // a hold whose heading stops matching gets a row whose entire reason reads
+    // "sched-1715, 2026-09-08". Empty is better, because empty is the one value
+    // loopBlockedItems has a designed answer for: a sentence naming the file.
+    need: plain(firstPara) || '',
     raisedBy: plain(raisedBy, 200),
     blocks,
     raisedOn: iso ? iso[1] : null,

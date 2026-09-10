@@ -37,6 +37,16 @@
  *      `conditions.loopLock` is absent from every synthetic world built by
  *      prove-red-concurrency.mjs. A rule that threw or delayed on `undefined`
  *      would take the whole worklist down everywhere but this laptop.
+ *
+ * A FIFTH GROUP WAS ADDED ON 2026-09-10 and it is about green 1 rather than a
+ * new verdict. `mine` is false until somebody passes `--session`, so green 1
+ * protects only a caller who remembered a flag — and the loop's own task prompt
+ * has never mentioned it. sched-2215 took the lock at step 3, re-read the board
+ * at step 4 as the prompt requires, and was told by five rows to wait for
+ * sched-2215. The rule cannot know it is being read by its own holder; what it
+ * can do is name the flag in the reason. Section 2b pins that the hint appears,
+ * that it carries the holder's own name, and — the harder half — that it stays
+ * quiet whenever it would be false.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -204,6 +214,65 @@ want(conc.assess([], live), conc.SAFE, 'a row that needs nothing: SAFE NOW even 
 want(conc.assess(conc.needsOf({ key: 'ci-red-claude-skills', type: 'gate-red' }), live), conc.SAFE, 'a ci-red- row is never hidden by the lock');
 want(conc.assess(conc.needsOf({ key: 'loop-blocked-st-ives', type: 'loop-blocked' }), live), conc.SAFE, 'nor is an OA-283 loop-blocked- row');
 want(conc.assess(conc.needsOf({ key: 'corr-unsent-001', type: 'correspondence' }), live), conc.SAFE, 'nor a drafted reply Peter has to send');
+
+// ---------------------------------------------------------------------------
+// 2b. THE HINT — because green 1 above is conditional on a flag nobody is
+// obliged to pass, and until 2026-09-10 nothing said so.
+//
+// `mine` is only ever true when the caller passed `--session`. sched-2215 took
+// the lock at step 3 of the task prompt, re-read the board at step 4 because
+// the prompt requires it, and was told by five rows that `sched-2115 holds
+// loop/LOCK.d ... a run in progress on the shared trees` — its own name, as a
+// reason to wait. Nothing in the reason said the flag existed. The claims block
+// in formatConditions has carried exactly that hint since it was written; this
+// rule did not, and the asymmetry is what these cases pin.
+//
+// THE HINT MUST ALSO BE ABLE TO STAY QUIET, which is the harder half: a reader
+// who HAS given a name is being told about a genuine third party, and telling
+// them it might be themselves would be false.
+// ---------------------------------------------------------------------------
+console.log('\n== the reason is not a dead end for the holder reading it ==');
+
+const withSelf = (w, name) => ({ ...w, selfSession: name });
+const hints = (got) => got.reasons.some((r) => /--session/.test(r.why));
+
+says(conc.assess(['buses-tree'], live), /--session sched-2115/, 'a live tick lock names the flag AND the holder, so a tick reading its own name can act on it');
+says(conc.assess(['buses-tree'], stalePerson), /--session buses-04/, "and so does a person's lock past its lease");
+ok(!hints(conc.assess(['buses-tree'], withSelf(live, 'buses-73'))),
+  'but NOT once a name was given and the holder is somebody else — the hint would be a lie',
+  conc.assess(['buses-tree'], withSelf(live, 'buses-73')).reasons.map((r) => r.why).join(' | '));
+/* AND THE NAMELESS CASE IS THE ONE THE `L.name` GUARD IS ACTUALLY FOR, which
+ * the first draft of this block got wrong: it asserted the hint stays quiet for
+ * `anon`, whose holder file is UNREADABLE — and that branch returns two lines
+ * before the hint is computed, so the case passed without the guard existing.
+ * A readable holder file whose first line is blank is the reachable shape:
+ * readLoopLock sets `readable: true` and leaves `name` null, which is what a
+ * tick killed between creating the file and writing into it leaves behind.
+ * Without `&& L.name` the reason would tell the reader to `pass --session
+ * null`. */
+const nameless = world(lockState({ readable: true, name: null, isTick: false }));
+ok(!hints(conc.assess(['buses-tree'], nameless)),
+  'nor when the holder file is readable but names nobody — there is no name to pass, and the hint must not say "null"',
+  conc.assess(['buses-tree'], nameless).reasons.map((r) => r.why).join(' | '));
+ok(!hints(conc.assess(['buses-tree'], anon)),
+  'and an unreadable holder never reaches the hint at all — this one passes on an earlier return, not on the guard',
+  conc.assess(['buses-tree'], anon).reasons.map((r) => r.why).join(' | '));
+ok(conc.assess(['buses-tree'], own).reasons.length === 0,
+  'and a row held by ME carries no reason at all, so the hint cannot appear on a safe row');
+
+/* THE COUNTERFACTUAL THE FINDING WAS MEASURED AS, pinned so it cannot come
+ * back. On the afternoon it was found the real tree was dirty, so `buses-tree`
+ * was already hiding the same rows and the lock changed no count — the fault
+ * was masked by an unrelated one. These worlds are CLEAN, which is where it
+ * shows: the DELAY has exactly one reason and that reason is the reader's own
+ * lock. If `--safe-only` is ever asked of a board in this state, every
+ * contending row disappears and the banner reads that nothing is contended. */
+ok(conc.assess(['buses-tree'], world({ present: false })).verdict === conc.SAFE,
+  'control: with no lock, a clean tree says a buses-tree row is SAFE NOW');
+const solely = conc.assess(['buses-tree'], live);
+ok(solely.reasons.length === 1 && solely.reasons[0].need === 'loop-lock',
+  'so on a clean tree the DELAY comes SOLELY from the lock — one reason, and it is loop-lock',
+  `${solely.reasons.length} reason(s): ${solely.reasons.map((r) => r.need).join(', ')}`);
 
 // --- the attachment itself: which rows get the lock, and which do not ---
 console.log('\n== which work the lock is attached to ==');

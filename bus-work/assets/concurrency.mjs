@@ -377,6 +377,26 @@ const RULES = {
    * A PERSON's lock past its lease is CHECK FIRST rather than SAFE, because a
    * tick never steals from a name that is not a tick's: nothing will clear it
    * for you, and an idle session looks exactly like an abandoned one.
+   *
+   * AND `mine` IS FALSE UNTIL SOMEBODY PASSES `--session`, WHICH MAKES THE
+   * FIRST GREEN ABOVE CONDITIONAL ON A FLAG NOBODY IS OBLIGED TO REMEMBER.
+   * Measured on 2026-09-10 by sched-2215, which took the lock at step 3 and
+   * then re-read the board — which step 4 of the task prompt requires it to do
+   * — and was told by five rows that `sched-2215 holds loop/LOCK.d ... that is
+   * a run in progress on the shared trees`. Every contending row went DELAY
+   * with the reader's own name as the reason. On the dirty tree of that
+   * afternoon it changed no count, because `buses-tree` was already hiding the
+   * same five; on a CLEAN tree it takes every buses-tree, engine and
+   * estate-sweep row from SAFE to DELAY, and `--safe-only` then hides them and
+   * prints `SAFE NOW - nothing on this list is contended`. So the failure is
+   * masked by an unrelated fault and shows itself only when the tree is well.
+   *
+   * The rule cannot work out that it is being read by its own holder - nothing
+   * connects a node process to the name in that file. What it CAN do is stop
+   * being a dead end: the claims block three hundred lines below has said
+   * `(one of those may be you - pass --session ...)` since it was written, and
+   * this one said nothing. The hint carries the holder's own name, so a tick
+   * reading `pass --session sched-2215` needs no further thought.
    */
   'loop-lock': (c) => {
     const L = c.loopLock;
@@ -385,11 +405,16 @@ const RULES = {
     if (!L.readable) return [CHECK, 'loop/LOCK.d is held and its holder file cannot be read — something took the loop\'s lock without saying who; read the directory before you start anything that writes'];
     const who = L.name || 'an unnamed holder';
     const age = L.ageMin === null ? 'for an unknown time' : `${fmtMin(L.ageMin)} ago`;
+    /* Only when no name was given: with --session passed, a holder that is not
+     * you really is somebody else and the hint would be a lie. */
+    const mayBeYou = (!c.selfSession && L.name)
+      ? ` — if that is YOU, nothing told this board so: re-run it with --session ${L.name} and this row goes back to what it would say with no lock at all`
+      : '';
     if (L.isTick && L.expired) return [SAFE, null];
     if (L.expired) {
-      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it`];
+      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it${mayBeYou}`];
     }
-    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file`];
+    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file${mayBeYou}`];
   },
 
   'portal-deploy': (c) => {

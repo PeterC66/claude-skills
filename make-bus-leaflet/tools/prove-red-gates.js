@@ -45,7 +45,7 @@ const path = require('node:path');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
-const { gate, PLACE_IGNORE, portalFixtureEnv } = require(path.join(ASSETS, 'gate_lib.js'));
+const { gate, PLACE_IGNORE, portalFixtureEnv, findSheets } = require(path.join(ASSETS, 'gate_lib.js'));
 const { scratchDir } = require('../assets/scratch');
 const { resolveBuses } = require('../assets/cli');
 
@@ -139,6 +139,23 @@ const TARGETS = [
     sheet: 'internal-diagram.svg',
     gen: 'diagram_internal.js',
     map: 'Areas/St Ives',
+    /* PARKED 2026-09-10 (buses-data OA-297). No map draws the tube-map diagram any
+     * more, so no `ci-reference/` on the estate holds this sheet and there is
+     * nothing for the control to reproduce. The target is KEPT rather than
+     * deleted — the generator is untouched, vendored and still load-tested, and
+     * OA-298 is the written return path — and `parked` is checked in BOTH
+     * directions: while the estate draws no such sheet the row reads `parked` and
+     * costs nothing, and the moment any map's ci-reference holds one again the row
+     * goes RED asking for this line to be removed. A target deleted on the day a
+     * sheet is parked is a target nobody re-adds when it comes back; a flag that
+     * reddens when its own premise expires is one nobody has to remember.
+     *
+     * This harness is how the parking announced itself: `gates.yml` went red at
+     * 17:16 on the day with NO REFERENCE, because the rollout that parked the
+     * sheet reached the four towns, `ci-reference/`, the extraction baseline and
+     * the portal fixture — and not the harness that falsifies the gate over them.
+     * Ask of any rollout that DROPS something what still asserts it exists. */
+    parked: 'the tube-map diagram is parked (buses-data OA-297); OA-298 is the return path',
     /* Re-anchored 2026-09-02 (OA-230): the pre-stage's projection is projection.js
      * now, so `pad` is no longer in this file. The first re-anchor tried the
      * ADOPTION -- flipping LEGACY_FRAME to the footer-safe frame -- and it SURVIVED
@@ -233,11 +250,30 @@ const scratch = scratchDir('prove-red-gates-');
 let failures = 0;
 const rows = [];
 
+/* Every sheet the ESTATE actually holds a reference for, by basename — the one
+ * walk (gate_lib.findSheets), not a sixth copy of it, and asked of the whole
+ * tree rather than of the target's own map: a `parked` target claims that NO map
+ * draws that sheet, so the only evidence that can falsify it is estate-wide. */
+const ESTATE_SHEETS = new Set(findSheets(BUSES).map(p => path.basename(p)));
+
 for (const t of TARGETS) {
   const genPath = path.join(ASSETS, t.gen);
   const data = path.join(BUSES, t.map, 'ci-reference');
   const committed = path.join(data, outName(t));
   const label = `${t.sheet.padEnd(24)} ${path.basename(t.map)}`;
+
+  /* A parked sheet, checked both ways — see the `parked` note on the target. */
+  if (t.parked) {
+    if (ESTATE_SHEETS.has(outName(t))) {
+      rows.push([label, 'NO LONGER PARKED',
+        `a ci-reference on the estate holds ${outName(t)} again, so this target can and must `
+        + `run: delete its \`parked\` line. It says: ${t.parked}`]);
+      failures++;
+    } else {
+      rows.push([label, 'parked', `${t.parked} — no ci-reference on the estate holds ${outName(t)}, so there is nothing to gate`, 'note']);
+    }
+    continue;
+  }
 
   if (!fs.existsSync(committed)) {
     rows.push([label, 'NO REFERENCE', `${committed} is not on disk`]);
@@ -308,7 +344,7 @@ let portalRan = 0;
 const portalEngine = path.join(PORTAL, 'engine');
 if (!fs.existsSync(portalEngine)) {
   rows.push(['portal fixtures (all)'.padEnd(24) + ' -', 'SKIPPED',
-    `no engine/ at ${PORTAL} — pass --portal <path to community-bus-maps>`]);
+    `no engine/ at ${PORTAL} — pass --portal <path to community-bus-maps>`, 'note']);
 } else {
   for (const t of PORTAL_TARGETS) {
     const dataDir = path.join(BUSES, 'Places', '_portal-fixture', t.fixture);
@@ -366,9 +402,15 @@ if (!fs.existsSync(portalEngine)) {
   }
 }
 
+/* THE MARK COMES FROM THE ROW'S KIND, NOT FROM A REGEX OVER ITS WORDS. It used to
+ * be `/caught/.test(verdict) ? 'ok' : 'FAIL'`, which printed a red `FAIL` beside
+ * every row that was neither — the portal arm's SKIPPED has read FAIL in every CI
+ * log this harness has ever written, while contributing nothing to the exit code.
+ * A reader then has to know which of the FAILs is real, and a harness whose own
+ * output has to be interpreted is one nobody trusts at a glance. */
 console.log('\nByte-gate falsification — control must PASS, mutation must not\n');
-for (const [label, verdict, detail] of rows) {
-  const mark = /caught/.test(verdict) ? 'ok  ' : 'FAIL';
+for (const [label, verdict, detail, kind] of rows) {
+  const mark = kind === 'note' ? ' .. ' : (/caught/.test(verdict) ? 'ok  ' : 'FAIL');
   console.log(`  ${mark} ${label}  ${verdict}`);
   console.log(`       ${detail}`);
 }
@@ -376,6 +418,18 @@ for (const [label, verdict, detail] of rows) {
 if (KEEP) console.log(`\nmutated copies kept in ${scratch}`);
 else fs.rmSync(scratch, { recursive: true, force: true });
 
-console.log(`\n${rows.length - failures}/${rows.length} byte gates proven able to go red`
-  + ` — ${TARGETS.length} local sheet types, 1 load-bearing-option control, ${portalRan} portal-fixture gates.`);
+/* Count only the rows that were ASKED the question. A parked target and a skipped
+ * portal arm are not gates proven able to go red, and folding them into the
+ * numerator would make this line climb as coverage fell. */
+const notes = rows.filter(r => r[3] === 'note').length;
+const asked = rows.length - notes;
+/* From the ROWS, not from the flags: a target carrying `parked` whose sheet has
+ * come back was asked the question and failed, and counting the flag would print
+ * "(1 parked)" on the same run whose row above says NO LONGER PARKED. */
+const parkedCount = rows.filter(r => r[1] === 'parked').length;
+console.log(`\n${asked - failures}/${asked} byte gates proven able to go red`
+  + ` — ${TARGETS.length - parkedCount} of ${TARGETS.length} local sheet types`
+  + (parkedCount ? ` (${parkedCount} parked)` : '')
+  + `, 1 load-bearing-option control, ${portalRan} portal-fixture gates`
+  + (notes ? `; ${notes} row(s) not run, listed above.` : '.'));
 process.exit(failures ? 1 : 0);

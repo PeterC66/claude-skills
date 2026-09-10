@@ -52,14 +52,44 @@ const fs = require('fs');
  * prevent — import from here, or add a row to --check-consumers for a file that
  * genuinely cannot import (collect-maps.ps1 is the only one today, being
  * PowerShell in a different repository).
+ *
+ * `sidecar` is the unplaced-label file that sheet's generator writes BESIDE it in
+ * the run folder, and it is declared rather than derived because it is not a
+ * function of the basename: `internal` writes `unplaced.json` and
+ * `internal-schematic` writes `unplaced-schematic.json`. It joined the row on
+ * 2026-09-10, when the same five names were found typed out a second time in
+ * quality_metrics.js — the exact shape the header above says this module exists to
+ * prevent — and when the rollout was found carrying a dropped sheet's sidecar
+ * forward for ever (see seed_prev_s4.js).
  */
 const SHEETS = [
-  { key: 'internal',  base: 'internal',           optIn: null,                level: 'both' },
-  { key: 'external',  base: 'external',           optIn: null,                level: 'both' },
-  { key: 'schematic', base: 'internal-schematic', optIn: 'internalSchematic', level: 'both' },
-  { key: 'diagram',   base: 'internal-diagram',   optIn: 'internalDiagram',   level: 'both' },
-  { key: 'boarding',  base: 'boarding',           optIn: 'boardingPlan',      level: 'place' },
+  { key: 'internal',  base: 'internal',           optIn: null,                level: 'both',  sidecar: 'unplaced.json' },
+  { key: 'external',  base: 'external',           optIn: null,                level: 'both',  sidecar: 'unplaced-external.json' },
+  { key: 'schematic', base: 'internal-schematic', optIn: 'internalSchematic', level: 'both',  sidecar: 'unplaced-schematic.json' },
+  { key: 'diagram',   base: 'internal-diagram',   optIn: 'internalDiagram',   level: 'both',  sidecar: 'unplaced-diagram.json' },
+  { key: 'boarding',  base: 'boarding',           optIn: 'boardingPlan',      level: 'place', sidecar: 'unplaced-boarding.json' },
 ];
+
+/*
+ * THE SIDECAR CONTRACT, stated once so both readers can quote it: every generator
+ * writes its sidecar when it dropped a label and UNLINKS it when it dropped none,
+ * so an ABSENT sidecar means zero and a PRESENT one is this build's answer. That
+ * contract is kept by a generator that runs. It says nothing about a sheet that is
+ * no longer built at all — and on 2026-09-10, when the tube-map diagram was parked
+ * (buses-data OA-297 P0-B), `unplaced-diagram.json` sat in the new Beaconsfield and
+ * High Wycombe S4 runs carrying the PREVIOUS run's mtime, because the rollout seeds
+ * a new build from the previous S4's `.json` files and nothing was left to unlink
+ * it. It had to be deleted by hand before `sync_ci_reference.js` wrote it into the
+ * tracked golden master, where it would have been gated against for ever as though
+ * something had produced it.
+ */
+const SIDECARS = new Set(SHEETS.map(s => s.sidecar).filter(Boolean));
+
+/** The sidecar the sheet with this BASENAME writes, or null for a basename this engine does not draw. */
+function sidecarFor(base) {
+  const s = SHEETS.find(x => x.base === base);
+  return (s && s.sidecar) || null;
+}
 
 /*
  * `level` is not a preference, it is a structural fact, and it was measured rather
@@ -165,4 +195,4 @@ if (require.main === module) {
   else for (const s of SHEETS) console.log(`${s.key.padEnd(10)} ${s.base.padEnd(20)} ${s.optIn ? 'opt-in via routes.json "' + s.optIn + '"' : 'always'}`);
 }
 
-module.exports = { SHEETS, basenames, declaredBy, optional, checkPowershellConsumer };
+module.exports = { SHEETS, SIDECARS, sidecarFor, basenames, declaredBy, optional, checkPowershellConsumer };

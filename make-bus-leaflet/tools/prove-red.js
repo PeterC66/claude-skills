@@ -806,6 +806,23 @@ const MUTATIONS = [
     find: "    if (fs.existsSync(to) && !fs.readFileSync(to).equals(fs.readFileSync(from))) shadowed.push(name);",
     to: "" },
 
+  // The sidecars, 2026-09-10. Carrying an unplaced-label sidecar forward is INERT
+  // while the sheet is still drawn — the generator overwrites or unlinks it in the
+  // same run — so nothing could go red until a sheet was DROPPED, and none ever had
+  // been until the tube-map diagram was parked (buses-data OA-297 P0-B) and
+  // `unplaced-diagram.json` was seeded into two new S4 runs it had no business in.
+  // Two mutations, because the fix has two halves that fail in opposite directions:
+  // carrying them all, and refusing them by a pattern instead of by the registry.
+  { suite: 'seed_prev_s4.test.js', file: 'seed_prev_s4.js',
+    what: "a dropped sheet's sidecar is carried forward again, so the parked sheet's last answer is seeded into a build that never drew it",
+    find: "    if (SIDECARS.has(name)) { sidecars.push(name); continue; }",
+    to: "    // the sidecar is carried like any other .json" },
+
+  { suite: 'seed_prev_s4.test.js', file: 'seed_prev_s4.js',
+    what: "the sidecar rule becomes a filename glob, which misses gen_internal.js's own `unplaced.json` and refuses a human's `unplaced-notes.json`",
+    find: "    if (SIDECARS.has(name)) { sidecars.push(name); continue; }",
+    to: "    if (name.startsWith('unplaced-')) { sidecars.push(name); continue; }" },
+
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',
     find: "  return sameBytesIgnoringLineEndings(fs.readFileSync(pathA), fs.readFileSync(pathB));",
@@ -829,10 +846,14 @@ const MUTATIONS = [
     find: '    } else unplaced = [];      // every writer unlinks its sidecar when nothing dropped',
     to: "    } else if (base === 'internal') unplaced = [];" },
 
-  { suite: 'quality_metrics.test.js', file: 'quality_metrics.js',
+  // RE-AIMED 2026-09-10, not retired: the five sheet/sidecar pairs left
+  // quality_metrics.js for sheet_registry.js, which is where the sheets are
+  // declared. The suite that objects is unchanged — quality_metrics.test.js names
+  // all five independently — and only the anchor moved.
+  { suite: 'quality_metrics.test.js', file: 'sheet_registry.js',
     what: 'the schematic goes back to having no sidecar of its own',
-    find: "    'internal-schematic': 'unplaced-schematic.json',",
-    to: '' },
+    find: "  { key: 'schematic', base: 'internal-schematic', optIn: 'internalSchematic', level: 'both',  sidecar: 'unplaced-schematic.json' },",
+    to: "  { key: 'schematic', base: 'internal-schematic', optIn: 'internalSchematic', level: 'both' }," },
 
   { suite: 'quality_metrics.test.js', file: 'quality_metrics.js',
     what: 'a corrupt sidecar is filed under the same word as a sheet type nobody reports',

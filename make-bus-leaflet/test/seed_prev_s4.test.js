@@ -99,3 +99,70 @@ test('non-JSON files and directories are left alone', () => {
   assert.deepEqual(out.carried, []);
   assert.equal(fs.existsSync(path.join(dest, 'internal.svg')), false);
 });
+
+/*
+ * THE SIDECARS — the one class of `.json` in an S4 that is an OUTPUT (2026-09-10).
+ *
+ * Found in buses-data OA-297 P0-B, when the tube-map diagram was parked and the
+ * four towns that drew it were rebuilt without it. `rollout.js` seeds a new build
+ * from the previous S4's `.json` files, so `unplaced-diagram.json` was copied into
+ * the new Beaconsfield and High Wycombe S4 runs carrying the PREVIOUS run's mtime —
+ * a report about a sheet that build never drew, one step short of
+ * `sync_ci_reference.js` writing it into the tracked golden master. It was removed
+ * by hand on the day; this is the fix.
+ *
+ * Why it hid: carrying a sidecar forward is INERT while the sheet is still drawn,
+ * because the generator overwrites it or unlinks it within the same run. Nothing
+ * could go red until a sheet was dropped, and no sheet had ever been dropped before.
+ */
+const { SHEETS, SIDECARS, sidecarFor } = load('sheet_registry.js');
+
+test('a dropped sheet leaves no sidecar behind — the OA-297 P0-B case, at unit size', () => {
+  const { prevS4, dest } = fixture();
+  w(prevS4, 'unplaced-diagram.json', '[{"text":"Hemingford Grey"}]');   // the parked sheet's last answer
+  w(prevS4, 'roads_geo.json', '{"a real input":true}');
+  const out = seedPrevS4(dest, prevS4, []);
+  assert.equal(fs.existsSync(path.join(dest, 'unplaced-diagram.json')), false,
+    'the previous build\'s sidecar was seeded into a run that does not draw that sheet');
+  assert.deepEqual(out.carried, ['roads_geo.json']);
+  assert.deepEqual(out.sidecars, ['unplaced-diagram.json']);
+});
+
+test('EVERY sheet\'s sidecar is refused, including the one no unplaced-* glob would catch', () => {
+  // gen_internal.js writes `unplaced.json`, not `unplaced-internal.json`. A fix
+  // written as a filename pattern would have carried it forward for ever, and the
+  // internal sheet is the one sheet every map has.
+  const { prevS4, dest } = fixture();
+  for (const name of SIDECARS) w(prevS4, name, '[]');
+  const out = seedPrevS4(dest, prevS4, []);
+  assert.deepEqual(out.carried, []);
+  assert.deepEqual(out.sidecars, [...SIDECARS].sort());
+  assert.ok(SIDECARS.has('unplaced.json'), 'the internal sheet\'s sidecar is not in the set');
+});
+
+test('and a file that merely LOOKS like one is still carried — the rule is the registry, not a prefix', () => {
+  const { prevS4, dest } = fixture();
+  w(prevS4, 'unplaced-notes.json', '{"a human wrote this":true}');
+  const out = seedPrevS4(dest, prevS4, []);
+  assert.deepEqual(out.carried, ['unplaced-notes.json']);
+  assert.deepEqual(out.sidecars, []);
+});
+
+test('the registry declares a sidecar for every sheet, and no two share one', () => {
+  // The join that stops this rotting: a sixth sheet with no `sidecar` would be
+  // carried forward silently, which is the bug, and quality_metrics.js would score
+  // it `no-reporter`, which reads as a deliberate coverage gap.
+  for (const s of SHEETS) assert.equal(typeof s.sidecar, 'string', `sheet "${s.key}" declares no sidecar`);
+  assert.equal(SIDECARS.size, SHEETS.length, 'two sheets share a sidecar filename');
+});
+
+test('sidecarFor answers by BASENAME, and answers null rather than undefined', () => {
+  // The five NAMES are not re-typed here. quality_metrics.js reads them through
+  // this same function, and quality_metrics.test.js already states all five
+  // independently in "each sheet type reads its OWN sidecar and not a neighbour's"
+  // — a third copy in this file would be one more list that has to agree, which is
+  // the fault sheet_registry.js exists to prevent.
+  for (const s of SHEETS) assert.equal(sidecarFor(s.base), s.sidecar, s.base + ' does not answer its own row');
+  assert.equal(sidecarFor('routes'), null,
+    'a basename this engine does not draw must answer null — quality_metrics.js tells "no-reporter" from "unreadable" on it');
+});

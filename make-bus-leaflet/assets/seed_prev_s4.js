@@ -38,9 +38,33 @@
  * been pulled there — and on the apply path it names exactly the ambiguity that
  * caused the incident. The choice is no longer silent, and it is no longer
  * different in the two paths.
+ *
+ * THE ONE CLASS OF `.json` THAT IS NOT AN INPUT (2026-09-10, from buses-data
+ * OA-297 P0-B). The rule above says "the previous S4 holds precisely the inputs
+ * that produced the sheet the diff is taken against". The unplaced-label sidecars
+ * are not inputs — they are OUTPUTS, one per sheet, and each generator writes its
+ * own or unlinks it, so an absent sidecar means zero. Carrying one forward is inert
+ * for as long as the sheet is still built, because the generator overwrites or
+ * removes it within the same run. It stops being inert the moment a sheet is
+ * DROPPED: nothing runs, nothing unlinks, and the previous build's answer is seeded
+ * into the new run with the previous run's mtime and no way to tell it from a fresh
+ * one. That is what happened when the tube-map diagram was parked — the four towns
+ * were rebuilt without it and `unplaced-diagram.json` came along, into two of the
+ * new S4 runs, one step short of `sync_ci_reference.js` writing it into the tracked
+ * golden master. So a sidecar is never carried, and the names come from
+ * sheet_registry.js rather than from a pattern: `internal` writes `unplaced.json`,
+ * which no `unplaced-*.json` glob would have caught.
+ *
+ * The general question this leaves open, deliberately unanswered here: every other
+ * `.json` in an S4 run was checked on the day, and the rest really are inputs from
+ * an earlier stage (`complexity.json`, the atco and route files) or are rewritten
+ * unconditionally by a generator that always runs (`build-meta.json`). If a future
+ * sheet writes a second kind of output beside itself, it belongs in the registry
+ * row too, not in a new set here.
  */
 const fs = require('node:fs');
 const path = require('node:path');
+const { SIDECARS } = require('./sheet_registry.js');
 
 /**
  * Copy the previous S4's `.json` inputs into `destDir`.
@@ -48,19 +72,24 @@ const path = require('node:path');
  * @param {string} destDir   where the new build is being assembled
  * @param {string} prevS4Dir the previous S4 run folder
  * @param {string[]} s3Carry filenames the S3 owns; never taken from S4
- * @returns {{carried: string[], shadowed: string[], skipped: string[]}}
+ * @returns {{carried: string[], shadowed: string[], skipped: string[], sidecars: string[]}}
  *   `carried`  — copied in, prevS4's bytes now on disk, sorted
  *   `shadowed` — of those, the ones that were already there with different bytes
  *   `skipped`  — `.json` files left alone because the caller owns them via S3
+ *   `sidecars` — the previous build's own output sidecars, deliberately NOT carried
  */
 function seedPrevS4(destDir, prevS4Dir, s3Carry) {
   const owned = new Set(s3Carry || []);
-  const carried = [], shadowed = [], skipped = [];
+  const carried = [], shadowed = [], skipped = [], sidecars = [];
   for (const name of fs.readdirSync(prevS4Dir).sort()) {
     const from = path.join(prevS4Dir, name);
     if (fs.statSync(from).isDirectory()) continue;
     if (!name.endsWith('.json')) continue;
     if (owned.has(name)) { skipped.push(name); continue; }
+    // Named rather than dropped in silence, for the same reason `shadowed` is: a
+    // build that stops carrying a file is a change to what the next diff is taken
+    // against, and the operator should be able to read it off the run.
+    if (SIDECARS.has(name)) { sidecars.push(name); continue; }
     const to = path.join(destDir, name);
     // Read both before writing: once the copy has happened the question of what
     // was there cannot be asked again, and "what was there" is the whole finding.
@@ -68,7 +97,7 @@ function seedPrevS4(destDir, prevS4Dir, s3Carry) {
     fs.copyFileSync(from, to);
     carried.push(name);
   }
-  return { carried, shadowed, skipped };
+  return { carried, shadowed, skipped, sidecars };
 }
 
 /**
@@ -104,7 +133,7 @@ function seedPrevS4(destDir, prevS4Dir, s3Carry) {
  * @param {string[]} o.s3Carry   filenames the S3 owns; never taken from S4
  * @param {string[]} o.stages    stages to pull, in order — ['S2','S3'] for a town, ['S1','S2','S3'] for a place
  * @param {(stage: string, dest: string) => void} o.pull  runs `stage.js pull <stage> <dest>`
- * @returns {{carried: string[], shadowed: string[], skipped: string[]}} from seedPrevS4
+ * @returns {{carried: string[], shadowed: string[], skipped: string[], sidecars: string[]}} from seedPrevS4
  */
 function assembleS4Inputs({ dest, prevS4Dir, s3Carry, stages, pull }) {
   for (const st of stages) pull(st, dest);

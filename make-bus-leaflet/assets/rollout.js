@@ -370,6 +370,9 @@ function rolloutOne(t) {
   if (seeded.shadowed.length) {
     console.log(`  ${t.name}: ${seeded.shadowed.length} file(s) existed in a pulled stage with different content and the previous S4's copy was used — ${seeded.shadowed.join(', ')}. That is the rollout rule (same data, new engine); if one of them SHOULD be refreshed, re-run the stage that owns it and commit before rolling out.`);
   }
+  if (seeded.sidecars.length) {
+    console.log(`  ${t.name}: ${seeded.sidecars.length} unplaced-label sidecar(s) in the previous S4 were NOT carried forward — ${seeded.sidecars.join(', ')}. Each is an OUTPUT; the generator that draws that sheet writes its own, or unlinks it when nothing dropped. A sheet this build no longer draws therefore leaves none behind.`);
+  }
   copyFile(path.join(SK, 'gen_internal.js'), s4Dir);
   copyFile(path.join(SK, EXTERNAL_GENERATOR), s4Dir, 'gen_external.js');
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);

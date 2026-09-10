@@ -38,6 +38,7 @@ const { rawLumUnit, lab } = require('./wcag.js');
 // The ONE reader of a corridor family, shared with the drawing engine so that a
 // new family shape cannot be understood by the generator and not by the measure.
 const { parseFamilies } = require('./complexity_ladder.js');
+const { sidecarFor } = require('./sheet_registry.js');   // the one list of sheets, and of the sidecars they write
 
 // ---------------------------------------------------------------- thresholds
 // Deliberately in one object: G1 asks Peter whether these are the right numbers,
@@ -869,15 +870,15 @@ function analyse(svgPath) {
   // ABSENT IS NOT UNKNOWN. `null` here means "no generator on this sheet type
   // reports drops", and nothing on the board is in that state any more. A sheet
   // whose sidecar is missing scored zero and is reported as zero.
+  //
+  // THE NAMES COME FROM sheet_registry.js, and until 2026-09-10 they were typed out
+  // here as a second literal map — five basenames and five sidecars, complete and
+  // correct on their own terms, which is exactly what `boarding.jpg` looked like in
+  // refresh_latest.js the day it stopped reaching `_latest`. A sixth sheet added to
+  // the registry and not to this object would have scored `no-reporter` for ever,
+  // and `no-reporter` reads as a deliberate coverage gap rather than as a fault.
   const base = path.basename(svgPath, '.svg');
-  const DROP_FILE = {
-    'internal': 'unplaced.json',
-    'external': 'unplaced-external.json',
-    'internal-schematic': 'unplaced-schematic.json',
-    'internal-diagram': 'unplaced-diagram.json',
-    'boarding': 'unplaced-boarding.json',
-  };
-  const dropFile = DROP_FILE[base] || null;
+  const dropFile = sidecarFor(base);
   let unplaced = null;
   // Three states, not two. `no-reporter` is a sheet type nothing writes a sidecar
   // for; `unreadable` is a sidecar that WAS there and would not parse. Both leave

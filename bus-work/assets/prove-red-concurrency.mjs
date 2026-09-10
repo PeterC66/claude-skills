@@ -106,6 +106,91 @@ ok(r.offMain && r.branch === 'work/thing', 'a feature branch reads as off main',
 g('checkout', '-q', 'main');
 ok(!read().offMain, 'and switching back clears it');
 
+// ---------------------------------------------------------------------------
+// 1a. THE HELD LETTER — readConditions against a real tree with a real hold
+// ---------------------------------------------------------------------------
+/* OA-301. The fixture has to look like the real repository in the one respect
+ * that matters: `loop/` is gitignored, so the hold folder itself can never show
+ * up as an untracked path. Without that line the tree would be dirty BECAUSE of
+ * the hold, and the case would be measuring the wrong thing. */
+console.log('\n== a held letter, read from a real tree (OA-301) ==');
+{
+  const held = path.join(root, 'held');
+  const hg = (...a) => execFileSync('git', ['-C', held, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(path.join(held, 'Correspondence', 'CORR-001'), { recursive: true });
+  fs.mkdirSync(path.join(held, 'Areas', 'Ramsey'), { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', held], { stdio: 'ignore' });
+  hg('config', 'user.email', 'harness@example.invalid');
+  hg('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(held, '.gitignore'), 'loop/*\n!loop/README.md\n');
+  const letter = 'Correspondence/CORR-001/008-2026-09-10-out-the-map-is-back-up.md';
+  fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi\n');
+  fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
+  hg('add', '-A');
+  hg('commit', '-q', '-m', 'first');
+  const blocked = path.join(held, 'loop', 'blocked');
+  fs.mkdirSync(blocked, { recursive: true });
+  const cond = () => conc.readConditions({ buses: held });
+
+  // The clean control first, so the hold cannot be what makes it green.
+  let C = cond();
+  ok(conc.assess(['buses-tree'], C).verdict === conc.SAFE && C.repos.buses.accounted.length === 0,
+    'clean tree with an empty blocked folder: SAFE, nothing accounted');
+
+  // Peter types the salutation and leaves it.
+  fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
+  C = cond();
+  want(conc.assess(['buses-tree'], C), conc.CHECK, 'the held letter with NO hold naming it: CHECK FIRST — nothing accounts for it');
+
+  // A tick writes the hold, in the house style: several fields on one line,
+  // the path in backticks, prose after it.
+  fs.writeFileSync(path.join(blocked, 'corr-001-salutation.md'),
+    '# CORR-001 message 008: the salutation names the correspondent\n\n' +
+    `**Raised by:** \`sched-0815\`, 2026-09-10 · **File:** \`${letter}\`, modified and uncommitted since 07:16 local · **Blocks:** corr-unsent-CORR-001\n\n` +
+    '## What is needed from you\n\nDecide the salutation.\n');
+  C = cond();
+  ok(C.repos.buses.modified.includes(letter), 'the letter is STILL reported as modified — the fact is not hidden', `modified=${C.repos.buses.modified.join(',')}`);
+  ok(C.repos.buses.accounted.length === 1 && C.repos.buses.accounted[0].path === letter && C.repos.buses.accounted[0].ref === 'corr-001-salutation',
+    'and it is accounted for, by the hold that names it', JSON.stringify(C.repos.buses.accounted));
+  want(conc.assess(['buses-tree'], C), conc.SAFE, 'the held letter WITH a live hold naming it: SAFE — this is the case twelve ticks stopped on');
+  want(conc.assess(['estate-sweep'], C), conc.SAFE, 'and a sweep is not held back by a letter either');
+  ok(conc.formatConditions(C).some((l) => /accounted\s+Correspondence\/CORR-001.*corr-001-salutation\.md/.test(l)),
+    'the conditions block SHOWS the subtraction and names the hold', conc.formatConditions(C).join('\n'));
+
+  // A second dirty file the hold does not name brings CHECK FIRST straight back,
+  // and the sentence counts ONE file and names Areas, not two and Correspondence.
+  fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
+  C = cond();
+  const A = conc.assess(['buses-tree'], C);
+  want(A, conc.CHECK, 'a second dirty file outside the hold: CHECK FIRST again');
+  ok(A.reasons.some((x) => /^1 uncommitted file\(s\) here \(Areas\)/.test(x.why)), 'and the reason counts the ONE unaccounted file and names its folder only', A.reasons.map((x) => x.why).join(' | '));
+  fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
+
+  // Retiring the hold puts the letter back into the verdict — the direction a
+  // rule like this must fail in.
+  fs.rmSync(path.join(blocked, 'corr-001-salutation.md'));
+  C = cond();
+  want(conc.assess(['buses-tree'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
+
+  // A hold that names a file OUTSIDE Correspondence/ accounts for nothing: that
+  // is residue, and the tree was right to stop on it on 2026-09-09.
+  fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi\n');
+  fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
+  fs.writeFileSync(path.join(blocked, 'residue.md'),
+    '# Residue\n\n**Raised by:** `sched-1115`, 2026-09-09 · **File:** `Areas/Ramsey/notes.md`, left behind\n\n## What is needed from you\n\nCommit it.\n');
+  C = cond();
+  want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
+  ok(C.repos.buses.accounted.length === 0, 'and nothing is listed as accounted', JSON.stringify(C.repos.buses.accounted));
+
+  // A hold with no File field, or a File field with no backticked path, is inert.
+  fs.rmSync(path.join(blocked, 'residue.md'));
+  fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
+  fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
+  fs.writeFileSync(path.join(blocked, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
+  C = cond();
+  want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
+}
+
 const missing = conc.readRepo({ key: 'x', label: 'x', name: 'nowhere', dir: path.join(root, 'no-such-dir') });
 ok(!missing.present && !missing.readable, 'a directory that does not exist is not silently "clean"');
 
@@ -234,6 +319,28 @@ says(conc.assess(['buses-tree'], dirtyTree), /cannot tell yours from a neighbour
 const stagedTree = world({ buses: { staged: ['Development Docs/OA-999.md'] } });
 want(conc.assess(['buses-tree'], stagedTree), conc.CHECK, "someone else's staged file: CHECK FIRST");
 says(conc.assess(['buses-tree'], stagedTree), /pathspec/, 'and the remedy named is the pathspec commit');
+
+// OA-301, the judgement half: accountFor over a synthetic repo, and the
+// subtraction must reach the STAGED count too, or a staged held letter would
+// print "1 already STAGED" about a file the verdict has not counted.
+{
+  const LETTER = 'Correspondence/CORR-001/008-out.md';
+  const heldOnly = world({ buses: { modified: [LETTER] } });
+  conc.accountFor(heldOnly.repos.buses, [{ path: LETTER, ref: 'corr-001-salutation' }]);
+  want(conc.assess(['buses-tree'], heldOnly), conc.SAFE, 'synthetic: one held letter, accounted: SAFE');
+  const unheld = world({ buses: { modified: [LETTER] } });
+  conc.accountFor(unheld.repos.buses, []);
+  want(conc.assess(['buses-tree'], unheld), conc.CHECK, 'synthetic: the same letter with no hold: CHECK FIRST');
+  const stagedHeld = world({ buses: { staged: [LETTER], modified: ['Documentation/x.md'] } });
+  conc.accountFor(stagedHeld.repos.buses, [{ path: LETTER, ref: 'corr-001-salutation' }]);
+  const S = conc.assess(['buses-tree'], stagedHeld);
+  want(S, conc.CHECK, 'synthetic: a staged held letter beside an unheld edit: CHECK FIRST');
+  ok(S.reasons.some((x) => /^1 uncommitted file\(s\) here \(Documentation\) — this tool cannot tell/.test(x.why)),
+    'and the staged-count branch is NOT taken for the accounted file', S.reasons.map((x) => x.why).join(' | '));
+  const json = world({ buses: { modified: ['Correspondence/CORR-001/_people.local.json'] } });
+  conc.accountFor(json.repos.buses, [{ path: 'Correspondence/CORR-001/_people.local.json', ref: 'x' }]);
+  want(conc.assess(['buses-tree'], json), conc.CHECK, 'synthetic: a hold naming a .json under Correspondence/ is outside the scope: CHECK FIRST');
+}
 
 // --- the engine ---
 want(conc.assess(['engine'], CLEAN), conc.SAFE, 'clean engine: SAFE NOW');

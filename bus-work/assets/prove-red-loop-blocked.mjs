@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readBlockedDir, parseBlocked, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
+import { readBlockedDir, parseBlocked, loopBlockedItems, applyHolds, heldPaths } from './loop_blocked.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -364,6 +364,32 @@ console.log('\n16. provenance but NO "What is needed" section — the shape the 
   check('the provenance is still CARRIED on the row', r.items[0].raisedBy.includes('sched-1715'), r.items[0].raisedBy);
   check('the hold still attaches', r.holds.length === 1 && r.holds[0].key === 'draft-1', JSON.stringify(r.holds));
   check('the stated date still dates the row', r.items[0].ageDays !== null, String(r.items[0].ageDays));
+}
+
+console.log('\n17. the path a hold is ABOUT — `**File:**` parsed for concurrency.mjs (OA-301)');
+{
+  // The exact header shape the 2026-09-10 hold carried: three fields on one
+  // line, the path in backticks, prose after it, and a Blocks: field after that.
+  const dir = path.join(tmp, 'names-path', 'loop', 'blocked');
+  mk(dir, 'corr-001-salutation.md',
+    '# CORR-001 message 008: the salutation names the correspondent\n\n' +
+    '**Raised by:** `sched-0815`, 2026-09-10 · **File:** `Correspondence/CORR-001/008-2026-09-10-out-the-map-is-back-up.md`, modified and uncommitted since 07:16 local · **Blocks:** corr-unsent-CORR-001\n\n' +
+    '## What is needed from you\n\nDecide the salutation.\n');
+  mk(dir, 'sf-008.md', '# SF-008\n\n**Raised by:** `sched-1915`, 2026-09-08 · **Register entry:** SF-008\n\n## What is needed from you\n\nAsk the council.\n');
+  mk(dir, 'backslashes.md', '# Windows\n\n**File:** `Correspondence\\CORR-002\\011-out.md`\n');
+  const files = readBlockedDir(dir);
+  const p = parseBlocked(files.find((f) => f.name === 'corr-001-salutation.md'));
+  check('the path is the backticked token, without the prose after it',
+    p.namesPath === 'Correspondence/CORR-001/008-2026-09-10-out-the-map-is-back-up.md', p.namesPath);
+  check('the Blocks: field on the same line still parses', p.blocks.length === 1 && p.blocks[0] === 'corr-unsent-CORR-001', JSON.stringify(p.blocks));
+  check('a hold with no File field names no path', parseBlocked(files.find((f) => f.name === 'sf-008.md')).namesPath === '');
+  check('backslashes are normalised to the porcelain form',
+    parseBlocked(files.find((f) => f.name === 'backslashes.md')).namesPath === 'Correspondence/CORR-002/011-out.md');
+  const held = heldPaths(files);
+  check('heldPaths lists exactly the holds that name a file, keyed by ref',
+    held.length === 2 && held.some((h) => h.ref === 'corr-001-salutation') && held.some((h) => h.ref === 'backslashes') && !held.some((h) => h.ref === 'sf-008'),
+    JSON.stringify(held));
+  check('an absent folder yields no held paths', heldPaths(readBlockedDir(path.join(tmp, 'no-such'))).length === 0);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -58,6 +58,7 @@ import { execFileSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readLoopLock, fmtMin } from './loop_lock.mjs';
+import { readBlockedDir, heldPaths } from './loop_blocked.mjs';
 
 // ---- verdicts --------------------------------------------------------------
 export const SAFE = 'safe';
@@ -106,6 +107,50 @@ export const mapDataHits = (r) => allPaths(r).filter((p) => MAP_DATA_RE.test(p) 
 export const isDirty = (r) => (r.staged || []).length + (r.modified || []).length > 0;
 export const isOffMain = (r) => !!r.branch && r.branch !== (r.expect || 'main');
 export const topFolders = (r) => [...new Set(allPaths(r).map((p) => p.split('/')[0]))].sort();
+
+/*
+ * OA-301. A DIRTY FILE THAT A LIVE HOLD ALREADY NAMES IS ACCOUNTED FOR.
+ *
+ * The buses-tree rule exists because `git status` cannot say WHOSE uncommitted
+ * files those are. A `loop/blocked/` hold can: its `**File:**` field names the
+ * path, its body says who it belongs to and why the loop must not touch it. On
+ * 2026-09-10 twelve of eighteen ticks stopped on one such file — a letter whose
+ * salutation Peter had typed and left for the morning — every one of them
+ * re-reading a hold that already explained the dirt in front of it. A held
+ * letter with Peter's salutation in it is the NORMAL state of Correspondence/,
+ * so without this the loop idles behind every letter he holds.
+ *
+ * THE SCOPE IS Correspondence/**\/*.md AND NOTHING WIDER, on purpose. A hold
+ * that names a file under Areas/ or Development Docs/ is describing residue the
+ * next commit could sweep or a run folder mid-build — `st-ives-experiment-
+ * residue-uncommitted.md` named seven such files on 2026-09-09 and the tree was
+ * RIGHT to read CHECK FIRST until they were committed. A held letter is the one
+ * shape whose dirt is a person's deliberate, explained, standing state, and it
+ * matches the loop's own write rule for that folder, which ends `*.md` for the
+ * same reason (`_people.local.json` lives there).
+ *
+ * ONLY A HOLD THAT IS IN THE FOLDER NOW COUNTS. Retiring the hold puts the file
+ * straight back into the verdict, and committing the file makes the hold moot.
+ * Both directions fail towards CHECK FIRST, never away from it. And the file is
+ * still reported as uncommitted in the conditions block — it IS — with a line
+ * beneath saying which hold accounts for it, so a reader can see the subtraction
+ * rather than trust it.
+ */
+const HELD_SCOPE_RE = /^Correspondence\/.+\.md$/i;
+
+/** Mark on `repo` which of its dirty paths a live hold accounts for. */
+export function accountFor(repo, holds) {
+  const byPath = new Map();
+  for (const h of holds || []) if (h && h.path && HELD_SCOPE_RE.test(h.path)) byPath.set(h.path, h.ref);
+  repo.accounted = allPaths(repo)
+    .filter((p) => byPath.has(p))
+    .map((p) => ({ path: p, ref: byPath.get(p) }));
+  return repo;
+}
+const accountedSet = (r) => new Set((r.accounted || []).map((a) => a.path));
+/** The dirty paths a verdict should count: everything a live hold does not account for. */
+export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPaths(r).filter((p) => !s.has(p)); };
+const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
 
 export function readRepo({ key, label, name, dir, expect = 'main' }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
@@ -285,7 +330,7 @@ export function readConditions({ buses, portal, engine, selfSession, now = Date.
     engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine }),
     portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal }),
   };
-  return {
+  const out = {
     at: new Date(now).toISOString(),
     repos,
     claims: buses ? readClaims(buses, selfSession) : [],
@@ -298,6 +343,11 @@ export function readConditions({ buses, portal, engine, selfSession, now = Date.
     peers: readPeerActivity({ windowMin: peerWindowMin, projectsDir, now }),
     selfSession: selfSession || null,
   };
+  /* OA-301, applied at read time so the JSON the loop reads already carries it.
+   * `loop/` is gitignored, so an absent folder — every fixture, every clone, CI
+   * — accounts for nothing and the verdict is exactly what it was before. */
+  accountFor(out.repos.buses, buses ? heldPaths(readBlockedDir(path.join(buses, 'loop', 'blocked'))) : []);
+  return out;
 }
 
 // ---- the rules -------------------------------------------------------------
@@ -312,12 +362,17 @@ const RULES = {
   'buses-tree': (c) => {
     const r = c.repos.buses;
     if (!r.readable) return [CHECK, `could not read the state of ${r.name} at ${r.dir} — assume nothing`];
-    const n = r.staged.length + r.modified.length + r.untracked.length;
+    // OA-301: a dirty letter a live hold names is accounted for and not counted.
+    // The count, the folders and the staged test all come from the SAME
+    // subtracted list, so the sentence cannot name a file it did not count.
+    const paths = unaccountedPaths(r);
+    const n = paths.length;
     if (!n) return [SAFE, null];
-    const top = topFolders(r);
+    const top = unaccountedTop(r);
     const where = top.slice(0, 4).join(', ') + (top.length > 4 ? ', …' : '');
-    if (r.staged.length) {
-      return [CHECK, `${n} uncommitted file(s) here (${where}), ${r.staged.length} already STAGED in the shared index — commit with a pathspec (git commit -m "…" -- <paths>), never a bare commit`];
+    const staged = paths.filter((p) => r.staged.includes(p)).length;
+    if (staged) {
+      return [CHECK, `${n} uncommitted file(s) here (${where}), ${staged} already STAGED in the shared index — commit with a pathspec (git commit -m "…" -- <paths>), never a bare commit`];
     }
     return [CHECK, `${n} uncommitted file(s) here (${where}) — this tool cannot tell yours from a neighbour's; read them, then stage by name and commit with a pathspec`];
   },
@@ -338,7 +393,9 @@ const RULES = {
     if (hits.length) {
       return [DELAY, `${hits.length} uncommitted file(s) under Areas/, Places/ or ci-reference/ (${hits.slice(0, 2).join(', ')}${hits.length > 2 ? ', …' : ''}). A sweep re-records from every sheet it can FIND, and has already absorbed a neighbour's uncommitted ci-reference/`];
     }
-    if (isDirty(r) || r.untracked.length) return [CHECK, 'the tree is not clean — take a copy of any shared file the sweep writes, and diff it afterwards'];
+    // OA-301: the same subtraction as buses-tree. A held letter cannot be swept
+    // into a quality ledger; the map-data test two lines up is untouched by it.
+    if (unaccountedPaths(r).length) return [CHECK, 'the tree is not clean — take a copy of any shared file the sweep writes, and diff it afterwards'];
     return [SAFE, null];
   },
 
@@ -598,6 +655,12 @@ const repoLine = (r) => {
 export function formatConditions(c) {
   const L = [];
   L.push(`  ${'this tree'.padEnd(12)}${repoLine(c.repos.buses)}`);
+  // OA-301. The subtraction is SHOWN, under the line that still counts the file
+  // as uncommitted, because a number that silently got smaller is a number
+  // nobody can check — the same rule the activity line follows for demotions.
+  for (const a of (c.repos.buses.accounted || [])) {
+    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/blocked/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
+  }
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);
   L.push(`  ${'the portal'.padEnd(12)}${repoLine(c.repos.portal)}`);
 

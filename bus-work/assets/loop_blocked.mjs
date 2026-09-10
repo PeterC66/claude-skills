@@ -111,9 +111,22 @@ export function parseBlocked(f) {
     .map((k) => k.replace(/[`'"]/g, '').trim())
     .filter(Boolean);
 
+  // OA-301. The repository path a hold is ABOUT, from its `**File:**` field —
+  // the first backticked token, because the house style writes
+  // `**File:** \`Correspondence/CORR-001/008-….md\`, modified and uncommitted
+  // since 07:16 local` and the prose after the path is for a reader. Normalised
+  // to forward slashes so it compares equal to what `git status --porcelain`
+  // reports. Empty when the field is absent or carries no backticked path: a
+  // hold that does not name a file accounts for nothing, which is the safe
+  // reading.
+  const fileField = field(text, 'File');
+  const tick = /`([^`\n]+)`/.exec(fileField);
+  const namesPath = tick ? tick[1].trim().replace(/\\/g, '/').replace(/^\.\//, '') : '';
+
   return {
     ref,
     file: f.name,
+    namesPath,
     headline: h1 ? plain(h1[1], 200) : ref,
     // NOT `|| plain(raisedBy)`, which it was until 2026-09-10. That fallback
     // contradicted loopBlockedItems' own rule three functions down — *the
@@ -159,6 +172,32 @@ export function readBlockedDir(dir) {
     }
   } catch { return []; }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The repository paths live holds are ABOUT, for concurrency.mjs (OA-301).
+ *
+ * WHY THE VERDICT NEEDS THIS. On 2026-09-10 twelve of eighteen ticks stopped at
+ * the conditions gate on ONE modified file — a letter under Correspondence/
+ * whose salutation Peter had typed and left for the morning — while a hold in
+ * this very folder named that file, said whose it was, and said the loop must
+ * not touch it. The tree was "dirty" and every fact about the dirt was already
+ * written down. A dirty path that a live hold names is not unknown residue: it
+ * is accounted for, and the buses-tree rule can leave it out of its count. Only
+ * a hold that is HERE NOW counts — retiring the hold puts the file back into the
+ * verdict, which is the right direction for a rule to fail.
+ *
+ * @param {Array<{name, text, mtimeMs}>} files  as readBlockedDir returns them
+ * @returns {Array<{path: string, ref: string}>}
+ */
+export function heldPaths(files) {
+  const out = [];
+  for (const f of files || []) {
+    let b;
+    try { b = parseBlocked(f); } catch { continue; }
+    if (b.namesPath) out.push({ path: b.namesPath, ref: b.ref });
+  }
+  return out;
 }
 
 /**

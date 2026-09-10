@@ -82,6 +82,7 @@ import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
+import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -953,6 +954,17 @@ const loopIdle = loopRunItems({
   busesDir: BUSES,
 });
 for (const it of loopIdle) add(it);
+
+// THE DROP ZONE (2026-09-10, item 7 of Peter's suggestions review). The fourth
+// and last loop folder with no reader: a tick saves a draft in `loop/adhoc/`
+// when it finds something it cannot act on, the folder is inert by design, and
+// five drafts sat there for up to two days each ending "promote it, or file it,
+// if you agree" — addressed to a reader this board had never shown the folder
+// to. One row for the whole folder, drop zone only; ready/, doing/ and done/
+// are read by the dispatcher, the crash rule and nobody, and counting them here
+// would report a prompt Peter has already triaged as awaiting his triage.
+const loopDrafts = loopDraftItems({ files: readDraftsDir(path.join(BUSES, 'loop', 'adhoc')) });
+for (const it of loopDrafts) add(it);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows

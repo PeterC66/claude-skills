@@ -9,12 +9,13 @@
     "test:prove-red-correspondence": "node assets/prove-red-correspondence.mjs",
     "test:prove-red-refresh-review": "node assets/prove-red-refresh-review.mjs",
     "test:prove-red-complexity-band": "node assets/prove-red-complexity-band.mjs",
-    "test:prove-red": "npm run test:prove-red-commitments && npm run test:prove-red-concurrency && npm run test:prove-red-correspondence && npm run test:prove-red-refresh-review && npm run test:prove-red-complexity-band && npm run test:prove-red-landmark-answers && npm run test:prove-red-ci-state && npm run test:prove-red-loop-blocked && npm run test:prove-red-loop-lock && npm run test:prove-red-loop-runs && npm run test:prove-red-town-status",
+    "test:prove-red": "npm run test:prove-red-commitments && npm run test:prove-red-concurrency && npm run test:prove-red-correspondence && npm run test:prove-red-refresh-review && npm run test:prove-red-complexity-band && npm run test:prove-red-landmark-answers && npm run test:prove-red-ci-state && npm run test:prove-red-loop-blocked && npm run test:prove-red-loop-lock && npm run test:prove-red-loop-runs && npm run test:prove-red-loop-adhoc && npm run test:prove-red-town-status",
     "test:prove-red-landmark-answers": "node assets/prove-red-landmark-answers.mjs",
     "test:prove-red-ci-state": "node assets/prove-red-ci-state.mjs",
     "test:prove-red-loop-blocked": "node assets/prove-red-loop-blocked.mjs",
     "test:prove-red-loop-lock": "node assets/prove-red-loop-lock.mjs",
     "test:prove-red-loop-runs": "node assets/prove-red-loop-runs.mjs",
+    "test:prove-red-loop-adhoc": "node assets/prove-red-loop-adhoc.mjs",
     "test:prove-red-town-status": "node assets/prove-red-town-status.mjs"
   }
 }

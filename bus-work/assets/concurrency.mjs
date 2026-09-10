@@ -577,6 +577,12 @@ export function needsOf(item) {
   // most likely to be ABOUT a dirty tree, so classifying it by the tree it
   // reports on would suppress it exactly when it is right.
   if (key === 'loop-idle') return [];
+  // 2026-09-10: the row's action is "read loop/adhoc/ and promote, file or
+  // decline each draft" — a triage, done by moving gitignored files. It touches
+  // no shared tree, and it is the row most likely to be ABOUT a fix a tick was
+  // barred from making, so classifying it by the tree would hide it exactly
+  // when it is right.
+  if (key === 'loop-drafts') return [];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

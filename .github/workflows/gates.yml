@@ -258,6 +258,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-blocked
 
+      # buses-data, 2026-09-10: the loop's ad-hoc DROP ZONE, loop/adhoc/, as one
+      # worklist row. Same checkout problem as the step above -- the folder is
+      # absent here by construction -- so this step exercises the silence and the
+      # harness builds real folders for the rest, including the control that
+      # ready/, doing/ and done/ are NOT counted.
+      - name: Prove the loop/adhoc/ drafts row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-loop-adhoc
+
       # buses-data OA-287 (2026-09-08): the scheduled loop's mutex, loop/LOCK.d,
       # read so that a MANUAL session can see it. SAME CHECKOUT PROBLEM AS THE STEP
       # ABOVE and one degree worse -- `loop/` is gitignored in buses-data, so the

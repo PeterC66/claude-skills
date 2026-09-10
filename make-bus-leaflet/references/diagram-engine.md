@@ -59,6 +59,10 @@ Curated-stop rule: termini of each route's drawn chain + stops at junction nodes
 
 Both live in S3-config and are re-applied on every regenerate.
 
+**ONLY ONE OF THEM SURVIVES A DELIVERY, and the heading above promises otherwise** (measured 2026-09-10, costing buses-data OA-291). "Survives refreshes" is true of both *here*; on the portal it is true of `diagram-layout.json` alone. The portal's `carryExpertTuning()` in `src/maps/engine.js` carries exactly two files across a data refresh — `diagram-layout.json` and `disagreements.pdf` — and `acceptProposed()` carries the same layout file forward from the archived version. `diagram-overrides.json` is carried by neither, is not written into the S5 pack, and is not in `Areas/_portal-fixture/St Ives/`; the portal's only mention of the name anywhere is inside its own vendored copy of `diagram_internal.js`, which looks for it, does not find it, and says nothing. This is NOT the same as the geographic sheet's `overrides.json`, which does reach the portal — `import-map.mjs` and `propose-update.mjs` stage it as `base-overrides.json`. The asymmetry is the diagram one specifically.
+
+**Why it matters more than a missing nudge.** `featSegs()` in `linear_features.js` accepts `features.<key>.points` and `.segments` — a whole hand-drawn polyline for a linear feature, in page mm — and the code marks that path DARK, taken by no shipped sheet. It is the obvious way to hand-place a diagram river, it needs no engine change, and it would draw correctly on this laptop and revert to the generated line the moment the map is delivered, with nothing red anywhere. That is the shape `render_sweep.js --drop-framing` exists to model and the one that hid OA-137's seven maps for about a year. **If a diagram tweak has to survive to the live site, it belongs in `diagram-layout.json`** — and note that no town in the estate has one, so even that channel has never been exercised on a shipped sheet.
+
 ## The pin editor
 
 ```

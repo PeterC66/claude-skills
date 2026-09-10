@@ -55,7 +55,7 @@
  * Zero dependencies (Node core only), matching the rest of assets/.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readLoopLock, fmtMin } from './loop_lock.mjs';
 
@@ -174,14 +174,80 @@ export function readClaims(busesDir, selfSession) {
 }
 
 /*
- * CONTEXT, NEVER A VERDICT. See the header. A session appends to its transcript
- * on every turn, so a recent mtime means "was working recently" — which is worth
- * a line of context and is not worth scoring, because the two ways it is wrong
- * point in opposite directions and neither is rare.
+ * THE FILE'S MTIME IS NOT THE SESSION'S LAST TURN, and on 2026-09-10 that was
+ * measured here rather than reasoned about. `sched-1715` read this line saying
+ * "2 session transcript(s) written in the last 20 min" while deciding whether
+ * the working tree was MOVING or STILL. One of the two was itself. The other
+ * was `sched-1115`, whose transcript ended at 10:23:56Z — and whose file had an
+ * mtime of 16:14Z, five hours and fifty minutes later. Its last two lines were
+ * a `last-prompt` and a `custom-title` record, neither of which carries a
+ * timestamp at all: something appended bookkeeping to a finished session, and
+ * the mtime moved with no turn behind it. A dead tick was being reported as a
+ * live peer, in the one line a stopped tick consults to decide whether the
+ * obstruction in front of it will clear itself.
+ *
+ * SO THE MTIME IS DEMOTED TO A PREFILTER AND THE ANSWER COMES FROM THE CONTENT.
+ * That ordering is what keeps it cheap: an append only ever moves an mtime
+ * FORWARD, so mtime-in-window is a strict superset of turn-in-window, and the
+ * tail read happens only for the handful of files that pass. Everything else is
+ * one stat, exactly as before — 298 files scanned, 2 tails read, on the run that
+ * found this.
+ *
+ * THE FALLBACK IS THE OLD BEHAVIOUR AND NOT SILENCE. A tail that cannot be read
+ * or holds no timestamp keeps its mtime, because the floor for this signal is
+ * what it already gave: a proxy that sometimes says "recent" when it should say
+ * "stale" is the thing being fixed, and a fix that answers "nothing is running"
+ * on an unreadable file would be worse than the fault.
+ *
+ * STILL CONTEXT, STILL NEVER A VERDICT. See the header. This closes the third
+ * way it was wrong; the two the header names — an idle session sitting at a
+ * prompt, a crashed one with a fresh transcript — are properties of what a
+ * transcript IS and no amount of reading it more carefully touches them.
  */
+const TAIL_BYTES = 64 * 1024;
+
+/* The latest `"timestamp":"…"` in the tail of a JSONL transcript that is no later
+ * than `capMs`, as ms, or null.
+ *
+ * THE GREATEST RATHER THAN THE LAST, and that is not fussiness. A transcript
+ * carries tool output verbatim, and this project's own tools print JSON with
+ * timestamp fields in it — so the final match in the tail may be a string
+ * somebody pasted rather than the record that ended the session, in either
+ * direction. Taking the maximum makes an older pasted stamp harmless, and the
+ * cap makes a newer one harmless.
+ *
+ * CAPPED AT THE MTIME, because a file cannot have been written after it was
+ * written: skew, or a future date inside pasted text, must not invent activity
+ * or produce a negative age in the printed line.
+ *
+ * Scanned as latin1 rather than utf8 on purpose: the chunk starts at an
+ * arbitrary byte offset and may split a multi-byte character, and the pattern
+ * being matched is pure ASCII. */
+export function lastEntryMs(file, capMs = Infinity) {
+  let fd;
+  try { fd = openSync(file, 'r'); } catch { return null; }
+  try {
+    const size = statSync(file).size;
+    const len = Math.min(size, TAIL_BYTES);
+    if (!len) return null;
+    const buf = Buffer.allocUnsafe(len);
+    const got = readSync(fd, buf, 0, len, Math.max(0, size - len));
+    const text = buf.toString('latin1', 0, got);
+    const hits = text.match(/"timestamp":"[^"]+"/g);
+    if (!hits) return null;
+    let best = null;
+    for (const h of hits) {
+      const ms = Date.parse(h.slice(13, -1));
+      if (Number.isFinite(ms) && ms <= capMs && (best === null || ms > best)) best = ms;
+    }
+    return best;
+  } catch { return null; }
+  finally { closeSync(fd); }
+}
+
 export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i, now = Date.now() } = {}) {
   const root = projectsDir || path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude', 'projects');
-  const out = { windowMin, count: 0, newestAgeMin: null, scanned: 0, ok: false };
+  const out = { windowMin, count: 0, newestAgeMin: null, scanned: 0, tailed: 0, demoted: 0, ok: false };
   if (!existsSync(root)) return out;
   let dirs;
   try { dirs = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && match.test(e.name)); } catch { return out; }
@@ -191,11 +257,21 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
     let entries;
     try { entries = readdirSync(p).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
     for (const f of entries) {
+      const full = path.join(p, f);
       let s;
-      try { s = statSync(path.join(p, f)); } catch { continue; }
+      try { s = statSync(full); } catch { continue; }
       out.scanned++;
-      const age = Math.floor((now - s.mtimeMs) / 60000);
-      if (s.mtimeMs >= cutoff) out.count++;
+      let at = s.mtimeMs;
+      if (s.mtimeMs >= cutoff) {
+        out.tailed++;
+        const entry = lastEntryMs(full, s.mtimeMs);
+        if (entry !== null) {
+          at = entry;
+          if (entry < cutoff) out.demoted++;
+        }
+      }
+      if (at >= cutoff) out.count++;
+      const age = Math.floor((now - at) / 60000);
       if (out.newestAgeMin === null || age < out.newestAgeMin) out.newestAgeMin = age;
     }
   }
@@ -515,8 +591,14 @@ export function formatConditions(c) {
   }
 
   // Context, and labelled as context. See the header for why it is never scored.
+  // The demotion is NAMED rather than quietly applied: a number that silently
+  // got smaller is a number nobody can check, and "the file moved but the
+  // session did not" is the most useful single fact this line has ever carried.
   if (c.peers.ok) {
-    L.push(`  ${'activity'.padEnd(12)}${c.peers.count} session transcript(s) written in the last ${c.peers.windowMin} min — a hint, not evidence; an idle prompt looks the same as gone`);
+    const d = c.peers.demoted
+      ? `; ${c.peers.demoted} more file(s) moved with no turn behind them and are not counted`
+      : '';
+    L.push(`  ${'activity'.padEnd(12)}${c.peers.count} session(s) with a TURN in the last ${c.peers.windowMin} min — a hint, not evidence; an idle prompt looks the same as gone${d}`);
   }
   return L;
 }

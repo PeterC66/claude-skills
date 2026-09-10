@@ -110,6 +110,99 @@ const missing = conc.readRepo({ key: 'x', label: 'x', name: 'nowhere', dir: path
 ok(!missing.present && !missing.readable, 'a directory that does not exist is not silently "clean"');
 
 // ---------------------------------------------------------------------------
+// 1b. THE PROXY — readPeerActivity, which had no case at all until 2026-09-10
+// ---------------------------------------------------------------------------
+/* It is never scored, which is exactly why nothing tested it, and it was wrong:
+ * it read each transcript's MTIME, and a `custom-title` record appended to a
+ * finished session moves an mtime with no turn behind it. `sched-1715` was
+ * shown a tick that had stopped at 10:23Z as a peer active within the last
+ * twenty minutes, in the line a stopped tick uses to decide whether the thing
+ * blocking it is about to clear itself.
+ *
+ * THE FIRST TWO CASES ARE THE PAIR. The first is red against the old code and
+ * green against the new; the second must stay green either way, or the fix
+ * would have been "count nothing" and would have passed the first on its own.
+ * The three after them hold the FLOOR: where the content cannot answer, the
+ * mtime still does, because the fallback must not go below what the proxy
+ * already gave. */
+console.log('\n== the activity proxy, mtime against content ==');
+
+const peerRoot = path.join(root, 'projects');
+const peerDir = path.join(peerRoot, 'C--Buses');
+fs.mkdirSync(peerDir, { recursive: true });
+
+const NOW = Date.parse('2026-09-10T16:15:00Z');
+const MIN = 60000;
+const line = (ms) => `{"type":"assistant","timestamp":"${new Date(ms).toISOString()}"}\n`;
+// The two records that actually did it: appended after the session ended, and
+// neither of them carries a timestamp.
+const BOOKKEEPING = '{"type":"last-prompt","leafUuid":"x"}\n{"type":"custom-title","customTitle":"t"}\n';
+
+function transcript(name, body, mtimeMs) {
+  const f = path.join(peerDir, name);
+  fs.writeFileSync(f, body);
+  fs.utimesSync(f, mtimeMs / 1000, mtimeMs / 1000);
+  return f;
+}
+const only = (name) => {
+  for (const f of fs.readdirSync(peerDir)) if (f !== name) fs.rmSync(path.join(peerDir, f));
+};
+const peers = () => conc.readPeerActivity({ windowMin: 20, projectsDir: peerRoot, now: NOW });
+
+// 1. The measured fault: a fresh file whose last turn was six hours ago.
+transcript('dead.jsonl', line(NOW - 352 * MIN) + BOOKKEEPING, NOW - 1 * MIN);
+let P = peers();
+ok(P.count === 0, 'a transcript touched a minute ago whose last TURN was 6 h ago is not a live peer', `count=${P.count}`);
+ok(P.demoted === 1, 'and the demotion is counted, so the line can say so', `demoted=${P.demoted}`);
+ok(P.newestAgeMin === 352, 'and the age reported is the turn\'s, not the file\'s', `newestAgeMin=${P.newestAgeMin}`);
+
+// 2. The other half of the pair — a genuinely live session must still count.
+only('none');
+transcript('live.jsonl', line(NOW - 3 * MIN), NOW - 3 * MIN);
+P = peers();
+ok(P.count === 1 && P.demoted === 0, 'a session that took a turn 3 min ago IS counted', `count=${P.count}, demoted=${P.demoted}`);
+ok(P.tailed === 1, 'and only the candidate was tail-read', `tailed=${P.tailed}`);
+
+// 3. THE FLOOR. No timestamp anywhere: the mtime is all there is, so it is used.
+only('none');
+transcript('opaque.jsonl', BOOKKEEPING, NOW - 2 * MIN);
+P = peers();
+ok(P.count === 1 && P.demoted === 0, 'a transcript with no timestamp at all keeps its mtime — the fallback is the old behaviour, not silence', `count=${P.count}`);
+
+// 4. The floor again, for a file that cannot be read as JSONL at all.
+only('none');
+transcript('empty.jsonl', '', NOW - 5 * MIN);
+P = peers();
+ok(P.count === 1, 'an empty transcript still counts by mtime rather than vanishing', `count=${P.count}`);
+
+// 5. A timestamp LATER than the file itself must not be believed. The first
+//    version of this case put the fresh stamp in a file with an OLD mtime, so
+//    the prefilter threw it out before the cap was ever consulted and the
+//    assertion was green against code with no cap in it at all. It has to sit
+//    INSIDE the window, where the cap is the only thing standing.
+only('none');
+transcript('skewed.jsonl', line(NOW + 100 * MIN), NOW - 2 * MIN);
+P = peers();
+ok(P.newestAgeMin === 2, 'a timestamp from the future is capped at the mtime, not reported as a negative age', `newestAgeMin=${P.newestAgeMin}`);
+ok(P.count === 1, 'and the file is still counted, on its mtime', `count=${P.count}`);
+
+// 5b. And the greatest stamp wins, not the last one. A transcript quotes tool
+//     output verbatim, so an OLDER timestamp pasted into the final turn must not
+//     drag a live session's age backwards.
+only('none');
+transcript('pasted.jsonl', line(NOW - 4 * MIN) + line(NOW - 900 * MIN), NOW - 4 * MIN);
+P = peers();
+ok(P.count === 1 && P.newestAgeMin === 4, 'an older stamp pasted after the real one does not age a live session out', `count=${P.count}, newestAgeMin=${P.newestAgeMin}`);
+
+// 6. The stat-only path is untouched: a file outside the window is never tailed.
+only('none');
+transcript('old.jsonl', line(NOW - 300 * MIN), NOW - 300 * MIN);
+P = peers();
+ok(P.count === 0 && P.tailed === 0 && P.scanned === 1, 'a file outside the window costs one stat and no read', `tailed=${P.tailed}, scanned=${P.scanned}`);
+
+fs.rmSync(peerRoot, { recursive: true, force: true });
+
+// ---------------------------------------------------------------------------
 // 2. THE JUDGEMENT — each rule, made red and then cleared
 // ---------------------------------------------------------------------------
 console.log('\n== the rules, each one paired ==');

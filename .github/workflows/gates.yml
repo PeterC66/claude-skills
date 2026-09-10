@@ -288,6 +288,16 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-runs
 
+      # buses-data OA-153 (2026-09-10): town_status.mjs answers "what is the status
+      # of <map>?" and three of its four answers are NEGATIVES -- not on the public
+      # site, no thread names it, nothing outstanding -- which look identical whether
+      # the check works or does nothing. Every case is paired with the positive that
+      # proves it can fire. It stands up its own stub portal on a loopback port, so
+      # it needs no network, no secret and no other repository.
+      - name: Prove the one-map status report can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-town-status
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

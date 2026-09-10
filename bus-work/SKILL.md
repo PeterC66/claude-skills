@@ -21,6 +21,28 @@ description: Show what the BusMaps.uk bus-map system is waiting on — one ranke
 
 This skill is the spine across all three. It does not replace `make-bus-leaflet` / `make-place-bus-leaflet` — it *calls* them, then does everything either side.
 
+## Asked about ONE map? Use `town_status.mjs`, not the worklist
+
+The worklist answers *what needs doing across the estate*. **"What is the status of Ramsey?" is a different question**, and answering it from the worklist or the board gets it wrong: on 2026-09-10 `status.js` reported `Ramsey 3.9 · PASS PASS PASS · ok` about a map that was returning 404 to the public, had been invisible for thirteen days, and had a correspondent waiting seven days for a reply. Every column was honest — they answer *does the current engine reproduce the committed sheet*, which is not the same question.
+
+```powershell
+node "%BW%\town_status.mjs" "Ramsey"
+```
+
+**Any directory.** One argument, the map's name — a town, a nested place or a standalone place; it finds all three by looking for `manifest.json` rather than by a list it carries. It joins the four things nothing else crossed: the **build** (version, S6 age, hard/soft), the **live site** (`/api/public/maps` — *published* and *visible* are different facts, and a map with a published version stays hidden while `public_listed` is 0), the **people** (every `Correspondence/CORR-nnn/` thread that declares this map on its `**About:**` line, reported even when nothing is pending), and the **questions we asked a real person and never got back** (`local-decisions.json`).
+
+**It leads with whatever is worst, not with the build.** If a map is invisible to the public, that is its status whatever the gates say.
+
+Exit **0** nothing needs attention · **1** something does · **2** used wrongly, or a fact could not be established. `--offline` skips the site, `--json` gives the same facts without the ordering opinion, `--url` points at another portal.
+
+**An unreachable portal is not an invisible map**, and the tool refuses to conflate them: a failed fetch exits 2 saying *"This is NOT a report that the map is missing"*, because the opposite would send somebody to re-publish a map that was never off. Its falsification harness is `prove-red-town-status.mjs` — nine cases, each negative paired with the positive that proves the check can fire at all, including the real bug that paid for it (a thread README naming another map's adviser in prose was reported as correspondence about that map). Run it after touching either file:
+
+```powershell
+node "%BW%\prove-red-town-status.mjs"
+```
+
+**It runs no byte gate and re-renders nothing** — for gates, vendoring drift and the quality ratchet, that is still `status.js`.
+
 ## Step 1 — Print the worklist (always start here)
 
 Let `BW=C:\u3a St Ives\.claude\skills\bus-work\assets` (this skill lives in the bus skills repo alongside `make-bus-leaflet`, and is junctioned into `~\.claude\skills\` like the others).

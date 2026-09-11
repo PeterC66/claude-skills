@@ -38,7 +38,15 @@
     "exclusions to apply and audited _archive. That stayed green only because",
     "archiving is a pure git mv: the day a round repointed the links inside nine",
     "documents it was archiving, CI went red about nine files docstamp refuses to",
-    "stamp. Added 2026-08-31."
+    "stamp. Added 2026-08-31.",
+    "",
+    "'.claude/*' is excluded because nothing under it is a document a reader reads:",
+    "it is configuration the HARNESS reads, and in .claude/commands/ the body of the",
+    "file IS the prompt sent to Claude. A stamp there is not metadata about the",
+    "content, it is two extra lines of content -- prepended to every /oa invocation,",
+    "and re-bumped on every edit so the prompt changes whenever the version does.",
+    "Added 2026-09-11, the day the first project slash command was written and",
+    "--all stamped it within the minute."
   ],
 
   "_baselineComment": [
@@ -69,7 +77,8 @@
         "loop/adhoc/*",
         "loop/blocked/*",
         "loop/runs/*",
-        "loop/NEXT.md"
+        "loop/NEXT.md",
+        ".claude/*"
       ]
     },
     {

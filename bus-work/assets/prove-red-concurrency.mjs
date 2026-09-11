@@ -285,6 +285,94 @@ transcript('old.jsonl', line(NOW - 300 * MIN), NOW - 300 * MIN);
 P = peers();
 ok(P.count === 0 && P.tailed === 0 && P.scanned === 1, 'a file outside the window costs one stat and no read', `tailed=${P.tailed}, scanned=${P.scanned}`);
 
+// ---------------------------------------------------------------------------
+// 1b. QUIESCENCE — the reading OA-294's orphan adoption rests on
+//
+// Peter said YES on 2026-09-11 to letting a tick ADOPT an orphaned document,
+// and one clause of the conjunction he approved — "the OWNING session's
+// transcript is more than 90 minutes old" — is not implementable: nothing
+// records which session modified a working-tree file. What is implementable is
+// strictly safer, and these cases are what say so: NOBODY ELSE has taken a turn
+// in 90 minutes. It can only refuse an adoption the original would have
+// allowed, never permit one it would have forbidden.
+//
+// Every case below is paired. The adoption rule is a rule that COMMITS SOMEBODY
+// ELSE'S WORK, so a harness that only proved it fires would be worse than none.
+// ---------------------------------------------------------------------------
+console.log('\n== quiescence: may a tick conclude everyone else has gone? ==');
+
+const SELF = 'self-abc';
+const quiet = (id = SELF) => conc.readPeerActivity({ windowMin: 20, projectsDir: peerRoot, now: NOW, excludeId: id });
+
+// 1. THE SHAPE OF THE NIGHT THE ACTION IS ABOUT. This tick is mid-turn; the one
+//    other session last took a turn two hours ago. MUST read as quiet.
+for (const f of fs.readdirSync(peerDir)) fs.rmSync(path.join(peerDir, f));
+transcript(`${SELF}.jsonl`, line(NOW), NOW);
+transcript('owner.jsonl', line(NOW - 120 * MIN), NOW - 120 * MIN);
+P = quiet();
+ok(P.excludedFound === true, 'the tick\'s own transcript is found and excluded', `excludedFound=${P.excludedFound}`);
+ok(P.quiescentMin === 120, 'and the quiet reading is the OTHER session\'s age, not its own 0', `quiescentMin=${P.quiescentMin}`);
+ok(P.newestAgeMin === 0, 'while the unfiltered line still reports 0 — which is why the flag had to exist', `newestAgeMin=${P.newestAgeMin}`);
+
+// 2. THE MUST-NOT. One peer took a turn five minutes ago. Everything else about
+//    the world is identical. Adoption must be off the table.
+for (const f of fs.readdirSync(peerDir)) fs.rmSync(path.join(peerDir, f));
+transcript(`${SELF}.jsonl`, line(NOW), NOW);
+transcript('owner.jsonl', line(NOW - 120 * MIN), NOW - 120 * MIN);
+transcript('busy.jsonl', line(NOW - 5 * MIN), NOW - 5 * MIN);
+P = quiet();
+ok(P.quiescentMin === 5, 'one live peer drags the quiet reading back to ITS age, not the orphan owner\'s', `quiescentMin=${P.quiescentMin}`);
+ok(P.quiescentMin < 90, 'so the 90-minute test fails and nothing is adopted', `quiescentMin=${P.quiescentMin}`);
+
+// 3. THE BUG THIS ACTUALLY CAUGHT, and it is the case to keep. A peer whose
+//    MTIME is 30 min old — outside the 20-minute count window — but whose last
+//    turn was five hours ago. With the tail prefilter at `windowMin` the mtime
+//    stands, the reading is 30, and adoption is blocked FOR EVER by a session
+//    that died before supper. The prefilter has to reach as far as the question.
+for (const f of fs.readdirSync(peerDir)) fs.rmSync(path.join(peerDir, f));
+transcript(`${SELF}.jsonl`, line(NOW), NOW);
+transcript('stale.jsonl', line(NOW - 300 * MIN) + BOOKKEEPING, NOW - 30 * MIN);
+P = quiet();
+ok(P.quiescentMin === 300, 'a bookkeeping touch 30 min ago does not make a 5-hour-dead session a reason to refuse', `quiescentMin=${P.quiescentMin}`);
+ok(P.demoted === 1, 'and it is demoted by reading the tail, not by trusting the mtime', `demoted=${P.demoted}`);
+
+// 4. THE FLAG IS LOAD-BEARING. Same quiet world, no excludeId: the answer must
+//    be "cannot tell", never "quiet". Without this the feature could ship
+//    reading its own freshness back as a peer's.
+P = conc.readPeerActivity({ windowMin: 20, projectsDir: peerRoot, now: NOW });
+ok(P.quiescentMin === null, 'with no self-id there is no quiet reading at all', `quiescentMin=${P.quiescentMin}`);
+
+// 5. FAIL SAFE ON A WRONG ID. An id matching no transcript excluded nothing, so
+//    the reading is not self-excluded and must not be offered as one.
+P = quiet('not-a-session');
+ok(P.excludedFound === false && P.quiescentMin === null,
+  'an id that matches no transcript reads as cannot-tell, not as quiet', `excludedFound=${P.excludedFound}, quiescentMin=${P.quiescentMin}`);
+
+// 6. ALONE IN THE WORLD is also cannot-tell. A fixture with no peers at all
+//    must not read as maximally quiet — null means null.
+for (const f of fs.readdirSync(peerDir)) fs.rmSync(path.join(peerDir, f));
+transcript(`${SELF}.jsonl`, line(NOW), NOW);
+P = quiet();
+ok(P.excludedFound === true && P.quiescentMin === null,
+  'a tick alone on the disk gets no quiet reading either — there is nothing to be quiet', `quiescentMin=${P.quiescentMin}`);
+
+// 7. THE CONTROL FOR THIS WHOLE BLOCK: the ordinary board read is unchanged by
+//    all of the above. No excludeId means no widened prefilter and no extra
+//    reads — the cost argument in `readPeerActivity` has to still hold.
+//    The file sits at 30 minutes: OUTSIDE the 20-minute count window, INSIDE
+//    the 90-minute horizon. That gap is the whole difference between the two
+//    callers, and a file older than BOTH would prove nothing — the first
+//    version of this case used 300 minutes and went green against a prefilter
+//    that had never widened, because neither caller tails that far.
+for (const f of fs.readdirSync(peerDir)) fs.rmSync(path.join(peerDir, f));
+transcript('old.jsonl', line(NOW - 300 * MIN), NOW - 30 * MIN);
+P = conc.readPeerActivity({ windowMin: 20, projectsDir: peerRoot, now: NOW });
+ok(P.tailed === 0 && P.scanned === 1, 'an ordinary board read still costs one stat and no tail', `tailed=${P.tailed}, scanned=${P.scanned}`);
+ok(P.newestAgeMin === 30, 'and it therefore still believes the mtime, exactly as before', `newestAgeMin=${P.newestAgeMin}`);
+P = quiet();
+ok(P.tailed === 1, 'while a tick asking the quiet question DOES reach back for it', `tailed=${P.tailed}`);
+ok(P.newestOtherAgeMin === 300, 'and gets the turn\'s age where the board got the file\'s', `newestOtherAgeMin=${P.newestOtherAgeMin}`);
+
 fs.rmSync(peerRoot, { recursive: true, force: true });
 
 // ---------------------------------------------------------------------------

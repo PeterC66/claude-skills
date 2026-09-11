@@ -118,6 +118,13 @@ const SHOW_CONDITIONS = !args['no-conditions'];
 // `gh run list` per repository and fails soft to a warning.
 const NO_CI = args['no-ci'] || process.env.BUS_WORKLIST_NO_CI === '1';
 const SELF_SESSION = (args.session && args.session !== true) ? String(args.session) : (process.env.BUS_SESSION || '');
+/* `--self-id <uuid>` is this session's OWN transcript id, and it is what turns
+ * the peer line into a quiescence reading a scheduled tick can act on (OA-294).
+ * A session finds it on its own scratchpad path: the UUID in
+ * `…\Temp\claude\<project>\<uuid>\scratchpad` is the basename of its own
+ * `<uuid>.jsonl`. Absent, `peers.quiescentMin` is null and reads as "cannot
+ * tell" — which is the answer every caller but a tick should get. */
+const SELF_ID = (args['self-id'] && args['self-id'] !== true) ? String(args['self-id']) : (process.env.BUS_SESSION_ID || '');
 
 const PORTAL = resolvePortal(args);
 
@@ -207,6 +214,7 @@ function findEngineRepo() {
 }
 const conditions = conc.readConditions({
   buses: BUSES, portal: PORTAL, engine: findEngineRepo(), selfSession: SELF_SESSION,
+  selfId: SELF_ID || null,
 });
 
 // `--conditions` answers "can I do anything at all right now?" without gathering

@@ -290,13 +290,66 @@ export function lastEntryMs(file, capMs = Infinity) {
   finally { closeSync(fd); }
 }
 
-export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i, now = Date.now() } = {}) {
+/*
+ * `excludeId` IS WHAT MAKES A QUIESCENCE READING POSSIBLE AT ALL, and it exists
+ * for exactly one caller: a scheduled tick asking whether ANYBODY ELSE is still
+ * working (buses-data OA-294, Peter's YES, 2026-09-11).
+ *
+ * A tick always has a fresh transcript of its own — it is taking a turn as it
+ * asks — so the unfiltered `newestAgeMin` is 0 on every run and can never
+ * answer "has everyone gone quiet". The caller passes its own session id and
+ * that one file is left out of `otherCount` and `newestOtherAgeMin`.
+ *
+ * A SESSION'S OWN ID IS ON ITS SCRATCHPAD PATH, measured 2026-09-11 rather than
+ * assumed: the UUID in `…\Temp\claude\<project>\<uuid>\scratchpad` is the
+ * basename of that session's own `<uuid>.jsonl` under `~/.claude/projects/`.
+ * That is the only self-identifying string a fresh session is handed.
+ *
+ * `excludedFound` IS THE LOAD-BEARING HALF AND IT FAILS SAFE. An id that
+ * matches no transcript means the exclusion did nothing, so the reading is NOT
+ * self-excluded and a caller that trusted it would be reading its own freshness
+ * back as a peer's. `quiescentMin` is therefore null unless the id was actually
+ * seen — never a number that merely happens to be right. A typo, a renamed
+ * transcript or a session whose file has not been created yet all land on null,
+ * and null must read as "cannot tell", never as "quiet".
+ *
+ * STILL CONTEXT, STILL NEVER A VERDICT. The header's rule is unchanged: this
+ * scores nothing. It reports an age, and the conjunction that may act on it
+ * lives in the loop's stored task prompt, not here.
+ */
+/*
+ * THE TAIL PREFILTER HAS TO REACH AS FAR BACK AS THE QUESTION DOES, and getting
+ * this wrong would have made the whole reading useless in the safe direction.
+ * The tail is read only for files whose mtime is inside the window, because an
+ * append only moves an mtime forward — but with a 20-minute window every
+ * transcript older than that keeps its MTIME as its age, and an mtime is the
+ * signal the header above demotes. The `sched-1115` case is exactly this: a
+ * session whose last turn was 5h50m before its mtime. Read at a 20-minute
+ * window it would report as 0 minutes idle for ever and block every adoption.
+ *
+ * So when a caller asks a quiescence question, the tail prefilter widens to
+ * `quiesceMin` while the COUNT window stays where it was. Beyond that horizon
+ * no tail is read and the mtime stands — which is sound, because mtime-age is
+ * always SMALLER than turn-age, so an mtime older than the horizon guarantees a
+ * turn older than the horizon. The verdict `quiescentMin >= quiesceMin` is
+ * therefore exact at the only boundary anybody tests it on.
+ */
+export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i, now = Date.now(), excludeId = null, quiesceMin = 90 } = {}) {
   const root = projectsDir || path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude', 'projects');
-  const out = { windowMin, count: 0, newestAgeMin: null, scanned: 0, tailed: 0, demoted: 0, ok: false };
+  const out = {
+    windowMin, quiesceMin, count: 0, newestAgeMin: null, scanned: 0, tailed: 0, demoted: 0, ok: false,
+    excludeId: excludeId || null, excludedFound: false,
+    otherCount: 0, newestOtherAgeMin: null, quiescentMin: null,
+  };
   if (!existsSync(root)) return out;
   let dirs;
   try { dirs = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && match.test(e.name)); } catch { return out; }
   const cutoff = now - windowMin * 60000;
+  /* Widened only when somebody is actually asking a quiescence question; an
+   * ordinary board read is one stat per file exactly as it always was. */
+  const tailCutoff = excludeId !== null
+    ? Math.min(cutoff, now - quiesceMin * 60000)
+    : cutoff;
   for (const d of dirs) {
     const p = path.join(root, d.name);
     let entries;
@@ -306,8 +359,10 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
       let s;
       try { s = statSync(full); } catch { continue; }
       out.scanned++;
+      const isSelf = excludeId !== null && f === `${excludeId}.jsonl`;
+      if (isSelf) out.excludedFound = true;
       let at = s.mtimeMs;
-      if (s.mtimeMs >= cutoff) {
+      if (s.mtimeMs >= tailCutoff) {
         out.tailed++;
         const entry = lastEntryMs(full, s.mtimeMs);
         if (entry !== null) {
@@ -318,13 +373,20 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
       if (at >= cutoff) out.count++;
       const age = Math.floor((now - at) / 60000);
       if (out.newestAgeMin === null || age < out.newestAgeMin) out.newestAgeMin = age;
+      if (!isSelf) {
+        if (at >= cutoff) out.otherCount++;
+        if (out.newestOtherAgeMin === null || age < out.newestOtherAgeMin) out.newestOtherAgeMin = age;
+      }
     }
   }
+  /* Only meaningful when the caller's own transcript was actually found and
+   * skipped. See `excludedFound` above: null means "cannot tell". */
+  if (out.excludedFound) out.quiescentMin = out.newestOtherAgeMin;
   out.ok = true;
   return out;
 }
 
-export function readConditions({ buses, portal, engine, selfSession, now = Date.now(), projectsDir, peerWindowMin = 20 } = {}) {
+export function readConditions({ buses, portal, engine, selfSession, selfId = null, now = Date.now(), projectsDir, peerWindowMin = 20 } = {}) {
   const repos = {
     buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses }),
     engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine }),
@@ -340,8 +402,13 @@ export function readConditions({ buses, portal, engine, selfSession, now = Date.
      * construction. Absent when there is no buses tree to look in, which is the
      * normal case in a harness fixture and in CI. */
     loopLock: buses ? readLoopLock(buses, { selfSession, now }) : null,
-    peers: readPeerActivity({ windowMin: peerWindowMin, projectsDir, now }),
+    /* `peerWindowMin` stays 20 for the printed line, which is a "is anything
+     * moving right now" hint. The 90-minute quiescence test OA-294 needs is a
+     * DERIVED age (`peers.quiescentMin`), not a second scan: `newestOtherAgeMin`
+     * is an age in minutes regardless of the window, so one pass answers both. */
+    peers: readPeerActivity({ windowMin: peerWindowMin, projectsDir, now, excludeId: selfId }),
     selfSession: selfSession || null,
+    selfId: selfId || null,
   };
   /* OA-301, applied at read time so the JSON the loop reads already carries it.
    * `loop/` is gitignored, so an absent folder — every fixture, every clone, CI

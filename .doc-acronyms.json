@@ -1,0 +1,96 @@
+{
+  "_comment": [
+    "What check-doc-acronyms.mjs reads in THIS repository, and which short forms",
+    "are not ours to define. The checker itself lives here, in tools/, because",
+    "this repository is public and buses-data cannot be; the RULE travels and the",
+    "SCOPE stays home. buses-data OA-300, the claude-skills round.",
+    "",
+    "THERE IS NO `dirs` KEY AND THAT IS THE DECLARATION, not an omission. A",
+    "repository that names no folders gets its WHOLE tracked corpus, which is the",
+    "widest scope and the one shape a coverage bug cannot take -- the same reason",
+    "this repository declares no .doc-tables.json and no .doc-links.json either.",
+    "Declaring folders here could only narrow what is already complete.",
+    "",
+    "`definitions` IS DELIBERATELY EMPTY: this repository has no glossary. So a",
+    "short form here has exactly two homes -- an expansion in the same document at",
+    "or before first use, which is the preferred one, or a line in `defined`",
+    "below saying what it stands for. If the next round gives this repository a",
+    "glossary, name it here and the rows move into it.",
+    "",
+    "`notAbbreviations` is a JUDGEMENT, recorded with its reason, and it is the",
+    "load-bearing half of this check: a short form listed here disappears from the",
+    "count, so a group must say why anybody reading these documents already knows",
+    "the word. Reasons are per GROUP rather than per token on purpose -- a reader",
+    "should be able to disagree with a judgement rather than with a token.",
+    "",
+    "THE FIFTH GROUP EXISTS BECAUSE THIS CORPUS IS SMALL, and OA-300 predicted it",
+    "before this round started. The checker separates our shouting from a real",
+    "short form by counting the lower-case form in prose, and that evidence is",
+    "thin over 45 documents where it was thick over 301: LOUDLY, REUSES and GAIN",
+    "were named in the action itself, and LATE, PARKED, REUSE and BUY came out",
+    "the same way here. In a small corpus the word rule is weaker and the",
+    "declaration carries more of the load -- which is an argument for a generous",
+    "group with its reason written down, NOT for lowering the threshold, because",
+    "lowering it is the direction that swallowed EP."
+  ],
+  "definitions": [],
+  "defined": {
+    "OA": "Open action -- buses-data's backlog, one file per action at `Development Docs/open-actions/OA-nnn.md`, retired by deleting the file",
+    "CORR": "Correspondence thread -- one folder per conversation in buses-data's `Correspondence/`, numbered permanently like an OA",
+    "BODS": "Bus Open Data Service -- the Department for Transport service every English bus operator must register its timetables with, and the source of every route this engine draws",
+    "GTFS": "General Transit Feed Specification -- the timetable data format BODS publishes in, read here by `gtfs_query.py`",
+    "NPTG": "National Public Transport Gazetteer -- the register of localities that NaPTAN stops hang off",
+    "ATCO": "The national bus-stop identifier carried in NaPTAN, named after the Association of Transport Co-ordinating Officers that defined it",
+    "POI": "Point of interest -- a landmark, shop or facility drawn as a symbol on the internal sheet",
+    "OSM": "OpenStreetMap, queried through Overpass for roads, rivers and POIs",
+    "DRT": "Demand-responsive transport -- a bookable service with no fixed route or timetable, which is why the engine cannot draw one as a line",
+    "CI": "Continuous integration -- the GitHub Actions gate runs in this repository, buses-data and the portal",
+    "PR": "Pull request",
+    "PAT": "Personal access token -- the GitHub credential a cross-repository checkout needs, here `CROSS_REPO_PAT2`",
+    "MCP": "Model Context Protocol -- how a tool server is exposed to a session",
+    "VPS": "Virtual private server -- the machine busmaps.uk runs on, as opposed to the dev copy on this laptop",
+    "QR": "Quick Response code -- the square barcode printed on every sheet, encoded by `assets/qr.js`",
+    "PCA": "Principal component analysis -- how the internal sheet's auto-rotation finds the town's long axis in its own stop cloud",
+    "LSQ": "Least squares -- the solver at the core of the schematic and diagram engines",
+    "IDW": "Inverse distance weighting -- the warp field that carries POIs across onto a schematised sheet",
+    "DP": "Dynamic programming -- the length-weighted solve that resolves conflicting octants at a junction",
+    "EC": "Error correction -- the four redundancy levels a QR code can be encoded at",
+    "UA": "User-Agent, the HTTP request header Overpass answers 406 without",
+    "COM": "Component Object Model -- the Windows automation interface the handout skills drive Word and Excel through",
+    "MOM": "Members' Open Meeting -- the monthly St Ives (Cambs) u3a meeting the three handout skills prepare for",
+    "AI": "Artificial intelligence"
+  },
+  "notAbbreviations": [
+    {
+      "reason": "standard computing vocabulary. Anybody who can act on what these documents say already reads code, and an entry for JSON would be noise that makes the real entries harder to find.",
+      "tokens": [
+        "ANSI", "API", "ASCII", "BOM", "CJS", "CLI", "CRLF", "CSS", "CSV", "DB",
+        "DOM", "DOTALL", "ENOENT", "ESM", "EOL", "FPU", "HTML", "HTTP", "HTTPS",
+        "IIFE", "IP", "ISO", "JPEG", "JPG", "JS", "JSON", "KB", "LF", "LLM", "MB",
+        "NULL", "OS", "PDF", "PIL", "PNG", "QA", "REGEX", "RGB", "SDK", "SHA",
+        "SPA", "SQL", "SSH", "SSR", "SVG", "TCP", "TLS", "TTY", "UI", "URI", "URL",
+        "UTC", "UTF", "UUID", "VM", "WAL", "XML", "XSS", "YAML"
+      ]
+    },
+    {
+      "reason": "in ordinary public use in Britain, and a reader who did not know one would not look it up in a bus-map engine's reference notes.",
+      "tokens": ["BBC", "CEO", "COVID", "GB", "GBP", "GP", "HMRC", "MIT", "NHS", "SME", "UK", "VAT"]
+    },
+    {
+      "reason": "a compass point on a map or in a bearing, not a short form.",
+      "tokens": ["NE", "NW", "SE", "SW", "SSW", "NNE", "NNW", "SSE", "ENE", "ESE", "WNW", "WSW"]
+    },
+    {
+      "reason": "a filename, a proper noun, or a literal string an artefact prints -- caught by the letters rule only because we write it in capitals. PILOT is the banner text on an unpublished sheet (\"PILOT — SAMPLE MAP\"); README is a filename.",
+      "tokens": ["README", "CLAUDE", "PETER", "OK", "PILOT", "BST", "HW"]
+    },
+    {
+      "reason": "ordinary English that our house style shouts, or a verdict token a tool prints in capitals -- REUSE and BUY are redteam_source.js's two answers, PARKED is a status. The checker's lower-case-count rule catches this class in a 301-document corpus and is weaker in a 45-document one, which is why they are declared here rather than left to it.",
+      "tokens": ["BUY", "REUSE", "REUSES", "PARKED", "LATE", "GAIN", "LOUDLY", "REFUSE", "NEVER", "BOTH", "DONE", "STALE", "PASS", "HARD", "SOFT"]
+    },
+    {
+      "reason": "a fragment of something that is not prose at all -- a hex colour, a font name, an encoding, a coordinate system -- that survived the code stripping because it was written bare.",
+      "tokens": ["CMYK", "CIE", "XYZ", "NUL", "SPDX", "ISC", "IEEE", "OCR", "RMS", "OGL"]
+    }
+  ]
+}

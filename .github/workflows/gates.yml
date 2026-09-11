@@ -557,6 +557,24 @@ jobs:
         working-directory: skills
         run: node tools/prove-red-doc-links.mjs
 
+      # buses-data OA-300, the claude-skills round (2026-09-11). The checker and
+      # this harness landed here on 2026-09-11 and ran in buses-data's gates.yml
+      # ONLY, because that repository's corpus had been cleaned and this one's
+      # had not: 69 short forms with nowhere to look across 45 documents, and a
+      # gate that is red on day one is one somebody mutes in its first week. The
+      # corpus is excused now -- `.doc-acronyms.json` at this root, 24 definitions
+      # and six judgement groups -- so the gate lands.
+      #
+      # ITS OWN FALSE-PASS DIRECTION IS THE DANGEROUS ONE and is why the harness
+      # runs first: widening what counts as "already defined" silences the finding
+      # that should have fired, which is check-doc-links.mjs's 2026-09-01 lesson
+      # in a second instrument. Every recogniser is falsified in BOTH directions,
+      # and the counts are asserted, because a verdict cannot express coverage.
+      - name: Prove the acronym checker can go red
+        if: ${{ !cancelled() }}
+        working-directory: skills
+        run: node tools/prove-red-doc-acronyms.mjs
+
       # OA-259, second half (2026-09-06). check-exclusion-fields.mjs runs in buses-data's
       # own gates.yml, because its subject is that repository's town files; this harness
       # runs HERE, because its subject is the checker. The gate went green on the day it
@@ -599,6 +617,23 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: skills
         run: node tools/check-doc-links.mjs
+
+      # No flag, for the same reason as the step above: the checker resolves its
+      # corpus from the repository it is RUN FROM, and `.doc-acronyms.json` here
+      # names no `dirs` -- so the scope is this repository's whole tracked corpus,
+      # the widest there is, and the one shape a coverage bug cannot take.
+      #
+      # WHAT IT ASKS IS COMPREHENSION RATHER THAN STRUCTURE, which is what makes
+      # it worth a step of its own beside two checkers that already read every
+      # one of these documents. A link checker asks whether a pointer resolves
+      # and a table checker whether a row is a row; neither can see a word. `EP`
+      # had ten uses across the estate, all load-bearing, and no expansion
+      # anywhere -- and it survived nine widenings of those two because no check
+      # asked the question at all.
+      - name: Every short form a reader meets is one they can look up
+        if: ${{ !cancelled() }}
+        working-directory: skills
+        run: node tools/check-doc-acronyms.mjs
 
   status:
     runs-on: ubuntu-latest

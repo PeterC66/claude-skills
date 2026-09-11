@@ -166,6 +166,11 @@ for (const file of Object.keys(NOT_A_TOOL)) {
 //
 // `npm test` (`node --test`) names no tools/ file and is correctly outside this:
 // it is the unit suite, and `gates.yml` runs it by name in the `unit` job.
+// `test:python` (`test/python/run.py`) is the same shape and outside for the same
+// reason -- it is the Python unit suite, not a tools/ gate. Its join is asserted
+// where it can be, in `test/python/test_wiring.py`, rather than left unchecked:
+// this filter is structural, so widening it to reach one suite would pull in every
+// future script that happens to name a .py outside tools/.
 const gateScripts = Object.keys(scripts).filter((n) => /tools\/[\w.-]+\.(js|py)/.test(scripts[n]));
 for (const name of gateScripts) {
   const cmd = scripts[name];

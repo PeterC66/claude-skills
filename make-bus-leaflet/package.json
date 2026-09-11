@@ -10,6 +10,8 @@
   },
   "scripts": {
     "test": "node --test",
+    "test:python": "python3 test/python/run.py",
+    "test:prove-red-python": "python3 tools/prove-red-python.py",
     "test:prove-red": "node tools/prove-red.js",
     "test:prove-red-gates": "node tools/prove-red-gates.js",
     "test:prove-red-status": "node tools/prove-red-status.js",

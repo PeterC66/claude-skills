@@ -111,6 +111,24 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm test
 
+      # THE PYTHON HALF, WHICH `npm test` CANNOT REACH. `npm test` is `node --test`,
+      # so twenty of the engine's files -- every GTFS query, the NaPTAN resolvers, the
+      # boarding index, the monthly refresh -- were carried entirely by the byte gates
+      # until 2026-09-11 (buses-data OA-001). A byte gate asks only *does the output
+      # still match*, which says nothing about a file no committed map runs: that is
+      # exactly how gen_external_busway.js threw at load for a day with every gate in
+      # three repositories green. test_module_load.py is that question asked of the
+      # Python half, over a population DERIVED from the directory rather than typed.
+      # The harness runs FIRST, because a suite that has never been seen to go red is
+      # the thing this project keeps paying for. ubuntu-latest already has python3.
+      - name: Prove the Python unit suite can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-python
+
+      - name: Python unit suite
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:python
+
       # Falsification harnesses that need no other repository. Each breaks its own
       # subject on purpose and asserts WHICH tests go red while a named CONTROL
       # stays green -- a suite that only ever goes green proves nothing about the

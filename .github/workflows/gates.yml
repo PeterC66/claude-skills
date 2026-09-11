@@ -726,6 +726,48 @@ jobs:
           echo "portal refs now visible to the vendoring row:"
           git -C community-bus-maps for-each-ref --format='  %(refname:short)  %(committerdate:relative)' refs/remotes/
 
+      # WHICH THREE COMMITS IS THIS VERDICT ABOUT? The last of the three
+      # repositories to get this step, and the one that needed it most. The
+      # portal's `verify.yml` has named its two since 2026-09-05 and buses-data's
+      # own `gates.yml` has named its three since 2026-08-28 (buses-data OA-018);
+      # this job gates the ENGINE, and two of the three trees it measures --
+      # `buses-data` and `community-bus-maps` -- are checked out above with no
+      # `ref:` and float on their default branches. So a verdict here is about a
+      # combination that existed for the minutes this job ran, and a red here is
+      # very often not about the commit that triggered it.
+      #
+      # MEASURED, NOT SUPPOSED. Run 34607735390 on 2026-09-11 went red on the
+      # quality ratchet four minutes after an engine commit that had nothing to
+      # do with it. The cause was buses-data `dd5db17e`, pushed 95 minutes
+      # earlier in another repository: it deliberately dropped route 101 from
+      # three Co-op place sheets and left the ledger unaccepted, so three rows
+      # read REGRESSED. Nothing in this run named that commit, or named
+      # buses-data at all -- the failing step pipes status.js into the step
+      # summary, so the log says only "exit code 1" -- and GitHub titles the
+      # failure email after the workflow's static `name:`, so the mail said
+      # claude-skills. Establishing that the engine was innocent took a
+      # downloaded gate-results artifact and a walk through a second
+      # repository's history.
+      #
+      # It cannot fail the job on its own: it reads SHAs out of checkouts three
+      # earlier steps have already made, and it is the attribution rather than a
+      # gate. Nothing here is asserted, so there is nothing to falsify.
+      - name: Which three commits is this verdict about
+        run: |
+          {
+            echo "### Checked out for this run"
+            echo
+            echo "| Repository | Ref | SHA |"
+            echo "|---|---|---|"
+            for d in skills buses-data community-bus-maps; do
+              sha=$(git -C "$GITHUB_WORKSPACE/$d" rev-parse HEAD)
+              ref=$(git -C "$GITHUB_WORKSPACE/$d" rev-parse --abbrev-ref HEAD)
+              pin='floats on its default branch'
+              [ "$d" = skills ] && pin='pinned to the triggering commit'
+              echo "| \`$d\` | $ref — $pin | \`${sha:0:10}\` |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       # WHICH NODE? THE ONE THE PRODUCT RUNS (buses-data OA-209, 2026-08-31).
       #
       # Derived rather than pinned, copied from buses-data's own `gates.yml`,

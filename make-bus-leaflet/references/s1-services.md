@@ -43,3 +43,30 @@ Detailed steps for S1 of the `make-bus-leaflet` workflow. See SKILL.md for the s
      - **Prefer `near` when the NaPTAN block is over-broad.** Beaconsfield's `040000001` covers 326 stops across a wide swathe of Bucks; on prefix it reported 35 unrelated routes as `[ADD?]`, on `near:[51.601601,-0.637726,2.5]` it reports only the 4 school services genuinely awaiting curation. Same over-broad-block problem `coreMaxKm` solves for the drawn map.
 7. `stage.js commit S1 "$S1" --outputs gtfs-services.json,verified-services.json,disagreements.json,disagreements.docx,disagreements.pdf`.
 
+
+## A service that is in NO feed at all — the hand-authored chain (2026-09-11, buses-data OA-286)
+
+**Before you conclude a community service cannot be drawn, download whatever the operator publishes.** OA-286 was filed saying Wisbech's route 68 had *"eight or nine place NAMES, from prose"* and was therefore undrawable. It does not: `fact-cambs.co.uk/Route-68.html` links a PNG headed *Route 68 Timetable / Wisbech town circular / Times updated 1st June 2026*, with all 38 calling points in order and five hourly journeys. Nobody had looked. The premise was an inference from the sources that happened to be to hand — two newspaper reports and a council listing — rather than a fact about the world. A community operator that runs a fixed route usually publishes a timetable somewhere, often as an image a text fetch will not show you; fetch the page, list its links, and read the PNG or PDF.
+
+**`source: "operator"` is the third provenance value, alongside `gtfs` and `bustimes-community`,** and it means *neither feed has this; a person read the operator's own publication*. Pair it with `notInBods{}` as usual, and say in `why` that bustimes lacks it too, because that is the unusual half — a community service missing from BODS is structural, one missing from bustimes as well is worth stating.
+
+### Resolving a printed timetable into an ATCO chain
+
+Route 68 is the estate's first drawn service whose geometry came from no feed. What made it defensible was not care; it was **a second field that had to agree**.
+
+- **Resolve row by row, in the timetable's printed order, and write the audit down.** Wisbech's S2 run carries `manual-chain-68.json`: every printed row with its `printedStop` / `printedLocation` verbatim, the ATCO it resolved to, a `confidence` and a `why`. Its own header says what it is for — *disagree with a row by reading it, not by re-deriving it*. Without that file the next session re-does the afternoon.
+- **Use NaPTAN's `Bearing` as the check, and it is nearly free.** NaPTAN records the direction a bus leaves each stop. Resolve each row to the stop *on the side the timetable's running order implies*, then verify the bearing agrees. On Wisbech all 34 resolved rows agreed, and in six places NaPTAN's `near`/`opp` independently matched the operator's printed *Near*/*Opposite*. Neither would have survived a wrong order or a wrong side. **On a chain with exactly one source, a field that has to agree is worth more than a second reading of the same source.**
+- **Resolve to nothing rather than guess.** Four of Wisbech's 38 rows name places NaPTAN has no stop for. They are in the audit with `atco: null` and are drawn as no tick. The line still runs down those streets, because the road matcher traces between the anchors either side — so the cost of an honest gap is four ticks on a sheet whose own footer says *"Stop positions are approximate"*.
+- **Then check the drawn line against the timetable a third way.** Name the OSM road nearest each point of the rendered path and compare the sequence to the streets the timetable names. Wisbech's reproduced the operator's own order, and one stretch OSM calls *6th Avenue* is what the timetable calls *Sixth Avenue* — which is the only evidence that the two lowest-confidence rows land in the right place.
+- **Cross-check the backfilled coordinates against `naptan.sqlite`.** `backfill_coords.js` falls back to bustimes stop pages, and bustimes' stop NAMES can be wrong in a way that matters: it calls Wisbech's Cromwell Retail Park pair *"Tesco Superstore"*, 400 m from the real Tesco, which would have put a second Tesco on the sheet. Coordinates agreed to 8.1 m; names did not. Take names from NaPTAN's `CommonName`, and only for stops no other route already relies on.
+
+### Two config levers a hand-authored circular will need
+
+Both were measured on the artefact, not reasoned:
+
+- **`match_cfg.json` `viaChain: {"<route>": "intown"}`** when part of the loop is one-way. Route 68's eye-clinic spur is on the return leg only, and on the canonical chain that tick sat **349.6 m** off its own line; on the intown chain the worst tick is 13.6 m. The doubled-back line costs nothing measurable — complexity scores identically either way.
+- **`intown_cfg.json` `circular`** must list a route that starts and ends at the same stop. Without it Wisbech's 68 had a loose end, `contEnd` went true, and the sheet would have drawn a *continues to…* arrow off a bus that goes nowhere.
+
+### What the operator's own page says beats what a newspaper said
+
+Route 68's register entry recorded *"booking is offered but optional"* from a 2022 newspaper piece about a booking app. The operator's current page says *"Journeys for a Monday need to be booked on a Friday"* and *"Return time to be booked at the time of you booking, you are unable to arrange this with the driver"* — and the contract changed hands twice in between. **A community route's terms of use change with its contract, so date every claim about them and re-read the operator's page at each rebuild.** The Services-panel line carries the booking number as a result.

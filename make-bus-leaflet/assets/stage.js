@@ -177,7 +177,22 @@ function parseFlags(args) {
  * name -- older folders are full of harmless upstream copies and something may rely on
  * them -- but it may no longer overwrite, and every skip is named on stdout. Silence
  * was the whole defect.
+ *
+ * WHAT THE SKIP COSTS WHEN THE TWO COPIES DISAGREE (OA-318, 2026-09-11). The guard
+ * refuses by NAME, so it cannot tell a file the destination OWNS from one the
+ * destination merely happens to have. St Neots v4.0 was built twice -- corrected S3,
+ * `pull S3` into the same S4 folder, then `pull S4` into the same S5 folder -- and the
+ * second pull refreshed the three SVGs and left `routes.json` alone, so the render
+ * folder held the corrected sheets beside the SUPERSEDED config. The portal's
+ * pre-flight verify was the only instrument in the estate that could see it: every
+ * local gate is anchored on `ci-reference/`, which is mirrored from S4, and S4 was
+ * right. So the skip is still a skip, but whether the two copies AGREE is now
+ * measured here and decided by the caller -- see `pull`, which refreshes an upstream
+ * copy that has gone stale and keeps refusing the OA-164 one.
  */
+function sameBytes(a, b) {
+  try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch (e) { return false; }
+}
 function copyInto(srcDir, destDir, declared) {
   fs.mkdirSync(destDir, { recursive: true });
   const shadowed = [];
@@ -185,7 +200,7 @@ function copyInto(srcDir, destDir, declared) {
     const s = path.join(srcDir, name);
     if (fs.statSync(s).isDirectory()) continue; // outputs are flat files
     const d = path.join(destDir, name);
-    if (declared && !declared.has(name) && fs.existsSync(d)) { shadowed.push(name); continue; }
+    if (declared && !declared.has(name) && fs.existsSync(d)) { shadowed.push({ name, differs: !sameBytes(s, d) }); continue; }
     fs.copyFileSync(s, d);
   }
   return shadowed;
@@ -344,7 +359,23 @@ function main() {
      * of S1,S2,S3,S4 printed 28 lines about files S2 had already, correctly, provided.
      * That is exactly how a message stops being read. The interesting case is the one
      * that cost Beaconsfield Waitrose its config: an EARLY stage's folder holding a
-     * file a LATER stage declares. The rest is counted, not listed. */
+     * file a LATER stage declares. The rest is counted, not listed.
+     *
+     * AND SINCE OA-318 THE COUNTED ONES ARE ASKED WHETHER THEY STILL AGREE. Four
+     * outcomes, and the discriminator is OWNERSHIP rather than difference -- "copy it
+     * when it differs", which is the cheap reading of OA-318, is precisely the
+     * Beaconsfield defect back again, because a stray July `routes.json` differs from
+     * the curated one too:
+     *   KEPT, loudly   a LATER stage declares it, so the destination owns it (OA-164).
+     *   REFRESHED      a stage at or before this one declares it and the bytes differ:
+     *                  the destination is holding a SUPERSEDED copy of this pull's own
+     *                  lineage, which is the St Neots v4.0 defect. Pulling a stage
+     *                  means making the folder look like that stage's folder.
+     *   KEPT, loudly   the bytes differ and NO stage declares the file, so the
+     *                  sentence below has no owner to appeal to and nobody can say
+     *                  which copy is right.
+     *   COUNTED        the bytes are identical, which is the ordinary case and the
+     *                  only one whose old message was true. */
     const owner = (f) => Object.keys(STAGE_NAME).filter((o) => {
       const sx2 = m.stages[o];
       if (!sx2 || !sx2.latest) return false;
@@ -352,11 +383,26 @@ function main() {
       return rr && (rr.outputs || []).includes(f);
     });
     const idx = (x) => ORDER_OF.indexOf(x);
-    const loud = shadowed.filter((f) => owner(f).some((o) => idx(o) > idx(st)));
-    for (const f of loud)
-      console.log(`  kept the file already there: ${st}'s folder holds an undeclared "${f}" that a LATER stage declares — go and look at that folder`);
-    const quiet = shadowed.length - loud.length;
-    if (quiet) console.log(`  (${quiet} undeclared upstream cop${quiet === 1 ? 'y' : 'ies'} in ${st}'s folder left alone; the owning stage had already supplied them)`);
+    const srcDir = path.join(townDir, r.dir);
+    const refreshed = [], orphaned = [];
+    let identical = 0;
+    for (const sh of shadowed) {
+      const owners = owner(sh.name);
+      if (owners.some((o) => idx(o) > idx(st))) {
+        console.log(`  kept the file already there: ${st}'s folder holds an undeclared "${sh.name}" that a LATER stage declares — go and look at that folder`);
+        continue;
+      }
+      if (!sh.differs) { identical++; continue; }
+      if (owners.length) {
+        fs.copyFileSync(path.join(srcDir, sh.name), path.join(dest, sh.name));
+        refreshed.push(`${sh.name} (${owners.join(',')})`);
+      } else orphaned.push(sh.name);
+    }
+    for (const f of refreshed)
+      console.log(`  REFRESHED a stale upstream copy: "${f}" in the destination differed from ${st}'s — the destination held a superseded one (OA-318)`);
+    for (const f of orphaned)
+      console.log(`  kept the file already there: "${f}" DIFFERS from ${st}'s copy and no stage declares it — nothing here can say which is right, so go and look`);
+    if (identical) console.log(`  (${identical} undeclared upstream cop${identical === 1 ? 'y' : 'ies'} in ${st}'s folder left alone; the destination already holds the same bytes)`);
     // Keep the on-map version stamp in step with the run dir it just landed in.
     // Silent when there is nothing to do (unversioned dest, no routes.json, or
     // already correct) — it should only speak when it changed something.

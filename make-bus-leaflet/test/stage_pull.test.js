@@ -110,6 +110,83 @@ test('the pull says which file it kept, because silence was the whole defect', (
     'the skip has to be visible in the build log or nobody learns the folder is dirty');
 });
 
+/* OA-318, 2026-09-11 — THE OTHER HALF: a skip that keeps a SUPERSEDED copy.
+ *
+ * The OA-164 guard refuses by NAME, so it cannot tell a file the destination owns
+ * from one the destination merely happens to have. St Neots v4.0 was built twice:
+ * corrected S3, `pull S3` into the same S4 folder, `pull S4` into the same S5
+ * folder. The second pull refreshed the three SVGs and left `routes.json` alone —
+ * "the owning stage had already supplied them", which was true of the FIRST pass —
+ * so the render folder held the corrected sheets beside the superseded config, and
+ * the portal's pre-flight verify was the only instrument in the estate that could
+ * see it. Every local gate is anchored on ci-reference/, mirrored from S4, and S4
+ * was right.
+ *
+ * THE DISCRIMINATOR IS OWNERSHIP, NOT DIFFERENCE, and that is why these tests sit
+ * beside the four above rather than replacing them. "Copy it when it differs" is
+ * the cheap reading of OA-318 and it is the Beaconsfield defect back again: the
+ * stray July `routes.json` differs from the curated one too.
+ *
+ * The stage pair here is S2 -> S3 rather than the S3 -> S4 -> S5 of the real
+ * incident, for the same reason the fixtures above use S2 and S3: committing an S4
+ * drags in the version stamp and provenance guards, which have nothing to do with
+ * this. The relation under test is the one that matters — the destination holds a
+ * superseded copy of a file an EARLIER stage owns.
+ */
+function townTwoPass() {
+  const town = newTown();
+  stageRun(town, 'S2', 'S2-geometry', '2026-09-11_0503',
+    { 'atco2ll.json': '{"whose":"the corrected geometry"}' }, ['atco2ll.json']);
+  stageRun(town, 'S3', 'S3-config', '2026-09-11_0519',
+    {
+      'routes.json': '{"whose":"the curated config"}',
+      'atco2ll.json': '{"whose":"the corrected geometry"}',   // the upstream copy S3 built from
+      'notes.txt': 'S3 folder scratch\n',                     // declared by nobody at all
+    }, ['routes.json']);
+  return town;
+}
+function whoseOf(d, name) {
+  return JSON.parse(fs.readFileSync(path.join(d, name), 'utf8')).whose;
+}
+
+test('a stale upstream copy is REFRESHED when the stage that owns it is at or before this pull', () => {
+  const town = townTwoPass();
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'atco2ll.json'), '{"whose":"the superseded geometry"}');
+  assert.strictEqual(run(town, ['pull', 'S3', d]).status, 0);
+  assert.strictEqual(whoseOf(d, 'atco2ll.json'), 'the corrected geometry',
+    'the destination was holding a superseded copy of this pull\'s own lineage — St Neots v4.0 was delivered like that');
+});
+
+test('the pull says which stale copy it refreshed, and names the stage that owns it', () => {
+  const town = townTwoPass();
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'atco2ll.json'), '{"whose":"the superseded geometry"}');
+  const out = run(town, ['pull', 'S3', d]).stdout;
+  assert.match(out, /REFRESHED a stale upstream copy: "atco2ll\.json \(S2\)"/,
+    'a silent refresh is as unreadable as the silent skip it replaces');
+});
+
+test('CONTROL — an identical upstream copy is left alone and is not announced as refreshed', () => {
+  const town = townTwoPass();
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'atco2ll.json'), '{"whose":"the corrected geometry"}');
+  const out = run(town, ['pull', 'S3', d]).stdout;
+  assert.strictEqual(whoseOf(d, 'atco2ll.json'), 'the corrected geometry');
+  assert.doesNotMatch(out, /REFRESHED/,
+    'the ordinary case is dozens of identical copies a pull, and a line each is how a message stops being read');
+});
+
+test('a differing copy that NO stage declares is kept and named, because nothing here can say which is right', () => {
+  const town = townTwoPass();
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'notes.txt'), 'the destination wrote its own\n');
+  const out = run(town, ['pull', 'S3', d]).stdout;
+  assert.strictEqual(fs.readFileSync(path.join(d, 'notes.txt'), 'utf8'), 'the destination wrote its own\n',
+    'with no owning stage there is no lineage to prefer, so the refusal stands');
+  assert.match(out, /"notes\.txt" DIFFERS from S3's copy and no stage declares it/);
+});
+
 test('CONTROL — the guard is keyed on the DECLARED set, not on the file name', () => {
   const town = newTown();
   // Here S2 DECLARES routes.json, so it is that stage's own output and must win.

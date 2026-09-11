@@ -152,10 +152,64 @@ const accountedSet = (r) => new Set((r.accounted || []).map((a) => a.path));
 export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPaths(r).filter((p) => !s.has(p)); };
 const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
 
+/*
+ * HOW MANY COMMITS NOBODY HAS PUSHED — and against WHAT (buses-data OA-313).
+ *
+ * `@{u}..HEAD` is the right question only where the branch HAS an upstream, and
+ * a branch created locally has none until its first push. That is not an exotic
+ * state: the portal is PR-per-change, so every piece of work there begins on a
+ * fresh local branch, and the one repository where "is there finished work
+ * nobody has pushed?" is asked most often was the one this count could not
+ * answer. On 2026-09-11 it reported `unpushed: None` over twenty files and a
+ * thousand committed lines of OA-308, while the same run counted buses-data's
+ * single commit correctly.
+ *
+ * So: count against the upstream where there is one, and against the remote's
+ * own default branch where there is not. `git rev-list --count origin/main..HEAD`
+ * needs no upstream and no network.
+ *
+ * WHICH BASIS WAS USED IS REPORTED, NEVER INFERRED. "3 commits ahead of
+ * origin/main" and "3 commits your upstream has not seen" are different
+ * sentences, and a reader who cannot tell which one they are being told will
+ * read the wrong one on the day it matters. `unpushedFrom` says which, and the
+ * printed line says so too whenever it is not the branch's own upstream.
+ *
+ * AND WHERE NEITHER CAN BE COMPUTED THE REASON IS CARRIED, because `null` here
+ * is *the refusal read as an absence* wearing a null: a repository with no
+ * remote at all and a repository that is perfectly pushed both rendered as
+ * nothing printed. `unpushedWhy` is that reason, and `repoLine` prints it.
+ */
+export function countUnpushed(dir) {
+  const out = { unpushed: null, unpushedBasis: null, unpushedFrom: null, unpushedWhy: null };
+  const count = (basis, from) => {
+    const n = git(dir, ['rev-list', '--count', `${basis}..HEAD`]);
+    if (n === null || !/^\d+$/.test(n)) return false;
+    out.unpushed = Number(n); out.unpushedBasis = basis; out.unpushedFrom = from;
+    return true;
+  };
+  const upstream = git(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+  if (upstream && count(upstream, 'upstream')) return out;
+  /* origin/HEAD first, because it is what the remote itself says its default
+   * branch is; the two guesses after it are for a clone that never set it. Each
+   * is verified to EXIST before it is counted against, so a wrong guess falls
+   * through to the reason below rather than to a number about nothing. */
+  const head = git(dir, ['rev-parse', '--abbrev-ref', 'origin/HEAD']);
+  for (const ref of [head, 'origin/main', 'origin/master']) {
+    if (!ref || !/^origin\//.test(ref)) continue;
+    if (git(dir, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) === null) continue;
+    if (count(ref, 'default-branch')) return out;
+  }
+  out.unpushedWhy = upstream
+    ? `counting ${upstream}..HEAD failed, and no origin default branch could be resolved either`
+    : 'the branch has no upstream and no origin/HEAD, origin/main or origin/master to count against — is a remote configured?';
+  return out;
+}
+
 export function readRepo({ key, label, name, dir, expect = 'main' }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
   repo.staged = []; repo.modified = []; repo.untracked = [];
-  repo.unpushed = null; repo.touchedTop = []; repo.touchesMapData = false;
+  repo.unpushed = null; repo.unpushedBasis = null; repo.unpushedFrom = null; repo.unpushedWhy = null;
+  repo.touchedTop = []; repo.touchesMapData = false;
 
   if (!dir || !existsSync(dir)) return repo;
   repo.present = true;
@@ -185,8 +239,7 @@ export function readRepo({ key, label, name, dir, expect = 'main' }) {
   // promises to touch the network only in --url mode, and a fetch inside a
   // read-only status command is exactly the kind of side effect nobody expects.
   // So this answers "have I pushed what I committed", never "has someone else".
-  const ahead = git(dir, ['rev-list', '--count', '@{u}..HEAD']);
-  repo.unpushed = ahead === null ? null : Number(ahead);
+  Object.assign(repo, countUnpushed(dir));
 
   repo.dirty = isDirty(repo);
   repo.offMain = isOffMain(repo);
@@ -470,7 +523,13 @@ const RULES = {
     const p = c.repos.portal, b = c.repos.buses;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
     if (isOffMain(p)) return [DELAY, `the portal checkout is on ${p.branch}, not ${p.expect || 'main'} — a deliver from here carries that branch, and the branch is somebody's live work`];
-    if (b.readable && b.unpushed > 0) return [CHECK, `${b.name} has ${b.unpushed} unpushed commit(s) — push this side FIRST; the portal's verify.yml reads whatever is on this repo's main at that moment`];
+    if (b.readable && b.unpushed > 0) return [CHECK, `${b.name} has ${b.unpushed} unpushed commit(s)${b.unpushedFrom === 'default-branch' ? ` (counted against ${b.unpushedBasis}, which is where they would land)` : ''} — push this side FIRST; the portal's verify.yml reads whatever is on this repo's main at that moment`];
+    // OA-313. A count that could not be taken is not a count of zero. Before
+    // this, a buses-data checkout with no upstream and no origin said nothing
+    // here and the row read SAFE NOW — the shape named as *the refusal read as
+    // an absence*, and the one direction in which being wrong ships a deliver
+    // against fixtures GitHub has never seen.
+    if (b.readable && b.unpushed === null) return [CHECK, `could not count what ${b.name} has not pushed — ${b.unpushedWhy || 'no basis to count against'}. The portal's verify.yml reads whatever is on that repo's main, so check by hand before delivering`];
     if (isDirty(p)) return [CHECK, `${p.staged.length + p.modified.length} uncommitted change(s) in the portal checkout`];
     return [SAFE, null];
   },
@@ -725,7 +784,11 @@ const repoLine = (r) => {
   if (n) bits.push(`${n} uncommitted${r.staged.length ? ` (${r.staged.length} staged)` : ''}`);
   if (r.untracked.length) bits.push(`${r.untracked.length} untracked`);
   if (!n && !r.untracked.length) bits.push('clean');
-  if (r.unpushed) bits.push(`${r.unpushed} unpushed`);
+  // OA-313. The basis is printed whenever it is not the branch's own upstream,
+  // because that is the case a reader would otherwise assume, and the reason is
+  // printed when there is no count at all — silence there read as "pushed".
+  if (r.unpushed) bits.push(`${r.unpushed} unpushed${r.unpushedFrom === 'default-branch' ? ` (ahead of ${r.unpushedBasis}; this branch has no upstream)` : ''}`);
+  else if (r.readable && r.unpushed === null) bits.push(`unpushed UNKNOWN — ${r.unpushedWhy || 'no basis to count against'}`);
   const top = topFolders(r);
   const where = top.length ? `  [${top.slice(0, 4).join(', ')}${top.length > 4 ? ', …' : ''}]` : '';
   return `${r.name} — ${bits.join(', ')}${where}`;

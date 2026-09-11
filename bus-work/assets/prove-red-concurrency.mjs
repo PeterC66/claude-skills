@@ -376,6 +376,90 @@ ok(P.newestOtherAgeMin === 300, 'and gets the turn\'s age where the board got th
 fs.rmSync(peerRoot, { recursive: true, force: true });
 
 // ---------------------------------------------------------------------------
+// 1c. THE UNPUSHED COUNT — against an upstream, and against a branch that has none
+// ---------------------------------------------------------------------------
+/* buses-data OA-313. The fault: `@{u}..HEAD` fails on a branch with no upstream
+ * and the count came back `null`, which printed as nothing at all — so twenty
+ * committed files on a fresh portal branch and a repository with nothing to push
+ * rendered identically. Every case here is over a REAL clone with a REAL remote,
+ * because the whole question is what git answers, and a synthetic conditions
+ * object cannot be wrong about that.
+ *
+ * THE CASE TO GUARD IS THE EMPTY BRANCH. An implementation that counts
+ * `origin/main..HEAD` on a freshly cut branch and reports 0 is correct; one that
+ * reports the base branch's own history is loudly wrong and would say "1
+ * unpushed" about a branch nobody has committed on. Both directions are asserted
+ * below, and the control — a branch WITH an upstream still answering exactly what
+ * it answered before — is what stops this becoming a count that is merely never
+ * null. */
+console.log('\n== the unpushed count, with and without an upstream (OA-313) ==');
+{
+  const originDir = path.join(root, 'origin.git');
+  const cloneDir = path.join(root, 'clone');
+  execFileSync('git', ['init', '--bare', '-b', 'main', originDir], { stdio: 'ignore' });
+  const seed = path.join(root, 'seed');
+  const sg = (...a) => execFileSync('git', ['-C', seed, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(seed, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', seed], { stdio: 'ignore' });
+  sg('config', 'user.email', 'harness@example.invalid');
+  sg('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(seed, 'a.txt'), 'one\n');
+  sg('add', 'a.txt'); sg('commit', '-q', '-m', 'first');
+  sg('remote', 'add', 'origin', originDir); sg('push', '-q', 'origin', 'main');
+  execFileSync('git', ['clone', '-q', originDir, cloneDir], { stdio: 'ignore' });
+  const cg = (...a) => execFileSync('git', ['-C', cloneDir, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  cg('config', 'user.email', 'harness@example.invalid');
+  cg('config', 'user.name', 'harness');
+  const commit = (name) => { fs.writeFileSync(path.join(cloneDir, name), 'x\n'); cg('add', name); cg('commit', '-q', '-m', name); };
+  const U = () => conc.countUnpushed(cloneDir);
+
+  // The control, and it is the behaviour this change must not disturb.
+  let u = U();
+  ok(u.unpushed === 0 && u.unpushedFrom === 'upstream', 'a tracking branch with nothing to push: 0, counted against its upstream', `${u.unpushed} from ${u.unpushedFrom}`);
+  ok(u.unpushedWhy === null, 'and it carries no reason, because nothing refused to answer');
+  commit('b.txt');
+  u = U();
+  ok(u.unpushed === 1 && u.unpushedFrom === 'upstream', 'one commit on a tracking branch: 1, still against the upstream', `${u.unpushed} from ${u.unpushedFrom}`);
+
+  // THE FAULT ITSELF. A branch cut locally, with no upstream — the state every
+  // portal change begins in — and nothing committed on it yet.
+  cg('checkout', '-q', '-b', 'oa308/suggest-and-signal');
+  u = U();
+  ok(u.unpushed === 1, 'a new branch with no upstream still answers a NUMBER, not null', `unpushed=${u.unpushed}`);
+  ok(u.unpushedFrom === 'default-branch' && /^origin\//.test(u.unpushedBasis || ''), 'and it says which basis it used', `from=${u.unpushedFrom} basis=${u.unpushedBasis}`);
+
+  // The regression to guard: cut from a branch that IS pushed, the answer is 0.
+  cg('checkout', '-q', 'main'); cg('reset', '-q', '--hard', 'origin/main');
+  cg('checkout', '-q', '-b', 'fresh/empty');
+  u = U();
+  ok(u.unpushed === 0, 'a freshly cut branch with NO commits on it reports 0, not the base branch\'s history', `unpushed=${u.unpushed}`);
+  commit('c.txt'); commit('d.txt');
+  u = U();
+  ok(u.unpushed === 2, 'two commits on it report 2 — the count moves with the work', `unpushed=${u.unpushed}`);
+
+  // A clone that never learned what the remote's default branch is: origin/HEAD
+  // is gone, and origin/main has to be the one it falls back to.
+  cg('remote', 'set-head', 'origin', '-d');
+  u = U();
+  ok(u.unpushed === 2 && u.unpushedBasis === 'origin/main', 'with origin/HEAD deleted it falls back to origin/main and answers the same', `${u.unpushed} vs ${u.unpushedBasis}`);
+
+  // And where there is no basis at all, the REASON is carried rather than a null.
+  const lonely = path.join(root, 'lonely');
+  const lg = (...a) => execFileSync('git', ['-C', lonely, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(lonely, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', lonely], { stdio: 'ignore' });
+  lg('config', 'user.email', 'harness@example.invalid');
+  lg('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(lonely, 'a.txt'), 'x\n'); lg('add', 'a.txt'); lg('commit', '-q', '-m', 'only');
+  u = conc.countUnpushed(lonely);
+  ok(u.unpushed === null && /remote/i.test(u.unpushedWhy || ''), 'a repository with no remote says WHY it cannot count, rather than null', `unpushed=${u.unpushed} why=${u.unpushedWhy}`);
+  const line = conc.formatConditions(conc.readConditions({ buses: lonely })).join('\n');
+  ok(/unpushed UNKNOWN/.test(line), 'and the printed conditions block says UNKNOWN rather than staying silent', line.split('\n')[0]);
+
+  fs.rmSync(seed, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
 // 2. THE JUDGEMENT — each rule, made red and then cleared
 // ---------------------------------------------------------------------------
 console.log('\n== the rules, each one paired ==');
@@ -451,6 +535,15 @@ want(conc.assess(['portal-write'], portalBranch), conc.DELAY, 'portal on a featu
 says(conc.assess(['portal-deploy'], portalBranch), /oa-220-landmark-chooser/, 'and the deploy rule names the branch it would ship');
 want(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), conc.CHECK, 'unpushed commits here: CHECK FIRST before portal work');
 says(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), /verify\.yml/, 'and it says WHY the order matters');
+// OA-313. A count that could not be TAKEN used to fall through this rule as
+// silently as a count of zero, and the row read SAFE NOW. The pair is the
+// point: unknown is CHECK FIRST, and a real zero is still SAFE NOW, or the
+// rule would simply be CHECK for ever and get muted.
+const cannotCount = world({ buses: { unpushed: null, unpushedWhy: 'the branch has no upstream and no origin/HEAD' } });
+want(conc.assess(['portal-write'], cannotCount), conc.CHECK, 'a buses-data whose unpushed count could not be taken: CHECK FIRST, not SAFE');
+says(conc.assess(['portal-write'], cannotCount), /no upstream/, 'and it repeats the reason git gave rather than reporting an absence');
+want(conc.assess(['portal-write'], world({ buses: { unpushed: 0 } })), conc.SAFE, 'and a genuine zero is still SAFE NOW');
+says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: 'default-branch', unpushedBasis: 'origin/main' } })), /origin\/main/, 'a count taken against the default branch says so on the row');
 
 // --- failing safe ---
 const blind = world({ portal: { present: false, readable: false } });

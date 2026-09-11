@@ -518,21 +518,34 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
   check('a serves-town disagreement keyed on the badge, over the map\'s OWN carried route, is STILL UNCOVERED — carrying it is not an answer to "it does not serve"',
     rServes.code === 1 && /UNCOVERED/.test(rServes.out), `exit ${rServes.code}`);
 
-  /* THE ASYMMETRY THAT VERSION OF THE ASSERTION FOUND, pinned rather than
-   * glossed. This checker excludes `own-carries` for a serves-town claim and does
-   * NOT exclude `parent-carries`, so the same disagreement raised on a PLACE is
-   * covered by its parent town carrying the route. That is the behaviour today,
-   * measured with identical keys and no alias anywhere — so the alias mirroring it
-   * is consistency, not a widening. Whether the exclusion should reach the parent
-   * is a separate question and is in the drop zone as
-   * `the disagreement its parent answered.md`; this pair is here so that whichever
-   * way it is settled, it is settled deliberately and both halves move together. */
+  /* THE ASYMMETRY THAT VERSION OF THE ASSERTION FOUND — SETTLED ON 2026-09-11, and
+   * the pin now holds the answer rather than the question. The checker excluded
+   * `own-carries` for a serves-town claim and did NOT exclude `parent-carries`, so
+   * the identical disagreement raised on a PLACE was covered silently by its parent
+   * town carrying the route. It was settled by counting before deciding: on all 19
+   * S6 reports the estate then held, 33 of 33 `parent-carries` claims were
+   * `missing-service` and none was a `serves-town`, so extending the gate moved no
+   * real claim and the checker's `--json` verdict is byte-identical either side.
+   * The exclusion is a statement about the CLAIM, not about which file holds the
+   * route; `parent-exclusion` and `parent-rejection` stay ungated because those are
+   * adjudications rather than restatements. Both halves moved together, as the
+   * previous version of this comment required. */
   const rServesDirect = run(repo('alias-serves-town-parent-direct', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), place('Neots', 'Tesco', { routeOrder: ['61EY'] }, [claim('61EY', 'serves-town')])], EMPTY));
-  check('PRE-EXISTING, no alias in play: a place\'s serves-town claim IS covered by its parent town carrying the route',
-    rServesDirect.code === 0 && /parent-carries 1/.test(rServesDirect.out), `exit ${rServesDirect.code}`);
+  check('no alias in play: a place\'s serves-town claim is NOT covered by its parent town merely carrying the route',
+    rServesDirect.code === 1 && /UNCOVERED/.test(rServesDirect.out) && !/parent-carries/.test(rServesDirect.out), `exit ${rServesDirect.code}`);
   const rServesParent = run(repo('alias-serves-town-parent', [town('Neots', parentTown, badged(), null), aliasPlace([claim('61', 'serves-town')])], EMPTY));
   check('...and the alias gives that same answer for the badge spelling — the two spellings must not be classified differently',
-    rServesParent.code === 0 && /1 claim\(s\) are ALIASED/.test(rServesParent.out) && /carried by Neots in its verified set/.test(rServesParent.out), `exit ${rServesParent.code}`);
+    rServesParent.code === 1 && /UNCOVERED/.test(rServesParent.out), `exit ${rServesParent.code}`);
+  /* THE CONTROL THAT KEEPS THE NARROWING HONEST: the same parent, the same route,
+   * a `missing-service` claim instead — still `parent-carries`, because there the
+   * parent carrying the route IS the answer (it is a pairing failure, not a
+   * disagreement). Without this, gating everything would pass the two above. */
+  /* The place must NOT carry the route itself here, or `own-carries` answers first
+   * and the control proves nothing about the parent — which is what it did on the
+   * first run of this assertion. */
+  const rMissParent = run(repo('parent-carries-missing-service-control', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), place('Neots', 'Tesco', { routeOrder: ['9'] }, [claim('61EY', 'missing-service')])], EMPTY));
+  check('CONTROL — a missing-service claim about the same route IS still covered by the parent carrying it',
+    rMissParent.code === 0 && /parent-carries 1/.test(rMissParent.out), `exit ${rMissParent.code}`);
   const rServesOff = run(repo('alias-serves-town-off', [town('Neots', parentTown, badged(), null), place('Neots', 'Tesco', { routeOrder: [], badgeLabels: { '61EY': '61' }, notOnLeaflet: [{ route: '61EY', note: 'not at this stop' }] }, [claim('61', 'serves-town')])], EMPTY));
   check('...but the same claim IS covered once the map declares the registered key off — the alias reaches an exclusion, as the direct test does',
     rServesOff.code === 0 && /1 claim\(s\) are ALIASED/.test(rServesOff.out), `exit ${rServesOff.code}`);

@@ -175,10 +175,11 @@ function badgeAliasIndex(obj, where) {
  * does not carry is not a home, it is a stale config line.
  *
  * `allow` NARROWS WHICH OF THE FOUR COUNTS, and every caller passes the same list the
- * direct tests beside it use. It exists for one case: a `serves-town` disagreement
- * about a route the map CARRIES is not covered by carrying it — that is the
- * disagreement — so the alias must not launder the same claim into a home by
- * spelling it differently.
+ * direct tests beside it use — and since 2026-09-11 the PARENT caller does too, which
+ * is the half that was out of step. It exists for one case: a `serves-town`
+ * disagreement about a route the map, or its parent town, CARRIES is not covered by
+ * carrying it — that is the disagreement — so the alias must not launder the same
+ * claim into a home by spelling it differently.
  */
 const ALIAS_FIELDS = { services: 'its verified set', routeOrder: 'its routeOrder', off: 'its notOnLeaflet', rejected: 'its redteamRejected' };
 function resolveBadgeAlias(d, keys, allow = ['services', 'routeOrder', 'off', 'rejected']) {
@@ -436,7 +437,18 @@ if (!REGISTER_ONLY) {
       // pairing failure, not a claim — St Neots' `18/18A` on a run that predates the
       // slashed-key fix. The home is the town file itself; the remedy is the next S6.
       else if (f.category === 'missing-service' && ((k = hit(own.services, keys)) || (k = hit(own.routeOrder, keys)))) claim.covered = { by: 'own-carries' };
-      else if (parent && (k = hit(parent.services, keys))) claim.covered = { by: 'parent-carries', town: m.parent };
+      /* AND THE SAME NARROWING REACHES THE PARENT, for the same reason (2026-09-11).
+       * The exclusion above is a statement about the CLAIM, not about which file
+       * happens to hold the route: answering "a bus you draw does not serve this
+       * town" with "but we carry it" restates the disagreement wherever the route
+       * is carried. Until today `own-carries` was gated and `parent-carries` was
+       * not, so the identical disagreement raised on a PLACE was covered silently.
+       * `parent-exclusion` and `parent-rejection` below stay ungated because those
+       * ARE adjudications — the parent declared it off or rejected it. Measured
+       * before the change on all 19 reports: 33 of 33 `parent-carries` claims were
+       * `missing-service` and none was a `serves-town`, so this moves no claim on
+       * this estate and the checker's verdict is byte-identical either side. */
+      else if (f.category === 'missing-service' && parent && (k = hit(parent.services, keys))) claim.covered = { by: 'parent-carries', town: m.parent };
       else if (parent && (k = hit(parent.off, keys))) claim.covered = { by: 'parent-exclusion', town: m.parent, where: parent.off.get(k).where };
       else if (parent && (k = hit(parent.rejected, keys))) claim.covered = { by: 'parent-rejection', town: m.parent };
       else {
@@ -455,7 +467,8 @@ if (!REGISTER_ONLY) {
            * eleven days. */
           const ownAllow = f.category === 'missing-service' ? ['off', 'rejected', 'services', 'routeOrder'] : ['off', 'rejected'];
           let a = resolveBadgeAlias(own, keys, ownAllow), via = m.name;
-          if (!a && parent) { a = resolveBadgeAlias(parent, keys, ['services', 'off', 'rejected']); via = m.parent; }
+          const parentAllow = f.category === 'missing-service' ? ['services', 'off', 'rejected'] : ['off', 'rejected'];
+          if (!a && parent) { a = resolveBadgeAlias(parent, keys, parentAllow); via = m.parent; }
           if (a) claim.covered = { by: 'badge-alias', map: via, label: a.label, registered: a.registered, field: a.field, declaredIn: a.declaredIn, where: a.where };
         }
       }

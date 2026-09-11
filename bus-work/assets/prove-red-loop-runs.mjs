@@ -86,6 +86,49 @@ console.log('\n3. CONTROL — a working tick clears it');
   check('no row, even with a dirty tree', loopRunItems({ health: h, treeDirty: true }).length === 0);
 }
 
+console.log('\n3b. OA-303 — an `around` tick does NOT reset the count, and is still WORKING');
+{
+  // THE ACCEPTANCE TEST FOR PETER'S OPTION 3. Replays the shape that produced the
+  // action: two gate-stops, then a tick that found and fixed a defect in the one
+  // tree the bar left open, then another gate-stop. Under the old rule the middle
+  // tick reset the run to 1 and the row vanished while the bar stayed; under
+  // `-around` the sequence counts THREE.
+  const h = health(mkRuns('around', ['0715-OA', '0815-none', '0915-around', '1015-none']));
+  check('-none, -around, -none counts THREE', h.idle === 3, String(h.idle));
+  check('and one of the three is named as an around', h.around === 1, String(h.around));
+  // The two predicates are no longer each other's complement. This is the whole
+  // substance of the change, so it is pinned directly rather than via the row.
+  check('the around tick IS in working — lastWorkingAt is 09:15, not 07:15',
+    h.lastWorkingAt === new Date(2026, 8, 9, 9, 15).getTime(), new Date(h.lastWorkingAt).toString());
+  const rows = loopRunItems({ health: h, treeDirty: true });
+  check('the row is raised — it was not, before OA-303', rows.length === 1, String(rows.length));
+  // Guarded, because the mutation this case exists to catch REMOVES the row: a
+  // harness that throws on `rows[0]` reports one red and abandons the six
+  // assertions after it, which is the *check that could not go red* in reverse —
+  // the evidence is there and nothing prints it. `row` stands in so every
+  // assertion below states its own verdict.
+  const row = rows[0] || { title: '(no row was raised)', why: '', idle: null, around: null };
+  check('title does NOT say "done nothing", which is false of a tick that worked',
+    rows.length === 1 && !/done nothing/.test(row.title), row.title);
+  check('title says the queue was never reached', /without reaching its own queue/.test(row.title), row.title);
+  check('title counts the around ticks', /1 of them worked around the bar/.test(row.title), row.title);
+  check('why explains what the count now measures', /out of reach rather than how idle/.test(row.why));
+  check('the count is on the row for a caller', row.idle === 3 && row.around === 1, `idle=${row.idle} around=${row.around}`);
+
+  // CONTROL, both ways. An all-`none` run keeps the old wording exactly, so this
+  // change cannot have silently rephrased the ordinary case…
+  const plain = loopRunItems({ health: health(mkRuns('around-ctl', ['0815-none', '0915-none'])), treeDirty: true })[0];
+  check('CONTROL — with no around tick the title is unchanged', /fired 2 times and done nothing/.test(plain.title), plain.title);
+  check('CONTROL — and why gains no around clause', !/worked around the bar/.test(plain.why));
+  // …and a REAL feed still resets the count, so `around` has not been made a
+  // synonym for "any work at all". Without this, `UNREACHED` holding every feed
+  // would pass every assertion above.
+  const cleared = health(mkRuns('around-cleared', ['0815-none', '0915-around', '1015-bus-work']));
+  check('CONTROL — a tick that DID reach the queue resets it to 0', cleared.idle === 0, String(cleared.idle));
+  check('CONTROL — and no row, even with a dirty tree', loopRunItems({ health: cleared, treeDirty: true }).length === 0);
+  check('CONTROL — around is 0 once the run is broken', cleared.around === 0, String(cleared.around));
+}
+
 console.log('\n4. one idle tick is below the threshold');
 {
   const h = health(mkRuns('one', ['0915-bus-work', '1015-none']));

@@ -21,11 +21,26 @@
  *
  * WHAT IT READS, AND WHY IT OPENS NOTHING. `loop/runs/` is one file per tick,
  * named `YYYY-MM-DD_HHMM-<feed>.md`, and `<feed>` is `none` exactly when the run
- * stopped before dispatch. So the date, the time and the verdict are all in the
+ * stopped before dispatch, or `around` when it dispatched but never reached
+ * `buses-data` at all. So the date, the time and the verdict are all in the
  * NAME: the measurement is a directory listing, and no run file is ever parsed.
  * That matters beyond speed — the run files are prose written by a fresh session
  * each hour, and a reader that depended on their wording would be a reader that
  * broke the first time a tick phrased something differently.
+ *
+ * `around` IS WHY THE TWO PREDICATES BELOW ARE NOT EACH OTHER'S COMPLEMENT
+ * (buses-data OA-303, Peter's option 3, 2026-09-11). The counter measured
+ * IDLENESS, and the subject anybody cares about is whether the loop can reach its
+ * own queue. Those came apart on 2026-09-10: `0815-none`, `0915-none` (row
+ * raised), then `1015-bus-work` — a tick that found and fixed a defect in
+ * `claude-skills`, the one tree the bar left open — and the row went away while
+ * one modified `Correspondence/` letter went on barring `buses-data` for another
+ * four hours. A better tick made the board quieter about a problem that was
+ * getting older. So a tick that WORKED but never reached the barred resource now
+ * names itself `-around`, and it counts BOTH ways: it continues the idle run,
+ * because the bar did not move, and it is in `working`, because it genuinely did
+ * something. Naming it is the tick's job at step 7 of the task prompt; this module
+ * still reads nothing but the filename.
  *
  * THE CADENCE IS DERIVED FROM THE FILENAMES, NOT CONFIGURED. OA-288 asked for a
  * threshold taken from the schedule rather than from taste. The schedule is not
@@ -105,17 +120,33 @@ export function cadenceMin(runs, fallback = 60) {
 }
 
 /**
+ * A feed that means the run never reached `buses-data`'s own queue — `none` for a
+ * gate-stop before dispatch, `around` for a tick that dispatched and worked
+ * somewhere the bar left open. Both continue the run the row counts.
+ */
+const UNREACHED = new Set(['none', 'around']);
+
+/**
  * @param {{runs: Array, now?: number, fallbackMin?: number}} p
- * @returns {{ran: boolean, lastAt, ageMin, cadence, idle: number, lastWorkingAt}}
- *   `idle` is the number of CONSECUTIVE most-recent ticks whose feed was `none`.
+ * @returns {{ran: boolean, lastAt, ageMin, cadence, idle: number, around: number, lastWorkingAt}}
+ *   `idle` is the number of CONSECUTIVE most-recent ticks that never reached the
+ *   queue — `none` or `around`. `around` is how many of those did work anyway.
  */
 export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
   const list = (runs || []).slice();
   const cadence = cadenceMin(list, fallbackMin);
-  if (!list.length) return { ran: false, lastAt: null, ageMin: null, cadence, idle: 0, lastWorkingAt: null };
+  if (!list.length) return { ran: false, lastAt: null, ageMin: null, cadence, idle: 0, around: 0, lastWorkingAt: null };
   const last = list[list.length - 1];
   let idle = 0;
-  for (let i = list.length - 1; i >= 0 && list[i].feed === 'none'; i--) idle++;
+  let around = 0;
+  for (let i = list.length - 1; i >= 0 && UNREACHED.has(list[i].feed); i--) {
+    idle++;
+    if (list[i].feed === 'around') around++;
+  }
+  // NOT the complement of the loop above, and that is the whole substance of
+  // OA-303. An `around` tick did a real unit of work, so it belongs here and sets
+  // `lastWorkingAt`; it also belongs in the run above, because the bar it worked
+  // around is still there. Only a `none` tick is in neither.
   const working = list.filter((r) => r.feed !== 'none');
   return {
     ran: true,
@@ -123,6 +154,7 @@ export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
     ageMin: Math.max(0, Math.round((now - last.at) / 60000)),
     cadence,
     idle,
+    around,
     lastWorkingAt: working.length ? working[working.length - 1].at : null,
   };
 }
@@ -170,17 +202,25 @@ export function loopRunItems({ health, idleThreshold = 2, stopFile = false, tree
     causes.push('nothing visible from here explains it — the tree is clean, there is no `loop/STOP` and no lock is held. Read the newest file in `loop/runs/`, which says why that tick stopped.');
   }
 
-  const title = idling
-    ? `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} and done nothing (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`
-    : 'The scheduled loop is halted by `loop/STOP`';
+  // TWO TITLES, BECAUSE "done nothing" IS FALSE OF AN `around` TICK. It committed
+  // a fix; what it did not do is reach the barred queue, which is what the row is
+  // about. Saying "done nothing" about a tick that worked is the kind of false
+  // sentence on a board this project does not ship — and with `around` counted in
+  // the run, the old wording would have been false rather than merely imprecise.
+  const around = h.around || 0;
+  const title = !idling
+    ? 'The scheduled loop is halted by `loop/STOP`'
+    : around
+      ? `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} without reaching its own queue — ${around} of them worked around the bar rather than clearing it (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`
+      : `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} and done nothing (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`;
 
   return [{
     key: 'loop-idle', rank, type: 'loop-health',
     title,
-    why: `${causes.join(' Also: ')}${h.lastWorkingAt ? `  The last tick that finished a unit of work was ${hhmm(h.lastWorkingAt)}.` : ''} Each stopped tick still wrote a file in \`loop/runs/\` saying why; this row exists because nothing read them.`,
+    why: `${causes.join(' Also: ')}${around ? `  ${around} of those ${h.idle} tick${h.idle === 1 ? '' : 's'} found work in a tree the bar left open and named itself \`-around\`, so the count below measures how long the queue has been out of reach rather than how idle the loop has been.` : ''}${h.lastWorkingAt ? `  The last tick that finished a unit of work was ${hhmm(h.lastWorkingAt)}.` : ''} Each stopped tick still wrote a file in \`loop/runs/\` saying why; this row exists because nothing read them.`,
     who: 'Peter', runbook: 'loop',
     ageDays: h.ageMin == null ? null : Math.floor(h.ageMin / 1440),
-    idle: h.idle, cadenceMin: h.cadence,
+    idle: h.idle, around, cadenceMin: h.cadence,
     do: [
       ...(treeDirty ? [{ kind: 'shell', cwd: busesDir, cmd: 'git status --porcelain', note: 'commit or revert what this names, and the next tick runs' }] : []),
       ...(stopFile ? [{ kind: 'shell', cwd: busesDir, cmd: 'rm -f loop/STOP', note: 'only when you actually want the loop back' }] : []),

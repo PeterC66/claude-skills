@@ -120,7 +120,45 @@ function buildFixture(src, rel) {
    */
   stampCurrent(path.join(dst, 'ci-reference', 'routes.json'),
     /Places/.test(rel) ? computePlaceEngineVersion() : computeEngineVersion());
+  /*
+   * AND ANCHOR THE FIXTURE'S INPUTS TO ITS OWN MANIFEST (2026-09-11).
+   *
+   * FIFTH instance of the class the block above names, and the first that is not
+   * about the stamp. `staleInputs()` asks whether S2/S3 have moved since the head
+   * S4 was built, reading nothing but the manifest — so a borrowed manifest borrows
+   * the donor's real staleness too, and rollout_places.js checks STALE-INPUTS
+   * BEFORE it checks UNRENDERED. On 2026-09-11 OA-306 committed a new S3 run for
+   * Ely Co-op at 05:01Z ("seven maps gained a bus"), which is a correct and
+   * deliberate estate state awaiting a rebuild, and cases C, D and H immediately
+   * reported STALE-INPUTS — about the estate, not about the code under test. Five
+   * failures, in both repositories, seventeen minutes after the push.
+   *
+   * Pinning `basedOn` to the manifest's own S2/S3 heads makes the fixture
+   * self-consistent BY CONSTRUCTION rather than by the donor happening to be up to
+   * date, which is what the borrowed-fixture lesson actually asks for: inject the
+   * state a case needs, never inherit it. It removes no coverage — STALE-INPUTS is
+   * the whole subject of test/stale_inputs.test.js and is mutated by prove-red.js,
+   * neither of which borrows anything.
+   */
+  anchorInputs(path.join(dst, 'manifest.json'));
   return { tmp, manifestPath: path.join(dst, 'manifest.json') };
+}
+
+/** Say that the head S4 was built on whatever S2/S3 the manifest now heads, so
+ *  that staleInputs() has nothing to report and the S5 mutation is the only
+ *  variable a case changes. */
+function anchorInputs(manifestPath) {
+  editManifest(manifestPath, (j) => {
+    const s4 = j.stages && j.stages.S4;
+    const head = s4 && Array.isArray(s4.runs) && s4.runs.find((r) => r.id === s4.latest);
+    if (!head) return;
+    const basedOn = Object.assign({}, head.basedOn);
+    for (const st of ['S2', 'S3']) {
+      const sx = j.stages[st];
+      if (sx && sx.latest) basedOn[st] = sx.latest;
+    }
+    head.basedOn = basedOn;
+  });
 }
 
 function stampCurrent(routesPath, hash) {

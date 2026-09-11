@@ -430,6 +430,144 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
     !!qc0 && qc0.claimed === true, 'if this were false the null above would be hiding a real miss rather than an unasked question');
 }
 
+/* ---------------------------------------------------------------------------
+ * 15. THE BADGE THE SHEET PRINTS vs THE KEY THE OPERATOR REGISTERED.
+ *
+ * A blind red team reads the SHEET, so its claim is keyed on the printed badge;
+ * every file we own is keyed on the registration. `badgeLabels` in a map's S3 is
+ * the join, and it is a normal deliberate thing this engine does — so the
+ * mismatch is guaranteed for every route that carries one, not a rare accident.
+ * SF-014 sat QUEUED for eleven days saying "neither the place nor the St Neots
+ * town file carries a 61"; both carried it, as 61EY, badged "61".
+ *
+ * THIS IS A WIDENING, so the controls come first and there are three of them.
+ * A widening's failure mode is covering something it should not, and the
+ * dangerous direction here is real: Wisbech PRINTS "46" for `46L` and also
+ * carries a genuine 46, so a label can be a live key on the same map. If the
+ * alias were consulted before the direct tests, a claim about the real route
+ * would be silently re-pointed at a different one — a false green on exactly the
+ * question this checker exists to ask.
+ * ------------------------------------------------------------------------- */
+{
+  console.log('\n15. A claim keyed on the BADGE, where the map carries the REGISTERED key, is ALIASED — not missing, and not silent');
+
+  // St Neots' real shape: the place draws 61EY and prints "61" on it.
+  const badged = (extra = {}) => ({ routeOrder: ['61EY'], badgeLabels: { '61EY': '61' }, ...extra });
+  const aliasPlace = (s6) => place('Neots', 'Tesco', badged(), s6);
+  const parentTown = { services: [{ route: '61EY' }] };
+
+  /* CONTROL 1, THE LOAD-BEARING ONE — Wisbech's shape, where the printed label is
+   * ALSO a real registered key on the same map. The claim must meet the route it
+   * names, as itself, and the alias must never be reached. */
+  const wisbech = town('Wisbech', { services: [{ route: '46' }, { route: '46L' }] }, { routeOrder: ['46', '46L'], badgeLabels: { '46L': '46' } }, [claim('46')]);
+  const rReal = run(repo('alias-control-real-key', [wisbech], EMPTY), '--json');
+  let jReal = null; try { jReal = JSON.parse(rReal.out); } catch { /* left null */ }
+  check('CONTROL: a label that is ALSO a real key on the map meets the real route, as own-carries, and the alias is never consulted',
+    rReal.code === 0 && !!jReal && (jReal.coveredBy || {})['own-carries'] === 1 && !(jReal.coveredBy || {})['badge-alias'],
+    `exit ${rReal.code}: ${JSON.stringify(jReal && jReal.coveredBy)}`);
+
+  /* CONTROL 2 — a `badgeLabels` line naming a key the map does not carry anywhere
+   * is a stale config line, not a home. */
+  const rStale = run(repo('alias-control-stale', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'], badgeLabels: { '61EY': '61' } }, [claim('61')])], EMPTY));
+  check('CONTROL: a badgeLabels entry naming a key the map carries NOWHERE is still UNCOVERED and red',
+    rStale.code === 1 && /UNCOVERED/.test(rStale.out), `exit ${rStale.code}`);
+
+  /* CONTROL 3 — the same estate with the badgeLabels line removed is red, which is
+   * what makes every green below attributable to the alias and to nothing else. */
+  const rNoLabels = run(repo('alias-control-no-labels', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), place('Neots', 'Tesco', { routeOrder: ['61EY'] }, [claim('61')])], EMPTY));
+  check('CONTROL: strip badgeLabels and the identical estate is RED — the alias is what changes the answer',
+    rNoLabels.code === 1 && /UNCOVERED/.test(rNoLabels.out), `exit ${rNoLabels.code}`);
+
+  /* THE CASE ITSELF — SF-014 on the day it was filed, with nothing written down. */
+  const sf014 = [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), aliasPlace([claim('61')])];
+  const rAlias = run(repo('alias-covers', sf014, EMPTY));
+  check('a missing-service claim keyed "61" is covered with an EMPTY register — eleven days of queue, answered for nothing',
+    rAlias.code === 0 && /1 claim\(s\) are ALIASED/.test(rAlias.out), `exit ${rAlias.code}: ${rAlias.out.split('\n').find((l) => /ALIASED|UNCOVERED/.test(l)) || ''}`);
+  check('and the row NAMES the registered key, the field it is carried in, and the file the join is declared in',
+    /"61" is 61EY, carried by Tesco in its routeOrder — the join is `badgeLabels` in Areas.Neots.Places.Tesco.S3-config/.test(rAlias.out),
+    rAlias.out.split('\n').find((l) => l.includes('61EY')) || '(no line naming 61EY)');
+
+  const rAliasJson = run(repo('alias-covers-json', sf014, EMPTY), '--json');
+  let jAlias = null; try { jAlias = JSON.parse(rAliasJson.out); } catch { /* left null */ }
+  const ac0 = (jAlias && (jAlias.aliasedClaims || [])[0]) || null;
+  check('--json carries aliasedClaims, which is how a board reads it without parsing prose',
+    !!ac0 && ac0.by === 'badge-alias' && ac0.registered === '61EY' && ac0.label === '61' && ac0.map === 'Tesco' && jAlias.red === false,
+    ac0 ? JSON.stringify(ac0) : rAliasJson.out.slice(0, 160));
+
+  /* THE PARENT TOWN'S badgeLabels reaches its place, like every other home. */
+  const rParent = run(repo('alias-parent', [town('Neots', parentTown, badged(), null), place('Neots', 'Tesco', { routeOrder: [] }, [claim('61')])], EMPTY));
+  check('the PARENT TOWN\'s badgeLabels covers its place\'s claim, and the row says which map the join came from',
+    rParent.code === 0 && /carried by Neots in its verified set/.test(rParent.out), `exit ${rParent.code}`);
+
+  /* THE REGISTER STILL WINS, and this is the assertion that protects `queuedFacts`.
+   * If the alias were tried first, a queued entry raised by exactly this claim
+   * would report RAISED BY NO CLAIM — a negative from a search that stopped
+   * early, which is the shape the field above this one exists to prevent. */
+  const rReg = run(repo('alias-register-first', sf014, { facts: [queued('SF-014', '61', ['Tesco'])] }), '--json');
+  let jReg = null; try { jReg = JSON.parse(rReg.out); } catch { /* left null */ }
+  const qf = (jReg && jReg.register && (jReg.register.queuedFacts || [])[0]) || null;
+  check('a claim that ALREADY has a register entry keeps it — register-queued, not badge-alias',
+    !!jReg && (jReg.coveredBy || {})['register-queued'] === 1 && !(jReg.coveredBy || {})['badge-alias'], JSON.stringify(jReg && jReg.coveredBy));
+  check('...which is what keeps the queued entry marked claimed:true instead of RAISED BY NO CLAIM',
+    !!qf && qf.claimed === true && (qf.maps || []).join() === 'Tesco', qf ? JSON.stringify(qf) : '(no entry at all)');
+
+  /* A DISAGREEMENT IS NOT LAUNDERED BY SPELLING IT DIFFERENTLY. Case 6 holds that
+   * carrying a route is no home for a `serves-town` claim about it; the alias must
+   * obey the same rule, or the widening quietly repeals it. */
+  const rServes = run(repo('alias-serves-town', [town('Neots', parentTown, badged(), [claim('61', 'serves-town')])], EMPTY));
+  check('a serves-town disagreement keyed on the badge, over the map\'s OWN carried route, is STILL UNCOVERED — carrying it is not an answer to "it does not serve"',
+    rServes.code === 1 && /UNCOVERED/.test(rServes.out), `exit ${rServes.code}`);
+
+  /* THE ASYMMETRY THAT VERSION OF THE ASSERTION FOUND, pinned rather than
+   * glossed. This checker excludes `own-carries` for a serves-town claim and does
+   * NOT exclude `parent-carries`, so the same disagreement raised on a PLACE is
+   * covered by its parent town carrying the route. That is the behaviour today,
+   * measured with identical keys and no alias anywhere — so the alias mirroring it
+   * is consistency, not a widening. Whether the exclusion should reach the parent
+   * is a separate question and is in the drop zone as
+   * `the disagreement its parent answered.md`; this pair is here so that whichever
+   * way it is settled, it is settled deliberately and both halves move together. */
+  const rServesDirect = run(repo('alias-serves-town-parent-direct', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), place('Neots', 'Tesco', { routeOrder: ['61EY'] }, [claim('61EY', 'serves-town')])], EMPTY));
+  check('PRE-EXISTING, no alias in play: a place\'s serves-town claim IS covered by its parent town carrying the route',
+    rServesDirect.code === 0 && /parent-carries 1/.test(rServesDirect.out), `exit ${rServesDirect.code}`);
+  const rServesParent = run(repo('alias-serves-town-parent', [town('Neots', parentTown, badged(), null), aliasPlace([claim('61', 'serves-town')])], EMPTY));
+  check('...and the alias gives that same answer for the badge spelling — the two spellings must not be classified differently',
+    rServesParent.code === 0 && /1 claim\(s\) are ALIASED/.test(rServesParent.out) && /carried by Neots in its verified set/.test(rServesParent.out), `exit ${rServesParent.code}`);
+  const rServesOff = run(repo('alias-serves-town-off', [town('Neots', parentTown, badged(), null), place('Neots', 'Tesco', { routeOrder: [], badgeLabels: { '61EY': '61' }, notOnLeaflet: [{ route: '61EY', note: 'not at this stop' }] }, [claim('61', 'serves-town')])], EMPTY));
+  check('...but the same claim IS covered once the map declares the registered key off — the alias reaches an exclusion, as the direct test does',
+    rServesOff.code === 0 && /1 claim\(s\) are ALIASED/.test(rServesOff.out), `exit ${rServesOff.code}`);
+
+  /* THE SILENCE HALF — the other place the two spellings meet. */
+  const silentSide = [town('Neots', parentTown, badged(), null)];
+  const rSil = run(repo('alias-silence', silentSide, { facts: [decided('SF-014', '61', ['Neots'], { outcome: 'nothing' })] }));
+  check('a decided entry keyed "61" over a map carrying 61EY is NOT SILENT — exit 0, and no VL14 row',
+    rSil.code === 0 && !/SILENT/.test(rSil.out), `exit ${rSil.code}: ${rSil.out.split('\n').find((l) => l.includes('SF-014')) || ''}`);
+  check('it is enumerated as ALIASED instead, naming the registered key and the aliases[] that would make the join explicit',
+    /SF-014 names 61 and Neots carries it as 61EY in its verified set — ALIASED, not silent/.test(rSil.out) && /Add "61EY" to this entry's aliases\[\]/.test(rSil.out),
+    rSil.out.split('\n').find((l) => l.includes('ALIASED')) || '(no ALIASED line)');
+  const rSilNoLabel = run(repo('alias-silence-control', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null)], { facts: [decided('SF-014', '61', ['Neots'], { outcome: 'nothing' })] }));
+  check('CONTROL: the same entry over the same map WITHOUT badgeLabels is still SILENT and red',
+    rSilNoLabel.code === 1 && /Neots's own file is SILENT/.test(rSilNoLabel.out), `exit ${rSilNoLabel.code}`);
+  const rSilJson = run(repo('alias-silence-json', silentSide, { facts: [decided('SF-014', '61', ['Neots'], { outcome: 'nothing' })] }), '--json', '--register-only');
+  let jSil = null; try { jSil = JSON.parse(rSilJson.out); } catch { /* left null */ }
+  const al0 = (jSil && jSil.register && (jSil.register.aliased || [])[0]) || null;
+  check('CI\'s half sees it too: --register-only carries register.aliased and an empty register.silences',
+    !!al0 && al0.registered === '61EY' && al0.map === 'Neots' && (jSil.register.silences || []).length === 0 && jSil.red === false,
+    al0 ? JSON.stringify(al0) : rSilJson.out.slice(0, 160));
+
+  /* AND THE `owed` ENUMERATION MUST ASK THE SAME QUESTION THE SILENCE CHECK ASKS.
+   * Before this it did not: an aliased `include` was not silent (so no row there)
+   * and read as silent here (so no row here either), and the entry was enumerated
+   * nowhere at all — *the claim with no named home*, inside the checker built to
+   * stop exactly that. */
+  const rOwed = run(repo('alias-owed', silentSide, { facts: [decided('SF-014', '61', ['Neots'], { outcome: 'include' })] }));
+  check('a decided `include` carried only under the registered key reads CARRIED rather than vanishing from the enumeration',
+    rOwed.code === 0 && /0 decided "include" entries are WAITING/.test(rOwed.out) && /the map now lists this route/.test(rOwed.out),
+    `exit ${rOwed.code}: ${rOwed.out.split('\n').find((l) => l.includes('SF-014  Neots')) || '(no owed row)'}`);
+  check('and the owed row says out loud that the two spellings are the reason it looks paid',
+    /\[ALIASED: the map spells it 61EY and badges it "61"\]/.test(rOwed.out), rOwed.out.split('\n').find((l) => l.includes('SF-014  Neots')) || '');
+}
+
 console.log('\n' + '='.repeat(78));
 rmSync(TMP, { recursive: true, force: true });
 if (failures) {

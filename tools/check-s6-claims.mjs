@@ -38,6 +38,11 @@
  *   4. an entry in `service-facts.json` whose scope names the map, its parent town,
  *      or `*` — QUEUED or decided. A claim has a home the moment it is written there;
  *      the queue IS the entries with no decision.
+ *   5. LAST, the map's own `badgeLabels`: a claim keyed on the badge the sheet PRINTS,
+ *      where the map carries that route under the key the operator REGISTERED, is
+ *      ALIASED rather than uncovered, and the row names the registered key. Last
+ *      because a label can also be a real key on the same map — Wisbech prints "46"
+ *      for `46L` and carries a real 46 — so every direct test runs first.
  * Anything else is UNCOVERED, and that is red.
  *
  * WHY THIS HALF CANNOT RUN IN CI. It reads `verification.json`, which is gitignored
@@ -57,7 +62,10 @@
  * no town in a decided entry's scope is SILENT about it, carrying the route neither
  * in `services[]` nor in `notOnLeaflet[]`. On 6 September 2026 one reader could hold
  * a St Ives sheet and a Huntingdon sheet that disagreed about whether VL14 was a
- * bus, and it was not two decisions: it was one decision and one silence.
+ * bus, and it was not two decisions: it was one decision and one silence. A map that
+ * carries the route only under its REGISTERED key, where its own `badgeLabels` maps
+ * that key to the badge the entry is named after, is ALIASED rather than silent —
+ * printed, never red, naming the registered key to put in the entry's `aliases[]`.
  *
  * AND IT ENUMERATES WHAT A DECIDED `include` STILL OWES (buses-data OA-285). That
  * outcome says the service should be ON the sheet at the next rebuild, so the
@@ -124,6 +132,73 @@ function keysOf(r) {
   return [...out];
 }
 
+/*
+ * THE BADGE THE SHEET PRINTS IS NOT THE KEY THE OPERATOR REGISTERED, and the map's
+ * own S3 declares both. `badgeLabels` in routes.json maps the key a map carries to
+ * the badge it draws — `{"61EY": "61"}` at St Neots, `{"excel": "A", "46L": "46"}`
+ * at Wisbech. A blind red team reads the SHEET, so its claim is keyed on the badge;
+ * every one of our files is keyed on the registration. Those strings differ for
+ * every route that carries one, so the mismatch is not a rare accident: it is
+ * guaranteed, and each such route is a standing candidate for a false
+ * `missing-service` claim and for a false SILENCE.
+ *
+ * Measured, and the reason this exists: SF-014 sat QUEUED for eleven days saying
+ * "neither the place nor the St Neots town file carries a 61". Both carried it —
+ * as 61EY, badged "61", in `routeOrder`, `panelOrder` and the town's `services[]`.
+ * The register's `aliases[]` is the join and it was written by hand after the fact;
+ * the map had been declaring the same join, in a tracked file, the whole time.
+ *
+ * This index is the other direction: printed label -> the key(s) registered under it.
+ */
+function badgeAliasIndex(obj, where) {
+  const idx = new Map();
+  const bl = obj && obj.badgeLabels;
+  if (!bl || typeof bl !== 'object' || Array.isArray(bl)) return idx;
+  for (const [registered, label] of Object.entries(bl)) {
+    if (registered == null || registered === '' || label == null || label === '') continue;
+    for (const k of keysOf(label)) {
+      if (!idx.has(k)) idx.set(k, []);
+      idx.get(k).push({ registered, where });
+    }
+  }
+  return idx;
+}
+
+/**
+ * Resolve a badge label to the registered key the map actually carries, or null.
+ *
+ * NEVER CONSULTED UNTIL EVERY DIRECT TEST HAS FAILED, and that ordering is the whole
+ * safety of it. Wisbech prints "46" for `46L` AND carries a real `46`; a claim keyed
+ * "46" there is that route, met as itself, and must never be re-pointed at 46L. So
+ * this runs last, and it only answers when the map carries the registered key in one
+ * of the four places a route can live — a `badgeLabels` entry naming a key the map
+ * does not carry is not a home, it is a stale config line.
+ *
+ * `allow` NARROWS WHICH OF THE FOUR COUNTS, and every caller passes the same list the
+ * direct tests beside it use. It exists for one case: a `serves-town` disagreement
+ * about a route the map CARRIES is not covered by carrying it — that is the
+ * disagreement — so the alias must not launder the same claim into a home by
+ * spelling it differently.
+ */
+const ALIAS_FIELDS = { services: 'its verified set', routeOrder: 'its routeOrder', off: 'its notOnLeaflet', rejected: 'its redteamRejected' };
+function resolveBadgeAlias(d, keys, allow = ['services', 'routeOrder', 'off', 'rejected']) {
+  if (!d || !d.badge || d.badge.size === 0) return null;
+  for (const k of keys) {
+    for (const cand of (d.badge.get(k) || [])) {
+      for (const rk of keysOf(cand.registered)) {
+        for (const field of allow) {
+          const prose = ALIAS_FIELDS[field];
+          const holder = d[field];
+          if (!holder || !holder.has(rk)) continue;
+          const rec = (field === 'off' || field === 'rejected') ? holder.get(rk) : null;
+          return { label: k, registered: cand.registered, field, prose, declaredIn: cand.where, where: rec ? rec.where : cand.where };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // known_off.js is the estate's one reader of the four exclusion spellings. Reached
 // relative to this file, because the tools folder and the engine are one repository.
 let knownOff = null;
@@ -170,7 +245,7 @@ function latest(manifest, stage) {
 
 /** What a map has WRITTEN about its services: its verified set, its exclusions, its rejections. Tracked files only. */
 function loadDeclarations(m) {
-  const d = { services: new Set(), off: new Map(), rejected: new Map(), routeOrder: new Set(), unreadable: [] };
+  const d = { services: new Set(), off: new Map(), rejected: new Map(), routeOrder: new Set(), badge: new Map(), unreadable: [] };
   const manifest = tryJson(path.join(ROOT, m.dir, 'manifest.json'));
   if (!manifest || manifest.__unreadable) { d.unreadable.push(`${m.dir}/manifest.json`); return d; }
   const s1 = latest(manifest, 'S1'), s3 = latest(manifest, 'S3');
@@ -201,6 +276,9 @@ function loadDeclarations(m) {
     else if (r) {
       for (const k of (r.routeOrder || [])) for (const key of keysOf(k)) d.routeOrder.add(key);
       for (const e of (Array.isArray(r.redteamRejected) ? r.redteamRejected : [])) if (e && e.route != null) for (const key of keysOf(e.route)) if (!d.rejected.has(key)) d.rejected.set(key, { where: p, entry: e });
+      // Both spellings, from the map's own S3 — see badgeAliasIndex above. Towns carry
+      // one as readily as places: St Neots and Wisbech are towns.
+      d.badge = badgeAliasIndex(r, p);
       // A PLACE declares its exclusions in S3 (its S1 is regenerated from BODS on every
       // pull and would overwrite them) — buses-data OA-262 item 3.
       if (m.kind === 'place') takeOff(r, p);
@@ -257,7 +335,10 @@ for (const [i, f] of facts.entries()) {
 }
 
 // Silence: a town in a decided entry's scope that neither carries the route nor declares it off.
+// ALIASED is the one thing that is NOT a silence: see badgeAliasIndex. Enumerated, never red —
+// the map is not silent about the route, it carries it under the name the operator registered.
 const silences = [];
+const aliased = [];
 for (const f of facts) {
   if (!f || f.status !== 'decided' || !Array.isArray(f.scope)) continue;
   for (const name of f.scope) {
@@ -267,7 +348,11 @@ for (const f of facts) {
     const d = decl.get(name);
     const keys = [...keysOf(f.route), ...(Array.isArray(f.aliases) ? f.aliases.flatMap(keysOf) : [])];
     const carried = keys.some(k => d.services.has(k) || d.off.has(k) || d.rejected.has(k) || d.routeOrder.has(k));
-    if (!carried) silences.push({ id: f.id, map: name, route: f.route, text: `${f.id} decided "${f.outcome}" for ${f.route} (${f.operator}) and names ${name} in its scope, but ${name}'s own file is SILENT — the route is in neither its verified set, its routeOrder, its notOnLeaflet nor its redteamRejected. Write the map's own field; a decision only in the register is the VL14 shape.` });
+    if (carried) continue;
+    const a = resolveBadgeAlias(d, keys);
+    if (a) aliased.push({ id: f.id, map: name, route: f.route, label: a.label, registered: a.registered, field: a.field, declaredIn: a.declaredIn, where: a.where,
+      text: `${f.id} names ${f.route} and ${name} carries it as ${a.registered} in ${a.prose} — ALIASED, not silent. ${name}'s own ${path.basename(a.declaredIn)} declares \`badgeLabels\` mapping ${a.registered} to the badge "${a.label}" the sheet prints, which is what the register's \`aliases[]\` says by hand. Add "${a.registered}" to this entry's aliases[] and the join stops depending on this line.` });
+    else silences.push({ id: f.id, map: name, route: f.route, text: `${f.id} decided "${f.outcome}" for ${f.route} (${f.operator}) and names ${name} in its scope, but ${name}'s own file is SILENT — the route is in neither its verified set, its routeOrder, its notOnLeaflet nor its redteamRejected. Write the map's own field; a decision only in the register is the VL14 shape.` });
   }
 }
 
@@ -296,12 +381,26 @@ for (const f of facts) {
     const d = decl.get(name);
     if (!d) continue;                     // an unknown scope name is already a register finding above
     const keys = [...keysOf(f.route), ...(Array.isArray(f.aliases) ? f.aliases.flatMap(keysOf) : [])];
-    const carried = keys.some(k => d.services.has(k) || d.routeOrder.has(k));
-    const offKey = keys.find(k => d.off.has(k));
-    if (!carried && !offKey) continue;    // SILENT, and the check above has already said so
+    let carried = keys.some(k => d.services.has(k) || d.routeOrder.has(k));
+    let offKey = keys.find(k => d.off.has(k));
+    /* THE SAME QUESTION THE SILENCE CHECK ASKS, SO IT MUST GET THE SAME ANSWER.
+     * Without this an `include` whose map carries the route only under the
+     * registered key falls out of BOTH — not silent (aliased), and not owed
+     * (read as silent here) — and is enumerated nowhere, which is the shape
+     * this estate records as *the claim with no named home*. Last resort, for
+     * the reason given at resolveBadgeAlias. */
+    let alias = null;
+    if (!carried && !offKey) {
+      alias = resolveBadgeAlias(d, keys);
+      if (!alias) continue;               // SILENT, and the check above has already said so
+      if (alias.field === 'services' || alias.field === 'routeOrder') carried = true;
+      else if (alias.field === 'off') offKey = null;
+      else continue;                      // a redteamRejected alias is neither carried nor waiting
+    }
     owed.push({
       id: f.id, route: f.route, map: name, state: carried ? 'carried' : 'waiting',
-      where: carried ? null : d.off.get(offKey).where,
+      alias: alias ? { label: alias.label, registered: alias.registered, field: alias.field, declaredIn: alias.declaredIn } : null,
+      where: carried ? null : (offKey ? d.off.get(offKey).where : alias.where),
       owes: (f.drawing && typeof f.drawing === 'object' && f.drawing[name]) || null,
     });
   }
@@ -344,6 +443,21 @@ if (!REGISTER_ONLY) {
         const inScope = (f2) => Array.isArray(f2.scope) && (f2.scope.includes('*') || f2.scope.includes(m.name) || (m.parent && f2.scope.includes(m.parent)));
         const fact = facts.find(f2 => f2 && inScope(f2) && [...keysOf(f2.route), ...(Array.isArray(f2.aliases) ? f2.aliases.flatMap(keysOf) : [])].some(x => keys.includes(x)));
         if (fact) claim.covered = { by: fact.status === 'decided' ? 'register-decided' : 'register-queued', id: fact.id, outcome: fact.outcome || null };
+        else {
+          /* THE LAST RESORT, AND DELIBERATELY AFTER THE REGISTER. The map's own
+           * `badgeLabels` is stronger evidence than any register entry — it says
+           * in a tracked file that these two strings are one route — but a claim
+           * that ALREADY has a register entry must keep it, or `queuedFacts`
+           * would report an entry as RAISED BY NO CLAIM while a claim sits on it.
+           * Placed here, this answers only the case it was built for: the claim
+           * on the day it is filed, before anybody has written anything down.
+           * SF-014 would have been answered for nothing instead of queueing for
+           * eleven days. */
+          const ownAllow = f.category === 'missing-service' ? ['off', 'rejected', 'services', 'routeOrder'] : ['off', 'rejected'];
+          let a = resolveBadgeAlias(own, keys, ownAllow), via = m.name;
+          if (!a && parent) { a = resolveBadgeAlias(parent, keys, ['services', 'off', 'rejected']); via = m.parent; }
+          if (a) claim.covered = { by: 'badge-alias', map: via, label: a.label, registered: a.registered, field: a.field, declaredIn: a.declaredIn, where: a.where };
+        }
       }
       claims.push(claim);
     }
@@ -393,7 +507,8 @@ if (AS_JSON) {
     root: path.resolve(ROOT), maps: maps.length, reports, mapsWithoutReport, unreadableReports, unreadableDecls,
     claims: claims.length, uncovered, queued: queued.map(l => ({ map: l.map, route: l.route, id: l.covered.id })),
     coveredBy: claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
-    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, findings: registerFindings, silences, owed },
+    aliasedClaims: claims.filter(l => l.covered && l.covered.by === 'badge-alias').map(l => ({ map: l.map, run: l.run, id: l.id, category: l.category, route: l.route, ...l.covered })),
+    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, findings: registerFindings, silences, aliased, owed },
     registerOnly: REGISTER_ONLY, requireReports: REQUIRE_REPORTS, red,
   }, null, 2));
 } else {
@@ -401,6 +516,7 @@ if (AS_JSON) {
   for (const p of unreadableReports) console.log(`  ${p}\n      could not be parsed as JSON — its claims could not be counted`);
   for (const f of registerFindings) console.log(`  ${REGISTER_NAME}: ${f.text}`);
   for (const s of silences) console.log(`  ${REGISTER_NAME}: ${s.text}`);
+  for (const a of aliased) console.log(`  ${REGISTER_NAME}: ${a.text}`);
   for (const l of uncovered) {
     console.log(`  ${l.map}  S6 ${l.run} ${l.id}  ${l.category}  ${l.route}${l.operator ? ` (${l.operator})` : ''}${l.superset ? '  [borrowed answer — may be a superset artefact]' : ''}`);
     console.log(`      UNCOVERED — no notOnLeaflet, no redteamRejected, ${l.parent ? `nothing in ${l.parent}'s file, ` : ''}no ${REGISTER_NAME} entry in scope. Write the register entry (queued is enough to give it a home).`);
@@ -419,7 +535,7 @@ if (AS_JSON) {
   if (owed.length) {
     console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to put the service on the sheet, of ${owed.length} in the register — enumeration, not a finding (OA-285):`);
     for (const o of owed) {
-      console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}`);
+      console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}${o.alias ? ` [ALIASED: the map spells it ${o.alias.registered} and badges it "${o.alias.label}"]` : ''}`);
       if (o.owes) console.log(`          owes: ${o.owes}`);
     }
   }
@@ -428,6 +544,11 @@ if (AS_JSON) {
     console.log(`  ${reports} map(s) had an S6 report on this disk${mapsWithoutReport.length ? `; ${mapsWithoutReport.length} had none (${mapsWithoutReport.map(x => `${x.map}: ${x.why}`).join('; ')})` : ''}`);
     const by = claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     console.log(`  ${claims.length} claim(s) on those reports — ${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`);
+    const aliasedClaims = claims.filter(l => l.covered && l.covered.by === 'badge-alias');
+    if (aliasedClaims.length) {
+      console.log(`  ${aliasedClaims.length} claim(s) are ALIASED — keyed on the badge the sheet PRINTS, and the map carries the route under the key the operator REGISTERED. Not a missing service, and not a finding:`);
+      for (const l of aliasedClaims) console.log(`      ${l.map}  S6 ${l.run} ${l.id}  ${l.category}  "${l.covered.label}" is ${l.covered.registered}, carried by ${l.covered.map} in ${ALIAS_FIELDS[l.covered.field]} — the join is \`badgeLabels\` in ${l.covered.declaredIn}`);
+    }
     if (queued.length) console.log(`  ${queued.length} claim(s) have a home only as a QUEUED register entry — a question written down, not yet answered: ${[...new Set(queued.map(l => l.covered.id))].join(', ')}`);
     if (REQUIRE_REPORTS && reports === 0) console.log('  RED: --require-reports and no map had a verification.json to read. This is a laptop-only check; a run that finds nothing has checked nothing.');
   }

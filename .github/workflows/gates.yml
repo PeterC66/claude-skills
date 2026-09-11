@@ -307,6 +307,18 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-town-status
 
+      # buses-data OA-308 (2026-09-11): the monthly reminder to sweep the national
+      # bus-map directory's links, and the row ranking any DEAD one. The CHECK it
+      # reminds you about is deliberately not in CI anywhere -- a council page dying
+      # on a Tuesday must not redden a branch nobody pushed to -- but the ROW is a
+      # pure function of a dated record on disk, so falsifying it here costs nothing
+      # and reads no network. Its section 12 joins the real writer in buses-data to
+      # this reader and SAYS IT IS SKIPPED here, because that repository is absent
+      # from this checkout; read this step as proving the module, not the join.
+      - name: Prove the bus-map directory's link rows can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-directory-links
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

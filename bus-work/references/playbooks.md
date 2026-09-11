@@ -309,3 +309,29 @@ Not your work. Two cases:
 
 If it stays unaccepted, it stays unaccepted: the customer owns their published map, and re-proposing next month is a normal outcome, not a failure.
 
+
+---
+
+## `directory` — the national bus-map directory's links (buses-data OA-308)
+
+`BusMapsUK/bus-map-directory/` is one row per English local transport authority: whether it publishes a bus map of its whole network, whether it publishes town-level maps, and where. Every URL in it belongs to somebody else, so the directory rots on a timescale set by seventy-six councils' website reorganisations rather than by anything we do. Three rows share this playbook, and all three are about `link-check.json`, the dated record the sweep writes.
+
+**`directory-links-due` — the sweep is over a month old, or has never run.** From `C:\u3a St Ives\Using AI\Buses\BusMapsUK\bus-map-directory`, with no placeholders:
+
+```bash
+node directory.mjs --links
+```
+
+It fetches every recorded URL, prints what it found, and rewrites `link-check.json`, which is what takes the row off the board until next month. It takes about a minute and reads roughly 109 URLs. **Commit the record** — it is tracked, and an uncommitted one means the next clone thinks the sweep never ran.
+
+**`directory-links-dead` — links that are GONE.** A 404, a 410 or a host that no longer resolves. The row names every dead URL and the directory rows citing it. **Open each one in the browser pane before editing anything**: a link that 404s to a fetcher and opens for a person is a redirect nobody followed, not a withdrawn map. Then, per row of `directory.json`, either repoint the URL and re-date that row's `checked` field, or — where the map really has gone — set the status to `no` and write what happened in the note. A withdrawn map is a finding about that authority, not a blank: three of the five genuine absences found in the 2026-09-11 browser pass were decay rather than policy, and saying so is half the value of the directory. Re-render the README table afterwards, from the same folder:
+
+```bash
+node directory.mjs
+```
+
+**Never "fix" a BLOCKED result.** Blocked is HTTP 403, 429, a 5xx, a reset or a timeout — the reader being refused, not the page being gone — and on the first real run twelve of fourteen apparent deaths were council bot walls on pages the survey agents had read in a browser that morning. The worklist never raises a row for one; the count appears in the prose of whichever row is already showing, so that a reader can see it was looked at.
+
+**`directory-links-record` — the record is there and cannot be believed.** It will not parse, or it carries no readable `checkedAt`. It is a written record and not source data, so deleting it and re-running the sweep is the whole remedy. If a fresh sweep still writes no `checkedAt`, the fault is in `buildLinkRecord()` in `directory.mjs` rather than in the data.
+
+**Why this is not a CI gate, and must not become one.** A council page dying on a Tuesday would turn `main` red with nobody having committed anything — the calendar-red shape OA-289 removed from the backlog index — and `buses-data` is the one repository in the estate whose Actions minutes are billed. The row on this list is the deliberate alternative: a reminder a person can act on, not a branch nobody can merge.

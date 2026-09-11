@@ -83,6 +83,7 @@ import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
+import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -974,6 +975,20 @@ for (const it of loopIdle) add(it);
 const loopDrafts = loopDraftItems({ files: readDraftsDir(path.join(BUSES, 'loop', 'adhoc')) });
 for (const it of loopDrafts) add(it);
 
+// THE NATIONAL BUS-MAP DIRECTORY'S LINKS (OA-308's "Keeping it true",
+// 2026-09-11). A hundred-odd URLs belonging to seventy-six councils, which rot
+// without anybody here touching them. `directory.mjs --links` is the check and
+// OA-308 ruled it out of CI on purpose — a council page dying on a Tuesday would
+// redden `main` with nobody having committed, and this is the repository whose
+// Actions minutes are billed. So it runs by hand, and a check that runs by hand
+// runs once unless something asks: this is the asking. Monthly, quiet in between.
+//
+// IT OPENS NO SOCKET. The sweep writes link-check.json and this reads it, because
+// a source that fetched 109 council URLs would turn a half-second board into a
+// minute-long one and fail on a train — see this file's own header on the network.
+const directoryDir = path.join(BUSES, 'BusMapsUK', 'bus-map-directory');
+for (const it of directoryLinkItems({ state: readDirectoryState(directoryDir) })) add(it);
+
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows
 // that bury the four things a person is actually waiting on.
@@ -1391,6 +1406,15 @@ for (const it of limited) {
     }
   }
   console.log(`    ${it.why}`);
+  // THE DETAIL WAS WRITTEN AND NEVER PRINTED, from 2026-08-31 until 2026-09-11.
+  // Three row types fill `detail` — the refresh rows with the BODS scan's own
+  // bullets, both landmark rows with the landmark keys that differ, and now the
+  // directory's dead URLs — and it reached the human output through no path at
+  // all: only `--json` carried it, and nobody reads the board as JSON. Each of
+  // those rows was quietly answering "which ones?" to an empty room. Printed
+  // under the explanation and above any hold, because it is evidence for the
+  // sentence above it, not an instruction.
+  if (it.detail) for (const l of String(it.detail).split('\n')) console.log(`      ${l}`);
   // OA-283. A hold goes ABOVE the commands and gates them, because the question
   // it answers is whether to act at all — which is upstream of how. The row keeps
   // its place, its age and its link; what it loses is the ability to be read as

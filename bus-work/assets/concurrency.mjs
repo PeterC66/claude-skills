@@ -650,6 +650,12 @@ export function needsOf(item) {
   // barred from making, so classifying it by the tree would hide it exactly
   // when it is right.
   if (key === 'loop-drafts') return [];
+  // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
+  // rather than left to fall through the default — the row's own action WRITES to
+  // the buses tree twice over. `directory.mjs --links` writes link-check.json, and
+  // fixing a dead link edits directory.json and re-renders README.md. Nothing it
+  // does needs the engine, and no other repository is involved.
+  if (key.startsWith('directory-links')) return ['buses-tree'];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

@@ -9,6 +9,8 @@ Everything else in this repository is a skill. This folder is for a check that *
 | [`check-file-hygiene.mjs`](check-file-hygiene.mjs) | Finds layout faults that confound an *edit* rather than a reader: a byte-order mark, a file carrying two kinds of line ending, trailing whitespace, a missing final newline, a run of blank lines |
 | [`check-tables.mjs`](check-tables.mjs) | Every markdown table is still a table — a row that ran on into its neighbour, a row with the wrong number of cells for its header, a row stranded past the end of the table it belongs to |
 | [`check-doc-links.mjs`](check-doc-links.mjs) | Dead paths, dead `#anchors`, `§n` citations into a document that has no such section, links whose target git IGNORES — on this disk and in no checkout — and whether every documented command says which folder to run it from and names a script that exists |
+| [`check-doc-acronyms.mjs`](check-doc-acronyms.mjs) | Every short form a reader MEETS is one they can look up — in a declared definitions document, in a bracketed expansion in the document that uses it, or in the repository's own `.doc-acronyms.json`. The only check here that is about **comprehension** rather than structure, and the one no widening of the other two could ever have reached. buses-data OA-300 |
+| [`prove-red-doc-acronyms.mjs`](prove-red-doc-acronyms.mjs) | 21 cases. Each of the three recognisers is watched ACCEPT a real definition and REFUSE a near miss, because widening what counts as *already defined* silences the finding that should have fired. Case 2 is the design that almost shipped: with no threshold on the word rule, a single lower-case `ep` in the estate made `EP` an ordinary English word |
 | [`lib/tracked-docs.mjs`](lib/tracked-docs.mjs) | Asks `git ls-files` which markdown a repository actually tracks, so neither checker's corpus has to be written down — and **throws rather than returning an empty list**, because a check that cannot find its subject must not report clear |
 | [`lib/repo-root.mjs`](lib/repo-root.mjs) | Which repository a checker is ABOUT, asked of `git rev-parse --show-toplevel` rather than read off `process.cwd()`. Every checker here used to take the folder it was started in, which is the same thing only when you happen to be standing at the root — see [Which repository a checker is about](#which-repository-a-checker-is-about) |
 | [`prove-red-file-hygiene.mjs`](prove-red-file-hygiene.mjs) | Breaks each hygiene fault on purpose and insists the checker notices — and breaks each **exemption** on purpose and insists it does not. 26 cases |
@@ -64,6 +66,19 @@ A repository with no such file gets the bare rules, which is the right default f
 - **`enumerate`** — a folder plus a pattern for its immediate subfolders. It exists for the shape a list cannot describe: buses-data's `Correspondence/` grows a `CORR-nnn/` whenever somebody answers an email, and nobody would remember to add one to a checker.
 - **`excluded`** / **`resolveFromRoot`** — one imported document that is not ours to fix, and the paths whose links resolve from the repository ROOT because that is where the assembled page renders.
 
+`check-doc-acronyms.mjs` reads **`.doc-acronyms.json`**, which is the same shape with two fields the others have no use for:
+
+```json
+{ "dirs": ["Documentation", "BusMapsUK"],
+  "definitions": ["Documentation/README - Glossary of terms.md"],
+  "defined": { "SSE": "School for Social Entrepreneurs" },
+  "notAbbreviations": [{ "reason": "standard computing vocabulary", "tokens": ["JSON", "HTML"] }] }
+```
+
+- **`definitions`** — the documents whose TABLE ROWS define a short form: first cell the form, second what it stands for. A row with an empty second cell defines nothing, because naming a term is not expanding it.
+- **`defined`** — a short form with no natural document home, given one here. buses-data uses it for a term expanded in two live documents and used bare in an archived one, since an archived plan is a record of what was said rather than something to re-edit.
+- **`notAbbreviations`** — **the load-bearing half**, and the reason it is a list of GROUPS rather than a map of tokens. A token listed here vanishes from the count, so a group states the judgement once and lists what it covers; eighty separate one-line reasons would be eighty copies of ten sentences, and a reader should be able to disagree with a judgement rather than with a token. A token in two groups is a hard error, because two different reasons for the same exclusion means one of them is wrong.
+
 **And whatever git knows about is added on top, declared or not.** Every directory or file holding a tracked `.md` that the declaration does not already reach joins the scan, so **a repository that declares nothing gets the WIDEST scope, not the narrowest** — its whole tracked corpus. That is deliberate rather than convenient: `check-tables.mjs`'s own bug, twice, was COVERAGE — a confident total over a population smaller than the truth — and a scope that can only be got wrong by ADDING a folder is the one shape that fault cannot take.
 
 **`--root` names a TREE, not a scope.** It scans exactly that tree and ignores `dirs`/`files` — but it still reads that tree's own declaration, and getting that wrong is the one fault the move produced. Read as *this is a fixture, not a repository*, it dropped the portal's `resolveFromRoot` and reported 24 live links dead, with every harness case green because their fixtures genuinely have no declaration. There is now a case where the tree named by the flag DOES carry one.
@@ -110,6 +125,12 @@ node "C:/u3a St Ives/.claude/skills/tools/check-tables.mjs"
 node "C:/u3a St Ives/.claude/skills/tools/check-doc-links.mjs"
 ```
 
+```bash
+node "C:/u3a St Ives/.claude/skills/tools/check-doc-acronyms.mjs"
+```
+
+**That last one is green in buses-data and has never been run as a gate anywhere else.** It reports 69 short forms with nowhere to look across this repository's 45 documents and 66 across the portal's 153, because neither has a glossary or a declaration yet: the corpus is cleaned or excused BEFORE the gate lands, never after, since a gate that is red on day one is one somebody mutes in its first week. Each of those is a round of its own, and until then this checker is a thing you run by hand here.
+
 `check-tables.mjs` also takes `--tree <dir>`, which walks and checks each folder it finds, each one flat. That is how this repository is checked, because it nests its documents two deep and grows a folder whenever a skill is added; `--root` stays flat because `prove-red-tables.mjs` drives it and asserts an exact row count.
 
 Falsify them first, which is the order to use because a checker pointed at a new corpus is exactly when one that has quietly stopped objecting looks identical to a clean tree. Run these from the repository root (`C:\u3a St Ives\.claude\skills`), with no placeholders:
@@ -124,6 +145,10 @@ node tools/prove-red-tables.mjs
 
 ```bash
 node tools/prove-red-doc-links.mjs
+```
+
+```bash
+node tools/prove-red-doc-acronyms.mjs
 ```
 
 `--root <dir>` points it at another checkout. `--staged` is the hook's form. An unknown flag is refused by name with exit 2, never ignored. Exit `0` clean, `1` findings, `2` used wrongly or its own preconditions unmet.

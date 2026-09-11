@@ -139,6 +139,15 @@ See [references/s3-config.md](references/s3-config.md) — and `coreBox` / `stop
 - **Coordinates, POIs, river, geography:** OpenStreetMap via Overpass. **Route-line geometry:** GTFS `shapes` are road-following but only published by larger operators (Stagecoach: yes; Dews/Stephensons/Whippet: no) — so keep bustimes/OSM as the geometry source and use GTFS shapes only opportunistically where present (`hasGtfsShape` in the query output flags which routes have them).
 
 ## Onboarding a NEW town (bootstrap + scaffold)
+
+**Before S1, ask whether somebody already maps this town** (buses-data OA-315, 2026-09-11). The national directory of local bus maps knows what 76 English transport authorities publish, and the question is asked ONCE when a town is chosen — never on a refresh, which must not re-ask a question already answered. It **cannot refuse a build and is not able to**: all 20 maps in the estate grade `area-only`, none is covered at town level, and what the gate enforces is that every map HAS an answer, not what the answer is. Run it from the buses-data root (`C:\u3a St Ives\Using AI\Buses`), filling in the two quoted values — the authority name copied exactly from the directory's own table, because nothing here guesses which authority a town belongs to:
+
+```bash
+node "C:/u3a St Ives/Using AI/Buses/BusMapsUK/bus-map-directory/coverage.mjs" --new "<Town>" --lta "<authority>"
+```
+
+It prints what that authority publishes and an entry to paste into `existing-coverage.json` with `reason` left blank for you to write. `node "C:/u3a St Ives/Using AI/Buses/BusMapsUK/bus-map-directory/coverage.mjs" --check` is the gate, and it is red until the new town has an entry. The convention is written up in `BusMapsUK/bus-map-directory/README.md` in buses-data — deliberately NOT linked from here, because this repository is public and that one is private, so a relative link would climb out of the tree and 404 for everybody but Peter.
+
 From just a town name, the deterministic setup is now scripted (no more hand-finding the slug/prefix/anchor):
 - **`python3 "%SK%\bootstrap_town.py" "<Town>" [--region <Region>] [--centre lat,lon]`** — geocodes the town, derives the **ATCO locality prefix** + **anchor/bus-station** from the GTFS stops, pulls the **service facts** (gtfs_query), assigns a draft **Tol-Bright palette**, computes draft **external spokes with real bearings**, suggests **candidate linear features** from OSM, and writes a **`routes.draft.json` + `bootstrap-report.md`** for approval. Nothing subjective is finalised — confirm services vs bustimes (community/DRT buses are NOT in BODS), lock the palette (river-blue clash!), curate external chains + features.
 - **`python3 "%SK%\scaffold_town.py" "<Town>" [--centre lat,lon]`** — one command: `stage.js init` + `new S1`, runs the bootstrap into it, writes `gtfs-services.json`, registers the town in `town_prefixes.json`, and drops a `SCAFFOLD-NEXT.md` checklist. Stops at the S1 review gate (does not commit S1 or run S2). Then review → S2 geometry → S3 (move `routes.draft.json` → `routes.json`) → S4/S5 with the **unedited** generators → S6.

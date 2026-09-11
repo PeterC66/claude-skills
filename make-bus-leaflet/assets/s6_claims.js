@@ -88,7 +88,28 @@ function printSection({ verdict, error }, log = console.log) {
   for (const u of v.uncovered || []) log('  UNCOVERED  ' + u.map + '  S6 ' + u.run + ' ' + u.id + '  ' + u.category + '  ' + u.route + (u.operator ? ' (' + u.operator + ')' : ''));
   for (const f of (v.register.findings || [])) log('  REGISTER   ' + f.text);
   for (const s of (v.register.silences || [])) log('  SILENT     ' + s.map + ' says nothing about ' + s.route + ' (' + s.id + ')');
-  if (v.queued && v.queued.length) log('  queued: ' + [...new Set(v.queued.map(q => q.id))].join(', ') + ' — questions written down, not yet answered');
+  // THE COUNT AND THE LIST HAVE TO ANSWER THE SAME QUESTION (buses-data, 2026-09-10).
+  // The `register:` line above reads `register.queued`, a count of QUEUED REGISTER
+  // ENTRIES. This line used to read `v.queued`, which is a list of CLAIMS that a
+  // queued entry happens to answer — a different population — so an entry written
+  // with no claim behind it was counted and never named. OA-004 decision 4 makes a
+  // fact about a service estate-wide, so a question can be queued about a town whose
+  // sheet no red team has read: SF-015 (Tiger on Demand at March) was exactly that,
+  // and the board printed "6 queued" over a list of five for as long as it sat there.
+  // `register.queuedFacts` is the register's own list and is the population the count
+  // describes. The entries NO report raises are named separately, because those are
+  // the ones nothing else will ever bring up again — every other queued entry is
+  // re-raised by its claim on the next S6 report.
+  const queuedFacts = (v.register && v.register.queuedFacts) || [];
+  if (queuedFacts.length) {
+    log('  queued: ' + queuedFacts.map(q => q.id).join(', ') + ' — questions written down, not yet answered');
+    // `claimed` is null, not false, when the coverage half did not run (--register-only,
+    // and every CI run). A negative from a search that never looked is not a negative,
+    // so only entries actually measured as unraised are named.
+    const unraised = queuedFacts.filter(q => q.claimed === false);
+    if (unraised.length) log('    raised by no S6 report: ' + unraised.map(q => q.id).join(', ')
+      + ' — the register is the only place ' + (unraised.length === 1 ? 'it is' : 'they are') + ' named, so nothing will re-raise ' + (unraised.length === 1 ? 'it' : 'them') + '.');
+  }
   // A decided `include` is a DEBT on the next rebuild, and the checker's silence test
   // is green the moment the map declares the route off -- which for this outcome is
   // the unfinished state (buses-data OA-285). Printed here, never red: the board says

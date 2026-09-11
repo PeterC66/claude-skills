@@ -1994,6 +1994,22 @@ const MUTATIONS = [
     to: "const _con = roadOps.contract(N, E, { mergeJn: SCH.mergeJn, mergeEdge: SCH.mergeEdge });" + String.fromCharCode(10)
       + "if (false) { N = N2; E = E2; }" },
 
+  // s6_claims.js - the board's S6-claims section, covered by no suite at all until
+  // 2026-09-10. The first mutation below is not an invented fault: it is the code
+  // the board actually shipped, which printed "6 queued" over a list of five names
+  // for as long as SF-015 was in the register. Nothing was red, nothing crashed,
+  // and the entry it dropped was the one class of queued fact no future S6 report
+  // will ever re-raise.
+  { suite: 's6_claims.test.js', file: 's6_claims.js',
+    what: 'the queued LIST goes back to reading the claims, so a register entry no report raises is counted and never named',
+    find: "  const queuedFacts = (v.register && v.register.queuedFacts) || [];",
+    to: "  const queuedFacts = [...new Map((v.queued || []).map(q => [q.id, { id: q.id, claimed: true }])).values()];" },
+
+  { suite: 's6_claims.test.js', file: 's6_claims.js',
+    what: 'claimed:null is read as "nobody raised it", so a --register-only run asserts a negative its coverage half never measured',
+    find: "    const unraised = queuedFacts.filter(q => q.claimed === false);",
+    to: "    const unraised = queuedFacts.filter(q => !q.claimed);" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

@@ -4,7 +4,7 @@ Every build throws up questions. Most of them are ours: is it legible, do the co
 
 Until August 2026 both kinds were settled the same way, by the one person who happened to live in one of the towns we had mapped. That does not survive contact with a town nobody here knows. The destination for these questions is the portal editor — the customer with the local knowledge — and the plan for getting them there is `…\Buses\Development Docs\local-decisions-to-the-editor-plan_2026-08-25.md`.
 
-**What exists today is Phase 0: recording.** A build writes its local questions to a file. **Nothing reads that file yet** — no gate, no generator, no portal panel. Say so when you report a build, so an unfed file is never mistaken for a working mechanism.
+**What exists today is Phase 0, recording, for six of the seven question types — and Phases 1 and 2 for landmarks alone** (type 5, built as OA-212 and OA-233 on 2026-09-01 and 2026-09-05: the portal's landmark chooser at `/app/maps/:id/landmarks`, `GET /api/maps/:id/poi-tiers`, and `poi_tiers_sync.js` in this folder, which writes the answer into a new S3 run). A build writes its local questions to a file. **No gate, generator or portal panel reads that file**; the only reader is `bus-work`'s worklist, which raises a row for each decision in `Areas/<town>/local-decisions.json` whose `answer.state` is `asked`, and not yet for a place under `Places/` or for a question nobody has been asked. Say so when you report a build, so an unfed file is never mistaken for a working mechanism. The row that would change it is buses-data OA-083.
 
 ## The rule
 
@@ -48,7 +48,7 @@ It holds every local question raised for that map, answered or not, for the life
   "map": "St Neots Town Centre",
   "kind": "place",
   "updated": "2026-08-25",
-  "_status": "Phase 0 — recorded only. Nothing reads this file: no generator, no gate, no portal panel.",
+  "_status": "Phase 0 — recorded only. No generator, gate or portal panel READS this file; bus-work's worklist.mjs raises a row for each `asked` decision in Areas/<town>/ (not yet under Places/). An answer reaches a sheet by hand, and `appliedIn` names the S3 run where that happened. OA-083 is the row that would change that.",
   "decisions": [
     {
       "id": "c2-stub-name",

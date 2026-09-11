@@ -1,0 +1,21 @@
+# The engine's Python half: what it needs that the standard library does not have.
+#
+# WHY THIS FILE EXISTS. The Python unit suite landed on 2026-09-11 and went red on
+# its very first CI run -- not on a fault in the engine, but because
+# gen_disagreements.py and gen_verification.py import `docx`, which is installed on
+# the one laptop this engine has ever been run from and on no runner anywhere. The
+# dependency was real, a year old, and declared in no file: `npm ci` cannot see a
+# Python import, the byte gates only ever asked *does the output still match*, and
+# test_module_load.py was the first thing that ever asked the question at all.
+#
+# Every line carries `# imported as: <name>` because a DISTRIBUTION name and an
+# IMPORT name are different things -- `python-docx` is imported as `docx` -- and
+# test/python/test_dependencies.py joins the two, so the next undeclared import
+# fails a test rather than a build. Install from this folder
+# (C:\u3a St Ives\.claude\skills\make-bus-leaflet), with no placeholders:
+#
+#     pip install -r requirements.txt
+#
+# PINNED, and to the version on the laptop the sheets are actually built from: a
+# .docx this estate ships should not depend on which machine wrote it.
+python-docx==1.2.0   # imported as: docx

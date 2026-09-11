@@ -134,6 +134,18 @@ MUTATIONS = [
      "what": "a module's import is renamed and nothing that runs daily touches it, so it throws at load for as long as nobody prunes",
      "find": "import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop",
      "to": "import cli_renamed_by_a_refactor   # OA-224 Tier 3.1"},
+
+    # ---------------------------------------------------------------- the declaration
+    # THE FAULT THAT PUT test_dependencies.py THERE, RE-ENACTED. python-docx was
+    # imported by two generators for a year, installed on the laptop, declared
+    # nowhere -- so the suite was green here and red on its first CI run, and the
+    # control failing stopped every mutation below from being asked at all. The
+    # mutation is the next one of those: a third-party import added by somebody
+    # who already has it installed.
+    {"suite": "test_dependencies.py", "file": "prune_runs.py",
+     "what": "a new third-party import is added and declared nowhere, so it works on the author's laptop and dies on every other machine",
+     "find": "import argparse, json, os, re, shutil, subprocess, sys, datetime",
+     "to": "import argparse, json, os, re, shutil, subprocess, sys, datetime\nimport requests   # nobody declared this"},
 ]
 
 

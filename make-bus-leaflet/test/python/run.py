@@ -18,8 +18,13 @@ question asked of the Python half. OA-001 in buses-data named "the Python half
 still needs its own runner" as one of its three remainders.
 
 WHAT IT RUNS. Every `test_*.py` beside this file, through stdlib `unittest` --
-no pytest, so it needs nothing installed and CI needs no setup step beyond the
-`python3` ubuntu-latest already has. The modules under test are reached through
+no pytest, so the SUITE itself needs nothing installed. **The ENGINE does**, and
+this sentence used to stop one clause too early: it said CI needed no setup step
+beyond the `python3` ubuntu-latest already has, and the first CI run went red on
+`No module named 'docx'` from two generators that have imported python-docx for a
+year on the laptop that has it. `requirements.txt` declares it, the workflow
+installs it before this step, and `test_dependencies.py` is the join that fails
+the next time an import arrives undeclared. The modules under test are reached through
 `_engine.py`'s ENGINE_DIR indirection, which is what lets
 `tools/prove-red-python.py` point the same suite at a mutated copy.
 

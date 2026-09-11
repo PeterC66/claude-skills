@@ -120,7 +120,28 @@ jobs:
       # three repositories green. test_module_load.py is that question asked of the
       # Python half, over a population DERIVED from the directory rather than typed.
       # The harness runs FIRST, because a suite that has never been seen to go red is
-      # the thing this project keeps paying for. ubuntu-latest already has python3.
+      # the thing this project keeps paying for.
+      #
+      # THIS PARAGRAPH USED TO END "ubuntu-latest already has python3", AND THAT WAS
+      # THE WHOLE OF THE THOUGHT -- so the suite's first run here went red on
+      # `ModuleNotFoundError: No module named 'docx'`, from gen_disagreements.py and
+      # gen_verification.py, which have imported python-docx for a year on the one
+      # laptop that has it. The control failed and the harness stopped without asking
+      # a single mutation. requirements.txt declares that dependency now, setup-python
+      # pins the interpreter to the laptop's 3.13 rather than whatever the image
+      # happens to ship, and test/python/test_dependencies.py is the join: it fails if
+      # the engine imports something this file does not install, or if this step ever
+      # stops running before the suite.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: skills/make-bus-leaflet/requirements.txt
+
+      - name: Install the engine's Python dependencies
+        working-directory: skills/make-bus-leaflet
+        run: pip install -r requirements.txt
+
       - name: Prove the Python unit suite can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-python

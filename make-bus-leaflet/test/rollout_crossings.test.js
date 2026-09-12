@@ -100,6 +100,24 @@ test('no build path has grown its own copy of the geometry', () => {
   }
 });
 
+test('the builder RUNS the check it declares, and does not only declare it', () => {
+  // THE HOLE OA-310 OPENED, found by prove-red-schematic-crossings.js on 2026-09-12
+  // and not by reading this file. Before the refactor the CALL was the wiring, so a
+  // mutation that deleted it deleted the whole check. Now the RECIPE declares
+  // `crossings: true` and one line in buildSheets performs it, and nothing joined the
+  // two: with that line deleted the three tests above all stayed green — the recipe
+  // still asked for the check, build_s4.js still required the detector, both tools
+  // still reached it twice — over a build that checked nothing. A declaration and its
+  // execution are two facts, and the tests above read only the easier one.
+  //
+  // Matched across a bounded span rather than on one exact line, so reformatting the
+  // statement is not a failure; the harness carries an equivalent mutant that splits
+  // it over two lines and must stay GREEN, because a check that pins the shape of the
+  // code fights every refactor and gets muted.
+  assert.match(src('build_s4.js'), /r\.crossings[\s\S]{0,160}?crossingWarnings\s*\(/,
+    'build_s4.js declares crossings in the RECIPE but nothing acts on it — the recipe and the run have drifted');
+});
+
 /* ---- the finding, as the build log will read it ------------------------- */
 
 function makeRun(geo, sch) {

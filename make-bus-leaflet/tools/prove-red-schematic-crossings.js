@@ -121,22 +121,53 @@ const MUTATIONS = [
     to: "const { die, resolveBuses } = require('./cli');" + String.fromCharCode(10)
       + "function parseArgs(a) { return { _: a }; }" },
 
-  // ---- the WIRING. Nothing above notices if no rollout ever calls the detector.
-  { file: 'rollout.js', suite: WIRING,
-    what: 'the town rollout stops checking the real S4 it is about to commit',
-    find: "realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('" + String.fromCharCode(92) + "n'), ok: true });",
-    to: '' },
+  // ---- the WIRING. Nothing above notices if no build path ever calls the detector.
+  //
+  // THE SUBJECT MOVED ON 2026-09-12 (buses-data OA-310) AND THESE ANCHORS DID NOT.
+  // Both rollouts' copy-run-capture sequences became one statement in build_s4.js,
+  // so the two "stops checking" mutations pointed at text that no longer exists in
+  // either file and reported `ANCHOR ... appears 0 times, not once` — which is this
+  // harness working: a stale anchor is a mutation that did not do what it says, and
+  // it would report a false green as loudly as the bug it hunts. The PROPERTY is
+  // unchanged, so the pairing is kept: an area schematizer run and a place one, each
+  // falsified separately, because wiring only the town tool is how a guard ends up
+  // covering a class once rather than completely.
+  { file: 'build_s4.js', suite: WIRING,
+    what: 'the AREA schematizer run stops carrying the crossing check',
+    find: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             env: { SKILL_ASSETS: SK }, out: 'internal-schematic.svg' }," },
 
-  { file: 'rollout_places.js', suite: WIRING,
-    what: 'the PLACE rollout stops checking, and only towns stay covered',
-    find: "    realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('" + String.fromCharCode(92) + "n'), ok: true });"
-      + String.fromCharCode(10),
+  { file: 'build_s4.js', suite: WIRING,
+    what: 'the PLACE schematizer run stops carrying it, and only areas stay covered',
+    find: "             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             env: { SKILL_ASSETS: SK }, overridesFile: true, out: 'internal-schematic.svg' }," },
+
+  // The other direction of the same test: a sheet that does NOT run the schematizer
+  // may not claim the check, because there is no schematic workspace to read and the
+  // answer would be about the PREVIOUS sheet's.
+  { file: 'build_s4.js', suite: WIRING,
+    what: 'a sheet that draws no schematic claims the check anyway, and reads the last one',
+    find: "    place: { copy: [[PSK, 'gen_external_places.js']], script: 'gen_external_places.js', fatal: true, out: 'external.svg' },",
+    to: "    place: { copy: [[PSK, 'gen_external_places.js']], script: 'gen_external_places.js', fatal: true, crossings: true, out: 'external.svg' }," },
+
+  // THE HOLE OA-310 OPENED, AND THE REASON A REPOINT WAS NOT ENOUGH. Before the
+  // refactor the RECIPE did not exist and the call WAS the wiring, so deleting it was
+  // the mutation. Now the recipe DECLARES the check and this line PERFORMS it, and
+  // until 2026-09-12 nothing joined the two: delete this line and the recipe still
+  // says `crossings: true`, build_s4.js still requires the detector, both tools still
+  // reach it twice — three green tests over a build that checks nothing. A declaration
+  // and its execution are two facts, and a suite that reads only the declaration is
+  // reading the easier one.
+  { file: 'build_s4.js', suite: WIRING,
+    what: 'the recipe still asks for the check and the builder quietly stops running it',
+    find: "    if (r.crossings) said.push({ source: 'crossings', stderr: crossingWarnings(dir).join('"
+      + String.fromCharCode(92) + "n'), ok: true });",
     to: '' },
 
   { file: 'rollout_places.js', suite: WIRING,
     what: 'the place rollout grows its own copy of the geometry beside the shared one',
-    find: "const { crossingWarnings } = require('./schematic_crossings');",
-    to: "const { crossingWarnings } = require('./schematic_crossings');" + String.fromCharCode(10)
+    find: "const { buildSheets } = require('./build_s4');",
+    to: "const { buildSheets } = require('./build_s4');" + String.fromCharCode(10)
       + 'function segSepM() { return 0; }' },
 
   { file: SUBJECT, suite: WIRING,
@@ -185,6 +216,18 @@ const MUTATIONS = [
     what: 'the rollout stops applying the wedge threshold, and every retrace reaches the build log again',
     find: '      if (c.sepM <= sepM || c.excMM < excMM) continue;',
     to: '      if (c.sepM <= sepM) continue;' },
+
+  // The control for the wiring assertion added the same day: the join between the
+  // recipe and the run is asserted across a bounded span, so splitting the statement
+  // over two lines must stay GREEN. Without this the new test would pin the SHAPE of
+  // that line and fight the next reformat, which is how a check gets muted.
+  { file: 'build_s4.js', suite: WIRING, equivalent: true,
+    what: 'the crossings call is wrapped onto two lines — the same call',
+    find: "    if (r.crossings) said.push({ source: 'crossings', stderr: crossingWarnings(dir).join('"
+      + String.fromCharCode(92) + "n'), ok: true });",
+    to: "    if (r.crossings) {" + String.fromCharCode(10)
+      + "      said.push({ source: 'crossings', stderr: crossingWarnings(dir).join('"
+      + String.fromCharCode(92) + "n'), ok: true });" + String.fromCharCode(10) + '    }' },
 
   // THE CONTROL. Same arithmetic, different order. It must stay GREEN.
   { equivalent: true,

@@ -521,6 +521,17 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-commit
 
+      # OA-310 item 2. `build-warnings.txt` is the only record that a generator
+      # REFUSED to draw something -- those guards write to stderr and exit 0 -- and
+      # until 2026-09-12 only the two rollouts wrote it, so an S4 built through the
+      # stage order, the only path left for a config change, had none. The refusal
+      # is SCOPED to a run whose predecessor declared a log, because a flat rule is
+      # red on Huntingdon and Wisbech, whose latest runs legitimately have none.
+      # Five of the seven tests are therefore CONTROLs asserting silence.
+      - name: Prove the S4 build-warnings guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-build-log
+
       # OA-164. `pull` copies the whole run FOLDER while the manifest speaks only
       # of DECLARED outputs, so an undeclared file left in an older stage's folder
       # rides along and clobbers whatever the destination already holds. It cost

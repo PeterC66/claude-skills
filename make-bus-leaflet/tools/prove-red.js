@@ -1440,6 +1440,32 @@ const MUTATIONS = [
     find: "cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ''}.`,",
     to: "cross-checked with operators at bustimes.org${D.checkedAt ? ` (${D.checkedAt})` : ` (${D.validFrom})`}.`," },
 
+  // THE TWO BELOW WERE INVISIBLE UNTIL 2026-09-12, and not because the suite was
+  // weak: provenance_date.test.js ran over a HAND-TYPED list of two generators while
+  // four draw an attribution band, so gen_boarding.js and place/gen_external_places.js
+  // were outside the only test in this repository that reads a generator as text.
+  // Measured, not argued - the committed test was run against both mutations in a
+  // scratch engine and was GREEN on each. The population is now derived from
+  // engine_version.js and filtered by footerBand(), so adding a generator adds it here.
+  //
+  // gen_boarding.js also held ZERO mutations of any kind before these (OA-001's
+  // "1 / 4 / 0 / 1 / 1" count, the review's engine N26), so it was the only entry
+  // point in its hash whose greenness had never been seen to go red.
+  //
+  // The place half cannot be mutated from here - prove-red copies the TOWN assets to
+  // the scratch dir and the place skill is not copied, so PLACE_PRESENT is false and
+  // those files drop out of the population. That is announced by the test rather than
+  // silent, and it is why only the two town-side mutations live here.
+  { suite: 'provenance_date.test.js', file: 'gen_boarding.js',
+    what: "the boarding footer gains a hardcoded month-year - the OA-153 fault in the generator the typed list omitted",
+    find: "  validFrom: RJ.validFrom || 'Summer 2026',",
+    to: "  validFrom: 'June 2026'," },
+
+  { suite: 'provenance_date.test.js', file: 'gen_boarding.js',
+    what: "a footer-drawing generator stops calling footerBand(), silently shrinking the population every assertion runs over",
+    find: "out(FOOTER.footerBand({ ...FOOTER_OPTS,",
+    to: "out(FOOTER.footerPlate2({ ...FOOTER_OPTS," },
+
   // dash_fit.js - extracted 2026-08-30 from three copies of the same primitive
   // (OA-167). The whole reason it exists is that a comment saying "change one,
   // change all three" failed TWICE, so the mutations below are what the comment

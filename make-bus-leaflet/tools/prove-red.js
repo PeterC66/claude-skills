@@ -850,6 +850,49 @@ const MUTATIONS = [
     find: "    if (SIDECARS.has(name)) { sidecars.push(name); continue; }",
     to: "    if (name.startsWith('unplaced-')) { sidecars.push(name); continue; }" },
 
+  /* build_s4.js — the one build path (buses-data OA-310, 2026-09-12). Its acceptance
+   * test is byte-identity against three real S4 runs, which CI cannot hold because
+   * those folders are gitignored; these are what stands under it in a fresh clone. */
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: "the draw order swaps boarding and diagram, so a place's log lists its entries in a different order",
+    find: "const DRAW_ORDER = ['internal', 'external', 'schematic', 'boarding', 'diagram'];",
+    to: "const DRAW_ORDER = ['internal', 'external', 'schematic', 'diagram', 'boarding'];" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the level filter goes, so a town carrying boardingPlan is handed to a generator that reads place.json',
+    find: "    .filter(s => s.level === 'both' || s.level === level)",
+    to: "" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: "`has` stops narrowing the plan, so a boarding-only place is asked for an internal sheet it has never had",
+    find: "  return DRAW_ORDER.filter(k => declared.has(k)).filter(k => has[k] !== false);",
+    to: "  return DRAW_ORDER.filter(k => declared.has(k));" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: "the place schematic stops forcing OVERRIDES_FILE, and a place's forced-POI labels are silently dropped again",
+    find: "             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' }," },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the area internal stops asking for build-meta.json, which is what commit S4 refuses an area without',
+    find: "    area:  { copy: [[SK, 'gen_internal.js']], script: 'gen_internal.js', meta: true, fatal: true, out: 'internal.svg' },",
+    to: "    area:  { copy: [[SK, 'gen_internal.js']], script: 'gen_internal.js', fatal: true, out: 'internal.svg' }," },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the log is written only when the build succeeded — losing the stderr of the one build whose stderr matters most',
+    find: "  if (write) {",
+    to: "  if (write && !failure) {" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'a fatal generator no longer stops the build, so the rest run over inputs the first one could not read',
+    find: "    if (r.fatal && (!res.ok || (r.needsOut && !landed))) {",
+    to: "    if (false && r.fatal && (!res.ok || (r.needsOut && !landed))) {" },
+
+  { suite: 'rollout_crossings.test.js', file: 'build_s4.js',
+    what: "the town schematic stops carrying the self-crossing check, which only a build path can ask (OA-240)",
+    find: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },\n    place:",
+    to: "             env: { SKILL_ASSETS: SK }, out: 'internal-schematic.svg' },\n    place:" },
+
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',
     find: "  return sameBytesIgnoringLineEndings(fs.readFileSync(pathA), fs.readFileSync(pathB));",
@@ -1811,10 +1854,12 @@ const MUTATIONS = [
   // nothing declared, so `rollout.js --apply` threw ReferenceError for every town.
   // Not a syntax error, on a path no gate exercises, one line past where the dry
   // run stops — nothing but this census could see it.
-  { suite: 'gate_lib.test.js', file: 'rollout.js',
+  // The anchor moved to build_s4.js on 2026-09-12 (OA-310) with the copy it names; the
+  // census itself is unchanged, because it reads every .js in the engine folder.
+  { suite: 'gate_lib.test.js', file: 'build_s4.js',
     what: 'the external generator name is assembled again from a variable nothing declares, so every rebuild throws',
-    find: "copyFile(path.join(SK, EXTERNAL_GENERATOR), s4Dir, 'gen_external.js');",
-    to: "copyFile(path.join(SK, `gen_external_${style}.js`), s4Dir, 'gen_external.js');" },
+    find: "    area:  { copy: [[SK, EXTERNAL_GENERATOR, 'gen_external.js']], script: 'gen_external.js', fatal: true, out: 'external.svg' },",
+    to: "    area:  { copy: [[SK, `gen_external_${style}.js`, 'gen_external.js']], script: 'gen_external.js', fatal: true, out: 'external.svg' }," },
 
   // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
   // OA-135) from seven copies across five files. The danger this module creates is

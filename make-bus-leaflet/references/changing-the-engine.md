@@ -217,15 +217,15 @@ So a template change still has **two** halves, and the second is still easy to f
 ```
 S4=$(stage.js new S4 --bump minor); cd "$S4"
 stage.js pull S2 .; stage.js pull S3 .        # data unchanged; also syncs the version stamp
-cp %SK%/gen_internal.js .                     # generator = the CURRENT TEMPLATE, copied fresh
-cp %SK%/gen_external_{radial|busway}.js gen_external.js
 node %SK%/engine_version.js --stamp routes.json
-node gen_internal.js; node gen_external.js    # + schematize_internal.js / diagram_internal.js if configured
-stage.js commit S4 --outputs internal.svg,external.svg[,...] --note "adopt current engine template: <what changes>"
+node %SK%/build_s4.js                         # copies the CURRENT TEMPLATE in, draws every sheet
+stage.js commit S4 --outputs <the list build_s4 printed> --note "adopt current engine template: <what changes>"
 # then S5 render, then refresh_latest.js
 ```
 
 (`rollout.js` does exactly this sequence automatically — prefer it over the manual steps above.)
+
+**Step 4 used to be four lines and is now one** (buses-data OA-310, 2026-09-12). It was `cp %SK%/gen_internal.js .`, `cp %SK%/gen_external_radial.js gen_external.js`, `node gen_internal.js; node gen_external.js`, plus whichever pre-stage the config asked for — and it produced no `build-warnings.txt`, because only the two rollouts ever called `build_log.js`. `build_s4.js` is the one statement of how each sheet is drawn, for towns and places alike, and both rollouts now call it rather than keeping their own copy of the capture. It prints the `--outputs` string the commit wants, so that is read off the run rather than typed.
 
 **A new S3 run does NOT force a `--bump major`, and after item 3 an engine-only rollout has no new S3 run to force one anyway.** §"Stage 4" in `s4-s5-build-and-render.md` used to read "major if you produced a new S1/S2/S3 run" — the rule that has actually been followed since v6.2 is **major = new *data* (S1/S2); minor = config- or engine-only re-gen**. Config/engine-only re-renders are **minor**.
 

@@ -52,11 +52,14 @@ const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
-// The self-crossing check (buses-data OA-240). One place map has a schematic --
-// High Wycombe Aldi -- and the town rollout's copy of this wiring would have
-// certified only towns. Both tools call the one helper; `rollout_crossings.test.js`
-// is the check on that. Non-blocking by construction, and outside the hash closure.
-const { crossingWarnings } = require('./schematic_crossings');
+// ONE statement of how each sheet is drawn, for both rollouts and for the stage path
+// (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
+// twice, and with it the self-crossing check (OA-240) that rides with the schematic --
+// one place map has one, High Wycombe Aldi, and the town rollout's own copy of that
+// wiring would have certified only towns. Both tools reach the one helper through this
+// module; `rollout_crossings.test.js` is the check on that. Non-blocking by
+// construction, and outside the hash closure.
+const { buildSheets } = require('./build_s4');
 // The printed sheet version (footer.js design.sheetVersion) and the engine hash.
 // BOTH now come from shared modules rather than living here, because living here
 // is how a hand-built S4 lost them both (OA-161) — see sheet_stamps.js.
@@ -123,17 +126,10 @@ function stage(cwd, ...cmdArgs) {
 // Per invariant 6, the tool's own invocations must run WITHOUT LEAFLET_DIR set
 // (cwd is the run dir) — same trap as rollout.js and the schematic/diagram
 // pre-stages (changing-the-engine.md's "LEAFLET_DIR trap").
-function runNode(scriptPath, cwd, extraEnv = {}) {
-  const env = { ...process.env, ...extraEnv };
-  delete env.LEAFLET_DIR;
-  const res = spawnSync(process.execPath, [scriptPath], { cwd, env, encoding: 'utf8' });
-  return { ok: res.status === 0, stdout: res.stdout, stderr: res.stderr };
-}
-function copyFile(src, destDir, name) {
-  if (!fs.existsSync(src)) return false;
-  fs.copyFileSync(src, path.join(destDir, name || path.basename(src)));
-  return true;
-}
+// runNode() and copyFile() moved to build_s4.js on 2026-09-12 (OA-310), where the
+// generator runs that used them now live. Byte-identical copies of both had sat in this
+// file and in rollout.js since each was written, and with them the LEAFLET_DIR contract
+// (invariant 6, the "LEAFLET_DIR trap" in changing-the-engine.md §4).
 
 const GEN_EXTERNAL_PLACES = path.join(PSK, 'gen_external_places.js');
 // The boarding-plan sheet is a place's THIRD output (make-place-bus-leaflet SKILL.md
@@ -177,25 +173,23 @@ function refreshBoardingData(dir) {
   if (ri.status !== 0) return { ok: false, stderr: 'boarding_index.py: ' + tailOf(ri) };
   return { ok: true, stderr: '' };
 }
-function buildBoarding(dir) {
-  if (REFRESH_INDEX) {
-    const r = refreshBoardingData(dir);
-    if (!r.ok) return { ok: false, stdout: '', stderr: 'refresh-index failed — ' + r.stderr };
-  }
-  copyFile(GEN_BOARDING, dir);
-  return runNode(path.join(dir, 'gen_boarding.js'), dir, { SKILL_ASSETS: SK });
-}
-
-// Build internal.svg the same way build_internal_place.js does (title-fix
-// wrapper around the UNCHANGED town gen_internal.js) — never
-// build_internal_place_roads.js, which additionally pulls fresh OSM road
-// geometry over the network. An engine-only rollout reuses the place's
-// existing roads_geo.json/routes_paths.json (copied forward like every other
-// S2-derived json), so it needs none of that; routes.json's own
-// `internalRoads` block (already stamped with fitExtra etc from the original
-// build) is what gen_internal.js reads either way.
-function buildInternal(dir) {
-  return runNode(path.join(PSK, 'build_internal_place.js'), dir, { TSK: SK });
+/* The boarding sheet's own data refresh, handed to build_s4.js as a hook. Drawing the
+ * sheet is that file's business (RECIPE.boarding.place); re-deriving the stands and the
+ * index first is THIS tool's, because --refresh-index and --asof are its flags and
+ * nothing in the stage path has them. The prefix is kept so the FAIL detail a caller
+ * reads is the sentence it has always been.
+ *
+ * How the sheets themselves are drawn — the place internal through the place skill's
+ * build_internal_place.js (a title-fix wrapper around the UNCHANGED town gen_internal.js)
+ * and never build_internal_place_roads.js, which additionally pulls fresh OSM road
+ * geometry over the network — is stated in build_s4.js's RECIPE. An engine-only rollout
+ * reuses the place's existing roads_geo.json/routes_paths.json, copied forward like every
+ * other S2-derived json, so it needs none of that; routes.json's own `internalRoads`
+ * block, already stamped with fitExtra etc from the original build, is what
+ * gen_internal.js reads either way. */
+function refreshBoardingHook(dir) {
+  const r = refreshBoardingData(dir);
+  return r.ok ? r : { ok: false, stderr: 'refresh-index failed — ' + r.stderr };
 }
 
 function rolloutOnePlace(p) {
@@ -206,7 +200,7 @@ function rolloutOnePlace(p) {
 
   // WHICH SHEETS DOES THIS PLACE ACTUALLY SHIP? Read it off the previous S4 rather
   // than assuming. Until 2026-08-23 this tool took "a place has an internal" as given
-  // and would have died in buildInternal() on High Wycombe High Street and High
+  // and would have died drawing an internal sheet on High Wycombe High Street and High
   // Wycombe Town Centre, which are BOARDING-ONLY (`internalRoads:false`, no external):
   // the boarding plan can be the whole product at a lettered town centre, and those
   // two places have never had another sheet.
@@ -328,7 +322,7 @@ function rolloutOnePlace(p) {
     pull: (st, dest) => stage(p.dir, 'pull', st, dest),
   });
   // REFUSE TO SEED FROM AN S3 THE BUILT S4 DISAGREES WITH. The comment on
-  // buildInternal() says routes.json's internalRoads block arrives "already stamped
+  // build_s4.js's place internal recipe says routes.json's internalRoads block arrives "already stamped
   // with fitExtra etc from the original build" — true of the S4 copy, and NOT true of
   // the S3 this tool actually seeds from. `build_internal_place_roads.js` injects
   // `internalRoads.fitExtra` (every drawn stop, so a cross-locality walkshed frames the
@@ -363,70 +357,33 @@ function rolloutOnePlace(p) {
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
 
   const s4 = path.join(scratch, 'S4');
-  const outputs = [];
-  // Every generator's stderr is kept, not just a failing one's — the guards that
-  // matter refuse to draw and then exit 0 (build_log.js).
-  const said = [];
-  let genOk;
-  if (hadInternal) {
-    genOk = buildInternal(s4);
-    if (!genOk.ok || !fs.existsSync(path.join(s4, 'internal.svg'))) {
-      fs.rmSync(scratch, { recursive: true, force: true });
-      return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js: ' + (genOk.stderr || 'no internal.svg produced').split('\n')[0] };
-    }
-    outputs.push('internal.svg');
-    said.push({ source: 'internal', stderr: genOk.stderr, ok: genOk.ok });
+  /* ONE BUILD ENTRY POINT FOR BOTH ROLLOUTS AND FOR THE STAGE PATH (buses-data OA-310).
+   * The copy-run-capture sequence written out here, again in the apply below, and twice
+   * more in rollout.js, is now build_s4.js — which the stage path can reach too, so a
+   * config-only rebuild stops being the one kind of build that produces no
+   * build-warnings.txt. Every generator's stderr is kept, not just a failing one's: the
+   * guards that matter refuse to draw and then exit 0 (build_log.js). `write: false`
+   * because this folder is deleted below.
+   *
+   * `has` is the part routes.json cannot express: three place maps deliberately ship
+   * with no internal or external sheet (OA-035, OA-037), and this tool reads that off
+   * the previous S4 rather than off the config. Everything else build_s4.js carries —
+   * the place internal built through build_internal_place.js rather than the roads
+   * variant, the sentinel gen_internal_place.js the pre-stages need beside routes.json,
+   * OVERRIDES_FILE on the schematic and deliberately not on the diagram, the boarding
+   * sheet's own generator, the crossings check — is stated once in that file's RECIPE. */
+  const hooks = { boarding: REFRESH_INDEX ? refreshBoardingHook : null };
+  const dry = buildSheets({ dir: s4, level: 'place', routesJson, write: false, hooks,
+                            has: { internal: hadInternal, external: hasExternalGen } });
+  if (!dry.ok) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: p.name, status: 'FAIL', detail: dry.failure.label + ': ' + String(dry.failure.stderr).split('\n')[0] };
   }
-  if (hasExternalGen) {
-    copyFile(GEN_EXTERNAL_PLACES, s4);
-    genOk = runNode(path.join(s4, 'gen_external_places.js'), s4);
-    said.push({ source: 'external', stderr: genOk.stderr, ok: genOk.ok });
-    if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_external_places.js: ' + genOk.stderr.split('\n')[0] }; }
-    outputs.push('external.svg');
-  }
-  // Schematic/diagram pre-stages (opt-in; only High Wycombe Aldi has
-  // internalSchematic as of 2026-08-09, none has internalDiagram yet) — the
-  // sentinel gen_internal_place.js must exist beside routes.json so their
-  // internal isPlace check (fs.existsSync) fires, which applies the same
-  // title/version fix build_internal_place.js applies to the ordinary map.
-  if (routesJson.internalSchematic || routesJson.internalDiagram) copyFile(path.join(PSK, 'gen_internal_place.js'), s4);
-  if (routesJson.internalSchematic) {
-    copyFile(path.join(SK, 'schematize_internal.js'), s4);
-    // THE GOTCHA (gotchas.md ~486): schematize_internal.js's workspace copy
-    // does NOT carry overrides.json into schematic/, and gen_internal.js only
-    // falls back to reading overrides.json from ITS OWN cwd (the workspace)
-    // when OVERRIDES_FILE isn't set — so a place's forced-POI overrides are
-    // silently dropped unless OVERRIDES_FILE is passed explicitly, pointing
-    // at the place's own overrides.json (absolute path; the child's cwd is
-    // the workspace subfolder, not this dir). No LEAFLET_DIR (runNode already
-    // deletes it) — same trap, documented in changing-the-engine.md §4.
-    const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4, 'overrides.json') });
-    said.push({ source: 'schematic', stderr: r.stderr, ok: r.ok });
-    said.push({ source: 'crossings', stderr: crossingWarnings(s4).join('\n'), ok: true });
-    if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
-  }
-  if (routesJson.boardingPlan) {
-    const r = buildBoarding(s4);
-    said.push({ source: 'boarding', stderr: r.stderr, ok: r.ok });
-    if (r.ok && fs.existsSync(path.join(s4, 'boarding.svg'))) outputs.push('boarding.svg');
-    else return (fs.rmSync(scratch, { recursive: true, force: true }),
-      { name: p.name, status: 'FAIL', detail: 'gen_boarding.js: ' + ((r.stderr || 'no boarding.svg produced').split('\n')[0]) });
-  }
-  if (routesJson.internalDiagram) {
-    copyFile(path.join(SK, 'diagram_internal.js'), s4);
-    // Deliberately NOT OVERRIDES_FILE here, unlike schematic above:
-    // diagram_internal.js copies its OWN diagram-overrides.json (S3-owned)
-    // into the workspace as overrides.json; forcing OVERRIDES_FILE would
-    // shadow that file entirely (gen_internal.js prefers OVERRIDES_FILE over
-    // its cwd-relative overrides.json unconditionally).
-    const r = runNode(path.join(s4, 'diagram_internal.js'), s4, { SKILL_ASSETS: SK });
-    said.push({ source: 'diagram', stderr: r.stderr, ok: r.ok });
-    if (r.ok && fs.existsSync(path.join(s4, 'internal-diagram.svg'))) outputs.push('internal-diagram.svg');
-  }
+  const outputs = dry.outputs;
 
   const diffs = {};
-  const warnings = BUILDLOG.collect(said);
-  const blockers = BUILDLOG.blocking(warnings);
+  const warnings = dry.warnings;
+  const blockers = dry.blockers;
   let anyLost = false;
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
@@ -511,55 +468,25 @@ function rolloutOnePlace(p) {
   if (seeded.sidecars.length) {
     console.log(`  ${p.name}: ${seeded.sidecars.length} unplaced-label sidecar(s) in the previous S4 were NOT carried forward — ${seeded.sidecars.join(', ')}. Each is an OUTPUT; the generator that draws that sheet writes its own, or unlinks it when nothing dropped. A sheet this build no longer draws therefore leaves none behind.`);
   }
-  let r;
-  const realOutputs = [];
-  const realSaid = [];
-  if (hadInternal) {
-    r = buildInternal(s4Dir);
-    if (!r.ok || !fs.existsSync(path.join(s4Dir, 'internal.svg'))) {
-      fs.rmSync(scratch, { recursive: true, force: true });
-      return { name: p.name, status: 'FAIL', detail: 'build_internal_place.js (real S4): ' + (r.stderr || 'no internal.svg produced').split('\n')[0] };
-    }
-    realOutputs.push('internal.svg');
-    realSaid.push({ source: 'internal', stderr: r.stderr, ok: r.ok });
+  // The real run, through the same entry point as the dry run above (OA-310).
+  const real = buildSheets({ dir: s4Dir, level: 'place', routesJson, hooks,
+                             has: { internal: hadInternal, external: hasExternalGen } });
+  if (!real.ok) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: p.name, status: 'FAIL',
+      detail: real.failure.label + ' (real S4): ' + String(real.failure.stderr).split('\n')[0] };
   }
-  if (hasExternalGen) {
-    copyFile(GEN_EXTERNAL_PLACES, s4Dir);
-    r = runNode(path.join(s4Dir, 'gen_external_places.js'), s4Dir);
-    realSaid.push({ source: 'external', stderr: r.stderr, ok: r.ok });
-    if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_external_places.js (real S4): ' + r.stderr.split('\n')[0] }; }
-    realOutputs.push('external.svg');
-  }
-  if (routesJson.internalSchematic || routesJson.internalDiagram) copyFile(path.join(PSK, 'gen_internal_place.js'), s4Dir);
-  if (routesJson.internalSchematic) {
-    copyFile(path.join(SK, 'schematize_internal.js'), s4Dir);
-    const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK, OVERRIDES_FILE: path.join(s4Dir, 'overrides.json') });
-    realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok });
-    realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('\n'), ok: true });
-    if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg');
-  }
-  if (routesJson.boardingPlan) {
-    const rb = buildBoarding(s4Dir);
-    realSaid.push({ source: 'boarding', stderr: rb.stderr, ok: rb.ok });
-    if (rb.ok && fs.existsSync(path.join(s4Dir, 'boarding.svg'))) realOutputs.push('boarding.svg');
-    else { fs.rmSync(scratch, { recursive: true, force: true }); return { name: p.name, status: 'FAIL', detail: 'gen_boarding.js (real S4): ' + ((rb.stderr || 'no boarding.svg produced').split('\n')[0]) }; }
-  }
-  if (routesJson.internalDiagram) {
-    copyFile(path.join(SK, 'diagram_internal.js'), s4Dir);
-    const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK });
-    realSaid.push({ source: 'diagram', stderr: r3.stderr, ok: r3.ok });
-    if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg');
-  }
-  // place.json must ride the S4 commit too — the portal's import-map.mjs
-  // --kind place requires it in --src, and `pull` never reaches back further
-  // than one stage (pipeline.md P4 note).
+  const realWarnings = real.warnings;
+  const realBlockers = real.blockers;
+  /* place.json must ride the S4 commit too — the portal's import-map.mjs --kind place
+   * requires it in --src, and `pull` never reaches back further than one stage
+   * (pipeline.md P4 note). It goes in BEFORE build-warnings.txt because that is the
+   * order this tool has always declared them in, and the list it declares is what the
+   * manifest records; the log itself goes in the run folder beside the artwork it
+   * describes and rides the commit as an output, so "what did the engine say when it
+   * drew this?" stays answerable from the tree without rebuilding. */
+  const realOutputs = real.outputs.filter(o => o !== BUILDLOG.LOG_NAME);
   if (fs.existsSync(path.join(s4Dir, 'place.json'))) realOutputs.push('place.json');
-  // The log goes in the run folder beside the artwork it describes and rides the
-  // commit as an output, so "what did the engine say when it drew this?" stays
-  // answerable from the tree without rebuilding.
-  const realWarnings = BUILDLOG.collect(realSaid);
-  const realBlockers = BUILDLOG.blocking(realWarnings);
-  BUILDLOG.write(s4Dir, realWarnings);
   realOutputs.push(BUILDLOG.LOG_NAME);
   stage(p.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE);
   fs.rmSync(scratch, { recursive: true, force: true });

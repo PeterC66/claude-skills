@@ -52,13 +52,11 @@ const { computeEngineVersion, stampEngine } = require('./engine_version');
 // two tools compare the same number against the same file (OA-179).
 const CURRENT_ENGINE = computeEngineVersion();
 const BUILDLOG = require('./build_log');
-// The self-crossing check (buses-data OA-240). A rollout is the ONLY place this
-// question can be asked: the schematic workspace lives in an S4 run folder and
-// nowhere else, so `ci-reference/` cannot feed it and CI's clone has nothing to
-// read. It is outside the engine hash closure and so is this file, so wiring it
-// here costs no rollout of its own. Non-blocking by construction -- see
-// crossingWarnings() -- because three published maps carry one today.
-const { crossingWarnings } = require('./schematic_crossings');
+// ONE statement of how each sheet is drawn, for both rollouts and for the stage path
+// (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
+// twice, the LEAFLET_DIR contract, and the self-crossing check (OA-240) that rides with
+// the schematic — non-blocking by construction, because three published maps carry one.
+const { buildSheets } = require('./build_s4');
 // The printed sheet version (footer.js design.sheetVersion). Byte-identical
 // copies of this lived in BOTH rollouts until 2026-08-29 and in neither of the
 // other two routes into an S4, which is how a hand-built build shipped with no
@@ -90,17 +88,9 @@ function stage(cwd, ...cmdArgs) {
   if (res.status !== 0) throw new Error(`stage.js ${cmdArgs.join(' ')} failed:\n${res.stderr || res.stdout}`);
   return res.stdout.trim();
 }
-function runNode(scriptPath, cwd, extraEnv = {}) {
-  const env = { ...process.env, ...extraEnv };
-  delete env.LEAFLET_DIR; // must run with cwd = the workspace, per the env contract
-  const res = spawnSync(process.execPath, [scriptPath], { cwd, env, encoding: 'utf8' });
-  return { ok: res.status === 0, stdout: res.stdout, stderr: res.stderr };
-}
-function copyFile(src, destDir, name) {
-  if (!fs.existsSync(src)) return false;
-  fs.copyFileSync(src, path.join(destDir, name || path.basename(src)));
-  return true;
-}
+// runNode() and copyFile() moved to build_s4.js on 2026-09-12 (OA-310), where the
+// generator runs that used them now live. Byte-identical copies of both had sat in this
+// file and in rollout_places.js since each was written.
 
 // labelDiff (label-set diff, oriented old->new, version-stamp-filtered) now
 // lives in gate_lib.js, shared with rollout_places.js — see its comment for
@@ -274,8 +264,8 @@ function rolloutOne(t) {
     s3Carry: S3_CARRY, stages: PULL_STAGES,
     pull: (st, dest) => stage(t.dir, 'pull', st, dest),
   });
-  copyFile(path.join(SK, 'gen_internal.js'), path.join(scratch, 'S4'));
-  copyFile(path.join(SK, EXTERNAL_GENERATOR), path.join(scratch, 'S4'), 'gen_external.js');
+  // The generators are copied in by buildSheets() below, from the same live template
+  // this pair of lines used to copy — one copy of that rule, not two (OA-310).
   const engineHash = CURRENT_ENGINE;
   stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
   // Dry-run parity: stamp the PREVIOUS run's identifier so the label-set diff below
@@ -285,34 +275,27 @@ function rolloutOne(t) {
   stampSheetVersion(path.join(scratch, 'S4', 'routes.json'), path.basename(prevS4.dir));
 
   const s4 = path.join(scratch, 'S4');
-  const outputs = [];
-  // Every generator's stderr is KEPT, not just a failing one's. The guards that
-  // matter most refuse to draw and then exit 0, so a build that "succeeded" is
-  // precisely the case where nothing was listening — see build_log.js.
-  const said = [];
-  let genOk = runNode(path.join(s4, 'gen_internal.js'), s4);
-  said.push({ source: 'internal', stderr: genOk.stderr, ok: genOk.ok });
-  if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_internal.js: ' + genOk.stderr.split('\n')[0] }; }
-  outputs.push('internal.svg');
-  genOk = runNode(path.join(s4, 'gen_external.js'), s4);
-  said.push({ source: 'external', stderr: genOk.stderr, ok: genOk.ok });
-  if (!genOk.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_external.js: ' + genOk.stderr.split('\n')[0] }; }
-  outputs.push('external.svg');
-  if (routesJson.internalSchematic) {
-    copyFile(path.join(SK, 'schematize_internal.js'), s4);
-    const r = runNode(path.join(s4, 'schematize_internal.js'), s4, { SKILL_ASSETS: SK });
-    said.push({ source: 'schematic', stderr: r.stderr, ok: r.ok });
-    said.push({ source: 'crossings', stderr: crossingWarnings(s4).join('\n'), ok: true });
-    if (r.ok && fs.existsSync(path.join(s4, 'internal-schematic.svg'))) outputs.push('internal-schematic.svg');
+  /* ONE BUILD ENTRY POINT FOR BOTH HALVES AND BOTH ROLLOUTS (buses-data OA-310).
+   * The copy-run-capture sequence used to be written out here, again below for the
+   * real run, and twice more in rollout_places.js — and NOWHERE ELSE, which is why an
+   * S4 built through the documented stage order carried no build-warnings.txt at all
+   * (18 of 20 maps had one on 2026-09-11; the two that did not were both data changes).
+   * build_s4.js is now the one statement of how each sheet is drawn, and stage.js
+   * reaches it too. Every generator's stderr is KEPT, not just a failing one's: the
+   * guards that matter most refuse to draw and then exit 0, so a build that
+   * "succeeded" is precisely the case where nothing was listening (build_log.js).
+   *
+   * `write: false` because this folder is deleted a few lines down, and `buildMeta:
+   * false` because the scratch run would otherwise overwrite build-meta.json with a
+   * build that is then thrown away — both were this tool's own rules before the move. */
+  const dry = buildSheets({ dir: s4, level: 'area', routesJson, buildMeta: false, write: false });
+  if (!dry.ok) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: t.name, status: 'FAIL', detail: dry.failure.label + ': ' + String(dry.failure.stderr).split('\n')[0] };
   }
-  if (routesJson.internalDiagram) {
-    copyFile(path.join(SK, 'diagram_internal.js'), s4);
-    const r = runNode(path.join(s4, 'diagram_internal.js'), s4, { SKILL_ASSETS: SK });
-    said.push({ source: 'diagram', stderr: r.stderr, ok: r.ok });
-    if (r.ok && fs.existsSync(path.join(s4, 'internal-diagram.svg'))) outputs.push('internal-diagram.svg');
-  }
-  const warnings = BUILDLOG.collect(said);
-  const blockers = BUILDLOG.blocking(warnings);
+  const outputs = dry.outputs;
+  const warnings = dry.warnings;
+  const blockers = dry.blockers;
 
   const diffs = {};
   let anyLost = false;
@@ -373,39 +356,35 @@ function rolloutOne(t) {
   if (seeded.sidecars.length) {
     console.log(`  ${t.name}: ${seeded.sidecars.length} unplaced-label sidecar(s) in the previous S4 were NOT carried forward — ${seeded.sidecars.join(', ')}. Each is an OUTPUT; the generator that draws that sheet writes its own, or unlinks it when nothing dropped. A sheet this build no longer draws therefore leaves none behind.`);
   }
-  copyFile(path.join(SK, 'gen_internal.js'), s4Dir);
-  copyFile(path.join(SK, EXTERNAL_GENERATOR), s4Dir, 'gen_external.js');
   stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
-  const realSaid = [];
-  // BUILD_META_DIR asks gen_internal.js to write build-meta.json beside the artwork
-  // — chiefly the rotation it actually applied, which is otherwise only a formatted
-  // number inside a stdout sentence. freeze_orientation.js reads it to turn "keep it
-  // the way the published sheet is" into an explicit design.fixedOrientation. Set
-  // only here, on the REAL S4 run: the scratch dry-run above would overwrite it with
-  // a build that is then thrown away.
-  let r = runNode(path.join(s4Dir, 'gen_internal.js'), s4Dir, { BUILD_META_DIR: s4Dir });
-  realSaid.push({ source: 'internal', stderr: r.stderr, ok: r.ok });
-  if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_internal.js (real S4): ' + r.stderr.split('\n')[0] }; }
-  r = runNode(path.join(s4Dir, 'gen_external.js'), s4Dir);
-  realSaid.push({ source: 'external', stderr: r.stderr, ok: r.ok });
-  if (!r.ok) { fs.rmSync(scratch, { recursive: true, force: true }); return { name: t.name, status: 'FAIL', detail: 'gen_external.js (real S4): ' + r.stderr.split('\n')[0] }; }
-  const realOutputs = ['internal.svg', 'external.svg'];
-  // Bug fixed 2026-08-06: this block ran schematize_internal.js/diagram_internal.js straight out
-  // of s4Dir without ever copying them in (unlike the scratch dry-run above, which does) — the
-  // spawn silently failed (ENOENT), r.ok was never checked, and the town's schematic/diagram
-  // output just vanished from the commit with no error surfaced. Caught when High Wycombe,
-  // Beaconsfield, St Neots and St Ives all lost internal-diagram.svg (St Ives also
-  // internal-schematic.svg) across a rollout --all --apply.
-  if (routesJson.internalSchematic) { copyFile(path.join(SK, 'schematize_internal.js'), s4Dir); const r2 = runNode(path.join(s4Dir, 'schematize_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'schematic', stderr: r2.stderr, ok: r2.ok }); realSaid.push({ source: 'crossings', stderr: crossingWarnings(s4Dir).join('\n'), ok: true }); if (r2.ok && fs.existsSync(path.join(s4Dir, 'internal-schematic.svg'))) realOutputs.push('internal-schematic.svg'); }
-  if (routesJson.internalDiagram) { copyFile(path.join(SK, 'diagram_internal.js'), s4Dir); const r3 = runNode(path.join(s4Dir, 'diagram_internal.js'), s4Dir, { SKILL_ASSETS: SK }); realSaid.push({ source: 'diagram', stderr: r3.stderr, ok: r3.ok }); if (r3.ok && fs.existsSync(path.join(s4Dir, 'internal-diagram.svg'))) realOutputs.push('internal-diagram.svg'); }
-  // The log goes in the run folder BESIDE the artwork it describes, and is committed
-  // as an output — so "what did the engine say when it drew this?" is answerable
-  // later, from the tree, without rebuilding. Written even when empty (build_log.js).
-  const realWarnings = BUILDLOG.collect(realSaid);
-  const realBlockers = BUILDLOG.blocking(realWarnings);
-  BUILDLOG.write(s4Dir, realWarnings);
-  realOutputs.push(BUILDLOG.LOG_NAME);
+  /* THE REAL RUN, through the same entry point as the dry run above (OA-310).
+   *
+   * BUILD_META_DIR — which buildSheets sets for an area's internal sheet, and which is
+   * what `buildMeta: true` means here — asks gen_internal.js to write build-meta.json
+   * beside the artwork, chiefly the rotation it actually applied, which is otherwise
+   * only a formatted number inside a stdout sentence. freeze_orientation.js reads it to
+   * turn "keep it the way the published sheet is" into an explicit
+   * design.fixedOrientation, and `stage.js commit S4` refuses an area S4 without one.
+   *
+   * The schematic and diagram pre-stages are copied into the run folder by buildSheets
+   * before they are run. That copy is not incidental: until 2026-08-06 this block ran
+   * them straight out of s4Dir without ever copying them in, the spawn silently failed
+   * (ENOENT), the exit status was never checked, and the town's schematic/diagram output
+   * vanished from the commit with no error surfaced — caught when High Wycombe,
+   * Beaconsfield, St Neots and St Ives all lost internal-diagram.svg across one
+   * `--all --apply`. The log itself goes in the run folder BESIDE the artwork it
+   * describes and is committed as an output, so "what did the engine say when it drew
+   * this?" is answerable later, from the tree, without rebuilding. */
+  const real = buildSheets({ dir: s4Dir, level: 'area', routesJson });
+  if (!real.ok) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: t.name, status: 'FAIL',
+      detail: real.failure.label + ' (real S4): ' + String(real.failure.stderr).split('\n')[0] };
+  }
+  const realOutputs = real.outputs;
+  const realWarnings = real.warnings;
+  const realBlockers = real.blockers;
   stage(t.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE);
   fs.rmSync(scratch, { recursive: true, force: true });
 

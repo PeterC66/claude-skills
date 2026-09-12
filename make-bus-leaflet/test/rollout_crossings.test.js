@@ -22,10 +22,15 @@
  * real-S4 branch ran `schematize_internal.js` without copying it in, silently,
  * because only the dry-run branch had been looked at.
  *
- * THE CENSUS IS ON THE COUNT, not on a list of line numbers. Each tool runs the
- * schematizer TWICE — once into a scratch dry run and once into the real S4 — and
- * the check has to follow both, so the assertion is that the two counts agree.
- * A third build path added later fails this the day it is written.
+ * THE SUBJECT MOVED ON 2026-09-12 (buses-data OA-310), AND THE PROPERTY DID NOT.
+ * Both tools' four copies of the copy-run-capture sequence became one statement in
+ * `build_s4.js`, so the question "does every schematizer run carry the check" is now
+ * asked of that file's RECIPE rather than of two files' line counts — and it is asked
+ * of the RECIPE OBJECT, not of a list of levels typed here, because a check pointed at
+ * an identifier the test itself supplies cannot report that the identifier was wrong.
+ * The count census survives in the second test below, one level up: each tool must
+ * still reach the one build path exactly twice, the dry run and the real S4, so a
+ * third build path added later fails this the day it is written.
  */
 'use strict';
 const test = require('node:test');
@@ -37,35 +42,60 @@ const { load, ENGINE_DIR } = require('./_engine');
 
 const { crossingWarnings, DEFAULT_SEP_M } = load('schematic_crossings.js');
 const { severity, collect, blocking } = load('build_log.js');
+const { RECIPE } = load('build_s4.js');
 
 const TOOLS = ['rollout.js', 'rollout_places.js'];
+const FILES = ['rollout.js', 'rollout_places.js', 'build_s4.js'];
 const src = (name) => fs.readFileSync(path.join(ENGINE_DIR, name), 'utf8');
 
-test('both rollout tools follow every schematizer run with the crossing check', () => {
-  for (const tool of TOOLS) {
-    const s = src(tool);
-    const runs = (s.match(/runNode\(path\.join\(s4[A-Za-z]*, 'schematize_internal\.js'\)/g) || []).length;
-    // Counted on the ARGUMENT, not on the bare name. The first draft counted
-    // `crossingWarnings(` and subtracted one for the require — which does not
-    // contain a paren at all, so the subtraction was really cancelling a mention
-    // of the function inside a comment in one file and nothing in the other. It
-    // reported the correctly-wired place tool as short by one. A census whose
-    // population is "every appearance of a word" is a census of the prose.
-    const checks = (s.match(/crossingWarnings\(s4[A-Za-z]*[,)]/g) || []).length;
-    assert.ok(runs >= 2, `${tool} builds a schematic in ${runs} place(s) — expected the dry run and the real S4`);
-    assert.strictEqual(checks, runs,
-      `${tool} runs the schematizer ${runs} times and checks for crossings ${checks} times`);
+/* Every (sheet, level) pair the engine can draw, taken from the RECIPE itself so a
+ * level or a sheet added later is in the population without anybody remembering. */
+const RECIPES = Object.entries(RECIPE)
+  .flatMap(([key, byLevel]) => Object.entries(byLevel).map(([level, r]) => ({ key, level, r })));
+
+test('every schematizer run in the one build path carries the crossing check', () => {
+  const schematizers = RECIPES.filter(x => x.r.script === 'schematize_internal.js');
+  assert.ok(schematizers.length >= 2,
+    `the RECIPE runs the schematizer for ${schematizers.length} (sheet, level) pair(s) — expected an area and a place`);
+  for (const { key, level, r } of schematizers) {
+    assert.strictEqual(r.crossings, true, `${key}/${level} runs the schematizer and does not check for crossings`);
+  }
+  // And the other direction, which is the one a copy-paste gets wrong: nothing that
+  // is NOT the schematizer may claim the check. There is no schematic workspace to
+  // read for any other sheet, so the answer would be about the previous sheet's.
+  for (const { key, level, r } of RECIPES) {
+    if (r.script !== 'schematize_internal.js') {
+      assert.ok(!r.crossings, `${key}/${level} claims the crossing check and does not run the schematizer`);
+    }
   }
 });
 
-test('neither rollout tool has grown its own copy of the geometry', () => {
-  // The failure this forestalls is not a wrong answer, it is a SECOND answer:
-  // two crossing detectors that agree until the day one of them is fixed.
+test('each rollout tool reaches the one build path exactly twice — the dry run and the real S4', () => {
+  // The census that used to count schematizer runs, one level up. Counted on the
+  // CALL, not on the bare name: an earlier version of this file counted a word and
+  // was really counting a mention of it inside a comment.
   for (const tool of TOOLS) {
     const s = src(tool);
-    assert.match(s, /require\('\.\/schematic_crossings'\)/, `${tool} does not require the detector`);
+    const builds = (s.match(/buildSheets\(\{/g) || []).length;
+    assert.strictEqual(builds, 2,
+      `${tool} calls buildSheets ${builds} time(s) — expected the scratch dry run and the real S4`);
+    // On the DEFINITION, not on the word: both files name runNode in a comment saying
+    // where it went, and a census that counts those is a census of the prose — the
+    // fault this file's header already records itself committing once.
+    assert.ok(!/(?:function|const)\s+runNode\b/.test(s),
+      `${tool} has its own runNode again — the whole point of build_s4.js is that it does not`);
+  }
+});
+
+test('no build path has grown its own copy of the geometry', () => {
+  // The failure this forestalls is not a wrong answer, it is a SECOND answer:
+  // two crossing detectors that agree until the day one of them is fixed.
+  assert.match(src('build_s4.js'), /require\('\.\/schematic_crossings'\)/,
+    'build_s4.js does not require the detector');
+  for (const f of FILES) {
+    const s = src(f);
     for (const own of ['function properCross', 'function selfCrossings', 'function segSepM']) {
-      assert.ok(!s.includes(own), `${tool} has grown its own ${own}`);
+      assert.ok(!s.includes(own), `${f} has grown its own ${own}`);
     }
   }
 });
@@ -167,12 +197,13 @@ test('an unreadable run is reported, not thrown — a rollout must not die of a 
   fs.rmSync(broken, { recursive: true, force: true });
 });
 
-test('the default threshold the rollout uses is the detector\'s own', () => {
-  // Not a tautology: the two rollout tools call crossingWarnings with no options,
-  // so a second default written at the call site is the way these drift apart.
+test('the default threshold the build path uses is the detector\'s own', () => {
+  // Not a tautology: the one call site passes crossingWarnings no options, so a
+  // second default written there is the way these drift apart. All three files are
+  // in the population, because the call site moving is exactly what happened once.
   assert.strictEqual(DEFAULT_SEP_M, 150);
-  for (const tool of TOOLS) {
-    assert.ok(!/crossingWarnings\([^)]*sepM/.test(src(tool)),
-      `${tool} passes its own threshold — there must be one number, in the detector`);
+  for (const f of FILES) {
+    assert.ok(!/crossingWarnings\([^)]*sepM/.test(src(f)),
+      `${f} passes its own threshold — there must be one number, in the detector`);
   }
 });

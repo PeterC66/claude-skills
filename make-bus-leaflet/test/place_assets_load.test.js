@@ -19,20 +19,34 @@
  * tests being wrong: the hash lists exist to name what DRAWS a sheet, and a stage
  * tool does not. It is that nothing else was asking either.
  *
- * WHY THE DARK FILES ARE DARK, and it is structural rather than an oversight.
+ * WHY THE DARK FILES WERE DARK, and it was structural rather than an oversight.
  * generator_load.test.js can require a town generator only because OA-224 Tier 4.1
  * put every generator's body behind `if (require.main === module)`. That round
  * reached this folder's two GENERATORS and stopped there. The other eight .js files
- * are top-to-bottom scripts that read their inputs and act at load, so `require()`
- * would run them — the cheapest check in the estate is not available to them, which
+ * were top-to-bottom scripts that read their inputs and act at load, so `require()`
+ * would run them — the cheapest check in the estate was not available to them, which
  * is exactly the state gen_external_busway.js was in when it threw at load for a day
  * through a re-vendor and a deploy with every gate green.
  *
- * WHAT THIS TEST THEREFORE CLAIMS, AND WHAT IT DOES NOT. It does not claim to catch
- * the busway fault in the eight: a ReferenceError at module scope parses perfectly,
- * and `node --check` would have called that file healthy. Overstating that is the
- * failure this estate has named as a check that reports on a predicate it never
- * evaluated. What it holds is narrower and still worth having:
+ * TIER 4.1 REACHED THIS SKILL ON 2026-09-12 (OA-323 item 1) AND THE INVENTORY IS
+ * NOW EMPTY. Seven of the eight took the town idiom — body inside `function main()`,
+ * `if (require.main === module) main();`, nothing re-indented, so the diff reads as a
+ * scope being added — and the eighth, place_engine.js, turned out to need no guard at
+ * all: it is a library with no body, which is a THIRD category this file did not have
+ * and which its GUARD regex read as "runs at load". All ten .js in the folder are now
+ * required, in a child process with an empty cwd, and every one of them prints
+ * nothing and writes nothing. What that buys is stated in the next paragraph and is
+ * not the whole busway fault: a ReferenceError at module scope is caught by a require
+ * and not by a parse, so the load half is the strong question and the parse half
+ * stays for whatever can only be parsed.
+ *
+ * WHAT THIS TEST THEREFORE CLAIMS, AND WHAT IT DOES NOT. Parse alone does not catch
+ * the busway fault: a ReferenceError at module scope parses perfectly, and
+ * `node --check` would have called that file healthy. Overstating that is the failure
+ * this estate has named as a check that reports on a predicate it never evaluated.
+ * Since every .js here is now loaded as well as parsed, the busway fault IS caught
+ * for this folder — but only for what a bare `require()` reaches, which is module
+ * scope and not a line inside main(). What it holds:
  *
  *   1. no file can appear in this folder, or change category, unnoticed;
  *   2. every file at least PARSES — the strongest question available to a script
@@ -43,11 +57,13 @@
  *   4. the exemption list is the inventory of what is still dark, with a reason
  *      each, and it retires itself in both directions.
  *
- * Fixing (3) for the eight properly — Tier 4.1 for this skill — is an assets/ change
- * and owes a portal re-vendor with `npm run track:engine` in the same commit, so it
- * is FILED rather than made here, for the same reason OA-321 and OA-322 were filed
- * the same week. A gate that is red on the day it lands is one somebody mutes in its
- * first week.
+ * THE RE-VENDOR THIS ROUND WAS EXPECTED TO OWE, IT DOES NOT OWE, and that was
+ * measured rather than assumed: engine/place/ in the portal holds three files, and
+ * the eight are not among them — only gen_internal_place.js and gen_external_places.js
+ * are vendored, and neither moved. Nor are any of the eight in engine_version.js's
+ * place closure, so no map's engine stamp moves and nothing goes stale. OA-321 and
+ * OA-322 still owe theirs; this item did not, once somebody read vendored.json
+ * instead of the sentence that grouped all three together.
  *
  * THE PYTHON HALF IS OUT OF SCOPE HERE AND SAID SO RATHER THAN DROPPED. Four of the
  * fourteen are .py, and test/python/test_module_load.py derives its population from
@@ -102,20 +118,31 @@ const GUARD = /require\s*\.\s*main\s*===\s*module|module\s*===\s*require\s*\.\s*
 const GUARDED = JS.filter((f) => GUARD.test(stripComments(SRC.get(f))));
 const RUNS_AT_LOAD = JS.filter((f) => !GUARD.test(stripComments(SRC.get(f))));
 
+// THE THIRD CATEGORY, and the one this file did not have on the day it was written:
+// a LIBRARY. place_engine.js has no body to guard — it resolves the town engine and
+// exports — so the guard regex read it as "runs at load" and its NOT_REQUIRE_TESTABLE
+// entry said "evaluates its tables at load", which is true and was never a reason it
+// could not be required. Requiring it IS the check.
+//
+// This list is hand-written where the other two are derived, so say what stops it
+// rotting: declaring a file here does not excuse it, it CONSCRIPTS it — the load test
+// below requires every member, so a "library" that grows a body prints or writes or
+// throws and goes red on the spot. The failure direction is closed, which is the
+// opposite of NOT_REQUIRE_TESTABLE, where an entry that stops being true has to be
+// caught by an assertion written for that purpose.
+const PURE_MODULES = new Set(['place_engine.js']);
+const REQUIRE_TESTABLE = JS.filter((f) => GUARDED.includes(f) || PURE_MODULES.has(f));
+
 // THE INVENTORY OF WHAT IS STILL DARK, one line of reason each. This is the
 // load-bearing half of the file: it is what makes a new unguarded script fail
 // rather than join a silent majority, and it is the list whoever does Tier 4.1 for
 // this skill deletes from as they go.
-const NOT_REQUIRE_TESTABLE = new Map([
-  ['aggregate_destinations.js', 'a P2 stage tool — reads the place folder and writes destinations at load'],
-  ['build_internal_place.js', 'a P4 driver — spawns the town gen_internal.js against the place folder at load'],
-  ['build_internal_place_roads.js', 'a P4 driver — spawns the road chain at load'],
-  ['derive_frequency.js', 'a P3 tool; spawned against fixtures by derive_frequency.test.js, which is the idiom for this group'],
-  ['derive_termini.js', 'a P3 tool — reads routes.json and writes termini at load'],
-  ['derive_walkshed.js', 'a P2 tool — reads osm.json and writes the walkshed at load'],
-  ['place_engine.js', 'the place stage helper — evaluates its tables at load'],
-  ['place_verified_services.js', 'a P1 tool — writes verified-services.json into the cwd at load'],
-]);
+// IT IS EMPTY AS OF 2026-09-12, which is what OA-323 item 1 was for, and an empty
+// map here is NOT this test going quiet: the assertion that bites for a new file is
+// `undeclared` below, whose population is the folder, and it is unaffected by this
+// map being empty. What an empty map does cost is the exemption test's own
+// population, so that test states it rather than passing over nothing.
+const NOT_REQUIRE_TESTABLE = new Map([]);
 
 test('the population is this folder on disk, and it is not empty', () => {
   // A suite whose population is empty is green by arithmetic — the assertion
@@ -160,10 +187,12 @@ test('every place asset is either require-testable or has a written reason it is
   // joining the dark one is a decision somebody writes down. Without this, the
   // default for a new file is silence — which is how this folder got to eight.
   if (!PLACE_PRESENT) return;
-  const undeclared = RUNS_AT_LOAD.filter((f) => !NOT_REQUIRE_TESTABLE.has(f));
+  const undeclared = RUNS_AT_LOAD.filter((f) => !NOT_REQUIRE_TESTABLE.has(f) && !PURE_MODULES.has(f));
   assert.deepStrictEqual(undeclared, [],
     'these place assets run their body at load and are excused nowhere: ' + undeclared.join(', ')
-    + '. Either put the body behind `if (require.main === module)` so it can be loaded, '
+    + '. Either put the body behind `if (require.main === module)` so it can be loaded '
+    + '(the idiom the other seven took under OA-323: body inside function main(), nothing '
+    + 're-indented), or declare it in PURE_MODULES if it is a library with no body, '
     + 'or add it to NOT_REQUIRE_TESTABLE with the reason.');
 });
 
@@ -173,12 +202,17 @@ test('everything that CAN be required is required, and draws nothing', () => {
   // the eight gains its guard it joins GUARDED by itself and is load-tested here
   // without anybody adding a line.
   if (!PLACE_PRESENT) return;
-  assert.ok(GUARDED.length >= 2,
-    'no place asset is behind the Tier 4.1 guard — the two generators were, so this has gone backwards. Got: '
-    + GUARDED.join(', '));
+  // The floor moved from 2 to 9 on 2026-09-12 and it is a RATCHET, not a count of
+  // today's folder: nine is the two generators plus the seven OA-323 guarded, and
+  // a tenth (place_engine.js) arrives through PURE_MODULES. A file deleted from the
+  // folder drops it below and says so, which is the direction that matters — going
+  // backwards on Tier 4.1 is exactly how the eight got dark in the first place.
+  assert.ok(REQUIRE_TESTABLE.length >= 9,
+    'fewer place assets can be loaded than on 2026-09-12, when OA-323 item 1 left nine behind '
+    + 'the guard and one declared pure — this has gone backwards. Got: ' + REQUIRE_TESTABLE.join(', '));
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'placeload-'));
   try {
-    for (const f of GUARDED) {
+    for (const f of REQUIRE_TESTABLE) {
       const abs = path.join(PLACE_DIR, f);
       const script = 'require(' + JSON.stringify(abs) + ');';
       let out;
@@ -197,12 +231,30 @@ test('everything that CAN be required is required, and draws nothing', () => {
   }
 });
 
-test('every exemption is still earned, so Tier 4.1 retires its own entries', () => {
+test('every declaration is still earned, so Tier 4.1 retires its own entries', () => {
   // The control, and the half that earns the file. Without it NOT_REQUIRE_TESTABLE
   // excuses a file for ever — including one somebody has already fixed, and one that
   // has been deleted. Red in both directions, which is what page.test.js's own
   // exemption was held to the same week.
   if (!PLACE_PRESENT) return;
+  // OA-323 emptied NOT_REQUIRE_TESTABLE, so the loop below now has no members and a
+  // loop over nothing is green by arithmetic — the shape this file's own header
+  // refuses elsewhere. The fix is not to forbid a future exemption (the `undeclared`
+  // assertion above offers it in terms, and a file that genuinely cannot take the
+  // guard should say so) but to widen this test to every DECLARATION, of which
+  // PURE_MODULES is the one that is not empty. Both lists are hand-written; both
+  // retire their own entries here.
+  assert.ok(NOT_REQUIRE_TESTABLE.size + PURE_MODULES.size > 0,
+    'both declaration lists are empty, so this test asserts nothing — if that is now '
+    + 'the right state, delete it rather than leaving a test that cannot fail.');
+  for (const f of PURE_MODULES) {
+    assert.ok(JS.includes(f),
+      f + ' is declared a pure module and is not in ' + PLACE_DIR + ' any more. Delete its '
+      + 'PURE_MODULES entry — the declaration is stale.');
+    assert.ok(!GUARDED.includes(f),
+      f + ' is behind `if (require.main === module)` now, so it is a script with a body and '
+      + 'not a library. Delete its PURE_MODULES entry; GUARDED already covers it.');
+  }
   for (const [f, why] of NOT_REQUIRE_TESTABLE) {
     assert.ok(JS.includes(f),
       f + ' is excused here and is not in ' + PLACE_DIR + ' any more. Delete its NOT_REQUIRE_TESTABLE entry — '

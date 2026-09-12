@@ -49,6 +49,13 @@
 const fs = require('fs');
 const path = require('path');
 
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const argv = process.argv.slice(2);
 const has = (f) => argv.includes(f);
 const val = (f, d) => { const i = argv.indexOf(f); return i >= 0 && argv[i + 1] != null ? argv[i + 1] : d; };
@@ -185,3 +192,7 @@ console.log('');
 console.log('  routes.json updated: internalRoads.termini now covers ' + Object.keys(out).length + ' service(s).');
 console.log('  Re-run P4 (build_internal_place_roads.js) and CHECK THE RENDER — a side that came out');
 console.log('  backwards shows as a missing label, not a wrong one, so it is easy to miss on the numbers.');
+}
+
+if (require.main === module) main();
+module.exports = { main };

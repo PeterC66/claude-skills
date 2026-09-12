@@ -63,6 +63,13 @@ const { assertNoCollision } = (() => {
   catch (e) { return { assertNoCollision: () => {} }; }
 })();
 
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const args = cli.parseArgs(process.argv.slice(2));
 const WRITE = args.write === true, FORCE = args.force === true;
 const DIR = path.resolve(typeof args.dir === 'string' ? args.dir : '.');
@@ -264,3 +271,7 @@ RJ.design = RJ.design || {};
 RJ.design.frequencyTiers = tiers;
 fs.writeFileSync(path.join(DIR, 'routes.json'), JSON.stringify(RJ, null, 2) + '\n');
 console.log('\n  Written into ' + path.join(DIR, 'routes.json') + (hadFreq ? ' (previous map overwritten)' : ''));
+}
+
+if (require.main === module) main();
+module.exports = { main };

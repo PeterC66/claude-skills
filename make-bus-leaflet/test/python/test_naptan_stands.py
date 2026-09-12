@@ -5,14 +5,18 @@ it exactly as far as the committed place maps happen to exercise it and no
 further. The three properties below are the ones the module's own docstrings call
 load-bearing, and each has a recorded cost behind it.
 """
+import contextlib
+import io
 import json
 import math
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 
 import _engine
+import _stubs
 
 ns = _engine.load("naptan_stands")
 
@@ -229,6 +233,153 @@ class ReadJson(unittest.TestCase):
         with open(os.path.join(tmp, "place.json"), "w", encoding="utf-8") as fh:
             json.dump({"name": "St Ives Bus Station", "note": "café"}, fh)
         self.assertEqual(ns.read_json(tmp, "place.json")["note"], "café")
+
+
+class FrameUniqueness(unittest.TestCase):
+    """THE DECISION THIS MODULE EXISTS TO MAKE, asked for the first time.
+
+    Everything above tests a helper that takes arguments and returns a value.
+    The rule that actually decides whether a boarding plan may be printed at all
+    -- *a name is only a usable identifier if it is unique inside the frame*, and
+    the compass-word rescue that softens it -- lives inside `main()` between two
+    sqlite connections, so nothing could reach it. OA-001 named this and
+    `boarding_index.py`'s locality rollup as what the Python half still could not
+    test; the pattern it named is to stub the data rather than read a dataset.
+
+    THE VERDICT IS THE ASSERTION, NOT THE LABELS. `REFUSE` is the one output of
+    this file that stops a sheet being generated, and the cost of getting it
+    wrong is asymmetric: a false REFUSE wastes a build, while a false OK prints a
+    boarding instruction a reader cannot follow -- two identical flags, one name,
+    and nothing on the pavement to tell them apart.
+    """
+
+    CENTRE = (52.3233, -0.0738)
+    RADIUS_M = 250.0
+
+    def build(self, stops, unserved=()):
+        """Lay out a place folder for `stops` and run `main --write`.
+
+        `stops` is (atco, CommonName, Indicator, metres north of the centre).
+        Every served stop is called at by route 1, because which route calls
+        there is not what this class is about. Returns (exit code, stands.json).
+        """
+        folder = _stubs.scratch("naptan-stands-frame-")
+        self.addCleanup(shutil.rmtree, folder, True)
+        lat0, lon0 = self.CENTRE
+        ll = {}
+        rows = []
+        for atco, common, indicator, north_m in stops:
+            lat = lat0 + north_m / 111195.0
+            ll[atco] = [lat, lon0]
+            rows.append({"ATCOCode": atco, "CommonName": common, "Indicator": indicator,
+                         "LocalityName": "St Ives", "AdministrativeAreaCode": "071",
+                         "StopType": "BCT", "lat": lat, "lon": lon0})
+        for atco, north_m in unserved:
+            ll[atco] = [lat0 + north_m / 111195.0, lon0]
+        _stubs.write_json(os.path.join(folder, "atco2ll.json"), ll)
+        _stubs.write_json(os.path.join(folder, "routes_full_atco.json"),
+                          {"1": {"directions": [{"name": "to Huntingdon",
+                                                 "stops": [s[0] for s in stops]}]}})
+        _stubs.write_json(os.path.join(folder, "place.json"),
+                          {"name": "A Frame With One Question In It",
+                           "lat": lat0, "lon": lon0})
+        _stubs.write_json(os.path.join(folder, "routes.json"),
+                          {"boardingPlan": {"frameRadiusM": self.RADIUS_M}})
+        db = _stubs.naptan_db(os.path.join(folder, "naptan.sqlite"), rows)
+
+        argv = sys.argv
+        sys.argv = ["naptan_stands.py", "--dir", folder, "--naptan", db, "--write"]
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                rc = ns.main()
+        finally:
+            sys.argv = argv
+        with io.open(os.path.join(folder, "stands.json"), encoding="utf-8") as fh:
+            return rc, json.load(fh)
+
+    def labels(self, out):
+        return {s["atco"]: s["label"] for s in out["stops"]}
+
+    def classes(self, out):
+        return {s["atco"]: s["class"] for s in out["stops"]}
+
+    def test_a_lettered_stand_does_not_need_its_name_to_be_unique(self):
+        """Both flags say "Bus Station" and a reader is sent to a bay, not a name."""
+        rc, out = self.build([("A1", "Bus Station", "Bay 1", 40),
+                              ("A2", "Bus Station", "Bay 2", 60)])
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["verdict"], "OK")
+        self.assertEqual(self.labels(out), {"A1": "Bay 1", "A2": "Bay 2"})
+        self.assertEqual(set(self.classes(out).values()), {"stand"})
+
+    def test_a_unique_name_prints_bare_even_when_the_flag_carries_a_compass_word(self):
+        """The qualifier earns its place only where it separates two flags."""
+        rc, out = self.build([("U1", "Cromwell Place", "E-bound", 80)])
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.labels(out), {"U1": "Cromwell Place"})
+        self.assertEqual(self.classes(out), {"U1": "named"})
+
+    def test_a_shared_name_is_rescued_when_every_flag_prints_a_DIFFERENT_compass_word(self):
+        """OA-030, widened 2026-08-30: two "Mill Road" flags reading N-bound and
+        S-bound are as separable on the pavement as two lettered stands, and
+        refusing the sheet over them was refusing it on a sheet whose whole
+        subject is which direction to travel in."""
+        rc, out = self.build([("N1", "Mill Road", "N-bound", 70),
+                              ("N2", "Mill Road", "S-bound", 90)])
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["verdict"], "OK")
+        self.assertEqual(self.labels(out),
+                         {"N1": "Mill Road (N-bound)", "N2": "Mill Road (S-bound)"})
+
+    def test_ONE_flag_without_a_compass_word_sinks_the_whole_cluster(self):
+        """The "every member" clause, which costs 1,771 stops this rule
+        deliberately does not rescue. Two of three flags separate themselves and
+        the third says "opp"; a reader sent to the third has been given a name
+        that matches all three, so the refusal stands for all of them."""
+        rc, out = self.build([("T1", "The Green", "N-bound", 50),
+                              ("T2", "The Green", "S-bound", 70),
+                              ("T3", "The Green", "opp", 90)])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out["verdict"], "REFUSE")
+        self.assertEqual(set(self.classes(out).values()), {"unidentifiable"})
+        self.assertEqual(set(self.labels(out).values()), {None})
+
+    def test_two_flags_printing_the_SAME_compass_word_are_not_separated_either(self):
+        """A distinct word per flag is the rescue; the same word twice is the
+        fault it is rescuing from, spelled more confidently."""
+        rc, out = self.build([("S1", "Station Road", "N-bound", 60),
+                              ("S2", "Station Road", "N-bound", 80)])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out["verdict"], "REFUSE")
+
+    def test_uniqueness_is_measured_INSIDE_the_frame(self):
+        """The frame edge is an arbitrary line through a street, and the rule is
+        written about what is in view. A same-named stop beyond the radius is
+        reported as a warning by the file itself and does not make the in-frame
+        name unprintable."""
+        rc, out = self.build([("F1", "Mill Road", "adj", 100),
+                              ("F2", "Mill Road", "opp", 400)])
+        self.assertEqual(rc, 0)
+        self.assertEqual([s["atco"] for s in out["stops"]], ["F1"])
+        self.assertEqual(self.labels(out), {"F1": "Mill Road"})
+
+    def test_a_stop_no_route_calls_at_is_not_in_the_frame_at_all(self):
+        """`atco2ll.json` is the geometry file and carries every stop the frame
+        drew; a boarding plan is about stops a bus departs from."""
+        rc, out = self.build([("U1", "Cromwell Place", "E-bound", 80)],
+                             unserved=[("Z1", 60)])
+        self.assertEqual(rc, 0)
+        self.assertEqual([s["atco"] for s in out["stops"]], ["U1"])
+
+    def test_the_counts_block_describes_the_stops_it_shipped(self):
+        """`stands.json`'s own summary is what `boarding_index.py` and the report
+        both read before looking at anything else."""
+        rc, out = self.build([("A1", "Bus Station", "Bay 1", 40),
+                              ("U1", "Cromwell Place", "E-bound", 80),
+                              ("T1", "The Green", "opp", 90),
+                              ("T2", "The Green", "adj", 100)])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out["counts"], {"stand": 1, "named": 1, "unidentifiable": 2})
 
 
 if __name__ == "__main__":

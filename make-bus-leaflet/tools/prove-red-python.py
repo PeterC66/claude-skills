@@ -107,6 +107,67 @@ MUTATIONS = [
      "find": "        parent = os.path.dirname(d)\n        if parent == d:\n            return None\n        d = parent",
      "to": "        parent = os.path.dirname(d)\n        if True:\n            return None\n        d = parent"},
 
+    # ------------------------------------------- boarding_index.py, the locality rollup
+    # Every one of these was a real sheet saying something wrong, and until
+    # 2026-09-12 not one of them could be broken on purpose: the rollup is a set
+    # of closures inside `main()` over two sqlite connections, so the only way to
+    # reach it was a full place build against the 127,658-stop register. The
+    # fixture that makes these gradeable is `test/python/_stubs.py`.
+    # THE FIRST WORDING OF THIS ONE SURVIVED, AND THAT IS WHY IT IS WRITTEN LIKE
+    # THIS. It said "climbs one hop only" and broke the loop's SECOND iteration,
+    # which the recorded case does not need: `locality()` starts the climb at the
+    # stop's own ParentLocalityName, so Orchard Park -> Kings Hedges -> Cambridge
+    # is already at the top after one ascent. The fault the file's own comment
+    # describes is the climb not happening at all -- "a single hop up therefore
+    # lands on a Cambridge housing estate" -- which is this edit.
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "the rollup takes the stop's own parent and never ascends, so Orchard Park prints as Kings Hedges -- a Cambridge housing estate offered as a destination",
+     "find": "    def climb(area, name):\n        seen_names = set()",
+     "to": "    def climb(area, name):\n        return name\n        seen_names = set()"},
+
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "a locality name with two different parents is no longer left alone, so Church End takes whichever village the register mentioned last",
+     "find": "    for key in ambiguous:\n        parent_of.pop(key, None)",
+     "to": "    for key in ambiguous:\n        pass"},
+
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "the parent fallback stops being scoped to the stop's own area, so a Cambridgeshire village inherits an Oxfordshire namesake's parent -- the St Neots sheet that offered London and Oxford",
+     "find": '            "SELECT DISTINCT AdministrativeAreaCode, LocalityName, ParentLocalityName FROM naptan "',
+     "to": '            "SELECT DISTINCT \'071\' AS AdministrativeAreaCode, LocalityName, ParentLocalityName FROM naptan "'},
+
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "a half of a joint parish loses its own name, so the 301 advertises Holywell-cum-Needingworth and a reader cannot find the village they are going to",
+     "find": "            if parent and child and joint_parish(child, parent):",
+     "to": "            if False:"},
+
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "a stop earns a destination from the whole trip rather than from what comes AFTER it, so an arrival bay is printed as the place to board for where the bus came from",
+     "find": "            onward = seq[i + 1:]",
+     "to": "            onward = seq[:i] + seq[i + 1:]"},
+
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "the home locality is indexed as a destination, so the sheet offers a bus to the town the reader is standing in",
+     "find": "                if not l or l == home:",
+     "to": "                if not l:"},
+
+    {"suite": "test_boarding_index.py", "file": "boarding_index.py",
+     "what": "boardingPlan.excludeRoutes is ignored, so a summer seaside coach whose calendar has ended is still printed on an autumn sheet",
+     "find": "        if rname in exclude:",
+     "to": "        if False:"},
+
+    # ------------------------------------- naptan_stands.py, the frame uniqueness rule
+    # The decision that stops a sheet being generated at all. Same shape as the
+    # rollup above: inside `main()`, reachable only with a stubbed register.
+    {"suite": "test_naptan_stands.py", "file": "naptan_stands.py",
+     "what": "the compass rescue no longer requires EVERY flag in the cluster to carry a word, so a reader sent to the one that says 'opp' gets a name matching all three",
+     "find": "        if all(words) and len(set(words)) == len(words):",
+     "to": "        if any(words) and len(set(words)) == len(words):"},
+
+    {"suite": "test_naptan_stands.py", "file": "naptan_stands.py",
+     "what": "a name is printed whether or not it is unique in the frame, so the sheet never refuses and sends readers to one of two identical flags",
+     "find": "        elif common and name_counts.get(common.lower(), 0) == 1:",
+     "to": "        elif common:"},
+
     # ---------------------------------------------------------------- cli.py
     # OA-224 Tier 3.1. The order is the flag, then the environment variable, then
     # the laptop -- and the laptop beating the variable is precisely the state the

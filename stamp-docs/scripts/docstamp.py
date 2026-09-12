@@ -27,6 +27,14 @@ Usage:
 
   --dry-run        report what would change, write nothing
   --root NAME      restrict to one root from the policy (buses | portal | ops)
+  --checkout [DIR] stamp the checkout at DIR (default: the current directory) instead of
+                   the configured root path -- a git worktree, or a clone somewhere else.
+                   It walks that ONE checkout and no other, so a session working in a
+                   worktree stamps its own documents and cannot reach a neighbour's.
+                   Worktrees are still never DISCOVERED (`worktrees` stays in
+                   baselineExcludeDirNames, on ownership grounds); this is how you opt
+                   the one you are standing in IN. Refuses a directory it cannot match
+                   to a root -- see resolve_checkout().
   --policy PATH    use an alternative policy file (used by the test harness)
 """
 
@@ -172,6 +180,111 @@ def is_generated(abs_path, marker):
     except OSError:
         return False
     return False
+
+
+def git_common_checkout(path):
+    """The MAIN checkout of the repository containing `path`, or None.
+
+    A linked worktree's `--git-common-dir` is the main checkout's `.git`, so its
+    parent is the main checkout -- which is what a policy root names. This is what
+    lets a worktree find its root WHATEVER it is called, with nothing to configure:
+    `cbm-r2-sample` is not a name any list would have guessed.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", path, "rev-parse", "--git-common-dir"],
+            capture_output=True, text=True, timeout=20,
+        )
+        if out.returncode != 0:
+            return None
+        common = out.stdout.strip()
+        if not common:
+            return None
+        if not os.path.isabs(common):
+            common = os.path.join(path, common)
+        common = os.path.normpath(common)
+        if os.path.basename(common).lower() != ".git":
+            return None
+        return os.path.normpath(os.path.dirname(common))
+    except Exception:
+        return None
+
+
+def resolve_checkout(policy, checkout, only_root=None):
+    """Point ONE root at the checkout in `checkout`, and return that root's name.
+
+    WHY THIS IS NOT "STAMP THE WORKTREES" (the other half of buses-data OA-235).
+    `worktrees` is in `baselineExcludeDirNames` on purpose and must stay: a stamp is
+    an EDIT, and on 2026-09-03 two sessions running `--all` bumped stamps inside
+    each other's worktrees, which is precisely the change that gets swept into a
+    commit describing something else. The objection was never that a worktree holds
+    no documents -- it is ownership. So this does not widen the walk to go and find
+    worktrees; it retargets one root to the ONE checkout you name, and `discover()`
+    then walks that and nothing else. You can still only ever stamp the tree you are
+    standing in, which is the property that incident bought.
+
+    Resolution, most specific first:
+      1. `--root NAME` -- you said which; nothing is guessed.
+      2. the checkout IS a configured root path -- the ordinary case, no retarget.
+      3. its git common-dir's parent is a configured root path -- any worktree of a
+         known repository, whatever the directory happens to be called.
+      4. its basename is in a root's `checkoutDirNames` -- a clone somewhere else
+         under a known name, the same list `check_committed_stamps.py` matches on.
+
+    ON NO MATCH IT REFUSES, WHICH IS THE OPPOSITE OF THE AUDITOR'S DEFAULT AND IS
+    DELIBERATE. `check_committed_stamps.py` audits an unmatched repo with no
+    exclusions and says so, because a silent filter is the worse failure when you
+    are only READING. This script WRITES, and stamping an unknown tree with no
+    exclusions would edit the files the policy exists to leave alone. Refusing names
+    the one thing that fixes it: say which root applies, with `--root`.
+    """
+    checkout = os.path.normpath(os.path.abspath(checkout))
+    if not os.path.isdir(checkout):
+        raise SystemExit("docstamp --checkout: no such directory: {}".format(checkout))
+
+    roots = policy.get("roots", [])
+    by_name = {r["name"]: r for r in roots}
+
+    def same(a, b):
+        return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+    chosen, how = None, None
+    if only_root:
+        chosen = by_name.get(only_root)
+        if not chosen:
+            raise SystemExit("docstamp --checkout: --root {} is not a root in this policy ({})"
+                             .format(only_root, ", ".join(sorted(by_name))))
+        how = "--root"
+    if chosen is None:
+        for r in roots:
+            if same(r["path"], checkout):
+                chosen, how = r, "configured path"
+                break
+    if chosen is None:
+        main = git_common_checkout(checkout)
+        if main:
+            for r in roots:
+                if same(r["path"], main):
+                    chosen, how = r, "worktree of {}".format(r["path"])
+                    break
+    if chosen is None:
+        base = os.path.basename(checkout)
+        for r in roots:
+            if base in (r.get("checkoutDirNames") or []):
+                chosen, how = r, "checkoutDirNames"
+                break
+
+    if chosen is None:
+        raise SystemExit(
+            "docstamp --checkout: {}\n"
+            "  is not a configured root, not a worktree of one, and its name is in no\n"
+            "  root's checkoutDirNames. Refusing rather than stamping an unknown tree\n"
+            "  with no exclusions -- name the root whose policy applies:\n"
+            "    --checkout \"{}\" --root {}".format(
+                checkout, checkout, sorted(by_name)[0] if by_name else "NAME"))
+
+    chosen["path"] = checkout
+    return chosen["name"], how
 
 
 def discover(policy, only_root=None):
@@ -564,6 +677,10 @@ def main(argv=None):
     ap.add_argument("--minor", metavar="FILE", help="force a minor bump of one file")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--root", help="restrict to one root name from the policy")
+    ap.add_argument("--checkout", nargs="?", const=".", metavar="DIR",
+                    help="stamp the checkout at DIR (default: the current directory) "
+                         "instead of the configured root path -- a worktree, or a clone "
+                         "elsewhere. Walks only that one checkout.")
     ap.add_argument("--policy", default=DEFAULT_POLICY)
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args(argv)
@@ -571,6 +688,15 @@ def main(argv=None):
 
     policy = load_policy(args.policy)
     sha_len = policy.get("shaLen", 8)
+
+    # --checkout retargets ONE root and then restricts the walk to it, so a run in a
+    # worktree can never reach a neighbour's. Said out loud on every run: this moves
+    # where an EDIT lands, and a retarget nobody noticed is the failure to avoid.
+    if args.checkout is not None:
+        args.root, how = resolve_checkout(policy, args.checkout, args.root)
+        if not args.quiet:
+            path = next(r["path"] for r in policy["roots"] if r["name"] == args.root)
+            print("checkout: root '{}' ({}) -> {}".format(args.root, how, path))
 
     if args.list:
         for name, _root, _abs, rel in discover(policy, args.root):

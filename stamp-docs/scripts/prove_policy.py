@@ -26,6 +26,7 @@ Exits non-zero and names the case that failed.
 import json
 import os
 import pathlib
+import subprocess
 import sys
 import tempfile
 
@@ -127,6 +128,83 @@ vals = [v[first] for v in faked.values() if first in v]
 report(not all(v == vals[0] for v in vals),
        "the comparison above notices a reader that disagrees — the control")
 
+# --------------------------------------------------------------------------- checkout
+# `--checkout` retargets ONE root at the tree you are standing in, which is how a
+# session in a worktree stamps its own documents without a hand-rolled policy copy.
+# It is the one feature here that deliberately points a WRITER at a path the policy
+# does not name, so the case that matters is the REFUSAL: an unmatched directory
+# must stop, not get stamped with no exclusions. `check_committed_stamps.py` takes
+# the opposite default on purpose because it only reads -- see resolve_checkout().
+print("\nWhere --checkout will let a stamp land:\n")
+
+
+def git(*args, cwd=None):
+    subprocess.run(["git"] + list(args), cwd=cwd, check=True,
+                   capture_output=True, text=True)
+
+
+def real_repo(tmp, name):
+    """A REAL git repository, not a directory shaped like one.
+
+    The first version of this fixture wrote a `.git` file by hand with the right
+    `gitdir:` line in it, and `git rev-parse --git-common-dir` refused it — a linked
+    worktree is also an entry under the main checkout's `.git/worktrees/`, which no
+    amount of writing the leaf file creates. It failed the case it was written to
+    prove, which is the fixture being honest; `git worktree add` is used below.
+    """
+    d = pathlib.Path(tmp) / name
+    d.mkdir(parents=True)
+    git("init", "-q", ".", cwd=d)
+    (d / "seed.txt").write_text("seed\n", encoding="utf-8")
+    git("add", "-A", cwd=d)
+    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init", cwd=d)
+    return d
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    main = real_repo(tmp, "known-repo")
+    wt = pathlib.Path(tmp) / "oddly-named-tree"
+    git("worktree", "add", "-q", "--detach", str(wt), cwd=main)
+    stranger = real_repo(tmp, "stranger")
+    pol = {"baselineExcludeDirNames": [".git"],
+           "roots": [root("known", ["local-only"], path=str(main))]}
+
+    # 1. The ordinary case: the checkout IS the configured root.
+    p = docstamp.load_policy(write_policy(pol))
+    name, how = docstamp.resolve_checkout(p, str(main))
+    report(name == "known" and how == "configured path",
+           "a configured root resolves to itself — got {!r} via {!r}".format(name, how))
+
+    # 2. The case this was built for: a worktree whose NAME nothing could have
+    #    guessed, resolved through git rather than through a list.
+    p = docstamp.load_policy(write_policy(pol))
+    name, how = docstamp.resolve_checkout(p, str(wt))
+    retargeted = next(r["path"] for r in p["roots"] if r["name"] == "known")
+    report(name == "known" and how.startswith("worktree of")
+           and os.path.normcase(retargeted) == os.path.normcase(str(wt)),
+           "a worktree resolves by git common-dir and retargets the root — got {!r}".format(how))
+
+    # 3. It inherits that root's exclusions rather than running with none — the
+    #    whole reason an unmatched tree is refused below.
+    excl = next(r["excludeDirNames"] for r in p["roots"] if r["name"] == "known")
+    report(".git" in excl and "local-only" in excl,
+           "the retargeted root keeps baseline + its own exclusions — got {}".format(sorted(excl)))
+
+    # 4. THE CONTROL. An unmatched tree must REFUSE. Without this the feature is a
+    #    licence to stamp any directory on the disk with no exclusions at all.
+    p = docstamp.load_policy(write_policy(pol))
+    try:
+        docstamp.resolve_checkout(p, str(stranger))
+        report(False, "an unmatched checkout is REFUSED — the control (it was accepted)")
+    except SystemExit as e:
+        report("Refusing" in str(e), "an unmatched checkout is REFUSED — the control")
+
+    # 5. ...and --root is the way past it, so the refusal is a prompt and not a wall.
+    p = docstamp.load_policy(write_policy(pol))
+    name, _how = docstamp.resolve_checkout(p, str(stranger), only_root="known")
+    report(name == "known", "--root names the policy for an unmatched tree — got {!r}".format(name))
+
 print("\n{}".format("{} CASE(S) FAILED".format(failed) if failed
-                    else "The baseline behaves in both directions and all readers agree."))
+                    else "The baseline behaves in both directions, all readers agree, "
+                         "and --checkout refuses what it cannot place."))
 sys.exit(1 if failed else 0)

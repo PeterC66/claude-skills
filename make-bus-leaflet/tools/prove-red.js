@@ -1830,6 +1830,27 @@ const MUTATIONS = [
     find: "  return `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${RASTER_W}\" height=\"${RASTER_H}\" viewBox=\"0 0 ${w} ${h}\">`;",
     to: "  return `<svg width=\"${RASTER_W}\" height=\"${RASTER_H}\" viewBox=\"0 0 ${w} ${h}\">`;" },
 
+  // THE TWO BELOW WERE INVISIBLE UNTIL 2026-09-12, the day after the same fault was
+  // found next door in provenance_date.test.js. page.test.js's census of the page size
+  // ran over a HAND-TYPED list of three generators while SIX files open a page, so the
+  // two pre-stages were outside it — and so was place/gen_external_places.js, which is
+  // breaching the rule today (OA-322). Measured, not argued: the committed test was run
+  // against both mutations below and was GREEN on each. Neither moves a byte either —
+  // an unused `const W` and a root element spelled out to the same characters svgOpen()
+  // returns — so the byte gate is green on them too, which is what leaves this test as
+  // the only thing standing under them. The population is now derived from
+  // engine_version.js and filtered on what each file does, so a generator that starts
+  // opening a page joins it here without anybody typing a name.
+  { suite: 'page.test.js', file: 'schematize_internal.js',
+    what: 'a pre-stage keeps its own copy of the page size in mm — a second home for a number that has to have one, in a file the typed list omitted',
+    find: "const { svgOpen } = require(_dep('page.js'));",
+    to: "const { svgOpen } = require(_dep('page.js'));\nconst W = 297, H = 210;" },
+
+  { suite: 'page.test.js', file: 'diagram_internal.js',
+    what: 'a pre-stage writes the root <svg> out as its own literal instead of calling svgOpen() — the exact shape the place generator is in',
+    find: "  let s = svgOpen();",
+    to: "  let s = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"3508\" height=\"2480\" viewBox=\"0 0 297 210\">`;" },
+
   // external_primitives.js — the radial's marks, shared with its clone (Tier 3.5).
   // There were TWO wraps here until OA-229 landed on 2026-09-04, and two mutations
   // guarding the difference between them: one saying the extraction had not

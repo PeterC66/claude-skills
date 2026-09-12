@@ -690,6 +690,131 @@ console.log('\n16. THE OPERATOR JOIN — closed-world, declared rather than comp
   check('--json carries the join for a board to read', !!j && j.register.operators.declared === true && j.register.operators.strings === 2 && j.register.operators.entries === 2, rJson.out.slice(0, 120));
 }
 
+console.log('\n17. THE COVERAGE ROW — given an operator, which places? (buses-data OA-307 step 2)');
+{
+  /* THE CONTROL IS FIRST AND IT IS THE HALF THAT MATTERS, for the same reason as case 16.
+   * A coverage row is OPTIONAL, so the first thing to establish is that a block where
+   * nobody has written one is green and silent — otherwise this lands red on twenty-five
+   * of the twenty-seven declared operators, and a gate red on day one is a gate somebody
+   * mutes in its first week.
+   *
+   * The fixture is the real shape: an operator with two services, one of which names a map
+   * the other does not, and one map CHECKED AND RULED OUT. That last field is the reason
+   * the row exists at all — the negative established off Tiger on Demand's own polygon
+   * lived only in an action's prose, so the next Huntingdonshire build would have bought
+   * the same answer twice. */
+  const estate = [
+    town('Alpha', { services: [{ route: '1', operator: 'Fixture Buses' }], notOnLeaflet: [{ route: 'DAR', operator: 'Fixture Community Transport', note: 'community' }] }, { routeOrder: ['1'] }, null),
+    town('Beta', { services: [{ route: '2', operator: 'Fixture Buses' }], notOnLeaflet: [{ route: 'DAR2', operator: 'Fixture Community Transport', note: 'community' }] }, { routeOrder: ['2'] }, null),
+    town('Gamma', { services: [{ route: '3', operator: 'Fixture Buses' }] }, { routeOrder: ['3'] }, null),
+  ];
+  const facts = [
+    { ...decided('SF-101', 'DAR', ['Alpha']), operator: 'Fixture Community Transport' },
+    { ...decided('SF-102', 'DAR2', ['Beta']), operator: 'Fixture Community Transport' },
+  ];
+  const source = { url: 'https://example.invalid/areas', kind: 'prose', read: '2026-09-11', says: 'the two areas, parish by parish' };
+  const cover = (extra = {}) => ({
+    researchedOn: '2026-09-11', recheckBy: '2027-09-11', sources: [source],
+    services: [
+      { fact: 'SF-101', calls: 'Area one', maps: ['Alpha'], ruledOut: [{ map: 'Gamma', reason: 'outside the published area, and named nowhere on the page' }] },
+      { fact: 'SF-102', calls: 'Area two', maps: ['Beta'] },
+    ],
+    ...extra,
+  });
+  const reg = (coverage) => ({
+    _operators: { operators: [{ name: 'Fixture Buses', aliases: [] }, { name: 'Fixture Community Transport', aliases: [], ...(coverage === undefined ? {} : { coverage }) }] },
+    facts,
+  });
+  /* A service's `maps` must BE its fact's `scope`, so a mutation to one is normally
+   * written as a mutation to the other; this rewrites the row rather than the register. */
+  const withService = (i, patch) => { const c = cover(); c.services[i] = { ...c.services[i], ...patch }; return c; };
+
+  const rNone = run(repo('cov-absent', estate, reg(undefined)));
+  check('CONTROL: an `_operators` block with no coverage row anywhere is green and says nothing about coverage',
+    rNone.code === 0 && !/coverage row/.test(rNone.out), `exit ${rNone.code}: ${rNone.out.split('\n').find((l) => l.includes('coverage')) || '(silent, as it should be)'}`);
+
+  const rOk = run(repo('cov-control', estate, reg(cover())));
+  check('CONTROL: a well-formed coverage row is green', rOk.code === 0, `exit ${rOk.code}: ${rOk.out.split('\n').filter((l) => l.includes('coverage')).join(' | ')}`);
+  check('...and the run SAYS what it answered — the services, the maps reached and the maps ruled out',
+    /Fixture Community Transport: 2 service\(s\) over 2 map\(s\), 1 map\(s\) checked and ruled OUT \(Gamma\) — read 2026-09-11, recheck by 2027-09-11/.test(rOk.out),
+    rOk.out.split('\n').find((l) => l.includes('Fixture Community Transport:')) || '(no coverage line)');
+  check('...and it says how many declared operators carry none, so "nobody has asked" is visible rather than absent',
+    /1 declared operator\(s\) carry none, which is not a finding/.test(rOk.out), rOk.out.split('\n').find((l) => l.includes('carry none')) || '');
+
+  /* THE JOIN ITSELF. A coverage row may only claim a service its own operator runs — this
+   * is what stops the two halves of the register drifting apart in silence, and it is the
+   * whole difference between a checked row and a document. */
+  const rWrongOwner = run(repo('cov-wrong-owner', estate, {
+    _operators: { operators: [{ name: 'Fixture Buses', aliases: [], coverage: cover() }, { name: 'Fixture Community Transport', aliases: [] }] },
+    facts,
+  }));
+  check('a coverage row claiming another operator\'s service is red, and names both operators',
+    rWrongOwner.code === 1 && /SF-101's own `operator` "Fixture Community Transport" resolves to "Fixture Community Transport", not to "Fixture Buses"/.test(rWrongOwner.out),
+    `exit ${rWrongOwner.code}: ${rWrongOwner.out.split('\n').find((l) => l.includes('may only claim')) || ''}`);
+
+  const rGhost = run(repo('cov-ghost-fact', estate, reg(withService(0, { fact: 'SF-999' }))));
+  check('a service naming a `fact` that does not exist is red — a coverage row hangs off a register entry or off nothing',
+    rGhost.code === 1 && /SF-999: `fact` names no entry in `facts\[\]`/.test(rGhost.out), `exit ${rGhost.code}`);
+
+  const rDrift = run(repo('cov-scope-drift', estate, reg(withService(0, { maps: ['Alpha', 'Beta'] }))));
+  check('a row whose `maps` are not its fact\'s `scope` is red — a second home for an answer is a second answer',
+    rDrift.code === 1 && /`maps` \[Alpha \| Beta\] is not SF-101's `scope` \[Alpha\]/.test(rDrift.out),
+    `exit ${rDrift.code}: ${rDrift.out.split('\n').find((l) => l.includes('is not SF-101')) || ''}`);
+
+  /* RULED OUT — the field written nowhere else, and the two ways it can lie. */
+  const rBothWays = run(repo('cov-ruled-out-contradiction', estate, reg(withService(0, { ruledOut: [{ map: 'Alpha', reason: 'outside the area' }] }))));
+  check('a map both served and ruled out is red — the register cannot say two things about one map',
+    rBothWays.code === 1 && /"Alpha" is ALSO in SF-101's scope — a map cannot be both served and ruled out/.test(rBothWays.out), `exit ${rBothWays.code}`);
+  const rUnknownMap = run(repo('cov-ruled-out-unknown', estate, reg(withService(0, { ruledOut: [{ map: 'Delta', reason: 'outside the area' }] }))));
+  check('ruling out a map this estate does not build is red — a negative about nothing tells nobody anything',
+    rUnknownMap.code === 1 && /"Delta" is not a map this estate tracks/.test(rUnknownMap.out), `exit ${rUnknownMap.code}`);
+  const rNoReason = run(repo('cov-ruled-out-no-reason', estate, reg(withService(0, { ruledOut: [{ map: 'Gamma' }] }))));
+  check('a ruling with no `reason` is red — a reader must be able to disagree with the judgement rather than with a silence',
+    rNoReason.code === 1 && /needs a `map` and a `reason`/.test(rNoReason.out), `exit ${rNoReason.code}`);
+
+  /* SOURCES — what the row rests on, and the one kind that may have no URL. */
+  const rNoSources = run(repo('cov-no-sources', estate, reg({ ...cover(), sources: [] })));
+  check('a coverage row with no sources is red — the source IS the claim', rNoSources.code === 1 && /has no `sources`/.test(rNoSources.out), `exit ${rNoSources.code}`);
+  const rNoSays = run(repo('cov-source-no-says', estate, reg({ ...cover(), sources: [{ url: 'https://example.invalid/x', kind: 'prose', read: '2026-09-11' }] })));
+  check('a source with no `says` is red — a URL with no record of what it said is a bookmark',
+    rNoSays.code === 1 && /has no `says`/.test(rNoSays.out), `exit ${rNoSays.code}`);
+  const rNoUrl = run(repo('cov-source-no-url', estate, reg({ ...cover(), sources: [{ kind: 'prose', read: '2026-09-11', says: 'something' }] })));
+  check('a source of any kind but `absent` with no url is red', rNoUrl.code === 1 && /has no `url`, and only a source of kind "absent"/.test(rNoUrl.out), `exit ${rNoUrl.code}`);
+  const rAbsent = run(repo('cov-source-absent', estate, reg({ ...cover(), sources: [source, { kind: 'absent', read: '2026-09-11', says: 'no prose source names the settlements; recorded so nobody looks again' }] })));
+  check('...but an `absent` source — a place the answer was looked for and was NOT — is green with no url, which is the case the real register needs',
+    rAbsent.code === 0, `exit ${rAbsent.code}: ${rAbsent.out.split('\n').find((l) => l.includes('absent')) || ''}`);
+
+  /* THE DATE, AND THE ONE THING IT MUST NOT DO. Shape is checked; DUENESS is not, because
+   * a gate that reddens when a date passes reddens `main` on the calendar with nobody
+   * committing anything (buses-data OA-289, measured). The second assertion is the one
+   * that had to be able to fail: a recheckBy long past must still be GREEN here. */
+  const rBadDate = run(repo('cov-bad-date', estate, reg({ ...cover(), recheckBy: 'next September' })));
+  check('a `recheckBy` that is not an ISO date is red — a date nothing can parse is a date nothing can enumerate',
+    rBadDate.code === 1 && /`recheckBy` must be an ISO date/.test(rBadDate.out), `exit ${rBadDate.code}`);
+  const rPast = run(repo('cov-date-passed', estate, reg({ ...cover(), recheckBy: '2020-01-01' })));
+  check('A RECHECK DATE SIX YEARS PAST IS GREEN — the checker never reads the clock, and the board is what says a recheck is due',
+    rPast.code === 0, `exit ${rPast.code}: ${rPast.out.split('\n').find((l) => l.includes('recheckBy')) || ''}`);
+
+  /* AND THE DATES REACH A READER. The whole point of step 2's second half: eighteen
+   * recheck dates sat in a tracked file that nothing enumerated. */
+  const rJson = run(repo('cov-json', estate, reg(cover())), '--json');
+  let j = null; try { j = JSON.parse(rJson.out); } catch { /* left null */ }
+  check('--json carries every recheck date, sorted earliest first, with no verdict attached',
+    !!j && Array.isArray(j.register.recheck) && j.register.recheck.length === 3
+      && j.register.recheck.filter((x) => x.kind === 'operator').length === 1
+      && j.register.recheck.every((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.by))
+      && !('due' in (j.register.recheck[0] || {})),
+    j ? JSON.stringify(j.register.recheck) : rJson.out.slice(0, 160));
+  check('--json carries the coverage rows for a board to read', !!j && j.register.operators.coverage.length === 1
+    && j.register.operators.coverage[0].maps.join('|') === 'Alpha|Beta' && j.register.operators.coverage[0].ruledOut.join('|') === 'Gamma',
+    j ? JSON.stringify(j.register.operators.coverage) : '');
+
+  /* CI RUNS THIS HALF: the coverage row reads the register and the maps' tracked files,
+   * and nothing else, so unlike the S6 half there is nothing here actions/checkout destroys. */
+  const rCi = run(repo('cov-register-only', estate, reg(withService(0, { maps: ['Alpha', 'Beta'] }))), '--register-only');
+  check('--register-only runs the coverage join too', rCi.code === 1 && /is not SF-101's `scope`/.test(rCi.out), `exit ${rCi.code}`);
+}
+
 console.log('\n' + '='.repeat(78));
 rmSync(TMP, { recursive: true, force: true });
 if (failures) {

@@ -1158,6 +1158,51 @@ if (s6Stale.length) {
           do: [{ kind: 'skill', what: `Work the queued entries in service-facts.json (${qids.join(', ')}): for each, answer its \`question\`, apply its \`default\` only if it names a decided OA-004 default, record decidedOn/decidedBy/outcome/reason/evidence/recheckBy, then write the map's notOnLeaflet[] or verified set. Runbook: s6-verify.md, "What happens to a claim".` }],
         });
       }
+
+      /*
+       * THE RECHECK DATES, AND THIS IS THE PLACE THE CLOCK IS READ (buses-data
+       * OA-307 step 2). Every decided register entry carries a `recheckBy`, and
+       * since 2026-09-12 a researched operator coverage row does too — eighteen
+       * dates in a tracked file, and until now NOTHING enumerated any of them.
+       * That is the same shape as the queued entry above, which sat unenumerated
+       * from the day it was written: a field written down, checked for shape, and
+       * reaching nobody.
+       *
+       * THE CHECKER DELIBERATELY DOES NOT TAKE THIS VERDICT and hands over the
+       * dates bare. Comparing a stored date to today inside a gate is a stored
+       * answer re-derived against an input nobody declares, and it reddens `main`
+       * on the CALENDAR with nobody committing anything (OA-289, measured). A
+       * board is the right place for it, because a board is ABOUT today: this row
+       * appears the morning a date comes round and goes away when somebody
+       * answers it, and neither event is a commit.
+       *
+       * `null` when the checker is older than this worklist — the vendored-tool
+       * pairing the `queuedFacts` fallback above exists for — so an absent field
+       * reads as "this checker did not tell me" and never as "nothing is due".
+       */
+      const recheck = (v.register && Array.isArray(v.register.recheck)) ? v.register.recheck : null;
+      if (recheck) {
+        const today = new Date().toISOString().slice(0, 10);
+        const due = recheck.filter((r) => r && typeof r.by === 'string' && r.by <= today);
+        if (due.length) {
+          const days = (iso) => Math.max(0, Math.round((Date.parse(today) - Date.parse(iso)) / 86400000));
+          add({
+            key: 's6-register-recheck', rank: 8, type: 'housekeeping',
+            title: `${due.length} register entr${due.length === 1 ? 'y is' : 'ies are'} due a recheck: ${due.map((r) => r.id).join(', ')}`,
+            why: due.map((r) => `${r.id} — ${r.what}, due ${r.by} (${days(r.by)}d ago)`).join('; ')
+              + '. A recheck date is what somebody wrote down when they decided the entry, and it is the only thing that brings a settled answer back for a second look.'
+              + ` ${due.filter((r) => r.kind === 'operator').length ? 'An OPERATOR row asks the coverage question again — what does the operator publish today, and which of our maps does it name. ' : ''}`
+              + 'Re-read the entry\'s own `evidence` first: a source that has moved or gone is itself the finding.',
+            who: 'a session, or Peter where the answer needs a person', runbook: 'S6',
+            towns: [...new Set(due.flatMap((r) => (Array.isArray(r.maps) ? r.maps : [])))],
+            ageDays: Math.max(...due.map((r) => days(r.by))),
+            do: [
+              { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'prints every recheck date the register holds, earliest first' },
+              { kind: 'skill', what: `Re-read the evidence behind ${due.map((r) => r.id).join(', ')}, then either move the \`recheckBy\` forward with what you found or change the entry. Runbook: s6-verify.md, "What happens to a claim".` },
+            ],
+          });
+        }
+      }
     }
   }
 }

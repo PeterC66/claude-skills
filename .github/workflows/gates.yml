@@ -358,6 +358,24 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-directory-links
 
+      # buses-data OA-307 step 2 (2026-09-12): every decided entry in the service-facts
+      # register carries a `recheckBy`, and since today a researched operator coverage
+      # row does too -- eighteen dates that NOTHING enumerated. check-s6-claims.mjs
+      # deliberately refuses to say which are DUE: a gate comparing a stored date to
+      # today reddens `main` on the calendar with nobody committing anything (OA-289,
+      # measured once a day for as long as a claim was held). So the checker hands over
+      # the dates bare and the BOARD takes the verdict -- and that split is only safe if
+      # the board half is watched firing, which on the real register it cannot be: its
+      # earliest date is 2026-12-08, so the row has never once appeared. This harness
+      # builds a throwaway git repository, because the checker enumerates from
+      # `git ls-files` and answers `notARepository` over anything else -- a plain temp
+      # directory would make every case quietly absent, which is a harness proving
+      # nothing. Read its two QUIET cases first: a date a year away says nothing, and a
+      # date moved forward -- which is what answering a recheck does -- takes the row away.
+      - name: Prove the register-recheck row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-register-recheck
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

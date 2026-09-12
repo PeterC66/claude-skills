@@ -388,7 +388,7 @@ for (const [i, f] of facts.entries()) {
  * A REGISTER WITH NO `_operators` BLOCK DOES NOT GO QUIETLY GREEN: the join is skipped and
  * the run SAYS how many strings it therefore did not check, the same shape as
  * `--register-only` saying the coverage half did not run. */
-const operatorJoin = { declared: false, entries: 0, strings: 0, uses: 0, unused: [], skipped: null };
+const operatorJoin = { declared: false, entries: 0, strings: 0, uses: 0, unused: [], coverage: [], skipped: null };
 {
   const uses = [
     ...maps.flatMap((m) => decl.get(m.name).operators),
@@ -468,6 +468,99 @@ const operatorJoin = { declared: false, entries: 0, strings: 0, uses: 0, unused:
       operatorJoin.unused = entries
         .filter((e) => e && typeof e.name === 'string' && !used.has(e.name.trim()))
         .map((e) => e.name.trim());
+
+      /* ---- COVERAGE: *given an operator, which places?* (buses-data OA-307 step 2) ----
+       * The join above asks whether a spelling is known. This asks the question OA-306 found
+       * that nothing in this system asks at all: a community or demand-responsive operator
+       * states its coverage as a LIST OF PLACES, and every stage of the pipeline can only ask
+       * about one place at a time — S1 pulls by ATCO prefix, the red team is told to re-derive
+       * one town, and a register entry keys on a route. The measured cost of that gap is
+       * SF-016: the Ely Co-op blind red team cost 89k–137k tokens, found two other services and
+       * missed FACT's East Cambridgeshire Dial-a-Ride, which one page fetch then found.
+       *
+       * A `coverage` row is OPTIONAL and carried only where somebody has actually read the
+       * operator's own pages. What makes it a check rather than a document is that it is
+       * JOINED, not merely written: each service names a `facts[]` entry, that entry's own
+       * `operator` must resolve — through the same alias index the join above uses — to THIS
+       * operator, and the maps it lists must BE that entry's `scope[]`. So the two halves of
+       * the register cannot drift apart silently, which is the failure a second home for an
+       * answer always has.
+       *
+       * `ruledOut[]` is the half that is written nowhere else. OA-307's Tiger on Demand round
+       * read the operator's own polygon and established that four of our maps are OUTSIDE the
+       * West Huntingdonshire zone; that negative lived only in the action's prose, so the next
+       * session to build a Huntingdonshire map would have paid for the question again. A map
+       * may not be both served and ruled out, and a ruling with no reason is refused, because
+       * a reader must be able to disagree with the judgement rather than with a silence.
+       *
+       * NOTHING HERE READS THE CLOCK. `recheckBy` is checked for SHAPE and never for dueness:
+       * a gate that reddens because a date has passed is a stored answer re-derived against an
+       * input nobody declared, and it turns `main` red on the CALENDAR with nobody committing
+       * anything — buses-data OA-289, which did exactly that once a day for as long as a claim
+       * was held. Whether a recheck is DUE is the board's question, and `register.recheck`
+       * below hands it every date with no verdict attached. */
+      const factById = new Map(facts.filter((f) => f && typeof f.id === 'string').map((f) => [f.id, f]));
+      const ISO = /^\d{4}-\d{2}-\d{2}$/;
+      const SOURCE_KINDS = new Set(['prose', 'geometry', 'timetable', 'absent']);
+      const claimedFacts = new Map();
+      for (const [i, e] of entries.entries()) {
+        if (!e || typeof e !== 'object' || typeof e.name !== 'string' || e.coverage === undefined) continue;
+        const at = `\`_operators\`.operators[${i}] ${e.name} coverage`;
+        const bad = (text) => registerFindings.push({ kind: 'operator', text: `${at}: ${text}` });
+        const cov = e.coverage;
+        if (!cov || typeof cov !== 'object' || Array.isArray(cov)) { bad('is not an object.'); continue; }
+        for (const k of ['researchedOn', 'recheckBy']) {
+          if (typeof cov[k] !== 'string' || !ISO.test(cov[k])) bad(`\`${k}\` must be an ISO date (YYYY-MM-DD) — a date nothing can parse is a date nothing can enumerate.`);
+        }
+        const sources = Array.isArray(cov.sources) ? cov.sources : null;
+        if (!sources || sources.length === 0) bad('has no `sources` — a coverage row is a claim about what the operator publishes, and the source is the claim.');
+        else for (const [si, s] of sources.entries()) {
+          if (!s || typeof s !== 'object') { bad(`sources[${si}] is not an object.`); continue; }
+          if (typeof s.kind !== 'string' || !SOURCE_KINDS.has(s.kind)) bad(`sources[${si}] has kind ${JSON.stringify(s.kind)} — it must be one of ${[...SOURCE_KINDS].join(', ')}.`);
+          if (typeof s.says !== 'string' || s.says.trim() === '') bad(`sources[${si}] has no \`says\` — a URL with no record of what it said is a bookmark, and the page will have changed by the time anybody opens it.`);
+          if (s.kind !== 'absent' && (typeof s.url !== 'string' || s.url.trim() === '')) bad(`sources[${si}] has no \`url\`, and only a source of kind "absent" — a place the answer was looked for and was not — may lack one.`);
+          if (typeof s.read !== 'string' || !ISO.test(s.read)) bad(`sources[${si}] has no ISO \`read\` date.`);
+        }
+        const svcs = Array.isArray(cov.services) ? cov.services : null;
+        if (!svcs || svcs.length === 0) { bad('names no `services` — an operator whose services nobody has listed is not a researched row.'); continue; }
+        for (const [si, s] of svcs.entries()) {
+          const sat = `${at}.services[${si}]${s && typeof s.fact === 'string' ? ` ${s.fact}` : ''}`;
+          const say = (text) => registerFindings.push({ kind: 'operator', text: `${sat}: ${text}` });
+          if (!s || typeof s !== 'object') { say('is not an object.'); continue; }
+          const f = typeof s.fact === 'string' ? factById.get(s.fact) : undefined;
+          if (!f) { say('`fact` names no entry in `facts[]` — a coverage row hangs off a register entry or off nothing.'); continue; }
+          const owner = typeof f.operator === 'string' ? resolve(f.operator.trim()) : [];
+          if (owner.length !== 1 || owner[0] !== e.name.trim())
+            say(`${f.id}'s own \`operator\` "${f.operator}" resolves to ${owner.length === 1 ? `"${owner[0]}"` : `${owner.length} operator(s)`}, not to "${e.name}" — a coverage row may only claim a service its own operator runs.`);
+          if (claimedFacts.has(s.fact)) say(`${s.fact} is already claimed by "${claimedFacts.get(s.fact)}" — one service belongs to one operator.`);
+          else claimedFacts.set(s.fact, e.name.trim());
+          const scope = Array.isArray(f.scope) ? f.scope.map(String) : [];
+          const listed = Array.isArray(s.maps) ? s.maps.map(String) : null;
+          if (!listed) say('has no `maps` array — write `[]` rather than leaving it out, so that "this service reaches none of our maps" is a thing somebody said.');
+          else {
+            const a = [...new Set(scope)].sort().join(' | '), b = [...new Set(listed)].sort().join(' | ');
+            if (a !== b) say(`\`maps\` [${b}] is not ${f.id}'s \`scope\` [${a}] — the coverage row and the register entry answer the same question, and a second home for an answer is a second answer.`);
+          }
+          for (const [ri, r] of (Array.isArray(s.ruledOut) ? s.ruledOut : []).entries()) {
+            const rat = `${sat}.ruledOut[${ri}]`;
+            if (!r || typeof r.map !== 'string' || typeof r.reason !== 'string' || r.reason.trim() === '') {
+              registerFindings.push({ kind: 'operator', text: `${rat} needs a \`map\` and a \`reason\` — a map ruled out with no reason written down is a judgement nobody can disagree with.` });
+              continue;
+            }
+            if (!mapByName.has(r.map)) registerFindings.push({ kind: 'operator', text: `${rat}: "${r.map}" is not a map this estate tracks — a negative about a map nobody builds tells nobody anything.` });
+            if (scope.includes(r.map)) registerFindings.push({ kind: 'operator', text: `${rat}: "${r.map}" is ALSO in ${f.id}'s scope — a map cannot be both served and ruled out.` });
+          }
+        }
+        operatorJoin.coverage.push({
+          operator: e.name.trim(),
+          researchedOn: typeof cov.researchedOn === 'string' ? cov.researchedOn : null,
+          recheckBy: typeof cov.recheckBy === 'string' ? cov.recheckBy : null,
+          sources: sources ? sources.length : 0,
+          services: svcs.length,
+          maps: [...new Set(svcs.flatMap((s) => (s && Array.isArray(s.maps) ? s.maps : [])))],
+          ruledOut: [...new Set(svcs.flatMap((s) => (s && Array.isArray(s.ruledOut) ? s.ruledOut.map((r) => (r && r.map) || '?') : [])))],
+        });
+      }
     }
   }
 }
@@ -646,6 +739,34 @@ const queuedFacts = facts.filter(f => f && f.status === 'queued').map(f => ({
   claimed: REGISTER_ONLY ? null : queued.some(l => l.covered.id === f.id),
   maps: [...new Set(queued.filter(l => l.covered.id === f.id).map(l => l.map))],
 }));
+/*
+ * EVERY RECHECK DATE THE REGISTER HOLDS, WITH NO VERDICT ATTACHED (OA-307 step 2).
+ * A decided fact must carry a `recheckBy` and, since today, a researched operator
+ * coverage row does too — and until now NOTHING enumerated either, so seventeen
+ * dates sat in a tracked file that only a reader who went looking would ever meet.
+ * That is the shape of the finding this register's own `queuedFacts` fixed on
+ * 2026-09-10: a field written down, checked for shape, and reaching nobody.
+ *
+ * THE VERDICT IS DELIBERATELY NOT TAKEN HERE. Comparing these dates to today is
+ * what makes a recheck DUE, and this checker is byte-compared in CI against a
+ * committed corpus: a finding that appears because the clock moved would redden
+ * `main` with nobody having committed anything, once a day, for as long as the
+ * date stayed passed — buses-data OA-289, measured rather than feared. So the
+ * checker hands over the dates and `worklist.mjs` — a board, whose whole job is
+ * to be about today — decides which of them have come round.
+ */
+const registerRecheck = [
+  ...facts.filter(f => f && typeof f.recheckBy === 'string' && f.recheckBy.trim() !== '').map(f => ({
+    kind: 'fact', id: f.id, by: f.recheckBy.trim(),
+    what: `${f.route}${f.operator ? ` (${f.operator})` : ''}`,
+    maps: Array.isArray(f.scope) ? f.scope.filter(s => s !== '*') : [],
+  })),
+  ...operatorJoin.coverage.filter(c => c.recheckBy).map(c => ({
+    kind: 'operator', id: c.operator, by: c.recheckBy,
+    what: `${c.services} service(s) this operator publishes, researched ${c.researchedOn || 'on an unrecorded date'}`,
+    maps: c.maps,
+  })),
+].sort((a, b) => a.by.localeCompare(b.by) || a.id.localeCompare(b.id));
 const unreadableDecls = maps.flatMap(m => decl.get(m.name).unreadable);
 
 // ---- verdict ------------------------------------------------------------------
@@ -658,7 +779,7 @@ if (AS_JSON) {
     claims: claims.length, uncovered, queued: queued.map(l => ({ map: l.map, route: l.route, id: l.covered.id })),
     coveredBy: claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
     aliasedClaims: claims.filter(l => l.covered && l.covered.by === 'badge-alias').map(l => ({ map: l.map, run: l.run, id: l.id, category: l.category, route: l.route, ...l.covered })),
-    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, findings: registerFindings, silences, aliased, owed, operators: operatorJoin },
+    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, recheck: registerRecheck, findings: registerFindings, silences, aliased, owed, operators: operatorJoin },
     registerOnly: REGISTER_ONLY, requireReports: REQUIRE_REPORTS, red,
   }, null, 2));
 } else {
@@ -673,6 +794,10 @@ if (AS_JSON) {
   }
   console.log(`\ncheck-s6-claims — ${path.resolve(ROOT)}`);
   console.log(`  ${maps.length} map(s) tracked; register: ${register ? `${facts.length} fact(s), ${facts.filter(f => f && f.status === 'queued').length} queued, ${facts.filter(f => f && f.status === 'decided').length} decided` : 'ABSENT'}`);
+  /* The dates, never the verdict — see `registerRecheck`. Which of these have come round
+   * is `worklist.mjs`'s question, because a gate that reads the clock reddens on the
+   * calendar (buses-data OA-289). */
+  if (registerRecheck.length) console.log(`  ${registerRecheck.length} recheck date(s) in the register, earliest ${registerRecheck[0].by} (${registerRecheck[0].id}) — handed to the board, which decides which are due; nothing here reads today's date.`);
   if (queuedFacts.length) {
     console.log(`  ${queuedFacts.length} QUEUED register ${queuedFacts.length === 1 ? 'entry is' : 'entries are'} awaiting a decision — enumeration, not a finding:`);
     for (const q of queuedFacts) {
@@ -695,6 +820,16 @@ if (AS_JSON) {
   if (operatorJoin.declared) {
     console.log(`  operator join: ${operatorJoin.strings} distinct operator string(s) over ${operatorJoin.uses} use(s), against ${operatorJoin.entries} declared operator(s) — each must resolve to exactly one`);
     if (operatorJoin.unused.length) console.log(`      ${operatorJoin.unused.length} declared operator(s) no map or fact names today — enumeration, not a finding: ${operatorJoin.unused.join(', ')}`);
+    /* WHAT THE COVERAGE ROWS ANSWER, AND HOW MANY OPERATORS STILL ANSWER NOTHING. The
+     * second number is the one worth printing: a row is optional, so a block where nobody
+     * has ever asked *given an operator, which places?* is green and silent otherwise. */
+    if (operatorJoin.coverage.length) {
+      console.log(`      ${operatorJoin.coverage.length} operator(s) carry a researched coverage row — given an operator, which places? — joined to the register entry each names:`);
+      for (const c of operatorJoin.coverage) {
+        console.log(`        ${c.operator}: ${c.services} service(s) over ${c.maps.length} map(s)${c.ruledOut.length ? `, ${c.ruledOut.length} map(s) checked and ruled OUT (${c.ruledOut.join(', ')})` : ''} — read ${c.researchedOn}, recheck by ${c.recheckBy}`);
+      }
+      console.log(`        ${operatorJoin.entries - operatorJoin.coverage.length} declared operator(s) carry none, which is not a finding: a coverage row is written where somebody has read the operator's own pages.`);
+    }
   } else if (operatorJoin.skipped) {
     console.log(`  operator join NOT RUN: ${REGISTER_NAME} has ${operatorJoin.skipped}.`);
   }

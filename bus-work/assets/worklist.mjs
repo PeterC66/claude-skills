@@ -82,6 +82,7 @@ import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
+import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
@@ -944,6 +945,32 @@ if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkA
 // a row this file may not have added yet.
 const loopBlocked = loopBlockedItems({ files: readBlockedDir(path.join(BUSES, 'loop', 'blocked')) });
 for (const it of loopBlocked.items) add(it);
+
+// COMMITTED WORK NOBODY HAS PUSHED, AND NOTHING KNEW IT EXISTED (OA-326,
+// 2026-09-12). `countUnpushed` in the CONDITIONS block above answers only for
+// the branch each of the three checkouts happens to have out, so a branch held
+// in a worktree — or checked out nowhere, the normal end state once a worktree
+// is removed — is invisible to it. On the day this was filed the board printed
+// `the portal  community-bus-maps — main, clean` while 463 insertions with a
+// falsification harness sat on a branch with no pull request and no
+// loop/blocked/ item. Computed rather than declared, for the reason in
+// unpushed_branches.mjs: a rule telling every tick to declare its own residue
+// can be forgotten, and on the day this was found it had been.
+//
+// IT OPENS NO SOCKET. Patch identity from `git cherry` and refs already on the
+// disk; whether a PUSHED branch has an open pull request is the half this
+// deliberately does not ask, and the count it does not raise is reported as a
+// warning so the narrowing is visible rather than silent.
+const stranded = unpushedBranchItems({
+  repos: [
+    { key: 'portal', name: 'community-bus-maps', dir: PORTAL, prPerChange: true },
+    { key: 'engine', name: 'claude-skills', dir: findEngineRepo(), prPerChange: true },
+    { key: 'buses', name: 'buses-data', dir: BUSES, prPerChange: false },
+  ].filter((r) => !!r.dir),
+});
+for (const it of stranded.items) add(it);
+for (const n of stranded.notes) warnings.push(n);
+for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name} could not be read — ${u.why}`);
 
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
 // the last one with no reader: `loop/blocked/` says these items need you and

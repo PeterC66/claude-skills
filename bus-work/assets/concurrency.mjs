@@ -709,6 +709,15 @@ export function needsOf(item) {
   // barred from making, so classifying it by the tree would hide it exactly
   // when it is right.
   if (key === 'loop-drafts') return [];
+  // OA-326 (2026-09-12): the row's action is `git push` plus opening a pull
+  // request, which only Peter can do — the loop is denied the push by design and
+  // that is the reason the row exists. Pushing a branch writes to no working
+  // tree here, and whatever REVIEWING that branch turns out to need belongs to
+  // the row that review becomes. Empty for the same load-bearing reason as
+  // `ci-red-` and `loop-blocked-`: --safe-only hides every non-SAFE row, and a
+  // row saying finished work is invisible to everyone but this laptop must not
+  // be the one hidden from a session looking for something safe to do.
+  if (key.startsWith('unpushed-branch-')) return [];
   // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
   // rather than left to fall through the default — the row's own action WRITES to
   // the buses tree twice over. `directory.mjs --links` writes link-check.json, and

@@ -118,11 +118,34 @@ OA-129 Phase 3 is extracting `gen_internal.js` along the comment banners already
 
 ## Git in this repo
 
-**Direct push to `main`**, single branch, no PRs as a matter of course. The portal is the opposite — strictly PR-per-change. Check which convention a repo uses before pushing.
+**PR-per-change to `main`, since 12 September 2026.** `main` is protected: the two `Bus leaflet gates` checks — `unit` and `status` — are required by name, a branch must be **up to date** with `main` before it merges, and **nobody may bypass**, administrators included. A direct `git push origin main` is refused by the server. This repository was direct-push until that date, and the three repositories are no longer alike: `community-bus-maps` has been PR-per-change under the same four settings since 2026-09-03, and `buses-data` is still direct-push because it is private, can never be made public while it holds `Correspondence/`, and pays for every Actions minute. **Check which convention a repo uses before pushing** — they sit side by side in this account and the answer is now different in each.
 
-`C:\u3a St Ives\.claude\skills` and `C:\Users\Peter\.claude\skills` are **separate repos with different remotes**, and it is the individual skill *folders* that are junctioned between them, not the tree. Bus and u3a skill work belongs in `C:\u3a St Ives\.claude\skills`; `git status` in the personal checkout stays quiet about it. `stamp-docs`, `token-saver`, `impeccable` and several others live only in the personal one.
+**Why it changed, and it is not tidiness.** On 2026-09-12 three commits — `09f2c64`, `f21eec3`, `00f6d36` — sat on this shared checkout's `main` unpushed and untested for up to two and a half hours (`09f2c64` for 2 h 34 m). `00f6d36` broke `prove-red-schematic-crossings.js`. A fourth session then pushed its own unrelated commit, `1f98812`, which published all four at once — so the only run that ever saw the break was titled *docstamp --checkout: stamp the worktree you are standing in*, and **the red landed under the wrong commit**. Nothing was wrong with the run; the commit it names simply is not the commit that broke it. A PR tests a change on its own, before it reaches `main`, and that is the whole of the fix.
 
-Other sessions run concurrently. Stage by name, never a directory; read `git diff --cached --stat` before committing; re-check `git branch --show-current` immediately before you commit.
+**A red `main` here does not stay here.** `actions/checkout` fetches this repository with **no `ref:`** from three jobs in the other two repositories — twice in `community-bus-maps/.github/workflows/test.yml` (the hygiene checker, then the document checkers) and once in `buses-data/.github/workflows/gates.yml` (the engine itself) — so each of those runs whatever is on this `main` **at the moment it runs**. A broken `tools/` or a broken generator reddens a sibling under a commit that never touched this repository, and floats a sibling falsely GREEN whenever this side is ahead of what that commit was written against. It is the same mechanism `buses-data`'s CLAUDE.md describes from the other end, and it is why this `main` being green is two other repositories' business.
+
+### Several sessions share ONE checkout, and protection does not stop them committing
+
+`C:\u3a St Ives\.claude\skills` is a single working tree that concurrent sessions commit into, and **a checkout can only be on one branch at a time** — so "just make a branch" is not available to two sessions at once: whoever switches switches it for everybody, mid-edit. Protection refuses the *push* and says nothing about the *commit*, so with no convention the 2026-09-12 shape repeats one step earlier — commits pile onto a local `main` that can no longer go anywhere, and the first session to notice has to untangle several sessions' work off it.
+
+**So take a worktree.** Two placeholders, both yours to choose: `<branch-name>` is the branch, and it is used twice below as the directory name too. One self-contained command, from anywhere:
+
+```bash
+git -C "C:/u3a St Ives/.claude/skills" worktree add "C:/u3a St Ives/.claude/skills-wt/<branch-name>" -b "<branch-name>"
+```
+
+Four things about a worktree of *this* repository, each already paid for somewhere:
+
+- **Run `npm ci` in it, and never junction or copy `node_modules` into it.** The tests live off `make-bus-leaflet/node_modules`, and `git worktree remove --force` follows a junction out of the worktree and empties whatever it points at — which is how the main checkout's copy was emptied once already. Replace `<branch-name>` with the one you chose; from anywhere: `npm --prefix "C:/u3a St Ives/.claude/skills-wt/<branch-name>/make-bus-leaflet" ci`
+- **The Skill tool still runs the MAIN checkout, never your worktree.** Every skill folder is junctioned into `C:\Users\Peter\.claude\skills` from `C:\u3a St Ives\.claude\skills`, so invoking `make-bus-leaflet`, or letting a stage tool pick its own engine path, runs the code on `main` and your change is not in it. Call scripts by their absolute path inside the worktree, and give `status.js` the worktree's own `assets/` as its working directory — otherwise you gate the change you did not make, and it reports green about a tree you are not shipping.
+- **Stamp with `--checkout`, because nothing will find your documents for you.** `worktrees` is excluded from stamp discovery on purpose — a stamp is an edit, and two sessions once bumped stamps inside each other's worktrees. From inside the worktree, no placeholders: `python "C:/Users/Peter/.claude/skills/stamp-docs/scripts/docstamp.py" --all --checkout .`
+- **Remove it when the PR merges**, with `git worktree remove` rather than by deleting the directory, so the administrative entry goes with it. `git -C "C:/u3a St Ives/.claude/skills" worktree list` is the read that says what is actually there.
+
+**Opening the PR.** `gh pr create` from the worktree, then read both checks. `gates.yml` already carried `pull_request: branches: [main]`, so a PR is gated by exactly the workflow a push used to run and this switch needed no workflow change at all. Merge only on green — and the up-to-date rule means a base that has moved asks you to update the branch first, which is the rule the portal has and `buses-data` deliberately does not.
+
+`C:\u3a St Ives\.claude\skills` and `C:\Users\Peter\.claude\skills` are **separate repos with different remotes**, and it is the individual skill *folders* that are junctioned between them, not the tree. Bus and u3a skill work belongs in `C:\u3a St Ives\.claude\skills`; `git status` in the personal checkout stays quiet about it. `token-saver`, `impeccable` and several others live only in the personal one — **this sentence named `stamp-docs` among them until 2026-09-12 and was wrong**, as `git ls-files stamp-docs` here has always answered; it is tracked in this repository and junctioned into the personal one like the rest.
+
+Other sessions run concurrently. Stage by name, never a directory; read `git diff --cached --stat` before committing, as its own command; re-check `git branch --show-current` immediately before you commit — on this shared checkout that last one now also tells you whether you are on `main`, where a commit can no longer be pushed anywhere.
 
 ## House style for documents
 

@@ -196,6 +196,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-engine-indirection
 
+      # The page census asks whether any generator still keeps its own copy of the
+      # sheet size, and its place half cannot be mutated from `prove-red.js`: that
+      # harness copies the TOWN assets to its scratch dir, so the place skill is not
+      # there to break. This one redirects PLACE_SKILL_ASSETS at a copy instead, and
+      # carries the case `prove-red.js` could not have either -- a KNOWN_LITERAL
+      # exemption granted to a file that no longer breaches the rule, which matters
+      # because that map is EMPTY since OA-322 and a control iterating nothing is
+      # green about everything. ~3 s.
+      - name: Prove the page census can go red across the skill boundary
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-page-place
+
       # The octolinear schematizer has no non-crossing constraint, so it can draw a
       # route crossing itself where the ground does not (buses-data OA-240). The
       # detector is standalone and deliberately OUTSIDE the engine hash closure --

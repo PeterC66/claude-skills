@@ -358,6 +358,25 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-directory-links
 
+      # buses-data OA-317 (2026-09-12): the step above proves a URL still RESOLVES.
+      # This one is about what the page SAYS, which is the half the sweep cannot see --
+      # a council quietly adding a town map to a page we already record reports LIVE
+      # for ever, so OA-315's `coverage.mjs --check` stays green because nobody looked.
+      # The row narrows to the authorities `existing-coverage.json` actually names (two
+      # today, across all 20 maps) rather than all 76, and asks a PERSON to re-read them
+      # quarterly. Like its sibling the row is a pure function of two dated files on
+      # disk, so falsifying it here costs nothing and opens no socket -- but the ROW
+      # itself must never become a CI step, because a staleness measure is a function of
+      # the clock and would redden `main` on the calendar (OA-289). Its section 10 joins
+      # the real buses-data files to this reader and SAYS IT IS SKIPPED here, that
+      # repository being absent from this checkout. Read the two SILENT-ON-PURPOSE
+      # sections first: an unmatched `lta` and an unparseable register are already faults
+      # of `coverage.mjs --check` in buses-data's own gates, and one fault printed twice
+      # under two names is worse than one.
+      - name: Prove the coverage-gate freshness row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-directory-coverage
+
       # buses-data OA-307 step 2 (2026-09-12): every decided entry in the service-facts
       # register carries a `recheckBy`, and since today a researched operator coverage
       # row does too -- eighteen dates that NOTHING enumerated. check-s6-claims.mjs

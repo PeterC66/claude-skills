@@ -84,6 +84,7 @@ import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
+import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -988,6 +989,17 @@ for (const it of loopDrafts) add(it);
 // minute-long one and fail on a train — see this file's own header on the network.
 const directoryDir = path.join(BUSES, 'BusMapsUK', 'bus-map-directory');
 for (const it of directoryLinkItems({ state: readDirectoryState(directoryDir) })) add(it);
+
+// AND THE FRESHNESS OF THE TWO ROWS THE COVERAGE GATE READS (OA-317, 2026-09-12).
+// The sweep above proves a URL resolves; this asks whether anybody has re-read
+// what the page SAYS. A council quietly adding a town map to a page we already
+// record reports LIVE for ever, so `coverage.mjs --check` stays green because
+// nobody looked. Narrowed to the authorities `existing-coverage.json` actually
+// names — two today, across all 20 maps — which is OA-317's own recommendation:
+// the other 74 rows feed the public panel and no gate, and are deliberately on no
+// cadence beyond the monthly link sweep. Reads two tracked files, opens no socket,
+// and must never enter CI: it is a function of the clock (OA-289).
+for (const it of directoryCoverageItems({ state: readCoverageState(directoryDir) })) add(it);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows

@@ -581,6 +581,115 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
     /\[ALIASED: the map spells it 61EY and badges it "61"\]/.test(rOwed.out), rOwed.out.split('\n').find((l) => l.includes('SF-014  Neots')) || '');
 }
 
+console.log('\n16. THE OPERATOR JOIN — closed-world, declared rather than computed, and loud when it does not run (buses-data OA-307)');
+{
+  /* THE CONTROL IS WRITTEN FIRST AND IT IS THE HALF THAT MATTERS. This section adds a
+   * gate over a field 157 uses wide, and the way a gate like that gets muted is by being
+   * red on the day it lands. So: an estate whose spellings are all declared is GREEN, and
+   * the run says what it looked at; then each way of breaking it is watched go red.
+   *
+   * The fixture is the real divergence, not a contrived one — an acronym against its
+   * expansion, which is the case the register's own `operator` rule cites and the one no
+   * normaliser can find. */
+  const ops = (extra = {}) => ({
+    _operators: {
+      operators: [
+        { name: 'FACT Community Transport', aliases: ['Fenland Assoc. for Community Transport'] },
+        { name: 'Whippet Coaches', aliases: [] },
+      ],
+      ...extra,
+    },
+    facts: [],
+  });
+  const estate = [town('Fixture',
+    { services: [{ route: '1', operator: 'Whippet Coaches' }], notOnLeaflet: [{ route: '33A', operator: 'Fenland Assoc. for Community Transport', note: 'community' }] },
+    { routeOrder: ['1'] }, null)];
+
+  const rOk = run(repo('op-control', estate, ops()));
+  check('CONTROL: an estate whose every spelling is declared is green', rOk.code === 0, `exit ${rOk.code}: ${rOk.out.split('\n').find((l) => l.includes('operator')) || ''}`);
+  check('...and the run SAYS what it joined — the strings, the uses and the operators', /operator join: 2 distinct operator string\(s\) over 2 use\(s\), against 2 declared operator\(s\)/.test(rOk.out), rOk.out.split('\n').find((l) => l.includes('operator join')) || '(no join line)');
+
+  /* THE SAME FIXTURE WITH THE ALIAS REMOVED. This is the both-ways control the estate's
+   * own rule asks for: the green above has to be the alias doing work, not the join
+   * failing to look. */
+  const rNone = run(repo('op-unresolved', estate, { _operators: { operators: [{ name: 'FACT Community Transport', aliases: [] }, { name: 'Whippet Coaches', aliases: [] }] }, facts: [] }));
+  check('a string resolving to NO operator is red, and the row names the string and where it is written',
+    rNone.code === 1 && /operator "Fenland Assoc. for Community Transport" \(1 use\(s\): Fixture notOnLeaflet 33A\) resolves to no `_operators` entry/.test(rNone.out),
+    `exit ${rNone.code}: ${rNone.out.split('\n').find((l) => l.includes('resolves to no')) || ''}`);
+
+  const rTwo = run(repo('op-ambiguous', estate, { _operators: { operators: [
+    { name: 'FACT Community Transport', aliases: ['Fenland Assoc. for Community Transport'] },
+    { name: 'Fenland Community Transport', aliases: ['Fenland Assoc. for Community Transport'] },
+    { name: 'Whippet Coaches', aliases: [] },
+  ] }, facts: [] }));
+  check('a string TWO entries claim is red — ambiguity is as broken as absence',
+    rTwo.code === 1 && /"Fenland Assoc. for Community Transport" is declared by "FACT Community Transport" and "Fenland Community Transport"/.test(rTwo.out),
+    `exit ${rTwo.code}: ${rTwo.out.split('\n').find((l) => l.includes('is declared by')) || ''}`);
+
+  /* THE REGISTER'S OWN `operator` FIELD IS PART OF THE ESTATE, which is the finding that
+   * started this: SF-009 and SF-010 name Redline Buses under a spelling no map uses. */
+  const rReg = run(repo('op-register-field', estate, {
+    _operators: { operators: [{ name: 'FACT Community Transport', aliases: ['Fenland Assoc. for Community Transport'] }, { name: 'Whippet Coaches', aliases: [] }] },
+    facts: [{ ...decided('SF-001', '1', ['Fixture']), operator: 'Redline Buses' }],
+  }));
+  check('an operator named only in the register, declared nowhere, is red — the register is part of the estate it checks',
+    rReg.code === 1 && /operator "Redline Buses" \(1 use\(s\): service-facts.json facts SF-001\)/.test(rReg.out),
+    `exit ${rReg.code}: ${rReg.out.split('\n').find((l) => l.includes('Redline')) || ''}`);
+
+  /* COMPOUND — a string that names two operators. It is DECLARED, never split on the
+   * slash: nothing tells a join that a slash is a separator rather than a character. */
+  const slash = [town('Fixture',
+    { services: [{ route: '1', operator: 'Whippet Coaches' }], notOnLeaflet: [{ route: '654', operator: 'Carousel Buses / Red Eagle', note: 'joint' }] },
+    { routeOrder: ['1'] }, null)];
+  const carousel = [{ name: 'Carousel Buses', aliases: [] }, { name: 'Red Eagle', aliases: [] }, { name: 'Whippet Coaches', aliases: [] }];
+  const rSlashBare = run(repo('op-compound-undeclared', slash, { _operators: { operators: carousel }, facts: [] }));
+  check('an undeclared slash-joined string is red rather than quietly split into two names',
+    rSlashBare.code === 1 && /operator "Carousel Buses \/ Red Eagle"/.test(rSlashBare.out), `exit ${rSlashBare.code}`);
+  const rSlashOk = run(repo('op-compound', slash, { _operators: { operators: carousel, compound: [{ string: 'Carousel Buses / Red Eagle', members: ['Carousel Buses', 'Red Eagle'], unnamed: [], reason: 'a joint operation, declared off the sheet' }] }, facts: [] }));
+  check('...and green once it is declared as a list with its members and a reason', rSlashOk.code === 0, `exit ${rSlashOk.code}: ${rSlashOk.out.split('\n').find((l) => l.includes('Carousel')) || ''}`);
+  const rSlashNoReason = run(repo('op-compound-no-reason', slash, { _operators: { operators: carousel, compound: [{ string: 'Carousel Buses / Red Eagle', members: ['Carousel Buses', 'Red Eagle'], unnamed: [] }] }, facts: [] }));
+  check('a compound with no `reason` is red — the judgement is the load-bearing half', rSlashNoReason.code === 1 && /has no `reason`/.test(rSlashNoReason.out), `exit ${rSlashNoReason.code}`);
+  const rSlashBadMember = run(repo('op-compound-bad-member', slash, { _operators: { operators: carousel, compound: [{ string: 'Carousel Buses / Red Eagle', members: ['Carousel Buses', 'Red Kite'], unnamed: [], reason: 'joint' }] }, facts: [] }));
+  check('a member naming no operator is red — a compound cannot launder an undeclared name', rSlashBadMember.code === 1 && /member "Red Kite" resolves to no `_operators` entry/.test(rSlashBadMember.out), `exit ${rSlashBadMember.code}`);
+  const rUnnamed = run(repo('op-compound-unnamed', slash, { _operators: { operators: carousel, compound: [{ string: 'Carousel Buses / Red Eagle', members: ['Carousel Buses', 'Red Eagle'], unnamed: [{ text: 'others' }], reason: 'joint' }] }, facts: [] }));
+  check('an `unnamed` fragment with no reason is red — excused in writing or not at all', rUnnamed.code === 1 && /excused in writing or not at all/.test(rUnnamed.out), `exit ${rUnnamed.code}`);
+
+  /* AN ENTRY NOTHING USES IS ENUMERATED AND NOT RED — otherwise declaring an operator
+   * ahead of the map that will write it is refused, which is exactly what OA-307's next
+   * step does. */
+  const rUnused = run(repo('op-unused', estate, { _operators: { operators: [
+    { name: 'FACT Community Transport', aliases: ['Fenland Assoc. for Community Transport'] },
+    { name: 'Whippet Coaches', aliases: [] },
+    { name: 'Tiger on Demand', aliases: [] },
+  ] }, facts: [] }));
+  check('a declared operator nothing writes is enumerated, not red', rUnused.code === 0 && /1 declared operator\(s\) no map or fact names today — enumeration, not a finding: Tiger on Demand/.test(rUnused.out),
+    `exit ${rUnused.code}: ${rUnused.out.split('\n').find((l) => l.includes('enumeration')) || ''}`);
+
+  /* AND THE ONE THAT STOPS THIS GOING QUIET. A register with no block at all is green —
+   * every fixture above case 16 has none — but it must SAY it did not look, with the
+   * count it did not check. A gate that answers "no findings" over a corpus it never
+   * opened is this estate's own named shape. */
+  const rSkip = run(repo('op-absent', estate, { facts: [] }));
+  check('no `_operators` block: green, but the run says the join DID NOT RUN and how many strings went unchecked',
+    rSkip.code === 0 && /operator join NOT RUN: service-facts.json has no `_operators` block, so 2 operator string\(s\) over 2 use\(s\) were NOT checked against anything/.test(rSkip.out),
+    `exit ${rSkip.code}: ${rSkip.out.split('\n').find((l) => l.includes('operator join')) || '(silent — the bad case)'}`);
+
+  /* THE ACCEPTANCE TEST EVERY CHECKER HERE IS HELD TO: identical counts from a subfolder
+   * and from the root, because a stage-engine call leaves the shell inside a map. */
+  const root = repo('op-cwd', estate, ops());
+  const below = runFrom(root, path.join('Areas', 'Fixture', 'S1-services', '2026-09-01_0000'));
+  const line = (o) => (o.split('\n').find((l) => l.includes('operator join')) || '').trim();
+  check('started inside a map: the same join line, over the whole estate', below.code === 0 && line(below.out) === line(rOk.out) && line(below.out) !== '', `${line(below.out)} | ${line(rOk.out)}`);
+
+  /* AND CI'S HALF RUNS IT — the join reads tracked files only, so unlike the coverage
+   * half there is nothing here that actions/checkout destroys. */
+  const rCi = run(repo('op-register-only', estate, { _operators: { operators: [{ name: 'Whippet Coaches', aliases: [] }] }, facts: [] }), '--register-only');
+  check('--register-only still runs the join, because it reads only what git tracks', rCi.code === 1 && /resolves to no `_operators` entry/.test(rCi.out), `exit ${rCi.code}`);
+  const rJson = run(repo('op-json', estate, ops()), '--json');
+  let j = null; try { j = JSON.parse(rJson.out); } catch { /* left null */ }
+  check('--json carries the join for a board to read', !!j && j.register.operators.declared === true && j.register.operators.strings === 2 && j.register.operators.entries === 2, rJson.out.slice(0, 120));
+}
+
 console.log('\n' + '='.repeat(78));
 rmSync(TMP, { recursive: true, force: true });
 if (failures) {

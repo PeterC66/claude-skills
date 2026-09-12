@@ -67,6 +67,19 @@
  * that key to the badge the entry is named after, is ALIASED rather than silent —
  * printed, never red, naming the registered key to put in the entry's `aliases[]`.
  *
+ * AND IT JOINS EVERY OPERATOR STRING IN THE ESTATE TO ONE OPERATOR (buses-data OA-307,
+ * 2026-09-12). The register's own rule is ONE STRING PER OPERATOR, ESTATE-WIDE, and
+ * nothing checked it: 32 distinct strings over 20 maps, three operators spelled seven
+ * ways, one of them — `Redline Buses` — written in the register under a spelling no map
+ * has ever used. `_operators` in that file declares each operator and the aliases it is
+ * actually written under, and every string in every map's `services[]`, `notOnLeaflet[]`
+ * (and its three read-only spellings) and `redteamRejected[]`, plus every `facts[].operator`,
+ * must resolve to exactly ONE of them. The join is CLOSED-WORLD and exact rather than
+ * normalised, because the normaliser that found the divergence could not have found all of
+ * it — see the block comment at the join. A string naming two operators is declared in
+ * `compound[]` with its members; a fragment naming none is excused there in writing. This
+ * moves no ink: the aliases record what the sheets say today.
+ *
  * AND IT ENUMERATES WHAT A DECIDED `include` STILL OWES (buses-data OA-285). That
  * outcome says the service should be ON the sheet at the next rebuild, so the
  * `notOnLeaflet[]` entry that satisfies the silence check is the UNFINISHED state
@@ -244,9 +257,27 @@ function latest(manifest, stage) {
   return s.runs.find(r => r.id === s.latest) || null;
 }
 
+/* EVERY FIELD IN WHICH A MAP NAMES AN OPERATOR. The four route-carrying arrays a map
+ * writes, `notOnLeaflet[]`'s three read-only spellings included (buses-data OA-259: they
+ * may no longer be written and are read for ever). The operator join below is closed-world,
+ * so this list is the world — a field left out of it is a place a divergent spelling could
+ * hide, which is why it is written once here rather than inline at the two call sites. */
+const OPERATOR_FIELDS = ['services', 'notOnLeaflet', 'verifiedNotDisplayed', 'notDisplayed', 'excluded', 'redteamRejected'];
+
 /** What a map has WRITTEN about its services: its verified set, its exclusions, its rejections. Tracked files only. */
 function loadDeclarations(m) {
-  const d = { services: new Set(), off: new Map(), rejected: new Map(), routeOrder: new Set(), badge: new Map(), unreadable: [] };
+  const d = { services: new Set(), off: new Map(), rejected: new Map(), routeOrder: new Set(), badge: new Map(), operators: [], unreadable: [] };
+  const takeOperators = (obj, where) => {
+    if (!obj || typeof obj !== 'object') return;
+    for (const field of OPERATOR_FIELDS) {
+      const arr = obj[field];
+      if (!Array.isArray(arr)) continue;
+      for (const e of arr) {
+        if (!e || typeof e !== 'object' || typeof e.operator !== 'string' || e.operator.trim() === '') continue;
+        d.operators.push({ string: e.operator.trim(), map: m.name, field, route: e.key || e.route || '(no route)', where });
+      }
+    }
+  };
   const manifest = tryJson(path.join(ROOT, m.dir, 'manifest.json'));
   if (!manifest || manifest.__unreadable) { d.unreadable.push(`${m.dir}/manifest.json`); return d; }
   const s1 = latest(manifest, 'S1'), s3 = latest(manifest, 'S3');
@@ -268,6 +299,7 @@ function loadDeclarations(m) {
     else if (v) {
       for (const s of (v.services || [])) for (const key of keysOf(s.key || s.route)) d.services.add(key);
       takeOff(v, p);
+      takeOperators(v, p);
     }
   }
   if (s3) {
@@ -283,6 +315,9 @@ function loadDeclarations(m) {
       // A PLACE declares its exclusions in S3 (its S1 is regenerated from BODS on every
       // pull and would overwrite them) — buses-data OA-262 item 3.
       if (m.kind === 'place') takeOff(r, p);
+      // The operator strings are taken from S3 for EVERY map, town or place: a town's S3
+      // carries the same fields, and a divergent spelling in one is as real as in the other.
+      takeOperators(r, p);
     }
   }
   return d;
@@ -331,6 +366,108 @@ for (const [i, f] of facts.entries()) {
     for (const prop of ['runs', 'public']) {
       const vals = new Set(list.map(f => f.fact[prop]).filter(v => v === true || v === false));
       if (vals.size > 1) registerFindings.push({ kind: 'contradiction', text: `${list.map(f => f.id).join(' and ')} disagree about whether ${key.split('|')[0]} (${list[0].operator}) \`${prop}\` — a fact about a service has one answer estate-wide (OA-004 decision 4).` });
+    }
+  }
+}
+
+// ---- the operator join (buses-data OA-307) ------------------------------------
+/* THE REGISTER'S `operator` RULE IS "ONE STRING PER OPERATOR, ESTATE-WIDE", and until
+ * 2026-09-12 nothing checked it: a sweep that day found 32 distinct strings over 20 maps
+ * and three operators spelled seven ways. This join is CLOSED-WORLD on purpose. Every
+ * operator string the estate writes must resolve, through a name or a DECLARED alias in
+ * `_operators`, to exactly one entry; none is a finding and two is a finding. The rejected
+ * alternative was a normalising key, and it is rejected on measurement rather than on
+ * taste: the sweep's own normaliser (lower case, brackets dropped, punctuation stripped,
+ * company suffixes removed) reported TWO operators carrying more than one spelling when
+ * the answer was THREE. It cannot see `Fenland Assoc. for Community Transport` against
+ * `FACT Community Transport` — an acronym and its expansion share no characters — and it
+ * cannot tell `Redline` against `Redline Buses` (one operator) from `Stagecoach East`
+ * against `Stagecoach East Midlands` (two). A checker keyed on an identifier it derived
+ * itself cannot report that the identifier was wrong, and its number reads like an answer.
+ *
+ * A REGISTER WITH NO `_operators` BLOCK DOES NOT GO QUIETLY GREEN: the join is skipped and
+ * the run SAYS how many strings it therefore did not check, the same shape as
+ * `--register-only` saying the coverage half did not run. */
+const operatorJoin = { declared: false, entries: 0, strings: 0, uses: 0, unused: [], skipped: null };
+{
+  const uses = [
+    ...maps.flatMap((m) => decl.get(m.name).operators),
+    ...facts.map((f, i) => (f && typeof f.operator === 'string' && f.operator.trim() !== ''
+      ? { string: f.operator.trim(), map: REGISTER_NAME, field: 'facts', route: f.id || `facts[${i}]`, where: REGISTER_NAME }
+      : null)).filter(Boolean),
+  ];
+  const distinct = new Map();
+  for (const u of uses) { if (!distinct.has(u.string)) distinct.set(u.string, []); distinct.get(u.string).push(u); }
+  operatorJoin.uses = uses.length;
+  operatorJoin.strings = distinct.size;
+
+  /* Where a string is written, for a row a reader can act on without grepping. Three sites
+   * and a count, because `Carousel Buses` is written 36 times and a finding is not a list. */
+  const sites = (list) => {
+    const seen = [...new Set(list.map((u) => `${u.map} ${u.field} ${u.route}`))];
+    return seen.slice(0, 3).join('; ') + (seen.length > 3 ? `; and ${seen.length - 3} more` : '');
+  };
+
+  const block = register ? register._operators : undefined;
+  if (register && (block === undefined || block === null)) {
+    operatorJoin.skipped = `no \`_operators\` block, so ${distinct.size} operator string(s) over ${uses.length} use(s) were NOT checked against anything`;
+  } else if (register) {
+    operatorJoin.declared = true;
+    const entries = Array.isArray(block.operators) ? block.operators : null;
+    const compounds = block.compound === undefined ? [] : (Array.isArray(block.compound) ? block.compound : null);
+    if (!entries) registerFindings.push({ kind: 'operator', text: '`_operators` has no `operators` array — the join cannot run over a declaration that is not there.' });
+    if (compounds === null) registerFindings.push({ kind: 'operator', text: '`_operators.compound` is present but is not an array.' });
+    if (entries) {
+      operatorJoin.entries = entries.length;
+      const index = new Map();     // every declared string -> the entry names claiming it
+      const claim = (s, name) => { if (!index.has(s)) index.set(s, []); index.get(s).push(name); };
+      for (const [i, e] of entries.entries()) {
+        const at = `\`_operators\`.operators[${i}]${e && typeof e.name === 'string' ? ` ${e.name}` : ''}`;
+        if (!e || typeof e !== 'object') { registerFindings.push({ kind: 'operator', text: `${at} is not an object.` }); continue; }
+        if (typeof e.name !== 'string' || e.name.trim() === '') { registerFindings.push({ kind: 'operator', text: `${at} has no \`name\`.` }); continue; }
+        if (!Array.isArray(e.aliases)) { registerFindings.push({ kind: 'operator', text: `${at} has no \`aliases\` array — write \`[]\` rather than leaving it out, so that "this operator has one spelling" is a thing somebody said.` }); continue; }
+        claim(e.name.trim(), e.name.trim());
+        for (const a of e.aliases) {
+          if (typeof a !== 'string' || a.trim() === '') { registerFindings.push({ kind: 'operator', text: `${at} has an alias that is not a string.` }); continue; }
+          claim(a.trim(), e.name.trim());
+        }
+      }
+      for (const [s, names] of index) {
+        if (names.length > 1) registerFindings.push({ kind: 'operator', text: `"${s}" is declared by ${[...new Set(names)].length > 1 ? [...new Set(names)].map((n) => `"${n}"`).join(' and ') : `"${names[0]}" twice`} — a string that resolves to two operators is as broken as one that resolves to none.` });
+      }
+      const resolve = (s) => index.get(s) || [];
+      const used = new Set();
+      const byCompound = new Map();
+      for (const [i, c] of (compounds || []).entries()) {
+        const at = `\`_operators\`.compound[${i}]${c && typeof c.string === 'string' ? ` "${c.string}"` : ''}`;
+        if (!c || typeof c !== 'object' || typeof c.string !== 'string' || c.string.trim() === '') { registerFindings.push({ kind: 'operator', text: `${at} has no \`string\`.` }); continue; }
+        if (!Array.isArray(c.members) || c.members.length === 0) { registerFindings.push({ kind: 'operator', text: `${at} names no \`members\` — a compound string with no members is a name nobody has read.` }); continue; }
+        if (typeof c.reason !== 'string' || c.reason.trim() === '') registerFindings.push({ kind: 'operator', text: `${at} has no \`reason\` — the judgement that this string is a list rather than a name is the load-bearing half, and a reader must be able to disagree with it.` });
+        if (index.has(c.string.trim())) registerFindings.push({ kind: 'operator', text: `${at} is ALSO declared as an operator name or alias — it cannot be both a list and a name.` });
+        for (const u of (Array.isArray(c.unnamed) ? c.unnamed : [])) {
+          if (!u || typeof u.text !== 'string' || typeof u.reason !== 'string' || u.reason.trim() === '')
+            registerFindings.push({ kind: 'operator', text: `${at} has an \`unnamed\` fragment with no \`text\` and \`reason\` — a fragment that names no operator is excused in writing or not at all.` });
+        }
+        for (const mName of c.members) {
+          const hit = typeof mName === 'string' ? resolve(mName.trim()) : [];
+          if (hit.length === 0) registerFindings.push({ kind: 'operator', text: `${at}: member "${mName}" resolves to no \`_operators\` entry — every member of a compound has to be an operator this estate knows.` });
+          else used.add(hit[0]);
+        }
+        byCompound.set(c.string.trim(), c);
+      }
+      for (const [s, list] of distinct) {
+        if (byCompound.has(s)) continue;                       // a declared list, checked above
+        const hit = resolve(s);
+        if (hit.length === 1) { used.add(hit[0]); continue; }
+        if (hit.length > 1) continue;                          // already a finding, at the declaration
+        registerFindings.push({
+          kind: 'operator',
+          text: `operator "${s}" (${list.length} use(s): ${sites(list)}) resolves to no \`_operators\` entry. Declare it as an alias of the operator it names, or as a new entry — matching is exact, so a new spelling is a finding until somebody says which operator it is.`,
+        });
+      }
+      operatorJoin.unused = entries
+        .filter((e) => e && typeof e.name === 'string' && !used.has(e.name.trim()))
+        .map((e) => e.name.trim());
     }
   }
 }
@@ -521,7 +658,7 @@ if (AS_JSON) {
     claims: claims.length, uncovered, queued: queued.map(l => ({ map: l.map, route: l.route, id: l.covered.id })),
     coveredBy: claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
     aliasedClaims: claims.filter(l => l.covered && l.covered.by === 'badge-alias').map(l => ({ map: l.map, run: l.run, id: l.id, category: l.category, route: l.route, ...l.covered })),
-    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, findings: registerFindings, silences, aliased, owed },
+    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, findings: registerFindings, silences, aliased, owed, operators: operatorJoin },
     registerOnly: REGISTER_ONLY, requireReports: REQUIRE_REPORTS, red,
   }, null, 2));
 } else {
@@ -551,6 +688,15 @@ if (AS_JSON) {
       console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}${o.alias ? ` [ALIASED: the map spells it ${o.alias.registered} and badges it "${o.alias.label}"]` : ''}`);
       if (o.owes) console.log(`          owes: ${o.owes}`);
     }
+  }
+  /* THE JOIN SAYS WHAT IT LOOKED AT EVERY TIME, green or red, and says out loud when it
+   * did not look at all — a count nobody sees cannot be the thing that tells you the
+   * declaration has gone (buses-data OA-307). */
+  if (operatorJoin.declared) {
+    console.log(`  operator join: ${operatorJoin.strings} distinct operator string(s) over ${operatorJoin.uses} use(s), against ${operatorJoin.entries} declared operator(s) — each must resolve to exactly one`);
+    if (operatorJoin.unused.length) console.log(`      ${operatorJoin.unused.length} declared operator(s) no map or fact names today — enumeration, not a finding: ${operatorJoin.unused.join(', ')}`);
+  } else if (operatorJoin.skipped) {
+    console.log(`  operator join NOT RUN: ${REGISTER_NAME} has ${operatorJoin.skipped}.`);
   }
   if (REGISTER_ONLY) console.log('  coverage half NOT RUN (--register-only): S6 reports are a property of a working tree and this run did not look for them.');
   else {

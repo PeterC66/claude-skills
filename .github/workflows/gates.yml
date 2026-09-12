@@ -132,7 +132,7 @@ jobs:
       # happens to ship, and test/python/test_dependencies.py is the join: it fails if
       # the engine imports something this file does not install, or if this step ever
       # stops running before the suite.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip

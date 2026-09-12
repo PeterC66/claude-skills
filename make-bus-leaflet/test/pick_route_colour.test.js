@@ -150,6 +150,200 @@ test('a route with no geometry says so rather than reporting a silent zero', () 
   assert.doesNotMatch(r.stdout, /drawn BESIDE/);
 });
 
+/* ---------------------------------------------------------------------------
+ * OA-304: the pool is every DRAWN LINEAR FEATURE, not only the wet ones.
+ *
+ * A GREEN RUN OF A COLOUR PICKER PROVES NOTHING — it always returns a ranking, so
+ * a test that only asserts "it printed some candidates" passes on a tool that has
+ * stopped measuring anything at all. What has to exist is a BEFORE/AFTER on the
+ * ranking itself: the same town, the same route, one field different, and a
+ * candidate that appears in one and not the other. The control is the half that
+ * makes the finding mean something, and it is written first.
+ *
+ * The fixture is the real case, reduced: Wisbech draws the A47 as a `road`, the
+ * engine strokes a road #e6a532, and #E69F00 — in the default pool for every town
+ * — was the tool's top answer for route 68 on 2026-09-11.
+ */
+/* The palette is BLUE AND GREEN on purpose: it leaves the warm end of the pool
+ * unconstrained, so #E69F00 is a live answer before the road is drawn and is not
+ * one after. A fixture where the candidate was never competitive would let the
+ * "after" assertion pass on a tool that had stopped ranking at all. */
+function featureFixture(features, extra = {}) {
+  const root = scratchDir('pick-colour-feat-');
+  const town = path.join(root, 'Areas', 'Testbury');
+  const ci = path.join(town, 'ci-reference');
+  fs.mkdirSync(ci, { recursive: true });
+  fs.writeFileSync(path.join(ci, 'routes.json'), JSON.stringify({
+    routeOrder: ['1', '2'], palette: { 1: '#4477AA', 2: '#228833' }, features,
+  }));
+  // Every feature named above is DRAWN — geometry is what makes it able to clash.
+  const geo = {}; for (const f of features) geo[f.key] = [[[52.5, 0.1], [52.6, 0.2]]];
+  fs.writeFileSync(path.join(ci, 'features_geo.json'), JSON.stringify(Object.assign(geo, extra.geo || {})));
+  return root;
+}
+
+test('CONTROL: with the road feature REMOVED, #E69F00 is offered in the top eight', () => {
+  /* Without this the test below passes on a tool that returns an empty ranking, on
+   * a pool that never held #E69F00, or — the way it actually failed when first
+   * written — on a fixture where that hue was outside the printed eight anyway. */
+  const root = featureFixture([]);
+  const r = run(root, '--route', '9');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /#E69F00 {2}worst dE 76\.7 {2}vs 2 #228833/);
+  assert.match(r.stdout, /no drawn linear feature/);
+});
+
+test('a drawn ROAD is in the pool, so the hue that IS the road stops being offered', () => {
+  /* The road carries NO explicit stroke, which is the whole point: Wisbech's A47
+   * does not either, so a fix reading only `f.style.stroke` would not have touched
+   * the case this was filed for. #e6a532 comes from the type default.
+   *
+   * Both halves of the before/after are asserted. #E69F00 leaves the eight an
+   * operator actually reads, and in the full ranking its worst separation collapses
+   * from 76.7 against a route to 10.2 against the A47 — which is the number the
+   * tool was silently not computing. */
+  const root = featureFixture([{ key: 'A47', type: 'road' }]);
+  const r = run(root, '--route', '9');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout, /#E69F00/);
+  assert.match(r.stdout, /1 drawn linear feature\(s\): A47 #e6a532/);
+
+  const full = run(root, '--route', '9', '--top', '30');
+  assert.strictEqual(full.status, 0, full.stderr);
+  assert.match(full.stdout, /#E69F00 {2}worst dE 10\.2 {2}vs A47 #e6a532/);
+  // 5th of 26 becomes 24th of 26. Asserted as a RANK rather than as "it is last",
+  // which is what this line first claimed and is not true: #117733 ties it at 10.2
+  // against the green route and #0072B2 sits below both at 9.5 against the blue.
+  const order = [...full.stdout.matchAll(/^ {2}(#[0-9A-F]{6}) {2}worst/gm)].map((m) => m[1]);
+  assert.strictEqual(order.length, 26);
+  assert.strictEqual(order.indexOf('#E69F00'), 23);
+});
+
+test('the summary line says linear FEATURES, not watercourses', () => {
+  /* Item 2 of the action. The old line said "1 drawn watercourse(s)" while looking
+   * at a road, which is a report naming a thing it did not measure. */
+  const root = featureFixture([{ key: 'Great Ouse', type: 'river' }]);
+  const r = run(root, '--route', '9');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /drawn linear feature\(s\)/);
+  assert.doesNotMatch(r.stdout, /watercourse/);
+});
+
+test('a NEAR-NEUTRAL feature is skipped, and the run says it was skipped rather than going quiet', () => {
+  /* A #333333 railway casing would otherwise knock out half the palette on
+   * lightness alone, which is why the engine's §5.2 excludes near-neutrals too. An
+   * exclusion that prints nothing is indistinguishable from never having looked. */
+  const root = featureFixture([{ key: 'ECML', type: 'railway' }]);
+  const r = run(root, '--route', '9');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /no drawn linear feature/);
+  assert.match(r.stdout, /1 more drawn feature\(s\) skipped as near-neutral furniture: ECML #333333/);
+});
+
+test('a feature with NO geometry is not in the pool — declared is not drawn', () => {
+  const root = scratchDir('pick-colour-nogeo-');
+  const ci = path.join(root, 'Areas', 'Testbury', 'ci-reference');
+  fs.mkdirSync(ci, { recursive: true });
+  fs.writeFileSync(path.join(ci, 'routes.json'), JSON.stringify({
+    routeOrder: ['1'], palette: { 1: '#CE1111' }, features: [{ key: 'A47', type: 'road' }],
+  }));
+  fs.writeFileSync(path.join(ci, 'features_geo.json'), JSON.stringify({}));
+  const r = run(root, '--route', '9', '--top', '30');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /no drawn linear feature/);
+  // and the undrawn road therefore constrains nothing: no candidate is scored against it
+  assert.doesNotMatch(r.stdout, /vs A47/);
+  assert.match(r.stdout, /#E69F00/);
+});
+
+test('the legacy river fallback fires on NO features block, and not merely on a dry one', () => {
+  /* March and St Ives declare no `features[]` and gen_internal.js synthesises one
+   * river from river_geo.json, so the fallback is load-bearing and stays. What
+   * changed is its condition: it used to fire whenever the pool came back empty, so
+   * a town declaring a road and no river got a phantom river in the pool as well as
+   * its real road left out of it. */
+  const root = scratchDir('pick-colour-legacy-');
+  const town = path.join(root, 'Areas', 'Testbury');
+  const s2 = path.join(town, 'S2-geometry', '2026-09-03_1100');
+  const s3 = path.join(town, 'S3-config', '2026-09-03_1200');
+  for (const d of [s2, s3]) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(s2, 'river_geo.json'), JSON.stringify([[[52.5, 0.1], [52.6, 0.2]]]));
+  fs.writeFileSync(path.join(s2, 'features_geo.json'), JSON.stringify({}));
+  fs.writeFileSync(path.join(town, 'manifest.json'), JSON.stringify({
+    town: 'Testbury',
+    stages: {
+      S2: { latest: '2026-09-03_1100', runs: [{ id: '2026-09-03_1100', dir: 'S2-geometry/2026-09-03_1100' }] },
+      S3: { latest: '2026-09-03_1200', runs: [{ id: '2026-09-03_1200', dir: 'S3-config/2026-09-03_1200' }] },
+    },
+  }));
+
+  // No features block at all: the fallback fires and the river is in the pool.
+  fs.writeFileSync(path.join(s3, 'routes.json'), JSON.stringify({ routeOrder: ['1'], palette: { 1: '#CE1111' } }));
+  const withNone = run(root, '--route', '9', '--stage');
+  assert.strictEqual(withNone.status, 0, withNone.stderr);
+  assert.match(withNone.stdout, /river \(legacy fallback\) #9ec9e8/);
+
+  // A features block that happens to be dry: no phantom river, and the road is in.
+  fs.writeFileSync(path.join(s3, 'routes.json'), JSON.stringify({
+    routeOrder: ['1'], palette: { 1: '#CE1111' }, features: [{ key: 'A47', type: 'road' }],
+  }));
+  fs.writeFileSync(path.join(s2, 'features_geo.json'), JSON.stringify({ A47: [[[52.5, 0.1], [52.6, 0.2]]] }));
+  const withRoad = run(root, '--route', '9', '--stage');
+  assert.strictEqual(withRoad.status, 0, withRoad.stderr);
+  assert.doesNotMatch(withRoad.stdout, /legacy fallback/);
+  assert.match(withRoad.stdout, /A47 #e6a532/);
+
+  /* THE CASE THAT SEPARATES THE TWO CONDITIONS, and it is here because the mutation
+   * harness found it missing: with only the two assertions above, replacing
+   * `!(RJ.features||[]).length` with `!features.length` SURVIVED — both readings
+   * agree on a town with no features and on a town with a chromatic one, so neither
+   * assertion can tell them apart. A railway is the discriminator: it is DECLARED
+   * and DRAWN, so the features block is not empty, but it is near-neutral so the
+   * pool is. The old condition reads that empty pool and invents a river the sheet
+   * does not draw. */
+  fs.writeFileSync(path.join(s3, 'routes.json'), JSON.stringify({
+    routeOrder: ['1'], palette: { 1: '#CE1111' }, features: [{ key: 'ECML', type: 'railway' }],
+  }));
+  fs.writeFileSync(path.join(s2, 'features_geo.json'), JSON.stringify({ ECML: [[[52.5, 0.1], [52.6, 0.2]]] }));
+  const withRail = run(root, '--route', '9', '--stage');
+  assert.strictEqual(withRail.status, 0, withRail.stderr);
+  assert.doesNotMatch(withRail.stdout, /legacy fallback/);
+  assert.match(withRail.stdout, /no drawn linear feature/);
+  assert.match(withRail.stdout, /skipped as near-neutral furniture: ECML #333333/);
+});
+
+test('the copied stroke table still matches gen_internal.js\'s FEATURE_STYLES', () => {
+  /* pick_route_colour.js carries its own copy of the per-type default strokes,
+   * because FEATURE_STYLES is a const inside a VENDORED generator and exporting it
+   * would owe a re-vendor. A copy is only defensible if something joins it to its
+   * source: this is that join, and it is the check that was missing when the copy
+   * held two of the five types and the tool measured against two of five features.
+   *
+   * Both tables are read out of the files rather than retyped here — a third copy
+   * in a test would be the same fault with a green tick on it. */
+  const strokes = (src, block) => {
+    const m = src.match(new RegExp(block + '\\s*=\\s*\\{([\\s\\S]*?)\\n\\};'));
+    assert.ok(m, `could not find ${block} — if it has moved, this join has to move with it`);
+    const out = {};
+    for (const line of m[1].split('\n')) {
+      const e = line.match(/^\s*(\w+)\s*:\s*\{[^}]*stroke\s*:\s*'(#[0-9a-fA-F]{6})'/);
+      if (e) out[e[1]] = e[2].toLowerCase();
+    }
+    return out;
+  };
+  const engine = strokes(fs.readFileSync(path.join(ENGINE_DIR, 'gen_internal.js'), 'utf8'), 'const FEATURE_STYLES');
+  assert.ok(Object.keys(engine).length >= 5, `parsed only ${Object.keys(engine).length} FEATURE_STYLES entries`);
+
+  const toolSrc = fs.readFileSync(SCRIPT, 'utf8');
+  const tm = toolSrc.match(/const FEATURE_STROKE = \{([^}]*)\};/);
+  assert.ok(tm, 'could not find FEATURE_STROKE in pick_route_colour.js');
+  const tool = {};
+  for (const e of tm[1].matchAll(/(\w+)\s*:\s*'(#[0-9a-fA-F]{6})'/g)) tool[e[1]] = e[2].toLowerCase();
+
+  assert.deepStrictEqual(tool, engine,
+    'the copied stroke table has drifted from gen_internal.js — re-copy it, and read the OA-304 comment above it');
+});
+
 test('a missing routes.json fails loudly, and points at --stage when the default was used', () => {
   const { root, ci } = fixture();
   fs.rmSync(path.join(ci, 'routes.json'));

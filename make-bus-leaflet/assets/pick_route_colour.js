@@ -12,7 +12,9 @@
  *   node pick_route_colour.js --town "High Wycombe" --route 20 --stage
  *
  * THE RULE IT ENCODES: score every candidate against EVERY OTHER COLOUR ON THE
- * SHEET **plus the water**, and take the one whose WORST separation is largest —
+ * SHEET — every other route, **plus every linear feature the sheet draws in a
+ * chromatic colour**, which since OA-304 means the roads and railways and not only
+ * the rivers — and take the one whose WORST separation is largest —
  * not the one that is furthest from the colour you are replacing. A hue can be
  * numerically far from the river and still land next to the route it now has to
  * be told apart from. Ramsey is exactly that case: teal scored 39.1 and its worst
@@ -120,25 +122,55 @@ const { lab } = require('./wcag.js');
 const dE = (a, b) => { const A = lab(a), B = lab(b); return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); };
 
 // --- what else is on this sheet ----------------------------------------------
-// Drawn water first: a river with no geometry cannot clash with anything.
-const WATER_DEFAULT = { river: '#9ec9e8', canal: '#7fb0d8' };
+// EVERY DRAWN LINEAR FEATURE, not only the wet ones (OA-304). This pool held
+// `type: 'river'` and `type: 'canal'` and nothing else, so on a town that draws a
+// road or a railway the tool's top answer could be that feature's own ink: asked
+// for Wisbech route 68 on 2026-09-11 it offered #E69F00 against an A47 stroked
+// #e6a532, and its own summary line said it had measured "1 drawn watercourse".
+// The failure is one-directional — the ranking takes the LARGEST worst-case
+// separation, so a missing pool member can only make a candidate look better than
+// it is — which is why it produces a confident wrong answer and never a finding.
+//
+// A feature with no geometry cannot clash with anything, and a NEAR-NEUTRAL stroke
+// is furniture rather than a colour: the #333333 railway casing and the #999999
+// generic would otherwise knock out half the palette on lightness alone. The test
+// is the engine's own, `chroma < 8` — the same line §5.2 uses to say "a grey is not
+// a river" — applied here to the feature instead of to the route.
+//
+// THE STROKE DEFAULTS BELOW ARE A COPY of `FEATURE_STYLES` in gen_internal.js,
+// which is a const inside a vendored generator: exporting it would move a vendored
+// file's bytes and owe a re-vendor, which this change deliberately does not. The
+// copy is JOINED to its source by `test/pick_route_colour.test.js`, which re-reads
+// both tables out of both files and fails if they diverge. A copy nothing checks is
+// how this one came to hold two of the five types for a month.
+const FEATURE_STROKE = { river: '#9ec9e8', canal: '#7fb0d8', railway: '#333333', road: '#e6a532', generic: '#999999' };
 const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; } };
 const geo = readJson(SRC.geo.path) || {};
-let water = (RJ.features || [])
-  .filter((f) => (f.type === 'river' || f.type === 'canal') && (geo[f.key] || []).length)
-  .map((f) => ({ name: f.key, colour: (f.style && f.style.stroke) || WATER_DEFAULT[f.type] }));
-// A town with no `features[]` still draws a river: `gen_internal.js` falls back to
-// river_geo.json and builds a single river feature itself (March, St Ives). Miss
-// this and the tool cheerfully offers a hue that is the river — the engine's own
-// §5.2 check does not have the hole, because it reads the built FEATURES list.
-if (!water.length) {
+const chromaOf = (hex) => { const L = lab(hex); return Math.hypot(L[1], L[2]); };
+const declared = (RJ.features || [])
+  .filter((f) => (geo[f.key] || []).length)
+  .map((f) => ({
+    name: f.key,
+    colour: (f.style && f.style.stroke) || FEATURE_STROKE[f.type] || FEATURE_STROKE.generic,
+  }))
+  .filter((f) => /^#[0-9a-f]{6}$/i.test(f.colour || ''));
+let features = declared.filter((f) => chromaOf(f.colour) >= 8);
+const neutral = declared.filter((f) => chromaOf(f.colour) < 8);
+// A town with no `features[]` AT ALL still draws a river: `gen_internal.js` falls
+// back to river_geo.json and builds a single river feature itself (March, St Ives).
+// Miss this and the tool cheerfully offers a hue that is the river — the engine's
+// own §5.2 check does not have the hole, because it reads the built FEATURES list.
+// The condition is the ABSENCE OF A FEATURES BLOCK, not the absence of a wet one:
+// it used to fire whenever the pool came back empty, so a town that declares a road
+// and no river got a phantom river in its pool as well as a real road left out of it.
+if (!(RJ.features || []).length) {
   const legacy = readJson(SRC.river.path) || [];
-  if (legacy.length) water = [{ name: 'river (legacy fallback)', colour: WATER_DEFAULT.river }];
+  if (legacy.length) features = [{ name: 'river (legacy fallback)', colour: FEATURE_STROKE.river }];
 }
 // Every other route the sheet draws, deduplicated by colour (a bundled family or a
 // corridorPalette group is ONE colour on the page, however many keys wear it).
 const drawn = (RJ.routeOrder || Object.keys(PALETTE)).filter((r) => r !== route && PALETTE[r]);
-const others = drawn.map((r) => ({ name: r, colour: PALETTE[r] })).concat(water);
+const others = drawn.map((r) => ({ name: r, colour: PALETTE[r] })).concat(features);
 
 /* --- which of those the route is actually DRAWN BESIDE -----------------------
  * A shared road edge is the cheapest honest proxy for "runs alongside": both lines
@@ -161,11 +193,12 @@ if (RP && RP.routes && RP.routes[route] && Array.isArray(RP.routes[route].edges)
     }
   }
 }
-/* The neighbour set for scoring: the routes it is drawn beside, PLUS the water,
- * which is adjacent to everything it runs along and is the clash that started this
- * tool. A route with no geometry on disk has no neighbour set and gets no column. */
+/* The neighbour set for scoring: the routes it is drawn beside, PLUS every drawn
+ * linear feature, which is adjacent to everything it runs along and is the clash
+ * that started this tool. A route with no geometry on disk has no neighbour set and
+ * gets no column. */
 const adjacent = neighbours.size
-  ? drawn.filter((r) => neighbours.has(r)).map((r) => ({ name: r, colour: PALETTE[r] })).concat(water)
+  ? drawn.filter((r) => neighbours.has(r)).map((r) => ({ name: r, colour: PALETTE[r] })).concat(features)
   : null;
 
 const POOL = (typeof args.pool === 'string' ? args.pool.split(',') : [
@@ -195,7 +228,12 @@ if (isNew) {
     + `dE ${nowWorst.d.toFixed(1)} against ${nowWorst.with}`);
 }
 console.log(`  measured against ${drawn.length} other route colour(s)`
-  + (water.length ? ` and ${water.length} drawn watercourse(s): ${water.map((w) => w.name + ' ' + w.colour).join(', ')}` : ' (no drawn watercourse)'));
+  + (features.length ? ` and ${features.length} drawn linear feature(s): ${features.map((w) => w.name + ' ' + w.colour).join(', ')}` : ' (no drawn linear feature)'));
+/* Say what was LOOKED AT AND SET ASIDE, rather than letting an exclusion read as an
+ * absence. A near-neutral feature is deliberately not in the pool, and an operator
+ * who cannot see that it was considered has no way to disagree with the judgement. */
+if (neutral.length) console.log(`  ${neutral.length} more drawn feature(s) skipped as near-neutral furniture: `
+  + neutral.map((w) => w.name + ' ' + w.colour).join(', '));
 if (neighbours.size) {
   const rank = [...neighbours.entries()].sort((a, b) => b[1] - a[1]);
   console.log(`  drawn BESIDE ${rank.length} of them, by shared road edge: `

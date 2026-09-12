@@ -439,6 +439,33 @@ const MUTATIONS = [
     find: "const edgeKey = (e) => { const [a, b] = String(e).split('>'); return a < b ? a + '|' + b : b + '|' + a; };",
     to: "const edgeKey = (e) => { const [a, b] = String(e).split('>'); return a + '|' + b; };" },
 
+  /* OA-304 widened the comparison pool from the two WET feature types to every
+   * drawn linear feature. The mutations below are the four ways to undo it, and the
+   * first is the bug as it actually shipped: the tool offered Wisbech #E69F00
+   * against an A47 stroked #e6a532 and reported having measured "1 drawn
+   * watercourse". This direction needs mutating more than most, because the failure
+   * is one-directional — a missing pool member can only make a candidate look
+   * BETTER than it is, so the tool never produces a finding you would notice. */
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'the pool narrows back to the wet features, so a road or a railway is ink the tool cannot see',
+    find: "  .filter((f) => (geo[f.key] || []).length)",
+    to: "  .filter((f) => (f.type === 'river' || f.type === 'canal') && (geo[f.key] || []).length)" },
+
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'near-neutral furniture joins the pool, so a #333333 railway casing knocks out half the palette on lightness',
+    find: "let features = declared.filter((f) => chromaOf(f.colour) >= 8);",
+    to: "let features = declared.slice();" },
+
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'the legacy river fallback fires on an EMPTY POOL again, so a town drawing a road and no river gets a phantom river',
+    find: "if (!(RJ.features || []).length) {",
+    to: "if (!features.length) {" },
+
+  { suite: 'pick_route_colour.test.js', file: 'pick_route_colour.js',
+    what: 'the copied stroke table drifts from gen_internal.js by one digit — the fault that let it hold two of the five types',
+    find: "railway: '#333333', road: '#e6a532', generic: '#999999' };",
+    to: "railway: '#333333', road: '#e6a533', generic: '#999999' };" },
+
   // strict_guards.js - extracted 2026-08-27 from two copies in gen_internal.js
   // and gen_boarding.js. The byte gate runs with the flag UNSET and no committed
   // map refuses anything, so none of this file is reachable from it; these four

@@ -19,7 +19,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { classify, selectPois } = require('./_engine.js').load('poi_select.js');
+const { classify, selectPois, sameThing, unnamed, CATEGORY_LABELS, printsName } =
+  require('./_engine.js').load('poi_select.js');
 
 const node = (lat, lon, tags) => ({ lat, lon, tags });
 
@@ -40,15 +41,25 @@ test('allotments are opt-in per town, and land in "industrial" for nobody', () =
 });
 
 test('a way with only a centre is placed at its centre', () => {
-  const out = selectPois([[{ center: { lat: 52.3, lon: -0.07 }, tags: { amenity: 'library' } }]], {});
-  assert.deepStrictEqual(out, [{ cat: 'library', name: 'Library', ll: [52.3, -0.07] }]);
+  // NAMED on purpose since OA-338: an unnamed library is called `Library`, which
+  // is a category label rather than a name, so it now defaults to `miss` and this
+  // test would be asserting the tier rule instead of the coordinate one.
+  const out = selectPois([[{ center: { lat: 52.3, lon: -0.07 }, tags: { amenity: 'library', name: 'Ash Library' } }]], {});
+  assert.deepStrictEqual(out, [{ cat: 'library', name: 'Ash Library', ll: [52.3, -0.07] }]);
 });
 
 test('de-duplication keeps the FIRST of a pair, so the caller\'s file order decides the answer', () => {
+  // 110 m apart, and BOTH HALVES OF THIS TEST ARE NOW LOAD-BEARING. It used to
+  // use two Co-ops 11 km apart and assert only `[0]`, so it passed whether the
+  // pair collapsed or not -- it could not tell the rule it is named after from
+  // its absence. OA-338 makes those two Co-ops survive as two, which is correct
+  // and would have left this test green for a brand new reason. The length
+  // assertion is what makes the order claim mean anything.
   const a = [node(52.3, -0.07, { shop: 'supermarket', name: 'Co-op' })];
-  const b = [node(52.4, -0.08, { shop: 'supermarket', name: 'Co-op' })];
+  const b = [node(52.301, -0.07, { shop: 'supermarket', name: 'Co-op' })];
+  assert.strictEqual(selectPois([a, b], {}).length, 1, 'one Co-op mapped twice');
   assert.deepStrictEqual(selectPois([a, b], {})[0].ll, [52.3, -0.07]);
-  assert.deepStrictEqual(selectPois([b, a], {})[0].ll, [52.4, -0.08]);
+  assert.deepStrictEqual(selectPois([b, a], {})[0].ll, [52.301, -0.07]);
 });
 
 test('the same place mapped as node and building collapses — under 60 m, same category', () => {
@@ -67,8 +78,14 @@ test('a near-duplicate in a DIFFERENT category is a different place and survives
 });
 
 test('tidying runs BEFORE de-duplication, so two spellings of one name collapse', () => {
+  // 110 m apart since OA-338, and the distance is now part of the claim: an
+  // identical name collapses within 250 m because one site is often mapped as
+  // two ways, and beyond that a shared name is a chain rather than a duplicate.
+  // The subject here is still the ORDER -- tidy runs first, so these are one name
+  // by the time dedup looks -- and the pair has to be close enough for that to be
+  // the only thing under test.
   const out = selectPois([[node(52.3, -0.07, { amenity: 'school', name: 'St Ivo Academy (Upper)' }),
-                           node(52.9, -0.9, { amenity: 'school', name: 'St Ivo Academy' })]], {});
+                           node(52.301, -0.07, { amenity: 'school', name: 'St Ivo Academy' })]], {});
   assert.strictEqual(out.length, 1, 'the bracket strip makes these the same name');
   assert.strictEqual(out[0].name, 'St Ivo Academy');
 });
@@ -115,8 +132,9 @@ test('an unnamed green names nothing and is always dropped, opted in or not', ()
 });
 
 test('no poi block at all is a valid town, and two of the committed maps are one', () => {
-  const out = selectPois([[node(52.3, -0.07, { amenity: 'townhall' })]], undefined);
-  assert.deepStrictEqual(out, [{ cat: 'townhall', name: 'Town Hall', ll: [52.3, -0.07] }]);
+  // NAMED since OA-338, for the reason given on the centre test above.
+  const out = selectPois([[node(52.3, -0.07, { amenity: 'townhall', name: 'Ash Town Hall' })]], undefined);
+  assert.deepStrictEqual(out, [{ cat: 'townhall', name: 'Ash Town Hall', ll: [52.3, -0.07] }]);
 });
 
 /*
@@ -328,10 +346,132 @@ test('OA-238 did not disturb the no-tiers path for named POIs', () => {
   // reach an unclassified town. This is the assertion that removing it changed
   // nothing else: a town with no tiers block still gets exactly its named POIs,
   // in order, untouched, and with no tier property on any of them.
+  // The library is NAMED since OA-338 -- an unnamed one is called `Library`, a
+  // category label, and defaults to `miss` like any other unnamed POI, so it
+  // would drop out of this list and the test would be about tiers again.
   const els = [[node(52.30, -0.07, { shop: 'supermarket', name: 'Aldi' }),
-                node(52.35, -0.07, { amenity: 'library' }),
+                node(52.35, -0.07, { amenity: 'library', name: 'Ash Library' }),
                 node(52.36, -0.07, { amenity: 'school', name: 'Ash School' })]];
   assert.deepStrictEqual(selectPois(els, {}), selectPois(els, { tiers: undefined }));
   assert.deepStrictEqual(selectPois(els, {}).map(p => [p.cat, p.name, p.tier]),
-    [['shop', 'Aldi', undefined], ['library', 'Library', undefined], ['school', 'Ash School', undefined]]);
+    [['shop', 'Aldi', undefined], ['library', 'Ash Library', undefined], ['school', 'Ash School', undefined]]);
 });
+
+/* ---------------------------------------------------------------------------
+ * OA-338 - a category label is not a name, 2026-09-13.
+ *
+ * `classify()` supplies `Library`, `Leisure`, `School` and the rest when
+ * OpenStreetMap has not named the place. That string is for DISPLAY, and three
+ * other things were reading it as an identity: the de-duplication key, the
+ * does-this-have-a-name default, and printsName. Measured across the eight town
+ * sheets on the day: 32 real places deleted by the name arm alone - four Boots
+ * in Wisbech drawn as one, five libraries in High Wycombe drawn as one - and ten
+ * more by the distance arm, including Boots 24 m from Superdrug on the St Neots
+ * sheet. Every case below is one of those, reduced.
+ * ------------------------------------------------------------------------- */
+
+test('OA-338: the label set is DERIVED from classify(), not typed beside it', () => {
+  // The one assertion that stops a new category with a new fallback escaping the
+  // rule silently. Every fallback classify() can return must be in the set, and
+  // the set must not name a string classify() never produces.
+  const cases = [
+    [{ shop: 'supermarket' }, 'Supermarket'], [{ amenity: 'library' }, 'Library'],
+    [{ tourism: 'museum' }, 'Museum'], [{ amenity: 'townhall' }, 'Town Hall'],
+    [{ amenity: 'community_centre' }, 'Community Centre'],
+    [{ leisure: 'sports_centre' }, 'Leisure'], [{ amenity: 'school' }, 'School'],
+    [{ leisure: 'park' }, 'Park'], [{ landuse: 'allotments' }, 'Allotments'],
+    [{ landuse: 'industrial' }, 'Industrial Estate'],
+  ];
+  const produced = new Set();
+  for (const [tags, label] of cases) {
+    const c = classify(tags, { include: ['allotments'] });
+    assert.ok(c, JSON.stringify(tags) + ' should classify');
+    assert.strictEqual(c[1], label, JSON.stringify(tags) + ' falls back to ' + label);
+    produced.add(c[1]);
+  }
+  assert.deepStrictEqual([...produced].sort(), [...CATEGORY_LABELS].sort(),
+    'CATEGORY_LABELS must be exactly the fallbacks classify() produces');
+  // pharmacy and gp are the two that fall back to nothing at all
+  assert.strictEqual(classify({ amenity: 'pharmacy' }, {})[1], '');
+  assert.strictEqual(classify({ amenity: 'doctors' }, {})[1], '');
+  assert.ok(unnamed('') && unnamed('Library') && !unnamed('Ash Library'));
+});
+
+test('OA-338: classify KEEPS the real name for library, museum and town hall', () => {
+  // It used to return the constant whatever the tags said, so every library in a
+  // town was one POI called `Library` and the name arm collapsed them all. High
+  // Wycombe has five, all named in OpenStreetMap, and drew one.
+  assert.strictEqual(classify({ amenity: 'library', name: 'Hazlemere Library' }, {})[1], 'Hazlemere Library');
+  assert.strictEqual(classify({ tourism: 'museum', name: 'Wycombe Museum' }, {})[1], 'Wycombe Museum');
+  assert.strictEqual(classify({ amenity: 'townhall', name: 'Ramsey Town Council' }, {})[1], 'Ramsey Town Council');
+});
+
+test('OA-338: five named libraries across a town are five POIs, and used to be one', () => {
+  const els = [[node(51.64, -0.75, { amenity: 'library', name: 'Hazlemere Library' }),
+                node(51.63, -0.75, { amenity: 'library', name: 'High Wycombe Library' }),
+                node(51.64, -0.80, { amenity: 'library', name: 'West Wycombe Community Library' }),
+                node(51.62, -0.73, { amenity: 'library', name: 'Micklefield Library' }),
+                node(51.61, -0.77, { amenity: 'library', name: 'Flackwell Heath Library' })]];
+  assert.strictEqual(selectPois(els, {}).length, 5);
+});
+
+test('OA-338: two DIFFERENT names 24 m apart are two places - the Boots case', () => {
+  // St Neots draws four pharmacy symbols for five pharmacies: Boots is 24 m from
+  // Superdrug, arrives second, and was deleted. Neither prints a name, so the
+  // sheet lost a chemist invisibly and every gate stayed green.
+  const els = [[node(52.2286, -0.2690, { amenity: 'pharmacy', name: 'Superdrug' }),
+                node(52.2288, -0.2690, { amenity: 'pharmacy', name: 'Boots' })]];
+  assert.deepStrictEqual(selectPois(els, {}).map(p => p.name), ['Superdrug', 'Boots']);
+});
+
+test('OA-338: but one name INSIDE the other, that close, is one place mapped twice', () => {
+  // The control for the case above, and the reason the rule is containment rather
+  // than inequality: `Tesco` and `Tesco Extra` 39 m apart are one shop.
+  const close = [[node(52.3, -0.07, { shop: 'supermarket', name: 'Tesco' }),
+                  node(52.30035, -0.07, { shop: 'supermarket', name: 'Tesco Extra' })]];
+  assert.strictEqual(selectPois(close, {}).length, 1);
+  const apart = [[node(52.3, -0.07, { shop: 'supermarket', name: 'Tesco' }),
+                  node(52.302, -0.07, { shop: 'supermarket', name: 'Tesco Extra' })]];
+  assert.strictEqual(selectPois(apart, {}).length, 2, '220 m apart is two shops');
+});
+
+test('OA-338: one name, 250 m is one site; beyond it is a chain', () => {
+  const site = [[node(52.66, 0.16, { amenity: 'school', name: 'High March' }),
+                 node(52.6616, 0.16, { amenity: 'school', name: 'High March' })]];
+  assert.strictEqual(selectPois(site, {}).length, 1, '178 m - one school mapped as two ways');
+  const chain = [[node(52.66, 0.16, { amenity: 'pharmacy', name: 'Boots' }),
+                  node(52.664, 0.16, { amenity: 'pharmacy', name: 'Boots' })]];
+  assert.strictEqual(selectPois(chain, {}).length, 2, '444 m - two branches, and Wisbech has four');
+});
+
+test('OA-338: an unnamed POI wearing a label defaults to miss, and is still OFFERED', () => {
+  // Wisbech has four unnamed sports centres. They collapsed to one, and the one
+  // printed the word `Leisure` on the sheet, because `leisure` is auto-named and
+  // the label read as a name. Now: four candidates, none drawn.
+  const els = [[node(52.660, 0.160, { leisure: 'sports_centre' }),
+                node(52.664, 0.162, { leisure: 'sports_centre' }),
+                node(52.670, 0.170, { leisure: 'sports_centre' }),
+                node(52.680, 0.180, { leisure: 'sports_centre' })]];
+  const report = {};
+  assert.deepStrictEqual(selectPois(els, {}, report), [], 'none is drawn');
+  assert.strictEqual(report.candidates.length, 4, 'all four are offered in the chooser');
+  assert.ok(report.candidates.every(c => c.tier === 'miss'));
+  // and the town can still say otherwise, which is what keeps it a default
+  const kept = selectPois(els, { tiers: { 'leisure:Leisure': 'may' } });
+  assert.strictEqual(kept.length, 4, 'an explicit answer still wins, in both directions');
+});
+
+test('OA-338: printsName reads the same label list, so `Leisure` prints nothing', () => {
+  assert.strictEqual(printsName({ cat: 'leisure', name: 'Leisure' }), false);
+  assert.strictEqual(printsName({ cat: 'park', name: 'Park' }), false, 'the original instance');
+  assert.strictEqual(printsName({ cat: 'leisure', name: 'One Leisure' }), true);
+  assert.strictEqual(printsName({ cat: 'pharmacy', name: 'Boots' }), false, 'symbol-only category');
+});
+
+test('OA-338: sameThing is symmetric, and a different category is never the same thing', () => {
+  const a = { cat: 'shop', name: 'Tesco', ll: [52.3, -0.07] };
+  const b = { cat: 'shop', name: 'Tesco Extra', ll: [52.30035, -0.07] };
+  assert.strictEqual(sameThing(a, b), sameThing(b, a));
+  assert.strictEqual(sameThing(a, Object.assign({}, b, { cat: 'pharmacy' })), false);
+});
+

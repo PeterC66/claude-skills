@@ -87,9 +87,9 @@ function classify(t, poiCfg) {
   if(t.shop==='supermarket') return ['shop', t.name||'Supermarket'];
   if(t.amenity==='pharmacy')  return ['pharmacy', t.name||''];
   if(t.amenity==='doctors')   return ['gp', t.name||''];
-  if(t.amenity==='library')   return ['library','Library'];
-  if(t.tourism==='museum')    return ['museum','Museum'];
-  if(t.amenity==='townhall')  return ['townhall','Town Hall'];
+  if(t.amenity==='library')   return ['library', t.name||'Library'];
+  if(t.tourism==='museum')    return ['museum', t.name||'Museum'];
+  if(t.amenity==='townhall')  return ['townhall', t.name||'Town Hall'];
   if(t.amenity==='community_centre') return ['community', t.name||'Community Centre'];
   if(t.leisure==='sports_centre'||t.leisure==='fitness_centre') return ['leisure', t.name||'Leisure'];
   if(t.amenity==='school')    return ['school', t.name||'School'];
@@ -120,11 +120,69 @@ const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotment
 
 /** Does this POI's own name get printed beside its symbol, or is it symbol-only? */
 function printsName(p){
-  return AUTO_NAMED_CATS.includes(p.cat) && !!p.name && p.name !== 'Park';
+  /* `p.name !== 'Park'` was this rule's first instance and OA-338 generalised it:
+   * an unnamed green called *Park* names nothing, and neither does an unnamed
+   * leisure centre called *Leisure*. One list, in `CATEGORY_LABELS`. */
+  return AUTO_NAMED_CATS.includes(p.cat) && !unnamed(p.name);
 }
 
 /** Two points closer than 60 m are the same place mapped twice. */
-const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;
+/*
+ * A CATEGORY LABEL IS NOT A NAME, and until 2026-09-13 three things treated it
+ * as one (OA-338).
+ *
+ * `classify()` supplies one of these strings when OpenStreetMap has not named
+ * the place. It exists so the sheet can print *Community Centre* under a symbol
+ * rather than nothing, and it is a DISPLAY string — but it was also being used
+ * as the de-duplication identity and as the does-this-have-a-name test, and in
+ * both of those it asserts something the data never said. Two unnamed sports
+ * centres are not the same sports centre because they are both called `Leisure`.
+ *
+ * This set is the whole population of that mistake and is derived from the
+ * fallbacks in `classify()` above; `test/poi_select.test.js` holds it against
+ * them, so a new category with a new fallback cannot quietly escape it.
+ */
+const CATEGORY_LABELS = new Set(['Supermarket','Library','Museum','Town Hall',
+  'Community Centre','Leisure','School','Park','Allotments','Industrial Estate']);
+
+/** True when this POI has no name of its own — blank, or a label standing in for one. */
+function unnamed(name){ return !name || CATEGORY_LABELS.has(name); }
+
+const metresApart = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000);
+
+/*
+ * IS THIS THE SAME PLACE MAPPED TWICE? Three answers, and each distance is a
+ * measurement rather than a preference (OA-338, 2026-09-13).
+ *
+ *   no name on one side   the only evidence is position, so 60 m — a shop mapped
+ *                         as a node AND as its building. This is the arm OA-234
+ *                         restored for blank names, now reaching the labels too.
+ *   the same real name    250 m, because one site is often mapped as two ways:
+ *                         St Ivo Outdoor 82 m, Wycombe Preparatory 123 m,
+ *                         Westwood Primary 178 m, High March 183 m are all one
+ *                         place. Beyond that a shared name is a CHAIN — four
+ *                         Boots in Wisbech, five libraries in High Wycombe — and
+ *                         collapsing them deleted 32 real places from the estate.
+ *   one name inside the   60 m. `Tesco` and `Tesco Extra` 39 m apart are one shop
+ *   other                 under two spellings; `Superdrug` and `Boots` 24 m apart
+ *                         are two chemists, and the sheet drew one of them.
+ *
+ * Two DIFFERENT names never collapse, at any distance. That is the rule that
+ * puts Boots back on the St Neots sheet, and it is deliberately the loose end of
+ * the three: where OpenStreetMap maps two parts of one site under two names, both
+ * are now drawn. That is the right way round — a spurious symbol is visible on
+ * the page and answerable with `miss` in the landmark chooser, and a deleted one
+ * is neither.
+ */
+function sameThing(a, b){
+  if(a.cat !== b.cat) return false;
+  const d = metresApart(a.ll, b.ll);
+  if(unnamed(a.name) || unnamed(b.name)) return d < 60;
+  if(a.name === b.name) return d < 250;
+  const x = a.name.toLowerCase(), y = b.name.toLowerCase();
+  if(x.includes(y) || y.includes(x)) return d < 60;
+  return false;
+}
 
 function selectPois(elementSets, poiCfg, report) {
   const POI = poiCfg || {};
@@ -176,7 +234,7 @@ function selectPois(elementSets, poiCfg, report) {
    * on today's estate and is here for the town that gets a second one. */
   const dedup=[];
   outer: for(const p of pois){
-    for(const q of dedup){ if(q.cat===p.cat && ((q.name===p.name && p.name) || near(q.ll,p.ll))){ continue outer; } }
+    for(const q of dedup){ if(sameThing(q,p)){ continue outer; } }
     dedup.push(p);
   }
   return applyTiers(dedup, POI, report);
@@ -224,7 +282,17 @@ function applyTiers(pois, POI, report){
    * says `"may"`, which is why the estate loses two symbols under this change and
    * not three — see report.namelessKeptByTier below, which exists so that is
    * visible at build time rather than being something a reader has to know. */
-  const defaultRule = p => ({ tier: p.name ? 'may' : 'miss', as: null });
+  /* OA-338 WIDENS THIS TO THE CATEGORY LABELS, 2026-09-13, and the paragraph
+   * above is why: it says the whole population of this rule is a chemist or a
+   * surgery, because those are the only two categories `classify()` leaves
+   * blank. That was true of the CODE and never of the RULE. An unnamed sports
+   * centre reached here called `Leisure`, read as named, defaulted to `may` and
+   * printed the word *Leisure* on the sheet beside its symbol — `leisure` is an
+   * auto-named category — which is exactly the bare glyph nobody chose that this
+   * default exists to stop, wearing a label to get past it. Wisbech has four
+   * unnamed sports centres and printed *Leisure*; it is now offered four rows
+   * in the chooser and prints none of them until somebody names one. */
+  const defaultRule = p => ({ tier: unnamed(p.name) ? 'miss' : 'may', as: null });
   const explicit = p => !!(TIERS && ((p.cat + ':' + p.name) in TIERS));
   const ruleFor = p => (explicit(p) ? rule(TIERS[p.cat + ':' + p.name]) : defaultRule(p));
 
@@ -308,4 +376,4 @@ function applyTiers(pois, POI, report){
   return kept;
 }
 
-module.exports = { classify, selectPois, applyTiers, near, AUTO_NAMED_CATS, printsName };
+module.exports = { classify, selectPois, applyTiers, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName };

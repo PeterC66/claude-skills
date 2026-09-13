@@ -814,17 +814,22 @@ if((poiReport.renameCollisions||[]).length) process.stderr.write('poi.tiers: a r
   + ' Give one of them a different "as", or classify one of them "miss".'+GUARD_NL);
 /* Two POIs with the same key BEFORE any rename. Only reachable since 2026-09-04
  * (OA-234): de-duplication used to delete the second unnamed POI of a category
- * outright, so the collision could not occur because the POI could not. It is
+ * outright, so the collision could not occur because the POI could not. OA-338
+ * widened it again and the message had to change with it: two REAL names can now
+ * collide — St Neots has two Lidls 2.9 km apart and two Riverside Parks — and the
+ * text here said `neither has a name`, which was true of the only case that could
+ * reach it in September 2026 and is a flat contradiction of the key it prints. It
+ * is
  * said here rather than collapsed, because collapsing it is the fault that row
  * removed — but it is real, and every key-addressed thing downstream (the tier
  * answer, internal.pois, unplaced.json, the placer's anchor id) can only hold
  * one of them. */
 if((poiReport.duplicateCandidateKeys||[]).length) process.stderr.write('poi: two POIs share'
   + ' one key — ' + poiReport.duplicateCandidateKeys.map(k=>'"'+k+'"').join(', ')
-  + '. They are more than 60 m apart, so they are different places, but the key is'
-  + ' "<category>:<name>" and neither has a name. A tier answer, an internal.pois'
-  + ' override and a placer anchor id can each address only one of them. Name one in'
-  + ' OpenStreetMap, or give it a poi.tiers "as".'+GUARD_NL);
+  + '. They are far enough apart to be different places, but the key is'
+  + ' "<category>:<name>", so a tier answer, an internal.pois override and a placer'
+  + ' anchor id can each address only one of them. Give one of them a poi.tiers "as",'
+  + ' or a name of its own in OpenStreetMap if it has none.'+GUARD_NL);
 /* A nameless POI is `miss` by default (OA-238). This town has said otherwise, so
  * the sheet carries a symbol with no name on purpose. Not a fault — it is the
  * customer's answer — but it is the one case where the sheet disagrees with the

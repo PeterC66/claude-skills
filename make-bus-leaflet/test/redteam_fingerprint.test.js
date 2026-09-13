@@ -75,6 +75,12 @@ function estate(opts = {}) {
   // A second S1 run exists exactly when the case describes a `now` side — including
   // `now: null`, which is the case where the run exists and carries no services file.
   if ('now' in opts) runs.push({ id: 'r2', at: day(2) });
+  /* A THIRD S1 run, for OA-332. A data-only run — the one OA-306 prescribes for
+   * declaring a decided register entry — pulls no feed and so derives no
+   * `gtfs-services.json`; it writes `verified-services.json` and nothing else.
+   * `later: null` is that run, and it becomes the latest, which is the side the
+   * tool compares against. */
+  if ('later' in opts) runs.push({ id: 'r3', at: day(1) });
   fs.mkdirSync(dir, { recursive: true });
   /* WHERE THE OLDER SIDE'S FILE SITS (OA-270). A place built before OA-158 wrote
    * no services file into its P1/S1 run at all — `gtfs-services.json` landed in
@@ -91,13 +97,23 @@ function estate(opts = {}) {
       S2: { latest: 'g1', runs: [g1] },
     },
   }, null, 1));
-  for (const [id, services] of [['r1', opts.then], ['r2', opts.now]]) {
+  for (const [id, services] of [['r1', opts.then], ['r2', opts.now], ['r3', opts.later]]) {
     if (!services) continue;
     const rd = (id === 'r1' && thenStage === 'S2')
       ? path.join(dir, 'S2-geometry', 'g1')
       : path.join(dir, 'S1-services', id);
     fs.mkdirSync(rd, { recursive: true });
     fs.writeFileSync(path.join(rd, 'gtfs-services.json'),
+      JSON.stringify({ town: 'Testton', services }, null, 1));
+  }
+  /* `verified-services.json` is OUR file — the feed derivation with our own
+   * adjudications written into it — and it is the fingerprint's second choice.
+   * A case that supplies it is asking which of the two the tool actually read. */
+  for (const [id, services] of [['r1', opts.thenVerified], ['r2', opts.nowVerified], ['r3', opts.laterVerified]]) {
+    if (!services) continue;
+    const rd = path.join(dir, 'S1-services', id);
+    fs.mkdirSync(rd, { recursive: true });
+    fs.writeFileSync(path.join(rd, 'verified-services.json'),
       JSON.stringify({ town: 'Testton', services }, null, 1));
   }
   const runId = day(opts.answerAgeDays === undefined ? 5 : opts.answerAgeDays) + '_1000';
@@ -262,4 +278,84 @@ test('an S2 services file the manifest does not DECLARE is not read (OA-270)', (
   const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
   assert.match(r.out, /CANNOT TELL/, 'it read a file the manifest never declared:\n' + r.out);
   assert.strictEqual(r.code, 10, `an undeclared file became a REUSE (exit ${r.code}):\n${r.out}`);
+});
+
+/* OA-332 — a data-only S1 run derives no feed file, so the fingerprint fell onto
+ * OUR OWN reply file and bought an answer for agreeing with it.
+ *
+ * `gtfs-services.json` is preferred over `verified-services.json` because the
+ * first is the raw derivation from the feed and it is the WORLD moving that
+ * stales a blind answer, not our reply to it. That preference stops holding the
+ * moment a map records a decision: the data-only S1 run OA-306 prescribes for
+ * declaring a decided register entry pulls no feed, so it writes
+ * `verified-services.json` and nothing else, and the era had no feed derivation
+ * of its own to find. Nine of the seventeen builds carrying a red-team answer
+ * were in that state on 2026-09-13 and five of the estate's six `_reuseOverride`
+ * stamps say the same sentence in different words — Huntingdon's 401 corrected to
+ * agree with the answer's own note, DIAL-A-RIDE and TIGERONDEMAND arriving from
+ * the service-facts register — which is: our data moved TOWARD this answer, so it
+ * cannot have changed it.
+ *
+ * A run that derived nothing from the feed leaves the previous pull's derivation
+ * in force, and that is the derivation the era actually has.
+ */
+
+const TWO_PLUS_DECIDED = [
+  svc('1', 'Whippet', 'Mon-Sat'),
+  svc('55', 'Stagecoach East', 'Daily'),
+  // The shape of SF-011: a register decision we wrote into our own file. It is in
+  // no feed, so no re-derivation from the feed could ever produce it.
+  svc('DIAL-A-RIDE', 'FACT Community Transport', 'Mon-Fri'),
+];
+
+test('a data-only S1 run does not buy an answer for agreeing with it (OA-332)', () => {
+  /* r1 pulled the feed; the answer came next; r2 is the declaration run — it
+   * carries our verified set with the decided include written in, and no feed
+   * derivation at all. Nothing the answer is about has moved. */
+  const e = estate({ then: TWO, now: null, thenVerified: TWO, nowVerified: TWO_PLUS_DECIDED });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.strictEqual(r.code, 0,
+    `a declaration run with no feed derivation bought a ~100k-token answer (exit ${r.code}):\n${r.out}`);
+  assert.match(r.out, /UNCHANGED/);
+  assert.match(r.out, /service facts\s+: gtfs-services\.json/,
+    'it fingerprinted our own reply file instead of the feed derivation:\n' + r.out);
+  assert.match(r.out, /in force/,
+    'a comparison that reached back has to say so, naming the run, or the reader cannot check it:\n' + r.out);
+  assert.match(r.out, /from S1 r1/, 'it did not name the run whose derivation is in force:\n' + r.out);
+});
+
+test('the derivation in force is the NEWEST one, not the oldest (OA-332)', () => {
+  /* The dangerous direction. r2 is a genuine re-pull that moved an operator, and
+   * r3 is a later declaration run with no feed derivation. Reaching back must
+   * land on r2 and buy; reaching back to r1 would answer UNCHANGED about a feed
+   * that has moved, which is the one thing this guard exists to prevent. */
+  const e = estate({
+    then: TWO,
+    now: [svc('1', 'Stagecoach East', 'Mon-Sat'), svc('55', 'Stagecoach East', 'Daily')],
+    later: null,
+    laterVerified: TWO_PLUS_DECIDED,
+  });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.strictEqual(r.code, 10,
+    `an operator moved in the newest feed derivation and it reused anyway (exit ${r.code}):\n${r.out}`);
+  assert.match(r.out, /CHANGED/, 'it did not compare against the newest derivation:\n' + r.out);
+  assert.match(r.out, /what moved/);
+  assert.match(r.out, /Stagecoach East/, 'the moved operator is not named:\n' + r.out);
+});
+
+test('it reaches BACK for a derivation and never forward (OA-332)', () => {
+  /* The narrowing that keeps the rule honest. The answer predates every feed
+   * derivation this build has: r1 carries none, and r2's was derived after the
+   * answer was bought. Comparing an era against a file that did not exist in it
+   * would be reading the future, so there is no fingerprint to take and CANNOT
+   * TELL is the safe answer — which then buys on the pull timestamp.
+   *
+   * NOT NAMED `CONTROL`, for the reason the OA-270 widening guard records: the
+   * prove-red fixture reverts the whole fingerprint, so the `CANNOT TELL` this
+   * asserts on is not printed at all and the case goes red with the guards. */
+  const e = estate({ then: null, now: TWO });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.match(r.out, /CANNOT TELL/,
+    'it fingerprinted an era against a derivation made after it:\n' + r.out);
+  assert.strictEqual(r.code, 10, `reaching forward became a REUSE (exit ${r.code}):\n${r.out}`);
 });

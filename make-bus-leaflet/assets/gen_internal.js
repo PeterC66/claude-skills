@@ -813,17 +813,12 @@ if((poiReport.renameCollisions||[]).length) process.stderr.write('poi.tiers: a r
   + ' now names more than one POI, so they share an override key and a placer anchor.'
   + ' Give one of them a different "as", or classify one of them "miss".'+GUARD_NL);
 /* Two POIs with the same key BEFORE any rename. Only reachable since 2026-09-04
- * (OA-234): de-duplication used to delete the second unnamed POI of a category
- * outright, so the collision could not occur because the POI could not. OA-338
- * widened it again and the message had to change with it: two REAL names can now
- * collide — St Neots has two Lidls 2.9 km apart and two Riverside Parks — and the
- * text here said `neither has a name`, which was true of the only case that could
- * reach it in September 2026 and is a flat contradiction of the key it prints. It
- * is
- * said here rather than collapsed, because collapsing it is the fault that row
- * removed — but it is real, and every key-addressed thing downstream (the tier
- * answer, internal.pois, unplaced.json, the placer's anchor id) can only hold
- * one of them. */
+ * (OA-234), and widened again by OA-338, which is why the text below no longer
+ * says `neither has a name`: two REAL names collide now — St Neots has two Lidls
+ * 2.9 km apart — and that sentence contradicted the key it was printing. Said
+ * rather than collapsed, because collapsing it is the fault OA-234 removed; but
+ * it is real, and every key-addressed thing downstream (the tier answer,
+ * internal.pois, unplaced.json, the placer's anchor id) can hold only one. */
 if((poiReport.duplicateCandidateKeys||[]).length) process.stderr.write('poi: two POIs share'
   + ' one key — ' + poiReport.duplicateCandidateKeys.map(k=>'"'+k+'"').join(', ')
   + '. They are far enough apart to be different places, but the key is'

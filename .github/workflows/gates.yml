@@ -150,6 +150,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:python
 
+      # stamp-docs' own harness, and it had never run anywhere but a laptop
+      # (buses-data OA-333). It falsifies the shared exclusion baseline, the JOIN
+      # between the three scripts that read it, and -- since 2026-09-13 -- the rule
+      # that a run walks only the root containing the working directory. That last
+      # one is a SCOPE rule, which is this estate's most-repeated failure shape: it
+      # goes wrong silently, the tool keeps working, and it quietly covers a
+      # different set of files. It is in no package.json because stamp-docs has
+      # none, so it is invoked directly rather than through an npm script.
+      - name: Prove the stamp policy and its scope rule can go red
+        working-directory: skills/stamp-docs
+        run: python scripts/prove_policy.py
+
       # Falsification harnesses that need no other repository. Each breaks its own
       # subject on purpose and asserts WHICH tests go red while a named CONTROL
       # stays green -- a suite that only ever goes green proves nothing about the

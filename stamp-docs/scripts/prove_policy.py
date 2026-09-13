@@ -204,6 +204,68 @@ with tempfile.TemporaryDirectory() as tmp:
     name, _how = docstamp.resolve_checkout(p, str(stranger), only_root="known")
     report(name == "known", "--root names the policy for an unmatched tree — got {!r}".format(name))
 
+print("\n\nThe DEFAULT scope is the root you are standing in (buses-data OA-333):\n")
+
+with tempfile.TemporaryDirectory() as tmp:
+    # Until 2026-09-13 scope had nothing to do with where you stood: every
+    # invocation but --checkout walked EVERY configured root, so a session in one
+    # repository stamped files in the others -- a write no gate in the running
+    # session can see, because the file is not in its checkout. The Stop hook made
+    # it constant, running --auto with no flags after every turn.
+    #
+    # Cases 4 and 5 are the ones that matter. 4 is the CONTROL: an unplaceable cwd
+    # must keep the old estate-wide behaviour rather than refusing, because this
+    # code runs on EVERY invocation including the hook's, and a refusal there would
+    # turn "you are standing somewhere unexpected" into a broken hook.
+    alpha = real_repo(tmp, "alpha-repo")
+    beta = real_repo(tmp, "beta-repo")
+    outside = pathlib.Path(tmp) / "not-a-root"
+    outside.mkdir()
+    deep = alpha / "sub" / "deeper"
+    deep.mkdir(parents=True)
+    sibling = pathlib.Path(tmp) / "alpha-repo-sibling"
+    sibling.mkdir()
+    pol2 = {"baselineExcludeDirNames": [".git"],
+            "roots": [root("alpha", path=str(alpha)), root("beta", path=str(beta))]}
+
+    # 1. The ordinary case: cwd IS a configured root.
+    p2 = docstamp.load_policy(write_policy(pol2))
+    name, how = docstamp.default_root_for_cwd(p2, str(alpha))
+    report(name == "alpha" and how == "cwd is the root",
+           "cwd that IS a root scopes to it -- got {!r} ({})".format(name, how))
+
+    # 2. A SUBDIRECTORY, placed through git rather than by string matching. This is
+    #    the ordinary case in practice: every stage-engine call leaves the shell
+    #    inside a map folder, which is where OA-275 found the sibling fault.
+    p2 = docstamp.load_policy(write_policy(pol2))
+    name, how = docstamp.default_root_for_cwd(p2, str(deep))
+    report(name == "alpha",
+           "a deep subdirectory still scopes to its root -- got {!r} ({})".format(name, how))
+
+    # 3. It picks the root it is IN, not merely the first configured one -- the
+    #    assertion that would pass by accident if the function returned roots[0].
+    p2 = docstamp.load_policy(write_policy(pol2))
+    name, _how = docstamp.default_root_for_cwd(p2, str(beta))
+    report(name == "beta",
+           "standing in the SECOND root scopes to that one -- got {!r}".format(name))
+
+    # 4. THE CONTROL. An unplaceable cwd returns None so the caller keeps the
+    #    estate-wide walk. Refusing here would break the Stop hook.
+    p2 = docstamp.load_policy(write_policy(pol2))
+    name, _how = docstamp.default_root_for_cwd(p2, str(outside))
+    report(name is None,
+           "a cwd in no root returns None and the run stays estate-wide -- the control (got {!r})"
+           .format(name))
+
+    # 5. A sibling whose NAME starts with a root's is not inside it. Prefix matching
+    #    without the separator would place "alpha-repo-sibling" inside "alpha-repo",
+    #    which is the classic form of this bug and is silent when it happens.
+    p2 = docstamp.load_policy(write_policy(pol2))
+    name, _how = docstamp.default_root_for_cwd(p2, str(sibling))
+    report(name is None,
+           "a sibling sharing a root's name PREFIX is not inside it -- got {!r}".format(name))
+
+
 print("\n{}".format("{} CASE(S) FAILED".format(failed) if failed
                     else "The baseline behaves in both directions, all readers agree, "
                          "and --checkout refuses what it cannot place."))

@@ -25,8 +25,23 @@ Usage:
   docstamp.py --major FILE      bump the major version of one file (a rewrite)
   docstamp.py --minor FILE      force a minor bump of one file
 
+SCOPE: BY DEFAULT A RUN WALKS ONLY THE ROOT CONTAINING THE WORKING DIRECTORY
+(buses-data OA-333, 2026-09-13). Until then every invocation but `--checkout`
+walked EVERY configured root whatever directory you stood in, so a session in one
+repository stamped documents in the others -- a whole-file write into a tree the
+running session does not have checked out, which no gate and no `git status` in
+that session can see. Measured on the day: 169 documents for `buses`, 31 for
+`portal`, 8 for `ops`, 208 for a bare run, so a portal session running the
+documented command touched 177 documents in two repositories it was not working
+in. Two sessions rewrote each other's uncommitted files within the hour, and the
+Stop hook was running the same estate-wide walk unasked after every turn. The run
+SAYS which root it scoped to, and says it louder when it could not place the
+working directory at all and fell back to walking everything.
+
   --dry-run        report what would change, write nothing
   --root NAME      restrict to one root from the policy (buses | portal | ops)
+  --all-roots      walk every configured root rather than the one containing the
+                   working directory -- the pre-OA-333 default, now opt-in
   --checkout [DIR] stamp the checkout at DIR (default: the current directory) instead of
                    the configured root path -- a git worktree, or a clone somewhere else.
                    It walks that ONE checkout and no other, so a session working in a
@@ -237,7 +252,25 @@ def resolve_checkout(policy, checkout, only_root=None):
     are only READING. This script WRITES, and stamping an unknown tree with no
     exclusions would edit the files the policy exists to leave alone. Refusing names
     the one thing that fixes it: say which root applies, with `--root`.
+
+    THE SENTENCE ABOVE USED TO END "You can still only ever stamp the tree you are
+    standing in, which is the property that incident bought", AND THAT WAS FALSE OF
+    THE TOOL (buses-data OA-333, 2026-09-13). It was true only when `--checkout` was
+    passed. Every other invocation walked EVERY configured root whatever directory
+    you stood in -- three of them here -- so the 2026-09-03 fix closed the WORKTREE
+    hole and left the cross-ROOT one wide open, while this docstring told the reader
+    the general property had been bought. It was measured from both ends on
+    2026-09-13: 169 documents for `buses`, 31 for `portal`, 8 for `ops` and 208 for
+    a bare run, so a portal session running the documented command walked 177
+    documents in two repositories it was not working in and the tree it stood in was
+    15% of the total. Two sessions rewrote each other's uncommitted files within the
+    hour, and the Stop hook was running the same estate-wide walk unasked after
+    every turn. `default_root_for_cwd()` below is what actually buys the property
+    this paragraph used to claim; see [The comment wider than its code] in
+    buses-data's failure-shapes list for the shape.
     """
+
+
     checkout = os.path.normpath(os.path.abspath(checkout))
     if not os.path.isdir(checkout):
         raise SystemExit("docstamp --checkout: no such directory: {}".format(checkout))
@@ -285,6 +318,61 @@ def resolve_checkout(policy, checkout, only_root=None):
 
     chosen["path"] = checkout
     return chosen["name"], how
+
+
+def default_root_for_cwd(policy, cwd=None):
+    """The root that CONTAINS `cwd`, or None -- the default scope of a run.
+
+    WHY (buses-data OA-333). Scope used to be "every root in the policy" unless you
+    said otherwise, so the tool's reach had nothing to do with where you were
+    standing. That is wrong for a WRITER by default and it is wrong in the direction
+    that cannot be seen: the write lands in a repository the running session does
+    not have checked out, so no gate, no `git status` and no reviewer in that session
+    can ever notice it. The Stop hook made it constant rather than occasional -- it
+    runs `--auto` with no flags at the end of every turn of every session.
+
+    This is NOT `resolve_checkout`. That one RETARGETS a root at a directory you
+    name, which is how you opt a worktree in; this one only decides which configured
+    root to walk and never moves a root's path. So a run from
+    `Areas/Beaconsfield` stamps the whole `buses` root, exactly as before -- what it
+    no longer does is stamp the portal as well.
+
+    Matching, most specific first, and it returns None rather than guessing:
+      1. cwd IS a configured root path.
+      2. cwd's git common-dir parent is a configured root path -- any worktree or
+         subdirectory of a known repository, which is the ordinary case, since
+         `git_common_checkout` answers from anywhere inside the tree.
+      3. cwd is underneath a configured root path on disk -- the fallback for a
+         directory that is inside a root but not inside its git checkout.
+
+    NONE IS NOT A REFUSAL HERE, AND THAT ASYMMETRY WITH `resolve_checkout` IS
+    DELIBERATE. `--checkout` is a thing you asked for by name, so failing to place it
+    is a mistake worth stopping on. This runs on EVERY invocation including the Stop
+    hook's, where refusing would turn "you are standing somewhere unexpected" into a
+    broken hook. So an unplaceable cwd keeps the old estate-wide behaviour and SAYS
+    SO on the run, which is the conservative direction: it can only ever be as wide
+    as the tool already was.
+    """
+    cwd = os.path.normpath(os.path.abspath(cwd or os.getcwd()))
+    roots = policy.get("roots", [])
+
+    def same(a, b):
+        return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+    for r in roots:
+        if same(r["path"], cwd):
+            return r["name"], "cwd is the root"
+    main = git_common_checkout(cwd)
+    if main:
+        for r in roots:
+            if same(r["path"], main):
+                return r["name"], "cwd is inside the {} checkout".format(r["name"])
+    for r in roots:
+        root_abs = os.path.normcase(os.path.normpath(os.path.abspath(r["path"])))
+        here = os.path.normcase(cwd)
+        if here.startswith(root_abs + os.sep):
+            return r["name"], "cwd is under the root path"
+    return None, None
 
 
 def discover(policy, only_root=None):
@@ -677,6 +765,9 @@ def main(argv=None):
     ap.add_argument("--minor", metavar="FILE", help="force a minor bump of one file")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--root", help="restrict to one root name from the policy")
+    ap.add_argument("--all-roots", action="store_true",
+                    help="walk every configured root, not just the one containing the "
+                         "working directory (the pre-OA-333 default)")
     ap.add_argument("--checkout", nargs="?", const=".", metavar="DIR",
                     help="stamp the checkout at DIR (default: the current directory) "
                          "instead of the configured root path -- a worktree, or a clone "
@@ -697,6 +788,26 @@ def main(argv=None):
         if not args.quiet:
             path = next(r["path"] for r in policy["roots"] if r["name"] == args.root)
             print("checkout: root '{}' ({}) -> {}".format(args.root, how, path))
+
+    # DEFAULT SCOPE IS THE ROOT YOU ARE STANDING IN (buses-data OA-333). Anything
+    # the caller said explicitly wins -- `--root` names one, `--checkout` has just
+    # resolved one, `--all-roots` asks for the old estate-wide walk on purpose.
+    if args.root is None and args.checkout is None and not args.all_roots:
+        name, how = default_root_for_cwd(policy)
+        # ON STDERR, because `--list` and `--check` are read by other programs and a
+        # diagnostic that lands in their DATA is a different bug from the one being
+        # fixed here -- `--list | grep -c .` counted 170 documents for 169 while this
+        # line went to stdout.
+        if name:
+            args.root = name
+            if not args.quiet:
+                sys.stderr.write("scope: root '{}' ({}) -- pass --all-roots to walk "
+                                 "every root\n".format(name, how))
+        elif not args.quiet:
+            # Louder than the placed case on purpose: this is the old behaviour, and
+            # the whole fault was that it never announced itself.
+            sys.stderr.write("scope: EVERY root -- this working directory ({}) is in "
+                             "none of them\n".format(os.getcwd()))
 
     if args.list:
         for name, _root, _abs, rel in discover(policy, args.root):

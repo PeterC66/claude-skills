@@ -282,6 +282,59 @@ function syncVersionField(runDir, { check = false } = {}) {
   return { status: 'updated', from, to, want, file };
 }
 
+/*
+ * REFRESH THIS MAP'S `_latest` MIRROR AFTER AN S6 COMMIT (OA-329 fault A).
+ *
+ * `<map>/_latest/` is the folder whose whole meaning is *these are the current
+ * deliverables* — `refresh_latest.js`'s own header says so — and until this
+ * landed nothing in the S6 path wrote to it. `refresh_latest.js` was a tool a
+ * person ran by hand, `grep -c '_latest' stage.js` found nothing, and the
+ * consequence was measured on 2026-09-13: **thirteen of twenty maps carried a
+ * superseded verification report**, one of them re-stranded within the hour by
+ * an S6 that ran while the action describing the fault was being written.
+ *
+ * SO IT GOES AT THE COMMIT BOUNDARY, for the reason OA-310 moved the
+ * build-warnings log there: `commit` is the one chokepoint every S6 passes
+ * through however it was run — a rollout, a skill, or a person assembling the
+ * folder by hand — and it already knows the map directory. A remembered driver
+ * is what produced the thirteen.
+ *
+ * S6 ONLY, deliberately. The S5 path already refreshes (rollout.js line 413 and
+ * rollout_places.js do it immediately after their `commit S5`), so S6 is the one
+ * stage with no driver at all, and it is the stage whose mirror is now GATED:
+ * `tools/latest-mirror-gate.js` fails CI on a `_latest/verification.docx` that
+ * does not match the S6 run the manifest names. Widening this to every stage
+ * would duplicate the rollout's own call rather than fix anything.
+ *
+ * A WARNING AND NOT A REFUSAL. By the time this runs the manifest is already
+ * written and the commit has happened, so there is nothing to refuse — exiting
+ * non-zero here would report a completed commit as a failure to every caller.
+ * A mirror that did not refresh is caught by the gate on the next push, which
+ * is exactly the backstop that case wants.
+ */
+function refreshLatestMirror(townDir) {
+  const { spawnSync } = require('child_process');
+  const tool = path.join(__dirname, 'refresh_latest.js');
+  if (!fs.existsSync(tool)) {
+    console.log(`  WARNING: ${path.basename(tool)} is not beside stage.js — _latest was NOT refreshed`);
+    return;
+  }
+  // --no-collect: the copy is this map's business, the estate-wide
+  // Collected_latests sweep is not. See refresh_latest.js's header for why the
+  // chokepoint takes the half with a gate behind it and leaves the other.
+  const r = spawnSync(process.execPath, [tool, townDir, '--no-collect'], { encoding: 'utf8' });
+  if (r.status === 0) {
+    const line = String(r.stdout || '').split('\n').find(l => l.startsWith('_latest refreshed:'));
+    console.log('  ' + (line || '_latest refreshed'));
+  } else {
+    console.log(`  WARNING: _latest was NOT refreshed — the mirror now disagrees with this run, and`
+      + `\n  tools/latest-mirror-gate.js will say so on the next push. Refresh it with:`
+      + `\n    node "${tool}" "${townDir}"`);
+    const why = String(r.stderr || '').trim().split('\n')[0];
+    if (why) console.log('  (' + why + ')');
+  }
+}
+
 function main() {
   const [cmd, ...rest0] = process.argv.slice(2);
   const { f, rest } = parseFlags(rest0);
@@ -786,6 +839,9 @@ function main() {
     const cost = [rec.elapsedMin != null ? rec.elapsedMin + ' min' : null,
       rec.tokens != null ? rec.tokens.toLocaleString('en-GB') + ' tokens' : null].filter(Boolean).join(', ');
     console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)${cost ? '  [' + cost + ']' : ''}`);
+    // OA-329 fault A — see refreshLatestMirror() above for why this is here, why
+    // it is S6 alone, and why it warns rather than refuses.
+    if (st === 'S6') refreshLatestMirror(townDir);
     return;
   }
 

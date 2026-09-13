@@ -246,13 +246,27 @@ export function readRepo({ key, label, name, dir, expect = 'main' }) {
   return repo;
 }
 
+/* A claim dated before today is one nobody is working: sessions here do not
+ * live overnight, so yesterday's claim is the residue of a collision that ended
+ * rather than evidence of one in progress. The number is assemble.mjs's
+ * STALE_AFTER_DAYS and is kept equal to it on purpose — the board and `--who`
+ * are read side by side, and two thresholds that disagreed would be worse than
+ * either. A null age (a `selected:` line whose date would not parse) is NOT
+ * stale: "could not look" is a third answer, never a finding. */
+export const STALE_CLAIM_AFTER_DAYS = 1;
+export const isStaleClaim = (x) => x && x.ageDays !== null && x.ageDays >= STALE_CLAIM_AFTER_DAYS;
+
 // The claims other sessions have written down. This is the one signal that says
 // what somebody is DOING rather than what they have touched, and it is direct
 // evidence: a claim is a session's own statement, checked in and pushed.
-export function readClaims(busesDir, selfSession) {
+//
+// `now` is INJECTABLE rather than read from the clock inside the loop, because
+// the only interesting case here is an age, and a harness that cannot set the
+// date can only assert an age against the day it happens to run.
+export function readClaims(busesDir, selfSession, now = Date.now()) {
   const dir = path.join(busesDir, 'Development Docs', 'open-actions');
   if (!existsSync(dir)) return [];
-  const today = new Date();
+  const today = now;
   const out = [];
   let files;
   try { files = readdirSync(dir).filter((f) => /^OA-\d+\.md$/.test(f)).sort(); } catch { return []; }
@@ -448,7 +462,7 @@ export function readConditions({ buses, portal, engine, selfSession, selfId = nu
   const out = {
     at: new Date(now).toISOString(),
     repos,
-    claims: buses ? readClaims(buses, selfSession) : [],
+    claims: buses ? readClaims(buses, selfSession, now) : [],
     /* OA-287. The one fact here that git cannot supply: `loop/` is gitignored,
      * so a held lock can never reach the `buses-tree` verdict as an uncommitted
      * file, and every reader of that verdict was blind to the loop by
@@ -821,10 +835,37 @@ export function formatConditions(c) {
   // let the row be read as a peer.
   const others = c.claims.filter((x) => !x.self);
   if (others.length) {
-    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}`;
+    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}${isStaleClaim(x) ? `   << STALE, ${x.ageDays} day(s) old` : ''}`;
     L.push(`  ${'claimed'.padEnd(12)}${say(others[0])}`);
     for (const x of others.slice(1)) L.push(`  ${''.padEnd(12)}${say(x)}`);
     if (!c.selfSession) L.push(`  ${''.padEnd(12)}(one of those may be you — pass --session <this session's name> and it will drop it)`);
+    /* Until 2026-09-13 this block printed the age and said nothing about it, and
+     * a session asked the obvious question: does the board tell me which of these
+     * to RELEASE? It did not. Six claims printed alike, five of them held by
+     * sessions that had ended days earlier and one being worked at that moment,
+     * and nothing in the rendering separated them — so a stale claim went on
+     * refusing `--claim` to everybody, the scheduled loop included, until a person
+     * happened to run `--who`. `--who` is the only thing in the estate that says
+     * STALE, and nothing runs it for you.
+     *
+     * THE MARKER IS ABOUT AGE, AND THE SENTENCE BELOW SAYS SO. This board cannot
+     * tell a dead session from an idle one — its own `activity` line, a few lines
+     * down, is explicit that "an idle prompt looks the same as gone" — so a
+     * marker phrased as liveness would be a claim this file has no evidence for.
+     * What it does know is the date somebody wrote down, and the estate's rule
+     * that a session does not live overnight.
+     *
+     * A COMPUTED AGE IS SAFE HERE AND IS NOT SAFE IN THE INDEX, which is the same
+     * distinction OA-289 was paid for: `open-actions.md` is a generated file under
+     * byte comparison, so an age in it turned `main` red on the calendar. This is
+     * a REPORT, recomputed on every run and compared to nothing. Threshold and
+     * wording are deliberately assemble.mjs's, so the two agree when read side by
+     * side. */
+    const stale = others.filter(isStaleClaim);
+    if (stale.length) {
+      L.push(`  ${''.padEnd(12)}${stale.length} of those ${stale.length === 1 ? 'was' : 'were'} claimed BEFORE TODAY, which is longer than a session lives here — that is an AGE, not a liveness check, and this board cannot tell a dead session from an idle one. If nobody is behind one, release it; --who names each and prints the command:`);
+      L.push(`  ${''.padEnd(12)}  node "Development Docs/open-actions/assemble.mjs" --who`);
+    }
   } else {
     L.push(`  ${'claimed'.padEnd(12)}no open action is claimed by another session`);
   }

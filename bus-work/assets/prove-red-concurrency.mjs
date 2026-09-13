@@ -596,6 +596,68 @@ ok(conc.contentions(rows, dirtyTree).length === 1, 'two rows blocked by one thin
   `got ${conc.contentions(rows, dirtyTree).length}`);
 
 // ---------------------------------------------------------------------------
+// 3b. THE STALE-CLAIM MARKER — read off real OA files, judged on AGE
+// ---------------------------------------------------------------------------
+//
+// Deliberately end-to-end rather than over a hand-built claims array. The
+// marker reads `ageDays`, `ageDays` is produced by readClaims parsing a
+// `selected:` line, and a test that hands formatConditions an object it made
+// itself could not tell you the parser ever produces the field — "the subject
+// you named yourself", and the reason `now` was made injectable above.
+console.log('\n== the stale-claim marker ==');
+{
+  const busesDir = path.join(root, 'claims-fixture');
+  const oa = path.join(busesDir, 'Development Docs', 'open-actions');
+  fs.mkdirSync(oa, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', busesDir], { stdio: 'ignore' });
+
+  const NOW = Date.parse('2026-09-13T09:00:00Z');
+  const day = (n) => new Date(NOW - n * 86400000).toISOString().slice(0, 10);
+  const action = (ref, date, session, note) => fs.writeFileSync(path.join(oa, `${ref}.md`),
+    `---\nref: ${ref}\nstatus: open\nselected: ${date}, ${session}, ${note}\n---\n\nbody\n`);
+  const blockAt = (now, dir = busesDir) => conc.formatConditions(conc.readConditions({ buses: dir, now })).join('\n');
+
+  action('OA-901', day(0), 'buses-live', 'being worked right now');
+  action('OA-902', day(3), 'buses-gone', 'nobody is behind this');
+  // A date the regex matches and Date.parse does not. "Could not look" is a
+  // third answer and must never be rendered as a finding.
+  action('OA-903', '2026-13-45', 'buses-odd', 'an age nothing can compute');
+
+  const b = blockAt(NOW);
+  ok(/OA-902 \(3d\).*<< STALE, 3 day\(s\) old/.test(b), 'a claim made before today is MARKED stale, with its age', b);
+  ok(/OA-901 \(today\)(?!.*STALE)/.test(b), 'CONTROL — a claim made today is printed and NOT marked', b);
+  ok(/OA-903(?!.*STALE)/.test(b), 'CONTROL — an age that would not parse is not marked either', b);
+  ok(/claimed BEFORE TODAY/.test(b) && /assemble\.mjs" --who/.test(b),
+    'and one summary line names the count and the command that can release them', b);
+  ok(/an AGE, not a liveness check/.test(b),
+    'the summary says it is an AGE — this board cannot tell a dead session from an idle one', b);
+  ok((b.match(/claimed BEFORE TODAY/g) || []).length === 1, 'the summary is printed once, not once per stale claim', b);
+
+  // THE INJECTION IS LIVE. Same files, clock moved on two days: the claim that
+  // was fresh is now stale. Without this, a marker wired to a hardcoded date
+  // would pass every case above on the day the fixture was written.
+  const later = blockAt(NOW + 2 * 86400000);
+  ok(/OA-901 \(2d\).*<< STALE, 2 day\(s\) old/.test(later), 'two days later the SAME file reads stale — the age is computed, not fixed', later);
+  ok(/3 of those were claimed BEFORE TODAY|2 of those were/.test(later), 'and the count moves with it', later);
+
+  // MUTATION CONTROL — with nothing old, the summary must be ABSENT. A footer
+  // printed unconditionally would satisfy every assertion above.
+  const freshOnly = path.join(root, 'claims-fresh');
+  fs.mkdirSync(path.join(freshOnly, 'Development Docs', 'open-actions'), { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', freshOnly], { stdio: 'ignore' });
+  fs.writeFileSync(path.join(freshOnly, 'Development Docs', 'open-actions', 'OA-904.md'),
+    `---\nref: OA-904\nstatus: open\nselected: ${day(0)}, buses-live, today only\n---\n\nbody\n`);
+  const clean = blockAt(NOW, freshOnly);
+  ok(/OA-904 \(today\)/.test(clean) && !/STALE/.test(clean) && !/claimed BEFORE TODAY/.test(clean),
+    'CONTROL — no stale claim, no marker and no summary line at all', clean);
+
+  // The boundary, stated once rather than inferred from the cases above.
+  ok(conc.isStaleClaim({ ageDays: conc.STALE_CLAIM_AFTER_DAYS }) && !conc.isStaleClaim({ ageDays: 0 })
+    && !conc.isStaleClaim({ ageDays: null }),
+    `the threshold is ${conc.STALE_CLAIM_AFTER_DAYS} day and a null age is not stale`);
+}
+
+// ---------------------------------------------------------------------------
 // 4. THE CONTROL — a quiet machine must say go
 // ---------------------------------------------------------------------------
 console.log('\n== the control: nothing else running ==');

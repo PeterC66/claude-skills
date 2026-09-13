@@ -357,6 +357,11 @@ const MUTATIONS = [
     to: "  if(a.name === b.name) return d < 25000;" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the label rule widens back over the symbol-only categories, so an unnamed town hall silently leaves the sheet',
+    find: "  const noName = p => (AUTO_NAMED_CATS.includes(p.cat) ? unnamed(p.name) : !p.name);",
+    to: "  const noName = p => unnamed(p.name);" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a category label counts as a name again, so an unnamed sports centre prints the word "Leisure" and merges with every other one',
     find: "function unnamed(name){ return !name || CATEGORY_LABELS.has(name); }",
     to: "function unnamed(name){ return !name; }" },
@@ -410,7 +415,7 @@ const MUTATIONS = [
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless POI defaults to drawn again, so a bare glyph nobody chose takes a full 4.2mm box on three towns (OA-238)',
-    find: "  const defaultRule = p => ({ tier: unnamed(p.name) ? 'miss' : 'may', as: null });",
+    find: "  const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });",
     to: "  const defaultRule = p => ({ tier: 'may', as: null });" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',

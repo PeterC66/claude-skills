@@ -486,6 +486,26 @@ test('OA-338: an unnamed POI wearing a label defaults to miss, and is still OFFE
   assert.strictEqual(kept.length, 4, 'an explicit answer still wins, in both directions');
 });
 
+test('OA-338: the label rule reaches the TIER DEFAULT only where a name would print', () => {
+  // Found by looking at the artwork during the rollout, not by reasoning. Reading
+  // every label as no-name took eleven symbols off the estate. Ten were `Leisure`,
+  // `Community Centre` and `Allotments` — auto-named categories where the label
+  // WAS the visible word, and exactly what OA-238's default exists to stop. The
+  // eleventh was Beaconsfield's town hall, and that was a plain regression: a
+  // symbol-only category prints nothing either way, so `a bare glyph nobody chose`
+  // does not reach it. The category IS the choice.
+  const rep = {};
+  const out = selectPois([[node(51.61, -0.64, { amenity: 'townhall' }),
+                           node(51.62, -0.64, { leisure: 'sports_centre' }),
+                           node(51.63, -0.64, { amenity: 'pharmacy' })]], {}, rep);
+  assert.deepStrictEqual(out.map(p => p.cat), ['townhall'],
+    'the unnamed town hall is drawn; the unnamed leisure centre and chemist are not');
+  const tiers = Object.fromEntries(rep.candidates.map(c => [c.cat, c.tier]));
+  assert.deepStrictEqual(tiers, { townhall: 'may', leisure: 'miss', pharmacy: 'miss' });
+  // and OA-238's own two categories are untouched by the narrowing
+  assert.strictEqual(tiers.pharmacy, 'miss', 'a nameless chemist is still miss — OA-238 stands');
+});
+
 test('OA-338: printsName reads the same label list, so `Leisure` prints nothing', () => {
   assert.strictEqual(printsName({ cat: 'leisure', name: 'Leisure' }), false);
   assert.strictEqual(printsName({ cat: 'park', name: 'Park' }), false, 'the original instance');

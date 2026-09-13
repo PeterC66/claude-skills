@@ -292,7 +292,26 @@ function applyTiers(pois, POI, report){
    * default exists to stop, wearing a label to get past it. Wisbech has four
    * unnamed sports centres and printed *Leisure*; it is now offered four rows
    * in the chooser and prints none of them until somebody names one. */
-  const defaultRule = p => ({ tier: unnamed(p.name) ? 'miss' : 'may', as: null });
+  /* THE LABEL RULE APPLIES HERE ONLY TO A CATEGORY THAT PRINTS A NAME, and that
+   * narrowing was bought by looking at the artwork rather than by reasoning
+   * (OA-338, the estate rollout). Dropping every label-named POI took eleven
+   * symbols off the estate: ten were `Leisure`, `Community Centre` and
+   * `Allotments` -- auto-named categories where the label WAS the visible word,
+   * and exactly what this default exists to stop. The eleventh was
+   * Beaconsfield's town hall, and it was a plain regression.
+   *
+   * A symbol-only category prints nothing either way, so OA-238's argument --
+   * `a bare glyph nobody chose` -- does not reach it: for a town hall, a library
+   * or a museum the CATEGORY is the choice, the symbol is the information, and
+   * whether OpenStreetMap happens to carry a name changes nothing a reader sees.
+   * For pharmacy and gp, the two that reach here genuinely blank, the behaviour
+   * is exactly what OA-238 decided and this line is unchanged.
+   *
+   * De-duplication still reads a label as no-name for EVERY category, which is
+   * the other half of OA-338 and is not affected: two unnamed town halls 5 km
+   * apart are two town halls. */
+  const noName = p => (AUTO_NAMED_CATS.includes(p.cat) ? unnamed(p.name) : !p.name);
+  const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });
   const explicit = p => !!(TIERS && ((p.cat + ':' + p.name) in TIERS));
   const ruleFor = p => (explicit(p) ? rule(TIERS[p.cat + ':' + p.name]) : defaultRule(p));
 

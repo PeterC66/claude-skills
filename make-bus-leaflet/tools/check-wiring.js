@@ -76,6 +76,10 @@ const NOT_IN_CI = {
     'needs the buses estate — would have to move to the status job, which has the checkout',
   'gate:attribution':
     'needs the buses estate; run by the rollout, and gated estate-wide by status.js in the status job',
+  'gate:latest-mirrors':
+    'needs the buses estate — its subject is each map\'s _latest/verification.docx, so it is wired into buses-data\'s own gates.yml status job, which has that checkout. It would move here only if this repository gained one',
+  'test:prove-red-latest-mirrors':
+    'builds its own fixture and needs no estate, but it is wired beside the gate it falsifies, in buses-data\'s gates.yml, so the harness and its subject cannot be scheduled apart. Moving it here would split the pair',
   'gate:extraction':
     'needs the buses estate; run by hand after an extraction, where its whole job is to report nothing moved',
   'gate:dark-paths':

@@ -13,7 +13,8 @@
 // internal-diagram.jpg from
 // the latest S5 render; the newest disagreements.docx + disagreements.pdf (the
 // customer-facing PDF conversion, see gen_disagreements.py) and verification.docx
-// found anywhere under the town folder. Missing items are skipped silently.
+// found anywhere under THIS map's own folder — never under a map nested inside
+// it, see newestUnder(). Missing items are skipped silently.
 // Final step, always: re-runs collect-maps.ps1 -All at the Buses root, so the
 // Collected_latests review folders never drift from _latest the way High
 // Wycombe Aldi / St Neots Town Centre did on 2026-08-08 (an in-place render
@@ -51,14 +52,41 @@ function latestS5() {
   const dirs = fs.readdirSync(base).filter(d => fs.statSync(path.join(base, d)).isDirectory()).sort();
   return dirs.length ? path.join(base, dirs[dirs.length - 1]) : null;
 }
-// newest file of a given basename anywhere under the town folder (by mtime),
-// ignoring the _latest copy itself
+// newest file of a given basename anywhere under THIS MAP's folder (by mtime),
+// ignoring the _latest copy itself and ignoring any nested map.
+//
+// A DIRECTORY HOLDING ITS OWN manifest.json IS A DIFFERENT MAP, AND THIS WALK
+// MUST NOT DESCEND INTO IT (OA-329 fault B). A town's folder contains
+// Places/<Place>/, each of which is a map in its own right, so for a town this
+// walk used to consider a PLACE's verification.docx as a candidate for the
+// TOWN's mirror — and being newer, it won. It won twice, and both wrong files
+// were tracked in git: Beaconsfield's _latest/verification.docx was byte-for-byte
+// Beaconsfield Simpson Centre's report, and High Wycombe's was High Wycombe Town
+// Centre's — a current, true statement about a DIFFERENT map, sitting in the
+// folder a reader opens to find out what was checked about the sheet beside it.
+// High Wycombe's mirror reported on a single-stop boarding plan while its
+// _latest/internal.jpg was a 34-route town sheet. Nothing could see it: git
+// status is clean, every byte gate passes, and status.js reads S6 staleness off
+// the manifest and never opens _latest.
+//
+// "Holds a manifest.json" is the estate's EXISTING definition of a different map
+// — it is the same test this file already applies to its own argument above, and
+// the one status.js and the map-population sweeps use — so the narrowing agrees
+// with every other reader rather than inventing a rule of its own. The check is
+// on the CHILD before descending, so the map's own manifest at TOWN never
+// excludes TOWN itself, and Places/ (which holds no manifest) is still entered
+// so that a place nested one level deeper is skipped individually rather than
+// the whole branch being cut off blind.
 function newestUnder(name) {
   let best = null, bestT = -1;
   (function walk(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== '_latest') walk(p); }
+      if (e.isDirectory()) {
+        if (e.name === '_latest') continue;
+        if (fs.existsSync(path.join(p, 'manifest.json'))) continue;   // a different map — OA-329 fault B
+        walk(p);
+      }
       else if (e.name === name) { const t = fs.statSync(p).mtimeMs; if (t > bestT) { bestT = t; best = p; } }
     }
   })(TOWN);

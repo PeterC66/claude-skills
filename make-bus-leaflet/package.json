@@ -43,6 +43,8 @@
     "sweep:scratch": "node tools/sweep-scratch.js",
     "gate:design-keys": "node tools/check-design-keys.js",
     "gate:attribution": "node tools/attribution-gate.js",
+    "gate:latest-mirrors": "node tools/latest-mirror-gate.js",
+    "test:prove-red-latest-mirrors": "node tools/prove-red-latest-mirrors.js",
     "gate:extraction": "node tools/extraction-gate.js",
     "gate:dark-paths": "node tools/dark-paths.js",
     "gate:line-endings": "node tools/check-line-endings.js",

@@ -312,9 +312,9 @@ const MUTATIONS = [
   // the properties that turn on ORDER and on thresholds, which the 20 maps
   // certify only by accident of what happens to be committed today.
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'the same place mapped as node and building stops collapsing, and prints twice',
-    find: "const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;",
-    to: "const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<6;" },
+    what: 'the same shop under two spellings stops collapsing, so Tesco and Tesco Extra print twice 39 m apart',
+    find: "  if(x.includes(y) || y.includes(x)) return d < 60;",
+    to: "  if(x.includes(y) || y.includes(x)) return d < 6;" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'excludeName narrows to industrial, so a town cannot drop a named shop again',
@@ -340,6 +340,31 @@ const MUTATIONS = [
     what: 'allotments stop being opt-in and appear on every town that has any',
     find: "  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
     to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
+
+  /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
+   * label rule behind them. Two of these guard a THRESHOLD and one guards the
+   * set itself, which is derived from classify() rather than typed -- the
+   * mutation below is what stops that derivation being quietly replaced by a
+   * literal that happens to agree today. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'two DIFFERENT names collapse again when close, so Boots 24 m from Superdrug leaves the St Neots sheet as it did for months',
+    find: "  return false;",
+    to: "  return d < 60;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the same-name radius widens to a chain\'s spacing, so four Boots in Wisbech and five libraries in High Wycombe draw as one again',
+    find: "  if(a.name === b.name) return d < 250;",
+    to: "  if(a.name === b.name) return d < 25000;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a category label counts as a name again, so an unnamed sports centre prints the word "Leisure" and merges with every other one',
+    find: "function unnamed(name){ return !name || CATEGORY_LABELS.has(name); }",
+    to: "function unnamed(name){ return !name; }" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'classify goes back to discarding the real library name, so a town draws one library however many it has',
+    find: "  if(t.amenity==='library')   return ['library', t.name||'Library'];",
+    to: "  if(t.amenity==='library')   return ['library','Library'];" },
 
   // poi_select.js applyTiers - the must / may / miss classification, added
   // 2026-08-31 (OA-202). NOT covered by the byte gate in any degree: no
@@ -379,13 +404,13 @@ const MUTATIONS = [
    * cover at all, and only on the two sheets that lose a symbol; the rest is
    * these four mutations. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'two blank names compare equal again, so the second unnamed chemist in a town is deleted at any distance - no candidate, no chooser row, no key, no error (OA-234)',
-    find: "    for(const q of dedup){ if(q.cat===p.cat && ((q.name===p.name && p.name) || near(q.ll,p.ll))){ continue outer; } }",
-    to: "    for(const q of dedup){ if(q.cat===p.cat && (q.name===p.name || near(q.ll,p.ll))){ continue outer; } }" },
+    what: 'the no-name arm loses its distance bound, so the second unnamed chemist in a town is deleted at any distance - no candidate, no chooser row, no key, no error (OA-234, re-anchored by OA-338)',
+    find: "  if(unnamed(a.name) || unnamed(b.name)) return d < 60;",
+    to: "  if(unnamed(a.name) || unnamed(b.name)) return true;" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless POI defaults to drawn again, so a bare glyph nobody chose takes a full 4.2mm box on three towns (OA-238)',
-    find: "  const defaultRule = p => ({ tier: p.name ? 'may' : 'miss', as: null });",
+    find: "  const defaultRule = p => ({ tier: unnamed(p.name) ? 'miss' : 'may', as: null });",
     to: "  const defaultRule = p => ({ tier: 'may', as: null });" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',

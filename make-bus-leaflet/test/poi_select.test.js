@@ -117,6 +117,16 @@ test('industrialKeep: default keeps named estates, "none" drops all, an array ke
   assert.deepStrictEqual(selectPois(els, { industrialKeep: 'none' }), []);
   assert.deepStrictEqual(selectPois(els, { industrialKeep: ['Somewhere Else'] }), []);
   assert.deepStrictEqual(selectPois(els, { industrialKeep: ['Compass Point'] }).map(p => p.name), ['Compass Point']);
+  // The default arm needs the same assertion as the unnamed-green test above, and
+  // for the same reason: `Industrial Estate` is a category label since OA-338, so
+  // an unnamed estate that got past this filter would be dropped by the tier
+  // default anyway and the drawn list could not tell the two apart. What only the
+  // filter does is keep it out of the chooser.
+  const rep = {};
+  selectPois([[node(52.3, -0.07, { landuse: 'industrial' }),
+               node(52.31, -0.07, { landuse: 'industrial', name: 'Meadow Lane Estate' })]], {}, rep);
+  assert.deepStrictEqual(rep.candidates.map(c => c.key), ['industrial:Meadow Lane Estate'],
+    'an unnamed estate is not offered in the chooser — that is the filter, not the tier default');
 });
 
 test('excludeName is one alternation over EVERY category, not just industrial', () => {
@@ -126,9 +136,24 @@ test('excludeName is one alternation over EVERY category, not just industrial', 
 });
 
 test('an unnamed green names nothing and is always dropped, opted in or not', () => {
-  const els = [[node(52.3, -0.07, { leisure: 'park' }),
-                node(52.9, -0.9, { leisure: 'recreation_ground', name: 'Hill Rise' })]];
-  assert.deepStrictEqual(selectPois(els, {}).map(p => p.name), ['Hill Rise']);
+  // OA-338 MADE THIS TEST TOO EASY TO PASS, and the mutation suite said so before
+  // any reader did. A green called `Park` is now a CATEGORY LABEL, so even with
+  // the filter below removed it would default to `miss` and never be drawn — the
+  // assertion on the drawn list could no longer tell the filter from its absence.
+  //
+  // The filter is NOT redundant, and this is the difference: it runs BEFORE
+  // applyTiers, so what it drops never reaches `report.candidates` either. The
+  // label rule drops the same POI from the SHEET and still OFFERS it in the
+  // landmark chooser. So the assertion that distinguishes them is the candidate
+  // list, and that is what this test now makes.
+  const report = {};
+  const out = selectPois([[node(52.3, -0.07, { leisure: 'park' }),
+                           node(52.31, -0.07, { leisure: 'park', name: 'Park' }),
+                           node(52.32, -0.07, { leisure: 'park', name: 'Hill Rise Park' })]],
+    { include: ['allotments'] }, report);
+  assert.deepStrictEqual(out.map(p => p.name), ['Hill Rise Park'], 'only the named green is drawn');
+  assert.deepStrictEqual(report.candidates.map(c => c.key), ['park:Hill Rise Park'],
+    'and an unnamed green is not OFFERED either — the filter, not the tier default, is what does that');
 });
 
 test('no poi block at all is a valid town, and two of the committed maps are one', () => {

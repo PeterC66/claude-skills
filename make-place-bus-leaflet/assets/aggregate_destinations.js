@@ -24,6 +24,14 @@ const fs = require('fs');
 // a second parser appearing here (OA-232 Tier 3.1, satellite F8). readJson names
 // the file it could not read, which `JSON.parse(fs.readFileSync(...))` does not.
 const { cli } = require('./place_engine.js');
+
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const a = cli.parseArgs(process.argv.slice(2))._;
 const full = cli.readJson(a[0]);
 const ll = cli.readJson(a[1]);
@@ -105,3 +113,7 @@ for (const d of dests)
   console.log(`  ${d.name.padEnd(26)} ${String(d.bearing).padStart(3)}°  ${String(d.distKm).padStart(5)}km  routes ${d.routes.join(', ')}`);
 if (localLoops.length) console.log(`Local loops (no outside destination): ${localLoops.join(', ')}`);
 console.log(`Wrote ${OUT}`);
+}
+
+if (require.main === module) main();
+module.exports = { main };

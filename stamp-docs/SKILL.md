@@ -42,6 +42,7 @@ python scripts/docstamp.py --all                # full hash scan, ignoring the m
 python scripts/docstamp.py --major "path/to/doc.md"   # rewrite: v1.4 -> v2.0
 python scripts/docstamp.py --minor "path/to/doc.md"   # force a bump
 python scripts/docstamp.py --auto               # what the hook runs; always exits 0
+python scripts/docstamp.py --all --all-roots    # every root, not just the one you are in
 ```
 
 Add `--dry-run` to any of them, or `--root buses|portal|ops` to narrow.
@@ -101,6 +102,8 @@ python scripts/prove_policy.py
 ## Committing a stamped document
 
 **When you edit a stamped document, run `docstamp.py --all` and commit the stamp in the same commit as the content.**
+
+**That walks only the root you are standing in, and since 2026-09-13 it is the tool rather than the reader that guarantees it** (buses-data OA-333). Before that, `--all` walked every configured root whatever directory you were in — 208 documents across three repositories — so running it stamped files in trees your session did not have checked out and could not see. `--checkout` had existed since 3 September for the sibling case and its own docstring claimed the general property it had not bought. If you genuinely want the estate-wide pass, ask for it by name with `--all-roots`; every run prints the scope it chose.
 
 The hook fires at **Stop**, i.e. after the turn. Commit mid-turn and the stamp lands afterwards as a separate working-tree change — which you then have to notice, and in `community-bus-maps` ship as its own PR. That is the single real cost of the whole mechanism, and this one habit removes it.
 

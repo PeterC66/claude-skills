@@ -28,7 +28,9 @@
  *         [--tokens <n>]                 record what this stage cost the session
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
  *         and, for S4, refuses a routes.json carrying no "engine" hash or no
- *         "design.sheetVersion" build stamp (--force-stamps overrides)
+ *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
+ *         with no build-warnings.txt whose PREVIOUS run declared one, which is a
+ *         log that has gone rather than one a map never had (--force-nolog)
  *   stamps [runDir]                    write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
@@ -718,6 +720,58 @@ function main() {
           }
           if (why) console.log(`  WARNING: committing an area S4 with no orientation record — ${why} (--force-meta)`);
         }
+      }
+
+      /* Guard (OA-310 item 2): an S4 does not silently LOSE its build-warnings log.
+       *
+       * `build_log.js` classifies everything the generators said and writes
+       * `build-warnings.txt` into the run folder. That matters because a guard that
+       * only writes to stderr is not a guard: three of `gen_internal.js`'s feature
+       * label guards refuse to draw and still exit 0, so without the log a sheet can
+       * ship carrying a label the engine declined to place with nothing saying so.
+       * On 2026-09-11 the Godmanchester Co-op Ermine Street rebuild drew its new map
+       * notes across a POI symbol, and the engine said so as a WARN — which does not
+       * block — so the sheet would have shipped over the POI had the log not been
+       * read by hand in the session that wrote it.
+       *
+       * `build_s4.js` now writes it on every route to an S4, the stage path
+       * included. This is the boundary half: `commit` is the one chokepoint every
+       * S4 passes through however it was built, and it cannot produce the log — it
+       * does not run the generators — so its only honest move is to refuse.
+       *
+       * WHY IT IS SCOPED TO A REGRESSION RATHER THAN A FLAT RULE. Two maps'
+       * latest S4 legitimately has no log — Huntingdon v5.0 and Wisbech v4.1, both
+       * data changes built before `build_s4.js` existed — so "every S4 must have
+       * one" is red on their next commit for a history they cannot change, and a
+       * gate that is red on day one is one somebody mutes in its first week. The
+       * question with an unambiguous answer is the one this asks: the PREVIOUS run
+       * declared a log, so this map's builds do produce one, and this one has none.
+       * That is a loss rather than an absence. When those two maps are rebuilt the
+       * estate reaches 20 of 20 and the rule can be widened to the flat form.
+       *
+       * THE PREVIOUS RUN IS READ FROM THE MANIFEST, NOT FROM THE DISK, because
+       * `S4-generate/` is gitignored and `prune_runs.py` deletes superseded runs by
+       * design — the folder may be long gone while the record of what it declared
+       * stays. This run is read from the DISK, because the folder is in front of us
+       * and a declaration is not a file: an --outputs list naming a log that is not
+       * there is the OA-106 guard's business and is refused above.
+       */
+      const LOG = 'build-warnings.txt';
+      const prior = sx.runs.filter(r => r.id !== id);
+      const prev = (sx.latest && sx.latest !== id && sx.runs.find(r => r.id === sx.latest))
+        || prior[prior.length - 1] || null;
+      const hadLog = !!(prev && Array.isArray(prev.outputs) && prev.outputs.includes(LOG));
+      if (hadLog && !fs.existsSync(path.join(runDir, LOG))) {
+        if (!f['force-nolog'])
+          die(`${id} has no ${LOG}, and the run before it did: ${prev.id}\n`
+            + `  The log is how anyone ever learns that a generator REFUSED to draw something.\n`
+            + `  Those guards write to stderr and exit 0, so a sheet can ship missing a label\n`
+            + `  or printing one over a POI with nothing downstream saying so — the byte gate\n`
+            + `  seeds ci-reference from this very run, so both sides agree about the sheet.\n`
+            + `  Build the sheets through the one entry point, which writes it for you:\n`
+            + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
+            + `  Override with --force-nolog only if this build genuinely drew no sheets.`);
+        console.log(`  WARNING: committing an S4 with no ${LOG} — ${prev.id} had one (--force-nolog)`);
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;

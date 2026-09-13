@@ -395,6 +395,22 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-register-recheck
 
+      # buses-data OA-326 (2026-09-12): committed work that has never been pushed.
+      # The scheduled loop is DENIED the push by design, and that containment is
+      # the reason it may write to these trees at all -- but nothing enumerated the
+      # residue, so 463 insertions with their own harness sat on a portal branch
+      # with no pull request while the board printed "community-bus-maps -- main,
+      # clean". UNLIKE most steps here the subject DOES survive actions/checkout,
+      # but only as an empty one: a fresh clone has a single branch, so this step
+      # would be green for ever over the real tree. It is green over FIXTURES
+      # instead -- the harness builds a bare origin, a clone, a worktree and a
+      # squash-merge history under the temp dir. Read its five CONTROLS first:
+      # four of the assertions exist to prove the row stays SILENT for finished
+      # work, which is the only way this source can realistically fail.
+      - name: Prove the stranded-branch row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-unpushed-branches
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision
@@ -520,6 +536,17 @@ jobs:
       - name: Prove the S4 output-existence guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-commit
+
+      # OA-310 item 2. `build-warnings.txt` is the only record that a generator
+      # REFUSED to draw something -- those guards write to stderr and exit 0 -- and
+      # until 2026-09-12 only the two rollouts wrote it, so an S4 built through the
+      # stage order, the only path left for a config change, had none. The refusal
+      # is SCOPED to a run whose predecessor declared a log, because a flat rule is
+      # red on Huntingdon and Wisbech, whose latest runs legitimately have none.
+      # Five of the seven tests are therefore CONTROLs asserting silence.
+      - name: Prove the S4 build-warnings guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-build-log
 
       # OA-164. `pull` copies the whole run FOLDER while the manifest speaks only
       # of DECLARED outputs, so an undeclared file left in an older stage's folder

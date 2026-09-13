@@ -138,8 +138,13 @@ let bad = false;
 // declare is not read. That third one is a control in spirit and is counted with
 // the guards, because this fixture removes the CANNOT TELL message it asserts on
 // along with everything else the fingerprint prints.
+// 2 and 12 since OA-332 (2026-09-13), which added three more: a data-only S1 run
+// that derives no feed file and must not buy an answer for agreeing with it, the
+// newest earlier derivation winning rather than the oldest, and the narrowing —
+// it reaches back and never forward. The third of those is again a control in
+// spirit, counted with the guards for the identical reason as OA-270's.
 if (controls.length !== 2) { console.error(`FAIL: expected 2 CONTROL tests, found ${controls.length}`); bad = true; }
-if (guards.length !== 9) { console.error(`FAIL: expected 9 guard tests, found ${guards.length}`); bad = true; }
+if (guards.length !== 12) { console.error(`FAIL: expected 12 guard tests, found ${guards.length}`); bad = true; }
 for (const n of controls) if (failed.has(n)) { console.error(`FAIL: CONTROL went red — the revert broke ordinary use, so nothing below is evidence: ${n}`); bad = true; }
 for (const n of guards) if (passed.has(n)) { console.error(`FAIL: guard test stayed green under the OLD rule — it is not testing the change: ${n}`); bad = true; }
 

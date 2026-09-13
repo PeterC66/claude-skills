@@ -373,11 +373,66 @@ function eraFile(era, file) {
   return null;
 }
 
+/* THE DERIVATION IN FORCE (OA-332, 2026-09-13) --------------------------------
+ *
+ * `gtfs-services.json` is preferred over `verified-services.json` for the reason
+ * written above -- the first is the raw derivation from the feed, and it is the
+ * WORLD moving that stales a blind answer, not our reply to it. That preference
+ * quietly stopped holding the moment a map recorded a DECISION. The data-only S1
+ * run that OA-306 prescribes for declaring a decided service-facts entry pulls no
+ * feed, so it writes `verified-services.json` and nothing else; the era then had
+ * no feed derivation of its own, `eraFile` found none, and the fingerprint fell
+ * through to our own adjudicated file -- the one carrying every claim we have
+ * just accepted. It compared our reply against our reply, saw the entry we had
+ * deliberately added, and said BUY at 89k-137k tokens.
+ *
+ * Measured on 2026-09-13: NINE of the seventeen builds holding a red-team answer
+ * had a latest S1 run carrying `verified-services.json` and nothing else, and
+ * FIVE of the estate's six `_reuseOverride` stamps are this one shape --
+ * Huntingdon's route 401 corrected to agree with the answer's own operator-sourced
+ * note, DIAL-A-RIDE and TIGERONDEMAND arriving from the register as decided
+ * includes. Every one of them says the same sentence in different words: our data
+ * moved TOWARD this answer, so it cannot have changed it.
+ *
+ * A run that derived nothing from the feed leaves the PREVIOUS pull's derivation
+ * in force, and that is the derivation the era actually has. So when an era
+ * resolves no copy of the named file, the search walks back through earlier eras,
+ * NEWEST FIRST, and takes the first that does.
+ *
+ * Three properties, each with a guard in test/redteam_fingerprint.test.js:
+ *
+ *   - It is strictly ADDITIVE. `eraFile` is unchanged and is still asked first,
+ *     so every era that resolved a file before resolves the same file now. This
+ *     branch runs only where the answer used to be "none".
+ *   - It reaches back, NEVER FORWARD. Only runs dated before the era are
+ *     considered, because comparing an era against a derivation made after it is
+ *     reading the future. Where nothing earlier exists the answer stays CANNOT
+ *     TELL, which falls back to the timestamp and buys -- the safe direction.
+ *   - The NEWEST earlier derivation wins, not the oldest. A genuine re-pull that
+ *     moved a fact, followed later by a declaration run, must still buy; landing
+ *     on the pull before it would answer UNCHANGED about a feed that has moved,
+ *     which is the one failure this whole guard exists to prevent.
+ *
+ * It reuses `eraFile` rather than reimplementing the search, so the OA-270 rule
+ * travels with it unchanged: an S1 run's own copy is found where it sits, and a
+ * copy in any other stage is read only where that run's record DECLARES it.
+ */
+function eraFileInForce(era, file) {
+  const own = eraFile(era, file);
+  if (own) return own;
+  const earlier = s1Runs().filter(r => r.at && r.at < era.at).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : (a.id < b.id ? 1 : -1)));
+  for (const e of earlier) {
+    const f = eraFile(e, file);
+    if (f) return { ...f, inForce: true };
+  }
+  return null;
+}
+
 function fingerprintPair(answerDate) {
   const now = s1Latest(), then = s1AsOf(answerDate);
   if (!now || !then) return { ok: false, why: 'the manifest names no S1 run on both sides of the answer' };
   for (const f of ['gtfs-services.json', 'verified-services.json']) {
-    const fa = eraFile(then, f), fb = eraFile(now, f);
+    const fa = eraFileInForce(then, f), fb = eraFileInForce(now, f);
     if (!fa || !fb) continue;
     const a = serviceFacts(fa.path), b = serviceFacts(fb.path);
     if (a && b) return { ok: true, file: f, then, now, thenFrom: fa, nowFrom: fb, a, b, same: a.hash === b.hash };
@@ -449,7 +504,12 @@ if (fp.ok) {
   // Say which run each era's file was READ from when it was not the S1 run itself
   // (OA-270). A place of the pre-OA-158 era declares it in P2, and a reader who
   // cannot see that cannot check the comparison.
-  const from = s => (s.stage === 'S1' ? '' : ` (file from ${s.stage} ${s.run})`);
+  // Two different sentences, deliberately worded apart (OA-270, then OA-332).
+  // "file from" is this era's own declaration sitting in another stage; "in force
+  // from" is an earlier era's derivation, still current because nothing has
+  // re-derived since. A reader who cannot tell those apart cannot check either.
+  const from = s => (s.inForce ? ` (derivation in force, from ${s.stage} ${s.run})`
+    : s.stage === 'S1' ? '' : ` (file from ${s.stage} ${s.run})`);
   console.log(`  service facts      : ${fp.file}  S1 ${fp.then.id}${from(fp.thenFrom)} (${fp.a.n} svc, ${fp.a.hash}) vs S1 ${fp.now.id}${from(fp.nowFrom)} (${fp.b.n} svc, ${fp.b.hash})`);
   console.log(`                       route, operator, days, termini, headsigns — ${fp.same ? 'UNCHANGED' : 'CHANGED'}`);
   if (!fp.same) {

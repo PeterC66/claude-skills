@@ -799,14 +799,19 @@ if (intown && !cfgThin && ladder.length && ladder[ladder.length - 1].after.S !==
  */
 if (poiLoad !== null && poiLoad > BANDS.amber.P) {
   const mute = (function () {
-    // POIs that draw a symbol and can never be named: poiMark()'s auto-name set
-    // is the six categories below, so everything else returns an unlabelled
-    // glyph. Not a proposal to drop them — a pharmacy symbol says "pharmacy"
-    // perfectly well without a name — but it IS the sharpest fact to hand a
-    // local, because it is the part of the load that is pure page area.
-    const AUTO = ['shop', 'leisure', 'school', 'park', 'community', 'allotments'];
+    // POIs that draw a symbol and can never be named: poiMark()'s auto-name set,
+    // so everything else returns an unlabelled glyph. Not a proposal to drop
+    // them — a pharmacy symbol says "pharmacy" perfectly well without a name —
+    // but it IS the sharpest fact to hand a local, because it is the part of the
+    // load that is pure page area.
+    //
+    // THE SET IS IMPORTED RATHER THAN TYPED, since OA-340. OA-212 moved this rule
+    // into `poi_select.js` because it had been written out twice; a third copy
+    // was sitting here, unexported and uncompared, and adding a category would
+    // have left this diagnostic quietly counting the new one as mute for ever.
+    // `AUTO_NAMED_CATS` is exported and `poi_worksheet.js` already reads it.
     try {
-      const { selectPois } = require('./poi_select.js');
+      const { selectPois, AUTO_NAMED_CATS: AUTO } = require('./poi_select.js');
       const sets = ['osm.json', 'osm2.json']
         .filter(f => fs.existsSync(path.join(dir, f)))
         .map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).elements);

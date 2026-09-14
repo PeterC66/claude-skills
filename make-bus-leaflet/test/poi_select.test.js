@@ -40,6 +40,76 @@ test('allotments are opt-in per town, and land in "industrial" for nobody', () =
     ['allotments', 'Broad Leas']);
 });
 
+/* ---------------------------------------------------------------------------
+ * OA-340 — pubs, the second opt-in category.
+ *
+ * Peter's decision of 2026-09-13, taken on the measurement: estate-wide the
+ * category is +34% named symbols onto pages where 98 labels already do not fit,
+ * so a town carries pubs only if it says `poi.include: ["pubs"]`. The property
+ * the form was chosen FOR is that a town which says nothing renders byte for
+ * byte as it did — the four assertions below are what hold that, and the byte
+ * gate over the 20 committed maps is what proves it on real data.
+ * ------------------------------------------------------------------------- */
+
+test('OA-340: pubs are opt-in per town, and one opt-in does not buy the other', () => {
+  assert.strictEqual(classify({ amenity: 'pub', name: 'The Pig and Falcon' }, {}), null,
+    'a town that has asked for nothing draws no pub');
+  assert.strictEqual(classify({ amenity: 'pub', name: 'The Pig and Falcon' }, { include: ['allotments'] }), null,
+    'and a town that asked for ALLOTMENTS has not thereby asked for pubs');
+  assert.deepStrictEqual(classify({ amenity: 'pub', name: 'The Pig and Falcon' }, { include: ['pubs'] }),
+    ['pub', 'The Pig and Falcon']);
+  // Both opt-ins at once, because `include` is a list and the two clauses are
+  // separate `if`s — the shape that would break if either were an `else if`.
+  assert.deepStrictEqual(classify({ landuse: 'allotments', name: 'Broad Leas' }, { include: ['pubs', 'allotments'] }),
+    ['allotments', 'Broad Leas']);
+});
+
+test('OA-340: a pub prints its name, and a NAMELESS pub is offered but not drawn', () => {
+  assert.ok(printsName({ cat: 'pub', name: 'The Weeping Ash' }),
+    'the whole point of the category is *the Wetherspoon*, so the name is the information');
+  assert.strictEqual(classify({ amenity: 'pub' }, { include: ['pubs'] })[1], '',
+    'the fallback is BLANK, not "Pub" — a label would sneak past the nameless default');
+  const report = {};
+  const out = selectPois([[node(52.2277, -0.2668, { amenity: 'pub', name: 'The Weeping Ash' }),
+                           node(52.2400, -0.2668, { amenity: 'pub' })]],
+    { include: ['pubs'] }, report);
+  assert.deepStrictEqual(out.map(p => p.name), ['The Weeping Ash'],
+    'OA-238: a bare glyph nobody chose stays off the sheet');
+  assert.deepStrictEqual(report.candidates.map(c => c.key), ['pub:The Weeping Ash', 'pub:'],
+    'and it is still OFFERED in the chooser, so the local can name it or confirm the miss');
+});
+
+test('OA-340: two differently-named pubs 38 m apart both survive, which is why this row waited', () => {
+  // The Weeping Ash is 38 m from the Pig and Falcon in St Neots, and until the
+  // de-duplication round of 2026-09-14 the 60 m rule collapsed them and kept the
+  // FIRST — so a town that opted in would have got its pubs and not the one the
+  // whole question was asked about. Real coordinates, real distance.
+  const out = selectPois([[node(52.22778, -0.26862, { amenity: 'pub', name: 'The Pig and Falcon' }),
+                           node(52.22812, -0.26862, { amenity: 'pub', name: 'The Weeping Ash' })]],
+    { include: ['pubs'] });
+  assert.deepStrictEqual(out.map(p => p.name).sort(), ['The Pig and Falcon', 'The Weeping Ash']);
+});
+
+test('OA-340: two Red Lions is what OA-250 says it is — both drawn, one key, and SAID so', () => {
+  // The acceptance question this row owed: pubs are exactly the category where a
+  // repeated name repeats, and `cat:name` carries no disambiguator. Beyond 250 m
+  // a shared name is two places and both are drawn; they then share one override
+  // key, one tier answer and one placer anchor. That is OA-250, it is live on
+  // five maps already, and the honest behaviour is to REPORT it rather than to
+  // collapse one of them away.
+  const report = {};
+  const out = selectPois([[node(52.30, -0.07, { amenity: 'pub', name: 'Red Lion' }),
+                           node(52.32, -0.07, { amenity: 'pub', name: 'Red Lion' })]],
+    { include: ['pubs'] }, report);
+  assert.strictEqual(out.length, 2, '2.2 km apart is two pubs, not one mapped twice');
+  assert.deepStrictEqual(report.duplicateCandidateKeys, ['pub:Red Lion'],
+    'the collision is named at build time — OA-250, not a surprise on the sheet');
+  // And inside 250 m the same name IS one place mapped twice, unchanged.
+  assert.strictEqual(selectPois([[node(52.30, -0.07, { amenity: 'pub', name: 'Red Lion' }),
+                                  node(52.3010, -0.07, { amenity: 'pub', name: 'Red Lion' })]],
+    { include: ['pubs'] }).length, 1);
+});
+
 test('a way with only a centre is placed at its centre', () => {
   // NAMED on purpose since OA-338: an unnamed library is called `Library`, which
   // is a category label rather than a name, so it now defaults to `miss` and this
@@ -416,9 +486,12 @@ test('OA-338: the label set is DERIVED from classify(), not typed beside it', ()
   }
   assert.deepStrictEqual([...produced].sort(), [...CATEGORY_LABELS].sort(),
     'CATEGORY_LABELS must be exactly the fallbacks classify() produces');
-  // pharmacy and gp are the two that fall back to nothing at all
+  // pharmacy, gp and — since OA-340 — pub are the three that fall back to
+  // nothing at all, which is what keeps them OUT of the set above.
   assert.strictEqual(classify({ amenity: 'pharmacy' }, {})[1], '');
   assert.strictEqual(classify({ amenity: 'doctors' }, {})[1], '');
+  assert.strictEqual(classify({ amenity: 'pub' }, { include: ['pubs'] })[1], '');
+  assert.ok(!CATEGORY_LABELS.has('Pub'), 'a "Pub" label would defeat the nameless default');
   assert.ok(unnamed('') && unnamed('Library') && !unnamed('Ash Library'));
 });
 

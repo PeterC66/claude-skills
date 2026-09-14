@@ -3,17 +3,22 @@
  * prove-red-stage-build-log.js — falsify the OA-310 item 2 guard.
  *
  * Copies assets/stage.js, cuts the build-warnings guard out of the copy, and runs
- * test/stage_build_log.test.js against it. The two guard tests must FAIL (they are
- * the guard) and the five named CONTROL must still PASS. A run where everything
+ * test/stage_build_log.test.js against it. The four guard tests must FAIL (they are
+ * the guard) and the three named CONTROL must still PASS. A run where everything
  * goes red proves the harness broke the file rather than that the guard works, so
  * both halves are asserted instead of just the failures.
  *
- * WHY FIVE CONTROLS FOR TWO GUARD TESTS, which is an unusual ratio here. This guard
- * is a SCOPED refusal — the flat rule it deliberately is not would be red on
- * Huntingdon and Wisbech the day it landed — so most of what has to be true of it is
- * that it stays silent. Two of those controls (the re-commit of one dir, and the S2)
- * pass with the guard cut out and are named CONTROL for exactly that reason: a test
- * that cannot go red under this cut must not be counted as evidence that it can.
+ * THE RATIO WENT 5:2 TO 3:4 ON 2026-09-14 AND THAT IS THE WIDENING, NOT DRIFT. The
+ * guard was a SCOPED refusal — it asked only whether the PREVIOUS run declared a log
+ * and this one has none — because three maps' latest S4 legitimately had none, so
+ * most of what had to be true of it was that it stays SILENT. Those three were
+ * rebuilt on 2026-09-13 and the rule is now the flat "an S4 has a log", so two cases
+ * that used to be exemptions are now refusals: the first S4 a map ever commits, and
+ * the map whose predecessor had no log either. Both moved from CONTROL to guard, and
+ * a third control (the re-commit) kept its log rather than having it deleted.
+ * Two controls still pass with the guard cut out — the re-commit of one dir, and the
+ * S2 — and are named CONTROL for exactly that reason: a test that cannot go red
+ * under this cut must not be counted as evidence that it can.
  *
  * THE COUNTS ARE ASSERTED, not just the verdicts, for the reason the sibling
  * harnesses give: a verdict cannot express "it did not look at this one".
@@ -94,12 +99,15 @@ console.log(`guard tests  : ${guards.length}  (must all FAIL)`);
 
 let bad = false;
 if (all.length !== 7) { console.error(`FAIL: expected 7 tests, parsed ${all.length} — the reporter format changed or the suite did`); bad = true; }
-if (controls.length !== 5) { console.error(`FAIL: expected 5 CONTROL tests, found ${controls.length}`); bad = true; }
-if (guards.length !== 2) { console.error(`FAIL: expected 2 guard tests, found ${guards.length}`); bad = true; }
+if (controls.length !== 3) { console.error(`FAIL: expected 3 CONTROL tests, found ${controls.length}`); bad = true; }
+if (guards.length !== 4) { console.error(`FAIL: expected 4 guard tests, found ${guards.length}`); bad = true; }
 if (controlsRed.length) { console.error('FAIL: a control went red — the harness broke the file, it did not falsify the guard:\n  ' + controlsRed.join('\n  ')); bad = true; }
 if (guardsGreen.length) { console.error('FAIL: these guard tests still PASS without the guard, so they do not test it:\n  ' + guardsGreen.join('\n  ')); bad = true; }
 
 cleanup();
 
 if (bad) { console.error('\n--- test output ---\n' + out); process.exit(1); }
-console.log('\nPROVEN RED: both guard tests fail without the guard, all 5 controls stay green.');
+// Counted, not spelled out: this line read "both guard tests ... all 5 controls" and
+// was still saying 5 when the widening of 2026-09-14 made it 3. A number in prose
+// beside the variable that holds it is the one that goes stale silently.
+console.log(`\nPROVEN RED: all ${guards.length} guard tests fail without the guard, all ${controls.length} controls stay green.`);

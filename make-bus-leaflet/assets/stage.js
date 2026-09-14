@@ -29,8 +29,8 @@
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
  *         and, for S4, refuses a routes.json carrying no "engine" hash or no
  *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
- *         with no build-warnings.txt whose PREVIOUS run declared one, which is a
- *         log that has gone rather than one a map never had (--force-nolog)
+ *         with no build-warnings.txt at all — every route to an S4 writes one
+ *         (--force-nolog overrides, for a build that genuinely drew no sheets)
  *   stamps [runDir]                    write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
@@ -722,7 +722,7 @@ function main() {
         }
       }
 
-      /* Guard (OA-310 item 2): an S4 does not silently LOSE its build-warnings log.
+      /* Guard (OA-310 item 2): an S4 has a build-warnings log, full stop.
        *
        * `build_log.js` classifies everything the generators said and writes
        * `build-warnings.txt` into the run folder. That matters because a guard that
@@ -739,31 +739,34 @@ function main() {
        * S4 passes through however it was built, and it cannot produce the log — it
        * does not run the generators — so its only honest move is to refuse.
        *
-       * WHY IT IS SCOPED TO A REGRESSION RATHER THAN A FLAT RULE. Two maps'
-       * latest S4 legitimately has no log — Huntingdon v5.0 and Wisbech v4.1, both
-       * data changes built before `build_s4.js` existed — so "every S4 must have
-       * one" is red on their next commit for a history they cannot change, and a
-       * gate that is red on day one is one somebody mutes in its first week. The
-       * question with an unambiguous answer is the one this asks: the PREVIOUS run
-       * declared a log, so this map's builds do produce one, and this one has none.
-       * That is a loss rather than an absence. When those two maps are rebuilt the
-       * estate reaches 20 of 20 and the rule can be widened to the flat form.
+       * IT WAS SCOPED TO A REGRESSION UNTIL 2026-09-14, AND THE SCOPING IS GONE
+       * BECAUSE THE THING IT PROTECTED IS GONE. The narrow rule asked whether the
+       * PREVIOUS run declared a log and this one has none — a loss rather than an
+       * absence — and it was narrow for one reason: three maps' latest S4
+       * legitimately had none (Huntingdon v5.0, Wisbech v4.1 and St Neots v4.0, all
+       * data changes built before `build_s4.js` existed), so a flat rule would have
+       * been red on their next commit for a history they could not change, and a
+       * gate that is red on day one is one somebody mutes in its first week. All
+       * three were rebuilt in place and re-committed on 2026-09-13 and all nine
+       * sheets came back byte-identical, so the estate is 20 of 20 and there is no
+       * longer a map the flat rule is unfair to. Keeping the scoping past that
+       * point would leave the guard DISARMED on exactly the case it exists for: a
+       * map whose predecessor declared no log gets no protection at all, which is
+       * how the three of them came to be in that state.
        *
-       * THE PREVIOUS RUN IS READ FROM THE MANIFEST, NOT FROM THE DISK, because
-       * `S4-generate/` is gitignored and `prune_runs.py` deletes superseded runs by
-       * design — the folder may be long gone while the record of what it declared
-       * stays. This run is read from the DISK, because the folder is in front of us
-       * and a declaration is not a file: an --outputs list naming a log that is not
-       * there is the OA-106 guard's business and is refused above.
+       * SO THE QUESTION IS NOW ABOUT THE RUN IN FRONT OF US AND NOTHING ELSE, and
+       * it is read from the DISK rather than from the --outputs list, because a
+       * declaration is not a file: an --outputs list naming a log that is not there
+       * is the OA-106 guard's business and is refused above. Nothing is read from
+       * the manifest any more, which also retires the reason the old rule had to
+       * read the predecessor from there rather than from disk — `S4-generate/` is
+       * gitignored and `prune_runs.py` deletes superseded runs, so the folder may be
+       * long gone while the record of what it declared stays.
        */
       const LOG = 'build-warnings.txt';
-      const prior = sx.runs.filter(r => r.id !== id);
-      const prev = (sx.latest && sx.latest !== id && sx.runs.find(r => r.id === sx.latest))
-        || prior[prior.length - 1] || null;
-      const hadLog = !!(prev && Array.isArray(prev.outputs) && prev.outputs.includes(LOG));
-      if (hadLog && !fs.existsSync(path.join(runDir, LOG))) {
+      if (!fs.existsSync(path.join(runDir, LOG))) {
         if (!f['force-nolog'])
-          die(`${id} has no ${LOG}, and the run before it did: ${prev.id}\n`
+          die(`${id} has no ${LOG}\n`
             + `  The log is how anyone ever learns that a generator REFUSED to draw something.\n`
             + `  Those guards write to stderr and exit 0, so a sheet can ship missing a label\n`
             + `  or printing one over a POI with nothing downstream saying so — the byte gate\n`
@@ -771,7 +774,7 @@ function main() {
             + `  Build the sheets through the one entry point, which writes it for you:\n`
             + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
             + `  Override with --force-nolog only if this build genuinely drew no sheets.`);
-        console.log(`  WARNING: committing an S4 with no ${LOG} — ${prev.id} had one (--force-nolog)`);
+        console.log(`  WARNING: committing an S4 with no ${LOG} (--force-nolog)`);
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;

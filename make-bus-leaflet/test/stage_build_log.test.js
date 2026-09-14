@@ -1,5 +1,5 @@
 /*
- * stage.js commit S4 — the build-warnings log must not go MISSING (OA-310 item 2).
+ * stage.js commit S4 — an S4 run folder has a build-warnings log (OA-310 item 2).
  *
  * `build_log.js` writes `build-warnings.txt` into the S4 run folder, and it is the
  * only record that a generator REFUSED to draw something: three of gen_internal.js's
@@ -10,20 +10,29 @@
  * boundary half, because `commit` is the one chokepoint every S4 passes through
  * however it was built.
  *
- * THE SCOPING IS THE SUBJECT OF THIS FILE, not the refusal. A flat "every S4 must
- * have one" is red on the next commit of Huntingdon and Wisbech, whose latest runs
- * legitimately have none, and a gate that is red on day one is one somebody mutes in
- * its first week. So five of the seven tests below are CONTROLS, and the third of
- * them IS the Huntingdon case: a predecessor with no log means this map's builds do
- * not produce one yet, and the guard must stay silent.
+ * THE SCOPING WAS THE SUBJECT OF THIS FILE UNTIL 2026-09-14 AND IS NOW GONE. The
+ * rule used to ask only whether the PREVIOUS run declared a log and this one has
+ * none, because three maps' latest S4 legitimately had none — Huntingdon v5.0,
+ * Wisbech v4.1 and St Neots v4.0 — and a flat rule would have been red on their
+ * next commit for a history they could not change. All three were rebuilt in place
+ * and re-committed on 2026-09-13, byte-identical across all nine sheets, so the
+ * estate is 20 of 20 and the scoping protects nobody. It is retired here, and the
+ * Huntingdon control it existed for is retired with it: under the flat rule a map
+ * whose predecessor declared no log is exactly the map that needs the guard, and
+ * leaving it exempt is how those three came to be in that state.
  *
- * TWO OF THOSE CONTROLS ARE NAMED THAT WAY BECAUSE THEY CANNOT BE FALSIFIED BY
- * REMOVING THE GUARD, and that is worth stating rather than hiding. Re-committing
- * the same run dir, and an S2 that drops an output, both PASS with the guard cut
- * out — they are assertions that the guard stays out of a case, so their evidence
- * is that they go red when the SCOPING is broken, not when the guard is. The
- * harness requires every non-CONTROL test to fail without the guard, so a test
- * that cannot fail must not claim to be one.
+ * WHAT THE WIDENING CHANGES IN THIS FILE, stated so nobody re-derives it. The first
+ * S4 a map ever commits used to be exempt for want of a predecessor and is now
+ * refused, which turns that case from a CONTROL into a mechanism test. And
+ * re-committing the SAME run dir is still a CONTROL, but of a narrower thing: it
+ * asserts the re-commit REPLACES rather than appends, and its fixture keeps its log
+ * rather than having it deleted, because deleting it now tests the guard instead.
+ *
+ * TWO OF THE CONTROLS CANNOT BE FALSIFIED BY REMOVING THE GUARD, and that is worth
+ * stating rather than hiding. Re-committing the same run dir, and an S2 that drops
+ * an output, both PASS with the guard cut out — they are assertions that the guard
+ * stays out of a case. The harness requires every non-CONTROL test to fail without
+ * the guard, so a test that cannot fail must not claim to be one.
  *
  * stage.js is a CLI with main() at the bottom, so every case here spawns it.
  * Requiring it would run main() on import and prove nothing about the CLI.
@@ -74,12 +83,15 @@ function manifest(town) {
 }
 const OUTS = (withLog) => ['--outputs', withLog ? 'internal.svg,' + LOG : 'internal.svg'];
 
-test('CONTROL — the FIRST S4 a map ever commits has no predecessor, so no log is required', () => {
+test('the FIRST S4 a map ever commits is refused when it has no log — there is no starting exemption', () => {
   const town = newTown();
   const d = s4(town, 'v1.0_2026-09-12_1200', false);
   const r = commit(town, ['S4', d].concat(OUTS(false)));
-  assert.strictEqual(r.status, 0, 'a first S4 must commit: ' + r.stderr);
-  assert.strictEqual(manifest(town).stages.S4.latest, 'v1.0_2026-09-12_1200');
+  assert.notStrictEqual(r.status, 0, 'a first S4 with no log must not commit');
+  assert.match(r.stderr, /v1\.0_2026-09-12_1200 has no build-warnings\.txt/);
+  assert.doesNotMatch(r.stderr, /the run before it/, 'the flat rule must not talk about a predecessor');
+  assert.strictEqual(manifest(town).stages.S4.runs.length, 0,
+    'the refused run must not reach the manifest');
 });
 
 test('CONTROL — a run that carries the log commits after one that also did', () => {
@@ -90,21 +102,25 @@ test('CONTROL — a run that carries the log commits after one that also did', (
   assert.strictEqual(manifest(town).stages.S4.latest, 'v1.1_2026-09-12_1300');
 });
 
-test('CONTROL — the Huntingdon case: the run before had no log either, so this one is not refused', () => {
+test('the retired Huntingdon case: a predecessor with no log is now the map that MOST needs the guard', () => {
   const town = newTown();
-  commit(town, ['S4', s4(town, 'v5.0_2026-09-12_1200', false)].concat(OUTS(false)));
+  // The first run is forced through exactly as a pre-`build_s4.js` map's would have to be.
+  const first = commit(town, ['S4', s4(town, 'v5.0_2026-09-12_1200', false)]
+    .concat(OUTS(false), ['--force-nolog']));
+  assert.strictEqual(first.status, 0, 'the override must still let a legacy run in: ' + first.stderr);
   const r = commit(town, ['S4', s4(town, 'v5.1_2026-09-12_1300', false)].concat(OUTS(false)));
-  assert.strictEqual(r.status, 0, 'a map whose builds do not yet write a log must still commit: ' + r.stderr);
-  assert.doesNotMatch(r.stdout, /WARNING: committing an S4 with no build-warnings/);
-  assert.strictEqual(manifest(town).stages.S4.latest, 'v5.1_2026-09-12_1300');
+  assert.notStrictEqual(r.status, 0,
+    'under the old scoping this committed silently, which is how three maps stayed logless');
+  assert.match(r.stderr, /v5\.1_2026-09-12_1300 has no build-warnings\.txt/);
+  assert.strictEqual(manifest(town).stages.S4.latest, 'v5.0_2026-09-12_1200');
 });
 
-test('a run whose PREDECESSOR declared a log and which has none is refused, and the refusal names it', () => {
+test('a run whose PREDECESSOR declared a log and which has none is refused', () => {
   const town = newTown();
   commit(town, ['S4', s4(town, 'v1.0_2026-09-12_1200', true)].concat(OUTS(true)));
   const r = commit(town, ['S4', s4(town, 'v1.1_2026-09-12_1300', false)].concat(OUTS(false)));
   assert.notStrictEqual(r.status, 0, 'a lost log must not commit');
-  assert.match(r.stderr, /has no build-warnings\.txt, and the run before it did: v1\.0_2026-09-12_1200/);
+  assert.match(r.stderr, /v1\.1_2026-09-12_1300 has no build-warnings\.txt/);
   assert.match(r.stderr, /build_s4\.js/, 'the refusal must print the command that writes it');
   assert.strictEqual(manifest(town).stages.S4.latest, 'v1.0_2026-09-12_1200',
     'the refused run must not reach the manifest');
@@ -116,17 +132,17 @@ test('--force-nolog turns the refusal into a warning and lets the commit through
   const r = commit(town, ['S4', s4(town, 'v1.1_2026-09-12_1300', false)]
     .concat(OUTS(false), ['--force-nolog']));
   assert.strictEqual(r.status, 0, 'the override must work: ' + r.stderr);
-  assert.match(r.stdout, /WARNING: committing an S4 with no build-warnings\.txt — v1\.0_2026-09-12_1200 had one/);
+  assert.match(r.stdout, /WARNING: committing an S4 with no build-warnings\.txt \(--force-nolog\)/);
   assert.strictEqual(manifest(town).stages.S4.latest, 'v1.1_2026-09-12_1300');
 });
 
-test('CONTROL — re-committing the SAME run dir does not compare a run with itself', () => {
+test('CONTROL — re-committing the SAME run dir replaces the record rather than appending', () => {
   const town = newTown();
   const d = s4(town, 'v1.0_2026-09-12_1200', true);
   assert.strictEqual(commit(town, ['S4', d].concat(OUTS(true))).status, 0);
-  fs.unlinkSync(path.join(d, LOG));
-  const r = commit(town, ['S4', d].concat(OUTS(false)));
-  assert.strictEqual(r.status, 0, 'the only run in the manifest is not its own predecessor: ' + r.stderr);
+  // The log stays: under the flat rule deleting it would test the guard, not this.
+  const r = commit(town, ['S4', d].concat(OUTS(true)));
+  assert.strictEqual(r.status, 0, 'a re-commit of a run that has its log must pass: ' + r.stderr);
   assert.strictEqual(manifest(town).stages.S4.runs.length, 1, 're-commit replaces rather than appends');
 });
 

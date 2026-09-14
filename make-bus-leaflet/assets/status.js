@@ -1457,24 +1457,13 @@ async function deploymentRow() {
   }
 
   // Rule 3: how long has the undeployed work been sitting there? THE POPULATION
-  // IS THE WHOLE BACKLOG, NOT THE TIP. This asked `log -1 <ref>` until 2026-09-14
-  // (OA-355) -- the age of main's NEWEST commit, which is not the question the
-  // line above asks and not what the grace was built to excuse. On a repository
-  // that anything else merges into, every unrelated merge reset this clock to
-  // zero, so `behind (grace)` could never age into `BEHIND` and the exit code
-  // stayed 0 however long a deploy was actually outstanding. Measured on the
-  // morning it was found rather than reasoned about: at 06:00Z the oldest
-  // undeployed portal commit (`ca87e7f`) was 16h old and over the grace, while
-  // the board read 0h and exited 0. Three changes then went live undescribed,
-  // one of them an engine re-vendor. The commit that has been WAITING is the
-  // oldest in `deployed..ref`, so that is the one dated.
-  //
-  // A LIVE SHA THIS CHECKOUT CANNOT RESOLVE IS "I COULD NOT TELL", NOT "0h".
-  // An unfetched or rewritten history makes the range fail outright, and a live
-  // build AHEAD of main makes it empty -- both are indistinguishable from "the
-  // backlog is brand new" unless they are asked separately. Both fall through
-  // to the same null-means-red path Rule 1 uses, because a backlog nobody can
-  // date is precisely the case a grace must not excuse.
+  // IS THE WHOLE BACKLOG, NOT THE TIP -- this asked `log -1 <ref>` until
+  // 2026-09-14, so every unrelated merge reset the clock and `behind (grace)`
+  // could never age into `BEHIND`. A gate that cannot fire; the measurement and
+  // the cost are buses-data OA-355, falsified by prove-red-deploy-grace.js.
+  // A range that yields nothing -- an unresolvable live sha, or a live build
+  // AHEAD of main -- is "I could not tell" and takes Rule 1's null-means-red
+  // path, because a backlog nobody can date is what a grace must not excuse.
   const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + ref]);
   const oldest = backlog == null ? null : backlog.split('\n').map(s => s.trim()).filter(Boolean).pop();
   const ts = Number(oldest);
@@ -1717,9 +1706,8 @@ async function main() {
     console.log('  no header    the live build predates X-App-Version; deploy once and this row starts working');
   } else {
     console.log('  ' + deploy.status + '   live ' + deploy.deployed + ' != main ' + deploy.want
-      + (deploy.ageHours == null
-        ? '  (undateable — the live sha is not in this checkout, so the backlog is NOT being excused)'
-        : '  (oldest undeployed commit ' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
+      + (deploy.ageHours == null ? '  (undateable — the live sha is not in this checkout, so it is NOT being excused)'
+         : '  (oldest undeployed commit ' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
     console.log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
     console.log('      npm run deploy');
   }

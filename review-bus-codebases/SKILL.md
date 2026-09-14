@@ -86,6 +86,22 @@ python3 "C:/Users/Peter/.claude/skills/stamp-docs/scripts/docstamp.py" --all
 
 Then write the round into the project memory store (a `project_codebase_review_<date>` entry and a pointer in `MEMORY.md`), and release the claim.
 
+## What happens to the plan afterwards — decided 2026-09-14, after the fourth run
+
+**NOTHING ENUMERATES A REVIEW PLAN, and every instinct about where it will resurface is wrong.** This was measured on 2026-09-14 rather than assumed, because the fourth run left fourteen tier items filed and nobody could say what would ask for them again. Three answers, all checked: **the `bus-work` worklist does not read the backlog at all** — its sources are the portal, correspondence, `commitments.json`, the BODS scan, S6 staleness, the claims register, CI state, unpushed branches and the loop queues, and there is no open-actions source in `worklist.mjs` — so filing an OA row does **not** put an item on the worklist, which is the obvious reason to file one and it is not true here. **The one worklist row a review produces is its `loop/blocked/` note**, and that row is one-shot: the moment somebody answers it and moves it to `loop/adhoc/ready/`, it stops appearing and every item it did not name goes with it. And **the plan document itself is held only by the previous round's plan and that blocked note**, so `check-doc-coverage.mjs` will not force the question either.
+
+**So the honest tracker is the NEXT review, and it is a real one.** [The consolidation brief](references/briefs/consolidation.md) requires every reviewer to classify every prior finding in its slice as CLOSED, STILL OPEN or CHANGED with the measurement that decides it, before listing anything new. A finding left in the plan is therefore genuinely tracked — just on a fortnightly clock, by a session that will re-measure it rather than take the plan's word. That is what makes the following rule safe rather than negligent.
+
+> **File an OA for what should be worked before the next review. Leave in the plan what the next review can re-ask.**
+
+**Tier 1 is DONE in the round, not filed — and the exception is the case that has now happened.** Its items are by construction under an hour each and need no decision, so filing eight backlog rows costs more in claiming, indexing and committing than the work. The 2026-09-03 round did exactly that and its Tier 1 table says *Done in this run*. The 2026-09-14 round could not, because it was dispatched by the scheduled loop as `sched-0315` and **a tick may not push**, so every item was filed instead. **That is a reason to give Tier 1 one session, not a reason to give it fourteen backlog rows**: when the round is run unattended, raise the `loop/blocked/` note (the four person-only outputs, not the whole plan), and the next interactive session does the whole tier in one sitting. Say in the plan's header that the round departed from *fix the no-decision faults in the same round*, so it is stated rather than left to be noticed.
+
+**Tier 2 is where OA rows belong** — session-sized, with a design decision inside each — and **the plan should already name which ones**, in its *How this sits with the backlog* section. Five is the right order of magnitude; fourteen is not.
+
+**Tier 3 is filed NOWHERE, deliberately.** It is the tier the plan explicitly carries rather than schedules, and rows nobody works make the next round's classification job harder, not easier. The next review re-asks it; that is what Tier 3 means.
+
+**Two things a round must not leave undone.** The plan's *Where this stands* section is filled in by the session that does the work, with the item number, the commit and the proof — the next round reads it. And **a decision the plan puts to Peter carries one recommendation, not a menu**; when he takes it, write the answer into the artefact it is about (the ratchet's own notes block, the register entry, the skill) rather than only into the plan, because the plan is the document nothing enumerates.
+
 ## What the first run taught about running it
 
 - **Six reviewers converge on the same helpers from different directions** (argument parsing, hashing, escaping). When two slices name the same duplication, it goes in the plan once, under the slice that owns the shared module.

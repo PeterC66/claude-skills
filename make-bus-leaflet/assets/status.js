@@ -1372,7 +1372,8 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
 //      lesson of a checker that reports "no answer" as "wrong answer".
 //   2. A MISSING HEADER IS NEVER RED either. It means the live build predates
 //      this change, which is a true and temporary fact, not a fault.
-//   3. BEHIND IS AMBER FOR DEPLOY_GRACE_HOURS AND RED AFTER. A merge is not a
+//   3. BEHIND IS AMBER FOR DEPLOY_GRACE_HOURS AND RED AFTER, AND THE AGE IS THE
+//      OLDEST UNDEPLOYED COMMIT'S, NOT THE TIP'S. A merge is not a
 //      deploy and nobody should be gated the minute they press merge; twelve
 //      hours later, "merged and forgotten" is the only remaining explanation.
 //
@@ -1455,13 +1456,23 @@ async function deploymentRow() {
     return { status: 'current', want, deployed, url: LIVE_URL };
   }
 
-  // Rule 3: how long has the undeployed commit been sitting there?
-  const ts = Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', ref]));
-  const ageH = Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
+  // Rule 3: how long has the undeployed work been sitting there? THE POPULATION
+  // IS THE WHOLE BACKLOG, NOT THE TIP -- this asked `log -1 <ref>` until
+  // 2026-09-14, so every unrelated merge reset the clock and `behind (grace)`
+  // could never age into `BEHIND`. A gate that cannot fire; the measurement and
+  // the cost are buses-data OA-355, falsified by prove-red-deploy-grace.js.
+  // A range that yields nothing -- an unresolvable live sha, or a live build
+  // AHEAD of main -- is "I could not tell" and takes Rule 1's null-means-red
+  // path, because a backlog nobody can date is what a grace must not excuse.
+  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + ref]);
+  const oldest = backlog == null ? null : backlog.split('\n').map(s => s.trim()).filter(Boolean).pop();
+  const ts = Number(oldest);
+  const ageH = oldest && Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
   const overGrace = ageH == null ? true : ageH >= DEPLOY_GRACE_HOURS;
   return {
     status: overGrace ? 'BEHIND' : 'behind (grace)',
     want, deployed, url: LIVE_URL, ageHours: ageH, graceHours: DEPLOY_GRACE_HOURS,
+    undateable: ageH == null,
   };
 }
 
@@ -1695,7 +1706,8 @@ async function main() {
     console.log('  no header    the live build predates X-App-Version; deploy once and this row starts working');
   } else {
     console.log('  ' + deploy.status + '   live ' + deploy.deployed + ' != main ' + deploy.want
-      + (deploy.ageHours == null ? '' : '  (' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
+      + (deploy.ageHours == null ? '  (undateable — the live sha is not in this checkout, so it is NOT being excused)'
+         : '  (oldest undeployed commit ' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
     console.log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
     console.log('      npm run deploy');
   }

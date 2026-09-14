@@ -610,6 +610,23 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-portal-drift
 
+      # buses-data OA-355. The board's DEPLOY GRACE could not expire. It dated the
+      # drift with `git log -1 <main>` -- the age of main's newest commit -- under a
+      # comment asking how long the undeployed commit had been waiting, so on a
+      # repository anything else merges into, every unrelated merge reset the clock
+      # and `behind (grace)` never aged into the red `BEHIND`. Found by arithmetic on
+      # a real morning: at 06:00Z on 2026-09-14 the oldest undeployed portal commit
+      # was 16h old against a 12h grace while the board read 0h and exited 0, and
+      # three changes then went live undescribed. It belongs in this secret-free tier
+      # for the same reason as the step above -- it builds its own git repository and
+      # serves its own fake live site on 127.0.0.1, so it reads neither the portal nor
+      # busmaps.uk. Its fourth case re-runs the SAME fixture against a copy of
+      # status.js with the old line restored and requires it to read amber, because a
+      # fixture that reddens the fix proves nothing until it is shown to discriminate.
+      - name: Prove the deploy grace can actually expire
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-deploy-grace
+
       # THE FILE-HYGIENE CHECKER NOW LIVES HERE (buses-data OA-241, 2026-09-04),
       # and it is in the SECRET-FREE tier deliberately. It was written in
       # buses-data, which is private; this repository and the portal are public,

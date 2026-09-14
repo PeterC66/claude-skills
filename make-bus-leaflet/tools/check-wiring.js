@@ -48,6 +48,8 @@ const path = require('path');
 
 const ENGINE = path.resolve(__dirname, '..');
 const SKILLS = path.resolve(ENGINE, '..');
+/** This tool's own manifest, as the workflow spells it: `make-bus-leaflet`. */
+const ENGINE_REL = path.basename(ENGINE);
 const WORKFLOW = path.join(SKILLS, '.github', 'workflows', 'gates.yml');
 
 /*
@@ -66,32 +68,44 @@ const SPEC_OF = {
  * Scripts `gates.yml` does not run, each with the reason it cannot. A reason
  * must say what would have to change — "needs X" — so that a later reader can
  * tell a deliberate exclusion from an oversight nobody revisited.
+ *
+ * KEYED BY MANIFEST, since OA-346. Two skills in this repository both call a
+ * script `test:prove-red`, and a flat table could not tell them apart — nor
+ * could the join itself, which is the fault half 2 of that action is about.
+ * A key naming no manifest is a finding, like every other entry here.
  */
 const NOT_IN_CI = {
-  'test:prove-red-status':
-    'needs the buses estate AND a portal checkout; it is falsified in the status job by prove-red-gates.js instead',
-  'test:prove-red-attribution':
-    'needs the buses estate — would have to move to the status job, which has the checkout',
-  'test:prove-red-external-spokes':
-    'needs the buses estate — would have to move to the status job, which has the checkout',
-  'gate:attribution':
-    'needs the buses estate; run by the rollout, and gated estate-wide by status.js in the status job',
-  'gate:latest-mirrors':
-    'needs the buses estate — its subject is each map\'s _latest/verification.docx, so it is wired into buses-data\'s own gates.yml status job, which has that checkout. It would move here only if this repository gained one',
-  'test:prove-red-latest-mirrors':
-    'builds its own fixture and needs no estate, but it is wired beside the gate it falsifies, in buses-data\'s gates.yml, so the harness and its subject cannot be scheduled apart. Moving it here would split the pair',
-  'gate:extraction':
-    'needs the buses estate; run by hand after an extraction, where its whole job is to report nothing moved',
-  'gate:dark-paths':
-    'needs the buses estate; run by the rollout over the sheets it just built',
-  'gate:branch-coverage':
-    'takes a spec file as its argument and answers a question about the committed maps, not a pass/fail',
-  'test:prove-lane-mirror':
-    'needs the buses estate AND renders every town twice — minutes, not seconds; run by hand when laneOrientation is touched',
-  'census:lanes':
-    'needs the buses estate AND renders every internal sheet on it — minutes, not seconds — and answers a question (how the offsetter treats each sheet, OA-176 4.21) rather than a pass/fail; run by hand when lane offsets, laneRibbon or a corridor family are touched. Its tool had no npm script from 2026-09-04 to 2026-09-05, and this check was red on every push in between',
-  'sweep:scratch':
-    'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
+  'bus-work': {
+    // Its sixteen harnesses are all scheduled individually, which is why this is
+    // empty rather than absent: an empty table is a manifest that has been looked
+    // at, and a missing one is a manifest nobody has.
+  },
+  'make-bus-leaflet': {
+    'test:prove-red-status':
+      'needs the buses estate AND a portal checkout; it is falsified in the status job by prove-red-gates.js instead',
+    'test:prove-red-attribution':
+      'needs the buses estate — would have to move to the status job, which has the checkout',
+    'test:prove-red-external-spokes':
+      'needs the buses estate — would have to move to the status job, which has the checkout',
+    'gate:attribution':
+      'needs the buses estate; run by the rollout, and gated estate-wide by status.js in the status job',
+    'gate:latest-mirrors':
+      'needs the buses estate — its subject is each map\'s _latest/verification.docx, so it is wired into buses-data\'s own gates.yml status job, which has that checkout. It would move here only if this repository gained one',
+    'test:prove-red-latest-mirrors':
+      'builds its own fixture and needs no estate, but it is wired beside the gate it falsifies, in buses-data\'s gates.yml, so the harness and its subject cannot be scheduled apart. Moving it here would split the pair',
+    'gate:extraction':
+      'needs the buses estate; run by hand after an extraction, where its whole job is to report nothing moved',
+    'gate:dark-paths':
+      'needs the buses estate; run by the rollout over the sheets it just built',
+    'gate:branch-coverage':
+      'takes a spec file as its argument and answers a question about the committed maps, not a pass/fail',
+    'test:prove-lane-mirror':
+      'needs the buses estate AND renders every town twice — minutes, not seconds; run by hand when laneOrientation is touched',
+    'census:lanes':
+      'needs the buses estate AND renders every internal sheet on it — minutes, not seconds — and answers a question (how the offsetter treats each sheet, OA-176 4.21) rather than a pass/fail; run by hand when lane offsets, laneRibbon or a corridor family are touched. Its tool had no npm script from 2026-09-04 to 2026-09-05, and this check was red on every push in between',
+    'sweep:scratch':
+      'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
+  },
 };
 
 /*
@@ -174,8 +188,31 @@ if (!fs.existsSync(WORKFLOW)) {
   process.exit(2);
 }
 
-const pkg = JSON.parse(fs.readFileSync(path.join(ENGINE, 'package.json'), 'utf8'));
-const scripts = pkg.scripts || {};
+const gitLines = (argv, cwd) => require('child_process')
+  .execFileSync('git', argv, { cwd, encoding: 'utf8' })
+  .split(/\r?\n/).filter(Boolean);
+
+/*
+ * EVERY PACKAGE MANIFEST IN THE REPOSITORY, enumerated rather than listed
+ * (buses-data OA-346 half 2, from the 2026-09-14 review's R3 G3).
+ *
+ * This check read ONE manifest — the engine's — for its whole life, while
+ * `bus-work` holds sixteen falsification harnesses of its own, twelve of them
+ * written in a fortnight. The fastest-growing corpus in the estate was outside
+ * the join whose entire job is to ask whether a harness is scheduled, and a join
+ * instrument with a blind spot is worse than none: it reports the healthiest
+ * possible state about the half it can see and says nothing about the other.
+ *
+ * ENUMERATED FROM GIT, not from a list, or this row repeats itself the next time
+ * a skill grows a package.json — and from the index rather than the disk, for the
+ * reason the tools/ enumeration below gives.
+ */
+const manifestDirs = gitLines(['ls-files', '--full-name', '*package.json'], SKILLS)
+  .filter((f) => !f.includes('node_modules/'))
+  .map((f) => path.posix.dirname(f))
+  .filter((d) => d && d !== '.')
+  .sort();
+
 const yml = fs.readFileSync(WORKFLOW, 'utf8');
 
 /*
@@ -235,75 +272,136 @@ const ciCommands = runSteps.join('\n');
 const findings = [];
 const rows = [];
 
-// --- 1. every runnable tool is reachable by name --------------------------
+/*
+ * A step belongs to a manifest when its `working-directory:` IS that manifest's
+ * directory. The workflow checks this repository out under `skills/`, so the
+ * value reads `skills/bus-work`; matching on the tail rather than on the whole
+ * path keeps that checkout path out of this file, since it is the workflow's
+ * choice and not ours.
+ *
+ * THIS IS THE HALF THAT WAS NOT MERELY MISSING BUT WRONG. Matching `npm run X`
+ * against every command in the file — which is what a flat list can do — reads
+ * `bus-work`'s `test:prove-red` as scheduled because the ENGINE has a step of
+ * that name. Two skills here both call a script `test:prove-red`, so widening the
+ * join without scoping it would have manufactured a green answer for a script no
+ * step runs, in the check whose subject is exactly that mistake.
+ */
+const stepsIn = (rel) => steps.filter((s) => s.dir && (s.dir === rel || s.dir.endsWith(`/${rel}`)));
 
-// TRACKED files, not the disk. tools/ collects gitignored scratch (a gate's
-// before/after baselines), and a check that read the disk would report a
-// neighbouring session's working files as unscheduled tools.
-const toolFiles = require('child_process')
-  .execFileSync('git', ['ls-files', 'tools/'], { cwd: ENGINE, encoding: 'utf8' })
-  .split(/\r?\n/).filter(Boolean).map((f) => f.replace(/^tools\//, '')).sort();
-const allScriptText = Object.values(scripts).join('\n');
-for (const file of toolFiles) {
-  if (NOT_A_TOOL[file]) continue;
-  const owner = Object.entries(SPEC_OF).find(([, re]) => re.test(file));
-  if (owner) continue;
-  if (!/\.(js|py)$/.test(file)) {
-    findings.push(`tools/${file} is neither a .js/.py tool nor declared in NOT_A_TOOL.`);
-    continue;
+/*
+ * A script is in the join when its command NAMES A FILE — `node tools/x.js`,
+ * `python3 test/python/run.py`, `node assets/prove-red-loop-lock.mjs`.
+ *
+ * It was `tools/*.(js|py)` until OA-346, which was the engine's own layout
+ * written into the rule: `bus-work` keeps its harnesses in `assets/`, so every
+ * one of them failed the test for not being in a folder its skill does not have.
+ * What a script DOES is a fact; where one skill happens to put its tools is not.
+ *
+ * An aggregate — `npm run a && npm run b` — names no file and stays outside,
+ * which is right: it is an alias for other scripts, and each of those is asked
+ * about on its own. `npm test` (`node --test`) is outside for the same reason
+ * and `gates.yml` runs it by name. `test:python` used to be outside because it
+ * names a .py that is not under tools/; it is now INSIDE the join and green,
+ * which is one small thing this widening bought.
+ */
+const NAMES_A_FILE = /[\w./@-]*[\w-]+\.(?:js|mjs|cjs|py)\b/;
+
+/** One manifest's answer, so the report can say how big the join actually is. */
+const audited = [];
+
+for (const rel of manifestDirs) {
+  const dir = path.join(SKILLS, ...rel.split('/'));
+  const scripts = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).scripts || {};
+  const mySteps = stepsIn(rel);
+  const myCommands = mySteps.flatMap((s) => s.cmds).join('\n');
+  const notInCi = NOT_IN_CI[rel] || {};
+
+  // --- 1. every runnable tool is reachable by name --------------------------
+  //
+  // Asked of a manifest that HAS a tools/ folder. It is a question about that
+  // convention — one folder holding the runnable gates — and a skill that keeps
+  // its harnesses beside its code has no such folder to audit. Question 2 below
+  // is the one that reaches every manifest.
+  //
+  // TRACKED files, not the disk. tools/ collects gitignored scratch (a gate's
+  // before/after baselines), and a check that read the disk would report a
+  // neighbouring session's working files as unscheduled tools.
+  const toolFiles = gitLines(['ls-files', 'tools/'], dir)
+    .map((f) => f.replace(/^tools\//, '')).sort();
+  const allScriptText = Object.values(scripts).join('\n');
+  for (const file of toolFiles) {
+    if (NOT_A_TOOL[file]) continue;
+    const owner = Object.entries(SPEC_OF).find(([, re]) => re.test(file));
+    if (owner) continue;
+    if (!/\.(js|py)$/.test(file)) {
+      findings.push(`${rel}/tools/${file} is neither a .js/.py tool nor declared in NOT_A_TOOL.`);
+      continue;
+    }
+    if (!allScriptText.includes(`tools/${file}`)) {
+      findings.push(`${rel}/tools/${file} has no npm script — nothing can name it, so nothing will schedule it.`);
+    }
   }
-  if (!allScriptText.includes(`tools/${file}`)) {
-    findings.push(`tools/${file} has no npm script — nothing can name it, so nothing will schedule it.`);
+  if (rel === ENGINE_REL) {
+    for (const file of Object.keys(NOT_A_TOOL)) {
+      if (!toolFiles.includes(file)) findings.push(`NOT_A_TOOL names tools/${file}, which is not there. Delete the entry.`);
+    }
+  }
+
+  // --- 2. every gate and harness is scheduled, and scheduled BY NAME ---------
+  //
+  // EVERY SCRIPT THAT NAMES A FILE, not every script whose NAME begins test: or
+  // gate:.
+  //
+  // It was the prefix rule until 2026-09-03, and the 2026-09-03 review found what
+  // that costs (engine-pipeline N27): `sweep:scratch` -> `tools/sweep-scratch.js`
+  // was named, unscheduled and undeclared, and invisible to the check whose whole
+  // job is to notice that. A NAME is a convention somebody has to remember; what a
+  // script DOES is a fact. Any future harness registered under a third prefix
+  // escaped the old rule the same way, silently, which is the failure mode this
+  // file exists to end -- the same shape as the four python/python3 divergences
+  // below, one level up.
+  const gateScripts = Object.keys(scripts).filter((n) => NAMES_A_FILE.test(scripts[n]));
+  for (const name of gateScripts) {
+    const cmd = scripts[name];
+    const target = (cmd.match(NAMES_A_FILE) || [])[0];
+    const viaNpm = new RegExp(`npm run ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`, 'm').test(myCommands);
+    const rebuilt = !viaNpm && target && myCommands.includes(target);
+    const status = viaNpm ? 'npm run' : rebuilt ? 'REBUILT' : 'absent';
+    rows.push({ manifest: rel, name, cmd, status });
+
+    if (rebuilt) {
+      const ciLine = mySteps.flatMap((s) => s.cmds).find((l) => l.includes(target)) || '';
+      findings.push(
+        `${rel} ${name}: CI rebuilds the command instead of running the script.\n` +
+        `      package.json:  ${cmd}\n` +
+        `      gates.yml:     ${ciLine}\n` +
+        `      Two copies of one invocation drift. Use \`npm run ${name}\`.`);
+    }
+    if (status === 'absent' && !notInCi[name]) {
+      findings.push(
+        `${rel} ${name} is in no workflow step running in ${rel}. Either add it to\n` +
+        `      gates.yml, or declare it in NOT_IN_CI["${rel}"] with a reason saying what\n` +
+        `      would have to change.`);
+    }
+  }
+
+  for (const name of Object.keys(notInCi)) {
+    if (!gateScripts.includes(name)) {
+      findings.push(`NOT_IN_CI["${rel}"] names "${name}", which is not a script any more. Delete the entry.`);
+    } else if (!notInCi[name].trim()) {
+      findings.push(`NOT_IN_CI["${rel}"]["${name}"] has no reason. An exclusion with no reason is a hole.`);
+    }
+  }
+
+  audited.push({ rel, tools: toolFiles.length, gates: gateScripts.length, steps: mySteps.length });
+}
+
+for (const rel of Object.keys(NOT_IN_CI)) {
+  if (!manifestDirs.includes(rel)) {
+    findings.push(`NOT_IN_CI names the manifest "${rel}", which this repository does not have. Delete the entry.`);
   }
 }
-for (const file of Object.keys(NOT_A_TOOL)) {
-  if (!toolFiles.includes(file)) findings.push(`NOT_A_TOOL names tools/${file}, which is not there. Delete the entry.`);
-}
 
-// --- 2. every gate and harness is scheduled, and scheduled BY NAME ---------
-
-// EVERY SCRIPT THAT RUNS A FILE IN tools/, not every script whose NAME begins
-// test: or gate:.
-//
-// It was the prefix rule until 2026-09-03, and the 2026-09-03 review found what
-// that costs (engine-pipeline N27): `sweep:scratch` -> `tools/sweep-scratch.js`
-// was named, unscheduled and undeclared, and invisible to the check whose whole
-// job is to notice that. A NAME is a convention somebody has to remember; what a
-// script DOES is a fact. Any future harness registered under a third prefix
-// escaped the old rule the same way, silently, which is the failure mode this
-// file exists to end -- the same shape as the four python/python3 divergences
-// below, one level up.
-//
-// `npm test` (`node --test`) names no tools/ file and is correctly outside this:
-// it is the unit suite, and `gates.yml` runs it by name in the `unit` job.
-// `test:python` (`test/python/run.py`) is the same shape and outside for the same
-// reason -- it is the Python unit suite, not a tools/ gate. Its join is asserted
-// where it can be, in `test/python/test_wiring.py`, rather than left unchecked:
-// this filter is structural, so widening it to reach one suite would pull in every
-// future script that happens to name a .py outside tools/.
-const gateScripts = Object.keys(scripts).filter((n) => /tools\/[\w.-]+\.(js|py)/.test(scripts[n]));
-for (const name of gateScripts) {
-  const cmd = scripts[name];
-  const target = (cmd.match(/tools\/[\w.-]+\.(js|py)/) || [])[0];
-  const viaNpm = new RegExp(`npm run ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`, 'm').test(ciCommands);
-  const rebuilt = !viaNpm && target && ciCommands.includes(target);
-  const status = viaNpm ? 'npm run' : rebuilt ? 'REBUILT' : 'absent';
-  rows.push({ name, cmd, status });
-
-  if (rebuilt) {
-    const ciLine = runSteps.find((l) => l.includes(target)) || '';
-    findings.push(
-      `${name}: CI rebuilds the command instead of running the script.\n` +
-      `      package.json:  ${cmd}\n` +
-      `      gates.yml:     ${ciLine}\n` +
-      `      Two copies of one invocation drift. Use \`npm run ${name}\`.`);
-  }
-  if (status === 'absent' && !NOT_IN_CI[name]) {
-    findings.push(
-      `${name} is in no workflow step. Either add it to gates.yml, or declare it in\n` +
-      `      NOT_IN_CI with a reason saying what would have to change.`);
-  }
-}
 // --- 3. `npm run <name> --flag` silently loses the flag ---------------------
 //
 // npm parses a `--flag` after the script name as an npm CONFIG option, not as an
@@ -322,14 +420,6 @@ for (const line of runSteps) {
       `      ${line}\n` +
       `      npm reads "${m[2]}" as its own config and the script is handed nothing.\n` +
       `      Write \`npm run ${m[1]} -- ${m[2]} ...\`.`);
-  }
-}
-
-for (const name of Object.keys(NOT_IN_CI)) {
-  if (!gateScripts.includes(name)) {
-    findings.push(`NOT_IN_CI names "${name}", which is not a script any more. Delete the entry.`);
-  } else if (!NOT_IN_CI[name].trim()) {
-    findings.push(`NOT_IN_CI["${name}"] has no reason. An exclusion with no reason is a hole.`);
   }
 }
 
@@ -365,17 +455,28 @@ for (const name of Object.keys(RAW_STEPS)) {
 
 // --- report ----------------------------------------------------------------
 
+// THE REPORT SAYS WHAT THE JOIN COVERED, not just what it found. A join
+// instrument that prints a verdict and not a population cannot be read for the
+// thing that was wrong with it for its whole life — that it was asking about one
+// manifest out of two. The per-manifest line is how a reader sees a skill enter
+// the join, or fail to.
+const declaredExceptions = Object.values(NOT_IN_CI).reduce((n, t) => n + Object.keys(t).length, 0);
 const byStatus = (s) => rows.filter((r) => r.status === s).length;
-console.log(`check-wiring — ${ENGINE}`);
-console.log(`  ${toolFiles.length} file(s) in tools/, ${gateScripts.length} script(s) running one of them`);
-console.log(`  scheduled by name: ${byStatus('npm run')}   rebuilt in the workflow: ${byStatus('REBUILT')}   not in CI: ${byStatus('absent')} (${Object.keys(NOT_IN_CI).length} declared)`);
+console.log(`check-wiring — ${SKILLS}`);
+console.log(`  ${audited.length} package manifest(s) in the join, ${rows.length} script(s) naming a file between them`);
+for (const a of audited) {
+  console.log(`    ${a.rel.padEnd(18)} ${String(a.gates).padStart(3)} gate script(s), ${String(a.tools).padStart(3)} file(s) in tools/, ${String(a.steps).padStart(3)} workflow step(s)`);
+}
+console.log(`  scheduled by name: ${byStatus('npm run')}   rebuilt in the workflow: ${byStatus('REBUILT')}   not in CI: ${byStatus('absent')} (${declaredExceptions} declared)`);
 console.log(`  ${steps.length} workflow step(s), ${rawSteps.length} of them running a raw command (${Object.keys(RAW_STEPS).length} declared)`);
 
 if (listAll) {
   console.log('');
-  for (const r of rows.sort((a, b) => a.name.localeCompare(b.name))) {
-    const note = r.status === 'absent' && NOT_IN_CI[r.name] ? `  — ${NOT_IN_CI[r.name]}` : '';
-    console.log(`  ${r.status.padEnd(8)} ${r.name.padEnd(34)}${note}`);
+  const sorted = rows.sort((a, b) => a.manifest.localeCompare(b.manifest) || a.name.localeCompare(b.name));
+  for (const r of sorted) {
+    const declared = (NOT_IN_CI[r.manifest] || {})[r.name];
+    const note = r.status === 'absent' && declared ? `  — ${declared}` : '';
+    console.log(`  ${r.status.padEnd(8)} ${r.manifest.padEnd(17)} ${r.name.padEnd(34)}${note}`);
   }
   process.exit(0);
 }

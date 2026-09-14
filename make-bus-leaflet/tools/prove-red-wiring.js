@@ -12,9 +12,11 @@
  * exactly the shape it was written to catch, one level up, and it went green on
  * the same afternoon it went red, which is when a check is least trustworthy.
  *
- * Nine cases, each on a scratch repository under os.tmpdir() holding a
+ * Every case runs on its own scratch repository under os.tmpdir() holding a
  * package.json, a tools/ folder and a gates.yml — never this checkout, so
- * nothing here can turn it green or red. ~2 s.
+ * nothing here can turn it green or red. ~2 s. The COUNT is printed by the run
+ * and written nowhere: this header said "nine cases" for a fortnight, and the
+ * closing line still said it while fourteen ran.
  *
  *   0  control: a correctly wired scratch repo      -> exit 0
  *   1  a tool with no npm script                    -> exit 1, and it is NAMED
@@ -53,8 +55,26 @@
  *                                                      comment is still
  *                                                      unscheduled. Case 6's
  *                                                      rule one level in
+ *  12  a harness in a SECOND manifest, unscheduled  -> exit 1, NAMED with its
+ *                                                      skill
+ * 12b  the same harness with a step in ITS OWN
+ *      working-directory                            -> clean
+ *  13  two skills with a script of the SAME NAME,
+ *      only one of them scheduled                   -> exit 1 for the other one.
+ *                                                      The case a flat join gets
+ *                                                      WRONG rather than misses
+ *  14  a NOT_IN_CI table keyed to a manifest that
+ *      is not in the repository                     -> exit 1
  *
- * CASES 8-11 ARE OA-346 (buses-data), from the 2026-09-14 review's R2 N34: a step
+ * CASES 8-14 ARE OA-346 (buses-data), from the 2026-09-14 review's R2 N34 and
+ * R3 G3. Case 13 is the one to read: `bus-work` and `make-bus-leaflet` both call
+ * a script `test:prove-red`, so a join that matched `npm run <name>` against
+ * every command in the workflow would have answered GREEN for a script no step
+ * runs. A missing question is a hole; a wrong answer is worse, and widening this
+ * check without scoping each match to the step's working-directory would have
+ * built one into the instrument whose subject is exactly that.
+ *
+ * CASES 8-11 ARE the raw-step half of the same action: a step
  * with a raw `run:` was outside this check by construction, which is the blind
  * spot one level up from the one the check exists for — it could only see the
  * form it already knew. The number of cases is now PRINTED FROM THE RUN rather
@@ -93,6 +113,19 @@ const fail = (m) => { console.error(`  x ${m}`); failures++; };
 let passes = 0;
 const ok = (m) => { passes++; console.log(`  + ${m}`); };
 
+/** Replace, or say which substitution stopped matching and stop. */
+function mustReplace(src, re, to, what) {
+  const out = src.replace(re, to);
+  if (out === src) {
+    console.error(`  x the harness could not patch ${what} out of check-wiring.js.`);
+    console.error('    The checker has been edited and this substitution no longer matches, so every');
+    console.error('    case below would be testing the scratch runner rather than the check. Fix the');
+    console.error('    regex in prove-red-wiring.js before trusting anything this file prints.');
+    process.exit(1);
+  }
+  return out;
+}
+
 /**
  * A scratch skills repository: <tmp>/skills/.github/workflows/gates.yml and
  * <tmp>/skills/make-bus-leaflet/{package.json,tools/}. The checker resolves both
@@ -103,8 +136,9 @@ const ok = (m) => { passes++; console.log(`  + ${m}`); };
  *   steps:   the `run:` lines to put in the workflow
  *   comment: extra prose in the workflow that must NOT count as scheduling
  *   patch:   (checkerSource) => checkerSource, to change its declared exceptions
+ *   manifests: dirName -> { script: command } for a SECOND skill in the tree
  */
-function tree({ tools = {}, scripts = {}, steps = [], comment = '', patch = null } = {}) {
+function tree({ tools = {}, scripts = {}, steps = [], comment = '', patch = null, manifests = {} } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-wiring-'));
   const engine = path.join(tmp, 'skills', 'make-bus-leaflet');
   fs.mkdirSync(path.join(engine, 'tools'), { recursive: true });
@@ -115,6 +149,15 @@ function tree({ tools = {}, scripts = {}, steps = [], comment = '', patch = null
   }
   fs.writeFileSync(path.join(engine, 'package.json'),
     JSON.stringify({ name: 'scratch', version: '0.0.0', scripts }, null, 2));
+
+  // A SECOND SKILL with its own manifest and no tools/ folder — the shape
+  // `bus-work` actually has, and the one the join could not see until OA-346.
+  for (const [dirName, dirScripts] of Object.entries(manifests)) {
+    const other = path.join(tmp, 'skills', dirName);
+    fs.mkdirSync(path.join(other, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(other, 'package.json'),
+      JSON.stringify({ name: dirName, version: '0.0.0', scripts: dirScripts }, null, 2));
+  }
 
   // A step is either a bare command string — named `step <i>` and run in the
   // engine — or `{ name, dir, run }`, where `run` may be an ARRAY, which is
@@ -135,13 +178,27 @@ function tree({ tools = {}, scripts = {}, steps = [], comment = '', patch = null
     `name: scratch\njobs:\n  unit:\n    runs-on: ubuntu-latest\n    steps:\n${comment}${stepYaml}\n`);
 
   let src = fs.readFileSync(CHECKER, 'utf8');
-  // The scratch repo is not a git repository, so the tracked-file enumeration
-  // has nothing to read. Point it at the disk for the scratch runs only; the
-  // real check keeps reading the index, which is what case 0 in the REAL
-  // repository (the check's own green run) exercises.
-  src = src.replace(
-    /const toolFiles = require\('child_process'\)[\s\S]*?\.sort\(\);/,
-    "const toolFiles = fs.readdirSync(path.join(ENGINE, 'tools')).sort();");
+  // The scratch repo is not a git repository, so neither enumeration has an
+  // index to read. Point both at the disk for the scratch runs only; the real
+  // check keeps reading the index, which is what its own green run in the REAL
+  // repository exercises.
+  //
+  // ASSERTED, not attempted. A patch that silently stopped matching would leave
+  // the checker calling git in a directory that is not a repository, and the
+  // whole harness would report the shape of that crash rather than the shape of
+  // the case — a checker pointed at a subject the harness itself supplied,
+  // which is the estate's own named fault. Both of these regexes have already
+  // had to be rewritten once, by the change that added the second one.
+  src = mustReplace(src,
+    /const toolFiles = gitLines\(\[[\s\S]*?\.sort\(\);/,
+    "const toolFiles = fs.existsSync(path.join(dir, 'tools'))\n" +
+    "    ? fs.readdirSync(path.join(dir, 'tools')).sort() : [];",
+    'the tools/ enumeration');
+  src = mustReplace(src,
+    /const manifestDirs = gitLines\(\[[\s\S]*?\.sort\(\);/,
+    "const manifestDirs = fs.readdirSync(SKILLS)\n" +
+    "  .filter((d) => fs.existsSync(path.join(SKILLS, d, 'package.json'))).sort();",
+    'the manifest enumeration');
   if (patch) src = patch(src);
   fs.writeFileSync(path.join(engine, 'tools', 'check-wiring.js'), src);
   return { tmp, engine };
@@ -220,7 +277,8 @@ withTree({
   tools: { ...SELF, 'prove-red-thing.js': null },
   scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
   steps: [SELF_STEP],
-  patch: (src) => src.replace('const NOT_IN_CI = {};', "const NOT_IN_CI = { 'test:thing': '' };"),
+  patch: (src) => src.replace('const NOT_IN_CI = {};',
+    "const NOT_IN_CI = { 'make-bus-leaflet': { 'test:thing': '' } };"),
 }, ({ code, out }) => {
   if (code === 1 && /has no reason/.test(out)) ok('an exception with no reason is a finding, not a licence');
   else fail(`a reasonless exception was accepted (exit ${code})\n${out}`);
@@ -231,7 +289,8 @@ withTree({
   tools: SELF,
   scripts: SELF_SCRIPT,
   steps: [SELF_STEP],
-  patch: (src) => src.replace('const NOT_IN_CI = {};', "const NOT_IN_CI = { 'test:retired': 'needs the buses estate' };"),
+  patch: (src) => src.replace('const NOT_IN_CI = {};',
+    "const NOT_IN_CI = { 'make-bus-leaflet': { 'test:retired': 'needs the buses estate' } };"),
 }, ({ code, out }) => {
   if (code === 1 && /not a script any more/.test(out)) ok('a stale exception is a finding — the list cannot rot quietly');
   else fail(`a stale exception was accepted (exit ${code})\n${out}`);
@@ -357,6 +416,79 @@ withTree({
     return fail(`a \`run: |\` block of npm scripts was misread as a raw step\n${out}`);
   }
   ok('a `run: |` block is read as its commands, and a `#` line inside it is a comment and not a schedule');
+});
+
+// 12 — a SECOND manifest's harness, scheduled nowhere ----------------------
+//
+// The blind spot OA-346 half 2 was filed about: `bus-work` holds sixteen
+// harnesses and the join read one manifest. A whole skill's worth of gates could
+// have been unscheduled and this check would have said every gate is scheduled.
+withTree({
+  tools: SELF,
+  scripts: SELF_SCRIPT,
+  manifests: { 'other-skill': { 'test:theirs': 'node assets/prove-red-theirs.mjs' } },
+  steps: [SELF_STEP],
+}, ({ code, out }) => {
+  if (code === 1 && /other-skill test:theirs is in no workflow step/.test(out)) {
+    ok('a harness in a SECOND manifest is inside the join, and an unscheduled one is NAMED with its skill');
+  } else {
+    fail(`a second manifest's unscheduled harness was not reported (exit ${code})\n${out}`);
+  }
+});
+
+// 12b — the control: with its own step, in its own directory, it is clean ---
+withTree({
+  tools: SELF,
+  scripts: SELF_SCRIPT,
+  manifests: { 'other-skill': { 'test:theirs': 'node assets/prove-red-theirs.mjs' } },
+  steps: [SELF_STEP, { name: 'Theirs', dir: 'skills/other-skill', run: 'npm run test:theirs' }],
+}, ({ code, out }) => {
+  if (code === 0) ok('control for 12: scheduled in its own working-directory, the same harness is clean');
+  else fail(`control for 12: a correctly scheduled second-manifest harness was reported (exit ${code})\n${out}`);
+});
+
+// 13 — THE ONE A FLAT JOIN GETS WRONG: the same script name in two skills ---
+//
+// Not a missing question but a WRONG ANSWER, and the direction that matters: a
+// flat `npm run <name>` match over every command in the file reads the second
+// skill's `test:prove-red` as scheduled because the ENGINE has a step of that
+// name. Both skills in this repository really do call a script `test:prove-red`,
+// so widening the join without scoping it to the step's working-directory would
+// have manufactured a green answer for a script no step runs — in the check
+// whose whole subject is that mistake.
+withTree({
+  tools: { ...SELF, 'prove-red-thing.js': null },
+  scripts: { ...SELF_SCRIPT, 'test:prove-red': 'node tools/prove-red-thing.js' },
+  manifests: { 'other-skill': { 'test:prove-red': 'node assets/prove-red-theirs.mjs' } },
+  steps: [SELF_STEP, 'npm run test:prove-red'],
+}, ({ code, out }) => {
+  if (code !== 1) {
+    return fail(
+      'a script sharing its NAME with a scheduled step in ANOTHER skill was read as scheduled\n' +
+      `      (exit ${code}). This is the flat-join answer, and it is the wrong one.\n${out}`);
+  }
+  if (!/other-skill test:prove-red is in no workflow step running in other-skill/.test(out)) {
+    return fail(`the collision was reported, but not as the second skill's own script\n${out}`);
+  }
+  if (/make-bus-leaflet test:prove-red is in no workflow step/.test(out)) {
+    return fail(`the ENGINE's correctly scheduled script of the same name was reported too\n${out}`);
+  }
+  ok('two skills with a script of the SAME NAME are answered separately — the engine\'s is scheduled, the other\'s is not');
+});
+
+// 14 — NOT_IN_CI naming a manifest the repository does not have -------------
+withTree({
+  tools: SELF,
+  scripts: SELF_SCRIPT,
+  steps: [SELF_STEP],
+  patch: (src) => src.replace('const NOT_IN_CI = {};',
+    "const NOT_IN_CI = { 'a-skill-that-left': { 'test:gone': 'needs the estate' } };"),
+}, ({ code, out }) => {
+  if (code === 1 && /names the manifest "a-skill-that-left", which this repository does not have/.test(out)) {
+    ok('an exception table for a manifest that is not there is a finding — the keys rot like the entries');
+  } else {
+    fail(`a NOT_IN_CI table keyed to a missing manifest was accepted (exit ${code})\n${out}`);
+  }
 });
 
 for (const t of made) fs.rmSync(t, { recursive: true, force: true });

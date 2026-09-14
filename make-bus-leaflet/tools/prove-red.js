@@ -900,8 +900,21 @@ const MUTATIONS = [
 
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: "the place schematic stops forcing OVERRIDES_FILE, and a place's forced-POI labels are silently dropped again",
-    find: "             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
-    to: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' }," },
+    find: "             overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             crossings: true, out: 'internal-schematic.svg' }," },
+
+  /* buses-data OA-342, 2026-09-14. The mutation IS the bug: take the default back out
+   * and the three rows that named no engine are exactly what they were on 2026-09-13,
+   * when a rollout from a worktree put eight hybrid sheets on buses-data's `main`. */
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the engine stops being set for every row, so a rollout from a worktree draws some sheets with the INSTALLED engine and stamps them with the branch it is rolling out',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}) };" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the default is spread OVER a row rather than under it, so a row can no longer override the engine — the direction that cannot lose a row is what makes an omission safe',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}), SKILL_ASSETS: SK };" },
 
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: 'the area internal stops asking for build-meta.json, which is what commit S4 refuses an area without',
@@ -918,10 +931,41 @@ const MUTATIONS = [
     find: "    if (r.fatal && (!res.ok || (r.needsOut && !landed))) {",
     to: "    if (false && r.fatal && (!res.ok || (r.needsOut && !landed))) {" },
 
+  /* render_sweep.js — WHICH ENGINE a --store sweep runs (buses-data OA-342 item 4,
+   * 2026-09-14). The first two mutations ARE the bug: they restore the file exactly
+   * as it stood while the store sweep ran each pack's own entry generator against the
+   * SKILL's shared modules. On a laptop where the two engines agree that is invisible,
+   * which is how it survived — so the suite judges the RESOLUTION, and one case makes
+   * a generator refuse its own environment. */
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: "sweepOne stops passing the engine on, so the pack's generator resolves its shared modules from the skill — a latent hybrid, and the OA-132 shape",
+    find: "        engineDir: map.engineDir || SK,\n",
+    to: "" },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'enumerateStore stops naming the portal engine, so every store map falls back to SK with nothing saying so',
+    find: "      engineDir: portal ? portalFixtureEnv(portal.portalDir, dataDir).SKILL_ASSETS : undefined,",
+    to: "      engineDir: undefined," },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'a portal engine folder is judged present by the FOLDER rather than by a module in it, so an empty engine/ passes and every dependency resolves past it',
+    find: "    ok: fs.existsSync(path.join(engineDir, 'engine_paths.js')),",
+    to: "    ok: fs.existsSync(engineDir)," },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: "the store sweep takes the expert three under the SKILL's file names again, which are not the files the portal runs",
+    find: "    ? { dir: expertDir, schematic: 'gen_internal_schematic.js', diagram: 'gen_internal_diagram.js', boarding: 'gen_boarding.js', portalOwned: true }",
+    to: "    ? { dir: expertDir, schematic: 'schematize_internal.js', diagram: 'diagram_internal.js', boarding: 'gen_boarding.js', portalOwned: true }" },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'the expert three stop being marked portal-owned, so the sweep runs a wrapper whose pre-stage sibling is not in the workspace and calls the crash a map that cannot be re-rendered',
+    find: "  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: expert.portalOwned });",
+    to: "  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: false });" },
+
   { suite: 'rollout_crossings.test.js', file: 'build_s4.js',
     what: "the town schematic stops carrying the self-crossing check, which only a build path can ask (OA-240)",
-    find: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },\n    place:",
-    to: "             env: { SKILL_ASSETS: SK }, out: 'internal-schematic.svg' },\n    place:" },
+    find: "             crossings: true, out: 'internal-schematic.svg' },\n    place:",
+    to: "             out: 'internal-schematic.svg' },\n    place:" },
 
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',

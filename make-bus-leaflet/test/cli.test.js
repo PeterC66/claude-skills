@@ -192,28 +192,114 @@ test('the migrated python scripts resolve through cli.py', () => {
  * property worth having. Widening this to tools/ is a separate decision with its
  * own allowlist, not a free tightening.
  */
-const ARGV_IDIOM = /argv\.indexOf\('--/;
+/*
+ * THE CENSUS MATCHED NOTHING IN ITS OWN POPULATION FOR ELEVEN DAYS (the
+ * 2026-09-14 review's R1 N31/N32, fixed here as its Tier 1.3).
+ *
+ * The pattern was `/argv\.indexOf\('--/` -- the idiom spelled with a LITERAL
+ * flag. Measured on 2026-09-14: it matched ZERO of the 80 `.js` files under
+ * assets/, while three of them open-coded a parser by other spellings. The case
+ * below had never been capable of failing where it looked, and it read as a clean
+ * bill of health over a folder with offenders in it.
+ *
+ * ITS CONTROL IS WHAT LET THAT STAND, and the shape is worth more than the fix.
+ * The old control pointed at `tools/attribution-gate.js` -- a file in a DIFFERENT
+ * FOLDER from the one the census walks. So it proved the regex matched something
+ * SOMEWHERE, which was true, and never that it could catch an offender WHERE IT
+ * LOOKS, which was false. A control outside the population cannot distinguish "no
+ * offenders" from "no matches", and those are the two answers the whole test
+ * exists to tell apart. This is the estate's named failure shape *the subject you
+ * named yourself*, with the population rather than the identifier as the subject.
+ *
+ * SO THE CONTROL IS NOW THE ALLOWLIST, and it lives inside the population. Every
+ * file in OPEN_CODED must still MATCH an idiom. That single assertion does three
+ * jobs at once: it proves each pattern fires on a real file in the real folder;
+ * it refuses to let an entry go stale, because migrating a file to cli.js without
+ * dropping its entry turns the control red; and it makes the allowlist reviewable
+ * as the list of exceptions it is, rather than as a regex nobody re-reads.
+ *
+ * THE PATTERNS ARE THE IDIOM, NOT ONE SPELLING OF IT. `argv.indexOf(` with any
+ * argument -- the flag is routinely a parameter, which is exactly how
+ * gen_boarding.js and refresh_area_fixture.js escaped -- and a locally DEFINED
+ * parseArgs, which is how render_sweep.js did. Destructuring the shared one
+ * (`const { parseArgs } = require('./cli')`) is not a definition and does not
+ * match; that is asserted below rather than assumed.
+ *
+ * STILL SCOPED TO assets/, not to tools/, for the reason the original gave: the
+ * harnesses under tools/ build scratch argv to feed a subject. Widening to tools/
+ * is a separate decision with its own allowlist, not a free tightening.
+ */
+const IDIOMS = {
+  'argv.indexOf(': /\bargv\.indexOf\s*\(/,
+  'a locally defined parseArgs': /function\s+parseArgs\s*\(|const\s+parseArgs\s*=[^=]/,
+};
+
+/*
+ * The exceptions, each with the reason it is one. An entry here is a claim that
+ * the file still carries an idiom -- the control below enforces that -- so this
+ * list cannot quietly outlive the thing it excuses.
+ */
+const OPEN_CODED = {
+  'cli.js': 'IS the shared parser. Its own definition of parseArgs is the thing every other file is asked to require.',
+  'gen_boarding.js':
+    'In the PLACE engine-hash closure (engine_version.js, BOARDING_ENGINE_FILES). Its two-line `val()` reader at :57 is four lines of code, and replacing it with a require would move the place hash and re-stamp every place map for a change that moves no ink. Migrate it inside a change that is already moving that hash.',
+  'refresh_area_fixture.js':
+    'Not named by the 2026-09-14 review, which measured only that the OLD regex matched nothing and did not enumerate what a correct one would catch. Found by this fix. Outside the hash closure, so it is a free migration whenever somebody wants it — it is here to keep this gate green on the day it landed, not because it deserves an exemption.',
+  'render_sweep.js':
+    'Keeps its own parser deliberately: it WHITELISTS its flags in an if/else chain, so an unknown flag is refused rather than silently collected. cli.js accepts any flag by design. Refusing a typo on a sweep that renders the estate is a property worth having.',
+};
 
 test('no file under assets/ open-codes the argv parser', () => {
   const files = fs.readdirSync(ENGINE_DIR).filter((f) => f.endsWith('.js'));
   // The population check. Without it this passes for a readdir that found
   // nothing, which is what an untested census looks like.
   assert.ok(files.length > 50, `the census read only ${files.length} files under assets/`);
-  const offenders = files.filter((f) => ARGV_IDIOM.test(fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8')));
+  const offenders = files.filter((f) => {
+    if (OPEN_CODED[f]) return false;
+    const src = fs.readFileSync(path.join(ENGINE_DIR, f), 'utf8');
+    return Object.values(IDIOMS).some((re) => re.test(src));
+  });
   assert.deepStrictEqual(offenders, [],
-    `these still open-code the flag parser instead of requiring ./cli.js: ${offenders.join(', ')}`);
+    `these open-code the flag parser instead of requiring ./cli.js: ${offenders.join(', ')}\n` +
+    'Migrate them, or add an entry to OPEN_CODED saying why not.');
 });
 
-test('CONTROL: the census pattern really does match the idiom', () => {
-  // Without this the case above passes for a regex that matches nothing. The
-  // control is a live file rather than a string, so it also fails loudly if the
-  // last user of the idiom in tools/ is migrated and this control goes stale.
-  // From __dirname, NOT from ENGINE_DIR. `tools/prove-red.js` runs this suite
-  // against a scratch COPY of assets/, so ENGINE_DIR is a temp folder with no
-  // tools/ beside it -- this control read ENOENT there on its first mutation
-  // run. The test file itself is never copied, so its own folder is the repo.
-  const control = path.join(__dirname, '..', 'tools', 'attribution-gate.js');
-  assert.ok(ARGV_IDIOM.test(fs.readFileSync(control, 'utf8')),
-    'tools/attribution-gate.js no longer carries the idiom — pick another control, or widen the census to tools/');
-  assert.ok(ARGV_IDIOM.test("const i = argv.indexOf('--town');"));
+test('CONTROL: every allowlisted file still matches an idiom, inside the population', () => {
+  /*
+   * THIS IS THE CASE THE OLD ONE SHOULD HAVE BEEN. It reads the same folder the
+   * census reads, so a pattern that matches nothing there fails HERE rather than
+   * passing there. `tools/prove-red.js` runs this suite against a scratch COPY of
+   * assets/, and every file named below is inside that copy — the old control
+   * read ENOENT under prove-red for exactly the reason it was wrong, because it
+   * reached outside assets/ for its subject.
+   */
+  for (const [name, why] of Object.entries(OPEN_CODED)) {
+    const p = path.join(ENGINE_DIR, name);
+    assert.ok(fs.existsSync(p), `OPEN_CODED names ${name}, which is not in assets/ — delete the entry`);
+    const src = fs.readFileSync(p, 'utf8');
+    const hit = Object.entries(IDIOMS).filter(([, re]) => re.test(src)).map(([label]) => label);
+    assert.ok(hit.length > 0,
+      `${name} no longer carries any open-coded parser — delete its OPEN_CODED entry, ` +
+      'and check the remaining entries still cover every pattern.');
+    assert.ok(why && why.length > 40, `${name}'s OPEN_CODED reason is too thin to review`);
+  }
+  // Each pattern must be exercised by at least one live file, or it is a pattern
+  // nobody has seen fire. This is what the old control was reaching for.
+  for (const [label, re] of Object.entries(IDIOMS)) {
+    const fired = Object.keys(OPEN_CODED).some((n) => re.test(fs.readFileSync(path.join(ENGINE_DIR, n), 'utf8')));
+    assert.ok(fired, `no file in assets/ exercises the "${label}" pattern — it has never been seen to match`);
+  }
+});
+
+test('CONTROL: requiring the shared parser is not mistaken for defining one', () => {
+  // The widened parseArgs pattern must not fire on the CORRECT idiom, or every
+  // migrated file becomes an offender and the census gets muted in a week.
+  const correct = "const { parseArgs } = require('./cli');";
+  assert.ok(!IDIOMS['a locally defined parseArgs'].test(correct));
+  assert.ok(!IDIOMS['argv.indexOf('].test(correct));
+  // And it must still fire on the two real definitions.
+  assert.ok(IDIOMS['a locally defined parseArgs'].test('function parseArgs(argv) {'));
+  assert.ok(IDIOMS['a locally defined parseArgs'].test('const parseArgs = (argv) => {'));
+  assert.ok(IDIOMS['argv.indexOf('].test("const i = argv.indexOf('--town');"));
+  assert.ok(IDIOMS['argv.indexOf('].test('const i = argv.indexOf(f);'));
 });

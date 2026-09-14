@@ -1,0 +1,121 @@
+#!/bin/sh
+# Two refusals: a leftover merge-conflict marker, and a staged file carrying a BOM
+# or two kinds of line ending. Both are things git itself will happily commit.
+#
+# WHY THIS FILE EXISTS AT ALL, AND WHY ITS ABSENCE WAS INVISIBLE. This repository
+# has had `core.hooksPath = .githooks` set in its local config since somebody
+# copied the opt-in line out of a sibling repository's instructions -- and the
+# directory it names has never existed in this repository's history. `git log
+# --all -- .githooks` returns nothing. Git does not warn about a hooksPath that
+# points nowhere: it looks for the hook, does not find it, and runs the commit.
+# So every hook here was silently off, and the only way to find that out was to
+# ask the config and the disk as two separate questions, which the 2026-09-14
+# codebase review did (its R6 N3). Restored under that review's Tier 1.1.
+#
+# WHAT WAS ACTUALLY UNGUARDED, and it is not a tidiness point. `check-file-hygiene
+# .mjs --staged` is the ONLY place in this estate the MIXED-LINE-ENDING check runs
+# anywhere. With `core.autocrlf=true` and `text=auto` the index normalises to LF
+# the moment a file is staged, so a file with CRLF at the top and LF at the bottom
+# produces a perfectly clean diff; and `actions/checkout` builds a uniform tree,
+# so CI cannot see the fault by construction. It is a property of a WORKING TREE.
+# CI here already runs the committed-bytes half (`gates.yml`, the `unit` job) --
+# what it cannot run is this half, and this repository had neither.
+#
+# THIS HOOK IS NOT AUTOMATICALLY ACTIVE IN A FRESH CLONE. `core.hooksPath` is local
+# git config and does not travel with the repository, so each clone or worktree must
+# opt in once, from the repository root:
+#
+#   git config core.hooksPath .githooks
+#
+# That is why CI keeps its own audit and this does not replace it: the hook is the
+# fast local guard for whoever installed it, CI is the one that is always there.
+set -e
+
+# ---------------------------------------------------------------------------
+# indent -- print a block indented four spaces, WITHOUT a pipeline.
+#
+# WHY IT IS NOT `printf ... | sed`. MEASURED in the buses-data repository, in a
+# throwaway checkout: with the sed form, `git commit 2>&1 | head -4` printed the
+# refusal and then GIT EXITED 0 AND THE COMMIT LANDED. `head` stops reading after
+# its four lines and closes the pipe; the `sed` inside the hook is killed writing
+# to it, and the hook dies partway through its own refusal without ever reaching
+# `exit 1`. Unpiped, and piped to `tail`, the identical commit was correctly
+# refused. That made every refusal here conditional on how the caller happened to
+# read the output. A guard that can be switched off by `| head` is not a guard, so
+# every write stays inside the hook's own process. Falsified here on the day this
+# landed: the conflict arm below was proved to refuse with the commit piped to
+# `head -4`, reading the status off PIPESTATUS rather than `$?`.
+indent() {
+  while IFS= read -r _line; do
+    echo "    $_line"
+  done <<INDENT_EOF
+$1
+INDENT_EOF
+}
+
+# ---------------------------------------------------------------------------
+# A leftover merge-conflict marker in a staged file.
+#
+# WHY THIS EXISTS. GIT DOES NOT STOP THIS. Git refuses a commit only while a merge
+# is IN PROGRESS with unmerged paths; the moment you `git add` the file, git treats
+# it as resolved and commits whatever is in it, markers and all. It is a REFUSAL
+# rather than a warning because, unlike an untracked sibling, it can never be
+# deliberate: there is no state of this repository in which a line beginning with a
+# conflict marker is the content somebody meant to commit.
+#
+# It reads ADDED lines in the staged diff, so it fires on the commit that introduces
+# a marker and not for ever afterwards. A document that quotes the markers inline in
+# backticks does not trip it.
+conflicts=$(git diff --cached --check 2>/dev/null | grep 'leftover conflict marker' || true)
+if [ -n "$conflicts" ]; then
+  echo ""
+  echo "pre-commit: refused -- staged content still carries merge-conflict markers:"
+  indent "$conflicts"
+  echo ""
+  echo "  git does NOT catch this once the file is staged. Resolve the file, re-add it,"
+  echo "  and commit again."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# A byte-order mark, or a file carrying two kinds of line ending.
+#
+# THE CHECKER LIVES IN THIS REPOSITORY, which is the one difference from the
+# sibling hooks and it makes this block simpler than theirs. buses-data and the
+# portal reach for `tools/check-file-hygiene.mjs` across the disk and must tolerate
+# its absence; here it is `tools/check-file-hygiene.mjs` relative to the repository
+# root, and if it is missing that is this repository's own fault and worth failing
+# on. Node's absence is still tolerated -- a machine without node cannot run the
+# checker and a hook that dies there teaches whoever hits it to bypass the hook.
+#
+# GREEN ON THE DAY IT LANDED, which is the half that matters: `node tools/
+# check-file-hygiene.mjs --root .` over this tree reported 372 tracked text files,
+# all clean, before this hook was written. A hook that is red on day one is one
+# somebody disables inside a week.
+HYGIENE="$(git rev-parse --show-toplevel)/tools/check-file-hygiene.mjs"
+if command -v node >/dev/null 2>&1; then
+  hygiene_out=$(node "$HYGIENE" --staged --root "$(git rev-parse --show-toplevel)" 2>&1) || {
+    echo ""
+    echo "pre-commit: refused -- staged files carry layout faults that confound an edit:"
+    indent "$hygiene_out"
+    echo ""
+    echo "  A BOM is invisible and shows up in no diff. MIXED-EOL is invisible to git"
+    echo "  itself: the index normalises to LF on staging, so the diff looks clean."
+    echo "  Rewrite the file without the mark, or with one kind of line ending."
+    echo "  (bypass with --no-verify only for a captured file kept as it arrived)"
+    exit 1
+  }
+fi
+
+# ---------------------------------------------------------------------------
+# THERE IS DELIBERATELY NO DOCSTAMP BLOCK HERE, and the reason is a measurement
+# rather than an oversight. The sibling hooks in buses-data and the portal both
+# end by running `stamp-docs/scripts/check_committed_stamps.py --staged`, because
+# every `.md` in those trees carries a stamp the Stop hook rewrites. This
+# repository is NOT a stamp root: `stamp-policy.json` configures exactly three --
+# `buses`, `portal` and `ops` -- and the only file here matching `docstamp v` is
+# `stamp-docs/SKILL.md`, which is the skill documenting the stamper rather than a
+# stamped document. Adding the block would put a check over a corpus of nothing.
+# If this repository is ever added as a stamp root, copy the portal's block in with
+# it; that is the event to watch for, not the passage of time.
+exit 0

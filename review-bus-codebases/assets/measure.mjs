@@ -32,10 +32,36 @@ const ENGINE = path.join(SKILLS, 'make-bus-leaflet');
 
 const read = (p) => fs.readFileSync(p, 'utf8');
 const exists = (p) => fs.existsSync(p);
+/*
+ * NEVER WALKED, whatever the caller passes. A git WORKTREE checked out inside a
+ * repository is a second copy of every file in it, and it is invisible to every
+ * instrument anybody would reach for: `git ls-files` does not list it, `git
+ * status` does not mention it, `.git/info/exclude` hides it from the porcelain,
+ * and `actions/checkout` never creates one, so CI cannot see it either. The only
+ * commands that admit it exists are `git worktree list` and a raw directory walk
+ * — which is what this file does, and why it was the thing that got fooled.
+ *
+ * THE 2026-09-14 REVIEW REPORTED buses-data's hard-coded laptop paths DOUBLING in
+ * eleven days, 13 files read as 26 and 7 code lines as 14, and the truth was that
+ * `.claude/worktrees/agitated-curran-18c8ba` had been left inside that repository
+ * on 11 September. A convention visibly breaking down, and the convention had not
+ * moved at all. Second review running in which this file's own numbers were the
+ * ones that lied.
+ *
+ * IT IS ENFORCED HERE RATHER THAN ADDED TO EACH CALLER'S `skip` — three walks
+ * pass a skip list and only one of them named a repository that happened to have
+ * a stray worktree in it that week. Fixing the one that was caught would leave the
+ * other two holding the same fault, waiting for somebody to leave a worktree
+ * somewhere else; the rule is about what a repository IS, not about what these
+ * three callers happen to contain today, so it belongs where a caller cannot
+ * forget it. `.git` is here for the same reason and was never excluded either.
+ */
+const NEVER_WALK = ['.git', '.claude'];
+
 function walk(dir, { exts, skip = [] }, out = []) {
   if (!exists(dir)) return out;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (skip.includes(e.name)) continue;
+    if (NEVER_WALK.includes(e.name) || skip.includes(e.name)) continue;
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p, { exts, skip }, out);
     else if (exts.some(x => e.name.endsWith(x))) out.push(p);

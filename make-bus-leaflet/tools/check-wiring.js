@@ -94,6 +94,68 @@ const NOT_IN_CI = {
     'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
 };
 
+/*
+ * Steps that run a RAW command instead of an npm script, each with the reason it
+ * cannot be routed through one. Keyed by the step's `name:`, which is what a
+ * reader of the workflow sees; two steps sharing a name share one entry, which is
+ * why the reason has to be about the KIND of command rather than about one job.
+ *
+ * WHY THIS TABLE EXISTS (buses-data OA-346, from the 2026-09-14 review's R2 N34).
+ * Question 2 below asks whether CI runs a script THROUGH `npm run` — but it could
+ * only ask that of a command it recognised as belonging to a script. A step with
+ * a raw `run:` was invisible to the whole check by construction, which is the
+ * same blind spot one level up: the instrument could only see what it already
+ * knew the form of. A raw step is now a finding unless it is declared here, so
+ * the population the question is asked of is every step in the file.
+ *
+ * `npm ci` and `npm test` are raw by this rule too, deliberately: the rule is
+ * structural — every command line in the step is `npm run <script>`, or the step
+ * is declared — because any rule that special-cased a list of "fine" commands
+ * would be a second list to keep true.
+ */
+const RAW_STEPS = {
+  'Install engine dependencies':
+    'npm ci — installing the dependencies is what makes the scripts runnable, so it cannot itself be one. Appears in both the unit and the status job',
+  'Unit suite':
+    '`npm test` is npm\'s own lifecycle script and `npm run test` is the same command; there is nothing to drift',
+  'Install the engine\'s Python dependencies':
+    'pip install -r requirements.txt — the same shape as npm ci, one layer down',
+  'Prove the stamp policy and its scope rule can go red':
+    'runs in skills/stamp-docs, which has NO package.json, so there is no script to route through. It would stop being raw only if that skill gained a manifest — and then it would join the manifest enumeration below',
+  'Prove the file-hygiene checker can go red':
+    'a shared checker in skills/tools/, run from the repository root, which has no package.json — the shared tools are deliberately outside every skill\'s manifest so all three repositories can run them the same way',
+  'Files carry no BOM, no trailing whitespace, no missing newline':
+    'the same shared skills/tools/ checker; see the entry above',
+  'Prove the table checker can go red':
+    'a shared checker in skills/tools/ — see above',
+  'Prove the doc-link checker can go red':
+    'a shared checker in skills/tools/ — see above',
+  'Prove the acronym checker can go red':
+    'a shared checker in skills/tools/ — see above',
+  'Prove the exclusion-field gate can go red':
+    'a shared checker in skills/tools/ — see above',
+  'Prove the S6 claims gate can go red':
+    'a shared checker in skills/tools/ — see above',
+  'Tables are still tables':
+    'a shared checker in skills/tools/ — see above',
+  'Links, anchors, §n citations and documented commands':
+    'a shared checker in skills/tools/ — see above',
+  'Every short form a reader meets is one they can look up':
+    'a shared checker in skills/tools/ — see above',
+  'Preflight -- can the PAT see both private repos?':
+    'a shell block calling the GitHub API to say WHY a checkout is about to fail; it runs before any checkout, so there is no manifest in the workspace yet',
+  'Fetch the portal\'s branch tips (so an open re-vendor reads pending, not DRIFTED)':
+    'raw git against the checked-out portal — plumbing for the step after it, not a gate, and it belongs to no skill',
+  'Which three commits is this verdict about':
+    'a shell block writing the step summary — it names the three SHAs this verdict is about and runs no tool',
+  'What Node does the deployment image use?':
+    'a shell block reading the portal\'s Dockerfile; its subject is the portal repository, which has its own manifest and its own workflow',
+  'Sweep for run folders holding a later stage\'s output':
+    'node assets/stray_outputs.js — an ASSET, not a tools/ gate, and it takes --buses so it can only run where the estate is checked out. If it is ever given an npm script it must be removed from here, which is what the two-way check below enforces',
+  'Run gates (JSON + step summary)':
+    'a shell block running assets/gates.js and writing its JSON into the step summary; the redirection is the point and cannot live in a script',
+};
+
 const args = process.argv.slice(2);
 if (args.some((a) => a === '--help' || a === '-h')) {
   console.log('usage: node tools/check-wiring.js [--list]   (run from make-bus-leaflet/)');
@@ -115,15 +177,59 @@ if (!fs.existsSync(WORKFLOW)) {
 const pkg = JSON.parse(fs.readFileSync(path.join(ENGINE, 'package.json'), 'utf8'));
 const scripts = pkg.scripts || {};
 const yml = fs.readFileSync(WORKFLOW, 'utf8');
-// Only what CI actually RUNS. A tool named in a comment is not scheduled, and
-// this file is heavily commented — the whole point is to ask what it reads.
-const runSteps = yml.split(/\r?\n/).reduce((acc, line) => {
-  if (/^\s*run:\s*\|/.test(line)) { acc.inBlock = true; return acc; }
-  if (/^\s*run:\s*(.+)$/.test(line)) { acc.inBlock = false; acc.cmds.push(RegExp.$1.trim()); return acc; }
-  if (acc.inBlock && /^\s{10,}\S/.test(line)) { acc.cmds.push(line.trim()); return acc; }
-  if (/^\s*-\s+name:/.test(line)) acc.inBlock = false;
-  return acc;
-}, { inBlock: false, cmds: [] }).cmds;
+
+/*
+ * Parse the workflow into STEPS rather than into a flat list of command lines.
+ * A step is `{ name, dir, cmds }` — its `name:`, its `working-directory:` if it
+ * declares one, and every command line it actually runs.
+ *
+ * It used to be flat, and two things were impossible while it was: a step with a
+ * raw command could not be named (there was nothing to name), and a `npm run X`
+ * could not be attributed to the MANIFEST it runs against, so a script called X
+ * in one skill read as scheduled because a different skill's step of the same
+ * name existed. Both are the same fault — the flat list threw away the only two
+ * fields that say what a command is about.
+ *
+ * Only what CI actually RUNS. A tool named in a comment is not scheduled, and
+ * this workflow is heavily commented — the whole point is to ask what it reads.
+ * That holds INSIDE a `run: |` block too: a `#` line there is a shell comment.
+ */
+function parseSteps(text) {
+  const indentOf = (l) => l.match(/^\s*/)[0].length;
+  const steps = [];
+  let cur = null;
+  let blockIndent = null;
+  for (const line of text.split(/\r?\n/)) {
+    if (blockIndent !== null) {
+      if (/^\s*$/.test(line)) continue;
+      if (indentOf(line) > blockIndent) {
+        const cmd = line.trim();
+        if (!cmd.startsWith('#')) cur.cmds.push(cmd);
+        continue;
+      }
+      blockIndent = null;
+    }
+    const start = line.match(/^\s*-\s+name:\s*(.+)$/);
+    if (start) {
+      cur = { name: start[1].trim().replace(/^['"]|['"]$/g, ''), dir: null, cmds: [] };
+      steps.push(cur);
+      continue;
+    }
+    if (!cur) continue;
+    const wd = line.match(/^\s*working-directory:\s*(.+)$/);
+    if (wd) { cur.dir = wd[1].trim().replace(/^['"]|['"]$/g, ''); continue; }
+    const run = line.match(/^(\s*)run:\s*(.*)$/);
+    if (run) {
+      const rest = run[2].trim();
+      if (/^[|>][+-]?$/.test(rest)) blockIndent = run[1].length;
+      else if (rest) cur.cmds.push(rest);
+    }
+  }
+  return steps;
+}
+
+const steps = parseSteps(yml);
+const runSteps = steps.flatMap((s) => s.cmds);
 const ciCommands = runSteps.join('\n');
 
 const findings = [];
@@ -227,12 +333,43 @@ for (const name of Object.keys(NOT_IN_CI)) {
   }
 }
 
+// --- 4. every RAW step is declared ------------------------------------------
+//
+// A step is routed if EVERY command line in it is `npm run <script>`; anything
+// else is raw and needs an entry in RAW_STEPS. Structural, not a list of
+// commands we have decided are acceptable — a rule that named `npm ci` and `pip`
+// as fine would be a second list to keep true, and the next raw form would slip
+// in under it exactly as raw steps slipped past the whole check until now.
+const isNpmRun = (c) => /^npm run [\w:.-]+/.test(c);
+const rawSteps = steps.filter((s) => s.cmds.length && !s.cmds.every(isNpmRun));
+for (const st of rawSteps) {
+  if (RAW_STEPS[st.name] === undefined) {
+    findings.push(
+      `the step "${st.name}" runs a raw command, and RAW_STEPS does not declare it.\n` +
+      `      gates.yml:     ${st.cmds[0]}${st.cmds.length > 1 ? `   (+${st.cmds.length - 1} more line(s))` : ''}\n` +
+      `      A raw command is a second copy of an invocation with no script behind it.\n` +
+      `      Either run it through an npm script, or declare it in RAW_STEPS with a\n` +
+      `      reason saying why it cannot be one.`);
+  } else if (!RAW_STEPS[st.name].trim()) {
+    findings.push(`RAW_STEPS["${st.name}"] has no reason. An exclusion with no reason is a hole.`);
+  }
+}
+const rawNames = new Set(rawSteps.map((s) => s.name));
+for (const name of Object.keys(RAW_STEPS)) {
+  if (!rawNames.has(name)) {
+    findings.push(
+      `RAW_STEPS names the step "${name}", which no longer runs a raw command.\n` +
+      `      Delete the entry — otherwise this table is where stale decisions go to be believed.`);
+  }
+}
+
 // --- report ----------------------------------------------------------------
 
 const byStatus = (s) => rows.filter((r) => r.status === s).length;
 console.log(`check-wiring — ${ENGINE}`);
 console.log(`  ${toolFiles.length} file(s) in tools/, ${gateScripts.length} script(s) running one of them`);
 console.log(`  scheduled by name: ${byStatus('npm run')}   rebuilt in the workflow: ${byStatus('REBUILT')}   not in CI: ${byStatus('absent')} (${Object.keys(NOT_IN_CI).length} declared)`);
+console.log(`  ${steps.length} workflow step(s), ${rawSteps.length} of them running a raw command (${Object.keys(RAW_STEPS).length} declared)`);
 
 if (listAll) {
   console.log('');

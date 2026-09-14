@@ -560,6 +560,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-build-log
 
+      # OA-329 fault A. `<map>/_latest/` is the folder that means CURRENT and
+      # nothing in the S6 path wrote to it, so thirteen of twenty maps carried a
+      # superseded verification report on 2026-09-13 -- one of them re-stranded
+      # within the hour by an S6 that ran while the action was being written. The
+      # refresh now happens at the commit boundary. This cuts the one call out and
+      # requires the four mechanism tests to fail while the three CONTROLs hold --
+      # the S5 one above all, since widening the refresh to every stage is the
+      # plausible wrong fix and would break that control alone.
+      - name: Prove the S6 _latest mirror refresh can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-s6-mirror
+
       # OA-164. `pull` copies the whole run FOLDER while the manifest speaks only
       # of DECLARED outputs, so an undeclared file left in an older stage's folder
       # rides along and clobbers whatever the destination already holds. It cost

@@ -20,9 +20,27 @@
 // Wycombe Aldi / St Neots Town Centre did on 2026-08-08 (an in-place render
 // edit and a skipped refresh, each caught only because Collected_latests was
 // stale against the newest S5-render — see project_bus_foolproofing_plan.md).
+//
+// --no-collect DOES THE COPY AND SKIPS THAT SWEEP, and it exists for exactly one
+// caller: `stage.js commit S6`, which refreshes this map's mirror as part of the
+// commit (OA-329 fault A). Three reasons the chokepoint may not run the sweep,
+// and the third is the deciding one. It is estate-wide work — collect-maps.ps1
+// -All walks all twenty maps — triggered by an event about ONE map. It needs
+// `powershell`, so a call from `commit` would make an engine unit test depend on
+// a Windows shell, and `commit` is spawned by a dozen of them. And
+// `Collected_latests/` is untracked (.gitignore:152), so no gate, no byte and no
+// CI run depends on it, while `_latest/verification.docx` IS tracked and IS
+// gated — `latest-mirror-gate.js` fails on a mirror that does not match the S6
+// run its own manifest names. So the half with a gate behind it moves into the
+// boundary and the half with none stays where a person drives it; the skipped
+// sweep is PRINTED rather than silent, with the command that does it.
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
-const TOWN = process.argv[2] || process.cwd();
+const ARGV = process.argv.slice(2);
+const NO_COLLECT = ARGV.includes('--no-collect');
+// The folder is the first NON-FLAG argument, so `<dir> --no-collect` and
+// `--no-collect <dir>` both work and a flag can never be mistaken for a town.
+const TOWN = ARGV.filter(a => !a.startsWith('--'))[0] || process.cwd();
 // REFUSE A FOLDER THAT IS NOT A TOWN OR PLACE. There is no walking up: the dir
 // is taken verbatim, so running this from the Buses root with no argument used
 // to create a bogus `Buses/_latest` holding whatever disagreements.docx and
@@ -155,7 +173,10 @@ function findBusesRoot(dir) {
   }
 }
 const busesRoot = findBusesRoot(TOWN);
-if (busesRoot) {
+if (NO_COLLECT) {
+  console.log('Collected_latests NOT refreshed (--no-collect). The sweep is one command, from anywhere:'
+    + '\n    powershell -File "' + (busesRoot ? path.join(busesRoot, 'collect-maps.ps1') : '<Buses root>\\collect-maps.ps1') + '" -All');
+} else if (busesRoot) {
   try {
     execFileSync('powershell', ['-File', path.join(busesRoot, 'collect-maps.ps1'), '-All'], { cwd: busesRoot, stdio: 'inherit' });
   } catch (e) {

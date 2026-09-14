@@ -20,6 +20,18 @@
  * Run it from make-bus-leaflet:
  *     npm run test:prove-red
  *     node tools/prove-red.js --keep      leave the scratch copy for inspection
+ *     node tools/prove-red.js --baseline-only
+ *                                         run the baseline and stop: is this tree
+ *                                         fit to be mutated at all? Seconds rather
+ *                                         than minutes, and the arm the harness
+ *                                         drives end to end
+ *
+ * THREE OUTCOMES, THREE EXIT CODES (buses-data OA-353). 0 every mutation was
+ * caught; 1 the harness RAN and found a hole — a mutation survived, or an anchor
+ * is stale; 2 the harness DID NOT RUN, because the baseline was red and not one
+ * mutation was attempted. Until 2026-09-14 the third shared the second's exit
+ * code and printed one ordinary-looking line, so a day of switched-off coverage
+ * read exactly like a day of ordinary failure. See tools/lib/baseline.js.
  */
 'use strict';
 const fs = require('node:fs');
@@ -27,10 +39,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { scratchDir } = require('../assets/scratch');
+const { EXIT_FOUND_A_HOLE, EXIT_DID_NOT_RUN, checkBaseline, stopLines, readyLine } = require('./lib/baseline');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const KEEP = process.argv.includes('--keep');
+const BASELINE_ONLY = process.argv.includes('--baseline-only');
 /* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
  * the paths printed below would name directories that no longer exist. */
 if (KEEP) require('../assets/scratch').keepScratch();
@@ -2217,16 +2231,24 @@ const rows = [];
 
 // A baseline first: the copied engine, unmutated, must be green. Otherwise every
 // "the suite noticed" below could be the copy failing rather than the mutation.
+// The STOP is reported by tools/lib/baseline.js and exits 2 rather than 1, because
+// "the harness did not run" and "a mutation survived" are two different answers
+// that shared one exit path until OA-353 (buses-data).
 const suites = [...new Set(MUTATIONS.map(m => m.suite))];
-for (const suite of suites) {
-  const r = runSuite(suite);
-  if (r.status !== 0) {
-    console.error(`BASELINE FAILED: ${suite} is red against an unmutated copy of the engine.`);
-    console.error(r.stdout || r.stderr);
-    process.exitCode = 1;
-  }
+const verdict = checkBaseline({ suites, mutationCount: MUTATIONS.length, runSuite });
+if (!verdict.ok) {
+  for (const line of stopLines(verdict)) console.error(line);
+  for (const r of verdict.red) { console.error(`\n--- ${r.suite}, unmutated ---`); console.error(r.output); }
+  if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
+  process.exitCode = EXIT_DID_NOT_RUN;
+  return;
 }
-if (process.exitCode === 1) { if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true }); return; }
+if (BASELINE_ONLY) {
+  console.log(readyLine(verdict));
+  if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
+  else console.log('scratch copy left at ' + scratch);
+  return;
+}
 
 for (const m of MUTATIONS) {
   const p = path.join(engine, m.file);
@@ -2262,4 +2284,4 @@ if (survived || broken) {
 }
 if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
 else console.log('scratch copy left at ' + scratch);
-process.exitCode = (survived || broken) ? 1 : 0;
+process.exitCode = (survived || broken) ? EXIT_FOUND_A_HOLE : 0;

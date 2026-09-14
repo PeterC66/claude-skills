@@ -41,10 +41,48 @@
  * conditional: no delivery has been observed losing it. --drop-framing measures
  * a dependency, not an incident, and must not be quoted as one.
  *
+ * WHICH ENGINE A --store SWEEP RUNS, and until 2026-09-14 it was the skill's
+ * (buses-data OA-342 item 4). `runGenerator` sets `SKILL_ASSETS: engineDir`
+ * unconditionally — so this file could never reach `engine_paths.js`'s last
+ * resort, which is the fault OA-342 was filed for — but it passed no `engineDir`
+ * at all, so the default `SK` applied: the store sweep ran the PACK's own entry
+ * generator (`preferPackGen`, four lines of comment below explaining why) against
+ * the SKILL's shared modules. That is the same latent hybrid `portalFixtureEnv`
+ * was written for on 2026-08-28 (OA-132), when status.js was found gating the
+ * portal's fixtures the same way and every file in the portal's `engine/` went
+ * unexecuted while the board said PASS. The helper has been exported from
+ * gate_lib.js ever since and this file did not import it.
+ *
+ * So a store sweep now needs to know WHERE THE PORTAL IS. `--store` names
+ * `<portal>/data/maps`, so the portal is two levels up and is derived; `--portal`
+ * overrides for a store that is somewhere else. **It REFUSES rather than falling
+ * back to `SK`** when that directory holds no engine: a fallback that is correct
+ * on the one laptop where the skill and the portal happen to agree is a fallback
+ * that reports on an engine no deployment runs, which is this whole file's subject.
+ *
+ * AND THE EXPERT THREE CANNOT BE SWEPT IN --store MODE AT ALL — they are reported
+ * `PORTAL-GEN` and counted, never run. Three measurements, in this order:
+ * store.js gives the schematic and the diagram `gens: ['gen_internal_schematic.js']`
+ * and `['gen_internal_diagram.js']` out of `engine/expert/`, which are PORTAL
+ * WRAPPERS and not this engine's `schematize_internal.js` / `diagram_internal.js`
+ * at all; the wrapper resolves its pre-stage as `path.join(__dirname, …)`, and
+ * runGenerator's workspace holds the map's json and ONE copied generator, so
+ * running it there dies with `Cannot find module …/schematize_internal.js`
+ * (measured against store map 2, 2026-09-14); and running the SKILL's copy in its
+ * place answers about a different program — with `SK` modules it is a sheet no
+ * deployment runs, and with the portal's it is precisely the hybrid the paragraph
+ * above removes. A verdict about a different program is worse than a gap, so this
+ * says `PORTAL-GEN` and the summary prints the count. The gap is REAL and is
+ * recorded as what is left of buses-data OA-342 item 4 — closing it means giving
+ * `runGenerator` a way to carry a generator's siblings, which reopens the rule
+ * OA-232 set deliberately (*the workspace is the map's data and nothing else*),
+ * so it is a change of its own and not a line in this one.
+ *
  * Usage — every argument below is a real path on this machine, no placeholders:
  *
  *   node assets/render_sweep.js --buses "<Buses dir>"
  *   node assets/render_sweep.js --store "C:/Claude/community-bus-maps/data/maps"
+ *   node assets/render_sweep.js --store "..." --portal "C:/Claude/community-bus-maps"
  *   node assets/render_sweep.js --buses "..." --drop-framing
  *   node assets/render_sweep.js --buses "..." --expect 20
  *
@@ -65,6 +103,7 @@ const os = require('os');
 const path = require('path');
 const {
   SK, rmTmp, runGenerator, findTowns, findPlaces, readJson, latestRunDir, EXTERNAL_GENERATOR,
+  portalFixtureEnv,
 } = require('./gate_lib');
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
@@ -75,6 +114,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--buses') f.buses = argv[++i];
     else if (a === '--store') f.store = argv[++i];
+    else if (a === '--portal') f.portal = argv[++i];
     else if (a === '--drop-framing') f.dropFraming = true;
     else if (a === '--expect') f.expect = Number(argv[++i]);
     else if (a === '--json') f.json = true;
@@ -82,6 +122,29 @@ function parseArgs(argv) {
     else if (a === '-h' || a === '--help') f.help = true;
   }
   return f;
+}
+
+/*
+ * WHERE THE PORTAL IS, for a --store sweep. `--store` names `<portal>/data/maps`
+ * — that path is built by the portal's own mapDataDir() and is not a convention
+ * this file invented — so the portal is two levels up unless `--portal` says
+ * otherwise. Returns `{ portalDir, engineDir, expertDir, ok }`; `ok` is false
+ * when that engine is not there, and main() refuses on it rather than quietly
+ * using SK, for the reason in the header.
+ *
+ * The existence test is `engine_paths.js` and not the directory, deliberately: an
+ * `engine/` that exists and holds no shared modules resolves every dependency
+ * past it and produces exactly the hybrid this argument was added to remove.
+ */
+function portalEngine(storeDir, explicitPortal) {
+  const portalDir = path.resolve(explicitPortal || path.join(storeDir, '..', '..'));
+  const engineDir = path.join(portalDir, 'engine');
+  return {
+    portalDir,
+    engineDir,
+    expertDir: path.join(engineDir, 'expert'),
+    ok: fs.existsSync(path.join(engineDir, 'engine_paths.js')),
+  };
 }
 
 /*
@@ -136,7 +199,7 @@ function readFraming(dataDir) {
  * Falling back to the template when the pack has no copy is right for both: it
  * is how an area map's portal-owned expert sheets resolve anyway.
  */
-function sheetsFor(dataDir, { isPlace, preferPackGen }) {
+function sheetsFor(dataDir, { isPlace, preferPackGen, expertDir }) {
   const rj = readJson(path.join(dataDir, 'routes.json'));
   const sheets = [];
   const have = (n) => fs.existsSync(path.join(dataDir, n));
@@ -158,9 +221,21 @@ function sheetsFor(dataDir, { isPlace, preferPackGen }) {
   }
   // The expert three are portal-owned (store.js `engine: 'expert'`): always the
   // template, never the pack, however tempting a copy sitting in the pack looks.
-  if (rj.internalSchematic) sheets.push({ key: 'schematic', gen: path.join(SK, 'schematize_internal.js'), out: 'internal-schematic.svg' });
-  if (rj.internalDiagram) sheets.push({ key: 'diagram', gen: path.join(SK, 'diagram_internal.js'), out: 'internal-diagram.svg' });
-  if (rj.boardingPlan) sheets.push({ key: 'boarding', gen: path.join(SK, 'gen_boarding.js'), out: 'boarding.svg' });
+  //
+  // AND IN --store MODE THE TEMPLATE IS NOT THE SKILL'S. `expertDir` is set only
+  // there, and it marks these three `portalOwned` — the sweep names the file the
+  // portal would actually run and then declines to run it, because it cannot: the
+  // wrapper needs its pre-stage sibling and this workspace holds one generator.
+  // The header records the three measurements. Tree mode is unchanged and still
+  // sweeps all three from SK, which is the right answer there: nothing in a tree
+  // sweep is pretending to model the portal.
+  const expert = expertDir
+    ? { dir: expertDir, schematic: 'gen_internal_schematic.js', diagram: 'gen_internal_diagram.js', boarding: 'gen_boarding.js', portalOwned: true }
+    : { dir: SK, schematic: 'schematize_internal.js', diagram: 'diagram_internal.js', boarding: 'gen_boarding.js', portalOwned: false };
+  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: expert.portalOwned });
+  if (rj.internalSchematic) add('schematic', expert.schematic, 'internal-schematic.svg');
+  if (rj.internalDiagram) add('diagram', expert.diagram, 'internal-diagram.svg');
+  if (rj.boardingPlan) add('boarding', expert.boarding, 'boarding.svg');
   return sheets;
 }
 
@@ -244,7 +319,31 @@ function sweepOne(map, flags) {
         rows.push({ sheet: s.key, verdict: 'NO-GEN', lines: [], refusals: [], refused: 0, detail: s.gen });
         continue;
       }
-      const run = runGenerator(s.gen, map.dataDir, { extraEnv: { STRICT_GUARDS: '1', OVERRIDES_FILE: ovFile } });
+      // PORTAL-GEN carries the same SHAPE as every other row, for the reason the
+      // NO-GEN paragraph above was written. It is not a failure and not a pass:
+      // it is this sweep saying which file the portal runs and that it cannot run
+      // it here. Counted in the summary so the gap is a number rather than a
+      // silence.
+      if (s.portalOwned) {
+        rows.push({ sheet: s.key, verdict: 'PORTAL-GEN', lines: [], refusals: [], refused: 0, detail: s.gen });
+        continue;
+      }
+      /* WHICH ENGINE (OA-342 item 4). `map.engineDir` is the portal's own
+       * `engine/` in store mode and undefined in tree mode, where runGenerator's
+       * `SK` default is already right. portalFixtureEnv() is asked for it rather
+       * than path.join being spelled here a second time — status.js and
+       * prove-red-gates.js both go through that helper, and a harness that builds
+       * its own copy of the environment proves a copy of the gate.
+       *
+       * Its OVERRIDES_FILE is deliberately NOT taken. It points straight at
+       * base-overrides.json, which is the same content by a shorter route — but
+       * this file composes the framing itself (readFraming, and --drop-framing),
+       * which is the OA-137 fix and the reason the whole header exists. extraEnv
+       * is applied last inside runGenerator, so the composed file wins. */
+      const run = runGenerator(s.gen, map.dataDir, {
+        engineDir: map.engineDir || SK,
+        extraEnv: { STRICT_GUARDS: '1', OVERRIDES_FILE: ovFile },
+      });
       const lines = guardLines(run.stderr);
       const refused = refusalCount(run.stderr);
       // Four outcomes, deliberately kept apart. A non-zero exit WITH a refusal
@@ -281,7 +380,7 @@ function enumerateTree(busesDir) {
   return maps;
 }
 
-function enumerateStore(storeDir) {
+function enumerateStore(storeDir, portal) {
   const maps = [];
   for (const id of fs.readdirSync(storeDir).sort((a, b) => Number(a) - Number(b))) {
     const dataDir = path.join(storeDir, id, 'data');
@@ -297,6 +396,11 @@ function enumerateStore(storeDir) {
       dataDir,
       // The portal runs the pack's OWN generator, not the skill's; so must this.
       preferPackGen: true,
+      // ...and the pack's generator resolves its SHARED modules through
+      // SKILL_ASSETS, which the portal points at its own engine/. Taken from
+      // portalFixtureEnv so there is one statement of it in this engine.
+      engineDir: portal ? portalFixtureEnv(portal.portalDir, dataDir).SKILL_ASSETS : undefined,
+      expertDir: portal ? portal.expertDir : undefined,
     });
   }
   return maps;
@@ -306,10 +410,22 @@ function main() {
   const flags = parseArgs(process.argv.slice(2));
   if (flags.help || (!flags.buses && !flags.store)) {
     console.log('usage: node render_sweep.js --buses "<Buses dir>" | --store "<portal data/maps>"'
-      + ' [--drop-framing] [--expect <n>] [--json] [--quiet]');
+      + ' [--portal "<portal dir>"] [--drop-framing] [--expect <n>] [--json] [--quiet]');
     process.exit(flags.help ? 0 : 2);
   }
-  const maps = flags.store ? enumerateStore(flags.store) : enumerateTree(flags.buses);
+  let portal = null;
+  if (flags.store) {
+    portal = portalEngine(flags.store, flags.portal);
+    if (!portal.ok) {
+      console.error(`render_sweep: no portal engine at ${portal.engineDir}.`);
+      console.error('  A --store sweep runs each pack\'s OWN generator, and that generator resolves its');
+      console.error('  shared modules through SKILL_ASSETS — which must be the PORTAL\'s engine, not the');
+      console.error('  skill\'s, or the sweep reports on an engine no deployment runs. Name it with');
+      console.error('  --portal "<portal dir>" if it is not two levels above the store.');
+      process.exit(2);
+    }
+  }
+  const maps = flags.store ? enumerateStore(flags.store, portal) : enumerateTree(flags.buses);
   if (flags.expect != null && maps.length !== flags.expect) {
     console.error(`render_sweep: enumerated ${maps.length} maps, --expect said ${flags.expect}.`);
     console.error('  A sweep that covers a subset reports the same green as one that covers everything.');
@@ -335,6 +451,15 @@ function main() {
     console.log('');
     console.log(`${results.length} maps swept, ${bad.length} cannot be re-rendered`
       + (bad.length ? ` (${total} refusal${total === 1 ? '' : 's'} in total).` : '.'));
+    // The gap, as a number. A sweep that silently covers fewer sheets than the
+    // maps declare reports the same cheerful green as one that covers them all —
+    // which is the argument --expect already makes about MAPS, made here about
+    // SHEETS.
+    const notSwept = results.reduce((n, r) => n + r.rows.filter((x) => x.verdict === 'PORTAL-GEN').length, 0);
+    if (notSwept) {
+      console.log(`${notSwept} sheet${notSwept === 1 ? '' : 's'} NOT swept: portal-owned expert generators,`
+        + ' which need their pre-stage sibling and cannot run in this workspace (buses-data OA-342 item 4).');
+    }
     if (bad.length) {
       // Group by the SENTENCE, not by map: OA-137's whole finding was that one
       // cause accounted for all seven, and a per-map listing buries that.
@@ -380,4 +505,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { readFraming, sheetsFor, guardLines, refusalCount, isGuarded, enumerateTree, enumerateStore, sweepOne };
+module.exports = { readFraming, sheetsFor, guardLines, refusalCount, isGuarded, enumerateTree, enumerateStore, sweepOne, portalEngine, parseArgs };

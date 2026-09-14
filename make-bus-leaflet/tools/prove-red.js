@@ -900,8 +900,21 @@ const MUTATIONS = [
 
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: "the place schematic stops forcing OVERRIDES_FILE, and a place's forced-POI labels are silently dropped again",
-    find: "             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
-    to: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' }," },
+    find: "             overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             crossings: true, out: 'internal-schematic.svg' }," },
+
+  /* buses-data OA-342, 2026-09-14. The mutation IS the bug: take the default back out
+   * and the three rows that named no engine are exactly what they were on 2026-09-13,
+   * when a rollout from a worktree put eight hybrid sheets on buses-data's `main`. */
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the engine stops being set for every row, so a rollout from a worktree draws some sheets with the INSTALLED engine and stamps them with the branch it is rolling out',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}) };" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the default is spread OVER a row rather than under it, so a row can no longer override the engine — the direction that cannot lose a row is what makes an omission safe',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}), SKILL_ASSETS: SK };" },
 
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: 'the area internal stops asking for build-meta.json, which is what commit S4 refuses an area without',
@@ -920,8 +933,8 @@ const MUTATIONS = [
 
   { suite: 'rollout_crossings.test.js', file: 'build_s4.js',
     what: "the town schematic stops carrying the self-crossing check, which only a build path can ask (OA-240)",
-    find: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },\n    place:",
-    to: "             env: { SKILL_ASSETS: SK }, out: 'internal-schematic.svg' },\n    place:" },
+    find: "             crossings: true, out: 'internal-schematic.svg' },\n    place:",
+    to: "             out: 'internal-schematic.svg' },\n    place:" },
 
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',

@@ -1372,7 +1372,8 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
 //      lesson of a checker that reports "no answer" as "wrong answer".
 //   2. A MISSING HEADER IS NEVER RED either. It means the live build predates
 //      this change, which is a true and temporary fact, not a fault.
-//   3. BEHIND IS AMBER FOR DEPLOY_GRACE_HOURS AND RED AFTER. A merge is not a
+//   3. BEHIND IS AMBER FOR DEPLOY_GRACE_HOURS AND RED AFTER, AND THE AGE IS THE
+//      OLDEST UNDEPLOYED COMMIT'S, NOT THE TIP'S. A merge is not a
 //      deploy and nobody should be gated the minute they press merge; twelve
 //      hours later, "merged and forgotten" is the only remaining explanation.
 //
@@ -1455,13 +1456,34 @@ async function deploymentRow() {
     return { status: 'current', want, deployed, url: LIVE_URL };
   }
 
-  // Rule 3: how long has the undeployed commit been sitting there?
-  const ts = Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', ref]));
-  const ageH = Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
+  // Rule 3: how long has the undeployed work been sitting there? THE POPULATION
+  // IS THE WHOLE BACKLOG, NOT THE TIP. This asked `log -1 <ref>` until 2026-09-14
+  // (OA-355) -- the age of main's NEWEST commit, which is not the question the
+  // line above asks and not what the grace was built to excuse. On a repository
+  // that anything else merges into, every unrelated merge reset this clock to
+  // zero, so `behind (grace)` could never age into `BEHIND` and the exit code
+  // stayed 0 however long a deploy was actually outstanding. Measured on the
+  // morning it was found rather than reasoned about: at 06:00Z the oldest
+  // undeployed portal commit (`ca87e7f`) was 16h old and over the grace, while
+  // the board read 0h and exited 0. Three changes then went live undescribed,
+  // one of them an engine re-vendor. The commit that has been WAITING is the
+  // oldest in `deployed..ref`, so that is the one dated.
+  //
+  // A LIVE SHA THIS CHECKOUT CANNOT RESOLVE IS "I COULD NOT TELL", NOT "0h".
+  // An unfetched or rewritten history makes the range fail outright, and a live
+  // build AHEAD of main makes it empty -- both are indistinguishable from "the
+  // backlog is brand new" unless they are asked separately. Both fall through
+  // to the same null-means-red path Rule 1 uses, because a backlog nobody can
+  // date is precisely the case a grace must not excuse.
+  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + ref]);
+  const oldest = backlog == null ? null : backlog.split('\n').map(s => s.trim()).filter(Boolean).pop();
+  const ts = Number(oldest);
+  const ageH = oldest && Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
   const overGrace = ageH == null ? true : ageH >= DEPLOY_GRACE_HOURS;
   return {
     status: overGrace ? 'BEHIND' : 'behind (grace)',
     want, deployed, url: LIVE_URL, ageHours: ageH, graceHours: DEPLOY_GRACE_HOURS,
+    undateable: ageH == null,
   };
 }
 
@@ -1695,7 +1717,9 @@ async function main() {
     console.log('  no header    the live build predates X-App-Version; deploy once and this row starts working');
   } else {
     console.log('  ' + deploy.status + '   live ' + deploy.deployed + ' != main ' + deploy.want
-      + (deploy.ageHours == null ? '' : '  (' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
+      + (deploy.ageHours == null
+        ? '  (undateable — the live sha is not in this checkout, so the backlog is NOT being excused)'
+        : '  (oldest undeployed commit ' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
     console.log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
     console.log('      npm run deploy');
   }

@@ -54,12 +54,19 @@ function newMap(prefix, town) {
   return dir;
 }
 
-/** An S4 run dir. `files` is what the build actually produced; `rj` what it declared. */
+/** An S4 run dir. `files` is what the build actually produced; `rj` what it declared.
+ *
+ * It carries `build-warnings.txt` unconditionally, for the same reason it carries the
+ * stamps: from 2026-09-14 `commit S4` refuses ANY S4 run folder without one (OA-310),
+ * and a fixture that trips a different guard cannot tell this file's verdict from that
+ * one's. It is written to disk and deliberately NOT added to any `--outputs` string,
+ * because that guard reads the folder rather than the declaration. */
 function s4(mapDir, rj, files) {
   const d = path.join(mapDir, 'S4-generate', RUN_ID);
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, 'routes.json'),
     JSON.stringify(Object.assign({ version: '9.9' }, STAMPED, rj)));
+  fs.writeFileSync(path.join(d, 'build-warnings.txt'), 'OK  nothing to report\n');
   for (const [name, body] of Object.entries(files)) fs.writeFileSync(path.join(d, name), body);
   return d;
 }

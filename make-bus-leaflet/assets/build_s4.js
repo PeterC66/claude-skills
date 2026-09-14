@@ -115,6 +115,18 @@ function copyFile(src, destDir, name) {
  *  - `fatal` says whether a failure stops the build. The pre-stage sheets are not
  *    fatal in either rollout — a schematic that fails leaves the other sheets standing
  *    and `stage.js commit S4`'s OA-206 guard is what refuses the commit.
+ *
+ * NO ROW SAYS `SKILL_ASSETS` ANY MORE, AND THAT IS THE FIX RATHER THAN THE TIDY-UP
+ * (buses-data OA-342, 2026-09-14). Five of these nine rows carried `env: { SKILL_ASSETS:
+ * SK }` and three carried nothing — `internal.area`, `external.area`, `external.place`.
+ * A generator copied into a run folder has no siblings, so with no SKILL_ASSETS its
+ * `engineDep()` falls to `engine_paths.js`'s last resort, which is the INSTALLED engine
+ * on this laptop: a rollout driven from a worktree drew those sheets with `main` and
+ * stamped them with the branch's hash. `c879f5a1` put eight such hybrid sheets on
+ * buses-data's `main` on 2026-09-13 and they were pushed. The engine is now set ONCE,
+ * in sheetEnv() below, for every row — a row may still override it, which is the
+ * direction that cannot lose a row, because a row that says nothing now gets the
+ * right answer rather than the laptop's.
  */
 const RECIPE = {
   internal: {
@@ -128,21 +140,44 @@ const RECIPE = {
   },
   schematic: {
     area:  { copy: [[SK, 'schematize_internal.js']], script: 'schematize_internal.js',
-             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },
+             crossings: true, out: 'internal-schematic.svg' },
     place: { sentinel: true, copy: [[SK, 'schematize_internal.js']], script: 'schematize_internal.js',
-             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },
+             overridesFile: true, crossings: true, out: 'internal-schematic.svg' },
   },
   boarding: {
-    place: { copy: [[SK, 'gen_boarding.js']], script: 'gen_boarding.js', env: { SKILL_ASSETS: SK },
+    place: { copy: [[SK, 'gen_boarding.js']], script: 'gen_boarding.js',
              fatal: true, needsOut: true, out: 'boarding.svg', before: 'boarding' },
   },
   diagram: {
     area:  { copy: [[SK, 'diagram_internal.js']], script: 'diagram_internal.js',
-             env: { SKILL_ASSETS: SK }, out: 'internal-diagram.svg' },
+             out: 'internal-diagram.svg' },
     place: { sentinel: true, copy: [[SK, 'diagram_internal.js']], script: 'diagram_internal.js',
-             env: { SKILL_ASSETS: SK }, out: 'internal-diagram.svg' },
+             out: 'internal-diagram.svg' },
   },
 };
+
+/**
+ * THE ENVIRONMENT ONE SHEET'S GENERATOR RUNS IN, and the one place the engine is named.
+ *
+ * `SKILL_ASSETS` is this file's own folder — the engine that is RUNNING the build,
+ * which is the worktree's when a rollout is driven from one and the install's when it
+ * is not. It goes on EVERY row, and a row's own `env` is spread over it afterwards, so
+ * an override is possible and an omission is not. `internal.place` is the one override
+ * there is: `build_internal_place.js` runs in place from PSK and spawns the town
+ * generator itself, reading `TSK` for it — the same directory said one process deeper.
+ *
+ * It is a named function rather than two lines inside the loop because the guarantee is
+ * over the WHOLE table: `build_s4.test.js` enumerates every recipe row through this and
+ * asserts each one names the engine, which is a test no per-row spelling could carry
+ * (buses-data OA-342). `dir` is the run folder; `buildMeta` is false for the scratch dry
+ * run, which must not overwrite a real build-meta.json.
+ */
+function sheetEnv(r, { dir, buildMeta = true } = {}) {
+  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };
+  if (r.meta && buildMeta) env.BUILD_META_DIR = dir;
+  if (r.overridesFile) env.OVERRIDES_FILE = path.join(dir, 'overrides.json');
+  return env;
+}
 
 /**
  * The sheets to draw, in draw order. `routesJson` is the map's own declaration, read
@@ -201,9 +236,7 @@ function buildSheets({ dir, level, routesJson, sheets = null, has = {}, buildMet
     if (r.sentinel) copyFile(path.join(PSK, 'gen_internal_place.js'), dir);
     for (const [from, name, as] of (r.copy || [])) copyFile(path.join(from, name), dir, as);
 
-    const env = { ...(r.env || {}) };
-    if (r.meta && buildMeta) env.BUILD_META_DIR = dir;
-    if (r.overridesFile) env.OVERRIDES_FILE = path.join(dir, 'overrides.json');
+    const env = sheetEnv(r, { dir, buildMeta });
     const script = r.runFrom || path.join(dir, r.script);
     const res = runNode(script, dir, env);
     said.push({ source: key, stderr: res.stderr, ok: res.ok });
@@ -289,4 +322,4 @@ if (require.main === module) {
  * pseudo-source the schematic pushes. A log written through this file is therefore
  * byte-identical to the one the rollouts wrote before they called it, and
  * test/build_s4.test.js asserts that rather than leaving it as a claim. */
-module.exports = { buildSheets, planSheets, runNode, copyFile, DRAW_ORDER, RECIPE, SK, PSK };
+module.exports = { buildSheets, planSheets, sheetEnv, runNode, copyFile, DRAW_ORDER, RECIPE, SK, PSK };

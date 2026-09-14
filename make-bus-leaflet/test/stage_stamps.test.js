@@ -58,6 +58,10 @@ function s4(town, rj, id) {
     generator: 'gen_internal.js', sheet: 'internal',
     builtAt: ((id || 'v9.9_2026-08-29_1200').match(/_(\d{4}-\d{2}-\d{2})_/) || [, '2026-08-29'])[1] + 'T12:00:00.000Z',
     rotationDeg: 0, orientationSource: 'auto', fixedOrientation: null }));
+  // The build-warnings log every S4 run folder has to carry from 2026-09-14 (OA-310),
+  // here for the same reason as the line above: otherwise the fixture trips a guard
+  // this file is not about, and its verdict stops being readable as this guard's.
+  fs.writeFileSync(path.join(d, 'build-warnings.txt'), 'OK  nothing to report\n');
   return d;
 }
 const STAMPED = { engine: 'deadbeef01', design: { sheetVersion: 'build 9.9 · 29 Aug 2026' } };

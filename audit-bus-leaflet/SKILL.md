@@ -56,7 +56,7 @@ Be specific and cite the source for every finding. When the leaflet and our data
 Assemble the findings into an **`image-audit.json`** (schema in `assets/image-audit.example.json`) and render it:
 
 ```
-python "<SK>\gen_image_audit.py" image-audit.json "C:\u3a St Ives\Using AI\Buses\Areas\<Town>\image-audit_<YYYY-MM-DD>.docx"
+python3 "<SK>\gen_image_audit.py" image-audit.json "C:\u3a St Ives\Using AI\Buses\Areas\<Town>\image-audit_<YYYY-MM-DD>.docx"
 ```
 where `<SK>` = `C:\u3a St Ives\.claude\skills\audit-bus-leaflet\assets`. The generator groups rows, colour-codes by verdict (red = leaflet-error, amber = leaflet-newer / data-stale, grey = comment, green = ok) and writes a landscape A4 table plus a per-category summary. Then give the user a tight chat summary: counts by verdict, the headline discrepancies, and whether a data refresh is advised.
 

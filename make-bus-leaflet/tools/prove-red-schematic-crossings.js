@@ -134,13 +134,13 @@ const MUTATIONS = [
   // covering a class once rather than completely.
   { file: 'build_s4.js', suite: WIRING,
     what: 'the AREA schematizer run stops carrying the crossing check',
-    find: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },",
-    to: "             env: { SKILL_ASSETS: SK }, out: 'internal-schematic.svg' }," },
+    find: "             crossings: true, out: 'internal-schematic.svg' },",
+    to: "             out: 'internal-schematic.svg' }," },
 
   { file: 'build_s4.js', suite: WIRING,
     what: 'the PLACE schematizer run stops carrying it, and only areas stay covered',
-    find: "             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
-    to: "             env: { SKILL_ASSETS: SK }, overridesFile: true, out: 'internal-schematic.svg' }," },
+    find: "             overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             overridesFile: true, out: 'internal-schematic.svg' }," },
 
   // The other direction of the same test: a sheet that does NOT run the schematizer
   // may not claim the check, because there is no schematic workspace to read and the

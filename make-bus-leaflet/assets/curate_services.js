@@ -44,6 +44,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 function die(msg) { console.error('curate_services: ' + msg); process.exit(1); }
 
 // ---------------------------------------------------------------- args
@@ -234,3 +235,7 @@ if (applied.corridorPalette) {
 console.log('');
 console.log('  Full ladder and the reasoning: references/complexity-triage.md');
 console.log('');
+}
+
+if (require.main === module) main();
+module.exports = { main };

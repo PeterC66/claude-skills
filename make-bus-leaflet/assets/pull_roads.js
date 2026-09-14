@@ -13,6 +13,7 @@
 // Overpass etiquette: GET with an explicit User-Agent (Node fetch sends none
 // and gets 406 — see gotchas), retry across mirrors.
 const fs = require('fs');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const ARGV = process.argv.slice(2);
 // --reuse: do not fetch if a roads_geo.json is already here whose stored bbox
@@ -158,3 +159,7 @@ const MIRRORS = [
     ways.reduce((s, w) => s + w.geometry.length, 0) + ' points, ' +
     named.size + ' named roads; bbox ' + bbox.map(x => x.toFixed(4)).join(','));
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

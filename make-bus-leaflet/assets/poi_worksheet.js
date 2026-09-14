@@ -72,6 +72,7 @@ const { resolveBuses } = require('./cli');
 //
 // It was typed out again here, beside the identical list in gen_internal.js,
 // with nothing comparing the two. Both now read poi_select.js (OA-212).
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const AUTO_NAMED = AUTO_NAMED_CATS;
 const FRAME_MM2 = 190 * 155.1;     // the internal sheet's clipPath rect
 const POI_BOX_MM2 = 4.2 * 4.2;     // icon(cat, x, y, 2.1) => a 4.2 mm box
@@ -276,3 +277,7 @@ else {
   console.log('  read from : ' + M.source);
   console.log('  written   : ' + outArg);
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -50,6 +50,7 @@ const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, st
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const CURRENT_ENGINE = computeEngineVersion();
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
@@ -476,3 +477,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // silence with a longer summary line.
 const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

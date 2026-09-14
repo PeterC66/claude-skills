@@ -36,6 +36,7 @@ const { parseArgs, resolveBuses } = require('./cli');
 const { findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
 const { lfBytes } = require('./line_endings');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const args = parseArgs(process.argv.slice(2));
 const BUSES = resolveBuses(args);
 
@@ -119,3 +120,7 @@ for (const p of places) {
   if (r.status === 'SKIP' && r.detail.startsWith('latest S4')) bad = true;
 }
 process.exit(bad ? 1 : 0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

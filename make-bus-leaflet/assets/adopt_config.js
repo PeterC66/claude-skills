@@ -68,6 +68,7 @@ const { parseArgs, resolveBuses } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, findTowns, findPlaces, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const args = parseArgs(process.argv.slice(2), { repeat: ['town', 'place', 'unset', 'feature-pos', 'set-path'] });
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
@@ -178,3 +179,7 @@ for (const t of targets) {
 
 if (APPLY) console.log('\nNow render them:\n  node "%SK%\\rollout.js" --all --apply --force --bump minor --note "..."'
   + '\n(--force is required: rollout.js gates the PREVIOUS S4, which still holds the old routes.json, and would otherwise report UP-TO-DATE.)');
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -178,6 +178,15 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-line-ratchet
 
+      # OA-344. `test/asset_load.test.js` asks the cheapest question there is -- does the
+      # file load -- of EVERY file in assets/, where generator_load.test.js asked it of the
+      # seven in the engine hash. The mutation it has to survive is a LOAD failure and not a
+      # behaviour one: a test that passed because the file merely EXISTS would be the same
+      # hole one level up, so case 1 plants the busway fault verbatim.
+      - name: Prove the asset-load test can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-asset-load
+
       - name: The generators have not grown past their ceilings
         working-directory: skills/make-bus-leaflet
         run: npm run gate:line-ratchet

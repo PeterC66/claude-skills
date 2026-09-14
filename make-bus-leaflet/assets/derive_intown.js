@@ -23,6 +23,7 @@
 //   to a village 8 km away. Core stops are always kept regardless of distance. Omit to
 //   keep all buffer stops.
 const fs=require('fs');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const full=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 const ll=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
 const cfg=JSON.parse(fs.readFileSync(process.argv[4],'utf8'));
@@ -62,3 +63,7 @@ fs.writeFileSync(OUT,JSON.stringify(intown,null,1));
 for(const r in intown){ const core=intown[r].filter(isCore).length;
   console.error(r.padEnd(5),'intown',String(intown[r].length).padStart(3),
     '(core',core,'+edge',intown[r].length-core+')'); }
+}
+
+if (require.main === module) main();
+module.exports = { main };

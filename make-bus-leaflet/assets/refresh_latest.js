@@ -22,6 +22,7 @@
 // stale against the newest S5-render — see project_bus_foolproofing_plan.md).
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const TOWN = process.argv[2] || process.cwd();
 // REFUSE A FOLDER THAT IS NOT A TOWN OR PLACE. There is no walking up: the dir
 // is taken verbatim, so running this from the Buses root with no argument used
@@ -164,3 +165,7 @@ if (busesRoot) {
 } else {
   console.error('WARNING: could not find collect-maps.ps1 above ' + TOWN + ' — Collected_latests was NOT refreshed.');
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -69,6 +69,7 @@ const { stampSheetVersion } = require('./sheet_stamps');
 // all 12 of them reading `current` across a round that moved ink on nine.
 const { computePlaceEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does (OA-179).
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
@@ -581,3 +582,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // silence with a longer summary line.
 const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

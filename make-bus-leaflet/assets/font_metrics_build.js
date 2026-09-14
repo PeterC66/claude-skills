@@ -29,6 +29,7 @@ const fs = require('fs');
 const path = require('path');
 const { resolveBuses } = require('./cli');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const ARGV = process.argv.slice(2);
 const CHECK = ARGV.includes('--check');
 const bi = ARGV.indexOf('--buses');
@@ -190,3 +191,7 @@ const DESCENDER = 0.212;
 module.exports = { textWidth, REGULAR, BOLD, FALLBACK, CAP_HEIGHT, DESCENDER };
 `);
 console.log('wrote ' + OUT);
+}
+
+if (require.main === module) main();
+module.exports = { main };

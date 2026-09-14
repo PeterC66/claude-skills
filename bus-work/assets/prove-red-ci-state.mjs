@@ -125,6 +125,24 @@ console.log('\n6. the marker buys grace, not amnesty');
   check('…but NOT excused', s2.excused === false);
   check('…and is ranked 0 like any other red', rowsFor(stale)[0].rank === 0, String(rowsFor(stale)[0].rank));
 
+  // HOLE (C), found 2026-09-14 (buses-data OA-341). The marker was on the right
+  // commit, `summarise` read it correctly, and the row then printed the exact
+  // opposite in the sentence a reader acts on. `why` branched on `excused`
+  // alone, so the moment the grace expired the explanation flipped from "a
+  // session marked this" to "NOTHING says anybody expected it" -- over a
+  // `predicted` that is still true two lines up. The RANK is right and must not
+  // move: a marker buys GRACE_HOURS, not amnesty. What was wrong is the
+  // explanation attached to it, which sent a scheduled tick re-deriving a
+  // four-repository chain that the head commit's own subject announces.
+  const staleRow = rowsFor(stale)[0];
+  check('…and does NOT tell the reader that nobody expected it', !staleRow.why.includes('NOTHING says anybody expected it'), staleRow.why);
+  check('…it says the marker IS there', staleRow.why.includes(MARKER), staleRow.why);
+  check('…and its title says the grace expired rather than hiding the marker', staleRow.title.includes('predicted'), staleRow.title);
+  // The control for the pair: an UNMARKED stale red must still say it plainly,
+  // or the fix has simply deleted the sentence rather than made it conditional.
+  const staleUnmarked = [run('failure', GRACE_HOURS + 2, 'an ordinary commit'), run('success', 40)];
+  check('…while an UNMARKED stale red still says nothing expected it', rowsFor(staleUnmarked)[0].why.includes('NOTHING says anybody expected it'), rowsFor(staleUnmarked)[0].why);
+
   const inherited = [run('failure', 1, 'an ordinary commit'), run('failure', 3, `the marked one ${MARKER}`)];
   check('the marker excuses only the run that CARRIES it, never a later inheritor', summarise(inherited, { now: NOW }).excused === false);
 

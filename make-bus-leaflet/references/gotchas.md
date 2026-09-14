@@ -530,9 +530,32 @@ The documented fallback — *an area `--src` carrying no generators falls back t
 
 **Copy the three generators from the town's last delivered S5 run, not from `assets/`.** The shared skills checkout may have another session's half-finished engine in it — on 2026-08-31 `gen_internal.js` in the working tree differed from the committed engine while a neighbouring session worked on the POI round, and the engine hash moved four times in half an hour. Then prove the copies are the right ones before shipping: re-run them over the S4 run and require every sheet to reproduce **byte-for-byte**. That single check answers both questions at once — whether the generators match the payload, and whether the build itself used a clean engine rather than a neighbour's work in progress.
 
+## A category label is not a name, and three things read it as one (OA-338, 2026-09-13)
+
+**`classify()` supplies `Supermarket`, `Library`, `Museum`, `Town Hall`, `Community Centre`, `Leisure`, `School`, `Park`, `Allotments` or `Industrial Estate` when OpenStreetMap has not named the place.** That string exists so the sheet can print something under a symbol. It was also being used as the de-duplication identity, as the does-this-have-a-name test behind OA-238's `miss` default, and by `printsName` — and in all three it asserts something the data never said. Two unnamed sports centres are not the same sports centre because they are both called `Leisure`. The list is `CATEGORY_LABELS` in `poi_select.js`, and `test/poi_select.test.js` holds it against `classify()`'s own fallbacks so a new category cannot quietly escape the rule.
+
+**Measured across the eight town sheets on the day the rule changed: 42 real places were being deleted.** Thirty-two by the name arm, which had no distance bound at all — four Boots in Wisbech drawn as one, five named libraries in High Wycombe drawn as one, two Aldis and two Lidls each drawn as one. Ten more by the distance arm, which ignored name disagreement — **Boots 24 m from Superdrug on the St Neots sheet**, so that town's pull held five pharmacies and its sheet drew four. `pharmacy` prints no name, so the loss showed only as a missing cross on a high street with two chemists, and every byte gate, the quality ratchet and all 98 sheet verdicts were green on it and always had been.
+
+**`classify()` also discarded the real name outright for `library`, `museum` and `townhall`** — it returned the constant whatever the tags said — which is why those three were the worst affected. It now returns `t.name || '<label>'` like every other category.
+
+**The rule now, and each distance is a measurement rather than a preference.** Same category throughout:
+
+| The two names | Collapse within | Why that distance |
+|---|---|---|
+| either is a label, or blank | 60 m | the only evidence is position — a shop mapped as a node AND as its building |
+| identical | 250 m | one site is often mapped as two ways: St Ivo Outdoor 82 m, Wycombe Preparatory 123 m, Westwood Primary 178 m, High March 183 m. Beyond that a shared name is a CHAIN |
+| one contains the other | 60 m | `Tesco` and `Tesco Extra` 39 m apart are one shop under two spellings |
+| different | never | `Superdrug` and `Boots` 24 m apart are two chemists |
+
+**The last row is deliberately the loose end.** Where OpenStreetMap maps two parts of one site under two names — *Cricket Ground Entrance* beside *Godmanchester Cricket Pavillion*, *Cedar Barn* beside *The Stables* — both are now drawn. That is the right way round: **a spurious symbol is visible on the page and answerable with `miss` in the landmark chooser, and a deleted one is neither.** There is no mechanism anywhere that can put back a POI de-duplication removed.
+
+**The effect on the artwork was much smaller than the count suggests**, because most of what came back is symbol-only: across the eight sheets the printed-label count moved 1,273 → 1,275, and **St Neots' unplaced labels went DOWN, 5 → 3**. High Wycombe, the saturated one, went 39 → 41. See `buses-data`'s `Development Docs/dedup-round_2026-09-13.md`.
+
+**One consequence to expect at build time.** Two POIs can now share a key `"<category>:<name>"` with real names on both — St Neots has two Lidls 2.9 km apart and two Riverside Parks — and `gen_internal.js` says so on stderr. That is [OA-250](https://github.com/PeterC66/community-bus-maps), not a regression here; the message used to say *neither has a name*, which was true of the only case that could reach it before this change and is now a flat contradiction of the key it prints, so it was reworded in the same commit.
+
 ## A `poi.tiers` key is read after tidying AND after de-duplication, and both halves have bitten
 
-**The key is `"<category>:<name>"` where the name is the one that reaches the page** — after `poi.tidy` and `poi.canon` have rewritten it, and after the 60-metre de-duplication has chosen which of two copies survives. Neither is obvious from a `routes.json`, because the raw OpenStreetMap name is what a person reading the town looks up.
+**The key is `"<category>:<name>"` where the name is the one that reaches the page** — after `poi.tidy` and `poi.canon` have rewritten it, and after de-duplication has chosen which of two copies survives. Neither is obvious from a `routes.json`, because the raw OpenStreetMap name is what a person reading the town looks up.
 
 Two consequences, and the second is the one that would have gone unnoticed.
 

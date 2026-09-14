@@ -181,18 +181,40 @@ export function ciRows(states) {
     // A red older than the grace window is BROKEN whatever its commit said.
     const rank = st.excused ? 8 : 0;
 
+    const lastGreenNote = st.lastGreen
+      ? ` Last green: ${String(st.lastGreen.createdAt).slice(0, 16).replace('T', ' ')}.`
+      : '';
+
+    // THREE STATES, NOT TWO (buses-data OA-341, hole C, 2026-09-14). `predicted`
+    // and `excused` are different facts -- the second is the first ANDed with
+    // the grace -- and branching the message on `excused` alone meant that the
+    // moment the grace expired the row asserted the OPPOSITE of a flag that was
+    // still true two lines up. It did so in precisely the state where knowing
+    // the red was deliberate matters most: an old red somebody opened on
+    // purpose and has not finished closing. On 2026-09-14 that sentence sent a
+    // scheduled tick re-deriving, from four repositories, a chain that the head
+    // commit's own subject announced in terms.
+    //
+    // THE RANK IS UNCHANGED IN ALL THREE and must stay that way: rank 0 past the
+    // grace is the design, because a marker buys GRACE_HOURS and not amnesty.
+    // What was wrong is only the explanation attached to it.
     const why = st.excused
       ? `A session marked the triggering commit ${MARKER}, so this red was predicted — but it is still here after ${age}.`
         + ` Confirm it is the predicted one and clear it; a marker buys ${GRACE_HOURS} hours, not amnesty.${steps}`
-      : `Red for ${age} (${streak}), and NOTHING says anybody expected it.`
-        + ` Every push since has inherited this and mailed Peter about it under its own commit message.${steps}`
-        + (st.lastGreen ? ` Last green: ${String(st.lastGreen.createdAt).slice(0, 16).replace('T', ' ')}.` : '');
+      : st.predicted
+        ? `Red for ${age} (${streak}). A session DID mark this ${MARKER}, so somebody opened it deliberately —`
+          + ` but the ${GRACE_HOURS}-hour grace has gone, so it ranks as broken like any other red.`
+          + ` Read that commit's subject and finish what it started, rather than hunting for an unexplained failure.${steps}`
+          + lastGreenNote
+        : `Red for ${age} (${streak}), and NOTHING says anybody expected it.`
+          + ` Every push since has inherited this and mailed Peter about it under its own commit message.${steps}`
+          + lastGreenNote;
 
     rows.push({
       key: `ci-red-${s.slug}`,
       rank,
       type: 'ci',
-      title: `${st.excused ? 'CI red (predicted)' : 'CI RED'}: ${s.name} — ${s.branch}`,
+      title: `${st.excused ? 'CI red (predicted)' : st.predicted ? 'CI RED (predicted, grace expired)' : 'CI RED'}: ${s.name} — ${s.branch}`,
       why,
       who: '—',
       runbook: 'engine',

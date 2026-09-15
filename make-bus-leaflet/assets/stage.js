@@ -29,8 +29,8 @@
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
  *         and, for S4, refuses a routes.json carrying no "engine" hash or no
  *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
- *         with no build-warnings.txt whose PREVIOUS run declared one, which is a
- *         log that has gone rather than one a map never had (--force-nolog)
+ *         with no build-warnings.txt at all — every route to an S4 writes one
+ *         (--force-nolog overrides, for a build that genuinely drew no sheets)
  *   stamps [runDir]                    write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
@@ -280,6 +280,59 @@ function syncVersionField(runDir, { check = false } = {}) {
   // Fall back to a full re-serialise if the surgical edit didn't land cleanly.
   fs.writeFileSync(file, ok ? patched : JSON.stringify({ ...obj, version: to }, null, 2) + '\n');
   return { status: 'updated', from, to, want, file };
+}
+
+/*
+ * REFRESH THIS MAP'S `_latest` MIRROR AFTER AN S6 COMMIT (OA-329 fault A).
+ *
+ * `<map>/_latest/` is the folder whose whole meaning is *these are the current
+ * deliverables* — `refresh_latest.js`'s own header says so — and until this
+ * landed nothing in the S6 path wrote to it. `refresh_latest.js` was a tool a
+ * person ran by hand, `grep -c '_latest' stage.js` found nothing, and the
+ * consequence was measured on 2026-09-13: **thirteen of twenty maps carried a
+ * superseded verification report**, one of them re-stranded within the hour by
+ * an S6 that ran while the action describing the fault was being written.
+ *
+ * SO IT GOES AT THE COMMIT BOUNDARY, for the reason OA-310 moved the
+ * build-warnings log there: `commit` is the one chokepoint every S6 passes
+ * through however it was run — a rollout, a skill, or a person assembling the
+ * folder by hand — and it already knows the map directory. A remembered driver
+ * is what produced the thirteen.
+ *
+ * S6 ONLY, deliberately. The S5 path already refreshes (rollout.js line 413 and
+ * rollout_places.js do it immediately after their `commit S5`), so S6 is the one
+ * stage with no driver at all, and it is the stage whose mirror is now GATED:
+ * `tools/latest-mirror-gate.js` fails CI on a `_latest/verification.docx` that
+ * does not match the S6 run the manifest names. Widening this to every stage
+ * would duplicate the rollout's own call rather than fix anything.
+ *
+ * A WARNING AND NOT A REFUSAL. By the time this runs the manifest is already
+ * written and the commit has happened, so there is nothing to refuse — exiting
+ * non-zero here would report a completed commit as a failure to every caller.
+ * A mirror that did not refresh is caught by the gate on the next push, which
+ * is exactly the backstop that case wants.
+ */
+function refreshLatestMirror(townDir) {
+  const { spawnSync } = require('child_process');
+  const tool = path.join(__dirname, 'refresh_latest.js');
+  if (!fs.existsSync(tool)) {
+    console.log(`  WARNING: ${path.basename(tool)} is not beside stage.js — _latest was NOT refreshed`);
+    return;
+  }
+  // --no-collect: the copy is this map's business, the estate-wide
+  // Collected_latests sweep is not. See refresh_latest.js's header for why the
+  // chokepoint takes the half with a gate behind it and leaves the other.
+  const r = spawnSync(process.execPath, [tool, townDir, '--no-collect'], { encoding: 'utf8' });
+  if (r.status === 0) {
+    const line = String(r.stdout || '').split('\n').find(l => l.startsWith('_latest refreshed:'));
+    console.log('  ' + (line || '_latest refreshed'));
+  } else {
+    console.log(`  WARNING: _latest was NOT refreshed — the mirror now disagrees with this run, and`
+      + `\n  tools/latest-mirror-gate.js will say so on the next push. Refresh it with:`
+      + `\n    node "${tool}" "${townDir}"`);
+    const why = String(r.stderr || '').trim().split('\n')[0];
+    if (why) console.log('  (' + why + ')');
+  }
 }
 
 function main() {
@@ -722,7 +775,7 @@ function main() {
         }
       }
 
-      /* Guard (OA-310 item 2): an S4 does not silently LOSE its build-warnings log.
+      /* Guard (OA-310 item 2): an S4 has a build-warnings log, full stop.
        *
        * `build_log.js` classifies everything the generators said and writes
        * `build-warnings.txt` into the run folder. That matters because a guard that
@@ -739,31 +792,34 @@ function main() {
        * S4 passes through however it was built, and it cannot produce the log — it
        * does not run the generators — so its only honest move is to refuse.
        *
-       * WHY IT IS SCOPED TO A REGRESSION RATHER THAN A FLAT RULE. Two maps'
-       * latest S4 legitimately has no log — Huntingdon v5.0 and Wisbech v4.1, both
-       * data changes built before `build_s4.js` existed — so "every S4 must have
-       * one" is red on their next commit for a history they cannot change, and a
-       * gate that is red on day one is one somebody mutes in its first week. The
-       * question with an unambiguous answer is the one this asks: the PREVIOUS run
-       * declared a log, so this map's builds do produce one, and this one has none.
-       * That is a loss rather than an absence. When those two maps are rebuilt the
-       * estate reaches 20 of 20 and the rule can be widened to the flat form.
+       * IT WAS SCOPED TO A REGRESSION UNTIL 2026-09-14, AND THE SCOPING IS GONE
+       * BECAUSE THE THING IT PROTECTED IS GONE. The narrow rule asked whether the
+       * PREVIOUS run declared a log and this one has none — a loss rather than an
+       * absence — and it was narrow for one reason: three maps' latest S4
+       * legitimately had none (Huntingdon v5.0, Wisbech v4.1 and St Neots v4.0, all
+       * data changes built before `build_s4.js` existed), so a flat rule would have
+       * been red on their next commit for a history they could not change, and a
+       * gate that is red on day one is one somebody mutes in its first week. All
+       * three were rebuilt in place and re-committed on 2026-09-13 and all nine
+       * sheets came back byte-identical, so the estate is 20 of 20 and there is no
+       * longer a map the flat rule is unfair to. Keeping the scoping past that
+       * point would leave the guard DISARMED on exactly the case it exists for: a
+       * map whose predecessor declared no log gets no protection at all, which is
+       * how the three of them came to be in that state.
        *
-       * THE PREVIOUS RUN IS READ FROM THE MANIFEST, NOT FROM THE DISK, because
-       * `S4-generate/` is gitignored and `prune_runs.py` deletes superseded runs by
-       * design — the folder may be long gone while the record of what it declared
-       * stays. This run is read from the DISK, because the folder is in front of us
-       * and a declaration is not a file: an --outputs list naming a log that is not
-       * there is the OA-106 guard's business and is refused above.
+       * SO THE QUESTION IS NOW ABOUT THE RUN IN FRONT OF US AND NOTHING ELSE, and
+       * it is read from the DISK rather than from the --outputs list, because a
+       * declaration is not a file: an --outputs list naming a log that is not there
+       * is the OA-106 guard's business and is refused above. Nothing is read from
+       * the manifest any more, which also retires the reason the old rule had to
+       * read the predecessor from there rather than from disk — `S4-generate/` is
+       * gitignored and `prune_runs.py` deletes superseded runs, so the folder may be
+       * long gone while the record of what it declared stays.
        */
       const LOG = 'build-warnings.txt';
-      const prior = sx.runs.filter(r => r.id !== id);
-      const prev = (sx.latest && sx.latest !== id && sx.runs.find(r => r.id === sx.latest))
-        || prior[prior.length - 1] || null;
-      const hadLog = !!(prev && Array.isArray(prev.outputs) && prev.outputs.includes(LOG));
-      if (hadLog && !fs.existsSync(path.join(runDir, LOG))) {
+      if (!fs.existsSync(path.join(runDir, LOG))) {
         if (!f['force-nolog'])
-          die(`${id} has no ${LOG}, and the run before it did: ${prev.id}\n`
+          die(`${id} has no ${LOG}\n`
             + `  The log is how anyone ever learns that a generator REFUSED to draw something.\n`
             + `  Those guards write to stderr and exit 0, so a sheet can ship missing a label\n`
             + `  or printing one over a POI with nothing downstream saying so — the byte gate\n`
@@ -771,7 +827,7 @@ function main() {
             + `  Build the sheets through the one entry point, which writes it for you:\n`
             + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
             + `  Override with --force-nolog only if this build genuinely drew no sheets.`);
-        console.log(`  WARNING: committing an S4 with no ${LOG} — ${prev.id} had one (--force-nolog)`);
+        console.log(`  WARNING: committing an S4 with no ${LOG} (--force-nolog)`);
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;
@@ -786,6 +842,9 @@ function main() {
     const cost = [rec.elapsedMin != null ? rec.elapsedMin + ' min' : null,
       rec.tokens != null ? rec.tokens.toLocaleString('en-GB') + ' tokens' : null].filter(Boolean).join(', ');
     console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)${cost ? '  [' + cost + ']' : ''}`);
+    // OA-329 fault A — see refreshLatestMirror() above for why this is here, why
+    // it is S6 alone, and why it warns rather than refuses.
+    if (st === 'S6') refreshLatestMirror(townDir);
     return;
   }
 

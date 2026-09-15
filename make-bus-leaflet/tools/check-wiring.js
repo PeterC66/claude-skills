@@ -92,6 +92,8 @@ const NOT_IN_CI = {
     'needs the buses estate AND renders every internal sheet on it — minutes, not seconds — and answers a question (how the offsetter treats each sheet, OA-176 4.21) rather than a pass/fail; run by hand when lane offsets, laneRibbon or a corridor family are touched. Its tool had no npm script from 2026-09-04 to 2026-09-05, and this check was red on every push in between',
   'sweep:scratch':
     'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
+  'measure:days-vocabulary':
+    'needs the buses estate, and answers a question — which `days` strings eight towns actually wrote, and what parse_days makes of each — rather than a pass/fail. It is the standing re-measurement behind the fixture list in test/python/test_gtfs_refresh_report.py, which is a copy of an estate this repository cannot see; run it from the buses-data root whenever a town file gains a service, and reconcile what it prints against that list. A gate here would have to assert the vocabulary, and the vocabulary is the half people are allowed to change',
 };
 
 const args = process.argv.slice(2);

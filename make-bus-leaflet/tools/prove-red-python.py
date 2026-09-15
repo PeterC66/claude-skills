@@ -345,6 +345,48 @@ MUTATIONS = [
      "what": "a new third-party import is added and declared nowhere, so it works on the author's laptop and dies on every other machine",
      "find": "import argparse, json, os, re, shutil, subprocess, sys, datetime",
      "to": "import argparse, json, os, re, shutil, subprocess, sys, datetime\nimport requests   # nobody declared this"},
+
+    # ---------------------------------------------------------- gtfs_refresh_report.py
+    # THE FIRST OF THESE IS NOT A HYPOTHETICAL MUTATION -- it is the code that
+    # shipped until 2026-09-15, restored. `parse_days` scanned for a day token
+    # anywhere in the string and took a lone one as the service's week, so
+    # Beaconsfield's X74 "Daily (reduced Sun)" read as SUNDAY ONLY and
+    # `[DAYS] X74 - shipped 'Daily (reduced Sun)' vs BODS 'Daily'` stood on the
+    # monthly reports of 21 and 31 August and 1 September, actionable every time,
+    # over a bus that had not changed. A mutation that re-enacts a real fault is
+    # the only kind that can show a new suite would have caught it.
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "parse_days takes a lone day token from anywhere in the string, so 'Daily (reduced Sun)' is Sunday-only again and the monthly report cries [DAYS] about a bus that runs all week",
+     "find": '    if re.fullmatch(DAY_ONE,p): return {DAY_IDX[p[:3]]}',
+     "to": '    _m=re.search(DAY_ONE,p)\n    if _m: return {DAY_IDX[_m.group(0)[:3]]}'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "a day range is matched anywhere in the piece rather than as the whole of it, so 'Mon-Sat 06:30-19:00' becomes a comparable week and a timetable note starts raising findings",
+     "find": '    m=re.fullmatch(r"("+DAY_ONE+r")(?:\\s*[-–—]\\s*|\\s+to\\s+)("+DAY_ONE+r")",p)',
+     "to": '    m=re.search(r"("+DAY_ONE+r")(?:\\s*[-–—]\\s*|\\s+to\\s+)("+DAY_ONE+r")",p)'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "a backwards range returns the EMPTY SET again, which `is not None` and so travels as a real answer that differs from every feed there is",
+     "find": '        return set(range(a,b+1)) if b>=a else None',
+     "to": '        return set(range(a,b+1))'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "the days string is no longer split on & or a comma, so 'Mon & Fri' stops being readable and five services on the estate go silently unchecked",
+     "find": '    for part in re.split(r"[&,]|\\band\\b",t):',
+     "to": '    for part in [t]:'},
+
+    # fmt writes the FEED's half of a [DAYS] line, so a fault here prints two
+    # spellings of one week side by side and calls them a change.
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "fmt spells any week as a range, so Mon & Wed & Fri prints as 'Mon-Fri' and a real difference is hidden behind a tidier sentence",
+     "find": '    if o==list(range(o[0],o[-1]+1)): return f"{DOW[o[0]]}-{DOW[o[-1]]}" if len(o)>2 else " & ".join(DOW[i] for i in o)',
+     "to": '    if True: return f"{DOW[o[0]]}-{DOW[o[-1]]}" if len(o)>2 else " & ".join(DOW[i] for i in o)'},
+
+    # The whole monthly diff is taken against whatever this returns.
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "latest_verified returns the OLDEST S1 run, so every town is diffed against the service list it shipped first rather than the one it ships",
+     "find": '    return cands[-1] if cands else None',
+     "to": '    return cands[0] if cands else None'},
 ]
 
 

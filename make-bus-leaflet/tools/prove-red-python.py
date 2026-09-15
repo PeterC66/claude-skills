@@ -676,6 +676,138 @@ MUTATIONS = [
      "find": 'DEFAULT_SERVICE_KM = 0.8',
      "to": 'DEFAULT_SERVICE_KM = 0.4'},
 
+    # ---------------------------------------------------------------- gtfs_regions.py
+    # The module that refuses. Every mutation below turns a refusal into an
+    # answer, which is the only failure mode it has: the monthly report is prose
+    # nobody diffs, so a town read from the wrong dataset comes out as a list of
+    # withdrawn routes that looks exactly like a list of withdrawn routes.
+
+    # RULE 1 -- THERE IS NO DEFAULT REGION.
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the privileged region comes back, so every town whose region key is missing is silently read from Cambridgeshire -- the 2026-08-21 rule undone by one word",
+     "find": 'DEFAULT_REGION = None',
+     "to": 'DEFAULT_REGION = "cambridgeshire"'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "resolve_db guesses instead of refusing, so any ad-hoc query run without --db is answered from a dataset nobody chose and reports an out-of-region town as entirely withdrawn",
+     "find": '    raise SystemExit(',
+     "to": '    return "cambridgeshire.sqlite" or SystemExit('},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "an explicit --db is ignored in favour of the environment, so a session that names its dataset is silently overridden by whatever the shell was last set to",
+     "find": '    if explicit:',
+     "to": '    if False:'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the deprecated $CAMBS_GTFS_DB is read in place of $GTFS_DB, so the misnamed single-region variable quietly becomes the live one again",
+     "find": '    env = os.environ.get("GTFS_DB")',
+     "to": '    env = os.environ.get("CAMBS_GTFS_DB")'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the refusal offers regions that have not been built, so the reader is told to pass a --db naming a sqlite file that is not there",
+     "find": 'if r.get("status") == "built" and r.get("db")]',
+     "to": 'if r.get("db")]'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the built regions are listed in registry order rather than by name, so the refusal message reads differently every time somebody adds a region",
+     "find": 'sorted(regions.items())',
+     "to": 'list(regions.items())'},
+
+    # RULE 5 -- `_`-PREFIXED KEYS ARE COMMENTS.
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the _example_west_yorkshire stub that documents how to add a region becomes a region, offerable by resolve_db and acceptable as a town's own",
+     "find": '    regions = {k: v for k, v in (cfg.get("regions") or {}).items() if not k.startswith("_")}',
+     "to": '    regions = dict(cfg.get("regions") or {})'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "a `_comment` entry in town_prefixes.json is planned as though it were a town, so the monthly report carries a section for a line of documentation",
+     "find": '        if town.startswith("_"):',
+     "to": '        if False:'},
+
+    # RULE 2 -- NO FALLBACK ON THE FEED SIDECAR.
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the per-dataset sidecar name loses its suffix, so every region reads the unsuffixed feed_info.json -- which only ever described Cambridgeshire -- and reports another county's build date and validity window as its own",
+     "find": '    name = f"feed_info_{os.path.splitext(os.path.basename(db))[0]}.json"',
+     "to": '    name = "feed_info.json"'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "feed_info stops guarding against having no dataset at all, so a caller reaching it with an empty registry raises inside the monthly report instead of answering",
+     "find": '    if not db:',
+     "to": '    if False:'},
+
+    # RULE 3 -- THE PREFIX GUARD, which is what caught Beaconsfield.
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the guard passes everything, so a town whose ATCO prefixes cannot occur in its region's dataset is diffed against it anyway and reports every route withdrawn",
+     "find": '    if not keep or not pref:',
+     "to": '    if True:'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the guard demands that EVERY prefix match EVERY filter, so a town straddling two areas -- or any town at all in a region keeping two prefixes -- is refused as out of region",
+     "find": '    if any(p.startswith(k) for p in pref for k in keep):',
+     "to": '    if all(p.startswith(k) for p in pref for k in keep):'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "prefix matching becomes equality, so the ATCO stop codes in a town file -- longer than the filter they start with -- match no region and every town is refused",
+     "find": 'if any(p.startswith(k) for p in pref for k in keep):',
+     "to": 'if any(p == k for p in pref for k in keep):'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "plan stops consulting the guard, so the registry's word is final and the missing-region-key mistake passes straight through to a wrong-dataset diff",
+     "find": '                reason = prefix_mismatch(cfg, name, r)',
+     "to": '                reason = None'},
+
+    # RULE 4 -- A TOWN IT CANNOT PLACE IS SKIPPED, NOT GUESSED.
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "an unregistered region falls back to whichever region happens to be first in the file, so a typo in a town's region key is answered rather than reported",
+     "find": '            r = regions.get(name)',
+     "to": '            r = regions.get(name) or (list(regions.values())[0] if regions else None)'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "a region whose dataset has never been built is planned anyway, so the month's diff runs against a sqlite file that is not there",
+     "find": '            reason = None if os.path.isfile(db) else \\',
+     "to": '            reason = None if True else \\'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "a region registered without an explicit db no longer falls back to <region>.sqlite beside the registry, so adding a region the documented short way breaks the plan",
+     "find": '            db = r.get("db") or os.path.join(gdir, f"{name}.sqlite")',
+     "to": '            db = r.get("db")'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "a town's own region key is ignored in favour of the registry's declared default, which is the Beaconsfield failure arriving through the registry rather than through a missing key",
+     "find": '        name = cfg.get("region") or default',
+     "to": '        name = cfg.get("region")'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "--db stops overriding the registry, so the single-dataset and testing path starts skipping the very towns it was passed to force through",
+     "find": '        if db_override:',
+     "to": '        if False:'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "each group loses its provenance, so the report header cannot say which build of which feed the section beneath it came from",
+     "find": '"feed": feed_info(gdir, db)',
+     "to": '"feed": {}'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "group order stops following the town list, so the monthly report's sections move about between runs for no reason a reader can see",
+     "find": '    return [groups[d] for d in order], skipped',
+     "to": '    return [groups[d] for d in reversed(order)], skipped'},
+
+    # THE PROVENANCE LINE.
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "an unknown build date is printed as a plausible one, so a section whose feed sidecar is missing claims to have been built on a date nobody built it",
+     "find": "(g.get('feed') or {}).get('built','?')",
+     "to": "(g.get('feed') or {}).get('built','2026-01-01')"},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "the report header carries this laptop's absolute path instead of the dataset's name",
+     "find": "os.path.basename(g['db'])",
+     "to": "g['db']"},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "feed_line stops tolerating a group with no feed key, so one hand-built group raises and takes the whole report with it",
+     "find": '    fi = (g.get("feed") or {}).get("feed_info", {})',
+     "to": '    fi = g.get("feed").get("feed_info", {})'},
+
 ]
 
 

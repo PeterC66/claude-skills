@@ -36,16 +36,40 @@ import gtfs_refresh_report as rr  # reuse diff_town / fold_gtfs / fmt / latest_v
 SK = os.path.dirname(os.path.abspath(__file__))
 
 
+# The only two changes this script may apply without a human: an operator NAME and a
+# set of DAYS, both copied out of BODS into fields that decide no colour and move no
+# line. An allowlist rather than the complement of a blocking list, so a tag the
+# report grows tomorrow escalates on the day it arrives instead of auto-applying.
+MECHANICAL = ("OPERATOR", "DAYS")
+
+
 def classify(changes):
     """SAFE = only OPERATOR/DAYS actionable changes (mechanical, no human call needed).
-    ESCALATE = at least one ADD?/WITHDRAWN?/RE-EVAL (a route set or serves-town change).
-    NOTHING = no actionable changes at all (COMMUNITY-only or none)."""
-    actionable = [c for c in changes if c[0] != "COMMUNITY"]
+    ESCALATE = any other actionable change -- a route set or serves-town change, and
+    any tag this function does not know about.
+    NOTHING = no actionable changes at all (rr.NON_ACTIONABLE-only, or none).
+
+    THE NON-ACTIONABLE SET IS rr's, NOT A SECOND COPY. `gtfs_refresh_report.py` keeps
+    it as a module constant with a comment saying exactly why -- so that nothing
+    re-implements the filter and then agrees with itself -- and this function
+    re-implemented it anyway, as the bare literal "COMMUNITY". `NOT-IN-BODS` means
+    absent from BODS AND the town's own file says so: the report leaves such a town
+    off the towns-to-review list, and this function called it SAFE, which is the
+    verdict that means rebuild the sheets and propose the result to the customer.
+
+    AND SAFE IS AN ALLOWLIST, which is the same fault one level up. This read `in
+    ("ADD?", "WITHDRAWN?", "RE-EVAL")` and escalated on a match, so every tag the
+    report has ever grown became SAFE the day it was added, with nothing here edited
+    and nothing anywhere saying so. `NOT-IN-BODS?` -- a stale `notInBods` declaration
+    over a route the feed does carry, whose fix is a person deleting a field -- was
+    being auto-applied as though it were a name change.
+    """
+    actionable = [c for c in changes if c[0] not in rr.NON_ACTIONABLE]
     if not actionable:
         return "NOTHING", []
-    blocking = [c for c in actionable if c[0] in ("ADD?", "WITHDRAWN?", "RE-EVAL")]
-    if blocking:
-        return "ESCALATE", blocking
+    escalating = [c for c in actionable if c[0] not in MECHANICAL]
+    if escalating:
+        return "ESCALATE", escalating
     return "SAFE", actionable
 
 
@@ -85,7 +109,8 @@ def gtfs_operator_and_days(db, cfg, town_name):
 def patch_verified_services(vf_path, safe_routes, new_values):
     """Copy verified-services.json, patch operator/days ONLY for routes in safe_routes,
     leave everything else (including community entries) byte-identical in content."""
-    vs = json.load(open(vf_path, encoding="utf-8"))
+    with open(vf_path, encoding="utf-8") as fh:
+        vs = json.load(fh)
     touched = []
     for svc in vs.get("services", []):
         r = svc.get("route")
@@ -157,7 +182,8 @@ def refresh_one_safe_town(town, cfg, db, town_dir, safe_changes, note, portal, p
         return {"status": "NOTHING-TO-PATCH", "detail": "GTFS values already match — nothing to apply"}
 
     prevS3 = stage(town_dir, "latest", "S3")
-    routes = json.load(open(os.path.join(prevS3, "routes.json"), encoding="utf-8"))
+    with open(os.path.join(prevS3, "routes.json"), encoding="utf-8") as fh:
+        routes = json.load(fh)
     ov_touched = patch_routes_json(routes, safe_routes, new_values)
 
     # ---- S1 (data-only): commit the patched verified-services.json ----

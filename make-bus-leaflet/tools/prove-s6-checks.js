@@ -379,6 +379,103 @@ console.log('\n3b. Direction coverage — the fraction that ran, and it must acc
     p.v ? JSON.stringify(p.v.findings.filter(f => f.category === 'direction-unavailable').map(f => f.evidence && f.evidence.allBlind)) : 'no report');
 }
 
+/* --------------------------------------- 3c. the DRAWN WINDOW, S-5b (OA-048, 2026-09-15) */
+console.log('\n3c. Drawn window — a hole in the in-town run is found, and a thin sheet is not called one');
+{
+  /*
+   * WHY THIS CASE EXISTS. S-5 can only speak about a route with two or more
+   * out-of-town buffer stops — 30 of the estate's 96 displayed routes, none at
+   * all on March or High Wycombe — and the two instruments proposed for widening
+   * it were built on 2026-08-29 and both manufactured findings on correct sheets.
+   * S-5b asks a different question, about derive_intown's own output rather than
+   * about the road, and reaches 79 of the 96. This case is the pair that says it
+   * can still go loud, because a check nobody has watched go red proves nothing.
+   *
+   * THE VICTIM IS CHOSEN, NOT TYPED. It has to be a stop lying between two drawn
+   * in-town calls in a direction drawn in full, or the completeness floor eats
+   * the mutation and the resulting silence would be read as coverage. That is not
+   * hypothetical: the floor was 0.85 for an hour on 2026-09-15 and this exact
+   * mutation — one call deleted from a six-call direction, 5 of 6 = 83% — went
+   * silent under it. The floor is 0.5 because of this case.
+   */
+  const d0 = stage('ramsey', 'window-control');
+  const control = verify(d0);
+  const wc0 = control.v && control.v.summary && control.v.summary.windowCoverage;
+  check('the report says how much of the drawn-window check ran', 'summary.windowCoverage with checked > 0 on Ramsey',
+    !!wc0 && wc0.checked > 0, wc0 ? JSON.stringify(wc0) : 'no windowCoverage in summary');
+  check('and its arithmetic closes', 'checked + unavailable + skipped == displayed',
+    !!wc0 && wc0.accountsForAll && wc0.checked + wc0.unavailable + wc0.skipped === wc0.displayed,
+    wc0 ? `${wc0.checked}+${wc0.unavailable}+${wc0.skipped} vs ${wc0.displayed}` : 'no windowCoverage');
+  check('the artefact itself is quiet', 'no drawn-window finding on the unmutated run',
+    !!control.v && !has(control.v, 'soft', 'drawn-window'),
+    control.v ? JSON.stringify(control.v.findings.filter(f => f.category === 'drawn-window').map(f => f.route)) : 'no report');
+
+  // Find a stop between two drawn in-town calls in a fully-drawn direction.
+  const nR = (r) => String(r).toUpperCase().replace(/\s+/g, '');
+  const cfg = readJ(d0, 'intown_cfg.json');
+  const full = readJ(d0, 'routes_full_atco.json');
+  const intown = readJ(d0, 'routes_intown_atco.json');
+  const isCore = (a) => a.startsWith(cfg.prefix) || (cfg.extraCore || []).includes(a);
+  const dirsOf = (fe) => {
+    const o = [];
+    if (fe.directions) for (const k of Object.keys(fe.directions)) o.push(fe.directions[k]);
+    if (fe.canonical) for (const x of fe.canonical) o.push(x);
+    return o.filter(x => x && Array.isArray(x.stops) && x.stops.length);
+  };
+  let victim = null;
+  for (const k of Object.keys(intown)) {
+    const fk = Object.keys(full).find(x => nR(x) === nR(k));
+    if (!fk) continue;
+    const drawn = new Set(intown[k]);
+    for (const dd of dirsOf(full[fk])) {
+      const core = dd.stops.filter(isCore);
+      if (core.length < 4 || !core.every(a => drawn.has(a))) continue;
+      victim = { route: k, atco: core[Math.floor(core.length / 2)], core };
+      break;
+    }
+    if (victim) break;
+  }
+  check('a fixture for this check exists in the stored run', 'a fully-drawn direction with >= 4 in-town calls',
+    !!victim, 'no route in Ramsey has one — the mutations below cannot be built');
+
+  if (victim) {
+    // RED: one in-town call removed from the drawn set, leaving a hole.
+    const dA = stage('ramsey', 'window-hole');
+    const itA = readJ(dA, 'routes_intown_atco.json');
+    itA[victim.route] = itA[victim.route].filter(a => a !== victim.atco);
+    writeJ(dA, 'routes_intown_atco.json', itA);
+    const a = verify(dA);
+    check('a hole in the drawn window is FOUND', `a soft drawn-window finding on route ${victim.route}`,
+      has(a.v, 'soft', 'drawn-window', nR(victim.route)) || has(a.v, 'soft', 'drawn-window', victim.route),
+      a.v ? JSON.stringify(a.v.findings.filter(f => f.category === 'drawn-window').map(f => f.route)) : 'no report');
+    check('and it names the stop that was dropped', 'the missing ATCO in the finding evidence',
+      !!a.v && a.v.findings.some(f => f.category === 'drawn-window' &&
+        JSON.stringify(f.evidence || {}).includes(victim.atco)),
+      a.v ? 'no finding carried ' + victim.atco : 'no report');
+
+    /*
+     * QUIET, AND FOR THE STATED REASON. A sheet that draws a long through route
+     * thinly — St Ives' 301 draws 3 of its 23 in-town calls — is not a sheet with
+     * twenty holes, it is a sheet making an editorial choice, and calling that a
+     * finding is how this check would get muted in its first week. The pair to
+     * the red above is therefore not merely "stays silent": the count BEFORE the
+     * floor must still move, or the silence is blindness rather than judgement.
+     */
+    const dB = stage('ramsey', 'window-thin');
+    const itB = readJ(dB, 'routes_intown_atco.json');
+    const keep = new Set([victim.core[0], victim.core[victim.core.length - 1]]);
+    itB[victim.route] = itB[victim.route].filter(a => !victim.core.includes(a) || keep.has(a));
+    writeJ(dB, 'routes_intown_atco.json', itB);
+    const b = verify(dB);
+    check('a deliberately thin drawing is NOT called a hole', 'no drawn-window finding below the completeness floor',
+      !!b.v && !has(b.v, 'soft', 'drawn-window'),
+      b.v ? JSON.stringify(b.v.findings.filter(f => f.category === 'drawn-window').map(f => f.message)) : 'no report');
+    check('and the silence is judgement, not blindness', 'windowCoverage.anyDirectionGappy still counts it',
+      !!b.v && b.v.summary.windowCoverage.anyDirectionGappy > 0,
+      b.v ? 'anyDirectionGappy = ' + b.v.summary.windowCoverage.anyDirectionGappy : 'no report');
+  }
+}
+
 /* ------------------------------------------------------------------ 4. truncated chain */
 console.log('\n4. Truncated chain — a chain that never leaves town cannot contradict a terminus');
 {

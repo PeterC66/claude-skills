@@ -187,6 +187,53 @@ MUTATIONS = [
      "find": '    env = os.environ if env is None else env\n    return os.path.abspath(value or env.get("BUSES_DIR") or LAPTOP_BUSES)',
      "to": '    env = {} if env is None else env\n    return os.path.abspath(value or env.get("BUSES_DIR") or LAPTOP_BUSES)'},
 
+    # ---------------------------------------------------------------- prune_runs.py
+    # The only module in this half whose faults are IRREVERSIBLE. Its verdicts
+    # delete git-ignored run folders, so there is no output for a byte gate to
+    # compare and no build that exercises it -- it runs from a person's hand.
+    # The first case is the 2026-08-27 fault re-enacted: that rule named nine S6
+    # folders and seven held a bought redteam.json.
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "S6 comes out of NEVER_PRUNE, so the newest-versions rule reaches the one file that cannot be rebuilt at any price",
+     "find": 'NEVER_PRUNE   = ("S3-config", "S6-verify")',
+     "to": 'NEVER_PRUNE   = ("S3-config",)'},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "version_key compares version numbers as text, so v1.10 sorts below v1.9 and the CURRENT sheet is the one deleted",
+     "find": "    return (int(a), int(b))",
+     "to": "    return (a, b)"},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "the output rule keeps one version more than it was asked for, so --keep-outputs means nothing and the prune frees less than it reports",
+     "find": "            if len(kept_versions) < keep_outputs:",
+     "to": "            if len(kept_versions) <= keep_outputs:"},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "the input rule keeps one run whatever --keep-inputs says, so a town loses the S1 history its refresh diff is read against",
+     "find": "if i < keep_inputs",
+     "to": "if i < 1"},
+
+    # A pin is the only way something OUTSIDE the Buses folder can say "not that
+    # one". The 2026-09-02 measurement is what makes a warning insufficient:
+    # the stale pin was the visible half, and two unprotected portal fixtures
+    # were the half nobody could see.
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "a pin naming a run that is gone warns and carries on, so a pin file can rot until it protects nothing and still reads as protection",
+     "find": "        sys.exit(1)",
+     "to": "        pass   # carry on, the operator has been told"},
+
+    # The accounting, whose whole reason for existing is that the sentence it
+    # prints used to be a hard-coded claim and was briefly false.
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "git failing to answer is recorded as 'nothing is tracked', so the summary states as a measurement what it could not check",
+     "find": "    if out.returncode != 0:\n        return None",
+     "to": "    if out.returncode != 0:\n        return set()"},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "the walk stops at the first manifest it meets, so every place map nested under a town is invisible to the pruner",
+     "find": '                dirnames[:] = [d for d in dirnames if d == "Places"]',
+     "to": "                dirnames[:] = []"},
+
     # ---------------------------------------------------------------- the load test
     # The cheapest check there is, and the one that was missing for a year. This
     # is the `gen_external_busway.js` shape in Python: a module nothing on the

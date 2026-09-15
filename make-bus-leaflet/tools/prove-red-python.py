@@ -234,6 +234,46 @@ MUTATIONS = [
      "find": '                dirnames[:] = [d for d in dirnames if d == "Places"]',
      "to": "                dirnames[:] = []"},
 
+    # ------------------------------------------------------------ auto_refresh_month.py
+    # The other module that runs to nobody, and the only one in this half that
+    # ACTS: a SAFE verdict rebuilds four stages for that town and stages a
+    # proposed update for the customer to accept. Its two second homes are the
+    # first two cases -- both were the live behaviour until 2026-09-15, and both
+    # were found by calling the function rather than by reading it.
+    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+     "what": "classify re-spells the non-actionable set as the bare literal COMMUNITY, so an expected absence the report leaves off its review list is auto-applied as SAFE",
+     "find": "    actionable = [c for c in changes if c[0] not in rr.NON_ACTIONABLE]",
+     "to": '    actionable = [c for c in changes if c[0] != "COMMUNITY"]'},
+
+    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+     "what": "SAFE goes back to being the complement of a blocking list, so every tag the report grows is auto-applied on the day it is added",
+     "find": "    escalating = [c for c in actionable if c[0] not in MECHANICAL]",
+     "to": '    escalating = [c for c in actionable if c[0] in ("ADD?", "WITHDRAWN?", "RE-EVAL")]'},
+
+    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+     "what": "MECHANICAL quietly grows a third member, so a change whose fix is a person editing a field is applied as though it were an operator rename",
+     "find": 'MECHANICAL = ("OPERATOR", "DAYS")',
+     "to": 'MECHANICAL = ("OPERATOR", "DAYS", "NOT-IN-BODS?")'},
+
+    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+     "what": "patch_verified_services patches every route the fresh pull carries, so a town's whole service file is rewritten from BODS on the strength of one safe change",
+     # Anchored on the line above as well, because the guard in `patch_routes_json`
+     # is the same text four spaces further in and CONTAINS this one as a
+     # substring -- the anchor-matched-twice check caught it, which is what that
+     # check is for.
+     "find": '        r = svc.get("route")\n        if r in safe_routes and r in new_values:',
+     "to": '        r = svc.get("route")\n        if r in new_values:'},
+
+    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+     "what": "patch_routes_json rewrites external[].days for every route, so a route nobody adjudicated gets BODS's days printed against it",
+     "find": "            if r in safe_routes and r in new_values:",
+     "to": "            if r in new_values:"},
+
+    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+     "what": "an operator entry emptied by a reassignment is left in routes.json, so the Key prints an operator with no routes under it",
+     "find": '        routes["operators"] = [o for o in ops if o.get("routes")]  # drop emptied entries',
+     "to": '        routes["operators"] = ops  # drop emptied entries'},
+
     # ---------------------------------------------------------------- the load test
     # The cheapest check there is, and the one that was missing for a year. This
     # is the `gen_external_busway.js` shape in Python: a module nothing on the

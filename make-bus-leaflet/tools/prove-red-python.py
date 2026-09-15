@@ -428,6 +428,51 @@ MUTATIONS = [
      "what": "the JS half stops exporting indexUniqueObj, so the declared JS_ONLY exemption for it is stale -- the exemption retiring itself, watched rather than claimed",
      "find": 'module.exports = { serviceKey, indexUnique, indexUniqueObj, assertNoCollision };',
      "to": 'module.exports = { serviceKey, indexUnique, assertNoCollision };'},
+
+    # ---------------------------------------------------------------- gtfs_duration.py
+    # The module that WRITES into a map's own routes.json, so every case below is a
+    # wrong number printed on a published sheet as "~N min" beside a spoke. No gate in
+    # the estate can see one: a sheet built from a wrong minute figure reproduces
+    # byte-for-byte for ever, and the only other reader is a rider at a bus stop.
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "_locality accepts a bare 9-character locality as a stop, so every stop in the destination town pairs with the terminus and a spoke is timed to whichever the bus reached first",
+     "find": '    return s[:9] if len(s) >= 10 and s[:4].isdigit() and s[4:9].isalpha() else None',
+     "to": '    return s[:9] if len(s) >= 9 and s[:4].isdigit() and s[4:9].isalpha() else None'},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the terminus pairing goes, so a looping route is timed to the last stop it calls at -- route 9's 20-minute ride to St Ives reads 78 again, which is the fault this module's longest docstring is about",
+     "find": "            if eloc and ename and _locality(rows[j]['stop_id']) == eloc \\\n                    and _norm_stop_name(rows[j]['stop_name']) == ename:\n                return j",
+     "to": "            if False:\n                return j"},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the journey is timed from the FIRST town stop rather than the last, so every spoke on the sheet carries the town leg as well as the journey",
+     "find": '                origin_i = i  # keep the LAST matching stop (town may have several)',
+     "to": '                origin_i = i if origin_i is None else origin_i  # keep the FIRST'},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the mean replaces the median, so one slow school-holiday working moves a printed figure",
+     "find": '    return round(statistics.median(durations)), len(durations)',
+     "to": '    return round(statistics.mean(durations)), len(durations)'},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "two trips become a trustworthy sample, so a spoke can be timed off one timetabled pair and prints as confidently as one timed off forty",
+     "find": '    if len(durations) < 3: return None, len(durations)  # too thin a sample to trust',
+     "to": '    if len(durations) < 2: return None, len(durations)  # too thin a sample to trust'},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the majority-terminus fallback stops asking the caller, so a route that splits to two places blends both arms into one number that describes neither",
+     "find": '    if len(durations) < 3 and allow_majority_fallback and terminus_counts:',
+     "to": '    if len(durations) < 3 and terminus_counts:'},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the fallback's own three-trip floor drops to two, so the rescue fires on a sample the ordinary path would refuse",
+     "find": '        if majority_n >= 3:',
+     "to": '        if majority_n >= 2:'},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "_clean_dest keeps the human qualifier, so 'Cambridge (Drummer St)' matches no GTFS name and --fill silently leaves that spoke blank",
+     "find": "    return label.split('(')[0].strip()",
+     "to": "    return label.strip()"},
 ]
 
 

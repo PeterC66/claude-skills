@@ -387,6 +387,47 @@ MUTATIONS = [
      "what": "latest_verified returns the OLDEST S1 run, so every town is diffed against the service list it shipped first rather than the one it ships",
      "find": '    return cands[-1] if cands else None',
      "to": '    return cands[0] if cands else None'},
+
+    # ---------------------------------------------------------------- index_guard.py
+    # The module whose JS twin has had a unit test since the day it was written and
+    # whose Python half had none until 2026-09-15. Every case below re-enacts OA-134:
+    # Wisbech runs two route 46s, and a fault here moves no drawn byte -- it quietly
+    # halves what the monthly refresh report looks at.
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "group_by INDEXES instead of grouping, which is OA-134 exactly -- Stagecoach East's 46 disappears and the monthly report diffs only the Lynx one, as it did every month until 2026-08-28",
+     "find": '        out.setdefault(key(row), []).append(row)',
+     "to": '        out[key(row)] = [row]'},
+
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "service_key ignores the `key` field, so both of Wisbech's 46s are labelled '46' and a reader of the refresh report is told about one bus twice instead of two buses once",
+     "find": '    k = s.get("key")',
+     "to": '    k = s.get("route")'},
+
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "index_unique stops refusing a collision, so draft_town silently keeps whichever same-numbered service happened to be last in the file",
+     "find": '    if clashes:',
+     "to": '    if False:'},
+
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "assert_no_collision never fires, so the after-the-fact check that a dict somebody else built lost nothing always passes",
+     "find": '    if len(mapping) != n:',
+     "to": '    if len(mapping) != n and False:'},
+
+    # The two below are caught by the TWIN CENSUS and by nothing else in the estate.
+    # index_guard.js and index_guard.py are one rule written twice, neither half moves
+    # a drawn byte, and until this suite nothing anywhere held them together. The
+    # second mutates a .js file from the PYTHON harness on purpose: the census is a
+    # Python test whose subject is the other language's copy, so this is the only
+    # place that case can be run at all.
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "the Python half grows a function the JS half does not have and nobody declares the divergence -- the drift this census exists to refuse",
+     "find": 'def assert_no_collision(mapping, items, what):',
+     "to": 'def sort_services(rows):\n    return sorted(rows or [], key=service_key)\n\n\ndef assert_no_collision(mapping, items, what):'},
+
+    {"suite": "test_index_guard.py", "file": "index_guard.js",
+     "what": "the JS half stops exporting indexUniqueObj, so the declared JS_ONLY exemption for it is stale -- the exemption retiring itself, watched rather than claimed",
+     "find": 'module.exports = { serviceKey, indexUnique, indexUniqueObj, assertNoCollision };',
+     "to": 'module.exports = { serviceKey, indexUnique, assertNoCollision };'},
 ]
 
 

@@ -880,6 +880,22 @@ jobs:
         with:
           repository: PeterC66/community-bus-maps
           path: community-bus-maps
+          # FULL HISTORY, AND THE DEPLOYMENT ROW IS THE WHOLE REASON (2026-09-15).
+          # This is the twin of buses-data a7a20e35, which fixed the identical
+          # fault next door the night before. status.js dates the deploy backlog
+          # with `log <deployed>..<ref>`, where <deployed> is the sha busmaps.uk
+          # reports of itself -- a commit that is by definition OLDER than the
+          # tip. actions/checkout fetches depth 1, so that sha is not in the clone
+          # at all, the range is "unknown revision", and the row falls to its
+          # documented `a backlog nobody can date is what a grace must not excuse`
+          # path: BEHIND, ageHours null, undateable true. In CI that is a
+          # structural "I could not look" rather than a measurement, and it fires
+          # whenever any deploy is pending. Until OA-355 (e6a40a3, 2026-09-14) the
+          # row dated the TIP, which a depth-1 clone can always name, so this
+          # workflow had never needed history and nothing said so. THE FIRST RUN
+          # THAT EVER TESTED IT WAS PR #16, whose status job went red on a
+          # 5,919-line Python test PR that touches nothing this row measures.
+          fetch-depth: 0
 
       # WITHOUT THIS THE PENDING RULE CANNOT FIRE HERE, WHICH IS THE ONLY PLACE
       # IT MATTERS (2026-08-31). actions/checkout fetches ONE branch, so
@@ -888,8 +904,17 @@ jobs:
       # DRIFTED -- the documented push order (buses-data BEFORE the portal PR)
       # guarantees a window where the portal is legitimately behind, and calling
       # that red made every engine rollout redden this workflow for no fault.
-      # Fetching only the branch TIPS, depth 1: this is a witness check, "do
-      # these bytes exist on some pushed branch", and it never needs history.
+      # THE WITNESS CHECK STILL WANTS ONLY THE TIPS -- "do these bytes exist on
+      # some pushed branch" -- BUT IT MAY NO LONGER SAY SO WITH `--depth=1`, which
+      # this carried until 2026-09-15. `git fetch --depth=1` does not merely
+      # decline to deepen: it SHALLOWS A COMPLETE REPOSITORY, and origin/main is
+      # one of the refs/heads/* below. Measured in a throwaway clone on 2026-09-14
+      # rather than reasoned about: origin/main went from 559 commits to 1 and
+      # .git/shallow appeared, so the flag would have silently taken back the
+      # fetch-depth: 0 above and left the deployment row exactly as red as it was.
+      # Without it the same clone stays at 559 and writes no shallow file. The
+      # cost of dropping it is the full history of a public repository, fetched
+      # once, against a gate that could not otherwise reach a verdict.
       #
       # It must not be able to fail the job on its own. A repository with no
       # other branches is the normal case and returns nothing; a fetch that is
@@ -898,7 +923,7 @@ jobs:
       # the run, so this step swallows its own status and says what it found.
       - name: Fetch the portal's branch tips (so an open re-vendor reads pending, not DRIFTED)
         run: |
-          git -C community-bus-maps fetch --depth=1 --no-tags origin '+refs/heads/*:refs/remotes/origin/*' || {
+          git -C community-bus-maps fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*' || {
             echo "::notice::could not fetch the portal's branch tips - an in-flight re-vendor will read DRIFTED, which is the old behaviour and not a new failure"
             exit 0
           }

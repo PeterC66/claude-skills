@@ -473,6 +473,120 @@ MUTATIONS = [
      "what": "_clean_dest keeps the human qualifier, so 'Cambridge (Drummer St)' matches no GTFS name and --fill silently leaves that spoke blank",
      "find": "    return label.split('(')[0].strip()",
      "to": "    return label.strip()"},
+
+    # ---------------------------------------------------------------- gtfs_query.py
+    # S1 runs this module and its output IS the town's verified-services.json, so
+    # every break below reaches a printed sheet and none of them can be seen by a
+    # byte gate: the sheet built from a wrong answer reproduces for ever.
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "two adjacent days hyphenate, so a Mon & Tue shopping bus prints as 'Mon-Tue' -- the same width, saying less",
+     "find": '        return f"{ABBR[on[0]]}-{ABBR[on[-1]]}" if len(on)>2 else " & ".join(ABBR[i] for i in on)',
+     "to": '        return f"{ABBR[on[0]]}-{ABBR[on[-1]]}" if len(on)>1 else " & ".join(ABBR[i] for i in on)'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "calendar_dates ADDITIONS stop counting, which is OA-204 exactly: High Wycombe's 300 files Mon-Fri and adds 263 weekend dates, so the sheet says 'no Sunday bus' on a day 12 journeys run",
+     "find": '    if e=="1": return True',
+     "to": '    if e=="1": pass'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "calendar_dates REMOVALS stop counting, so a school-term break or a bank holiday still reads as a running day and the frequency fields count journeys nobody can catch",
+     "find": '    if e=="2": return False',
+     "to": '    if e=="2": pass'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the sampled window starts on the reference DAY rather than its Monday, so the first week is short, its journey count is low and journeysPerWeekRange opens with a week that never happened",
+     "find": '    monday=ref-datetime.timedelta(ref.weekday())',
+     "to": '    monday=ref'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "sampling runs past the end of the feed, so weeks the data does not cover are counted as weeks with no service and weeksActive falls for every route in the town",
+     "find": '        if last and m.strftime("%Y%m%d")>last: break',
+     "to": '        if False: break'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "a 25:10 night journey is clamped to 01:10, which puts it at the head of the day: the window opens at 01:10 and the longest daytime gap is measured from the wrong end",
+     "find": '    p=t.split(":"); return int(p[0])*60+int(p[1])',
+     "to": '    p=t.split(":"); return (int(p[0])%24)*60+int(p[1])'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the longest gap is measured over the whole day rather than 07:00-19:00, so a school working at 05:50 and a night bus at 20:00 decide the number that is supposed to describe the working day",
+     "find": '    inday=sorted({m for m in allt if DAY_LO<=m<=DAY_HI})',
+     "to": '    inday=sorted({m for m in allt})'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the core headway is taken over the whole day instead of 09:00-15:00, so a route with two morning journeys and two evening ones reports a headway and is drawn as if you could turn up for it",
+     "find": '    core=[m for m in dom if CORE_LO<=m<=CORE_HI]',
+     "to": '    core=[m for m in dom]'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the core headway becomes the WORST gap rather than the median, which is set by the thinnest hour of the day and demotes the line weight of every turn-up-and-go route there is",
+     "find": '    head=int(statistics.median(b-a for a,b in zip(core,core[1:]))) if len(core)>=3 else None',
+     "to": '    head=int(max(b-a for a,b in zip(core,core[1:]))) if len(core)>=3 else None'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "two departures in the core day become a headway, and one gap is not a headway -- it would be quoted as one all the same",
+     "find": '    head=int(statistics.median(b-a for a,b in zip(core,core[1:]))) if len(core)>=3 else None',
+     "to": '    head=int(statistics.median(b-a for a,b in zip(core,core[1:]))) if len(core)>=2 else None'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "a repeated departure minute contributes a gap of ZERO, which is what dragged High Wycombe's M40 to a median headway of 0 minutes and drew it as the busiest line on the sheet",
+     "find": '    for m,dr in profile: bydir.setdefault(dr,set()).add(m)',
+     "to": '    for m,dr in profile: bydir.setdefault(dr,[]).append(m)'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the headway is taken in the QUIETER direction, so the wait a passenger actually has is replaced by the wait in the direction fewest buses go",
+     "find": '    dom=sorted(max(bydir.values(), key=len))',
+     "to": '    dom=sorted(min(bydir.values(), key=len))'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "journeysPerWeek becomes the BUSIEST week rather than the lower median, so one bank-holiday week or one week of rail replacement sets the weight of a lane for the year",
+     "find": '    typical=sorted(live)[len(live)//2] if live else 0',
+     "to": '    typical=max(live) if live else 0'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "weeksActive counts every sampled week rather than the weeks the service runs at all, which removes the only floor that stops a bank-holiday-only route being tiered as a weekly service",
+     "find": '      "weeksActive":len(live),',
+     "to": '      "weeksActive":len(weekly),'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the de-duplicator stops firing, so a journey filed under four service_ids is four journeys: High Wycombe's M40 quadruples and is drawn four times heavier than it runs",
+     "find": '                if key in seen:            # the same journey, filed again',
+     "to": '                if False:            # the same journey, filed again'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "a journey's identity becomes its two ENDS rather than its whole stop sequence, so two real journeys leaving at the same minute for the same place by different roads are collapsed into one and the route is drawn at half its frequency",
+     "find": '    return {k:tuple(v) for k,v in seqs.items()}',
+     "to": '    return {k:(v[0],v[-1]) for k,v in seqs.items()}'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the RESOLVED days are discarded for the operator's declared calendar pattern, so every route in the estate reports what its calendar row says rather than what it runs -- and daysBasis says 'declared' while nothing else changes",
+     "find": '        if any(served): flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"',
+     "to": '        if False: flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "only the far end of a trip is recorded as a terminus, so every route through the town loses the place it came FROM and the external sheet draws a one-armed spoke",
+     "find": '            if seq: ends.add(seq[0]["stop_name"]); ends.add(seq[-1]["stop_name"])',
+     "to": '            if seq: ends.add(seq[-1]["stop_name"])'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "services are grouped by route_id rather than by the number on the bus, so a route registered once per direction or once per operator is listed twice in the Services panel",
+     "find": '        by.setdefault(r["sn"],{"sn":r["sn"],"ops":set(),"long":set(),"route_ids":set()})',
+     "to": '        by.setdefault(r["route_id"],{"sn":r["sn"],"ops":set(),"long":set(),"route_ids":set()})'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the variant hint reads its prefix rule backwards, so 5A is no longer offered as a variant of 5 and the curation step loses the prompt it exists to give",
+     "find": '        base=[n for n in names if n!=s["route"] and s["route"].startswith(n) and s["route"][len(n):].isalpha()]',
+     "to": '        base=[n for n in names if n!=s["route"] and n.startswith(s["route"]) and s["route"][len(n):].isalpha()]'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the earth gets bigger, so every --near radius reaches further than asked and a place map picks up stops in the next village",
+     "find": '    return 6371*2*asin(sqrt(a))',
+     "to": '    return 6400*2*asin(sqrt(a))'},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the region is hardcoded again, which is the fault that field was fixed for: every Buckinghamshire and Bedfordshire pull records east_anglia as its source, in the one field a later reader uses to check which feed a fact came from",
+     "find": '         "source":"BODS GTFS (%s)"%os.path.splitext(os.path.basename(db))[0],',
+     "to": '         "source":"BODS GTFS (east_anglia)",'},
 ]
 
 

@@ -587,6 +587,95 @@ MUTATIONS = [
      "what": "the region is hardcoded again, which is the fault that field was fixed for: every Buckinghamshire and Bedfordshire pull records east_anglia as its source, in the one field a later reader uses to check which feed a fact came from",
      "find": '         "source":"BODS GTFS (%s)"%os.path.splitext(os.path.basename(db))[0],',
      "to": '         "source":"BODS GTFS (east_anglia)",'},
+
+    # ------------------------------------------------------- the map nobody enumerated
+    # OA-001's third long fuse, and the only one whose fault is an ABSENCE.
+    # gtfs_places.discover() decides which place maps exist; every other
+    # instrument this estate owns is asked OF a map, so a place it fails to
+    # return is not scanned, not reported and not counted anywhere. Each
+    # mutation below leaves a green byte gate, a green status.js, and a report
+    # that simply has less in it.
+    #
+    # THE FIRST HAS THE SMALLEST DIFF AND THE WORST OUTCOME. The `_portal-fixture`
+    # tree is a frozen copy of two High Wycombe places carrying the same NAMES as
+    # the live maps, and entries are keyed on the name with the fixture globbed
+    # LAST -- so emptying this tuple does not ADD an entry, it silently replaces a
+    # live place's directory with the fixture's and the count does not move.
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "the portal fixture stops being excluded, so the frozen copy of High Wycombe Aldi overwrites the live map's entry under the same name and the monthly scan reads a fixture's coordinates",
+     "find": 'EXCLUDED_DIRS = ("_portal-fixture",)',
+     "to": 'EXCLUDED_DIRS = ()'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "the exclusion matches a path SUBSTRING rather than a whole component, so a real place in any folder whose name merely contains the fixture's stops being scanned",
+     "find": '            if d in seen or any(x in d.split(os.sep) for x in EXCLUDED_DIRS):',
+     "to": '            if d in seen or any(x in d for x in EXCLUDED_DIRS):'},
+
+    # THE THREE LAYOUTS. Each pattern is a whole class of place map, and dropping
+    # one removes every place of that shape from the scan with no error anywhere.
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "places bucketed under Places/<Bucket>/<Place>/ stop being discovered, so every standalone map -- Ely Co-op and both Godmanchester branches -- silently leaves the monthly scan",
+     "find": '        (os.path.join(root, "Places", "*", "*", "manifest.json"), False),',
+     "to": '        (os.path.join(root, "Places", "*", "*", "no-such-file.json"), False),'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "places inside a mapped area stop being discovered, which is the largest of the three classes and the one every town's own place maps belong to",
+     "find": '        (os.path.join(root, "Areas", "*", "Places", "*", "manifest.json"), True),',
+     "to": '        (os.path.join(root, "Areas", "*", "Places", "*", "no-such-file.json"), True),'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "a place inside a mapped area loses its parent town, so it no longer inherits that town's dataset and is diffed against whatever its own place.json happens to name",
+     "find": '            parent = os.path.basename(os.path.dirname(os.path.dirname(d))) if has_parent else None',
+     "to": '            parent = None'},
+
+    # THE STAGE ORDER. S4/S5 hold copies made at generate and render time; S1/S2
+    # are where the facts are written. Reversed, a place whose services were
+    # re-pulled but not yet re-rendered is scanned against the radius its last
+    # picture was drawn with.
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "the render-time copies are trusted ahead of the facts stages, so a place re-pulled since its last render is scanned against a stale radius",
+     "find": 'STAGE_PREFERENCE = ("S2", "S1", "S5", "S4")',
+     "to": 'STAGE_PREFERENCE = ("S5", "S4", "S2", "S1")'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "the CI reference mirror is consulted FIRST, so every place is scanned against the frozen gate copy rather than against its own latest run",
+     "find": '    out.append(os.path.join(place_dir, "ci-reference"))',
+     "to": '    out.insert(0, os.path.join(place_dir, "ci-reference"))'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "a place read from the mirror no longer says so, so a report quoting coordinates that are current-state-only reads exactly like one quoting a live run",
+     "find": '            note = "read from ci-reference (no stage run has it)" if os.path.basename(d) == "ci-reference" else None',
+     "to": '            note = None'},
+
+    # THE REGION JOIN, at the end that produces a CONFIDENT WRONG ANSWER rather
+    # than a refusal -- the Beaconsfield shape, arriving through a place instead
+    # of a town.
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "a place's own region name is preferred to its parent town's, so a place is diffed against a dataset its town is not in and reports its routes withdrawn",
+     "find": '    if parent_cfg is not None:',
+     "to": '    if parent_cfg is not None and not (place_meta or {}).get("region"):'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "an unrecognised region name falls back to the default dataset instead of being returned for gtfs_regions.plan() to name, so a misconfigured place is quietly scanned against a feed that cannot contain it and found to serve nothing",
+     "find": "    return human\n\n\ndef _place_dirs(root):",
+     "to": "    return default\n\n\ndef _place_dirs(root):"},
+
+    # THE RADIUS AND THE COLLISION.
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "a place whose name collides with a registered town is scanned instead of refused, so it takes the TOWN's slot in the entries dict and the town stops being scanned at all",
+     "find": '            problems.append((name, "a town of this name is already registered in town_prefixes.json"))\n            continue',
+     "to": "            pass"},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "the assumed-radius caveat is dropped, so a place with no recorded radius is reported with the same confidence as one that has one",
+     "find": '            note = "; ".join(x for x in (note, f"no recorded radius — assumed {DEFAULT_SERVICE_KM} km") if x)',
+     "to": '            note = note'},
+
+    {"suite": "test_gtfs_places.py", "file": "gtfs_places.py",
+     "what": "the fallback service radius becomes the walkshed-sized 0.4 km, so a place with no recorded radius is scanned over half the ground and loses the routes between the two circles",
+     "find": 'DEFAULT_SERVICE_KM = 0.8',
+     "to": 'DEFAULT_SERVICE_KM = 0.4'},
+
 ]
 
 

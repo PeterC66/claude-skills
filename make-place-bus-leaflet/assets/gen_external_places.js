@@ -143,7 +143,16 @@ const BFIT = DESIGN.badgeFit !== false;
 const HUBFIT = DESIGN.hubFit !== false;
 const LEGPLACE = !!DESIGN.legendPlace;
 const SPRD = DESIGN.spokeSpread ? (DESIGN.spokeSpread === true ? {} : DESIGN.spokeSpread) : null;
-const W = 297, H = 210;
+// THE PAGE COMES FROM page.js, and until 2026-09-12 this file was the one place in
+// either skill that kept its own copy (OA-322). `const W = 297, H = 210` here was
+// the thirteenth of the twelve numbers page.js was written to end, and the root
+// element below was typed out rather than taken from svgOpen(). page.test.js's
+// census could not see it: its population was three names typed into the test, all
+// of them town files, and the place skill has no test folder of its own. The two
+// pairs are not derivable from each other — 297mm at 300dpi is 3507.87px and the
+// root declares 3508 — so a second home is a second answer, and the one that is
+// wrong is the one nobody edits. page.js's header has the whole reasoning.
+const { W, H, svgOpen } = require(_dep('page.js'));
 // The boxes nothing may be printed over, gathered as the sheet is drawn — the same
 // "claim your space before anything is placed" order gen_internal.js uses. Unlike
 // gen_external_radial.js these are collected UNCONDITIONALLY rather than only under
@@ -253,7 +262,7 @@ function destNode(x, y, label, sub, timeLabel) {
 }
 
 // ---- canvas -----------------------------------------------------------------
-out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
+out(svgOpen(W, H));
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.place)}</text>`);

@@ -283,6 +283,57 @@ MUTATIONS = [
      "find": "import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop",
      "to": "import cli_renamed_by_a_refactor   # OA-224 Tier 3.1"},
 
+    # ------------------------------------------------------------- the look-ahead
+    # OA-001's second long fuse. gtfs_upcoming.py runs once a month to nobody and
+    # writes the report a person adjudicates a rebuild from, so a wrong finding
+    # here is either a rebuild nobody owed or a change nobody saw.
+    #
+    # THE FIRST TWO ARE THE BANK-HOLIDAY-EXTRA GATE. A calendar_dates-only
+    # service with a few future dates is an occasional working, not a timetable
+    # change; without the gate every one of them raises [NEW] or [CHANGE] and the
+    # monthly report fills with rows a person has to adjudicate one at a time.
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "MIN_ONGOING_DATES drops to 1, so a single bank-holiday extra registered for a future date raises a timetable change against the town",
+     "find": "MIN_ONGOING_DATES = 10",
+     "to": "MIN_ONGOING_DATES = 1"},
+
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "the ongoing gate is removed outright, so any future-dated registration counts however sparse it is",
+     "find": "        ongoing = had_cal or addn >= MIN_ONGOING_DATES",
+     "to": "        ongoing = True"},
+
+    # THE ONE OA-269 WOULD HAVE WANTED. `routingHash` is a SHA-1 over the set of
+    # DISTINCT stop sequences and `tripCount` is len(distinct trip_id): that is
+    # the whole separation between the road moving and the operator splitting the
+    # same journeys across more service_ids. Taken over trip ids the hash moves
+    # whenever the count does, so every re-registration reads as a road move --
+    # and tools/prove-red-timetable-trigger.py cannot see it, because its
+    # fixtures are the dictionaries this line builds.
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "routingHash is taken over trip ids rather than stop sequences, so a re-registration that moves no road reads as one that does",
+     "find": '        R["routingHash"] = hashlib.sha1(("|".join("/".join(s) for s in sorted(seqs))).encode()).hexdigest()[:12]',
+     "to": '        R["routingHash"] = hashlib.sha1(("|".join(sorted(tids))).encode()).hexdigest()[:12]'},
+
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "calendar_dates REMOVALS are unioned in as though they were additions, so a Christmas Day exclusion registers the service as running until Christmas",
+     "find": '        "SELECT date FROM calendar_dates WHERE service_id=? AND exception_type=\'1\'", (service_id,)).fetchall()]',
+     "to": '        "SELECT date FROM calendar_dates WHERE service_id=?", (service_id,)).fetchall()]'},
+
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "the finding prints the day pattern the route runs TODAY instead of the one it changes to, so the reader is told nothing has changed",
+     "find": '            R["futureDays"] = fmt_days(uf)',
+     "to": '            R["futureDays"] = fmt_days(R["flags"])'},
+
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "prev_snapshot stops excluding today's own file, so a re-run the same day diffs the feed against itself and reports a quiet month",
+     "find": '    cands = [c for c in cands if os.path.basename(c) < f"snapshot_{today_iso}.json"]',
+     "to": "    cands = list(cands)"},
+
+    {"suite": "test_gtfs_upcoming.py", "file": "gtfs_upcoming.py",
+     "what": "a contiguous PAIR of days prints as a range, so the seasonal Sat & Sun coach reads as Sat-Sun and a two-day service looks like a span",
+     "find": '        return f"{ABBR[on[0]]}-{ABBR[on[-1]]}" if len(on) > 2 else " & ".join(ABBR[i] for i in on)',
+     "to": '        return f"{ABBR[on[0]]}-{ABBR[on[-1]]}" if len(on) >= 2 else " & ".join(ABBR[i] for i in on)'},
+
     # ---------------------------------------------------------------- the declaration
     # THE FAULT THAT PUT test_dependencies.py THERE, RE-ENACTED. python-docx was
     # imported by two generators for a year, installed on the laptop, declared

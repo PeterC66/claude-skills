@@ -1050,6 +1050,132 @@ MUTATIONS = [
      "find": '"SELECT COUNT(*) FROM naptan WHERE Status=\'active\'"',
      "to": '"SELECT COUNT(*) FROM naptan"'},
 
+    # ---------------------------------------------------------------- gtfs_build.py
+    # THE OTHER HALF OF THE PAIR `_stubs.py` LOADS. `naptan_build.py` above decides
+    # what a STOP is; this one decides what a BUS is, and its `TABLES` is the schema
+    # every GTFS fixture in test/python/ is created from. Its output is gitignored
+    # and rebuilt by hand when BODS reissues the feed, so no byte gate, ratchet or
+    # board has ever had an opinion about it -- and unlike a wrong stand code, a
+    # route this filter silently dropped is a bus that never appears on the sheet
+    # at all, with nothing on the sheet to say so.
+
+    # THE SCHEMA. What `TABLES` says is what `_stubs.gtfs_db` builds, so the two
+    # parting makes every GTFS fixture in this folder a correct assertion about a
+    # table the real builder does not make.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`stops` loses `stop_code` from the declared schema, so the real database and every fixture in test/python/ stop having the same shape",
+     "find": '    "stops":   ["stop_id","stop_code","stop_name","stop_lat","stop_lon"],',
+     "to": '    "stops":   ["stop_id","stop_name","stop_lat","stop_lon"],'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`shapes` leaves the declared tables, so no route in the estate can be drawn along its own shape and every fixture naming one is rejected",
+     "find": '    "shapes": ["shape_id","shape_pt_lat","shape_pt_lon","shape_pt_sequence"],',
+     "to": ''},
+
+    # READING THE ZIP. BODS reissues this feed about weekly and pins no column
+    # order; nothing anywhere would notice a positional read until a map was drawn.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the CSV is read by column POSITION rather than by name, so a feed that reorders its columns puts the latitude in the stop name and draws the whole estate somewhere else",
+     "find": '            idx=[hdr.index(c) if c in hdr else None for c in cols]',
+     "to": '            idx=[i if i<len(hdr) else None for i,c in enumerate(cols)]'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the short-row guard goes, so one ragged line anywhere in a nine-million-row stop_times kills the whole rebuild",
+     "find": 'batch.append(tuple(row[i] if (i is not None and i<len(row)) else None for i in idx))',
+     "to": 'batch.append(tuple(row[i] if i is not None else None for i in idx))'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the byte-order mark is no longer stripped, so the first header cell is never matched, every stop_id in the database is NULL, and the dataset joins to nothing",
+     "find": '            rd=csv.reader(io.TextIOWrapper(raw,encoding="utf-8-sig")); hdr=next(rd)',
+     "to": '            rd=csv.reader(io.TextIOWrapper(raw,encoding="utf-8")); hdr=next(rd)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "a member the zip does not hold is opened anyway rather than skipped, so a feed shipping no shapes.txt -- which GTFS permits -- dies instead of building",
+     "find": '        if fn not in zf.namelist(): print("skip",fn); continue',
+     "to": '        if fn not in zf.namelist(): print("skip",fn)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the stop_times trip index is built on the wrong column, so the filter's join over nine million rows becomes a full scan and the rebuild is abandoned rather than slow",
+     "find": '    cur.execute("CREATE INDEX ix_st_trip ON stop_times(trip_id)")',
+     "to": '    cur.execute("CREATE INDEX ix_st_trip ON stop_times(stop_sequence)")'},
+
+    # THE FILTER. The file's headline claim, and the one whose breach produces a
+    # sheet that is reproducible, gates green, and has lost its terminus.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the ATCO prefix match stops being anchored, so every stop id in the country that merely CONTAINS 0500 or 0570 drags its trips into Cambridgeshire's dataset",
+     "find": '''    cond=" OR ".join(f"st.stop_id LIKE '{p}%'" for p in prefixes)''',
+     "to": '''    cond=" OR ".join(f"st.stop_id LIKE '%{p}%'" for p in prefixes)'''},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "Peterborough leaves the default prefixes, so every route that touches this area only at a 0570 stop vanishes from the dataset the file is named after",
+     "find": 'KEEP_PREFIXES = ("0500", "0570")',
+     "to": 'KEEP_PREFIXES = ("0500",)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "only the in-county calls of a kept trip are carried, so every route is truncated at the county boundary and an external sheet -- whose whole job is where the bus GOES -- loses its terminus",
+     "find": '    cur.execute("CREATE TABLE stop_times AS SELECT st.* FROM src.stop_times st JOIN keep_trips k ON k.trip_id=st.trip_id")',
+     "to": '    cur.execute(f"CREATE TABLE stop_times AS SELECT st.* FROM src.stop_times st JOIN keep_trips k ON k.trip_id=st.trip_id WHERE {cond}")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`stops` is filtered by the prefix a second time instead of by what the kept calls reference, so the out-of-county stops a route runs to are absent and every such stop_times row points at nothing",
+     "find": '    cur.execute("CREATE TABLE stops AS SELECT * FROM src.stops WHERE stop_id IN (SELECT DISTINCT stop_id FROM stop_times)")',
+     "to": '    cur.execute(f"CREATE TABLE stops AS SELECT * FROM src.stops WHERE {cond}".replace("st.stop_id","stop_id"))'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`routes` stops being filtered, so the dataset carries every route in East Anglia and anything counting routes at a town counts a region",
+     "find": '    cur.execute("CREATE TABLE routes AS SELECT * FROM src.routes WHERE route_id IN (SELECT DISTINCT route_id FROM trips)")',
+     "to": '    cur.execute("CREATE TABLE routes AS SELECT * FROM src.routes")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`agency` stops being filtered, so operators who run nothing here appear in the dataset and can be printed beside a service they do not work",
+     "find": '    cur.execute("CREATE TABLE agency AS SELECT * FROM src.agency WHERE agency_id IN (SELECT DISTINCT agency_id FROM routes)")',
+     "to": '    cur.execute("CREATE TABLE agency AS SELECT * FROM src.agency")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`calendar` stops being filtered, so the dataset carries operating patterns for services it does not hold",
+     "find": '    cur.execute("CREATE TABLE calendar AS SELECT * FROM src.calendar WHERE service_id IN (SELECT DISTINCT service_id FROM trips)")',
+     "to": '    cur.execute("CREATE TABLE calendar AS SELECT * FROM src.calendar")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`calendar_dates` stops being filtered, so the exceptions table carries rules for services the dataset does not hold and a bank-holiday question is answered about the wrong bus",
+     "find": '    cur.execute("CREATE TABLE calendar_dates AS SELECT * FROM src.calendar_dates WHERE service_id IN (SELECT DISTINCT service_id FROM trips)")',
+     "to": '    cur.execute("CREATE TABLE calendar_dates AS SELECT * FROM src.calendar_dates")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the empty shape_id stops being excluded, so a trip that carries no shape selects the shapes rows whose id is blank and draws a line to 0N 0E",
+     "find": """WHERE s.shape_id IN (SELECT DISTINCT shape_id FROM trips WHERE shape_id IS NOT NULL AND shape_id<>'')""",
+     "to": """WHERE s.shape_id IN (SELECT DISTINCT shape_id FROM trips)"""},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "an existing output database is added to rather than replaced, so a table an older version of this script wrote survives every rebuild under a name nothing now drops",
+     "find": '    if os.path.exists(out_db): os.remove(out_db)',
+     "to": '    if False: os.remove(out_db)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the working table is left in the output, where a reader cannot tell it from a table the feed ships",
+     "find": '    con.commit(); cur.execute("DROP TABLE keep_trips")',
+     "to": '    con.commit()'},
+
+    # THE SIDECAR. The only mutation here that restores a fault this project
+    # actually shipped: while a bare feed_info.json existed,
+    # `gtfs_regions.feed_info()` fell back to it, so every region whose own sidecar
+    # was missing reported Cambridgeshire's build date and validity window as its
+    # own -- a wrong answer indistinguishable from a right one.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the sidecar loses the dataset's name and is written as a bare feed_info.json again, so every region without one reports Cambridgeshire's build date and validity window as its own",
+     "find": '    with open(os.path.join(outdir,f"feed_info_{stem}.json"),"w",encoding="utf-8") as fh:',
+     "to": '    with open(os.path.join(outdir,"feed_info.json"),"w",encoding="utf-8") as fh:'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the sidecar records the module's default prefixes instead of the ones this build was asked for, so a regional dataset's record says what the code usually does rather than what it did",
+     "find": '"keep_prefixes": list(prefixes), "counts": counts,',
+     "to": '"keep_prefixes": list(KEEP_PREFIXES), "counts": counts,'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the --keep-prefixes list is no longer trimmed, so `0500, 0570` typed with the space a person types silently builds a Cambridgeshire-only dataset under a name that says otherwise",
+     "find": '    prefixes=tuple(p.strip() for p in a.keep_prefixes.split(",") if p.strip())',
+     "to": '    prefixes=tuple(a.keep_prefixes.split(","))'},
+
 ]
 
 

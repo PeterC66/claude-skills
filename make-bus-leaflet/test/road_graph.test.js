@@ -37,7 +37,7 @@ const path = require('node:path');
 const { ENGINE_DIR, load } = require('./_engine');
 
 const RG = load('road_graph.js');
-const { key6, dpTol, angdist, lsq, makeWarp, deg, walk, graphOps } = RG;
+const { key6, dpTol, dpPinned, angdist, lsq, makeWarp, deg, walk, graphOps } = RG;
 
 /** A projection stand-in: lat/lon straight through as mm, so a hand-built graph
  *  has coordinates that can be reasoned about. The module never builds one. */
@@ -170,6 +170,89 @@ test('dpTol survives a zero-length span — the branch no fixture reaches', () =
   const keep = [];
   assert.doesNotThrow(() => dpTol(pts, 0, 2, 1, keep));
   assert.deepStrictEqual(keep, [1], 'and it still finds the vertex 2mm away');
+});
+
+/* ---- 3b. dpPinned — never simplify across a pin -------------------------- */
+
+// THE FAULT THIS IS ABOUT. `dpTol` measures every vertex against the chord
+// between the two ends of the range it is given, so a longer range discards more.
+// OA-059 welded a linear feature's OSM ways into ONE chain before mapping and
+// left the simplification running once over the welded result — so a chord that
+// had spanned one OSM way came to span a whole river. On St Ives the diagram
+// river fell from 30 control points to 12 and stopped matching the schematic
+// sheet. No byte gate could see it: they compare a build against itself.
+
+test('dpPinned keeps every pin, and dpTol over the same range drops them', () => {
+  // Two shallow bumps 3mm off the long chord, one either side of the middle.
+  // Against the full 0..8 chord both are inside a 4mm tolerance and die; pinned
+  // at the vertex between them, each is measured against its own short chord.
+  const pts = [[0, 0], [10, 3], [20, 0], [30, -3], [40, 0], [50, 3], [60, 0], [70, -3], [80, 0]];
+
+  const unpinned = [0]; dpTol(pts, 0, 8, 4, unpinned); unpinned.push(8);
+  assert.deepStrictEqual([...new Set(unpinned)].sort((a, b) => a - b), [0, 8],
+    'CONTROL — with one 0..8 chord a 4mm tolerance flattens the whole line');
+
+  const pinned = dpPinned(pts, [4], 4);
+  assert.ok(pinned.includes(4), 'the pin survives');
+  assert.ok(pinned.length > 2, `pinning recovers control points, got ${JSON.stringify(pinned)}`);
+});
+
+test('dpPinned with NO pins is exactly dpTol — the whole blast radius of the change', () => {
+  // A feature crossing no route has nothing known about it but its ends, so it
+  // must keep the behaviour it has today. Asserted rather than reasoned about:
+  // every map with no crossings rides on this equivalence, and a fix that
+  // quietly moved those sheets would be caught only by 20 red byte gates.
+  const pts = [[0, 0], [1, 0.01], [2, 5], [3, 0.01], [4, 0], [5, 2], [6, 0]];
+  for (const tol of [0.5, 1, 2, 10]) {
+    const old = [0]; dpTol(pts, 0, pts.length - 1, tol, old); old.push(pts.length - 1);
+    const oldSorted = [...new Set(old)].sort((a, b) => a - b);
+    assert.deepStrictEqual(dpPinned(pts, [], tol), oldSorted, `tol ${tol}: no pins must not change the answer`);
+    assert.deepStrictEqual(dpPinned(pts, undefined, tol), oldSorted, `tol ${tol}: an absent pins array is not a crash`);
+  }
+});
+
+test('dpPinned refuses to let a bad pin widen a span', () => {
+  // The SAME line as the case above, deliberately: on it a 4mm tolerance drops
+  // index 4 unless it is pinned, so the anchor below can actually fail. The
+  // first fixture here was a zigzag whose middle vertex plain Douglas-Peucker
+  // kept anyway, which left every assertion in this test passing on an
+  // implementation that ignored pins entirely — proved by a mutation run.
+  const pts = [[0, 0], [10, 3], [20, 0], [30, -3], [40, 0], [50, 3], [60, 0], [70, -3], [80, 0]];
+  // Out of range, negative, non-integer and duplicate pins are all discarded
+  // rather than trusted. A pin index that is not ON the line cannot be honoured,
+  // and honouring it as a bound would silently merge two spans into one — which
+  // is the exact failure this function exists to prevent.
+  const clean = dpPinned(pts, [4], 4);
+  // ANCHOR THE BASELINE FIRST. Without this line every assertion below compares
+  // dpPinned against dpPinned and passes on an implementation that ignores pins.
+  // A consistency test whose reference is the function under test is not a test
+  // of that function.
+  assert.ok(clean.includes(4), 'the baseline must actually honour its pin');
+  for (const junk of [[4, 99], [4, -1], [4, 1.5], [4, 4, 4], [4, null], [4, '4']]) {
+    assert.deepStrictEqual(dpPinned(pts, junk, 4), clean, `junk pins ${JSON.stringify(junk)} must not change the answer`);
+  }
+  assert.deepStrictEqual(dpPinned(pts, [0, 4, 8], 4), clean, 'pinning the endpoints is a no-op — they are always kept');
+});
+
+test('dpPinned returns every index for a line too short to simplify', () => {
+  assert.deepStrictEqual(dpPinned([[0, 0], [1, 1]], [], 1), [0, 1]);
+  assert.deepStrictEqual(dpPinned([[0, 0]], [], 1), [0]);
+  assert.deepStrictEqual(dpPinned([], [], 1), []);
+});
+
+test('dpPinned is monotone in pins — more pins never keeps fewer points', () => {
+  // The property the caller actually relies on: adding a crossing to a feature
+  // cannot make its drawn line coarser. Stated as a property because the St Ives
+  // failure was a COUNT collapsing, and a single hand-built case would have been
+  // satisfied by a fix that happened to work on that shape.
+  const pts = Array.from({ length: 41 }, (_, i) => [i, Math.sin(i / 3) * 4]);
+  let prev = dpPinned(pts, [], 3).length;
+  for (const pins of [[20], [10, 20], [10, 20, 30], [5, 10, 20, 30, 35]]) {
+    const n = dpPinned(pts, pins, 3).length;
+    assert.ok(n >= prev, `pins ${JSON.stringify(pins)} kept ${n}, fewer than the ${prev} before them`);
+    for (const p of pins) assert.ok(dpPinned(pts, pins, 3).includes(p), `pin ${p} was dropped`);
+    prev = n;
+  }
 });
 
 test('angdist is the SHORT way round, both directions', () => {

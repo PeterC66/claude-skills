@@ -922,6 +922,134 @@ MUTATIONS = [
      "find": '    return 1 if hards else 0',
      "to": '    return 0'},
 
+    # ---------------------------------------------------------------- naptan_build.py
+    # THE MODULE THAT DECIDES WHAT A STOP IS. Nothing downstream re-derives any of
+    # this: `naptan_stands.py`, `boarding_index.py` and `boarding_verify.py` all
+    # read the columns it wrote, and `_stubs.py` builds both of its fixtures from
+    # its schema. Its output is gitignored and rebuilt by hand a few times a year,
+    # so no byte gate, no ratchet and no board has ever had an opinion about it --
+    # a wrong register produces perfectly reproducible sheets.
+
+    # THE STAND CODE. "Never fall back to Indicator when stand is NULL: printing
+    # 'opp' on a map tells a reader nothing, and inventing a letter is worse than
+    # printing none" -- the module's own docstring, and the only rule here whose
+    # breach a passenger standing at the stop would see.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "derive_stand falls back to the raw Indicator, so every 'opp', 'o/s' and 'N-bound' in the register becomes a stand code and is printed on a boarding sheet as one",
+     "find": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return None, None',
+     "to": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return ind.upper(), "indicator"'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the bare-code pattern gains IGNORECASE, so a lone lower-case letter -- far more often an abbreviation than a flag code -- becomes an invented bay letter",
+     "find": 'BARE_RE = re.compile(r"^[A-Z]{1,2}$")',
+     "to": 'BARE_RE = re.compile(r"^[A-Z]{1,2}$", re.IGNORECASE)'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "'stance' leaves the word list, so every Scottish-style stance code silently stops being a stand and those stops lose their letter",
+     "find": '(stop|stand|bay|gate|platform|stance|berth)',
+     "to": '(stop|stand|bay|gate|platform|berth)'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the stand code keeps the feed's own case, so 'Bay 12a' and 'Bay 12A' become two different bays and a sheet matches neither",
+     "find": '        return m.group(2).upper(), m.group(1).lower()',
+     "to": '        return m.group(2), m.group(1).lower()'},
+
+    # THE POSITION. Every stop on every sheet is drawn at these two numbers.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a published WGS84 pair is recorded as having been converted from the grid, so the provenance column says every position was derived and nobody can tell which half was measured",
+     "find": '            return float(lat), float(lon), "naptan"',
+     "to": '            return float(lat), float(lon), "osgb"'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a stop with neither a lat/lon nor a grid reference is placed at 0N 0E -- a real point in the Gulf of Guinea -- instead of being left without a position",
+     "find": '    return None, None, None',
+     "to": '    return 0.0, 0.0, None'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the converted position is rounded to three decimal places, moving every Cambridgeshire stop by up to 70 metres -- several stops' worth, on a sheet with no reference copy to diff against",
+     "find": '            return round(la, 7), round(lo, 7), "osgb"',
+     "to": '            return round(la, 3), round(lo, 3), "osgb"'},
+
+    # THE ROWS. What a downloaded CSV becomes once it is in the table.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the dedupe is dropped, so a stop appearing in two ATCO areas' downloads is inserted twice and the UNIQUE index at the end aborts the whole build after the last one",
+     "find": '        if not atco or atco in seen:',
+     "to": '        if not atco:'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a blank cell is stored as an empty string rather than NULL, so the bearing coverage figure -- which is what says whether a boarding plan can name a direction -- reads 100% for every region",
+     "find": '        vals = [(row.get(c) or "").strip() or None for c in COLUMNS]',
+     "to": '        vals = [(row.get(c) or "").strip() for c in COLUMNS]'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the area column takes four characters of the ATCO code instead of three, so the register can no longer be joined back to the area request that fetched it",
+     "find": 'atco[:3], lat, lon, src',
+     "to": 'atco[:4], lat, lon, src'},
+
+    # WHICH AREAS GET FETCHED. What keeps the download at 10 MB rather than 96.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a region that is registered but not built is scanned anyway, so a stale entry can point the area scan at a file that is not a GTFS build",
+     "find": '        if r.get("status") != "built":',
+     "to": '        if False:'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the `_example_west_yorkshire` comment entry is treated as a region, so the stub documenting how to add one becomes one and the scan opens a dataset nobody has built",
+     "find": '        if name.startswith("_"):',
+     "to": '        if False:'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a missing regions.json returns no regions instead of stopping, so the build fetches nothing, writes an empty register over the real one and reports success",
+     "find": '        sys.exit(f"regions.json not found at {reg_path} -- pass --root or --areas")',
+     "to": '        return []'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the area scan takes four characters of stop_id, so it asks the DfT for areas that do not exist and never asks for the ones our own datasets use",
+     "find": '"SELECT substr(stop_id,1,3) a, COUNT(*) n FROM stops GROUP BY 1"',
+     "to": '"SELECT substr(stop_id,1,4) a, COUNT(*) n FROM stops GROUP BY 1"'},
+
+    # COVERAGE -- "the number that decides whether a boarding plan is possible at
+    # a given place", and the only figure anybody reads off this run.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the attached GTFS database is never detached, so the FIRST region reports correctly and every region after it fails -- on this laptop, a report that is right about Cambridgeshire and silent about everywhere else",
+     "find": '            con.execute("DETACH DATABASE g")',
+     "to": '            pass'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "every matched stop is counted as carrying a stand code, so the coverage table says a boarding plan is possible everywhere and the first one built discovers otherwise",
+     "find": '                "WHERE n.stand IS NOT NULL"',
+     "to": '                "WHERE 1"'},
+
+    # THE BUILD ITSELF.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "areas are fetched alphabetically rather than busiest first, so a run cut off by the 200-per-hour rate limit loses the areas our own maps depend on most",
+     "find": '        order = sorted(area_counts, key=lambda a: (-(area_counts.get(a) or 0), a))',
+     "to": '        order = sorted(area_counts)'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the ATCOCode index stops being UNIQUE, so a dedupe failure no longer aborts the build -- it ships a register with duplicate stops and every downstream join silently doubles",
+     "find": '        "CREATE UNIQUE INDEX ix_naptan_atco ON naptan(ATCOCode)",',
+     "to": '        "CREATE INDEX ix_naptan_atco ON naptan(ATCOCode)",'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "an area nobody could download is recorded as fetched with zero rows, so COULD NOT LOOK becomes a measurement and a county nobody could reach looks like a county with no buses",
+     "find": '                failed.append(area)',
+     "to": '                fetched.append({"area": area, "rows": 0})'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "an existing register is not removed before the rebuild, so a rebuild that should have shrunk the table keeps every row the last one had",
+     "find": '        os.remove(out)',
+     "to": '        pass'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the provenance timestamp loses its ISO UTC shape, so everything that reads how old the register is -- the board and the refresh report -- gets a string it cannot parse",
+     "find": '"builtAt": started.strftime("%Y-%m-%dT%H:%M:%SZ"),',
+     "to": '"builtAt": started.strftime("%d/%m/%Y %H:%M"),'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the active-stop count includes the withdrawn rows, so the sidecar overstates the register and a shrinking network reads as a stable one",
+     "find": '"SELECT COUNT(*) FROM naptan WHERE Status=\'active\'"',
+     "to": '"SELECT COUNT(*) FROM naptan"'},
+
 ]
 
 

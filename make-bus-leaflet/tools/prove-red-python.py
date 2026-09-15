@@ -808,6 +808,120 @@ MUTATIONS = [
      "find": '    fi = (g.get("feed") or {}).get("feed_info", {})',
      "to": '    fi = g.get("feed").get("feed_info", {})'},
 
+    # ---------------------------------------------------------------- boarding_verify.py
+    # THE CHECKER THAT STANDS IN FOR S6 ON EVERY PLACE MAP. Almost every mutation
+    # below makes it say LESS, because that is the failure mode a verdict has: a
+    # check that has stopped checking prints exactly what a clean sheet prints,
+    # and nothing downstream re-asks the question. The sheet it wrongly certifies
+    # is perfectly reproducible, so no byte gate, no quality ratchet and no
+    # status board can tell the two apart. The three that make it say MORE are
+    # here for the other half of the same rule: a soft note that fires on a
+    # correct sheet is muted within a week, and then it is not watching the bays.
+
+    # S-1 -- LABEL TRUTH. A letter we invented is worse than no letter: a reader
+    # standing in a bus station can only act on a code that is on the flag.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "S-1 reads a lettered bay's CommonName instead of its stand code, so every bay in the frame is checked against the name of the bus station and any bay number the sheet invents passes",
+     "find": '        if stand:',
+     "to": '        if False:'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a bare code loses its 'Stand' word and is expected as 'Bare C', so every authority that puts the code in Indicator with no word in front fails S-1 on a correct sheet",
+     "find": '            word = kind.capitalize() if kind and kind != "bare" else "Stand"',
+     "to": '            word = kind.capitalize() if kind else "Stand"'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a boarding point NaPTAN has never heard of is downgraded to a note, so the one case where the checker has nothing to compare against stops failing the run",
+     "find": '            hard("S-1", "%s: boarding stop %s has no NaPTAN row at all"',
+     "to": '            soft("S-1", "%s: boarding stop %s has no NaPTAN row at all"'},
+
+    # S-2 -- DEPARTURE TRUTH, re-derived from stop_times so a bug in the index
+    # cannot pass by agreeing with itself.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a trip that ARRIVES at a stand from a place counts as departing to it, so a reader is sent to wait at a bay for a bus that only ever terminates there",
+     "find": '                for nxt in seq[i + 1:]:',
+     "to": '                for nxt in seq:'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "the sheet's own excludeRoutes are ignored, so the checker measures a sheet nobody asked for -- at High Wycombe a school working made one stop look like a better boarding point for three villages the sheet does not claim it serves",
+     "find": '        excluded = {str(r) for r in (_bp.get("excludeRoutes") or [])}',
+     "to": '        excluded = set()'},
+
+    # THE NAME A PLACE IS PRINTED UNDER. Re-derived here, so a difference of
+    # NAMING between this file and the generator must not read as a bus that
+    # does not run -- and an over-wide rule must not let a suburb stand for a city.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "any child name is accepted as a name for its parent, so the sheet may print 'Kings Hedges' for Cambridge and pass, because a bus does reach Kings Hedges",
+     "find": '        return bool(c) and any(_norm(x) == c for x in parts)',
+     "to": '        return bool(c)'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "the locality rollup stops at the first parent, so a Cambridge housing estate is the only name S-2 will accept for a bus to Cambridge and the correct sheet is failed",
+     "find": '            top = climb((r[2] or "").strip(), parent or child)',
+     "to": '            top = (parent or child)'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a locality name carrying two DIFFERENT parents keeps whichever the register listed last, so 'Church End' is moved to whichever village sorted last and the sheet naming it plainly is failed",
+     "find": '        if key in parent_of and parent_of[key] != p:',
+     "to": '        if False:'},
+
+    # S-3 -- NEVER A LONGER WALK THAN THE SHEET'S OWN ARITHMETIC NEEDS. A SOFT
+    # note, and every clause is a widening made after it fired on a correct sheet.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a stand with barely more service buys a longer walk, so a reader genuinely sent out of their way is never reported",
+     "find": '            bought = (extra_min <= 1 and theirs > 0 and mine > theirs * 3)',
+     "to": '            bought = (extra_min <= 1 and theirs > 0 and mine > theirs)'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a stand the SAME walk away is reported as nearer, which is the metres fault that fired seven times at St Neots over six-metre differences the sheet itself prints as one minute",
+     "find": '                  if a in by_atco and by_atco[a]["walkMin"] < by_atco[atco]["walkMin"]]',
+     "to": '                  if a in by_atco and by_atco[a]["walkMin"] <= by_atco[atco]["walkMin"]]'},
+
+    # S-4 -- THE ONLY CHECK THAT READS THE ARTEFACT. A generator that silently
+    # drops rows fails here and nowhere else.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "the generator can stop tagging bay glyphs and S-4 goes silently blind -- every remaining assertion then passes over an empty set, which reads exactly like a sheet whose bays are all correct",
+     "find": '        if not glyphs:',
+     "to": '        if False:'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "any abbreviation anywhere on the sheet excuses every missing destination, so a generator that dropped all but one row is green",
+     "find": '            if any(t.endswith(".") and name.startswith(t[:-1]) and len(t) > 4 for t in blob):',
+     "to": '            if any(t.endswith(".") for t in blob):'},
+
+    # S-5 -- WHICH DAY THE SHEET IS ABOUT (OA-189). A note in both directions,
+    # on purpose.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a sheet is FAILED by a calendar, which is what gets a checker --no-verify'd -- and then it is not checking the labels either",
+     "find": '                soft("S-5", "%s: %s (%s) reaches it only on trips whose registration is not "',
+     "to": '                hard("S-5", "%s: %s (%s) reaches it only on trips whose registration is not "'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "an index recording no --asof passes with nothing said, so nobody learns the sheet and the check are describing different sets of registrations",
+     "find": '    if asof is None:\n        soft("S-5", "this index records no --asof date',
+     "to": '    if False:\n        soft("S-5", "this index records no --asof date'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a service carrying no calendar row at all is treated as EXPIRED rather than live, which turns the safe direction into the unsafe one and notes every trip whose registration the feed happens not to carry",
+     "find": '                live = (row is None) or (row[0] in live_sid) or (\n                    db.execute("SELECT 1 FROM calendar WHERE service_id=?", (row[0],)).fetchone() is None)',
+     "to": '                live = (row is None) or (row[0] in live_sid)'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a malformed --asof silently becomes no date, so a typo turns the whole check quietly weaker and reports it as a pass",
+     "find": '    if asof and (len(asof) != 8 or not asof.isdigit()):',
+     "to": '    if False:'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "the durable record says the date came from --asof when it came from the index, so a reader cannot tell a run that was told which day from one that read it off the sheet's own build",
+     "find": '        asof_src = "boarding_index.json" if asof else None',
+     "to": '        asof_src = "--asof"'},
+
+    # THE EXIT CODE IS WHAT A STAGE GATE READS.
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "a sheet with a HARD finding exits 0, so every caller of this checker passes it -- the findings are still printed, to a log nobody reads",
+     "find": '    return 1 if hards else 0',
+     "to": '    return 0'},
+
 ]
 
 

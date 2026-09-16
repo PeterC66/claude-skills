@@ -922,6 +922,96 @@ MUTATIONS = [
      "find": '    return 1 if hards else 0',
      "to": '    return 0'},
 
+    # ---------------------------------------------------------------- gen_verification.py
+    # THE ONE ARTEFACT HERE WHOSE ONLY READER IS A PERSON. This module turns
+    # verification.json into the verification.docx that Peter opens, that
+    # `stage.js commit S6` mirrors into `_latest/`, and that git tracks. Nothing
+    # downstream parses it, so every mutation below produces a document that is
+    # well-formed, opens cleanly, and is wrong in a sentence.
+    #
+    # The first three are the faults the suite was written on, restored verbatim.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "an uncurated S1 prints the red BLOCKED banner -- 'hard findings must be resolved' over a run with no hard findings, two lines under a subtitle saying 0 hard",
+     "find": '    uncurated = verdict == "not-verified-uncurated-s1"',
+     "to": '    uncurated = False'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "a borrowed red team is never named, so the fifteen shipped reports that reached PASS on another map's answer say only 'the stored data is safe to build/rely on'",
+     "find": '    if borrowed or uncurated:',
+     "to": '    if False:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the subtitle prints the routes version raw, so a place map reads 'routes vv1.0' -- the form 24 of the 79 tracked reports carry",
+     "find": "_bare_version(inputs.get('routesVersion'))",
+     "to": "inputs.get('routesVersion')"},
+
+    # The other direction on the qualification, which is the one that would put
+    # the fault back invisibly: a sentence printed on every report is a sentence
+    # nobody reads, and the fifteen would be indistinguishable again.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "every report is qualified, so the qualification stops meaning anything and an unqualified pass cannot be told from a borrowed one",
+     "find": '    if borrowed or uncurated:',
+     "to": '    if True:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the downgraded HARDs are not counted beside the verdict, so a pass that exists only because a blocking finding was restated reads as an ordinary one",
+     "find": '            if downgraded:',
+     "to": '            if False:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the standing prose claims THIS map's services were re-derived from scratch when the answer was borrowed from another map's",
+     "find": '            + ("that map\'s" if borrowed else "the town\'s")',
+     "to": '            + "the town\'s"'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "uncuratedS1 is read only through summary.verdict, so the 19 S6 runs on the estate that predate that field lose the qualification entirely",
+     "find": '        if data.get("uncuratedS1"):',
+     "to": '        if False:'},
+
+    # HARD and the literal word "soft" as two filters rather than a partition.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "a finding whose severity is neither word appears in no row, no bullet and no count, and the 'no findings' row that would have looked odd is suppressed with it",
+     "find": '    soft = [f for f in findings if f.get("severity") != "hard"]',
+     "to": '    soft = [f for f in findings if f.get("severity") == "soft"]'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "_bare_version strips every leading v rather than one, so a version somebody wrote as vv1.0 is silently corrected instead of shown",
+     "find": '    return s[1:] if s[:1] in ("v", "V") else s',
+     "to": '    return s.lstrip("vV")'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the findings table is printed in file order, so the blocking ones are scattered among the soft ones in the table a reader scans first",
+     "find": '    for f in hard + soft:',
+     "to": '    for f in findings:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the evidence cell loses its [sanity]/[redteam] tag, so nothing on the row says whether the finding came from our own checks or from the independent pass",
+     "find": '        tail = (f"[{srctag}]\\n" if srctag else "") + tail',
+     "to": '        tail = tail'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "red-team sources are listed even when no red team ran, so a sanity-checks-only report cites evidence nobody consulted",
+     "find": '    if rt and data.get("redteamSources"):',
+     "to": '    if data.get("redteamSources"):'},
+
+    # The helper's own comment says what this one is: tblGrid left at the equal
+    # widths python-docx created the table with is what headless LibreOffice
+    # lays the PDF out from, whatever the cells say.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "tblGrid is left at equal widths, so the PDF crams Finding and Evidence against the three short code columns",
+     "find": '    for gridcol, w in zip(grid.findall(qn("w:gridCol")), widths):',
+     "to": '    for gridcol, w in zip([], widths):'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the default output is a bare filename, so a report written with no out path lands in whatever directory the caller happened to be standing in rather than beside its run",
+     "find": '        out = os.path.join(os.path.dirname(os.path.abspath(src)), "verification.docx")',
+     "to": '        out = "verification.docx"'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the created date is left at python-docx's 2013-12-23 template default, which Explorer shows and a reader takes for the date of the check",
+     "find": '    doc.core_properties.created = _now',
+     "to": '    _now = _now'},
+
 ]
 
 

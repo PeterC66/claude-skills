@@ -13,6 +13,7 @@
     "test:python": "python3 test/python/run.py",
     "test:prove-red-python": "python3 tools/prove-red-python.py",
     "test:prove-red": "node tools/prove-red.js",
+    "test:prove-red-baseline": "node tools/prove-red-baseline.js",
     "test:prove-red-gates": "node tools/prove-red-gates.js",
     "test:prove-red-status": "node tools/prove-red-status.js",
     "test:prove-red-deploy-grace": "node tools/prove-red-deploy-grace.js",

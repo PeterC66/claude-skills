@@ -32,7 +32,7 @@ their absence is reported as expected, not as a withdrawal.
 Usage:
   python gtfs_refresh_report.py [--root "<Buses folder>"] [--db <one dataset for every town>]
 """
-import os, sys, json, glob, argparse, datetime
+import os, sys, json, glob, re, argparse, datetime
 import cli   # OA-224 Tier 3.1: --root, then BUSES_DIR, then the laptop
 import gtfs_query as gq
 import gtfs_regions as greg
@@ -46,19 +46,91 @@ COMMUNITY_HINTS=["villager","fact","community","minibus","dial","demand","volunt
 # filter it is testing agrees with itself and proves nothing about the report.
 NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS")
 
+# The day vocabulary, once. `parse_days` reads it in three places -- a range's two
+# ends and a bare day -- and three copies of one alternation is how they stop
+# agreeing. The long spellings and the plural are here because an unrecognised
+# spelling now means NOT COMPARABLE rather than a partial read, and silence on
+# "Sundays" would be a loss where silence on "Limited (pre-book)" is the point.
+DAY_TOKEN=(r"mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?"
+           r"|fri(?:day)?|sat(?:urday)?|sun(?:day)?")
+DAY_ONE=r"(?:"+DAY_TOKEN+r")s?"
+DAY_IDX={"mon":0,"tue":1,"wed":2,"thu":3,"fri":4,"sat":5,"sun":6}
+
+def parse_days_part(part):
+    """One &-or-comma separated piece of a days string -> set of 0..6, or None.
+
+    A piece is a single day ("Sat") or an inclusive range ("Mon-Fri", "Mon to
+    Fri"), and it must be the WHOLE piece: `fullmatch`, not `search`, is what
+    keeps a parenthetical aside from being read as a service's week.
+
+    A RANGE WHOSE END PRECEDES ITS START RETURNS None, not the empty set that
+    `range(6,4)` produces. An empty set is `is not None`, so it reached diff_town
+    as a real answer -- one that differs from every feed there is -- and would
+    have cried [DAYS] every month on a route nobody had touched.
+    """
+    p=part.strip()
+    m=re.fullmatch(r"("+DAY_ONE+r")(?:\s*[-–—]\s*|\s+to\s+)("+DAY_ONE+r")",p)
+    if m:
+        a,b=DAY_IDX[m.group(1)[:3]],DAY_IDX[m.group(2)[:3]]
+        return set(range(a,b+1)) if b>=a else None
+    if re.fullmatch(DAY_ONE,p): return {DAY_IDX[p[:3]]}
+    return None
+
 def parse_days(s):
-    """Best-effort: freeform shipped 'days' string -> set of 0..6, or None if not parseable."""
+    """Best-effort: freeform shipped 'days' string -> set of 0..6, or None if not comparable.
+
+    NOT COMPARABLE IS AN ANSWER, and it is the one to reach for whenever the whole
+    string cannot be read. The only caller compares this against a set built from
+    the feed and prints [DAYS] when they differ, so a string half-read is not a
+    smaller answer than a string not read at all -- it is a monthly alarm about a
+    service running exactly as shipped, which is the failure this module's own
+    comments name three separate times.
+
+    THE VOCABULARY WAS MEASURED, NOT IMAGINED -- and read the counts off the
+    command below rather than from here, because the first draft of this paragraph
+    said 20 maps and 528 services by counting every S1 run the estate has ever
+    written, superseded ones included, when the population that matters is the
+    LATEST run of each town: 8 towns, 104 services, 15 distinct strings on
+    2026-09-15. Three of the fifteen were read wrongly and one of the three was
+    live on the estate.
+
+      "Daily (reduced Sun)"  -> {Sun}  Beaconsfield's X74. A `len(toks)==1` arm
+                                       took the single day token inside a
+                                       PARENTHETICAL ASIDE for the service's week,
+                                       so a bus running seven days read as
+                                       Sunday-only, and `[DAYS] X74 - shipped
+                                       'Daily (reduced Sun)' vs BODS 'Daily'` duly
+                                       stood on the reports of 2026-08-21,
+                                       2026-08-31 and 2026-09-01. Its two siblings
+                                       "Mon-Fri (school/college term)" and
+                                       "Mon-Sat (not public holidays)" already
+                                       returned None, so the estate's own
+                                       vocabulary disagreed with itself.
+      "Mon-Fri & Sat"        -> {Mon,Fri,Sat}  a range beside a day fell past the
+                                       range arm to the token scan, which cannot
+                                       see that the first two ends belong together.
+      "Sun-Thu"              -> set()  see parse_days_part.
+
+    None of the three errs in a harmless direction: each makes the report cry
+    about a route that has not moved, and this file's X46 comment already says
+    what a recurring wrong alarm teaches a reader to do with the section that will
+    one day carry a real withdrawal.
+
+    Re-measure the vocabulary from the buses-data repository root
+    (`C:\\u3a St Ives\\Using AI\\Buses`), with no placeholders:
+
+        python "C:/u3a St Ives/.claude/skills/make-bus-leaflet/tools/days-vocabulary.py"
+    """
     if not s: return None
     t=s.strip().lower()
     if t in ("daily","every day","mon-sun","mon to sun"): return set(range(7))
-    idx={"mon":0,"tue":1,"wed":2,"thu":3,"fri":4,"sat":5,"sun":6}
-    import re
-    m=re.fullmatch(r"(mon|tue|wed|thu|fri|sat|sun)\s*[-–]\s*(mon|tue|wed|thu|fri|sat|sun)",t)
-    if m: a,b=idx[m.group(1)],idx[m.group(2)]; return set(range(a,b+1))
-    toks=re.findall(r"mon|tue|wed|thu|fri|sat|sun",t)
-    if toks and all(("&" in t or "," in t or len(toks)==1) for _ in [0]):
-        return {idx[x] for x in toks}
-    return None  # e.g. "Limited (pre-book)" -> not comparable
+    out=set()
+    for part in re.split(r"[&,]|\band\b",t):
+        if not part.strip(): continue
+        d=parse_days_part(part)
+        if d is None: return None   # e.g. "Limited (pre-book)" -> not comparable
+        out|=d
+    return out or None
 
 def is_community(operator, source):
     if (source or "").lower().startswith("bustimes-community"): return True

@@ -40,6 +40,14 @@
  * landed. So a gone upstream is read as merged, and it is the reason this source
  * raises three portal rows today instead of five.
  *
+ * AND A GONE UPSTREAM IS ONLY THE TRUTH AS AT THE MERGE (2026-09-15). Nothing
+ * stops anybody committing to the same local branch afterwards, and the
+ * scheduled loop does it every hour: `oa001/prune-retention-tests` was squashed
+ * into `claude-skills` main at 18:23 and gained a 944-insertion commit at 18:36,
+ * which this source then suppressed as landed work. That is the `gone-extended`
+ * grade below, and `addedAndAbsent` carries the measurement of the four
+ * discriminators and why three of them were rejected.
+ *
  * WHAT IT DOES NOT LOOK AT, NAMED AT THE POINT OF THE NARROWING. OA-326 asks for
  * `gh pr list --head <branch>` as the second half of the test. This source does
  * not make that call, because `worklist.mjs` promises to touch the network only
@@ -110,6 +118,90 @@ export function defaultRef(dir, git) {
 }
 
 /**
+ * Paths this branch ADDED that the trunk does not have — the discriminator that
+ * separates a branch which landed and was abandoned from one which landed and
+ * then gained more work.
+ *
+ * WHY THE GRADE ABOVE NEEDED SPLITTING AT ALL, measured on 2026-09-15. A
+ * squash merge deletes the remote branch, and `gone-upstream` reads that
+ * deletion as the remote saying the work landed. It did land — AS OF THE MERGE.
+ * Nothing stopped anybody committing to the same local branch afterwards, and
+ * the scheduled loop does exactly that every hour: `oa001/prune-retention-tests`
+ * was squash-merged as `claude-skills` #16 at 18:23, gained `2275e53` at 18:36
+ * carrying a 944-insertion Python suite, and the board suppressed it in the
+ * `not raised` note as landed work. The loop's own output was invisible on the
+ * only list Peter works from, and would have stayed so for every later tick,
+ * because each commits to that same branch.
+ *
+ * FOUR DISCRIMINATORS WERE MEASURED OVER ALL 22 GONE-UPSTREAM BRANCHES IN BOTH
+ * PUBLIC REPOSITORIES, and three of them are recorded here because each failed
+ * in a way worth not repeating:
+ *
+ *   - TIP DATE NEWER THAN THE TRUNK'S TIP fires on exactly the one true case and
+ *     nothing else, and is the only one that is a PROOF — the trunk cannot
+ *     contain a commit made after its own newest commit. It was rejected anyway:
+ *     the trunk moves several times a day, so the row would go quiet again
+ *     within hours of being right, and a signal that extinguishes itself is
+ *     worse than one that never fired.
+ *   - CONTENT DIFF trunk..branch over the branch's own paths is non-empty on 16
+ *     of the 22, because the trunk has moved on and the two-dot diff reverses
+ *     its later work. It would have been muted in a week.
+ *   - ANY PATH ON THE BRANCH THAT THE TRUNK LACKS raises 8 of the 22, and 7 of
+ *     those are one explainable class: the portal DELETED `CHANGELOG.md` in the
+ *     2026-08-27 truncation, so every branch from before that date still carries
+ *     it. The trunk deleting a file is not this branch adding one.
+ *
+ * What is left is the rule below — a path this branch ADDED, absent at the merge
+ * base and which the trunk's history has never once touched. It raises 1 of the
+ * 22, and the one is the true case. It is also STABLE, which the date test is
+ * not: it stays true until the work actually lands.
+ *
+ * THE HISTORY HALF OF THAT RULE WAS PUT THERE BY THE HARNESS, not by this
+ * reasoning. The first version asked only whether the trunk has the path NOW,
+ * which is a fifth class of false positive the 22 real branches happen not to
+ * contain: a branch that adds a file, lands, and has that file deleted from the
+ * trunk afterwards. The control written for the `CHANGELOG.md` class went red on
+ * it — a rule with three measured rejections behind it, wrong on the first case
+ * nobody had met.
+ *
+ * THE HOLE, NAMED AT THE POINT OF THE NARROWING. A post-squash commit that only
+ * MODIFIES files the branch already had is invisible to this, and so is one that
+ * adds a path the trunk has independently created. Both are silent, not wrong —
+ * the branch stays graded as landed, which is where it was before this existed.
+ * The harness carries a case for the modify-only shape asserting that silence,
+ * so a later widening has something to flip rather than something to write.
+ *
+ * ANOTHER AVENUE WAS TRIED AND IS CLOSED, so nobody spends the hour again: git
+ * keeps no reflog for a pruned remote-tracking ref. `.git/logs/refs/remotes/
+ * origin/<branch>` is removed with the ref, so the moment the upstream went away
+ * — which would have answered this exactly — cannot be read off the disk.
+ *
+ * @returns {string[]|null} null when git refused a question, never [] for that
+ */
+export function addedAndAbsent(dir, git, base, branch) {
+  const mb = git(dir, ['merge-base', base, branch]);
+  if (!mb) return null;
+  const added = git(dir, ['diff', '--name-only', '--diff-filter=A', mb, branch]);
+  if (added === null) return null;
+  const out = [];
+  for (const p of lines(added)) {
+    // `cat-file -e` prints nothing and exits 0 when the path exists, so an
+    // empty string is PRESENT and only null is absent-or-refused. Both read as
+    // "the trunk has it" here, which is the quiet direction.
+    if (git(dir, ['cat-file', '-e', `${base}:${p}`]) !== null) continue;
+    // ABSENT FROM THE TIP IS NOT ENOUGH, and the harness's control is what said
+    // so rather than any reasoning here. A branch can add a file, land, and the
+    // trunk drop that file later — then the path is missing from the tip while
+    // the work is long since merged. So ask the trunk's HISTORY: a path it has
+    // never once touched is a path this branch's landing never carried.
+    const seen = git(dir, ['rev-list', '--max-count=1', base, '--', p]);
+    if (seen === null || seen !== '') continue;
+    out.push(p);
+  }
+  return out;
+}
+
+/**
  * Read every LOCAL branch and what git already knows about it.
  *
  * Read from the main checkout, which is enough: `refs/heads/` is shared across
@@ -163,16 +255,33 @@ export function readBranches(dir, git = defaultGit) {
     // A branch may be on the remote without an upstream ever being configured —
     // `git push origin <b>` without -u. Ask the ref directly rather than trust
     // the configuration.
+    //
+    // AND A CONFIGURED UPSTREAM IS NOT EVIDENCE ON ITS OWN, which cost nothing
+    // to find because this tick created one: `git worktree add -b <b> <path>
+    // origin/main` — the ordinary way a branch is started in this estate — sets
+    // the new branch's upstream to origin/MAIN. Read as "it has an upstream, so
+    // somebody can see it", that grades a branch nobody has pushed as visible to
+    // the world, which is the very silence this file exists to break. An
+    // upstream counts only when it is a ref of its OWN, never the trunk every
+    // branch here forks from.
+    const ownUpstream = !!upstream && upstream !== base;
     const onRemote = !upstreamGone
-      && (!!upstream || git(dir, ['rev-parse', '--verify', '--quiet', `origin/${branch}^{commit}`]) !== null);
+      && (git(dir, ['rev-parse', '--verify', '--quiet', `origin/${branch}^{commit}`]) !== null
+        || (ownUpstream && git(dir, ['rev-parse', '--verify', '--quiet', `${upstream}^{commit}`]) !== null));
 
     let insertions = null;
     const stat = git(dir, ['diff', '--shortstat', `${base}...${branch}`]);
     const m = /(\d+) insertion/.exec(stat || '');
     if (m) insertions = Number(m[1]);
 
+    // DID THIS BRANCH GAIN WORK AFTER ITS SQUASH LANDED? Asked only of a gone
+    // upstream, because that is the only grade whose verdict it can change, and
+    // `null` means NOT ASKED rather than none found — the same three-valued
+    // shape as `readable` above, for the same reason.
+    const addedMissing = upstreamGone ? addedAndAbsent(dir, git, base, branch) : null;
+
     out.branches.push({
-      branch, upstream, upstreamGone, onRemote, unmerged,
+      branch, upstream, upstreamGone, onRemote, unmerged, addedMissing,
       committedAt: when || null, subject: subject || '', insertions,
     });
   }
@@ -187,15 +296,26 @@ export function readBranches(dir, git = defaultGit) {
  *                  In a repository with delete_branch_on_merge that is the
  *                  remote saying it landed, and a multi-commit squash is why
  *                  `cherry` disagrees. See the header's measurement.
+ *   gone-extended— the same, EXCEPT that the branch has gained work since the
+ *                  squash landed: it carries a file it added that the trunk does
+ *                  not have. The deletion said the work landed as of the merge,
+ *                  and this part came after it. Raises a row, and a different
+ *                  one, because the fix is not a plain push. See
+ *                  `addedAndAbsent` for why this discriminator and not the
+ *                  three that were measured beside it.
  *   pushed       — unmerged, and on the remote. Visible to anybody who looks;
  *                  whether a pull request is open is the question this source
  *                  deliberately does not ask.
  *   stranded     — unmerged, and on NO remote. Nothing outside this laptop knows
- *                  the work exists. This is the only class that raises a row.
+ *                  the work exists.
+ *
+ * `stranded` and `gone-extended` are the two classes that raise a row.
  */
 export function classifyBranch(b) {
   if (!b || !b.unmerged) return 'merged';
-  if (b.upstreamGone) return 'gone-upstream';
+  if (b.upstreamGone) {
+    return (b.addedMissing && b.addedMissing.length) ? 'gone-extended' : 'gone-upstream';
+  }
   return b.onRemote ? 'pushed' : 'stranded';
 }
 
@@ -233,6 +353,44 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
     if (gone.length) {
       notes.push(`${repo.name}: ${gone.length} branch(es) read unmerged by patch but their remote branch has been DELETED, `
         + `which in a squash-merging repository means they landed — not raised: ${gone.map((b) => b.branch).join(', ')}`);
+    }
+
+    // LANDED, AND THEN ADDED TO. The deletion of the remote branch said the work
+    // landed as of the merge; these carry a file they added that the trunk still
+    // does not have, so part of them came after it. A separate row from the
+    // stranded one because the ADVICE differs: this branch has been pushed
+    // before, and pushing it again re-proposes everything the squash already
+    // took, since a pull request diffs against the merge base rather than
+    // against the trunk.
+    for (const b of graded.filter((x) => x.grade === 'gone-extended')) {
+      const stamp = b.committedAt ? Date.parse(b.committedAt) : NaN;
+      const ageDays = Number.isFinite(stamp) ? Math.max(0, Math.floor((now - stamp) / 86400000)) : null;
+      const stat = git(repo.dir, ['diff', '--shortstat', read.base, b.branch, '--', ...b.addedMissing]);
+      const m = /(\d+) insertion/.exec(stat || '');
+      const size = m ? m[1] : 'an unknown number of';
+      items.push({
+        key: `extended-branch-${repo.key}-${b.branch.replace(/[^A-Za-z0-9]+/g, '-')}`,
+        rank: 3, type: 'unpushed-branch',
+        title: `${repo.name}: the branch ${b.branch} was merged and its remote deleted — and it has been committed to SINCE`,
+        why: `${size} insertion(s) in ${b.addedMissing.length} file(s) the trunk has never had. `
+          + `The deleted remote branch is what makes this repository's finished work look finished, so a branch in `
+          + `that state is normally read as landed — this one gained work after the merge, and nothing outside this `
+          + `laptop knows about that part. The loop commits to a branch like this every hour and cannot push.`,
+        detail: [`last commit ${(b.committedAt || '').slice(0, 10) || 'date unknown'} — ${b.subject || '(no subject)'}`,
+          `on the branch and in no trunk: ${b.addedMissing.join(', ')}`].join('\n'),
+        who: 'Peter', runbook: 'git', ref: b.branch, repo: repo.name, ageDays,
+        do: [
+          { kind: 'shell', cwd: repo.dir,
+            cmd: `git -C "${repo.dir}" log --oneline ${read.base}..${b.branch}`,
+            note: 'one self-contained command; run it from anywhere — it lists every commit the trunk lacks, landed ones included' },
+          { kind: 'chat',
+            what: 'Do NOT just push it. A pull request diffs against the merge base, so this branch would re-propose '
+              + 'everything its squash already took. Start a fresh branch from the trunk and cherry-pick onto it only '
+              + 'the commits made after the merge — the ones whose files are named above — then push that and open the '
+              + 'pull request for it.' },
+          { kind: 'chat', what: 'Nothing in the loop can do this: pushing is denied to an unattended tick by design, which is why the work waits here.' },
+        ],
+      });
     }
 
     for (const b of graded.filter((x) => x.grade === 'stranded')) {

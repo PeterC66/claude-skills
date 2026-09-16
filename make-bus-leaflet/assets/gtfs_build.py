@@ -52,6 +52,7 @@ def load_full(zip_path, full_db):
         con.commit()
     cur.execute("CREATE INDEX ix_st_trip ON stop_times(trip_id)")
     cur.execute("CREATE INDEX ix_st_stop ON stop_times(stop_id)")
+    zf.close()  # else a ResourceWarning names this line from wherever the collector runs
     con.commit(); con.close()
 
 def filter_cambs(full_db, out_db, prefixes=KEEP_PREFIXES):
@@ -99,8 +100,8 @@ if __name__=="__main__":
     # feed_info sidecar
     info={}
     try:
-        zf=zipfile.ZipFile(a.zip); rd=csv.DictReader(io.TextIOWrapper(zf.open("feed_info.txt"),encoding="utf-8-sig"))
-        info=next(rd)
+        with zipfile.ZipFile(a.zip) as zf, zf.open("feed_info.txt") as raw:
+            info=next(csv.DictReader(io.TextIOWrapper(raw,encoding="utf-8-sig")))
     except Exception: pass
     side={"built": time.strftime("%Y-%m-%d %H:%M"), "source_zip": os.path.basename(a.zip),
           "feed_info": info, "keep_prefixes": list(prefixes), "counts": counts,
@@ -114,6 +115,7 @@ if __name__=="__main__":
     # right one. Both halves went on 2026-08-21 when every region became equal; a
     # missing sidecar now reads as unknown, which is the truth.
     outdir=os.path.dirname(a.out); stem=os.path.splitext(os.path.basename(a.out))[0]
-    json.dump(side, open(os.path.join(outdir,f"feed_info_{stem}.json"),"w"), indent=1)
+    with open(os.path.join(outdir,f"feed_info_{stem}.json"),"w",encoding="utf-8") as fh:
+        json.dump(side, fh, indent=1)
     print("counts:", counts)
     print("size MB:", side["size_mb"], "in", round(time.time()-t0,1),"s")

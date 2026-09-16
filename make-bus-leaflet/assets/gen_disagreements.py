@@ -14,6 +14,7 @@ disagreements.json schema:
   "town": "March",
   "validFrom": "June 2026",          # optional
   "generatedAt": "2026-06-05T16:30",  # optional; filled if absent
+  "note": "Refresh audit ...",        # optional; what THIS round re-checked, printed under the intro
   "rows": [
     { "route": "32",
       "operator": "Dews Coaches",
@@ -43,6 +44,18 @@ from docx.oxml import OxmlElement
 CONFLICT_FILL = "FCE4E4"   # pale red for conflict rows
 AGREE_FILL = "E8F4E8"      # pale green for agree rows
 HEADER_FILL = "2F2F2F"
+
+# The two sources every row carries, in the order a reader expects them, and the
+# short labels they print under. Anything ELSE a row cites — `press`, which two
+# rows of the High Wycombe route 20 reversal carry and which is the evidence for
+# that exclusion — is listed after them under its own key rather than dropped for
+# not being one of the two.
+SOURCE_ORDER = ["bustimes", "operator"]
+SOURCE_LABELS = {"bustimes": "bt", "operator": "op"}
+
+# What a row writes in `resolution` when it means "nothing to resolve". Dropped
+# on an agreeing row; a real sentence there is a clarification and is printed.
+PLACEHOLDER_RESOLUTIONS = {"-", "--", "n/a", "N/A", "none", "None"}
 
 
 # The .docx is the internal editable source of truth (kept forever); customers
@@ -127,12 +140,11 @@ def main():
     if len(sys.argv) < 2:
         sys.exit("usage: gen_disagreements.py <disagreements.json> [out.docx]")
     src = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else (
-        src.rsplit(".", 1)[0].rsplit("\\", 1)[-1].rsplit("/", 1)[-1])
-    if len(sys.argv) <= 2:
-        # default beside the json
-        import os
-        out = os.path.join(os.path.dirname(os.path.abspath(src)), "disagreements.docx")
+    # Default beside the json rather than in whatever directory the caller
+    # happened to be standing in, which for a stage engine is the run folder
+    # of some other stage.
+    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
+        os.path.dirname(os.path.abspath(src)), "disagreements.docx")
 
     with open(src, "r", encoding="utf-8") as fh:
         data = json.load(fh)
@@ -162,6 +174,20 @@ def main():
         "operator's site is treated as authoritative and the resolution taken is shown."
     )
 
+    # The audit's own qualification. `note` is where the writer says what this
+    # round actually re-checked — "only 130, 300, WW1 and BHS01 were re-checked
+    # against live sources this round; the other 34 rows are carried forward
+    # unchanged" — which is the one thing that stops the standing paragraph
+    # above being read as a claim that every row was checked today. It was
+    # written into the JSON of 20 committed audits and reached none of their
+    # documents. Printed only when it is there: a qualification on every report
+    # is a qualification nobody reads.
+    note = (data.get("note") or "").strip()
+    if note:
+        np = doc.add_paragraph()
+        np.add_run("Note on this audit: ").bold = True
+        np.add_run(note)
+
     cols = ["Route", "Operator", "Field", "bustimes.org says", "Operator says", "Agree?", "Resolution / source"]
     table = doc.add_table(rows=1, cols=len(cols))
     table.style = "Table Grid"
@@ -182,13 +208,19 @@ def main():
         set_cell(cells[5], "agree" if agree else "DISAGREE", bold=not agree, size=9,
                  align=WD_ALIGN_PARAGRAPH.CENTER)
         srcs = r.get("sources", {}) or {}
-        res = r.get("resolution", "") if not agree else ""
+        # An agreeing row's `resolution` is a CLARIFICATION rather than a
+        # resolution — "Drawn to Windsor as principal terminus; Slough/Langley
+        # journeys noted" — and dropping it threw away 107 of them across 27
+        # committed audits, including the two March's own note points the reader
+        # at. A placeholder dash is not one and is still dropped.
+        res = (r.get("resolution") or "").strip()
+        if agree and res in PLACEHOLDER_RESOLUTIONS:
+            res = ""
         tail = res
         link_bits = []
-        if srcs.get("bustimes"):
-            link_bits.append("bt: " + srcs["bustimes"])
-        if srcs.get("operator"):
-            link_bits.append("op: " + srcs["operator"])
+        for key in SOURCE_ORDER + sorted(k for k in srcs if k not in SOURCE_ORDER):
+            if srcs.get(key):
+                link_bits.append(SOURCE_LABELS.get(key, key) + ": " + srcs[key])
         if link_bits:
             tail = (res + "\n" if res else "") + "\n".join(link_bits)
         set_cell(cells[6], tail, size=8)
@@ -209,8 +241,16 @@ def main():
             p.add_run(f"{r.get('route','')} ({r.get('operator','')}) — {r.get('field','')}: ").bold = True
             p.add_run(f"bustimes.org: {r.get('bustimes','')}; operator: {r.get('operator_says','')}. ")
             p.add_run(f"Resolution: {r.get('resolution','')}.").italic = True
-    else:
+    elif rows:
         doc.add_paragraph("No disagreements found — bustimes.org and every operator site agreed.")
+    else:
+        # An audit with no rows has not found agreement; it has found nothing.
+        # The sentence above would report the absence of checks as a clean
+        # result, in the document that is the only record anybody reads.
+        doc.add_paragraph(
+            "No checks are recorded in this audit — nothing was compared, so this document "
+            "says nothing about whether bustimes.org and the operators agree."
+        )
 
     # Stamp real created/modified dates — python-docx's blank template otherwise
     # leaves its baked-in 2013-12-23 date, which Windows Explorer shows in its

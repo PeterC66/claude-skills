@@ -1265,6 +1265,101 @@ MUTATIONS = [
      "find": '    doc.core_properties.created = _now',
      "to": '    _now = _now'},
 
+    # ---------------------------------------------------------------- gen_disagreements.py
+    # THE SECOND ARTEFACT HERE WHOSE ONLY READER IS A PERSON, and the one the
+    # block above named as still uncovered. This module turns a stage's
+    # disagreements.json into the disagreements.docx that git tracks and that
+    # nothing downstream parses. The first three mutations are the faults the
+    # suite was written on, restored verbatim -- all three had SHIPPED, measured
+    # over 49 committed audits and 1,441 rows on 2026-09-16.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the audit's own note is dropped, so 20 committed audits say which routes were actually re-checked this round and none of their documents does",
+     "find": '    note = (data.get("note") or "").strip()',
+     "to": '    note = ""'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "a clarification on an agreeing row is thrown away -- the 107 notes across 27 audits, including the two March's own note points the reader at",
+     "find": '        if agree and res in PLACEHOLDER_RESOLUTIONS:',
+     "to": '        if agree:'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "sources are read by their two known names, so the press article that is the evidence for the High Wycombe route 20 exclusion is cited nowhere",
+     "find": '        for key in SOURCE_ORDER + sorted(k for k in srcs if k not in SOURCE_ORDER):',
+     "to": '        for key in SOURCE_ORDER:'},
+
+    # The other direction on each of the first two, which is the direction that
+    # would put the fault back invisibly: a qualification printed on every
+    # report is one nobody reads, and a column of dashes is how a real
+    # clarification stops being noticed.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "every audit is given a Note line whether or not it has one, so the 20 that carry a real qualification stop being distinguishable",
+     "find": '    if note:',
+     "to": '    if True:'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the placeholder dash is printed on agreeing rows too, so 1,334 rows gain a dash and the 107 real clarifications are lost in it",
+     "find": '        if agree and res in PLACEHOLDER_RESOLUTIONS:',
+     "to": '        if agree and res in ():'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the settled bustimes-then-operator order becomes whatever sorting gives, so every row in every audit reorders around an unknown key",
+     "find": '        for key in SOURCE_ORDER + sorted(k for k in srcs if k not in SOURCE_ORDER):',
+     "to": '        for key in sorted(srcs, reverse=True):'},
+
+    # An audit with no rows has not found agreement; it has found nothing.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "an audit with no rows reports that every operator site agreed, which is the absence of checks printed as a clean result",
+     "find": '    elif rows:',
+     "to": '    elif True:'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "a row that says nothing about agreement is silently counted as agreeing, so an unrecorded check prints green",
+     "find": '        agree = bool(r.get("agree", False))',
+     "to": '        agree = bool(r.get("agree", True))'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the conflict set is inverted, so the subtitle's disagreement count and the summary bullets describe the rows that agree",
+     "find": '    conflicts = [r for r in rows if not r.get("agree", False)]',
+     "to": '    conflicts = [r for r in rows if r.get("agree", False)]'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "every row says agree, so a disagreement is invisible in the one column a reader scans",
+     "find": '        set_cell(cells[5], "agree" if agree else "DISAGREE", bold=not agree, size=9,',
+     "to": '        set_cell(cells[5], "agree", bold=not agree, size=9,'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the red and green fills are swapped, so a 60-row table points the eye at every row except the conflicts",
+     "find": '        fill = AGREE_FILL if agree else CONFLICT_FILL',
+     "to": '        fill = CONFLICT_FILL if agree else AGREE_FILL'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "no row is shaded at all, so the document loses the only signal that finds a conflict without reading every cell",
+     "find": '            shade(c, fill)',
+     "to": '            pass'},
+
+    # The helper's own comment says what this one is, and it is the sibling's
+    # mutation in this file: tblGrid left at the equal widths python-docx made
+    # the table with is what headless LibreOffice lays the customer PDF out from.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "tblGrid is left at equal widths, so the PDF crams the resolution and both URLs into the same width as the route code",
+     "find": '    for gridcol, w in zip(grid.findall(qn("w:gridCol")), widths):',
+     "to": '    for gridcol, w in zip([], widths):'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the default output is a bare filename, so an audit written with no out path lands in whatever directory the stage engine was standing in",
+     "find": '        os.path.dirname(os.path.abspath(src)), "disagreements.docx")',
+     "to": '        "", "disagreements.docx")'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the created date is left at python-docx's 2013-12-23 template default, which Explorer shows and a reader takes for the date of the audit",
+     "find": '    doc.core_properties.created = _now',
+     "to": '    _now = _now'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "no PDF is asked for, so the customer-facing copy silently stays at whatever the last run left beside the docx",
+     "find": '    convert_to_pdf(out)',
+     "to": '    pass'},
+
 ]
 
 

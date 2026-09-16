@@ -1029,13 +1029,9 @@ for (const it of directoryLinkItems({ state: readDirectoryState(directoryDir) })
 // and must never enter CI: it is a function of the clock (OA-289).
 for (const it of directoryCoverageItems({ state: readCoverageState(directoryDir) })) add(it);
 
-// 7c — the place lookup's edition (buses-data OA-312, 2026-09-16). The /maps
-// search resolves every named place in Great Britain out of places.json, built
-// from the ONS Index of Place Names, which is republished roughly yearly. Nothing
-// in CI may ask how old that edition is — `check-places.mjs` holds the files to
-// one edition and never compares `built` to today (OA-289) — so this row asks a
-// person, twice a year, to look for a newer edition and rebuild. Reads one tracked
-// file, opens no socket, and must never enter CI.
+// 7c — the place lookup's edition (buses-data OA-312): the ONS Index of Place Names
+// is republished roughly yearly and nothing in CI may ask how old our copy is
+// (OA-289), so this row asks a person twice a year. The reasoning is in the module.
 for (const it of directoryPlacesItems({ state: readPlacesState(directoryDir) })) add(it);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.

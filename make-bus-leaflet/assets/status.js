@@ -48,6 +48,7 @@ const { scratchDir } = require('./scratch');
  * files into `engine/`, which is a different repo entirely. Guessing a path that
  * happens to be right on one machine is how a check ends up reporting "cannot
  * look" for a reason having nothing to do with its subject. */
+function runCli() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const SKILLS_ROOT = (() => {
   if (process.env.SKILLS_REPO) return path.resolve(process.env.SKILLS_REPO);
   let d = SK;
@@ -1747,3 +1748,7 @@ main().then(finish).catch((e) => {
   console.error(e);
   finish(true);
 });
+}
+
+if (require.main === module) runCli();
+module.exports = { main: runCli };

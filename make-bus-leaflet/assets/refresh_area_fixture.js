@@ -60,6 +60,7 @@ const path = require('node:path');
 const { readJson, latestRunDir, sameIgnoringLineEndings } = require('./gate_lib');
 const { resolveBuses } = require('./cli');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf(n); return (i >= 0 && argv[i + 1]) ? argv[i + 1] : d; };
 const APPLY = argv.includes('--apply');
@@ -137,3 +138,7 @@ console.log(`  refresh with no explanation is indistinguishable from one that hi
 console.log(`\n  And do the PLACE fixture in the same breath — they are two mechanisms for one`);
 console.log(`  job and forgetting the other one is how this row was opened. From the portal:`);
 console.log(`      node scripts/refresh-place-fixture.mjs`);
+}
+
+if (require.main === module) main();
+module.exports = { main };

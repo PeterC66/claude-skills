@@ -61,6 +61,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses } = require('./cli');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const args = parseArgs(process.argv.slice(2));
 const BUSES = resolveBuses(args);
 if (!args.town || !args.route) {
@@ -268,3 +269,7 @@ if (worstNear && ranked.length) {
 console.log('\nTake the largest worst-case, set textOn to #fff on a dark fill and #111 on a light one,'
   + '\nthen RENDER IT: adjacency by shared edge is a proxy, and two lines can crowd each other'
   + '\nat a junction they do not share (Ramsey X31 vs the green 303, 2026-08-16).');
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -50,6 +50,7 @@
 const fs = require('fs');
 const path = require('path');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const radiusM = parseFloat(process.argv[2] || '300');
 
@@ -207,3 +208,7 @@ function areaKind(t) {
       + ' m — the sheet will simply have no lights symbol, which is the truth here.');
   }
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

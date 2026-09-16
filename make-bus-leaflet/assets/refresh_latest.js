@@ -36,6 +36,7 @@
 // sweep is PRINTED rather than silent, with the command that does it.
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
 const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const ARGV = process.argv.slice(2);
 const NO_COLLECT = ARGV.includes('--no-collect');
 // The folder is the first NON-FLAG argument, so `<dir> --no-collect` and
@@ -185,3 +186,7 @@ if (NO_COLLECT) {
 } else {
   console.error('WARNING: could not find collect-maps.ps1 above ' + TOWN + ' — Collected_latests was NOT refreshed.');
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

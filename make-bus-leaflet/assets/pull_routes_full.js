@@ -25,6 +25,7 @@
 //   A Thursday + a Sunday covers Mon–Fri, Mon–Sat, market-day/Thursday-only community
 //   services and Sunday-only workings. Omit to keep the legacy today-only behaviour.
 const fs=require('fs'), path=require('path');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const UA='make-bus-leaflet/1.0 (bus leaflet project)';
 const ARGS=process.argv.slice(2).filter(a=>!a.startsWith('--'));
 const SLUGS=JSON.parse(fs.readFileSync(ARGS[0],'utf8'));
@@ -121,3 +122,7 @@ function mergeDirs(perSub){            // merge sub-services' direction lists by
   fs.writeFileSync(path.join(OUT,'_all_atco.json'), JSON.stringify([...allAtco].sort(),null,0));
   console.error('\nroutes:',Object.keys(full).length,'unique stops:',allAtco.size);
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -51,6 +51,7 @@ const { assertNoCollision } = require('./index_guard');
 const { knownOff } = require('./known_off');
 const { checkDrawnWindow } = require('./window_contiguity');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
 const P = (f) => path.join(DIR, f);
 function readJSON(f, optional) {
@@ -1721,3 +1722,7 @@ console.log(bar);
 // 3 = could not verify (uncurated S1), the same code the refusal above uses;
 // 1 = verified and BLOCKED; 0 = verified and clean.
 process.exit(UNCURATED ? 3 : (out.summary.pass ? 0 : 1));
+}
+
+if (require.main === module) main();
+module.exports = { main };

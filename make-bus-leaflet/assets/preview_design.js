@@ -58,6 +58,7 @@ const { SK, latestRunDir, readJson, findTowns, EXTERNAL_GENERATOR, parseSetPath,
 const GEN = require(path.join(__dirname, 'sheet_registry.js'));
 const { scratchDir } = require('./scratch');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const args = parseArgs(process.argv.slice(2), { repeat: ['town', 'unset', 'feature-pos', 'set-path'] });
 // "<key>=<x>,<y>" -> {key,x,y}
 const featurePos = args['feature-pos'].map(s => {
@@ -235,3 +236,7 @@ for (const r of rows) {
   if (r.gained.length) console.log('    GAINED: ' + r.gained.join(' | '));
 }
 console.log('TOTAL defects: ' + tb + ' -> ' + ta + '\nsheets in ' + OUT);
+}
+
+if (require.main === module) main();
+module.exports = { main };

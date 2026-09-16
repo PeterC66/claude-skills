@@ -130,6 +130,7 @@ const crypto = require('node:crypto');
 // The second arm is kept: it costs a comparison and it is the one that would
 // notice if the shared parser's value rule ever changed under this file.
 const { parseArgs, readJson } = require('./cli.js');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const FLAGS = parseArgs(process.argv.slice(2));
 const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
 const DRY = 'dry-run' in FLAGS;
@@ -597,3 +598,7 @@ if (DRY) {
 console.log(`\n          Record it: pass --note "...redteam reused from ${best.dir}..." to stage.js commit S6,`);
 console.log(`          so the run says whose research it rests on.`);
 process.exit(0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

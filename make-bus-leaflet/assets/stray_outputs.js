@@ -44,6 +44,7 @@ const path = require('path');
 const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
 const { parseArgs, resolveBuses } = require('./cli');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIRN = { S1: 'S1-services', S2: 'S2-geometry', S3: 'S3-config', S4: 'S4-generate', S5: 'S5-render', S6: 'S6-verify' };
 const ORDER = Object.keys(DIRN);
 
@@ -119,3 +120,7 @@ console.log('\n  `stage.js pull` now refuses to let these overwrite a file alrea
 console.log('  They are listed so that "harmless" is something somebody looked at. Deleting one rewrites nothing the');
 console.log('  manifest says -- an undeclared file was never that run\'s output -- but it is still a decision, not a tidy-up.');
 process.exit(args.strict ? 1 : 0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

@@ -91,6 +91,7 @@ const path = require('path');
 const { serviceKey, indexUniqueObj } = require('./index_guard');
 
 // ---------------------------------------------------------------- constants
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const CELL_DEG = 0.001;              // ~111 m of latitude
 const CELL_KM = 0.111;               // cell side, km
 const CELL_AREA = CELL_KM * CELL_KM; // km2 per cell
@@ -966,3 +967,7 @@ if (jsonOnly) {
 
 if (out.band === 'RED' && !noFail) process.exit(2);
 process.exit(0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

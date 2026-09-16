@@ -330,11 +330,32 @@ for (const rel of manifestDirs) {
   // neighbouring session's working files as unscheduled tools.
   const toolFiles = gitLines(['ls-files', 'tools/'], dir)
     .map((f) => f.replace(/^tools\//, '')).sort();
+  const sourceFiles = gitLines(['ls-files', '*.js', '*.mjs', '*.cjs'], dir).sort();
   const allScriptText = Object.values(scripts).join('\n');
   for (const file of toolFiles) {
     if (NOT_A_TOOL[file]) continue;
     const owner = Object.entries(SPEC_OF).find(([, re]) => re.test(file));
     if (owner) continue;
+    // tools/lib/ holds LIBRARIES — code a tool requires and nothing runs (the
+    // first is tools/lib/baseline.js, buses-data OA-353, 2026-09-16). "Which npm
+    // script names it" has no answer for a library by construction, so asking
+    // it here reported the estate's first shared library as an unscheduled tool.
+    // The question that DOES apply is the mirror one: does any tracked source in
+    // this manifest load it. A library nobody requires is a dark file — the
+    // shape gen_external_busway.js took for a day (buses-data CLAUDE.md, "none
+    // of those gates can see a file no map runs") — and this is the only place
+    // that asks. Matched on a require()/import string ending in lib/<stem>, with
+    // or without its extension, so a mention in a comment is not a reader.
+    if (file.startsWith('lib/')) {
+      const stem = file.replace(/^lib\//, '').replace(/\.(?:c?js|mjs)$/, '');
+      const loads = new RegExp(`(?:require\\(|from\\s+)['"][^'"]*\\blib/${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\.c?js|\\.mjs)?['"]`);
+      const readers = sourceFiles.filter((f) => f !== `tools/${file}`
+        && loads.test(fs.readFileSync(path.join(dir, f), 'utf8')));
+      if (!readers.length) {
+        findings.push(`${rel}/tools/${file} is required by no tracked source — a library nothing loads is a dark file. Delete it, or require it from the tool it serves.`);
+      }
+      continue;
+    }
     if (!/\.(js|py)$/.test(file)) {
       findings.push(`${rel}/tools/${file} is neither a .js/.py tool nor declared in NOT_A_TOOL.`);
       continue;

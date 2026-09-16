@@ -206,6 +206,22 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red
 
+      # AND PROVE THAT THE STEP ABOVE CAN SAY IT DID NOT RUN (buses-data OA-353).
+      # `prove-red.js` stops before mutating anything if the unmutated copy is
+      # already red -- correctly, since a mutation measured against a failing copy
+      # proves nothing. Until 2026-09-14 that stop printed one ordinary line and
+      # exited 1, exactly like `a mutation SURVIVED`, and it hid a whole day in
+      # which the answer to *can these mutations fail?* was nobody has asked. It
+      # now exits 2 and says `0 of N mutations ran`. Seven cases: five drive the
+      # verdict with a stub runner in milliseconds, and two run
+      # `prove-red.js --baseline-only` end to end -- green here, and red on a
+      # scratch copy of the skill with one baseline suite deliberately broken,
+      # because the first five would all pass against a module nothing called.
+      # ~60 s, no other repository.
+      - name: Prove the mutation harness can say it DID NOT RUN
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-baseline
+
       # The convention `_engine.js` and test/README.md have both stated since
       # August, now with something enforcing it. A suite that requires its subject
       # out of assets/ directly never sees the mutation copy, so it is green about

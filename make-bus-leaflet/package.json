@@ -15,6 +15,7 @@
     "test:prove-red": "node tools/prove-red.js",
     "test:prove-red-gates": "node tools/prove-red-gates.js",
     "test:prove-red-status": "node tools/prove-red-status.js",
+    "test:prove-red-deploy-grace": "node tools/prove-red-deploy-grace.js",
     "test:prove-red-held-back": "node tools/prove-red-held-back.js",
     "test:prove-red-portal-drift": "node tools/prove-red-portal-drift.js",
     "test:prove-red-sweep": "node tools/prove-red-sweep.js",
@@ -56,6 +57,7 @@
     "test:prove-red-via-chain": "node tools/prove-red-via-chain.js",
     "test:prove-lane-mirror": "node tools/prove-lane-mirror.js",
     "census:lanes": "node tools/lane-census.js",
+    "measure:days-vocabulary": "python3 tools/days-vocabulary.py",
     "test:prove-red-wiring": "node tools/prove-red-wiring.js",
     "test:prove-red-engine-indirection": "node tools/prove-red-engine-indirection.js",
     "gate:wiring": "node tools/check-wiring.js"

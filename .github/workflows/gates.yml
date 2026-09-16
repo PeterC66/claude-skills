@@ -432,6 +432,22 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-unpushed-branches
 
+      # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
+      # would go red if I pushed now". Read case 2 first and read it as the
+      # POINT of the tool rather than as one assertion among thirty: a preflight
+      # that stopped at the first failure would satisfy every other case here and
+      # still be the fault it was built to remove, because CI's own job ordering
+      # is what hid three of the four blockers that kept `buses-data` red for
+      # seven hours. So the assertion is on how many checks RAN, which no verdict
+      # can express. Case 3 is the other half -- a check whose tool is missing is
+      # UNANSWERED and takes the exit code with it, never a pass -- and case 4
+      # holds that a check printing a reassuring last line and exiting 1 is a
+      # FAIL, which is this repository's own refusal-that-depended-on-how-you-
+      # read-it met a third time.
+      - name: Prove the push preflight can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-preflight
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

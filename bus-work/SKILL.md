@@ -175,6 +175,20 @@ Every time, without being asked:
 2. Tell Peter what changed in one or two lines: the version number, the map, the customer, what the next actor is.
 3. If anything about the *procedure* proved wrong or fiddly, fix it here (this file, the playbooks, or `worklist.mjs`) in the same session rather than leaving it for the next one.
 
+## Before you push — `preflight.mjs` answers *what would go red if I pushed now*
+
+**Run it once per ROUND, before the first push of a change that reaches map data, the engine or a workflow** (buses-data OA-343, from Peter on 2026-09-14: *I want us to avoid the system being in a BROKEN state*). Landing OA-338 left `buses-data` `main` red for about seven hours and met four independent blockers one at a time — byte-gate control diff, portal vendoring drift, the deployment row BEHIND, the portal's own `verify:area` on a stale committed fixture. Every one of them was true before the first push and answerable on this laptop in under two minutes, and three CI round trips were spent discovering them in sequence. From anywhere, with the repository written into the command rather than stated beside it, and with no placeholders:
+
+```bash
+node "C:/u3a St Ives/.claude/skills/bus-work/assets/preflight.mjs" --repo "C:/u3a St Ives/Using AI/Buses"
+```
+
+**It asks what the push CONTAINS first, and the answer decides how much of the rest to run.** `origin/main..HEAD` gives the paths; a push touching only the documentation folders `gates.yml` already treats that way runs the cheap tier, and anything reaching `Areas/`, `Places/`, `.github/` or a root dotfile earns the full one, which includes the unsuppressed board and the area fixture. That is not thrift for its own sake: hand-run before a docs-only push the cheap version yielded zero true findings and one false alarm, and a preflight whose false positives outnumber its true ones is one somebody stops running. `--all` forces the full tier, `--json` prints the machine-readable form, `--repo <path>` names a repository other than the one you are standing in.
+
+**Four properties are load-bearing and each of them is a thing that went wrong.** It never stops at the first failure, because CI's job ordering is what hid three of the four blockers — the named shape *the blocker behind the blocker*. It suppresses nothing: no `--no-live`, no `--register-only`, because the deployment row is exactly what `--no-live` hides. A check whose tool is missing is UNANSWERED and takes the exit code with it, never a pass. And the report always ends with **what it did not ask** — whether the portal suite is green, anything needing the network, and, when the engine checkout is not clean and level with its own `origin/main`, the fact that a local byte-gate verdict was measured against an engine CI will not check out.
+
+**Exit codes are this repository's: `0` nothing would go red, `1` something would, `2` it cannot tell you** — an undeclared repository, a branch with no upstream, or a check it could not run. A repository declares its own checks in a `.preflight.json` at its root, exactly as it declares its documentation scope; `buses-data` and `claude-skills` have built-in manifests, and a repository matching neither is a refusal rather than a clean bill of health. `npm run test:prove-red-preflight --prefix "C:/u3a St Ives/.claude/skills/bus-work"` is the harness.
+
 ## Rules that override convenience
 
 - **Never decide an approval gate.** Organisation approval, map-request approval, and publish review are Peter's judgement and the system's integrity. Prepare the evidence, summarise it, open the URL — then stop.

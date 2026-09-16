@@ -922,6 +922,349 @@ MUTATIONS = [
      "find": '    return 1 if hards else 0',
      "to": '    return 0'},
 
+    # ---------------------------------------------------------------- naptan_build.py
+    # THE MODULE THAT DECIDES WHAT A STOP IS. Nothing downstream re-derives any of
+    # this: `naptan_stands.py`, `boarding_index.py` and `boarding_verify.py` all
+    # read the columns it wrote, and `_stubs.py` builds both of its fixtures from
+    # its schema. Its output is gitignored and rebuilt by hand a few times a year,
+    # so no byte gate, no ratchet and no board has ever had an opinion about it --
+    # a wrong register produces perfectly reproducible sheets.
+
+    # THE STAND CODE. "Never fall back to Indicator when stand is NULL: printing
+    # 'opp' on a map tells a reader nothing, and inventing a letter is worse than
+    # printing none" -- the module's own docstring, and the only rule here whose
+    # breach a passenger standing at the stop would see.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "derive_stand falls back to the raw Indicator, so every 'opp', 'o/s' and 'N-bound' in the register becomes a stand code and is printed on a boarding sheet as one",
+     "find": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return None, None',
+     "to": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return ind.upper(), "indicator"'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the bare-code pattern gains IGNORECASE, so a lone lower-case letter -- far more often an abbreviation than a flag code -- becomes an invented bay letter",
+     "find": 'BARE_RE = re.compile(r"^[A-Z]{1,2}$")',
+     "to": 'BARE_RE = re.compile(r"^[A-Z]{1,2}$", re.IGNORECASE)'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "'stance' leaves the word list, so every Scottish-style stance code silently stops being a stand and those stops lose their letter",
+     "find": '(stop|stand|bay|gate|platform|stance|berth)',
+     "to": '(stop|stand|bay|gate|platform|berth)'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the stand code keeps the feed's own case, so 'Bay 12a' and 'Bay 12A' become two different bays and a sheet matches neither",
+     "find": '        return m.group(2).upper(), m.group(1).lower()',
+     "to": '        return m.group(2), m.group(1).lower()'},
+
+    # THE POSITION. Every stop on every sheet is drawn at these two numbers.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a published WGS84 pair is recorded as having been converted from the grid, so the provenance column says every position was derived and nobody can tell which half was measured",
+     "find": '            return float(lat), float(lon), "naptan"',
+     "to": '            return float(lat), float(lon), "osgb"'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a stop with neither a lat/lon nor a grid reference is placed at 0N 0E -- a real point in the Gulf of Guinea -- instead of being left without a position",
+     "find": '    return None, None, None',
+     "to": '    return 0.0, 0.0, None'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the converted position is rounded to three decimal places, moving every Cambridgeshire stop by up to 70 metres -- several stops' worth, on a sheet with no reference copy to diff against",
+     "find": '            return round(la, 7), round(lo, 7), "osgb"',
+     "to": '            return round(la, 3), round(lo, 3), "osgb"'},
+
+    # THE ROWS. What a downloaded CSV becomes once it is in the table.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the dedupe is dropped, so a stop appearing in two ATCO areas' downloads is inserted twice and the UNIQUE index at the end aborts the whole build after the last one",
+     "find": '        if not atco or atco in seen:',
+     "to": '        if not atco:'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a blank cell is stored as an empty string rather than NULL, so the bearing coverage figure -- which is what says whether a boarding plan can name a direction -- reads 100% for every region",
+     "find": '        vals = [(row.get(c) or "").strip() or None for c in COLUMNS]',
+     "to": '        vals = [(row.get(c) or "").strip() for c in COLUMNS]'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the area column takes four characters of the ATCO code instead of three, so the register can no longer be joined back to the area request that fetched it",
+     "find": 'atco[:3], lat, lon, src',
+     "to": 'atco[:4], lat, lon, src'},
+
+    # WHICH AREAS GET FETCHED. What keeps the download at 10 MB rather than 96.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a region that is registered but not built is scanned anyway, so a stale entry can point the area scan at a file that is not a GTFS build",
+     "find": '        if r.get("status") != "built":',
+     "to": '        if False:'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the `_example_west_yorkshire` comment entry is treated as a region, so the stub documenting how to add one becomes one and the scan opens a dataset nobody has built",
+     "find": '        if name.startswith("_"):',
+     "to": '        if False:'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "a missing regions.json returns no regions instead of stopping, so the build fetches nothing, writes an empty register over the real one and reports success",
+     "find": '        sys.exit(f"regions.json not found at {reg_path} -- pass --root or --areas")',
+     "to": '        return []'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the area scan takes four characters of stop_id, so it asks the DfT for areas that do not exist and never asks for the ones our own datasets use",
+     "find": '"SELECT substr(stop_id,1,3) a, COUNT(*) n FROM stops GROUP BY 1"',
+     "to": '"SELECT substr(stop_id,1,4) a, COUNT(*) n FROM stops GROUP BY 1"'},
+
+    # COVERAGE -- "the number that decides whether a boarding plan is possible at
+    # a given place", and the only figure anybody reads off this run.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the attached GTFS database is never detached, so the FIRST region reports correctly and every region after it fails -- on this laptop, a report that is right about Cambridgeshire and silent about everywhere else",
+     "find": '            con.execute("DETACH DATABASE g")',
+     "to": '            pass'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "every matched stop is counted as carrying a stand code, so the coverage table says a boarding plan is possible everywhere and the first one built discovers otherwise",
+     "find": '                "WHERE n.stand IS NOT NULL"',
+     "to": '                "WHERE 1"'},
+
+    # THE BUILD ITSELF.
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "areas are fetched alphabetically rather than busiest first, so a run cut off by the 200-per-hour rate limit loses the areas our own maps depend on most",
+     "find": '        order = sorted(area_counts, key=lambda a: (-(area_counts.get(a) or 0), a))',
+     "to": '        order = sorted(area_counts)'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the ATCOCode index stops being UNIQUE, so a dedupe failure no longer aborts the build -- it ships a register with duplicate stops and every downstream join silently doubles",
+     "find": '        "CREATE UNIQUE INDEX ix_naptan_atco ON naptan(ATCOCode)",',
+     "to": '        "CREATE INDEX ix_naptan_atco ON naptan(ATCOCode)",'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "an area nobody could download is recorded as fetched with zero rows, so COULD NOT LOOK becomes a measurement and a county nobody could reach looks like a county with no buses",
+     "find": '                failed.append(area)',
+     "to": '                fetched.append({"area": area, "rows": 0})'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "an existing register is not removed before the rebuild, so a rebuild that should have shrunk the table keeps every row the last one had",
+     "find": '        os.remove(out)',
+     "to": '        pass'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the provenance timestamp loses its ISO UTC shape, so everything that reads how old the register is -- the board and the refresh report -- gets a string it cannot parse",
+     "find": '"builtAt": started.strftime("%Y-%m-%dT%H:%M:%SZ"),',
+     "to": '"builtAt": started.strftime("%d/%m/%Y %H:%M"),'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the active-stop count includes the withdrawn rows, so the sidecar overstates the register and a shrinking network reads as a stable one",
+     "find": '"SELECT COUNT(*) FROM naptan WHERE Status=\'active\'"',
+     "to": '"SELECT COUNT(*) FROM naptan"'},
+
+    # ---------------------------------------------------------------- gtfs_build.py
+    # THE OTHER HALF OF THE PAIR `_stubs.py` LOADS. `naptan_build.py` above decides
+    # what a STOP is; this one decides what a BUS is, and its `TABLES` is the schema
+    # every GTFS fixture in test/python/ is created from. Its output is gitignored
+    # and rebuilt by hand when BODS reissues the feed, so no byte gate, ratchet or
+    # board has ever had an opinion about it -- and unlike a wrong stand code, a
+    # route this filter silently dropped is a bus that never appears on the sheet
+    # at all, with nothing on the sheet to say so.
+
+    # THE SCHEMA. What `TABLES` says is what `_stubs.gtfs_db` builds, so the two
+    # parting makes every GTFS fixture in this folder a correct assertion about a
+    # table the real builder does not make.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`stops` loses `stop_code` from the declared schema, so the real database and every fixture in test/python/ stop having the same shape",
+     "find": '    "stops":   ["stop_id","stop_code","stop_name","stop_lat","stop_lon"],',
+     "to": '    "stops":   ["stop_id","stop_name","stop_lat","stop_lon"],'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`shapes` leaves the declared tables, so no route in the estate can be drawn along its own shape and every fixture naming one is rejected",
+     "find": '    "shapes": ["shape_id","shape_pt_lat","shape_pt_lon","shape_pt_sequence"],',
+     "to": ''},
+
+    # READING THE ZIP. BODS reissues this feed about weekly and pins no column
+    # order; nothing anywhere would notice a positional read until a map was drawn.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the CSV is read by column POSITION rather than by name, so a feed that reorders its columns puts the latitude in the stop name and draws the whole estate somewhere else",
+     "find": '            idx=[hdr.index(c) if c in hdr else None for c in cols]',
+     "to": '            idx=[i if i<len(hdr) else None for i,c in enumerate(cols)]'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the short-row guard goes, so one ragged line anywhere in a nine-million-row stop_times kills the whole rebuild",
+     "find": 'batch.append(tuple(row[i] if (i is not None and i<len(row)) else None for i in idx))',
+     "to": 'batch.append(tuple(row[i] if i is not None else None for i in idx))'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the byte-order mark is no longer stripped, so the first header cell is never matched, every stop_id in the database is NULL, and the dataset joins to nothing",
+     "find": '            rd=csv.reader(io.TextIOWrapper(raw,encoding="utf-8-sig")); hdr=next(rd)',
+     "to": '            rd=csv.reader(io.TextIOWrapper(raw,encoding="utf-8")); hdr=next(rd)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "a member the zip does not hold is opened anyway rather than skipped, so a feed shipping no shapes.txt -- which GTFS permits -- dies instead of building",
+     "find": '        if fn not in zf.namelist(): print("skip",fn); continue',
+     "to": '        if fn not in zf.namelist(): print("skip",fn)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the stop_times trip index is built on the wrong column, so the filter's join over nine million rows becomes a full scan and the rebuild is abandoned rather than slow",
+     "find": '    cur.execute("CREATE INDEX ix_st_trip ON stop_times(trip_id)")',
+     "to": '    cur.execute("CREATE INDEX ix_st_trip ON stop_times(stop_sequence)")'},
+
+    # THE FILTER. The file's headline claim, and the one whose breach produces a
+    # sheet that is reproducible, gates green, and has lost its terminus.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the ATCO prefix match stops being anchored, so every stop id in the country that merely CONTAINS 0500 or 0570 drags its trips into Cambridgeshire's dataset",
+     "find": '''    cond=" OR ".join(f"st.stop_id LIKE '{p}%'" for p in prefixes)''',
+     "to": '''    cond=" OR ".join(f"st.stop_id LIKE '%{p}%'" for p in prefixes)'''},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "Peterborough leaves the default prefixes, so every route that touches this area only at a 0570 stop vanishes from the dataset the file is named after",
+     "find": 'KEEP_PREFIXES = ("0500", "0570")',
+     "to": 'KEEP_PREFIXES = ("0500",)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "only the in-county calls of a kept trip are carried, so every route is truncated at the county boundary and an external sheet -- whose whole job is where the bus GOES -- loses its terminus",
+     "find": '    cur.execute("CREATE TABLE stop_times AS SELECT st.* FROM src.stop_times st JOIN keep_trips k ON k.trip_id=st.trip_id")',
+     "to": '    cur.execute(f"CREATE TABLE stop_times AS SELECT st.* FROM src.stop_times st JOIN keep_trips k ON k.trip_id=st.trip_id WHERE {cond}")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`stops` is filtered by the prefix a second time instead of by what the kept calls reference, so the out-of-county stops a route runs to are absent and every such stop_times row points at nothing",
+     "find": '    cur.execute("CREATE TABLE stops AS SELECT * FROM src.stops WHERE stop_id IN (SELECT DISTINCT stop_id FROM stop_times)")',
+     "to": '    cur.execute(f"CREATE TABLE stops AS SELECT * FROM src.stops WHERE {cond}".replace("st.stop_id","stop_id"))'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`routes` stops being filtered, so the dataset carries every route in East Anglia and anything counting routes at a town counts a region",
+     "find": '    cur.execute("CREATE TABLE routes AS SELECT * FROM src.routes WHERE route_id IN (SELECT DISTINCT route_id FROM trips)")',
+     "to": '    cur.execute("CREATE TABLE routes AS SELECT * FROM src.routes")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`agency` stops being filtered, so operators who run nothing here appear in the dataset and can be printed beside a service they do not work",
+     "find": '    cur.execute("CREATE TABLE agency AS SELECT * FROM src.agency WHERE agency_id IN (SELECT DISTINCT agency_id FROM routes)")',
+     "to": '    cur.execute("CREATE TABLE agency AS SELECT * FROM src.agency")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`calendar` stops being filtered, so the dataset carries operating patterns for services it does not hold",
+     "find": '    cur.execute("CREATE TABLE calendar AS SELECT * FROM src.calendar WHERE service_id IN (SELECT DISTINCT service_id FROM trips)")',
+     "to": '    cur.execute("CREATE TABLE calendar AS SELECT * FROM src.calendar")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "`calendar_dates` stops being filtered, so the exceptions table carries rules for services the dataset does not hold and a bank-holiday question is answered about the wrong bus",
+     "find": '    cur.execute("CREATE TABLE calendar_dates AS SELECT * FROM src.calendar_dates WHERE service_id IN (SELECT DISTINCT service_id FROM trips)")',
+     "to": '    cur.execute("CREATE TABLE calendar_dates AS SELECT * FROM src.calendar_dates")'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the empty shape_id stops being excluded, so a trip that carries no shape selects the shapes rows whose id is blank and draws a line to 0N 0E",
+     "find": """WHERE s.shape_id IN (SELECT DISTINCT shape_id FROM trips WHERE shape_id IS NOT NULL AND shape_id<>'')""",
+     "to": """WHERE s.shape_id IN (SELECT DISTINCT shape_id FROM trips)"""},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "an existing output database is added to rather than replaced, so a table an older version of this script wrote survives every rebuild under a name nothing now drops",
+     "find": '    if os.path.exists(out_db): os.remove(out_db)',
+     "to": '    if False: os.remove(out_db)'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the working table is left in the output, where a reader cannot tell it from a table the feed ships",
+     "find": '    con.commit(); cur.execute("DROP TABLE keep_trips")',
+     "to": '    con.commit()'},
+
+    # THE SIDECAR. The only mutation here that restores a fault this project
+    # actually shipped: while a bare feed_info.json existed,
+    # `gtfs_regions.feed_info()` fell back to it, so every region whose own sidecar
+    # was missing reported Cambridgeshire's build date and validity window as its
+    # own -- a wrong answer indistinguishable from a right one.
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the sidecar loses the dataset's name and is written as a bare feed_info.json again, so every region without one reports Cambridgeshire's build date and validity window as its own",
+     "find": '    with open(os.path.join(outdir,f"feed_info_{stem}.json"),"w",encoding="utf-8") as fh:',
+     "to": '    with open(os.path.join(outdir,"feed_info.json"),"w",encoding="utf-8") as fh:'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the sidecar records the module's default prefixes instead of the ones this build was asked for, so a regional dataset's record says what the code usually does rather than what it did",
+     "find": '"keep_prefixes": list(prefixes), "counts": counts,',
+     "to": '"keep_prefixes": list(KEEP_PREFIXES), "counts": counts,'},
+
+    {"suite": "test_gtfs_build.py", "file": "gtfs_build.py",
+     "what": "the --keep-prefixes list is no longer trimmed, so `0500, 0570` typed with the space a person types silently builds a Cambridgeshire-only dataset under a name that says otherwise",
+     "find": '    prefixes=tuple(p.strip() for p in a.keep_prefixes.split(",") if p.strip())',
+     "to": '    prefixes=tuple(a.keep_prefixes.split(","))'},
+    # ---------------------------------------------------------------- gen_verification.py
+    # THE ONE ARTEFACT HERE WHOSE ONLY READER IS A PERSON. This module turns
+    # verification.json into the verification.docx that Peter opens, that
+    # `stage.js commit S6` mirrors into `_latest/`, and that git tracks. Nothing
+    # downstream parses it, so every mutation below produces a document that is
+    # well-formed, opens cleanly, and is wrong in a sentence.
+    #
+    # The first three are the faults the suite was written on, restored verbatim.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "an uncurated S1 prints the red BLOCKED banner -- 'hard findings must be resolved' over a run with no hard findings, two lines under a subtitle saying 0 hard",
+     "find": '    uncurated = verdict == "not-verified-uncurated-s1"',
+     "to": '    uncurated = False'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "a borrowed red team is never named, so the fifteen shipped reports that reached PASS on another map's answer say only 'the stored data is safe to build/rely on'",
+     "find": '    if borrowed or uncurated:',
+     "to": '    if False:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the subtitle prints the routes version raw, so a place map reads 'routes vv1.0' -- the form 24 of the 79 tracked reports carry",
+     "find": "_bare_version(inputs.get('routesVersion'))",
+     "to": "inputs.get('routesVersion')"},
+
+    # The other direction on the qualification, which is the one that would put
+    # the fault back invisibly: a sentence printed on every report is a sentence
+    # nobody reads, and the fifteen would be indistinguishable again.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "every report is qualified, so the qualification stops meaning anything and an unqualified pass cannot be told from a borrowed one",
+     "find": '    if borrowed or uncurated:',
+     "to": '    if True:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the downgraded HARDs are not counted beside the verdict, so a pass that exists only because a blocking finding was restated reads as an ordinary one",
+     "find": '            if downgraded:',
+     "to": '            if False:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the standing prose claims THIS map's services were re-derived from scratch when the answer was borrowed from another map's",
+     "find": '            + ("that map\'s" if borrowed else "the town\'s")',
+     "to": '            + "the town\'s"'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "uncuratedS1 is read only through summary.verdict, so the 19 S6 runs on the estate that predate that field lose the qualification entirely",
+     "find": '        if data.get("uncuratedS1"):',
+     "to": '        if False:'},
+
+    # HARD and the literal word "soft" as two filters rather than a partition.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "a finding whose severity is neither word appears in no row, no bullet and no count, and the 'no findings' row that would have looked odd is suppressed with it",
+     "find": '    soft = [f for f in findings if f.get("severity") != "hard"]',
+     "to": '    soft = [f for f in findings if f.get("severity") == "soft"]'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "_bare_version strips every leading v rather than one, so a version somebody wrote as vv1.0 is silently corrected instead of shown",
+     "find": '    return s[1:] if s[:1] in ("v", "V") else s',
+     "to": '    return s.lstrip("vV")'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the findings table is printed in file order, so the blocking ones are scattered among the soft ones in the table a reader scans first",
+     "find": '    for f in hard + soft:',
+     "to": '    for f in findings:'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the evidence cell loses its [sanity]/[redteam] tag, so nothing on the row says whether the finding came from our own checks or from the independent pass",
+     "find": '        tail = (f"[{srctag}]\\n" if srctag else "") + tail',
+     "to": '        tail = tail'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "red-team sources are listed even when no red team ran, so a sanity-checks-only report cites evidence nobody consulted",
+     "find": '    if rt and data.get("redteamSources"):',
+     "to": '    if data.get("redteamSources"):'},
+
+    # The helper's own comment says what this one is: tblGrid left at the equal
+    # widths python-docx created the table with is what headless LibreOffice
+    # lays the PDF out from, whatever the cells say.
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "tblGrid is left at equal widths, so the PDF crams Finding and Evidence against the three short code columns",
+     "find": '    for gridcol, w in zip(grid.findall(qn("w:gridCol")), widths):',
+     "to": '    for gridcol, w in zip([], widths):'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the default output is a bare filename, so a report written with no out path lands in whatever directory the caller happened to be standing in rather than beside its run",
+     "find": '        out = os.path.join(os.path.dirname(os.path.abspath(src)), "verification.docx")',
+     "to": '        out = "verification.docx"'},
+
+    {"suite": "test_gen_verification.py", "file": "gen_verification.py",
+     "what": "the created date is left at python-docx's 2013-12-23 template default, which Explorer shows and a reader takes for the date of the check",
+     "find": '    doc.core_properties.created = _now',
+     "to": '    _now = _now'},
+
 ]
 
 

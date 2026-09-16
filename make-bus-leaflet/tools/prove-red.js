@@ -930,6 +930,22 @@ const MUTATIONS = [
     find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
     to: "  const env = { ...(r.env || {}), SKILL_ASSETS: SK };" },
 
+  /* buses-data OA-342 item 3, 2026-09-14 — the END-TO-END pair, and the second of them
+   * is why the new suite exists. `build_s4.test.js` asks sheetEnv() its question
+   * directly, so it cannot see a build path that stops CALLING it: measured, the bypass
+   * below leaves all twelve of that suite's tests green while a hybrid sheet is drawn.
+   * The first is the original bug asserted one level out, because a suite that catches
+   * the bypass and not the bug it was written for is covering the wrong half. */
+  { suite: 'build_s4_engine_end_to_end.test.js', file: 'build_s4.js',
+    what: 'the engine stops being set for every row — the 2026-09-13 bug, seen here as what a spawned generator actually resolved rather than as a key in a returned object',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}) };" },
+
+  { suite: 'build_s4_engine_end_to_end.test.js', file: 'build_s4.js',
+    what: "the build path stops handing sheetEnv's answer to the spawn, so the RECIPE is immaculate and the sheet is still drawn by whatever engine is installed",
+    find: "    const res = runNode(script, dir, env);",
+    to: "    const res = runNode(script, dir);" },
+
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: 'the area internal stops asking for build-meta.json, which is what commit S4 refuses an area without',
     find: "    area:  { copy: [[SK, 'gen_internal.js']], script: 'gen_internal.js', meta: true, fatal: true, out: 'internal.svg' },",

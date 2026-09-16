@@ -58,6 +58,7 @@
     "test:prove-red-via-chain": "node tools/prove-red-via-chain.js",
     "test:prove-lane-mirror": "node tools/prove-lane-mirror.js",
     "census:lanes": "node tools/lane-census.js",
+    "measure:days-vocabulary": "python3 tools/days-vocabulary.py",
     "test:prove-red-wiring": "node tools/prove-red-wiring.js",
     "test:prove-red-engine-indirection": "node tools/prove-red-engine-indirection.js",
     "gate:wiring": "node tools/check-wiring.js"

@@ -18,6 +18,7 @@ const os = require('os');
 const { spawnSync } = require('child_process');
 const { scratchDir } = require('./scratch');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const RUN = path.resolve(process.argv[2] || process.cwd());
 const PORT = +(process.argv[3] || 5180);
 if (!fs.existsSync(path.join(RUN, 'routes.json'))) { console.error('no routes.json in ' + RUN); process.exit(1); }
@@ -152,3 +153,7 @@ const server = http.createServer((req, res) => {
   send(404, 'text/plain', 'not found');
 });
 server.listen(PORT, () => console.log('diagram pin editor: http://localhost:' + PORT + '  (run dir: ' + RUN + ')'));
+}
+
+if (require.main === module) main();
+module.exports = { main };

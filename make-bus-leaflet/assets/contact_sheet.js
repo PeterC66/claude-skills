@@ -59,6 +59,7 @@ const { parseArgs, resolveBuses } = require('./cli');
 
 // The one parser (OA-232 Tier 2.5). `flag` keeps its name and its meaning; only
 // the loop behind it is gone.
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const argv = process.argv.slice(2);
 const FLAGS = parseArgs(argv);
 const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
@@ -370,3 +371,7 @@ table.sumt th:first-child,table.sumt td:first-child{text-align:left}
   console.log(`old-side sanity (frozen baseline was 658 DEF / 245 pt-over-ink): `
     + `${sum(rows, 'om', 'defects')} DEF / ${sum(rows, 'om', 'pointLabelsOverInk')} pt-over-ink`);
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

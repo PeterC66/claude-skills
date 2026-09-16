@@ -10,6 +10,7 @@
 // Usage: node backfill_coords.js <_all_atco.json> <S,W,N,E> <atco2ll.json> <atco2name.json>
 //   (atco2ll/atco2name are read if present and updated in place; pass paths in the S2 dir.)
 const fs=require('fs');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const UA='make-bus-leaflet/1.0 (bus leaflet project)';
 const ALL=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 const BBOX=process.argv[3];                 // "south,west,north,east"
@@ -58,3 +59,7 @@ async function bustimesStop(a){
     '| coverage',ALL.length-stillMiss.length,'/',ALL.length,
     stillMiss.length?('| STILL MISSING '+stillMiss.join(' ')):'');
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

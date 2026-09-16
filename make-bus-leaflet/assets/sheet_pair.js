@@ -24,6 +24,7 @@
 'use strict';
 const sharp = require('sharp');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const [oldSvg, newSvg, out, labels = 'shipped|with frequency tiers', W = '1500'] = process.argv.slice(2);
 if (!oldSvg || !newSvg || !out) {
   console.error('usage: node sheet_pair.js old.svg new.svg out.png ["before|after"] [width-px]');
@@ -56,3 +57,7 @@ const caption = (text, width) => Buffer.from(
     .composite(composite).png().toFile(out);
   console.log(`wrote ${out}  ${w}x${H}`);
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

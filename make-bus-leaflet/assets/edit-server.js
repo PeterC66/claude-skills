@@ -15,6 +15,7 @@ const http = require('http'); const fs = require('fs'); const path = require('pa
 const os = require('os');
 const { execFileSync } = require('child_process');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const MAP = (process.argv[2] || 'internal').toLowerCase() === 'external' ? 'external' : 'internal';
 // run dir: 3rd CLI arg or EDITOR_DIR env, else the current working directory
 const DIR = process.argv[3] ? path.resolve(process.argv[3]) : (process.env.EDITOR_DIR || process.cwd());
@@ -114,3 +115,7 @@ server.listen(PORT, ()=>{
   if(process.env.BUS_EDITOR_NOOPEN==='1'){ console.log('  (auto-open disabled) open the URL above in your browser.'); return; }
   try{ execFileSync('cmd',['/c','start','""', url]); }catch(e){ console.log('  open the URL above in your browser.'); }
 });
+}
+
+if (require.main === module) main();
+module.exports = { main };

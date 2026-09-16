@@ -49,6 +49,7 @@ const path = require('path');
 // somewhere confusing rather than saying where it had looked. `resolveBuses`
 // asks the flag, then the environment, then the one named laptop path.
 const { parseArgs, resolveBuses } = require('./cli.js');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const FLAGS = parseArgs(process.argv.slice(2));
 const arg = (name, fallback) => (typeof FLAGS[name] === 'string' ? FLAGS[name] : fallback);
 const has = (name) => name in FLAGS;
@@ -164,3 +165,7 @@ function findLatestBuildMeta(dir) {
   found.sort((a, b) => b.mtime - a.mtime);
   return found[0];
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

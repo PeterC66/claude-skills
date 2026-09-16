@@ -28,6 +28,7 @@
 //                  stopT:{ATCO:{i,t,d}}, fallbacks:[{from,to,why}] } },
 //   edgeWay: { "nodeA|nodeB": {way,name,highway} } }
 const fs = require('fs');
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const SNAP_M = 120, SERVICE_PEN = 1.6, LIVING_PEN = 1.3;
 /* HOW FAR A PROJECTED TICK MAY SIT FROM ITS OWN LINE BEFORE THE BUILD SAYS SO.
@@ -283,3 +284,7 @@ if (farReport.length) {
 }
 fs.writeFileSync(DIR + '/routes_paths.json', JSON.stringify(OUT));
 console.log('routes_paths.json written: ' + Object.keys(OUT.routes).length + ' routes, ' + Object.keys(OUT.edgeWay).length + ' road edges used');
+}
+
+if (require.main === module) main();
+module.exports = { main };

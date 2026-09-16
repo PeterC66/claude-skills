@@ -16,10 +16,13 @@
  * actually fails is by being RIGHT too often — the portal has 34 local branches
  * and 24 of them are finished work that still looks unmerged from one angle or
  * another. A row that raised those would be muted inside a week, which is this
- * project's standard way of losing a gate. So five of the nine assertions below
+ * project's standard way of losing a gate. So a third of the assertions below
  * are controls asserting SILENCE, and two of them cannot be falsified by
  * deleting the guard at all — they go red against a broken SCOPE, and they are
- * named CONTROL rather than counted as evidence that the rule works.
+ * named CONTROL rather than counted as evidence that the rule works. The run
+ * prints how many controls it carried; do not write the number here, because
+ * this sentence said "five of the nine" until 2026-09-15 and by then it was
+ * seven of twenty-five.
  *
  * THE TRAP HAS ITS OWN FIXTURE, because reasoning about it got the wrong answer
  * first. `git cherry` is defeated by a squash merge of TWO commits and not by a
@@ -43,6 +46,15 @@
  *     fail: the word is in the sentence whatever the number is. Dropping the
  *     insertion count entirely left it green. It asserts the COUNT now, and
  *     that mutation is red.
+ *
+ * THE 2026-09-15 ROUND ADDED THE `gone-extended` GRADE, and its two mutations
+ * were run the same way — collapsing the grade back to `gone-upstream` reddens 7
+ * assertions, and dropping the trunk-HISTORY half of `addedAndAbsent` reddens 4.
+ * Worth more than either: the `squashed-then-trunk-deleted` CONTROL went red
+ * against the first draft of the rule and is what put that history half in.
+ * A rule with three measured rejections behind it was still wrong about a case
+ * the 22 real branches did not happen to contain, and only a control asserting
+ * silence could have said so.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -134,7 +146,73 @@ try {
   g('push', 'origin', 'main');
   g('push', 'origin', '--delete', 'squashed-double');
 
-  // 6. IN A WORKTREE — the blind spot that started all this. `countUnpushed`
+  // 6. SQUASHED THEN EXTENDED — squash-merged and the remote branch deleted,
+  //    exactly like 5, and then committed to AGAIN. The new commit adds a file
+  //    the trunk has never had. This is what the loop does to its own branch
+  //    every hour, and until 2026-09-15 it was folded into 5's silent note.
+  g('checkout', '-b', 'squashed-extended');
+  commit('se1.txt', 'a\n');
+  commit('se2.txt', 'b\n');
+  g('push', '-u', 'origin', 'squashed-extended');
+  g('checkout', 'main');
+  g('merge', '--squash', 'squashed-extended');
+  g('commit', '-m', 'squash squashed-extended (#3)');
+  g('push', 'origin', 'main');
+  g('push', 'origin', '--delete', 'squashed-extended');
+  g('checkout', 'squashed-extended');
+  commit('se-after.txt', 'x\ny\nz\nw\n');   // four lines: the row must say four
+
+  // 7. CONTROL — THE TRUNK DELETED A FILE THE BRANCH STILL CARRIES. Measured on
+  //    2026-09-15 as the false-positive class that sank the obvious rule: the
+  //    portal dropped `CHANGELOG.md` in the 2026-08-27 truncation, so 7 of its
+  //    17 gone-upstream branches carry a path the trunk lacks and NOT ONE of
+  //    them has gained a commit. A branch of this shape must stay silent — the
+  //    trunk deleting a file is not this branch adding one.
+  g('checkout', 'main');
+  g('checkout', '-b', 'squashed-then-trunk-deleted');
+  commit('sd1.txt', 'a\n');
+  commit('sd2.txt', 'b\n');
+  g('push', '-u', 'origin', 'squashed-then-trunk-deleted');
+  g('checkout', 'main');
+  g('merge', '--squash', 'squashed-then-trunk-deleted');
+  g('commit', '-m', 'squash squashed-then-trunk-deleted (#4)');
+  g('rm', 'sd2.txt');
+  g('commit', '-m', 'the trunk drops sd2.txt later');
+  g('push', 'origin', 'main');
+  g('push', 'origin', '--delete', 'squashed-then-trunk-deleted');
+
+  // 8. CONTROL — THE NAMED HOLE, written as a case rather than as a sentence. A
+  //    post-squash commit that only MODIFIES a file the branch already had adds
+  //    no path, so it stays graded as landed. Silent, not wrong: the branch sits
+  //    where it sat before `gone-extended` existed. A later widening flips this
+  //    case; until then it is the boundary of the claim.
+  g('checkout', 'main');
+  g('checkout', '-b', 'squashed-extended-modify-only');
+  commit('mo1.txt', 'a\n');
+  commit('mo2.txt', 'b\n');
+  g('push', '-u', 'origin', 'squashed-extended-modify-only');
+  g('checkout', 'main');
+  g('merge', '--squash', 'squashed-extended-modify-only');
+  g('commit', '-m', 'squash squashed-extended-modify-only (#5)');
+  g('push', 'origin', 'main');
+  g('push', 'origin', '--delete', 'squashed-extended-modify-only');
+  g('checkout', 'squashed-extended-modify-only');
+  commit('mo1.txt', 'a\nand more\n');
+  g('checkout', 'main');
+
+  // 9. STARTED FROM THE TRUNK WITH AN UPSTREAM ALREADY SET. `git worktree add -b
+  //    <b> <path> origin/main` — how a branch is started in this estate — points
+  //    the new branch's upstream at origin/MAIN. A branch with an upstream
+  //    configured used to read as "somebody can see it"; nobody can. Found on
+  //    2026-09-15 because the tick writing this created one for its own work and
+  //    watched the board stay quiet about it.
+  g('branch', 'upstream-is-the-trunk', 'main');
+  g('branch', '--set-upstream-to=origin/main', 'upstream-is-the-trunk');
+  g('checkout', 'upstream-is-the-trunk');
+  commit('ut.txt', 'a\n');
+  g('checkout', 'main');
+
+  // 10. IN A WORKTREE — the blind spot that started all this. `countUnpushed`
   //    reads HEAD in the main checkout and cannot see this branch at all.
   g('worktree', 'add', '-b', 'in-a-worktree', path.join(root, 'wt'));
   execFileSync('git', ['-C', path.join(root, 'wt'), 'config', 'user.email', 'harness@example.invalid'], { stdio: 'ignore' });
@@ -179,6 +257,25 @@ control(grade('pushed-live') === 'pushed', 'a branch that IS on the remote is no
 control(grade('merged-plain') === 'merged', 'a branch merged the ordinary way is not stranded', `got ${grade('merged-plain')}`);
 control(grade('squashed-single') === 'merged', 'a SINGLE-commit squash merge is seen as merged by patch identity', `got ${grade('squashed-single')}`);
 control(grade('squashed-double') === 'gone-upstream', 'a TWO-commit squash merge is rescued by its gone upstream, not by cherry', `got ${grade('squashed-double')}`);
+ok(grade('upstream-is-the-trunk') === 'stranded',
+  'a branch whose upstream was set to the TRUNK when it was created is still stranded — an upstream is not a push',
+  `got ${grade('upstream-is-the-trunk')}`);
+ok(grade('squashed-extended') === 'gone-extended',
+  'a branch COMMITTED TO AFTER its squash landed is gone-EXTENDED, not landed', `got ${grade('squashed-extended')}`);
+control(grade('squashed-then-trunk-deleted') === 'gone-upstream',
+  'a branch carrying a file the TRUNK later deleted is still landed — the class that sank the obvious rule',
+  `got ${grade('squashed-then-trunk-deleted')}`);
+control(grade('squashed-extended-modify-only') === 'gone-upstream',
+  'the named hole: a post-squash commit that only MODIFIES is silent, and that boundary is asserted rather than described',
+  `got ${grade('squashed-extended-modify-only')}`);
+
+// THE DISCRIMINATOR'S THIRD VALUE, asserted so a refusal can never be read as an
+// absence. It is asked only of a gone upstream; everywhere else it must be null,
+// which is "not asked" and is a different thing from "nothing found".
+ok((by['squashed-extended'] || {}).addedMissing?.length === 1
+  && (by['stranded'] || {}).addedMissing === null,
+  'the added-and-absent question is asked of a gone upstream and of nothing else, and null means NOT ASKED',
+  `extended=${JSON.stringify((by['squashed-extended'] || {}).addedMissing)} stranded=${JSON.stringify((by['stranded'] || {}).addedMissing)}`);
 
 // THE TRAP, STATED AS AN ASSERTION RATHER THAN AS A COMMENT. If this ever fails
 // the fixture has stopped being the shape that lies, and the control above has
@@ -194,12 +291,35 @@ console.log('\n== the rows it raises ==');
 
 const got = unpushedBranchItems({ repos: [{ key: 'f', name: 'fixture', dir: work, prPerChange: true }], git: defaultGit });
 const names = got.items.map((i) => i.ref).sort();
-ok(JSON.stringify(names) === JSON.stringify(['in-a-worktree', 'stranded']),
-  'two rows, and they are the two stranded branches', `got ${JSON.stringify(names)}`);
+ok(JSON.stringify(names) === JSON.stringify(['in-a-worktree', 'squashed-extended', 'stranded', 'upstream-is-the-trunk']),
+  'four rows — the three stranded branches and the one that was added to after its merge', `got ${JSON.stringify(names)}`);
 ok(got.items.every((i) => i.rank === 3), 'each sits in SOMEONE IS BLOCKED (rank 3)');
-ok(got.items.every((i) => i.do.some((d) => d.kind === 'shell' && d.cmd.includes(`push -u origin ${i.ref}`) && d.cmd.includes(work))),
-  'each carries a self-contained push command with its repository inside it',
-  got.items.map((i) => (i.do.find((d) => d.kind === 'shell') || {}).cmd).join(' | '));
+const strandedRows = got.items.filter((i) => i.ref !== 'squashed-extended');
+ok(strandedRows.every((i) => i.do.some((d) => d.kind === 'shell' && d.cmd.includes(`push -u origin ${i.ref}`) && d.cmd.includes(work))),
+  'each stranded row carries a self-contained push command with its repository inside it',
+  strandedRows.map((i) => (i.do.find((d) => d.kind === 'shell') || {}).cmd).join(' | '));
+
+// THE ADVICE IS THE POINT OF THE SEPARATE ROW, so it is asserted rather than
+// left to the prose. Telling Peter to push this branch would re-propose
+// everything its squash already took, because a pull request diffs against the
+// merge base — so the row must NOT carry the push command the others carry, and
+// must say what to do instead.
+const extRow = got.items.find((i) => i.ref === 'squashed-extended');
+ok(extRow && !extRow.do.some((d) => d.kind === 'shell' && /push/.test(d.cmd))
+  && extRow.do.some((d) => d.kind === 'chat' && /cherry-pick/.test(d.what)),
+  'the extended row does NOT say push it, and says cherry-pick onto a fresh branch instead',
+  JSON.stringify((extRow || {}).do));
+ok(/\b4 insertion/.test((extRow || {}).why || ''),
+  'and it sizes the work added SINCE the merge — four lines — not the whole branch',
+  (extRow || {}).why);
+ok(/se-after\.txt/.test((extRow || {}).detail || ''),
+  'and names the file that proves it, so a reader can check the verdict rather than trust it',
+  (extRow || {}).detail);
+// Membership of the note's own comma-separated list, not a substring match:
+// `squashed-extended-modify-only` starts with the same letters and is supposed
+// to be in there, so a /squashed-extended/ test would have passed either way.
+ok(!got.notes.some((n) => n.split(/[:,]\s+/).includes('squashed-extended')),
+  'and it is no longer swallowed by the note that says these branches landed', got.notes.join(' | '));
 // NOT `/insertion/`, which is what this said first and which cannot fail: the
 // sentence carries the word "insertion(s)" whatever the number is, including
 // when the number is the string "an unknown". Assert the COUNT, against a
@@ -224,8 +344,8 @@ const repo = conc.readRepo({ key: 'f', label: 'fixture', name: 'fixture', dir: w
 ok(repo.unpushed === 0,
   'with main checked out, countUnpushed reports NOTHING unpushed — the board would print "clean"',
   `unpushed=${repo.unpushed} basis=${repo.unpushedBasis}`);
-ok(got.items.length === 2,
-  'while this source names two branches of committed work nobody has pushed');
+ok(got.items.length === 4,
+  'while this source names four branches of committed work nobody has pushed');
 
 // ---------------------------------------------------------------------------
 // 5. REFUSAL IS NOT ABSENCE — a repo it cannot read says so, and raises nothing.

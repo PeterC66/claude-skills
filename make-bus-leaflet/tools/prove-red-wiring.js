@@ -145,6 +145,8 @@ function tree({ tools = {}, scripts = {}, steps = [], comment = '', patch = null
   fs.mkdirSync(path.join(tmp, 'skills', '.github', 'workflows'), { recursive: true });
 
   for (const [name, body] of Object.entries(tools)) {
+    // A name may carry a folder — `lib/helper.js` — since the tools/lib/ cases.
+    fs.mkdirSync(path.dirname(path.join(engine, 'tools', name)), { recursive: true });
     fs.writeFileSync(path.join(engine, 'tools', name), body || '// scratch\n');
   }
   fs.writeFileSync(path.join(engine, 'package.json'),
@@ -189,11 +191,21 @@ function tree({ tools = {}, scripts = {}, steps = [], comment = '', patch = null
   // the case — a checker pointed at a subject the harness itself supplied,
   // which is the estate's own named fault. Both of these regexes have already
   // had to be rewritten once, by the change that added the second one.
+  // RECURSIVE, with `/` separators, because `git ls-files tools/` is — the real
+  // enumeration answers `lib/baseline.js` for a file in tools/lib/, and a flat
+  // readdir would answer `lib` and trip the "neither a .js/.py tool" finding for
+  // a folder. The same walk stands in for the tracked-source enumeration the
+  // library rule reads, which in the real repository is `git ls-files '*.js'`.
   src = mustReplace(src,
     /const toolFiles = gitLines\(\[[\s\S]*?\.sort\(\);/,
-    "const toolFiles = fs.existsSync(path.join(dir, 'tools'))\n" +
-    "    ? fs.readdirSync(path.join(dir, 'tools')).sort() : [];",
+    "const walk = (d, pre = '') => fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true })\n" +
+    "    .flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name), pre + e.name + '/') : [pre + e.name]) : [];\n" +
+    "  const toolFiles = walk(path.join(dir, 'tools')).sort();",
     'the tools/ enumeration');
+  src = mustReplace(src,
+    /const sourceFiles = gitLines\(\[[\s\S]*?\.sort\(\);/,
+    "const sourceFiles = walk(dir).filter((f) => /\\.(?:c?js|mjs)$/.test(f) && !f.startsWith('node_modules/')).sort();",
+    'the tracked-source enumeration');
   src = mustReplace(src,
     /const manifestDirs = gitLines\(\[[\s\S]*?\.sort\(\);/,
     "const manifestDirs = fs.readdirSync(SKILLS)\n" +
@@ -489,6 +501,42 @@ withTree({
   } else {
     fail(`a NOT_IN_CI table keyed to a missing manifest was accepted (exit ${code})\n${out}`);
   }
+});
+
+// 15 — a LIBRARY under tools/lib/, loaded by a tool: not a finding -------------
+// (buses-data OA-353, 2026-09-16.) tools/lib/baseline.js was the estate's first
+// shared library under tools/, and question 1 reported it as a tool with no npm
+// script — a question a library cannot answer. This is the green arm: a library
+// some tracked source requires is clean, and is NOT reported under the old rule.
+withTree({
+  tools: { ...SELF, 'prove-red-thing.js': "const { x } = require('./lib/helper');\n", 'lib/helper.js': 'module.exports = { x: 1 };\n' },
+  scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
+  steps: [SELF_STEP, 'npm run test:thing'],
+}, ({ code, out }) => {
+  if (code === 0) ok('a library under tools/lib/ that a tool requires is clean, and is not asked for an npm script');
+  else fail(`a required library under tools/lib/ was reported (exit ${code})\n${out}`);
+});
+
+// 16 — a library nothing loads: a dark file, found and NAMED --------------------
+withTree({
+  tools: { ...SELF, 'prove-red-thing.js': "// no requires here\n", 'lib/orphan.js': 'module.exports = {};\n' },
+  scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
+  steps: [SELF_STEP, 'npm run test:thing'],
+}, ({ code, out }) => {
+  if (code === 1 && /tools\/lib\/orphan\.js is required by no tracked source/.test(out)) ok('a library under tools/lib/ that nothing requires is found and NAMED');
+  else fail(`an unrequired library was not reported (exit ${code})\n${out}`);
+});
+
+// 17 — THE CONTROL: a mention in a comment is not a reader ----------------------
+// The same shape as case 6 for scripts. `// see lib/orphan.js` is not a
+// require(), so a library whose only "reader" is a comment is still dark.
+withTree({
+  tools: { ...SELF, 'prove-red-thing.js': "// see lib/orphan.js for the verdict vocabulary\n", 'lib/orphan.js': 'module.exports = {};\n' },
+  scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
+  steps: [SELF_STEP, 'npm run test:thing'],
+}, ({ code, out }) => {
+  if (code === 1 && /tools\/lib\/orphan\.js is required by no tracked source/.test(out)) ok('control: a comment naming a library is not a require — it is still reported');
+  else fail(`a library mentioned only in a comment was accepted as loaded (exit ${code})\n${out}`);
 });
 
 for (const t of made) fs.rmSync(t, { recursive: true, force: true });

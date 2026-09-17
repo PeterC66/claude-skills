@@ -1506,6 +1506,94 @@ MUTATIONS = [
      "to": '''        else:
             print(f"{a.town} already in town_prefixes.json (or no prefix)")'''},
 
+    # ---------------------------------------------------------------- bootstrap_town.py
+    # The module scaffold_town.py shells out to, and where the derivation
+    # actually happens: the ATCO prefix the town is registered under, the anchor
+    # the internal sheet is centred on, the draft spokes and the candidate linear
+    # features. It runs before S1's human gate, so there is nothing yet to
+    # compare its output against and no gate downstream can see a fault in it.
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the haversine loses its factor of two, so every distance is half what it is -- a far stop reads as in-town and the draft spokes are drawn to the wrong places",
+     "find": '    return 6371*2*math.asin(math.sqrt(a))',
+     "to": '    return 6371*math.asin(math.sqrt(a))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the bearing's longitude difference is taken backwards, so every draft external spoke is mirrored east-for-west around the anchor",
+     "find": '    y=math.sin(math.radians(lo2-lo1))*math.cos(math.radians(la2))',
+     "to": '    y=math.sin(math.radians(lo1-lo2))*math.cos(math.radians(la2))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the radius test is inverted, so the town's stops are exactly the ones NOT in the town and the prefix, anchor and services all come from somewhere else",
+     "find": '            if _km(lat,lon,float(la),float(lo))<=km: out.append((sid,nm,float(la),float(lo)))',
+     "to": '            if _km(lat,lon,float(la),float(lo))>=km: out.append((sid,nm,float(la),float(lo)))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the 9-char block is counted over ALL stops again rather than within the dominant ATCO area -- the pre-region-agnostic rule, under which a town whose radius clips a neighbouring county can be registered under the neighbour's prefix",
+     "find": '    c=Counter(s[0][:9] for s in stops if s[0].startswith(top_area))',
+     "to": '    c=Counter(s[0][:9] for s in stops)'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "every 9-char block is kept however few stops it holds, so one stray stop from the next locality is registered as one of the town's prefixes and the monthly refresh diffs against it for ever",
+     "find": '    tot=sum(c.values()); keep=[p for p,n in c.most_common() if n/tot>=0.12]',
+     "to": '    tot=sum(c.values()); keep=[p for p,n in c.most_common() if n/tot>=0.0]'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "a stop merely NAMED like a bus station becomes the anchor however few routes call there, so a one-route layby outranks the real interchange and the whole internal sheet is centred on it",
+     "find": '    named=[(sid,n) for sid,n in rows if STN.search(nm_by.get(sid,"") or "") and n>=max(2,nmax*0.5)]',
+     "to": '    named=[(sid,n) for sid,n in rows if STN.search(nm_by.get(sid,"") or "")]'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the anchor candidates are ordered quietest-first, so the fallback picks the least-served stop in town and `nmax` -- which the naming gate is measured against -- becomes the minimum",
+     "find": '        WHERE st.stop_id IN ({ph}) GROUP BY st.stop_id ORDER BY n DESC""", ids).fetchall()',
+     "to": '        WHERE st.stop_id IN ({ph}) GROUP BY st.stop_id ORDER BY n ASC""", ids).fetchall()'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the draft spoke is taken from trips that do NOT call in the town, so a route passing nearby gets an external spoke drawn for it and the reviewer is shown a destination this town cannot reach",
+     "find": '        WHERE t.route_id IN ({ph}) AND st.stop_id IN ({tph}) LIMIT 40""", route_ids+town_ids)]',
+     "to": '        WHERE t.route_id IN ({ph}) AND st.stop_id NOT IN ({tph}) LIMIT 40""", route_ids+town_ids)]'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the spoke keeps the NEAREST stop instead of the farthest, so every external radial is seeded with the stop next to the bus station",
+     "find": '            if not far or d>far[0]: far=(d,nm,float(la),float(lo))',
+     "to": '            if not far or d<far[0]: far=(d,nm,float(la),float(lo))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "only one Overpass endpoint is ever tried, so the fallback that exists because that host is regularly busy is gone and the town is reported as having no linear features",
+     "find": '    for host in ("https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"):',
+     "to": '    for host in ("https://overpass-api.de/api/interpreter",):'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "more than six candidate features are reported, so the draft's `features[]` takes three from an unranked tail rather than from the top of the ranking",
+     "find": '    return ranked[:6], True',
+     "to": '    return ranked, True'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "a colour in LIGHT names no colour the palette can assign, so that route prints white badge text on a pale badge and nothing anywhere objects",
+     "find": 'LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7733"}',
+     "to": 'LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7734"}'},
+
+    # The last three restore what the module did BEFORE 2026-09-17 rather than
+    # inventing a fault. A fix is only held by a suite if the suite has been seen
+    # to go red against the code it replaced.
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "both Overpass endpoints failing goes back to reporting as though OSM had answered, so an unasked question is indistinguishable from a town with no river in it",
+     "find": '    if not d: return [], False',
+     "to": '    if not d: return [], True'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "a successful Overpass read reports as unreachable, which is the same conflation pointing the other way -- every town would carry the COULD NOT LOOK sentence and the reviewer would stop reading it",
+     "find": '    return ranked[:6], True',
+     "to": '    return ranked[:6], False'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the refusal loses its own sentence and falls through to the absence's, which is `- (none found / skipped)` restored in everything but wording",
+     "find": '''    if state=="refused":
+        return ("- COULD NOT LOOK: both Overpass endpoints failed, so OSM has NOT been asked "
+                "-- a refusal, not an absence. Re-run before treating an empty features[] as "
+                "a finding about this town.")''',
+     "to": '''    if False:
+        return ""'''},
+
 ]
 
 

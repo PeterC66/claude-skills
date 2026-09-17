@@ -88,6 +88,7 @@ import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
+import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -711,6 +712,21 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
+
+// A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is
+// the row that carries it: the board prints a BEHIND deployment and no longer
+// exits 1 on it, so without this nothing would chase a merge nobody deployed.
+// One header read from the live site and two git questions of the portal
+// checkout; a tree with no portal checkout asks nothing of the network, which
+// is what keeps every harness fixture quiet. `--no-live` skips it, as it does
+// on the board.
+{
+  const deployState = args['no-live'] ? null
+    : await readDeployState({ portalDir: PORTAL, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL });
+  const deployPending = deployPendingItems(deployState, { portalDir: PORTAL });
+  for (const it of deployPending.items) add(it);
+  for (const w of deployPending.warnings) warnings.push(w);
+}
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
 // steps name their working directory symbolically ("portal") because the server

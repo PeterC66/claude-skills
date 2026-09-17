@@ -292,6 +292,14 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-commitments
 
+      # buses-data OA-396 (2026-09-17). The board stopped reddening on a pending
+      # deploy that day, so the worklist row is now the ONLY thing that chases a
+      # merge nobody deployed -- which is why its falsifier runs here and not
+      # only on the laptop. Stubs for git and the live site; no network.
+      - name: Prove the deploy-pending row can appear and stay quiet
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-deploy-pending
+
       - name: Prove the concurrency verdicts can go red
         working-directory: skills/bus-work
         run: npm run test:prove-red-concurrency

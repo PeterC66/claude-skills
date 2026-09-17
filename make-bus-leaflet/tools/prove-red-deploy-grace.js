@@ -116,6 +116,37 @@ function emptyBuses() {
   return root;
 }
 
+/* OA-392's fixture: a checkout whose `origin/main` is STALE, which is the shape
+ * the old row could not tell from a stale deployment. An upstream repository is
+ * built and cloned, and only THEN does upstream gain the newer commit — so the
+ * clone holds neither the object nor the ref, exactly as `C:\Claude\
+ * community-bus-maps` did on the morning of 2026-09-17 when `git cat-file -t
+ * 7c1297d` answered `fatal: Not a valid object name`. Reproducing the ABSENCE
+ * rather than merely the inequality is the whole point: the cheaper fix the
+ * action first proposed — comparing the two `git log` directions — cannot see
+ * this fixture at all, because both directions fail on an object that is not
+ * there. `ahead` puts the newer commit on a branch instead of on main, which is
+ * the other state one fetch can reach.
+ *
+ * Returns the CLONE as the portal directory, plus the sha the fake live site
+ * should claim. Both repositories are handed back so the caller can clean up. */
+function scratchStaleClone(mode) {
+  const { root: up, shas } = scratchPortal([50, 40]);
+  const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'oa392-clone-'));
+  fs.rmSync(clone, { recursive: true, force: true });
+  git(path.dirname(clone), ['clone', '--quiet', up, clone]);
+  /* Everything below happens AFTER the clone, so the clone cannot know about it
+   * without fetching. */
+  if (mode === 'ahead') git(up, ['checkout', '--quiet', '-b', 'deploy']);
+  fs.writeFileSync(path.join(up, 'newer.txt'), 'the commit the clone has never heard of\n');
+  git(up, ['add', '--', 'newer.txt']);
+  const when = new Date(Date.now() - 1 * HOUR).toISOString();
+  git(up, ['commit', '--quiet', '-m', 'the commit the clone has never heard of'],
+      { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when });
+  const liveSha = git(up, ['rev-parse', '--short', 'HEAD']);
+  return { portal: clone, upstream: up, liveSha, cloneTip: shas[shas.length - 1] };
+}
+
 /* status.js with the pre-OA-355 line put back, for the mutation arm. Copies the
  * whole assets folder rather than editing in place, the way prove-red-status.js
  * builds its injected-exception copy. */
@@ -125,11 +156,15 @@ function statusWithOldRule() {
   fs.cpSync(path.join(__dirname, '..', 'assets'), assets, { recursive: true });
   const p = path.join(assets, 'status.js');
   let s = fs.readFileSync(p, 'utf8');
-  const marker = "  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + ref]);";
+  /* The ref this reads is `liveRef` rather than `ref` since OA-392, which may
+   * have been refreshed by that action's one fetch. The marker is matched
+   * VERBATIM and the throw below is the anchor check: if the subject moves
+   * again, this arm says so instead of silently testing nothing. */
+  const marker = "  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + liveRef]);";
   if (!s.includes(marker)) {
     throw new Error('the current status.js does not carry the OA-355 backlog line; this harness is out of date with its subject');
   }
-  const oldLine = "  const backlog = null; const oldest = String(Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', ref])));";
+  const oldLine = "  const backlog = null; const oldest = String(Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', liveRef])));";
   s = s.replace(marker, oldLine);
   /* The replacement above redeclares `oldest` on the next line in the real file,
    * so that line is removed rather than left to throw a SyntaxError — a mutant
@@ -146,10 +181,10 @@ function statusWithOldRule() {
  * not tell". The first cut of this harness did exactly that and read 5 of 5
  * FAILED — a harness that cannot reach its own fixture, wearing the face of a
  * subject that is broken. Async spawn keeps the loop free to serve. */
-function board(statusPath, busesDir, portalDir, liveUrl, graceHours) {
+function board(statusPath, busesDir, portalDir, liveUrl, graceHours, extra) {
   const flags = [statusPath, '--buses', busesDir, '--portal', portalDir,
                  '--live', liveUrl, '--deploy-grace-hours', String(graceHours),
-                 '--no-quality', '--no-commitments', '--json'];
+                 '--no-quality', '--no-commitments', '--json'].concat(extra || []);
   return new Promise((resolve, reject) => {
     const ch = spawn(process.execPath, flags, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '', err = '';
@@ -203,8 +238,29 @@ const CASES = [
   {
     label: 'a live sha this checkout cannot resolve is not 0h',
     ages: [50, 40, 0], live: 'ffffffe', grace: 12,
-    wantStatus: 'BEHIND', wantRed: true, wantUndateable: true,
-    what: 'could-not-tell must fail safe, not read as a brand-new backlog',
+    wantStatus: 'BEHIND', wantRed: true, wantUndateable: true, wantFetch: 'COULD NOT FETCH',
+    what: 'could-not-tell must fail safe, and a failed fetch is named rather than hidden',
+  },
+  /* OA-392's three, and the second is the mutation arm for the first: the same
+   * fixture, the same code, one flag. If `--no-fetch` did not redden it, the
+   * fixture would be proving nothing about the fetch. */
+  {
+    label: 'OA-392 THE ARM: live is the remote main, and MY origin/main is stale',
+    fixture: 'stale', grace: 12,
+    wantStatus: 'current', wantRed: false, wantWasStale: true, wantFetch: 'fetched',
+    what: 'the 2026-09-17 false BEHIND that became a rank-3 row asking for a deploy',
+  },
+  {
+    label: 'OA-392 mutation: the same fixture with --no-fetch',
+    fixture: 'stale', grace: 12, extra: ['--no-fetch'],
+    wantStatus: 'BEHIND', wantRed: true, wantUndateable: true, wantFetch: 'not attempted (--no-fetch)',
+    what: 'the old behaviour exactly — so the fetch is what moved the verdict, not the fixture',
+  },
+  {
+    label: 'OA-392 control: live is genuinely ahead of the remote main',
+    fixture: 'ahead', grace: 12,
+    wantStatus: 'live ahead', wantRed: false, wantFetch: 'fetched',
+    what: 'main has nothing the public cannot see, so it passes and prescribes a fetch',
   },
 ];
 
@@ -214,18 +270,28 @@ const CASES = [
   const kept = [];
 
   for (const c of CASES) {
-    const { root: portal, shas } = scratchPortal(c.ages);
+    /* Two fixture families now: the OA-355 ones, which are a single repository
+     * whose commits carry chosen ages, and the OA-392 ones, which are a clone
+     * whose `origin/main` is deliberately behind its upstream. */
+    let portal, upstream = null, liveSha;
+    if (c.fixture) {
+      const f = scratchStaleClone(c.fixture);
+      portal = f.portal; upstream = f.upstream; liveSha = f.liveSha;
+    } else {
+      const s = scratchPortal(c.ages);
+      portal = s.root;
+      /* `live: null` means "the commit before the backlog starts" — i.e. nothing
+       * on main is deployed. 'tip' means the deployment is current. A string is
+       * used verbatim, which is how the unresolvable-sha case is built. */
+      liveSha = c.live === 'tip' ? s.shas[s.shas.length - 1]
+        : typeof c.live === 'number' ? s.shas[c.live]
+        : typeof c.live === 'string' ? c.live
+        : s.shas[0];
+    }
     const buses = emptyBuses();
-    /* `live: null` means "the commit before the backlog starts" — i.e. nothing
-     * on main is deployed. 'tip' means the deployment is current. A string is
-     * used verbatim, which is how the unresolvable-sha case is built. */
-    const liveSha = c.live === 'tip' ? shas[shas.length - 1]
-      : typeof c.live === 'number' ? shas[c.live]
-      : typeof c.live === 'string' ? c.live
-      : shas[0];
     const { srv, url } = await fakeLive('0.0.0-harness+' + liveSha);
     const inj = c.useOldRule ? statusWithOldRule() : null;
-    const r = await board(inj ? inj.status : STATUS, buses, portal, url, c.grace);
+    const r = await board(inj ? inj.status : STATUS, buses, portal, url, c.grace, c.extra);
     srv.close();
 
     const dep = r.json && r.json.deployment;
@@ -234,20 +300,30 @@ const CASES = [
     const redOk = c.wantRed ? r.code !== 0 : r.code === 0;
     const ageOk = c.wantMinAge == null ? true : (dep && dep.ageHours != null && dep.ageHours >= c.wantMinAge);
     const undateOk = c.wantUndateable == null ? true : (dep && dep.undateable === true);
-    const ok = statusOk && redOk && ageOk && undateOk;
+    /* OA-392's two extra assertions. `fetch` is checked by VALUE rather than by
+     * truthiness because its three answers — not needed, fetched, COULD NOT
+     * FETCH — are the point: a refusal read as an absence measures the
+     * instrument instead of the subject. */
+    const fetchOk = c.wantFetch == null ? true : (dep && dep.fetch === c.wantFetch);
+    const staleOk = c.wantWasStale == null ? true : (dep && dep.wasStale === true);
+    const ok = statusOk && redOk && ageOk && undateOk && fetchOk && staleOk;
     if (!ok) failed++;
 
     const why = !statusOk ? 'said ' + got + ', wanted ' + c.wantStatus
       : !redOk ? 'exit ' + r.code + ', wanted ' + (c.wantRed ? 'non-zero' : '0')
       : !ageOk ? 'age ' + (dep && dep.ageHours) + 'h, wanted at least ' + c.wantMinAge + 'h'
       : !undateOk ? 'undateable was ' + (dep && dep.undateable) + ', wanted true'
-      : 'exit ' + r.code + ', ' + got + (dep && dep.ageHours != null ? ', ' + dep.ageHours + 'h' : '');
+      : !fetchOk ? 'fetch was ' + (dep && dep.fetch) + ', wanted ' + c.wantFetch
+      : !staleOk ? 'wasStale was ' + (dep && dep.wasStale) + ', wanted true'
+      : 'exit ' + r.code + ', ' + got + (dep && dep.ageHours != null ? ', ' + dep.ageHours + 'h' : '')
+        + (dep && dep.fetch && dep.fetch !== 'not needed' ? ', ' + dep.fetch : '');
     rows.push([ok ? 'ok' : 'FAILED', c.label, why, c.what]);
 
-    if (KEEP) { kept.push(portal); kept.push(buses); if (inj) kept.push(inj.root); }
+    if (KEEP) { kept.push(portal); kept.push(buses); if (upstream) kept.push(upstream); if (inj) kept.push(inj.root); }
     else {
       fs.rmSync(portal, { recursive: true, force: true });
       fs.rmSync(buses, { recursive: true, force: true });
+      if (upstream) fs.rmSync(upstream, { recursive: true, force: true });
       if (inj) fs.rmSync(inj.root, { recursive: true, force: true });
     }
   }
@@ -260,6 +336,6 @@ const CASES = [
     console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the deploy grace is not what status.js says it is.');
     process.exitCode = 1;
   } else {
-    console.log('\nall ' + CASES.length + ' cases behaved as claimed: the deploy grace expires on the age of the OLDEST undeployed commit, a fresh tip no longer hides an old backlog, an unresolvable live sha fails safe, and the same fixture still reads amber against the rule this replaced.');
+    console.log('\nall ' + CASES.length + ' cases behaved as claimed: the deploy grace expires on the age of the OLDEST undeployed commit, a fresh tip no longer hides an old backlog, an unresolvable live sha fails safe, the same fixture still reads amber against the rule this replaced, and a stale origin/main no longer reads as a stale deployment - with --no-fetch reproducing the old verdict on the same fixture.');
   }
 })();

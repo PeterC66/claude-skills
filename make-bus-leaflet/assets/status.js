@@ -22,6 +22,7 @@
  *                                          print the board, so one walk feeds
  *                                          both CI outputs (see JSON_OUT below)
  *   ...[--live <base url>] [--no-live]     (deployment drift; see deploymentRow below)
+ *   ...[--no-fetch]                        (never refresh origin/main to date an unknown live sha)
  *
  * Defaults (Peter's machine): --buses "C:\u3a St Ives\Using AI\Buses"
  *                              --portal "C:\Claude\community-bus-maps"
@@ -92,6 +93,13 @@ const NO_QUALITY = !!args['no-quality'];
 // site; --no-live skips it entirely, --live <url> points it somewhere else.
 const NO_LIVE = !!args['no-live'];
 const LIVE_URL = typeof args.live === 'string' ? args.live.replace(/\/+$/, '') : 'https://busmaps.uk';
+// buses-data OA-392. When the live sha is not in the portal checkout at all, the
+// row cannot tell "the deployment is stale" from "MY COPY of origin/main is
+// stale", and those two have opposite remedies. One `git fetch` settles it, and
+// it runs ONLY in that case -- the common path stays offline. `--no-fetch` holds
+// it off, which is how the harness proves the fetch is what changes the verdict
+// rather than the fixture.
+const NO_FETCH = !!args['no-fetch'];
 // How long a merged-but-undeployed commit is allowed to sit before this goes
 // RED rather than amber. A deploy is a deliberate act and a merge at midnight
 // should not page anyone at 00:01, but "we merged it and forgot" is exactly the
@@ -1378,6 +1386,17 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
 //      deploy and nobody should be gated the minute they press merge; twelve
 //      hours later, "merged and forgotten" is the only remaining explanation.
 //
+//   4. A LIVE BUILD NEWER THAN MY COPY OF THE REMOTE IS NOT A DEPLOYMENT FAULT
+//      AT ALL, and until 2026-09-17 it was reported as the worst kind (OA-392).
+//      `origin/main` is only as current as whoever last fetched it, so a laptop
+//      one commit stale read `BEHIND ... undateable` about a site that was
+//      running `origin/main` exactly -- and since every `loop/blocked/` file is
+//      a rank-3 row, that verdict reached Peter's worklist carrying a pasteable
+//      deploy command for a site that needed nothing. The row now fetches ONCE,
+//      and only when the live sha resolves to nothing here, then says which of
+//      the two it is. Rule 1's null-means-red path is untouched for the case it
+//      was written about: a live sha nobody can find even after fetching.
+//
 // The comparison is against `origin/main` in the portal checkout, falling back
 // to HEAD -- so running this on a feature branch still asks the right question
 // ("is the deployment current with main"), not the wrong one ("is the deployment
@@ -1387,6 +1406,23 @@ function gitIn(dir, args) {
     const r = require('child_process').execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     return r.trim();
   } catch { return null; }
+}
+
+// ONE fetch, bounded, and only from the branch below that has established it has
+// nothing to answer with (OA-392). It updates remote-tracking refs and touches
+// no branch, no index and no working tree, so it cannot disturb whatever the
+// portal checkout is in the middle of. A repository with no `origin`, no network
+// or no credentials returns false in a bounded time rather than hanging the
+// board -- and false is reported as COULD NOT FETCH rather than folded into
+// "the live sha does not exist", because a refusal read as an absence measures
+// the instrument instead of the subject.
+function gitFetch(dir) {
+  try {
+    require('child_process').execFileSync('git', ['fetch', '--quiet', 'origin'], {
+      cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 20000,
+    });
+    return true;
+  } catch { return false; }
 }
 
 // Read Development Docs/commitments.json and judge each entry against today.
@@ -1454,7 +1490,66 @@ async function deploymentRow() {
   }
   const deployed = live.split('+').pop();
   if (deployed === want || (wantFull && wantFull.startsWith(deployed))) {
-    return { status: 'current', want, deployed, url: LIVE_URL };
+    return { status: 'current', want, deployed, url: LIVE_URL, fetch: 'not needed' };
+  }
+
+  // OA-392: BEFORE JUDGING THE DEPLOYMENT, ESTABLISH THAT THIS CHECKOUT CAN SEE
+  // WHAT IS DEPLOYED. `ref` above is `origin/main` as this clone last fetched it,
+  // and nothing here ever fetched -- so on 2026-09-17 a laptop one commit stale
+  // reported the live site as BEHIND when live WAS `origin/main`, and that
+  // verdict became a rank-3 row asking Peter to deploy a site that needed
+  // nothing. The two states collapsed into one word have opposite remedies: a
+  // live build running something older that cannot be dated needs a deploy; a
+  // live build running something NEWER than my copy of the remote needs a fetch
+  // and is not a fact about the deployment at all.
+  //
+  // THE CHEAP TEST THE ACTION PROPOSED CANNOT SEE THE CASE THAT RAISED IT, which
+  // is why this fetches. That test was `log <ref>..<deployed>` non-empty -- but a
+  // stale clone does not HOLD the newer object, so both log directions fail and
+  // the branch never fires. `git cat-file -t 7c1297d` answered `fatal: Not a
+  // valid object name` on the morning this was found: absent, not merely
+  // unreachable. So the resolvable question is asked first, and the fetch runs
+  // only when the answer is no -- the common path stays offline.
+  let liveRef = ref, liveWant = want, liveWantFull = wantFull;
+  let fetchState = 'not needed';
+  let resolved = gitIn(PORTAL, ['rev-parse', '--verify', '--quiet', deployed + '^{commit}']);
+  if (!resolved) {
+    if (NO_FETCH) {
+      fetchState = 'not attempted (--no-fetch)';
+    } else {
+      const ok = gitFetch(PORTAL);
+      fetchState = ok ? 'fetched' : 'COULD NOT FETCH';
+      if (ok) {
+        liveRef = gitIn(PORTAL, ['rev-parse', '--verify', '--quiet', 'origin/main']) ? 'origin/main' : 'HEAD';
+        liveWantFull = gitIn(PORTAL, ['rev-parse', liveRef]) || wantFull;
+        liveWant = gitIn(PORTAL, ['rev-parse', '--short', liveRef]) || want;
+        resolved = gitIn(PORTAL, ['rev-parse', '--verify', '--quiet', deployed + '^{commit}']);
+      }
+    }
+  }
+
+  // The clone was the stale one: the live site is running exactly what the
+  // remote's `main` says. This is a PASS and it prescribes nothing, because
+  // there is nothing to do. `wasStale` records that the answer needed a fetch,
+  // so a reader can tell it from a row that was current all along.
+  if (deployed === liveWant || (liveWantFull && liveWantFull.startsWith(deployed))) {
+    return { status: 'current', want: liveWant, deployed, url: LIVE_URL, fetch: fetchState, wasStale: fetchState === 'fetched' };
+  }
+
+  // The live site is running something this clone's `main` does not contain, in
+  // the forward direction -- deployed from a branch, or from a commit merged
+  // after the ref this board is comparing against. A PASS with a prescription
+  // that is a fetch and never a deploy: `main` has nothing the public cannot
+  // see, so the one rule this row exists to enforce is not broken.
+  if (resolved) {
+    const behindLive = gitIn(PORTAL, ['log', '--format=%h', liveWant + '..' + deployed]);
+    const aheadOfLive = gitIn(PORTAL, ['log', '--format=%h', deployed + '..' + liveWant]);
+    if (behindLive && !aheadOfLive) {
+      return {
+        status: 'live ahead', want: liveWant, deployed, url: LIVE_URL, fetch: fetchState,
+        why: 'the live build contains commits this checkout\'s ' + liveRef + ' does not; that is a fact about this clone, not about the deployment',
+      };
+    }
   }
 
   // Rule 3: how long has the undeployed work been sitting there? THE POPULATION
@@ -1465,15 +1560,20 @@ async function deploymentRow() {
   // A range that yields nothing -- an unresolvable live sha, or a live build
   // AHEAD of main -- is "I could not tell" and takes Rule 1's null-means-red
   // path, because a backlog nobody can date is what a grace must not excuse.
-  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + ref]);
+  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + liveRef]);
   const oldest = backlog == null ? null : backlog.split('\n').map(s => s.trim()).filter(Boolean).pop();
   const ts = Number(oldest);
   const ageH = oldest && Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
   const overGrace = ageH == null ? true : ageH >= DEPLOY_GRACE_HOURS;
   return {
     status: overGrace ? 'BEHIND' : 'behind (grace)',
-    want, deployed, url: LIVE_URL, ageHours: ageH, graceHours: DEPLOY_GRACE_HOURS,
+    want: liveWant, deployed, url: LIVE_URL, ageHours: ageH, graceHours: DEPLOY_GRACE_HOURS,
     undateable: ageH == null,
+    // Three answers, never two: the live sha was found, or it was looked for and
+    // is genuinely not there, or nobody could look. An undateable row that says
+    // COULD NOT FETCH is naming the instrument rather than the deployment, and a
+    // reader can act on the difference.
+    fetch: fetchState, resolved: !!resolved,
   };
 }
 
@@ -1698,7 +1798,15 @@ async function main() {
 
   console.log('\n=== Deployment (' + (deploy.url || LIVE_URL) + ') ===');
   if (deploy.status === 'current') {
-    console.log('  current   live ' + deploy.deployed + ' == main ' + deploy.want);
+    console.log('  current   live ' + deploy.deployed + ' == main ' + deploy.want
+      + (deploy.wasStale ? '  (this clone was the stale one — origin/main was fetched to find that out)' : ''));
+  } else if (deploy.status === 'live ahead') {
+    // OA-392. Not a verdict about the deployment, so it prescribes a fetch and
+    // never a deploy: the old text sent a reader to `npm run deploy` for a site
+    // that was already current, and that instruction reached Peter's worklist.
+    console.log('  live ahead   live ' + deploy.deployed + ' contains commits this checkout\'s main ' + deploy.want + ' does not');
+    console.log('    Nothing is undeployed. This clone is behind the remote. From anywhere, with no placeholders:');
+    console.log('      git -C "C:\\Claude\\community-bus-maps" fetch origin');
   } else if (deploy.status === 'skipped') {
     console.log('  skipped   ' + deploy.why);
   } else if (deploy.status === 'unreachable') {
@@ -1707,7 +1815,10 @@ async function main() {
     console.log('  no header    the live build predates X-App-Version; deploy once and this row starts working');
   } else {
     console.log('  ' + deploy.status + '   live ' + deploy.deployed + ' != main ' + deploy.want
-      + (deploy.ageHours == null ? '  (undateable — the live sha is not in this checkout, so it is NOT being excused)'
+      + (deploy.ageHours == null ? '  (undateable — the live sha is not in this checkout, so it is NOT being excused'
+         + (deploy.fetch === 'fetched' ? '; origin was fetched and it is still not there)'
+            : deploy.fetch === 'COULD NOT FETCH' ? '; the fetch that would have settled it FAILED, so this names the instrument as much as the deployment)'
+            : deploy.fetch === 'not attempted (--no-fetch)' ? '; --no-fetch, so nobody looked)' : ')')
          : '  (oldest undeployed commit ' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
     console.log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
     console.log('      npm run deploy');

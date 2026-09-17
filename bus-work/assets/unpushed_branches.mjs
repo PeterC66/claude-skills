@@ -2,12 +2,16 @@
  * unpushed_branches.mjs — committed work that has never reached GitHub, as
  * worklist rows (buses-data OA-326, 2026-09-12).
  *
- * WHY THIS EXISTS. The scheduled loop can never push: `Bash(git push…)` is in
- * this estate's deny list, and that containment is the whole reason an
- * unattended tick may write to the map trees and to `claude-skills` at all — a
- * wrong edit sits in an unpushed commit until a person reads it. Nothing here
- * proposes changing that. What was missing is the CHANNEL for the residue it
- * creates. On 2026-09-12 `check/schema-version-oa325` sat in the portal with 463
+ * WHY THIS EXISTS. Until 2026-09-17 the scheduled loop could never push:
+ * `Bash(git push…)` was in this estate's deny list, and that containment was
+ * the reason an unattended tick could write to the map trees and to
+ * `claude-skills` at all — a wrong edit sat in an unpushed commit until a person
+ * read it. buses-data OA-394 (R1 of the 2026-09-17 process review) gave the
+ * tick the push at the end of its unit, behind the push preflight, so a row
+ * here now means a push that did not happen — a preflight that refused, or a
+ * session's own branch — rather than one that could not. What was missing, and
+ * still is what this module provides, is the CHANNEL for the residue that
+ * leaves. On 2026-09-12 `check/schema-version-oa325` sat in the portal with 463
  * insertions, a falsification harness, no pull request and no `loop/blocked/`
  * item, while the board printed `the portal  community-bus-maps — main, clean`.
  *
@@ -375,7 +379,7 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
         why: `${size} insertion(s) in ${b.addedMissing.length} file(s) the trunk has never had. `
           + `The deleted remote branch is what makes this repository's finished work look finished, so a branch in `
           + `that state is normally read as landed — this one gained work after the merge, and nothing outside this `
-          + `laptop knows about that part. The loop commits to a branch like this every hour and cannot push.`,
+          + `laptop knows about that part. Since OA-394 a tick pushes at the end of its unit, so this was left by a session or by a refused preflight.`,
         detail: [`last commit ${(b.committedAt || '').slice(0, 10) || 'date unknown'} — ${b.subject || '(no subject)'}`,
           `on the branch and in no trunk: ${b.addedMissing.join(', ')}`].join('\n'),
         who: 'Peter', runbook: 'git', ref: b.branch, repo: repo.name, ageDays,
@@ -415,7 +419,7 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
         title: `${repo.name}: the branch ${b.branch} has never been pushed, and nothing outside this laptop knows it exists`,
         why: `${size} insertion(s) of committed work, on no remote and in no pull request. `
           + `Its patches are not in ${read.base}, and it is checked out in this repository or one of its worktrees. `
-          + `The loop cannot push, so this sits here until you do.`,
+          + `Push it, or ask why the tick that made it did not: since OA-394 a tick pushes at the end of its unit when the preflight is green.`,
         detail: [`last commit ${(b.committedAt || '').slice(0, 10) || 'date unknown'} — ${b.subject || '(no subject)'}`,
           `${b.unmerged} commit(s) whose patches ${read.base} does not have`].join('\n'),
         who: 'Peter', runbook: 'git', ref: b.branch, repo: repo.name, ageDays,

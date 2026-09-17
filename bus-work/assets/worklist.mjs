@@ -589,10 +589,54 @@ function fromCorrespondence() {
     const status = st ? st[1].trim() : '';
     const declared = [status, h1 ? h1[0] : ''].filter(Boolean);
     if (declared.some((d) => /\bNOT SENT\b|\bDRAFTED\b/i.test(d))) {
+      // A DRAFTED LETTER THAT ANSWERS NOBODY'S QUESTION IS NOT A DEBT, and
+      // until 2026-09-17 there was no way to say so. Rank 3 is deliberately
+      // immune to prose -- no wording in a record WE write takes a letter off
+      // this board -- because the thing it protects is a person waiting, and a
+      // session that could argue a debt away would eventually argue a real one
+      // away. CORR-004 is the case that exposure was hiding: he never wrote to
+      // us. He gave his views to a fellow campaigner who asked for them, three
+      // weeks after an hour's demonstration, and that thread's own README has
+      // said since the day it was written that nobody has asked him whether he
+      // wants a reply. It sat at rank 3 for ten days as "the person has heard
+      // nothing", which was true and was not a debt.
+      //
+      // So a hold is a DECLARATION, with the two halves that make it one: who
+      // decided and when, and WHAT WOULD CHANGE IT. The second half is the
+      // load-bearing one -- a hold with no revisit condition is how a letter
+      // rots quietly, which is the failure this whole source exists to prevent
+      // -- so a `**Held:**` with no `**Revisit when:**` STAYS AT RANK 3 and
+      // says why. An incomplete hold nags, the same failure direction every
+      // other branch here takes.
+      //
+      // And it DEMOTES rather than silences: rank 9, WAITING ON OTHERS, which
+      // is what a letter waiting on a condition outside this project actually
+      // is. A suppression nobody can see is how a board starts lying, and the
+      // thing being held here is a letter to a real person.
+      const held = /\*\*Held:\*\*\s*([^\n]+)/.exec(head);
+      const revisit = /\*\*Revisit when:\*\*\s*([^\n]+)/.exec(head);
+      const heldWhy = held ? held[1].trim() : '';
+      const revisitWhy = revisit ? revisit[1].trim() : '';
+      if (heldWhy && revisitWhy) {
+        out.push({
+          key: `corr-held-${ref}`, rank: 9, type: 'correspondence',
+          title: `${label}: reply drafted ${last.date}, HELD — deliberately not being sent`,
+          why: `${heldWhy} Revisit when: ${revisitWhy} Nobody is waiting on this one — it is here so that a held letter cannot rot unnoticed, not because anything is owed.`,
+          who: 'Peter', runbook: 'correspondence',
+          ageDays: daysSince(last.date),
+          do: [
+            { kind: 'chat', what: `Read Correspondence/${ref}/${last.file} — the hold and what would lift it are declared in its header.` },
+            { kind: 'chat', what: 'To lift it: delete both the **Held:** and **Revisit when:** lines, and the row returns to SOMEONE IS BLOCKED where only you can clear it.' },
+          ],
+        });
+        continue;
+      }
       out.push({
         key: `corr-unsent-${ref}`, rank: 3, type: 'correspondence',
         title: `${label}: reply drafted ${last.date}, NOT SENT`,
-        why: 'Only you can send it — there is no reply button on the portal and Claude has no access to email. Until it goes, the person has heard nothing.',
+        why: heldWhy
+          ? `It declares a hold — "${heldWhy}" — but no **Revisit when:**, so it is still on this list. A hold with no condition that lifts it is how a letter is quietly abandoned; write what would change it, or send it.`
+          : 'Only you can send it — there is no reply button on the portal and Claude has no access to email. Until it goes, the person has heard nothing.',
         who: 'Peter', runbook: 'correspondence',
         ageDays: daysSince(last.date),
         do: [

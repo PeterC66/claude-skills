@@ -152,6 +152,8 @@ Present the result to Peter as a short numbered list — title, who's waiting, a
 
 ## Step 3 — Do it
 
+**First, unless this item builds or renders a map, do it in a worktree** — `EnterWorktree`, or `git worktree add .claude/worktrees/<name> -b work/<name>` from the repository root (OA-395, R2 of the 2026-09-17 process review: one writer per tree). A `gate` diagnosis, an approval-gate `review`, an `awaiting-customer` nudge and a `draft-unsubmitted` evidence pass all write only tracked files and belong in a worktree. A `build`, a `refresh`, a `refresh-local` and any `housekeeping` that re-renders a sheet write a map's untracked S4–S6 output, which a worktree cannot keep, so those stay in the main checkout and take `loop/LOCK.d` for their duration. The full convention is the *So: what belongs in a worktree* section of buses-data's `Documentation/README - Working in parallel.md` (named rather than linked, because a relative link across a repository boundary 404s for everyone but this laptop).
+
 Load [references/playbooks.md](references/playbooks.md) and follow the playbook for that item's `type`. One item at a time, start to finish, before offering the next.
 
 The types and where each ends up:

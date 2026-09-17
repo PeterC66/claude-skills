@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readBlockedDir, parseBlocked, loopBlockedItems, applyHolds, heldPaths } from './loop_blocked.mjs';
+import { readBlockedDir, parseBlocked, loopBlockedItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched } from './loop_blocked.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -234,11 +234,16 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   // line that carries the text and does not begin with `//`.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
-    "import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';",
+    "import { readBlockedDir, loopBlockedItems, applyHolds, groupUnmatched } from './loop_blocked.mjs';",
     "readBlockedDir(path.join(BUSES, 'loop', 'blocked'))",
     'for (const it of loopBlocked.items) add(it);',
     'const heldRows = applyHolds(items, loopBlocked.holds);',
-    'for (const h of heldRows.unmatched) {',
+    // OA-376: the loop is over GROUPS, one per blocked file. Iterating the raw
+    // unmatched list is the behaviour that printed thirteen warnings for one
+    // field, so the literal that must run is the grouped one.
+    'for (const g of groupUnmatched(heldRows.unmatched)) {',
+    'if (!g.looksLikeKeys) {',
+    'has a **Blocks:** field that is not a worklist row key',
     'if (it.onHold && it.onHold.length) {',
     'Only once that is settled:',
   ]) check(`worklist.mjs RUNS: ${lit.slice(0, 56)}`, liveLine(lit), 'absent, or commented out');
@@ -390,6 +395,131 @@ console.log('\n17. the path a hold is ABOUT — `**File:**` parsed for concurren
     held.length === 2 && held.some((h) => h.ref === 'corr-001-salutation') && held.some((h) => h.ref === 'backslashes') && !held.some((h) => h.ref === 'sf-008'),
     JSON.stringify(held));
   check('an absent folder yields no held paths', heldPaths(readBlockedDir(path.join(tmp, 'no-such'))).length === 0);
+}
+
+console.log('\n18. a field is a FIELD, not a substring — the seventy-three-warning case (OA-376)');
+{
+  // MEASURED, NOT IMAGINED. On 2026-09-15 a hold carried a sentence in its
+  // `**Blocks:**` field and the board printed thirteen warnings, one per word.
+  // The first attempt to fix it REPLACED the field with a paragraph explaining
+  // what it had said — naming the marker the ordinary way a document names a
+  // convention — and the board printed SEVENTY-THREE. The marker was matched
+  // anywhere in the file, so describing the convention was using it.
+  const dir = path.join(tmp, 'substring', 'loop', 'blocked');
+  mk(dir, 'prose-mention.md',
+    '# Two branches nothing outside this laptop knows about\n\n' +
+    '**Raised by:** `sched-2115`, 2026-09-15\n\n' +
+    'This hold contradicts nothing on the board, so it carries no field: a **Blocks:** line names the worklist rows a hold argues with, one key each, and there is no row here to name.\n\n' +
+    '## What is needed from you\n\nPush the two branches.\n');
+  mk(dir, 'fenced-example.md',
+    '# The convention, shown\n\n**Raised by:** `sched-0015`, 2026-09-16\n\n' +
+    'A hold names the row it contradicts like this:\n\n```\n**Blocks:** `draft-1`\n```\n\nand that example is not this file using it.\n');
+  mk(dir, 'real-field.md', '# A genuine hold\n\n**Blocks:** `draft-1`\n');
+  const files = readBlockedDir(dir);
+  const prose = parseBlocked(files.find((f) => f.name === 'prose-mention.md'));
+  check('a marker quoted MID-SENTENCE is not a field', prose.blocks.length === 0, JSON.stringify(prose.blocks));
+  check('…and the file still yields its row', prose.headline.includes('Two branches'), prose.headline);
+  check('…and its OTHER fields still parse', prose.raisedBy.includes('sched-2115'), prose.raisedBy);
+  const fenced = parseBlocked(files.find((f) => f.name === 'fenced-example.md'));
+  check('a field line inside a FENCED example is not a field', fenced.blocks.length === 0, JSON.stringify(fenced.blocks));
+  check('…and the fenced file still parses its real field', fenced.raisedBy.includes('sched-0015'), fenced.raisedBy);
+  // CONTROLS, and they are the half that makes the two silences mean something:
+  // a rule that never recognises a field would pass every assertion above.
+  const real = parseBlocked(files.find((f) => f.name === 'real-field.md'));
+  check('CONTROL — a field on its own line IS still read', real.blocks.length === 1 && real.blocks[0] === 'draft-1', JSON.stringify(real.blocks));
+  check('CONTROL — the house header line (Raised by · Blocks) is still read',
+    parseBlocked({ name: 'h.md', text: '# H\n\n**Raised by:** `sched-1`, 2026-09-17 · **Blocks:** corr-unsent-CORR-001\n', mtimeMs: 0 }).blocks.join() === 'corr-unsent-CORR-001');
+  // THE MUTATION THIS IS AGAINST is the pre-OA-376 `field()`, which ran its
+  // regex over the whole text. Restoring that — scanning `[text]` instead of
+  // `fieldLines(text)` — was done on 2026-09-17 and watched go red: the prose
+  // file yields TWENTY holds (`line`, `names`, `the`, `worklist`, … `name.`) and
+  // the fenced example yields one, while every other assertion in this case
+  // stays green. That last part is the point: nothing else in the harness could
+  // see the fault, which is how it survived until a reader met it on a board.
+}
+
+console.log('\n19. a value that cannot be a key list is ONE finding, and it says what it is (OA-376)');
+{
+  // The thirteen words the live field actually carried, plus the keys the board
+  // actually writes. A sentence's tokens are bare words; a row key never is.
+  for (const k of ['draft-1', 'draft-99', 's6-stale', 'engine-stale', 'loop-blocked-sf-008',
+    'corr-unsent-CORR-001', 'landmark-owed-high-wycombe', 'ci-red-PeterC66/claude-skills',
+    'unpushed-branch-engine-oa376-blocks-field']) {
+    check(`a real row key reads as one: ${k}`, looksLikeRowKey(k));
+  }
+  for (const w of ['nothing', 'on', 'the', 'board', 'that', 'is', 'whole', 'point', 'of', 'this', 'file', '—']) {
+    check(`an English word does not: ${w}`, !looksLikeRowKey(w));
+  }
+
+  // THE CONTROL IS INSIDE THE POPULATION (the 2026-09-14 review's rule). The
+  // claim above is about keys THIS CODEBASE WRITES, so it is held against the
+  // source rather than against a list somebody typed: every `key:` literal
+  // written within two lines of a `rank:` — 30 of them across twelve modules on
+  // 2026-09-17 — must pass the predicate. The day somebody adds a one-word row
+  // key, this goes red and names it, instead of the predicate quietly calling a
+  // real hold a sentence. The floor is asserted too, because a scan that matched
+  // nothing would satisfy `every()` in silence.
+  {
+    const sites = [];
+    for (const f of fs.readdirSync(HERE)) {
+      if (!f.endsWith('.mjs') || f.startsWith('prove-red')) continue;
+      const L = fs.readFileSync(path.join(HERE, f), 'utf8').split('\n');
+      for (let i = 0; i < L.length; i++) {
+        const m = /key:\s*(`([^`]*)`|'([^']*)')/.exec(L[i]);
+        if (!m) continue;
+        if (!/\brank:/.test([L[i], L[i + 1] || '', L[i + 2] || ''].join('\n'))) continue;
+        sites.push({ file: f, lit: (m[2] !== undefined ? m[2] : m[3]).split('${')[0] });
+      }
+    }
+    check('the scan found the row-key sites at all', sites.length >= 25, `found ${sites.length}`);
+    const bareKeys = sites.filter((s) => !looksLikeRowKey(s.lit));
+    check('every row key this codebase writes reads as a key', bareKeys.length === 0,
+      JSON.stringify(bareKeys));
+    console.log(`     (${sites.length} row-key sites scanned)`);
+  }
+
+  // And the grouping itself, over real files rather than over a fake.
+  const dir = path.join(tmp, 'grouped', 'loop', 'blocked');
+  mk(dir, 'a-sentence.md', '# A hold that blocks nothing\n\n**Blocks:** nothing on the board — that is the whole point of this file\n');
+  // THE SENTENCE WITH NO PUNCTUATION IN IT, and it is here because of a
+  // measurement rather than a hunch. Dropping the compound clause from
+  // looksLikeRowKey turns the twelve word assertions above red and left the
+  // sentence file's CLASSIFICATION green — its em dash fails the key regex on
+  // its own, so that one assertion was resting on punctuation rather than on
+  // the rule it is about. A sentence of bare words is the case that cannot pass
+  // by accident, and the assertion walks between the two.
+  mk(dir, 'plain-words.md', '# Another hold that blocks nothing\n\n**Blocks:** nothing on the board that is the whole point\n');
+  mk(dir, 'two-stale.md', '# A well-formed hold gone stale\n\n**Blocks:** `draft-98`, draft-99\n');
+  mk(dir, 'one-stale.md', '# Another\n\n**Blocks:** `draft-97`\n');
+  const r = loopBlockedItems({ files: readBlockedDir(dir) });
+  const res = applyHolds([{ key: 'draft-1', title: 'x', do: [] }], r.holds);
+  const groups = groupUnmatched(res.unmatched);
+  check('FOUR files, FOUR findings — not one per word', groups.length === 4, JSON.stringify(groups.map((g) => [g.file, g.keys.length])));
+  const plainWords = groups.find((g) => g.file === 'plain-words.md');
+  check('a sentence of BARE WORDS is not a key list either', plainWords && plainWords.looksLikeKeys === false, JSON.stringify(plainWords));
+  check('…and it is one finding, not eight', plainWords && groups.filter((g) => g.file === 'plain-words.md').length === 1);
+  const sentence = groups.find((g) => g.file === 'a-sentence.md');
+  check('the sentence yields ONE group', !!sentence && sentence.keys.length > 1, JSON.stringify(sentence));
+  check('…classified as NOT a key list', sentence && sentence.looksLikeKeys === false);
+  check('…carrying the field as written, so the warning can quote it',
+    sentence && sentence.raw.startsWith('nothing on the board'), sentence && sentence.raw);
+  const twoStale = groups.find((g) => g.file === 'two-stale.md');
+  check('a genuine two-key hold stays ONE finding with both keys',
+    twoStale && twoStale.keys.join() === 'draft-98,draft-99', JSON.stringify(twoStale));
+  check('…and IS classified as a key list, so the board wording applies', twoStale && twoStale.looksLikeKeys === true);
+  check('a single stale key is unchanged', groups.find((g) => g.file === 'one-stale.md').looksLikeKeys === true);
+  check('CONTROL — nothing unmatched yields no findings', groupUnmatched([]).length === 0);
+  // MUTATION CONTROL, RUN RATHER THAN REASONED ABOUT (2026-09-17). Dropping the
+  // compound clause from looksLikeRowKey — leaving ROW_KEY_RE alone — reddens
+  // eleven of the twelve word assertions (the em dash fails the regex anyway)
+  // and the bare-words classification above — twelve red in all. On the first
+  // version of this case it reddened NOTHING ELSE, because the only sentence
+  // fixture contained an em dash and its classification was therefore resting on
+  // punctuation; that is why `plain-words.md` exists.
+  // And the fault itself, measured on these four fixtures: the pre-OA-376 loop
+  // over `heldRows.unmatched` prints 25 warnings for four mistakes, and grouping
+  // by KEY rather than by file would still print 15. Only the file is the unit
+  // that matches the number of things a reader has to go and fix.
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

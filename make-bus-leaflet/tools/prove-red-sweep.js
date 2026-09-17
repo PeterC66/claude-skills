@@ -28,6 +28,15 @@
  *   4  mutant,  --drop-framing      7 refusals   what OA-137 actually measured —
  *                                                the composition left out
  *
+ * Two more rows were added on 2026-09-17 and they are about the SCAFFOLDING the
+ * four stand on rather than about the river:
+ *
+ *   5  the estate size               from git     how many maps runs 1-4 were
+ *                                                 held to, and a NULL with its
+ *                                                 reason when it cannot be got
+ *   6  --expect goes red             exit 2       the coverage guard, watched
+ *                                                 refusing a count wrong by one
+ *
  * Run 3 is the one worth staring at, and it has now been wrong twice for opposite
  * reasons. It was written on 2026-08-27 as a mutation the check does NOT catch,
  * asserted deliberately as a no-op, on the premise that "every live pack carries
@@ -147,8 +156,45 @@ function copyDir(from, to) {
   }
 }
 
-function runSweep(assetsDir, dropFraming) {
-  const args = [path.join(assetsDir, 'render_sweep.js'), '--buses', BUSES, '--expect', '20', '--json'];
+/*
+ * HOW MANY MAPS THE ESTATE HAS — asked of a DIFFERENT instrument from the one
+ * under test, and no longer typed as a number here.
+ *
+ * This was the literal `20` from 2026-08-27 until 2026-09-17, when The Shelfords
+ * made the estate 21 and every one of the four runs below died at once on
+ * `enumerated 21 maps, --expect said 20`. Nothing any of them asserts had moved.
+ * A constant that a MAP BUILD in the other repository invalidates is a
+ * clock-dependent artefact by another route: `main` in buses-data went red on a
+ * commit that built a sheet, and could only be cleared from here.
+ *
+ * Deriving it from render_sweep's own enumeration would be worse than the
+ * constant, because `--expect` exists precisely to catch that enumeration
+ * silently narrowing — three standalone places were invisible to findPlaces()
+ * for a fortnight — and a check pointed at the number its subject supplied
+ * cannot report it wrong. So the count comes from git: the tracked
+ * `<map>/ci-reference/routes.json` mirrors, one per map, written by
+ * sync_ci_reference.js and reaching neither findTowns(), findPlaces() nor any
+ * manifest. Two instruments, one subject.
+ *
+ * THREE ANSWERS, NOT TWO. A count, or NULL with the reason — git absent, the
+ * buses tree not a checkout, no mirror tracked. Null is reported as a FAILED
+ * row rather than quietly dropping `--expect`, because a refusal read as an
+ * absence measures the instrument instead of the subject.
+ */
+function estateSize(busesDir) {
+  const r = spawnSync('git', ['-C', busesDir, 'ls-files', '--', '*ci-reference/routes.json'],
+    { encoding: 'utf8' });
+  if (r.error) return { n: null, why: `could not run git: ${r.error.message}` };
+  if (r.status !== 0) return { n: null, why: `git ls-files exited ${r.status} in ${busesDir}: ${(r.stderr || '').trim().slice(0, 200)}` };
+  const dirs = new Set((r.stdout || '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .map((l) => l.replace(/\/ci-reference\/routes\.json$/, '')));
+  if (!dirs.size) return { n: null, why: `no <map>/ci-reference/routes.json is tracked in ${busesDir}` };
+  return { n: dirs.size, why: null };
+}
+
+function runSweep(assetsDir, dropFraming, expect) {
+  const args = [path.join(assetsDir, 'render_sweep.js'), '--buses', BUSES, '--json'];
+  if (expect != null) args.push('--expect', String(expect));
   if (dropFraming) args.push('--drop-framing');
   const r = spawnSync(process.execPath, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (r.status === 2) return { fatal: (r.stderr || '').trim() };
@@ -197,9 +243,12 @@ function check(label, ok, detail) {
   if (!ok) failures++;
 }
 
+const ESTATE = estateSize(BUSES);
+const EXPECT = ESTATE.n;
+
 try {
   // ---- the control: the real assets, exactly as they ship -------------------
-  const c1 = runSweep(ASSETS, false);
+  const c1 = runSweep(ASSETS, false, EXPECT);
   if (c1.fatal) check('1 control, framing present', false, c1.fatal);
   else {
     const r = refusing(c1.parsed);
@@ -207,7 +256,7 @@ try {
       `${c1.parsed.maps} maps, ${r.names.length} refusing` + (r.names.length ? ` (${r.names.join(', ')})` : ''));
   }
 
-  const c2 = runSweep(ASSETS, true);
+  const c2 = runSweep(ASSETS, true, EXPECT);
   if (c2.fatal) check('2 control, --drop-framing', false, c2.fatal);
   else {
     const r = refusing(c2.parsed);
@@ -227,9 +276,9 @@ try {
 
     // Run 4 FIRST, because run 3's expectation is derived from it — see
     // expectedWithFraming() above. The reported order is unchanged.
-    const m2 = runSweep(scratch, true);
+    const m2 = runSweep(scratch, true, EXPECT);
 
-    const m1 = runSweep(scratch, false);
+    const m1 = runSweep(scratch, false, EXPECT);
     if (m1.fatal) check('3 mutant, framing present', false, m1.fatal);
     else if (m2.fatal) check('3 mutant, framing present', false, 'run 4 could not run, so there is nothing to derive from');
     else {
@@ -259,6 +308,34 @@ try {
 } finally {
   if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
   else console.log('mutated engine left at ' + scratch);
+}
+
+/*
+ * ---- the coverage guard the four runs above are standing on ----------------
+ *
+ * Runs 1–4 each pass `--expect`, so each of them dies rather than reporting on a
+ * silently narrowed corpus. That protection is worth nothing unless the number
+ * is real and the flag bites, and neither had ever been watched: `20` was a
+ * literal nobody re-derived, and no case in this estate had ever seen
+ * render_sweep refuse a wrong count.
+ *
+ * Row 5 is the number, from git, with could-not-look as its own answer.
+ * Row 6 asks the sweep for a count that is deliberately wrong by one and
+ * requires exit 2 and the sentence that names both numbers. It is cheap: the
+ * `--expect` check runs immediately after enumeration, so nothing renders.
+ */
+check('5 the estate size, from git rather than typed', ESTATE.n != null,
+  ESTATE.n != null
+    ? `${ESTATE.n} maps carry a tracked ci-reference/routes.json; every run above was held to that`
+    : `COULD NOT LOOK, so runs 1-4 ran with no coverage guard at all — ${ESTATE.why}`);
+
+if (ESTATE.n != null) {
+  const wrong = runSweep(ASSETS, false, ESTATE.n + 1);
+  const said = wrong.fatal || '';
+  const bit = said.includes(`enumerated ${ESTATE.n} maps, --expect said ${ESTATE.n + 1}`);
+  check('6 --expect itself goes red on a wrong count', bit,
+    bit ? `asked for ${ESTATE.n + 1}, refused before rendering anything`
+      : `asked for ${ESTATE.n + 1} and the sweep did not refuse: ${said.slice(0, 200) || 'it exited normally'}`);
 }
 
 const w = Math.max(...rows.map((r) => r[1].length));

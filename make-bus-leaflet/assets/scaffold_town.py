@@ -68,6 +68,14 @@ def main():
     if prefix:
         run([py, os.path.join(HERE,"gtfs_query.py"), prefix, "--town", a.town,
              "--db", a.db, "--out", os.path.join(s1,"gtfs-services.json")])
+    else:
+        # A draft with no atcoPrefix is a REFUSAL, not an absence, and it silently costs
+        # this run its central artefact: there is no gtfs-services.json to review at the
+        # gate, and step 4 cannot register the town either. Until this line existed the
+        # only trace was step 4's "(or no prefix)", which reads as "already registered".
+        print(f"  WARNING: bootstrap found no atcoPrefix for {a.town}, so "
+              f"gtfs-services.json was NOT pulled. Check routes.draft.json, then run "
+              f"gtfs_query.py by hand before reviewing S1.")
 
     # 4. register the town in town_prefixes.json (for the monthly refresh report)
     tp_path=os.path.join(os.path.dirname(a.db),"town_prefixes.json")
@@ -94,8 +102,13 @@ def main():
             tp[a.town]=entry
             json.dump(tp,open(tp_path,"w",encoding="utf-8"),indent=1,ensure_ascii=False)
             print(f"registered {a.town} in {tp_path}")
+        elif a.town in tp:
+            print(f"{a.town} already in town_prefixes.json - left as it stands")
         else:
-            print(f"{a.town} already in town_prefixes.json (or no prefix)")
+            # The other half of the same conflation: nothing was registered, and the
+            # reason is the missing prefix rather than a row that already existed.
+            print(f"NOT registered: {a.town} has no atcoPrefix, so the monthly refresh "
+                  f"cannot check this town until one is added by hand")
     except FileNotFoundError:
         print(f"(no town_prefixes.json at {tp_path} — skipped registration)")
 

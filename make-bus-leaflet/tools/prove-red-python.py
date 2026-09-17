@@ -1424,6 +1424,88 @@ MUTATIONS = [
      "find": '    a = math.sin(dla / 2) ** 2 + math.cos(math.radians(la1)) * math.cos(math.radians(la2)) * math.sin(dlo / 2) ** 2',
      "to": '    a = math.sin(dla / 2) ** 2 + math.sin(dlo / 2) ** 2'},
 
+    # ---------------------------------------------------------------- scaffold_town.py
+    # The one module that runs BEFORE every human gate in the pipeline, once per
+    # town, from a person's hand. Its output is what the S1 reviewer reviews, so
+    # a fault here arrives disguised as the starting position rather than as a
+    # fault, and no byte gate can see it because it draws nothing.
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "`stage.js new` no longer runs inside the town folder, so it walks up from the engine's own cwd and the S1 run lands in whichever map it finds first",
+     "find": '    s1=run([node, stage, "new", "S1"], cwd=town_dir)',
+     "to": '    s1=run([node, stage, "new", "S1"])'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a failing subprocess is ignored, so the scaffold finishes and writes a review checklist for a run that has no service facts in it",
+     "find": '    if p.returncode!=0:',
+     "to": '    if p.returncode<0:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the failing command's own stdout and stderr are dropped, leaving the reader `command failed: node .../stage.js new S1` and nothing to act on",
+     "find": '        sys.stderr.write(p.stdout+"\\n"+p.stderr+"\\n"); raise SystemExit(f"command failed: {\' \'.join(cmd)}")',
+     "to": '        raise SystemExit(f"command failed: {\' \'.join(cmd)}")'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "`--centre` is never passed on, so a town the geocoder places wrongly is scaffolded there and the person who supplied the coordinates is not told they were dropped",
+     "find": '    if a.centre: boot += ["--centre", a.centre]',
+     "to": '    if False: boot += ["--centre", a.centre]'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "gtfs_query is asked for the TOWN NAME rather than the ATCO prefix the bootstrap derived, which matches no stop and produces an empty, plausible service set",
+     "find": '        run([py, os.path.join(HERE,"gtfs_query.py"), prefix, "--town", a.town,',
+     "to": '        run([py, os.path.join(HERE,"gtfs_query.py"), a.town, "--town", a.town,'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a town with no ATCO prefix is registered anyway, so the monthly refresh joins on nothing and reports every one of its routes as withdrawn -- the Beaconsfield month, from a different direction",
+     "find": '        if a.town not in tp and prefix:',
+     "to": '        if a.town not in tp:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a town already in town_prefixes.json is overwritten, destroying a hand-set region or a second prefix that this run's single derived one cannot know about",
+     "find": '        if a.town not in tp and prefix:',
+     "to": '        if prefix:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "`region` is written on every town including the default region's own, so the field stops distinguishing the towns the monthly refresh must treat specially",
+     "find": '            if match and match[0]!=default:',
+     "to": '            if match:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a dataset registered in no regions.json is registered silently, which is exactly how Beaconsfield spent a month being diffed against Cambridgeshire",
+     "find": '            elif not match:',
+     "to": '            elif False:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the registry is never written, so the scaffold prints `registered <town>` about a file it did not change",
+     "find": '            json.dump(tp,open(tp_path,"w",encoding="utf-8"),indent=1,ensure_ascii=False)',
+     "to": '            pass'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the review checklist is written under a different name, so the path the run prints is not the file it wrote",
+     "find": '    nxt=os.path.join(s1,"SCAFFOLD-NEXT.md")',
+     "to": '    nxt=os.path.join(s1,"NEXT.md")'},
+
+    # The last two restore what the module did BEFORE 2026-09-17 rather than
+    # inventing a fault. A fix is only held by a suite if the suite has been seen
+    # to go red against the code it replaced.
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a bootstrap that found no ATCO prefix goes back to saying nothing at all, so the run exits 0 without the gtfs-services.json the S1 review gate exists to review",
+     "find": '''        print(f"  WARNING: bootstrap found no atcoPrefix for {a.town}, so "
+              f"gtfs-services.json was NOT pulled. Check routes.draft.json, then run "
+              f"gtfs_query.py by hand before reviewing S1.")''',
+     "to": '        pass'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the registration message goes back to `(or no prefix)`, so a town that COULD NOT be registered prints the sentence a town needing nothing prints",
+     "find": '''        elif a.town in tp:
+            print(f"{a.town} already in town_prefixes.json - left as it stands")
+        else:
+            # The other half of the same conflation: nothing was registered, and the
+            # reason is the missing prefix rather than a row that already existed.
+            print(f"NOT registered: {a.town} has no atcoPrefix, so the monthly refresh "
+                  f"cannot check this town until one is added by hand")''',
+     "to": '''        else:
+            print(f"{a.town} already in town_prefixes.json (or no prefix)")'''},
+
 ]
 
 

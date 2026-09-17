@@ -86,6 +86,7 @@ import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
+import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -1022,6 +1023,11 @@ for (const it of directoryLinkItems({ state: readDirectoryState(directoryDir) })
 // cadence beyond the monthly link sweep. Reads two tracked files, opens no socket,
 // and must never enter CI: it is a function of the clock (OA-289).
 for (const it of directoryCoverageItems({ state: readCoverageState(directoryDir) })) add(it);
+
+// 7c — the place lookup's edition (buses-data OA-312): the ONS Index of Place Names
+// is republished roughly yearly and nothing in CI may ask how old our copy is
+// (OA-289), so this row asks a person twice a year. The reasoning is in the module.
+for (const it of directoryPlacesItems({ state: readPlacesState(directoryDir) })) add(it);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows

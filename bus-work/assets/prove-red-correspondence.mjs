@@ -217,6 +217,64 @@ write('Correspondence/CORR-901/002-2026-08-02-out-reply.md',
   h1('SENT 3 August 2026').replace('**From:** BusMaps.uk', '**From:** BusMaps.uk · **Status:** SENT, 3 August 2026'));
 expect('both sites agreeing it is SENT clears the row', { key: 'corr-unsent-CORR-901', present: false });
 
+// 3c. A DELIBERATE HOLD, which is the one thing that may move an unsent letter
+// off rank 3 -- and case 2b above is the reason it took a code change rather
+// than a sentence. Prose cannot do it, because rank 3 protects a person
+// waiting. A DECLARATION can, because it says who decided and what would lift
+// it. CORR-004 is the shape: he never wrote to us, so his drafted reply had
+// been reported as "the person has heard nothing" for ten days while nobody
+// was waiting for anything.
+const holdable = (extra) => h1('DRAFTED, NOT SENT').replace('**From:** BusMaps.uk', `**From:** BusMaps.uk${extra}`);
+
+write('Correspondence/CORR-901/002-2026-08-02-out-reply.md',
+  holdable('\n**Held:** 17 September 2026 by Peter — nothing is expected of us.\n**Revisit when:** more customers are paying for this.'));
+expect('a hold declaring BOTH halves demotes the letter to WAITING ON OTHERS',
+  { key: 'corr-held-CORR-901', present: true, rank: 9 });
+expect('and the rank 3 row is gone, because it is not a debt any more',
+  { key: 'corr-unsent-CORR-901', present: false });
+
+// THE CONDITION IS THE LOAD-BEARING HALF. A hold with no route back is how a
+// letter is quietly abandoned, which is the exact failure this source exists
+// to prevent -- so half a declaration buys nothing and the row stays where it
+// was. Both orders, because a rule reading one of them works by accident.
+//
+// AND THIS PAIR NEEDED A MUTATION RATHER THAN THE USUAL BEFORE-RUN, which is
+// worth the four lines because it is the shape that catches people. Run against
+// the commit before the rule existed, the two demote cases above go red -- and
+// THESE stay green, trivially, because a rule that never demotes anything
+// cannot demote this either. Green under the feature and green under its
+// absence is this estate's "check that could not go red": it would have shipped
+// looking like proof and asserted nothing. Dropping the `revisitWhy` half of
+// the condition in worklist.mjs turns exactly these two red and nothing else,
+// which is what actually pins them. Measured 2026-09-17, both runs.
+write('Correspondence/CORR-901/002-2026-08-02-out-reply.md',
+  holdable('\n**Held:** 17 September 2026 by Peter — nothing is expected of us.'));
+expect('**Held:** with no **Revisit when:** does NOT demote it',
+  { key: 'corr-unsent-CORR-901', present: true, rank: 3 });
+expect('and no held row is emitted either', { key: 'corr-held-CORR-901', present: false });
+
+write('Correspondence/CORR-901/002-2026-08-02-out-reply.md',
+  holdable('\n**Revisit when:** more customers are paying for this.'));
+expect('**Revisit when:** with no **Held:** does NOT demote it either',
+  { key: 'corr-unsent-CORR-901', present: true, rank: 3 });
+
+// Lifting the hold must put it straight back. Appearing is half a rule; this
+// is the half that stops a hold becoming a delete nobody can see.
+write('Correspondence/CORR-901/002-2026-08-02-out-reply.md', h1('DRAFTED, NOT SENT'));
+expect('deleting the hold returns the letter to SOMEONE IS BLOCKED',
+  { key: 'corr-unsent-CORR-901', present: true, rank: 3 });
+expect('and the held row goes with it', { key: 'corr-held-CORR-901', present: false });
+
+// THE GREEN THAT MATTERS: a hold must not resurrect a letter that has gone.
+// This rule reads the hold fields inside the unsent branch for that reason, and
+// a version that read them first would report a SENT letter as held for ever.
+write('Correspondence/CORR-901/002-2026-08-02-out-reply.md',
+  h1('SENT 3 August 2026').replace('**From:** BusMaps.uk',
+    '**From:** BusMaps.uk\n**Held:** 17 September 2026 by Peter — stale header nobody cleaned up.\n**Revisit when:** never.'));
+expect('a leftover hold on a SENT letter raises nothing at all',
+  { key: 'corr-held-CORR-901', present: false });
+expect('and does not raise the unsent row either', { key: 'corr-unsent-CORR-901', present: false });
+
 // 4. an unanswered local question, and what answering it does
 const decisions = (state) => JSON.stringify({
   map: 'Testtown', kind: 'area',

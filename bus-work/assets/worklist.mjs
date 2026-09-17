@@ -87,6 +87,7 @@ import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
+import { unsentLetterItem } from './outbound_letter.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -590,18 +591,12 @@ function fromCorrespondence() {
     const status = st ? st[1].trim() : '';
     const declared = [status, h1 ? h1[0] : ''].filter(Boolean);
     if (declared.some((d) => /\bNOT SENT\b|\bDRAFTED\b/i.test(d))) {
-      out.push({
-        key: `corr-unsent-${ref}`, rank: 3, type: 'correspondence',
-        title: `${label}: reply drafted ${last.date}, NOT SENT`,
-        why: 'Only you can send it — there is no reply button on the portal and Claude has no access to email. Until it goes, the person has heard nothing.',
-        who: 'Peter', runbook: 'correspondence',
-        ageDays: daysSince(last.date),
-        do: [
-          { kind: 'shell', cwd: BUSES, cmd: `node Correspondence/to-email.mjs "Correspondence/${ref}/${last.file}"`, note: 'run it AFTER any edits you make' },
-          { kind: 'chat', what: 'Open the .html it writes, Ctrl+A, Ctrl+C, paste into the email. Add the salutation yourself.' },
-          { kind: 'chat', what: 'Then tell Claude it has gone, so the file becomes the sent record.' },
-        ],
-      });
+      // Held-or-not is outbound_letter.mjs's, because a letter nobody is
+      // waiting for is not a debt and rank 3 had no legitimate release.
+      out.push(unsentLetterItem({
+        ref, label, head, date: last.date, file: last.file,
+        buses: BUSES, ageDays: daysSince(last.date),
+      }));
     }
   }
 

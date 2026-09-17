@@ -40,6 +40,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readDirectoryState, directoryLinkItems, CADENCE_DAYS } from './directory_links.mjs';
 import { needsOf } from './concurrency.mjs';
+import { resolveBuses } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 let bad = 0;
@@ -223,7 +224,9 @@ console.log('\n12. THE JOIN ITSELF — the real writer\'s output, read by the re
   // tests while disagreeing about a field name. This is the only place the
   // question can be asked. buses-data is absent from a claude-skills checkout, so
   // in CI this section SAYS it could not look rather than reporting a pass.
-  const busesDir = process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses';
+  // BUSES_DIR, then the one named laptop path — engine.mjs's order, read from
+  // engine.mjs rather than written out again here (buses-data OA-345).
+  const busesDir = resolveBuses();
   const writer = path.join(busesDir, 'BusMapsUK', 'bus-map-directory', 'directory.mjs');
   if (!fs.existsSync(writer)) {
     console.log(`  --  SKIPPED, and this is not a pass: buses-data is not at ${busesDir}, so the writer cannot be joined to the reader here. Expected in CI; run this on the laptop.`);

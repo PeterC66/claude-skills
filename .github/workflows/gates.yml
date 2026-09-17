@@ -510,6 +510,25 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-preflight
 
+      # buses-data OA-345 (2026-09-17): `engine.mjs` is this skill's ONE path
+      # resolver and argument parser, and eight modules written after it did not
+      # import it -- its importer count was still the two files it was cut from.
+      # The 2026-09-14 review's conclusion is that the unit of an extraction is
+      # the module PLUS the check on its callers, so the census is the half that
+      # was missing and this step is what keeps it. The harness runs first
+      # because it is the thing that says the census can fire at all: its
+      # section 7 copies the real assets/ folder, puts back the exact literal
+      # this action removed from `town_status.mjs`, and requires the census to
+      # name it. A census whose control sits outside its own population is the
+      # fault `make-bus-leaflet/test/cli.test.js` carried until 2026-09-14.
+      - name: Prove the engine-adoption census can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-engine-adoption
+
+      - name: Every bus-work module reaches the engine through engine.mjs
+        working-directory: skills/bus-work
+        run: npm run gate:engine-adoption
+
       - name: Prove the route-number collision guard can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-route-collision

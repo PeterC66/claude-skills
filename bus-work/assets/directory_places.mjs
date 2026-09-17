@@ -44,6 +44,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolvePortal } from './engine.mjs';
 
 /** Half a year, argued above. */
 export const RECHECK_DAYS = 182;
@@ -109,7 +110,11 @@ export function directoryPlacesItems({ state, now = Date.now(), recheckDays = RE
       { kind: 'shell', cwd, cmd: 'tar -xf ipn.zip', note: 'extracts the CSV beside the zip; the CSV name carries the edition year' },
       { kind: 'shell', cwd, cmd: 'node build-places.mjs --csv IPN_GB_2024.csv --zip ipn.zip', note: 'rebuilds the three files and re-records `built`; refuses if the district rule no longer covers the data. If the sha256 matches the old one the edition is unchanged and only `built` moves — commit that: it is the record that somebody looked' },
       { kind: 'shell', cwd, cmd: 'node check-places.mjs', note: 'the gate; a new edition that renames a district shows here first' },
-      { kind: 'chat', what: 'If the edition changed: update EDITION and URL in build-places.mjs, then `npm run sync:directory` from the portal root (C:\\Claude\\community-bus-maps) and open a portal PR — AFTER pushing buses-data, because the portal\'s verify.yml reads this repository\'s main.' },
+      // The portal root is NAMED, because a command written for Peter states the
+      // folder it runs from (buses-data CLAUDE.md), and it is RESOLVED rather
+      // than typed, so the sentence stays true on a checkout that is not this
+      // laptop's (buses-data OA-345).
+      { kind: 'chat', what: `If the edition changed: update EDITION and URL in build-places.mjs, then \`npm run sync:directory\` from the portal root (${resolvePortal()}) and open a portal PR — AFTER pushing buses-data, because the portal's verify.yml reads this repository's main.` },
     ],
   });
 

@@ -22,6 +22,8 @@
  * Commands:
  *   init  <townDir> <"Town Name">      create manifest.json if absent
  *   new   <S1..S6> [--bump major|minor]  create+print the next run dir (abs path)
+ *         refuses --based-on: nothing here writes a run record, so it is `commit`
+ *         that takes it (OA-352 — both rollouts passed it here and it was discarded)
  *   pull  <S1..S6> [destDir]           copy latest outputs of a stage into destDir (def cwd)
  *   latest <S1..S6>                    print latest run dir (abs) of a stage
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
@@ -360,6 +362,26 @@ function main() {
 
   if (cmd === 'new') {
     const st = rest[0]; const sx = stage(st);
+    /* `new` DOES NOT WRITE PROVENANCE, AND USED TO ACCEPT THE FLAG THAT SAYS IT (OA-352).
+     *
+     * `--based-on` is read in exactly one place in this file, the `commit` handler, which
+     * writes it as the run record's `basedOn`. `new` never looked at it — and both rollouts
+     * passed it here and nowhere else from 2026-09-03 to 2026-09-17, so every S4 either of
+     * them built carries no `basedOn` at all, and `staleInputs()` in gate_lib.js has been
+     * falling back to its weaker "did the latest S2/S3 finish after this S4 started?"
+     * inference on every one of them. Nothing said so: the argument was accepted, ignored
+     * and discarded, and a clean answer from the fallback reads exactly like a clean answer
+     * from the exact signal.
+     *
+     * So the flag is REFUSED here rather than quietly dropped. A caller that means it is
+     * one line away from the command that honours it, and the next one to make this mistake
+     * finds out at the moment they make it rather than a fortnight later in a field that is
+     * not there. Refusing costs nothing: `new --based-on` has never had a meaning to
+     * preserve, and the usage block at the head of this file has only ever documented the
+     * flag on `commit`. */
+    if (f['based-on'] !== undefined) {
+      die('--based-on is not read by `new` and never has been — `commit` is what writes the run record, so it is the only command that can record what a run was built from. Pass it on `stage.js commit ' + (st || '<S1..S6>') + ' <runDir> …` instead (OA-352).', 2);
+    }
     let id, dir;
     if (st === 'S4') { const v = computeVersion(m, f.bump === 'major' ? 'major' : 'minor'); id = `v${v}_${ts()}`; }
     else if (st === 'S5') {

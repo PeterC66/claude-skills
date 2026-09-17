@@ -629,11 +629,14 @@ function unrenderedS4(manifest) {
  * the config draws from the old data and the panel says nothing at all.
  *
  * IT ASKS THE MANIFEST, WHICH ALREADY RECORDS BOTH, AND IT PREFERS THE EXACT
- * SIGNAL. `stage.js new --based-on "S2=<id>;S3=<id>"` writes a run's inputs into
+ * SIGNAL. `stage.js commit --based-on "S2=<id>;S3=<id>"` writes a run's inputs into
  * its record, so where that field is present this is an id comparison and there is
  * nothing to infer. Where it is ABSENT — which on 2026-09-03 was 9 of the 11 town
  * and place manifests, because neither rollout passed --based-on until this change
- * went in — it falls back to asking whether the latest S2/S3 run COMPLETED after
+ * went in, AND WHICH STAYED TRUE OF EVERY ROLLOUT-BUILT S4 FOR A FORTNIGHT AFTER IT
+ * DID (OA-352): both tools passed the flag to `new`, which does not read it, so the
+ * sentence above described an intention rather than the estate until 2026-09-17 —
+ * it falls back to asking whether the latest S2/S3 run COMPLETED after
  * the S4 started. That is the same sentence OA-225 wrote ("a town whose newest S2
  * or S3 postdates the S4 being rolled forward"), and the comparison is strict:
  * High Wycombe's v4.0 started at 23:08 and its S2 completed at 23:08, so `>=` would

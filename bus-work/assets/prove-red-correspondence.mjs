@@ -237,6 +237,16 @@ expect('and the rank 3 row is gone, because it is not a debt any more',
 // letter is quietly abandoned, which is the exact failure this source exists
 // to prevent -- so half a declaration buys nothing and the row stays where it
 // was. Both orders, because a rule reading one of them works by accident.
+//
+// AND THIS PAIR NEEDED A MUTATION RATHER THAN THE USUAL BEFORE-RUN, which is
+// worth the four lines because it is the shape that catches people. Run against
+// the commit before the rule existed, the two demote cases above go red -- and
+// THESE stay green, trivially, because a rule that never demotes anything
+// cannot demote this either. Green under the feature and green under its
+// absence is this estate's "check that could not go red": it would have shipped
+// looking like proof and asserted nothing. Dropping the `revisitWhy` half of
+// the condition in worklist.mjs turns exactly these two red and nothing else,
+// which is what actually pins them. Measured 2026-09-17, both runs.
 write('Correspondence/CORR-901/002-2026-08-02-out-reply.md',
   holdable('\n**Held:** 17 September 2026 by Peter — nothing is expected of us.'));
 expect('**Held:** with no **Revisit when:** does NOT demote it',

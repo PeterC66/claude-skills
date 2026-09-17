@@ -36,6 +36,20 @@
  * at an empty Buses tree on purpose: a tree with nothing to gate must read as
  * such, and this harness is asking about one row.
  *
+ * SINCE 2026-09-17 THE WORD MOVES AND THE EXIT CODE DOES NOT (buses-data OA-396,
+ * R3 of the process review). A dated BEHIND is a deploy somebody has not run --
+ * a chore, printed by the board and carried by the worklist -- and it no longer
+ * exits 1; three of the newest thirty reds on buses-data were exactly that. What
+ * still exits 1 is an UNDATEABLE row: a live sha that neither this checkout nor
+ * a fetch can find, which is either a site running something main never held or
+ * an instrument that could not look. So case 3 now wants BEHIND with exit 0 and
+ * `undateable: false`, and a NEW mutation arm runs the same fixture against a
+ * copy of status.js with the pre-OA-396 rule put back and requires exit 1 --
+ * without it, "BEHIND exits 0" would be a fixture agreeing with the installed
+ * code rather than a fixture known to discriminate. The two undateable cases
+ * (an unresolvable sha; --no-fetch) keep their red, and that is the control
+ * that matters: the change must not convert could-not-tell into a pass.
+ *
  * Run it from make-bus-leaflet (no placeholders):
  *     npm run test:prove-red-deploy-grace
  *     node tools/prove-red-deploy-grace.js --keep   leave the scratch trees on disk
@@ -150,28 +164,46 @@ function scratchStaleClone(mode) {
 /* status.js with the pre-OA-355 line put back, for the mutation arm. Copies the
  * whole assets folder rather than editing in place, the way prove-red-status.js
  * builds its injected-exception copy. */
-function statusWithOldRule() {
+function statusWithOldRule(kind) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oa355-oldrule-'));
   const assets = path.join(root, 'assets');
   fs.cpSync(path.join(__dirname, '..', 'assets'), assets, { recursive: true });
-  const p = path.join(assets, 'status.js');
+  /* The row moved from status.js into deployment.js on 2026-09-17 (OA-396, under
+   * the line ratchet); the whole assets folder is copied, so the copy's status.js
+   * requires the copy's deployment.js and the mutation lands where it is read. */
+  const p = path.join(assets, 'deployment.js');
+  /* The SCRIPT the board runs is still status.js; the MUTATION lands in the
+   * module it requires. The first cut of this split returned the module's path
+   * as `status`, so both mutation arms ran deployment.js as the main script,
+   * printed nothing parseable, and scored "(no deployment row)". */
+  const status = path.join(assets, 'status.js');
   let s = fs.readFileSync(p, 'utf8');
+  /* 'red' puts the pre-OA-396 exit rule back -- BEHIND itself was red -- so the
+   * dated-backlog fixture can be shown to discriminate between the two rules.
+   * The anchor is the whole body of deployBad() and is matched verbatim, so if
+   * the rule moves this arm refuses rather than silently testing nothing. */
+  if (kind === 'red') {
+    const now = "  return !!d && d.status === 'BEHIND' && d.undateable === true;";
+    if (!s.includes(now)) throw new Error('the current deployment.js does not carry the OA-396 deployBad() rule; this harness is out of date with its subject');
+    fs.writeFileSync(p, s.replace(now, "  return !!d && d.status === 'BEHIND';"), 'utf8');
+    return { root, status };
+  }
   /* The ref this reads is `liveRef` rather than `ref` since OA-392, which may
    * have been refreshed by that action's one fetch. The marker is matched
    * VERBATIM and the throw below is the anchor check: if the subject moves
    * again, this arm says so instead of silently testing nothing. */
-  const marker = "  const backlog = gitIn(PORTAL, ['log', '--format=%ct', deployed + '..' + liveRef]);";
+  const marker = "  const backlog = gitIn(portal, ['log', '--format=%ct', deployed + '..' + liveRef]);";
   if (!s.includes(marker)) {
-    throw new Error('the current status.js does not carry the OA-355 backlog line; this harness is out of date with its subject');
+    throw new Error('the current deployment.js does not carry the OA-355 backlog line; this harness is out of date with its subject');
   }
-  const oldLine = "  const backlog = null; const oldest = String(Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', liveRef])));";
+  const oldLine = "  const backlog = null; const oldest = String(Number(gitIn(portal, ['log', '-1', '--format=%ct', liveRef])));";
   s = s.replace(marker, oldLine);
   /* The replacement above redeclares `oldest` on the next line in the real file,
    * so that line is removed rather than left to throw a SyntaxError — a mutant
    * that cannot parse would "catch" every case for the wrong reason. */
   s = s.replace("  const oldest = backlog == null ? null : backlog.split('\\n').map(s => s.trim()).filter(Boolean).pop();\n", '');
   fs.writeFileSync(p, s, 'utf8');
-  return { root, status: p };
+  return { root, status };
 }
 
 /* SPAWNED, NOT execFileSync, AND THAT IS THE WHOLE REASON THIS WORKS. The fake
@@ -226,14 +258,20 @@ const CASES = [
   {
     label: 'THE ARM: an old backlog behind a tip committed seconds ago',
     ages: [50, 40, 0], live: 0, grace: 12,
-    wantStatus: 'BEHIND', wantRed: true, wantMinAge: 12,
-    what: 'the case the pre-OA-355 rule read as 0h and exited 0 on',
+    wantStatus: 'BEHIND', wantRed: false, wantMinAge: 12, wantUndateable: false,
+    what: 'the case the pre-OA-355 rule read as 0h; BEHIND, dated, and since OA-396 a chore that exits 0',
   },
   {
     label: 'mutation: the same fixture against the pre-OA-355 rule',
-    ages: [50, 40, 0], live: 0, grace: 12, useOldRule: true,
+    ages: [50, 40, 0], live: 0, grace: 12, useOldRule: 'age',
     wantStatus: 'behind (grace)', wantRed: false,
     what: 'proves the fixture discriminates rather than reddening anything',
+  },
+  {
+    label: 'OA-396 mutation: the same dated backlog against the rule that made BEHIND red',
+    ages: [50, 40, 0], live: 0, grace: 12, useOldRule: 'red',
+    wantStatus: 'BEHIND', wantRed: true, wantMinAge: 12,
+    what: 'exit 1 here and 0 above is the whole of OA-396 on this row: the word is the same, the colour moved',
   },
   {
     label: 'a live sha this checkout cannot resolve is not 0h',
@@ -290,7 +328,7 @@ const CASES = [
     }
     const buses = emptyBuses();
     const { srv, url } = await fakeLive('0.0.0-harness+' + liveSha);
-    const inj = c.useOldRule ? statusWithOldRule() : null;
+    const inj = c.useOldRule ? statusWithOldRule(c.useOldRule) : null;
     const r = await board(inj ? inj.status : STATUS, buses, portal, url, c.grace, c.extra);
     srv.close();
 
@@ -299,7 +337,10 @@ const CASES = [
     const statusOk = got === c.wantStatus;
     const redOk = c.wantRed ? r.code !== 0 : r.code === 0;
     const ageOk = c.wantMinAge == null ? true : (dep && dep.ageHours != null && dep.ageHours >= c.wantMinAge);
-    const undateOk = c.wantUndateable == null ? true : (dep && dep.undateable === true);
+    /* Checked against the VALUE asked for, so a case can insist a dated BEHIND
+     * says `undateable: false` -- the half that makes its green exit mean "a
+     * chore" rather than "the row forgot to say it could not tell". */
+    const undateOk = c.wantUndateable == null ? true : (dep && dep.undateable === c.wantUndateable);
     /* OA-392's two extra assertions. `fetch` is checked by VALUE rather than by
      * truthiness because its three answers — not needed, fetched, COULD NOT
      * FETCH — are the point: a refusal read as an absence measures the
@@ -336,6 +377,6 @@ const CASES = [
     console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the deploy grace is not what status.js says it is.');
     process.exitCode = 1;
   } else {
-    console.log('\nall ' + CASES.length + ' cases behaved as claimed: the deploy grace expires on the age of the OLDEST undeployed commit, a fresh tip no longer hides an old backlog, an unresolvable live sha fails safe, the same fixture still reads amber against the rule this replaced, and a stale origin/main no longer reads as a stale deployment - with --no-fetch reproducing the old verdict on the same fixture.');
+    console.log('\nall ' + CASES.length + ' cases behaved as claimed: the deploy grace expires on the age of the OLDEST undeployed commit, a fresh tip no longer hides an old backlog, a dated BEHIND is reported and exits 0 while the pre-OA-396 rule on the same fixture exits 1, an unresolvable live sha still fails safe, the same fixture still reads amber against the pre-OA-355 rule, and a stale origin/main no longer reads as a stale deployment - with --no-fetch reproducing the old verdict on the same fixture.');
   }
 })();

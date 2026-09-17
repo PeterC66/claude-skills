@@ -43,7 +43,14 @@
  *      ALIASED rather than uncovered, and the row names the registered key. Last
  *      because a label can also be a real key on the same map — Wisbech prints "46"
  *      for `46L` and carries a real 46 — so every direct test runs first.
- * Anything else is UNCOVERED, and that is red.
+ * Anything else is UNCOVERED. Until 2026-09-17 that was red; since buses-data OA-396
+ * (R3 of the process review) it is a ROW -- a service fact OWED, printed here, carried
+ * by the bus-work worklist as `s6-claims-uncovered`, and never the exit code, because
+ * a claim nobody has filed yet is a chore and not a fault in a map or a register.
+ * What stays red is a fault in the RECORDS: a register that cannot be read, that
+ * contradicts itself, whose operator strings resolve to nothing or to two, or that
+ * decides a route a map in scope is SILENT about -- and `--require-reports` on a run
+ * that found no report at all.
  *
  * WHY THIS HALF CANNOT RUN IN CI. It reads `verification.json`, which is gitignored
  * because our own code rebuilds it for free. `actions/checkout` therefore produces a
@@ -770,7 +777,11 @@ const registerRecheck = [
 const unreadableDecls = maps.flatMap(m => decl.get(m.name).unreadable);
 
 // ---- verdict ------------------------------------------------------------------
-const red = uncovered.length > 0 || registerFindings.length > 0 || silences.length > 0 || unreadableReports.length > 0 || unreadableDecls.length > 0
+// `uncovered.length > 0` was the first term of this line until 2026-09-17 (buses-data
+// OA-396). A claim with no home is now reported and counted, and it is the worklist's
+// `s6-claims-uncovered` row that chases it; the exit code answers only for a fault in
+// the records. prove-red-s6-claims.mjs case 2 pins the row as reported-and-green.
+const red = registerFindings.length > 0 || silences.length > 0 || unreadableReports.length > 0 || unreadableDecls.length > 0
   || (REQUIRE_REPORTS && reports === 0);
 
 if (AS_JSON) {
@@ -790,7 +801,7 @@ if (AS_JSON) {
   for (const a of aliased) console.log(`  ${REGISTER_NAME}: ${a.text}`);
   for (const l of uncovered) {
     console.log(`  ${l.map}  S6 ${l.run} ${l.id}  ${l.category}  ${l.route}${l.operator ? ` (${l.operator})` : ''}${l.superset ? '  [borrowed answer — may be a superset artefact]' : ''}`);
-    console.log(`      UNCOVERED — no notOnLeaflet, no redteamRejected, ${l.parent ? `nothing in ${l.parent}'s file, ` : ''}no ${REGISTER_NAME} entry in scope. Write the register entry (queued is enough to give it a home).`);
+    console.log(`      UNCOVERED — no notOnLeaflet, no redteamRejected, ${l.parent ? `nothing in ${l.parent}'s file, ` : ''}no ${REGISTER_NAME} entry in scope. Write the register entry (queued is enough to give it a home). A chore on the worklist, not a red.`);
   }
   console.log(`\ncheck-s6-claims — ${path.resolve(ROOT)}`);
   console.log(`  ${maps.length} map(s) tracked; register: ${register ? `${facts.length} fact(s), ${facts.filter(f => f && f.status === 'queued').length} queued, ${facts.filter(f => f && f.status === 'decided').length} decided` : 'ABSENT'}`);

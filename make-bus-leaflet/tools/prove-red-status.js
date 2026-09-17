@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /*
- * prove-red-status.js — break the STATUS BOARD's engine-staleness gate on
- * purpose, and check that the board's exit code notices.
+ * prove-red-status.js — pin what the STATUS BOARD's exit code means: a FAULT
+ * reddens it, a CHORE is reported and does not, and each half is proved both
+ * ways against a mutated copy of status.js.
  *
  * WHY THIS FILE EXISTS. OA-151 folded `row.engineCurrent` into `status.js`'s
  * `bad` on 2026-08-28. Until then the Engine column was decoration: computed,
@@ -14,7 +15,24 @@
  * standing rule is that a green check nobody has watched go red proves nothing,
  * and OA-151 wrote the falsification into the row itself: "whichever is chosen,
  * prove it can go red by stamping one map with a wrong hash and watching the
- * board fail." This is that.
+ * board fail." This was that, for nineteen days.
+ *
+ * AND THEN THE COLOUR MOVED BACK, DELIBERATELY (buses-data OA-396, 2026-09-17,
+ * R3 of the process review). OA-151 was right that a verdict the exit code
+ * ignores is a gate described rather than run, and wrong that the verdict had
+ * to be RED: a map drawn by an older engine whose sheets still reproduce byte
+ * for byte is a chore -- a rollout nobody has run -- and the byte gate is what
+ * says whether the artwork is wrong. 317 red runs in 69 streaks on buses-data
+ * in four weeks, none of the newest thirty a fault in a map, is what a red that
+ * means "somebody has a chore" costs. So the stale-stamp case now expects exit 0
+ * AND the town named in `engineStale`, a mutation arm runs the same fixture
+ * against a copy of status.js with the OA-151 term put back and expects exit 1,
+ * and the pair the action asked for is here too: a stale S6 report is reported
+ * and green (with its own mutation arm: a copy that gates on it goes red), and
+ * a town sheet that no longer reproduces goes red. A green that has never been
+ * seen to go red proves nothing; a green whose fixture has never been seen to
+ * redden a mutant proves nothing either, and every information-only case here
+ * carries its mutant for that reason.
  *
  * ITS SIBLINGS AND WHAT IT ADDS. `prove-red.js` falsifies the unit suite and
  * `prove-red-gates.js` falsifies the five BYTE gates. Neither can reach this,
@@ -136,7 +154,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null }) {
+function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null, staleS6 = false, mutateInternal = false }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -245,6 +263,31 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
     fs.mkdirSync(fix, { recursive: true });
     fs.writeFileSync(path.join(fix, 'internal.svg'),
       areaFixture === 'same' ? NEWEST : '<svg><!-- an OLDER render, frozen --></svg>');
+  }
+  /* A STALE S6 REPORT (OA-396). status.js reads S6 staleness off the MANIFEST
+   * alone -- latestRunDir() needs no folder on disk for S6 -- and calls a run
+   * stale when its `at` predates the newest S1/S2/S3 `at`. So the fixture is the
+   * donor's own manifest with its latest S6 run dated before any data run it
+   * holds. The date is a string the real files' own format would sort before,
+   * not a number, because that is what the comparison actually does. */
+  if (staleS6) {
+    const mp = path.join(dst, 'manifest.json');
+    const m = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const s6 = m.stages && m.stages.S6;
+    const rec = s6 && (s6.runs || []).find(r => r.id === s6.latest);
+    if (!rec) throw new Error('prove-red-status: the donor ' + town + ' has no latest S6 run to age -- pick a donor that has been verified');
+    rec.at = '2000-01-01T00:00';
+    fs.writeFileSync(mp, JSON.stringify(m, null, 2));
+  }
+  /* A TOWN SHEET THAT NO LONGER REPRODUCES (OA-396). One comment appended inside
+   * the committed internal.svg: the generator will not draw it, so the byte gate
+   * reads DIFF. It is the FAULT half of the pair the action asked for, and it is
+   * here so the harness that pins two chores green also shows a fault red. */
+  if (mutateInternal) {
+    const sv = path.join(dst, 'ci-reference', 'internal.svg');
+    const txt = fs.readFileSync(sv, 'utf8');
+    if (!txt.includes('</svg>')) throw new Error('prove-red-status: ' + sv + ' carries no closing </svg> to mutate before');
+    fs.writeFileSync(sv, txt.replace('</svg>', '<!-- one byte the generator will not draw: prove-red-status.js --></svg>'));
   }
   if (engine) {
     const rjPath = path.join(dst, 'ci-reference', 'routes.json');
@@ -365,6 +408,33 @@ function statusWithException(town, engine) {
   const one = "const ENGINE_STALE_ALLOWED = [{ town: '" + town + "', engine: '" + engine
     + "', since: '2026-08-28', why: 'injected by prove-red-status.js' }];";
   fs.writeFileSync(f, src.replace(DECL, one));
+  return { statusPath: f, root };
+}
+
+/* A scratch copy of the engine with one of OA-396's removed rules PUT BACK, so
+ * a fixture that is green against the installed board can be shown to redden the
+ * board it was written against. 'engine' restores OA-151's term (a stale stamp
+ * exits 1); 's6' adds the term nothing ever had (a stale S6 exits 1), which is
+ * the mutant the S6 pin has to be able to catch. Each anchor is matched exactly
+ * once, the way statusWithException() matches its declaration: an anchor that
+ * silently matched nowhere would leave an unmutated copy and score "caught"
+ * against nothing. */
+function statusWithOldRule(kind) {
+  const root = scratchDir('prove-red-status-oldrule-');
+  copyDir(ASSETS, path.join(root, 'assets'));
+  const f = path.join(root, 'assets', 'status.js');
+  const src = fs.readFileSync(f, 'utf8');
+  const anchor = "  || require('./s6_claims.js').isRed(s6Claims);";
+  const hits = src.split(anchor).length - 1;
+  if (hits !== 1) {
+    throw new Error('prove-red-status: expected exactly one `' + anchor.trim() + '` line in status.js, found ' + hits
+      + '. The old-rule arms append their term there; re-point them at whatever replaced it.');
+  }
+  const term = kind === 'engine' ? '\n  || engineStaleRows.length > 0'
+    : kind === 's6' ? '\n  || townRows.some(r => r.s6Stale) || placeRows.some(r => r.s6Stale)'
+    : null;
+  if (!term) throw new Error('prove-red-status: unknown old rule ' + kind);
+  fs.writeFileSync(f, src.replace(anchor, anchor.replace(/;$/, '') + term + ';'));
   return { statusPath: f, root };
 }
 
@@ -503,10 +573,68 @@ const CASES = [
     what: 'an unmutated board must be green, or a red one below proves nothing',
   },
   {
-    label: 'a town stamped with a hash that is not current',
+    /* THE CASE THAT FLIPPED (OA-396). From 2026-08-28 to 2026-09-17 this expected
+     * exit 1 and was THE GATE ITSELF. It now expects exit 0 and still requires
+     * the board to NAME the stale town in `engineStale` (staleNamed), so a green
+     * here is "reported and not red" and never "not seen". The case below it is
+     * what stops this from being a fixture that merely agrees with the code. */
+    label: 'a town stamped with a hash that is not current is REPORTED, and the board stays green',
     make: { engine: 'deadbeef00' },
+    expect: 0,
+    staleNamed: true,
+    also: (json) => {
+      const t = (json.towns || []).find(r => r.name === DONOR);
+      if (!t) return 'the board never saw the town at all';
+      if (t.engineCurrent !== false) return 'the board did not judge the stamp stale: engineCurrent=' + t.engineCurrent;
+      return null;
+    },
+    what: 'a chore, not a fault: the byte gate says whether the artwork is wrong, and this column says who owes a rollout',
+  },
+  {
+    label: 'mutation: the same stale stamp against the pre-OA-396 rule goes RED',
+    make: { engine: 'deadbeef00' },
+    oldRule: 'engine',
     expect: 1,
-    what: 'THE GATE ITSELF - this exited 0 for as long as the hash existed',
+    staleNamed: true,
+    what: 'exit 1 here and 0 above is the whole of OA-396 on this column: the fixture discriminates, the term is what changed',
+  },
+  {
+    label: 'a stale S6 report is REPORTED, and the board stays green',
+    make: { staleS6: true },
+    expect: 0,
+    also: (json) => {
+      const t = (json.towns || []).find(r => r.name === DONOR);
+      if (!t) return 'the board never saw the town at all';
+      if (t.s6Stale !== true) return 'the board did not judge the S6 stale: s6Stale=' + t.s6Stale + ', s6=' + t.s6;
+      return null;
+    },
+    what: 'the half OA-396 asked for first: this column never gated, and now it is pinned that way rather than assumed',
+  },
+  {
+    label: 'mutation: the same stale S6 against a board that gates on it goes RED',
+    make: { staleS6: true },
+    oldRule: 's6',
+    expect: 1,
+    cause: 's6',
+    also: (json) => {
+      const t = (json.towns || []).find(r => r.name === DONOR);
+      if (!t || t.s6Stale !== true) return 'red, but not about a stale S6';
+      return null;
+    },
+    what: 'the fixture is known to discriminate: a board that reddened on S6 staleness would be caught by the case above',
+  },
+  {
+    label: 'a town sheet that no longer reproduces goes RED',
+    make: { mutateInternal: true },
+    expect: 1,
+    cause: 'sheet',
+    also: (json) => {
+      const t = (json.towns || []).find(r => r.name === DONOR);
+      if (!t) return 'the board never saw the town at all';
+      if (t.internal !== 'DIFF') return 'red, but the internal sheet read ' + t.internal;
+      return null;
+    },
+    what: 'the other half of the pair: a FAULT still reddens, and it is the byte gate that says so',
   },
   {
     label: 'an INJECTED exception excuses its own town-and-hash pair',
@@ -726,10 +854,11 @@ const CASES = [
     what: 'OA-210 asked what the PORTAL answer is - refresh-place-fixture.mjs regenerates from the fixture\'s own data and cannot see this; the buses tree asks it for both',
   },
   {
-    label: 'Ramsey at some OTHER stale hash',
+    label: 'Ramsey at some OTHER stale hash is reported like any other town',
     make: { town: 'Ramsey', engine: 'deadbeef00' },
-    expect: 1,
-    what: 'keyed to the hash too, so a rebuilt Ramsey gates like any other town',
+    expect: 0,
+    staleNamed: true,
+    what: 'keyed to the hash too, so a rebuilt Ramsey is named as stale like any other town (and green, since OA-396)',
   },
 ];
 
@@ -777,7 +906,9 @@ let failed = 0;
 for (const c of CASES) {
   const root = scratchTree(c.make);
   kept.push(root);
-  const inj = c.engineException ? statusWithException(c.engineException.town, c.engineException.engine) : null;
+  const inj = c.engineException ? statusWithException(c.engineException.town, c.engineException.engine)
+    : c.oldRule ? statusWithOldRule(c.oldRule)
+    : null;
   if (inj) kept.push(inj.root);
   /* The injected case runs a COPY of status.js, and portalDrift() derives the
    * skill root from its own location -- so from a scratch folder every vendored
@@ -805,10 +936,15 @@ for (const c of CASES) {
    * stale town at all -- which the old test scored as RED, WRONG CAUSE. The
    * discrimination is the point and is kept either way: a keys case must name NO
    * stale town, so it still cannot pass by tripping the staleness gate instead. */
+  /* `staleNamed: true` (OA-396) says the board must NAME the mutated town in
+   * `engineStale` whatever the colour: since 2026-09-17 a stale stamp is green,
+   * so "red implies named" no longer carries that assertion, and a green case
+   * that did not require the name would be satisfied by a board that never
+   * looked. The default is unchanged for every case that does not set it. */
+  const staleWanted = c.staleNamed ? 'named' : c.cause ? 'none' : wantRed ? 'named' : 'none';
   const causeOk = stale === null ? false
-    : c.cause ? stale.length === 0
-    : wantRed ? (stale.length === 1 && stale[0] === (c.make.town || DONOR))
-              : stale.length === 0;
+    : staleWanted === 'named' ? (stale.length === 1 && stale[0] === (c.make.town || DONOR))
+    : stale.length === 0;
   /* A GREEN case needs more than a green exit: a map the board never FOUND is
    * green too, and an enumeration that quietly walks past a map is this
    * project's most-repeated bug. `also` is where a case says what the board must
@@ -836,8 +972,8 @@ for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].p
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
 
 if (failed) {
-  console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the engine-staleness gate is not what status.js says it is.');
+  console.error('\n' + failed + ' of ' + CASES.length + ' cases did not behave as claimed - the board\'s exit code is not what status.js says it is.');
   process.exitCode = 1;
 } else {
-  console.log('\nall ' + CASES.length + ' cases behaved as claimed: the gate goes red on a stale stamp, an injected exception is exactly one town-and-hash pair wide, the OA-057 completeness column is gated, and the OA-170 place-schematic column is gated -- each of the last two red for its own fault, and naming no stale town while it does it.');
+  console.log('\nall ' + CASES.length + ' cases behaved as claimed: a stale engine stamp and a stale S6 report are each REPORTED and green while the same fixture reddens a copy of the board with the old rule put back, a town sheet that no longer reproduces goes red, an injected exception is exactly one town-and-hash pair wide, the OA-057 completeness column is gated, and the OA-170 place-schematic column is gated -- each red case red for its own fault, and naming no stale town unless the case says so.');
 }

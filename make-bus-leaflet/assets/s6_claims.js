@@ -60,7 +60,14 @@ function nothingToGate(v) {
     && (v.register.findings || []).every(f => f.kind === 'missing');
 }
 
-/** Does the measurement need attention — a claim with no home, a silent map, or a checker that could not run. */
+/**
+ * Does the measurement need attention — a silent map, a register that contradicts
+ * itself or cannot be read, or a checker that could not run. A claim with NO HOME
+ * stopped counting on 2026-09-17 (buses-data OA-396): it is printed below and the
+ * worklist chases it, but it is a chore and the checker's own `red` no longer
+ * includes it. This reads that `red` rather than recomputing it, so the two can
+ * never disagree about what a red is.
+ */
 function isRed({ verdict, error }) { return error !== null || !!(verdict && verdict.red && !nothingToGate(verdict)); }
 
 /**

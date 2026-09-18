@@ -722,13 +722,16 @@ export const NEED_LABEL = {
 
 /*
  * OA-287. WHICH WORK THE LOOP CAN CONTEND FOR, and it is a fact about the loop
- * rather than a judgement about risk. A tick works the shared local trees; it
- * NEVER pushes — a deny rule in buses-data's settings, observed refusing — so it
- * can neither deliver a map nor deploy the portal, and the two portal resources
- * are genuinely not contended. If the loop is ever allowed to push, the harness
- * assertion that a deploy does not carry the lock is what should go red.
+ * rather than a judgement about risk. Until 2026-09-17 a tick NEVER pushed — a
+ * deny rule in buses-data's settings, observed refusing — so it could neither
+ * deliver a map nor deploy the portal, and the two portal resources were
+ * genuinely not contended. buses-data OA-394 (R1 of the 2026-09-17 process
+ * review, Peter's decision) gave the tick the push, the pull request, the merge
+ * and the DEPLOY, so a deploy is contended now and the harness assertion the
+ * old comment promised would go red has been flipped. Delivery of a map was
+ * NOT in that grant, so `portal-write` stays outside the set on purpose.
  */
-const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep']);
+const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep', 'portal-deploy']);
 
 export function assess(needs, conditions) {
   let verdict = SAFE;

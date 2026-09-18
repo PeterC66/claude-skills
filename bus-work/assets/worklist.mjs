@@ -87,6 +87,8 @@ import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
+import { unsentLetterItem } from './outbound_letter.mjs';
+import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -590,18 +592,12 @@ function fromCorrespondence() {
     const status = st ? st[1].trim() : '';
     const declared = [status, h1 ? h1[0] : ''].filter(Boolean);
     if (declared.some((d) => /\bNOT SENT\b|\bDRAFTED\b/i.test(d))) {
-      out.push({
-        key: `corr-unsent-${ref}`, rank: 3, type: 'correspondence',
-        title: `${label}: reply drafted ${last.date}, NOT SENT`,
-        why: 'Only you can send it — there is no reply button on the portal and Claude has no access to email. Until it goes, the person has heard nothing.',
-        who: 'Peter', runbook: 'correspondence',
-        ageDays: daysSince(last.date),
-        do: [
-          { kind: 'shell', cwd: BUSES, cmd: `node Correspondence/to-email.mjs "Correspondence/${ref}/${last.file}"`, note: 'run it AFTER any edits you make' },
-          { kind: 'chat', what: 'Open the .html it writes, Ctrl+A, Ctrl+C, paste into the email. Add the salutation yourself.' },
-          { kind: 'chat', what: 'Then tell Claude it has gone, so the file becomes the sent record.' },
-        ],
-      });
+      // Held-or-not is outbound_letter.mjs's, because a letter nobody is
+      // waiting for is not a debt and rank 3 had no legitimate release.
+      out.push(unsentLetterItem({
+        ref, label, head, date: last.date, file: last.file,
+        buses: BUSES, ageDays: daysSince(last.date),
+      }));
     }
   }
 
@@ -716,6 +712,21 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
+
+// A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is
+// the row that carries it: the board prints a BEHIND deployment and no longer
+// exits 1 on it, so without this nothing would chase a merge nobody deployed.
+// One header read from the live site and two git questions of the portal
+// checkout; a tree with no portal checkout asks nothing of the network, which
+// is what keeps every harness fixture quiet. `--no-live` skips it, as it does
+// on the board.
+{
+  const deployState = args['no-live'] ? null
+    : await readDeployState({ portalDir: PORTAL, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL });
+  const deployPending = deployPendingItems(deployState, { portalDir: PORTAL });
+  for (const it of deployPending.items) add(it);
+  for (const w of deployPending.warnings) warnings.push(w);
+}
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
 // steps name their working directory symbolically ("portal") because the server

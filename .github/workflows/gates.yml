@@ -162,6 +162,17 @@ jobs:
         working-directory: skills/stamp-docs
         run: python scripts/prove_policy.py
 
+      # buses-data OA-397 (2026-09-18): the stamp is written at commit time by the
+      # pre-commit hook, so a committed stamp describes its committed content by
+      # construction. This drives `docstamp.py --staged` through REAL hooks and real
+      # commits in a throwaway repository named by its own policy file, and its
+      # mutation arm runs the same mid-turn edit through a hook that does not stamp
+      # and requires the audit to refuse -- without that, "the audit never fires
+      # now" and "the audit is broken" would look the same.
+      - name: Prove stamping at commit time makes the committed stamp describe its commit
+        working-directory: skills/stamp-docs
+        run: python scripts/prove_staged.py
+
       # Falsification harnesses that need no other repository. Each breaks its own
       # subject on purpose and asserts WHICH tests go red while a named CONTROL
       # stays green -- a suite that only ever goes green proves nothing about the
@@ -291,6 +302,14 @@ jobs:
       - name: Prove the commitment reminders can go red
         working-directory: skills/bus-work
         run: npm run test:prove-red-commitments
+
+      # buses-data OA-396 (2026-09-17). The board stopped reddening on a pending
+      # deploy that day, so the worklist row is now the ONLY thing that chases a
+      # merge nobody deployed -- which is why its falsifier runs here and not
+      # only on the laptop. Stubs for git and the live site; no network.
+      - name: Prove the deploy-pending row can appear and stay quiet
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-deploy-pending
 
       - name: Prove the concurrency verdicts can go red
         working-directory: skills/bus-work

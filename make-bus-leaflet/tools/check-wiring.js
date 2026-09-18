@@ -138,6 +138,8 @@ const RAW_STEPS = {
     'pip install -r requirements.txt — the same shape as npm ci, one layer down',
   'Prove the stamp policy and its scope rule can go red':
     'runs in skills/stamp-docs, which has NO package.json, so there is no script to route through. It would stop being raw only if that skill gained a manifest — and then it would join the manifest enumeration below',
+  'Prove stamping at commit time makes the committed stamp describe its commit':
+    'the same skills/stamp-docs, with NO package.json -- see the policy entry above. It drives docstamp.py --staged and the audit through real hooks in a scratch repository, and it stops being raw on the day that skill gains a manifest, together with the entry above',
   'Prove the file-hygiene checker can go red':
     'a shared checker in skills/tools/, run from the repository root, which has no package.json — the shared tools are deliberately outside every skill\'s manifest so all three repositories can run them the same way',
   'Files carry no BOM, no trailing whitespace, no missing newline':

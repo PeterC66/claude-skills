@@ -218,7 +218,7 @@ console.log('\n8. the join, asserted directly — the half that can silently nar
 console.log('\n9. the wire in worklist.mjs — literal strings, and they must RUN');
 {
   const src = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  // NOT src.includes(). A mutation sweep on prove-red-loop-blocked.mjs commented
+  // NOT src.includes(). A mutation sweep on prove-red-loop-your-move.mjs commented
   // a wire out and every assertion stayed green, because a commented line still
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));

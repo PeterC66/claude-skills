@@ -350,18 +350,17 @@ jobs:
       # check: the harness builds real folders under the temp dir so the rows and
       # the hold are falsified too, and a mutation sweep on this laptop watched all
       # eight mutations go red. Read this step as proving the module, not the estate.
-      - name: Prove the loop/blocked/ rows and holds can go red
+      #
+      # buses-data OA-401 (2026-09-18) merged this step with the one that followed
+      # it. The drop zone at the top of loop/adhoc/ and loop/blocked/ became one
+      # folder, loop/your-move/, and the FILE now says whether it is a hold or a
+      # draft rather than the folder it sits in -- so the two harnesses became one,
+      # and its new cases include the control that the partition is total and
+      # disjoint. `loop/adhoc/ready/`, `doing/` and `done/` are still a separate
+      # channel and still asserted NOT to be counted.
+      - name: Prove the loop/your-move/ holds and drafts can go red
         working-directory: skills/bus-work
-        run: npm run test:prove-red-loop-blocked
-
-      # buses-data, 2026-09-10: the loop's ad-hoc DROP ZONE, loop/adhoc/, as one
-      # worklist row. Same checkout problem as the step above -- the folder is
-      # absent here by construction -- so this step exercises the silence and the
-      # harness builds real folders for the rest, including the control that
-      # ready/, doing/ and done/ are NOT counted.
-      - name: Prove the loop/adhoc/ drafts row can go red
-        working-directory: skills/bus-work
-        run: npm run test:prove-red-loop-adhoc
+        run: npm run test:prove-red-loop-your-move
 
       # buses-data OA-287 (2026-09-08): the scheduled loop's mutex, loop/LOCK.d,
       # read so that a MANUAL session can see it. SAME CHECKOUT PROBLEM AS THE STEP

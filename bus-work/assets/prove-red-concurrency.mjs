@@ -128,14 +128,14 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
   hg('add', '-A');
   hg('commit', '-q', '-m', 'first');
-  const blocked = path.join(held, 'loop', 'blocked');
-  fs.mkdirSync(blocked, { recursive: true });
+  const yourMove = path.join(held, 'loop', 'your-move');
+  fs.mkdirSync(yourMove, { recursive: true });
   const cond = () => conc.readConditions({ buses: held });
 
   // The clean control first, so the hold cannot be what makes it green.
   let C = cond();
   ok(conc.assess(['buses-tree'], C).verdict === conc.SAFE && C.repos.buses.accounted.length === 0,
-    'clean tree with an empty blocked folder: SAFE, nothing accounted');
+    'clean tree with an empty your-move folder: SAFE, nothing accounted');
 
   // Peter types the salutation and leaves it.
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
@@ -144,7 +144,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
 
   // A tick writes the hold, in the house style: several fields on one line,
   // the path in backticks, prose after it.
-  fs.writeFileSync(path.join(blocked, 'corr-001-salutation.md'),
+  fs.writeFileSync(path.join(yourMove, 'corr-001-salutation.md'),
     '# CORR-001 message 008: the salutation names the correspondent\n\n' +
     `**Raised by:** \`sched-0815\`, 2026-09-10 · **File:** \`${letter}\`, modified and uncommitted since 07:16 local · **Blocks:** corr-unsent-CORR-001\n\n` +
     '## What is needed from you\n\nDecide the salutation.\n');
@@ -168,7 +168,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
 
   // Retiring the hold puts the letter back into the verdict — the direction a
   // rule like this must fail in.
-  fs.rmSync(path.join(blocked, 'corr-001-salutation.md'));
+  fs.rmSync(path.join(yourMove, 'corr-001-salutation.md'));
   C = cond();
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
 
@@ -176,17 +176,17 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   // is residue, and the tree was right to stop on it on 2026-09-09.
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi\n');
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
-  fs.writeFileSync(path.join(blocked, 'residue.md'),
+  fs.writeFileSync(path.join(yourMove, 'residue.md'),
     '# Residue\n\n**Raised by:** `sched-1115`, 2026-09-09 · **File:** `Areas/Ramsey/notes.md`, left behind\n\n## What is needed from you\n\nCommit it.\n');
   C = cond();
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
   ok(C.repos.buses.accounted.length === 0, 'and nothing is listed as accounted', JSON.stringify(C.repos.buses.accounted));
 
   // A hold with no File field, or a File field with no backticked path, is inert.
-  fs.rmSync(path.join(blocked, 'residue.md'));
+  fs.rmSync(path.join(yourMove, 'residue.md'));
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
-  fs.writeFileSync(path.join(blocked, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
+  fs.writeFileSync(path.join(yourMove, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
   C = cond();
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
 }
@@ -218,8 +218,8 @@ console.log('\n== the age of the dirt (OA-386) ==');
   fs.writeFileSync(path.join(aged, 'gone.txt'), 'g\n');
   ag('add', '-A');
   ag('commit', '-q', '-m', 'first');
-  const blocked = path.join(aged, 'loop', 'blocked');
-  fs.mkdirSync(blocked, { recursive: true });
+  const yourMove = path.join(aged, 'loop', 'your-move');
+  fs.mkdirSync(yourMove, { recursive: true });
 
   const THEN = Date.parse('2026-09-17T12:00:00Z');
   const setAge = (rel, min) => { const t = (THEN - min * 60000) / 1000; fs.utimesSync(path.join(aged, rel), t, t); };
@@ -252,12 +252,12 @@ console.log('\n== the age of the dirt (OA-386) ==');
   fs.writeFileSync(path.join(aged, letter), 'Hi Simon\n');
   setAge(letter, 600);
   setAge('Areas/Ramsey/notes.md', 5);
-  fs.writeFileSync(path.join(blocked, 'corr-001-salutation.md'),
+  fs.writeFileSync(path.join(yourMove, 'corr-001-salutation.md'),
     `# CORR-001: the salutation names the correspondent\n\n**Raised by:** \`sched-0815\`, 2026-09-17 · **File:** \`${letter}\`, modified and uncommitted\n\n## What is needed from you\n\nDecide the salutation.\n`);
   C = cond();
   ok(C.repos.buses.dirtyAge.paths === 1 && C.repos.buses.dirtyAge.oldestMin === 5,
     'a held letter ten hours old is left OUT of the age, exactly as it is left out of the count', JSON.stringify(C.repos.buses.dirtyAge));
-  fs.rmSync(path.join(blocked, 'corr-001-salutation.md'));
+  fs.rmSync(path.join(yourMove, 'corr-001-salutation.md'));
   C = cond();
   ok(C.repos.buses.dirtyAge.paths === 2 && C.repos.buses.dirtyAge.oldestMin === 600,
     'retire the hold and the ten-hour letter is counted and aged again', JSON.stringify(C.repos.buses.dirtyAge));

@@ -80,10 +80,9 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { readBlockedDir, loopBlockedItems, applyHolds, groupUnmatched } from './loop_blocked.mjs';
+import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
-import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
@@ -949,14 +948,17 @@ for (const it of landmarkAnswers.items) {
 }
 if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared — ${landmarkAnswers.skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
 
-// The scheduled loop's own outbound channel (OA-283). It writes loop/blocked/
-// and stops; until this source nothing Peter runs read that folder, and one of
-// its files was contradicting a row on this very list. `loop/` is gitignored, so
-// absent is the normal state everywhere but this laptop — see loop_blocked.mjs.
-// The holds are applied AFTER every source has run, below, because a hold names
-// a row this file may not have added yet.
-const loopBlocked = loopBlockedItems({ files: readBlockedDir(path.join(BUSES, 'loop', 'blocked')) });
-for (const it of loopBlocked.items) add(it);
+// The scheduled loop's ONE outbound folder to Peter (OA-283, merged with the
+// drop zone by OA-401). It writes loop/your-move/ and stops; until that source
+// nothing Peter runs read it, and one of its files was contradicting a row on
+// this very list. Absent is the normal state everywhere but this laptop, and the
+// classifier, the drafts row and the whole argument are in loop_your_move.mjs.
+// ONE read feeds BOTH builders below: reading it twice is how a file could be a
+// hold to one and a draft to the other. Holds are applied AFTER every source has
+// run, because a hold names a row this file may not have added yet.
+const yourMove = readYourMoveDir(path.join(BUSES, 'loop', 'your-move'));
+const loopHolds = loopHoldItems({ files: yourMove });
+for (const it of loopHolds.items) add(it);
 
 // COMMITTED WORK NOBODY HAS PUSHED, AND NOTHING KNEW IT EXISTED (OA-326,
 // 2026-09-12). `countUnpushed` in the CONDITIONS block above answers only for
@@ -965,7 +967,7 @@ for (const it of loopBlocked.items) add(it);
 // is removed — is invisible to it. On the day this was filed the board printed
 // `the portal  community-bus-maps — main, clean` while 463 insertions with a
 // falsification harness sat on a branch with no pull request and no
-// loop/blocked/ item. Computed rather than declared, for the reason in
+// loop/your-move/ item. Computed rather than declared, for the reason in
 // unpushed_branches.mjs: a rule telling every tick to declare its own residue
 // can be forgotten, and on the day this was found it had been.
 //
@@ -985,7 +987,7 @@ for (const n of stranded.notes) warnings.push(n);
 for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name} could not be read — ${u.why}`);
 
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
-// the last one with no reader: `loop/blocked/` says these items need you and
+// the last one with no reader: `loop/your-move/` says these items need you and
 // `loop/LOCK.d` says a tick is running now, but when the loop is HALTED there is
 // no lock, so `conditions.loopLock` reports `present: false` — identical to
 // health. On 2026-09-09 it stopped four ticks running, three of them on a still
@@ -1004,15 +1006,13 @@ const loopIdle = loopRunItems({
 });
 for (const it of loopIdle) add(it);
 
-// THE DROP ZONE (2026-09-10, item 7 of Peter's suggestions review). The fourth
-// and last loop folder with no reader: a tick saves a draft in `loop/adhoc/`
-// when it finds something it cannot act on, the folder is inert by design, and
-// five drafts sat there for up to two days each ending "promote it, or file it,
-// if you agree" — addressed to a reader this board had never shown the folder
-// to. One row for the whole folder, drop zone only; ready/, doing/ and done/
-// are read by the dispatcher, the crash rule and nobody, and counting them here
-// would report a prompt Peter has already triaged as awaiting his triage.
-const loopDrafts = loopDraftItems({ files: readDraftsDir(path.join(BUSES, 'loop', 'adhoc')) });
+// THE DRAFTS IN THE SAME FOLDER (2026-09-10, item 7 of Peter's suggestions
+// review; moved here from the old drop zone by OA-401). Inert was right and
+// unenumerated was not: five drafts sat for up to two days each ending "promote
+// it, or file it, if you agree", addressed to a reader this board had never
+// shown the folder to. One row for all of them at the bottom of YOUR MOVE.
+// `loop/adhoc/ready|doing|done` is a DIFFERENT channel and is not counted.
+const loopDrafts = loopDraftItems({ files: yourMove });
 for (const it of loopDrafts) add(it);
 
 // THE NATIONAL BUS-MAP DIRECTORY'S LINKS (OA-308's "Keeping it true",
@@ -1336,9 +1336,9 @@ if (RUN_GATES && SK) {
 // seeded too (seed-demo.mjs), and the evidence that settles it is the ADDRESS
 // -- clerk@ramsey-tc.example, on an RFC 2606 reserved TLD that can never
 // receive mail. A name can look real. A reserved domain cannot be one.
-// OA-283 — a blocked file may name the rows it contradicts, and every source has
+// OA-283 — a hold may name the rows it contradicts, and every source has
 // now run, so the rows exist to be named. Annotating rather than dropping is the
-// point: `loop/blocked/st-ives-v10.2-river.md` contradicts `draft-1`, and a row
+// point: `st-ives-v10.2-river.md` contradicted `draft-1`, and a row
 // that vanished would take its age, its URL and any explanation with it. A hold
 // that matched nothing is a stale `Blocks:` and is said out loud, for the reason
 // `adjudicated` is printed — a suppression nobody can see is how a board starts
@@ -1346,11 +1346,11 @@ if (RUN_GATES && SK) {
 //
 // A HOLD THAT MATCHED NOTHING HAS THREE POSSIBLE CAUSES AND THE FIRST DRAFT
 // NAMED ONLY TWO. It said "either the row has cleared and the blocked file can
-// go, or the key is wrong", which is a claim about the blocked file — and it
+// go, or the key is wrong", which is a claim about the hold file — and it
 // fired on 2026-09-09 for a hold that was working perfectly, because the portal
 // was unreachable that run. `fromRemotePortal()` warns and returns null, every
 // `draft-*` row with it, and `draft-1` is then "not on the board" in a sense
-// that says nothing whatever about the blocked file. Reproduced deliberately
+// that says nothing whatever about the hold file. Reproduced deliberately
 // with `--url https://busmaps.invalid`: both warnings, in that order.
 //
 // It is the worse direction, too. Acting on "the row has cleared" means deleting
@@ -1371,17 +1371,17 @@ if (RUN_GATES && SK) {
 // so the confident sentence now requires the board to be AUTHORITATIVE for the row:
 // a portal source reached, and it the live one. Every `draft-*` row comes from that
 // source, so REMOTE is the whole test; a hold naming another source would carry it.
-const heldRows = applyHolds(items, loopBlocked.holds);
+const heldRows = applyHolds(items, loopHolds.holds);
 const boardAuthoritative = !!portal && REMOTE;
 // OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the
-// FILE, so the three branches below do not apply to it. Both rules: loop_blocked.mjs.
+// FILE, so the three branches below do not apply to it. Both rules: loop_your_move.mjs.
 for (const g of groupUnmatched(heldRows.unmatched)) {
   const plural = g.keys.length > 1;
-  const named = `loop/blocked/${g.file} names worklist ${plural ? 'rows' : 'row'} ${g.keys.map((k) => `\`${k}\``).join(', ')}`;
+  const named = `loop/your-move/${g.file} names worklist ${plural ? 'rows' : 'row'} ${g.keys.map((k) => `\`${k}\``).join(', ')}`;
   if (!g.looksLikeKeys) {
-    warnings.push(`loop/blocked/${g.file} has a **Blocks:** field that is not a worklist row key — it reads “${g.raw}”. That field names the rows a hold contradicts, one key each, and a sentence belongs in the body. Nothing was held: this is a fault in the FILE and says nothing about any row.`);
+    warnings.push(`loop/your-move/${g.file} has a **Blocks:** field that is not a worklist row key — it reads “${g.raw}”. That field names the rows a hold contradicts, one key each, and a sentence belongs in the body. Nothing was held: this is a fault in the FILE and says nothing about any row.`);
   } else if (boardAuthoritative) {
-    warnings.push(`${named}, which ${plural ? 'are' : 'is'} not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
+    warnings.push(`${named}, which ${plural ? 'are' : 'is'} not on the board today — the hold did nothing. Either the row has cleared and the hold can go, or the key is wrong.`);
   } else if (!portal) {
     warnings.push(`${named} and this run could not check ${plural ? 'them' : 'it'}: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
   } else {
@@ -1520,12 +1520,12 @@ for (const it of limited) {
   // it answers is whether to act at all — which is upstream of how. The row keeps
   // its place, its age and its link; what it loses is the ability to be read as
   // an instruction. Without this the St Ives row said "Send v10.2 for review"
-  // while a blocked file said in terms that v10.2 must not be sent.
+  // while a hold said in terms that v10.2 must not be sent.
   if (it.onHold && it.onHold.length) {
     for (const h of it.onHold) {
       console.log(`    ⚠ ON HOLD — ${h.headline}`);
       if (h.need) console.log(`      ${h.need}`);
-      console.log(`      Raised by the scheduled loop; the whole argument is in loop/blocked/${h.file}`);
+      console.log(`      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`);
     }
     console.log(`    Only once that is settled:`);
   }

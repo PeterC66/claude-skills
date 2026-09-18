@@ -327,9 +327,11 @@ export function classifyBranch(b) {
  * Rows for every stranded branch, plus the counts of what was deliberately not
  * raised.
  *
- * Rank 3 — the same band as a drafted reply Peter has not sent, and for exactly
- * the same reason: a person is the only thing that moves it, and every tick that
- * fires meanwhile does nothing about it.
+ * Rank 3 — the same band as a drafted reply Peter has not sent. The reason used
+ * to be that a person was the only thing that COULD move it; since OA-394 it is
+ * that a person is the only thing that can DECIDE it. A tick may push and open a
+ * pull request now, but every branch on this list was written by somebody else,
+ * and nothing on this laptop says whether they had finished with it.
  *
  * @param {{repos: Array<{key,name,dir,prPerChange?}>, git: Function, now?: number}} p
  * @returns {{items: Array, notes: Array<string>, unreadable: Array}}
@@ -392,7 +394,9 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
               + 'everything its squash already took. Start a fresh branch from the trunk and cherry-pick onto it only '
               + 'the commits made after the merge — the ones whose files are named above — then push that and open the '
               + 'pull request for it.' },
-          { kind: 'chat', what: 'Nothing in the loop can do this: pushing is denied to an unattended tick by design, which is why the work waits here.' },
+          { kind: 'chat',
+            what: 'Since OA-394 the loop is no longer barred from pushing, and it will still not do this one: the '
+              + 'cherry-pick above is a judgement about which commits are wanted, and an unattended tick cannot make it.' },
         ],
       });
     }
@@ -411,7 +415,9 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
       } else {
         do_.push({ kind: 'chat', what: `${repo.name} is direct-push to main, so a branch here is unusual — merge it or say why it exists.` });
       }
-      do_.push({ kind: 'chat', what: 'Nothing in the loop can do this: pushing is denied to an unattended tick by design, which is why the work waits here.' });
+      do_.push({ kind: 'chat',
+        what: 'Since OA-394 the loop is no longer barred from this — a tick pushes at the end of its own unit. What it '
+          + 'cannot tell is whether SOMEBODY ELSE\'S branch is finished, so this waits on a decision, not on a permission.' });
 
       items.push({
         key: `unpushed-branch-${repo.key}-${b.branch.replace(/[^A-Za-z0-9]+/g, '-')}`,

@@ -27,7 +27,7 @@
  *      decision is made, which is where loop/README.md puts it.
  *
  *   3. A ROW THAT NEEDS NOTHING STILL NEEDS NOTHING. `ci-red-` rows and
- *      OA-283's `loop-blocked-` rows return [] from needsOf() on purpose, so
+ *      OA-283's `loop-hold-` rows return [] from needsOf() on purpose, so
  *      that --safe-only can never hide the row saying the repository is broken
  *      or that the loop has stopped. A guard bolted onto assess() is exactly
  *      how that would get undone by accident.
@@ -212,7 +212,7 @@ want(conc.assess(['buses-tree', 'engine', 'estate-sweep'], own), conc.SAFE, 'and
 // --- green 3: a row that needs nothing is untouched by any of it ---
 want(conc.assess([], live), conc.SAFE, 'a row that needs nothing: SAFE NOW even while a tick runs');
 want(conc.assess(conc.needsOf({ key: 'ci-red-claude-skills', type: 'gate-red' }), live), conc.SAFE, 'a ci-red- row is never hidden by the lock');
-want(conc.assess(conc.needsOf({ key: 'loop-blocked-st-ives', type: 'loop-blocked' }), live), conc.SAFE, 'nor is an OA-283 loop-blocked- row');
+want(conc.assess(conc.needsOf({ key: 'loop-hold-st-ives', type: 'loop-hold' }), live), conc.SAFE, 'nor is an OA-283 loop-hold- row');
 want(conc.assess(conc.needsOf({ key: 'corr-unsent-001', type: 'correspondence' }), live), conc.SAFE, 'nor a drafted reply Peter has to send');
 
 // ---------------------------------------------------------------------------

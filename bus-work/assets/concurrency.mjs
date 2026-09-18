@@ -58,7 +58,7 @@ import { execFileSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readLoopLock, fmtMin } from './loop_lock.mjs';
-import { readBlockedDir, heldPaths } from './loop_blocked.mjs';
+import { readYourMoveDir, heldPaths } from './loop_your_move.mjs';
 
 // ---- verdicts --------------------------------------------------------------
 export const SAFE = 'safe';
@@ -112,7 +112,7 @@ export const topFolders = (r) => [...new Set(allPaths(r).map((p) => p.split('/')
  * OA-301. A DIRTY FILE THAT A LIVE HOLD ALREADY NAMES IS ACCOUNTED FOR.
  *
  * The buses-tree rule exists because `git status` cannot say WHOSE uncommitted
- * files those are. A `loop/blocked/` hold can: its `**File:**` field names the
+ * files those are. A `loop/your-move/` hold can: its `**File:**` field names the
  * path, its body says who it belongs to and why the loop must not touch it. On
  * 2026-09-10 twelve of eighteen ticks stopped on one such file — a letter whose
  * salutation Peter had typed and left for the morning — every one of them
@@ -554,7 +554,7 @@ export function readConditions({ buses, portal, engine, selfSession, selfId = nu
   /* OA-301, applied at read time so the JSON the loop reads already carries it.
    * `loop/` is gitignored, so an absent folder — every fixture, every clone, CI
    * — accounts for nothing and the verdict is exactly what it was before. */
-  accountFor(out.repos.buses, buses ? heldPaths(readBlockedDir(path.join(buses, 'loop', 'blocked'))) : []);
+  accountFor(out.repos.buses, buses ? heldPaths(readYourMoveDir(path.join(buses, 'loop', 'your-move'))) : []);
   /* OA-386 item 2, and it is derived AFTER the subtraction above for the reason
    * OA-301 gives: the count, the folder list, the staged test and now the age
    * must all come from the same unaccounted set, or the block can print an age
@@ -738,7 +738,7 @@ export function assess(needs, conditions) {
   const reasons = [];
   /* OA-287, and stated ONCE here rather than added to a dozen returns in
    * needsOf(). Attaching it at the boundary is what keeps the empty list empty:
-   * `ci-red-` and `loop-blocked-` rows return [] on purpose so that --safe-only
+   * `ci-red-` and `loop-hold-` rows return [] on purpose so that --safe-only
    * can never hide the row saying the repository is broken or that the loop has
    * stopped, and a guard written case by case is exactly how that gets undone by
    * somebody adding the thirteenth case. */
@@ -783,23 +783,24 @@ export function needsOf(item) {
   // the one row that must never be hidden from a session looking for something
   // safe to do is the one saying the repository is broken.
   if (key.startsWith('ci-red-')) return [];
-  // OA-283: the row's own action is "read loop/blocked/<ref>.md and decide". That
+  // OA-283, renamed by OA-401: the row's own action is "read
+  // loop/your-move/<ref>.md and decide". That
   // is a decision, like a drafted reply or an application — it touches no working
   // tree, and whatever the ANSWER turns out to need belongs to the row that
   // answer becomes. Empty for the same load-bearing reason as `ci-red-` above:
   // --safe-only hides every non-SAFE row, and a session looking for something
   // safe to do is exactly who should see that the loop has stopped and why.
-  if (key.startsWith('loop-blocked-')) return [];
+  if (key.startsWith('loop-hold-')) return [];
   // OA-288: the row's action is "commit or revert what git status names", or
   // "delete loop/STOP", or "read the newest run file". None of that writes to a
   // shared tree, and the same load-bearing argument as `ci-red-` and
-  // `loop-blocked-` applies with more force here: --safe-only hides every
+  // `loop-hold-` applies with more force here: --safe-only hides every
   // non-SAFE row, and a row saying THE LOOP HAS STOPPED must never be the one
   // hidden from a session looking for something safe to do. It is also the row
   // most likely to be ABOUT a dirty tree, so classifying it by the tree it
   // reports on would suppress it exactly when it is right.
   if (key === 'loop-idle') return [];
-  // 2026-09-10: the row's action is "read loop/adhoc/ and promote, file or
+  // 2026-09-10: the row's action is "read loop/your-move/ and promote, file or
   // decline each draft" — a triage, done by moving gitignored files. It touches
   // no shared tree, and it is the row most likely to be ABOUT a fix a tick was
   // barred from making, so classifying it by the tree would hide it exactly
@@ -810,7 +811,7 @@ export function needsOf(item) {
   // that is the reason the row exists. Pushing a branch writes to no working
   // tree here, and whatever REVIEWING that branch turns out to need belongs to
   // the row that review becomes. Empty for the same load-bearing reason as
-  // `ci-red-` and `loop-blocked-`: --safe-only hides every non-SAFE row, and a
+  // `ci-red-` and `loop-hold-`: --safe-only hides every non-SAFE row, and a
   // row saying finished work is invisible to everyone but this laptop must not
   // be the one hidden from a session looking for something safe to do.
   if (key.startsWith('unpushed-branch-')) return [];
@@ -924,7 +925,7 @@ export function formatConditions(c) {
   // as uncommitted, because a number that silently got smaller is a number
   // nobody can check — the same rule the activity line follows for demotions.
   for (const a of (c.repos.buses.accounted || [])) {
-    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/blocked/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
+    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/your-move/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
   }
   age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);

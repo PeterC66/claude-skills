@@ -1360,22 +1360,17 @@ if (RUN_GATES && SK) {
 // refuse a fallback that goes below what saying nothing would have given.
 //
 // THERE WAS A FOURTH CAUSE AND THE FIRST FIX DID NOT CATCH IT (buses-73, same
-// evening). `!!portal` asks *did a source return something*, which is not the
-// question — the question is *does this board know about the thing the hold
-// NAMES*. On `--local` the dev checkout returns an object, so `!!portal` was
-// true, and the run printed the confident wording about a hold on the LIVE
-// portal's draft v10.2, which is not in the dev SQLite at all. Measured: that run
-// banners LOCAL, emits ZERO `draft-*` rows, and still concluded the row had
-// cleared. A completeness test that measures the wrong completeness is worse than
-// none, because it reads as the guard being in place.
-//
-// That is this estate's named shape *"the portal" means the VPS* — never the
-// laptop's dev copy, whose rows read exactly like real ones — and both of
-// tonight's faults are instances of it. So the confident sentence now requires
-// the board to be AUTHORITATIVE for the row: a portal source reached, and it the
-// live one. Every `draft-*` row comes from that source, so REMOTE is the whole
-// test today; if a blocked file ever names a row from another source, carry the
-// source on the hold and compare, rather than widening this.
+// evening). `!!portal` asks *did a source return something*, not *does this board
+// know about the thing the hold NAMES*. On `--local` the dev checkout returns an
+// object, so `!!portal` was true and the run printed the confident wording about a
+// hold on the LIVE portal's draft v10.2, which is not in the dev SQLite at all:
+// measured, that run banners LOCAL, emits ZERO `draft-*` rows, and still concluded
+// the row had cleared. A completeness test that measures the wrong completeness is
+// worse than none, because it reads as the guard being in place. That is this
+// estate's named shape *"the portal" means the VPS* — never the laptop's dev copy —
+// so the confident sentence now requires the board to be AUTHORITATIVE for the row:
+// a portal source reached, and it the live one. Every `draft-*` row comes from that
+// source, so REMOTE is the whole test; a hold naming another source would carry it.
 const heldRows = applyHolds(items, loopBlocked.holds);
 const boardAuthoritative = !!portal && REMOTE;
 // OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the

@@ -16,9 +16,11 @@ Versions start at **v1.0**. Each ordinary edit moves the second number (v1.0 →
 
 ## What keeps it up to date
 
-A hook that runs automatically at the end of every Claude session turn. It notices any in-scope document that changed — however it changed, whether typed by hand, edited by Claude, or rebuilt by a script — and updates that document's stamp. Documents that did not change are not touched at all, so nothing gets a spurious new date and no file is rewritten needlessly.
+The pre-commit hook of each repository, since 18 September 2026: when a commit is made, the in-scope documents in that commit are stamped as part of it, so the version and date that go into the repository describe exactly the content that goes in with them. Documents that did not change are not touched at all, so nothing gets a spurious new date and no file is rewritten needlessly. A document that has been edited but not yet committed shows its previous stamp until it is committed, which is what a stamp should mean.
 
 There is nothing to remember and nothing to run.
+
+Until that day a hook ran at the end of every Claude session turn and stamped whatever had changed on disk. That was simple, and it had one flaw that cost a month of attention: a document committed in the middle of a turn went into the repository with its previous stamp, and everything that noticed — a check that refused the commit, an instruction to re-stamp first, a rule that blocked the wrong command — was a way of living with the gap rather than closing it. Stamping at commit time closes it (buses-data OA-397).
 
 ## What is covered
 

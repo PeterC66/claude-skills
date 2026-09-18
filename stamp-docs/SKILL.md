@@ -9,7 +9,9 @@ Every in-scope document carries a version and a last-updated date that is visibl
 
 ## How it already works without you
 
-A **Stop hook** in `~/.claude/settings.json` runs `scripts/docstamp.py --auto` at the end of every turn. It catches files changed by any means — Edit, Write, or a Python/Node script that wrote a `.pptx`. **You do not need to invoke this skill for the stamps to stay current.** If you have just edited a document in scope, the stamp is already handled; say nothing about it.
+**The pre-commit hook stamps the documents in the commit in front of it** (`scripts/docstamp.py --staged`, since 18 September 2026 — buses-data OA-397, R4 of the process review), so the committed stamp describes the committed content by construction. **You do not need to invoke this skill, re-stamp anything or remember an order of operations**: edit, stage, commit, and the stamp in the commit is current. A document edited and not yet committed carries its previous stamp until it is committed, which is what a stamp should mean.
+
+Until that day a **Stop hook** ran `scripts/docstamp.py --auto` at the end of every turn. It caught files changed by any means, and it also meant a commit made mid-turn carried the new content and the old stamp — ten of the fifteen early buses-data CI runs failed on exactly that, an audit, a re-stamp instruction, a hookify rule and two flags grew around the gap, and on 9 September 2026 the end-of-turn rewrite landed between a session's review and its commit. `--auto` is still in the script for a machine that wires it; no hook here calls it.
 
 ## The stamp
 
@@ -41,11 +43,12 @@ python scripts/docstamp.py --backfill           # stamp new documents at v1.0, d
 python scripts/docstamp.py --all                # full hash scan, ignoring the mtime gate
 python scripts/docstamp.py --major "path/to/doc.md"   # rewrite: v1.4 -> v2.0
 python scripts/docstamp.py --minor "path/to/doc.md"   # force a bump
-python scripts/docstamp.py --auto               # what the hook runs; always exits 0
+python scripts/docstamp.py --staged             # what the pre-commit hook runs: stamp the staged documents into the index; always exits 0
+python scripts/docstamp.py --auto               # what the retired Stop hook ran; kept for a machine that still wires it
 python scripts/docstamp.py --all --all-roots    # every root, not just the one you are in
 ```
 
-Add `--dry-run` to any of them, or `--root buses|portal|ops` to narrow.
+Add `--dry-run` to any of them, or `--root buses|portal|ops` to narrow. `--staged` takes neither: its subject is the repository enclosing the working directory, and a repository the policy does not name is a no-op that says so.
 
 ## Markdown paragraphs
 
@@ -101,19 +104,17 @@ python scripts/prove_policy.py
 
 ## Committing a stamped document
 
-**When you edit a stamped document, run `docstamp.py --all` and commit the stamp in the same commit as the content.**
+**Since 18 September 2026 there is nothing to run when you edit a stamped document**: the pre-commit hook stamps it as part of the commit (buses-data OA-397). The paragraphs below record the mechanism this replaced and why, because the flags it left behind are still in the script.
 
-**That walks only the root you are standing in, and since 2026-09-13 it is the tool rather than the reader that guarantees it** (buses-data OA-333). Before that, `--all` walked every configured root whatever directory you were in — 208 documents across three repositories — so running it stamped files in trees your session did not have checked out and could not see. `--checkout` had existed since 3 September for the sibling case and its own docstring claimed the general property it had not bought. If you genuinely want the estate-wide pass, ask for it by name with `--all-roots`; every run prints the scope it chose.
+**A walk stamps only the root you are standing in, and since 2026-09-13 it is the tool rather than the reader that guarantees it** (buses-data OA-333). Before that, `--all` walked every configured root whatever directory you were in — 208 documents across three repositories — so running it stamped files in trees your session did not have checked out and could not see. `--checkout` had existed since 3 September for the sibling case and its own docstring claimed the general property it had not bought. If you genuinely want the estate-wide pass, ask for it by name with `--all-roots`; every run prints the scope it chose. `--staged` needs none of this: a commit has exactly one repository.
 
-The hook fires at **Stop**, i.e. after the turn. Commit mid-turn and the stamp lands afterwards as a separate working-tree change — which you then have to notice, and in `community-bus-maps` ship as its own PR. That is the single real cost of the whole mechanism, and this one habit removes it.
+**The retired mechanism, for the record.** The Stop hook fired after the turn, so a commit made mid-turn carried the stamp from before the edit and the stamp landed afterwards as a separate working-tree change — which somebody then had to notice, and in `community-bus-maps` ship as its own PR. Measured at one stamp-only commit (`1ac847b`) in the portal's last 60 as at 2026-08-18, twice more on 2026-08-25 alone, and ten of the fifteen buses-data CI runs before 2026-08-29. The habit that stood in for a fix was *re-stamp before you commit*, written into two CLAUDE.md files and a hookify rule, and broken again after being written.
 
-It is less rare than that line used to claim. Measured at one stamp-only commit (`1ac847b`) in the portal’s last 60 as at 2026-08-18 — and it happened twice more on 2026-08-25 alone, both times because a change edited documents inside a PR: the content merged, the hook bumped the stamps seconds later, and `main` was left carrying stamps describing the pre-edit content until a second PR (#98) cleared them. **If your change touches a stamped document, expect a stamp-only commit and land it before you merge** — or run `docstamp.py --all` before the first commit so there is nothing left over.
+## The stamp can be correct on disk and wrong in git — and the audit that catches it stays
 
-## The stamp can be correct on disk and wrong in git
+`--check` audits the **working tree**. A stamp written after a commit could therefore be right on disk and wrong in `HEAD`, and anyone reading the file out of the repository — a cold start, a clone, a PR review — would see a stamp that does not describe what they are reading, looking exactly as authoritative as a correct one. Found 2026-08-17: three of the 44 stamped `.md` in the Buses repo were stale in `HEAD`, one of them claiming *v1.12 · 9 August* over a body that had moved on.
 
-`--check` audits the **working tree**. Nothing gates the **commit**, so the hash is content-gated only at *write* time: edit a doc and commit it before the Stop hook next fires, and it goes into git carrying the previous version, date and sha. Anyone reading that file out of the repo — a cold start, a clone, a PR review — sees a stamp that does not describe what they are reading, and it looks exactly as authoritative as a correct one. `--check` cannot see this by construction, because by the time it runs the working tree has already been fixed.
-
-Found 2026-08-17: three of the 44 stamped `.md` in the Buses repo were stale in `HEAD`, one of them (`README - How to enhance the system.md`) claiming *v1.12 · 9 August* over a body that had moved on. Two were hook corrections that had simply never been committed; the third was self-inflicted, by hand-editing a version line without recomputing the hash. All three are fixed.
+Stamping at commit time closes that by construction, and the audit that used to catch it is **kept as the control that must never fire**: `check_committed_stamps.py --staged` still runs in the pre-commit hook after the stamper, and the CI step still hashes `HEAD`'s blobs. A green from either now says the mechanism worked; a red says something bypassed it. `scripts/prove_staged.py` drives the whole thing through real hooks and real commits, and its mutation arm runs the same mid-turn edit through a hook that does not stamp and requires the audit to refuse it.
 
 To audit what is actually committed, hash `HEAD`'s blobs rather than the files on disk:
 

@@ -153,6 +153,77 @@ export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPa
 const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
 
 /*
+ * OA-386 item 2. HOW OLD IS THE DIRT — the instrument the loop has been asking
+ * for by hand, and the one `quiescentMin` was standing in for and cannot be.
+ *
+ * Step 2 of the loop's task prompt tells a stopped tick to say whether the tree
+ * is MOVING (a live session, which clears itself) or STILL (a leftover, which
+ * does not), and step 2b gates orphan adoption on a quiescence reading. Both
+ * questions are about the ORPHAN, and `peers.quiescentMin` answers a question
+ * about TRANSCRIPTS: the loop fires hourly, so an hour-old sibling tick's
+ * transcript is always on disk and that number has a structural ceiling of
+ * about sixty minutes. Over 106 recorded readings it topped out at 56 against a
+ * threshold of 90, and the one reading that ever cleared 90 did so because the
+ * scheduler MISSED a firing — a quantity whose variance is dominated by the
+ * loop's own uptime, which is the opposite of evidence that a departed session
+ * has gone home. Measured on 2026-09-16 at 05:15Z: peers read `quiescentMin: 3`
+ * (live) while the bar in front of that tick had been byte-unchanged for six
+ * hours. The subject is the file; so the instrument is the file's mtime.
+ *
+ * THREE ANSWERS, NOT TWO, because a stat that refused must never read as a file
+ * that is young or a file that is absent. `read` carries a number; `absent` is
+ * a path git names that is not in the working tree, which is the ordinary shape
+ * of a staged deletion; `refused` is everything else, and it is counted as a
+ * finding rather than skipped — see *the refusal read as an absence*.
+ *
+ * MTIME IS A PROXY AND IS LABELLED AS ONE WHERE IT PRINTS. A file rewritten
+ * with identical bytes reads young, so this number can only ever say the dirt
+ * is at LEAST that old when it is old, and nothing at all when it is young.
+ * That asymmetry points the same way as every other rule here: it can hold a
+ * tick back, never wave one through.
+ *
+ * NOTHING SCORES IT YET, deliberately. Widening step 2b's clause (iv) to read
+ * this instead is [OA-294]'s conjunction and therefore Peter's decision, and a
+ * tick that rewrote its own adoption clause would be granting itself the
+ * capability the clause exists to withhold. What this buys now is the printed
+ * diagnosis step 2 already asks for, and a range to set a threshold FROM.
+ */
+export function readDirtyAges(dir, paths, nowMs = Date.now()) {
+  const out = {};
+  for (const p of paths || []) {
+    try {
+      const st = statSync(path.join(dir, p));
+      out[p] = { state: 'read', ageMin: Math.max(0, Math.round((nowMs - st.mtimeMs) / 60000)), why: null };
+    } catch (e) {
+      const code = (e && e.code) || 'unknown';
+      out[p] = code === 'ENOENT'
+        ? { state: 'absent', ageMin: null, why: 'git names it but it is not in the working tree — a deletion, or a rename away' }
+        : { state: 'refused', ageMin: null, why: `could not stat it (${code}) — this is a refusal, not an absence` };
+    }
+  }
+  return out;
+}
+
+/** The age of the dirt a verdict actually counts: the unaccounted paths only. */
+export function dirtyAge(r) {
+  const ages = r.dirtyAges || null;
+  const paths = unaccountedPaths(r);
+  const out = { paths: paths.length, counted: 0, absent: 0, refused: 0, oldestMin: null, newestMin: null };
+  for (const p of paths) {
+    /* No `dirtyAges` at all means nobody looked — a synthetic conditions object
+     * in a harness, or a reader built before this existed. That is a refusal,
+     * and it is the whole reason the field is counted rather than dropped. */
+    const a = ages ? ages[p] : null;
+    if (!a || a.state === 'refused') { out.refused++; continue; }
+    if (a.state === 'absent') { out.absent++; continue; }
+    out.counted++;
+    if (out.oldestMin === null || a.ageMin > out.oldestMin) out.oldestMin = a.ageMin;
+    if (out.newestMin === null || a.ageMin < out.newestMin) out.newestMin = a.ageMin;
+  }
+  return out;
+}
+
+/*
  * HOW MANY COMMITS NOBODY HAS PUSHED — and against WHAT (buses-data OA-313).
  *
  * `@{u}..HEAD` is the right question only where the branch HAS an upstream, and
@@ -205,9 +276,9 @@ export function countUnpushed(dir) {
   return out;
 }
 
-export function readRepo({ key, label, name, dir, expect = 'main' }) {
+export function readRepo({ key, label, name, dir, expect = 'main', now = Date.now() }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
-  repo.staged = []; repo.modified = []; repo.untracked = [];
+  repo.staged = []; repo.modified = []; repo.untracked = []; repo.dirtyAges = {};
   repo.unpushed = null; repo.unpushedBasis = null; repo.unpushedFrom = null; repo.unpushedWhy = null;
   repo.touchedTop = []; repo.touchesMapData = false;
 
@@ -234,6 +305,9 @@ export function readRepo({ key, label, name, dir, expect = 'main' }) {
   }
   repo.touchedTop = topFolders(repo);
   repo.touchesMapData = mapDataHits(repo).length > 0;
+  // OA-386 item 2. Read here, beside the paths it is about, so the age and the
+  // path list can never come from two different reads of the disk.
+  repo.dirtyAges = readDirtyAges(dir, allPaths(repo), now);
 
   // Ahead of its own remote-tracking ref. Deliberately NOT a fetch: this tool
   // promises to touch the network only in --url mode, and a fetch inside a
@@ -455,9 +529,9 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
 
 export function readConditions({ buses, portal, engine, selfSession, selfId = null, now = Date.now(), projectsDir, peerWindowMin = 20 } = {}) {
   const repos = {
-    buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses }),
-    engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine }),
-    portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal }),
+    buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses, now }),
+    engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine, now }),
+    portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal, now }),
   };
   const out = {
     at: new Date(now).toISOString(),
@@ -481,6 +555,11 @@ export function readConditions({ buses, portal, engine, selfSession, selfId = nu
    * `loop/` is gitignored, so an absent folder — every fixture, every clone, CI
    * — accounts for nothing and the verdict is exactly what it was before. */
   accountFor(out.repos.buses, buses ? heldPaths(readBlockedDir(path.join(buses, 'loop', 'blocked'))) : []);
+  /* OA-386 item 2, and it is derived AFTER the subtraction above for the reason
+   * OA-301 gives: the count, the folder list, the staged test and now the age
+   * must all come from the same unaccounted set, or the block can print an age
+   * for a file the verdict did not count. */
+  for (const r of Object.values(out.repos)) r.dirtyAge = dirtyAge(r);
   return out;
 }
 
@@ -820,8 +899,26 @@ const repoLine = (r) => {
   return `${r.name} — ${bits.join(', ')}${where}`;
 };
 
+/* OA-386 item 2. One line, printed only where there is unaccounted dirt to be
+ * old, saying how long the thing barring a tick has been sitting there. It is
+ * labelled `mtime` at the point of use because that is what it is: a file
+ * rewritten with identical bytes reads young, so an old answer is evidence and
+ * a young one is not. */
+const ageLine = (r) => {
+  const a = r.dirtyAge;
+  if (!a || !a.paths) return null;
+  const bits = [];
+  if (a.counted) bits.push(a.oldestMin === a.newestMin
+    ? `${fmtMin(a.oldestMin)} old`
+    : `oldest ${fmtMin(a.oldestMin)}, newest ${fmtMin(a.newestMin)}`);
+  if (a.absent) bits.push(`${a.absent} named by git and not on disk`);
+  if (a.refused) bits.push(`${a.refused} COULD NOT LOOK — a refusal, not an absence`);
+  return `${a.paths} unaccounted path(s), ${bits.join('; ')} — mtime, so an OLD answer is evidence that nobody is working on it and a young one is not`;
+};
+
 export function formatConditions(c) {
   const L = [];
+  const age = (r) => { const s = ageLine(r); if (s) L.push(`  ${'dirt age'.padEnd(12)}${s}`); };
   L.push(`  ${'this tree'.padEnd(12)}${repoLine(c.repos.buses)}`);
   // OA-301. The subtraction is SHOWN, under the line that still counts the file
   // as uncommitted, because a number that silently got smaller is a number
@@ -829,8 +926,11 @@ export function formatConditions(c) {
   for (const a of (c.repos.buses.accounted || [])) {
     L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/blocked/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
   }
+  age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);
+  age(c.repos.engine);
   L.push(`  ${'the portal'.padEnd(12)}${repoLine(c.repos.portal)}`);
+  age(c.repos.portal);
 
   // WITHOUT --session THIS CANNOT SUBTRACT YOURSELF, and a list that shows your
   // own claim back to you as somebody else's work is worse than no list: it

@@ -191,6 +191,104 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
 }
 
+// ---------------------------------------------------------------------------
+// 1c. HOW OLD IS THE DIRT — the instrument OA-386 item 2 asks for
+// ---------------------------------------------------------------------------
+/* `peers.quiescentMin` has a structural ceiling of about an hour, because the
+ * previous scheduled tick's own transcript is always on disk, so it can never
+ * answer "has the owner of this orphan gone home". The subject is the FILE, so
+ * the instrument is the file's mtime. These cases hold the three properties
+ * that make it worth having: it follows the disk, it obeys the SAME
+ * subtraction the count obeys, and it has three answers rather than two. The
+ * last case is the one that keeps it honest — an observation that scores
+ * nothing, so it can never become a mute button. */
+console.log('\n== the age of the dirt (OA-386) ==');
+{
+  const aged = path.join(root, 'aged');
+  const ag = (...a) => execFileSync('git', ['-C', aged, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(path.join(aged, 'Correspondence', 'CORR-001'), { recursive: true });
+  fs.mkdirSync(path.join(aged, 'Areas', 'Ramsey'), { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', aged], { stdio: 'ignore' });
+  ag('config', 'user.email', 'harness@example.invalid');
+  ag('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(aged, '.gitignore'), 'loop/*\n!loop/README.md\n');
+  const letter = 'Correspondence/CORR-001/009-2026-09-17-out.md';
+  fs.writeFileSync(path.join(aged, letter), 'Hi\n');
+  fs.writeFileSync(path.join(aged, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
+  fs.writeFileSync(path.join(aged, 'gone.txt'), 'g\n');
+  ag('add', '-A');
+  ag('commit', '-q', '-m', 'first');
+  const blocked = path.join(aged, 'loop', 'blocked');
+  fs.mkdirSync(blocked, { recursive: true });
+
+  const THEN = Date.parse('2026-09-17T12:00:00Z');
+  const setAge = (rel, min) => { const t = (THEN - min * 60000) / 1000; fs.utimesSync(path.join(aged, rel), t, t); };
+  const cond = () => conc.readConditions({ buses: aged, now: THEN });
+  const line = (C) => conc.formatConditions(C).find((l) => /dirt age/.test(l)) || '(no dirt-age line)';
+
+  // THE CONTROL FIRST: nothing dirty, nothing to be old, and no line about it.
+  // Without this a reader could not tell an age of zero from no measurement.
+  let C = cond();
+  ok(C.repos.buses.dirtyAge.paths === 0 && C.repos.buses.dirtyAge.oldestMin === null,
+    'CONTROL — a clean tree reports no dirt age at all', JSON.stringify(C.repos.buses.dirtyAge));
+  ok(!conc.formatConditions(C).some((l) => /dirt age/.test(l)), 'and the conditions block prints no dirt-age line');
+
+  fs.writeFileSync(path.join(aged, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
+  setAge('Areas/Ramsey/notes.md', 360);
+  C = cond();
+  ok(C.repos.buses.dirtyAge.counted === 1 && C.repos.buses.dirtyAge.oldestMin === 360,
+    'a file last written six hours ago reads 360 minutes old', JSON.stringify(C.repos.buses.dirtyAge));
+  ok(/6h old/.test(line(C)) && /mtime/.test(line(C)),
+    'and the block prints it, labelled as an mtime rather than as proof of stillness', line(C));
+
+  setAge('Areas/Ramsey/notes.md', 0);
+  C = cond();
+  ok(C.repos.buses.dirtyAge.oldestMin === 0, 'touch the same file and the same dirt reads young — the number follows the disk', JSON.stringify(C.repos.buses.dirtyAge));
+
+  /* THE SAME SUBTRACTION AS THE COUNT (OA-301). An accounted held letter must be
+   * out of the age as well as out of the count, or the block prints an age for a
+   * file the verdict never counted — two sources for one fact, which is the
+   * exact fault `unaccountedPaths` was introduced to remove. */
+  fs.writeFileSync(path.join(aged, letter), 'Hi Simon\n');
+  setAge(letter, 600);
+  setAge('Areas/Ramsey/notes.md', 5);
+  fs.writeFileSync(path.join(blocked, 'corr-001-salutation.md'),
+    `# CORR-001: the salutation names the correspondent\n\n**Raised by:** \`sched-0815\`, 2026-09-17 · **File:** \`${letter}\`, modified and uncommitted\n\n## What is needed from you\n\nDecide the salutation.\n`);
+  C = cond();
+  ok(C.repos.buses.dirtyAge.paths === 1 && C.repos.buses.dirtyAge.oldestMin === 5,
+    'a held letter ten hours old is left OUT of the age, exactly as it is left out of the count', JSON.stringify(C.repos.buses.dirtyAge));
+  fs.rmSync(path.join(blocked, 'corr-001-salutation.md'));
+  C = cond();
+  ok(C.repos.buses.dirtyAge.paths === 2 && C.repos.buses.dirtyAge.oldestMin === 600,
+    'retire the hold and the ten-hour letter is counted and aged again', JSON.stringify(C.repos.buses.dirtyAge));
+
+  /* THREE ANSWERS, NOT TWO. A path git names that is not on the disk is ABSENT,
+   * and a path nobody measured is a REFUSAL — neither may arrive as an age, and
+   * neither may quietly vanish from the total. */
+  fs.writeFileSync(path.join(aged, letter), 'Hi\n');
+  fs.rmSync(path.join(aged, 'gone.txt'));
+  C = cond();
+  const three = C.repos.buses.dirtyAge;
+  ok(three.absent === 1 && three.refused === 0 && three.counted === 1,
+    'a tracked file deleted from the working tree reads ABSENT — not aged, and not refused', JSON.stringify(three));
+  ok(/named by git and not on disk/.test(line(C)), 'and the block says how many it could not age, rather than dropping them', line(C));
+
+  const blind = { staged: [], modified: ['Development Docs/open-actions.md'], untracked: [], accounted: [] };
+  const b = conc.dirtyAge(blind);
+  ok(b.refused === 1 && b.counted === 0 && b.oldestMin === null,
+    'a repo carrying no dirtyAges at all is a REFUSAL over its paths — never an absence, and never an age of zero', JSON.stringify(b));
+
+  /* AND IT SCORES NOTHING. Widening step 2b's quiescence clause to read this is
+   * OA-294's conjunction and Peter's decision; a tick that let its own new
+   * number move a verdict would be granting itself that. Ten-hour-old dirt is
+   * still CHECK FIRST, and that is the whole point of the measurement being an
+   * observation. */
+  fs.writeFileSync(path.join(aged, letter), 'Hi Simon\n');
+  setAge(letter, 600);
+  C = cond();
+  want(conc.assess(['buses-tree'], C), conc.CHECK, 'CONTROL — dirt ten hours old still reads CHECK FIRST: the age is an observation and moves no verdict');
+}
+
 const missing = conc.readRepo({ key: 'x', label: 'x', name: 'nowhere', dir: path.join(root, 'no-such-dir') });
 ok(!missing.present && !missing.readable, 'a directory that does not exist is not silently "clean"');
 

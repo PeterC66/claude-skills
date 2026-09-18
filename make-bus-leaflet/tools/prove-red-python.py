@@ -1265,6 +1265,70 @@ MUTATIONS = [
      "find": '    doc.core_properties.created = _now',
      "to": '    _now = _now'},
 
+    # ---------------------------------------------------------------- draft_town.py
+    # The first four are the 2026-08-28 public report as mutations: a member of
+    # the public found Whittlesey on Ramsey's published X31 spoke, because
+    # Nominatim at zoom=14 answers town=Whittlesey for Pondersbridge, Turves,
+    # Coates and Eastrea alike. Nothing in this estate can see that fault -- the
+    # sheet reproduces byte-for-byte for ever and every gate is green over it.
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "PlaceNamer.name reverse-geocodes before consulting NaPTAN, which is the ordering that put Whittlesey on a published sheet",
+     "find": '        loc, _parent = self.locality(stop_id)\n        if loc:\n            return loc, True                  # NaPTAN is authoritative; no call needed',
+     "to": '        loc, _parent = self.locality(stop_id)\n        if False:\n            return loc, True                  # NaPTAN is authoritative; no call needed'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "in_town folds the town's own outlying parts in, which re-creates the fault it replaced: Ramsey Heights then sits after Bury and Wistow and both villages are thrown off the spoke",
+     "find": '        loc, _par = self.locality(stop_id)\n        if not loc:\n            return None                       # unknown -- caller keeps the old test\n        return loc == town',
+     "to": '        loc, _par = self.locality(stop_id)\n        if not loc:\n            return None                       # unknown -- caller keeps the old test\n        return loc == town or self.locality(stop_id)[1] == town'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "of_town asks the NAME instead of NaPTAN's parent, so Ramsey End -- which belongs to Warboys -- is swallowed as one of Ramsey's own edges",
+     "find": '        loc, par = self.locality(stop_id)\n        return bool(loc) and par == town and loc != town',
+     "to": '        loc, par = self.locality(stop_id)\n        return bool(loc) and loc.startswith(town) and loc != town'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "a district in Nominatim's city slot is accepted, so a rural stop between Ramsey and Warboys is labelled Huntingdonshire",
+     "find": '            if v and not self.ADMIN.search(v):',
+     "to": '            if v:'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "suburb outranks town, which turned Peterborough's Queensgate into Millfield and Huntingdon bus station into Hartford",
+     "find": '    SETTLEMENT = ("town", "village", "city", "suburb", "hamlet")',
+     "to": '    SETTLEMENT = ("suburb", "town", "village", "city", "hamlet")'},
+
+    # The spoke's own three rules. Each decides what a rider reads at the end of
+    # a printed line, and none of them is reachable from any gate in the estate.
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the spoke is labelled by the last NEW name rather than by where the chain ends, so Hartford -> Huntingdon -> Newtown -> Huntingdon reads as a bus to Newtown",
+     "find": '    if term in places:\n        places = [p for p in places if p != term] + [term]',
+     "to": '    if False:\n        places = [p for p in places if p != term] + [term]'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the terminus stops absorbing its own suburbs, so a spoke naming Stanground and Fletton before Peterborough reads as three separate destinations",
+     "find": '    if len(places) > 1:\n        places = [p for p in places[:-1] if parents.get(p) != places[-1]] + [places[-1]]',
+     "to": '    if False:\n        places = [p for p in places[:-1] if parents.get(p) != places[-1]] + [places[-1]]'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the intermediates are never thinned, so the ten hamlets between Ramsey and St Ives overflow the spoke and collide with its neighbour",
+     "find": '    if len(places) > MAX_INTERMEDIATE + 1:',
+     "to": '    if False:'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "colliding spokes are left where they are, so Ramsey's 303 and 305 -- both Huntingdon, both bearing 201 -- print as one unreadable stack",
+     "find": '            if gap < min_gap:',
+     "to": '            if gap < 0:'},
+
+    # The two that are not about the artwork at all.
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "an unattended Tier-2 draft writes verified: true, so a route BODS alone declared is indistinguishable from one a person checked against the operator's own timetable",
+     "find": '    verified = [{**s, "verified": False,',
+     "to": '    verified = [{**s, "verified": True,'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "km_between drops the cos(lat) term, so every east-west distance on the draft -- the 1 km 'never leaves town' floor included -- is overstated by 62% at this latitude",
+     "find": '    a = math.sin(dla / 2) ** 2 + math.cos(math.radians(la1)) * math.cos(math.radians(la2)) * math.sin(dlo / 2) ** 2',
+     "to": '    a = math.sin(dla / 2) ** 2 + math.sin(dlo / 2) ** 2'},
+
 ]
 
 

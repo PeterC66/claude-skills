@@ -27,9 +27,21 @@ WHICH DAYS A ROUTE RUNS -- resolved, not declared (OA-204, fixed 2026-08-31)
   printed "no Sunday bus" onto a sheet where Sunday buses run, and no byte gate could see
   it: the gate compares the drawing with ci-reference, not with the world.
 
+  BUT AN ADDITION IS NOT ALWAYS A PATTERN, and until 2026-09-18 it was treated as one
+  (buses-data OA-410). A weekday was set by the FIRST journey found on it anywhere in the
+  window, so ONE added date -- a bank holiday, a rail replacement, an event shuttle --
+  made that weekday a running day on the printed sheet. St Neots C2 is the worked case: a
+  `calendar` row of Thursday only, one added Tuesday, and "Tue & Thu" on the sheet. So a
+  weekday NO calendar row declares must now run in more than a quarter of the sampled
+  weeks to count; see EXCEPTION_DAY_MIN_FRACTION, which carries the measurement. A weekday
+  the operator DID declare is untouched by that rule, which is what keeps route 300's
+  answer above and this one from being the same question.
+
   `daysBasis` says which claim you are reading. Normally "resolved ..."; it falls back to
-  the DECLARED calendar pattern only when the sampled window holds no journey at all (a
-  seasonal route sampled out of season), which is a weaker claim and labelled as one.
+  the DECLARED calendar pattern when the sampled window holds no journey at all (a
+  seasonal route sampled out of season), and also when everything that ran was an
+  exception-only weekday under the fraction. Both are weaker claims, both are labelled as
+  such, and the two are worded differently because they are different situations.
 
 HOW OFTEN A ROUTE RUNS -- read this before using any number below
   `journeysPerWeek` is the honest one: real journeys calling at the town in a
@@ -92,6 +104,55 @@ import gtfs_regions
 DOW=["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
 ABBR=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 WEEKS_SAMPLED=12   # consecutive weeks expanded from the reference Monday
+
+# An EXCEPTION-ONLY weekday -- one no `calendar` row of this route declares, which the
+# route reaches only through `calendar_dates` additions -- is a RUNNING day when it runs
+# in more than this fraction of the sampled weeks. A quarter.
+#
+# WHY IT EXISTS (buses-data OA-410, 2026-09-18). `servedFlags` below used to be set by
+# the FIRST journey found on a weekday anywhere in the window -- a boolean OR over twelve
+# weeks. So one `calendar_dates` addition made that weekday a running day, and the flag is
+# what reaches `verified-services.json`, the Services panel and the printed sheet. St
+# Neots C2 is the worked case: a `calendar` row of Thursday only, two added dates, one of
+# them a single Tuesday (2026-12-01), and the sheet would have said "Tue & Thu". Most of
+# the estate's exposure is the correct GTFS idiom for a bank holiday -- a Sunday service
+# registered to run on Christmas Monday -- so a Sunday route acquires Mon, Tue, Thu, Fri
+# and Sat. 56 (route, calendar, invented-day) combinations across the shipped estate were
+# exposed the day this was written.
+#
+# WHY NOT "PREFER THE CALENDAR ROW". Honouring `calendar_dates` is deliberate and fixes
+# the opposite fault, which OA-204 was filed about and `tools/prove-red-days-resolution.py`
+# still falsifies: High Wycombe's 300 files Mon-Fri and adds every Saturday and Sunday of
+# a nine-month registration as exceptions, running 25 journeys on a Saturday. Reading the
+# calendar row would call that Mon-Fri. A preference trades one fault for the other.
+#
+# WHY IT IS A FRACTION AND NOT A COUNT, which is the measurement that changed this rule
+# after it was first written as `MIN_WEEKS_FOR_A_RUNNING_DAY = 2`. The sampled window is
+# NOT always twelve weeks: `_sample_mondays` stops at the feed's last `end_date`, so near
+# the end of a registration it can be four. Measured over the estate at four window
+# anchors, `Beaconsfield 808` runs an exception-only Monday in **3 of 4** weeks and
+# `The Shelfords 132` -- a Sunday bus -- runs an exception-only Monday in **3 of 12**,
+# those three being Easter Monday, May Day and the late May bank holiday. Both are 3. Any
+# absolute threshold either keeps the bank holidays or discards a real short-window
+# pattern; a fraction separates them at 75% against 25%.
+#
+# WHY A QUARTER, EXCLUSIVE. It is the largest fraction that keeps every genuine
+# exception-only pattern in the estate and the smallest that drops every artefact.
+# Measured at those same four anchors, the exception-only distribution has **no weekday at
+# all between 1 week and 3 weeks**, and above 3 it goes 6, 7, 8, 9, 10, 11, 12 -- so the
+# gap the rule sits in is wide, and the two boundaries it must not cross are 3-of-12
+# (drop) and 3-of-4 (keep). `> weeks/4` puts 3-of-12 exactly on the line and excludes it,
+# which is why the comparison is strict.
+#
+# A DECLARED WEEKDAY IS NOT SUBJECT TO THIS AT ALL. The calendar row is the operator's
+# statement of the weekly pattern; an exception is by definition an exception. So this
+# rule cannot drop a day the operator declared, which is what makes it safe to apply
+# without re-opening what OA-204 settled. A route that clears no weekday at all still
+# falls back to the declared pattern, exactly as a route sampled out of season already
+# did. The sibling `gtfs_upcoming.py` answers a different question -- has a registration
+# begun at all -- with `MIN_ONGOING_DATES = 10`; the two are not interchangeable and
+# neither should be spelled in terms of the other.
+EXCEPTION_DAY_MIN_FRACTION=0.25
 DAY_LO,DAY_HI=7*60,19*60      # the working day: where a hole in the service counts
 CORE_LO,CORE_HI=9*60,15*60    # the core day: where a headway means what it says
 
@@ -281,13 +342,28 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
     contested=[tid for ids in tied.values() if len(ids)>1 for tid in ids]
     sigs=_trip_signatures(cur, contested) if contested else {}
     weekly=[]; best_day=0; out_n=back_n=0; deps=[]; dupday={}
-    # Which weekdays this route ACTUALLY carries a journey at the town, anywhere in the
-    # sampled window. This is the honest answer to "what days does it run?" and it is free
-    # here, because the loop below already resolves every (service, date) through _runs --
-    # which is the only place calendar_dates is honoured. Deriving the days from the
-    # `calendar` row instead reports a Mon-Fri base with weekend calendar_dates additions
-    # as Mon-Fri; see the docstring and OA-204.
-    served=[0]*7
+    # Which weekdays this route ACTUALLY carries a journey at the town. Free here, because
+    # the loop below already resolves every (service, date) through _runs -- which is the
+    # only place calendar_dates is honoured. Deriving the days from the `calendar` row
+    # instead reports a Mon-Fri base with weekend calendar_dates additions as Mon-Fri; see
+    # the docstring and OA-204.
+    #
+    # COUNTED PER WEEK, NOT FLAGGED (OA-410). This was `served[j]=1` on the first journey
+    # found, which is a boolean OR over the whole window: one added date made a weekday a
+    # running day. `servedWeeks[j]` is the number of sampled weeks in which this route ran
+    # on weekday j; the flag is derived from it below.
+    servedWeeks=[0]*7
+    # Weekdays DECLARED by a `calendar` row of any service this route runs. An exception
+    # -only weekday -- one this does not carry -- is the only kind the OA-410 fraction can
+    # drop, because a calendar row is the operator's statement of the weekly pattern and a
+    # calendar_dates row is by definition an exception to it. Read from `cal`, which the
+    # caller already built and already passes here for `_runs`.
+    declared=[0]*7
+    for t in trips:
+        c=cal.get(t["service_id"])
+        if not c: continue
+        for i,dn in enumerate(DOW):
+            if str(c[dn])=="1": declared[i]=1
     # (week, weekday) -> [(minutes, direction)], for the day-shape fields below.
     # Weekdays only: a Saturday timetable is a different product, not a thin Tuesday.
     profiles={}
@@ -302,7 +378,12 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
                 if key in seen:            # the same journey, filed again
                     dupday[(wi,j)]=dupday.get((wi,j),0)+1; continue
                 seen.add(key)
-                n+=1; per_day[j]+=1; served[j]=1
+                n+=1; per_day[j]+=1
+                # `per_day` is reset each week, so it reaches 1 exactly once per
+                # (week, weekday) -- which is what makes this a count of WEEKS and not
+                # of journeys. A route with forty journeys on one Tuesday still scores
+                # that Tuesday once.
+                if per_day[j]==1: servedWeeks[j]+=1
                 if j<5 and t["dep"]: profiles.setdefault((wi,j),[]).append((_mins(t["dep"]),str(t["dir"])))
                 if m is mondays[0]:
                     if str(t["dir"])=="1": back_n+=1
@@ -327,7 +408,19 @@ def _journey_stats(cur, rids, ph, IN, SVCF, cal, exc, mondays):
       "firstDeparture":deps[0][:5] if deps else None,
       "lastDeparture":deps[-1][:5] if deps else None,
       "typicalDayDuplicates":dupday.get(best,0) if best else 0,
-      "servedFlags":served,
+      # A declared weekday counts if it ran at all -- that is OA-204's rule and this does
+      # not touch it. An exception-only weekday must run in MORE than a quarter of the
+      # sampled weeks; see EXCEPTION_DAY_MIN_FRACTION, which carries the argument and the
+      # measurement. `len(mondays)` rather than WEEKS_SAMPLED, because the window is short
+      # near the end of a feed and 3-of-4 is a pattern where 3-of-12 is three bank
+      # holidays.
+      "servedFlags":[1 if (n and (declared[j] or n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION))
+                     else 0 for j,n in enumerate(servedWeeks)],
+      # The counts and the declaration the flags were derived from, so a caller that
+      # disagrees with a day string can see WHY without re-expanding the calendar. Both
+      # are popped by query() beside servedFlags and never reach the output.
+      "servedWeeks":servedWeeks,
+      "declaredFlags":declared,
       **_day_shape(profiles.get(best) if best else None),
     }
 
@@ -417,8 +510,26 @@ def query(db, prefixes=None, near=None, town=None, asof=None):
         # "declared" and "observed" are two different claims and a reader cannot tell them
         # apart from a day string alone.
         served=freq.pop("servedFlags")
-        if any(served): flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"
-        else:           basis = "declared calendar pattern -- no journey at this town in the sampled window"
+        weeks=freq.pop("servedWeeks")
+        freq.pop("declaredFlags")
+        # OA-410: the basis now says the rule, because a reader who disagrees with a day
+        # string needs to know that a weekday reached only through calendar_dates can be
+        # dropped for running too rarely. The PREFIXES are unchanged -- "resolved" and
+        # "declared" are what the suite and tools/prove-red-days-resolution.py match on,
+        # and they are the two claims a reader has to tell apart.
+        if any(served):
+            flags, basis = served, ("resolved from calendar + calendar_dates over the sampled window "
+                                    "of %d weeks; a weekday no calendar row declares counts when it "
+                                    "runs in more than a quarter of them" % len(mondays))
+        elif any(weeks):
+            # It ran, but every weekday it ran on was exception-only and under the
+            # fraction -- a route whose only appearances in the window are one-offs.
+            # Falling back to the calendar row is right, and saying WHICH fallback this is
+            # matters: it is not the seasonal route below, and nothing else shows it.
+            basis = ("declared calendar pattern -- this route ran in the sampled window, but only on "
+                     "weekdays no calendar row declares and none of them often enough to count")
+        else:
+            basis = "declared calendar pattern -- no journey at this town in the sampled window"
         out.append({"route":sn,"operator":" / ".join(sorted(d["ops"])),
           "days":fmt_days(flags),"daysFlags":flags,"daysBasis":basis,
           "validFrom":min(sd) if sd else None,"validTo":max(ed) if ed else None,

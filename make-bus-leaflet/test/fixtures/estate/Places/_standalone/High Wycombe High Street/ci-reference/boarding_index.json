@@ -1,0 +1,973 @@
+{
+ "place": "High Street",
+ "homeLocality": "High Wycombe",
+ "generatedBy": "boarding_index.py v1.4",
+ "asof": "2026-08-31",
+ "feed": "20260831_025027",
+ "region": "buckinghamshire.sqlite",
+ "stands": [
+  {
+   "atco": "040000003054",
+   "label": "Stop R",
+   "class": "stand",
+   "distM": 9,
+   "walkMin": 1,
+   "facing": "east",
+   "name": "High Street",
+   "pos": [
+    51.628654,
+    -0.748916
+   ],
+   "street": "High Street",
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "36",
+    "37",
+    "M40",
+    "X74"
+   ],
+   "destinations": [
+    "Beaconsfield",
+    "Beaconsfield Services",
+    "Beaconsfield Wilton Park",
+    "Bourne End",
+    "Bulstrode Park",
+    "Butlers Cross",
+    "Chalfont Common",
+    "Chalfont St Giles",
+    "Chalfont St Peter",
+    "Chartridge",
+    "Coleshill",
+    "Cookham",
+    "Cores End",
+    "Denham",
+    "Farnham Common",
+    "Farnham Royal",
+    "Fifield",
+    "Flackwell Heath",
+    "George Green",
+    "Gerrards Cross",
+    "Hedgerley",
+    "Hillingdon Heath",
+    "Iver Heath",
+    "Langley",
+    "London",
+    "Loudwater",
+    "Maidenhead",
+    "Seer Green",
+    "Slough",
+    "Tatling End",
+    "Uxbridge",
+    "Windsor",
+    "Wooburn",
+    "Wooburn Green",
+    "Wooburn Moor"
+   ]
+  },
+  {
+   "atco": "040000003055",
+   "label": "Stop S",
+   "class": "stand",
+   "distM": 31,
+   "walkMin": 1,
+   "facing": "west",
+   "name": "High Street",
+   "pos": [
+    51.628658,
+    -0.749262
+   ],
+   "street": "High Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000003095",
+   "label": "Stop T",
+   "class": "stand",
+   "distM": 72,
+   "walkMin": 1,
+   "facing": "north",
+   "name": "Town Hall",
+   "pos": [
+    51.627952,
+    -0.748863
+   ],
+   "street": "Queen Victoria Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000003052",
+   "label": "Stop V",
+   "class": "stand",
+   "distM": 139,
+   "walkMin": 2,
+   "facing": "east",
+   "name": "Castle Street",
+   "pos": [
+    51.629732,
+    -0.74799
+   ],
+   "street": "Castle Street",
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "31",
+    "41"
+   ],
+   "destinations": [
+    "Amersham",
+    "Beamond End",
+    "Bovingdon",
+    "Chesham",
+    "Great Kingshill",
+    "Great Missenden",
+    "Hazlemere",
+    "Heath End",
+    "Hemel Hempstead",
+    "Holmer Green",
+    "Hyde Heath",
+    "Penn",
+    "Penn Street",
+    "Prestwood",
+    "Tylers Green",
+    "Whelpley Hill",
+    "Widmer End",
+    "Winchmore Hill"
+   ]
+  },
+  {
+   "atco": "040000003053",
+   "label": "Stop W",
+   "class": "stand",
+   "distM": 130,
+   "walkMin": 2,
+   "facing": "west",
+   "name": "Castle Street",
+   "pos": [
+    51.629596,
+    -0.747849
+   ],
+   "street": "Castle Street",
+   "routes": [
+    "34"
+   ],
+   "destinations": [
+    "Lane End"
+   ]
+  },
+  {
+   "atco": "040000003063",
+   "label": "Crendon Street",
+   "class": "named",
+   "distM": 94,
+   "walkMin": 1,
+   "facing": "north-east",
+   "name": "Crendon Street",
+   "pos": [
+    51.629109,
+    -0.747747
+   ],
+   "street": "Crendon Street",
+   "routes": [],
+   "destinations": []
+  }
+ ],
+ "destinations": [
+  {
+   "destination": "Amersham",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "41"
+   ],
+   "trips": 418,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000003054",
+     "label": "Stop R",
+     "class": "stand",
+     "distM": 9,
+     "walkMin": 1,
+     "routes": [
+      "105"
+     ],
+     "trips": 72,
+     "arrivalM": 328,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Beaconsfield",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "X74"
+   ],
+   "trips": 811,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000003052",
+     "label": "Stop V",
+     "class": "stand",
+     "distM": 139,
+     "walkMin": 2,
+     "routes": [
+      "31"
+     ],
+     "trips": 148,
+     "arrivalM": 213,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Beaconsfield Services",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 417,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Beaconsfield Wilton Park",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103"
+   ],
+   "trips": 232,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Beamond End",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Bourne End",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "36",
+    "37"
+   ],
+   "trips": 238,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Bovingdon",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1B"
+   ],
+   "trips": 166,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Bulstrode Park",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102"
+   ],
+   "trips": 238,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Butlers Cross",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Chalfont Common",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Chalfont St Giles",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Chalfont St Peter",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Chartridge",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "105"
+   ],
+   "trips": 61,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Chesham",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000003054",
+     "label": "Stop R",
+     "class": "stand",
+     "distM": 9,
+     "walkMin": 1,
+     "routes": [
+      "105"
+     ],
+     "trips": 66,
+     "arrivalM": 686,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Coleshill",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "105"
+   ],
+   "trips": 72,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Cookham",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Cores End",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Denham",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104"
+   ],
+   "trips": 322,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Farnham Common",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 417,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Farnham Royal",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 417,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Fifield",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 101,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Flackwell Heath",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "36"
+   ],
+   "trips": 87,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "George Green",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "X74"
+   ],
+   "trips": 135,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Gerrards Cross",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104"
+   ],
+   "trips": 322,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Great Kingshill",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Great Missenden",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hazlemere",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "31",
+    "41"
+   ],
+   "trips": 605,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Heath End",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hedgerley",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 417,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hemel Hempstead",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1B"
+   ],
+   "trips": 166,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hillingdon Heath",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102"
+   ],
+   "trips": 238,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Holmer Green",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hyde Heath",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "41"
+   ],
+   "trips": 66,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Iver Heath",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "X74"
+   ],
+   "trips": 135,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Lane End",
+   "boardAt": "Stop W",
+   "boardAtAtco": "040000003053",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "34"
+   ],
+   "trips": 101,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Langley",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103"
+   ],
+   "trips": 77,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "London",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104",
+    "M40",
+    "X74"
+   ],
+   "trips": 590,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Loudwater",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "37",
+    "M40",
+    "X74"
+   ],
+   "trips": 1095,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Maidenhead",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Penn",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "31"
+   ],
+   "trips": 172,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Penn Street",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Prestwood",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Seer Green",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Slough",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 417,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Tatling End",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104"
+   ],
+   "trips": 322,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Tylers Green",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "31"
+   ],
+   "trips": 172,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Uxbridge",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104",
+    "M40"
+   ],
+   "trips": 455,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Whelpley Hill",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1B"
+   ],
+   "trips": 66,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Widmer End",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Winchmore Hill",
+   "boardAt": "Stop V",
+   "boardAtAtco": "040000003052",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Windsor",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "37"
+   ],
+   "trips": 191,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Wooburn",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Wooburn Green",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Wooburn Moor",
+   "boardAt": "Stop R",
+   "boardAtAtco": "040000003054",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105"
+   ],
+   "trips": 626,
+   "limited": false,
+   "alsoFrom": []
+  }
+ ]
+}

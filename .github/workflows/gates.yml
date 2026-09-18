@@ -1,40 +1,41 @@
 name: Bus leaflet gates
 
-# Mirror of buses-data's workflow of the same name, triggered from this side
-# (the engine repo) instead. Runs the same status.js gate suite so an engine
-# change gets checked immediately rather than waiting for the next buses-data
-# push or the nightly schedule over there.
+# The engine's own gate suite: the unit tests and their mutation harnesses, and a
+# byte gate over the small map estate this repository owns at
+# `make-bus-leaflet/test/fixtures/estate/`.
 #
-# Requires the CROSS_REPO_PAT2 secret, added here as a repo secret: a GitHub PAT
-# with read access to PeterC66/buses-data, which is the ONE private repository
-# this workflow checks out. It needed the portal too until 2026-09-03, when that
-# repository was made public; the token line and the preflight row for it were
-# removed on 2026-09-04 (buses-data OA-236).
+# NO SECRET IS NAMED IN THIS FILE, SINCE 2026-09-18 (buses-data OA-398, R5 of the
+# 2026-09-17 process review). The `status` job used to clone the PRIVATE
+# PeterC66/buses-data with CROSS_REPO_PAT2 and gate its twenty-one maps. That
+# token expires on Sunday 22 November 2026, and `status` is a required check here
+# with strict mode and enforce_admins both on, so its expiry would have blocked
+# every pull request in this repository outright, with no escape but a person
+# turning branch protection off.
 #
-# THE HISTORY IS KEPT BECAUSE THE FAILURE MODE HAS NOT CHANGED. Naming only one
-# repo when two were needed is what made this workflow red from 2026-08-04 to
-# 2026-08-24: the token in the store could read buses-data and could not see the
-# portal, so the run died at the portal checkout having gated nothing. A token
-# that cannot see a repository fails identically to an expired one. If a future
-# checkout adds a private repository, widen the token AND this preflight, and do
-# not assume a green run means the credential is right.
+# THE HISTORY IS KEPT BECAUSE THE FAILURE MODE IS THE ESTATE'S, NOT THE TOKEN'S.
+# Naming one repository when two were needed is what made this workflow red from
+# 2026-08-04 to 2026-08-24: the token in the store could read buses-data and could
+# not see the portal, so the run died at the portal checkout having gated nothing.
+# A token that cannot see a repository fails identically to an expired one, and a
+# green run says nothing about whether the credential is right. That is why a
+# preflight stood in the `status` job for six weeks, and why the honest answer in
+# the end was to stop reaching across at all. IF A FUTURE STEP HERE WANTS A
+# PRIVATE REPOSITORY, the question to ask first is whether what it wants could be
+# vendored instead.
 #
-# ONE token, FOUR stores, and they renew together: buses-data Actions,
-# claude-skills Actions, community-bus-maps Actions, community-bus-maps
-# Dependabot -- the portal's verify.yml runs on pull_request, and a Dependabot PR
-# cannot read an Actions secret. The 2026-08-21 rotation updated three of the
-# four and missed one, which is the six weeks of red described above.
-# CROSS_REPO_PAT2 expires Sunday 22 November 2026; when it does, this workflow,
-# buses-data's copy and the portal's verify all fail at once, at their
-# preflights. Its predecessor CROSS_REPO_PAT is no longer named by any workflow
-# in any of the three repos (migrated 2026-08-24).
+# WHERE THE TOKEN WENT, in order. The `docs` job stopped needing it on 2026-09-04,
+# when OA-246 moved both document checkers out of the private repository into
+# `tools/` here beside `check-file-hygiene.mjs` and folded those steps into
+# `unit`. The portal checkout stopped needing it the same day (OA-236), that
+# repository having been made public on 2026-09-03. The `status` job was the last
+# reader, and OA-398 removed it. The direction was the rule all along: A SHARED
+# CHECK BELONGS IN THE REPOSITORY ANYONE CAN READ.
 #
-# WHAT NO LONGER DEPENDS ON IT, as of 2026-09-04. The `docs` job did, because
-# both document checkers lived in buses-data; OA-246 moved them into `tools/`
-# here, beside `check-file-hygiene.mjs`, and folded those four steps into `unit`.
-# Only the `status` job is left needing the token, and only because it gates the
-# map estate, which really is in the private repository. The direction is the
-# rule: A SHARED CHECK BELONGS IN THE REPOSITORY ANYONE CAN READ.
+# WHAT RUNS OVER THE REAL ESTATE NOW is buses-data's own `gates.yml`, which checks
+# this public repository out with no credential, at a commit recorded in a lock
+# file rather than floating on `main`. Four steps moved there in the same change --
+# the S6 falsification, the render sweep, the exclusion-parity join's real half and
+# the stray-output sweep -- each with the reason written where it left.
 
 # ONE RUN PER REF PER EVENT (2026-09-03). The portal's four workflows each grew
 # this block on 2026-09-03 (buses-data OA-232 Tier 2.3) and the two `gates.yml`
@@ -851,99 +852,61 @@ jobs:
   status:
     runs-on: ubuntu-latest
     steps:
-      # Fail fast and legibly: without this, an absent or wrongly-scoped
-      # CROSS_REPO_PAT2 surfaces as `Not Found` from actions/checkout, which
-      # reads like a deleted repository rather than a missing permission. That
-      # is exactly how this workflow's six weeks of red read. Mirrors the
-      # preflight in buses-data's gates.yml, over this side's two repos.
-      - name: Preflight -- can the PAT see both private repos?
-        env:
-          PAT: ${{ secrets.CROSS_REPO_PAT2 }}
-        run: |
-          if [ -z "$PAT" ]; then
-            echo "::error::CROSS_REPO_PAT2 is not set on this repository. Add it under Settings -> Secrets and variables -> Actions, with read access to PeterC66/buses-data."
-            exit 1
-          fi
-          # Ask the credential when it dies rather than trusting a date typed
-          # into the comment above. GitHub returns a
-          # github-authentication-token-expiration header on any request
-          # authenticated with a PAT that expires. Until 2026-08-24 the date in
-          # this file came from a previous session's notes and had never been
-          # read back off the token itself; a third token in the account,
-          # carrying a third date, is what exposed that. Now every run prints it.
-          exp=$(curl -sS -D - -o /dev/null -H "Authorization: Bearer $PAT" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/PeterC66/buses-data" | sed -n 's/^github-authentication-token-expiration: *//Ip' | tr -dc '[:print:]')
-          if [ -n "$exp" ]; then
-            echo "  this token expires: $exp"
-          else
-            echo "::warning::GitHub reported no token-expiry header, so the date in this file's header comment is unverified."
-          fi
-          fail=0
-          # NARROWED WITH THE CHECKOUT ABOVE (OA-236). This asked whether the
-          # token could read the portal, which it no longer needs to — and the
-          # question had become unanswerable anyway: a public repository returns
-          # 200 to any valid credential, so a token with no access to it would
-          # have passed this check. A preflight that cannot fail is worse than no
-          # preflight, because it reads as coverage.
-          for repo in PeterC66/buses-data; do
-            code=$(curl -s -o /dev/null -w '%{http_code}'               -H "Authorization: Bearer $PAT"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$repo")
-            if [ "$code" = "200" ]; then
-              echo "  ok   $repo"
-            else
-              echo "::error::CROSS_REPO_PAT2 cannot read $repo (HTTP $code). Widen the token's repository access."
-              fail=1
-            fi
-          done
-          exit $fail
-
       - name: Checkout claude-skills (engine)
         uses: actions/checkout@v7
         with:
           path: skills
 
-      # NO STEP HERE FETCHES THE HELD-BACK ENGINE ANY MORE, AND THAT IS THE FIX
-      # (OA-217, 2026-09-01). status.js gates a held-back town against the engine it
-      # was BUILT with, which means checking that commit out of the skills clone --
-      # and actions/checkout clones one commit deep, so the object is not there. The
-      # first remedy was a step in this file that fetched the shas by name. It was
-      # written into ONE of the two workflows that run this suite, the sentence "CI
-      # is green on it" was true of that one, and the other went red about a sheet
-      # that was perfectly good.
+      # NO PREFLIGHT AND NO buses-data CHECKOUT, SINCE 2026-09-18 (buses-data
+      # OA-398, R5 of the 2026-09-17 process review). Three things stood here: a
+      # preflight that asked GitHub whether CROSS_REPO_PAT2 could still read
+      # PeterC66/buses-data and printed the token's real expiry, the token-bearing
+      # checkout of that private repository, and a long comment about a fetch that
+      # status.js now does for itself.
       #
-      # Two YAML files in two repositories held a setup requirement belonging to a
-      # function in a third, and nothing made them agree. So the function does it
-      # itself: a missing object is now a fetch and a retry inside status.js, timed
-      # out at 60s, reporting the original error if it cannot recover. On any clone
-      # that already has the commit it never runs. Falsified in prove-red-status.js,
-      # which runs above, against a genuinely one-deep clone -- and the mutation that
-      # removes the retry reproduces this workflow's 2026-09-01 red exactly.
-      - name: Checkout buses-data
-        uses: actions/checkout@v7
-        with:
-          repository: PeterC66/buses-data
-          token: ${{ secrets.CROSS_REPO_PAT2 }}
-          path: buses-data
+      # THE TOKEN DIES ON 22 NOVEMBER 2026, and `status` is a required check here
+      # with strict mode and enforce_admins both on, so its expiry would have
+      # blocked every pull request in this repository outright.
+      #
+      # BUT THE FLOATING REF WAS THE WORSE HALF. That checkout named no `ref:`, so
+      # a verdict was about whatever buses-data's `main` held for the minutes this
+      # job ran -- see the attribution step below for the run that measured it.
+      #
+      # AND IT CARRIED THE ORDERING TRAP (OA-341). `prove-red-held-back` needs a
+      # DONOR town whose stamped engine IS the current one, and the stamp is a hash
+      # of the engine's own files -- so ANY edit to ANY hashed engine file made
+      # every town in that 21-map estate a non-donor at once, and the harness
+      # exited 1 before a single case ran. Appending one comment line to `icons.js`
+      # was enough. An engine pull request therefore opened RED and the only thing
+      # that could clear it was a commit in the other repository.
+      #
+      # WHAT REPLACES IT is `make-bus-leaflet/test/fixtures/estate/`: five maps
+      # this repository owns, redrawn and re-stamped by the same pull request that
+      # moves the ink. `tools/estate-fixture.js` is the tool and its header is the
+      # argument. What this job no longer does is gate twenty-one maps on every
+      # engine push; that runs in buses-data's own `gates.yml`, on the rebuild that
+      # follows, against an engine commit somebody chose.
 
-      # community-bus-maps is PRIVATE, and this step used to say "public" and pass no
-      # token. The checkout failed with "Not Found" on every run, before a single gate
-      # executed, so this workflow has been reporting red for the checkout rather than
-      # for anything it was written to measure -- a gate that cannot run hides whatever
-      # backlog it would have found. It takes the same CROSS_REPO_PAT2 the buses-data
-      # checkout above it takes; the preflight at the top of this job now names a
-      # scope problem instead of letting it surface as "Not Found". Still EXPECT A
-      # RED FOR REAL from here: the portal fixture rows DIFF whenever the vendored
-      # engine is ahead of the portal's main, which is exactly the state a
-      # re-vendoring PR is in, and this row has never once been exercised.
-      # NO TOKEN, SINCE 2026-09-04 (buses-data OA-236). This step passed
-      # CROSS_REPO_PAT2 because the portal was private; it was made PUBLIC on
-      # 2026-09-03 to stop GitHub billing its Actions minutes, and a public
-      # repository needs no credential to clone. Removing the line does not close
-      # a hole — there is no exploitable path here, measured: neither public
-      # repository has a pull_request_target, workflow_run or issue_comment
-      # trigger, and GitHub withholds secrets from fork PRs. It shrinks the number
-      # of places a credential that can read a PRIVATE repository is named in a
-      # file anybody on the internet can read, which is the cheap half of the same
-      # idea. The two buses-data checkouts above keep their token because
-      # buses-data is private and stays private: it holds Correspondence/.
+      # THE ONLY OTHER REPOSITORY THIS JOB READS, AND IT IS PUBLIC. The history is
+      # kept because the failure mode has not changed. This step once said "public"
+      # while community-bus-maps was still private and passed no token: the
+      # checkout failed with "Not Found" on every run before a single gate
+      # executed, so the workflow reported red for the checkout rather than for
+      # anything it was written to measure -- a gate that cannot run hides whatever
+      # backlog it would have found. It then took CROSS_REPO_PAT2 until 2026-09-04,
+      # when the portal really was made public (buses-data OA-236). Since
+      # 2026-09-18 it is the last cross-repository checkout in this file.
+      #
+      # Still EXPECT A RED FOR REAL from here: the portal fixture rows DIFF
+      # whenever the vendored engine is ahead of the portal's main, which is
+      # exactly the state a re-vendoring pull request is in.
+      #
+      # AND SINCE 2026-09-18 IT CARRIES THE PORTAL'S OWN FIXTURE PACKS, under
+      # `gate-fixtures/` (OA-398). `prove-red-gates`' portal arm mutates the
+      # portal's engine and draws the portal's fixtures; the code came from here
+      # and the data used to come from a private third repository, so an arm
+      # entirely about the portal could not run without a credential that had
+      # nothing to do with it. Code and data are now one checkout.
       - name: Checkout community-bus-maps (portal, public since 2026-09-03)
         uses: actions/checkout@v7
         with:
@@ -999,46 +962,47 @@ jobs:
           echo "portal refs now visible to the vendoring row:"
           git -C community-bus-maps for-each-ref --format='  %(refname:short)  %(committerdate:relative)' refs/remotes/
 
-      # WHICH THREE COMMITS IS THIS VERDICT ABOUT? The last of the three
-      # repositories to get this step, and the one that needed it most. The
-      # portal's `verify.yml` has named its two since 2026-09-05 and buses-data's
-      # own `gates.yml` has named its three since 2026-08-28 (buses-data OA-018);
-      # this job gates the ENGINE, and two of the three trees it measures --
-      # `buses-data` and `community-bus-maps` -- are checked out above with no
-      # `ref:` and float on their default branches. So a verdict here is about a
-      # combination that existed for the minutes this job ran, and a red here is
-      # very often not about the commit that triggered it.
+      # WHICH TWO COMMITS IS THIS VERDICT ABOUT? It was WHICH THREE, and the one
+      # that went is the one that made a verdict here unattributable.
       #
       # MEASURED, NOT SUPPOSED. Run 34607735390 on 2026-09-11 went red on the
-      # quality ratchet four minutes after an engine commit that had nothing to
-      # do with it. The cause was buses-data `dd5db17e`, pushed 95 minutes
-      # earlier in another repository: it deliberately dropped route 101 from
-      # three Co-op place sheets and left the ledger unaccepted, so three rows
-      # read REGRESSED. Nothing in this run named that commit, or named
-      # buses-data at all -- the failing step pipes status.js into the step
-      # summary, so the log says only "exit code 1" -- and GitHub titles the
-      # failure email after the workflow's static `name:`, so the mail said
-      # claude-skills. Establishing that the engine was innocent took a
-      # downloaded gate-results artifact and a walk through a second
-      # repository's history.
+      # quality ratchet four minutes after an engine commit that had nothing to do
+      # with it. The cause was buses-data `dd5db17e`, pushed 95 minutes earlier in
+      # another repository: it deliberately dropped route 101 from three Co-op
+      # place sheets and left the ledger unaccepted, so three rows read REGRESSED.
+      # Nothing in that run named the commit, or named buses-data at all -- the
+      # failing step pipes status.js into the step summary, so the log says only
+      # "exit code 1" -- and GitHub titles the failure email after the workflow's
+      # static `name:`, so the mail said claude-skills. Establishing that the
+      # engine was innocent took a downloaded gate-results artifact and a walk
+      # through a second repository's history.
       #
-      # It cannot fail the job on its own: it reads SHAs out of checkouts three
+      # That repository is gone from this job (OA-398) and the maps gated below are
+      # a fixture this one owns, pinned by construction to the commit under test.
+      # The portal still floats, and that is deliberate: *does today's portal still
+      # carry today's engine* is a question about today, and pinning it would make
+      # the vendoring row reproducible and blind to the drift it exists to catch.
+      #
+      # It cannot fail the job on its own: it reads SHAs out of checkouts two
       # earlier steps have already made, and it is the attribution rather than a
       # gate. Nothing here is asserted, so there is nothing to falsify.
-      - name: Which three commits is this verdict about
+      - name: Which two commits is this verdict about
         run: |
           {
             echo "### Checked out for this run"
             echo
             echo "| Repository | Ref | SHA |"
             echo "|---|---|---|"
-            for d in skills buses-data community-bus-maps; do
+            for d in skills community-bus-maps; do
               sha=$(git -C "$GITHUB_WORKSPACE/$d" rev-parse HEAD)
               ref=$(git -C "$GITHUB_WORKSPACE/$d" rev-parse --abbrev-ref HEAD)
               pin='floats on its default branch'
               [ "$d" = skills ] && pin='pinned to the triggering commit'
               echo "| \`$d\` | $ref — $pin | \`${sha:0:10}\` |"
             done
+            echo
+            echo "The maps gated below are this repository's own, under"
+            echo "\`make-bus-leaflet/test/fixtures/estate/\`. buses-data is not checked out at all."
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       # WHICH NODE? THE ONE THE PRODUCT RUNS (buses-data OA-209, 2026-08-31).
@@ -1082,6 +1046,30 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm ci
 
+      # FALSIFY IT FIRST, as everything in this suite is. The fixture check below
+      # is the thing the whole job now stands on: if it could not go red, an engine
+      # change that moved ink would land with a fixture describing the engine
+      # before it, every byte gate would still say PASS, and the first thing to
+      # notice would be buses-data's real estate failing to reproduce days later in
+      # another repository. Seven scratch copies of the fixture, each damaged a
+      # different way; nothing under test/fixtures/estate is touched.
+      - name: Prove the fixture-estate check can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-fixture-estate
+
+      # THE FIXTURE ESTATE IS IN STEP WITH THIS ENGINE -- FIRST, because every byte
+      # gate below is measured against it (buses-data OA-398). It asks two things:
+      # that the current engine redraws all twelve fixture sheets, and that every
+      # pack's `routes.json` stamp IS the current engine hash. The second is what
+      # lets `prove-red-held-back` pose its fixture at all -- it needs a DONOR
+      # whose stamp is current, and an edit to any hashed engine file used to empty
+      # that set across a whole 21-map estate in another repository (OA-341). Here
+      # the remedy is inside this pull request: `npm run fixture:estate -- --apply`,
+      # committed with the engine edit that moved the ink.
+      - name: The fixture estate is in step with this engine
+        working-directory: skills/make-bus-leaflet
+        run: npm run fixture:estate
+
       # Falsify the byte gates BEFORE trusting them. status.js below reports PASS
       # for every sheet in the estate; this step is what establishes that those
       # PASSes can turn into DIFFs at all. It mutates a scratch copy of each of
@@ -1093,7 +1081,7 @@ jobs:
       # the thing it replaced was an excuse that could not go red at all.
       - name: Prove the held-back engine gate can go red
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate"
       # AND THE SAME EIGHT CASES ON THE FIXTURE THIS FILE BUILDS ITSELF (OA-219).
       #
       # Six of those cases need a town whose sheets do not reproduce under the current
@@ -1106,23 +1094,25 @@ jobs:
       # between a fallback and a promise.
       - name: Prove it on the fixture the harness builds itself
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/buses-data" --synthetic
+        run: npm run test:prove-red-held-back -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate" --synthetic
 
       - name: Prove the byte gates can go red
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-gates -- --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-gates -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate" --portal "$GITHUB_WORKSPACE/community-bus-maps"
 
-      # Falsify the S6 verification checks too. Four of them were rewritten on
-      # 2026-08-27 (OA-129 Phase 2) because they were manufacturing findings that
-      # looked like defects and were not, and the failure mode of quietening a
-      # noisy check is a check that no longer says anything -- which looks exactly
-      # like success. Every case here comes in a pair: quiet on the artefact, loud
-      # on a real fault of the same kind. It seeds from the TRACKED S1/S2/S3 runs
-      # plus redteam.json, so it runs on a fresh clone; the S4/S5/S6 run folders
-      # are gitignored and CI has none of them.
-      - name: Prove the S6 checks can still go red
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-s6 -- --buses "$GITHUB_WORKSPACE/buses-data"
+      # THE S6 FALSIFICATION HAS MOVED TO buses-data (OA-398, 2026-09-18), and it
+      # is a NARROWING, so the guarantee is re-established at the point of it.
+      # `npm run test:prove-s6` seeds from a town's TRACKED S1/S2/S3 runs and its
+      # redteam.json, and it is bound to one town by name -- its route families,
+      # its headsigns, its stop codes. That is a claim about buses-data's estate
+      # rather than about this engine, and the fixture estate here carries
+      # ci-reference packs and one S3 run per map, which is deliberately not enough
+      # to pose it. It now runs as a step in buses-data's own `gates.yml`, which is
+      # where OA-218's rule puts it: a harness that reads the map tree runs in the
+      # suite that fires when the tree changes. IT RAN NOWHERE ELSE BEFORE TODAY,
+      # so moving it without adding it there would have deleted it -- which is the
+      # fault OA-218 was itself filed about, where three documents said a harness
+      # ran in CI and `git log -S` over the workflow returned nothing.
 
       # WHICH OF THESE BELONGS IN WHICH WORKFLOW (OA-218, 2026-09-01). The rule,
       # which nothing stated until now: a harness that reads the buses-data map tree
@@ -1139,18 +1129,18 @@ jobs:
       # repository and does not belong over there. Two of the five OA-218 first named
       # were wrong, and that is the test that said so.
       #
-      # The sweep asks the one question the byte gate does not: could each map be
-      # re-rendered under STRICT_GUARDS=1, which is what every portal render that
-      # goes public sets. Its harness was the ONE falsification harness never wired
-      # in here, and on 2026-08-28 it was found RED -- its run-3 control asserted a
-      # no-op that depended on a side file whose writer the OA-137 fix had deleted.
-      # A harness nobody runs is a harness nobody can trust. It works on a fresh
-      # clone because latestRunDir() already falls back to the tracked ci-reference/
-      # when the gitignored S4 run folder is absent, which was verified against
-      # `git archive HEAD` rather than assumed.
-      - name: Prove the render sweep can still go red
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-sweep -- --buses "$GITHUB_WORKSPACE/buses-data"
+      # THE RENDER SWEEP RUNS ONLY IN buses-data NOW (OA-398), same shape as the S6
+      # one above. Its run-4 case asserts an EXACT SET OF SEVEN MAPS BY NAME -- the
+      # packs with no river geometry of their own -- which is a fact about that
+      # estate and about nothing in this repository. Re-deriving the set for the
+      # fixture estate would mean a second implementation of the engine's own
+      # protection rule, and the harness's own header says why that is worse than
+      # the constant: the first attempt at exactly that re-derivation confidently
+      # listed a town the rule does not reach. It was ALREADY a step in
+      # buses-data's `gates.yml`, so this is a removal rather than a move. What is
+      # lost is that a change to `render_sweep.js` is no longer falsified until the
+      # engine pin over there is bumped -- which is the rollout moment, and is when
+      # that estate is rebuilt anyway.
 
       # And falsify the ROLLOUT stamp verdict (OA-179). This one has to be here
       # rather than in `unit`, because it needs a buses-data checkout — and it has
@@ -1162,7 +1152,7 @@ jobs:
       # checkout has.
       - name: Prove the rollout stamp verdict can go red
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-rollout-stamp -- --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-rollout-stamp -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate"
 
       # The same argument again, for the verdict that says a committed S4 was never
       # rendered (OA-198). Both rollout tools commit S4 and render S5 as a separate
@@ -1175,7 +1165,7 @@ jobs:
       # the row was written about places and towns have the identical stop.
       - name: Prove the unrendered-S4 verdict can go red
         working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-unrendered -- --buses "$GITHUB_WORKSPACE/buses-data"
+        run: npm run test:prove-red-unrendered -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate"
 
       # And falsify the severity contract that decides whether a build may ship at
       # all. Every rule in build_log.js is a regex over a MESSAGE, and a regex that
@@ -1270,26 +1260,20 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-timetable-trigger
 
-      # OA-259, the other half: the FOUR conventions a town uses for "known and not drawn"
-      # are read by two checkers that cannot share a runtime, so the rule is written twice.
-      # A comment saying they agree is a claim about a JOIN, and this is the join -- one
-      # fixture through both, plus every real town file. It found a genuine disagreement on
-      # its first run: the Python iterated a dict's KEYS where the JS checked isArray.
-      # Added 2026-09-06.
-      - name: Prove both checkers read the exclusion conventions the same way
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-known-off-parity
-        env:
-          # This job checks out buses-data, so the REAL half must run here rather than
-          # skip: BUSES_DIR set is a promise the harness now fails on if it is wrong.
-          BUSES_DIR: ${{ github.workspace }}/buses-data
+      # THE EXCLUSION-PARITY JOIN RUNS IN buses-data NOW, and only the REAL half
+      # moved (OA-398). This step set `BUSES_DIR` to the buses-data checkout so the
+      # harness ran its synthetic fixture AND every real town file; the fixture
+      # estate here carries no `S1-services` runs at all, so the real half exits 1
+      # on `the estate really has towns to check`, which is the harness correctly
+      # refusing to answer a question it cannot ask. The synthetic half still runs,
+      # in the `unit` job above, where it has always run and needs nothing.
 
-      # OA-164, REPORTED not gated: eight files exist today, the pull guard already
-      # stops them doing harm, and a check red on the day it lands gets muted. It is
-      # here so "harmless" stays something somebody looked at.
-      - name: Sweep for run folders holding a later stage's output
-        working-directory: skills/make-bus-leaflet
-        run: node assets/stray_outputs.js --buses "$GITHUB_WORKSPACE/buses-data"
+      # THE STRAY-OUTPUT SWEEP RUNS ONLY IN buses-data NOW (OA-398). It walks the
+      # map tree for run folders holding a later stage's output -- a property of
+      # that estate's gitignored S4/S5/S6 folders, which this repository's fixture
+      # does not have and never will, so a step here would have been green for
+      # ever. A check that cannot fail where it runs is the thing this estate keeps
+      # paying for. buses-data's own `gates.yml` gained the step in this change.
 
       # ONE WALK, BOTH OUTPUTS (2026-09-03). This was two steps -- `--json >
       # gate-results.json` for the artifact, then `--md >> $GITHUB_STEP_SUMMARY`
@@ -1310,7 +1294,7 @@ jobs:
       - name: Run gates (JSON + step summary)
         working-directory: skills/make-bus-leaflet
         run: |
-          node assets/status.js --buses "$GITHUB_WORKSPACE/buses-data" --portal "$GITHUB_WORKSPACE/community-bus-maps" --md --json-out gate-results.json >> "$GITHUB_STEP_SUMMARY"
+          node assets/status.js --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate" --portal "$GITHUB_WORKSPACE/community-bus-maps" --md --json-out gate-results.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload gate results
         if: always()

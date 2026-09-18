@@ -1,0 +1,20 @@
+[
+  {
+    "id": "poi:community:The Curzon Centre",
+    "text": "The Curzon Centre",
+    "at": [
+      72.83247079318645,
+      63.18742652079128
+    ],
+    "reason": "no candidate clear"
+  },
+  {
+    "id": "poi:shop:Sainsbury's",
+    "text": "Sainsbury's",
+    "at": [
+      55.914316713061886,
+      81.35418049158825
+    ],
+    "reason": "no candidate clear"
+  }
+]

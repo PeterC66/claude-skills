@@ -1,0 +1,670 @@
+{
+  "town": "High Wycombe High Street",
+  "created": "2026-08-23T11:03",
+  "stages": {
+    "S1": {
+      "name": "services",
+      "latest": "2026-08-23_1203",
+      "runs": [
+        {
+          "id": "2026-08-23_1203",
+          "dir": "S1-services/2026-08-23_1203",
+          "at": "2026-08-23T11:05",
+          "outputs": [
+            "place.json",
+            "place-candidates.json"
+          ],
+          "note": "Anchor = High Street (east, un-pedestrianised), OSM way 26518398, 51.6285952/-0.7488204 -- candidate 2 of 5, 9 m from Stop R and 31 m from Stop S. Region corrected to Buckinghamshire by hand (resolve_place defaults to Cambridgeshire). Boarding frame is 200 m, not the 252 m maxOK: at 224 m a lone Station Interchange Stop X1 enters and its CommonName is unique only because X2 and X3 fall just outside it."
+        }
+      ]
+    },
+    "S2": {
+      "name": "geometry",
+      "latest": "2026-08-23_1205",
+      "runs": [
+        {
+          "id": "2026-08-23_1205",
+          "dir": "S2-geometry/2026-08-23_1205",
+          "at": "2026-08-23T11:08",
+          "outputs": [
+            "place.json",
+            "routes_full_atco.json",
+            "atco2ll.json",
+            "atco2name.json",
+            "gtfs-services.json",
+            "routes_intown_atco.json",
+            "walkshed_cfg.json",
+            "roads_geo.json",
+            "locator_geo.json"
+          ],
+          "note": "39 routes within a 0.8 km service radius; 450 m walkshed. naptan_stands OK at 200 m: 6 served stops in frame, 5 lettered (High Street R/S, Town Hall T, Castle Street V/W -- the town-wide series across three streets) and 1 named-only (Crendon Street). REFUSE from 224 m, where the three identically-named Station Interchange flags arrive. locator_geo and roads_geo pulled here rather than in S4 to keep the Overpass calls in one stage. No osm.json / river_geo.json / destinations.draft.json: boarding plan only."
+        }
+      ]
+    },
+    "S3": {
+      "name": "config",
+      "latest": "2026-08-28_1941",
+      "runs": [
+        {
+          "id": "2026-08-23_1211",
+          "dir": "S3-config/2026-08-23_1211",
+          "at": "2026-08-23T11:11",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Boarding plan only. frameRadiusM 200 (OK; 224 m REFUSES on the three Station Interchange flags). excludeRoutes = the six services at frame stops with no calendar row (school/works 1S, 36S, 37M, 643, 654 and the WW1 match-day shuttle), so the config carries the decision boarding_index.py would otherwise take silently. Palette and titleColor inherited from the High Wycombe town map. No design.keyCols: gen_boarding.js does not read it (open action)."
+        },
+        {
+          "id": "2026-08-24_1600",
+          "dir": "S3-config/2026-08-24_1600",
+          "at": "2026-08-24T15:00",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Opt-in rebase: sheetQr and keyCols are engine defaults now (14mm code, two Key columns). Ely Co-op is excluded from the keyCols unset - its 3 is a real per-map judgement."
+        },
+        {
+          "id": "2026-08-28_1941",
+          "dir": "S3-config/2026-08-28_1941",
+          "at": "2026-08-28T18:41",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "checkedAt from this map's own latest S1/P1 date. The footer's cross-check date was a hardcoded June 2026 in three generators, identical on all 20 maps and false on most (OA-153)."
+        }
+      ]
+    },
+    "S4": {
+      "name": "generate",
+      "latest": "v1.21_2026-09-13_2027",
+      "runs": [
+        {
+          "id": "v1.0_2026-08-23_1211",
+          "dir": "S4-generate/v1.0_2026-08-23_1211",
+          "at": "2026-08-23T11:32",
+          "outputs": [
+            "boarding.svg",
+            "locator_geo.json",
+            "stands.json",
+            "boarding_index.json",
+            "boarding-verify.json",
+            "place.json",
+            "routes.json"
+          ],
+          "version": "1.0",
+          "note": "v1.0 boarding plan. 54 destinations in two columns, six boarding points drawn of six in frame (none hidden), boarding_verify PASS (proved red on --self-test), quality_metrics 0 hard defects. The lettered-town-centre form: five stands of High Wycombe's town-wide letter series across three streets (High Street R/S, Town Hall T, Castle Street V/W) plus the named-only Crendon Street. Stop R takes 37 destinations, Stop V 16, Stop W 1; S, T and Crendon Street take none and are drawn and captioned rather than hidden. Four notes, the last saying that the four town-only services (27, 32, 32A, 33 -- 23% of the journeys at these stands) are not indexed. No internal or external sheet."
+        },
+        {
+          "id": "v1.1_2026-08-23_1904",
+          "dir": "S4-generate/v1.1_2026-08-23_1904",
+          "at": "2026-08-23T18:04",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.1",
+          "note": "Boarding sheets rejoin the rollout: rollout_places can build them at last"
+        },
+        {
+          "id": "v1.2_2026-08-24_0539",
+          "dir": "S4-generate/v1.2_2026-08-24_0539",
+          "at": "2026-08-24T04:39",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.2",
+          "note": "boarding index + carries a count; keyCols dropped where inert"
+        },
+        {
+          "id": "v1.3_2026-08-24_1611",
+          "dir": "S4-generate/v1.3_2026-08-24_1611",
+          "at": "2026-08-24T15:11",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.3",
+          "note": "Opt-in rebase: sheetQr/keyCols are engine defaults now, and every place re-renders onto the current engine so the fixtures gate the real product."
+        },
+        {
+          "id": "v1.4_2026-08-24_1615",
+          "dir": "S4-generate/v1.4_2026-08-24_1615",
+          "at": "2026-08-24T15:15",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.4",
+          "note": "gen_boarding: an empty stand sub-line is no sub-line. With anchorTick off by default a stand with no NaPTAN bearing produced an empty <text> element - invisible on paper, a label to every metric here."
+        },
+        {
+          "id": "v1.5_2026-08-25_1406",
+          "dir": "S4-generate/v1.5_2026-08-25_1406",
+          "at": "2026-08-25T13:06",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.5",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.6_2026-08-28_1946",
+          "dir": "S4-generate/v1.6_2026-08-28_1946",
+          "at": "2026-08-28T18:47",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.6",
+          "note": "checkedAt: the footer's cross-check date now comes from each map's own S1/P1 date instead of a hardcoded June 2026 (OA-153)"
+        },
+        {
+          "id": "v1.7_2026-08-29_1712",
+          "dir": "S4-generate/v1.7_2026-08-29_1712",
+          "at": "2026-08-29T16:12",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.7",
+          "note": "OA-019 round three (external): OA-149 hubEdge floor, OA-160 dash fit, OA-061 panel metrics, OA-056 howToUse panel"
+        },
+        {
+          "id": "v1.8_2026-08-30_0611",
+          "dir": "S4-generate/v1.8_2026-08-30_0611",
+          "at": "2026-08-30T05:11",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.8",
+          "note": "OA-168 round: stamped with the PLACE engine template"
+        },
+        {
+          "id": "v1.9_2026-08-30_1303",
+          "dir": "S4-generate/v1.9_2026-08-30_1303",
+          "at": "2026-08-30T12:03",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.9",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.10_2026-08-30_1609",
+          "dir": "S4-generate/v1.10_2026-08-30_1609",
+          "at": "2026-08-30T15:09",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.10",
+          "note": "The place-index round"
+        },
+        {
+          "id": "v1.11_2026-08-30_2021",
+          "dir": "S4-generate/v1.11_2026-08-30_2021",
+          "at": "2026-08-30T19:21",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.11",
+          "note": "Place-index heading rhythm (claude-skills 6e5c356): the index heading now sits on the panel's own gapDown rather than a hand-picked 1.8mm."
+        },
+        {
+          "id": "v1.12_2026-08-30_2255",
+          "dir": "S4-generate/v1.12_2026-08-30_2255",
+          "at": "2026-08-30T21:55",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.12",
+          "note": "OA-027/028/030: the boarding stand rules — containment, service preference, compass words"
+        },
+        {
+          "id": "v1.13_2026-08-31_0507",
+          "dir": "S4-generate/v1.13_2026-08-31_0507",
+          "at": "2026-08-31T04:07",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.13",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.14_2026-08-31_2117",
+          "dir": "S4-generate/v1.14_2026-08-31_2117",
+          "at": "2026-08-31T20:17",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "version": "1.14",
+          "note": "OA-034 the stand key names its street; OA-189 the index records its asof and its feed"
+        },
+        {
+          "id": "v1.15_2026-09-01_0946",
+          "dir": "S4-generate/v1.15_2026-09-01_0946",
+          "at": "2026-09-01T08:46",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-01T08:46",
+          "elapsedMin": 0,
+          "version": "1.15",
+          "note": "OA-187 + OA-213: the numbered index block fills, and its markers are drawn at 2.4mm rather than 2.3, the print-legibility floor"
+        },
+        {
+          "id": "v1.16_2026-09-04_1144",
+          "dir": "S4-generate/v1.16_2026-09-04_1144",
+          "at": "2026-09-04T10:44",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-04T10:44",
+          "elapsedMin": 0,
+          "version": "1.16",
+          "note": "OA-229/234/238: the external wrap stops emitting an empty first line; a nameless POI defaults to not-drawn"
+        },
+        {
+          "id": "v1.17_2026-09-05_1040",
+          "dir": "S4-generate/v1.17_2026-09-05_1040",
+          "at": "2026-09-05T09:40",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-05T09:40",
+          "elapsedMin": 0,
+          "version": "1.17",
+          "note": "rollout: adopt place engine 62267663c7 (stamp-only; no config change)"
+        },
+        {
+          "id": "v1.18_2026-09-07_0301",
+          "dir": "S4-generate/v1.18_2026-09-07_0301",
+          "at": "2026-09-07T02:01",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-07T02:01",
+          "elapsedMin": 0,
+          "version": "1.18",
+          "note": "OA-059: engine restamp only; no place draws a diagram and every sheet gates PASS byte-for-byte"
+        },
+        {
+          "id": "v1.19_2026-09-07_0322",
+          "dir": "S4-generate/v1.19_2026-09-07_0322",
+          "at": "2026-09-07T02:22",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-07T02:22",
+          "elapsedMin": 0,
+          "version": "1.19",
+          "note": "OA-059 follow-up: engine restamp only; no place draws a diagram"
+        },
+        {
+          "id": "v1.20_2026-09-13_1913",
+          "dir": "S4-generate/v1.20_2026-09-13_1913",
+          "at": "2026-09-13T18:13",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-13T18:13",
+          "elapsedMin": 0,
+          "version": "1.20",
+          "note": "OA-338: the de-duplicator stopped reading a category label as an identity"
+        },
+        {
+          "id": "v1.21_2026-09-13_2027",
+          "dir": "S4-generate/v1.21_2026-09-13_2027",
+          "at": "2026-09-13T19:27",
+          "outputs": [
+            "boarding.svg",
+            "place.json",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-13T19:27",
+          "elapsedMin": 0,
+          "version": "1.21",
+          "note": "OA-338 re-rollout"
+        }
+      ]
+    },
+    "S5": {
+      "name": "render",
+      "latest": "v1.21_2026-09-13_2027",
+      "runs": [
+        {
+          "id": "v1.0_2026-08-23_1229",
+          "dir": "S5-render/v1.0_2026-08-23_1229",
+          "at": "2026-08-23T11:32",
+          "outputs": [
+            "boarding.jpg",
+            "place.json"
+          ],
+          "version": "1.0",
+          "note": "300 dpi A4 landscape render of the v1.0 boarding sheet."
+        },
+        {
+          "id": "v1.1_2026-08-23_1904",
+          "dir": "S5-render/v1.1_2026-08-23_1904",
+          "at": "2026-08-23T18:04",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.1",
+          "note": "Boarding sheets rejoin the rollout: rollout_places can build them at last"
+        },
+        {
+          "id": "v1.2_2026-08-24_0539",
+          "dir": "S5-render/v1.2_2026-08-24_0539",
+          "at": "2026-08-24T04:39",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.2",
+          "note": "boarding index + carries a count; keyCols dropped where inert"
+        },
+        {
+          "id": "v1.3_2026-08-24_1611",
+          "dir": "S5-render/v1.3_2026-08-24_1611",
+          "at": "2026-08-24T15:11",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.3",
+          "note": "Opt-in rebase: sheetQr/keyCols are engine defaults now, and every place re-renders onto the current engine so the fixtures gate the real product."
+        },
+        {
+          "id": "v1.4_2026-08-24_1615",
+          "dir": "S5-render/v1.4_2026-08-24_1615",
+          "at": "2026-08-24T15:15",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.4",
+          "note": "gen_boarding: an empty stand sub-line is no sub-line. With anchorTick off by default a stand with no NaPTAN bearing produced an empty <text> element - invisible on paper, a label to every metric here."
+        },
+        {
+          "id": "v1.5_2026-08-25_1409",
+          "dir": "S5-render/v1.5_2026-08-25_1409",
+          "at": "2026-08-25T13:09",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg"
+          ],
+          "version": "1.5",
+          "note": "OSM attribution on the boarding footer (ODbL 4.3)"
+        },
+        {
+          "id": "v1.6_2026-08-28_1947",
+          "dir": "S5-render/v1.6_2026-08-28_1947",
+          "at": "2026-08-28T18:47",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.6",
+          "note": "checkedAt: the footer's cross-check date now comes from each map's own S1/P1 date instead of a hardcoded June 2026 (OA-153)"
+        },
+        {
+          "id": "v1.7_2026-08-29_1712",
+          "dir": "S5-render/v1.7_2026-08-29_1712",
+          "at": "2026-08-29T16:12",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.7",
+          "note": "OA-019 round three (external): OA-149 hubEdge floor, OA-160 dash fit, OA-061 panel metrics, OA-056 howToUse panel"
+        },
+        {
+          "id": "v1.8_2026-08-30_0611",
+          "dir": "S5-render/v1.8_2026-08-30_0611",
+          "at": "2026-08-30T05:11",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.8",
+          "note": "OA-168 round: stamped with the PLACE engine template"
+        },
+        {
+          "id": "v1.9_2026-08-30_1303",
+          "dir": "S5-render/v1.9_2026-08-30_1303",
+          "at": "2026-08-30T12:03",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.9",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.10_2026-08-30_1609",
+          "dir": "S5-render/v1.10_2026-08-30_1609",
+          "at": "2026-08-30T15:09",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.10",
+          "note": "The place-index round"
+        },
+        {
+          "id": "v1.11_2026-08-30_2021",
+          "dir": "S5-render/v1.11_2026-08-30_2021",
+          "at": "2026-08-30T19:21",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.11",
+          "note": "Place-index heading rhythm (claude-skills 6e5c356): the index heading now sits on the panel's own gapDown rather than a hand-picked 1.8mm."
+        },
+        {
+          "id": "v1.12_2026-08-30_2255",
+          "dir": "S5-render/v1.12_2026-08-30_2255",
+          "at": "2026-08-30T21:55",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.12",
+          "note": "OA-027/028/030: the boarding stand rules — containment, service preference, compass words"
+        },
+        {
+          "id": "v1.13_2026-08-31_0507",
+          "dir": "S5-render/v1.13_2026-08-31_0507",
+          "at": "2026-08-31T04:07",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.13",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.14_2026-08-31_2117",
+          "dir": "S5-render/v1.14_2026-08-31_2117",
+          "at": "2026-08-31T20:17",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "version": "1.14",
+          "note": "OA-034 the stand key names its street; OA-189 the index records its asof and its feed"
+        },
+        {
+          "id": "v1.15_2026-09-01_0946",
+          "dir": "S5-render/v1.15_2026-09-01_0946",
+          "at": "2026-09-01T08:46",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-01T08:46",
+          "elapsedMin": 0,
+          "version": "1.15",
+          "note": "OA-187 + OA-213: the numbered index block fills, and its markers are drawn at 2.4mm rather than 2.3, the print-legibility floor"
+        },
+        {
+          "id": "v1.16_2026-09-04_1144",
+          "dir": "S5-render/v1.16_2026-09-04_1144",
+          "at": "2026-09-04T10:44",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-04T10:44",
+          "elapsedMin": 0,
+          "version": "1.16",
+          "note": "OA-229/234/238: the external wrap stops emitting an empty first line; a nameless POI defaults to not-drawn"
+        },
+        {
+          "id": "v1.17_2026-09-05_1040",
+          "dir": "S5-render/v1.17_2026-09-05_1040",
+          "at": "2026-09-05T09:40",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-05T09:40",
+          "elapsedMin": 0,
+          "version": "1.17",
+          "note": "rollout: adopt place engine 62267663c7 (stamp-only; no config change)"
+        },
+        {
+          "id": "v1.18_2026-09-07_0301",
+          "dir": "S5-render/v1.18_2026-09-07_0301",
+          "at": "2026-09-07T02:01",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-07T02:01",
+          "elapsedMin": 0,
+          "version": "1.18",
+          "note": "OA-059: engine restamp only; no place draws a diagram and every sheet gates PASS byte-for-byte"
+        },
+        {
+          "id": "v1.19_2026-09-07_0322",
+          "dir": "S5-render/v1.19_2026-09-07_0322",
+          "at": "2026-09-07T02:22",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-07T02:22",
+          "elapsedMin": 0,
+          "version": "1.19",
+          "note": "OA-059 follow-up: engine restamp only; no place draws a diagram"
+        },
+        {
+          "id": "v1.20_2026-09-13_1913",
+          "dir": "S5-render/v1.20_2026-09-13_1913",
+          "at": "2026-09-13T18:13",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-13T18:13",
+          "elapsedMin": 0,
+          "version": "1.20",
+          "note": "OA-338: the de-duplicator stopped reading a category label as an identity"
+        },
+        {
+          "id": "v1.21_2026-09-13_2027",
+          "dir": "S5-render/v1.21_2026-09-13_2027",
+          "at": "2026-09-13T19:27",
+          "outputs": [
+            "boarding.jpg",
+            "boarding.svg",
+            "place.json"
+          ],
+          "startedAt": "2026-09-13T19:27",
+          "elapsedMin": 0,
+          "version": "1.21",
+          "note": "OA-338 re-rollout"
+        }
+      ]
+    },
+    "S6": {
+      "name": "verify",
+      "latest": "2026-08-29_0538",
+      "runs": [
+        {
+          "id": "2026-08-29_0538",
+          "dir": "S6-verify/2026-08-29_0538",
+          "at": "2026-08-29T04:38",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "basedOn": {
+            "S1": "2026-08-23_1203",
+            "S2": "2026-08-23_1205",
+            "S3": "2026-08-28_1941"
+          },
+          "note": "PASS 0 hard / 105 soft. Boarding-only place (routes[]=0, no destinations[]), so as at High Wycombe Town Centre every drawn chain is empty and the terminus findings compare against nothing. Red team BORROWED from High Wycombe town S6-verify/2026-08-26_0700 (--foreign-build, OA-141); downgradedFromHard empty, so the PASS does not rest on the borrow. Direction check 0/30 (0%)."
+        }
+      ]
+    }
+  }
+}

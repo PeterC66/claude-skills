@@ -1,0 +1,16 @@
+{
+ "place": "High Street",
+ "town": "High Wycombe",
+ "region": "Buckinghamshire",
+ "name": "High Street",
+ "display": "High Street, Daws Hill, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 2BE, United Kingdom",
+ "lat": 51.6285952,
+ "lon": -0.7488204,
+ "osm_type": "way",
+ "osm_id": 26518398,
+ "class": "highway",
+ "type": "unclassified",
+ "walkshedM": 450.0,
+ "ambiguous": true,
+ "_anchorNote": "Picked candidate 2 of 5 -- the un-pedestrianised eastern section of High Street, which is the stretch the buses use: 9 m from Stop R and 31 m from Stop S. Candidate 1 is the pedestrianised High Street 96 m west (no bus stops on it), candidates 3 and 4 are a different High Street in Downley 2.5 km away. resolve_place.py defaulted region to 'Cambridgeshire'; corrected by hand to Buckinghamshire. Frame radius for the boarding plan is routes.json boardingPlan.frameRadiusM (200 m), NOT this walkshed. 200 m and not the 252 m maxOK of frame-coverage_2026-08-23.md: at 224 m the frame admits Station Interchange Stop X1 alone, whose CommonName is unique in frame only because X2 (230 m) and X3 (241 m) fall outside it -- the sheet would print 'Station Interchange' as a boarding point and a reader would arrive to find three flags. At 200 m the frame is the six stops of the town-wide letter series plus Crendon Street, and is stable for any radius from 139 m to 223 m."
+}

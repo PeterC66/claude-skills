@@ -1,0 +1,125 @@
+{
+  "place": "High Street, High Wycombe",
+  "placeShort": "High Street",
+  "placeTitle": "Buses serving High Street, High Wycombe",
+  "town": "High Wycombe",
+  "validFrom": "August 2026",
+  "version": "v1.0",
+  "anchor": "040000003055",
+  "anchorLabel": "High Street",
+  "titleColor": "#4477AA",
+  "palette": {
+    "1": "#AA3377",
+    "27": "#CCBB44",
+    "31": "#009988",
+    "32": "#CC3311",
+    "33": "#CCBB44",
+    "34": "#4477AA",
+    "36": "#EE6677",
+    "37": "#332288",
+    "41": "#AA3377",
+    "102": "#332288",
+    "103": "#332288",
+    "104": "#332288",
+    "105": "#332288",
+    "1A": "#AA3377",
+    "1B": "#AA3377",
+    "32A": "#CC3311",
+    "M40": "#332288",
+    "X74": "#332288"
+  },
+  "textOn": {
+    "1": "#fff",
+    "27": "#111",
+    "31": "#fff",
+    "32": "#fff",
+    "33": "#111",
+    "34": "#fff",
+    "36": "#fff",
+    "37": "#fff",
+    "41": "#fff",
+    "102": "#fff",
+    "103": "#fff",
+    "104": "#fff",
+    "105": "#fff",
+    "1A": "#fff",
+    "1B": "#fff",
+    "32A": "#fff",
+    "M40": "#fff",
+    "X74": "#fff"
+  },
+  "operators": [
+    {
+      "name": "Carousel Buses",
+      "routes": [
+        "1",
+        "1A",
+        "1B",
+        "27",
+        "31",
+        "32",
+        "32A",
+        "33",
+        "34",
+        "36",
+        "37",
+        "41",
+        "102",
+        "103",
+        "104",
+        "105"
+      ]
+    },
+    {
+      "name": "First Berkshire & The Thames Valley",
+      "routes": [
+        "M40",
+        "X74"
+      ]
+    }
+  ],
+  "boardingPlan": {
+    "title": "Where to catch your bus on High Street, High Wycombe",
+    "subtitle": "High Street, the Town Hall and Castle Street",
+    "indexHeading": "Where to board, by destination",
+    "frameRadiusM": 200,
+    "hideStandsWithNoDestinations": false,
+    "limitedBelowPerWeek": 6,
+    "excludeRoutes": [
+      "1S",
+      "36S",
+      "37M",
+      "643",
+      "654",
+      "WW1"
+    ],
+    "note": [
+      "Stop letters are those printed on the stop itself (NaPTAN); services from the Bus Open Data Service.",
+      "Every bus here also calls at the bus station, 600 m north-west; on this sheet you board on the street, in the direction you are going.",
+      "Not indexed: school and works journeys (1S, 36S, 37M, 643, 654) and the WW1 shuttle to Adams Park.",
+      "Town buses that stay inside High Wycombe (27, 32, 32A and 33) are not listed: this sheet indexes places outside the town."
+    ],
+    "indexCols": 2,
+    "locatorSignalNearM": 45,
+    "locatorLandmarks": 16,
+    "anchorTick": false,
+    "locatorNearM": 0,
+    "standKeyNames": true,
+    "emptyStandLabel": "no bus on this sheet is boarded here",
+    "locatorLandmarkNames": [
+      "Old Town Hall",
+      "Barclays",
+      "Santander",
+      "Barnes Food and Wine",
+      "Domino's",
+      "Al-Medina Foods Market",
+      "Wycombe Fresh Fish"
+    ],
+    "indexMaxBadges": 5
+  },
+  "design": {
+    "sheetUrl": "busmaps.uk/m/high-wycombe-high-street",
+    "sheetUrlLabel": "Latest version:"
+  },
+  "checkedAt": "August 2026"
+}

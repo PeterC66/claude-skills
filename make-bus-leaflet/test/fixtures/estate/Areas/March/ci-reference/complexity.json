@@ -1,0 +1,105 @@
+{
+  "scoredAt": "2026-07-28 09:32",
+  "dir": "C:\\u3a St Ives\\Using AI\\Buses\\March\\S2-geometry\\2026-07-12_1919",
+  "geometrySource": "routes_paths.json (road-matched)",
+  "geometryApproximate": false,
+  "metrics": {
+    "R": 7,
+    "S": 70,
+    "K5": 0.27,
+    "D5": 1.35,
+    "maxRoutesPerCell": 7,
+    "congestedClusters": 3,
+    "largestClusterCells": 15,
+    "routeKm": 47.6,
+    "extentKm": [
+      3.13,
+      7.03
+    ],
+    "inkDensity": 2.16,
+    "medianBuriedFraction": 0.645,
+    "routesOverHalfBuried": 5
+  },
+  "bands": {
+    "amber": {
+      "R": 12,
+      "S": 120,
+      "K5": 0.5,
+      "D5": 1.6
+    },
+    "red": {
+      "R": 18,
+      "S": 200,
+      "K5": 0.8,
+      "D5": 3.5
+    }
+  },
+  "applied": {
+    "internalCorridors": null,
+    "corridorPalette": null,
+    "coreBox": null,
+    "stopThinning": null
+  },
+  "band": "GREEN",
+  "failedThresholds": [],
+  "colours": {
+    "routes": 7,
+    "distinct": 7,
+    "ambiguity": 1
+  },
+  "congestionShape": "linear - one busy street",
+  "ladder": [
+    {
+      "rung": 1,
+      "action": "bundle 1 co-running route family into single lines (CANDIDATES - confirm each really co-runs)",
+      "detail": "46/32/X32",
+      "data": {
+        "families": [
+          [
+            "46",
+            "32",
+            "X32"
+          ]
+        ],
+        "overlapMin": 0.6,
+        "internalCorridors": {
+          "46": [
+            "32",
+            "X32"
+          ]
+        }
+      },
+      "after": {
+        "R": 5,
+        "S": 70,
+        "K5": 0.17,
+        "D5": 1.24
+      },
+      "band": "GREEN",
+      "stillFailing": []
+    },
+    {
+      "rung": 2,
+      "action": "suppress the core: draw a \"town centre\" box of radius 600 m",
+      "detail": "routes terminate at the box edge instead of crossing the knot",
+      "data": null,
+      "after": {
+        "R": 5,
+        "S": 62,
+        "K5": 0.11,
+        "D5": 0.7
+      },
+      "band": "GREEN",
+      "stillFailing": []
+    }
+  ],
+  "perRouteBuried": {
+    "32": 0.8365384615384616,
+    "46": 0.9197860962566845,
+    "56": 0.3471698113207547,
+    "302": 0.5057471264367817,
+    "X32": 0.8365384615384616,
+    "33A": 0.24652087475149106,
+    "ZIP2": 0.644808743169399
+  }
+}

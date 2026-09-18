@@ -1,0 +1,163 @@
+{
+ "place": "Waitrose",
+ "center": [
+  51.6122569,
+  -0.6462755
+ ],
+ "clusterKm": 1.2,
+ "destinations": [
+  {
+   "name": "High School",
+   "routes": [
+    "31"
+   ],
+   "bearing": 167,
+   "distKm": 1,
+   "side": "up",
+   "_members": [
+    "31:High School"
+   ]
+  },
+  {
+   "name": "Tesco Store",
+   "routes": [
+    "380"
+   ],
+   "bearing": 255,
+   "distKm": 3.3,
+   "side": "up",
+   "_members": [
+    "380:Tesco Store"
+   ]
+  },
+  {
+   "name": "Green East Road",
+   "routes": [
+    "380"
+   ],
+   "bearing": 87,
+   "distKm": 3.6,
+   "side": "up",
+   "_members": [
+    "380:Green East Road"
+   ]
+  },
+  {
+   "name": "High Wycombe BusStn",
+   "routes": [
+    "31",
+    "102",
+    "103",
+    "104",
+    "105"
+   ],
+   "bearing": 285,
+   "distKm": 7.9,
+   "side": "up",
+   "_members": [
+    "31:High Wycombe BusStn",
+    "102:High Wycombe BusStn",
+    "103:High Wycombe BusStn",
+    "104:High Wycombe BusStn",
+    "105:High Wycombe BusStn"
+   ]
+  },
+  {
+   "name": "Marlow Hill Schools",
+   "routes": [
+    "604"
+   ],
+   "bearing": 276,
+   "distKm": 7.9,
+   "side": "up",
+   "_members": [
+    "604:Marlow Hill Schools"
+   ]
+  },
+  {
+   "name": "Fulmer Drive",
+   "routes": [
+    "604"
+   ],
+   "bearing": 126,
+   "distKm": 8.2,
+   "side": "up",
+   "_members": [
+    "604:Fulmer Drive"
+   ]
+  },
+  {
+   "name": "Springbridge Nurseries",
+   "routes": [
+    "624"
+   ],
+   "bearing": 117,
+   "distKm": 11.3,
+   "side": "up",
+   "_members": [
+    "624:Springbridge Nurseries"
+   ]
+  },
+  {
+   "name": "Village Hall",
+   "routes": [
+    "105"
+   ],
+   "bearing": 357,
+   "distKm": 12.6,
+   "side": "up",
+   "_members": [
+    "105:Village Hall"
+   ]
+  },
+  {
+   "name": "York Road (UB8)",
+   "routes": [
+    "104"
+   ],
+   "bearing": 122,
+   "distKm": 13.8,
+   "side": "up",
+   "_members": [
+    "104:York Road (UB8)"
+   ]
+  },
+  {
+   "name": "Axis Park",
+   "routes": [
+    "103"
+   ],
+   "bearing": 149,
+   "distKm": 15.2,
+   "side": "up",
+   "_members": [
+    "103:Axis Park"
+   ]
+  },
+  {
+   "name": "Deanfield Avenue",
+   "routes": [
+    "624"
+   ],
+   "bearing": 245,
+   "distKm": 20.2,
+   "side": "up",
+   "_members": [
+    "624:Deanfield Avenue"
+   ]
+  },
+  {
+   "name": "Heathrow Central Bus Station",
+   "routes": [
+    "102"
+   ],
+   "bearing": 139,
+   "distKm": 20.6,
+   "side": "up",
+   "_members": [
+    "102:Heathrow Central Bus Station"
+   ]
+  }
+ ],
+ "localLoops": []
+}

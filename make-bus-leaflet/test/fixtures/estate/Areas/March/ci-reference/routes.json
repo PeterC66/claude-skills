@@ -1,0 +1,324 @@
+{
+  "engine": "dbc9c983fa",
+  "town": "March",
+  "validFrom": "June 2026",
+  "version": "2.63",
+  "anchor": "0500FMARC032",
+  "anchorLabel": "March Town Centre",
+  "titleColor": "#EE6677",
+  "internalZoom": {
+    "corePct": 0.55,
+    "comp": 0.22
+  },
+  "palette": {
+    "32": "#EE7733",
+    "46": "#CCBB44",
+    "56": "#EE6677",
+    "302": "#AA3377",
+    "X32": "#004488",
+    "33A": "#228833",
+    "ZIP2": "#009988"
+  },
+  "textOn": {
+    "32": "#fff",
+    "46": "#111",
+    "56": "#fff",
+    "302": "#fff",
+    "X32": "#fff",
+    "33A": "#fff",
+    "ZIP2": "#fff"
+  },
+  "operators": [
+    {
+      "name": "Dews Coaches",
+      "routes": [
+        "32",
+        "X32",
+        "302",
+        "ZIP2"
+      ]
+    },
+    {
+      "name": "Stagecoach East",
+      "routes": [
+        "46"
+      ]
+    },
+    {
+      "name": "Stagecoach East Midlands",
+      "routes": [
+        "56"
+      ]
+    },
+    {
+      "name": "Fenland Assoc. for Community Transport",
+      "routes": [
+        "33A"
+      ]
+    }
+  ],
+  "external": [
+    {
+      "route": "56",
+      "label": "Manea",
+      "days": "Mon–Sat",
+      "bearing": 2,
+      "side": "right",
+      "stops": [
+        "Wimblington",
+        "Doddington",
+        "Benwick",
+        "Manea"
+      ],
+      "minutesToDestination": 15
+    },
+    {
+      "route": "46",
+      "label": "Wisbech",
+      "days": "Mon–Sat",
+      "bearing": 44,
+      "side": "up",
+      "stops": [
+        "Westry",
+        "Ring's End",
+        "Guyhirn",
+        "Murrow",
+        "Parson Drove",
+        "Wisbech"
+      ],
+      "minutesToDestination": 34
+    },
+    {
+      "route": "56",
+      "label": "Wisbech",
+      "days": "Mon–Sat",
+      "bearing": 74,
+      "side": "down",
+      "stops": [
+        "Chainbridge",
+        "Coldham",
+        "Friday Bridge",
+        "Elm",
+        "Wisbech"
+      ],
+      "minutesToDestination": 25
+    },
+    {
+      "route": "X32",
+      "label": "Whittlesey",
+      "days": "Mon–Sat",
+      "bearing": 110,
+      "side": "up",
+      "stops": [
+        "Westry",
+        "Coates",
+        "Eastrea",
+        "Whittlesey"
+      ],
+      "minutesToDestination": 17
+    },
+    {
+      "route": "ZIP2",
+      "label": "Ely",
+      "minutesToDestination": 64,
+      "days": "Mon–Fri",
+      "bearing": 150,
+      "side": "up",
+      "stops": [
+        "Wimblington",
+        "Doddington",
+        "Chatteris",
+        "Mepal",
+        "Sutton",
+        "Witchford",
+        "Ely"
+      ]
+    },
+    {
+      "route": "302",
+      "label": "St Ives",
+      "days": "Mon–Sat",
+      "bearing": 186,
+      "side": "left",
+      "stops": [
+        "Wimblington",
+        "Doddington",
+        "Chatteris",
+        "Warboys",
+        "Pidley",
+        "St Ives"
+      ],
+      "minutesToDestination": 55
+    },
+    {
+      "route": "32",
+      "label": "Ramsey",
+      "minutesToDestination": 52,
+      "days": "Mon–Sat",
+      "bearing": 222,
+      "side": "left",
+      "stops": [
+        "Coates",
+        "Eastrea",
+        "Whittlesey",
+        "Pondersbridge",
+        "Ramsey"
+      ]
+    }
+  ],
+  "riverLabel": "R. Nene (old course)",
+  "routeOrder": [
+    "33A",
+    "302",
+    "ZIP2",
+    "46",
+    "56",
+    "32",
+    "X32"
+  ],
+  "panelOrder": [
+    "33A",
+    "32",
+    "X32",
+    "46",
+    "56",
+    "302",
+    "ZIP2"
+  ],
+  "orientationRoute": "33A",
+  "internalDesc": {
+    "32": [
+      "March – Ramsey",
+      "Mon–Sat, via Whittlesey & Pondersbridge, gaps of over 2 hours"
+    ],
+    "46": [
+      "March – Wisbech",
+      "Mon–Sat, via Guyhirn & Murrow"
+    ],
+    "56": [
+      "March – Manea / Wisbech",
+      "Mon–Sat, via Wimblington / Friday Bridge"
+    ],
+    "302": [
+      "March – St Ives",
+      "Mon–Sat, via Chatteris & Warboys, gaps of over 2 hours"
+    ],
+    "33A": [
+      "March Town Service",
+      "Mon–Sat circular, community town service"
+    ],
+    "X32": [
+      "March – Whittlesey",
+      "Mon–Sat, fast via Coates & Eastrea, morning & evening only"
+    ],
+    "ZIP2": [
+      "March – Ely (Ely Zipper 2)",
+      "Mon–Fri, via Chatteris & Mepal"
+    ]
+  },
+  "poi": {
+    "industrialKeep": "none",
+    "excludeName": [
+      "Crematorium",
+      "Auction Field",
+      "Gardens of Remembrance"
+    ],
+    "tidy": [
+      [
+        " Primary Academy$",
+        " Primary"
+      ],
+      [
+        " Primary School.*$",
+        " Primary"
+      ],
+      [
+        " Interchurch Academy$",
+        ""
+      ],
+      [
+        " Academy$",
+        ""
+      ],
+      [
+        " School$",
+        ""
+      ]
+    ],
+    "canon": [
+      [
+        "George Campbell",
+        "George Campbell Leisure"
+      ],
+      [
+        "Co-?op",
+        "Co-op"
+      ]
+    ]
+  },
+  "internalRoads": {
+    "focus": {
+      "coreKm": 0.9,
+      "comp": 0.3
+    },
+    "roadLabelMax": 16,
+    "badgeEvery": 70,
+    "termini": {
+      "32": {
+        "end": "Ramsey"
+      },
+      "46": {
+        "start": "Wisbech"
+      },
+      "56": {
+        "start": "Wisbech",
+        "end": "Manea"
+      },
+      "302": {
+        "end": "St Ives"
+      },
+      "X32": {
+        "end": "Whittlesey"
+      },
+      "ZIP2": {
+        "start": "Ely"
+      }
+    }
+  },
+  "design": {
+    "spokeSpread": true,
+    "sheetUrl": "busmaps.uk/m/march",
+    "sheetUrlLabel": "Latest version:",
+    "howToUse": {
+      "bullets": [
+        "Find where you want to go, around the edge of the diagram.",
+        "Follow its coloured line in to March at the centre.",
+        "The badge on that line is the bus service number."
+      ]
+    },
+    "frequencyTiers": {
+      "all-day": {
+        "mm": 1.7
+      },
+      "limited": {
+        "mm": 1.2
+      }
+    },
+    "featureLabelAuto": true,
+    "laneOrientation": true,
+    "sheetVersion": "build 2.63 · 13 Sep 2026"
+  },
+  "labels": {},
+  "internalSchematic": true,
+  "frequency": {
+    "32": "limited",
+    "46": "all-day",
+    "56": "all-day",
+    "302": "limited",
+    "ZIP2": "all-day",
+    "X32": "limited",
+    "33A": "limited"
+  },
+  "panelGroups": true,
+  "checkedAt": "June 2026"
+}

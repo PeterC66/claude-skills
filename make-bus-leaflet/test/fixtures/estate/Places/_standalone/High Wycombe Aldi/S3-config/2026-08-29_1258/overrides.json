@@ -1,0 +1,14 @@
+{
+  "internal": {
+    "pois": {
+      "shop:Aldi": {
+        "force": true,
+        "label": { "offset": { "dx": 3.2, "dy": -1.8 }, "anchor": "start" }
+      },
+      "industrial:Tannery Road Ind Est": {
+        "force": true,
+        "label": { "offset": { "dx": -3.2, "dy": 3.4 }, "anchor": "end" }
+      }
+    }
+  }
+}

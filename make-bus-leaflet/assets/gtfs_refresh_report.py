@@ -46,6 +46,61 @@ COMMUNITY_HINTS=["villager","fact","community","minibus","dial","demand","volunt
 # filter it is testing agrees with itself and proves nothing about the report.
 NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS")
 
+# The only two changes a machine may apply to a town without a person looking:
+# an operator NAME and a set of DAYS, both copied out of BODS into fields that
+# decide no colour and move no line.
+#
+# THIS AND `classify()` BELOW CAME FROM `auto_refresh_month.py`, WHICH WAS RETIRED
+# ON 2026-09-18 (buses-data OA-091, under R9 of the process review). That script
+# was the Tier-1 monthly auto-applier: it graded each town with this function and
+# then, for a SAFE one, rebuilt S1/S3/S4/S5 and staged a proposed update to the
+# customer. It was retired on a measurement rather than a preference -- across
+# three runs and 24 town-months its SAFE path fired ONCE, and that once was wrong,
+# because the day string it would have copied came from a `gtfs_query` fold that
+# turns a single `calendar_dates` addition into a weekly day (buses-data OA-410).
+# An unattended applier is only as safe as the weakest number it copies.
+#
+# THE GRADING IS NOT THE APPLIER AND IS WORTH KEEPING, which is why it lives here
+# now instead of dying with it. It answers *which changes need a person*, the
+# report is what a person or a tick actually reads when adjudicating a refresh,
+# and putting it here means one module owns the whole tag taxonomy rather than two
+# agreeing by hand. The report prints each town's grade in its heading.
+#
+# AN ALLOWLIST, NEVER THE COMPLEMENT OF A BLOCKING LIST. This read
+# `in ("ADD?", "WITHDRAWN?", "RE-EVAL")` until 2026-09-15, so every tag the report
+# has ever grown became SAFE on the day it was added, with nothing edited and
+# nothing anywhere saying so -- `NOT-IN-BODS?`, a stale declaration whose fix is a
+# person deleting a field, was being auto-applied as though it were a rename.
+MECHANICAL=("OPERATOR","DAYS")
+
+
+def classify(changes):
+    """Grade a town's changes: SAFE, ESCALATE or NOTHING, with the rows that decided it.
+
+    SAFE      = only OPERATOR/DAYS actionable changes -- mechanical, no human call.
+    ESCALATE  = any other actionable change, INCLUDING a tag this function has never
+                heard of, so a tag added to the report tomorrow escalates on the day
+                it arrives instead of being graded safe by silence.
+    NOTHING   = no actionable changes at all.
+
+    THE NON-ACTIONABLE SET IS THE MODULE CONSTANT ABOVE, NOT A SECOND COPY. This
+    re-implemented it as the bare literal "COMMUNITY" until 2026-09-15, so a town
+    whose only change was NOT-IN-BODS -- absent from BODS, with the town's own file
+    saying so -- was left off the report's towns-to-review list and graded SAFE in
+    the same breath. A harness that re-implements the filter it is testing agrees
+    with itself and proves nothing, and so does a caller.
+
+    One blocking change escalates the WHOLE town: the grade is the town's, because
+    a rebuild is.
+    """
+    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]
+    if not actionable:
+        return "NOTHING",[]
+    escalating=[c for c in actionable if c[0] not in MECHANICAL]
+    if escalating:
+        return "ESCALATE",escalating
+    return "SAFE",actionable
+
 # The day vocabulary, once. `parse_days` reads it in three places -- a range's two
 # ends and a bare day -- and three copies of one alternation is how they stop
 # agreeing. The long spellings and the plural are here because an unrecognised
@@ -528,6 +583,14 @@ if __name__=="__main__":
             actionable=[c for c in d["changes"] if c[0] not in NON_ACTIONABLE]
             if actionable: total_actionable+=len(actionable); towns_to_review.append(town)
             verdict = "NO CHANGE" if not d["changes"] else (f"{len(actionable)} to review" if actionable else "only expected community gaps")
+            # The GRADE, beside the count, since 2026-09-18 (buses-data OA-091). The
+            # count says how much there is to read; the grade says whether any of it
+            # needs a person, which is the question the reader of this report is
+            # actually holding. `actionable` and `grade` are computed from the same
+            # `changes` by the same rule, so the heading cannot say "3 to review"
+            # beside "NOTHING".
+            grade,_=classify(d["changes"])
+            verdict = verdict if grade=="NOTHING" else f"{verdict} · {grade}"
             summary.append(f"  {town}: {verdict}")
             lines.append(f"## {town} — {verdict}")
             lines.append(f"_last verified {d['verifiedOn']} · region {g['region']}_")

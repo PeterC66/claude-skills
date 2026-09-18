@@ -54,7 +54,10 @@ const MIGRATED_JS = {
   'sync_ci_reference.js': [],
 };
 
-const MIGRATED_PY = ['auto_refresh_month.py', 'draft_town.py', 'gtfs_refresh_report.py',
+// auto_refresh_month.py left this list on 2026-09-18 with the file (buses-data
+// OA-091): the monthly auto-applier was retired and its grading moved into
+// gtfs_refresh_report.py, which is already here.
+const MIGRATED_PY = ['draft_town.py', 'gtfs_refresh_report.py',
   'gtfs_upcoming.py', 'prune_runs.py', 'scaffold_town.py'];
 
 test('parseArgs: a flag takes the next argument as its value', () => {

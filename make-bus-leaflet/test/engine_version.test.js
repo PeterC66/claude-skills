@@ -409,3 +409,53 @@ test('on the real engine: gen_boarding.js is in the boarding half and its shared
   }
   assert.ok(!engineFiles(ENGINE_DIR).includes('gen_boarding.js'), 'a boarding change must not re-stamp every town');
 });
+
+// ---------------------------------------------------------------------------
+// A BAD `sk` USED TO ANSWER, AND THE ANSWER LOOKED REAL (2026-09-18).
+//
+// computeEngineVersion takes a DIRECTORY. Hand it the NAME of an engine kind —
+// which is the reading the parameter name `sk` invites, and this engine really
+// does have three kinds — and nothing threw: every closure name was absent,
+// each hashed as MISSING, and the function returned an ordinary ten-character
+// hash. `computeEngineVersion('internal')` and `computeEngineVersion('C:/no/such/dir')`
+// were EQUAL, and OA-310's 2026-09-14 section quotes that equality as evidence
+// that two engines agreed. They did agree — re-measured with real directories
+// the same morning — but the pair could not have told agreement from two reads
+// of nothing, and a second reader of that paragraph repeated the mistake within
+// the hour. These four tests are the instrument, not the conclusion.
+test('a `sk` that is not a directory is refused, rather than hashed as 28 missing files', () => {
+  assert.throws(() => computeEngineVersion('internal'), /not a directory/,
+    'the NAME of an engine kind is not a path, and must not produce a hash');
+  assert.throws(() => computeEngineVersion(path.join(os.tmpdir(), 'no-such-engine-dir-9f3a2b')), /not a directory/);
+  assert.throws(() => computeEngineVersion(''), TypeError);
+  assert.throws(() => computeEngineVersion(null), TypeError);
+});
+
+test('two bad paths no longer agree with each other, which is the whole fault', () => {
+  // The shape this fixes: both calls returned the same hash, and a reader
+  // concluded the engines matched. Now neither call returns anything at all.
+  for (const bad of ['internal', 'external', 'place']) {
+    assert.throws(() => computeEngineVersion(bad), /not a directory/, `${bad} must not answer`);
+  }
+});
+
+test('a real directory that is not an engine is refused too', () => tmp(dir => {
+  // The subtler half: the path exists, so an existence check alone would pass
+  // it, and every entry point is still absent. A file that is not an entry
+  // point does not make a folder an engine.
+  fs.writeFileSync(path.join(dir, 'README.md'), '# not an engine\n');
+  assert.throws(() => computeEngineVersion(dir), /holds none of the entry points/);
+  assert.throws(() => engineFiles(dir), /holds none of the entry points/);
+}));
+
+test('an engine that has DROPPED a file still hashes, because MISSING is the point', () => tmp(dir => {
+  // The guard must not swallow the case it was built around: a checkout whose
+  // engine has lost a module is a real engine in a state the stamp has to keep
+  // describing. One entry point present is enough to make it an engine.
+  const base = computeEngineVersion(seed(dir));
+  fs.rmSync(path.join(dir, 'lane_normals.js'));
+  const gone = computeEngineVersion(dir);
+  assert.notStrictEqual(gone, base, 'dropping an entry point must move the hash');
+  assert.match(gone, /^[0-9a-f]{10}$/, 'and it must still be an ordinary hash');
+  assert.ok(engineFiles(dir).includes('gen_internal.js'));
+}));

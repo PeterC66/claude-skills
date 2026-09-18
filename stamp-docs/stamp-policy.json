@@ -75,9 +75,8 @@
         "_gtfs/refresh-report_*.md",
         "_gtfs/upcoming/*",
         "loop/adhoc/*",
-        "loop/blocked/*",
+        "loop/your-move/*",
         "loop/runs/*",
-        "loop/NEXT.md",
         ".claude/*"
       ]
     },

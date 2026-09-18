@@ -56,9 +56,14 @@ BASE = datetime.date(2026, 9, 7)           # a Monday
 WINDOW_END = BASE + datetime.timedelta(weeks=13)
 
 
-def build(cal_days, adds=(), removes=(), *, with_calendar=True):
+def build(cal_days, adds=(), removes=(), *, with_calendar=True, end_weeks=None):
     """A feed with one route at one town stop. `cal_days` is a 7-char MTWTFSS mask of the
-    calendar row; `adds`/`removes` are calendar_dates offsets in days from BASE."""
+    calendar row; `adds`/`removes` are calendar_dates offsets in days from BASE.
+
+    `end_weeks` shortens the calendar row's end_date to that many weeks after BASE,
+    which is how a case controls the SAMPLED WINDOW: `_sample_mondays` stops at the
+    feed's last end_date. OA-410 case 10 needs it, because the rule it falsifies is a
+    fraction of the window and the only way to show that is to change the window."""
     con = sqlite3.connect(":memory:")
     con.row_factory = sqlite3.Row
     c = con.cursor()
@@ -81,9 +86,10 @@ def build(cal_days, adds=(), removes=(), *, with_calendar=True):
         c.execute("INSERT INTO trips VALUES(?,'r1','s1',?,'Town Centre','')", ("t%d" % i, str(i)))
         c.execute("INSERT INTO stop_times VALUES(?,'0400TOWN01','1',?,?)", ("t%d" % i, dep, dep))
     if with_calendar:
+        end = (BASE + datetime.timedelta(weeks=end_weeks)) if end_weeks else WINDOW_END
         c.execute("INSERT INTO calendar VALUES('s1',?,?,?,?,?,?,?,?,?)",
                   tuple("1" if ch != "." else "0" for ch in cal_days)
-                  + (BASE.strftime("%Y%m%d"), WINDOW_END.strftime("%Y%m%d")))
+                  + (BASE.strftime("%Y%m%d"), end.strftime("%Y%m%d")))
     for off in adds:
         c.execute("INSERT INTO calendar_dates VALUES('s1',?, '1')",
                   ((BASE + datetime.timedelta(off)).strftime("%Y%m%d"),))
@@ -110,6 +116,24 @@ def old_calendar_only_days(con):
     """The derivation as it stood BEFORE the fix, reproduced here so case 5 can show the
     harness distinguishes the two. Reads the calendar row and nothing else."""
     flags = [0] * 7
+    for row in con.execute("SELECT * FROM calendar WHERE service_id='s1'"):
+        for i, dn in enumerate(gq.DOW):
+            if row[dn] == "1":
+                flags[i] = 1
+    return gq.fmt_days(flags)
+
+
+def old_boolean_or_days(con):
+    """The OA-410 behaviour, reproduced: a weekday is a running day as soon as ONE journey
+    is found on it anywhere in the sampled window, whatever the calendar row says. Kept
+    here so case 13 can show the harness tells the two apart, exactly as case 5 does for
+    the calendar-only derivation."""
+    days, _, _ = days_of(con)
+    flags = [0] * 7
+    for row in con.execute("SELECT date FROM calendar_dates WHERE service_id='s1' AND exception_type='1'"):
+        dt = datetime.datetime.strptime(row[0], "%Y%m%d").date()
+        if BASE <= dt <= BASE + datetime.timedelta(weeks=gq.WEEKS_SAMPLED):
+            flags[dt.weekday()] = 1
     for row in con.execute("SELECT * FROM calendar WHERE service_id='s1'"):
         for i, dn in enumerate(gq.DOW):
             if row[dn] == "1":
@@ -179,6 +203,67 @@ path = os.path.join(TMPDIR, "buckinghamshire.sqlite")
 disk = sqlite3.connect(path); build("MTWTF..").backup(disk); disk.close()
 res = gq.query(path, prefixes=["0400TOWN"], town="Testville", asof=BASE.strftime("%Y%m%d"))
 check("source names the dataset actually read", "buckinghamshire" in res["source"], res["source"])
+
+# ==================================================================== OA-410
+# An EXCEPTION-ONLY weekday -- one no calendar row declares -- needs to run in MORE than a
+# quarter of the sampled weeks to count. Everything above is about calendar_dates carrying
+# the real pattern; these are about calendar_dates carrying an OCCURRENCE and the two
+# being told apart.
+
+# ------------------------------- 8. THE BUG: one added date invented a weekday for ever
+# St Neots C2, reduced to its bones: a Thursday calendar row plus a single added Tuesday.
+# Before OA-410 `servedFlags` was set by the first journey found on a weekday anywhere in
+# the window -- a boolean OR over twelve weeks -- so this printed "Tue & Thu" on the sheet.
+thursdays = [w * 7 + 3 for w in range(13)]
+d, basis, flags = days_of(build("...T...", adds=thursdays + [1]))
+check("Thu calendar + ONE added Tuesday -> Thu", d == "Thu", "got %r" % d)
+check("  and the Tuesday flag is clear", flags[1] == 0, str(flags))
+check("  and the basis says what the rule is", "quarter" in basis, basis)
+
+# --------------------- 9. the same shape with THREE additions is still an occurrence
+# The estate's real second case: The Shelfords 132, a Sunday bus whose exception-only
+# Mondays are Easter Monday, May Day and the late May bank holiday -- three in a
+# twelve-week window. A count-based threshold of two keeps this; a quarter drops it.
+sundays = [w * 7 + 6 for w in range(13)]
+d, _, flags = days_of(build("......S", adds=sundays + [0, 7 * 4, 7 * 9]))
+check("Sun calendar + 3 bank-holiday Mondays in 12 weeks -> Sun", d == "Sun", "got %r" % d)
+check("  and the Monday flag is clear", flags[0] == 0, str(flags))
+
+# ------------------- 10. THREE IN A SHORT WINDOW IS A PATTERN, and this is why it is a
+#                        fraction rather than a count. `_sample_mondays` stops at the
+#                        feed's last end_date, so near the end of a registration the
+#                        window is short. Beaconsfield 808 runs 3 of 4 in exactly this
+#                        shape. The two cases differ ONLY in the window length.
+d, _, flags = days_of(build("......S", adds=sundays + [0, 7, 7 * 2], end_weeks=4))
+check("the same 3 Mondays in a FOUR-week window -> kept", flags[0] == 1, "%r %s" % (d, flags))
+check("  so the rule is a fraction of the window, not a count of weeks", d == "Mon & Sun", "got %r" % d)
+
+# --------------------------------- 11. a DECLARED weekday is never dropped by the rule
+# The calendar row is the operator's statement of the weekly pattern; the fraction applies
+# only to weekdays it does not declare. A Mon-Fri service that manages a single Friday in
+# the window still reports Friday.
+d, _, flags = days_of(build("MTWTF..", removes=[w * 7 + 4 for w in range(1, 13)]))
+check("a declared Friday that ran ONCE is still a running day", flags[4] == 1, "%r %s" % (d, flags))
+
+# ------------------------- 12. everything under the fraction falls back, and says so
+# A calendar row the sampled window contradicts entirely: Sunday declared, and the only
+# thing that runs is one added Tuesday. Nothing clears the fraction, so the declared
+# pattern is used -- and the basis distinguishes this from the seasonal case in 6.
+d, basis, _ = days_of(build("......S", adds=[1], removes=sundays))
+check("only sub-threshold exception days -> declared pattern", d == "Sun", "got %r" % d)
+check("  labelled 'declared'", basis.startswith("declared"), basis)
+check("  and distinguishable from the no-journey fallback of case 6",
+      "none of them often enough" in basis, basis)
+
+# ----------------- 13. the harness can tell this fix from the bug, as case 5 does for 2
+# Re-implement the OLD boolean-OR flagging over case 8's fixture and assert it still says
+# Tue & Thu. Without this, cases 8 to 12 would pass just as well against the buggy code if
+# the fixtures happened to suit it.
+con = build("...T...", adds=thursdays + [1])
+check("OLD boolean-OR flagging still reads Tue & Thu on case 8's data",
+      old_boolean_or_days(con) == "Tue & Thu", "got %r" % old_boolean_or_days(con))
+check("  and the fixed derivation disagrees with it",
+      days_of(con)[0] != old_boolean_or_days(con))
 
 print()
 if FAILURES:

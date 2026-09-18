@@ -59,9 +59,30 @@ const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : u
 const pi = argv.indexOf('--portal');
 const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-bus-maps';
 
-/* One target per SHEET TYPE, because the five sheet types are drawn by five
+/* WHICH MAP EACH TARGET USES IS NOW A DESCRIPTION, NOT A NAME (OA-398,
+ * 2026-09-18). Every target carried a `map:` literal — `Areas/St Ives`,
+ * `Areas/Huntingdon`, `Places/_standalone/Ely Co-op`,
+ * `Areas/High Wycombe/Places/High Wycombe Aldi`,
+ * `Areas/St Ives/Places/St Ives Bus Station` — five paths into another
+ * repository, describing a tree this file cannot see. That was survivable while
+ * there was exactly one estate. There are two now: the small fixture estate this
+ * repository owns, which is what the engine's own CI gates, and buses-data's real
+ * one, which this same harness runs against from that repository's workflow. A
+ * constant cannot be right in both.
+ *
+ * So a target says WHAT IT NEEDS — `level` and the files that must be in the
+ * map's `ci-reference` — and `pickMap()` answers, in name order so the answer is
+ * stable and a red is reproducible. `needs` is expressive enough to carry the
+ * property each target was really chosen for: the place schematic needs an
+ * `overrides.json`, which is the whole point of that target and of the
+ * load-bearing control below it, and it used to be true only because somebody
+ * had typed *Aldi*.
+ *
+ * A target that finds no map is a FAILURE, listed by name, never a skip.
+ *
+ * One target per SHEET TYPE, because the five sheet types are drawn by five
  * different generators and a gate proven red on one says nothing about the
- * others. `map` is relative to the Buses repo; `data` is always the tracked
+ * others. `data` is always the tracked
  * ci-reference folder rather than the local S4 run dir, because ci-reference is
  * what a fresh CI clone actually has — gating against a run dir that only
  * exists on this laptop would prove the gate works in the one place it is never
@@ -74,7 +95,7 @@ const TARGETS = [
   {
     sheet: 'internal.svg (town)',
     gen: 'gen_internal.js',
-    map: 'Areas/St Ives',
+    level: 'area', needs: ['internal.svg'],
     what: 'every point-of-interest icon is drawn a third larger',
     find: 'const POI_HALF=2.1;',
     to: 'const POI_HALF=2.8;',
@@ -82,7 +103,7 @@ const TARGETS = [
   {
     sheet: 'internal.svg (place)',
     gen: 'gen_internal.js',
-    map: 'Places/_standalone/Ely Co-op',
+    level: 'place', needs: ['internal.svg'],
     opts: { ignoreLineRe: PLACE_IGNORE },
     what: 'every point-of-interest icon is drawn a third larger',
     find: 'const POI_HALF=2.1;',
@@ -91,15 +112,24 @@ const TARGETS = [
   {
     sheet: 'external.svg',
     gen: 'gen_external_radial.js',
-    map: 'Areas/St Ives',
-    what: 'each town hub box loses a millimetre of height per line',
+    level: 'area', needs: ['external.svg'],
+    /* RE-ANCHORED 2026-09-18 (OA-398), and it is the OA-230 lesson arriving a
+     * second time. The mutation was `(HUB_LINES.length-1)*4.0` -> `*3.0`, which
+     * moves nothing at all on a town whose every hub box is ONE line: the
+     * multiplier is applied to zero. It was invisible while this target named St
+     * Ives, which has multi-line hubs, and it SURVIVED the moment the target
+     * began choosing its own map and chose Beaconsfield, which does not. So the
+     * mutation was not about the generator, it was about a property of one town's
+     * data that nothing stated. The constant term moves every hub box on every
+     * map, whatever its hubs look like. */
+    what: 'each town hub box loses a millimetre of height',
     find: 'const HUB_H = 12 + (HUB_LINES.length-1)*4.0;',
-    to: 'const HUB_H = 12 + (HUB_LINES.length-1)*3.0;',
+    to: 'const HUB_H = 11 + (HUB_LINES.length-1)*4.0;',
   },
   {
     sheet: 'internal-schematic.svg',
     gen: 'schematize_internal.js',
-    map: 'Areas/Huntingdon',
+    level: 'area', needs: ['internal-schematic.svg'],
     /* Re-anchored 2026-09-02 (OA-230): the pre-stage's projection is projection.js
      * now, so `pad` is no longer in this file. The first re-anchor tried the
      * ADOPTION -- flipping LEGACY_FRAME to the footer-safe frame -- and it SURVIVED
@@ -121,7 +151,7 @@ const TARGETS = [
      * makes this target worth having: it fails if that stops being passed. */
     sheet: 'internal-schematic.svg (place)',
     gen: 'schematize_internal.js',
-    map: 'Areas/High Wycombe/Places/High Wycombe Aldi',
+    level: 'place', needs: ['internal-schematic.svg', 'overrides.json'],
     opts: { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true },
     /* Re-anchored 2026-09-02 (OA-230): the pre-stage's projection is projection.js
      * now, so `pad` is no longer in this file. The first re-anchor tried the
@@ -138,7 +168,7 @@ const TARGETS = [
   {
     sheet: 'internal-diagram.svg',
     gen: 'diagram_internal.js',
-    map: 'Areas/St Ives',
+    level: 'area', needs: ['internal-diagram.svg'],
     /* PARKED 2026-09-10 (buses-data OA-297). No map draws the tube-map diagram any
      * more, so no `ci-reference/` on the estate holds this sheet and there is
      * nothing for the control to reproduce. The target is KEPT rather than
@@ -171,7 +201,7 @@ const TARGETS = [
   {
     sheet: 'boarding.svg',
     gen: 'gen_boarding.js',
-    map: 'Areas/St Ives/Places/St Ives Bus Station',
+    level: 'place', needs: ['boarding.svg'],
     what: 'the legend gap closes by a millimetre',
     find: 'const LG_GAP = 3.2;',
     to: 'const LG_GAP = 2.2;',
@@ -256,11 +286,40 @@ const rows = [];
  * draws that sheet, so the only evidence that can falsify it is estate-wide. */
 const ESTATE_SHEETS = new Set(findSheets(BUSES).map(p => path.basename(p)));
 
+/* Every map, area then place, in name order within each — the same two walks
+ * status.js uses, so this harness and the board cannot disagree about what a map
+ * is (the three place LAYOUTS in particular: a list built by hand here would have
+ * missed the standalone ones exactly as every consumer did before 2026-08-21). */
+const { findTowns, findPlaces } = require(path.join(ASSETS, 'gate_lib.js'));
+const ALL_MAPS = (() => {
+  const towns = findTowns(BUSES).sort((a, b) => a.name.localeCompare(b.name));
+  const places = findPlaces(towns, BUSES).sort((a, b) => a.name.localeCompare(b.name));
+  return [
+    ...towns.map((t) => ({ level: 'area', name: t.name, dir: t.dir })),
+    ...places.map((p) => ({ level: 'place', name: p.name, dir: p.dir })),
+  ];
+})();
+
+/** The first map of this level whose ci-reference holds everything `needs` names. */
+function pickMap(t) {
+  return ALL_MAPS.find((m) => m.level === t.level
+    && (t.needs || []).every((f) => fs.existsSync(path.join(m.dir, 'ci-reference', f)))) || null;
+}
+
 for (const t of TARGETS) {
   const genPath = path.join(ASSETS, t.gen);
-  const data = path.join(BUSES, t.map, 'ci-reference');
-  const committed = path.join(data, outName(t));
-  const label = `${t.sheet.padEnd(24)} ${path.basename(t.map)}`;
+  const picked = pickMap(t);
+  const data = picked && path.join(picked.dir, 'ci-reference');
+  const committed = data && path.join(data, outName(t));
+  const label = `${t.sheet.padEnd(24)} ${picked ? picked.name : '(no map)'}`;
+  /* NO MAP AT ALL is a different fact from a parked sheet, and only the target's
+   * own `parked` line may excuse it — so the parked branch below gets first
+   * refusal, and anything else is a failure naming what it looked for. */
+  if (!picked && !t.parked) {
+    rows.push([label, 'NO MAP', `no ${t.level} under ${BUSES} has ${(t.needs || []).join(' + ')} in its ci-reference`]);
+    failures++;
+    continue;
+  }
 
   /* A parked sheet, checked both ways — see the `parked` note on the target. */
   if (t.parked) {
@@ -322,11 +381,19 @@ for (const t of TARGETS) {
 // its own workspace — in which case delete this and the option together — or Aldi
 // stopped forcing a POI, and the gate has gone back to proving nothing.
 {
-  const dataDir = path.join(BUSES, 'Areas/High Wycombe/Places/High Wycombe Aldi', 'ci-reference');
-  const committed = path.join(dataDir, 'internal-schematic.svg');
-  const label = 'overrides are load-bearing High Wycombe Aldi';
-  if (!fs.existsSync(committed)) {
-    rows.push([label, 'NO REFERENCE', `${committed} is not on disk`]);
+  /* THE SAME MAP THE PLACE-SCHEMATIC TARGET CHOSE, asked for the same way rather
+   * than typed a second time (OA-398). It read `Areas/High Wycombe/Places/High
+   * Wycombe Aldi` — the same literal as that target, in a second place, which is
+   * the *two lists that must agree* shape: repoint one and this control goes on
+   * asking about a different map, and would keep passing. */
+  const OVERRIDE_TARGET = { level: 'place', needs: ['internal-schematic.svg', 'overrides.json'] };
+  const picked = pickMap(OVERRIDE_TARGET);
+  const dataDir = picked && path.join(picked.dir, 'ci-reference');
+  const committed = dataDir && path.join(dataDir, 'internal-schematic.svg');
+  const label = `overrides are load-bearing ${picked ? picked.name : '(no map)'}`;
+  if (!picked || !fs.existsSync(committed)) {
+    rows.push([label, 'NO REFERENCE', picked ? `${committed} is not on disk`
+      : `no place under ${BUSES} carries both an internal-schematic.svg and an overrides.json, so nothing here asks whether OVERRIDES_FILE is load-bearing`]);
     failures++;
   } else {
     const without = gate(path.join(ASSETS, 'schematize_internal.js'), dataDir, 'internal-schematic.svg', committed, { ignoreLineRe: PLACE_IGNORE });
@@ -340,6 +407,15 @@ for (const t of TARGETS) {
 }
 
 // ---- the portal arm --------------------------------------------------------
+//
+// THE DATA COMES FROM THE PORTAL NOW, NOT FROM buses-data (OA-398, 2026-09-18).
+// This arm mutates the PORTAL's engine and draws the PORTAL's fixtures, and until
+// that day the code came from one repository and the data from a third — so an
+// arm entirely about the portal could not run without a token for a private
+// repository that has nothing to do with it. The portal vendored those packs into
+// its own `gate-fixtures/` on the same day and for the same reason, so code and
+// data are now one checkout and this whole file runs with no credential.
+const PORTAL_FIXTURES = path.join(PORTAL, 'gate-fixtures', 'Places', '_portal-fixture');
 let portalRan = 0;
 const portalEngine = path.join(PORTAL, 'engine');
 if (!fs.existsSync(portalEngine)) {
@@ -347,7 +423,7 @@ if (!fs.existsSync(portalEngine)) {
     `no engine/ at ${PORTAL} — pass --portal <path to community-bus-maps>`, 'note']);
 } else {
   for (const t of PORTAL_TARGETS) {
-    const dataDir = path.join(BUSES, 'Places', '_portal-fixture', t.fixture);
+    const dataDir = path.join(PORTAL_FIXTURES, t.fixture);
     const committed = path.join(dataDir, t.out);
     const label = `${(t.sheet + ' (portal)').padEnd(24)} ${t.fixture}`;
     portalRan++;

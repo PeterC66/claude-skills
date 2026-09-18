@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "What check-file-hygiene.mjs must not read in THIS repository. The CHECKER lives",
+    "here, in tools/, and is run by all three repositories; the RULE travels and the",
+    "exemptions stay home, so a checker three repositories share never carries one",
+    "repository's exclusion list. buses-data OA-241 states the convention; this file",
+    "arrived with OA-398.",
+    "",
+    "Until 2026-09-18 this repository declared nothing and got the bare rules over its",
+    "whole tracked corpus, which was right and cost nothing. Vendoring a small map",
+    "estate into make-bus-leaflet/test/fixtures/estate/ changed that: 73 of its files",
+    "are generator output with no final newline, and they are COPIES of packs in",
+    "buses-data, which excuses the same folders for the same reason. Fixing them here",
+    "would make the copy differ from what the engine draws and turn the fixture check",
+    "red for ever; excusing them keeps the copy honest.",
+    "",
+    "It names the fixture estate and nothing else, so every hand-written file in this",
+    "repository is still read."
+  ],
+  "neverRead": [
+    "^make-bus-leaflet/test/fixtures/estate/"
+  ]
+}

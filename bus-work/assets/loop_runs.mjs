@@ -95,7 +95,7 @@ export function readRuns(dir) {
     // front of it — readdirSync already throws for a missing path, an undefined
     // path and a path that is a file, so a guard here could be deleted with every
     // assertion still green. That is *the check that could not go red*, and
-    // loop_blocked.mjs carries the same note for the same reason.
+    // loop_your_move.mjs carries the same note for the same reason.
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (!e.isFile()) continue;
       const r = parseRunName(e.name);

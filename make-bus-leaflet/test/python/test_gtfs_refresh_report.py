@@ -1,9 +1,11 @@
 """gtfs_refresh_report.py -- the monthly diff, and the day strings a person typed.
 
-THE THIRD OF OA-001'S MONTHLY JOBS, and the one the other two lean on:
-`auto_refresh_month.py` imports `diff_town`, `fold_gtfs`, `fmt` and
-`latest_verified` from here by name, so its suite and this one are testing the
-same code from two sides. This module runs after every BODS refresh, classifies
+THE THIRD OF OA-001'S MONTHLY JOBS, and since 2026-09-18 it owns the whole tag
+taxonomy: `auto_refresh_month.py` used to import `diff_town`, `fold_gtfs`, `fmt`
+and `latest_verified` from here by name and grade each town with its own copy of
+`classify()`. That module was retired (buses-data OA-091) and the grading moved
+here, bringing its two classes with it -- `Classify` and `TagsTheReportCanEmit`
+at the foot of this file. This module runs after every BODS refresh, classifies
 each town's differences, and writes `_gtfs/refresh-report_<date>.md` -- the
 document every `refresh-reviews.json` adjudication is written against, and the
 one whose towns-to-review list decides whether a sheet gets rebuilt.
@@ -46,7 +48,9 @@ EVERY DATE HERE IS EXPLICIT AND NONE OF THEM IS `today`. `diff_town` takes
 in the glossary and OA-289, which reddened `main` once a day for as long as a
 claim was held.
 """
+import io
 import os
+import re
 import shutil
 import unittest
 
@@ -328,6 +332,144 @@ class DiffTownReadsTheDaysItIsGiven(unittest.TestCase):
         self.assertEqual(
             self.diff([bods("7", "Stagecoach East",
                             days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))]), [])
+
+
+def change(tag, route="7", msg="a change"):
+    """One row of `diff_town`'s `changes` list, in the shape it really returns."""
+    return (tag, route, msg)
+
+
+class Classify(unittest.TestCase):
+    """The grade: does any of this town's change need a person?
+
+    MOVED HERE FROM `test_auto_refresh_month.py` ON 2026-09-18 (buses-data OA-091)
+    WITH THE FUNCTION IT TESTS. There it guarded an unattended applier, where SAFE
+    meant rebuild four stages and stage a proposed update to the customer; that
+    applier was retired on a measurement -- its SAFE path fired once in 24
+    town-months and that once was wrong. The grading itself is the judgement worth
+    keeping, and what it now decides is what the report PRINTS beside each town, so
+    a wrong verdict costs a misleading heading rather than a wrong sheet. The cases
+    are unchanged, because the question they ask has not.
+
+    What their first run found, and the reason the class is worth more than its
+    green: `classify()` carried two second homes for rules written down elsewhere --
+    the non-actionable set, re-spelled as the bare literal "COMMUNITY", and SAFE
+    itself as the COMPLEMENT of a blocking list. Both are assertions below.
+    """
+
+    def test_an_operator_rename_alone_is_SAFE(self):
+        verdict, reasons = rr.classify([change("OPERATOR", "5", "shipped 'A' vs BODS 'B'")])
+        self.assertEqual(verdict, "SAFE")
+        self.assertEqual([c[1] for c in reasons], ["5"])
+
+    def test_a_days_change_alone_is_SAFE(self):
+        verdict, reasons = rr.classify([change("DAYS", "5", "shipped 'Mon-Fri' vs BODS 'Mon-Sat'")])
+        self.assertEqual(verdict, "SAFE")
+        self.assertEqual([c[1] for c in reasons], ["5"])
+
+    def test_a_new_route_ESCALATES_because_somebody_has_to_choose_a_colour(self):
+        verdict, reasons = rr.classify([change("ADD?", "X5", "new in BODS")])
+        self.assertEqual(verdict, "ESCALATE")
+        self.assertEqual([c[1] for c in reasons], ["X5"])
+
+    def test_a_vanished_route_ESCALATES(self):
+        self.assertEqual(rr.classify([change("WITHDRAWN?", "66")])[0], "ESCALATE")
+
+    def test_a_serves_town_re_evaluation_ESCALATES(self):
+        self.assertEqual(rr.classify([change("RE-EVAL", "303")])[0], "ESCALATE")
+
+    def test_nothing_at_all_is_NOTHING(self):
+        self.assertEqual(rr.classify([]), ("NOTHING", []))
+
+    def test_a_community_only_town_is_NOTHING(self):
+        self.assertEqual(rr.classify([change("COMMUNITY", "V1")]), ("NOTHING", []))
+
+    def test_an_expected_absence_is_NOTHING_and_the_set_is_the_REPORTs(self):
+        """NOT-IN-BODS: absent from BODS, and the town's own file says so.
+
+        The grade has to agree with the list the same `main()` builds a few lines
+        away. The report leaves such a town off its towns-to-review list --
+        `NON_ACTIONABLE` is what does that -- and this function said SAFE. Asserted
+        against `rr.NON_ACTIONABLE` rather than against the string, so a tag leaving
+        that constant cannot leave this test green.
+        """
+        for tag in rr.NON_ACTIONABLE:
+            self.assertEqual(rr.classify([change(tag, "56")]), ("NOTHING", []), tag)
+
+    def test_a_stale_notInBods_declaration_ESCALATES_rather_than_reading_mechanical(self):
+        """`NOT-IN-BODS?` is actionable and is NOT mechanical.
+
+        Its own message in the report is *the declaration is stale, delete it* -- a
+        person editing a field. Under the blocking-list version this graded SAFE.
+        """
+        verdict, reasons = rr.classify([change("NOT-IN-BODS?", "401")])
+        self.assertEqual(verdict, "ESCALATE")
+        self.assertEqual([c[0] for c in reasons], ["NOT-IN-BODS?"])
+
+    def test_a_tag_nobody_has_written_yet_ESCALATES(self):
+        """The default is the direction that costs a person five minutes, rather
+        than the one that tells them a change needs nobody."""
+        self.assertEqual(rr.classify([change("SOMETHING-NEW", "9")])[0], "ESCALATE")
+
+    def test_one_blocking_change_ESCALATES_the_whole_town(self):
+        verdict, reasons = rr.classify([change("OPERATOR", "5"), change("ADD?", "X5")])
+        self.assertEqual(verdict, "ESCALATE")
+        self.assertEqual([c[1] for c in reasons], ["X5"],
+                         "only the blocking rows are reasons -- the grade is the town's, "
+                         "because a rebuild is")
+
+    def test_a_non_actionable_row_does_not_make_a_mechanical_town_unsafe(self):
+        verdict, reasons = rr.classify([change("COMMUNITY", "V1"), change("DAYS", "5")])
+        self.assertEqual(verdict, "SAFE")
+        self.assertEqual([c[1] for c in reasons], ["5"])
+
+    def test_the_reasons_are_the_rows_themselves_not_a_summary(self):
+        """Callers unpack them as `for tag, r, msg in reasons`. A reason that were
+        a string, or a pair, would fail there and not here."""
+        rows = [change("OPERATOR", "5", "shipped 'A' vs BODS 'B'")]
+        self.assertEqual(rr.classify(rows)[1], rows)
+
+
+class TagsTheReportCanEmit(unittest.TestCase):
+    """The join: every tag the report can produce is DECIDED, not defaulted.
+
+    Derived from this module's own source rather than typed here, for the reason
+    `_engine.module_names()` is derived: a hand-kept list cannot notice the tag
+    nobody listed, which is the only tag this class exists for. Now that the
+    grading lives in the module that emits the tags, this is a join within one
+    file -- which makes it cheaper to keep true and no less necessary, because the
+    two halves are still fifty lines and four hundred apart.
+    """
+
+    def tags(self):
+        path = os.path.join(_engine.ENGINE_DIR, "gtfs_refresh_report.py")
+        with io.open(path, encoding="utf-8") as fh:
+            src = fh.read()
+        found = set(re.findall(r'changes\.append\(\(\s*"([A-Z?\-]+)"', src))
+        self.assertTrue(found, "no tags found -- the regex has stopped matching the report")
+        return found
+
+    def test_the_report_still_emits_the_tags_this_module_reasons_about(self):
+        """A control on the instrument above. If this ever shrinks to a handful,
+        the regex has drifted and every verdict below is about nothing."""
+        self.assertLessEqual({"OPERATOR", "DAYS", "ADD?", "WITHDRAWN?", "RE-EVAL",
+                              "COMMUNITY", "NOT-IN-BODS"}, self.tags())
+
+    def test_every_tag_is_either_non_actionable_mechanical_or_escalates(self):
+        for tag in sorted(self.tags()):
+            verdict, _ = rr.classify([change(tag, "7")])
+            if tag in rr.NON_ACTIONABLE:
+                self.assertEqual(verdict, "NOTHING", tag)
+            elif tag in rr.MECHANICAL:
+                self.assertEqual(verdict, "SAFE", tag)
+            else:
+                self.assertEqual(verdict, "ESCALATE", tag)
+
+    def test_only_the_two_mechanical_tags_can_be_SAFE(self):
+        """Stated the other way round, because the assertion above is satisfied by
+        a MECHANICAL that has quietly grown a third member."""
+        safe = {t for t in self.tags() if rr.classify([change(t, "7")])[0] == "SAFE"}
+        self.assertEqual(safe, {"OPERATOR", "DAYS"})
 
 
 if __name__ == "__main__":

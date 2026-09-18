@@ -1,0 +1,105 @@
+{
+  "scoredAt": "2026-07-28 09:32",
+  "dir": "C:\\u3a St Ives\\Using AI\\Buses\\Beaconsfield\\S2-geometry\\2026-07-21_1542",
+  "geometrySource": "routes_paths.json (road-matched)",
+  "geometryApproximate": false,
+  "metrics": {
+    "R": 7,
+    "S": 49,
+    "K5": 0.54,
+    "D5": 1.34,
+    "maxRoutesPerCell": 6,
+    "congestedClusters": 3,
+    "largestClusterCells": 27,
+    "routeKm": 56.9,
+    "extentKm": [
+      5.33,
+      5.35
+    ],
+    "inkDensity": 2,
+    "medianBuriedFraction": 0.633,
+    "routesOverHalfBuried": 5
+  },
+  "bands": {
+    "amber": {
+      "R": 12,
+      "S": 120,
+      "K5": 0.5,
+      "D5": 1.6
+    },
+    "red": {
+      "R": 18,
+      "S": 200,
+      "K5": 0.8,
+      "D5": 3.5
+    }
+  },
+  "applied": {
+    "internalCorridors": null,
+    "corridorPalette": null,
+    "coreBox": null,
+    "stopThinning": null
+  },
+  "band": "AMBER",
+  "failedThresholds": [
+    "K5=0.54 > 0.5"
+  ],
+  "colours": {
+    "routes": 7,
+    "distinct": 7,
+    "ambiguity": 1
+  },
+  "congestionShape": "linear - one busy street",
+  "ladder": [
+    {
+      "rung": 1,
+      "action": "bundle 1 co-running route family into single lines (CANDIDATES - confirm each really co-runs)",
+      "detail": "104/105",
+      "data": {
+        "families": [
+          [
+            "104",
+            "105"
+          ]
+        ],
+        "overlapMin": 0.6,
+        "internalCorridors": {
+          "104": [
+            "105"
+          ]
+        }
+      },
+      "after": {
+        "R": 6,
+        "S": 49,
+        "K5": 0.16,
+        "D5": 0.99
+      },
+      "band": "GREEN",
+      "stillFailing": []
+    },
+    {
+      "rung": 2,
+      "action": "suppress the core: draw a \"town centre\" box of radius 600 m",
+      "detail": "routes terminate at the box edge instead of crossing the knot",
+      "data": null,
+      "after": {
+        "R": 6,
+        "S": 43,
+        "K5": 0.09,
+        "D5": 0.5
+      },
+      "band": "GREEN",
+      "stillFailing": []
+    }
+  ],
+  "perRouteBuried": {
+    "31": 0.6333333333333333,
+    "102": 0.6734006734006734,
+    "103": 0.4423076923076923,
+    "104": 0.6697530864197531,
+    "105": 0.9393939393939394,
+    "380": 0.5167243367935409,
+    "X74": 0
+  }
+}

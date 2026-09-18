@@ -234,45 +234,34 @@ MUTATIONS = [
      "find": '                dirnames[:] = [d for d in dirnames if d == "Places"]',
      "to": "                dirnames[:] = []"},
 
-    # ------------------------------------------------------------ auto_refresh_month.py
-    # The other module that runs to nobody, and the only one in this half that
-    # ACTS: a SAFE verdict rebuilds four stages for that town and stages a
-    # proposed update for the customer to accept. Its two second homes are the
-    # first two cases -- both were the live behaviour until 2026-09-15, and both
-    # were found by calling the function rather than by reading it.
-    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+    # ------------------------------ gtfs_refresh_report.py, the tag grading
+    # THESE THREE CAME FROM auto_refresh_month.py, WHICH WAS RETIRED ON 2026-09-18
+    # (buses-data OA-091). That module was the monthly auto-applier -- a SAFE
+    # verdict rebuilt four stages for the town and staged a proposed update for
+    # the customer to accept -- and it went on a measurement: its SAFE path fired
+    # once in 24 town-months and that once was wrong. The GRADING moved into the
+    # module that emits the tags, and these mutations moved with it, because what
+    # they falsify has not changed: the grade now decides what the report PRINTS
+    # beside each town, so a survivor here is a heading that tells a person a
+    # change needs nobody. The first two were the live behaviour until 2026-09-15
+    # and both were found by calling the function rather than by reading it.
+    # Their three siblings, which mutated the patch functions, were deleted with
+    # them -- there is no applier left for them to be about.
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
      "what": "classify re-spells the non-actionable set as the bare literal COMMUNITY, so an expected absence the report leaves off its review list is auto-applied as SAFE",
-     "find": "    actionable = [c for c in changes if c[0] not in rr.NON_ACTIONABLE]",
-     "to": '    actionable = [c for c in changes if c[0] != "COMMUNITY"]'},
+     "find": "    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]",
+     "to": '    actionable=[c for c in changes if c[0]!="COMMUNITY"]'},
 
-    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
      "what": "SAFE goes back to being the complement of a blocking list, so every tag the report grows is auto-applied on the day it is added",
-     "find": "    escalating = [c for c in actionable if c[0] not in MECHANICAL]",
-     "to": '    escalating = [c for c in actionable if c[0] in ("ADD?", "WITHDRAWN?", "RE-EVAL")]'},
+     "find": "    escalating=[c for c in actionable if c[0] not in MECHANICAL]",
+     "to": '    escalating=[c for c in actionable if c[0] in ("ADD?","WITHDRAWN?","RE-EVAL")]'},
 
-    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
      "what": "MECHANICAL quietly grows a third member, so a change whose fix is a person editing a field is applied as though it were an operator rename",
-     "find": 'MECHANICAL = ("OPERATOR", "DAYS")',
-     "to": 'MECHANICAL = ("OPERATOR", "DAYS", "NOT-IN-BODS?")'},
+     "find": 'MECHANICAL=("OPERATOR","DAYS")',
+     "to": 'MECHANICAL=("OPERATOR","DAYS","NOT-IN-BODS?")'},
 
-    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
-     "what": "patch_verified_services patches every route the fresh pull carries, so a town's whole service file is rewritten from BODS on the strength of one safe change",
-     # Anchored on the line above as well, because the guard in `patch_routes_json`
-     # is the same text four spaces further in and CONTAINS this one as a
-     # substring -- the anchor-matched-twice check caught it, which is what that
-     # check is for.
-     "find": '        r = svc.get("route")\n        if r in safe_routes and r in new_values:',
-     "to": '        r = svc.get("route")\n        if r in new_values:'},
-
-    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
-     "what": "patch_routes_json rewrites external[].days for every route, so a route nobody adjudicated gets BODS's days printed against it",
-     "find": "            if r in safe_routes and r in new_values:",
-     "to": "            if r in new_values:"},
-
-    {"suite": "test_auto_refresh_month.py", "file": "auto_refresh_month.py",
-     "what": "an operator entry emptied by a reassignment is left in routes.json, so the Key prints an operator with no routes under it",
-     "find": '        routes["operators"] = [o for o in ops if o.get("routes")]  # drop emptied entries',
-     "to": '        routes["operators"] = ops  # drop emptied entries'},
 
     # ---------------------------------------------------------------- the load test
     # The cheapest check there is, and the one that was missing for a year. This
@@ -560,8 +549,34 @@ MUTATIONS = [
 
     {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
      "what": "the RESOLVED days are discarded for the operator's declared calendar pattern, so every route in the estate reports what its calendar row says rather than what it runs -- and daysBasis says 'declared' while nothing else changes",
-     "find": '        if any(served): flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"',
-     "to": '        if False: flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"'},
+     # Re-anchored on 2026-09-18: OA-410 rewrote this line to carry the window length
+     # and the fraction. The mutation is unchanged in what it falsifies.
+     "find": '        if any(served):',
+     "to": '        if False:'},
+
+    # ---- OA-410, the fraction that separates a pattern from an occurrence -------------
+    # Three mutations, because the rule has three parts and each fails differently: the
+    # counting, the fraction, and the exemption for a weekday the operator declared.
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "a weekday counts as soon as ONE journey is found on it anywhere in the sampled window, so a single calendar_dates addition -- a bank holiday, a rail replacement -- becomes a running day on the printed sheet. This is the OA-410 bug exactly: St Neots C2 read 'Tue & Thu' off one added Tuesday",
+     "find": '''      "servedFlags":[1 if (n and (declared[j] or n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION))
+                     else 0 for j,n in enumerate(servedWeeks)],''',
+     "to": '''      "servedFlags":[1 if n else 0 for j,n in enumerate(servedWeeks)],'''},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the fraction becomes a COUNT, so the rule stops being relative to the sampled window -- three bank-holiday Mondays in twelve weeks and three in a four-week window at the end of a registration are then the same answer, and one of them is wrong whichever number is chosen",
+     "find": "n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION",
+     "to": "n>2"},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the fraction is applied to EVERY weekday rather than only to the ones no calendar row declares, so a Mon-Fri service that manages one Friday in the window loses the Friday its operator declared -- trading OA-410's fault for the opposite one",
+     "find": "declared[j] or n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION",
+     "to": "n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION"},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "servedWeeks counts JOURNEYS rather than weeks, so a route with forty journeys on one Tuesday scores that Tuesday forty times and clears any fraction -- the count stops measuring how often the day recurs and starts measuring how busy it is",
+     "find": "                if per_day[j]==1: servedWeeks[j]+=1",
+     "to": "                servedWeeks[j]+=1"},
 
     {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
      "what": "only the far end of a trip is recorded as a terminus, so every route through the town loses the place it came FROM and the external sheet draws a one-armed spoke",
@@ -1264,6 +1279,335 @@ MUTATIONS = [
      "what": "the created date is left at python-docx's 2013-12-23 template default, which Explorer shows and a reader takes for the date of the check",
      "find": '    doc.core_properties.created = _now',
      "to": '    _now = _now'},
+
+    # ---------------------------------------------------------------- gen_disagreements.py
+    # THE SECOND ARTEFACT HERE WHOSE ONLY READER IS A PERSON, and the one the
+    # block above named as still uncovered. This module turns a stage's
+    # disagreements.json into the disagreements.docx that git tracks and that
+    # nothing downstream parses. The first three mutations are the faults the
+    # suite was written on, restored verbatim -- all three had SHIPPED, measured
+    # over 49 committed audits and 1,441 rows on 2026-09-16.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the audit's own note is dropped, so 20 committed audits say which routes were actually re-checked this round and none of their documents does",
+     "find": '    note = (data.get("note") or "").strip()',
+     "to": '    note = ""'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "a clarification on an agreeing row is thrown away -- the 107 notes across 27 audits, including the two March's own note points the reader at",
+     "find": '        if agree and res in PLACEHOLDER_RESOLUTIONS:',
+     "to": '        if agree:'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "sources are read by their two known names, so the press article that is the evidence for the High Wycombe route 20 exclusion is cited nowhere",
+     "find": '        for key in SOURCE_ORDER + sorted(k for k in srcs if k not in SOURCE_ORDER):',
+     "to": '        for key in SOURCE_ORDER:'},
+
+    # The other direction on each of the first two, which is the direction that
+    # would put the fault back invisibly: a qualification printed on every
+    # report is one nobody reads, and a column of dashes is how a real
+    # clarification stops being noticed.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "every audit is given a Note line whether or not it has one, so the 20 that carry a real qualification stop being distinguishable",
+     "find": '    if note:',
+     "to": '    if True:'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the placeholder dash is printed on agreeing rows too, so 1,334 rows gain a dash and the 107 real clarifications are lost in it",
+     "find": '        if agree and res in PLACEHOLDER_RESOLUTIONS:',
+     "to": '        if agree and res in ():'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the settled bustimes-then-operator order becomes whatever sorting gives, so every row in every audit reorders around an unknown key",
+     "find": '        for key in SOURCE_ORDER + sorted(k for k in srcs if k not in SOURCE_ORDER):',
+     "to": '        for key in sorted(srcs, reverse=True):'},
+
+    # An audit with no rows has not found agreement; it has found nothing.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "an audit with no rows reports that every operator site agreed, which is the absence of checks printed as a clean result",
+     "find": '    elif rows:',
+     "to": '    elif True:'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "a row that says nothing about agreement is silently counted as agreeing, so an unrecorded check prints green",
+     "find": '        agree = bool(r.get("agree", False))',
+     "to": '        agree = bool(r.get("agree", True))'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the conflict set is inverted, so the subtitle's disagreement count and the summary bullets describe the rows that agree",
+     "find": '    conflicts = [r for r in rows if not r.get("agree", False)]',
+     "to": '    conflicts = [r for r in rows if r.get("agree", False)]'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "every row says agree, so a disagreement is invisible in the one column a reader scans",
+     "find": '        set_cell(cells[5], "agree" if agree else "DISAGREE", bold=not agree, size=9,',
+     "to": '        set_cell(cells[5], "agree", bold=not agree, size=9,'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the red and green fills are swapped, so a 60-row table points the eye at every row except the conflicts",
+     "find": '        fill = AGREE_FILL if agree else CONFLICT_FILL',
+     "to": '        fill = CONFLICT_FILL if agree else AGREE_FILL'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "no row is shaded at all, so the document loses the only signal that finds a conflict without reading every cell",
+     "find": '            shade(c, fill)',
+     "to": '            pass'},
+
+    # The helper's own comment says what this one is, and it is the sibling's
+    # mutation in this file: tblGrid left at the equal widths python-docx made
+    # the table with is what headless LibreOffice lays the customer PDF out from.
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "tblGrid is left at equal widths, so the PDF crams the resolution and both URLs into the same width as the route code",
+     "find": '    for gridcol, w in zip(grid.findall(qn("w:gridCol")), widths):',
+     "to": '    for gridcol, w in zip([], widths):'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the default output is a bare filename, so an audit written with no out path lands in whatever directory the stage engine was standing in",
+     "find": '        os.path.dirname(os.path.abspath(src)), "disagreements.docx")',
+     "to": '        "", "disagreements.docx")'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "the created date is left at python-docx's 2013-12-23 template default, which Explorer shows and a reader takes for the date of the audit",
+     "find": '    doc.core_properties.created = _now',
+     "to": '    _now = _now'},
+
+    {"suite": "test_gen_disagreements.py", "file": "gen_disagreements.py",
+     "what": "no PDF is asked for, so the customer-facing copy silently stays at whatever the last run left beside the docx",
+     "find": '    convert_to_pdf(out)',
+     "to": '    pass'},
+
+    # ---------------------------------------------------------------- draft_town.py
+    # The first four are the 2026-08-28 public report as mutations: a member of
+    # the public found Whittlesey on Ramsey's published X31 spoke, because
+    # Nominatim at zoom=14 answers town=Whittlesey for Pondersbridge, Turves,
+    # Coates and Eastrea alike. Nothing in this estate can see that fault -- the
+    # sheet reproduces byte-for-byte for ever and every gate is green over it.
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "PlaceNamer.name reverse-geocodes before consulting NaPTAN, which is the ordering that put Whittlesey on a published sheet",
+     "find": '        loc, _parent = self.locality(stop_id)\n        if loc:\n            return loc, True                  # NaPTAN is authoritative; no call needed',
+     "to": '        loc, _parent = self.locality(stop_id)\n        if False:\n            return loc, True                  # NaPTAN is authoritative; no call needed'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "in_town folds the town's own outlying parts in, which re-creates the fault it replaced: Ramsey Heights then sits after Bury and Wistow and both villages are thrown off the spoke",
+     "find": '        loc, _par = self.locality(stop_id)\n        if not loc:\n            return None                       # unknown -- caller keeps the old test\n        return loc == town',
+     "to": '        loc, _par = self.locality(stop_id)\n        if not loc:\n            return None                       # unknown -- caller keeps the old test\n        return loc == town or self.locality(stop_id)[1] == town'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "of_town asks the NAME instead of NaPTAN's parent, so Ramsey End -- which belongs to Warboys -- is swallowed as one of Ramsey's own edges",
+     "find": '        loc, par = self.locality(stop_id)\n        return bool(loc) and par == town and loc != town',
+     "to": '        loc, par = self.locality(stop_id)\n        return bool(loc) and loc.startswith(town) and loc != town'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "a district in Nominatim's city slot is accepted, so a rural stop between Ramsey and Warboys is labelled Huntingdonshire",
+     "find": '            if v and not self.ADMIN.search(v):',
+     "to": '            if v:'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "suburb outranks town, which turned Peterborough's Queensgate into Millfield and Huntingdon bus station into Hartford",
+     "find": '    SETTLEMENT = ("town", "village", "city", "suburb", "hamlet")',
+     "to": '    SETTLEMENT = ("suburb", "town", "village", "city", "hamlet")'},
+
+    # The spoke's own three rules. Each decides what a rider reads at the end of
+    # a printed line, and none of them is reachable from any gate in the estate.
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the spoke is labelled by the last NEW name rather than by where the chain ends, so Hartford -> Huntingdon -> Newtown -> Huntingdon reads as a bus to Newtown",
+     "find": '    if term in places:\n        places = [p for p in places if p != term] + [term]',
+     "to": '    if False:\n        places = [p for p in places if p != term] + [term]'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the terminus stops absorbing its own suburbs, so a spoke naming Stanground and Fletton before Peterborough reads as three separate destinations",
+     "find": '    if len(places) > 1:\n        places = [p for p in places[:-1] if parents.get(p) != places[-1]] + [places[-1]]',
+     "to": '    if False:\n        places = [p for p in places[:-1] if parents.get(p) != places[-1]] + [places[-1]]'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the intermediates are never thinned, so the ten hamlets between Ramsey and St Ives overflow the spoke and collide with its neighbour",
+     "find": '    if len(places) > MAX_INTERMEDIATE + 1:',
+     "to": '    if False:'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "colliding spokes are left where they are, so Ramsey's 303 and 305 -- both Huntingdon, both bearing 201 -- print as one unreadable stack",
+     "find": '            if gap < min_gap:',
+     "to": '            if gap < 0:'},
+
+    # The two that are not about the artwork at all.
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "an unattended Tier-2 draft writes verified: true, so a route BODS alone declared is indistinguishable from one a person checked against the operator's own timetable",
+     "find": '    verified = [{**s, "verified": False,',
+     "to": '    verified = [{**s, "verified": True,'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "km_between drops the cos(lat) term, so every east-west distance on the draft -- the 1 km 'never leaves town' floor included -- is overstated by 62% at this latitude",
+     "find": '    a = math.sin(dla / 2) ** 2 + math.cos(math.radians(la1)) * math.cos(math.radians(la2)) * math.sin(dlo / 2) ** 2',
+     "to": '    a = math.sin(dla / 2) ** 2 + math.sin(dlo / 2) ** 2'},
+
+    # ---------------------------------------------------------------- scaffold_town.py
+    # The one module that runs BEFORE every human gate in the pipeline, once per
+    # town, from a person's hand. Its output is what the S1 reviewer reviews, so
+    # a fault here arrives disguised as the starting position rather than as a
+    # fault, and no byte gate can see it because it draws nothing.
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "`stage.js new` no longer runs inside the town folder, so it walks up from the engine's own cwd and the S1 run lands in whichever map it finds first",
+     "find": '    s1=run([node, stage, "new", "S1"], cwd=town_dir)',
+     "to": '    s1=run([node, stage, "new", "S1"])'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a failing subprocess is ignored, so the scaffold finishes and writes a review checklist for a run that has no service facts in it",
+     "find": '    if p.returncode!=0:',
+     "to": '    if p.returncode<0:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the failing command's own stdout and stderr are dropped, leaving the reader `command failed: node .../stage.js new S1` and nothing to act on",
+     "find": '        sys.stderr.write(p.stdout+"\\n"+p.stderr+"\\n"); raise SystemExit(f"command failed: {\' \'.join(cmd)}")',
+     "to": '        raise SystemExit(f"command failed: {\' \'.join(cmd)}")'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "`--centre` is never passed on, so a town the geocoder places wrongly is scaffolded there and the person who supplied the coordinates is not told they were dropped",
+     "find": '    if a.centre: boot += ["--centre", a.centre]',
+     "to": '    if False: boot += ["--centre", a.centre]'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "gtfs_query is asked for the TOWN NAME rather than the ATCO prefix the bootstrap derived, which matches no stop and produces an empty, plausible service set",
+     "find": '        run([py, os.path.join(HERE,"gtfs_query.py"), prefix, "--town", a.town,',
+     "to": '        run([py, os.path.join(HERE,"gtfs_query.py"), a.town, "--town", a.town,'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a town with no ATCO prefix is registered anyway, so the monthly refresh joins on nothing and reports every one of its routes as withdrawn -- the Beaconsfield month, from a different direction",
+     "find": '        if a.town not in tp and prefix:',
+     "to": '        if a.town not in tp:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a town already in town_prefixes.json is overwritten, destroying a hand-set region or a second prefix that this run's single derived one cannot know about",
+     "find": '        if a.town not in tp and prefix:',
+     "to": '        if prefix:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "`region` is written on every town including the default region's own, so the field stops distinguishing the towns the monthly refresh must treat specially",
+     "find": '            if match and match[0]!=default:',
+     "to": '            if match:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a dataset registered in no regions.json is registered silently, which is exactly how Beaconsfield spent a month being diffed against Cambridgeshire",
+     "find": '            elif not match:',
+     "to": '            elif False:'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the registry is never written, so the scaffold prints `registered <town>` about a file it did not change",
+     "find": '            json.dump(tp,open(tp_path,"w",encoding="utf-8"),indent=1,ensure_ascii=False)',
+     "to": '            pass'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the review checklist is written under a different name, so the path the run prints is not the file it wrote",
+     "find": '    nxt=os.path.join(s1,"SCAFFOLD-NEXT.md")',
+     "to": '    nxt=os.path.join(s1,"NEXT.md")'},
+
+    # The last two restore what the module did BEFORE 2026-09-17 rather than
+    # inventing a fault. A fix is only held by a suite if the suite has been seen
+    # to go red against the code it replaced.
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "a bootstrap that found no ATCO prefix goes back to saying nothing at all, so the run exits 0 without the gtfs-services.json the S1 review gate exists to review",
+     "find": '''        print(f"  WARNING: bootstrap found no atcoPrefix for {a.town}, so "
+              f"gtfs-services.json was NOT pulled. Check routes.draft.json, then run "
+              f"gtfs_query.py by hand before reviewing S1.")''',
+     "to": '        pass'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the registration message goes back to `(or no prefix)`, so a town that COULD NOT be registered prints the sentence a town needing nothing prints",
+     "find": '''        elif a.town in tp:
+            print(f"{a.town} already in town_prefixes.json - left as it stands")
+        else:
+            # The other half of the same conflation: nothing was registered, and the
+            # reason is the missing prefix rather than a row that already existed.
+            print(f"NOT registered: {a.town} has no atcoPrefix, so the monthly refresh "
+                  f"cannot check this town until one is added by hand")''',
+     "to": '''        else:
+            print(f"{a.town} already in town_prefixes.json (or no prefix)")'''},
+
+    # ---------------------------------------------------------------- bootstrap_town.py
+    # The module scaffold_town.py shells out to, and where the derivation
+    # actually happens: the ATCO prefix the town is registered under, the anchor
+    # the internal sheet is centred on, the draft spokes and the candidate linear
+    # features. It runs before S1's human gate, so there is nothing yet to
+    # compare its output against and no gate downstream can see a fault in it.
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the haversine loses its factor of two, so every distance is half what it is -- a far stop reads as in-town and the draft spokes are drawn to the wrong places",
+     "find": '    return 6371*2*math.asin(math.sqrt(a))',
+     "to": '    return 6371*math.asin(math.sqrt(a))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the bearing's longitude difference is taken backwards, so every draft external spoke is mirrored east-for-west around the anchor",
+     "find": '    y=math.sin(math.radians(lo2-lo1))*math.cos(math.radians(la2))',
+     "to": '    y=math.sin(math.radians(lo1-lo2))*math.cos(math.radians(la2))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the radius test is inverted, so the town's stops are exactly the ones NOT in the town and the prefix, anchor and services all come from somewhere else",
+     "find": '            if _km(lat,lon,float(la),float(lo))<=km: out.append((sid,nm,float(la),float(lo)))',
+     "to": '            if _km(lat,lon,float(la),float(lo))>=km: out.append((sid,nm,float(la),float(lo)))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the 9-char block is counted over ALL stops again rather than within the dominant ATCO area -- the pre-region-agnostic rule, under which a town whose radius clips a neighbouring county can be registered under the neighbour's prefix",
+     "find": '    c=Counter(s[0][:9] for s in stops if s[0].startswith(top_area))',
+     "to": '    c=Counter(s[0][:9] for s in stops)'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "every 9-char block is kept however few stops it holds, so one stray stop from the next locality is registered as one of the town's prefixes and the monthly refresh diffs against it for ever",
+     "find": '    tot=sum(c.values()); keep=[p for p,n in c.most_common() if n/tot>=0.12]',
+     "to": '    tot=sum(c.values()); keep=[p for p,n in c.most_common() if n/tot>=0.0]'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "a stop merely NAMED like a bus station becomes the anchor however few routes call there, so a one-route layby outranks the real interchange and the whole internal sheet is centred on it",
+     "find": '    named=[(sid,n) for sid,n in rows if STN.search(nm_by.get(sid,"") or "") and n>=max(2,nmax*0.5)]',
+     "to": '    named=[(sid,n) for sid,n in rows if STN.search(nm_by.get(sid,"") or "")]'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the anchor candidates are ordered quietest-first, so the fallback picks the least-served stop in town and `nmax` -- which the naming gate is measured against -- becomes the minimum",
+     "find": '        WHERE st.stop_id IN ({ph}) GROUP BY st.stop_id ORDER BY n DESC""", ids).fetchall()',
+     "to": '        WHERE st.stop_id IN ({ph}) GROUP BY st.stop_id ORDER BY n ASC""", ids).fetchall()'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the draft spoke is taken from trips that do NOT call in the town, so a route passing nearby gets an external spoke drawn for it and the reviewer is shown a destination this town cannot reach",
+     "find": '        WHERE t.route_id IN ({ph}) AND st.stop_id IN ({tph}) LIMIT 40""", route_ids+town_ids)]',
+     "to": '        WHERE t.route_id IN ({ph}) AND st.stop_id NOT IN ({tph}) LIMIT 40""", route_ids+town_ids)]'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the spoke keeps the NEAREST stop instead of the farthest, so every external radial is seeded with the stop next to the bus station",
+     "find": '            if not far or d>far[0]: far=(d,nm,float(la),float(lo))',
+     "to": '            if not far or d<far[0]: far=(d,nm,float(la),float(lo))'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "only one Overpass endpoint is ever tried, so the fallback that exists because that host is regularly busy is gone and the town is reported as having no linear features",
+     "find": '    for host in ("https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"):',
+     "to": '    for host in ("https://overpass-api.de/api/interpreter",):'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "more than six candidate features are reported, so the draft's `features[]` takes three from an unranked tail rather than from the top of the ranking",
+     "find": '    return ranked[:6], True',
+     "to": '    return ranked, True'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "a colour in LIGHT names no colour the palette can assign, so that route prints white badge text on a pale badge and nothing anywhere objects",
+     "find": 'LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7733"}',
+     "to": 'LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7734"}'},
+
+    # The last three restore what the module did BEFORE 2026-09-17 rather than
+    # inventing a fault. A fix is only held by a suite if the suite has been seen
+    # to go red against the code it replaced.
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "both Overpass endpoints failing goes back to reporting as though OSM had answered, so an unasked question is indistinguishable from a town with no river in it",
+     "find": '    if not d: return [], False',
+     "to": '    if not d: return [], True'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "a successful Overpass read reports as unreachable, which is the same conflation pointing the other way -- every town would carry the COULD NOT LOOK sentence and the reviewer would stop reading it",
+     "find": '    return ranked[:6], True',
+     "to": '    return ranked[:6], False'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the refusal loses its own sentence and falls through to the absence's, which is `- (none found / skipped)` restored in everything but wording",
+     "find": '''    if state=="refused":
+        return ("- COULD NOT LOOK: both Overpass endpoints failed, so OSM has NOT been asked "
+                "-- a refusal, not an absence. Re-run before treating an empty features[] as "
+                "a finding about this town.")''',
+     "to": '''    if False:
+        return ""'''},
 
 ]
 

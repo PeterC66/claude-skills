@@ -58,7 +58,7 @@ import { execFileSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readLoopLock, fmtMin } from './loop_lock.mjs';
-import { readBlockedDir, heldPaths } from './loop_blocked.mjs';
+import { readYourMoveDir, heldPaths } from './loop_your_move.mjs';
 
 // ---- verdicts --------------------------------------------------------------
 export const SAFE = 'safe';
@@ -112,7 +112,7 @@ export const topFolders = (r) => [...new Set(allPaths(r).map((p) => p.split('/')
  * OA-301. A DIRTY FILE THAT A LIVE HOLD ALREADY NAMES IS ACCOUNTED FOR.
  *
  * The buses-tree rule exists because `git status` cannot say WHOSE uncommitted
- * files those are. A `loop/blocked/` hold can: its `**File:**` field names the
+ * files those are. A `loop/your-move/` hold can: its `**File:**` field names the
  * path, its body says who it belongs to and why the loop must not touch it. On
  * 2026-09-10 twelve of eighteen ticks stopped on one such file — a letter whose
  * salutation Peter had typed and left for the morning — every one of them
@@ -151,6 +151,77 @@ const accountedSet = (r) => new Set((r.accounted || []).map((a) => a.path));
 /** The dirty paths a verdict should count: everything a live hold does not account for. */
 export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPaths(r).filter((p) => !s.has(p)); };
 const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
+
+/*
+ * OA-386 item 2. HOW OLD IS THE DIRT — the instrument the loop has been asking
+ * for by hand, and the one `quiescentMin` was standing in for and cannot be.
+ *
+ * Step 2 of the loop's task prompt tells a stopped tick to say whether the tree
+ * is MOVING (a live session, which clears itself) or STILL (a leftover, which
+ * does not), and step 2b gates orphan adoption on a quiescence reading. Both
+ * questions are about the ORPHAN, and `peers.quiescentMin` answers a question
+ * about TRANSCRIPTS: the loop fires hourly, so an hour-old sibling tick's
+ * transcript is always on disk and that number has a structural ceiling of
+ * about sixty minutes. Over 106 recorded readings it topped out at 56 against a
+ * threshold of 90, and the one reading that ever cleared 90 did so because the
+ * scheduler MISSED a firing — a quantity whose variance is dominated by the
+ * loop's own uptime, which is the opposite of evidence that a departed session
+ * has gone home. Measured on 2026-09-16 at 05:15Z: peers read `quiescentMin: 3`
+ * (live) while the bar in front of that tick had been byte-unchanged for six
+ * hours. The subject is the file; so the instrument is the file's mtime.
+ *
+ * THREE ANSWERS, NOT TWO, because a stat that refused must never read as a file
+ * that is young or a file that is absent. `read` carries a number; `absent` is
+ * a path git names that is not in the working tree, which is the ordinary shape
+ * of a staged deletion; `refused` is everything else, and it is counted as a
+ * finding rather than skipped — see *the refusal read as an absence*.
+ *
+ * MTIME IS A PROXY AND IS LABELLED AS ONE WHERE IT PRINTS. A file rewritten
+ * with identical bytes reads young, so this number can only ever say the dirt
+ * is at LEAST that old when it is old, and nothing at all when it is young.
+ * That asymmetry points the same way as every other rule here: it can hold a
+ * tick back, never wave one through.
+ *
+ * NOTHING SCORES IT YET, deliberately. Widening step 2b's clause (iv) to read
+ * this instead is [OA-294]'s conjunction and therefore Peter's decision, and a
+ * tick that rewrote its own adoption clause would be granting itself the
+ * capability the clause exists to withhold. What this buys now is the printed
+ * diagnosis step 2 already asks for, and a range to set a threshold FROM.
+ */
+export function readDirtyAges(dir, paths, nowMs = Date.now()) {
+  const out = {};
+  for (const p of paths || []) {
+    try {
+      const st = statSync(path.join(dir, p));
+      out[p] = { state: 'read', ageMin: Math.max(0, Math.round((nowMs - st.mtimeMs) / 60000)), why: null };
+    } catch (e) {
+      const code = (e && e.code) || 'unknown';
+      out[p] = code === 'ENOENT'
+        ? { state: 'absent', ageMin: null, why: 'git names it but it is not in the working tree — a deletion, or a rename away' }
+        : { state: 'refused', ageMin: null, why: `could not stat it (${code}) — this is a refusal, not an absence` };
+    }
+  }
+  return out;
+}
+
+/** The age of the dirt a verdict actually counts: the unaccounted paths only. */
+export function dirtyAge(r) {
+  const ages = r.dirtyAges || null;
+  const paths = unaccountedPaths(r);
+  const out = { paths: paths.length, counted: 0, absent: 0, refused: 0, oldestMin: null, newestMin: null };
+  for (const p of paths) {
+    /* No `dirtyAges` at all means nobody looked — a synthetic conditions object
+     * in a harness, or a reader built before this existed. That is a refusal,
+     * and it is the whole reason the field is counted rather than dropped. */
+    const a = ages ? ages[p] : null;
+    if (!a || a.state === 'refused') { out.refused++; continue; }
+    if (a.state === 'absent') { out.absent++; continue; }
+    out.counted++;
+    if (out.oldestMin === null || a.ageMin > out.oldestMin) out.oldestMin = a.ageMin;
+    if (out.newestMin === null || a.ageMin < out.newestMin) out.newestMin = a.ageMin;
+  }
+  return out;
+}
 
 /*
  * HOW MANY COMMITS NOBODY HAS PUSHED — and against WHAT (buses-data OA-313).
@@ -205,9 +276,9 @@ export function countUnpushed(dir) {
   return out;
 }
 
-export function readRepo({ key, label, name, dir, expect = 'main' }) {
+export function readRepo({ key, label, name, dir, expect = 'main', now = Date.now() }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
-  repo.staged = []; repo.modified = []; repo.untracked = [];
+  repo.staged = []; repo.modified = []; repo.untracked = []; repo.dirtyAges = {};
   repo.unpushed = null; repo.unpushedBasis = null; repo.unpushedFrom = null; repo.unpushedWhy = null;
   repo.touchedTop = []; repo.touchesMapData = false;
 
@@ -234,6 +305,9 @@ export function readRepo({ key, label, name, dir, expect = 'main' }) {
   }
   repo.touchedTop = topFolders(repo);
   repo.touchesMapData = mapDataHits(repo).length > 0;
+  // OA-386 item 2. Read here, beside the paths it is about, so the age and the
+  // path list can never come from two different reads of the disk.
+  repo.dirtyAges = readDirtyAges(dir, allPaths(repo), now);
 
   // Ahead of its own remote-tracking ref. Deliberately NOT a fetch: this tool
   // promises to touch the network only in --url mode, and a fetch inside a
@@ -455,9 +529,9 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
 
 export function readConditions({ buses, portal, engine, selfSession, selfId = null, now = Date.now(), projectsDir, peerWindowMin = 20 } = {}) {
   const repos = {
-    buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses }),
-    engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine }),
-    portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal }),
+    buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses, now }),
+    engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine, now }),
+    portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal, now }),
   };
   const out = {
     at: new Date(now).toISOString(),
@@ -480,7 +554,12 @@ export function readConditions({ buses, portal, engine, selfSession, selfId = nu
   /* OA-301, applied at read time so the JSON the loop reads already carries it.
    * `loop/` is gitignored, so an absent folder — every fixture, every clone, CI
    * — accounts for nothing and the verdict is exactly what it was before. */
-  accountFor(out.repos.buses, buses ? heldPaths(readBlockedDir(path.join(buses, 'loop', 'blocked'))) : []);
+  accountFor(out.repos.buses, buses ? heldPaths(readYourMoveDir(path.join(buses, 'loop', 'your-move'))) : []);
+  /* OA-386 item 2, and it is derived AFTER the subtraction above for the reason
+   * OA-301 gives: the count, the folder list, the staged test and now the age
+   * must all come from the same unaccounted set, or the block can print an age
+   * for a file the verdict did not count. */
+  for (const r of Object.values(out.repos)) r.dirtyAge = dirtyAge(r);
   return out;
 }
 
@@ -643,20 +722,23 @@ export const NEED_LABEL = {
 
 /*
  * OA-287. WHICH WORK THE LOOP CAN CONTEND FOR, and it is a fact about the loop
- * rather than a judgement about risk. A tick works the shared local trees; it
- * NEVER pushes — a deny rule in buses-data's settings, observed refusing — so it
- * can neither deliver a map nor deploy the portal, and the two portal resources
- * are genuinely not contended. If the loop is ever allowed to push, the harness
- * assertion that a deploy does not carry the lock is what should go red.
+ * rather than a judgement about risk. Until 2026-09-17 a tick NEVER pushed — a
+ * deny rule in buses-data's settings, observed refusing — so it could neither
+ * deliver a map nor deploy the portal, and the two portal resources were
+ * genuinely not contended. buses-data OA-394 (R1 of the 2026-09-17 process
+ * review, Peter's decision) gave the tick the push, the pull request, the merge
+ * and the DEPLOY, so a deploy is contended now and the harness assertion the
+ * old comment promised would go red has been flipped. Delivery of a map was
+ * NOT in that grant, so `portal-write` stays outside the set on purpose.
  */
-const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep']);
+const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep', 'portal-deploy']);
 
 export function assess(needs, conditions) {
   let verdict = SAFE;
   const reasons = [];
   /* OA-287, and stated ONCE here rather than added to a dozen returns in
    * needsOf(). Attaching it at the boundary is what keeps the empty list empty:
-   * `ci-red-` and `loop-blocked-` rows return [] on purpose so that --safe-only
+   * `ci-red-` and `loop-hold-` rows return [] on purpose so that --safe-only
    * can never hide the row saying the repository is broken or that the loop has
    * stopped, and a guard written case by case is exactly how that gets undone by
    * somebody adding the thirteenth case. */
@@ -701,23 +783,24 @@ export function needsOf(item) {
   // the one row that must never be hidden from a session looking for something
   // safe to do is the one saying the repository is broken.
   if (key.startsWith('ci-red-')) return [];
-  // OA-283: the row's own action is "read loop/blocked/<ref>.md and decide". That
+  // OA-283, renamed by OA-401: the row's own action is "read
+  // loop/your-move/<ref>.md and decide". That
   // is a decision, like a drafted reply or an application — it touches no working
   // tree, and whatever the ANSWER turns out to need belongs to the row that
   // answer becomes. Empty for the same load-bearing reason as `ci-red-` above:
   // --safe-only hides every non-SAFE row, and a session looking for something
   // safe to do is exactly who should see that the loop has stopped and why.
-  if (key.startsWith('loop-blocked-')) return [];
+  if (key.startsWith('loop-hold-')) return [];
   // OA-288: the row's action is "commit or revert what git status names", or
   // "delete loop/STOP", or "read the newest run file". None of that writes to a
   // shared tree, and the same load-bearing argument as `ci-red-` and
-  // `loop-blocked-` applies with more force here: --safe-only hides every
+  // `loop-hold-` applies with more force here: --safe-only hides every
   // non-SAFE row, and a row saying THE LOOP HAS STOPPED must never be the one
   // hidden from a session looking for something safe to do. It is also the row
   // most likely to be ABOUT a dirty tree, so classifying it by the tree it
   // reports on would suppress it exactly when it is right.
   if (key === 'loop-idle') return [];
-  // 2026-09-10: the row's action is "read loop/adhoc/ and promote, file or
+  // 2026-09-10: the row's action is "read loop/your-move/ and promote, file or
   // decline each draft" — a triage, done by moving gitignored files. It touches
   // no shared tree, and it is the row most likely to be ABOUT a fix a tick was
   // barred from making, so classifying it by the tree would hide it exactly
@@ -728,7 +811,7 @@ export function needsOf(item) {
   // that is the reason the row exists. Pushing a branch writes to no working
   // tree here, and whatever REVIEWING that branch turns out to need belongs to
   // the row that review becomes. Empty for the same load-bearing reason as
-  // `ci-red-` and `loop-blocked-`: --safe-only hides every non-SAFE row, and a
+  // `ci-red-` and `loop-hold-`: --safe-only hides every non-SAFE row, and a
   // row saying finished work is invisible to everyone but this laptop must not
   // be the one hidden from a session looking for something safe to do.
   if (key.startsWith('unpushed-branch-')) return [];
@@ -817,17 +900,38 @@ const repoLine = (r) => {
   return `${r.name} — ${bits.join(', ')}${where}`;
 };
 
+/* OA-386 item 2. One line, printed only where there is unaccounted dirt to be
+ * old, saying how long the thing barring a tick has been sitting there. It is
+ * labelled `mtime` at the point of use because that is what it is: a file
+ * rewritten with identical bytes reads young, so an old answer is evidence and
+ * a young one is not. */
+const ageLine = (r) => {
+  const a = r.dirtyAge;
+  if (!a || !a.paths) return null;
+  const bits = [];
+  if (a.counted) bits.push(a.oldestMin === a.newestMin
+    ? `${fmtMin(a.oldestMin)} old`
+    : `oldest ${fmtMin(a.oldestMin)}, newest ${fmtMin(a.newestMin)}`);
+  if (a.absent) bits.push(`${a.absent} named by git and not on disk`);
+  if (a.refused) bits.push(`${a.refused} COULD NOT LOOK — a refusal, not an absence`);
+  return `${a.paths} unaccounted path(s), ${bits.join('; ')} — mtime, so an OLD answer is evidence that nobody is working on it and a young one is not`;
+};
+
 export function formatConditions(c) {
   const L = [];
+  const age = (r) => { const s = ageLine(r); if (s) L.push(`  ${'dirt age'.padEnd(12)}${s}`); };
   L.push(`  ${'this tree'.padEnd(12)}${repoLine(c.repos.buses)}`);
   // OA-301. The subtraction is SHOWN, under the line that still counts the file
   // as uncommitted, because a number that silently got smaller is a number
   // nobody can check — the same rule the activity line follows for demotions.
   for (const a of (c.repos.buses.accounted || [])) {
-    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/blocked/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
+    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/your-move/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
   }
+  age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);
+  age(c.repos.engine);
   L.push(`  ${'the portal'.padEnd(12)}${repoLine(c.repos.portal)}`);
+  age(c.repos.portal);
 
   // WITHOUT --session THIS CANNOT SUBTRACT YOURSELF, and a list that shows your
   // own claim back to you as somebody else's work is worse than no list: it

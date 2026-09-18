@@ -2,12 +2,16 @@
  * unpushed_branches.mjs — committed work that has never reached GitHub, as
  * worklist rows (buses-data OA-326, 2026-09-12).
  *
- * WHY THIS EXISTS. The scheduled loop can never push: `Bash(git push…)` is in
- * this estate's deny list, and that containment is the whole reason an
- * unattended tick may write to the map trees and to `claude-skills` at all — a
- * wrong edit sits in an unpushed commit until a person reads it. Nothing here
- * proposes changing that. What was missing is the CHANNEL for the residue it
- * creates. On 2026-09-12 `check/schema-version-oa325` sat in the portal with 463
+ * WHY THIS EXISTS. Until 2026-09-17 the scheduled loop could never push:
+ * `Bash(git push…)` was in this estate's deny list, and that containment was
+ * the reason an unattended tick could write to the map trees and to
+ * `claude-skills` at all — a wrong edit sat in an unpushed commit until a person
+ * read it. buses-data OA-394 (R1 of the 2026-09-17 process review) gave the
+ * tick the push at the end of its unit, behind the push preflight, so a row
+ * here now means a push that did not happen — a preflight that refused, or a
+ * session's own branch — rather than one that could not. What was missing, and
+ * still is what this module provides, is the CHANNEL for the residue that
+ * leaves. On 2026-09-12 `check/schema-version-oa325` sat in the portal with 463
  * insertions, a falsification harness, no pull request and no `loop/blocked/`
  * item, while the board printed `the portal  community-bus-maps — main, clean`.
  *
@@ -323,9 +327,11 @@ export function classifyBranch(b) {
  * Rows for every stranded branch, plus the counts of what was deliberately not
  * raised.
  *
- * Rank 3 — the same band as a drafted reply Peter has not sent, and for exactly
- * the same reason: a person is the only thing that moves it, and every tick that
- * fires meanwhile does nothing about it.
+ * Rank 3 — the same band as a drafted reply Peter has not sent. The reason used
+ * to be that a person was the only thing that COULD move it; since OA-394 it is
+ * that a person is the only thing that can DECIDE it. A tick may push and open a
+ * pull request now, but every branch on this list was written by somebody else,
+ * and nothing on this laptop says whether they had finished with it.
  *
  * @param {{repos: Array<{key,name,dir,prPerChange?}>, git: Function, now?: number}} p
  * @returns {{items: Array, notes: Array<string>, unreadable: Array}}
@@ -375,7 +381,7 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
         why: `${size} insertion(s) in ${b.addedMissing.length} file(s) the trunk has never had. `
           + `The deleted remote branch is what makes this repository's finished work look finished, so a branch in `
           + `that state is normally read as landed — this one gained work after the merge, and nothing outside this `
-          + `laptop knows about that part. The loop commits to a branch like this every hour and cannot push.`,
+          + `laptop knows about that part. Since OA-394 a tick pushes at the end of its unit, so this was left by a session or by a refused preflight.`,
         detail: [`last commit ${(b.committedAt || '').slice(0, 10) || 'date unknown'} — ${b.subject || '(no subject)'}`,
           `on the branch and in no trunk: ${b.addedMissing.join(', ')}`].join('\n'),
         who: 'Peter', runbook: 'git', ref: b.branch, repo: repo.name, ageDays,
@@ -388,7 +394,9 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
               + 'everything its squash already took. Start a fresh branch from the trunk and cherry-pick onto it only '
               + 'the commits made after the merge — the ones whose files are named above — then push that and open the '
               + 'pull request for it.' },
-          { kind: 'chat', what: 'Nothing in the loop can do this: pushing is denied to an unattended tick by design, which is why the work waits here.' },
+          { kind: 'chat',
+            what: 'Since OA-394 the loop is no longer barred from pushing, and it will still not do this one: the '
+              + 'cherry-pick above is a judgement about which commits are wanted, and an unattended tick cannot make it.' },
         ],
       });
     }
@@ -407,7 +415,9 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
       } else {
         do_.push({ kind: 'chat', what: `${repo.name} is direct-push to main, so a branch here is unusual — merge it or say why it exists.` });
       }
-      do_.push({ kind: 'chat', what: 'Nothing in the loop can do this: pushing is denied to an unattended tick by design, which is why the work waits here.' });
+      do_.push({ kind: 'chat',
+        what: 'Since OA-394 the loop is no longer barred from this — a tick pushes at the end of its own unit. What it '
+          + 'cannot tell is whether SOMEBODY ELSE\'S branch is finished, so this waits on a decision, not on a permission.' });
 
       items.push({
         key: `unpushed-branch-${repo.key}-${b.branch.replace(/[^A-Za-z0-9]+/g, '-')}`,
@@ -415,7 +425,7 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
         title: `${repo.name}: the branch ${b.branch} has never been pushed, and nothing outside this laptop knows it exists`,
         why: `${size} insertion(s) of committed work, on no remote and in no pull request. `
           + `Its patches are not in ${read.base}, and it is checked out in this repository or one of its worktrees. `
-          + `The loop cannot push, so this sits here until you do.`,
+          + `Push it, or ask why the tick that made it did not: since OA-394 a tick pushes at the end of its unit when the preflight is green.`,
         detail: [`last commit ${(b.committedAt || '').slice(0, 10) || 'date unknown'} — ${b.subject || '(no subject)'}`,
           `${b.unmerged} commit(s) whose patches ${read.base} does not have`].join('\n'),
         who: 'Peter', runbook: 'git', ref: b.branch, repo: repo.name, ageDays,

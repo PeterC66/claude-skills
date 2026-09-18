@@ -28,7 +28,7 @@
  * on a calendar, which is the fault OA-289 took out of the backlog index and the
  * whole reason this check is not in CI in the first place.
  *
- * TWO HARNESS LESSONS INHERITED FROM prove-red-loop-blocked.mjs. A source
+ * TWO HARNESS LESSONS INHERITED FROM prove-red-loop-your-move.mjs. A source
  * assertion asks whether the line RUNS, not whether the file contains the text,
  * because `includes()` is satisfied by the line commented out. And where a phrase
  * must appear in more than one branch it is COUNTED, because an assertion that
@@ -257,7 +257,7 @@ console.log('\n12. THE JOIN ITSELF — the real writer\'s output, read by the re
 console.log('\n13. the wire in worklist.mjs — literal strings, and they must RUN');
 {
   const src = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  // NOT src.includes(). A mutation sweep on prove-red-loop-blocked.mjs commented
+  // NOT src.includes(). A mutation sweep on prove-red-loop-your-move.mjs commented
   // a wire out and every assertion stayed green, because a commented line still
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));

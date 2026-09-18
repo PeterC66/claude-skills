@@ -19,7 +19,7 @@
  * newest run raises nothing at all (case 5) because the scheduler only fires
  * while the desktop app is open and "nothing since 01:15" is every morning.
  *
- * TWO HARNESS LESSONS FROM prove-red-loop-blocked.mjs ARE APPLIED HERE FROM THE
+ * TWO HARNESS LESSONS FROM prove-red-loop-your-move.mjs ARE APPLIED HERE FROM THE
  * START, both found by a mutation sweep on 2026-09-08. A source assertion asks
  * whether the line RUNS, not whether the file contains the text, because
  * `includes()` is satisfied by the line commented out. And where a phrase must
@@ -229,7 +229,7 @@ console.log('\n11. the concurrency verdict');
 console.log('\n12. the wire in worklist.mjs — literal strings, and it must RUN');
 {
   const src = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  // NOT src.includes(). A mutation sweep on prove-red-loop-blocked.mjs commented
+  // NOT src.includes(). A mutation sweep on prove-red-loop-your-move.mjs commented
   // a wire out and every assertion stayed green, because a commented line still
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));

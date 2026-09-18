@@ -27,7 +27,7 @@
  *      decision is made, which is where loop/README.md puts it.
  *
  *   3. A ROW THAT NEEDS NOTHING STILL NEEDS NOTHING. `ci-red-` rows and
- *      OA-283's `loop-blocked-` rows return [] from needsOf() on purpose, so
+ *      OA-283's `loop-hold-` rows return [] from needsOf() on purpose, so
  *      that --safe-only can never hide the row saying the repository is broken
  *      or that the loop has stopped. A guard bolted onto assess() is exactly
  *      how that would get undone by accident.
@@ -212,7 +212,7 @@ want(conc.assess(['buses-tree', 'engine', 'estate-sweep'], own), conc.SAFE, 'and
 // --- green 3: a row that needs nothing is untouched by any of it ---
 want(conc.assess([], live), conc.SAFE, 'a row that needs nothing: SAFE NOW even while a tick runs');
 want(conc.assess(conc.needsOf({ key: 'ci-red-claude-skills', type: 'gate-red' }), live), conc.SAFE, 'a ci-red- row is never hidden by the lock');
-want(conc.assess(conc.needsOf({ key: 'loop-blocked-st-ives', type: 'loop-blocked' }), live), conc.SAFE, 'nor is an OA-283 loop-blocked- row');
+want(conc.assess(conc.needsOf({ key: 'loop-hold-st-ives', type: 'loop-hold' }), live), conc.SAFE, 'nor is an OA-283 loop-hold- row');
 want(conc.assess(conc.needsOf({ key: 'corr-unsent-001', type: 'correspondence' }), live), conc.SAFE, 'nor a drafted reply Peter has to send');
 
 // ---------------------------------------------------------------------------
@@ -285,12 +285,16 @@ const standing = (what) => conc.STANDING_TOOLS.find((t) => t.what === what);
 ok(needsLock(standing('Run a map build (S1–S6)').needs), 'the standing "Run a map build" command carries it');
 ok(needsLock(standing('Full byte gate sweep').needs), 'so does the byte gate sweep');
 ok(!needsLock(standing('Print this worklist').needs), 'and printing the worklist does not');
-/* The portal rows deliberately do NOT carry it, and the reason is a fact about
- * the loop rather than a judgement: a tick never pushes — that is a deny rule in
- * buses-data's settings, observed refusing — so it can neither deliver a map nor
- * deploy the portal, and cannot contend for either. If the loop is ever allowed
- * to push, this assertion is the thing that should go red. */
-ok(!needsLock(standing('Deploy the portal').needs), 'a portal deploy does not, because a tick can never push');
+/* Until 2026-09-17 the portal rows deliberately did NOT carry it: a tick never
+ * pushed — a deny rule in buses-data's settings, observed refusing — so it could
+ * neither deliver a map nor deploy the portal. buses-data OA-394 (R1 of the
+ * 2026-09-17 process review, Peter's decision) gave the tick the push, the pull
+ * request, the merge and the deploy. This is the assertion the old comment
+ * promised would go red when that happened: it did, and it now asserts the
+ * opposite. Delivery was NOT in that grant, so the deliver row still stands
+ * outside the loop's contention, and the second line holds that boundary. */
+ok(needsLock(standing('Deploy the portal').needs), 'a portal deploy carries it, because a tick may deploy since OA-394');
+ok(!needsLock(standing('Deliver a map to the live portal').needs), 'a delivery does not — OA-394 granted push, merge and deploy, not delivery');
 
 fs.rmSync(root, { recursive: true, force: true });
 console.log(bad === 0 ? '\nAll loop-lock cases pass.\n' : `\n${bad} case(s) MISSED.\n`);

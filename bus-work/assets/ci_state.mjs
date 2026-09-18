@@ -208,6 +208,13 @@ export function ciRows(states) {
           + lastGreenNote
         : `Red for ${age} (${streak}), and NOTHING says anybody expected it.`
           + ` Every push since has inherited this and mailed Peter about it under its own commit message.${steps}`
+          // Since 2026-09-17 (buses-data OA-396, R3 of the process review) a red
+          // is a FAULT by construction -- a sheet that does not reproduce, a
+          // document check, a harness, or a live site running a commit no fetch
+          // can find -- and never a chore. Said here so a tick opens the run
+          // rather than first asking whether this is an S6 due or a deploy
+          // pending; those are rows now, further down this same list.
+          + ' Since OA-396 a red is a fault by construction (a sheet, a document check, a harness, or a live sha nothing can find), never a chore, so open the run rather than asking whether it is a stale S6 or a pending deploy — those are rows on this list, not reds.'
           + lastGreenNote;
 
     rows.push({

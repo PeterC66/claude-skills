@@ -1,0 +1,18 @@
+{
+ "place": "High Street",
+ "version": "v1.14",
+ "checkedAt": "2026-08-31",
+ "verifier": "boarding_verify.py v1.4",
+ "register": "naptan.sqlite",
+ "region": "buckinghamshire.sqlite",
+ "asof": "2026-08-31",
+ "asofFrom": "boarding_index.json",
+ "checked": {
+  "labels": 54,
+  "destinations": 54,
+  "boardingPoints": 6,
+  "sheetRead": true
+ },
+ "findings": [],
+ "result": "PASS"
+}

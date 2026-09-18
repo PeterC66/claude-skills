@@ -1,0 +1,69 @@
+{
+  "town": "High Wycombe",
+  "measure": "mutual 111m-cell overlap of the matched paths (as complexity_score.js --overlap)",
+  "sharedMin": 0.6,
+  "families": [
+    {
+      "lead": "102",
+      "routes": [
+        "102",
+        "103",
+        "104",
+        "105",
+        "M40",
+        "X74"
+      ],
+      "members": [
+        {
+          "route": "102",
+          "drawn": true,
+          "cells": 32,
+          "sharedFraction": 1,
+          "weakestAgainst": null
+        },
+        {
+          "route": "103",
+          "drawn": true,
+          "cells": 32,
+          "sharedFraction": 1,
+          "weakestAgainst": null
+        },
+        {
+          "route": "104",
+          "drawn": true,
+          "cells": 32,
+          "sharedFraction": 1,
+          "weakestAgainst": null
+        },
+        {
+          "route": "105",
+          "drawn": true,
+          "cells": 32,
+          "sharedFraction": 1,
+          "weakestAgainst": null
+        },
+        {
+          "route": "M40",
+          "drawn": true,
+          "cells": 32,
+          "sharedFraction": 1,
+          "weakestAgainst": null
+        },
+        {
+          "route": "X74",
+          "drawn": true,
+          "cells": 32,
+          "sharedFraction": 1,
+          "weakestAgainst": null
+        }
+      ],
+      "weakMembers": []
+    }
+  ],
+  "colours": {
+    "drawnLines": 11,
+    "distinctColours": 6,
+    "ambiguity": 1.83,
+    "corridorPalette": false
+  }
+}

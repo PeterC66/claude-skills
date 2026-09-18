@@ -1,0 +1,438 @@
+{
+  "town": "Beaconsfield",
+  "validFrom": "July 2026",
+  "version": "1.1",
+  "anchor": "040000001216",
+  "anchorLabel": "Old Town (Aylesbury End / The Saracen's Head)",
+  "atcoPrefix": "040000001",
+  "titleColor": "#4477AA",
+  "legendAt": {
+    "x": 10,
+    "y": 155
+  },
+  "internalZoom": {
+    "corePct": 0.9,
+    "comp": 0.22
+  },
+  "palette": {
+    "31": "#4477AA",
+    "102": "#EE6677",
+    "103": "#228833",
+    "104": "#CCBB44",
+    "105": "#AA3377",
+    "380": "#EE7733",
+    "X74": "#66CCEE"
+  },
+  "textOn": {
+    "31": "#fff",
+    "102": "#fff",
+    "103": "#fff",
+    "104": "#111",
+    "105": "#fff",
+    "380": "#fff",
+    "X74": "#111"
+  },
+  "operators": [
+    {
+      "name": "Carousel Buses",
+      "routes": [
+        "31",
+        "102",
+        "103",
+        "104",
+        "105"
+      ]
+    },
+    {
+      "name": "Red Eagle",
+      "routes": [
+        "380"
+      ]
+    },
+    {
+      "name": "First Berkshire & The Thames Valley",
+      "routes": [
+        "X74"
+      ]
+    }
+  ],
+  "routeOrder": [
+    "X74",
+    "380",
+    "31",
+    "105",
+    "104",
+    "103",
+    "102"
+  ],
+  "redteamRejected": [
+    {
+      "route": "101",
+      "decidedOn": "2026-09-08",
+      "decidedBy": "manual-0933, on the BODS extract and the DfT NaPTAN stop register (service-facts.json SF-006)",
+      "why": "Carousel's 101 is a real hourly service and it does not come to Beaconsfield. It runs Amersham - Little Chalfont - Chalfont St Giles - Chalfont Common - Chalfont St Peter - Gerrards Cross - Tatling End - Denham - New Denham - Uxbridge, Mon-Fri plus Saturday, along the corridor south-east of the town. All 97 of its stops resolve in NaPTAN to those ten localities and none is Beaconsfield; High Wycombe, also named in the claim, is absent too. Nothing changes on the sheet.",
+      "evidence": "Red-team claim of 2026-09-06 (S6-verify/2026-09-06_0719 F012), at high confidence: '101 Amersham - Uxbridge, hourly Mon-Fri via High Wycombe, Beaconsfield (Maxwell Road), Seer Green and the Chalfonts'. Its own named stop falsifies it: Maxwell Road, Beaconsfield is ATCO 040000001225/226 and is served by Carousel 102 (204 calls), 103 (190), 104 (75), 105 (46), 624 (2) and Red Eagle 380 (1) - all of the first four already drawn here - and by no 101. The claim is the Carousel 10x family confused for one another, 101 being the single member that never reaches the town. Note that the ATCO prefix 040000001 is county-wide in Buckinghamshire, so the prefix test our S1 uses cannot answer this and the locality register is what settles it.",
+      "recheckBy": "2027-09-08"
+    },
+    {
+      "route": "X103",
+      "decidedOn": "2026-09-08",
+      "decidedBy": "sched-1522, on the 2026-09-01 Buckinghamshire BODS extract (service-facts.json SF-007)",
+      "why": "X103 is not a missing service: it no longer exists as a registration, and the journeys it used to carry are inside route 103, which this sheet already draws. The renumbering Carousel announced in September 2024 is visible in the registration data. Nothing changes on the sheet.",
+      "evidence": "Red-team claim of 2026-09-06 (S6-verify/2026-09-06_0719 F013), at LOW confidence: an 'X103 High Wycombe - Slough' still hosted on Carousel's site and listed active on bustimes. _gtfs/buckinghamshire.sqlite (BODS feed 20260901_024734, 186 routes over every stop with ATCO prefix 0400) carries NO route named X103, and no X-prefixed Carousel route at all: the family is 1, 1A, 1B, 101, 102, 103, 104, 105, 106, 107 and the rest. Route 103 (route_id 70563, Carousel, 190 trips) is the whole of it - its four headsigns are High Wycombe BusStn (93), Windsor Town Centre Parish Church (38), Slough Town Centre Wellington Street Stop B (34) and Langley Axis Park (25), Mon-Fri / Sat / Sun calendars 79, 142 and 414, all 20260901-20270601. The Slough leg the claim describes is those 34 trips, and 189 of the 190 call at High Wycombe BusStn (040000000441) while ALL 190 call at Maxwell Road, Beaconsfield (040000001225/226). So the claimed X103 corridor is drawn here already, under the number the operator now registers it under.",
+      "recheckBy": "2027-09-08"
+    }
+  ],
+  "panelOrder": [
+    "31",
+    "102",
+    "103",
+    "104",
+    "105",
+    "380",
+    "X74"
+  ],
+  "orientationRoute": "102",
+  "internalDesc": {
+    "31": [
+      "31  Beaconsfield – High Wycombe",
+      "Mon–Sat · Carousel · via Holtspur, Penn & Hazlemere"
+    ],
+    "102": [
+      "102  High Wycombe – Beaconsfield – Heathrow",
+      "Daily · Carousel · via Gerrards Cross, Denham & Uxbridge"
+    ],
+    "103": [
+      "103  High Wycombe – Beaconsfield – Windsor",
+      "Daily · Carousel · via Farnham Common & Slough"
+    ],
+    "104": [
+      "104  High Wycombe – Beaconsfield – Uxbridge",
+      "Daily · Carousel · via Gerrards Cross & Denham"
+    ],
+    "105": [
+      "105  Chiltern Hundreds: Wycombe – Amersham",
+      "Mon–Sat · Carousel · via Beaconsfield, Coleshill & Chesham"
+    ],
+    "380": [
+      "380  Jordans – Beaconsfield – Loudwater",
+      "Tue & Fri (shopper) · Red Eagle · via Seer Green & Holtspur"
+    ],
+    "X74": [
+      "X74  Slough – Beaconsfield – High Wycombe",
+      "Daily · First · via Farnham Common (M40 corridor)"
+    ]
+  },
+  "poi": {
+    "industrialKeep": "none",
+    "excludeName": [],
+    "tidy": [
+      [
+        " Church of England Primary School$",
+        " C of E Primary"
+      ],
+      [
+        " Combined School$",
+        " School"
+      ],
+      [
+        " Primary School$",
+        " Primary"
+      ],
+      [
+        " Junior School$",
+        " Junior"
+      ],
+      [
+        " Infant School$",
+        " Infants"
+      ],
+      [
+        " School$",
+        ""
+      ]
+    ],
+    "canon": []
+  },
+  "features": [
+    {
+      "key": "railway",
+      "type": "railway",
+      "label": "Chiltern Main Line",
+      "labelPos": {
+        "x": 108.1,
+        "y": 50.4
+      },
+      "labelColor": "#777777",
+      "labelSize": 3.2,
+      "style": {
+        "rail": "chequer"
+      }
+    },
+    {
+      "key": "a355",
+      "type": "road",
+      "label": "A355",
+      "labelPos": "auto",
+      "labelColor": "#c2a45a",
+      "labelSize": 3.4,
+      "style": {
+        "stroke": "#e2d3a6",
+        "width": 2.1
+      }
+    }
+  ],
+  "internalRoads": {
+    "focus": {
+      "coreKm": 1.3,
+      "comp": 0.3
+    },
+    "roadLabelMax": 16,
+    "badgeEvery": 70,
+    "termini": {
+      "31": {
+        "end": "High Wycombe"
+      },
+      "102": {
+        "start": "High Wycombe",
+        "end": "Gerrards Cross & Heathrow"
+      },
+      "103": {
+        "start": "High Wycombe",
+        "end": "Slough & Windsor"
+      },
+      "104": {
+        "start": "High Wycombe",
+        "end": "Gerrards Cross & Uxbridge"
+      },
+      "105": {
+        "start": "High Wycombe",
+        "end": "Amersham"
+      },
+      "380": {
+        "start": "Seer Green",
+        "end": "Holtspur & Loudwater"
+      },
+      "X74": {
+        "start": "High Wycombe",
+        "end": "Slough"
+      }
+    },
+    "lenses": [
+      {
+        "center": [
+          51.6112,
+          -0.646
+        ],
+        "radiusKm": 0.55,
+        "mag": 1.8
+      }
+    ]
+  },
+  "mapNotes": [
+    {
+      "text": "School services (term-time only, not shown on this map):",
+      "x": 70,
+      "y": 158,
+      "size": 2.6,
+      "color": "#555"
+    },
+    {
+      "text": "222 / 662 / 808 → Beaconsfield High School",
+      "x": 70,
+      "y": 162.4,
+      "size": 2.4,
+      "color": "#555"
+    },
+    {
+      "text": "RGS02A / B / C → Royal Grammar School, High Wycombe",
+      "x": 70,
+      "y": 166.4,
+      "size": 2.4,
+      "color": "#555"
+    },
+    {
+      "text": "CCC1/2, DCG1, DCH1/2 → Chalfonts & Dr Challoner's",
+      "x": 70,
+      "y": 170.4,
+      "size": 2.4,
+      "color": "#555"
+    }
+  ],
+  "external": [
+    {
+      "route": "105",
+      "label": "Amersham & Chesham",
+      "days": "Mon–Sat",
+      "bearing": 353,
+      "side": "up",
+      "stops": [
+        "Coleshill",
+        "Amersham",
+        "Chesham",
+        "Chartridge"
+      ],
+      "minutesToDestination": 50
+    },
+    {
+      "route": "31",
+      "label": "High Wycombe",
+      "days": "Mon–Sat",
+      "bearing": 314,
+      "side": "up",
+      "stops": [
+        "Holtspur",
+        "Tylers Green",
+        "Penn",
+        "Hazlemere"
+      ],
+      "minutesToDestination": 35
+    },
+    {
+      "route": "380",
+      "label": "Holtspur & Loudwater",
+      "days": "Tue & Fri",
+      "bearing": 268,
+      "side": "left",
+      "stops": [
+        "Holtspur",
+        "Wooburn",
+        "Loudwater"
+      ]
+    },
+    {
+      "route": "104",
+      "label": "Uxbridge",
+      "days": "Daily",
+      "bearing": 116,
+      "side": "right",
+      "stops": [
+        "Gerrards Cross",
+        "Denham",
+        "Uxbridge"
+      ],
+      "minutesToDestination": 45
+    },
+    {
+      "route": "102",
+      "label": "Heathrow Airport",
+      "days": "Daily",
+      "bearing": 134,
+      "side": "right",
+      "stops": [
+        "Gerrards Cross",
+        "Denham",
+        "Uxbridge",
+        "West Drayton",
+        "Heathrow"
+      ],
+      "minutesToDestination": 37
+    },
+    {
+      "route": "103",
+      "label": "Windsor",
+      "days": "Daily",
+      "bearing": 156,
+      "side": "down",
+      "stops": [
+        "Farnham Common",
+        "Slough",
+        "Eton",
+        "Windsor"
+      ],
+      "minutesToDestination": 44
+    },
+    {
+      "route": "X74",
+      "label": "Slough",
+      "days": "Daily",
+      "bearing": 178,
+      "side": "down",
+      "stops": [
+        "Farnham Royal",
+        "Slough"
+      ],
+      "minutesToDestination": 20
+    },
+    {
+      "route": "380",
+      "label": "Seer Green & Jordans",
+      "days": "Tue & Fri",
+      "bearing": 52,
+      "side": "right",
+      "stops": [
+        "Seer Green",
+        "Jordans"
+      ],
+      "minutesToDestination": 32
+    }
+  ],
+  "externalNote": "102 / 103 / 104 / X74 also reach High Wycombe. 380 runs Tue & Fri only.",
+  "design": {
+    "spokeSpread": true,
+    "sheetUrl": "busmaps.uk/m/beaconsfield",
+    "sheetUrlLabel": "Latest version:",
+    "howToUse": {
+      "bullets": [
+        "Find where you want to go, around the edge of the diagram.",
+        "Follow its coloured line in to Beaconsfield at the centre.",
+        "The badge on that line is the bus service number."
+      ]
+    },
+    "frequencyTiers": {
+      "frequent": {
+        "mm": 2.2
+      },
+      "all-day": {
+        "mm": 1.7
+      },
+      "limited": {
+        "mm": 1.2
+      }
+    },
+    "laneOrientation": true
+  },
+  "labels": {},
+  "internalSchematic": {
+    "features": {
+      "railway": {
+        "labelPos": "auto"
+      }
+    }
+  },
+  "frequency": {
+    "31": "frequent",
+    "102": "frequent",
+    "103": "frequent",
+    "104": "all-day",
+    "105": "all-day",
+    "380": "limited",
+    "X74": "frequent"
+  },
+  "checkedAt": "July 2026",
+  "parked": {
+    "internalDiagram": {
+      "interchanges": [
+        {
+          "atco": "040000001216",
+          "label": "Old Town (Aylesbury End)"
+        }
+      ],
+      "loopArrows": [],
+      "mapNotes": [
+        {
+          "text": "Only main stops and stops near places of interest are shown",
+          "x": 8,
+          "y": 185,
+          "size": 2.4,
+          "color": "#555"
+        }
+      ],
+      "features": {
+        "railway": {
+          "labelPos": "auto"
+        }
+      }
+    }
+  }
+}

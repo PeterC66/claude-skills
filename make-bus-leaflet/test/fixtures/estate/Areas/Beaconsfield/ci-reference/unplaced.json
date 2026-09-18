@@ -1,0 +1,20 @@
+[
+  {
+    "id": "poi:park:Beaconsfield Town Hall Green",
+    "text": "Beaconsfield Town Hall Green",
+    "at": [
+      33.84803928918407,
+      73.7973401631983
+    ],
+    "reason": "no candidate clear"
+  },
+  {
+    "id": "poi:shop:Sainsbury's",
+    "text": "Sainsbury's",
+    "at": [
+      56.987832682556494,
+      80.75372173545001
+    ],
+    "reason": "no candidate clear"
+  }
+]

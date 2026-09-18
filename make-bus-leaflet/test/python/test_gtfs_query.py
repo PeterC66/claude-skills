@@ -335,15 +335,129 @@ class WhichDaysTheRouteActuallyRuns(unittest.TestCase):
         self.assertEqual(svc["days"], "Mon-Fri")
         self.assertEqual(svc["daysFlags"], [1, 1, 1, 1, 1, 0, 0])
 
+    @staticmethod
+    def _every_weekend(weeks=13):
+        """Every Saturday and Sunday of the sampled window, as calendar_dates additions.
+
+        THE FIXTURE USED TO BE ONE WEEKEND, and its docstring said "every weekend" from
+        the day it was written (OA-204). Nothing could tell the two apart, because
+        `servedFlags` was set by the FIRST journey found on a weekday anywhere in the
+        window -- so one addition and 263 of them produced the same flag, and an
+        under-specified fixture was indistinguishable from an accurate one. OA-410 made
+        the difference real: an exception-only weekday now has to run in more than a
+        quarter of the sampled weeks. So the fixture is now what it always claimed to be,
+        and the case below asserts the other side of the same rule.
+        """
+        import datetime as _dt
+        base = _dt.date(2026, 1, 10)            # the Saturday the one-weekend fixture used
+        out = []
+        for w in range(weeks):
+            for off in (0, 1):
+                d = base + _dt.timedelta(weeks=w, days=off)
+                out.append({"service_id": "WKDY", "date": d.strftime("%Y%m%d"),
+                            "exception_type": "1"})
+        return out
+
     def test_weekend_dates_added_by_calendar_dates_reach_the_day_string(self):
-        """High Wycombe's 300: filed Mon-Fri, adds every weekend. Read from the
-        calendar row it printed "no Sunday bus" onto a sheet with 12 Sunday
-        journeys, and no byte gate could see it -- the gate compares the drawing
-        with ci-reference, not with the world."""
-        svc = _one(self._res([{"service_id": "WKDY", "date": "20260110", "exception_type": "1"},
-                              {"service_id": "WKDY", "date": "20260111", "exception_type": "1"}]))
+        """High Wycombe's 300: filed Mon-Fri, adds every weekend -- 263 additions over a
+        nine-month registration. Read from the calendar row it printed "no Sunday bus"
+        onto a sheet with 12 Sunday journeys, and no byte gate could see it -- the gate
+        compares the drawing with ci-reference, not with the world."""
+        svc = _one(self._res(self._every_weekend()))
         self.assertEqual(svc["daysFlags"], [1, 1, 1, 1, 1, 1, 1])
         self.assertEqual(svc["days"], "Daily")
+
+    def test_ONE_added_weekend_does_not_reach_the_day_string(self):
+        """The other side of the rule the case above depends on (OA-410).
+
+        A single Saturday and Sunday is an OCCURRENCE -- a rail-replacement, an event
+        shuttle, a bank holiday -- and printing "Daily" for it tells a reader there is a
+        weekend bus. St Neots C2 is the live case this was found on: a Thursday calendar
+        row, one added Tuesday, and `Tue & Thu` on the sheet.
+
+        This case and the one above are a PAIR and must stay one: together they say the
+        rule is about how OFTEN an exception-only day runs, and either alone is satisfied
+        by a resolver that always answers the same thing.
+        """
+        svc = _one(self._res([{"service_id": "WKDY", "date": "20260110", "exception_type": "1"},
+                              {"service_id": "WKDY", "date": "20260111", "exception_type": "1"}]))
+        self.assertEqual(svc["daysFlags"], [1, 1, 1, 1, 1, 0, 0])
+        self.assertEqual(svc["days"], "Mon-Fri")
+        self.assertIn("quarter", svc["daysBasis"])
+
+    # ---------------------------------------------------------------- OA-410
+    # The three cases below were written because the mutation harness said the suite
+    # needed them: `tools/prove-red-python.py` mutates gtfs_query.py and runs THIS file,
+    # and three OA-410 mutations SURVIVED the first time -- the discriminating cases
+    # existed only in `tools/prove-red-days-resolution.py`, which that mutation never
+    # runs. A rule falsified in one harness and not in the one a mutation names is a rule
+    # with no cover where the cover is measured.
+
+    def _res_window(self, calendar_dates, days, weeks):
+        """Like `_res`, but the calendar row ENDS after `weeks`, which is what shortens the
+        sampled window -- `_sample_mondays` stops at the feed's last end_date."""
+        import datetime as _dt
+        end = (_dt.date(2026, 1, 5) + _dt.timedelta(weeks=weeks)).strftime("%Y%m%d")
+        trip = _trip("T1", "WKDY", [(TOWN + "001", "09:00:00"),
+                                    ("0500CCITY001", "09:40:00")])
+        db = _town_db([trip], [_cal("WKDY", days, end=end)], calendar_dates)
+        return gq.query(db, prefixes=[TOWN], town="St Ives", asof=ASOF)
+
+    @staticmethod
+    def _adds(weekday, n, first="20260105", every=7):
+        """`n` calendar_dates additions on the same weekday, `every` days apart."""
+        import datetime as _dt
+        base = _dt.datetime.strptime(first, "%Y%m%d").date()
+        base += _dt.timedelta((weekday - base.weekday()) % 7)
+        return [{"service_id": "WKDY",
+                 "date": (base + _dt.timedelta(days=i * every)).strftime("%Y%m%d"),
+                 "exception_type": "1"} for i in range(n)]
+
+    def test_an_exception_only_weekday_running_3_of_12_weeks_is_not_a_running_day(self):
+        """Three occurrences in a twelve-week window is a quarter, and the rule is MORE
+        than a quarter. The estate's real case is The Shelfords 132, a Sunday bus whose
+        three exception-only Mondays are Easter Monday, May Day and the late May bank
+        holiday. A rule written as a COUNT keeps this, which is why the pair below
+        matters more than either case alone."""
+        svc = _one(self._res(self._adds(5, 3)))          # three Saturdays
+        self.assertEqual(svc["daysFlags"], [1, 1, 1, 1, 1, 0, 0])
+        self.assertEqual(svc["days"], "Mon-Fri")
+
+    def test_the_same_3_weeks_in_a_SHORT_window_IS_a_running_day(self):
+        """The other half, and together they pin the rule to a FRACTION of the sampled
+        window rather than to a number of weeks. Near the end of a registration the window
+        is short -- Beaconsfield 808 runs an exception-only Monday in 3 of 4 weeks -- and
+        3-of-4 is a pattern where 3-of-12 is three bank holidays. The two cases differ in
+        the window length and in nothing else."""
+        svc = _one(self._res_window(self._adds(5, 3), [0, 1, 2, 3, 4], weeks=4))
+        self.assertEqual(svc["daysFlags"][5], 1, svc["daysFlags"])
+
+    def test_a_weekday_the_calendar_DECLARES_survives_running_only_once(self):
+        """The fraction applies only to weekdays no calendar row declares. The calendar is
+        the operator's statement of the weekly pattern; an exception is by definition an
+        exception. Without this the fix would trade OA-410's fault for its opposite -- a
+        Mon-Fri service that manages one Friday would lose the Friday it declared."""
+        import datetime as _dt
+        base = _dt.date(2026, 1, 9)                      # the first Friday in the window
+        removed = [{"service_id": "WKDY",
+                    "date": (base + _dt.timedelta(weeks=w)).strftime("%Y%m%d"),
+                    "exception_type": "2"} for w in range(1, 13)]
+        svc = _one(self._res(removed))                   # every Friday but the first
+        self.assertEqual(svc["daysFlags"][4], 1, svc["daysFlags"])
+        self.assertEqual(svc["days"], "Mon-Fri")
+
+    def test_forty_journeys_on_one_day_is_still_one_week(self):
+        """The count is of WEEKS, not of journeys. A resolver that incremented per journey
+        would let a single busy Saturday -- an event shuttle, a rail replacement -- clear
+        any fraction, and the count would stop measuring how often the day recurs and
+        start measuring how busy it is."""
+        one_saturday = self._adds(5, 1)
+        trips = [_trip("T%d" % i, "WKDY", [(TOWN + "001", "%02d:00:00" % (7 + i)),
+                                           ("0500CCITY001", "%02d:40:00" % (7 + i))])
+                 for i in range(8)]
+        db = _town_db(trips, [_cal("WKDY", [0, 1, 2, 3, 4])], one_saturday)
+        svc = _one(gq.query(db, prefixes=[TOWN], town="St Ives", asof=ASOF))
+        self.assertEqual(svc["daysFlags"][5], 0, svc["daysFlags"])
 
     def test_the_resolved_answer_says_it_is_resolved(self):
         """"declared" and "observed" are two different claims and a reader cannot

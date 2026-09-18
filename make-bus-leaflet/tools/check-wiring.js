@@ -105,6 +105,10 @@ const NOT_IN_CI = {
       'needs the buses estate AND renders every internal sheet on it — minutes, not seconds — and answers a question (how the offsetter treats each sheet, OA-176 4.21) rather than a pass/fail; run by hand when lane offsets, laneRibbon or a corridor family are touched. Its tool had no npm script from 2026-09-04 to 2026-09-05, and this check was red on every push in between',
     'sweep:scratch':
       'a housekeeping sweep, not a check — it DELETES scratch folders, and a CI runner has none; run by hand on the laptop. It escaped this file entirely until 2026-09-03 because its name carries neither prefix (the review\'s engine-pipeline N27), which is why the rule above now reads what a script DOES rather than what it is called',
+    'test:prove-s6':
+      'seeds from a town\'s TRACKED S1/S2/S3 runs and its redteam.json, and is bound to one town by name — its route families, its headsigns, its stop codes. That is a claim about buses-data\'s estate rather than about this engine, and the fixture estate here carries ci-reference packs and one S3 run per map, which is deliberately not enough to pose it. Wired into buses-data\'s own gates.yml on 2026-09-18 (OA-398) IN THE SAME CHANGE that removed it here, because it ran nowhere else and a move without the other half is a deletion. It would come back if this repository gained a fixture town with full stage runs',
+    'test:prove-red-sweep':
+      'its run-4 case asserts an EXACT SET OF SEVEN MAPS BY NAME — the packs with no river geometry of their own — which is a fact about buses-data\'s estate and about nothing here. Re-deriving that set for the fixture estate would be a second implementation of the engine\'s own protection rule, and the harness\'s own header records that the first attempt at exactly that confidently listed a town the rule does not reach. It already ran in buses-data\'s gates.yml, so 2026-09-18 (OA-398) removed it here rather than moving it. It would come back if the fixture estate could state that set without re-deriving it',
     'measure:days-vocabulary':
       'needs the buses estate, and answers a question — which `days` strings eight towns actually wrote, and what parse_days makes of each — rather than a pass/fail. It is the standing re-measurement behind the fixture list in test/python/test_gtfs_refresh_report.py, which is a copy of an estate this repository cannot see; run it from the buses-data root whenever a town file gains a service, and reconcile what it prints against that list. A gate here would have to assert the vocabulary, and the vocabulary is the half people are allowed to change',
   },
@@ -138,6 +142,8 @@ const RAW_STEPS = {
     'pip install -r requirements.txt — the same shape as npm ci, one layer down',
   'Prove the stamp policy and its scope rule can go red':
     'runs in skills/stamp-docs, which has NO package.json, so there is no script to route through. It would stop being raw only if that skill gained a manifest — and then it would join the manifest enumeration below',
+  'Prove stamping at commit time makes the committed stamp describe its commit':
+    'the same skills/stamp-docs, with NO package.json -- see the policy entry above. It drives docstamp.py --staged and the audit through real hooks in a scratch repository, and it stops being raw on the day that skill gains a manifest, together with the entry above',
   'Prove the file-hygiene checker can go red':
     'a shared checker in skills/tools/, run from the repository root, which has no package.json — the shared tools are deliberately outside every skill\'s manifest so all three repositories can run them the same way',
   'Files carry no BOM, no trailing whitespace, no missing newline':
@@ -158,16 +164,12 @@ const RAW_STEPS = {
     'a shared checker in skills/tools/ — see above',
   'Every short form a reader meets is one they can look up':
     'a shared checker in skills/tools/ — see above',
-  'Preflight -- can the PAT see both private repos?':
-    'a shell block calling the GitHub API to say WHY a checkout is about to fail; it runs before any checkout, so there is no manifest in the workspace yet',
   'Fetch the portal\'s branch tips (so an open re-vendor reads pending, not DRIFTED)':
     'raw git against the checked-out portal — plumbing for the step after it, not a gate, and it belongs to no skill',
-  'Which three commits is this verdict about':
-    'a shell block writing the step summary — it names the three SHAs this verdict is about and runs no tool',
+  'Which two commits is this verdict about':
+    'a shell block writing the step summary — it names the two SHAs this verdict is about and runs no tool. It said THREE until 2026-09-18, when OA-398 removed the buses-data checkout',
   'What Node does the deployment image use?':
     'a shell block reading the portal\'s Dockerfile; its subject is the portal repository, which has its own manifest and its own workflow',
-  'Sweep for run folders holding a later stage\'s output':
-    'node assets/stray_outputs.js — an ASSET, not a tools/ gate, and it takes --buses so it can only run where the estate is checked out. If it is ever given an npm script it must be removed from here, which is what the two-way check below enforces',
   'Run gates (JSON + step summary)':
     'a shell block running assets/gates.js and writing its JSON into the step summary; the redirection is the point and cannot live in a script',
 };

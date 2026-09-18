@@ -335,6 +335,25 @@ ok(got.notes.some((n) => /pushed-live/.test(n)),
 ok(got.notes.some((n) => /squashed-double/.test(n)),
   'and so is the branch it decided was merged despite cherry', got.notes.join(' | '));
 
+// NO ROW MAY TELL A TICK THE LOOP CANNOT PUSH. This assertion exists because
+// the claim survived the change that was supposed to remove it: claude-skills
+// #33 rewrote this module's header and both `why` sentences for buses-data
+// OA-394 and left the same claim standing in both rows' `do` advice, which is
+// the half a tick reads as an INSTRUCTION rather than as background. It stood
+// for a day, over nine live rows, while the sentence two lines above it in the
+// same row said a tick pushes at the end of its unit. A grep of the diff would
+// have passed; only a check over the row's FINISHED WORDS catches a claim that
+// moved from the prose into the advice. The negative is the load-bearing half —
+// citing OA-394 is no defence, since "the loop cannot push (OA-394)" would pass
+// that on its own.
+const advice = got.items.flatMap((i) => [i.why || '', ...i.do.map((d) => d.what || '')]);
+ok(!advice.some((t) => /cannot push|can never push|denied to an unattended|Nothing in the loop can do this/i.test(t)),
+  'no row tells a tick the loop cannot push — the claim OA-394 retired, in the advice where it outlived the prose',
+  advice.filter((t) => /cannot push|can never push|denied to an unattended|Nothing in the loop can do this/i.test(t)).join(' | '));
+ok(got.items.every((i) => i.do.some((d) => d.kind === 'chat' && /OA-394/.test(d.what || ''))),
+  'and each says which decision changed that, so a reader can look it up rather than take it',
+  JSON.stringify(got.items.map((i) => i.do.map((d) => d.what).filter(Boolean))));
+
 // ---------------------------------------------------------------------------
 // 4. THE HEADLINE CLAIM — countUnpushed cannot see any of this.
 // ---------------------------------------------------------------------------

@@ -948,15 +948,14 @@ for (const it of landmarkAnswers.items) {
 }
 if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared — ${landmarkAnswers.skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
 
-// The scheduled loop's ONE outbound channel to Peter (OA-283, merged with the
+// The scheduled loop's ONE outbound folder to Peter (OA-283, merged with the
 // drop zone by OA-401). It writes loop/your-move/ and stops; until that source
-// nothing Peter runs read the folder, and one of its files was contradicting a
-// row on this very list. `loop/` is gitignored, so absent is the normal state
-// everywhere but this laptop — see loop_your_move.mjs. ONE read of the folder
-// feeds both row builders, because the classifier must see the same bytes for
-// both: reading it twice is how a file could be a hold to one and a draft to the
-// other. The holds are applied AFTER every source has run, below, because a hold
-// names a row this file may not have added yet.
+// nothing Peter runs read it, and one of its files was contradicting a row on
+// this very list. Absent is the normal state everywhere but this laptop, and the
+// classifier, the drafts row and the whole argument are in loop_your_move.mjs.
+// ONE read feeds BOTH builders below: reading it twice is how a file could be a
+// hold to one and a draft to the other. Holds are applied AFTER every source has
+// run, because a hold names a row this file may not have added yet.
 const yourMove = readYourMoveDir(path.join(BUSES, 'loop', 'your-move'));
 const loopHolds = loopHoldItems({ files: yourMove });
 for (const it of loopHolds.items) add(it);
@@ -1008,15 +1007,11 @@ const loopIdle = loopRunItems({
 for (const it of loopIdle) add(it);
 
 // THE DRAFTS IN THE SAME FOLDER (2026-09-10, item 7 of Peter's suggestions
-// review; moved here from the old drop zone by OA-401). A tick saves a draft
-// when it finds something it cannot act on, and nothing in the loop will ever
-// action one — which was right, and unenumerated, and five drafts sat there for
-// up to two days each ending "promote it, or file it, if you agree", addressed
-// to a reader this board had never shown the folder to. One row for all of them
-// at the bottom of YOUR MOVE. `loop/adhoc/ready/`, `doing/` and `done/` are a
-// different channel — Peter's in-tray INTO the loop, the dispatcher's crash rule
-// and nobody — and counting them here would report a prompt he has already
-// triaged as awaiting his triage.
+// review; moved here from the old drop zone by OA-401). Inert was right and
+// unenumerated was not: five drafts sat for up to two days each ending "promote
+// it, or file it, if you agree", addressed to a reader this board had never
+// shown the folder to. One row for all of them at the bottom of YOUR MOVE.
+// `loop/adhoc/ready|doing|done` is a DIFFERENT channel and is not counted.
 const loopDrafts = loopDraftItems({ files: yourMove });
 for (const it of loopDrafts) add(it);
 

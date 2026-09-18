@@ -127,6 +127,19 @@ const DEP_PATTERNS = [
 // not an existing directory. That is a caller error, it cannot be got wrong
 // silently, and nothing downstream wants the lenient answer — status.js's
 // held-back check already wraps its call in a try/catch and reports the message.
+//
+// WHERE IT IS ASKED, AND WHY NOT EVERYWHERE. This guard is on the TOWN half
+// only: engineFiles(), and therefore computeEngineVersion(), computePlaceEngineVersion()
+// and boardingEngineFiles(), all of which start from it. The PLACE half is
+// deliberately left lenient, and that was not a judgement call — CI answered it.
+// Asking it of placeEngineFiles() too turned two prove-red harnesses red
+// (prove-red-held-back and the cli.js closure test under prove-red): both copy
+// the town skill's assets/ alone into a scratch directory and run it there, so
+// placeAssetsDir() resolves to a sibling make-place-bus-leaflet/assets that is
+// genuinely not on disk, and the place half has ALWAYS hashed as two MISSING
+// entry points in that case. A town engine without the place skill beside it is
+// a real configuration, not a caller error, and the hash it produces has to stay
+// the one it has always produced.
 function assertEngineDir(sk, what) {
   if (typeof sk !== 'string' || !sk) {
     throw new TypeError(`${what}: expected a path to an assets DIRECTORY, got ${typeof sk === 'string' ? 'an empty string' : typeof sk}`);
@@ -143,7 +156,6 @@ function assertEngineDir(sk, what) {
 /** The transitive require closure of `entries` under `sk`, sorted. A name in
  * `already` is neither added nor followed: it is hashed by another half. */
 function requireClosure(sk, entries, already = new Set()) {
-  assertEngineDir(sk, 'requireClosure');
   const seen = new Set();
   const queue = entries.slice();
   while (queue.length) {
@@ -174,9 +186,11 @@ function requireClosure(sk, entries, already = new Set()) {
 // same vacuous ten characters as a path that does not exist. So a folder that
 // holds not ONE of the entry points is refused too.
 //
-// This is deliberately asked of the ENTRY POINTS and not of the closure, and
-// not of boardingEngineFiles() at all: an engine that has dropped gen_boarding.js
-// is a real engine missing a file, which is the case MISSING exists to describe.
+// This is deliberately asked of the TOWN ENTRY POINTS and not of the closure,
+// not of boardingEngineFiles() and not of placeEngineFiles(): an engine that has
+// dropped gen_boarding.js is a real engine missing a file, and a town skill with
+// no place skill beside it is a real configuration that two prove-red harnesses
+// run in — both are the case MISSING exists to describe.
 function assertIsAnEngine(dir, entries, what) {
   if (entries.some((name) => fs.existsSync(path.join(dir, name)))) return;
   throw new Error(`${what}: ${JSON.stringify(dir)} holds none of the entry points ${entries.join(', ')}, `
@@ -275,11 +289,7 @@ function placeAssetsDir(sk = SK) {
 
 /** The place entry points and their place-LOCAL siblings, sorted. Anything they
  * reach in the town skill is already in engineFiles() and is not repeated here. */
-function placeEngineFiles(psk = placeAssetsDir()) {
-  assertEngineDir(psk, 'placeEngineFiles');
-  assertIsAnEngine(psk, PLACE_ENGINE_FILES, 'placeEngineFiles');
-  return requireClosure(psk, PLACE_ENGINE_FILES);
-}
+function placeEngineFiles(psk = placeAssetsDir()) { return requireClosure(psk, PLACE_ENGINE_FILES); }
 
 // THE BOARDING GENERATOR IS A PLACE GENERATOR THAT LIVES IN THE TOWN FOLDER (OA-230,
 // 2026-09-02). gen_boarding.js draws the boarding-plan sheet, which only a place has,

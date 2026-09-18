@@ -459,3 +459,29 @@ test('an engine that has DROPPED a file still hashes, because MISSING is the poi
   assert.match(gone, /^[0-9a-f]{10}$/, 'and it must still be an ordinary hash');
   assert.ok(engineFiles(dir).includes('gen_internal.js'));
 }));
+
+test('the PLACE half stays lenient when the place skill is not beside the town one', () => {
+  // THE CONTROL THIS COMMIT NEEDED, and it was CI that supplied it. The first
+  // version of the guard above asked the same question of placeEngineFiles(),
+  // and turned two prove-red harnesses red: prove-red-held-back and the cli.js
+  // closure test both copy the town skill's assets/ ALONE into a scratch
+  // directory and run the engine there, so placeAssetsDir() resolves to a
+  // sibling make-place-bus-leaflet/assets that is genuinely not on disk. That
+  // is a real configuration, not a caller error, and the place half has always
+  // hashed it as two MISSING entry points. It must go on doing so.
+  const nowhere = path.join(os.tmpdir(), 'no-such-place-assets-4c1e7d');
+  assert.ok(!fs.existsSync(nowhere), 'the premise: this directory must not exist');
+  const hash = EV.computePlaceEngineVersion(ENGINE_DIR, nowhere);
+  assert.match(hash, /^[0-9a-f]{10}$/, 'a town engine with no place skill beside it still has a place hash');
+  assert.deepStrictEqual(EV.placeEngineFiles(nowhere), [...EV.PLACE_ENGINE_FILES].sort(),
+    'the two place entry points are still named, and hashed as MISSING');
+  // Only asked where a real place skill is actually beside this engine. Under
+  // prove-red it is NOT — the harness copies assets/ alone into scratch — and
+  // asserting it unconditionally made this very test fail there, which is the
+  // same mistake one layer up: a premise that holds on the laptop and not in
+  // the place the check really runs.
+  if (fs.existsSync(EV.placeAssetsDir(ENGINE_DIR))) {
+    assert.notStrictEqual(hash, EV.computePlaceEngineVersion(ENGINE_DIR),
+      'and it is not the same answer as a real place skill, which is the whole point of MISSING');
+  }
+});

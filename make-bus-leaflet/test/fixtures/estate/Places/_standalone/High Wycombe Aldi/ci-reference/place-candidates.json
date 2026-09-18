@@ -1,0 +1,35 @@
+[
+ {
+  "display": "Aldi, Crest Road, Booker, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 1UA, United Kingdom",
+  "lat": 51.6130551,
+  "lon": -0.7748907,
+  "osm_type": "way",
+  "osm_id": 1313108643,
+  "class": "shop",
+  "type": "supermarket",
+  "name": "Aldi",
+  "importance": 5.8891432059159496e-05
+ },
+ {
+  "display": "Aldi, Baker Street, Castlefield, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 2RX, United Kingdom",
+  "lat": 51.6328225,
+  "lon": -0.760031,
+  "osm_type": "way",
+  "osm_id": 628646510,
+  "class": "shop",
+  "type": "supermarket",
+  "name": "Aldi",
+  "importance": 5.8891432059159496e-05
+ },
+ {
+  "display": "Aldi, Tannery Road, Tannery Road Trade Park, Totteridge, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP13 7EQ, United Kingdom",
+  "lat": 51.6180732,
+  "lon": -0.7135776,
+  "osm_type": "node",
+  "osm_id": 9658107896,
+  "class": "shop",
+  "type": "supermarket",
+  "name": "Aldi",
+  "importance": 5.8891432059159496e-05
+ }
+]

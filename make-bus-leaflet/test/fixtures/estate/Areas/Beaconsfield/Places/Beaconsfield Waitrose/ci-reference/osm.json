@@ -1,0 +1,104 @@
+{
+ "elements": [
+  {
+   "type": "way",
+   "id": 24902097,
+   "lat": 51.6122295,
+   "lon": -0.6462921,
+   "tags": {
+    "shop": "supermarket",
+    "name": "Waitrose"
+   }
+  },
+  {
+   "type": "way",
+   "id": 89541601,
+   "lat": 51.6097376,
+   "lon": -0.6430552,
+   "tags": {
+    "shop": "supermarket",
+    "name": "Sainsbury's"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1323980996,
+   "lat": 51.6096646,
+   "lon": -0.6453889,
+   "tags": {
+    "shop": "supermarket",
+    "name": "M&S Simply Food"
+   }
+  },
+  {
+   "type": "way",
+   "id": 495249019,
+   "lat": 51.6128001,
+   "lon": -0.6494652,
+   "tags": {
+    "amenity": "library",
+    "name": "Beaconsfield Library"
+   }
+  },
+  {
+   "type": "way",
+   "id": 561537536,
+   "lat": 51.6118819,
+   "lon": -0.6457865,
+   "tags": {
+    "amenity": "townhall",
+    "name": "Town Hall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 561537579,
+   "lat": 51.613642,
+   "lon": -0.6423393,
+   "tags": {
+    "amenity": "community_centre",
+    "name": "St Michael's Hall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 600818795,
+   "lat": 51.6110189,
+   "lon": -0.6456801,
+   "tags": {
+    "amenity": "pharmacy",
+    "name": "Boots"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1323944141,
+   "lat": 51.6105579,
+   "lon": -0.6454003,
+   "tags": {
+    "amenity": "pharmacy",
+    "name": "Pyramid Pharmacy"
+   }
+  },
+  {
+   "type": "way",
+   "id": 24908899,
+   "lat": 51.6119086,
+   "lon": -0.6464205,
+   "tags": {
+    "leisure": "park",
+    "name": "Beaconsfield Town Hall Green"
+   }
+  },
+  {
+   "type": "way",
+   "id": 591652815,
+   "lat": 51.6141073,
+   "lon": -0.640187,
+   "tags": {
+    "leisure": "fitness_centre",
+    "name": "Beaconsfield Tennis Club"
+   }
+  }
+ ]
+}

@@ -65,25 +65,32 @@ const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
 const ROLLOUT_PLACES = path.join(ROOT, 'assets', 'rollout_places.js');
 const argOf = (n, d) => { const i = process.argv.indexOf('--' + n); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 const BUSES = resolveBuses({ buses: argOf('buses') });
-const TOWN = argOf('town', 'Ramsey');
-const PLACE = argOf('place', 'Ely Co-op');
+/* WHICH TOWN AND WHICH PLACE, ASKED OF THE ESTATE RATHER THAN TYPED (OA-398).
+ *
+ * These two lines were `argOf('town', 'Ramsey')` and `argOf('place', 'Ely
+ * Co-op')`, and the next two built `Areas/Ramsey` and
+ * `Places/_standalone/Ely Co-op` by hand. Two map names and one LAYOUT, written
+ * into this file, describing another repository's tree — the same fault OA-219
+ * fixed in `prove-red-held-back` and did not fix here. It surfaced the moment
+ * this was pointed at the fixture estate: `Ramsey has no manifest.json`, which
+ * reads like a broken harness and is a stale constant.
+ *
+ * `--town` / `--place` still name one explicitly, and a name that is not there is
+ * still an error rather than a substitution. What makes a map usable — and why a
+ * latest S3 run is part of it — is in tools/lib/pick-fixture.js. */
+const { pickTown, pickPlace } = require('./lib/pick-fixture');
+const townPick = pickTown(BUSES, argOf('town', null), 'prove-red-unrendered');
+const placePick = pickPlace(BUSES, argOf('place', null), 'prove-red-unrendered');
+const TOWN = townPick.name;
+const PLACE = placePick.name;
 
 let failures = 0;
 const fail = (m) => { console.error('  FAIL  ' + m); failures++; };
 const pass = (m) => console.log('  ok    ' + m);
 
 /* ---- fixtures --------------------------------------------------------- */
-const srcTown = path.join(BUSES, 'Areas', TOWN);
-const srcPlace = path.join(BUSES, 'Places', '_standalone', PLACE);
-for (const [what, dir] of [[TOWN, srcTown], [PLACE, srcPlace]]) {
-  for (const need of ['manifest.json', 'ci-reference/routes.json']) {
-    if (!fs.existsSync(path.join(dir, need))) {
-      console.error(`prove-red-unrendered: ${what} has no ${need} under ${dir}.`);
-      console.error('  Point at a checkout that has one with --buses "<dir>", or name another with --town / --place.');
-      process.exit(1);
-    }
-  }
-}
+const srcTown = townPick.dir;
+const srcPlace = placePick.dir;
 
 /** Copy one map's tracked skeleton into a scratch buses tree. `rel` is where the
  *  map sits under the tree, so a town and a place build the same way. */

@@ -1,0 +1,83 @@
+[
+  {
+    "id": "poi:dot:Barnes Food and Wine",
+    "text": "Barnes Food and Wine",
+    "at": [
+      86.66990851446275,
+      49.71553037485498
+    ],
+    "reason": "no room for the symbol"
+  },
+  {
+    "id": "poi:shop:Al-Medina Foods Market",
+    "text": "Al-Medina Foods Market",
+    "at": [
+      22.276550753980985,
+      100.44043991599725
+    ],
+    "reason": "no room for the symbol"
+  },
+  {
+    "id": "poi:dot:Wycombe Fresh Fish",
+    "text": "Wycombe Fresh Fish",
+    "at": [
+      86.3536489386953,
+      35.18087030994375
+    ],
+    "reason": "no room for the name"
+  },
+  {
+    "id": "poi:dot:Nationwide",
+    "text": "Nationwide",
+    "at": [
+      49.60937546895704,
+      96.76285469441304
+    ],
+    "reason": "no room for the symbol"
+  },
+  {
+    "id": "poi:dot:Mail Box Etc",
+    "text": "Mail Box Etc",
+    "at": [
+      44.392910052544025,
+      94.13349838138036
+    ],
+    "reason": "no room for the name"
+  },
+  {
+    "id": "poi:dot:NatWest",
+    "text": "NatWest",
+    "at": [
+      12.974157025344923,
+      96.72771852987826
+    ],
+    "reason": "no room for the name"
+  },
+  {
+    "id": "poi:dot:Magazin Romanesc Diana",
+    "text": "Magazin Romanesc Diana",
+    "at": [
+      75.28456378679874,
+      126.11326414009761
+    ],
+    "reason": "no room for the name"
+  },
+  {
+    "id": "poi:dot:Lunch",
+    "text": "Lunch",
+    "at": [
+      51.76866498627005,
+      98.03946867264868
+    ],
+    "reason": "no room for the symbol"
+  },
+  {
+    "id": "poi:dot:Olive Tree",
+    "text": "Olive Tree",
+    "at": [
+      42.091849001263796,
+      92.9857170063002
+    ],
+    "reason": "no room for the symbol"
+  }
+]

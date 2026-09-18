@@ -1,0 +1,1958 @@
+{
+ "town": "High Street",
+ "atcoPrefixes": null,
+ "near": [
+  51.6285952,
+  -0.7488204,
+  0.8
+ ],
+ "source": "BODS GTFS (east_anglia)",
+ "frequencyBasis": {
+  "weeksSampled": 12,
+  "from": "2026-08-17",
+  "to": "2026-11-08",
+  "note": "journeysPerWeek is the lower median of the sampled weeks; the range shows term-time/holiday variation. tripPatternsAtTown counts trips.txt rows and is NOT a rate -- never rank or draw from it. To tier a line weight, use coreHeadwayMinutes and longestDaytimeGap with a weeksActive floor, not journeysPerWeek: a weekly total is a volume, not availability.",
+  "dayProfile": "the busiest weekday of the sampled weeks; 07:00-19:00 is the working day and 09:00-15:00 the core day"
+ },
+ "services": [
+  {
+   "route": "1",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Hemel Hempstead, Marlowes"
+   ],
+   "termini": [
+    "Broadway",
+    "High Wycombe BusStn",
+    "Marlowes"
+   ],
+   "journeysPerWeek": 207,
+   "journeysPerWeekRange": [
+    198,
+    207
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 31,
+   "journeysOutBack": [
+    100,
+    107
+   ],
+   "firstDeparture": "05:00",
+   "lastDeparture": "21:35",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 31,
+   "typicalDayWindow": [
+    "05:00",
+    "21:35"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 70,
+   "tripPatternsAtTown": 88,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "1A",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Chesham, Townsend Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Townsend Road"
+   ],
+   "journeysPerWeek": 355,
+   "journeysPerWeekRange": [
+    326,
+    355
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 55,
+   "journeysOutBack": [
+    180,
+    175
+   ],
+   "firstDeparture": "05:15",
+   "lastDeparture": "24:05",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 55,
+   "typicalDayWindow": [
+    "05:15",
+    "24:05"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 40,
+   "tripPatternsAtTown": 141,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "1"
+  },
+  {
+   "route": "1B",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Hemel Hempstead, Marlowes",
+    "Chesham, Townsend Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Marlowes",
+    "Townsend Road"
+   ],
+   "journeysPerWeek": 149,
+   "journeysPerWeekRange": [
+    124,
+    149
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 25,
+   "journeysOutBack": [
+    72,
+    77
+   ],
+   "firstDeparture": "06:30",
+   "lastDeparture": "19:35",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 25,
+   "typicalDayWindow": [
+    "06:30",
+    "19:23"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 52,
+   "tripPatternsAtTown": 54,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "1"
+  },
+  {
+   "route": "1S",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Chesham, Townsend Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Townsend Road"
+   ],
+   "journeysPerWeek": 0,
+   "journeysPerWeekRange": [
+    0,
+    0
+   ],
+   "weeksActive": 0,
+   "busiestDayJourneys": 0,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 0,
+   "typicalDayWindow": null,
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "1"
+  },
+  {
+   "route": "20",
+   "operator": "Thames Valley Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Maidenhead",
+    "High Wycombe, Bus Station"
+   ],
+   "termini": [
+    "Bus Station",
+    "Frascati Way"
+   ],
+   "journeysPerWeek": 164,
+   "journeysPerWeekRange": [
+    164,
+    171
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 35,
+   "journeysOutBack": [
+    82,
+    82
+   ],
+   "firstDeparture": "07:15",
+   "lastDeparture": "20:42",
+   "typicalDayDuplicates": 17,
+   "typicalDayJourneys": 35,
+   "typicalDayWindow": [
+    "07:15",
+    "20:42"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 64,
+   "tripPatternsAtTown": 52,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "27",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "High Wycombe, Orchard Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Orchard Road"
+   ],
+   "journeysPerWeek": 35,
+   "journeysPerWeekRange": [
+    28,
+    35
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 7,
+   "journeysOutBack": [
+    15,
+    20
+   ],
+   "firstDeparture": "09:21",
+   "lastDeparture": "14:53",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 7,
+   "typicalDayWindow": [
+    "09:21",
+    "14:53"
+   ],
+   "coreHeadwayMinutes": 120,
+   "longestDaytimeGap": 92,
+   "tripPatternsAtTown": 7,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "29",
+   "operator": "Red Eagle",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 20,
+   "journeysPerWeekRange": [
+    16,
+    20
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 4,
+   "journeysOutBack": [
+    20,
+    0
+   ],
+   "firstDeparture": "09:10",
+   "lastDeparture": "15:10",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 4,
+   "typicalDayWindow": [
+    "09:10",
+    "15:10"
+   ],
+   "coreHeadwayMinutes": 120,
+   "longestDaytimeGap": 120,
+   "tripPatternsAtTown": 4,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "30",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 273,
+   "journeysPerWeekRange": [
+    251,
+    273
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 44,
+   "journeysOutBack": [
+    273,
+    0
+   ],
+   "firstDeparture": "06:10",
+   "lastDeparture": "21:40",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 44,
+   "typicalDayWindow": [
+    "06:10",
+    "21:40"
+   ],
+   "coreHeadwayMinutes": 20,
+   "longestDaytimeGap": 20,
+   "tripPatternsAtTown": 97,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "31",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Beaconsfield Old Town, Aylesbury End",
+    "Penn, The Pond",
+    "Beaconsfield, High School"
+   ],
+   "termini": [
+    "Aylesbury End",
+    "High School",
+    "High Wycombe BusStn",
+    "The Pond",
+    "William Ramsay School"
+   ],
+   "journeysPerWeek": 338,
+   "journeysPerWeekRange": [
+    309,
+    338
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 53,
+   "journeysOutBack": [
+    172,
+    166
+   ],
+   "firstDeparture": "06:00",
+   "lastDeparture": "20:20",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 53,
+   "typicalDayWindow": [
+    "06:00",
+    "20:20"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 30,
+   "tripPatternsAtTown": 129,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "32",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Micklefield Estate, Woodside Road",
+    "Cressex, Empire Cinema",
+    "Booker, Asda"
+   ],
+   "termini": [
+    "Asda",
+    "Empire Cinema",
+    "Woodside Road"
+   ],
+   "journeysPerWeek": 567,
+   "journeysPerWeekRange": [
+    472,
+    567
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 95,
+   "journeysOutBack": [
+    275,
+    292
+   ],
+   "firstDeparture": "05:55",
+   "lastDeparture": "19:43",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 95,
+   "typicalDayWindow": [
+    "05:55",
+    "19:43"
+   ],
+   "coreHeadwayMinutes": 15,
+   "longestDaytimeGap": 19,
+   "tripPatternsAtTown": 187,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "33",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Totteridge, Tyzack Road",
+    "Desborough Castle, Whitelands Road",
+    "Desborough Castle, Copyground Lane"
+   ],
+   "termini": [
+    "Tyzack Road",
+    "Whitelands Road"
+   ],
+   "journeysPerWeek": 652,
+   "journeysPerWeekRange": [
+    599,
+    652
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 104,
+   "journeysOutBack": [
+    321,
+    331
+   ],
+   "firstDeparture": "06:14",
+   "lastDeparture": "23:04",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 104,
+   "typicalDayWindow": [
+    "06:14",
+    "23:04"
+   ],
+   "coreHeadwayMinutes": 15,
+   "longestDaytimeGap": 20,
+   "tripPatternsAtTown": 236,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "34",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Lane End, Simmons Way",
+    "High Wycombe, Olympic Way",
+    "High Wycombe, High Wycombe BusStn",
+    "Lane End, The Row",
+    "High Wycombe, Coachway"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Olympic Way",
+    "Simmons Way",
+    "The Row"
+   ],
+   "journeysPerWeek": 300,
+   "journeysPerWeekRange": [
+    270,
+    300
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 48,
+   "journeysOutBack": [
+    150,
+    150
+   ],
+   "firstDeparture": "06:43",
+   "lastDeparture": "19:25",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 48,
+   "typicalDayWindow": [
+    "06:43",
+    "19:25"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 35,
+   "tripPatternsAtTown": 108,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "36",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Bus Station",
+    "Bourne End, Railway Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Railway Station"
+   ],
+   "journeysPerWeek": 180,
+   "journeysPerWeekRange": [
+    173,
+    180
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 27,
+   "journeysOutBack": [
+    87,
+    93
+   ],
+   "firstDeparture": "06:50",
+   "lastDeparture": "19:49",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 27,
+   "typicalDayWindow": [
+    "06:50",
+    "19:44"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 60,
+   "tripPatternsAtTown": 75,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "37",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Bus Station",
+    "Windsor Town Centre, Parish Church",
+    "Maidenhead Town Centre, Frascati Way"
+   ],
+   "termini": [
+    "Frascati Way",
+    "High Wycombe BusStn",
+    "Parish Church",
+    "Railway Station",
+    "Windsor Castle"
+   ],
+   "journeysPerWeek": 320,
+   "journeysPerWeekRange": [
+    291,
+    320
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 53,
+   "journeysOutBack": [
+    151,
+    169
+   ],
+   "firstDeparture": "06:09",
+   "lastDeparture": "23:19",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 53,
+   "typicalDayWindow": [
+    "06:09",
+    "23:19"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 35,
+   "tripPatternsAtTown": 108,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "38",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 25,
+   "journeysPerWeekRange": [
+    20,
+    25
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 5,
+   "journeysOutBack": [
+    25,
+    0
+   ],
+   "firstDeparture": "09:30",
+   "lastDeparture": "15:00",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 5,
+   "typicalDayWindow": [
+    "09:30",
+    "15:00"
+   ],
+   "coreHeadwayMinutes": 75,
+   "longestDaytimeGap": 120,
+   "tripPatternsAtTown": 6,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "40",
+   "operator": "Red Rose Travel",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Town Hall",
+    "High Wycombe BusStn",
+    "Lord Williams Upper School"
+   ],
+   "termini": [
+    "Brook Street",
+    "High Wycombe BusStn",
+    "Lord Williams Upper School",
+    "The Red Lion",
+    "Town Hall"
+   ],
+   "journeysPerWeek": 178,
+   "journeysPerWeekRange": [
+    152,
+    178
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 34,
+   "journeysOutBack": [
+    89,
+    89
+   ],
+   "firstDeparture": "07:12",
+   "lastDeparture": "21:12",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 34,
+   "typicalDayWindow": [
+    "07:12",
+    "21:10"
+   ],
+   "coreHeadwayMinutes": 50,
+   "longestDaytimeGap": 64,
+   "tripPatternsAtTown": 66,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "41",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Amersham, Amersham Station",
+    "Great Missenden, Railway Station"
+   ],
+   "termini": [
+    "Amersham Station",
+    "High Wycombe BusStn",
+    "Railway Station"
+   ],
+   "journeysPerWeek": 168,
+   "journeysPerWeekRange": [
+    162,
+    168
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 25,
+   "journeysOutBack": [
+    81,
+    87
+   ],
+   "firstDeparture": "06:37",
+   "lastDeparture": "19:11",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 25,
+   "typicalDayWindow": [
+    "06:37",
+    "19:11"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 46,
+   "tripPatternsAtTown": 73,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "102",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Heathrow Airport, Heathrow Central Bus Station"
+   ],
+   "termini": [
+    "Heathrow Central Bus Station",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 476,
+   "journeysPerWeekRange": [
+    476,
+    476
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 68,
+   "journeysOutBack": [
+    238,
+    238
+   ],
+   "firstDeparture": "01:53",
+   "lastDeparture": "24:10",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 68,
+   "typicalDayWindow": [
+    "01:53",
+    "24:10"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 30,
+   "tripPatternsAtTown": 204,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "103",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Windsor Town Centre, Parish Church",
+    "Slough Town Centre, Wellington Street Stop B",
+    "Langley, Axis Park"
+   ],
+   "termini": [
+    "Axis Park",
+    "High Wycombe BusStn",
+    "Parish Church",
+    "Wellington Street Stop B",
+    "Wellington Street Stop G"
+   ],
+   "journeysPerWeek": 457,
+   "journeysPerWeekRange": [
+    447,
+    457
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 67,
+   "journeysOutBack": [
+    232,
+    225
+   ],
+   "firstDeparture": "04:40",
+   "lastDeparture": "24:40",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 67,
+   "typicalDayWindow": [
+    "04:40",
+    "24:40"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 30,
+   "tripPatternsAtTown": 189,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "104",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Uxbridge, York Road (UB8)",
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Market Place",
+    "York Road (UB8)"
+   ],
+   "journeysPerWeek": 161,
+   "journeysPerWeekRange": [
+    134,
+    161
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 27,
+   "journeysOutBack": [
+    84,
+    77
+   ],
+   "firstDeparture": "05:55",
+   "lastDeparture": "20:03",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 27,
+   "typicalDayWindow": [
+    "05:55",
+    "20:02"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 57,
+   "tripPatternsAtTown": 53,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "105",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Chartridge, Village Hall",
+    "Amersham, Amersham Station",
+    "Chesham, Broadway"
+   ],
+   "termini": [
+    "Amersham Station",
+    "Broadway",
+    "High Wycombe BusStn",
+    "Village Hall"
+   ],
+   "journeysPerWeek": 138,
+   "journeysPerWeekRange": [
+    115,
+    138
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 23,
+   "journeysOutBack": [
+    72,
+    66
+   ],
+   "firstDeparture": "06:25",
+   "lastDeparture": "18:23",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 23,
+   "typicalDayWindow": [
+    "06:25",
+    "18:23"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 47,
+   "tripPatternsAtTown": 46,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "130",
+   "operator": "Redline",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "Aylesbury Bus Station (Bay 7)",
+    "High Wycombe Bus Stn (Bay 15)"
+   ],
+   "termini": [
+    "Aylesbury Bus Stn",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 24,
+   "journeysPerWeekRange": [
+    0,
+    24
+   ],
+   "weeksActive": 1,
+   "busiestDayJourneys": 24,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 24,
+   "typicalDayWindow": [
+    "07:46",
+    "19:00"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 46,
+   "tripPatternsAtTown": 24,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "158",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Marlow, Court Garden Leisure Centre",
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "Court Garden Leisure Centre",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    8,
+    10
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "10:58",
+   "lastDeparture": "13:45",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "10:58",
+    "13:45"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 167,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "275",
+   "operator": "Red Rose Travel",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Street"
+   ],
+   "termini": [
+    "Brook Street",
+    "High Street"
+   ],
+   "journeysPerWeek": 5,
+   "journeysPerWeekRange": [
+    4,
+    5
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 1,
+   "journeysOutBack": [
+    5,
+    0
+   ],
+   "firstDeparture": "06:50",
+   "lastDeparture": "06:50",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 1,
+   "typicalDayWindow": [
+    "06:50",
+    "06:50"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 1,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "300",
+   "operator": "Redline",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "High Wycombe Bus Stn (Bay 15)",
+    "Aylesbury Bus Station (Bay 7)"
+   ],
+   "termini": [
+    "Aylesbury Bus Stn",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 24,
+   "journeysPerWeekRange": [
+    0,
+    24
+   ],
+   "weeksActive": 1,
+   "busiestDayJourneys": 24,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 24,
+   "typicalDayWindow": [
+    "08:26",
+    "19:30"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 56,
+   "tripPatternsAtTown": 24,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "32A",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Micklefield Estate, Woodside Road",
+    "Cressex, Empire Cinema",
+    "Booker, Asda",
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "Asda",
+    "Empire Cinema",
+    "High Wycombe BusStn",
+    "Woodside Road"
+   ],
+   "journeysPerWeek": 131,
+   "journeysPerWeekRange": [
+    131,
+    164
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 47,
+   "journeysOutBack": [
+    71,
+    60
+   ],
+   "firstDeparture": "07:41",
+   "lastDeparture": "23:05",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 47,
+   "typicalDayWindow": [
+    "07:41",
+    "20:11"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 30,
+   "tripPatternsAtTown": 75,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "32"
+  },
+  {
+   "route": "331",
+   "operator": "Red Eagle",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Village Hall",
+    "The Red Lion",
+    "Bus Station",
+    "Marlow Hill Schools"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Marlow Hill Schools",
+    "The Red Lion",
+    "Village Hall"
+   ],
+   "journeysPerWeek": 22,
+   "journeysPerWeekRange": [
+    16,
+    22
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 6,
+   "journeysOutBack": [
+    11,
+    11
+   ],
+   "firstDeparture": "08:10",
+   "lastDeparture": "16:15",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 6,
+   "typicalDayWindow": [
+    "08:10",
+    "16:15"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 190,
+   "tripPatternsAtTown": 6,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "333",
+   "operator": "Red Eagle",
+   "days": "Tue & Fri",
+   "daysFlags": [
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "The Harrow PH"
+   ],
+   "journeysPerWeek": 2,
+   "journeysPerWeekRange": [
+    2,
+    2
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 1,
+   "journeysOutBack": [
+    2,
+    0
+   ],
+   "firstDeparture": "09:29",
+   "lastDeparture": "09:29",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 1,
+   "typicalDayWindow": [
+    "09:29",
+    "09:29"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 1,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "334",
+   "operator": "Red Eagle",
+   "days": "Tue & Fri",
+   "daysFlags": [
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "The Harrow"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "The Harrow PH"
+   ],
+   "journeysPerWeek": 2,
+   "journeysPerWeekRange": [
+    2,
+    2
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 1,
+   "journeysOutBack": [
+    2,
+    0
+   ],
+   "firstDeparture": "12:20",
+   "lastDeparture": "12:20",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 1,
+   "typicalDayWindow": [
+    "12:20",
+    "12:20"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 1,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "36S",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Bus Station",
+    "Bourne End, Railway Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Railway Station"
+   ],
+   "journeysPerWeek": 0,
+   "journeysPerWeekRange": [
+    0,
+    0
+   ],
+   "weeksActive": 0,
+   "busiestDayJourneys": 0,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 0,
+   "typicalDayWindow": null,
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "36"
+  },
+  {
+   "route": "37M",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "Windsor Town Centre, Parish Church",
+    "High Wycombe, Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Parish Church",
+    "Windsor Castle"
+   ],
+   "journeysPerWeek": 0,
+   "journeysPerWeekRange": [
+    0,
+    0
+   ],
+   "weeksActive": 0,
+   "busiestDayJourneys": 0,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 0,
+   "typicalDayWindow": null,
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "37"
+  },
+  {
+   "route": "643",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "Ibstone, Infant School",
+    "High Wycombe, Chadwick Street"
+   ],
+   "termini": [
+    "Chadwick Street",
+    "Infant School"
+   ],
+   "journeysPerWeek": 0,
+   "journeysPerWeekRange": [
+    0,
+    0
+   ],
+   "weeksActive": 0,
+   "busiestDayJourneys": 0,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 0,
+   "typicalDayWindow": null,
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "644",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "Hughenden Valley, The Harrow PH",
+    "High Wycombe, Marlow Hill Schools"
+   ],
+   "termini": [
+    "Marlow Hill Schools",
+    "The Harrow PH"
+   ],
+   "journeysPerWeek": 0,
+   "journeysPerWeekRange": [
+    0,
+    0
+   ],
+   "weeksActive": 0,
+   "busiestDayJourneys": 0,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 0,
+   "typicalDayWindow": null,
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "654",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "Chinnor Hill, Red Lane",
+    "High Wycombe, Royal Grammar School"
+   ],
+   "termini": [
+    "Chadwick Street",
+    "Red Lane",
+    "Royal Grammar School"
+   ],
+   "journeysPerWeek": 0,
+   "journeysPerWeekRange": [
+    0,
+    0
+   ],
+   "weeksActive": 0,
+   "busiestDayJourneys": 0,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 0,
+   "typicalDayWindow": null,
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "850",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Reading Town Centre, Friar Street",
+    "Henley-on-Thames, Hart Street"
+   ],
+   "termini": [
+    "Bell Street",
+    "Friar Street",
+    "Hart Street",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 621,
+   "journeysPerWeekRange": [
+    567,
+    621
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 101,
+   "journeysOutBack": [
+    317,
+    304
+   ],
+   "firstDeparture": "04:35",
+   "lastDeparture": "24:02",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 101,
+   "typicalDayWindow": [
+    "04:35",
+    "24:02"
+   ],
+   "coreHeadwayMinutes": 15,
+   "longestDaytimeGap": 28,
+   "tripPatternsAtTown": 219,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "M40",
+   "operator": "First Berkshire & The Thames Valley",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270606",
+   "longName": "",
+   "headsigns": [
+    "York Road (Stop V) Uxbridge Station",
+    "High Wycombe Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "York Road (UB8)"
+   ],
+   "journeysPerWeek": 440,
+   "journeysPerWeekRange": [
+    262,
+    440
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 78,
+   "journeysOutBack": [
+    160,
+    155
+   ],
+   "firstDeparture": "05:15",
+   "lastDeparture": "20:05",
+   "typicalDayDuplicates": 28,
+   "typicalDayJourneys": 78,
+   "typicalDayWindow": [
+    "05:15",
+    "20:07"
+   ],
+   "coreHeadwayMinutes": 15,
+   "longestDaytimeGap": 20,
+   "tripPatternsAtTown": 312,
+   "hasGtfsShape": true,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "WW1",
+   "operator": "Carousel Buses",
+   "days": "?",
+   "daysFlags": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "validFrom": null,
+   "validTo": null,
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Adams Park",
+    "High Wycombe, Station Interchange"
+   ],
+   "termini": [
+    "Adams Park",
+    "Station Interchange"
+   ],
+   "journeysPerWeek": 8,
+   "journeysPerWeekRange": [
+    0,
+    8
+   ],
+   "weeksActive": 1,
+   "busiestDayJourneys": 8,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 8,
+   "typicalDayWindow": [
+    "12:40",
+    "22:27"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 197,
+   "tripPatternsAtTown": 8,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "X74",
+   "operator": "First Berkshire & The Thames Valley",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270606",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe Bus Station",
+    "Belmont Road",
+    "Queensmere Car Park",
+    "Slough, Wellington Street"
+   ],
+   "termini": [
+    "Belmont Road",
+    "High Wycombe BusStn",
+    "Uxbridge Station",
+    "Wellington Street Stop B",
+    "Wellington Street Stop G",
+    "Wellington Street Stop H"
+   ],
+   "journeysPerWeek": 548,
+   "journeysPerWeekRange": [
+    373,
+    548
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 98,
+   "journeysOutBack": [
+    207,
+    204
+   ],
+   "firstDeparture": "05:00",
+   "lastDeparture": "24:06",
+   "typicalDayDuplicates": 42,
+   "typicalDayJourneys": 98,
+   "typicalDayWindow": [
+    "05:00",
+    "24:06"
+   ],
+   "coreHeadwayMinutes": 5,
+   "longestDaytimeGap": 23,
+   "tripPatternsAtTown": 450,
+   "hasGtfsShape": true,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "130M",
+   "operator": "Redline",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "validFrom": "20260803",
+   "validTo": "20270503",
+   "longName": "",
+   "headsigns": [
+    "Aylesbury Bus Station (Bay 7)",
+    "Marlow Hill Schools"
+   ],
+   "termini": [
+    "Aylesbury Bus Stn",
+    "Marlow Hill Schools"
+   ],
+   "journeysPerWeek": 14,
+   "journeysPerWeekRange": [
+    0,
+    14
+   ],
+   "weeksActive": 9,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    0,
+    0
+   ],
+   "firstDeparture": null,
+   "lastDeparture": null,
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "07:56",
+    "16:10"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 494,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "130"
+  }
+ ]
+}

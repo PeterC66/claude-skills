@@ -1,0 +1,642 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 297 210">
+<rect width="297" height="210" fill="#ffffff"/>
+<clipPath id="map"><rect x="6" y="30" width="190" height="155.1"/></clipPath>
+<g clip-path="url(#map)">
+<path d="M61.16 134.10 L63.91 131.55" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M63.91 131.55 L71.07 128.97" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M71.07 128.97 L84.92 128.12" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M84.92 128.12 L108.31 129.00" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M108.31 129.00 L110.74 131.28" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M110.74 131.28 L114.94 132.39 L125.21 124.77 L130.13 124.31 L136.50 115.83 L143.80 117.34 L149.86 109.55 L147.28 101.11 L184.99 92.18" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.03 181.89 L17.56 176.75 L25.72 160.72 L33.76 157.73 L58.30 141.28 L61.16 134.10" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M187.40 92.58 L208.87 98.52" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M184.99 92.18 L187.40 92.58" fill="none" stroke="#9ec9e8" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.07 152.98 L2.19 139.82 L3.27 138.08 L11.04 124.79 L39.25 112.86 L40.77 112.12 L65.23 102.53 L108.36 96.85 L110.87 96.46 L145.40 81.95 L149.56 80.56 L180.70 78.67 L184.81 79.09 L196.32 79.68" fill="none" stroke="#4a4a4a" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="round"/>
+<path d="M-8.07 152.98 L2.19 139.82 L3.27 138.08 L11.04 124.79 L39.25 112.86 L40.77 112.12 L65.23 102.53 L108.36 96.85 L110.87 96.46 L145.40 81.95 L149.56 80.56 L180.70 78.67 L184.81 79.09 L196.32 79.68" fill="none" stroke="#ffffff" stroke-width="0.88" stroke-dasharray="2.3 2.3" stroke-linecap="butt" stroke-linejoin="round"/>
+<path d="M97.29 99.84 L48.24 110.84" fill="none" stroke="#4a4a4a" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="round"/>
+<path d="M97.29 99.84 L48.24 110.84" fill="none" stroke="#ffffff" stroke-width="0.88" stroke-dasharray="2.3 2.3" stroke-linecap="butt" stroke-linejoin="round"/>
+<path d="M14.70 166.93L17.26 164.37" fill="none" stroke="#f6f6f6" stroke-width="10.10" stroke-linecap="round"/>
+<path d="M17.26 164.37L18.14 163.50" fill="none" stroke="#f6f6f6" stroke-width="10.10" stroke-linecap="round"/>
+<path d="M18.14 163.50L18.35 163.30" fill="none" stroke="#f6f6f6" stroke-width="10.10" stroke-linecap="round"/>
+<path d="M18.35 163.30L18.51 163.14" fill="none" stroke="#f6f6f6" stroke-width="10.10" stroke-linecap="round"/>
+<path d="M18.51 163.14L18.67 162.98" fill="none" stroke="#f6f6f6" stroke-width="10.10" stroke-linecap="round"/>
+<path d="M18.67 162.98L18.87 162.77" fill="none" stroke="#f6f6f6" stroke-width="10.10" stroke-linecap="round"/>
+<path d="M18.87 162.77L19.11 162.53" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M19.11 162.53L19.49 162.15" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M19.49 162.15L20.26 161.39" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M20.26 161.39L21.46 160.19" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M21.46 160.19L23.73 157.92" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M23.73 157.92L24.00 157.66" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M24.00 157.66L25.77 155.89" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M25.77 155.89L30.51 151.16" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M30.51 151.16L33.87 147.81" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M33.87 147.81L36.93 144.76" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M36.93 144.76L37.89 143.79" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M37.89 143.79L43.85 137.85" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M43.85 137.85L46.19 135.51" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M46.19 135.51L46.47 135.23" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M46.47 135.23L48.01 133.70" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M48.01 133.70L48.56 133.15" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M48.56 133.15L50.43 131.29" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M50.43 131.29L51.37 130.35" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M51.37 130.35L51.78 129.93" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M51.78 129.93L51.78 129.93" fill="none" stroke="#f6f6f6" stroke-width="12.50" stroke-linecap="round"/>
+<path d="M51.78 129.93L51.78 129.93" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M51.78 129.93L56.30 129.94" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M56.30 129.94L58.82 129.94" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M58.82 129.94L59.85 129.95" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M59.85 129.95L61.25 129.95" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M61.25 129.95L64.73 129.95" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M64.73 129.95L67.82 129.96" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M67.82 129.96L70.46 129.96" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M70.46 129.96L71.43 129.97" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M71.43 129.97L75.20 129.97" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M75.20 129.97L76.91 129.98" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M76.91 129.98L82.14 129.98" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M82.14 129.98L83.81 129.99" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M83.81 129.99L86.31 129.98" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M86.31 129.98L88.61 129.98" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M88.61 129.98L92.14 129.97" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M92.14 129.97L96.04 129.96" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M96.04 129.96L97.10 129.96" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M97.10 129.96L99.76 129.96" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M99.76 129.96L107.39 129.94" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M107.39 129.94L109.86 129.94" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M109.86 129.94L111.33 129.93" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M111.33 129.93L114.19 129.93" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M114.19 129.93L117.49 126.63" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M117.49 126.63L118.52 125.60" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M118.52 125.60L120.64 123.48" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M120.64 123.48L122.98 121.13" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M122.98 121.13L124.34 119.77" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M124.34 119.77L124.86 119.25" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M124.86 119.25L127.31 116.81" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M127.31 116.81L128.85 115.26" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M128.85 115.26L132.97 111.13" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M132.97 111.13L134.09 110.02" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M134.09 110.02L135.21 108.89" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M135.21 108.89L136.85 107.25" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M136.85 107.25L138.46 105.64" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M138.46 105.64L140.66 103.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M140.66 103.43L142.68 101.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M142.68 101.41L145.20 98.90" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M145.20 98.90L148.62 95.47" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M148.62 95.47L154.02 95.47" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M154.02 95.47L156.23 95.47" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M156.23 95.47L163.27 95.46" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M163.27 95.46L164.20 95.46" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M164.20 95.46L169.58 95.45" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M169.58 95.45L173.77 95.45" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M173.77 95.45L176.14 95.45" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M176.14 95.45L181.64 95.44" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M181.64 95.44L186.22 95.44" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M186.22 95.44L187.15 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M187.15 95.43L188.20 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M188.20 95.43L188.76 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M188.76 95.43L191.75 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M191.75 95.43L192.60 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M192.60 95.43L193.85 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M193.85 95.43L195.50 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M195.50 95.43L196.11 95.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M196.11 95.43L197.88 95.42" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M197.88 95.42L199.31 95.42" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M199.31 95.42L201.71 95.42" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M201.71 95.42L208.38 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M208.38 95.41L209.37 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M209.37 95.41L210.15 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M210.15 95.41L211.05 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M211.05 95.41L211.66 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M211.66 95.41L213.47 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M213.47 95.41L213.76 95.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M213.76 95.41L216.69 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M216.69 95.40L218.29 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M218.29 95.40L219.06 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M219.06 95.40L219.90 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M219.90 95.40L220.79 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M220.79 95.40L221.50 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M221.50 95.40L224.57 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M224.57 95.40L225.70 95.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M225.70 95.40L228.61 95.39" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M228.61 95.39L230.62 95.39" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M230.62 95.39L233.30 95.39" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M233.30 95.39L234.68 95.39" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M209.37 95.41L207.92 96.85" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M207.92 96.85L207.78 97.00" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M207.78 97.00L207.64 97.14" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M207.64 97.14L207.48 97.30" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M207.48 97.30L206.04 98.73" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M51.78 129.93L51.78 129.93" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M14.70 166.93L13.29 168.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M83.81 129.99L85.30 131.50" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M85.30 131.50L87.54 133.77" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M87.54 133.77L89.04 135.29" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M89.04 135.29L91.74 138.04" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M91.74 138.04L93.10 139.41" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.10 139.41L93.09 149.80" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 149.80L93.09 154.94" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 154.94L93.09 161.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 161.43L93.09 161.69" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 161.69L93.09 162.95" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 162.95L93.09 164.15" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 164.15L93.09 170.40" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 170.40L93.09 175.34" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 175.34L93.09 177.75" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 177.75L93.09 178.28" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 178.28L93.09 179.88" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 179.88L93.09 181.04" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 181.04L93.09 182.27" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 182.27L93.09 184.38" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M93.09 184.38L98.01 179.47" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M98.01 179.47L102.72 174.77" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M102.72 174.77L110.44 167.06" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M110.44 167.06L113.03 164.48" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M113.03 164.48L120.96 156.57" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M120.96 156.57L123.08 154.45" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M123.08 154.45L127.27 150.27" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M127.27 150.27L131.47 146.07" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M131.47 146.07L133.12 144.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M133.12 144.43L133.91 143.64" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M133.91 143.64L137.84 139.72" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M137.84 139.72L142.35 135.22" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M142.35 135.22L143.17 134.39" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M143.17 134.39L144.91 132.66" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M144.91 132.66L151.82 125.76" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M151.82 125.76L152.57 125.01" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M152.57 125.01L157.50 120.10" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M157.50 120.10L160.02 117.58" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M160.02 117.58L160.49 117.11" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M160.49 117.11L161.53 116.07" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M161.53 116.07L162.96 114.65" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M162.96 114.65L163.19 114.42" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M163.19 114.42L164.01 113.60" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M164.01 113.60L167.18 110.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M167.18 110.43L167.82 109.80" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M167.82 109.80L170.50 107.12" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M170.50 107.12L172.68 104.94" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M172.68 104.94L173.55 104.07" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M173.55 104.07L174.30 103.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M174.30 103.33L176.69 100.95" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M176.69 100.95L177.69 99.95" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M177.69 99.95L178.73 98.91" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M178.73 98.91L179.90 97.74" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M179.90 97.74L180.85 96.79" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M180.85 96.79L184.55 93.10" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M184.55 93.10L186.06 91.59" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M186.06 91.59L186.48 91.17" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M186.48 91.17L190.28 91.18" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M190.28 91.18L193.47 91.19" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M193.47 91.19L196.60 91.20" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M196.60 91.20L201.03 91.20" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M201.03 91.20L202.08 91.21" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M202.08 91.21L206.04 91.22" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M206.04 91.22L211.23 91.23" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M211.23 91.23L211.73 91.23" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M211.73 91.23L214.88 91.23" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M214.88 91.23L216.62 91.24" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M216.62 91.24L220.79 91.25" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M51.78 129.93L55.79 125.94" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M55.79 125.94L57.28 124.45" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M57.28 124.45L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M58.44 123.30L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M58.44 123.30L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M58.44 123.30L57.91 122.76" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M57.91 122.76L54.93 119.78" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M54.93 119.78L51.96 116.79" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M51.96 116.79L51.96 116.79" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M51.96 116.79L50.97 115.80" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M50.97 115.80L48.77 113.60" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M48.77 113.60L45.93 110.74" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M45.93 110.74L43.96 108.77" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M43.96 108.77L41.62 106.42" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M41.62 106.42L40.19 104.99" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M40.19 104.99L39.56 104.36" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M39.56 104.36L38.26 103.05" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M38.26 103.05L36.57 101.36" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M36.57 101.36L35.55 100.34" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M35.55 100.34L34.30 99.08" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M34.30 99.08L32.09 96.86" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M32.09 96.86L27.47 92.24" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M27.47 92.24L25.48 90.24" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M25.48 90.24L23.33 88.08" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M23.33 88.08L22.49 87.24" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M22.49 87.24L19.67 84.41" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M19.67 84.41L16.59 81.32" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M16.59 81.32L15.76 80.49" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M15.76 80.49L14.71 79.43" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M14.71 79.43L13.17 77.89" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M13.17 77.89L11.58 76.29" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M11.58 76.29L10.06 74.77" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M10.06 74.77L9.77 74.48" fill="none" stroke="#f6f6f6" stroke-width="7.70" stroke-linecap="round"/>
+<path d="M9.77 74.48L9.77 73.92" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M10.97 73.92L10.97 71.45" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M10.97 71.45L10.97 69.89" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M10.97 69.89L10.97 68.28" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M10.97 68.28L10.98 66.63" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M10.98 66.63L10.98 64.59" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M10.98 64.59L10.98 61.92" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M9.77 74.48L8.05 76.22" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M8.05 76.22L7.28 77.00" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M8.13 77.85L7.26 78.72" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M7.26 78.72L6.86 79.13" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.01 78.29L3.16 81.09" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M3.16 81.09L-0.26 84.46" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-0.26 84.46L-2.98 87.13" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-2.98 87.13L-5.69 89.80" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-5.69 89.80L-10.71 89.82" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-10.71 89.82L-14.59 89.84" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-14.59 89.84L-18.26 89.85" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-18.26 89.85L-22.12 89.87" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-22.12 89.87L-20.81 91.19" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-20.81 91.19L-19.48 92.54" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-19.48 92.54L-18.72 93.32" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-18.72 93.32L-17.54 94.50" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-17.54 94.50L-17.29 94.76" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-17.29 94.76L-15.44 96.64" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-15.44 96.64L-15.22 96.86" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-15.22 96.86L-12.48 99.64" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-12.48 99.64L-9.72 102.44" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-9.72 102.44L-8.45 103.73" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-8.45 103.73L-7.13 105.06" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-7.13 105.06L-6.49 105.71" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-6.49 105.71L-5.99 106.22" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-5.99 106.22L-4.63 107.60" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-4.63 107.60L-2.56 109.70" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-2.56 109.70L-1.18 111.09" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-1.18 111.09L2.83 115.16" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M2.83 115.16L4.26 116.61" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M4.26 116.61L5.32 117.69" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M5.32 117.69L6.33 118.71" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.33 118.71L6.31 116.74" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.31 116.74L6.31 115.96" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.31 115.96L6.29 113.39" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.29 113.39L6.28 112.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.28 112.43L6.25 108.65" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.25 108.65L6.22 105.56" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.22 105.56L6.20 102.75" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.20 102.75L6.16 97.36" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.16 97.36L6.11 91.84" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.11 91.84L6.10 89.94" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.10 89.94L6.08 87.34" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.08 87.34L6.04 82.51" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.04 82.51L6.01 78.29" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.80 46.81L66.80 49.53" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.80 49.53L66.81 50.83" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 50.83L66.81 52.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 52.33L66.81 54.17" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 54.17L66.81 55.88" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 55.88L66.81 56.71" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 56.71L66.81 57.55" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 57.55L66.81 58.43" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 58.43L66.81 59.29" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 59.29L66.81 61.06" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.81 61.06L66.82 65.62" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.82 65.62L66.82 68.72" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.82 68.72L66.82 72.77" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.82 72.77L66.82 75.32" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.82 75.32L66.83 76.96" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.83 76.96L66.83 78.54" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.83 78.54L66.83 80.52" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.83 80.52L66.83 84.02" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.83 84.02L66.83 85.17" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.83 85.17L66.84 90.37" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.84 90.37L66.84 93.02" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.84 93.02L66.84 94.12" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.84 94.12L66.84 95.32" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.84 95.32L66.84 96.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.84 96.33L66.84 100.34" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.84 100.34L66.85 102.21" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 102.21L66.85 105.10" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 105.10L66.85 106.57" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 106.57L66.85 107.01" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 107.01L66.85 109.56" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 109.56L66.85 112.52" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 112.52L66.86 114.79" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M66.86 114.79L66.87 116.29" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M66.87 116.29L66.90 123.30" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M66.90 123.30L64.02 123.30" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M64.02 123.30L60.67 123.30" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M60.67 123.30L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="5.30" stroke-linecap="round"/>
+<path d="M58.44 123.30L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M58.44 123.30L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-22.12 89.87L-23.00 89.87" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-23.00 89.87L-24.30 89.86" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-24.30 89.86L-25.63 89.86" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-25.63 89.86L-27.46 89.85" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-25.15 118.21L-24.94 118.42" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-24.94 118.42L-24.61 118.75" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-24.61 118.75L-23.44 119.92" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-23.44 119.92L-17.69 125.68" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-17.69 125.68L-16.33 127.04" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-16.33 127.04L-14.93 128.44" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-14.93 128.44L-12.40 130.97" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-12.40 130.97L-10.95 132.42" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-10.95 132.42L-10.63 132.75" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-10.63 132.75L-9.05 134.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-9.05 134.33L-7.64 135.74" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-7.64 135.74L-1.71 141.68" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-1.71 141.68L-0.12 143.28" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M-0.12 143.28L0.39 143.79" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M0.39 143.79L1.96 145.35" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M1.96 145.35L3.98 147.38" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M3.98 147.38L4.64 148.04" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M4.64 148.04L6.37 149.77" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.37 149.77L6.86 150.26" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M6.86 150.26L7.96 151.37" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M7.96 151.37L10.12 153.52" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M10.12 153.52L13.74 157.15" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M13.74 157.15L14.46 157.87" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M14.46 157.87L15.14 158.56" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M15.14 158.56L16.27 159.69" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M16.27 159.69L18.43 161.85" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M18.43 161.85L18.56 161.98" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M18.56 161.98L18.73 162.15" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M18.73 162.15L18.91 162.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M18.91 162.33L19.11 162.53" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M58.44 123.30L58.44 123.30" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M66.85 112.52L72.66 112.51" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M72.66 112.51L107.38 112.46" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M107.38 112.46L113.95 112.46" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M113.95 112.46L113.95 114.44" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M113.95 114.44L113.95 115.99" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M113.95 115.99L113.96 118.93" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M113.96 118.93L113.96 120.67" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M113.96 120.67L111.98 120.66" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M111.98 120.66L110.00 120.66" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M110.00 120.66L109.27 120.65" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M109.27 120.65L107.58 120.65" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M107.58 120.65L106.38 119.44" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M106.38 119.44L105.26 118.33" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M105.26 118.33L103.63 116.69" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M103.63 116.69L102.48 115.54" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M102.48 115.54L99.02 112.07" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M99.02 112.07L98.66 111.71" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M98.66 111.71L96.41 109.46" fill="none" stroke="#f6f6f6" stroke-width="2.90" stroke-linecap="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#ffffff" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#ffffff" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M196.00 95.43L195.50 95.43L193.85 95.43L192.60 95.43L191.75 95.43L188.76 95.43L188.20 95.43L187.15 95.43L186.22 95.44L181.64 95.44L176.14 95.45L173.77 95.45L169.58 95.45L164.20 95.46L163.27 95.46L156.23 95.47L154.02 95.47L150.62 95.47Q148.62 95.47 147.20 96.89L145.20 98.90L142.68 101.41L140.66 103.43L138.46 105.64L136.85 107.25L135.21 108.89L134.09 110.02L132.97 111.13L128.85 115.26L127.31 116.81L124.86 119.25L124.34 119.77L122.98 121.13L120.64 123.48L118.52 125.60L117.49 126.63L115.21 128.92Q114.19 129.93 112.76 129.93L111.33 129.93L109.86 129.94L107.39 129.94L99.76 129.96L97.10 129.96L96.04 129.96L92.14 129.97L88.61 129.98L86.31 129.98L83.81 129.39L82.14 128.78L76.91 128.78L75.20 128.77L71.43 128.77L70.47 128.76L67.82 128.76L64.73 128.75L61.26 128.75L59.86 128.75L58.82 128.74L56.30 128.74L52.78 129.20Q51.78 129.33 50.93 128.78L50.09 128.23L48.55 127.29Q47.98 126.95 47.51 127.42L47.04 127.89L45.17 129.75L44.62 130.30L43.08 131.83L42.80 132.12L40.46 134.45L34.50 140.40L33.54 141.36L30.48 144.41L27.12 147.76L22.38 152.50L20.61 154.26L20.34 154.53L18.07 156.79L16.87 157.99L16.10 158.76L15.92 158.94Q15.73 159.13 15.80 159.39L15.91 159.80L16.09 160.32Q16.13 160.42 16.05 160.51L15.97 160.59L15.81 160.75L15.60 160.95L14.72 161.82L13.43 165.65L13.29 168.33" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.85 166.07L16.42 163.52L17.30 162.65L17.50 162.45L17.66 162.29L17.74 162.21Q17.82 162.13 17.78 162.02L17.60 161.50L17.49 161.09Q17.42 160.83 17.61 160.64L17.80 160.45L18.57 159.69L19.77 158.49L22.04 156.23L22.30 155.96L24.07 154.19L28.81 149.46L32.17 146.11L35.23 143.06L36.20 142.10L42.15 136.15L44.49 133.82L44.78 133.53L46.32 132.00L46.87 131.45L48.73 129.59L49.20 129.12Q49.67 128.65 50.30 128.86L50.93 129.08L51.57 129.72Q51.78 129.93 51.78 130.23L51.78 130.23Q51.78 130.53 52.08 130.57L56.30 131.14L58.82 131.14L59.85 131.15L61.25 131.15L64.73 131.15L67.82 131.16L70.46 131.16L71.43 131.17L75.20 131.17L76.91 131.18L82.14 131.18L82.99 130.88Q83.81 130.59 84.56 131.04L85.30 131.50L87.54 133.77L89.04 135.29L91.74 138.04L92.42 138.72Q93.10 139.41 93.10 140.37L93.09 149.80L93.09 154.94L93.09 161.43L93.09 161.69L93.09 162.95L93.09 164.15L93.09 170.40L93.09 175.34L93.09 177.75L93.09 178.28L93.09 179.88L93.09 181.04L93.09 182.27L93.09 183.33Q93.09 184.38 93.84 183.63L98.01 179.47L102.72 174.77L110.44 167.06L113.03 164.48L120.96 156.57L123.08 154.45L127.27 150.27L131.47 146.07L133.12 144.43L133.91 143.64L137.84 139.72L142.35 135.22L143.17 134.39L144.91 132.66L151.82 125.76L152.57 125.01L157.50 120.10L160.02 117.58L160.49 117.11L161.53 116.07L162.96 114.65L163.19 114.42L164.01 113.60L167.18 110.43L167.82 109.80L170.50 107.12L172.68 104.94L173.55 104.07L174.30 103.33L176.69 100.95L177.69 99.95L178.73 98.91L179.90 97.74L180.85 96.79L184.55 93.10L186.06 91.59L186.27 91.38Q186.48 91.17 186.77 91.17L190.28 91.18L193.47 91.19L196.00 91.19" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M15.55 167.78L18.11 165.22L18.99 164.35L19.19 164.15L19.35 163.99L19.43 163.91Q19.51 163.83 19.48 163.72L19.29 163.20L19.18 162.79Q19.11 162.53 19.30 162.34L19.49 162.15L20.26 161.39L21.46 160.19L23.73 157.92L24.00 157.66L25.77 155.89L30.51 151.16L33.87 147.81L36.93 144.76L37.89 143.79L43.85 137.85L46.19 135.51L46.47 135.23L48.01 133.70L48.56 133.15L50.43 131.29L51.37 130.35L51.57 130.14Q51.78 129.93 51.58 129.72L51.36 129.51Q50.94 129.08 51.26 128.58L54.10 124.24L54.87 123.47Q55.59 122.75 56.59 122.60L57.00 122.54Q57.60 122.45 58.02 122.87L58.02 122.87Q58.44 123.30 58.87 122.87L58.87 122.87Q59.29 122.45 59.42 121.87L59.45 121.76Q59.61 121.07 59.11 120.56L56.63 118.08L53.33 116.24Q52.81 115.95 52.38 116.37L52.38 116.37Q51.96 116.79 52.38 116.37L52.38 116.37Q52.81 115.95 52.76 115.35L52.74 115.03Q52.67 114.11 52.01 113.45L50.47 111.91L47.63 109.05L45.66 107.08L43.32 104.73L41.89 103.30L41.26 102.66L39.95 101.36L38.27 99.67L37.25 98.64L36.00 97.38L33.79 95.17L29.17 90.54L27.18 88.54L25.03 86.39L24.19 85.54L21.37 82.72L18.29 79.62L17.46 78.79L16.41 77.74L14.87 76.19L13.28 74.60L12.03 73.35Q11.76 73.07 11.49 73.35L11.22 73.63L11.09 73.78Q10.97 73.92 10.97 73.73L10.97 71.45L10.97 69.89L10.97 68.28L10.98 66.63L10.98 64.59L10.98 61.92" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.24 169.48L19.80 166.93L20.68 166.05L20.89 165.85L21.05 165.69L21.13 165.61Q21.21 165.53 21.17 165.42L20.99 164.90L20.88 164.49Q20.81 164.23 21.00 164.04L21.19 163.85L21.96 163.09L23.16 161.89L25.43 159.62L25.69 159.36L27.46 157.59L32.20 152.86L35.56 149.51L38.62 146.45L39.59 145.49L45.54 139.55L47.88 137.21L48.17 136.93L49.71 135.39L50.26 134.84L52.12 132.98L52.59 132.51Q53.06 132.04 52.85 131.42L52.63 130.78L52.21 130.36Q51.78 129.93 52.21 129.51L55.79 125.94L57.28 124.45L58.44 123.30L58.44 123.30L58.44 123.30L57.91 122.76L54.93 119.78L51.96 116.79L51.96 116.79L51.96 116.79L50.97 115.80L48.77 113.60L45.93 110.74L43.96 108.77L41.62 106.42L40.19 104.99L39.56 104.36L38.26 103.05L36.57 101.36L35.55 100.34L34.30 99.08L32.09 96.86L27.47 92.24L25.48 90.24L23.33 88.08L22.49 87.24L19.67 84.41L16.59 81.32L15.76 80.49L14.71 79.43L13.17 77.89L11.58 76.29L10.13 74.84Q10.06 74.77 10.13 74.83L10.13 74.83Q10.20 74.90 10.15 74.98L8.90 77.07L8.13 77.85L7.26 78.72L6.85 79.14L6.00 79.98" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M66.80 46.81L66.80 49.53L66.81 50.83L66.81 52.33L66.81 54.17L66.81 55.88L66.81 56.71L66.81 57.55L66.81 58.43L66.81 59.29L66.81 61.06L66.82 65.62L66.82 68.72L66.82 72.77L66.82 75.32L66.83 76.96L66.83 78.54L66.83 80.52L66.83 84.02L66.83 85.17L66.84 90.37L66.84 93.02L66.84 94.12L66.84 95.32L66.84 96.33L66.84 100.34L66.85 102.21L66.85 105.10L66.85 106.57L66.85 107.01L66.85 109.56L67.45 112.51L68.06 114.79L68.07 116.28L67.66 120.93Q67.50 122.69 65.76 122.40L64.02 122.10L60.67 122.10L58.73 122.62Q58.44 122.70 58.44 123.00L58.44 123.00Q58.44 123.30 58.23 123.51L58.02 123.72Q57.59 124.15 57.01 124.28L56.90 124.30Q56.21 124.46 55.71 123.95L53.23 121.47L51.40 118.17Q51.11 117.64 51.53 117.22L51.53 117.22Q51.96 116.79 51.53 117.22L51.53 117.22Q51.11 117.64 50.51 117.59L50.19 117.57Q49.27 117.49 48.61 116.84L47.07 115.29L44.23 112.44L42.26 110.47L39.92 108.12L38.49 106.69L37.86 106.05L36.56 104.74L34.87 103.06L33.85 102.03L32.60 100.77L30.39 98.56L25.78 93.93L23.78 91.93L21.63 89.78L20.79 88.93L17.97 86.10L14.89 83.01L14.06 82.18L13.01 81.13L11.47 79.58L9.88 77.99L8.91 77.02Q8.36 76.46 8.43 75.68L8.43 75.59Q8.49 74.90 7.84 75.14L7.19 75.38L6.42 76.16L6.00 76.59" fill="none" stroke="#ffffff" stroke-width="2.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.00 149.40L6.37 149.77L6.86 150.26L7.96 151.37L10.12 153.52L13.74 157.15L14.46 157.87L15.14 158.56L16.27 159.69L18.43 161.85L18.56 161.98L18.73 162.15L18.91 162.33L20.81 164.23L22.43 165.26Q22.88 165.55 23.27 165.17L23.65 164.78L24.85 163.59L27.12 161.32L27.39 161.06L29.16 159.29L33.90 154.56L37.26 151.21L40.32 148.15L41.28 147.19L47.24 141.25L49.58 138.91L49.87 138.63L51.40 137.09L51.95 136.54L53.82 134.68L54.29 134.21Q54.76 133.74 54.41 133.17L53.48 131.63L53.05 131.21Q52.63 130.78 53.13 130.46L57.49 127.64L58.26 126.87Q58.98 126.15 59.13 125.15L59.22 124.59Q59.29 124.15 58.87 124.02L58.87 124.02Q58.44 123.90 58.87 124.01L60.67 124.50L64.02 124.50L65.16 124.20Q66.30 123.90 66.20 122.72L65.67 116.29L65.66 114.80L65.96 113.66Q66.25 112.52 67.43 112.52L72.66 112.51L107.38 112.46L112.96 112.46Q113.95 112.46 113.95 113.45L113.95 114.44L113.95 115.99L113.96 118.93L113.96 119.80Q113.96 120.67 113.09 120.66L111.98 120.66L110.00 120.66L109.27 120.65L108.43 120.65Q107.58 120.65 106.99 120.05L106.38 119.44L105.26 118.33L103.63 116.69L102.48 115.54L99.02 112.07L98.66 111.71L96.41 109.46" fill="none" stroke="#ffffff" stroke-width="1.90" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#332288" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#332288" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#332288" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#332288" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.16 164.37L14.72 161.82L15.60 160.95L15.81 160.75L15.97 160.59L16.05 160.51Q16.13 160.42 16.09 160.32L15.91 159.80L15.80 159.39Q15.73 159.13 15.92 158.94L16.10 158.76L16.87 157.99L18.07 156.79L20.34 154.53L20.61 154.26L22.38 152.50L27.12 147.76L30.48 144.41L33.54 141.36L34.50 140.40L40.46 134.45L42.80 132.12L43.08 131.83L44.62 130.30L45.17 129.75L47.04 127.89L47.51 127.42Q47.98 126.95 48.55 127.29L50.09 128.23L51.57 129.72Q51.78 129.93 51.78 129.63L51.78 129.63Q51.78 129.33 52.08 129.29L56.30 128.74L58.82 128.74L59.86 128.75L61.26 128.75L64.73 128.75L67.82 128.76L70.47 128.76L71.43 128.77L75.20 128.77L76.91 128.78L82.14 128.78L83.81 129.39L86.31 129.98L88.61 129.98L92.14 129.97L96.04 129.96L97.10 129.96L99.76 129.96L107.39 129.94L109.86 129.94L111.33 129.93L112.76 129.93Q114.19 129.93 115.21 128.92L117.49 126.63L118.52 125.60L120.64 123.48L122.98 121.13L124.34 119.77L124.86 119.25L127.31 116.81L128.85 115.26L132.97 111.13L134.09 110.02L135.21 108.89L136.85 107.25L138.46 105.64L140.66 103.43L142.68 101.41L145.20 98.90L147.20 96.89Q148.62 95.47 150.62 95.47L154.02 95.47L156.23 95.47L163.27 95.46L164.20 95.46L169.58 95.45L173.77 95.45L176.14 95.45L181.64 95.44L186.22 95.44L187.15 95.43L188.20 95.43L188.76 95.43L191.75 95.43L192.60 95.43L193.85 95.43L195.50 95.43L196.00 95.43" fill="none" stroke="#332288" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M196.00 95.43L195.50 95.43L193.85 95.43L192.60 95.43L191.75 95.43L188.76 95.43L188.20 95.43L187.15 95.43L186.22 95.44L181.64 95.44L176.14 95.45L173.77 95.45L169.58 95.45L164.20 95.46L163.27 95.46L156.23 95.47L154.02 95.47L150.62 95.47Q148.62 95.47 147.20 96.89L145.20 98.90L142.68 101.41L140.66 103.43L138.46 105.64L136.85 107.25L135.21 108.89L134.09 110.02L132.97 111.13L128.85 115.26L127.31 116.81L124.86 119.25L124.34 119.77L122.98 121.13L120.64 123.48L118.52 125.60L117.49 126.63L115.21 128.92Q114.19 129.93 112.76 129.93L111.33 129.93L109.86 129.94L107.39 129.94L99.76 129.96L97.10 129.96L96.04 129.96L92.14 129.97L88.61 129.98L86.31 129.98L83.81 129.39L82.14 128.78L76.91 128.78L75.20 128.77L71.43 128.77L70.47 128.76L67.82 128.76L64.73 128.75L61.26 128.75L59.86 128.75L58.82 128.74L56.30 128.74L52.78 129.20Q51.78 129.33 50.93 128.78L50.09 128.23L48.55 127.29Q47.98 126.95 47.51 127.42L47.04 127.89L45.17 129.75L44.62 130.30L43.08 131.83L42.80 132.12L40.46 134.45L34.50 140.40L33.54 141.36L30.48 144.41L27.12 147.76L22.38 152.50L20.61 154.26L20.34 154.53L18.07 156.79L16.87 157.99L16.10 158.76L15.92 158.94Q15.73 159.13 15.80 159.39L15.91 159.80L16.09 160.32Q16.13 160.42 16.05 160.51L15.97 160.59L15.81 160.75L15.60 160.95L14.72 161.82L13.43 165.65L13.29 168.33" fill="none" stroke="#332288" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.85 166.07L16.42 163.52L17.30 162.65L17.50 162.45L17.66 162.29L17.74 162.21Q17.82 162.13 17.78 162.02L17.60 161.50L17.49 161.09Q17.42 160.83 17.61 160.64L17.80 160.45L18.57 159.69L19.77 158.49L22.04 156.23L22.30 155.96L24.07 154.19L28.81 149.46L32.17 146.11L35.23 143.06L36.20 142.10L42.15 136.15L44.49 133.82L44.78 133.53L46.32 132.00L46.87 131.45L48.73 129.59L49.20 129.12Q49.67 128.65 50.30 128.86L50.93 129.08L51.57 129.72Q51.78 129.93 51.78 130.23L51.78 130.23Q51.78 130.53 52.08 130.57L56.30 131.14L58.82 131.14L59.85 131.15L61.25 131.15L64.73 131.15L67.82 131.16L70.46 131.16L71.43 131.17L75.20 131.17L76.91 131.18L82.14 131.18L82.99 130.88Q83.81 130.59 84.56 131.04L85.30 131.50L87.54 133.77L89.04 135.29L91.74 138.04L92.42 138.72Q93.10 139.41 93.10 140.37L93.09 149.80L93.09 154.94L93.09 161.43L93.09 161.69L93.09 162.95L93.09 164.15L93.09 170.40L93.09 175.34L93.09 177.75L93.09 178.28L93.09 179.88L93.09 181.04L93.09 182.27L93.09 183.33Q93.09 184.38 93.84 183.63L98.01 179.47L102.72 174.77L110.44 167.06L113.03 164.48L120.96 156.57L123.08 154.45L127.27 150.27L131.47 146.07L133.12 144.43L133.91 143.64L137.84 139.72L142.35 135.22L143.17 134.39L144.91 132.66L151.82 125.76L152.57 125.01L157.50 120.10L160.02 117.58L160.49 117.11L161.53 116.07L162.96 114.65L163.19 114.42L164.01 113.60L167.18 110.43L167.82 109.80L170.50 107.12L172.68 104.94L173.55 104.07L174.30 103.33L176.69 100.95L177.69 99.95L178.73 98.91L179.90 97.74L180.85 96.79L184.55 93.10L186.06 91.59L186.27 91.38Q186.48 91.17 186.77 91.17L190.28 91.18L193.47 91.19L196.00 91.19" fill="none" stroke="#228833" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M15.55 167.78L18.11 165.22L18.99 164.35L19.19 164.15L19.35 163.99L19.43 163.91Q19.51 163.83 19.48 163.72L19.29 163.20L19.18 162.79Q19.11 162.53 19.30 162.34L19.49 162.15L20.26 161.39L21.46 160.19L23.73 157.92L24.00 157.66L25.77 155.89L30.51 151.16L33.87 147.81L36.93 144.76L37.89 143.79L43.85 137.85L46.19 135.51L46.47 135.23L48.01 133.70L48.56 133.15L50.43 131.29L51.37 130.35L51.57 130.14Q51.78 129.93 51.58 129.72L51.36 129.51Q50.94 129.08 51.26 128.58L54.10 124.24L54.87 123.47Q55.59 122.75 56.59 122.60L57.00 122.54Q57.60 122.45 58.02 122.87L58.02 122.87Q58.44 123.30 58.87 122.87L58.87 122.87Q59.29 122.45 59.42 121.87L59.45 121.76Q59.61 121.07 59.11 120.56L56.63 118.08L53.33 116.24Q52.81 115.95 52.38 116.37L52.38 116.37Q51.96 116.79 52.38 116.37L52.38 116.37Q52.81 115.95 52.76 115.35L52.74 115.03Q52.67 114.11 52.01 113.45L50.47 111.91L47.63 109.05L45.66 107.08L43.32 104.73L41.89 103.30L41.26 102.66L39.95 101.36L38.27 99.67L37.25 98.64L36.00 97.38L33.79 95.17L29.17 90.54L27.18 88.54L25.03 86.39L24.19 85.54L21.37 82.72L18.29 79.62L17.46 78.79L16.41 77.74L14.87 76.19L13.28 74.60L12.03 73.35Q11.76 73.07 11.49 73.35L11.22 73.63L11.09 73.78Q10.97 73.92 10.97 73.73L10.97 71.45L10.97 69.89L10.97 68.28L10.98 66.63L10.98 64.59L10.98 61.92" fill="none" stroke="#CC3311" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.24 169.48L19.80 166.93L20.68 166.05L20.89 165.85L21.05 165.69L21.13 165.61Q21.21 165.53 21.17 165.42L20.99 164.90L20.88 164.49Q20.81 164.23 21.00 164.04L21.19 163.85L21.96 163.09L23.16 161.89L25.43 159.62L25.69 159.36L27.46 157.59L32.20 152.86L35.56 149.51L38.62 146.45L39.59 145.49L45.54 139.55L47.88 137.21L48.17 136.93L49.71 135.39L50.26 134.84L52.12 132.98L52.59 132.51Q53.06 132.04 52.85 131.42L52.63 130.78L52.21 130.36Q51.78 129.93 52.21 129.51L55.79 125.94L57.28 124.45L58.44 123.30L58.44 123.30L58.44 123.30L57.91 122.76L54.93 119.78L51.96 116.79L51.96 116.79L51.96 116.79L50.97 115.80L48.77 113.60L45.93 110.74L43.96 108.77L41.62 106.42L40.19 104.99L39.56 104.36L38.26 103.05L36.57 101.36L35.55 100.34L34.30 99.08L32.09 96.86L27.47 92.24L25.48 90.24L23.33 88.08L22.49 87.24L19.67 84.41L16.59 81.32L15.76 80.49L14.71 79.43L13.17 77.89L11.58 76.29L10.13 74.84Q10.06 74.77 10.13 74.83L10.13 74.83Q10.20 74.90 10.15 74.98L8.90 77.07L8.13 77.85L7.26 78.72L6.85 79.14L6.00 79.98" fill="none" stroke="#EE7733" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M66.80 46.81L66.80 49.53L66.81 50.83L66.81 52.33L66.81 54.17L66.81 55.88L66.81 56.71L66.81 57.55L66.81 58.43L66.81 59.29L66.81 61.06L66.82 65.62L66.82 68.72L66.82 72.77L66.82 75.32L66.83 76.96L66.83 78.54L66.83 80.52L66.83 84.02L66.83 85.17L66.84 90.37L66.84 93.02L66.84 94.12L66.84 95.32L66.84 96.33L66.84 100.34L66.85 102.21L66.85 105.10L66.85 106.57L66.85 107.01L66.85 109.56L67.45 112.51L68.06 114.79L68.07 116.28L67.66 120.93Q67.50 122.69 65.76 122.40L64.02 122.10L60.67 122.10L58.73 122.62Q58.44 122.70 58.44 123.00L58.44 123.00Q58.44 123.30 58.23 123.51L58.02 123.72Q57.59 124.15 57.01 124.28L56.90 124.30Q56.21 124.46 55.71 123.95L53.23 121.47L51.40 118.17Q51.11 117.64 51.53 117.22L51.53 117.22Q51.96 116.79 51.53 117.22L51.53 117.22Q51.11 117.64 50.51 117.59L50.19 117.57Q49.27 117.49 48.61 116.84L47.07 115.29L44.23 112.44L42.26 110.47L39.92 108.12L38.49 106.69L37.86 106.05L36.56 104.74L34.87 103.06L33.85 102.03L32.60 100.77L30.39 98.56L25.78 93.93L23.78 91.93L21.63 89.78L20.79 88.93L17.97 86.10L14.89 83.01L14.06 82.18L13.01 81.13L11.47 79.58L9.88 77.99L8.91 77.02Q8.36 76.46 8.43 75.68L8.43 75.59Q8.49 74.90 7.84 75.14L7.19 75.38L6.42 76.16L6.00 76.59" fill="none" stroke="#4477AA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.00 149.40L6.37 149.77L6.86 150.26L7.96 151.37L10.12 153.52L13.74 157.15L14.46 157.87L15.14 158.56L16.27 159.69L18.43 161.85L18.56 161.98L18.73 162.15L18.91 162.33L20.81 164.23L22.43 165.26Q22.88 165.55 23.27 165.17L23.65 164.78L24.85 163.59L27.12 161.32L27.39 161.06L29.16 159.29L33.90 154.56L37.26 151.21L40.32 148.15L41.28 147.19L47.24 141.25L49.58 138.91L49.87 138.63L51.40 137.09L51.95 136.54L53.82 134.68L54.29 134.21Q54.76 133.74 54.41 133.17L53.48 131.63L53.05 131.21Q52.63 130.78 53.13 130.46L57.49 127.64L58.26 126.87Q58.98 126.15 59.13 125.15L59.22 124.59Q59.29 124.15 58.87 124.02L58.87 124.02Q58.44 123.90 58.87 124.01L60.67 124.50L64.02 124.50L65.16 124.20Q66.30 123.90 66.20 122.72L65.67 116.29L65.66 114.80L65.96 113.66Q66.25 112.52 67.43 112.52L72.66 112.51L107.38 112.46L112.96 112.46Q113.95 112.46 113.95 113.45L113.95 114.44L113.95 115.99L113.96 118.93L113.96 119.80Q113.96 120.67 113.09 120.66L111.98 120.66L110.00 120.66L109.27 120.65L108.43 120.65Q107.58 120.65 106.99 120.05L106.38 119.44L105.26 118.33L103.63 116.69L102.48 115.54L99.02 112.07L98.66 111.71L96.41 109.46" fill="none" stroke="#CCBB44" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="51.66" cy="129.81" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="97.40" cy="129.96" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="124.58" cy="119.54" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="144.08" cy="100.01" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="153.65" cy="95.47" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="129.89" cy="114.22" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="89.86" cy="129.98" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="39.68" cy="135.23" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="93.09" cy="148.21" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="93.09" cy="166.81" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="111.99" cy="165.52" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="129.84" cy="147.70" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="150.26" cy="127.33" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="179.71" cy="97.93" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="180.48" cy="97.16" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="152.28" cy="125.31" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="129.39" cy="148.15" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="109.21" cy="168.29" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="93.09" cy="166.53" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="93.09" cy="152.70" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="52.10" cy="116.65" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="23.22" cy="84.57" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="25.52" cy="86.88" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="55.97" cy="117.72" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="66.80" cy="46.81" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="66.82" cy="68.25" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="66.82" cy="63.11" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="69.98" cy="112.51" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="103.71" cy="112.47" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="113.95" cy="112.46" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+<circle cx="113.96" cy="120.67" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>
+</g>
+<rect x="95.69759631132104" y="128.2615742757422" width="3.4" height="3.4" rx="0.5" fill="#111"/>
+<rect x="96.39759631132104" y="128.96157427574218" width="2.0" height="2.0" rx="0.3" fill="#fff"/>
+<text x="99.99759631132103" y="130.96157427574218" font-family="Arial" font-weight="bold" font-size="3.0" fill="#111" stroke="#fff" stroke-width="0.7" paint-order="stroke">Ford Street stops</text>
+<path d="M198.60 94.82 L195.50 96.42 L195.50 93.22 Z" fill="#555"/>
+<circle cx="183.0957" cy="80.8241598317235" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="183.0957" y="80.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">102</text>
+<circle cx="183.0957" cy="87.8241598317235" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="183.0957" y="87.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">103</text>
+<circle cx="174.55949999999999" cy="94.8241598317235" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="174.55949999999999" y="94.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">104</text>
+<rect x="179.13" y="91.82" width="7.94" height="6.00" rx="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="183.0957" y="94.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">M40</text>
+<circle cx="191.6319" cy="94.8241598317235" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="191.6319" y="94.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">X74</text>
+<circle cx="183.0957" cy="101.8241598317235" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="183.0957" y="101.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">105</text>
+<circle cx="183.0957" cy="108.8241598317235" r="3" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="183.0957" y="108.8241598317235" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<path d="M11.72 167.92 L12.53 164.52 L14.95 166.61 Z" fill="#555"/>
+<circle cx="23.172399999999996" cy="151.66008695364522" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="23.172399999999996" y="151.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">102</text>
+<circle cx="31.708599999999997" cy="151.66008695364522" r="3" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="31.708599999999997" y="151.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<circle cx="10.368099999999998" cy="158.66008695364522" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="10.368099999999998" y="158.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">103</text>
+<circle cx="18.9043" cy="158.66008695364522" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="18.9043" y="158.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">104</text>
+<circle cx="27.440499999999997" cy="158.66008695364522" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="27.440499999999997" y="158.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">105</text>
+<rect x="32.01" y="155.66" width="7.94" height="6.00" rx="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="35.976699999999994" y="158.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">M40</text>
+<circle cx="44.512899999999995" cy="158.66008695364522" r="3" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="44.512899999999995" y="158.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">X74</text>
+<circle cx="27.440499999999997" cy="165.66008695364522" r="3" fill="#CC3311" stroke="#fff" stroke-width="0.7"/>
+<text x="27.440499999999997" y="165.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">32</text>
+<circle cx="27.440499999999997" cy="172.66008695364522" r="3" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="27.440499999999997" y="172.66008695364522" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">32A</text>
+<path d="M10.98 59.32 L12.58 62.42 L9.38 62.42 Z" fill="#CC3311"/>
+<circle cx="10.975963171240338" cy="66.91697312179163" r="3" fill="#CC3311" stroke="#fff" stroke-width="0.7"/>
+<text x="10.975963171240338" y="66.91697312179163" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">32</text>
+<path d="M4.16 80.12 L5.22 76.80 L7.48 79.06 Z" fill="#555"/>
+<circle cx="9.399999999999999" cy="74.75107808615789" r="3" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="9.399999999999999" y="74.75107808615789" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">32A</text>
+<circle cx="16" cy="74.75107808615789" r="3" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="16" y="74.75107808615789" font-family="Arial" font-weight="bold" font-size="3.00" fill="#fff" text-anchor="middle" dominant-baseline="central">34</text>
+<path d="M4.16 147.56 L7.49 148.62 L5.22 150.88 Z" fill="#CCBB44"/>
+<circle cx="12.363498150744292" cy="150.1117204160166" r="3" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
+<text x="12.363498150744292" y="150.1117204160166" font-family="Arial" font-weight="bold" font-size="3.00" fill="#111" text-anchor="middle" dominant-baseline="central">27</text>
+<circle cx="66.80256134301831" cy="46.81023835310319" r="2.6" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="66.80256134301831" y="46.81023835310319" font-family="Arial" font-weight="bold" font-size="2.60" fill="#fff" text-anchor="middle" dominant-baseline="central">34</text>
+<circle cx="96.4087969678543" cy="109.46146161405214" r="2.6" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
+<text x="96.4087969678543" y="109.46146161405214" font-family="Arial" font-weight="bold" font-size="2.60" fill="#111" text-anchor="middle" dominant-baseline="central">27</text>
+<circle cx="33.910680891645825" cy="144.37600720327868" r="2.4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="33.910680891645825" y="144.37600720327868" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<circle cx="81.33749776154872" cy="131.18348792600602" r="2.4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="81.33749776154872" y="131.18348792600602" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<circle cx="93.09267411265562" cy="178.98073546085993" r="2.4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="93.09267411265562" y="178.98073546085993" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<circle cx="128.20025059244045" cy="149.33949639697886" r="2.4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="128.20025059244045" y="149.33949639697886" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<circle cx="167.12903174850177" cy="110.48656863076" r="2.4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="167.12903174850177" y="110.48656863076" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<circle cx="49.58359032340131" cy="111.01400436863612" r="2.4" fill="#CC3311" stroke="#fff" stroke-width="0.7"/>
+<text x="49.58359032340131" y="111.01400436863612" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">32</text>
+<circle cx="66.82592910797486" cy="77.060229315309" r="2.4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="66.82592910797486" y="77.060229315309" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">34</text>
+<circle cx="58.44197657856404" cy="122.71011164162343" r="2.4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="58.44197657856404" y="122.71011164162343" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">34</text>
+<circle cx="21.766075850321485" cy="89.91051791423156" r="2.4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="21.766075850321485" y="89.91051791423156" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">34</text>
+<text x="115.65" y="118.08" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(-14.7 115.65 118.08)" stroke="#fff" stroke-width="0.8" paint-order="stroke">London Road</text>
+<text x="151.79" y="129.24" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(-38.3 151.79 129.24)" stroke="#fff" stroke-width="0.8" paint-order="stroke">Kingsmead Road</text>
+<text x="34.92" y="99.71" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(50.2 34.92 99.71)" stroke="#fff" stroke-width="0.8" paint-order="stroke">Micklefield Road</text>
+<text x="66.84" y="101.28" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(89.9 66.84 101.28)" stroke="#fff" stroke-width="0.8" paint-order="stroke">Cock Lane</text>
+<text x="91.98" y="154.07" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(81.2 91.98 154.07)" stroke="#fff" stroke-width="0.8" paint-order="stroke">Abbey Barn Road</text>
+<text x="69.76" y="112.51" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(-0.1 69.76 112.51)" stroke="#fff" stroke-width="0.8" paint-order="stroke">Orchard Road</text>
+<g transform="translate(61.41624158036465 153.67608232462743) scale(0.21000000000000002) translate(-12 -12)"><circle cx="15.2" cy="5.6" r="4.6" fill="#ffffff"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.2" cy="5.6" r="3" fill="#33383d"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(76.81193133758174 139.11592218791608) scale(0.21000000000000002) translate(-12 -12)"><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="11.6" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><circle cx="18" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#33383d"/><circle cx="11.6" cy="17.9" r="1.8" fill="#33383d"/><circle cx="18" cy="17.9" r="1.8" fill="#33383d"/></g>
+<g transform="translate(62.22072152205362 150.58257912542487) scale(0.21000000000000002) translate(-12 -12)"><circle cx="12" cy="12" r="11.6" fill="#ffffff"/><circle cx="12" cy="12" r="10" fill="#33383d"/><path d="M10,5.6 H14 V10 H18.4 V14 H14 V18.4 H10 V14 H5.6 V10 H10 Z" fill="#ffffff"/></g>
+<g transform="translate(99.96353937578976 114.07828023598756) scale(0.21000000000000002) translate(-12 -12)"><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="11.6" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><circle cx="18" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#33383d"/><circle cx="11.6" cy="17.9" r="1.8" fill="#33383d"/><circle cx="18" cy="17.9" r="1.8" fill="#33383d"/></g>
+<g transform="translate(14.836483660472545 174.00848903808628) scale(0.21000000000000002) translate(-12 -12)"><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="11.6" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><circle cx="18" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#33383d"/><circle cx="11.6" cy="17.9" r="1.8" fill="#33383d"/><circle cx="18" cy="17.9" r="1.8" fill="#33383d"/></g>
+<g transform="translate(160.47207178670453 112.90559978836264) scale(0.21000000000000002) translate(-12 -12)"><circle cx="12" cy="7.6" r="6.800000000000001" fill="#ffffff"/><circle cx="6.9" cy="11.6" r="6.199999999999999" fill="#ffffff"/><circle cx="17.1" cy="11.6" r="6.199999999999999" fill="#ffffff"/><path d="M10.4,12.6 h3.2 v8.2 h-3.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="12" cy="7.6" r="5.2" fill="#33383d"/><circle cx="6.9" cy="11.6" r="4.6" fill="#33383d"/><circle cx="17.1" cy="11.6" r="4.6" fill="#33383d"/><path d="M10.4,12.6 h3.2 v8.2 h-3.2 Z" fill="#33383d"/></g>
+<g transform="translate(194.58702699199213 106.53401932165288) scale(0.21000000000000002) translate(-12 -12)"><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="3.3" fill="#ffffff"/><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#33383d"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#33383d"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="1.7" fill="#33383d"/></g>
+<g transform="translate(79.02326445255031 166.4869001127518) scale(0.21000000000000002) translate(-12 -12)"><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="3.3" fill="#ffffff"/><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#33383d"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#33383d"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="1.7" fill="#33383d"/></g>
+<g transform="translate(124.63241704250204 138.95746878413) scale(0.21000000000000002) translate(-12 -12)"><circle cx="15.2" cy="5.6" r="4.6" fill="#ffffff"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.2" cy="5.6" r="3" fill="#33383d"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(14.88834113807518 146.1970983324506) scale(0.21000000000000002) translate(-12 -12)"><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="3.3" fill="#ffffff"/><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#33383d"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#33383d"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="1.7" fill="#33383d"/></g>
+<g transform="translate(28.350617479484846 156.6354824835268) scale(0.21000000000000002) translate(-12 -12)"><path d="M17.6,3.6 h3.4 v8.4 h-3.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M17.6,3.6 h3.4 v8.4 h-3.4 Z" fill="#7c7f82"/><path d="M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z" fill="#7c7f82"/></g>
+<g transform="translate(163.5941675095204 128.90450844605766) scale(0.21000000000000002) translate(-12 -12)"><circle cx="15.2" cy="5.6" r="4.6" fill="#ffffff"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.2" cy="5.6" r="3" fill="#33383d"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+<g transform="translate(96.88490873685824 115.91922069088432) scale(0.21000000000000002) translate(-12 -12)"><path d="M17.6,3.6 h3.4 v8.4 h-3.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M17.6,3.6 h3.4 v8.4 h-3.4 Z" fill="#7c7f82"/><path d="M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z" fill="#7c7f82"/></g>
+<g transform="translate(60.80751125717315 111.34549137401011) scale(0.21000000000000002) translate(-12 -12)"><circle cx="16.4" cy="7.6" r="4.6" fill="#ffffff"/><path d="M11.4,20 C11.4,14.2 21.4,14.2 21.4,20 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="8" cy="7" r="4.6" fill="#ffffff"/><path d="M3.2,20 C3.2,13.6 13.4,13.6 13.4,20 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="16.4" cy="7.6" r="3" fill="#33383d"/><path d="M11.4,20 C11.4,14.2 21.4,14.2 21.4,20 Z" fill="#33383d"/><g fill="#33383d" stroke="#ffffff" stroke-width="2.6" stroke-linejoin="round" paint-order="stroke"><circle cx="8" cy="7" r="3" fill="#33383d"/><path d="M3.2,20 C3.2,13.6 13.4,13.6 13.4,20 Z" fill="#33383d"/></g></g>
+<text x="200.00" y="166.00" font-family="Arial" font-size="2.6" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Route 27 terminates at Orchard Road, beside the store.</text>
+<text x="200.00" y="170.00" font-family="Arial" font-size="2.6" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">All other services use Ford Street or The King George V</text>
+<text x="200.00" y="174.00" font-family="Arial" font-size="2.6" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">PH on London Road — a 2–3 minute walk from Aldi.</text>
+<text x="200.00" y="180.00" font-family="Arial" font-size="2.6" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">School service 37M (term-time only, not shown) also</text>
+<text x="200.00" y="184.00" font-family="Arial" font-size="2.6" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">calls at the London Road stops.</text>
+<text x="9.00" y="35.00" font-family="Arial" font-style="italic" font-size="2.4" fill="#555">Simplified — not to scale</text>
+<text x="179.07" y="86.06" font-family="Arial" font-size="2.7" fill="#332288" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Loudwater &amp; Beaconsfield</text>
+<path d="M183.10 87.82L183.10 83.39" stroke="#332288" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="183.10" y="82.36" font-family="Arial" font-size="2.7" fill="#332288" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Slough</text>
+<text x="183.10" y="92.22" font-family="Arial" font-size="2.7" fill="#111" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Uxbridge</text>
+<text x="180.50" y="102.73" font-family="Arial" font-size="2.7" fill="#332288" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Amersham &amp; Chesham</text>
+<path d="M183.10 108.82L175.75 116.58" stroke="#228833" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="175.30" y="118.96" font-family="Arial" font-size="2.7" fill="#228833" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Bourne End &amp; Maidenhead</text>
+<path d="M27.44 151.66L27.44 160.04" stroke="#111" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="27.44" y="162.42" font-family="Arial" font-size="2.7" fill="#111" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe town centre</text>
+<text x="30.04" y="156.45" font-family="Arial" font-size="2.7" fill="#111" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to town centre</text>
+<text x="27.44" y="169.25" font-family="Arial" font-size="2.7" fill="#CC3311" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to town centre, Booker &amp; Cressex</text>
+<path d="M27.44 172.66L32.45 177.37" stroke="#ce672c" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="32.90" y="179.76" font-family="Arial" font-size="2.7" fill="#ce672c" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to town centre &amp; Cressex</text>
+<path d="M14.58 66.92L15.99 66.92" stroke="#CC3311" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="16.44" y="68.83" font-family="Arial" font-size="2.7" fill="#CC3311" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Micklefield</text>
+<path d="M12.70 74.75L20.05 75.10" stroke="#111" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="20.50" y="77.48" font-family="Arial" font-size="2.7" fill="#111" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Micklefield</text>
+<text x="14.96" y="147.90" font-family="Arial" font-size="2.7" fill="#8e822f" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Totteridge</text>
+<text x="65.45" y="158.92" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Snap Fitness</text>
+<text x="72.78" y="140.53" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">M&amp;S Food</text>
+<text x="103.16" y="112.28" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Aldi</text>
+<text x="18.87" y="179.25" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Lidl</text>
+<text x="156.44" y="114.32" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Kings Mead</text>
+<text x="74.99" y="167.90" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Marsh</text>
+<text x="120.60" y="140.37" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Kingsmead Netball Centre</text>
+<text x="14.89" y="142.17" font-family="Arial" font-size="2.5" fill="#222" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">Beechview</text>
+<text x="167.62" y="127.12" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">High Wycombe Rugby</text>
+<text x="167.62" y="130.32" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Union Football Club</text>
+<text x="93.68" y="119.32" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Tannery Road Ind Est</text>
+<path d="M58.71 113.60L53.46 119.25" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="53.01" y="121.49" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">British Legion</text>
+<text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fill="#332288">Buses serving Aldi, Tannery Road</text>
+<text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from July 2026)</text>
+<text x="153.95" y="104.50" font-family="Arial" font-style="italic" font-size="3.2" text-anchor="middle" fill="#6ba3cc">River Wye</text>
+<text x="150" y="78" font-family="Arial" font-style="italic" font-size="3.2" fill="#777777">Chiltern Main Line</text>
+<text x="200" y="14" font-family="Arial" font-weight="bold" font-size="5" fill="#222">Services</text>
+<text x="200" y="20.338" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">CAROUSEL BUSES</text>
+<circle cx="205.2908" cy="26.947000000000003" r="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="26.947000000000003" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">102</text>
+<text x="212.5816" y="26.347" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">102  High Wycombe – Heathrow Airport</text>
+<text x="212.5816" y="29.947000000000003" font-family="Arial" font-size="2.9" fill="#555">Daily · Carousel · via Beaconsfield &amp; Uxbridge</text>
+<circle cx="205.2908" cy="34.347" r="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="34.347" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">103</text>
+<text x="212.5816" y="33.747" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">103  High Wycombe – Slough – Langley</text>
+<text x="212.5816" y="37.347" font-family="Arial" font-size="2.9" fill="#555">Daily · Carousel · via Beaconsfield &amp; Windsor</text>
+<circle cx="205.2908" cy="41.747" r="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="41.747" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">104</text>
+<text x="212.5816" y="41.147" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">104  High Wycombe – Uxbridge</text>
+<text x="212.5816" y="44.747" font-family="Arial" font-size="2.9" fill="#555">Mon–Sat · Carousel · via Gerrards Cross &amp; Denham</text>
+<circle cx="205.2908" cy="49.147" r="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="49.147" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">105</text>
+<text x="212.5816" y="48.547" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">105  High Wycombe – Amersham &amp; Chesham</text>
+<text x="212.5816" y="52.147" font-family="Arial" font-size="2.9" fill="#555">Mon–Sat · Carousel · via Beaconsfield</text>
+<circle cx="205.2908" cy="56.547" r="4" fill="#228833" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="56.547" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">37</text>
+<text x="212.5816" y="55.946999999999996" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">37  High Wycombe – Bourne End – Windsor</text>
+<text x="212.5816" y="59.547" font-family="Arial" font-size="2.9" fill="#555">Daily · Carousel · via Flackwell Hth &amp; Maidenhead</text>
+<circle cx="205.2908" cy="63.946999999999996" r="4" fill="#CC3311" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="63.946999999999996" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">32</text>
+<text x="212.5816" y="63.346999999999994" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">32  Micklefield – town centre – Booker</text>
+<text x="212.5816" y="66.947" font-family="Arial" font-size="2.9" fill="#555">Mon–Sat · Carousel · via Asda &amp; Cressex</text>
+<circle cx="205.2908" cy="71.347" r="4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="71.347" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">32A</text>
+<text x="212.5816" y="70.747" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">32A  Micklefield – town centre – Booker</text>
+<text x="212.5816" y="74.347" font-family="Arial" font-size="2.9" fill="#555">Sundays + a few Mon–Sat journeys · Carousel</text>
+<circle cx="205.2908" cy="78.747" r="4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="78.747" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">34</text>
+<text x="212.5816" y="78.147" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">34  Micklefield – Totteridge – Lane End</text>
+<text x="212.5816" y="81.747" font-family="Arial" font-size="2.9" fill="#555">Mon–Sat · Carousel · via town centre &amp; Cressex</text>
+<circle cx="205.2908" cy="86.147" r="4" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="86.147" font-family="Arial" font-weight="bold" font-size="4.00" fill="#111" text-anchor="middle" dominant-baseline="central">27</text>
+<text x="212.5816" y="85.54700000000001" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">27  Orchard Road – Totteridge – town centre</text>
+<text x="212.5816" y="89.147" font-family="Arial" font-size="2.9" fill="#555">Mon–Fri only · Carousel · about 7 journeys a day</text>
+<text x="200" y="95.244" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">FIRST BERKSHIRE &amp; THE THAMES VALLEY</text>
+<rect x="200.00" y="97.85" width="10.58" height="8.00" rx="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="101.853" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">M40</text>
+<text x="212.5816" y="101.253" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">M40  High Wycombe – Uxbridge express</text>
+<text x="212.5816" y="104.853" font-family="Arial" font-size="2.9" fill="#555">Mon–Sat · First Berkshire · via the M40</text>
+<circle cx="205.2908" cy="109.253" r="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>
+<text x="205.2908" y="109.253" font-family="Arial" font-weight="bold" font-size="4.00" fill="#fff" text-anchor="middle" dominant-baseline="central">X74</text>
+<text x="212.5816" y="108.653" font-family="Arial" font-weight="bold" font-size="3.5" fill="#111">X74  High Wycombe – Slough – Uxbridge</text>
+<text x="212.5816" y="112.253" font-family="Arial" font-size="2.9" fill="#555">Daily · First Berkshire · via Beaconsfield</text>
+<text x="200" y="121.462" font-family="Arial" font-weight="bold" font-size="5" fill="#222">Key</text>
+<g transform="translate(203 127.712) scale(0.2) translate(-12 -12)"><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="11.6" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><circle cx="18" cy="17.9" r="3.4000000000000004" fill="#ffffff"/><path d="M3.4,4.6 H5.6 L7.8,9" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.4,9 H21.4 L19,15.6 H10 Z" fill="#33383d"/><circle cx="11.6" cy="17.9" r="1.8" fill="#33383d"/><circle cx="18" cy="17.9" r="1.8" fill="#33383d"/></g>
+<text x="207" y="128.712" font-family="Arial" font-size="2.9" fill="#222">Supermarket</text>
+<g transform="translate(203 132.112) scale(0.2) translate(-12 -12)"><rect x="1.4" y="1.4" width="21.2" height="21.2" rx="3.6" fill="#ffffff"/><rect x="3" y="3" width="18" height="18" rx="2" fill="#c62828"/><path d="M10,5.6 H14 V10 H18.4 V14 H14 V18.4 H10 V14 H5.6 V10 H10 Z" fill="#ffffff"/></g>
+<text x="207" y="133.112" font-family="Arial" font-size="2.9" fill="#222">Doctors / GP</text>
+<g transform="translate(203 136.512) scale(0.2) translate(-12 -12)"><circle cx="12" cy="12" r="11.6" fill="#ffffff"/><circle cx="12" cy="12" r="10" fill="#33383d"/><path d="M10,5.6 H14 V10 H18.4 V14 H14 V18.4 H10 V14 H5.6 V10 H10 Z" fill="#ffffff"/></g>
+<text x="207" y="137.512" font-family="Arial" font-size="2.9" fill="#222">Pharmacy</text>
+<g transform="translate(203 140.912) scale(0.2) translate(-12 -12)"><circle cx="15.2" cy="5.6" r="4.6" fill="#ffffff"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="15.2" cy="5.6" r="3" fill="#33383d"/><path d="M14.4,9.4 L10.6,14.2 M14.6,10.4 L18.6,13 M13,10.4 L8.8,8.4 M10.6,14.2 L6.4,19.6 M10.6,14.2 L15.2,15.8 L16.2,20.6" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="207" y="141.912" font-family="Arial" font-size="2.9" fill="#222">Leisure centre</text>
+<g transform="translate(247.5 127.712) scale(0.2) translate(-12 -12)"><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="3.3" fill="#ffffff"/><path d="M12,3.6 L22,8.4 L12,13.2 L2,8.4 Z" fill="#33383d"/><path d="M6.6,10.6 V15.4 C6.6,18.6 17.4,18.6 17.4,15.4 V10.6 L12,13.2 Z" fill="#33383d"/><path d="M20.1,9.6 V15.4" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.1" cy="17.2" r="1.7" fill="#33383d"/></g>
+<text x="251.5" y="128.712" font-family="Arial" font-size="2.9" fill="#222">School</text>
+<g transform="translate(247.5 132.112) scale(0.2) translate(-12 -12)"><circle cx="12" cy="7.6" r="6.800000000000001" fill="#ffffff"/><circle cx="6.9" cy="11.6" r="6.199999999999999" fill="#ffffff"/><circle cx="17.1" cy="11.6" r="6.199999999999999" fill="#ffffff"/><path d="M10.4,12.6 h3.2 v8.2 h-3.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="12" cy="7.6" r="5.2" fill="#33383d"/><circle cx="6.9" cy="11.6" r="4.6" fill="#33383d"/><circle cx="17.1" cy="11.6" r="4.6" fill="#33383d"/><path d="M10.4,12.6 h3.2 v8.2 h-3.2 Z" fill="#33383d"/></g>
+<text x="251.5" y="133.112" font-family="Arial" font-size="2.9" fill="#222">Park</text>
+<g transform="translate(247.5 136.512) scale(0.2) translate(-12 -12)"><path d="M17.6,3.6 h3.4 v8.4 h-3.4 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M17.6,3.6 h3.4 v8.4 h-3.4 Z" fill="#7c7f82"/><path d="M2.6,21 V11.6 L8,14.6 V11.6 L13.4,14.6 V11.6 L21,14.6 V21 Z" fill="#7c7f82"/></g>
+<text x="251.5" y="137.512" font-family="Arial" font-size="2.9" fill="#222">Industrial estate</text>
+<g transform="translate(247.5 140.912) scale(0.2) translate(-12 -12)"><circle cx="16.4" cy="7.6" r="4.6" fill="#ffffff"/><path d="M11.4,20 C11.4,14.2 21.4,14.2 21.4,20 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="8" cy="7" r="4.6" fill="#ffffff"/><path d="M3.2,20 C3.2,13.6 13.4,13.6 13.4,20 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><circle cx="16.4" cy="7.6" r="3" fill="#33383d"/><path d="M11.4,20 C11.4,14.2 21.4,14.2 21.4,20 Z" fill="#33383d"/><g fill="#33383d" stroke="#ffffff" stroke-width="2.6" stroke-linejoin="round" paint-order="stroke"><circle cx="8" cy="7" r="3" fill="#33383d"/><path d="M3.2,20 C3.2,13.6 13.4,13.6 13.4,20 Z" fill="#33383d"/></g></g>
+<text x="251.5" y="141.912" font-family="Arial" font-size="2.9" fill="#222">Community centre</text>
+<path d="M201.00 147.51h4.00" fill="none" stroke="#555" stroke-width="2.2" stroke-linecap="round"/>
+<text x="207" y="148.51" font-family="Arial" font-size="2.9" fill="#222">Frequent — turn up and go</text>
+<path d="M201.00 151.91h4.00" fill="none" stroke="#555" stroke-width="1.7" stroke-linecap="round"/>
+<text x="207" y="152.91" font-family="Arial" font-size="2.9" fill="#222">Runs through the day</text>
+<path d="M201.00 156.31h4.00" fill="none" stroke="#555" stroke-width="1.2" stroke-linecap="round"/>
+<text x="207" y="157.31" font-family="Arial" font-size="2.9" fill="#222">Limited — check times</text>
+<line x1="18.00" y1="56.00" x2="11.32" y2="51.60" stroke="#666" stroke-width="0.8"/>
+<path d="M11.32 51.60L14.10 51.75L12.55 54.09Z" fill="#666"/>
+<text x="8.82" y="50.95" font-family="Arial" font-weight="bold" font-size="3.4" fill="#666" text-anchor="middle">N</text>
+<rect x="0" y="188.10" width="297" height="21.90" fill="#fff" fill-opacity="0.97"/>
+<text x="8" y="197.21" font-family="Arial" font-size="2.8" fill="#666">Routes &amp; stops: UK Bus Open Data Service, cross-checked at bustimes.org (July 2026), Open Government Licence v3.0.</text>
+<text x="8" y="200.81" font-family="Arial" font-size="2.8" fill="#666">Places: © OpenStreetMap contributors (ODbL). Stop positions are approximate; check live times at bustimes.org.</text>
+<text x="275.10" y="195.05" font-family="Arial" font-weight="bold" font-size="3.5" fill="#333" text-anchor="end">busmaps.uk/m/highwycombe-aldi</text>
+<text x="217.69" y="195.05" font-family="Arial" font-size="3.5" fill="#666" text-anchor="end">Latest version:</text>
+<rect x="275.10" y="188.10" width="19.79" height="19.79" fill="#ffffff"/>
+<path d="M278 191h3.379v0.483h-3.379zM283.31 191h1.448v0.483h-1.448zM285.724 191h2.414v0.483h-2.414zM288.621 191h3.379v0.483h-3.379zM278 191.483h0.483v0.483h-0.483zM280.897 191.483h0.483v0.483h-0.483zM283.31 191.483h0.483v0.483h-0.483zM285.241 191.483h0.483v0.483h-0.483zM286.69 191.483h0.483v0.483h-0.483zM288.621 191.483h0.483v0.483h-0.483zM291.517 191.483h0.483v0.483h-0.483zM278 191.966h0.483v0.483h-0.483zM278.966 191.966h1.448v0.483h-1.448zM280.897 191.966h0.483v0.483h-0.483zM281.862 191.966h2.414v0.483h-2.414zM284.759 191.966h1.448v0.483h-1.448zM288.621 191.966h0.483v0.483h-0.483zM289.586 191.966h1.448v0.483h-1.448zM291.517 191.966h0.483v0.483h-0.483zM278 192.448h0.483v0.483h-0.483zM278.966 192.448h1.448v0.483h-1.448zM280.897 192.448h0.483v0.483h-0.483zM281.862 192.448h0.966v0.483h-0.966zM283.793 192.448h0.483v0.483h-0.483zM285.241 192.448h0.483v0.483h-0.483zM286.207 192.448h0.483v0.483h-0.483zM287.172 192.448h0.483v0.483h-0.483zM288.621 192.448h0.483v0.483h-0.483zM289.586 192.448h1.448v0.483h-1.448zM291.517 192.448h0.483v0.483h-0.483zM278 192.931h0.483v0.483h-0.483zM278.966 192.931h1.448v0.483h-1.448zM280.897 192.931h0.483v0.483h-0.483zM281.862 192.931h1.448v0.483h-1.448zM284.276 192.931h0.483v0.483h-0.483zM285.724 192.931h0.483v0.483h-0.483zM286.69 192.931h1.448v0.483h-1.448zM288.621 192.931h0.483v0.483h-0.483zM289.586 192.931h1.448v0.483h-1.448zM291.517 192.931h0.483v0.483h-0.483zM278 193.414h0.483v0.483h-0.483zM280.897 193.414h0.483v0.483h-0.483zM281.862 193.414h0.483v0.483h-0.483zM282.828 193.414h0.966v0.483h-0.966zM284.276 193.414h1.448v0.483h-1.448zM286.207 193.414h0.483v0.483h-0.483zM287.655 193.414h0.483v0.483h-0.483zM288.621 193.414h0.483v0.483h-0.483zM291.517 193.414h0.483v0.483h-0.483zM278 193.897h3.379v0.483h-3.379zM281.862 193.897h0.483v0.483h-0.483zM282.828 193.897h0.483v0.483h-0.483zM283.793 193.897h0.483v0.483h-0.483zM284.759 193.897h0.483v0.483h-0.483zM285.724 193.897h0.483v0.483h-0.483zM286.69 193.897h0.483v0.483h-0.483zM287.655 193.897h0.483v0.483h-0.483zM288.621 193.897h3.379v0.483h-3.379zM281.862 194.379h0.966v0.483h-0.966zM283.31 194.379h0.483v0.483h-0.483zM284.276 194.379h0.483v0.483h-0.483zM285.241 194.379h0.966v0.483h-0.966zM287.172 194.379h0.966v0.483h-0.966zM278 194.862h0.483v0.483h-0.483zM278.966 194.862h2.414v0.483h-2.414zM282.345 194.862h0.483v0.483h-0.483zM283.793 194.862h0.483v0.483h-0.483zM284.759 194.862h0.483v0.483h-0.483zM286.207 194.862h0.483v0.483h-0.483zM287.172 194.862h0.483v0.483h-0.483zM288.621 194.862h2.414v0.483h-2.414zM278 195.345h0.966v0.483h-0.966zM279.931 195.345h0.966v0.483h-0.966zM281.379 195.345h0.483v0.483h-0.483zM282.345 195.345h0.483v0.483h-0.483zM283.31 195.345h0.483v0.483h-0.483zM285.724 195.345h1.931v0.483h-1.931zM288.138 195.345h1.931v0.483h-1.931zM291.517 195.345h0.483v0.483h-0.483zM278 195.828h0.483v0.483h-0.483zM278.966 195.828h0.483v0.483h-0.483zM279.931 195.828h0.483v0.483h-0.483zM280.897 195.828h0.483v0.483h-0.483zM283.31 195.828h0.966v0.483h-0.966zM285.241 195.828h0.966v0.483h-0.966zM286.69 195.828h0.483v0.483h-0.483zM287.655 195.828h0.966v0.483h-0.966zM289.103 195.828h0.966v0.483h-0.966zM278 196.31h0.966v0.483h-0.966zM279.448 196.31h0.966v0.483h-0.966zM281.379 196.31h1.448v0.483h-1.448zM284.759 196.31h0.966v0.483h-0.966zM286.69 196.31h0.483v0.483h-0.483zM287.655 196.31h0.483v0.483h-0.483zM289.103 196.31h0.483v0.483h-0.483zM290.069 196.31h0.483v0.483h-0.483zM291.034 196.31h0.483v0.483h-0.483zM278 196.793h0.966v0.483h-0.966zM280.897 196.793h0.966v0.483h-0.966zM282.345 196.793h1.931v0.483h-1.931zM285.241 196.793h0.483v0.483h-0.483zM286.207 196.793h0.483v0.483h-0.483zM287.172 196.793h0.483v0.483h-0.483zM290.069 196.793h0.966v0.483h-0.966zM278.483 197.276h0.966v0.483h-0.966zM281.379 197.276h0.483v0.483h-0.483zM282.345 197.276h0.483v0.483h-0.483zM283.31 197.276h1.931v0.483h-1.931zM285.724 197.276h0.483v0.483h-0.483zM287.172 197.276h0.966v0.483h-0.966zM288.621 197.276h1.448v0.483h-1.448zM291.517 197.276h0.483v0.483h-0.483zM278 197.759h0.483v0.483h-0.483zM278.966 197.759h0.483v0.483h-0.483zM279.931 197.759h0.483v0.483h-0.483zM280.897 197.759h0.483v0.483h-0.483zM282.828 197.759h0.483v0.483h-0.483zM284.276 197.759h2.414v0.483h-2.414zM287.655 197.759h0.966v0.483h-0.966zM289.103 197.759h0.483v0.483h-0.483zM290.069 197.759h0.966v0.483h-0.966zM279.931 198.241h0.966v0.483h-0.966zM281.379 198.241h2.414v0.483h-2.414zM284.276 198.241h0.483v0.483h-0.483zM285.241 198.241h0.966v0.483h-0.966zM287.172 198.241h1.448v0.483h-1.448zM289.586 198.241h0.483v0.483h-0.483zM291.034 198.241h0.483v0.483h-0.483zM278 198.724h0.483v0.483h-0.483zM279.448 198.724h0.483v0.483h-0.483zM280.897 198.724h0.483v0.483h-0.483zM281.862 198.724h0.483v0.483h-0.483zM283.31 198.724h0.483v0.483h-0.483zM284.759 198.724h0.483v0.483h-0.483zM286.207 198.724h0.483v0.483h-0.483zM287.172 198.724h0.483v0.483h-0.483zM289.103 198.724h0.483v0.483h-0.483zM290.069 198.724h0.966v0.483h-0.966zM278 199.207h1.448v0.483h-1.448zM279.931 199.207h0.483v0.483h-0.483zM281.379 199.207h0.483v0.483h-0.483zM282.828 199.207h1.448v0.483h-1.448zM286.207 199.207h0.483v0.483h-0.483zM287.172 199.207h0.483v0.483h-0.483zM288.621 199.207h1.448v0.483h-1.448zM290.552 199.207h0.483v0.483h-0.483zM291.517 199.207h0.483v0.483h-0.483zM278 199.69h0.483v0.483h-0.483zM278.966 199.69h0.483v0.483h-0.483zM280.897 199.69h3.379v0.483h-3.379zM285.241 199.69h0.966v0.483h-0.966zM286.69 199.69h0.483v0.483h-0.483zM287.655 199.69h0.966v0.483h-0.966zM289.103 199.69h0.966v0.483h-0.966zM290.552 199.69h0.483v0.483h-0.483zM278 200.172h0.483v0.483h-0.483zM279.448 200.172h0.483v0.483h-0.483zM280.414 200.172h0.483v0.483h-0.483zM281.379 200.172h0.966v0.483h-0.966zM283.31 200.172h0.966v0.483h-0.966zM284.759 200.172h1.448v0.483h-1.448zM287.172 200.172h0.483v0.483h-0.483zM288.621 200.172h1.448v0.483h-1.448zM291.034 200.172h0.483v0.483h-0.483zM278 200.655h0.483v0.483h-0.483zM279.448 200.655h0.966v0.483h-0.966zM280.897 200.655h0.966v0.483h-0.966zM283.31 200.655h0.483v0.483h-0.483zM285.241 200.655h0.483v0.483h-0.483zM286.207 200.655h0.483v0.483h-0.483zM287.172 200.655h2.897v0.483h-2.897zM290.552 200.655h1.448v0.483h-1.448zM281.862 201.138h0.966v0.483h-0.966zM283.31 201.138h1.931v0.483h-1.931zM285.724 201.138h0.483v0.483h-0.483zM286.69 201.138h0.483v0.483h-0.483zM287.655 201.138h0.483v0.483h-0.483zM289.586 201.138h2.414v0.483h-2.414zM278 201.621h3.379v0.483h-3.379zM282.345 201.621h0.483v0.483h-0.483zM283.31 201.621h0.483v0.483h-0.483zM284.276 201.621h1.448v0.483h-1.448zM286.207 201.621h1.931v0.483h-1.931zM288.621 201.621h0.483v0.483h-0.483zM289.586 201.621h1.448v0.483h-1.448zM278 202.103h0.483v0.483h-0.483zM280.897 202.103h0.483v0.483h-0.483zM281.862 202.103h1.448v0.483h-1.448zM284.276 202.103h0.483v0.483h-0.483zM287.172 202.103h0.966v0.483h-0.966zM289.586 202.103h0.483v0.483h-0.483zM278 202.586h0.483v0.483h-0.483zM278.966 202.586h1.448v0.483h-1.448zM280.897 202.586h0.483v0.483h-0.483zM281.862 202.586h0.483v0.483h-0.483zM282.828 202.586h0.483v0.483h-0.483zM283.793 202.586h0.483v0.483h-0.483zM284.759 202.586h0.966v0.483h-0.966zM286.207 202.586h0.483v0.483h-0.483zM287.655 202.586h2.414v0.483h-2.414zM290.552 202.586h0.483v0.483h-0.483zM278 203.069h0.483v0.483h-0.483zM278.966 203.069h1.448v0.483h-1.448zM280.897 203.069h0.483v0.483h-0.483zM281.862 203.069h2.897v0.483h-2.897zM285.724 203.069h1.931v0.483h-1.931zM288.138 203.069h0.483v0.483h-0.483zM289.103 203.069h0.483v0.483h-0.483zM290.069 203.069h1.931v0.483h-1.931zM278 203.552h0.483v0.483h-0.483zM278.966 203.552h1.448v0.483h-1.448zM280.897 203.552h0.483v0.483h-0.483zM281.862 203.552h0.483v0.483h-0.483zM282.828 203.552h0.483v0.483h-0.483zM284.276 203.552h2.414v0.483h-2.414zM287.172 203.552h0.483v0.483h-0.483zM288.138 203.552h3.379v0.483h-3.379zM278 204.034h0.483v0.483h-0.483zM280.897 204.034h0.483v0.483h-0.483zM282.828 204.034h0.483v0.483h-0.483zM284.276 204.034h1.931v0.483h-1.931zM287.172 204.034h0.966v0.483h-0.966zM288.621 204.034h0.483v0.483h-0.483zM290.069 204.034h0.483v0.483h-0.483zM291.034 204.034h0.483v0.483h-0.483zM278 204.517h3.379v0.483h-3.379zM281.862 204.517h0.483v0.483h-0.483zM283.31 204.517h0.483v0.483h-0.483zM284.759 204.517h0.483v0.483h-0.483zM286.207 204.517h0.483v0.483h-0.483zM287.172 204.517h0.483v0.483h-0.483zM288.138 204.517h0.966v0.483h-0.966zM289.586 204.517h0.483v0.483h-0.483zM290.552 204.517h0.483v0.483h-0.483z" fill="#111111"/>
+<text x="275.1034482758621" y="200.29" font-family="Arial" font-size="2.8" fill="#999" text-anchor="end">build 1.32 · 13 Sep 2026</text>
+<text x="8" y="204.4064" font-family="Arial" font-size="2.8" fill="#999">Valid from July 2026</text>
+<text x="275.1034482758621" y="204.4064" font-family="Arial" font-size="2.8" fill="#999" text-anchor="end">Map design © BusMaps.uk</text>
+</svg>

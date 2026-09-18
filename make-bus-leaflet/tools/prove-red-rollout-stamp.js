@@ -93,21 +93,23 @@ const ROOT = path.join(__dirname, '..');
 const ROLLOUT = path.join(ROOT, 'assets', 'rollout.js');
 const argOf = (n, d) => { const i = process.argv.indexOf('--' + n); return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : d; };
 const BUSES = resolveBuses({ buses: argOf('buses') });
-const TOWN = argOf('town', 'Ramsey');
+/* WHICH TOWN, ASKED OF THE ESTATE RATHER THAN TYPED (OA-398, 2026-09-18). This
+ * was `argOf('town', 'Ramsey')`, and the place half below carried two more
+ * literals — one map name and one that has to AGREE with it, which is worse. The
+ * same fault OA-219 fixed in prove-red-held-back and did not fix here; it
+ * surfaced as `Ramsey has no manifest.json` the moment this was pointed at the
+ * fixture estate. `--town` still names one, and a name that is not there is an
+ * error rather than a substitution (tools/lib/pick-fixture.js). */
+const { pickTown, pickPlace } = require('./lib/pick-fixture');
+const townPick = pickTown(BUSES, argOf('town', null), 'prove-red-rollout-stamp');
+const TOWN = townPick.name;
 
 let failures = 0;
 const fail = (m) => { console.error('  FAIL  ' + m); failures++; };
 const pass = (m) => console.log('  ok    ' + m);
 
 /* ---- fixture ---------------------------------------------------------- */
-const srcTown = path.join(BUSES, 'Areas', TOWN);
-for (const need of ['manifest.json', 'ci-reference/routes.json', 'ci-reference/internal.svg']) {
-  if (!fs.existsSync(path.join(srcTown, need))) {
-    console.error(`prove-red-rollout-stamp: ${TOWN} has no ${need} under ${srcTown}.`);
-    console.error('  Point at a checkout that has one with --buses "<dir>", or name another town with --town "<Town>".');
-    process.exit(1);
-  }
-}
+const srcTown = townPick.dir;
 
 function buildFixture() {
   const tmp = scratchDir('prove-rollout-stamp-');
@@ -227,12 +229,19 @@ console.log(`\nD  ${TOWN}, stale stamp AND a sheet that really differs — must 
  * file's copy is wired up and reads the PLACE hash.
  */
 const ROLLOUT_PLACES = path.join(ROOT, 'assets', 'rollout_places.js');
-const PLACE = argOf('place', 'St Neots Co-op');
-const PLACE_TOWN = argOf('place-town', 'St Neots');
-const srcPlace = path.join(BUSES, 'Areas', PLACE_TOWN, 'Places', PLACE);
+/* `--place-town` has gone, and its disappearance is the point. It had to AGREE
+ * with `--place`: name one and not the other and the harness paired a real place
+ * with some other town's folder, which is the fixture bug OA-219 is about, wired
+ * in as an argument. The place's town is a property of the place, so it is read
+ * off it. `requireTown` because the fixture below builds the nested layout — a
+ * standalone place has no town folder to put a manifest in. */
+const placePick = pickPlace(BUSES, argOf('place', null), 'prove-red-rollout-stamp', { requireTown: true });
+const PLACE = placePick.name;
+const PLACE_TOWN = placePick.town;
+const srcPlace = placePick.dir;
 
 if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
-  fail(`no ci-reference/routes.json for the place ${PLACE} under ${srcPlace} — the place half is UNPROVEN, which is a failure, not a skip. Name another with --place / --place-town.`);
+  fail(`no ci-reference/routes.json for the place ${PLACE} under ${srcPlace} — the place half is UNPROVEN, which is a failure, not a skip. Name another with --place.`);
 } else {
   function buildPlaceFixture() {
     const tmp = scratchDir('prove-rollout-stamp-p-');

@@ -354,6 +354,8 @@ The High Street build added a third: **the traffic-signal layer now calls `hits(
 
 > ### 2026-08-24 (later) — the `claude-skills` gate had never once run, and the reason was scope, not staleness
 
+> **UPDATE 2026-09-18 — THE CREDENTIAL IS GONE FROM BOTH PUBLIC REPOSITORIES, and everything below is a record rather than an instruction** (`buses-data` OA-398, R5 of the process review of 2026-09-17). No workflow in `claude-skills` or `community-bus-maps` names `CROSS_REPO_PAT2`, and neither clones `PeterC66/buses-data`: this repository's `status` job gates the fixture estate it owns at `make-bus-leaflet/test/fixtures/estate/`, and the portal's `verify.yml` gates the packs it vendors at `gate-fixtures/`. The token expires on 22 November 2026 and is deleted rather than renewed. **Read the paragraphs below for the LESSON and not for the arrangement** — a dead credential and a wrongly-scoped one still fail identically, and a green run still says nothing about whether a credential is right; what changed is that there is no longer a credential here to be wrong about. Everything that reads across a repository boundary now reads a PUBLIC one, with no `ref:` only where floating is the question being asked.
+>
 > **`Bus leaflet gates` exists in BOTH repos, and only `buses-data`'s had ever reached its own gates.** The `claude-skills` copy was red on every push from 4 to 24 August 2026. The recorded cause was a stale `CROSS_REPO_PAT`; that was wrong. In the last failed run the **`buses-data` checkout SUCCEEDED one step before the portal checkout failed, on the same secret** — a live token reading one private repo and blind to the other, i.e. a fine-grained PAT whose repository list was never widened when the portal checkout was added. A dead credential and a wrongly-scoped one fail identically (`Not Found` from `actions/checkout`, which reads like a deleted repo), so the instinct is to rotate, and rotating changes nothing. **The discriminator is the step before.**
 >
 > **The file itself pointed at the wrong fix.** That workflow's header asked for "read access to PeterC66/buses-data" and named nothing else, so a token scoped from the comment reproduces the fault exactly. Both private repos were then named there, and a **pre-flight** copied from `buses-data`'s `gates.yml` probes each by name and reports `cannot read <repo> (HTTP <code>). Widen the token's repository access.` Twenty days of opaque red would have been one legible line.
@@ -414,7 +416,25 @@ BUSES_DIR="C:/u3a St Ives/Using AI/Buses" FIXTURE_DIR= npm run verify:area
 
 **`status.js` also tells you when the area one has gone stale** and exits non-zero on it, so the board you already run before re-vendoring is the reminder. It and `refresh_area_fixture.js` ask the same two questions the same way — `latestRunDir()` for which run, `sameIgnoringLineEndings()` for whether it matches — so the tool that WRITES the fixture and the check that JUDGES it cannot disagree about what current means. It is a laptop check by construction — `S5-render/` is gitignored, so a fresh CI checkout has no render to compare with — and CI answers the complementary question once the PR is open.
 
-**And push `buses-data` BEFORE opening the portal PR.** The fixtures live there, and the portal's `verify.yml` checks that repository out with no `ref:`, so the PR's engine is gated against whatever is on its `main` at that moment.
+**THE PORTAL VENDORS ITS FIXTURES TOO, SINCE 2026-09-18** (`buses-data` OA-398, R5 of the process review of 2026-09-17), and that is a third step rather than a change to the two above. Both scripts still write into `buses-data`, beside the render each pack comes from; the portal's byte gates now read a COPY of those packs, under `gate-fixtures/` in the portal itself, because `verify.yml` no longer clones the private repository at all. So re-cutting a fixture changes nothing the portal's gates see until the copy is refreshed. From the portal root (`C:\Claude\community-bus-maps`), with no placeholders:
+
+```bash
+npm run fixtures:vendor -- --apply
+```
+
+**The old instruction here was *push `buses-data` BEFORE opening the portal pull request*, and it is retired.** The fixtures lived in that repository and `verify.yml` checked it out with no `ref:`, so a pull request's engine was gated against whatever was on its `main` at that moment — a truthful red when this side was ahead, and a false GREEN whenever that side was, which is the direction that matters. Nothing in the portal reads that repository at run time now, so the ordering does not matter; what matters instead is that `gate-fixtures/` carries the bytes you mean. Whether the copy has fallen behind is asked by `npm run fixtures:vendor` with no `--apply`, from the laptop and daily from `buses-data`'s own gates workflow.
+
+### AND RE-DRAW THIS REPOSITORY'S OWN FIXTURE ESTATE, IN THE SAME COMMIT AS THE ENGINE EDIT (OA-398)
+
+**This is the step that stops an engine pull request opening red.** `claude-skills` now owns a miniature map estate at `make-bus-leaflet/test/fixtures/estate/` — five maps, twelve sheets — and its `status` job gates that instead of cloning `buses-data`. Two things follow. An ink-moving change makes those twelve sheets stop reproducing, exactly as it does to the real estate. And **every pack's engine stamp goes stale at once**, which matters more than it sounds: `prove-red-held-back` needs a DONOR pack whose stamp IS the current engine, so an edit to any hashed engine file used to empty the donor set across a whole 21-map estate and the harness exited 1 before a single case ran. That is `buses-data` OA-341's ordering trap, where the only thing that could clear the red was a commit in another repository — and appending one comment line to `icons.js` was enough to cause it.
+
+Now the remedy is inside the pull request. From `make-bus-leaflet`, with no placeholders:
+
+```bash
+npm run fixture:estate -- --apply
+```
+
+Run it with no `--apply` first if you want to see what moved; it exits 1 when the fixture is behind, which is exactly what the `status` job reads. Commit `test/fixtures/estate/` in the SAME commit as the engine edit — a fixture refreshed in a LATER commit is one whose own gate passed by construction in between, which is the trap this section's first paragraph is about, one repository along.
 
 ### ✅ CLOSED 2026-08-26 — A NEW MODULE is a hand-off the drift table could not warn you about, and now it can
 

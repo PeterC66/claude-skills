@@ -80,7 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
+import { readBlockedDir, loopBlockedItems, applyHolds, groupUnmatched } from './loop_blocked.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
@@ -1360,32 +1360,32 @@ if (RUN_GATES && SK) {
 // refuse a fallback that goes below what saying nothing would have given.
 //
 // THERE WAS A FOURTH CAUSE AND THE FIRST FIX DID NOT CATCH IT (buses-73, same
-// evening). `!!portal` asks *did a source return something*, which is not the
-// question — the question is *does this board know about the thing the hold
-// NAMES*. On `--local` the dev checkout returns an object, so `!!portal` was
-// true, and the run printed the confident wording about a hold on the LIVE
-// portal's draft v10.2, which is not in the dev SQLite at all. Measured: that run
-// banners LOCAL, emits ZERO `draft-*` rows, and still concluded the row had
-// cleared. A completeness test that measures the wrong completeness is worse than
-// none, because it reads as the guard being in place.
-//
-// That is this estate's named shape *"the portal" means the VPS* — never the
-// laptop's dev copy, whose rows read exactly like real ones — and both of
-// tonight's faults are instances of it. So the confident sentence now requires
-// the board to be AUTHORITATIVE for the row: a portal source reached, and it the
-// live one. Every `draft-*` row comes from that source, so REMOTE is the whole
-// test today; if a blocked file ever names a row from another source, carry the
-// source on the hold and compare, rather than widening this.
+// evening). `!!portal` asks *did a source return something*, not *does this board
+// know about the thing the hold NAMES*. On `--local` the dev checkout returns an
+// object, so `!!portal` was true and the run printed the confident wording about a
+// hold on the LIVE portal's draft v10.2, which is not in the dev SQLite at all:
+// measured, that run banners LOCAL, emits ZERO `draft-*` rows, and still concluded
+// the row had cleared. A completeness test that measures the wrong completeness is
+// worse than none, because it reads as the guard being in place. That is this
+// estate's named shape *"the portal" means the VPS* — never the laptop's dev copy —
+// so the confident sentence now requires the board to be AUTHORITATIVE for the row:
+// a portal source reached, and it the live one. Every `draft-*` row comes from that
+// source, so REMOTE is the whole test; a hold naming another source would carry it.
 const heldRows = applyHolds(items, loopBlocked.holds);
 const boardAuthoritative = !!portal && REMOTE;
-for (const h of heldRows.unmatched) {
-  const named = `loop/blocked/${h.file} names worklist row \`${h.key}\``;
-  if (boardAuthoritative) {
-    warnings.push(`${named}, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
+// OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the
+// FILE, so the three branches below do not apply to it. Both rules: loop_blocked.mjs.
+for (const g of groupUnmatched(heldRows.unmatched)) {
+  const plural = g.keys.length > 1;
+  const named = `loop/blocked/${g.file} names worklist ${plural ? 'rows' : 'row'} ${g.keys.map((k) => `\`${k}\``).join(', ')}`;
+  if (!g.looksLikeKeys) {
+    warnings.push(`loop/blocked/${g.file} has a **Blocks:** field that is not a worklist row key — it reads “${g.raw}”. That field names the rows a hold contradicts, one key each, and a sentence belongs in the body. Nothing was held: this is a fault in the FILE and says nothing about any row.`);
+  } else if (boardAuthoritative) {
+    warnings.push(`${named}, which ${plural ? 'are' : 'is'} not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
   } else if (!portal) {
-    warnings.push(`${named} and this run could not check it: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
+    warnings.push(`${named} and this run could not check ${plural ? 'them' : 'it'}: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
   } else {
-    warnings.push(`${named} and this run cannot check it: it read the DEV CHECKOUT, not the live portal, so a live draft is absent here by construction. NOT evidence the row has cleared — re-run against the live portal before acting on this one.`);
+    warnings.push(`${named} and this run cannot check ${plural ? 'them' : 'it'}: it read the DEV CHECKOUT, not the live portal, so a live draft is absent here by construction. NOT evidence the row has cleared — re-run against the live portal before acting on this one.`);
   }
 }
 

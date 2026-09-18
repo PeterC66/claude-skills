@@ -70,14 +70,72 @@ function plain(s, max = 320) {
  * broken; what broke was the channel that exists to say when a hold did NOT
  * attach, and a warning that cries wolf ten times is one nobody reads the
  * eleventh time. Falsified by cases 14 and 15 of prove-red-loop-blocked.mjs.
+ *
+ * AND IT IS A FIELD RATHER THAN A SUBSTRING (OA-376, 2026-09-17). The marker was
+ * matched anywhere in the file, so a hold that merely DESCRIBES the convention —
+ * quoting `**Blocks:**` in a sentence, the ordinary way a document names one —
+ * was read as USING it, and the words of the description became row keys. That
+ * was measured on 2026-09-15 rather than reasoned about: the first attempt to fix
+ * a malformed hold explained in prose what its field had said, and the board
+ * printed SEVENTY-THREE warnings where the malformed field itself had printed
+ * thirteen. It is the same shape `CLAUDE.md` records for `[expected-red]` — *a
+ * commit whose body merely describes the convention would otherwise trip it, and
+ * one did* — arriving in a second instrument. A field is a LINE with a known
+ * shape, so only a field line is read: one that opens with `**Name:**`, outside
+ * any fenced block. Prose that mentions the marker mid-sentence, and a fenced
+ * example showing the convention, are both silent. A line that genuinely opens
+ * with the marker is still a field wherever it sits, which is deliberate: that is
+ * what the shape MEANS, and a rule that also asked where the line was would be
+ * guessing at prose.
  */
+const FIELD_LINE_RE = /^\s{0,3}\*\*[^*\n]+:\*\*/;
+
+/** The lines of `text` that are field lines — see `field`'s header. */
+function fieldLines(text) {
+  const out = [];
+  let fenced = false;
+  for (const line of String(text || '').split('\n')) {
+    if (/^\s{0,3}(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+    if (!fenced && FIELD_LINE_RE.test(line)) out.push(line);
+  }
+  return out;
+}
+
 function field(text, name) {
   const re = new RegExp(`\\*\\*${name}:\\*\\*\\s*([^\\n]*)`, 'i');
-  const m = re.exec(text);
-  if (!m) return '';
-  // Stop at the next `**Something:**` on the same line, then drop the ` · `
-  // separator the house style leaves behind.
-  return m[1].split(/\*\*[^*\n]+:\*\*/)[0].replace(/[\s·]+$/, '').trim();
+  for (const line of fieldLines(text)) {
+    const m = re.exec(line);
+    if (!m) continue;
+    // Stop at the next `**Something:**` on the same line, then drop the ` · `
+    // separator the house style leaves behind.
+    return m[1].split(/\*\*[^*\n]+:\*\*/)[0].replace(/[\s·]+$/, '').trim();
+  }
+  return '';
+}
+
+/**
+ * Could this token be a worklist row key at all? (OA-376.)
+ *
+ * IT CHOOSES THE WORDING OF A WARNING AND NOTHING ELSE. A token that fails this
+ * is still parsed, still looked up and still able to hold a row — so a wrong
+ * answer here costs a differently-worded warning and can never drop a hold. That
+ * is deliberate: the thing this module protects is a channel that says when a
+ * hold did NOT attach, and a predicate allowed to silence one would be worse than
+ * the noise it removes.
+ *
+ * MEASURED OVER THE POPULATION RATHER THAN FELT. Every row key the board writes
+ * is compound — `draft-1`, `s6-stale`, `corr-unsent-CORR-001`, `engine-stale`,
+ * `loop-blocked-<ref>`, `unpushed-branch-<repo>-<branch>` — and no site anywhere
+ * emits a bare English word as a key. Case 19 of prove-red-loop-blocked.mjs holds
+ * that claim against the source: every `key:` literal written within two lines of
+ * a `rank:` — 30 sites across twelve modules on 2026-09-17 — must pass this, so
+ * the day somebody adds a one-word row key the harness says so instead of this
+ * predicate quietly mis-reporting a real hold as a sentence.
+ */
+const ROW_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+export function looksLikeRowKey(tok) {
+  const t = String(tok || '');
+  return ROW_KEY_RE.test(t) && /[-_./0-9]/.test(t);
 }
 
 /**
@@ -105,6 +163,11 @@ export function parseBlocked(f) {
   // "8 September 2026", and inventing a parser for the second is not worth the
   // branch when mtime is a sound fallback.
   const iso = /(\d{4}-\d{2}-\d{2})/.exec(raisedBy);
+
+  // The field as WRITTEN, kept so a caller can quote it back when it turns out
+  // not to be a list of keys at all (OA-376). Reading a mangled value is how the
+  // reader tells a typo from a sentence, and the tokens alone cannot say which.
+  const blocksRaw = plain(field(text, 'Blocks'), 160);
 
   const blocks = field(text, 'Blocks')
     .split(/[,\s]+/)
@@ -137,6 +200,7 @@ export function parseBlocked(f) {
     need: plain(firstPara) || '',
     raisedBy: plain(raisedBy, 200),
     blocks,
+    blocksRaw,
     raisedOn: iso ? iso[1] : null,
     mtimeMs: f.mtimeMs,
   };
@@ -219,7 +283,7 @@ export function loopBlockedItems({ files, now = Date.now() }) {
     const stamp = b.raisedOn ? Date.parse(`${b.raisedOn}T00:00:00Z`) : b.mtimeMs;
     const ageDays = Number.isFinite(stamp) ? Math.max(0, Math.floor((now - stamp) / 86400000)) : null;
 
-    for (const key of b.blocks) holds.push({ key, ref: b.ref, file: b.file, headline: b.headline, need: b.need });
+    for (const key of b.blocks) holds.push({ key, ref: b.ref, file: b.file, headline: b.headline, need: b.need, raw: b.blocksRaw });
 
     items.push({
       key: `loop-blocked-${b.ref}`, rank: 3, type: 'loop-blocked',
@@ -255,4 +319,37 @@ export function applyHolds(items, holds) {
     for (const it of hits) { (it.onHold ||= []).push(h); applied++; }
   }
   return { applied, unmatched };
+}
+
+/**
+ * The unmatched holds as ONE finding per FILE (OA-376, 2026-09-17).
+ *
+ * WHY THE FILE IS THE UNIT AND THE KEY IS NOT. A `Blocks:` field is written once,
+ * by one author, in one file, and it is either right or wrong as a whole — so a
+ * value with n unmatched tokens is one mistake, not n. On 2026-09-15 a hold wrote
+ * a sentence there and the board printed thirteen warnings, one per English word,
+ * each ending with confident and wrong advice — *either the row has cleared and
+ * the blocked file can go, or the key is wrong* — about a row key that was the
+ * word `the`. A reader who acted on any one of them would have deleted a live
+ * hold. Grouping is right even for a well-formed multi-key hold that has gone
+ * stale: the reader opens one file either way.
+ *
+ * `looksLikeKeys` is false when NOT EVERY token could be a key, which is what
+ * separates *this field is a sentence* from *this key is stale* — the two have
+ * different remedies, and the second is the only one that is a claim about the
+ * board. See `looksLikeRowKey` for why it may choose wording and nothing else.
+ *
+ * @param {Array<{key, ref, file, headline, need, raw}>} unmatched  from applyHolds
+ * @returns {Array<{file, ref, raw, keys: string[], looksLikeKeys: boolean}>}
+ */
+export function groupUnmatched(unmatched) {
+  const byFile = new Map();
+  for (const h of unmatched || []) {
+    const file = h.file || '(unknown file)';
+    if (!byFile.has(file)) byFile.set(file, { file, ref: h.ref || '', raw: h.raw || '', keys: [] });
+    const g = byFile.get(file);
+    if (!g.keys.includes(h.key)) g.keys.push(h.key);
+    if (!g.raw && h.raw) g.raw = h.raw;
+  }
+  return [...byFile.values()].map((g) => ({ ...g, looksLikeKeys: g.keys.every(looksLikeRowKey) }));
 }

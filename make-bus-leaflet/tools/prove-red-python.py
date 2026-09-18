@@ -549,8 +549,34 @@ MUTATIONS = [
 
     {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
      "what": "the RESOLVED days are discarded for the operator's declared calendar pattern, so every route in the estate reports what its calendar row says rather than what it runs -- and daysBasis says 'declared' while nothing else changes",
-     "find": '        if any(served): flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"',
-     "to": '        if False: flags, basis = served, "resolved from calendar + calendar_dates over the sampled window"'},
+     # Re-anchored on 2026-09-18: OA-410 rewrote this line to carry the window length
+     # and the fraction. The mutation is unchanged in what it falsifies.
+     "find": '        if any(served):',
+     "to": '        if False:'},
+
+    # ---- OA-410, the fraction that separates a pattern from an occurrence -------------
+    # Three mutations, because the rule has three parts and each fails differently: the
+    # counting, the fraction, and the exemption for a weekday the operator declared.
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "a weekday counts as soon as ONE journey is found on it anywhere in the sampled window, so a single calendar_dates addition -- a bank holiday, a rail replacement -- becomes a running day on the printed sheet. This is the OA-410 bug exactly: St Neots C2 read 'Tue & Thu' off one added Tuesday",
+     "find": '''      "servedFlags":[1 if (n and (declared[j] or n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION))
+                     else 0 for j,n in enumerate(servedWeeks)],''',
+     "to": '''      "servedFlags":[1 if n else 0 for j,n in enumerate(servedWeeks)],'''},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the fraction becomes a COUNT, so the rule stops being relative to the sampled window -- three bank-holiday Mondays in twelve weeks and three in a four-week window at the end of a registration are then the same answer, and one of them is wrong whichever number is chosen",
+     "find": "n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION",
+     "to": "n>2"},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "the fraction is applied to EVERY weekday rather than only to the ones no calendar row declares, so a Mon-Fri service that manages one Friday in the window loses the Friday its operator declared -- trading OA-410's fault for the opposite one",
+     "find": "declared[j] or n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION",
+     "to": "n>len(mondays)*EXCEPTION_DAY_MIN_FRACTION"},
+
+    {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
+     "what": "servedWeeks counts JOURNEYS rather than weeks, so a route with forty journeys on one Tuesday scores that Tuesday forty times and clears any fraction -- the count stops measuring how often the day recurs and starts measuring how busy it is",
+     "find": "                if per_day[j]==1: servedWeeks[j]+=1",
+     "to": "                servedWeeks[j]+=1"},
 
     {"suite": "test_gtfs_query.py", "file": "gtfs_query.py",
      "what": "only the far end of a trip is recorded as a terminus, so every route through the town loses the place it came FROM and the external sheet draws a one-armed spoke",

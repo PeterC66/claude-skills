@@ -312,6 +312,24 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-deploy-pending
 
+      # buses-data OA-402 (2026-09-18), R9. The BODS-scan row is the only thing
+      # that can say the monthly refresh did not RUN -- every other refresh row
+      # on the board is a JOIN on the report that run writes, so a stale scan and
+      # a quiet month are the same picture and a source that silently never fires
+      # reads as good news for ever. Its falsifier belongs where a change to it is
+      # seen. One directory listing, injected; no _gtfs folder and no network.
+      - name: Prove the BODS-scan row can appear and stay quiet
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-bods-scan
+
+      # buses-data OA-402 (2026-09-18), R9. The five numbers R9 is judged on. Two
+      # of the five refuse to be computed and say why, and the harness is what
+      # holds them to it -- both faults it has already caught produced a PLAUSIBLE
+      # number rather than an error. Stubs throughout; gh is never called.
+      - name: Prove the five routine numbers are what their labels say
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-routine-numbers
+
       - name: Prove the concurrency verdicts can go red
         working-directory: skills/bus-work
         run: npm run test:prove-red-concurrency

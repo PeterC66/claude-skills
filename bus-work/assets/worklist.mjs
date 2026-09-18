@@ -88,6 +88,7 @@ import { readCoverageState, directoryCoverageItems } from './directory_coverage.
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
+import { readScanState, bodsScanItems } from './bods_scan.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -725,6 +726,17 @@ for (const it of fromCommitments()) add(it);
   const deployPending = deployPendingItems(deployState, { portalDir: PORTAL });
   for (const it of deployPending.items) add(it);
   for (const w of deployPending.warnings) warnings.push(w);
+}
+
+// The monthly BODS scan not having RUN is the one fact every `refresh` row below
+// is downstream of, and until 2026-09-18 (buses-data OA-402, R9) nothing asked
+// it: `fromUpcomingReport()` reads the newest report and a report that is three
+// months old produces exactly the same board as a quiet month. One directory
+// listing, no report opened, and a tree with no `_gtfs` at all asks nothing.
+{
+  const scan = bodsScanItems(readScanState({ busesDir: BUSES }), { busesDir: BUSES });
+  for (const it of scan.items) add(it);
+  for (const w of scan.warnings) warnings.push(w);
 }
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell

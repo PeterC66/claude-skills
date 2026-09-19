@@ -53,9 +53,10 @@
  *         classified, which is what keeps this block byte-neutral when absent.
  *
  * THE DEFAULT FOR A POI WITH NO NAME IS `miss` (OA-238, 2026-09-04), and it is
- * the one place this block is not byte-neutral when absent. Only `pharmacy` and
- * `gp` can reach here nameless — every other category has a fallback name from
- * `classify()` — and a nameless symbol costs a full box for a glyph nobody chose.
+ * the one place this block is not byte-neutral when absent. `pharmacy`, `gp` and
+ * — since OA-340 — `pub` can reach here nameless; every other category has a
+ * fallback name from `classify()`, and a nameless symbol costs a full box for a
+ * glyph nobody chose.
  * It is still listed in `report.candidates` so the local can name it or confirm
  * the miss; an explicit answer in `poi.tiers` overrides the default either way.
  *
@@ -79,8 +80,19 @@
  * The OSM tag combinations this engine draws, in precedence order — the first
  * match wins, so a leisure centre tagged as a school stays a school only if the
  * school test comes first. Returns [category, name] or null for "not a POI".
- * `allotments` is opt-in per town (poi.include) because most towns do not want
- * them; everything else is on for every town.
+ * `allotments` and `pubs` are opt-in per town (poi.include) because most towns
+ * do not want them; everything else is on for every town.
+ *
+ * WHY `pubs` IS OPT-IN RATHER THAN A CATEGORY LIKE THE OTHERS (OA-340, Peter's
+ * decision of 2026-09-13, taken on the measurement in
+ * `Development Docs/pubs-as-landmarks-measured_2026-09-13.md`). Estate-wide the
+ * category is 116 more named symbols on top of the 340 the eight town sheets
+ * carry — +34%, and +50% on St Neots — onto pages where 98 labels already do not
+ * fit. Branded-only is a defensible 15, but it decides WHICH pubs by a tag that
+ * records a tenancy rather than a landmark. Opt-in is byte-inert on the day it
+ * lands and puts the judgement where the must/may/miss design already puts it:
+ * with the local adviser, who knows that St Neots navigates by three pubs and
+ * not by twenty-one.
  */
 function classify(t, poiCfg) {
   const POI = poiCfg || {};
@@ -95,6 +107,14 @@ function classify(t, poiCfg) {
   if(t.amenity==='school')    return ['school', t.name||'School'];
   if(t.leisure==='park'||t.leisure==='recreation_ground') return ['park', t.name||'Park'];
   if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
+  /* Below the named categories on purpose: a pub that OpenStreetMap ALSO tags as
+   * a community centre or a restaurant-with-rooms is the thing that tag says
+   * first, and a town that switched pubs on did not thereby ask for its village
+   * hall to be redrawn as one. The fallback is deliberately blank rather than
+   * 'Pub': a nameless pub is a bare glyph nobody chose, so OA-238's
+   * nameless-`miss` default keeps it off the page while still offering it in the
+   * chooser — see the `noName` rule below. */
+  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];
   if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
   return null;
 }
@@ -116,7 +136,11 @@ function classify(t, poiCfg) {
  * an unnamed green is called "Park" and names nothing — and that clause was in
  * both copies too.
  */
-const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];
+/* `pub` is here because the whole point of the category is *the Wetherspoon* —
+ * a pub symbol with no name beside it is no use to anybody navigating by it
+ * (OA-340). It is also the one auto-named category with a BLANK fallback, so
+ * `noName` below reads an unnamed pub as unnamed and leaves it off the page. */
+const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];
 
 /** Does this POI's own name get printed beside its symbol, or is it symbol-only? */
 function printsName(p){
@@ -263,8 +287,9 @@ function applyTiers(pois, POI, report){
   /* THE DEFAULT IS NOT ALWAYS `may` ANY MORE (OA-238, Peter's decision 2026-09-03).
    *
    * A POI with no name prints nothing beside its symbol — `classify()` supplies a
-   * fallback name for every category except `pharmacy` and `gp`, so the whole
-   * population of this rule is a chemist or a surgery OpenStreetMap has not named.
+   * fallback name for every category except `pharmacy`, `gp` and `pub`, so the
+   * population of this rule is a chemist, a surgery, or (since OA-340, on a town
+   * that has switched pubs on) a pub OpenStreetMap has not named.
    * It costs the same 4.2 x 4.2 mm box and the same placer anchor as a named one,
    * for a bare glyph nobody chose. So it defaults to NOT DRAWN.
    *
@@ -304,8 +329,10 @@ function applyTiers(pois, POI, report){
    * `a bare glyph nobody chose` -- does not reach it: for a town hall, a library
    * or a museum the CATEGORY is the choice, the symbol is the information, and
    * whether OpenStreetMap happens to carry a name changes nothing a reader sees.
-   * For pharmacy and gp, the two that reach here genuinely blank, the behaviour
-   * is exactly what OA-238 decided and this line is unchanged.
+   * For pharmacy and gp, which reach here genuinely blank, the behaviour is
+   * exactly what OA-238 decided and this line is unchanged. A `pub` reaches here
+   * blank too but is auto-named, so it takes the first arm and is missed — which
+   * is OA-340's own answer to *what does a nameless pub do*.
    *
    * De-duplication still reads a label as no-name for EVERY category, which is
    * the other half of OA-338 and is not affected: two unnamed town halls 5 km

@@ -64,6 +64,26 @@ test('every grid category has a colour, and every colour draws something', () =>
   }
 });
 
+test('and every category draws its OWN glyph rather than the fallback dot (OA-340)', () => {
+  /* The loop above cannot tell a real glyph from `default:`, which returns a
+   * plain disc in the category's own colour — long enough and coloured enough to
+   * pass both of its assertions. So adding a colour and forgetting the drawing
+   * was a silent way to ship a dot, and the population here is `GRID_COL`'s own
+   * keys rather than a typed list, so it holds for whatever is added next. The
+   * legacy set has its own `default:` and the same omission there ships a grey
+   * blob on any sheet still drawn from it. */
+  const fallback = (col) => gridGlyph('a-category-that-does-not-exist', col);
+  const seen = new Map();
+  for (const cat of Object.keys(GRID_COL)) {
+    const g = gridGlyph(cat, GRID_COL[cat]);
+    assert.notStrictEqual(g, fallback(GRID_COL[cat]), `${cat} has a colour but no drawing — it ships as a dot`);
+    if (seen.has(g)) assert.fail(`${cat} and ${seen.get(g)} draw identical artwork`);
+    seen.set(g, cat);
+  }
+  assert.notStrictEqual(icon('pub', 10, 10, 2.2), icon('a-category-that-does-not-exist', 10, 10, 2.2),
+    'the legacy icon set has no pub either, so it draws the grey default blob');
+});
+
 test('the grid set is drawn charcoal by parameter, never by running inkify over it', () => {
   // "Authored one-colour-per-glyph, so charcoal is a parameter rather than a
   // regex over the artwork — inkify is not used on this set and must not be."

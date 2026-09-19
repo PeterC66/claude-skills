@@ -37,8 +37,31 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const { ENGINE_DIR } = require('./_engine.js');
+const { mainCheckoutTwin } = require('./_worktree.js');
 
 const onDisk = fs.readdirSync(ENGINE_DIR).filter((f) => f.endsWith('.js')).sort();
+
+const PKG_DIR = path.join(__dirname, '..');
+
+// The dependencies this package DECLARES. Read, never typed — see the census's own rule.
+function declaredDependencies() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(PKG_DIR, 'package.json'), 'utf8'));
+  return Object.keys(pkg.dependencies || {}).sort();
+}
+
+// Where a declared dependency may be found, nearest first: this package's own install, then
+// — when this checkout is a git WORKTREE and has none — the main checkout's install of the
+// same package. `--git-common-dir` is the only thing that names the main checkout without
+// assuming a layout; the package is then located at its own path relative to the repository
+// root, so this stays correct if either tree is moved or renamed. Only directories that
+// exist are returned, because NODE_PATH entries that do not are silently ignored and a
+// silent ignore is how this went wrong in the first place.
+function dependencySearchPath() {
+  const twin = mainCheckoutTwin(PKG_DIR);
+  return [path.join(PKG_DIR, 'node_modules'), twin && path.join(twin, 'node_modules')]
+    .filter(Boolean)
+    .filter((d) => fs.existsSync(d));
+}
 
 test('the population is the directory, and it is not empty', () => {
   // A misdirected ENGINE_DIR must read as a failure, not as eighty silent passes. This is
@@ -96,10 +119,47 @@ test('every file in assets/ loads, prints nothing and writes nothing', () => {
   // requires `sharp` would resolve nothing from a temp folder, and four files here do.
   // Without this the mutation run's own BASELINE would be red for a reason having nothing
   // to do with the engine, which is the shape this whole action is about.
+  //
+  // AND THE PACKAGE'S OWN node_modules IS NOT ALWAYS THERE (OA-344, 2026-09-19). A git
+  // worktree has none — nothing is junctioned in, deliberately — and since OA-341 every
+  // engine change is made in one. So this named a directory that did not exist, and the
+  // census died on the first of the four saying `contact_sheet.js failed while being
+  // loaded`: a sentence about the ENGINE, for a condition that is a property of the
+  // CHECKOUT. The cost was not the wrong message. It made this suite permanently one-red
+  // wherever engine work now happens, and tools/prove-red-asset-load.js could not run there
+  // at all — its CONTROL failed, so four of its six cases reported NOT RED and the harness
+  // that exists to prove this check can go red was itself dead in the water.
+  //
+  // The search is therefore the candidates that EXIST, and the main checkout is the second
+  // of them: `--git-common-dir` names it, it is the same repository rather than a second
+  // copy or a junction, and the package is taken at its own path relative to the repository
+  // root rather than by a layout this file would then have to be right about. The fallback
+  // is reached only when the worktree has no install of its own.
+  const search = dependencySearchPath();
+  // Said out loud, because "it resolved from somewhere" is the claim, and which somewhere is
+  // the part a reader in a worktree needs to be able to see rather than infer.
+  console.log('# asset_load: dependencies searched in ' + (search.join(', ') || '(nowhere)'));
   const env = Object.assign({}, process.env, {
-    NODE_PATH: [path.join(__dirname, '..', 'node_modules'), process.env.NODE_PATH]
-      .filter(Boolean).join(path.delimiter),
+    NODE_PATH: [...search, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
   });
+
+  // AND THE DECLARED DEPENDENCIES ARE ASKED FOR BEFORE THE CENSUS RUNS, so that a checkout
+  // with no install anywhere fails saying WHICH dependency is missing rather than naming
+  // whichever engine file happens to sort first. The list is READ from package.json and
+  // never typed — a typed one cannot notice the dependency nobody added to it, which is
+  // this suite's own rule about its population one level down.
+  //
+  // WHAT THIS MUST NOT DO is excuse a file requiring something the package never declared:
+  // that is the busway fault the whole test exists for, and it stays a failure that names
+  // the file. prove-red-asset-load.js case 7 is what says so, and case 8 says this check
+  // is consulted at all.
+  const missing = declaredDependencies().filter((dep) => {
+    try { require.resolve(dep, { paths: search }); return false; } catch { return true; }
+  });
+  assert.deepStrictEqual(missing, [],
+    'declared dependenc(ies) ' + missing.join(', ') + ' resolve from none of '
+    + search.join(', ') + ' — this checkout has no install, so run `npm ci` in it. Nothing'
+    + ' about this is a statement about the engine.');
 
   let failed = null;
   let out = '';

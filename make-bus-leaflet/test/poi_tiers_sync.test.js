@@ -87,6 +87,71 @@ test('an unreachable key alone is owed nothing — the row a worklist could neve
   assert.strictEqual(c.owed, false);
 });
 
+/*
+ * OA-354, and High Wycombe's real shape in both directions. The town answered on
+ * 2026-08-31 against one unnamed library and one unnamed museum, wearing the
+ * fallback names classify() gives them; the OpenStreetMap pull on 2026-09-02
+ * named five libraries and three museums, and the stored answer has named
+ * nothing since. BOTH directions are asserted deliberately: a narrowing that
+ * only ever says "not owed" would clear every row on the board, so the same
+ * candidate list must still raise a key that DOES name a POI the town has.
+ */
+const HW_CANDIDATES = [
+  'library:High Wycombe Library', 'library:Hazlemere Library', 'library:Micklefield Library',
+  'museum:Wycombe Museum', 'museum:Chair Making Museum', 'shop:Eden Shopping Centre',
+];
+
+test('a stored answer whose POI has since been NAMED is ORPHANED, not owed, and says what the town does have', () => {
+  const portal = { 'library:Library': { tier: 'must' }, 'museum:Museum': { tier: 'must' } };
+  const c = S.compareTiers({}, portal, {}, HW_CANDIDATES);
+  assert.deepStrictEqual(c.added, []);
+  assert.strictEqual(c.owed, false, 'a row nothing can clear must not be raised');
+  assert.strictEqual(c.narrowed, true);
+  assert.deepStrictEqual(c.orphaned.map((o) => o.key), ['library:Library', 'museum:Museum']);
+  assert.deepStrictEqual(c.orphaned[0].have, ['library:High Wycombe Library', 'library:Hazlemere Library', 'library:Micklefield Library']);
+  assert.deepStrictEqual(c.orphaned[1].cat, 'museum');
+  // ...and --apply must never write one: that is the unknownTierKeys state.
+  const m = S.mergeTiers({}, portal, {}, HW_CANDIDATES);
+  assert.deepStrictEqual(Object.keys(m), []);
+});
+
+test('the SAME candidate list still raises a real debt — the narrowing has not blinded the check', () => {
+  const portal = { 'library:Library': 'must', 'shop:Eden Shopping Centre': { tier: 'must' } };
+  const c = S.compareTiers({}, portal, {}, HW_CANDIDATES);
+  assert.deepStrictEqual(c.added, ['shop:Eden Shopping Centre']);
+  assert.strictEqual(c.owed, true);
+  const m = S.mergeTiers({}, portal, {}, HW_CANDIDATES);
+  assert.deepStrictEqual(Object.keys(m), ['shop:Eden Shopping Centre']);
+});
+
+test('a CHANGED key can be orphaned too — a stale identity on both sides is still a dead key', () => {
+  const c = S.compareTiers({ 'library:Library': 'may' }, { 'library:Library': 'must' }, {}, HW_CANDIDATES);
+  assert.deepStrictEqual(c.changed, []);
+  assert.strictEqual(c.owed, false);
+  assert.deepStrictEqual(c.orphaned.map((o) => o.key), ['library:Library']);
+});
+
+test('NO candidate list fails OPEN: the comparison is exactly what it was, and says it was not narrowed', () => {
+  const portal = { 'library:Library': { tier: 'must' } };
+  const c = S.compareTiers({}, portal, {});
+  assert.deepStrictEqual(c.added, ['library:Library']);
+  assert.strictEqual(c.owed, true, 'a tree with no geometry must not be able to clear a real debt');
+  assert.strictEqual(c.narrowed, false);
+  assert.deepStrictEqual(c.orphaned, []);
+  assert.strictEqual(S.townCandidateKeys('C:/no/such/map/folder'), null);
+});
+
+test('both reasons a key reaches nothing come from ONE place, and unreachableKeys is their union', () => {
+  const tiers = { 'industrial:Cressex': 'miss', 'library:Library': 'must', 'museum:Wycombe Museum': 'must' };
+  const cands = ['library:High Wycombe Library', 'museum:Wycombe Museum'];
+  const r = S.unreachableReasons(tiers, { industrialKeep: 'none' }, cands);
+  assert.deepStrictEqual(r.culled, ['industrial:Cressex']);
+  assert.deepStrictEqual(r.orphaned.map((o) => o.key), ['library:Library']);
+  assert.deepStrictEqual(S.unreachableKeys(tiers, { industrialKeep: 'none' }, cands), ['industrial:Cressex', 'library:Library']);
+  // A culled key is never ALSO reported as an orphan, however few candidates there are.
+  assert.deepStrictEqual(S.unreachableReasons({ 'industrial:X': 'miss' }, { industrialKeep: 'none' }, []).orphaned, []);
+});
+
 test('merge keeps source-only keys, takes the portal on conflict, skips unreachable, sorts, and writes routes.json spelling', () => {
   const source = { 'community:The Hive': 'must', 'shop:Asda': 'must' };
   const portal = { 'shop:Asda': { tier: 'may' }, 'school:New': { tier: 'must', as: 'New School' }, 'industrial:X': { tier: 'miss' } };

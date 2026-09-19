@@ -427,15 +427,16 @@ function rolloutOnePlace(p) {
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
-  /* RECORD WHAT THIS BUILD WAS MADE FROM (OA-225) — see the same block in rollout.js.
-   * Neither rollout passed --based-on until this change, so the field the staleness
-   * guard wants to read was missing on almost every map it would be asked about. */
+  /* RECORD WHAT THIS BUILD WAS MADE FROM (OA-225) — see the same block in rollout.js,
+   * which carries the whole reasoning including why it is `commit` and not `new` that
+   * takes the flag (OA-352). This file had the identical hole and it was found here:
+   * Godmanchester Co-op Ermine Street v1.20, built by this tool on 2026-09-14 with
+   * --based-on on the command line, carries no `basedOn` at all, while v1.19 — built
+   * through the documented stage order by hand — carries both ids. */
   const s2Latest = (manifest.stages && manifest.stages.S2 && manifest.stages.S2.latest) || null;
   const s3Latest = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.latest) || null;
   const basedOn = [s2Latest && `S2=${s2Latest}`, s3Latest && `S3=${s3Latest}`].filter(Boolean).join(';');
-  const s4Dir = basedOn
-    ? stage(p.dir, 'new', 'S4', '--bump', BUMP, '--based-on', basedOn)
-    : stage(p.dir, 'new', 'S4', '--bump', BUMP);
+  const s4Dir = stage(p.dir, 'new', 'S4', '--bump', BUMP);
   // PULL_STAGES leads with S1 because place.json is an S1 output (pipeline.md P4
   // note) and `pull S2` would never bring it; pull S3 also syncs routes.json's
   // printed version stamp to this run's v<N.N>.
@@ -489,7 +490,10 @@ function rolloutOnePlace(p) {
   const realOutputs = real.outputs.filter(o => o !== BUILDLOG.LOG_NAME);
   if (fs.existsSync(path.join(s4Dir, 'place.json'))) realOutputs.push('place.json');
   realOutputs.push(BUILDLOG.LOG_NAME);
-  stage(p.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE);
+  // --based-on rides THIS call, not the `new` above — commit is what writes the run
+  // record (OA-352).
+  stage(p.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE,
+        ...(basedOn ? ['--based-on', basedOn] : []));
   fs.rmSync(scratch, { recursive: true, force: true });
 
   if (realBlockers.length && !FORCE) {

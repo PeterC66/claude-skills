@@ -611,6 +611,19 @@ for (const f of facts) {
 // READ today, and BOTH answers are reachable: `waiting` while the map still declares
 // the route off, `carried` once the map lists it — so this count can say "none of
 // them" as well as "all of them", which is what makes it worth printing.
+//
+// AND `waiting` IS NOT "THE LINE IS MISSING FROM THE SHEET", WHICH IS HOW EVERY
+// CONSUMER USED TO WORD IT. OA-285 probed all 14 then-live pairs against the shipped
+// `ci-reference/` SVGs on 2026-09-16: the register's own `drawing` prose was right 14
+// times out of 14, and this enumeration was wrong 4 times, always `waiting` over a
+// sheet that had already paid. The cause is that a rebuild pays an `include` by doing
+// two things — printing the line, and moving the route out of `notOnLeaflet[]` — and
+// several maps did the first without the second. So the wording here, on the status
+// board and in the worklist row says what is actually read: which maps still DECLARE
+// the route off. Believing otherwise costs a rebuild that prints the note twice.
+// Sniffing /^DELIVERED/ off `drawing` would give a truer count and would settle
+// OA-285's hard half by fiat — which artefact answers it is exactly that action's
+// open question, and a self-declared English string is not among its candidates.
 const owed = [];
 for (const f of facts) {
   if (!f || f.status !== 'decided' || f.outcome !== 'include' || !Array.isArray(f.scope)) continue;
@@ -819,7 +832,7 @@ if (AS_JSON) {
     }
   }
   if (owed.length) {
-    console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to put the service on the sheet, of ${owed.length} in the register — enumeration, not a finding (OA-285):`);
+    console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to take the route out of notOnLeaflet[], of ${owed.length} in the register — enumeration, not a finding (OA-285). THAT IS A COUNT OF DECLARATIONS AND NOT OF SHEETS MISSING THE LINE: each entry's own note below says which, and where it opens DELIVERED the line is already printed:`);
     for (const o of owed) {
       console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}${o.alias ? ` [ALIASED: the map spells it ${o.alias.registered} and badges it "${o.alias.label}"]` : ''}`);
       if (o.owes) console.log(`          owes: ${o.owes}`);

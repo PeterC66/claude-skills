@@ -320,6 +320,21 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
   check('the row names the entry, the map, the route and the file the exclusion is written in', /SF-001  Fixture  TIGER — waiting; still declared off in Areas.Fixture.S1-services.2026-09-01_0000.verified-services.json/.test(r.out), r.out.split('\n').find(l => l.includes('SF-001')));
   check('and it carries what the register says is owed, so the reader does not have to open the file', /owes: a Services-panel line carrying the booking number/.test(r.out), '');
 
+  /* THE PAIR THE WORDING WAS WRONG ABOUT, and the reason these four assertions exist
+   * (2026-09-19). A rebuild pays an `include` by doing TWO things — printing the line,
+   * and taking the route out of `notOnLeaflet[]` — and several maps in the estate did
+   * the first without the second. Five of the ten waiting pairs are in that state
+   * today. OA-285 probed all 14 then-live pairs against the shipped SVGs on
+   * 2026-09-16: the register's `drawing` prose was right 14 times out of 14 and this
+   * enumeration wrong 4 times, ALWAYS this way round. So the output may say the
+   * DECLARATION is outstanding and must never say the line is missing from the sheet,
+   * because a session that believed that would rebuild the map and print it twice. */
+  const rDelivered = run(repo('owed-delivered-but-declared-off', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include', drawing: { Fixture: 'DELIVERED 2026-09-11 in v1.24 - the include is paid and this entry owes nothing further.' } })] }));
+  check('an entry whose note says DELIVERED but whose map still declares it off is STILL enumerated, still exit 0', rDelivered.code === 0 && /1 decided "include" entry is WAITING on a rebuild/.test(rDelivered.out), `exit ${rDelivered.code}`);
+  check('and what it says it waits on is the DECLARATION, never that the line is missing from the sheet', /WAITING on a rebuild to take the route out of notOnLeaflet\[\]/.test(rDelivered.out) && !/to put the service on the sheet/.test(rDelivered.out), rDelivered.out.split('\n').find((l) => l.includes('WAITING')) || '(no WAITING line)');
+  check('and it warns in the same breath that this counts declarations rather than ink', /COUNT OF DECLARATIONS AND NOT OF SHEETS MISSING THE LINE/.test(rDelivered.out), rDelivered.out.split('\n').find((l) => l.includes('WAITING')) || '(no WAITING line)');
+  check('and the DELIVERED note itself reaches the reader — the half OA-285 measured as trustworthy 14/14', /owes: DELIVERED 2026-09-11 in v1\.24/.test(rDelivered.out), '');
+
   /* THE COUNT MUST BE ABLE TO ANSWER "NONE OF THEM" — the shape recorded as
    * "the count that equalled the total". Once the map lists the route, the same
    * register entry reads as paid rather than disappearing from the output. */

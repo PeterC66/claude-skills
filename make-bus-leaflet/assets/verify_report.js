@@ -50,6 +50,7 @@ const path = require('path');
 const { assertNoCollision } = require('./index_guard');
 const { knownOff } = require('./known_off');
 const { checkDrawnWindow } = require('./window_contiguity');
+const { displayedRoutes } = require('./displayed_routes');
 
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
@@ -362,63 +363,13 @@ function bearing(a, b) {                   // degrees 0..360 from a to b
 function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
 
 // ---------- derive the displayed-route set + anchor ----------
-const palette = routes.palette || {};
 
-/* DISPLAYED MEANS ON THE SHEET, NOT PRESENT IN THE GEOMETRY (OA-004, 2026-08-29).
- *
- * `intown` is routes_intown_atco.json -- an S2 output listing the in-town chain of
- * every route NEAR the town. The config then chooses which of them to draw, and a
- * route left out of `palette`/`routeOrder` is skipped by gen_internal entirely.
- * Seeding `displayed` from the geometry therefore counted routes the sheet does
- * not draw, and the consequence was that DROPPING A ROUTE FROM THE CONFIG COULD
- * NOT CLEAR A FINDING ABOUT IT: the map stopped drawing X46, and S6 went on
- * reporting "we include it and draw it" off S2's leftovers.
- *
- * That was found the day Peter adjudicated the X46 question and the sheet was
- * rebuilt without it. Measured across all eight towns before changing anything:
- * every one has geometry and drawn set of exactly equal size with no difference
- * between them, so this narrowing is a NO-OP on the estate as it stands and only
- * bites where a config deliberately omits a route it has geometry for -- which is
- * the case it exists for.
- *
- * The drawn set is still unioned in below, so a route the config intends to draw is
- * displayed even if S2 gave it no in-town chain; that is a different fault and the
- * no-full-chain check is the one that reports it.
- *
- * AND THE NARROWING ABOVE COULD NOT BITE UNTIL 2026-09-19 (OA-048), BECAUSE THE LINE
- * BELOW IT PUT BACK WHAT IT REMOVED. `drawnByConfig` was `palette + routeOrder` and
- * the palette was then unioned in unconditionally, so a route dropped from
- * `routeOrder` stayed displayed -- and a route is dropped from `routeOrder` while
- * KEEPING its palette entry precisely because the colour is what its legend badge is
- * drawn with. Measured across the estate: eight towns of nine have palette and
- * routeOrder of equal size and are unaffected either way; High Wycombe has 34 against
- * 22, and its S6 reports read `displayed: 34` for a sheet drawing 22, so every
- * coverage percentage on that town was struck over a denominator 55% too big.
- *
- * WHAT IS AUTHORITATIVE IS WHAT EACH GENERATOR ACTUALLY DRAWS, so both halves below
- * are taken from the generators rather than restated:
- *   - the internal sheet draws `routeOrder || Object.keys(palette)` (gen_internal.js,
- *     `dropHidden(RJ.routeOrder || Object.keys(C))`) -- an EITHER/OR, never a union;
- *   - an external spoke draws `b.routes` when it has one, else `[b.route]`
- *     (gen_external_radial.js, `_badges`), because several services can share one
- *     spoke to a destination and each gets its own badge on it.
- * The second half is load-bearing rather than tidiness, and doing the first without it
- * was measured: High Wycombe then loses 334, LHR and OXF as well -- three routes that
- * ARE drawn, riding on the 333, 102 and 275 spokes. With both, it loses exactly 27,
- * 29, 38 and WW1, which have a line on neither sheet and are a legend badge and a line
- * of prose in a map note. Every other town is a no-op, measured rather than assumed.
- *
- * NOT honoured here: `dropHidden`'s hidden-operator filter, because no town in the
- * estate sets `hiddenOperators` and a filter with no instance cannot be falsified
- * against real data. A town that set one would over-count by that operator's routes.
+/* DISPLAYED MEANS ON THE SHEET, NOT PRESENT IN THE GEOMETRY (OA-004, 2026-08-29;
+ * the narrowing that could not bite, and both halves of what does, OA-048 2026-09-19).
+ * The derivation and its whole argument are displayed_routes.js; what stays here is the
+ * call and the fact that `displayed` is the denominator of every coverage figure below.
  */
-const drawnInternal = new Set(((routes.routeOrder && routes.routeOrder.length) ? routes.routeOrder : Object.keys(palette)).map(normRoute));
-const spokeBadges = b => (Array.isArray(b.routes) && b.routes.length) ? b.routes : [b.route];
-const displayed = new Set();
-for (const r of Object.keys(intown || {})) if (!drawnInternal.size || drawnInternal.has(normRoute(r))) displayed.add(normRoute(r));
-for (const e of (routes.external || [])) for (const r of spokeBadges(e)) displayed.add(normRoute(r));
-for (const e of (routes.busway || [])) for (const r of spokeBadges(e)) displayed.add(normRoute(r));
-for (const r of drawnInternal) displayed.add(r); // the internal sheet draws these
+const { displayed } = displayedRoutes({ routes, intown, norm: normRoute });
 
 // anchor coordinate (for direction checks)
 let anchorLL = null;

@@ -51,7 +51,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseArgs } from './engine.mjs';
+import { parseArgs, assetsDir, resolvePortal } from './engine.mjs';
 
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
@@ -107,33 +107,62 @@ export function tierFor(paths, docsOnly) {
   return { tier: beyond.length ? 'full' : 'cheap', beyond };
 }
 
+/*
+ * Where the shared checkers are, asked of the engine rather than typed.
+ *
+ * Until 2026-09-17 the three constants below were literal paths on Peter's
+ * laptop (buses-data OA-345). `assetsDir()` is the resolver every other tool in
+ * this skill reaches the engine through — `BUS_SKILL_ASSETS`, then the sibling
+ * skills tree beside this file, then the two named fallbacks — so a checkout
+ * anywhere else, or a session with the environment variable set, now gets the
+ * engine it is actually running rather than a path that happens to exist here.
+ *
+ * `skillsRoot` is the tree those two live under; `stamp-docs` is NOT in it —
+ * it is a separate skill under the user profile, so it is resolved from
+ * USERPROFILE the same way `assetsDir()`'s own last candidate is.
+ */
+function skillPaths() {
+  const engine = assetsDir();
+  const skillsRoot = engine ? path.resolve(engine, '..', '..') : null;
+  const home = process.env.USERPROFILE || process.env.HOME || '';
+  return {
+    ENGINE: engine,
+    SKILLS: skillsRoot,
+    TOOLS: skillsRoot ? path.join(skillsRoot, 'tools') : null,
+    STAMP: home ? path.join(home, '.claude', 'skills', 'stamp-docs', 'scripts', 'docstamp.py') : null,
+  };
+}
+
 /** The built-in manifests, used only where a repository declares none of its own. */
 function builtIn(repo) {
   const has = (p) => existsSync(path.join(repo, p));
-  const TOOLS = 'C:/u3a St Ives/.claude/skills/tools';
-  const ENGINE = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets';
-  const STAMP = 'C:/Users/Peter/.claude/skills/stamp-docs/scripts/docstamp.py';
+  const { ENGINE, SKILLS, TOOLS, STAMP } = skillPaths();
   if (has('Development Docs/open-actions/assemble.mjs')) {
     return {
       name: 'buses-data',
       docsOnly: ['^Development Docs/', '^Documentation/', '^Correspondence/', '^BusMapsUK/', '^CLAUDE\\.md$', '^README\\.md$', '^loop/README\\.md$'],
       checks: [
-        { id: 'docstamp', label: 'every committed document describes its committed content', cmd: 'python3', args: [STAMP, '--check'], echo: ['^scope:'] },
-        { id: 'tables', label: 'tables are still tables', cmd: 'node', args: [`${TOOLS}/check-tables.mjs`] },
-        { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: [`${TOOLS}/check-doc-links.mjs`] },
-        { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: [`${TOOLS}/check-file-hygiene.mjs`, '--root', '.'] },
-        { id: 'acronyms', label: 'every short form can be looked up', cmd: 'node', args: [`${TOOLS}/check-doc-acronyms.mjs`] },
+        STAMP && { id: 'docstamp', label: 'every committed document describes its committed content', cmd: 'python3', args: [STAMP, '--check'], echo: ['^scope:'] },
+        TOOLS && { id: 'tables', label: 'tables are still tables', cmd: 'node', args: [`${TOOLS}/check-tables.mjs`] },
+        TOOLS && { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: [`${TOOLS}/check-doc-links.mjs`] },
+        TOOLS && { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: [`${TOOLS}/check-file-hygiene.mjs`, '--root', '.'] },
+        TOOLS && { id: 'acronyms', label: 'every short form can be looked up', cmd: 'node', args: [`${TOOLS}/check-doc-acronyms.mjs`] },
         { id: 'backlog-index', label: 'the backlog index matches every action file', cmd: 'node', args: ['Development Docs/open-actions/assemble.mjs', '--check'] },
         { id: 'doc-coverage', label: 'every working document is reachable from live work', cmd: 'node', args: ['Documentation/check-doc-coverage.mjs'] },
         { id: 'directory-coverage', label: 'every map has an answer to does somebody else map this town', cmd: 'node', args: ['BusMapsUK/bus-map-directory/coverage.mjs', '--check'] },
-        { id: 'exclusion-fields', label: 'a town declares a route off in notOnLeaflet[] and nowhere else', cmd: 'node', args: [`${TOOLS}/check-exclusion-fields.mjs`] },
-        { id: 's6-claims', label: 'every S6 claim has a home, and the operator join resolves', cmd: 'node', args: [`${TOOLS}/check-s6-claims.mjs`], note: 'run WITHOUT --register-only: the coverage half is the half CI cannot run' },
-        { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift', tier: 'full', cmd: 'node', args: [`${ENGINE}/status.js`, '--buses', repo, '--portal', 'C:/Claude/community-bus-maps'], note: 'no --no-live: the deployment row is the one that flag hides' },
-        { id: 'area-fixture', label: 'the committed area fixture reproduces', tier: 'full', cmd: 'node', args: [`${ENGINE}/refresh_area_fixture.js`, '--check'] },
-      ],
+        TOOLS && { id: 'exclusion-fields', label: 'a town declares a route off in notOnLeaflet[] and nowhere else', cmd: 'node', args: [`${TOOLS}/check-exclusion-fields.mjs`] },
+        TOOLS && { id: 's6-claims', label: 'every S6 claim has a home, and the operator join resolves', cmd: 'node', args: [`${TOOLS}/check-s6-claims.mjs`], note: 'run WITHOUT --register-only: the coverage half is the half CI cannot run' },
+        ENGINE && { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift', tier: 'full', cmd: 'node', args: [`${ENGINE}/status.js`, '--buses', repo, '--portal', resolvePortal()], note: 'no --no-live: the deployment row is the one that flag hides' },
+        ENGINE && { id: 'area-fixture', label: 'the committed area fixture reproduces', tier: 'full', cmd: 'node', args: [`${ENGINE}/refresh_area_fixture.js`, '--check'] },
+      ].filter(Boolean),
       unanswered: [
         'Whether the PORTAL suite is green — its `verify:area` gates a fixture that lives in this repository, and nothing on this side runs another repository\'s gates.',
         'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers.',
+        /* A missing engine tree is a REFUSAL and is said out loud. It used to be
+         * a path literal that simply was not there, which reads as a check that
+         * failed rather than as one that could not be run (OA-345). */
+        ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the area fixture, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
+        ...(STAMP ? [] : ['The docstamp check — neither USERPROFILE nor HOME is set, so stamp-docs could not be located.']),
       ],
     };
   }
@@ -275,7 +304,10 @@ export function preflight({ repo, all = false }) {
   const tier = scope.known ? tierFor(scope.paths, manifest.docsOnly || []) : { tier: 'full', beyond: [] };
   const wanted = all || tier.tier === 'full' ? manifest.checks : manifest.checks.filter((c) => (c.tier || 'cheap') === 'cheap');
   const checks = wanted.map((c) => runCheck(c, repo));
-  const engine = manifest.name === 'buses-data' ? engineTransfers('C:/u3a St Ives/.claude/skills') : null;
+  /* Resolved, not typed — and `engineTransfers` already reports an unresolved
+   * tree as `known: false` with its reason, which is the answer a refusal wants
+   * rather than a literal that happens to exist on one laptop (OA-345). */
+  const engine = manifest.name === 'buses-data' ? engineTransfers(skillPaths().SKILLS) : null;
   const failed = checks.filter((c) => c.verdict === 'FAIL').length;
   const unanswered = checks.filter((c) => c.verdict === 'UNANSWERED').length;
   const exit = failed ? EXIT_FAILED : (unanswered || !scope.known) ? EXIT_CANNOT_TELL : EXIT_OK;

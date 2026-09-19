@@ -108,7 +108,7 @@ console.log('\n6. Two things it refuses to guess about');
 console.log('\n7. It reads the FILENAMES and opens no report');
 {
   const { read, asked } = readerFor([ago(2)]);
-  readScanState({ busesDir: 'C:/u3a St Ives/Using AI/Buses', readScanDates: read });
+  readScanState({ busesDir: 'C:/x', readScanDates: read });
   check('exactly one directory is asked for', asked.length === 1, JSON.stringify(asked));
   check('and it is _gtfs/upcoming under the buses dir', /_gtfs[\\/]upcoming$/.test(asked[0]), asked[0]);
 }

@@ -75,6 +75,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { parseArgs, resolveBuses, resolvePortal, assetsDir } from './engine.mjs';
 
 export const DEFAULT_WINDOW_DAYS = 30;
 
@@ -282,21 +283,40 @@ export function render(r) {
 }
 
 /* ---- CLI ---------------------------------------------------------------- */
+/*
+ * THE THREE REPOSITORIES ARE RESOLVED, NOT NAMED (buses-data OA-345).
+ *
+ * Until this change the block below carried its own `arg()` over `process.argv`
+ * and three literal paths off Peter's laptop, so on any other checkout — CI, a
+ * worktree, a second machine — it read three repositories that are not there and
+ * reported the resulting silence as a routine number. `parseArgs` and the two
+ * resolvers are `engine.mjs`'s, which is the whole point of the row: the
+ * argument handling and the path handling are the skill's, in one place, and a
+ * `--buses` or `--portal` flag or the `BUSES_DIR` / `BUSMAPS_PORTAL` environment
+ * now reaches this tool the same way it reaches every other one.
+ *
+ * `claude-skills` has no resolver of its own because nothing needed one before:
+ * it is the tree `assetsDir()` already finds the engine inside, two levels up,
+ * which is the same derivation `preflight.mjs` uses for `skillsRoot`.
+ */
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('routine_numbers.mjs')) {
-  const arg = (name, dflt) => {
-    const i = process.argv.indexOf('--' + name);
-    return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : dflt;
-  };
-  const busesDir = arg('buses', 'C:/u3a St Ives/Using AI/Buses');
-  const days = Number(arg('days', String(DEFAULT_WINDOW_DAYS))) || DEFAULT_WINDOW_DAYS;
+  const opts = parseArgs(process.argv.slice(2));
+  const busesDir = resolveBuses({ buses: opts.buses });
+  const engineAssets = assetsDir();
+  const skillsRoot = engineAssets ? path.resolve(engineAssets, '..', '..') : null;
+  const days = Number(opts.days ?? DEFAULT_WINDOW_DAYS) || DEFAULT_WINDOW_DAYS;
   const facts = readFacts({
     busesDir,
     repos: [
       { name: 'buses-data', dir: busesDir, branch: 'main' },
-      { name: 'claude-skills', dir: 'C:/u3a St Ives/.claude/skills', branch: 'main' },
-      { name: 'community-bus-maps', dir: 'C:/Claude/community-bus-maps', branch: 'main' },
+      // A tree that could not be found is left OUT rather than passed as null:
+      // readFacts would read a missing directory as a repository with no commits,
+      // and an absence reported as a zero is this estate's own named fault.
+      ...(skillsRoot ? [{ name: 'claude-skills', dir: skillsRoot, branch: 'main' }] : []),
+      { name: 'community-bus-maps', dir: resolvePortal({ portal: opts.portal }), branch: 'main' },
     ],
   });
+  if (!skillsRoot) console.error('routine_numbers: no skills tree found, so claude-skills is NOT counted — set BUS_SKILL_ASSETS to the make-bus-leaflet assets folder.');
   const r = routineNumbers(facts, { windowDays: days });
-  console.log(process.argv.includes('--json') ? JSON.stringify(r, null, 2) : render(r));
+  console.log(opts.json ? JSON.stringify(r, null, 2) : render(r));
 }

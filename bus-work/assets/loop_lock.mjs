@@ -28,6 +28,7 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { resolveBuses } from './engine.mjs';
 
 /* The lease the loop's own prompt sets, and the fallback for a holder that does
  * not carry a parseable `expires:`. Ninety minutes is NOT an estimate of how
@@ -159,7 +160,11 @@ export function fmtMin(n) {
  * wired into one: it is here so that "is the loop holding the lock right now?"
  * is answerable without reading JSON. */
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` || process.argv[1]?.endsWith('loop_lock.mjs')) {
-  const dir = process.argv[2] || 'C:/u3a St Ives/Using AI/Buses';
+  // The DEFAULT comes from engine.mjs, which is the one place the `--buses` /
+  // BUSES_DIR / laptop-path order is written (buses-data OA-345). The argument
+  // itself stays positional and therefore stays excused in
+  // `engine_adoption.mjs`: this is a bare folder, not a flag.
+  const dir = process.argv[2] || resolveBuses();
   const L = readLoopLock(dir, { selfSession: process.argv[3] || null });
   if (!L.present) console.log('loop/LOCK.d is not held.');
   else if (!L.readable) console.log(`loop/LOCK.d is held and its holder file cannot be read (${L.dir}).`);

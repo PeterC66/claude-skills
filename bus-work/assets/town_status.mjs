@@ -58,6 +58,7 @@ import path from 'node:path';
 import process from 'node:process';
 import http from 'node:http';
 import https from 'node:https';
+import { resolveBuses } from './engine.mjs';
 
 /*
  * getJson — one GET, no connection pool, hard timeout.
@@ -131,12 +132,14 @@ function headerHelp() {
 }
 
 /* ---- where is buses-data ---------------------------------------------- */
-function resolveBuses() {
-  if (opts.buses) return opts.buses;
-  if (process.env.BUSES_DIR) return process.env.BUSES_DIR;
-  return 'C:/u3a St Ives/Using AI/Buses';
-}
-const BUSES = resolveBuses();
+// The resolution order — `--buses`, then BUSES_DIR, then the one named laptop
+// path — is engine.mjs's, and this file re-implemented it character for
+// character until 2026-09-17 (buses-data OA-345). The ARGUMENT PARSER above is
+// deliberately NOT engine.mjs's: it refuses an unknown flag by name and takes a
+// bare map name, and `parseArgs` is long-flags-only and would silently ignore
+// both. Adopting the half that is shared and keeping the half that is stricter
+// is the whole distinction, and `engine_adoption.mjs` holds it in writing.
+const BUSES = resolveBuses({ buses: opts.buses });
 if (!fs.existsSync(path.join(BUSES, 'Areas'))) {
   die(2, `town_status: no Areas/ under ${BUSES}\n  pass --buses <dir> or set BUSES_DIR.`);
 }

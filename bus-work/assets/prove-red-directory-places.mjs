@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readPlacesState, directoryPlacesItems, RECHECK_DAYS } from './directory_places.mjs';
+import { resolveBuses } from './engine.mjs';
 
 let bad = 0;
 const check = (name, cond, extra) => {
@@ -91,7 +92,10 @@ console.log('\n4  silent on purpose');
 
 console.log('\n5  the real file, when buses-data is on this machine');
 {
-  const candidates = [process.env.BUSES_DIR, 'C:/u3a St Ives/Using AI/Buses', path.resolve(process.cwd(), '..', '..', 'buses-data')].filter(Boolean);
+  // engine.mjs answers the first two candidates — `--buses`/BUSES_DIR, then the
+  // named laptop path (buses-data OA-345). The third stays: it is the sibling
+  // checkout CI would have, which engine.mjs deliberately does not guess at.
+  const candidates = [resolveBuses(), path.resolve(process.cwd(), '..', '..', 'buses-data')].filter(Boolean);
   const real = candidates.map((b) => path.join(b, 'BusMapsUK', 'bus-map-directory')).find((d) => fs.existsSync(path.join(d, 'places', 'places-source.json')));
   if (!real) {
     console.log('  --  SKIPPED: no buses-data checkout with places/places-source.json on this machine; the join against the real file was not tested here');

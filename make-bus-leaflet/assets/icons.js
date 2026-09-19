@@ -82,6 +82,10 @@ const GRID_COL = {
   shop: '#c2185b', gp: '#d00', pharmacy: '#0a8a3a', library: '#8a5a00', museum: '#6a3d9a',
   leisure: '#e07b00', school: '#1f78b4', park: '#2f8f2f', industrial: '#777777',
   community: '#00868b', townhall: '#555555', allotments: '#7a8f3c',
+  // OA-340. Dark rose-brown rather than the amber a pint suggests: amber sits on
+  // top of `leisure` (#e07b00) and `library` (#8a5a00), and a category a town
+  // opts into has to be told apart from the ones that are always on.
+  pub: '#8e3b46',
 };
 /* `cw > 0` draws the same glyph as one white silhouette fattened by cw, to be
  * laid down before the real one. It is a separate PASS rather than
@@ -148,6 +152,17 @@ function gridGlyph(cat, col, cw = 0) {
                         // frame, so it takes the corner radius
       return `<rect x="${3 + GW / 2}" y="${5 + GW / 2}" width="${18 - GW}" height="${14 - GW}" rx="${GR}" fill="${cw ? WHITE : 'none'}" stroke="${cw ? WHITE : col}" stroke-width="${GW + cw * 2}"/>`
            + f('M6.3,8.4 h2.6 v7.2 h-2.6 Z M10.7,8.4 h2.6 v7.2 h-2.6 Z M15.1,8.4 h2.6 v7.2 h-2.6 Z');
+    case 'pub':         // a tapered pint glass, its head separated from the beer
+                        // by a knocked-out band. Solid, like the rest of the grid
+                        // set — a glass drawn as an outline goes faint at 4.2 mm
+                        // over a route ribbon, which is what GCASE exists for.
+                        // No tankard handle: the live area is 20 units, and a
+                        // handle is the kind of 2-unit detail the 2026-08-16 icon
+                        // round took OUT of this set — see `design-quality.md`,
+                        // "four rules". If a handle is ever wanted, it is a
+                        // drawing decision for a person with a proof at 4.2 mm.
+      return f('M6.6,4.6 H17.4 L15.4,20.8 H8.6 Z')
+           + k('M7.2,9.2 H16.8 L16.6,10.9 H7.4 Z');
     default:
       return dot(12, 12, 7);
   }
@@ -217,6 +232,9 @@ function icon(cat, x, y, s = 2.2, ink, set) {
     case 'allotments': // bed rows behind a low frame
       return T(`<rect x="-2.2" y="-1.6" width="4.4" height="3.4" rx="0.4" fill="#e8dcc0" stroke="#7a8f3c" stroke-width="0.35"/>
         <path d="M-1.4,-1.0 V1.4 M0,-1.0 V1.4 M1.4,-1.0 V1.4" stroke="#7a8f3c" stroke-width="0.5" fill="none"/>`);
+    case 'pub': // pint glass: beer under a pale head
+      return T(`<path d="M-1.35,-2.1 H1.35 L0.95,2.3 H-0.95 Z" fill="#8e3b46"/>
+        <path d="M-1.29,-2.1 H1.29 L1.16,-1.15 H-1.16 Z" fill="#f2e3c6"/>`);
     default:
       return `<circle cx="${x}" cy="${y}" r="${s*0.7}" fill="#888"/>`;
   }

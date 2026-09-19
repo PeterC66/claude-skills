@@ -355,6 +355,38 @@ const MUTATIONS = [
     find: "  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
     to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
 
+  /* poi_select.js OA-340, 2026-09-14 — pubs, the second opt-in category. The
+   * property the opt-in form was CHOSEN for is that a town which has not asked
+   * renders byte-identical, so the first mutation is the one that matters: it is
+   * +116 named symbols across the estate, on pages where 98 labels already do
+   * not fit. The second is subtler — a 'Pub' fallback reads as a NAME to
+   * OA-238's nameless default, so a bare glyph nobody chose reaches the page
+   * wearing a label to get past the rule that exists to stop it. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'pubs stop being opt-in, so every town with a pub gains every pub it has',
+    find: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
+    to: "  if(t.amenity==='pub') return ['pub', t.name||''];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a nameless pub falls back to the word "Pub", which walks it past the nameless-miss default',
+    find: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
+    to: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||'Pub'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a pub stops printing its name, so the category delivers a glass symbol and no Wetherspoon',
+    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];",
+    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key loses its pub row, so the sheet draws a symbol nothing on the page explains',
+    find: "  if(pois.some(p=>p.cat==='pub')) key.push(['pub','Pub']);",
+    to: "" },
+
+  { suite: 'icons.test.js', file: 'icons.js',
+    what: 'the pub glyph is unreachable while its colour stays, so the category ships as a plain dot',
+    find: "    case 'pub':         // a tapered pint glass, its head separated from the beer",
+    to: "    case 'pub-unreachable': // a tapered pint glass, its head separated from the beer" },
+
   /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
    * label rule behind them. Two of these guard a THRESHOLD and one guards the
    * set itself, which is derived from classify() rather than typed -- the

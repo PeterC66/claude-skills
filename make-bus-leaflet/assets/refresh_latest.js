@@ -35,7 +35,7 @@
 // boundary and the half with none stays where a person drives it; the skipped
 // sweep is PRINTED rather than silent, with the command that does it.
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
-const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
+const { loadManifest, versionOfRunDir } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4), and the one parse of a run dir's version (OA-368)
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const ARGV = process.argv.slice(2);
 const NO_COLLECT = ARGV.includes('--no-collect');
@@ -59,7 +59,32 @@ if (!fs.existsSync(path.join(TOWN, 'manifest.json'))) {
 const OUT = path.join(TOWN, '_latest');
 fs.mkdirSync(OUT, { recursive: true });
 
-// newest S5 render dir from the manifest (fallback: newest S5-render/* by name)
+// newest S5 render dir — from the manifest, which is the answer, and only if the
+// manifest cannot answer from the listing, ordered by VERSION (buses-data OA-368).
+//
+// A TEXT SORT IS THE WRONG INSTRUMENT ON THESE NAMES AND THE ESTATE SAYS SO BY
+// COUNT. An S5 run dir is `v<N.N>_<date>_<hhmm>`, and `v1.9` sorts after `v1.19`
+// exactly as `v2.9` sorts after `v2.32` — measured 2026-09-16 over the 23 map
+// folders, a text sort names the WRONG run in 26 of the 40 versioned stage
+// listings, against 0 of the 80 unversioned ones. The 14 it gets right today are
+// right because a MAJOR bump has kept their minors in single digits (High Wycombe
+// is two builds from breaking) or because prune_runs.py has deleted the low
+// numbers, so the correctness of this listing is currently a property of the
+// RETENTION POLICY, which nobody designed and nobody would think to preserve.
+// The same shell default delivered two of the first customer's four sheets from
+// renders a fortnight old, and the byte gate could not see it: a stale render
+// that still reproduces is indistinguishable, to that gate, from a current one.
+//
+// Ordering is version first and the rest of the name second — within one version
+// the remainder is `_<date>_<hhmm>`, on which a text sort IS a chronological sort,
+// which is what the 80 unversioned listings measure. A directory whose name is not
+// a versioned run is not a candidate at all: St Neots Town Centre carries a stray
+// `_latest/` INSIDE its S5-render, which loses a text sort only by the accident
+// that `_` sorts before `v` — a folder called `z-old` would have won it.
+//
+// AND THE FALLBACK SAYS SO WHEN IT FIRES, because a silent guess that is right on
+// one laptop is how this shipped four times: three of them are named in OA-368,
+// and two of those had written the correct rule down in another file first.
 function latestS5() {
   try {
     const m = loadManifest(TOWN);   // loadManifest from stage.js — one reader (OA-232 Tier 2.4)
@@ -68,8 +93,19 @@ function latestS5() {
   } catch (e) {}
   const base = path.join(TOWN, 'S5-render');
   if (!fs.existsSync(base)) return null;
-  const dirs = fs.readdirSync(base).filter(d => fs.statSync(path.join(base, d)).isDirectory()).sort();
-  return dirs.length ? path.join(base, dirs[dirs.length - 1]) : null;
+  const runs = fs.readdirSync(base)
+    .filter(d => fs.statSync(path.join(base, d)).isDirectory())
+    .map(d => ({ d, v: versionOfRunDir(d) }))            // stage.js owns that parse (OA-368)
+    .filter(r => r.v)
+    .sort((a, b) => {
+      const [amj, amn] = a.v.split('.').map(Number), [bmj, bmn] = b.v.split('.').map(Number);
+      return (amj - bmj) || (amn - bmn) || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+    });
+  if (!runs.length) return null;
+  const pick = runs[runs.length - 1].d;
+  console.error('refresh_latest: manifest.json names no committed S5 run that is on this disk,');
+  console.error('  so the mirror is taken from the newest render BY VERSION: ' + pick);
+  return path.join(base, pick);
 }
 // newest file of a given basename anywhere under THIS MAP's folder (by mtime),
 // ignoring the _latest copy itself and ignoring any nested map.

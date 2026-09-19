@@ -913,5 +913,11 @@ if (require.main === module) main();
 
 module.exports = {
   findTownDir, loadManifest, saveManifest, emptyStages, backfillStages,
+  // versionOfRunDir is exported so that no caller has to re-parse `v<N.N>_<ts>`
+  // for itself (buses-data OA-368). A run dir's version is this file's business,
+  // and every private copy of that parse is one more place where `v1.9` can beat
+  // `v1.19` — which is how two of the first customer's four sheets were delivered
+  // from renders a fortnight old.
+  versionOfRunDir,
   STAGE_NAME, ORDER_OF, VERSIONED,
 };

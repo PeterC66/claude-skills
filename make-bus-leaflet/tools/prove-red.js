@@ -2265,6 +2265,24 @@ const MUTATIONS = [
     find: "    const unraised = queuedFacts.filter(q => q.claimed === false);",
     to: "    const unraised = queuedFacts.filter(q => !q.claimed);" },
 
+  // refresh_latest.js — which render the `_latest` mirror is taken from when the
+  // manifest cannot answer (buses-data OA-368). The first mutation is the code as
+  // it stood until 2026-09-16: a text sort, which put `v1.9` after `v1.19` and
+  // delivered two of the first customer's four sheets from renders a fortnight
+  // old. It is worth carrying as a mutation rather than only as a fixed bug
+  // because the fault is INVISIBLE on a map whose low-numbered runs have been
+  // pruned away — four of the estate's twenty are in exactly that state, so the
+  // listing is correct there by retention policy rather than by code.
+  { suite: 'refresh_latest_render_choice.test.js', file: 'refresh_latest.js',
+    what: 'the fallback orders the render listing as TEXT again, so v1.9 beats v1.19 and the mirror is a fortnight old',
+    find: "    .map(d => ({ d, v: versionOfRunDir(d) }))            // stage.js owns that parse (OA-368)",
+    to: "    .map(d => ({ d, v: '0.0' }))" },
+
+  { suite: 'refresh_latest_render_choice.test.js', file: 'refresh_latest.js',
+    what: 'anything in S5-render becomes a candidate, so a stray folder that is not a run at all can be mirrored as the newest render',
+    find: "    .filter(r => r.v)\n",
+    to: "    .map(r => ({ ...r, v: r.v || '0.0' }))\n" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

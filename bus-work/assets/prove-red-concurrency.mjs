@@ -558,6 +558,110 @@ console.log('\n== the unpushed count, with and without an upstream (OA-313) ==')
 }
 
 // ---------------------------------------------------------------------------
+// 1d. WHAT A DETACHED HEAD IS — deploy residue, or somebody's unlanded work
+// ---------------------------------------------------------------------------
+/* buses-data OA-387. The fault: `portal-write` said of ANY checkout that was not
+ * on `main` that the branch was "somebody's live work", and for two days that
+ * sentence was said hourly about a portal checkout the deploy procedure had
+ * detached and a finished worktree was holding `main` away from. Eleven ticks
+ * read it, correctly declined to deliver, and none went and looked — because a
+ * verdict that says somebody is mid-task reads as transient, and residue is the
+ * opposite: it is still there tomorrow.
+ *
+ * EVERY CASE HERE IS A REAL CLONE WITH A REAL REMOTE, because the whole question
+ * is what git answers about ancestry and about who holds a branch, and a
+ * synthetic conditions object cannot be wrong about that. The pairs matter more
+ * than usual: a rule that called every detachment residue would be as false as
+ * the one it replaces, and in the more dangerous direction.
+ *
+ * WATCHED GO RED AGAINST THE OLD BEHAVIOUR, not only against fixtures, and both
+ * experiments were run and reverted rather than reasoned about. Reinstating the
+ * pre-OA-387 rule — one BETTER TO DELAY for every checkout that is not on main —
+ * reddens 13 cases here and leaves every control green, including the named
+ * feature branch, which is the case the old sentence was right about. Treating
+ * the third answer as residue (`ancestor !== false`) reddens 4, and TWO of them
+ * are `says` assertions rather than verdicts: an unlanded-work detachment and a
+ * refused reading both come out BETTER TO DELAY under the old rule as well, so
+ * the verdict alone cannot tell the fix from its absence and the sentence is
+ * what divides them. Drop either `says` and the regression walks between the
+ * cases that are left. */
+console.log('\n== a detached checkout: residue or unlanded work (OA-387) ==');
+{
+  const originDir = path.join(root, 'origin-d.git');
+  const seed = path.join(root, 'seed-d');
+  const work = path.join(root, 'detached-clone');
+  const held = path.join(root, 'holds-main');
+  execFileSync('git', ['init', '--bare', '-b', 'main', originDir], { stdio: 'ignore' });
+  const sg = (...a) => execFileSync('git', ['-C', seed, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(seed, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', seed], { stdio: 'ignore' });
+  sg('config', 'user.email', 'harness@example.invalid');
+  sg('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(seed, 'a.txt'), 'one\n');
+  sg('add', 'a.txt'); sg('commit', '-q', '-m', 'first');
+  sg('remote', 'add', 'origin', originDir); sg('push', '-q', 'origin', 'main');
+  execFileSync('git', ['clone', '-q', originDir, work], { stdio: 'ignore' });
+  const wg = (...a) => execFileSync('git', ['-C', work, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  wg('config', 'user.email', 'harness@example.invalid');
+  wg('config', 'user.name', 'harness');
+
+  const readPortal = () => conc.readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: work });
+  const verdict = () => conc.assess(['portal-write'], conc.readConditions({ portal: work }));
+  const block = () => conc.formatConditions(conc.readConditions({ portal: work })).join('\n');
+
+  // THE CONTROL FIRST, and it is the one that stops a `detached` line appearing
+  // over a checkout that is not detached at all: nothing measured, nothing said.
+  let p = readPortal();
+  ok(p.branch === 'main' && p.detached === null, 'a checkout on main carries NO detachment reading', `branch=${p.branch} detached=${JSON.stringify(p.detached)}`);
+  ok(!/detached/.test(block()), 'and the conditions block prints no detached line at all');
+
+  // The shape the deploy procedure leaves behind: detached at the commit
+  // origin/main already points at.
+  wg('checkout', '-q', '--detach', 'origin/main');
+  p = readPortal();
+  ok(p.branch === '(detached)' && p.detached && p.detached.state === 'read', 'a detached checkout is measured rather than asserted', `${p.branch} ${JSON.stringify(p.detached)}`);
+  ok(p.detached.ancestor === true && p.detached.ref === 'origin/main', 'and standing on published history reads as an ancestor of origin/main', JSON.stringify(p.detached));
+  ok(p.detached.heldBy === null, 'with no worktree holding main, no worktree is named — an absence is not invented');
+  let v = verdict();
+  ok(v.verdict === conc.CHECK, 'deploy residue is CHECK FIRST — go and look — not BETTER TO DELAY', `got ${v.verdict}`);
+  ok(/residue/.test(v.reasons[0].why) && !/somebody's live work/.test(v.reasons[0].why), 'and the reason says RESIDUE, never "somebody\'s live work"', v.reasons[0].why);
+  ok(/nothing clears it on its own/.test(v.reasons[0].why), 'and says in terms that waiting will not fix it — the half that cost eleven ticks');
+  ok(/deploy residue/.test(block()), 'and the conditions block carries the same finding', block());
+
+  // The worktree that holds `main` away from the primary checkout. This is the
+  // fact a reader cannot guess and `git worktree list` has had all along.
+  execFileSync('git', ['-C', work, 'worktree', 'add', '-q', held, 'main'], { stdio: 'ignore' });
+  p = readPortal();
+  ok(p.detached.heldBy !== null && /holds-main/.test(p.detached.heldBy), 'the worktree holding main is NAMED', `heldBy=${p.detached.heldBy}`);
+  ok(/holds-main/.test(verdict().reasons[0].why), 'and the reason says why checking main out again would fail');
+  execFileSync('git', ['-C', work, 'worktree', 'remove', held], { stdio: 'ignore' });
+  ok(readPortal().detached.heldBy === null, 'and removing that worktree takes the name away again');
+
+  // THE OTHER DIRECTION, and it is what stops this becoming a mute button: a
+  // commit that is on no branch is somebody's unlanded work, and waiting IS the
+  // right advice there.
+  fs.writeFileSync(path.join(work, 'b.txt'), 'two\n');
+  wg('add', 'b.txt'); wg('commit', '-q', '-m', 'work nobody has landed');
+  p = readPortal();
+  ok(p.detached.ancestor === false, 'a commit made on the detached head is NOT an ancestor of origin/main', JSON.stringify(p.detached));
+  v = verdict();
+  ok(v.verdict === conc.DELAY, 'unlanded work on a detached head stays BETTER TO DELAY', `got ${v.verdict}`);
+  ok(/NOT on origin\/main/.test(v.reasons[0].why), 'and the reason says which way the ancestry went', v.reasons[0].why);
+
+  // THE THIRD ANSWER. With nothing to compare against, the instrument says it
+  // could not look — it does not fall back to either finding.
+  wg('update-ref', '-d', 'refs/remotes/origin/main');
+  p = readPortal();
+  ok(p.detached.state === 'refused' && p.detached.ancestor === null, 'no origin/main to compare against: COULD NOT LOOK, not a verdict', JSON.stringify(p.detached));
+  ok(/origin\/main/.test(p.detached.why || ''), 'and it says what it could not find', p.detached.why);
+  v = verdict();
+  ok(v.verdict === conc.DELAY && /COULD NOT LOOK/.test(v.reasons[0].why), 'a refusal takes the STRICTER verdict and says so out loud', `${v.verdict}: ${v.reasons[0].why}`);
+  ok(/COULD NOT LOOK/.test(block()), 'and the conditions block does not quietly print nothing', block());
+
+  fs.rmSync(seed, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
 // 2. THE JUDGEMENT — each rule, made red and then cleared
 // ---------------------------------------------------------------------------
 console.log('\n== the rules, each one paired ==');
@@ -642,6 +746,33 @@ want(conc.assess(['portal-write'], cannotCount), conc.CHECK, 'a buses-data whose
 says(conc.assess(['portal-write'], cannotCount), /no upstream/, 'and it repeats the reason git gave rather than reporting an absence');
 want(conc.assess(['portal-write'], world({ buses: { unpushed: 0 } })), conc.SAFE, 'and a genuine zero is still SAFE NOW');
 says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: 'default-branch', unpushedBasis: 'origin/main' } })), /origin\/main/, 'a count taken against the default branch says so on the row');
+
+/* OA-387, the judgement half. The observation block above proves what git
+ * answers; these prove what the rule DOES with each answer, including the one
+ * input a real tree cannot produce — a conditions object that carries no
+ * detachment reading at all, which is every caller written before this landed
+ * and every synthetic world in every harness. Falling back to the old sentence
+ * there would reinstate the false claim on the one input that cannot answer
+ * back, so it is a refusal like any other. */
+{
+  const det = (over) => world({ portal: { branch: '(detached)', detached: { state: 'read', ancestor: true, head: 'b461f93', ref: 'origin/main', heldBy: null, why: null, ...over } } });
+  const residue = conc.assess(['portal-write'], det({}));
+  want(residue, conc.CHECK, 'detached at a commit already on origin/main: CHECK FIRST, go and look');
+  says(residue, /residue from the deploy procedure/, 'and it is named as residue');
+  says(residue, /checkout main/, 'and the reason carries the command that clears it');
+  ok(!/somebody's live work/.test(residue.reasons[0].why), 'and never says somebody is working on it', residue.reasons[0].why);
+  says(conc.assess(['portal-write'], det({ heldBy: 'C:/Claude/cbm-oa261' })), /cbm-oa261/, 'the worktree holding main is named on the row');
+  want(conc.assess(['portal-write'], det({ ancestor: false })), conc.DELAY, 'detached at a commit that is NOT on origin/main: BETTER TO DELAY');
+  want(conc.assess(['portal-write'], det({ state: 'refused', ancestor: null, why: 'there is no origin/main here' })), conc.DELAY, 'a refused reading: BETTER TO DELAY, the stricter answer');
+  says(conc.assess(['portal-write'], det({ state: 'refused', ancestor: null, why: 'there is no origin/main here' })), /COULD NOT LOOK/, 'and it says it could not look rather than implying it did');
+  const unmeasured = world({ portal: { branch: '(detached)' } });
+  want(conc.assess(['portal-write'], unmeasured), conc.DELAY, 'a detached portal with NO reading at all: BETTER TO DELAY');
+  ok(!/somebody's live work/.test(conc.assess(['portal-write'], unmeasured).reasons[0].why),
+    'and it must NOT fall back to the sentence this action was filed about', conc.assess(['portal-write'], unmeasured).reasons[0].why);
+  // The control that keeps the old behaviour where it was right: a NAMED branch
+  // really is somebody's work, and that sentence is correct about it.
+  says(conc.assess(['portal-write'], portalBranch), /somebody's live work/, 'a named feature branch still reads as somebody working');
+}
 
 // --- failing safe ---
 const blind = world({ portal: { present: false, readable: false } });

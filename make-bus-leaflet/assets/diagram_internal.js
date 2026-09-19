@@ -62,13 +62,19 @@ const { esc } = require(_dep('svg_primitives.js'));
 // and schematize_internal.js are one algorithm written twice, and the three
 // differences between them are the two flags below plus a function name.
 //
-// The four plain re-exports are destructured HERE rather than where each used to
-// be declared, and that is not tidiness: dpTol() was called thirty lines ABOVE
-// its own `function` declaration and worked on hoisting, which a `const` does
-// not do. Left in place, the move would have thrown on the feature-simplify path
-// — which no gate reaches on every town.
+// The plain re-exports are destructured HERE rather than where each used to be
+// declared, and that is not tidiness: the simplifier was called thirty lines
+// ABOVE its own `function` declaration and worked on hoisting, which a `const`
+// does not do. Left in place, the move would have thrown on the feature-simplify
+// path — which no gate reaches on every town.
+//
+// `dpPinned` and not `dpTol` since 2026-09-09: this file's one simplification is
+// of a line that is PINNED where it crosses the network, and cutting across a pin
+// is what cost St Ives' diagram river its course. `schematize_internal.js` still
+// takes plain `dpTol`, correctly — it simplifies the real geometry, not a mapped
+// one, so it has no pins to respect.
 const roadGraph = require(_dep('road_graph.js'));
-const { key6, angdist, lsq, dpTol } = roadGraph;
+const { key6, angdist, lsq, dpPinned } = roadGraph;
 
 // ---- main() ---------------------------------------------------------------
 // OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
@@ -683,7 +689,7 @@ function featureCrossings(mmSeg, cum) {
 function mapFeatureSeg(mmSeg, crossings) {
   const cum = featureArc(mmSeg);
   const CR = crossings || featureCrossings(mmSeg, cum);
-  if (!CR.length) return mmSeg.map(warp);
+  if (!CR.length) return { pts: mmSeg.map(warp), pins: [] };
   const sim = (P0, P1, Q0, Q1) => {
     const vx = P1[0] - P0[0], vy = P1[1] - P0[1];
     const wx = Q1[0] - Q0[0], wy = Q1[1] - Q0[1];
@@ -717,14 +723,18 @@ function mapFeatureSeg(mmSeg, crossings) {
     const D = damp(P0, P1);
     spanF.push(p => T(D(p)));
   }
-  const outPts = [];
+  // `pins` are the indices in outPts of the CROSSINGS — the only points on this
+  // line whose position is known rather than inferred, because each is where the
+  // feature meets the solved network. They are returned so the simplification
+  // downstream can refuse to cut across one; see dpPinned() in road_graph.js.
+  const outPts = [], pins = [];
   let k = 0;
   for (let j = 0; j < mmSeg.length; j++) {
-    while (k < CR.length && cum[j] > CR[k].arc) { outPts.push(CR[k].Q.slice()); k++; }
+    while (k < CR.length && cum[j] > CR[k].arc) { pins.push(outPts.length); outPts.push(CR[k].Q.slice()); k++; }
     outPts.push(spanF[k](mmSeg[j]));
   }
-  while (k < CR.length) { outPts.push(CR[k].Q.slice()); k++; }
-  return outPts;
+  while (k < CR.length) { pins.push(outPts.length); outPts.push(CR[k].Q.slice()); k++; }
+  return { pts: outPts, pins };
 }
 
 // ---- curated stop set ----------------------------------------------------------
@@ -822,10 +832,17 @@ const wjson = (f, o) => fs.writeFileSync(path.join(WD, f), JSON.stringify(o));
     out[kf] = chains.map(mm => {
       const cr = mm.length < 2 ? [] : featureCrossings(mm);
       if (mm.length >= 2 && !cr.length) noCross++;
-      const mapped = mm.length < 2 ? mm.map(warp) : mapFeatureSeg(mm, cr);
+      const m = mm.length < 2 ? { pts: mm.map(warp), pins: [] } : mapFeatureSeg(mm, cr);
+      const mapped = m.pts;
       if (mapped.length < 3) return mapped.map(p => INV(p).map(rll));
-      const keep = [0]; dpTol(mapped, 0, mapped.length - 1, DG.featureTol, keep); keep.push(mapped.length - 1);
-      return [...new Set(keep)].sort((a, b) => a - b).map(i => INV(mapped[i]).map(rll));
+      // NEVER SIMPLIFY ACROSS A PIN (2026-09-09). This was a single dpTol over
+      // the whole mapped line, which was right while a feature arrived as one
+      // OSM way per call and wrong the moment OA-059 welded the ways together:
+      // the chord it measures against went from spanning a way to spanning a
+      // river, and St Ives' diagram river lost 60% of its control points and
+      // its course with them. Peter rejected portal v11.0 on sight for it, and
+      // no byte gate could have — they compare a build against itself.
+      return dpPinned(mapped, m.pins, DG.featureTol).map(i => INV(mapped[i]).map(rll));
     });
     // The line that would have caught OA-059 the day it shipped, and neither half
     // of it is visible in a byte count or a label diff: ways outnumbering chains

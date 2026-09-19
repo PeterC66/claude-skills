@@ -43,6 +43,7 @@
  */
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { resolvePortal } from './engine.mjs';
 
 export const DEFAULT_LIVE_URL = 'https://busmaps.uk';
 export const DEFAULT_GRACE_HOURS = 12;
@@ -105,7 +106,7 @@ export async function readDeployState({ portalDir, liveUrl = DEFAULT_LIVE_URL, g
  * The row, or nothing, plus the warnings the worklist should print. `now` is
  * milliseconds; `commitTimes` are seconds, as git prints them.
  */
-export function deployPendingItems(state, { graceHours = DEFAULT_GRACE_HOURS, now = Date.now(), portalDir = 'C:/Claude/community-bus-maps' } = {}) {
+export function deployPendingItems(state, { graceHours = DEFAULT_GRACE_HOURS, now = Date.now(), portalDir = resolvePortal() } = {}) {
   const items = [];
   const warnings = [];
   if (!state) return { items, warnings };

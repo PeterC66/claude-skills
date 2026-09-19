@@ -761,7 +761,13 @@ says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: '
   says(residue, /residue from the deploy procedure/, 'and it is named as residue');
   says(residue, /checkout main/, 'and the reason carries the command that clears it');
   ok(!/somebody's live work/.test(residue.reasons[0].why), 'and never says somebody is working on it', residue.reasons[0].why);
-  says(conc.assess(['portal-write'], det({ heldBy: 'C:/Claude/cbm-oa261' })), /cbm-oa261/, 'the worktree holding main is named on the row');
+  // The held-by path is opaque to the rule -- it only has to come back out on
+  // the row -- so it is deliberately NOT the real portal worktree path of the
+  // OA-387 incident. A laptop path in a fixture works everywhere and breaks
+  // nowhere, which is exactly why excusing this file for the idiom would then
+  // excuse a real one too. The distinctive half, the worktree's own name, is
+  // what is asserted, and that is unchanged.
+  says(conc.assess(['portal-write'], det({ heldBy: 'C:/x/cbm-oa261' })), /cbm-oa261/, 'the worktree holding main is named on the row');
   want(conc.assess(['portal-write'], det({ ancestor: false })), conc.DELAY, 'detached at a commit that is NOT on origin/main: BETTER TO DELAY');
   want(conc.assess(['portal-write'], det({ state: 'refused', ancestor: null, why: 'there is no origin/main here' })), conc.DELAY, 'a refused reading: BETTER TO DELAY, the stricter answer');
   says(conc.assess(['portal-write'], det({ state: 'refused', ancestor: null, why: 'there is no origin/main here' })), /COULD NOT LOOK/, 'and it says it could not look rather than implying it did');

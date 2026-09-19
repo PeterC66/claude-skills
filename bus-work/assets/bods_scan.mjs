@@ -60,6 +60,7 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { resolveBuses } from './engine.mjs';
 
 /**
  * A calendar month plus a grace. The scheduled task fires on the 1st, so the
@@ -132,7 +133,7 @@ export function bodsScanItems(state, {
   now = Date.now(),
   cadenceDays = CADENCE_DAYS,
   graceDays = GRACE_DAYS,
-  busesDir = 'C:/u3a St Ives/Using AI/Buses',
+  busesDir = resolveBuses(),
 } = {}) {
   const items = [];
   const warnings = [];

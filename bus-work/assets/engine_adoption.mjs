@@ -114,10 +114,30 @@ const IMPORTS_PARSEARGS_RE = /import\s*\{[^}]*\bparseArgs\b[^}]*\}\s*from\s*['"]
  * Blank every comment, preserving length and newlines so line numbers survive.
  *
  * String literals are KEPT — a laptop path inside a string is the thing this
- * census is about, and `'https://busmaps.uk'` must not open a line comment. The
- * one shape this scanner cannot see is a quote character inside a regular
- * expression literal, which would desync the string state; there is none in this
- * folder today and the harness holds a case that says so.
+ * census is about, and `'https://busmaps.uk'` must not open a line comment.
+ *
+ * THE SHAPE THIS SCANNER CANNOT SEE IS A QUOTE INSIDE A REGULAR EXPRESSION
+ * LITERAL, and until 2026-09-19 the sentence here said "there is none in this
+ * folder today and the harness holds a case that says so". BOTH HALVES WERE
+ * FALSE and are corrected rather than deleted, because the sentence was the
+ * reason to trust the census and it was the wrong reason.
+ *
+ * Measured on 2026-09-19 over the 43 modules in this folder: **145 full-line
+ * `//` comments survive the blanking, across five files** — `concurrency.mjs`,
+ * `loop_your_move.mjs`, `prove-red-concurrency.mjs`, `prove-red-loop-your-move.mjs`
+ * and `worklist.mjs`. A surviving comment means the state machine was inside a
+ * string it should not have been in, so from that point the file is read wrongly
+ * in BOTH directions: prose in a comment can be reported as a finding, and a real
+ * laptop path in code can be missed. `/somebody's live work/` in
+ * `prove-red-concurrency.mjs` is one instance and arrived with OA-387.
+ *
+ * No harness case guarded it, and idempotence does not catch it — a second pass
+ * desyncs identically, so the output is stable and still wrong, which was checked
+ * rather than assumed. Fixing it properly means telling a regex literal from a
+ * division, which needs the previous significant token and is a real piece of
+ * work; it is filed rather than bodged here. The census's findings are sound for
+ * the 38 files that blank cleanly and should be read with this in mind for the
+ * other five.
  */
 export function blankComments(src) {
   let out = '';

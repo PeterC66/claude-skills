@@ -1671,6 +1671,77 @@ console.log('\n20. servesTown — a place\'s notOnLeaflet declaration outranks t
   check('and the serves-town finding still fires on it', `a serves-town finding on ${R} survives the declaration`,
     stRows(s.v).length === 1, JSON.stringify(stRows(s.v).map(f => f.severity)));
 }
+
+/* ---- 21. the displayed DENOMINATOR is what the sheets draw (OA-048) */
+console.log('\n21. displayed — the coverage denominator is what the two sheets draw, and nothing else');
+{
+  /*
+   * `displayed` is the population every coverage percentage in this report is
+   * struck over, and it counted routes no sheet drew. The narrowing that was
+   * supposed to prevent that could not bite, because the line under it unioned the
+   * whole palette back in -- and a route is dropped from `routeOrder` while KEEPING
+   * its palette entry precisely because the colour is what its legend badge is drawn
+   * with. High Wycombe read `displayed: 34` for a sheet drawing 22.
+   *
+   * Both cases below are the bug verbatim rather than a proxy for it, and the second
+   * exists because the obvious fix to the first breaks the external sheet: taking
+   * only `external[].route` drops every service that RIDES on another's spoke, of
+   * which High Wycombe has three that are drawn (334, LHR, OXF).
+   */
+  const norm = r => String(r).trim().toUpperCase().replace(/\s+/g, '');
+  const base = stage('stives', 's21-baseline');
+  const R0 = readJ(base, 'routes.json');
+
+  /* The fixture has to offer a route drawn on the INTERNAL sheet and on no spoke,
+   * or case A asserts nothing: a route named by an external entry stays displayed
+   * however it is dropped from `routeOrder`, and rightly. */
+  const onASpoke = new Set((R0.external || []).flatMap(e =>
+    ((Array.isArray(e.routes) && e.routes.length) ? e.routes : [e.route])).map(norm));
+  const DROP = (R0.routeOrder || []).map(norm).find(r => !onASpoke.has(r));
+  if (!DROP) throw new Error('prove-s6-checks 21: every route in St Ives\' routeOrder is now named by an external spoke, so dropping one from routeOrder cannot take it out of `displayed` — pick another fixture town, do not delete the case');
+  if (!Object.keys(R0.palette || {}).map(norm).includes(DROP)) throw new Error(`prove-s6-checks 21: ${DROP} is in routeOrder and not in the palette, which is the opposite of the shape this case needs`);
+
+  const b = verify(base);
+  check('the control: a route in routeOrder IS displayed', `${DROP} is in inputs.displayedRoutes`,
+    !!b.v && b.v.inputs.displayedRoutes.map(norm).includes(DROP),
+    b.v ? b.v.inputs.displayedRoutes.join(',') : 'no verification.json');
+
+  // CASE A — the bug verbatim: dropped from the draw order, colour kept for its badge.
+  const undrawn = stage('stives', 's21-undrawn');
+  const RA = readJ(undrawn, 'routes.json');
+  RA.routeOrder = (RA.routeOrder || []).filter(r => norm(r) !== DROP);  // palette untouched
+  writeJ(undrawn, 'routes.json', RA);
+  const a = verify(undrawn);
+  check('a route dropped from routeOrder leaves the denominator', `${DROP} is NOT in inputs.displayedRoutes`,
+    !!a.v && !a.v.inputs.displayedRoutes.map(norm).includes(DROP),
+    a.v ? a.v.inputs.displayedRoutes.join(',') : 'no verification.json');
+  check('and it takes the denominator down by exactly one', 'displayed falls by 1, no other route moves',
+    !!a.v && !!b.v && a.v.inputs.displayedRoutes.length === b.v.inputs.displayedRoutes.length - 1,
+    a.v && b.v ? `${b.v.inputs.displayedRoutes.length} -> ${a.v.inputs.displayedRoutes.length}` : 'no verification.json');
+
+  /* CASE B — the half that keeps the first honest. A service sharing a spoke is drawn
+   * on the external sheet as its own badge (gen_external_radial.js `_badges`), and is
+   * in neither the palette nor routeOrder. Reading only `external[].route` would drop
+   * it, which is the SAME fault as case A with the sheets swapped. */
+  const RIDER = 'ZZ9';
+  if (Object.keys(R0.palette || {}).map(norm).includes(RIDER) || onASpoke.has(RIDER)) throw new Error(`prove-s6-checks 21: ${RIDER} was chosen because St Ives has no such route and now it has one — pick another absent route, do not delete the case`);
+  check('the control: a route on no spoke and in no palette is NOT displayed', `${RIDER} is absent from inputs.displayedRoutes`,
+    !!b.v && !b.v.inputs.displayedRoutes.map(norm).includes(RIDER),
+    b.v ? b.v.inputs.displayedRoutes.join(',') : 'no verification.json');
+
+  const rider = stage('stives', 's21-rider');
+  const RB = readJ(rider, 'routes.json');
+  if (!(RB.external || []).length) throw new Error('prove-s6-checks 21: the St Ives fixture has no external spokes to hang a rider on');
+  RB.external[0].routes = [RB.external[0].route, RIDER];
+  writeJ(rider, 'routes.json', RB);
+  const c = verify(rider);
+  check('a service riding on another\'s spoke IS displayed', `${RIDER} is in inputs.displayedRoutes`,
+    !!c.v && c.v.inputs.displayedRoutes.map(norm).includes(RIDER),
+    c.v ? c.v.inputs.displayedRoutes.join(',') : 'no verification.json');
+  check('and the spoke\'s own route is still displayed beside it', `${norm(R0.external[0].route)} did not lose its place to the rider`,
+    !!c.v && c.v.inputs.displayedRoutes.map(norm).includes(norm(R0.external[0].route)),
+    c.v ? c.v.inputs.displayedRoutes.join(',') : 'no verification.json');
+}
 console.log('\n' + '='.repeat(78));
 console.log(failures
   ? `FAILED — ${failures} of ${run} checks did not hold`

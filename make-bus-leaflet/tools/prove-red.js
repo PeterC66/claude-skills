@@ -2283,6 +2283,38 @@ const MUTATIONS = [
     find: "    .filter(r => r.v)\n",
     to: "    .map(r => ({ ...r, v: r.v || '0.0' }))\n" },
 
+  /* OA-048. The first two are the bug verbatim, in both directions: the denominator every
+   * S6 coverage percentage is struck over counted routes no sheet draws. */
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'the palette is unioned back in over the draw order, so a route dropped from routeOrder keeps its place in the denominator on the strength of its legend badge — the state this file was written to end',
+    find: "  for (const r of drawnInternal) displayed.add(r);",
+    to: "  for (const r of drawnInternal) displayed.add(r);\n  for (const r of Object.keys(palette)) displayed.add(norm(r));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'a spoke contributes only the entry key, so every service riding on another route\'s spoke drops out of the denominator although it is drawn',
+    find: "  for (const e of (routes.external || [])) for (const r of spokeBadges(e)) displayed.add(norm(r));",
+    to: "  for (const e of (routes.external || [])) displayed.add(norm(e.route));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'routeOrder and the palette go back to being a UNION rather than gen_internal\'s either/or, which is the same fault one step earlier',
+    find: "    ((routes.routeOrder && routes.routeOrder.length) ? routes.routeOrder : Object.keys(palette)).map(norm));",
+    to: "    [...(routes.routeOrder || []), ...Object.keys(palette)].map(norm));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'an empty routeOrder stops reading as an absent one, so a config with the key present and empty draws nothing at all',
+    find: "    ((routes.routeOrder && routes.routeOrder.length) ? routes.routeOrder : Object.keys(palette)).map(norm));",
+    to: "    ((routes.routeOrder) ? routes.routeOrder : Object.keys(palette)).map(norm));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'spokeBadges stops treating an empty routes[] as an absent one, so a spoke declaring `routes: []` loses its own badge',
+    find: "  return (Array.isArray(entry.routes) && entry.routes.length) ? entry.routes : [entry.route];",
+    to: "  return Array.isArray(entry.routes) ? entry.routes : [entry.route];" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'the geometry arm stops falling back when the config names nothing, so a config with no palette and no routeOrder reports on no route at all instead of on all of them',
+    find: "  for (const r of Object.keys(intown || {})) if (!drawnInternal.size || drawnInternal.has(norm(r))) displayed.add(norm(r));",
+    to: "  for (const r of Object.keys(intown || {})) if (drawnInternal.has(norm(r))) displayed.add(norm(r));" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

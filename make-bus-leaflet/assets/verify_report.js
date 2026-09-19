@@ -381,16 +381,44 @@ const palette = routes.palette || {};
  * bites where a config deliberately omits a route it has geometry for -- which is
  * the case it exists for.
  *
- * The palette is still unioned in below, so a route the config intends to draw is
+ * The drawn set is still unioned in below, so a route the config intends to draw is
  * displayed even if S2 gave it no in-town chain; that is a different fault and the
  * no-full-chain check is the one that reports it.
+ *
+ * AND THE NARROWING ABOVE COULD NOT BITE UNTIL 2026-09-19 (OA-048), BECAUSE THE LINE
+ * BELOW IT PUT BACK WHAT IT REMOVED. `drawnByConfig` was `palette + routeOrder` and
+ * the palette was then unioned in unconditionally, so a route dropped from
+ * `routeOrder` stayed displayed -- and a route is dropped from `routeOrder` while
+ * KEEPING its palette entry precisely because the colour is what its legend badge is
+ * drawn with. Measured across the estate: eight towns of nine have palette and
+ * routeOrder of equal size and are unaffected either way; High Wycombe has 34 against
+ * 22, and its S6 reports read `displayed: 34` for a sheet drawing 22, so every
+ * coverage percentage on that town was struck over a denominator 55% too big.
+ *
+ * WHAT IS AUTHORITATIVE IS WHAT EACH GENERATOR ACTUALLY DRAWS, so both halves below
+ * are taken from the generators rather than restated:
+ *   - the internal sheet draws `routeOrder || Object.keys(palette)` (gen_internal.js,
+ *     `dropHidden(RJ.routeOrder || Object.keys(C))`) -- an EITHER/OR, never a union;
+ *   - an external spoke draws `b.routes` when it has one, else `[b.route]`
+ *     (gen_external_radial.js, `_badges`), because several services can share one
+ *     spoke to a destination and each gets its own badge on it.
+ * The second half is load-bearing rather than tidiness, and doing the first without it
+ * was measured: High Wycombe then loses 334, LHR and OXF as well -- three routes that
+ * ARE drawn, riding on the 333, 102 and 275 spokes. With both, it loses exactly 27,
+ * 29, 38 and WW1, which have a line on neither sheet and are a legend badge and a line
+ * of prose in a map note. Every other town is a no-op, measured rather than assumed.
+ *
+ * NOT honoured here: `dropHidden`'s hidden-operator filter, because no town in the
+ * estate sets `hiddenOperators` and a filter with no instance cannot be falsified
+ * against real data. A town that set one would over-count by that operator's routes.
  */
-const drawnByConfig = new Set([...Object.keys(palette), ...(routes.routeOrder || [])].map(normRoute));
+const drawnInternal = new Set(((routes.routeOrder && routes.routeOrder.length) ? routes.routeOrder : Object.keys(palette)).map(normRoute));
+const spokeBadges = b => (Array.isArray(b.routes) && b.routes.length) ? b.routes : [b.route];
 const displayed = new Set();
-for (const r of Object.keys(intown || {})) if (!drawnByConfig.size || drawnByConfig.has(normRoute(r))) displayed.add(normRoute(r));
-for (const e of (routes.external || [])) displayed.add(normRoute(e.route));
-for (const e of (routes.busway || [])) displayed.add(normRoute(e.route));
-for (const r of Object.keys(palette)) displayed.add(normRoute(r)); // palette = intended to draw
+for (const r of Object.keys(intown || {})) if (!drawnInternal.size || drawnInternal.has(normRoute(r))) displayed.add(normRoute(r));
+for (const e of (routes.external || [])) for (const r of spokeBadges(e)) displayed.add(normRoute(r));
+for (const e of (routes.busway || [])) for (const r of spokeBadges(e)) displayed.add(normRoute(r));
+for (const r of drawnInternal) displayed.add(r); // the internal sheet draws these
 
 // anchor coordinate (for direction checks)
 let anchorLL = null;

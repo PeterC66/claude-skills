@@ -128,5 +128,19 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
       }
     }
   }
-  return { items, checked, skipped, orphaned };
+  /* THE WARNING SENTENCES ARE BUILT HERE, not at the call site (OA-354, and the
+   * line ratchet is what said so: the orphan sentence pushed worklist.mjs five
+   * lines past its ceiling, and the ratchet's own advice is the OA-001 rule —
+   * move the logic into a module rather than raise the number). The caller drains
+   * this array; both sentences are about this module's own findings, so this is
+   * where they belong anyway.
+   *
+   * A SKIPPED town and an ORPHANED answer are both things that raise no row and
+   * must still be visible. Neither is a fault: one is a town this board could not
+   * compare, the other is a real person's saved answer the board has stopped
+   * counting, and what happens to that is Peter's decision, not a tick's. */
+  const warnings = [];
+  if (skipped.length) warnings.push(`landmark answers: ${skipped.length} town(s) not compared — ${skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
+  if (orphaned.length) warnings.push(`landmark answers: ${orphaned.reduce((n, o) => n + o.keys.length, 0)} saved answer(s) name a POI their town no longer has under that name, so they are NOT raised as owed — ${orphaned.map((o) => `${o.town}: ${o.keys.join(', ')}`).join('; ')}. Writing one would match nothing; run poi_tiers_sync.js --town "<town>" to see what that town does have.`);
+  return { items, checked, skipped, orphaned, warnings };
 }

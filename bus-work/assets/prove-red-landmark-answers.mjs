@@ -127,9 +127,9 @@ console.log('\n4. what is skipped is counted, never silent');
   // no portal — caught by prove-red-commitments, not by anything here, because
   // this file drove only the function (2026-09-19, OA-354).
   const c = landmarkAnswerItems({ maps: [], towns: [], compareTiers, readBlock: () => null, readTown: () => null });
-  check('an empty run still returns items, skipped AND orphaned as arrays', [c.items, c.skipped, c.orphaned].every(Array.isArray), JSON.stringify(c));
+  check('an empty run still returns items, skipped, orphaned AND warnings as arrays', [c.items, c.skipped, c.orphaned, c.warnings].every(Array.isArray), JSON.stringify(c));
   const wl0 = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  check('…and the worklist’s no-portal early return has the same shape', wl0.includes('return { items: [], checked: 0, skipped: [], orphaned: [] };'));
+  check('…and the worklist’s no-portal early return has the same shape', wl0.includes('return { items: [], checked: 0, skipped: [], orphaned: [], warnings: [] };'));
 }
 
 console.log('\n5. the wire — asserted on its SOURCE');
@@ -141,10 +141,12 @@ console.log('\n5. the wire — asserted on its SOURCE');
   check('…and calls it', wl.includes('return landmarkAnswerItems({'));
   check('…with the ENGINE\u2019s compareTiers, required from the skill assets', wl.includes("const { compareTiers, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));"));
   check('…and the ENGINE’s candidate reader, so the orphan rule is the engine’s and not a copy', wl.includes('readCandidates: townCandidateKeys,'));
-  check('…and counts the orphaned answers into the warnings, because they raise no row', wl.includes('saved answer(s) name a POI their town no longer has under that name'));
+  check('…and drains EVERY warning the module built, rather than composing one of its own', wl.includes('for (const w of landmarkAnswers.warnings) warnings.push(w);'));
+  check('the module is what writes the skipped sentence', mod.includes('town(s) not compared'));
+  check('…and the orphaned one, because they raise no row and must still be seen', mod.includes('saved answer(s) name a POI their town no longer has under that name'));
   check('…over GET /api/maps/:id/poi-tiers when remote', wl.includes('/api/maps/${m.id}/poi-tiers'));
   check('…adds every item it returns', wl.includes('for (const it of landmarkAnswers.items) {'));
-  check('…and counts the skipped towns into the warnings', wl.includes('landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared'));
+  check('an empty run builds no warning sentences at all', landmarkAnswerItems({ maps: [], towns: [], compareTiers, readBlock: () => null, readTown: () => null }).warnings.length === 0);
   check('the two key prefixes are the ones the module writes', mod.includes('key: `landmark-owed-${') && mod.includes('key: `landmark-unbuilt-${'));
   check('concurrency.mjs classifies landmark-owed- as a buses-tree write', conc.includes("if (key.startsWith('landmark-owed-')) return ['buses-tree'];"));
   check('…and landmark-unbuilt- as buses-tree + engine', conc.includes("if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'engine'];"));

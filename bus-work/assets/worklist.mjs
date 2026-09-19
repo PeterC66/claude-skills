@@ -917,7 +917,7 @@ if (upcoming) {
 // routes.json, read directly. A portal older than the route answers 404 and the
 // town is SKIPPED and counted in the header, never silently omitted.
 const landmarkAnswers = await (async () => {
-  if (!SK || !portal) return { items: [], checked: 0, skipped: [], orphaned: [] };
+  if (!SK || !portal) return { items: [], checked: 0, skipped: [], orphaned: [], warnings: [] };
   const { compareTiers, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));
   const { readJson: rj, latestRunDir: lrd } = require(path.join(SK, 'gate_lib.js'));
   const dataDir = process.env.DATA_DIR || path.join(PORTAL, 'data');
@@ -952,18 +952,13 @@ const landmarkAnswers = await (async () => {
   };
   return landmarkAnswerItems({
     maps: portal.maps, towns: tree.towns, readBlock, readTown, compareTiers,
-    readCandidates: townCandidateKeys,
-    syncCmd: 'node poi_tiers_sync.js',
+    readCandidates: townCandidateKeys, syncCmd: 'node poi_tiers_sync.js',
   });
 })();
 for (const it of landmarkAnswers.items) {
   add({ ...it, do: it.do.map((d) => (d.kind === 'shell' && d.cwd === 'engine-assets' ? { ...d, cwd: SK } : d)) });
 }
-if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared — ${landmarkAnswers.skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
-// An orphan raises no ROW, and it must still be visible: it is a real person's
-// answer that this board has quietly stopped counting, and the decision about
-// what happens to one (re-key it, retire it, leave it) is Peter's (OA-354).
-if (landmarkAnswers.orphaned.length) warnings.push(`landmark answers: ${landmarkAnswers.orphaned.reduce((n, o) => n + o.keys.length, 0)} saved answer(s) name a POI their town no longer has under that name, so they are NOT raised as owed — ${landmarkAnswers.orphaned.map((o) => `${o.town}: ${o.keys.join(', ')}`).join('; ')}. Writing one would match nothing; run poi_tiers_sync.js --town "<town>" to see what that town does have.`);
+for (const w of landmarkAnswers.warnings) warnings.push(w);
 
 // The scheduled loop's ONE outbound folder to Peter (OA-283, merged with the
 // drop zone by OA-401). It writes loop/your-move/ and stops; until that source

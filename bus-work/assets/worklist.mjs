@@ -1169,25 +1169,25 @@ if (s6Stale.length) {
        * question disappeared when it was answered and nothing replaced it, and the
        * instruction survived only as English inside the register.
        *
-       * The row is the ENUMERATION half only. Whether the note was actually written
-       * at the rebuild is a question about the Services panel and is undecided; this
-       * says what is owed and to which map, and it drops off by itself when a map
-       * stops declaring the route off.
+       * ENUMERATION ONLY: which maps still DECLARE the route off, NOT what is owed —
+       * a rebuild pays by printing the line AND clearing the declaration, so a map
+       * that did only the first reads `waiting` owing nothing (OA-285: prose right
+       * 14/14 against the SVGs, this wrong 4). No sniff; OA-285 owns the question.
        */
       const owed = ((v.register && v.register.owed) || []).filter((o) => o.state === 'waiting');
       const carried = ((v.register && v.register.owed) || []).filter((o) => o.state === 'carried');
       if (owed.length || carried.length) {
         add({
           key: 's6-claims-owed', rank: 8, type: 'housekeeping',
-          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} owe${owed.length === 1 ? 's' : ''} a line on the next rebuild of ${[...new Set(owed.map((o) => o.map))].join(', ') || 'a map'}`,
+          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} ${owed.length === 1 ? 'is' : 'are'} still declared off the sheet of ${[...new Set(owed.map((o) => o.map))].join(', ') || 'a map'} — some of them already printed`,
           why: [
             ...owed.map((o) => `${o.id}: ${o.map} — ${o.owes || `${o.route} is decided \`include\` and the map still declares it off`}`),
             ...carried.map((o) => `${o.id}: ${o.map} now lists ${o.route}, so the note looks written — the register entry can be closed`),
-          ].join('; ') + '. An `include` is a decision the sheet has not learned yet: nothing rebuilds on its own, and no byte moves until somebody does.',
+          ].join('; ') + '. READ EACH ENTRY ABOVE BEFORE REBUILDING ANYTHING: this count is of maps that still DECLARE the route off, which is not the same question as whether the line is on the sheet, and the two answers differ today. A rebuild pays an `include` by printing the line and by moving the route out of notOnLeaflet[], and the estate has maps that did the first and not the second — their entry opens DELIVERED or DRAWN and they owe nothing, so rebuilding them would print the note twice. Which artefact settles it is the undecided half of buses-data OA-285; until it is settled the register\'s own note, above, is the thing to believe, and it was checked against the shipped SVGs on 2026-09-16 and found right in every case.',
           who: 'a session, at the next rebuild of that map', runbook: 'S6', towns: [...new Set([...owed, ...carried].map((o) => o.map))],
           do: [
-            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each debt and where it is declared off' },
-            { kind: 'skill', what: 'At the next rebuild of each map above, write the Services-panel or map-notes line the register entry describes — its `reason` and `drawing` say what it must carry — and take the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
+            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each entry and where it is still declared off' },
+            { kind: 'skill', what: 'FIRST read the entry\'s own `drawing` note. Where it opens DELIVERED, DRAWN or PAID the line is already on that sheet and the only thing outstanding is the declaration, so write nothing new. Where it says the service is off the sheet until the next rebuild, that rebuild writes the Services-panel or map-notes line the entry describes — its `reason` and `drawing` say what it must carry — and takes the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
           ],
         });
       }

@@ -117,15 +117,22 @@ function printSection({ verdict, error }, log = console.log) {
     if (unraised.length) log('    raised by no S6 report: ' + unraised.map(q => q.id).join(', ')
       + ' — the register is the only place ' + (unraised.length === 1 ? 'it is' : 'they are') + ' named, so nothing will re-raise ' + (unraised.length === 1 ? 'it' : 'them') + '.');
   }
-  // A decided `include` is a DEBT on the next rebuild, and the checker's silence test
-  // is green the moment the map declares the route off -- which for this outcome is
-  // the unfinished state (buses-data OA-285). Printed here, never red: the board says
-  // what is owed, and whether the note was written at the rebuild is undecided.
+  // A decided `include` is unfinished while the map declares the route off, which is
+  // the state the checker's silence test is green for (buses-data OA-285). Printed
+  // here, never red.
+  //
+  // SAY WHICH QUESTION THIS ANSWERS. `waiting` reads the map's DECLARATION; whether
+  // the line is on the sheet is a question about the Services panel and is OA-285's
+  // undecided half. The two answers differ: OA-285 checked every then-live pair
+  // against the shipped SVGs on 2026-09-16 and found the register's prose right 14
+  // times out of 14 and this enumeration wrong 4 times, always `waiting` over a sheet
+  // that had paid. So this line no longer says the note is owed, and no longer ends
+  // on "not on a map until a rebuild writes it" -- for several of these it already is.
   const owed = (v.register && v.register.owed) || [];
   if (owed.length) {
     const waiting = owed.filter(o => o.state === 'waiting');
-    log('  owed at the NEXT REBUILD: ' + owed.map(o => o.id + ' (' + o.map + (o.state === 'carried' ? ' — now carried, close the entry' : '') + ')').join(', ')
-      + ' — ' + waiting.length + ' of ' + owed.length + ' still off the sheet. A decided "include" is not on a map until a rebuild writes it.');
+    log('  still DECLARED OFF at the next rebuild: ' + owed.map(o => o.id + ' (' + o.map + (o.state === 'carried' ? ' — now carried, close the entry' : '') + ')').join(', ')
+      + ' — ' + waiting.length + ' of ' + owed.length + ' still declare the route off. That counts declarations, not ink: read each entry\'s own note before rebuilding, because one that opens DELIVERED is already printed and a rebuild would print it twice.');
   }
   if (v.red) log('  RED — a claim with no home, or a decision no sheet has learned. Run tools/check-s6-claims.mjs from the buses root for the remedy on each row.');
   else log('  every claim has a home, and the register contradicts no map.');

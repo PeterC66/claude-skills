@@ -566,6 +566,12 @@ function drawServicesPanel(deps) {
   const KEY_ALL=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
   const key=KEY_ALL.filter(([cat])=>pois.some(p=>p.cat===cat));
   if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
+  // `pub` is the second opt-in category (OA-340) and follows the first in the
+  // same shape: appended after the always-on rows, so a town that has not
+  // switched pubs on renders byte-identical — the property the opt-in form was
+  // chosen for. The Key row is the half that is easy to forget and the half a
+  // reader needs: a symbol nothing explains is a puzzle, not a landmark.
+  if(pois.some(p=>p.cat==='pub')) key.push(['pub','Pub']);
   /* design.keyCols — lay the pictogram rows out in N columns instead of one.
    *
    * The Services panel is ~92mm wide and a Key row is a 4mm symbol plus a name; the longest

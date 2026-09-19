@@ -280,6 +280,19 @@ test('the Key lists only the categories this sheet actually draws', () => {
   assert.ok(svg.indexOf('Supermarket<') < svg.indexOf('Allotments<'));
 });
 
+test('OA-340: a pub on the sheet earns a Key row, and no pub earns none', () => {
+  // The half that is easy to forget. A symbol nothing explains is a puzzle, and
+  // the Key is the only place a reader can find out what the glass means.
+  const withPub = run({ pois: [{ cat: 'shop' }, { cat: 'pub' }] });
+  assert.match(withPub.svg, /Pub</);
+  assert.match(withPub.svg, /<icon cat="pub"/, 'the row carries the real pictogram, not a placeholder');
+  // Appended after the always-on rows, like allotments — which is what makes a
+  // town that has not opted in render byte-identical.
+  assert.ok(withPub.svg.indexOf('Supermarket<') < withPub.svg.indexOf('Pub<'));
+  const without = run({ pois: [{ cat: 'shop' }, { cat: 'allotments' }] });
+  assert.ok(!/>Pub</.test(without.svg), 'a category with no POI earns no row');
+});
+
 test('footerSafe:false leaves the Key pitch alone however long the Key is', () => {
   const many = ['shop', 'gp', 'pharmacy', 'library', 'museum', 'leisure', 'school', 'park',
     'industrial', 'community', 'townhall'].map((cat) => ({ cat }));

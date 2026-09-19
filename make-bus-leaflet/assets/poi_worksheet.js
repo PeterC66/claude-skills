@@ -57,12 +57,14 @@
  *   --out    <file>  where to write (default: <map>/poi-worksheet.md; "-" = stdout)
  *   --all            print one summary line per map and write nothing
  *
- * Zero dependencies (Node core + poi_select.js), matching the rest of assets/.
+ * Zero dependencies (Node core + poi_select.js + poi_tiers_sync.js for the one
+ * input rule they share), matching the rest of assets/.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const { selectPois, AUTO_NAMED_CATS, printsName } = require('./poi_select.js');
+const { poiInputs } = require('./poi_tiers_sync.js');
 const { resolveBuses } = require('./cli');
 
 // poiMark()'s auto-name set. Everything outside it draws a symbol the Key
@@ -97,17 +99,14 @@ const BUSES = resolveBuses(F);
  * run folders are gitignored and a fresh clone or a worktree has neither. Asking
  * ci-reference means the worksheet describes the sheet the customer is holding.
  * The S2 fallback is for a town mid-build that has not reached S4 yet.
+ *
+ * THE RULE ITSELF MOVED TO poi_tiers_sync.js (OA-354, 2026-09-19), because the
+ * orphaned-key narrowing needs exactly this preference to decide which POIs a
+ * town has TODAY, and two copies of "prefer ci-reference, else the newest S2"
+ * would be one more shape with two readers. The paragraph above stays here: it
+ * is the argument, and this is where the argument was made.
  */
-function inputs(mapDir) {
-  const ci = path.join(mapDir, 'ci-reference');
-  if (fs.existsSync(path.join(ci, 'osm.json'))) return { dir: ci, source: 'ci-reference' };
-  const s2 = path.join(mapDir, 'S2-geometry');
-  if (fs.existsSync(s2)) {
-    const runs = fs.readdirSync(s2).filter(d => fs.existsSync(path.join(s2, d, 'osm.json'))).sort();
-    if (runs.length) return { dir: path.join(s2, runs[runs.length - 1]), source: 'S2-geometry/' + runs[runs.length - 1] };
-  }
-  return null;
-}
+const inputs = poiInputs;
 
 function readJson(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; } }
 

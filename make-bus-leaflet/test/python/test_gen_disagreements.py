@@ -462,10 +462,30 @@ class TheCommandLine(GenDisagreementsCase):
 
     def test_with_no_out_path_the_document_lands_beside_its_json(self):
         """Not beside the caller's cwd, which for a stage engine is some other
-        stage's run folder. The sub-directory is what makes the two differ."""
+        stage's run folder. The sub-directory is what makes the two differ.
+
+        Run from a THIRD directory, neither the run folder nor the repository,
+        exactly as the twin case in `test_gen_verification.py` is -- and for the
+        reason that twin's comment gives. The mutation this case exists for
+        replaces the joined path with a bare filename, which resolves against
+        the cwd: standing in the run folder would make the mutant PASS, and
+        standing in the checkout makes the mutant WRITE A 37 KB .docx INTO
+        `test/python/` before this case fails it. `prove-red-python.py` runs
+        every suite with `cwd=TESTS`, so the checkout is where it stood, and
+        that litter -- untracked, invisible to CI because `actions/checkout`
+        throws the tree away -- is what OA-001 recorded on 2026-09-18 and
+        blamed on the fixture. It was never the fixture; it was this missing
+        line, which the twin has had since it was written."""
+        elsewhere = tempfile.mkdtemp(prefix="gd-cwd-")
+        self.addCleanup(shutil.rmtree, elsewhere, True)
+        here = os.getcwd()
+        os.chdir(elsewhere)
+        self.addCleanup(os.chdir, here)
         r = self.render(an_audit(), argv_out=False, sub="S1-services/2026-09-16_1115")
         self.assertTrue(r.path.endswith(os.path.join("2026-09-16_1115", "disagreements.docx")))
         self.assertTrue(os.path.exists(r.path))
+        self.assertEqual(os.path.dirname(os.path.abspath(r.path)),
+                         os.path.abspath(os.path.join(self.dir, "S1-services", "2026-09-16_1115")))
 
     def test_an_explicit_output_path_is_honoured(self):
         r = self.render(an_audit(), out_name="named.docx")

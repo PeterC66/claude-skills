@@ -18,7 +18,7 @@
  * together and no row's date can ever tell you it is the stale one. The gate can
  * therefore only fire if somebody re-surveys, which nothing asks for — green
  * because nobody looked. But the gate does not read 76 rows: `existing-coverage.json`
- * names exactly TWO authorities across all 20 maps, and re-reading two council
+ * names exactly TWO authorities across the whole estate, and re-reading two council
  * pages on a cadence makes the gate's input as fresh as the gate implies for a
  * fraction of the work. That narrowing is OA-317's own recommendation, taken
  * before any of the wider sweep is built.
@@ -34,7 +34,7 @@
  * is HAND-SET and matched exactly against a `directory.json` row — nothing here
  * guesses one, for the reason that register's own `_readme` gives. So this module
  * asks the register which authorities matter rather than carrying a list of two
- * names, and a twenty-first map in a third authority puts that authority on the
+ * names, and a further map in a third authority puts that authority on the
  * cadence the day its entry is written.
  *
  * WHAT IT DELIBERATELY STAYS SILENT ABOUT, SO ONE FAULT IS NOT PRINTED TWICE.
@@ -77,7 +77,7 @@ import path from 'node:path';
  * first one somebody learns to scroll past — the same argument as "a gate that is
  * red on day one gets muted", arriving from the other end. Against that, the
  * thing it guards is advisory: `coverage.mjs` has never once refused a build and
- * all 20 maps grade `area-only`, so a quarter of a wrong answer costs a paragraph
+ * every map grades `area-only`, so a quarter of a wrong answer costs a paragraph
  * of README and not a wasted build. Quarterly bounds the wrong answer at three
  * months where today it is unbounded, for about ten minutes a quarter.
  */

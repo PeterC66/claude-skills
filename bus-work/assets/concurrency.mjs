@@ -78,6 +78,25 @@ function git(dir, argv) {
   } catch { return null; }
 }
 
+/*
+ * A git question whose answer is the EXIT STATUS rather than the output, with
+ * three values and not two. `merge-base --is-ancestor` exits 0 for yes and 1
+ * for no, and anything else — a ref that does not resolve, a repository it
+ * cannot read, the binary missing — is neither. `git()` above collapses all of
+ * that to null, which is right when the answer is text and wrong here: reading
+ * "not an ancestor" out of a failure would let a broken read be reported as a
+ * measured fact, which is the shape this estate names *the refusal read as an
+ * absence*. So the caller gets true, false, or null for COULD NOT LOOK.
+ */
+function gitSucceeds(dir, argv) {
+  try {
+    execFileSync('git', ['-C', dir, ...argv], { stdio: 'ignore', timeout: 15000 });
+    return true;
+  } catch (e) {
+    return e && e.status === 1 ? false : null;
+  }
+}
+
 // A porcelain path may be quoted (a space, a non-ASCII byte) and a rename is
 // written "old -> new". This repository has folders with spaces in the name, so
 // neither case is hypothetical here.
@@ -276,17 +295,99 @@ export function countUnpushed(dir) {
   return out;
 }
 
+export const DETACHED = '(detached)';
+
+/*
+ * OA-387. WHAT A DETACHED HEAD ACTUALLY IS, measured rather than asserted.
+ *
+ * `portal-write` used to say of any checkout that was not on `main` that the
+ * branch was "somebody's live work". For two days in September 2026 that
+ * sentence was said about the portal every hour and it was false every time:
+ * a finished worktree held the `main` branch name, `git checkout main` in the
+ * primary checkout therefore failed, and the deploy procedure's
+ * `git checkout origin/main` had left a detached HEAD nothing could undo.
+ * Eleven ticks in a row read *somebody's live work*, correctly declined to
+ * deliver, and none of them went and looked — because a verdict that says
+ * somebody is mid-task reads as transient, and residue is the opposite: it
+ * will still be there tomorrow. That is the same fault as OA-375, a false
+ * reason sitting in front of the one action that clears the estate's red.
+ *
+ * So this asks the two questions that separate them, and the answer to each
+ * is carried rather than folded into a verdict:
+ *
+ *   ancestor — is the detached commit already on origin/<expect>? If it is,
+ *     nothing is stranded here: the checkout is standing on published history
+ *     and the only thing wrong is that no branch name points at it. If it is
+ *     NOT, somebody's commits are sitting on no branch at all, which is the
+ *     one shape where waiting is the right advice.
+ *
+ *   heldBy — which worktree holds <expect>, when one does. This is the fact a
+ *     reader needs and cannot guess: it is WHY the branch cannot simply be
+ *     checked out again, and `git worktree list` has had it all along.
+ *
+ * THREE ANSWERS, NOT TWO. `ancestor` is null for COULD NOT LOOK — no
+ * origin/<expect> to compare against, or a git call that failed for any other
+ * reason — and the rule treats null as the stricter verdict, never as residue.
+ * A repository object carrying no `detached` field at all (a synthetic
+ * conditions object in a harness, a reader written before today) is the same
+ * refusal and is handled the same way.
+ */
+export function readDetachment(dir, expect = 'main') {
+  const out = { state: 'refused', why: null, head: null, ref: null, ancestor: null, heldBy: null };
+  out.head = git(dir, ['rev-parse', '--short', 'HEAD']);
+  const ref = `origin/${expect}`;
+  if (git(dir, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) === null) {
+    out.why = `there is no ${ref} in this checkout to compare the detached commit against`;
+    out.heldBy = worktreeHolding(dir, expect);
+    return out;
+  }
+  out.ref = ref;
+  const anc = gitSucceeds(dir, ['merge-base', '--is-ancestor', 'HEAD', ref]);
+  if (anc === null) {
+    out.why = `git could not answer whether HEAD is an ancestor of ${ref}`;
+    out.heldBy = worktreeHolding(dir, expect);
+    return out;
+  }
+  out.state = 'read';
+  out.ancestor = anc;
+  out.heldBy = worktreeHolding(dir, expect);
+  return out;
+}
+
+/* The worktree holding a branch, if it is not this one. `--porcelain` emits
+ * stanzas of `worktree <path>` / `branch refs/heads/<name>`, so the branch line
+ * is read against the path that preceded it rather than against the newest one
+ * seen. A checkout that cannot answer at all returns null, which prints nothing
+ * — the absence of a name is not a claim that no worktree holds it. */
+export function worktreeHolding(dir, branch) {
+  const out = git(dir, ['worktree', 'list', '--porcelain']);
+  if (!out) return null;
+  const here = path.resolve(dir).replace(/\\/g, '/').toLowerCase();
+  let at = null;
+  for (const line of out.split(/\r?\n/)) {
+    if (line.startsWith('worktree ')) at = line.slice(9).trim().replace(/\\/g, '/');
+    else if (line === `branch refs/heads/${branch}` && at && path.resolve(at).replace(/\\/g, '/').toLowerCase() !== here) return at;
+  }
+  return null;
+}
+
 export function readRepo({ key, label, name, dir, expect = 'main', now = Date.now() }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
   repo.staged = []; repo.modified = []; repo.untracked = []; repo.dirtyAges = {};
   repo.unpushed = null; repo.unpushedBasis = null; repo.unpushedFrom = null; repo.unpushedWhy = null;
   repo.touchedTop = []; repo.touchesMapData = false;
+  repo.detached = null;
 
   if (!dir || !existsSync(dir)) return repo;
   repo.present = true;
   if (git(dir, ['rev-parse', '--is-inside-work-tree']) !== 'true') return repo;
   repo.readable = true;
-  repo.branch = git(dir, ['branch', '--show-current']) || '(detached)';
+  repo.branch = git(dir, ['branch', '--show-current']) || DETACHED;
+  // OA-387. Measured beside the branch read that produced it, so the verdict
+  // and the evidence for it can never come from two different reads of the
+  // disk — the property OA-386's dirt ages are built on and for the same
+  // reason. A checkout on a named branch carries null: there is nothing to ask.
+  repo.detached = repo.branch === DETACHED ? readDetachment(dir, expect) : null;
 
   // --untracked-files=normal, not =all: an untracked FOLDER arrives as one entry
   // rather than every file under it. A session mid-task has untracked scratch
@@ -615,7 +716,39 @@ const RULES = {
   'portal-write': (c) => {
     const p = c.repos.portal, b = c.repos.buses;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
-    if (isOffMain(p)) return [DELAY, `the portal checkout is on ${p.branch}, not ${p.expect || 'main'} — a deliver from here carries that branch, and the branch is somebody's live work`];
+    /*
+     * OA-387. TWO THINGS LOOK ALIKE HERE AND ONLY ONE OF THEM CLEARS ITSELF.
+     * A named branch that is not `main` is somebody working — waiting is the
+     * right advice, so it stays BETTER TO DELAY. A DETACHED head standing on
+     * published history is residue the deploy procedure leaves behind by
+     * design, and nothing will ever clear it: that is CHECK FIRST, which in
+     * this module means go and look, and the reason says what to look at and
+     * why the branch cannot simply be checked out again. The verdict grade is
+     * the smaller half of the fix; the sentence is the half that cost eleven
+     * ticks, because *somebody's live work* reads as transient.
+     */
+    if (isOffMain(p)) {
+      const want = p.expect || 'main';
+      if (p.branch !== DETACHED) {
+        return [DELAY, `the portal checkout is on ${p.branch}, not ${want} — a deliver from here carries that branch, and the branch is somebody's live work`];
+      }
+      /* A detached checkout whose conditions object carries no reading — a
+       * synthetic world in a harness, a caller written before this landed — is
+       * a REFUSAL and not a licence to reuse the old sentence. Falling back to
+       * *somebody's live work* here would reinstate the exact false claim this
+       * rule was rewritten to stop making, on the one input that cannot answer
+       * back. */
+      const d = p.detached || { state: 'refused', ancestor: null, head: null, ref: null, heldBy: null, why: 'nothing measured the detachment — this conditions object carries no reading' };
+      const held = d.heldBy ? ` The worktree at ${d.heldBy} holds ${want}, which is why checking it out again fails.` : '';
+      const dirt = isDirty(p) ? ` There are also ${p.staged.length + p.modified.length} uncommitted change(s) here.` : '';
+      if (d.ancestor === true) {
+        return [CHECK, `the portal checkout is detached at ${d.head}, a commit already on ${d.ref} — this is residue from the deploy procedure, not somebody's work, and nothing clears it on its own.${held}${dirt} Restore it first: git -C "${p.dir}" checkout ${want}`];
+      }
+      if (d.ancestor === false) {
+        return [DELAY, `the portal checkout is detached at ${d.head}, and that commit is NOT on ${d.ref} — it is work nobody has landed, sitting on no branch, so a deliver from here would commit onto no branch either.${held}${dirt}`];
+      }
+      return [DELAY, `the portal checkout is detached at ${d.head || 'an unknown commit'} and this tool COULD NOT LOOK to see whether that is deploy residue or somebody's unlanded work — ${d.why || 'no reason recorded'}.${held}${dirt} Check by hand before delivering`];
+    }
     if (b.readable && b.unpushed > 0) return [CHECK, `${b.name} has ${b.unpushed} unpushed commit(s)${b.unpushedFrom === 'default-branch' ? ` (counted against ${b.unpushedBasis}, which is where they would land)` : ''} — push this side FIRST; the portal's verify.yml reads whatever is on this repo's main at that moment`];
     // OA-313. A count that could not be taken is not a count of zero. Before
     // this, a buses-data checkout with no upstream and no origin said nothing
@@ -917,10 +1050,28 @@ const ageLine = (r) => {
   return `${a.paths} unaccounted path(s), ${bits.join('; ')} — mtime, so an OLD answer is evidence that nobody is working on it and a young one is not`;
 };
 
+/* OA-387. A detached checkout prints what it IS, on its own line, under the one
+ * that reports the branch. The reader's question on meeting `(detached)` is
+ * always the same — is this somebody mid-task, or is it left over? — and until
+ * this line existed the board answered it by assertion. `state: 'refused'` says
+ * COULD NOT LOOK in as many words rather than falling silent, because silence
+ * here would be read as the benign answer. */
+const detachedLine = (r) => {
+  const d = r && r.readable && r.branch === DETACHED ? r.detached : null;
+  if (!d) return null;
+  const want = r.expect || 'main';
+  const held = d.heldBy ? ` — ${want} is held by the worktree at ${d.heldBy}` : '';
+  if (d.state !== 'read') return `detached at ${d.head || 'an unknown commit'}: COULD NOT LOOK — ${d.why || 'no reason recorded'}${held}`;
+  if (d.ancestor) return `detached at ${d.head}, already on ${d.ref} — deploy residue, not somebody's work; it will not clear itself${held}`;
+  return `detached at ${d.head}, NOT on ${d.ref} — commits sitting on no branch${held}`;
+};
+
 export function formatConditions(c) {
   const L = [];
   const age = (r) => { const s = ageLine(r); if (s) L.push(`  ${'dirt age'.padEnd(12)}${s}`); };
+  const detach = (r) => { const s = detachedLine(r); if (s) L.push(`  ${'detached'.padEnd(12)}${s}`); };
   L.push(`  ${'this tree'.padEnd(12)}${repoLine(c.repos.buses)}`);
+  detach(c.repos.buses);
   // OA-301. The subtraction is SHOWN, under the line that still counts the file
   // as uncommitted, because a number that silently got smaller is a number
   // nobody can check — the same rule the activity line follows for demotions.
@@ -929,8 +1080,10 @@ export function formatConditions(c) {
   }
   age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);
+  detach(c.repos.engine);
   age(c.repos.engine);
   L.push(`  ${'the portal'.padEnd(12)}${repoLine(c.repos.portal)}`);
+  detach(c.repos.portal);
   age(c.repos.portal);
 
   // WITHOUT --session THIS CANNOT SUBTRACT YOURSELF, and a list that shows your

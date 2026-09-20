@@ -346,6 +346,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-complexity-band
 
+      # buses-data OA-417 (2026-09-21): the "waiting on you in the portal" block.
+      # A projection over rows already on the board, so the only way it can be
+      # wrong is by disagreeing with the list under it -- and its last section
+      # greps the PORTAL's own row builder, which is what would catch the step
+      # kind being renamed and the block going silently, greenly empty.
+      - name: Prove the portal-clicks block can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-portal-clicks
+
       # buses-data OA-233 (2026-09-05): the two landmark-answer rows, and the wire
       # that adds them, asserted on the source of the wire as well as the module.
       - name: Prove the landmark-answer rows can go red

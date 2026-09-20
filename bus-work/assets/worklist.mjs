@@ -89,6 +89,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems } from './bods_scan.mjs';
+import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1424,6 +1425,14 @@ shown.sort((a, b) => (a.demo ? 1 : 0) - (b.demo ? 1 : 0)
   || a.rank - b.rank || (b.ageDays || 0) - (a.ageDays || 0) || a.key.localeCompare(b.key));
 const limited = args.limit ? shown.slice(0, Number(args.limit)) : shown;
 
+// OA-417 — the portal is a channel of Peter's work with no summary of its own.
+// Projected from `shown` and not from `limited`: --limit is a display cut on
+// how much of the list fits a screen, and a click of his that fell off the
+// bottom of that cut is still waiting. Every other filter DOES apply, because
+// --safe-only and the demo hiding are statements about what is on the board at
+// all, and this block must never name a row the reader cannot find below it.
+const clicks = portalClicks(shown);
+
 // ---- output ----------------------------------------------------------------
 const meta = {
   generatedAt: new Date().toISOString(),
@@ -1447,6 +1456,10 @@ const meta = {
   // only one of them gets read.
   conditions,
   safeOnly: SAFE_ONLY, unsafeHidden,
+  // OA-417, and OA-221's rule: a caller reading --json must be able to see the
+  // same verdict a person does. The terminal block below renders this array and
+  // nothing else, so the two cannot drift apart.
+  portalClicks: clicks,
   warnings,
 };
 
@@ -1468,6 +1481,12 @@ console.log(`  ${modeLabel}`);
 console.log(bannerRule);
 console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
 console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${shown.length} item(s)\n`);
+// OA-417. At the HEAD, above the conditions and above the suppression notes,
+// because it is the one part of this output written for Peter rather than for
+// whoever is about to run something: these are the rows no session can take off
+// his hands. Nothing is printed when there are none — a standing heading over
+// an empty list is one a reader learns to skip.
+for (const l of formatPortalClicks(clicks, { truncated: limited.length < shown.length })) console.log(l);
 if (SHOW_CONDITIONS) {
   console.log('\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
   for (const l of conc.formatConditions(conditions)) console.log(l);

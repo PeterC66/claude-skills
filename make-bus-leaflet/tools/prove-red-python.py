@@ -402,6 +402,22 @@ MUTATIONS = [
      "find": '    if len(mapping) != n:',
      "to": '    if len(mapping) != n and False:'},
 
+    # The two below put OA-369 back, one per half of `_route_of`. Both restore a
+    # real shipped behaviour rather than inventing one: the first is the exact
+    # expression the module carried from 2026-08-28 to 2026-09-20, and it is the
+    # only mutation in this file whose fault is that the GUARD ITSELF dies -- the
+    # caller gets an AttributeError traceback in place of the ValueError the whole
+    # module is about, on the one row shape `service_key` accepts by name.
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "a non-dict row reaches .get again, so a bare route string makes the refusal raise AttributeError from inside the guard instead of reporting the collision -- OA-369, which stood for 23 days because no live caller passes a non-dict and neither half moves a drawn byte",
+     "find": '    if not isinstance(row, dict):\n        return "?"',
+     "to": '    if False:\n        return "?"'},
+
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "the route falls back to `.get`'s default, which applies only when the KEY is absent -- so a dict carrying an explicit `route: None` prints the word 'None' where the JS twin prints '?', the second divergence in the same expression and the one nothing had named",
+     "find": '    r = row.get("route")\n    return "?" if r is None else r',
+     "to": '    return row.get("route", "?")'},
+
     # The two below are caught by the TWIN CENSUS and by nothing else in the estate.
     # index_guard.js and index_guard.py are one rule written twice, neither half moves
     # a drawn byte, and until this suite nothing anywhere held them together. The

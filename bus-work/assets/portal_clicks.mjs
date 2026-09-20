@@ -75,6 +75,15 @@ export function screenOf(step) {
  * ORDER IS THE CALLER'S, NOT OURS. The rows arrive sorted by band and age and
  * this preserves that, so the block reads in the same order as the list under
  * it. Sorting again here would be a second opinion about priority.
+ *
+ * WHICH ROWS THE CALLER SHOULD PASS, because the answer is not obvious and the
+ * comment belongs beside the reasoning rather than at the call site.
+ * `worklist.mjs` passes `shown` and NOT `limited`: `--limit` is a display cut on
+ * how much of the list fits a screen, and a click of Peter's that fell off the
+ * bottom of that cut is still waiting. Every other filter DOES apply, because
+ * `--safe-only` and the demo hiding are statements about what is on the board at
+ * all, and this block must never name a row the reader cannot find below it.
+ * When the cut does bite, the caller says so through `truncated` below.
  */
 export function portalClicks(rows) {
   const out = [];
@@ -107,6 +116,16 @@ export function portalClicks(rows) {
  * job is to tell him the click is there, and the full row below carries the hold
  * banner and the reason. Dropping a held row from the summary would reintroduce
  * exactly the invisibility this block was written to end.
+ *
+ * WHERE THE CALLER PUTS THESE LINES: at the HEAD of the board, above the
+ * conditions and above the suppression notes, because this is the one part of
+ * that output written for Peter rather than for whoever is about to run
+ * something — these are the rows no session can take off his hands.
+ *
+ * AND THE SAME ARRAY GOES INTO `--json`, under OA-221's rule that a caller
+ * reading the board as data must be able to see the same verdict a person does.
+ * The terminal block renders this array and nothing else, so the two cannot
+ * drift apart.
  */
 export function formatPortalClicks(clicks, { truncated = false } = {}) {
   if (!clicks || !clicks.length) return [];

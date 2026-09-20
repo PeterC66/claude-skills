@@ -116,39 +116,92 @@ const IMPORTS_PARSEARGS_RE = /import\s*\{[^}]*\bparseArgs\b[^}]*\}\s*from\s*['"]
  * String literals are KEPT — a laptop path inside a string is the thing this
  * census is about, and `'https://busmaps.uk'` must not open a line comment.
  *
- * THE SHAPE THIS SCANNER CANNOT SEE IS A QUOTE INSIDE A REGULAR EXPRESSION
- * LITERAL, and until 2026-09-19 the sentence here said "there is none in this
- * folder today and the harness holds a case that says so". BOTH HALVES WERE
- * FALSE and are corrected rather than deleted, because the sentence was the
- * reason to trust the census and it was the wrong reason.
- *
- * Measured on 2026-09-19 over the 43 modules in this folder: **145 full-line
- * `//` comments survive the blanking, across five files** — `concurrency.mjs`,
+ * REGULAR EXPRESSION LITERALS ARE A STATE OF THEIR OWN, since 2026-09-20 and
+ * buses-data OA-413. Until then this scanner had no such state, so a quote
+ * inside a regex — `/somebody's live work/` in `prove-red-concurrency.mjs`,
+ * which arrived with OA-387 — opened a string that was never opened, and
+ * everything to the next matching quote was passed through as code. Measured
+ * over the 43 modules here on 2026-09-19: **145 full-line `//` comments
+ * survived the blanking, across five files** — `concurrency.mjs`,
  * `loop_your_move.mjs`, `prove-red-concurrency.mjs`, `prove-red-loop-your-move.mjs`
- * and `worklist.mjs`. A surviving comment means the state machine was inside a
- * string it should not have been in, so from that point the file is read wrongly
- * in BOTH directions: prose in a comment can be reported as a finding, and a real
- * laptop path in code can be missed. `/somebody's live work/` in
- * `prove-red-concurrency.mjs` is one instance and arrived with OA-387.
+ * and `worklist.mjs`. A surviving comment means the machine was inside a string
+ * it should not have been in, so from that point the file was read wrongly in
+ * BOTH directions: prose in a comment could be reported as a finding, and a real
+ * laptop path in code could be missed. Idempotence did not catch it, because a
+ * second pass desyncs identically — the output was stable and still wrong.
  *
- * No harness case guarded it, and idempotence does not catch it — a second pass
- * desyncs identically, so the output is stable and still wrong, which was checked
- * rather than assumed. Fixing it properly means telling a regex literal from a
- * division, which needs the previous significant token and is a real piece of
- * work; it is filed rather than bodged here. The census's findings are sound for
- * the 38 files that blank cleanly and should be read with this in mind for the
- * other five.
+ * TELLING A REGEX FROM A DIVISION NEEDS THE PREVIOUS SIGNIFICANT TOKEN, which is
+ * why `lastSig` and `lastWord` are carried: after `(`, `,`, `=`, an operator or
+ * one of the keywords in `REGEX_AFTER_WORD` a `/` opens a regex; after an
+ * identifier, a number, `)`, `]` or a closing quote it divides. `)` is genuinely
+ * ambiguous — `if (x) /re/.test(s)` against `(a + b) / 2` — and is read as
+ * division, which is the commoner shape by far.
+ *
+ * A TEMPLATE LITERAL NESTED INSIDE A `${...}` SUBSTITUTION IS THE SECOND MISSING
+ * STATE, and it was found by fixing the first: with regex literals understood the
+ * count fell 145 -> 32, and the 32 were all one file after `worklist.mjs` line
+ * 1184, where a backtick-quoted string sits inside a substitution of the template
+ * that encloses it. A flat scanner reads that inner backtick as CLOSING the outer
+ * template, and an odd number of them leaves the machine inside a string for the
+ * rest of the file. So substitutions are a stack — `frames` holds one entry per
+ * open `${`, with the brace depth to restore, and `depth` tells a `}` that closes
+ * a block inside the expression from the one that ends it.
+ *
+ * WHAT STILL LIMITS IT, stated because the sentence that used to stand here was
+ * the reason to trust the census and was the wrong reason. A misjudged `/` can
+ * only cost the REST OF ITS OWN LINE: a regex literal cannot contain a newline,
+ * so the state bails back to code at one, and a desync can no longer run to the
+ * end of a file. `)` before a `/` is read as division, so `if (x) /re/.test(s)`
+ * would be misread for its own line and nothing further. Both are claims about
+ * the scanner rather than about what happens to be in this folder today, which
+ * is what stops them decaying into a false reassurance the way the last one did.
  */
+
+/* Identifier characters, for the keyword lookbehind below. */
+const ID_CHAR = /[A-Za-z0-9_$]/;
+/* After one of these WORDS a `/` opens a regular expression and never divides. */
+const REGEX_AFTER_WORD = new Set([
+  'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void',
+  'case', 'do', 'else', 'yield', 'await', 'throw',
+]);
+
+/** Could a `/` here open a regex literal, given the last significant token? */
+function regexCanFollow(lastSig, lastWord) {
+  if (lastSig === '') return true; /* start of file, or the start of a line after a bail */
+  if (ID_CHAR.test(lastSig)) return REGEX_AFTER_WORD.has(lastWord);
+  if (lastSig === ')' || lastSig === ']' || lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
+  return true; /* `(`, `,`, `=`, `:`, `;`, `{`, `}`, `!`, `&`, `|`, `?` and the operators */
+}
+
 export function blankComments(src) {
   let out = '';
   let state = 'code';
+  let lastSig = '';   /* the last significant character of CODE seen */
+  let lastWord = '';  /* the identifier ending at it, where it is one */
+  let inClass = false; /* inside a `[...]` character class, where `/` does not close the regex */
+  let depth = 0;      /* `{` nesting inside the current code frame */
+  const frames = [];  /* one saved depth per open `${` substitution */
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     const d = src[i + 1];
     if (state === 'code') {
       if (c === '/' && d === '/') { state = 'line'; out += '  '; i++; continue; }
       if (c === '/' && d === '*') { state = 'block'; out += '  '; i++; continue; }
-      if (c === "'" || c === '"' || c === '`') { state = c; }
+      if (c === '/' && regexCanFollow(lastSig, lastWord)) {
+        state = 'regex'; inClass = false; lastSig = '/'; lastWord = '';
+        out += c;
+        continue;
+      }
+      if (c === "'" || c === '"' || c === '`') { state = c; lastSig = c; lastWord = ''; out += c; continue; }
+      if (c === '{') { depth++; lastSig = c; lastWord = ''; out += c; continue; }
+      if (c === '}') {
+        /* The `}` that ENDS a substitution is the one with no open brace under it
+         * in this frame; every other closes a block inside the expression. */
+        if (depth > 0) depth--;
+        else if (frames.length) { depth = frames.pop(); state = '`'; out += c; continue; }
+        lastSig = c; lastWord = ''; out += c; continue;
+      }
+      if (!/\s/.test(c)) { lastSig = c; lastWord = ID_CHAR.test(c) ? lastWord + c : ''; }
       out += c;
       continue;
     }
@@ -161,9 +214,32 @@ export function blankComments(src) {
       out += (c === '\n' ? '\n' : ' ');
       continue;
     }
-    /* inside a string: state holds the closing quote */
+    if (state === 'regex') {
+      /* Passed through unblanked: a regex is code, and a laptop path written into
+       * one is exactly the shape this census exists to see. */
+      out += c;
+      if (c === '\\') { if (d !== undefined) { out += d; i++; } continue; }
+      if (inClass) { if (c === ']') inClass = false; continue; }
+      if (c === '[') { inClass = true; continue; }
+      if (c === '/') { state = 'code'; lastSig = '/'; lastWord = ''; continue; }
+      /* A regex literal cannot span a line, so a newline here means the `/` was a
+       * division after all. Bailing bounds a misjudgement to its own line. */
+      if (c === '\n') { state = 'code'; lastSig = ''; lastWord = ''; }
+      continue;
+    }
+    if (state === '`') {
+      if (c === '\\') { out += c + (d === undefined ? '' : d); i++; continue; }
+      if (c === '$' && d === '{') {
+        frames.push(depth); depth = 0; state = 'code'; lastSig = ''; lastWord = '';
+        out += c + d; i++; continue;
+      }
+      if (c === '`') { state = 'code'; lastSig = c; lastWord = ''; }
+      out += c;
+      continue;
+    }
+    /* inside a quoted string: state holds the closing quote */
     if (c === '\\') { out += c + (d === undefined ? '' : d); i++; continue; }
-    if (c === state) state = 'code';
+    if (c === state) { state = 'code'; lastSig = c; lastWord = ''; }
     out += c;
   }
   return out;

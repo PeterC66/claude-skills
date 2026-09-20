@@ -87,6 +87,76 @@ console.log('\n2  the comment blanker does not mistake a URL for a comment');
   ok(blankComments(src8).split('\n').length === src8.split('\n').length, 'blanking preserves the line count, which is what makes a reported line number the real one');
 }
 
+console.log('\n2a  a REGULAR EXPRESSION LITERAL is a state of its own — buses-data OA-413');
+{
+  /* The fault this section was written for: the blanker tracked strings and
+   * comments and not regexes, so a quote inside one opened a string that was
+   * never opened and the file was read wrongly from there to the end. Measured
+   * at 145 surviving full-line comments across five modules of this folder. Each
+   * fixture puts the shape on line 1, a COMMENT holding a laptop path on line 2
+   * and a CODE one on line 3: a desync shows up as the comment being reported,
+   * the code line being missed, or both. */
+  const fixture = (first) => [first, `// ${LAPTOP}`, `const dir = '${LAPTOP}';`, ''].join('\n');
+
+  const quoted = fixture("const RE = /somebody's live work/;");
+  const escaped = fixture('const URL_RE = /https:\\/\\/busmaps\\.uk/;');
+  const charClass = fixture('const SEP_RE = /[/\\\\]+/;');
+
+  /* The division goes on the SAME LINE as the comment on purpose. A scanner that
+   * read every `/` as opening a regex would run from the division to the `/` of
+   * the `//`, reopen on the second, and pass the comment through as code -- so
+   * this is the case that fails if `regexCanFollow` is widened to always true.
+   * Split over two lines it would prove nothing, because the bail at a newline
+   * would rescue it. */
+  const divided = [`const ratio = width / height; // ${LAPTOP}`, `const dir = '${LAPTOP}';`, ''].join('\n');
+
+  const d = mk('regex', { 'a.mjs': quoted, 'b.mjs': escaped, 'c.mjs': charClass, 'e.mjs': divided });
+  const r = census(d, []);
+  for (const [f, what] of [['a.mjs', 'an apostrophe inside a regex'], ['b.mjs', 'an escaped slash inside a regex'], ['c.mjs', 'a slash inside a character class']]) {
+    const hits = r.findings.filter((x) => x.file === f && x.idiom === LAPTOP_PATH);
+    ok(hits.length === 1 && hits[0].line === 3, `${what}: the CODE path is found and the COMMENT one is not`, JSON.stringify(hits));
+  }
+  {
+    const hits = r.findings.filter((x) => x.file === 'e.mjs' && x.idiom === LAPTOP_PATH);
+    ok(hits.length === 1 && hits[0].line === 2, 'a division is not a regex: the trailing comment on its own line is still blanked', JSON.stringify(hits));
+  }
+  /* Line 2 only: line 3 holds the path in a STRING, which the blanker keeps on purpose. */
+  ok(!blankComments(quoted).split('\n')[1].includes('u3a'), 'the comment after a regex holding a quote is blanked');
+  ok(blankComments(quoted).includes("/somebody's live work/"), 'and the regex itself survives, because a regex is code');
+  for (const [label, src] of [['quoted', quoted], ['escaped', escaped], ['charClass', charClass], ['divided', divided]]) {
+    ok(blankComments(src).length === src.length, `${label}: blanking preserves the length`);
+  }
+}
+
+console.log('\n2b  a TEMPLATE LITERAL inside a `${...}` substitution — the second missing state');
+{
+  /* Found by fixing 2a: with regexes understood the survivor count fell 145 -> 32
+   * and every one of the 32 was in `worklist.mjs` after line 1184, where a
+   * backtick-quoted string sits inside a substitution of the template enclosing
+   * it. A flat scanner reads that inner backtick as CLOSING the outer template. */
+  const fixture = (first) => [first, `// ${LAPTOP}`, `const dir = '${LAPTOP}';`, ''].join('\n');
+
+  /* The apostrophe inside the NESTED template is what makes this discriminating.
+   * A flat scanner reads the nested backtick as closing the outer template, lands
+   * in code, and opens a single-quoted string on the apostrophe that nothing ever
+   * closes -- so the desync runs past the newline the regex bail would have caught.
+   * A nested template with no quote in it has even backtick parity and proves
+   * nothing, which is why this fixture is not that. */
+  const nested = fixture("const msg = `a ${x || `it's here`} b`;");
+  const braces = fixture('const msg = `a ${(() => { return 1; })()} b`;');
+  const both = fixture('const msg = `a ${x.replace(/[/\\\\]/g, `-`)} b`;');
+
+  const d = mk('template', { 'a.mjs': nested, 'b.mjs': braces, 'c.mjs': both });
+  const r = census(d, []);
+  for (const [f, what] of [['a.mjs', 'a template nested in a substitution'], ['b.mjs', 'a block whose `}` is not the end of the substitution'], ['c.mjs', 'a regex and a template in the same substitution']]) {
+    const hits = r.findings.filter((x) => x.file === f && x.idiom === LAPTOP_PATH);
+    ok(hits.length === 1 && hits[0].line === 3, `${what}: the CODE path is found and the COMMENT one is not`, JSON.stringify(hits));
+  }
+  for (const [label, src] of [['nested', nested], ['braces', braces], ['both', both]]) {
+    ok(blankComments(src).length === src.length, `${label}: blanking preserves the length`);
+  }
+}
+
 console.log('\n3  reading ARGUMENTS out of process.argv is a finding; the main-module guard is not');
 {
   const d = mk('argv', {
@@ -149,6 +219,24 @@ console.log('\n7  THE REAL FOLDER — the census is green on it, and goes red wh
   ok(r.controls.length === ALLOW.length && r.controls.every((c) => c.matched),
     'every allowlist entry STILL MATCHES, so the pattern is known to fire inside the population',
     r.controls.filter((c) => !c.matched).map((c) => `${c.file}[${c.idiom}]`).join(', '));
+
+  /* THE SURVIVOR COUNT over the real folder — buses-data OA-413, and the reason
+   * it is an assertion only now. A full-line `//` comment that comes through the
+   * blanking means the machine was in a string it should not have been in, so it
+   * is the cheapest visible symptom of a desync of any kind. It stood at 145
+   * across five files on 2026-09-19 and the action said in as many words not to
+   * land a census while that was true, because a check that is red on the day it
+   * lands teaches a reader to ignore it. The two fixes took it to zero, so it can
+   * be held there. A file written tomorrow carrying a shape the scanner still
+   * cannot see reddens HERE, which is the whole point of the case. */
+  const survivors = [];
+  for (const f of fs.readdirSync(HERE).filter((n) => n.endsWith('.mjs'))) {
+    blankComments(fs.readFileSync(path.join(HERE, f), 'utf8')).split(/\r?\n/)
+      .forEach((line, i) => { if (/^\s*\/\//.test(line)) survivors.push(`${f}:${i + 1}`); });
+  }
+  ok(survivors.length === 0,
+    `no full-line comment survives the blanking anywhere in the REAL folder (${r.scanned} modules)`,
+    `${survivors.length} survivor(s), first few: ${survivors.slice(0, 5).join('; ')}`);
 
   /* The mutation. Copy the real folder and put back the one line OA-345 was
    * filed about. Watched go red here, not reasoned about. */

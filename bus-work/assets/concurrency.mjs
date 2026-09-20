@@ -819,11 +819,24 @@ const RULES = {
     const mayBeYou = (!c.selfSession && L.name)
       ? ` — if that is YOU, nothing told this board so: re-run it with --session ${L.name} and this row goes back to what it would say with no lock at all`
       : '';
+    /* buses-data OA-407. THE VERDICT IS DELIBERATELY UNCHANGED and the sentence
+     * is what moves. `loop_lock.mjs` has already disbelieved the holder and
+     * rebuilt both times from the directory's own mtime, so the age and the
+     * lease in this sentence are right — there is nothing left for a person to
+     * decide, and reddening the board for a holder that is correctly running is
+     * going red for a chore. What was actually broken was that the board stated
+     * a wrong number in a confident voice; the cure is that the number is right
+     * and the voice says which clock it came from. Escalating this to CHECK
+     * would also put a live tick's lock in front of the next tick's step-2 gate,
+     * which is the harm the two quiet verdicts above exist to prevent. */
+    const stamp = L.stampSuspect
+      ? ` — and its holder file was DISBELIEVED: ${L.stampWhy}, so the times here are the directory's own mtime and a ${fmtMin(L.leaseMin)} lease from it, not what the file says`
+      : '';
     if (L.isTick && L.expired) return [SAFE, null];
     if (L.expired) {
-      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it${mayBeYou}`];
+      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it${stamp}${mayBeYou}`];
     }
-    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file${mayBeYou}`];
+    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file${stamp}${mayBeYou}`];
   },
 
   'portal-deploy': (c) => {

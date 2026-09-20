@@ -146,6 +146,50 @@ ok(midline.takenSource === 'holder' && midline.ageMin === 9, 'a timestamp writte
   `takenSource=${midline.takenSource}, ageMin=${midline.ageMin}`);
 ok(midline.expiresSource === 'holder' && midline.expired === false, 'and its expires: line is read off the holder too');
 
+/* THE TWO IMPOSSIBILITIES, buses-data OA-407, and each is paired with the
+ * control that stops the guard eating the ordinary case.
+ *
+ * The fault was found on a live holder on 2026-09-18: a tick read the LOCAL
+ * clock and appended a `Z`, so a British Summer Time stamp wore UTC's marker on
+ * BOTH lines at once. Date.parse believes a `Z`, so the lease inflated by an
+ * hour and the age went negative and was clamped to zero — a twenty-minute-old
+ * lock printed as `taken 0m ago` and a lease with 1h 05m left printed as 2h 05m.
+ * For a `sched-` holder that is an hour of stalled loop after a tick dies,
+ * because the steal test is *now is past `expires`*.
+ *
+ * WHAT IS ASSERTED IS THE SOURCE, NOT THE NUMBER. Once the holder is
+ * disbelieved the times come from the directory mtime, which in a fixture is
+ * the real clock rather than `NOW` — so the ages here are meaningless and
+ * deliberately not asserted. `takenSource` and `expiresSource` are what say the
+ * holder was not believed, and they are the fields the rest of this file
+ * already treats as the honest answer to *where did this come from*. */
+const ahead = readLoopLock(tree({ lock: true, holder: held('sched-2115', NOW + 60 * 60000, NOW + 130 * 60000) }), { now: NOW });
+ok(ahead.stampSuspect === true, 'a taken-at time an hour in the future: the holder file is disbelieved', `stampSuspect=${ahead.stampSuspect}`);
+ok(ahead.stampAheadMin === 60, 'and how far ahead it is, is REPORTED rather than clamped away', `stampAheadMin=${ahead.stampAheadMin}`);
+ok(/future/.test(ahead.stampWhy || ''), 'and the reason names the impossibility', `stampWhy=${ahead.stampWhy}`);
+ok(ahead.takenSource === 'mtime', 'the taken time falls back to the mtime the atomic mkdir set', `takenSource=${ahead.takenSource}`);
+ok(ahead.expiresSource === 'fallback', 'and the lease falls back too, because ONE clock wrote both lines', `expiresSource=${ahead.expiresSource}`);
+
+const skew = readLoopLock(tree({ lock: true, holder: held('sched-2115', NOW + 60000, NOW + 91 * 60000) }), { now: NOW });
+ok(skew.stampSuspect === false, 'CONTROL: a stamp a minute ahead is skew, not an impossibility, and is believed', `stampSuspect=${skew.stampSuspect}`);
+ok(skew.takenSource === 'holder' && skew.expiresSource === 'holder', 'and both lines are still read off the holder', `${skew.takenSource}/${skew.expiresSource}`);
+
+const immortal = readLoopLock(tree({ lock: true, holder: held('sched-1900', NOW - 10 * 60000, NOW + 300 * 60000) }), { now: NOW });
+ok(immortal.stampSuspect === true, 'a lease running 5h 10m from the moment it was taken: disbelieved, because the prompt forbids more than four hours', `stampSuspect=${immortal.stampSuspect}`);
+ok(immortal.expiresSource === 'fallback' && immortal.expires === immortal.takenAt + DEFAULT_LEASE_MIN * 60000,
+  `and it falls back to taken + ${DEFAULT_LEASE_MIN} minutes rather than becoming immortal`, `expiresSource=${immortal.expiresSource}`);
+ok(immortal.takenSource === 'holder', 'while the taken time, which is not impossible, is left alone', `takenSource=${immortal.takenSource}`);
+
+const longLease = readLoopLock(tree({ lock: true, holder: held('sched-1900', NOW - 10 * 60000, NOW + 230 * 60000) }), { now: NOW });
+ok(longLease.stampSuspect === false && longLease.expiresSource === 'holder',
+  'CONTROL: a four-hour lease is the ceiling and not over it — an S6 red team may legitimately ask for one',
+  `stampSuspect=${longLease.stampSuspect}, expiresSource=${longLease.expiresSource}`);
+
+const plain = readLoopLock(tree({ lock: true, holder: held('sched-2115', NOW - 20 * 60000, NOW + 70 * 60000) }), { now: NOW });
+ok(plain.stampSuspect === false && plain.stampAheadMin === null && plain.stampWhy === null,
+  'CONTROL: an ordinary holder is not suspected of anything, and says nothing about stamps',
+  `stampSuspect=${plain.stampSuspect}, stampAheadMin=${plain.stampAheadMin}`);
+
 const mine = readLoopLock(tree({ lock: true, holder: held('buses-73', NOW - 5 * 60000, NOW + 85 * 60000) }), { selfSession: 'buses-73', now: NOW });
 ok(mine.mine === true, 'a holder naming this session is recognised as mine');
 const theirs = readLoopLock(tree({ lock: true, holder: held('buses-04', NOW - 5 * 60000, NOW + 85 * 60000) }), { selfSession: 'buses-73', now: NOW });
@@ -273,6 +317,43 @@ const solely = conc.assess(['buses-tree'], live);
 ok(solely.reasons.length === 1 && solely.reasons[0].need === 'loop-lock',
   'so on a clean tree the DELAY comes SOLELY from the lock — one reason, and it is loop-lock',
   `${solely.reasons.length} reason(s): ${solely.reasons.map((r) => r.need).join(', ')}`);
+
+// ---------------------------------------------------------------------------
+// 2c. A DISBELIEVED HOLDER CHANGES THE SENTENCE AND NOT THE VERDICT, buses-data
+// OA-407 — and the three greens here are the point, exactly as they are in the
+// block above.
+//
+// By the time the rule sees it, `loop_lock.mjs` has already rebuilt both times
+// from the directory mtime, so the age and the lease the sentence quotes are
+// RIGHT. Nothing is left for a person to decide, and escalating would do real
+// harm in two directions: a CHECK FIRST on a live tick's lock lands in front of
+// the next tick's step-2 gate, which is the harm green 2 above exists to
+// prevent, and a board that reddens for a holder that is correctly running is
+// going red for a chore. What was broken was that the board stated a wrong
+// number in a confident voice — so the number is now right, and the voice says
+// which clock it came from.
+// ---------------------------------------------------------------------------
+console.log('\n== a holder file that could not be believed ==');
+
+const disbelieved = { stampSuspect: true, stampWhy: 'its taken-at time is 1h in the future, which no clock can be' };
+const badTick = world(lockState(disbelieved));
+want(conc.assess(['buses-tree'], badTick), conc.DELAY, 'a live tick whose holder file was disbelieved: still BETTER TO DELAY, not CHECK FIRST');
+says(conc.assess(['buses-tree'], badTick), /DISBELIEVED/, 'and the sentence says the file was not believed');
+says(conc.assess(['buses-tree'], badTick), /mtime/, 'and names the clock the times actually came from');
+says(conc.assess(['buses-tree'], badTick), /in the future/, "and carries loop_lock.mjs's own reason rather than inventing one");
+
+const badPerson = world(lockState({ name: 'buses-04', isTick: false, expired: true, overdueMin: 30, expires: NOW - 30 * 60000, takenAt: NOW - 120 * 60000, ageMin: 120, ...disbelieved }));
+want(conc.assess(['buses-tree'], badPerson), conc.CHECK, "a person's expired lock with a bad stamp: CHECK FIRST, exactly as it would be with a good one");
+says(conc.assess(['buses-tree'], badPerson), /DISBELIEVED/, 'and it says so there too');
+
+const badStaleTick = world(lockState({ expired: true, overdueMin: 15, expires: NOW - 15 * 60000, takenAt: NOW - 105 * 60000, ageMin: 105, ...disbelieved }));
+want(conc.assess(['buses-tree'], badStaleTick), conc.SAFE, "GREEN: a crashed tick's lock stays SAFE NOW even with a bad stamp — the steal rule still owns that decision");
+
+ok(!/DISBELIEVED/.test(conc.assess(['buses-tree'], live).reasons[0]?.why || ''),
+  'GREEN: and an ordinary holder is never accused of anything',
+  conc.assess(['buses-tree'], live).reasons.map((r) => r.why).join(' | '));
+ok(conc.assess(['buses-tree'], world(lockState({ ...disbelieved, mine: true, name: 'buses-73' }))).reasons.length === 0,
+  'GREEN: held by ME is still SAFE NOW with no reason at all — a bad stamp must not block its own holder');
 
 // --- the attachment itself: which rows get the lock, and which do not ---
 console.log('\n== which work the lock is attached to ==');

@@ -1,0 +1,2258 @@
+{
+  "town": "Beaconsfield",
+  "created": "2026-07-21T14:34",
+  "stages": {
+    "S1": {
+      "name": "services",
+      "latest": "2026-09-06_0644",
+      "runs": [
+        {
+          "id": "2026-07-21_1534",
+          "dir": "S1-services/2026-07-21_1534",
+          "at": "2026-07-21T14:40",
+          "outputs": [
+            "gtfs-services.json",
+            "verified-services.json",
+            "disagreements.json",
+            "disagreements.docx"
+          ],
+          "note": "Beaconsfield (Bucks) - first out-of-region town; 7 public routes displayed, 604/624 occasional + school services not displayed"
+        },
+        {
+          "id": "2026-09-06_0644",
+          "dir": "S1-services/2026-09-06_0644",
+          "at": "2026-09-06T05:45",
+          "outputs": [
+            "verified-services.json"
+          ],
+          "startedAt": "2026-09-06T05:44",
+          "elapsedMin": 1,
+          "note": "OA-259 convergence: notDisplayed -> notOnLeaflet, 3 entries verbatim. The one-line diff is the key name; both readers proved to give an identical answer before and after. No service added, removed or reworded; nothing drawn."
+        }
+      ]
+    },
+    "S2": {
+      "name": "geometry",
+      "latest": "2026-07-21_1542",
+      "runs": [
+        {
+          "id": "2026-07-21_1542",
+          "dir": "S2-geometry/2026-07-21_1542",
+          "at": "2026-07-21T14:59",
+          "outputs": [
+            "atco2ll.json",
+            "atco2name.json",
+            "osm.json",
+            "osm2.json",
+            "features_geo.json",
+            "routes_full_atco.json",
+            "routes_intown_atco.json",
+            "routes_atco.json",
+            "roads_geo.json",
+            "routes_paths.json",
+            "intown_cfg.json",
+            "match_cfg.json",
+            "route_slugs.json"
+          ],
+          "note": "Beaconsfield geometry: 473 stops, coreMaxKm 2.5 clip (broad Bucks 040000001 block), roads+match 0 fallbacks, features railway/M40/A355"
+        }
+      ]
+    },
+    "S3": {
+      "name": "config",
+      "latest": "2026-09-10_1753",
+      "runs": [
+        {
+          "id": "2026-07-21_1557",
+          "dir": "S3-config/2026-07-21_1557",
+          "at": "2026-07-21T15:00",
+          "outputs": [
+            "routes.json",
+            "gen_internal.js",
+            "gen_external.js"
+          ],
+          "basedOn": {
+            "S2": "2026-07-21_1542",
+            "S1": "2026-07-21_1534"
+          },
+          "note": "Beaconsfield config: 7 public routes, Tol Bright palette, 3 features, radial external (6 spokes to High Wycombe)"
+        },
+        {
+          "id": "2026-07-21_1614",
+          "dir": "S3-config/2026-07-21_1614",
+          "at": "2026-07-21T15:14",
+          "outputs": [
+            "routes.json",
+            "gen_internal.js",
+            "gen_external.js"
+          ],
+          "basedOn": {
+            "S2": "2026-07-21_1542",
+            "S1": "2026-07-21_1534"
+          },
+          "note": "v1.1: fisheye lens on New Town retail core + school-services mapNote"
+        },
+        {
+          "id": "2026-08-03_1735",
+          "dir": "S3-config/2026-08-03_1735",
+          "at": "2026-08-03T16:36",
+          "outputs": [
+            "routes.json",
+            "gen_internal.js",
+            "gen_external.js"
+          ]
+        },
+        {
+          "id": "2026-08-06_0432",
+          "dir": "S3-config/2026-08-06_0432",
+          "at": "2026-08-06T03:32",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "move legend to bottom-left (legendAt y:155) — top-left default now collides with the High Wycombe terminus lozenge once the legend panel gained an opaque backing box"
+        },
+        {
+          "id": "2026-08-15_1129",
+          "dir": "S3-config/2026-08-15_1129",
+          "at": "2026-08-15T10:29",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design-quality: design, labels:v2, rail:chequer×1 (label-and-design-quality-plan Phases 1-4)"
+        },
+        {
+          "id": "2026-08-15_1217",
+          "dir": "S3-config/2026-08-15_1217",
+          "at": "2026-08-15T11:17",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design-quality: design (label-and-design-quality-plan Phases 1-4)"
+        },
+        {
+          "id": "2026-08-15_1238",
+          "dir": "S3-config/2026-08-15_1238",
+          "at": "2026-08-15T11:38",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design-quality: northArrow -> auto (label-and-design-quality-plan Phases 1-4)"
+        },
+        {
+          "id": "2026-08-15_1533",
+          "dir": "S3-config/2026-08-15_1533",
+          "at": "2026-08-15T14:33",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Phase 6 §4.4: one panel type scale and heading rhythm; keyRow now uniform"
+        },
+        {
+          "id": "2026-08-15_1747",
+          "dir": "S3-config/2026-08-15_1747",
+          "at": "2026-08-15T16:47",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "diagram note was under the footer plate and ran into the panel - moved bottom-left inside the frame"
+        },
+        {
+          "id": "2026-08-15_2047",
+          "dir": "S3-config/2026-08-15_2047",
+          "at": "2026-08-15T19:47",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design.scaleBar: scale bar on the geographic sheets (sized from the true-scale fisheye core), Diagram - not to scale on the schematic/diagram/external sheets"
+        },
+        {
+          "id": "2026-08-15_2136",
+          "dir": "S3-config/2026-08-15_2136",
+          "at": "2026-08-15T20:36",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design.routeCasing + design.cornerRadius: tube-map line work - 0.35mm white casing under every route, and a 2.0mm fillet on corners turning more than 30 degrees"
+        },
+        {
+          "id": "2026-08-16_0127",
+          "dir": "S3-config/2026-08-16_0127",
+          "at": "2026-08-16T00:27",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "config: set design"
+        },
+        {
+          "id": "2026-08-16_0141",
+          "dir": "S3-config/2026-08-16_0141",
+          "at": "2026-08-16T00:41",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "config: set design"
+        },
+        {
+          "id": "2026-08-16_0708",
+          "dir": "S3-config/2026-08-16_0708",
+          "at": "2026-08-16T06:08",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design.spokeSpread: adopted after re-judging with legendPlace in place"
+        },
+        {
+          "id": "2026-08-16_1002",
+          "dir": "S3-config/2026-08-16_1002",
+          "at": "2026-08-16T09:02",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "design.iconSet:grid - the twelve pictograms redrawn on one 24x24 grid, solid and cased (Phase 5)"
+        },
+        {
+          "id": "2026-08-16_1951",
+          "dir": "S3-config/2026-08-16_1951",
+          "at": "2026-08-16T18:51",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "config: set design"
+        },
+        {
+          "id": "2026-08-17_0345",
+          "dir": "S3-config/2026-08-17_0345",
+          "at": "2026-08-17T02:45",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "G5: promote to engine defaults, strip the now-redundant config (plan Phase 8 item 5)"
+        },
+        {
+          "id": "2026-08-17_0404",
+          "dir": "S3-config/2026-08-17_0404",
+          "at": "2026-08-17T03:04",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Phase 8 item 5b: three maps always generated, schematic added to the seven towns that lacked it (Peter's decision 2026-08-16)"
+        },
+        {
+          "id": "2026-08-19_0543",
+          "dir": "S3-config/2026-08-19_0543",
+          "at": "2026-08-19T04:43",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "P1 round: two-column Key; feature labels place themselves; grey routes repicked; places onto the chequer rail"
+        },
+        {
+          "id": "2026-08-19_0545",
+          "dir": "S3-config/2026-08-19_0545",
+          "at": "2026-08-19T04:45",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "P1 round: feature labels place themselves; grey routes repicked; places onto the chequer rail"
+        },
+        {
+          "id": "2026-08-19_0616",
+          "dir": "S3-config/2026-08-19_0616",
+          "at": "2026-08-19T05:16",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Hand-place the geographic Chiltern Main Line on the clear horizontal stretch at 121.8,46.5 so Waitrose and St Michael's Hall keep their names (Peter, 2026-08-19); schematic and diagram stay on auto, their coordinates differ"
+        },
+        {
+          "id": "2026-08-19_0737",
+          "dir": "S3-config/2026-08-19_0737",
+          "at": "2026-08-19T06:37",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Chiltern Main Line: a hand labelPos is drawn START-anchored, so 121.8 ran the tail into the descending bend; 108.1,50.4 puts the whole 25.8mm of it on the flat stretch, clear of ink and of every other label"
+        },
+        {
+          "id": "2026-08-24_1256",
+          "dir": "S3-config/2026-08-24_1256",
+          "at": "2026-08-24T11:56",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Lift the diagram stop-thinning note clear of the footer plate (Peter, 2026-08-24 review item 10)"
+        },
+        {
+          "id": "2026-08-24_1600",
+          "dir": "S3-config/2026-08-24_1600",
+          "at": "2026-08-24T15:00",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "Opt-in rebase: sheetQr, keyCols and howToUse.width are engine defaults now, not per-map keys. Proved byte-inert on all 20 maps (stripped-config build identical to pre-flip build)."
+        },
+        {
+          "id": "2026-08-26_1943",
+          "dir": "S3-config/2026-08-26_1943",
+          "at": "2026-08-26T18:43",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "adopt design.laneOrientation (OA-063), approved on the proof pack 2026-08-26"
+        },
+        {
+          "id": "2026-08-28_1941",
+          "dir": "S3-config/2026-08-28_1941",
+          "at": "2026-08-28T18:41",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "checkedAt from this map's own latest S1/P1 date. The footer's cross-check date was a hardcoded June 2026 in three generators, identical on all 20 maps and false on most (OA-153)."
+        },
+        {
+          "id": "2026-08-30_1604",
+          "dir": "S3-config/2026-08-30_1604",
+          "at": "2026-08-30T15:04",
+          "outputs": [
+            "routes.json"
+          ],
+          "note": "OA-181: move the school-services block left, clear of the frame-exit badge column on all three sheets"
+        },
+        {
+          "id": "2026-09-08_0942",
+          "dir": "S3-config/2026-09-08_0942",
+          "at": "2026-09-08T08:42",
+          "outputs": [
+            "routes.json"
+          ],
+          "startedAt": "2026-09-08T08:42",
+          "elapsedMin": 0,
+          "basedOn": {
+            "S1": "2026-09-06_0644",
+            "S2": "2026-07-21_1542"
+          },
+          "note": "OA-273/SF-006: declare the red team's Carousel 101 claim rejected. Config otherwise identical to 2026-08-30_1604 - nothing drawn moves."
+        },
+        {
+          "id": "2026-09-08_1522",
+          "dir": "S3-config/2026-09-08_1522",
+          "at": "2026-09-08T14:22",
+          "outputs": [
+            "routes.json"
+          ],
+          "startedAt": "2026-09-08T14:22",
+          "elapsedMin": 0,
+          "basedOn": {
+            "S1": "2026-09-06_0644",
+            "S2": "2026-07-21_1542"
+          },
+          "note": "SF-007: declare the red team's Carousel X103 claim rejected - the number is retired and its journeys are inside route 103, which this sheet draws. Config otherwise identical to 2026-09-08_0942 - nothing drawn moves."
+        },
+        {
+          "id": "2026-09-10_1753",
+          "dir": "S3-config/2026-09-10_1753",
+          "at": "2026-09-10T16:53",
+          "outputs": [
+            "routes.json"
+          ],
+          "startedAt": "2026-09-10T16:53",
+          "elapsedMin": 0,
+          "note": "OA-297: tube-map diagram parked, config kept under parked.internalDiagram"
+        }
+      ]
+    },
+    "S4": {
+      "name": "generate",
+      "latest": "v1.68_2026-09-13_2024",
+      "runs": [
+        {
+          "id": "v1.0_2026-07-21_1600",
+          "dir": "S4-generate/v1.0_2026-07-21_1600",
+          "at": "2026-07-21T15:07",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.0",
+          "basedOn": {
+            "S2": "2026-07-21_1542",
+            "S3": "2026-07-21_1557"
+          },
+          "note": "v1.0: dropped M40 feature (read as river), consolidated external High Wycombe spokes; +abstract diagram draft"
+        },
+        {
+          "id": "v1.1_2026-07-21_1614",
+          "dir": "S4-generate/v1.1_2026-07-21_1614",
+          "at": "2026-07-21T15:15",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.1",
+          "basedOn": {
+            "S2": "2026-07-21_1542",
+            "S3": "2026-07-21_1614"
+          },
+          "note": "v1.1 minor: retail-core fisheye + school note"
+        },
+        {
+          "id": "v1.2_2026-08-03_1736",
+          "dir": "S4-generate/v1.2_2026-08-03_1736",
+          "at": "2026-08-03T16:37",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg",
+            "river_geo.json"
+          ],
+          "version": "1.2",
+          "basedOn": {
+            "S2": "2026-07-21_1542",
+            "S3": "2026-08-03_1735"
+          }
+        },
+        {
+          "id": "v1.3_2026-08-06_0422",
+          "dir": "S4-generate/v1.3_2026-08-06_0422",
+          "at": "2026-08-06T03:22",
+          "outputs": [
+            "internal.svg",
+            "external.svg"
+          ],
+          "version": "1.3",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.4_2026-08-06_0423",
+          "dir": "S4-generate/v1.4_2026-08-06_0423",
+          "at": "2026-08-06T03:23",
+          "outputs": [
+            "internal.svg",
+            "external.svg"
+          ],
+          "version": "1.4",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.5_2026-08-06_0427",
+          "dir": "S4-generate/v1.5_2026-08-06_0427",
+          "at": "2026-08-06T03:28",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.5",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.6_2026-08-06_0432",
+          "dir": "S4-generate/v1.6_2026-08-06_0432",
+          "at": "2026-08-06T03:32",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.6",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.7_2026-08-06_0436",
+          "dir": "S4-generate/v1.7_2026-08-06_0436",
+          "at": "2026-08-06T03:36",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.7",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.8_2026-08-06_0439",
+          "dir": "S4-generate/v1.8_2026-08-06_0439",
+          "at": "2026-08-06T03:40",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.8",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.9_2026-08-08_0505",
+          "dir": "S4-generate/v1.9_2026-08-08_0505",
+          "at": "2026-08-08T04:05",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.9",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.10_2026-08-08_0507",
+          "dir": "S4-generate/v1.10_2026-08-08_0507",
+          "at": "2026-08-08T04:07",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.10",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.11_2026-08-09_0315",
+          "dir": "S4-generate/v1.11_2026-08-09_0315",
+          "at": "2026-08-09T02:15",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.11",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.12_2026-08-10_2048",
+          "dir": "S4-generate/v1.12_2026-08-10_2048",
+          "at": "2026-08-10T19:48",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.12",
+          "note": "adopt current engine template (footer version-stamp removal, panel spacing fixes)"
+        },
+        {
+          "id": "v1.13_2026-08-11_0911",
+          "dir": "S4-generate/v1.13_2026-08-11_0911",
+          "at": "2026-08-11T08:11",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.13",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.14_2026-08-15_1129",
+          "dir": "S4-generate/v1.14_2026-08-15_1129",
+          "at": "2026-08-15T10:29",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.14",
+          "note": "design quality: footerSafe frame, spreadIcons, labels engine v2 (labeller.js), chequer railway where present"
+        },
+        {
+          "id": "v1.15_2026-08-15_1217",
+          "dir": "S4-generate/v1.15_2026-08-15_1217",
+          "at": "2026-08-15T11:17",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.15",
+          "note": "G2/G3: charcoal POI symbols (design.iconInk), High Wycombe north arrow moved off the map"
+        },
+        {
+          "id": "v1.16_2026-08-15_1238",
+          "dir": "S4-generate/v1.16_2026-08-15_1238",
+          "at": "2026-08-15T11:38",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.16",
+          "note": "north arrow: engine auto-places it in the nearest blank corner; per-town pinned positions dropped"
+        },
+        {
+          "id": "v1.17_2026-08-15_1534",
+          "dir": "S4-generate/v1.17_2026-08-15_1534",
+          "at": "2026-08-15T14:34",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.17",
+          "note": "Phase 6 §4.4: panel type scale + heading rhythm (design.panelScale)"
+        },
+        {
+          "id": "v1.18_2026-08-15_1545",
+          "dir": "S4-generate/v1.18_2026-08-15_1545",
+          "at": "2026-08-15T14:45",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.18",
+          "note": "feature-label panel guard; Wisbech river/A47 labels moved onto the map"
+        },
+        {
+          "id": "v1.19_2026-08-15_1727",
+          "dir": "S4-generate/v1.19_2026-08-15_1727",
+          "at": "2026-08-15T16:27",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.19",
+          "note": "Phase 6 §3.4: railway chequer lightened to 1.6mm #4a4a4a (core 0.88) so the railway reads as context, not subject"
+        },
+        {
+          "id": "v1.20_2026-08-15_1748",
+          "dir": "S4-generate/v1.20_2026-08-15_1748",
+          "at": "2026-08-15T16:48",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.20",
+          "note": "Phase 6: railway chequer lightened to 1.6mm #4a4a4a; badge rows clamped vertically; feature labels and diagram notes lifted out of the footer band; Ramsey's two geometry-less canal features dropped"
+        },
+        {
+          "id": "v1.21_2026-08-15_2047",
+          "dir": "S4-generate/v1.21_2026-08-15_2047",
+          "at": "2026-08-15T19:47",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.21",
+          "note": "Phase 6 §4.6: scale bar sized from the true-scale fisheye core on the geographic sheets; 'Diagram - not to scale' on the schematic, diagram and external sheets"
+        },
+        {
+          "id": "v1.22_2026-08-15_2115",
+          "dir": "S4-generate/v1.22_2026-08-15_2115",
+          "at": "2026-08-15T20:15",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.22",
+          "note": "Phase 6 §4.2: the fit set now excludes core stops more than 1500m from any drawn route line (affects Ramsey only - six X31 stops out at Ramsey St Mary's were scaling the whole map down)"
+        },
+        {
+          "id": "v1.23_2026-08-15_2136",
+          "dir": "S4-generate/v1.23_2026-08-15_2136",
+          "at": "2026-08-15T20:36",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.23",
+          "note": "Phase 6 §3.1/§3.2: white route casing and a 2.0mm corner radius"
+        },
+        {
+          "id": "v1.24_2026-08-16_0115",
+          "dir": "S4-generate/v1.24_2026-08-16_0115",
+          "at": "2026-08-16T00:15",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.24",
+          "note": "re-stamp: unify the engine hash after two sessions edited gen_internal.js concurrently (no artwork change expected)"
+        },
+        {
+          "id": "v1.25_2026-08-16_0128",
+          "dir": "S4-generate/v1.25_2026-08-16_0128",
+          "at": "2026-08-16T00:28",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.25",
+          "note": "design.badgeFit: stadium badges for route numbers wider than their disc"
+        },
+        {
+          "id": "v1.26_2026-08-16_0142",
+          "dir": "S4-generate/v1.26_2026-08-16_0142",
+          "at": "2026-08-16T00:42",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.26",
+          "note": "design.hubFit: size the external hub box from its text, not a character count"
+        },
+        {
+          "id": "v1.27_2026-08-16_0218",
+          "dir": "S4-generate/v1.27_2026-08-16_0218",
+          "at": "2026-08-16T01:18",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.27",
+          "note": "Phase 7: design.panelCorridors - Services panel carries the 14 drawn lanes, not 22 equal rows, and the sheet states the corridor rule (High Wycombe); other towns re-stamped onto the same engine"
+        },
+        {
+          "id": "v1.28_2026-08-16_0228",
+          "dir": "S4-generate/v1.28_2026-08-16_0228",
+          "at": "2026-08-16T01:28",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.28",
+          "note": "Re-stamp: all 8 towns onto engine 58ca13d28a (adds the water-colour palette check; artwork unchanged outside High Wycombe, St Ives and Ramsey)"
+        },
+        {
+          "id": "v1.29_2026-08-16_0248",
+          "dir": "S4-generate/v1.29_2026-08-16_0248",
+          "at": "2026-08-16T01:48",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.29",
+          "note": "Phase 4 leftovers on Ramsey external: 303+305 merged onto one Huntingdon spoke, design.spokeSpread opens the fan to an X, legend moved into the freed space; other towns re-stamped onto the same engine"
+        },
+        {
+          "id": "v1.30_2026-08-16_0709",
+          "dir": "S4-generate/v1.30_2026-08-16_0709",
+          "at": "2026-08-16T06:09",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.30",
+          "note": "design.legendPlace on all 8; design.spokeSpread on Beaconsfield, Huntingdon, March"
+        },
+        {
+          "id": "v1.31_2026-08-16_1004",
+          "dir": "S4-generate/v1.31_2026-08-16_1004",
+          "at": "2026-08-16T09:04",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.31",
+          "note": "design.iconSet:grid - twelve pictograms redrawn on one 24x24 grid, solid, each with a 0.34mm white casing (Phase 5)"
+        },
+        {
+          "id": "v1.32_2026-08-16_1951",
+          "dir": "S4-generate/v1.32_2026-08-16_1951",
+          "at": "2026-08-16T18:51",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.32",
+          "note": "design.printSafe: 5mm print safe margin on footer, placer, panel and termini"
+        },
+        {
+          "id": "v1.33_2026-08-16_1957",
+          "dir": "S4-generate/v1.33_2026-08-16_1957",
+          "at": "2026-08-16T18:57",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.33",
+          "note": "printSafe: honest scale-bar footprint, and the panel note fits its row"
+        },
+        {
+          "id": "v1.34_2026-08-16_2020",
+          "dir": "S4-generate/v1.34_2026-08-16_2020",
+          "at": "2026-08-16T19:20",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.34",
+          "note": "Re-stamp onto the gated scale-bar footprint engine (no artwork change)"
+        },
+        {
+          "id": "v1.35_2026-08-17_0346",
+          "dir": "S4-generate/v1.35_2026-08-17_0346",
+          "at": "2026-08-17T02:46",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.35",
+          "note": "G5: twelve keys promoted to engine defaults, config stripped; byte-identical self-check passed"
+        },
+        {
+          "id": "v1.36_2026-08-17_0405",
+          "dir": "S4-generate/v1.36_2026-08-17_0405",
+          "at": "2026-08-17T03:05",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.36",
+          "note": "Phase 8 item 5b: internalSchematic added to the seven towns that lacked it (three maps always generated, Peter's decision 2026-08-16)"
+        },
+        {
+          "id": "v1.37_2026-08-18_1613",
+          "dir": "S4-generate/v1.37_2026-08-18_1613",
+          "at": "2026-08-18T15:13",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.37",
+          "note": "Frequency tiers, printed URL+QR, how-to-read panel; legend note and Services subtitles measured on real Arial advances"
+        },
+        {
+          "id": "v1.38_2026-08-18_1626",
+          "dir": "S4-generate/v1.38_2026-08-18_1626",
+          "at": "2026-08-18T15:26",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.38",
+          "note": "QR at 18mm: the size that costs fewest labels across internal+schematic and is the most scannable"
+        },
+        {
+          "id": "v1.39_2026-08-18_1633",
+          "dir": "S4-generate/v1.39_2026-08-18_1633",
+          "at": "2026-08-18T15:34",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.39",
+          "note": "External frame follows the footer plate: terminus lozenges no longer buried under it"
+        },
+        {
+          "id": "v1.40_2026-08-18_1637",
+          "dir": "S4-generate/v1.40_2026-08-18_1637",
+          "at": "2026-08-18T15:37",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.40",
+          "note": "QR at 14mm: the largest code that fits the space the URL line already made, so the footer plate does not move further"
+        },
+        {
+          "id": "v1.41_2026-08-18_1644",
+          "dir": "S4-generate/v1.41_2026-08-18_1644",
+          "at": "2026-08-18T15:44",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.41",
+          "note": "Services subtitles fitted in the grouped panel too; Key row pitch compresses so tier rows clear the footer plate"
+        },
+        {
+          "id": "v1.42_2026-08-18_1647",
+          "dir": "S4-generate/v1.42_2026-08-18_1647",
+          "at": "2026-08-18T15:47",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg"
+          ],
+          "version": "1.42",
+          "note": "Footer: URL line centred on the QR instead of stranded level with its top edge"
+        },
+        {
+          "id": "v1.43_2026-08-19_0547",
+          "dir": "S4-generate/v1.43_2026-08-19_0547",
+          "at": "2026-08-19T04:47",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.43",
+          "note": "P1 round from Peter's 32-comment review: J1 footer/plate sweep, J2 guards bite, J3 two-column Key, J4 naming, J5 external line key, J6 grey routes repicked, J8 operator-name row"
+        },
+        {
+          "id": "v1.44_2026-08-19_0735",
+          "dir": "S4-generate/v1.44_2026-08-19_0735",
+          "at": "2026-08-19T06:35",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.44",
+          "note": "Hand-place the geographic Chiltern Main Line so Waitrose and St Michael's Hall keep their names (Peter, 2026-08-19); schematic and diagram stay on labelPos:auto"
+        },
+        {
+          "id": "v1.45_2026-08-19_0737",
+          "dir": "S4-generate/v1.45_2026-08-19_0737",
+          "at": "2026-08-19T06:37",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.45",
+          "note": "Chiltern Main Line moved to the flat stretch (start-anchored box scored properly this time)"
+        },
+        {
+          "id": "v1.46_2026-08-24_1602",
+          "dir": "S4-generate/v1.46_2026-08-24_1602",
+          "at": "2026-08-24T15:02",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.46",
+          "note": "Opt-in rebase: sheetQr/keyCols/howToUse.width are engine defaults now, and every town re-renders onto the current engine so the fixtures gate the real product."
+        },
+        {
+          "id": "v1.47_2026-08-26_1943",
+          "dir": "S4-generate/v1.47_2026-08-26_1943",
+          "at": "2026-08-26T18:43",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.47",
+          "note": "adopt design.laneOrientation (OA-063): lane bundles no longer mirror around their centreline"
+        },
+        {
+          "id": "v1.48_2026-08-28_1029",
+          "dir": "S4-generate/v1.48_2026-08-28_1029",
+          "at": "2026-08-28T09:29",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.48",
+          "note": "OA-060 and OA-147: badge and lozenge separation"
+        },
+        {
+          "id": "v1.49_2026-08-28_1944",
+          "dir": "S4-generate/v1.49_2026-08-28_1944",
+          "at": "2026-08-28T18:44",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.49",
+          "note": "checkedAt: the footer's cross-check date now comes from each map's own S1/P1 date instead of a hardcoded June 2026 (OA-153)"
+        },
+        {
+          "id": "v1.50_2026-08-30_0608",
+          "dir": "S4-generate/v1.50_2026-08-30_0608",
+          "at": "2026-08-30T05:08",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.50",
+          "note": "OA-167/157/118/168 round: re-stamp onto the current engine template"
+        },
+        {
+          "id": "v1.51_2026-08-30_1301",
+          "dir": "S4-generate/v1.51_2026-08-30_1301",
+          "at": "2026-08-30T12:01",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.51",
+          "note": "placer round: reserve what you draw; hand-placed ink claims first"
+        },
+        {
+          "id": "v1.52_2026-08-30_1606",
+          "dir": "S4-generate/v1.52_2026-08-30_1606",
+          "at": "2026-08-30T15:06",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.52",
+          "note": "The place-index round: OA-078 numbered index, OA-124 compass re-site, OA-181 note positions"
+        },
+        {
+          "id": "v1.53_2026-08-30_2009",
+          "dir": "S4-generate/v1.53_2026-08-30_2009",
+          "at": "2026-08-30T19:10",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.53",
+          "note": "Place-index heading rhythm: the index heading now uses the panel's own gapDown, not a hand-picked 1.8mm"
+        },
+        {
+          "id": "v1.54_2026-08-30_2013",
+          "dir": "S4-generate/v1.54_2026-08-30_2013",
+          "at": "2026-08-30T19:13",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.54",
+          "note": "x"
+        },
+        {
+          "id": "v1.55_2026-08-30_2017",
+          "dir": "S4-generate/v1.55_2026-08-30_2017",
+          "at": "2026-08-30T19:17",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.55",
+          "note": "Place-index heading rhythm (claude-skills 6e5c356): the index heading now sits on the panel's own gapDown rather than a hand-picked 1.8mm. Supersedes v*.53/.54 - an accidental re-run of the apply left the previous version noted only as 'x'; the sheets are identical to it apart from the build stamp."
+        },
+        {
+          "id": "v1.56_2026-08-31_0505",
+          "dir": "S4-generate/v1.56_2026-08-31_0505",
+          "at": "2026-08-31T04:05",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.56",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.57_2026-08-31_1237",
+          "dir": "S4-generate/v1.57_2026-08-31_1237",
+          "at": "2026-08-31T11:37",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.57",
+          "note": "OA-202/OA-066: POI must/may/miss tiers; High Wycombe forces the Hive and drops 26 unnamed industrial estates"
+        },
+        {
+          "id": "v1.58_2026-08-31_1648",
+          "dir": "S4-generate/v1.58_2026-08-31_1648",
+          "at": "2026-08-31T15:48",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "version": "1.58",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.59_2026-09-01_0940",
+          "dir": "S4-generate/v1.59_2026-09-01_0940",
+          "at": "2026-09-01T08:40",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-01T08:40",
+          "elapsedMin": 0,
+          "version": "1.59",
+          "note": "OA-187 + OA-213: the numbered index block fills, and its markers are drawn at 2.4mm rather than 2.3, the print-legibility floor"
+        },
+        {
+          "id": "v1.60_2026-09-04_1141",
+          "dir": "S4-generate/v1.60_2026-09-04_1141",
+          "at": "2026-09-04T10:41",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-04T10:41",
+          "elapsedMin": 0,
+          "version": "1.60",
+          "note": "OA-229/234/238: the external wrap stops emitting an empty first line; a nameless POI defaults to not-drawn"
+        },
+        {
+          "id": "v1.61_2026-09-05_1024",
+          "dir": "S4-generate/v1.61_2026-09-05_1024",
+          "at": "2026-09-05T09:24",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-05T09:24",
+          "elapsedMin": 0,
+          "version": "1.61",
+          "note": "rollout: adopt engine 57d265c5ee (stamp-only; no config change)"
+        },
+        {
+          "id": "v1.62_2026-09-06_2342",
+          "dir": "S4-generate/v1.62_2026-09-06_2342",
+          "at": "2026-09-06T22:42",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-06T22:42",
+          "elapsedMin": 0,
+          "version": "1.62",
+          "note": "OA-059: linear features stitched before mapping; Beaconsfield Town Hall Green label reviewed and accepted lost"
+        },
+        {
+          "id": "v1.63_2026-09-07_0319",
+          "dir": "S4-generate/v1.63_2026-09-07_0319",
+          "at": "2026-09-07T02:19",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-07T02:19",
+          "elapsedMin": 0,
+          "version": "1.63",
+          "note": "OA-059 follow-up: stitchSegs' start-to-start join measured its turn one vertex too early, so a double track folded into a hairpin"
+        },
+        {
+          "id": "v1.64_2026-09-09_1110",
+          "dir": "S4-generate/v1.64_2026-09-09_1110",
+          "at": "2026-09-09T10:10",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-09T10:10",
+          "elapsedMin": 0,
+          "version": "1.64",
+          "note": "OA-291: octolinear river through the network crossings; plus dpPinned."
+        },
+        {
+          "id": "v1.65_2026-09-09_1112",
+          "dir": "S4-generate/v1.65_2026-09-09_1112",
+          "at": "2026-09-09T10:12",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "internal-diagram.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-09T10:12",
+          "elapsedMin": 0,
+          "version": "1.65",
+          "note": "Revert the OA-291 octolinear trial: it draws each CHAIN of a feature as its own full-length straight run, so a multi-chain feature gains ink and keeps its fragments. Back to engine 93dcb150fa."
+        },
+        {
+          "id": "v1.66_2026-09-10_1754",
+          "dir": "S4-generate/v1.66_2026-09-10_1754",
+          "at": "2026-09-10T16:54",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-10T16:54",
+          "elapsedMin": 0,
+          "version": "1.66",
+          "note": "OA-297: tube-map diagram parked; internal, external and schematic unchanged"
+        },
+        {
+          "id": "v1.67_2026-09-13_1908",
+          "dir": "S4-generate/v1.67_2026-09-13_1908",
+          "at": "2026-09-13T18:08",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-13T18:08",
+          "elapsedMin": 0,
+          "version": "1.67",
+          "note": "OA-338: the de-duplicator stopped reading a category label as an identity"
+        },
+        {
+          "id": "v1.68_2026-09-13_2024",
+          "dir": "S4-generate/v1.68_2026-09-13_2024",
+          "at": "2026-09-13T19:24",
+          "outputs": [
+            "internal.svg",
+            "external.svg",
+            "internal-schematic.svg",
+            "build-warnings.txt"
+          ],
+          "startedAt": "2026-09-13T19:24",
+          "elapsedMin": 0,
+          "version": "1.68",
+          "note": "OA-338 re-rollout: the first pass built internal.svg with no SKILL_ASSETS and got main's poi_select"
+        }
+      ]
+    },
+    "S5": {
+      "name": "render",
+      "latest": "v1.68_2026-09-13_2024",
+      "runs": [
+        {
+          "id": "v1.0_2026-07-21_1601",
+          "dir": "S5-render/v1.0_2026-07-21_1601",
+          "at": "2026-07-21T15:07",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.0"
+        },
+        {
+          "id": "v1.1_2026-07-21_1615",
+          "dir": "S5-render/v1.1_2026-07-21_1615",
+          "at": "2026-07-21T15:15",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.1"
+        },
+        {
+          "id": "v1.2_2026-08-03_1737",
+          "dir": "S5-render/v1.2_2026-08-03_1737",
+          "at": "2026-08-03T16:38",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.2"
+        },
+        {
+          "id": "v1.4_2026-08-06_0423",
+          "dir": "S5-render/v1.4_2026-08-06_0423",
+          "at": "2026-08-06T03:23",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg"
+          ],
+          "version": "1.4",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.5_2026-08-06_0428",
+          "dir": "S5-render/v1.5_2026-08-06_0428",
+          "at": "2026-08-06T03:28",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.5",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.6_2026-08-06_0432",
+          "dir": "S5-render/v1.6_2026-08-06_0432",
+          "at": "2026-08-06T03:32",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.6",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.7_2026-08-06_0436",
+          "dir": "S5-render/v1.7_2026-08-06_0436",
+          "at": "2026-08-06T03:36",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.7",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.8_2026-08-06_0440",
+          "dir": "S5-render/v1.8_2026-08-06_0440",
+          "at": "2026-08-06T03:40",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.8",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.10_2026-08-08_0507",
+          "dir": "S5-render/v1.10_2026-08-08_0507",
+          "at": "2026-08-08T04:07",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.10",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.11_2026-08-09_0315",
+          "dir": "S5-render/v1.11_2026-08-09_0315",
+          "at": "2026-08-09T02:15",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.11",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.12_2026-08-10_2048",
+          "dir": "S5-render/v1.12_2026-08-10_2048",
+          "at": "2026-08-10T19:48",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.12",
+          "note": "adopt current engine template (footer version-stamp removal, panel spacing fixes)"
+        },
+        {
+          "id": "v1.13_2026-08-11_0911",
+          "dir": "S5-render/v1.13_2026-08-11_0911",
+          "at": "2026-08-11T08:11",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.13",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.14_2026-08-15_1129",
+          "dir": "S5-render/v1.14_2026-08-15_1129",
+          "at": "2026-08-15T10:29",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.14",
+          "note": "design quality: footerSafe frame, spreadIcons, labels engine v2 (labeller.js), chequer railway where present"
+        },
+        {
+          "id": "v1.15_2026-08-15_1217",
+          "dir": "S5-render/v1.15_2026-08-15_1217",
+          "at": "2026-08-15T11:17",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.15",
+          "note": "G2/G3: charcoal POI symbols (design.iconInk), High Wycombe north arrow moved off the map"
+        },
+        {
+          "id": "v1.16_2026-08-15_1238",
+          "dir": "S5-render/v1.16_2026-08-15_1238",
+          "at": "2026-08-15T11:38",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.16",
+          "note": "north arrow: engine auto-places it in the nearest blank corner; per-town pinned positions dropped"
+        },
+        {
+          "id": "v1.17_2026-08-15_1534",
+          "dir": "S5-render/v1.17_2026-08-15_1534",
+          "at": "2026-08-15T14:34",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.17",
+          "note": "Phase 6 §4.4: panel type scale + heading rhythm (design.panelScale)"
+        },
+        {
+          "id": "v1.18_2026-08-15_1545",
+          "dir": "S5-render/v1.18_2026-08-15_1545",
+          "at": "2026-08-15T14:45",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.18",
+          "note": "feature-label panel guard; Wisbech river/A47 labels moved onto the map"
+        },
+        {
+          "id": "v1.19_2026-08-15_1727",
+          "dir": "S5-render/v1.19_2026-08-15_1727",
+          "at": "2026-08-15T16:27",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.19",
+          "note": "Phase 6 §3.4: railway chequer lightened to 1.6mm #4a4a4a (core 0.88) so the railway reads as context, not subject"
+        },
+        {
+          "id": "v1.20_2026-08-15_1748",
+          "dir": "S5-render/v1.20_2026-08-15_1748",
+          "at": "2026-08-15T16:48",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.20",
+          "note": "Phase 6: railway chequer lightened to 1.6mm #4a4a4a; badge rows clamped vertically; feature labels and diagram notes lifted out of the footer band; Ramsey's two geometry-less canal features dropped"
+        },
+        {
+          "id": "v1.21_2026-08-15_2047",
+          "dir": "S5-render/v1.21_2026-08-15_2047",
+          "at": "2026-08-15T19:47",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.21",
+          "note": "Phase 6 §4.6: scale bar sized from the true-scale fisheye core on the geographic sheets; 'Diagram - not to scale' on the schematic, diagram and external sheets"
+        },
+        {
+          "id": "v1.22_2026-08-15_2115",
+          "dir": "S5-render/v1.22_2026-08-15_2115",
+          "at": "2026-08-15T20:15",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.22",
+          "note": "Phase 6 §4.2: the fit set now excludes core stops more than 1500m from any drawn route line (affects Ramsey only - six X31 stops out at Ramsey St Mary's were scaling the whole map down)"
+        },
+        {
+          "id": "v1.23_2026-08-15_2136",
+          "dir": "S5-render/v1.23_2026-08-15_2136",
+          "at": "2026-08-15T20:36",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.23",
+          "note": "Phase 6 §3.1/§3.2: white route casing and a 2.0mm corner radius"
+        },
+        {
+          "id": "v1.24_2026-08-16_0115",
+          "dir": "S5-render/v1.24_2026-08-16_0115",
+          "at": "2026-08-16T00:15",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.24",
+          "note": "re-stamp: unify the engine hash after two sessions edited gen_internal.js concurrently (no artwork change expected)"
+        },
+        {
+          "id": "v1.25_2026-08-16_0128",
+          "dir": "S5-render/v1.25_2026-08-16_0128",
+          "at": "2026-08-16T00:28",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.25",
+          "note": "design.badgeFit: stadium badges for route numbers wider than their disc"
+        },
+        {
+          "id": "v1.26_2026-08-16_0142",
+          "dir": "S5-render/v1.26_2026-08-16_0142",
+          "at": "2026-08-16T00:42",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.26",
+          "note": "design.hubFit: size the external hub box from its text, not a character count"
+        },
+        {
+          "id": "v1.27_2026-08-16_0218",
+          "dir": "S5-render/v1.27_2026-08-16_0218",
+          "at": "2026-08-16T01:18",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.27",
+          "note": "Phase 7: design.panelCorridors - Services panel carries the 14 drawn lanes, not 22 equal rows, and the sheet states the corridor rule (High Wycombe); other towns re-stamped onto the same engine"
+        },
+        {
+          "id": "v1.28_2026-08-16_0228",
+          "dir": "S5-render/v1.28_2026-08-16_0228",
+          "at": "2026-08-16T01:28",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.28",
+          "note": "Re-stamp: all 8 towns onto engine 58ca13d28a (adds the water-colour palette check; artwork unchanged outside High Wycombe, St Ives and Ramsey)"
+        },
+        {
+          "id": "v1.29_2026-08-16_0248",
+          "dir": "S5-render/v1.29_2026-08-16_0248",
+          "at": "2026-08-16T01:48",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.29",
+          "note": "Phase 4 leftovers on Ramsey external: 303+305 merged onto one Huntingdon spoke, design.spokeSpread opens the fan to an X, legend moved into the freed space; other towns re-stamped onto the same engine"
+        },
+        {
+          "id": "v1.30_2026-08-16_0709",
+          "dir": "S5-render/v1.30_2026-08-16_0709",
+          "at": "2026-08-16T06:09",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.30",
+          "note": "design.legendPlace on all 8; design.spokeSpread on Beaconsfield, Huntingdon, March"
+        },
+        {
+          "id": "v1.31_2026-08-16_1004",
+          "dir": "S5-render/v1.31_2026-08-16_1004",
+          "at": "2026-08-16T09:04",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.31",
+          "note": "design.iconSet:grid - twelve pictograms redrawn on one 24x24 grid, solid, each with a 0.34mm white casing (Phase 5)"
+        },
+        {
+          "id": "v1.32_2026-08-16_1951",
+          "dir": "S5-render/v1.32_2026-08-16_1951",
+          "at": "2026-08-16T18:51",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.32",
+          "note": "design.printSafe: 5mm print safe margin on footer, placer, panel and termini"
+        },
+        {
+          "id": "v1.33_2026-08-16_1957",
+          "dir": "S5-render/v1.33_2026-08-16_1957",
+          "at": "2026-08-16T18:57",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.33",
+          "note": "printSafe: honest scale-bar footprint, and the panel note fits its row"
+        },
+        {
+          "id": "v1.34_2026-08-16_2020",
+          "dir": "S5-render/v1.34_2026-08-16_2020",
+          "at": "2026-08-16T19:20",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.34",
+          "note": "Re-stamp onto the gated scale-bar footprint engine (no artwork change)"
+        },
+        {
+          "id": "v1.35_2026-08-17_0346",
+          "dir": "S5-render/v1.35_2026-08-17_0346",
+          "at": "2026-08-17T02:46",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.35",
+          "note": "G5: twelve keys promoted to engine defaults, config stripped; byte-identical self-check passed"
+        },
+        {
+          "id": "v1.36_2026-08-17_0405",
+          "dir": "S5-render/v1.36_2026-08-17_0405",
+          "at": "2026-08-17T03:05",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.36",
+          "note": "Phase 8 item 5b: internalSchematic added to the seven towns that lacked it (three maps always generated, Peter's decision 2026-08-16)"
+        },
+        {
+          "id": "v1.37_2026-08-18_1613",
+          "dir": "S5-render/v1.37_2026-08-18_1613",
+          "at": "2026-08-18T15:13",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.37",
+          "note": "Frequency tiers, printed URL+QR, how-to-read panel; legend note and Services subtitles measured on real Arial advances"
+        },
+        {
+          "id": "v1.38_2026-08-18_1626",
+          "dir": "S5-render/v1.38_2026-08-18_1626",
+          "at": "2026-08-18T15:26",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.38",
+          "note": "QR at 18mm: the size that costs fewest labels across internal+schematic and is the most scannable"
+        },
+        {
+          "id": "v1.39_2026-08-18_1634",
+          "dir": "S5-render/v1.39_2026-08-18_1634",
+          "at": "2026-08-18T15:34",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.39",
+          "note": "External frame follows the footer plate: terminus lozenges no longer buried under it"
+        },
+        {
+          "id": "v1.40_2026-08-18_1637",
+          "dir": "S5-render/v1.40_2026-08-18_1637",
+          "at": "2026-08-18T15:37",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.40",
+          "note": "QR at 14mm: the largest code that fits the space the URL line already made, so the footer plate does not move further"
+        },
+        {
+          "id": "v1.41_2026-08-18_1644",
+          "dir": "S5-render/v1.41_2026-08-18_1644",
+          "at": "2026-08-18T15:44",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.41",
+          "note": "Services subtitles fitted in the grouped panel too; Key row pitch compresses so tier rows clear the footer plate"
+        },
+        {
+          "id": "v1.42_2026-08-18_1647",
+          "dir": "S5-render/v1.42_2026-08-18_1647",
+          "at": "2026-08-18T15:47",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.42",
+          "note": "Footer: URL line centred on the QR instead of stranded level with its top edge"
+        },
+        {
+          "id": "v1.43_2026-08-19_0547",
+          "dir": "S5-render/v1.43_2026-08-19_0547",
+          "at": "2026-08-19T04:47",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.43",
+          "note": "P1 round from Peter's 32-comment review: J1 footer/plate sweep, J2 guards bite, J3 two-column Key, J4 naming, J5 external line key, J6 grey routes repicked, J8 operator-name row"
+        },
+        {
+          "id": "v1.44_2026-08-19_0735",
+          "dir": "S5-render/v1.44_2026-08-19_0735",
+          "at": "2026-08-19T06:35",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.44",
+          "note": "Hand-place the geographic Chiltern Main Line so Waitrose and St Michael's Hall keep their names (Peter, 2026-08-19); schematic and diagram stay on labelPos:auto"
+        },
+        {
+          "id": "v1.45_2026-08-19_0737",
+          "dir": "S5-render/v1.45_2026-08-19_0737",
+          "at": "2026-08-19T06:37",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.45",
+          "note": "Chiltern Main Line moved to the flat stretch (start-anchored box scored properly this time)"
+        },
+        {
+          "id": "v1.46_2026-08-24_1602",
+          "dir": "S5-render/v1.46_2026-08-24_1602",
+          "at": "2026-08-24T15:02",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.46",
+          "note": "Opt-in rebase: sheetQr/keyCols/howToUse.width are engine defaults now, and every town re-renders onto the current engine so the fixtures gate the real product."
+        },
+        {
+          "id": "v1.47_2026-08-26_1943",
+          "dir": "S5-render/v1.47_2026-08-26_1943",
+          "at": "2026-08-26T18:43",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.47",
+          "note": "adopt design.laneOrientation (OA-063): lane bundles no longer mirror around their centreline"
+        },
+        {
+          "id": "v1.48_2026-08-28_1029",
+          "dir": "S5-render/v1.48_2026-08-28_1029",
+          "at": "2026-08-28T09:29",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.48",
+          "note": "OA-060 and OA-147: badge and lozenge separation"
+        },
+        {
+          "id": "v1.49_2026-08-28_1944",
+          "dir": "S5-render/v1.49_2026-08-28_1944",
+          "at": "2026-08-28T18:44",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.49",
+          "note": "checkedAt: the footer's cross-check date now comes from each map's own S1/P1 date instead of a hardcoded June 2026 (OA-153)"
+        },
+        {
+          "id": "v1.50_2026-08-30_0608",
+          "dir": "S5-render/v1.50_2026-08-30_0608",
+          "at": "2026-08-30T05:08",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.50",
+          "note": "OA-167/157/118/168 round: re-stamp onto the current engine template"
+        },
+        {
+          "id": "v1.51_2026-08-30_1301",
+          "dir": "S5-render/v1.51_2026-08-30_1301",
+          "at": "2026-08-30T12:01",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.51",
+          "note": "placer round: reserve what you draw; hand-placed ink claims first"
+        },
+        {
+          "id": "v1.52_2026-08-30_1606",
+          "dir": "S5-render/v1.52_2026-08-30_1606",
+          "at": "2026-08-30T15:06",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.52",
+          "note": "The place-index round: OA-078 numbered index, OA-124 compass re-site, OA-181 note positions"
+        },
+        {
+          "id": "v1.53_2026-08-30_2010",
+          "dir": "S5-render/v1.53_2026-08-30_2010",
+          "at": "2026-08-30T19:10",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.53",
+          "note": "Place-index heading rhythm: the index heading now uses the panel's own gapDown, not a hand-picked 1.8mm"
+        },
+        {
+          "id": "v1.54_2026-08-30_2013",
+          "dir": "S5-render/v1.54_2026-08-30_2013",
+          "at": "2026-08-30T19:13",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.54",
+          "note": "x"
+        },
+        {
+          "id": "v1.55_2026-08-30_2017",
+          "dir": "S5-render/v1.55_2026-08-30_2017",
+          "at": "2026-08-30T19:17",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.55",
+          "note": "Place-index heading rhythm (claude-skills 6e5c356): the index heading now sits on the panel's own gapDown rather than a hand-picked 1.8mm. Supersedes v*.53/.54 - an accidental re-run of the apply left the previous version noted only as 'x'; the sheets are identical to it apart from the build stamp."
+        },
+        {
+          "id": "v1.56_2026-08-31_0505",
+          "dir": "S5-render/v1.56_2026-08-31_0505",
+          "at": "2026-08-31T04:05",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.56",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.57_2026-08-31_1237",
+          "dir": "S5-render/v1.57_2026-08-31_1237",
+          "at": "2026-08-31T11:37",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.57",
+          "note": "OA-202/OA-066: POI must/may/miss tiers; High Wycombe forces the Hive and drops 26 unnamed industrial estates"
+        },
+        {
+          "id": "v1.58_2026-08-31_1648",
+          "dir": "S5-render/v1.58_2026-08-31_1648",
+          "at": "2026-08-31T15:48",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "version": "1.58",
+          "note": "rollout: adopt current engine template (auto)"
+        },
+        {
+          "id": "v1.59_2026-09-01_0940",
+          "dir": "S5-render/v1.59_2026-09-01_0940",
+          "at": "2026-09-01T08:40",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-01T08:40",
+          "elapsedMin": 0,
+          "version": "1.59",
+          "note": "OA-187 + OA-213: the numbered index block fills, and its markers are drawn at 2.4mm rather than 2.3, the print-legibility floor"
+        },
+        {
+          "id": "v1.60_2026-09-04_1141",
+          "dir": "S5-render/v1.60_2026-09-04_1141",
+          "at": "2026-09-04T10:41",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-04T10:41",
+          "elapsedMin": 0,
+          "version": "1.60",
+          "note": "OA-229/234/238: the external wrap stops emitting an empty first line; a nameless POI defaults to not-drawn"
+        },
+        {
+          "id": "v1.61_2026-09-05_1024",
+          "dir": "S5-render/v1.61_2026-09-05_1024",
+          "at": "2026-09-05T09:24",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-05T09:24",
+          "elapsedMin": 0,
+          "version": "1.61",
+          "note": "rollout: adopt engine 57d265c5ee (stamp-only; no config change)"
+        },
+        {
+          "id": "v1.62_2026-09-06_2342",
+          "dir": "S5-render/v1.62_2026-09-06_2342",
+          "at": "2026-09-06T22:42",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-06T22:42",
+          "elapsedMin": 0,
+          "version": "1.62",
+          "note": "OA-059: linear features stitched before mapping; Beaconsfield Town Hall Green label reviewed and accepted lost"
+        },
+        {
+          "id": "v1.63_2026-09-07_0319",
+          "dir": "S5-render/v1.63_2026-09-07_0319",
+          "at": "2026-09-07T02:19",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-07T02:19",
+          "elapsedMin": 0,
+          "version": "1.63",
+          "note": "OA-059 follow-up: stitchSegs' start-to-start join measured its turn one vertex too early, so a double track folded into a hairpin"
+        },
+        {
+          "id": "v1.64_2026-09-09_1110",
+          "dir": "S5-render/v1.64_2026-09-09_1110",
+          "at": "2026-09-09T10:10",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-09T10:10",
+          "elapsedMin": 0,
+          "version": "1.64",
+          "note": "OA-291: octolinear river through the network crossings; plus dpPinned."
+        },
+        {
+          "id": "v1.65_2026-09-09_1112",
+          "dir": "S5-render/v1.65_2026-09-09_1112",
+          "at": "2026-09-09T10:12",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg",
+            "internal-diagram.jpg"
+          ],
+          "startedAt": "2026-09-09T10:12",
+          "elapsedMin": 0,
+          "version": "1.65",
+          "note": "Revert the OA-291 octolinear trial: it draws each CHAIN of a feature as its own full-length straight run, so a multi-chain feature gains ink and keeps its fragments. Back to engine 93dcb150fa."
+        },
+        {
+          "id": "v1.66_2026-09-10_1754",
+          "dir": "S5-render/v1.66_2026-09-10_1754",
+          "at": "2026-09-10T16:54",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg"
+          ],
+          "startedAt": "2026-09-10T16:54",
+          "elapsedMin": 0,
+          "version": "1.66",
+          "note": "OA-297: tube-map diagram parked; internal, external and schematic unchanged"
+        },
+        {
+          "id": "v1.67_2026-09-13_1908",
+          "dir": "S5-render/v1.67_2026-09-13_1908",
+          "at": "2026-09-13T18:08",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg"
+          ],
+          "startedAt": "2026-09-13T18:08",
+          "elapsedMin": 0,
+          "version": "1.67",
+          "note": "OA-338: the de-duplicator stopped reading a category label as an identity"
+        },
+        {
+          "id": "v1.68_2026-09-13_2024",
+          "dir": "S5-render/v1.68_2026-09-13_2024",
+          "at": "2026-09-13T19:24",
+          "outputs": [
+            "internal.jpg",
+            "external.jpg",
+            "internal-schematic.jpg"
+          ],
+          "startedAt": "2026-09-13T19:24",
+          "elapsedMin": 0,
+          "version": "1.68",
+          "note": "OA-338 re-rollout: the first pass built internal.svg with no SKILL_ASSETS and got main's poi_select"
+        }
+      ]
+    },
+    "S6": {
+      "name": "verify",
+      "latest": "2026-09-10_1758",
+      "runs": [
+        {
+          "id": "2026-07-21_1616",
+          "dir": "S6-verify/2026-07-21_1616",
+          "at": "2026-07-21T15:23",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "basedOn": {
+            "S1": "2026-07-21_1534",
+            "S2": "2026-07-21_1542",
+            "S3": "2026-07-21_1614",
+            "S4": "v1.1_2026-07-21_1614"
+          },
+          "note": "PASS 0 hard / 22 soft — all 7 displayed routes confirmed serving w/ correct operators; softs = numeric-ATCO terminus artifacts + our documented school/occasional exclusions + 105→Chartridge/X74→Uxbridge terminus refinements"
+        },
+        {
+          "id": "2026-08-26_0701",
+          "dir": "S6-verify/2026-08-26_0701",
+          "at": "2026-08-26T10:04",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "note": "PASS 0 hard / 22 soft: genuinely missing 101, X103, Town Bus (community), 604; 102(Flightline) is a name-normalisation double-count"
+        },
+        {
+          "id": "2026-08-28_1347",
+          "dir": "S6-verify/2026-08-28_1347",
+          "at": "2026-08-28T12:48",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "basedOn": {
+            "S1": "2026-07-21_1534",
+            "S2": "2026-07-21_1542",
+            "S3": "2026-08-26_1943",
+            "S4": "v1.48_2026-08-28_1029"
+          },
+          "note": "PASS 0 hard / 21 soft; redteam reused from 2026-08-26_0701 (S1/S2 unmoved); re-run to clear the stale verdict ahead of the badge/lozenge republish"
+        },
+        {
+          "id": "2026-08-28_2200",
+          "dir": "S6-verify/2026-08-28_2200",
+          "at": "2026-08-28T21:01",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "note": "Re-run against the current S3 after the checkedAt rollout made the previous S6 stale. Red-team answer REUSED from 2026-08-28_1347 (redteam_source: our S1/S2 inputs have not moved). Nothing purchased."
+        },
+        {
+          "id": "2026-08-30_1722",
+          "dir": "S6-verify/2026-08-30_1722",
+          "at": "2026-08-30T16:23",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "basedOn": {
+            "S1": "2026-07-21_1534",
+            "S2": "2026-07-21_1542",
+            "S3": "2026-08-30_1604",
+            "S4": "v1.52_2026-08-30_1607"
+          },
+          "note": "Re-run against the new S3 from the place-index round (OA-181 moved the school-services note). PASS, 0 hard / 14 soft. Red team REUSED from 2026-08-28_2200 (derived 2026-08-26): S1/S2 have not moved, so nothing was purchased."
+        },
+        {
+          "id": "2026-09-06_0719",
+          "dir": "S6-verify/2026-09-06_0719",
+          "at": "2026-09-06T06:20",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "startedAt": "2026-09-06T06:19",
+          "elapsedMin": 1,
+          "basedOn": {
+            "S1": "2026-09-06_0644",
+            "S2": "2026-07-21_1542",
+            "S3": "2026-08-30_1604",
+            "S4": "v1.61_2026-09-05_1024"
+          },
+          "note": "PASS 0 hard / 15 soft. Re-run only to clear S6-STALE after the notOnLeaflet field rename (S1 2026-09-06_0644). redteam REUSED from 2026-08-30_1722 (derived 2026-08-26, 11 services): service fingerprint fe2a706722e5 identical on both S1 runs, so no service fact the answer is about has moved and no red team was bought. Soft 14 -> 15 is the OA-259 reader, not the rename: 604 moves from a false missing-service to known-off carrying the town's own reason, and the group entry Dedicated school services is now named as silencing nothing."
+        },
+        {
+          "id": "2026-09-10_1758",
+          "dir": "S6-verify/2026-09-10_1758",
+          "at": "2026-09-10T16:58",
+          "outputs": [
+            "redteam.json",
+            "verification.json",
+            "verification.docx"
+          ],
+          "startedAt": "2026-09-10T16:58",
+          "elapsedMin": 0,
+          "basedOn": {
+            "S1": "2026-09-06_0644",
+            "S2": "2026-07-21_1542",
+            "S3": "2026-09-10_1753",
+            "S4": "v1.66_2026-09-10_1754"
+          },
+          "note": "OA-297: S3 moved internalDiagram to parked.internalDiagram; red-team answer REUSED from 2026; 0 hard / 17 soft"
+        }
+      ]
+    }
+  }
+}

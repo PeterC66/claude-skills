@@ -19,6 +19,13 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 // TSK — the town engine's assets folder. Through place_engine.js since 2026-09-03
 // (OA-232 Tier 3.1): the join this replaced went straight across the tree and so
@@ -83,3 +90,7 @@ if (svg.includes('>' + emitted + '<')) {
 } else {
   console.log('internal.svg written (title token not matched; check RJ.town). Title left as-is.');
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

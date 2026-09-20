@@ -34,11 +34,16 @@ const os = require('node:os');
 const path = require('node:path');
 const { load } = require('./_engine');
 
-const { planSheets, buildSheets, DRAW_ORDER, RECIPE } = load('build_s4.js');
+const { planSheets, buildSheets, sheetEnv, DRAW_ORDER, RECIPE, SK } = load('build_s4.js');
 const { SHEETS } = load('sheet_registry.js');
 const { LOG_NAME } = load('build_log.js');
+const { engineDep, ENGINE_HOME } = load('engine_paths.js');
 
 const LEVELS = ['area', 'place'];
+/* A stand-in for a run folder, and it deliberately holds nothing: the copied generator
+ * whose resolution OA-342 is about has no siblings beside it, so a real folder with a
+ * real icons.js in it would answer from the sibling arm and prove nothing. */
+const RUNDIR = path.join(os.tmpdir(), 'bs4-no-such-run-folder');
 
 test('every sheet the registry declares has a recipe at every level it can be drawn', () => {
   // The join, in the direction that matters: a sheet the engine says it draws and
@@ -107,6 +112,67 @@ test('the schematic recipe passes OVERRIDES_FILE for a place and never for a tow
   assert.ok(!RECIPE.schematic.area.overridesFile);
   assert.ok(!RECIPE.diagram.place.overridesFile, 'the place diagram must not force OVERRIDES_FILE');
   assert.ok(!RECIPE.diagram.area.overridesFile);
+});
+
+test('every sheet this engine draws runs its generator with THIS engine, not the installed one', () => {
+  // buses-data OA-342, and it is the whole action: five of the nine rows carried
+  // `env: { SKILL_ASSETS: SK }` and three carried none — internal.area, external.area
+  // and external.place. A generator copied into a run folder has no siblings, so with
+  // no SKILL_ASSETS engine_paths.js falls to its last resort, the INSTALLED engine on
+  // this laptop, while the rest of the same build used the engine being rolled out and
+  // routes.json was stamped with the latter's hash. Eight hybrid sheets reached
+  // buses-data's `main` on 2026-09-13 that way.
+  //
+  // The assertion is over the WHOLE table rather than over the three rows that were
+  // wrong, which is the point of asking it here: a tenth row added tomorrow is covered
+  // by a test nobody has to remember to widen. Both populations come from the module.
+  const missing = [];
+  for (const [key, byLevel] of Object.entries(RECIPE))
+    for (const [level, r] of Object.entries(byLevel)) {
+      const env = sheetEnv(r, { dir: RUNDIR });
+      if (env.SKILL_ASSETS !== SK) missing.push(`${key}/${level} -> ${env.SKILL_ASSETS}`);
+    }
+  assert.deepStrictEqual(missing, [], 'these rows would draw with whatever engine is installed');
+  // The one override there is, and it must survive the default being set over it:
+  // build_internal_place.js runs in place from the place skill and spawns the town
+  // generator itself, reading TSK for it — the same directory one process deeper.
+  assert.strictEqual(sheetEnv(RECIPE.internal.place, { dir: RUNDIR }).TSK, SK);
+  // AND THE DIRECTION, which is the half that stops this being lost again: the default
+  // goes UNDER a row's own env, never over it. No row overrides SKILL_ASSETS today —
+  // asserted on a row made here for the purpose, because a property with no instance is
+  // exactly the one a refactor reverses without any test noticing.
+  assert.strictEqual(sheetEnv({ env: { SKILL_ASSETS: '/an/engine/of/its/own' } }, { dir: RUNDIR }).SKILL_ASSETS,
+    '/an/engine/of/its/own', 'a row can no longer override the engine it is built with');
+});
+
+test('the env a row carries is what a copied generator then resolves its siblings through', () => {
+  // The join, and the reason the test above is not a tautology about a variable name:
+  // SKILL_ASSETS is only worth setting because engine_paths.js's dep() reads it, and
+  // the fault it prevents is a resolution, not a missing key. Falsified in both
+  // directions against a run folder with no siblings in it, which is what every copied
+  // generator sees.
+  const before = process.env.SKILL_ASSETS;
+  try {
+    delete process.env.SKILL_ASSETS;
+    assert.throws(() => engineDep(RUNDIR)('icons.js'), /no engine to resolve "icons\.js"/,
+      'with no engine named, a copied generator must REFUSE rather than reach for whatever '
+      + 'engine is installed on this machine — OA-342 item 5, 2026-09-20');
+    for (const [key, byLevel] of Object.entries(RECIPE))
+      for (const [level, r] of Object.entries(byLevel)) {
+        process.env.SKILL_ASSETS = sheetEnv(r, { dir: RUNDIR }).SKILL_ASSETS;
+        assert.strictEqual(engineDep(RUNDIR)('icons.js'), path.join(SK, 'icons.js'),
+          `${key}/${level} resolves a shared module outside the engine that is building it`);
+      }
+  } finally {
+    if (before === undefined) delete process.env.SKILL_ASSETS; else process.env.SKILL_ASSETS = before;
+  }
+  // WHERE THIS DISCRIMINATES, said out loud because on one machine it used to not: the
+  // two outcomes differ whenever SK is not the installed engine — a worktree, which is
+  // what the engine-PR ordering now requires for every engine change, and a CI clone,
+  // where ENGINE_HOME does not exist at all. THAT CAVEAT IS SPENT as of OA-342 item 5:
+  // the no-engine case is now a THROW rather than a path, so the first assertion
+  // discriminates on every machine, including the installed engine where the two
+  // folders are the same one.
 });
 
 test('only an area internal asks for build-meta.json', () => {

@@ -51,7 +51,28 @@
  * will raise a row nothing can ever clear. `unreachableKeys()` is that rule, in
  * one place, so both callers share it.
  *
- * Zero dependencies (Node core only), like the rest of assets/. Exported as a
+ * AND EXCEPT THE KEYS WHOSE SUBJECT HAS BEEN RE-IDENTIFIED SINCE THE ANSWER WAS
+ * GIVEN (OA-354, 2026-09-19). A key is `<category>:<name>`, so a later
+ * OpenStreetMap pull that NAMES a POI which used to be nameless retires every
+ * stored answer about it: the answer is still true, still on the sheet, and no
+ * longer reachable under the identity it was saved with. High Wycombe is the
+ * measured case — the portal holds `library:Library` and `museum:Museum`, the
+ * fallback names `classify()` gave two unnamed POIs on 2026-08-31, and the town
+ * now has five named libraries and three named museums and neither of those
+ * keys. Until this rule existed the comparison read them as ADDED, the worklist
+ * raised them as a debt, and the only way to clear the row was `--apply`, which
+ * would have written two keys matching nothing — the exact unknownTierKeys state
+ * three paragraphs up. So an ORPHANED key is named, counted, told which
+ * candidates of its category the town DOES have, and never written.
+ *
+ * THE NARROWING IS ONLY AS GOOD AS THE CANDIDATE LIST, and it FAILS OPEN. When
+ * a tree has neither ci-reference nor an S2 run — a fresh clone, a worktree —
+ * `townCandidateKeys()` returns null, nothing is called orphaned, and the debt
+ * is raised exactly as it was before. A false debt is a row somebody reads; a
+ * false clear is a customer's answer quietly written off.
+ *
+ * Zero dependencies (Node core + poi_select.js, for the candidate list the
+ * orphan rule needs), like the rest of assets/. Exported as a
  * module for bus-work's worklist; `require.main === module` guards the CLI, so
  * requiring it draws nothing and fetches nothing (the dark-file rule, OA-224
  * Tier 4.1). Not in the engine-hash closure: no generator requires it.
@@ -61,6 +82,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { parseArgs, die, readJson, resolveBuses, resolvePortal } = require('./cli.js');
+const { selectPois } = require('./poi_select.js');
 
 const STAGE_JS = path.join(__dirname, 'stage.js');
 
@@ -98,16 +120,92 @@ function resolveRule(src, por) {
   return { tier: por.tier, as: por.as || (src && src.as) || null };
 }
 
+/** `<category>:<name>` — the category is everything before the FIRST colon. */
+const catOf = (key) => String(key).slice(0, String(key).indexOf(':'));
+
 /**
- * Keys the selector removes BEFORE applyTiers() sees them, given the town's
- * `poi` config. Today that is one rule: `industrial:*` under industrialKeep
- * "none". Add a rule here when poi_select.js grows another pre-tier cull, and
- * add its case to test/poi_tiers_sync.test.js in the same commit.
+ * The POI data on disk for one map, preferring ci-reference for the reason
+ * poi_worksheet.js states: it is the tracked mirror of the latest S4, so it is
+ * the data that DREW the sheet now published, and the S2/S4 run folders are
+ * gitignored. The S2 fallback is for a town mid-build. Null when neither is here
+ * — which every caller must read as "cannot narrow", never as "nothing found".
  */
-function unreachableKeys(tiers, poiCfg) {
-  const ind = poiCfg && poiCfg.industrialKeep;
-  if (ind !== 'none') return [];
-  return Object.keys(tiers || {}).filter((k) => k.startsWith('industrial:'));
+function poiInputs(mapDir) {
+  const ci = path.join(mapDir, 'ci-reference');
+  if (fs.existsSync(path.join(ci, 'osm.json'))) return { dir: ci, source: 'ci-reference' };
+  const s2 = path.join(mapDir, 'S2-geometry');
+  if (fs.existsSync(s2)) {
+    const runs = fs.readdirSync(s2).filter((d) => fs.existsSync(path.join(s2, d, 'osm.json'))).sort();
+    if (runs.length) return { dir: path.join(s2, runs[runs.length - 1]), source: 'S2-geometry/' + runs[runs.length - 1] };
+  }
+  return null;
+}
+
+/**
+ * Every `<cat>:<name>` identity this map could offer a chooser today, or null if
+ * the data to answer that is not in this tree.
+ *
+ * It runs the engine's OWN poi_select.js over data already on disk — the same
+ * chain, the same de-duplication, the same tidy rules that produced the keys the
+ * pack was built from — so there is no second code path to drift. Nothing is
+ * drawn, no generator runs and no stage folder is touched; `report.candidates`
+ * is filled whether or not the town has classified anything, and it is read
+ * BEFORE `as` renaming, which is the identity a tier key is written against.
+ */
+function townCandidateKeys(mapDir) {
+  const inp = poiInputs(mapDir);
+  if (!inp) return null;
+  const sets = ['osm.json', 'osm2.json']
+    .map((f) => path.join(inp.dir, f)).filter(fs.existsSync)
+    .map((f) => { try { return readJson(f).elements; } catch { return null; } }).filter(Boolean);
+  if (!sets.length) return null;
+  const cfgPath = fs.existsSync(path.join(inp.dir, 'routes.json'))
+    ? path.join(inp.dir, 'routes.json') : path.join(mapDir, 'ci-reference', 'routes.json');
+  let cfg; try { cfg = readJson(cfgPath); } catch { return null; }
+  const report = {};
+  try { selectPois(sets, cfg.poi || {}, report); } catch { return null; }
+  return Array.isArray(report.candidates) ? report.candidates.map((c) => c.key) : null;
+}
+
+/**
+ * The two reasons a stored key can reach no POI, split, in one place so that
+ * every caller applies both.
+ *
+ *   culled    the selector drops it BEFORE applyTiers() runs — today one rule,
+ *             `industrial:*` under industrialKeep "none". Add a rule here when
+ *             poi_select.js grows another pre-tier cull, and add its case to
+ *             test/poi_tiers_sync.test.js in the same commit.
+ *   orphaned  the town has no candidate of that identity any more, because the
+ *             POI it named has since been named, renamed or lost (OA-354). Each
+ *             carries `have`: the candidate keys of its own category the town
+ *             DOES hold, which is the whole of what a person needs to decide
+ *             whether it was re-keyed by hand or genuinely went.
+ *
+ * `candidates` null means the candidate list could not be read, and then nothing
+ * is orphaned — the narrowing must never be able to blind the check to a real
+ * debt just because a tree has no geometry in it.
+ */
+function unreachableReasons(tiers, poiCfg, candidates) {
+  const keys = Object.keys(tiers || {});
+  const culled = (poiCfg && poiCfg.industrialKeep) === 'none' ? keys.filter((k) => k.startsWith('industrial:')) : [];
+  if (!candidates) return { culled, orphaned: [] };
+  const have = new Set(candidates);
+  const skip = new Set(culled);
+  const byCat = new Map();
+  for (const k of candidates) {
+    const c = catOf(k);
+    if (!byCat.has(c)) byCat.set(c, []);
+    byCat.get(c).push(k);
+  }
+  const orphaned = keys.filter((k) => !skip.has(k) && !have.has(k))
+    .map((k) => ({ key: k, cat: catOf(k), have: byCat.get(catOf(k)) || [] }));
+  return { culled, orphaned };
+}
+
+/** Both reasons as one list: every stored key that would reach nothing. */
+function unreachableKeys(tiers, poiCfg, candidates) {
+  const r = unreachableReasons(tiers, poiCfg, candidates);
+  return [...r.culled, ...r.orphaned.map((o) => o.key)];
 }
 
 /**
@@ -117,28 +215,40 @@ function unreachableKeys(tiers, poiCfg) {
  *   same        keys in both, agreeing
  *   sourceOnly  source keys the portal never named — kept
  *   unreachable portal keys the selector would drop before tiers — not written
+ *   orphaned    portal keys naming a POI this town no longer has under that
+ *               identity — {key, cat, have} — not written and NOT a debt
+ *   narrowed    whether the candidate list was available to tell the last two
+ *               apart; false means `added` may still hold a stale identity
  * `owed` is the one-word verdict a worklist wants: true when added or changed
- * is non-empty.
+ * is non-empty. Neither unreachable nor orphaned counts towards it, for the same
+ * reason: a row that can only be cleared by making the data worse is a row
+ * nothing can ever clear.
  */
-function compareTiers(sourceTiers, portalTiers, poiCfg) {
+function compareTiers(sourceTiers, portalTiers, poiCfg, candidates) {
   const src = normTiers(sourceTiers), por = normTiers(portalTiers);
-  const unreachable = new Set(unreachableKeys(por, poiCfg));
+  const reasons = unreachableReasons(por, poiCfg, candidates);
+  const unreachable = new Set(reasons.culled);
+  const orphaned = new Set(reasons.orphaned.map((o) => o.key));
   const added = [], changed = [], same = [];
   for (const [k, r0] of Object.entries(por)) {
-    if (unreachable.has(k)) continue;
+    if (unreachable.has(k) || orphaned.has(k)) continue;
     if (!(k in src)) { added.push(k); continue; }
     const r = resolveRule(src[k], r0);
     if (sameRule(src[k], r)) same.push(k);
     else changed.push({ key: k, from: src[k], to: r });
   }
   const sourceOnly = Object.keys(src).filter((k) => !(k in por));
-  return { added, changed, same, sourceOnly, unreachable: [...unreachable], owed: added.length + changed.length > 0 };
+  return {
+    added, changed, same, sourceOnly,
+    unreachable: [...unreachable], orphaned: reasons.orphaned, narrowed: !!candidates,
+    owed: added.length + changed.length > 0,
+  };
 }
 
 /** The merged tiers block in routes.json's own spelling. Portal wins on conflict. */
-function mergeTiers(sourceTiers, portalTiers, poiCfg) {
+function mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) {
   const src = normTiers(sourceTiers), por = normTiers(portalTiers);
-  const skip = new Set(unreachableKeys(por, poiCfg));
+  const skip = new Set(unreachableKeys(por, poiCfg, candidates));
   const merged = {};
   for (const [k, r] of Object.entries(src)) merged[k] = r;
   for (const [k, r] of Object.entries(por)) if (!skip.has(k)) merged[k] = resolveRule(src[k], r);
@@ -236,6 +346,16 @@ function printReport(town, cmp, where) {
   if (cmp.added.length) { console.log(`  ADDED ${cmp.added.length}:`); for (const k of cmp.added) console.log(`    + ${k}`); }
   if (cmp.changed.length) { console.log(`  CHANGED ${cmp.changed.length}:`); for (const c of cmp.changed) console.log(`    ~ ${c.key}: ${fmt(c.from)} -> ${fmt(c.to)}`); }
   if (cmp.unreachable.length) console.log(`  unreachable: ${cmp.unreachable.slice(0, 6).join(', ')}${cmp.unreachable.length > 6 ? ', ...' : ''} — dropped by poi.industrialKeep "none" before tiers run, so writing them would only produce unknownTierKeys warnings`);
+  if (cmp.orphaned.length) {
+    console.log(`  ORPHANED ${cmp.orphaned.length} — an answer whose subject this town no longer has under that name. NOT owed, and not written:`);
+    for (const o of cmp.orphaned) {
+      const have = o.have.length ? o.have.join(', ') : '(none at all)';
+      console.log(`    ? ${o.key}  — this town's ${o.cat}: ${have}`);
+    }
+    console.log('    Writing one would match no POI and land in the build\'s unknownTierKeys. Whether to re-key it, retire it,');
+    console.log('    or leave it and report it is a decision about somebody else\'s saved answer — so this tool only reports it.');
+  }
+  if (!cmp.narrowed) console.log('  (no ci-reference or S2 geometry in this tree, so a stale identity cannot be told from a real debt — every ADDED key below is unverified)');
   console.log(cmp.owed ? `  => the source is OWED ${cmp.added.length + cmp.changed.length} key(s)` : '  => nothing owed — the source already carries the portal\'s answer');
 }
 
@@ -263,15 +383,16 @@ async function main() {
     where = `from ${url}, ${mapLabel}, ${block.counts ? `${block.counts.answered} answered (${block.counts.saved} saved in the portal, ${block.counts.pack} in its pack)` : `${Object.keys(portalTiers).length} keys`}`;
   }
 
-  const cmp = compareTiers(sourceTiers, portalTiers, poiCfg);
+  const candidates = townCandidateKeys(info.dir);
+  const cmp = compareTiers(sourceTiers, portalTiers, poiCfg, candidates);
   if (args.json) { console.log(JSON.stringify({ town, source: info.rec.id, where, ...cmp }, null, 2)); return; }
   printReport(town, cmp, where);
 
   if (!args.apply) { if (cmp.owed) console.log('\n  dry run — pass --apply to write a new S3 run carrying the merge'); return; }
   if (!cmp.owed) { console.log('\n  --apply: nothing to write'); return; }
-  const merged = { ...info.routes, poi: { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, poiCfg) } };
+  const merged = { ...info.routes, poi: { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) } };
   const note = (args.note && args.note !== true) ? String(args.note)
-    : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable not written. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
+    : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable and ${cmp.orphaned.length} orphaned not written. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
   const newDir = writeNewS3(info, merged, note);
   console.log(`\n  wrote and committed a new S3 run: ${newDir}`);
   console.log('  Next: a rollout dry run reads the latest S3 — and it WILL refuse with STALE-INPUTS, because this run');
@@ -280,7 +401,7 @@ async function main() {
   console.log(`    node rollout.js --town "${town}" --force --buses "${buses}"`);
 }
 
-module.exports = { normRule, normTiers, denormRule, unreachableKeys, compareTiers, mergeTiers, findPortalMap, portalCredentials, fetchPortalBlock };
+module.exports = { normRule, normTiers, denormRule, unreachableKeys, unreachableReasons, poiInputs, townCandidateKeys, compareTiers, mergeTiers, findPortalMap, portalCredentials, fetchPortalBlock };
 
 if (require.main === module) {
   // exitCode rather than exit(): a hard exit under an open fetch handle trips a

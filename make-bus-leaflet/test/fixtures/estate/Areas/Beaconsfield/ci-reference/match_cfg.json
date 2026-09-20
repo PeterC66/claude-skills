@@ -1,0 +1,5 @@
+{
+  "_comment": "Beaconsfield first build. coreMaxKm 2.5 clips the broad 040000001 NaPTAN block to the town. X74 only touches the southern edge (Beaconsfield Services/Harehatch Lane).",
+  "skipRoutes": [],
+  "reachExtend": {}
+}

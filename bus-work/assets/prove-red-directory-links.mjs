@@ -28,7 +28,7 @@
  * on a calendar, which is the fault OA-289 took out of the backlog index and the
  * whole reason this check is not in CI in the first place.
  *
- * TWO HARNESS LESSONS INHERITED FROM prove-red-loop-blocked.mjs. A source
+ * TWO HARNESS LESSONS INHERITED FROM prove-red-loop-your-move.mjs. A source
  * assertion asks whether the line RUNS, not whether the file contains the text,
  * because `includes()` is satisfied by the line commented out. And where a phrase
  * must appear in more than one branch it is COUNTED, because an assertion that
@@ -40,6 +40,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readDirectoryState, directoryLinkItems, CADENCE_DAYS } from './directory_links.mjs';
 import { needsOf } from './concurrency.mjs';
+import { resolveBuses } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 let bad = 0;
@@ -223,7 +224,9 @@ console.log('\n12. THE JOIN ITSELF — the real writer\'s output, read by the re
   // tests while disagreeing about a field name. This is the only place the
   // question can be asked. buses-data is absent from a claude-skills checkout, so
   // in CI this section SAYS it could not look rather than reporting a pass.
-  const busesDir = process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses';
+  // BUSES_DIR, then the one named laptop path — engine.mjs's order, read from
+  // engine.mjs rather than written out again here (buses-data OA-345).
+  const busesDir = resolveBuses();
   const writer = path.join(busesDir, 'BusMapsUK', 'bus-map-directory', 'directory.mjs');
   if (!fs.existsSync(writer)) {
     console.log(`  --  SKIPPED, and this is not a pass: buses-data is not at ${busesDir}, so the writer cannot be joined to the reader here. Expected in CI; run this on the laptop.`);
@@ -257,7 +260,7 @@ console.log('\n12. THE JOIN ITSELF — the real writer\'s output, read by the re
 console.log('\n13. the wire in worklist.mjs — literal strings, and they must RUN');
 {
   const src = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  // NOT src.includes(). A mutation sweep on prove-red-loop-blocked.mjs commented
+  // NOT src.includes(). A mutation sweep on prove-red-loop-your-move.mjs commented
   // a wire out and every assertion stayed green, because a commented line still
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));

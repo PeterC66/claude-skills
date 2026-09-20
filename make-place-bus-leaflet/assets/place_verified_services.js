@@ -23,6 +23,13 @@ const fs = require('fs');
 
 function readJSON(f) { return JSON.parse(fs.readFileSync(f, 'utf8')); }
 
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const gtfs = readJSON('gtfs-services.json');
 const place = fs.existsSync('place.json') ? readJSON('place.json') : null;
 const routes = fs.existsSync('routes.json') ? readJSON('routes.json') : {};
@@ -160,3 +167,7 @@ if (Array.isArray(routes.notOnLeaflet) && routes.notOnLeaflet.length) {
 
 fs.writeFileSync('verified-services.json', JSON.stringify(out, null, 2) + '\n');
 console.log(`wrote verified-services.json (${out.services.length} service(s), adapted from gtfs-services.json)`);
+}
+
+if (require.main === module) main();
+module.exports = { main };

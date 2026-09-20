@@ -22,11 +22,32 @@
  *                                          print the board, so one walk feeds
  *                                          both CI outputs (see JSON_OUT below)
  *   ...[--live <base url>] [--no-live]     (deployment drift; see deploymentRow below)
+ *   ...[--no-fetch]                        (never refresh origin/main to date an unknown live sha)
  *
  * Defaults (Peter's machine): --buses "C:\u3a St Ives\Using AI\Buses"
  *                              --portal "C:\Claude\community-bus-maps"
  *
  * Zero dependencies (Node core only).
+ *
+ * WHAT MAKES THE BOARD RED, AND WHAT DOES NOT (buses-data OA-396, R3 of the
+ * process review of 2026-09-17). The exit code answers ONE question: is there
+ * a FAULT. A fault is a sheet that no longer reproduces (DIFF, FAIL, MISSING,
+ * NO-BUILD, a stale boarding index, a held-back town nobody can gate), a
+ * vendored file that differs from its source, a fixture describing the previous
+ * engine, a quality regression or a ratchet that could not run, a claims
+ * register that contradicts itself or a map, a commitment that is overdue, and a
+ * live site running a commit no fetch can find. A CHORE is work that is merely
+ * due -- a verification report older than the data, a map drawn by an older
+ * engine, a merge nobody has deployed yet, a claim with no home yet -- and a
+ * chore is PRINTED here and carried by the bus-work worklist as a row at its
+ * rank, and never by the exit code. The reason is measured rather than argued:
+ * 317 red runs in 69 streaks on buses-data between 20 August and 17 September,
+ * none of the newest thirty a fault in a map, and an email that had therefore
+ * stopped meaning anything. A red that means "somebody has a chore" is a red
+ * nobody opens, and then the one that means "a sheet is wrong" goes unopened
+ * with it. tools/prove-red-status.js holds both halves: a stale S6 and a stale
+ * engine stamp must leave the exit 0 AND be reported, and a sheet that no
+ * longer reproduces must not.
  */
 const fs = require('fs');
 const path = require('path');
@@ -37,6 +58,10 @@ const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_ve
 const quality = require('./quality_gate');
 const { spawnSync } = require('child_process');
 const { scratchDir } = require('./scratch');
+// The Deployment row (OA-396 moved it out, under the line ratchet); gitIn is
+// shared with the vendoring rows below.
+const deployment = require('./deployment');
+const { deploymentRow, deployBad, printDeployment, gitIn } = deployment;
 /* THE SKILLS REPOSITORY, which OA-214 checks a held-back town's engine out of.
  *
  * Normally `assets/`'s grandparent — `SK` is `…/make-bus-leaflet/assets`. But it
@@ -48,6 +73,7 @@ const { scratchDir } = require('./scratch');
  * files into `engine/`, which is a different repo entirely. Guessing a path that
  * happens to be right on one machine is how a check ends up reporting "cannot
  * look" for a reason having nothing to do with its subject. */
+function runCli() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const SKILLS_ROOT = (() => {
   if (process.env.SKILLS_REPO) return path.resolve(process.env.SKILLS_REPO);
   let d = SK;
@@ -87,23 +113,17 @@ const AS_JSON = !!args.json;
 // buses-data's `Documentation/README - What CI costs and how to keep it cheap.md`.
 const JSON_OUT = typeof args['json-out'] === 'string' ? args['json-out'] : null;
 const NO_QUALITY = !!args['no-quality'];
-// Deployment drift (technical-audit_2026-08-25 N2). Default ON against the live
-// site; --no-live skips it entirely, --live <url> points it somewhere else.
+// Deployment drift (technical-audit_2026-08-25 N2): default ON against the live
+// site; --no-live skips it, --live <url> points it elsewhere, --no-fetch holds
+// off the one fetch OA-392 added, and --deploy-grace-hours moves the boundary
+// between amber and BEHIND. The row, its four rules and what is red are in
+// ./deployment.js; since OA-396 the grace decides the WORD and never the exit.
 const NO_LIVE = !!args['no-live'];
-const LIVE_URL = typeof args.live === 'string' ? args.live.replace(/\/+$/, '') : 'https://busmaps.uk';
-// How long a merged-but-undeployed commit is allowed to sit before this goes
-// RED rather than amber. A deploy is a deliberate act and a merge at midnight
-// should not page anyone at 00:01, but "we merged it and forgot" is exactly the
-// state this exists to catch, and twelve hours is long enough that reaching it
-// means nobody is coming.
-//
-// Overridable so the RED branch can be PROVED to fire rather than assumed to:
-// `--deploy-grace-hours 0` against a deployment that is behind must exit 1. A
-// gate nobody has watched fail is not a gate, and the amber/red split is the
-// only part of this row that contains a judgement.
+const LIVE_URL = typeof args.live === 'string' ? args.live.replace(/\/+$/, '') : deployment.DEFAULT_LIVE_URL;
+const NO_FETCH = !!args['no-fetch'];
 const DEPLOY_GRACE_HOURS = (args['deploy-grace-hours'] !== undefined && args['deploy-grace-hours'] !== true)
   ? Number(args['deploy-grace-hours'])
-  : 12;
+  : deployment.DEFAULT_GRACE_HOURS;
 
 // The SAME judgement, for the vendoring row, and for the same reason (2026-08-31).
 // A re-vendor sitting on a pushed branch is the deploy row's shape one step
@@ -1341,51 +1361,37 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // that has slipped through three times in three days: an engine round that
   // re-vendors and leaves a fixture describing the previous engine.
   || freshnessRows.some(r => r.stale.length)
-  || engineStaleRows.length > 0
-  // OA-273: a claim with no home, a decided fact over a silent map, or a checker
-  // that could not run. Green on the day it landed because the register was
+  // ENGINE STALENESS LEFT THIS EXPRESSION ON 2026-09-17 (buses-data OA-396), and
+  // it is not decoration now either. OA-151 folded `engineStaleRows` in on
+  // 2026-08-28 because the column had been computed, printed and dropped, and a
+  // verdict the exit code ignores is a gate described rather than run. That
+  // argument was right about the CHECK and wrong about the COLOUR: a map drawn by
+  // an older engine whose sheets still reproduce byte for byte is a chore -- a
+  // rollout somebody has not run -- and the byte gate above is what says whether
+  // the artwork is wrong. So the rows are still computed, still printed below
+  // as ENGINE STALE, still in the JSON as `engineStale`, and carried by the
+  // bus-work worklist's `engine-stale` row; what changed is that they no longer
+  // exit 1. tools/prove-red-status.js pins both: a stale stamp is reported and
+  // green, and the same fixture against a copy of this file with the old term
+  // put back goes red, so the fixture is known to discriminate.
+  //
+  // What still gates about an old engine is `heldBackUncheckable` above -- a
+  // town nobody could gate at all -- because "we could not look" must never be
+  // quieter than "we looked and it was fine".
+  //
+  // OA-273: a decided fact over a silent map, a register that contradicts
+  // itself, or a checker that could not run. A claim with NO HOME stopped being
+  // red on 2026-09-17 (OA-396): it is a service fact OWED, a chore the worklist
+  // carries as `s6-claims-uncovered`, and check-s6-claims.mjs's own `red` no
+  // longer counts it. Green on the day it landed because the register was
   // written and Ely Co-op's S3 carried its two decisions first.
   || require('./s6_claims.js').isRed(s6Claims);
 
 
 // ---- deployment drift: is the LIVE site running what main says? ------------
-//
-// WHY THIS IS HERE AT ALL (technical-audit_2026-08-25 N2). On 2026-08-25 the
-// live site was one commit behind `main`, and the commit it was missing was the
-// one crediting NaPTAN in legal.html -- an attribution correction whose entire
-// value is that the public can see it. Nothing in the estate compared the two.
-// The portal's own /health had carried `gitSha` until the S4 fix gated it
-// (correctly) behind a token on 2026-08-20, and the only other surface was a
-// <meta> injected by a script, so establishing the gap took a headless browser.
-// A security fix had quietly cost an operational control.
-//
-// The portal now sets `X-App-Version: <version>+<short sha>` on every response,
-// from every route, with no authentication and no JavaScript. This reads it.
-//
-// THREE RULES ABOUT WHEN THIS MAY GO RED, because a badly-judged gate here would
-// be worse than none:
-//
-//   1. A NETWORK FAILURE IS NEVER RED. If the site is unreachable, that is what
-//      the uptime monitor is for (audit O2, live since 2026-08-20). A gate that
-//      cannot reach the network must say "I could not tell", not "your
-//      deployment is stale" -- the difference between the two is the whole
-//      lesson of a checker that reports "no answer" as "wrong answer".
-//   2. A MISSING HEADER IS NEVER RED either. It means the live build predates
-//      this change, which is a true and temporary fact, not a fault.
-//   3. BEHIND IS AMBER FOR DEPLOY_GRACE_HOURS AND RED AFTER. A merge is not a
-//      deploy and nobody should be gated the minute they press merge; twelve
-//      hours later, "merged and forgotten" is the only remaining explanation.
-//
-// The comparison is against `origin/main` in the portal checkout, falling back
-// to HEAD -- so running this on a feature branch still asks the right question
-// ("is the deployment current with main"), not the wrong one ("is the deployment
-// running my branch").
-function gitIn(dir, args) {
-  try {
-    const r = require('child_process').execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return r.trim();
-  } catch { return null; }
-}
+// In ./deployment.js since 2026-09-17 (OA-396): the row, its four rules, the
+// one fetch (OA-392), the grace (OA-355) and deployBad(), which is the whole
+// of what makes it red.
 
 // Read Development Docs/commitments.json and judge each entry against today.
 // Pure: no network, no git, no clock beyond `today`. Returns [] when the file is
@@ -1420,53 +1426,8 @@ function commitBad(c) {
   return c.rows.some(r => r.state === 'OVERDUE' || r.state === 'UNDATED');
 }
 
-async function deploymentRow() {
-  if (NO_LIVE) return { status: 'skipped', why: '--no-live' };
-  if (!exists(PORTAL)) return { status: 'skipped', why: 'no portal checkout to compare against' };
-
-  const ref = gitIn(PORTAL, ['rev-parse', '--verify', '--quiet', 'origin/main']) ? 'origin/main' : 'HEAD';
-  const wantFull = gitIn(PORTAL, ['rev-parse', ref]);
-  const want = gitIn(PORTAL, ['rev-parse', '--short', ref]);
-  if (!want) return { status: 'skipped', why: 'could not read a SHA from ' + PORTAL };
-
-  let live = null;
-  try {
-    const res = await fetch(LIVE_URL + '/health', { signal: AbortSignal.timeout(8000), redirect: 'follow' });
-    live = res.headers.get('x-app-version');
-    // DRAIN THE BODY even though only the header is wanted. An unconsumed
-    // response body leaves undici holding the socket, and this process ends by
-    // calling process.exit -- on Windows that combination aborts the process
-    // outright: "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file
-    // src\win\async.c". Found on the first real run after the deploy of
-    // 2026-08-25: every row was correct, the Deployment row said `current`, and
-    // the EXIT CODE was 127. Which is the worse half, because the exit code is
-    // the only part of this CI reads.
-    await res.arrayBuffer().catch(() => {});
-  } catch (e) {
-    // Rule 1: unreachable is not stale.
-    return { status: 'unreachable', want, url: LIVE_URL, why: String(e.message || e) };
-  }
-  if (!live) {
-    // Rule 2: no header means an older build, which is a fact and not a fault.
-    return { status: 'no-header', want, url: LIVE_URL, why: 'live build predates X-App-Version' };
-  }
-  const deployed = live.split('+').pop();
-  if (deployed === want || (wantFull && wantFull.startsWith(deployed))) {
-    return { status: 'current', want, deployed, url: LIVE_URL };
-  }
-
-  // Rule 3: how long has the undeployed commit been sitting there?
-  const ts = Number(gitIn(PORTAL, ['log', '-1', '--format=%ct', ref]));
-  const ageH = Number.isFinite(ts) ? Math.floor((Date.now() / 1000 - ts) / 3600) : null;
-  const overGrace = ageH == null ? true : ageH >= DEPLOY_GRACE_HOURS;
-  return {
-    status: overGrace ? 'BEHIND' : 'behind (grace)',
-    want, deployed, url: LIVE_URL, ageHours: ageH, graceHours: DEPLOY_GRACE_HOURS,
-  };
-}
-
 async function main() {
-  const deploy = await deploymentRow();
+  const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
   const commit = commitmentRows();
   if (AS_JSON || JSON_OUT) {
     const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error }, null, 2);
@@ -1479,7 +1440,7 @@ async function main() {
       fs.writeFileSync(JSON_OUT, payload + '\n');
     } else {
       console.log(payload);
-      return bad || deploy.status === 'BEHIND' || commitBad(commit);
+      return bad || deployBad(deploy) || commitBad(commit);
     }
   }
 
@@ -1532,7 +1493,16 @@ async function main() {
     }
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }
-  if (engineStaleRows.length) console.log('  ENGINE STALE (gating): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- rebuild it, or add a dated exception');
+  if (engineStaleRows.length) console.log('  ENGINE STALE (information, not red): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- drawn by an older engine; the byte gate is what says whether the artwork is wrong, and the worklist carries this as engine-stale');
+  // The S6 column has never gated and now says so (OA-396). It is the chore the
+  // review's cause 3 named first, and the answer to "why is main red after a
+  // rebuild" was never this column -- but a reader could not tell that from a
+  // cell that reads STALE in the same font as DIFF.
+  const s6StaleTowns = townRows.filter(r => r.s6Stale).map(r => r.name);
+  const s6StalePlaces = placeRows.filter(r => r.s6Stale).map(r => r.name);
+  if (s6StaleTowns.length || s6StalePlaces.length) console.log('  S6 STALE (information, not red): '
+    + [s6StaleTowns.length ? 'towns ' + s6StaleTowns.join(', ') : '', s6StalePlaces.length ? 'places ' + s6StalePlaces.join(', ') : ''].filter(Boolean).join('; ')
+    + '  -- the data moved since the last verification report; a chore the worklist carries as s6-stale, never a red');
   // OA-188 — named in full, because the cell can only hold a word. A drift that a
   // DIFF verdict is masking is printed here too: the sheet has two problems and
   // the cell can only say one of them.
@@ -1684,23 +1654,9 @@ async function main() {
     }
   }
 
-  console.log('\n=== Deployment (' + (deploy.url || LIVE_URL) + ') ===');
-  if (deploy.status === 'current') {
-    console.log('  current   live ' + deploy.deployed + ' == main ' + deploy.want);
-  } else if (deploy.status === 'skipped') {
-    console.log('  skipped   ' + deploy.why);
-  } else if (deploy.status === 'unreachable') {
-    console.log('  unreachable  ' + deploy.why + '  (not a verdict about the deployment -- the uptime monitor owns that)');
-  } else if (deploy.status === 'no-header') {
-    console.log('  no header    the live build predates X-App-Version; deploy once and this row starts working');
-  } else {
-    console.log('  ' + deploy.status + '   live ' + deploy.deployed + ' != main ' + deploy.want
-      + (deploy.ageHours == null ? '' : '  (' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h)'));
-    console.log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
-    console.log('      npm run deploy');
-  }
+  printDeployment(deploy, LIVE_URL);
 
-  return bad || deploy.status === 'BEHIND' || commitBad(commit);
+  return bad || deployBad(deploy) || commitBad(commit);
 }
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
@@ -1735,3 +1691,7 @@ main().then(finish).catch((e) => {
   console.error(e);
   finish(true);
 });
+}
+
+if (require.main === module) runCli();
+module.exports = { main: runCli };

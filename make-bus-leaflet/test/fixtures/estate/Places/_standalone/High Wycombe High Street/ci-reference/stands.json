@@ -1,0 +1,427 @@
+{
+ "place": "High Street",
+ "center": [
+  51.6285952,
+  -0.7488204
+ ],
+ "radiusM": 200.0,
+ "register": "naptan.sqlite",
+ "generatedBy": "naptan_stands.py v1.2",
+ "verdict": "OK",
+ "counts": {
+  "stand": 5,
+  "named": 1,
+  "unidentifiable": 0
+ },
+ "stops": [
+  {
+   "atco": "040000003054",
+   "distM": 9,
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "27",
+    "32",
+    "32A",
+    "36",
+    "36S",
+    "37",
+    "37M",
+    "M40",
+    "X74"
+   ],
+   "routeDirections": {
+    "103": [
+     "High Wycombe BusStn - Axis Park"
+    ],
+    "102": [
+     "High Wycombe BusStn - Heathrow Central Bus Station"
+    ],
+    "104": [
+     "High Wycombe BusStn - York Road (UB8)"
+    ],
+    "105": [
+     "High Wycombe BusStn - Village Hall"
+    ],
+    "32": [
+     "Empire Cinema - Woodside Road"
+    ],
+    "32A": [
+     "Empire Cinema - Woodside Road"
+    ],
+    "36": [
+     "High Wycombe BusStn - Railway Station"
+    ],
+    "36S": [
+     "High Wycombe BusStn - Railway Station"
+    ],
+    "37": [
+     "High Wycombe BusStn - Parish Church"
+    ],
+    "37M": [
+     "High Wycombe BusStn - Parish Church"
+    ],
+    "27": [
+     "High Wycombe BusStn - Orchard Road"
+    ],
+    "M40": [
+     "High Wycombe BusStn - York Road (UB8)"
+    ],
+    "X74": [
+     "High Wycombe BusStn - Belmont Road"
+    ]
+   },
+   "gtfsPos": [
+    51.628654,
+    -0.748916
+   ],
+   "naptan": {
+    "CommonName": "High Street",
+    "Indicator": "Stop R",
+    "stand": "R",
+    "stand_kind": "stop",
+    "Bearing": "E",
+    "Street": "High Street",
+    "Landmark": "Corporation Street",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.628654,
+    "lon": -0.748916
+   },
+   "class": "stand",
+   "label": "Stop R",
+   "standCode": "R",
+   "why": "NaPTAN Indicator 'Stop R'",
+   "facing": "east",
+   "street": "High Street",
+   "landmark": "Corporation Street",
+   "stopType": "BCT",
+   "name": "High Street"
+  },
+  {
+   "atco": "040000003055",
+   "distM": 31,
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "27",
+    "32",
+    "32A",
+    "36",
+    "36S",
+    "37",
+    "37M",
+    "M40",
+    "X74"
+   ],
+   "routeDirections": {
+    "103": [
+     "Axis Park - High Wycombe BusStn"
+    ],
+    "102": [
+     "Heathrow Central Bus Station - High Wycombe BusStn"
+    ],
+    "104": [
+     "York Road (UB8) - High Wycombe BusStn"
+    ],
+    "105": [
+     "Village Hall - High Wycombe BusStn"
+    ],
+    "32": [
+     "Woodside Road - Asda"
+    ],
+    "32A": [
+     "Woodside Road - Asda"
+    ],
+    "36": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "36S": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "37": [
+     "Windsor Castle - High Wycombe BusStn"
+    ],
+    "37M": [
+     "Windsor Castle - High Wycombe BusStn"
+    ],
+    "27": [
+     "Orchard Road - High Wycombe BusStn"
+    ],
+    "M40": [
+     "York Road (UB8) - High Wycombe BusStn"
+    ],
+    "X74": [
+     "Uxbridge Station - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.628658,
+    -0.749262
+   ],
+   "naptan": {
+    "CommonName": "High Street",
+    "Indicator": "Stop S",
+    "stand": "S",
+    "stand_kind": "stop",
+    "Bearing": "W",
+    "Street": "High Street",
+    "Landmark": "Corporation Street",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.628658,
+    "lon": -0.749262
+   },
+   "class": "stand",
+   "label": "Stop S",
+   "standCode": "S",
+   "why": "NaPTAN Indicator 'Stop S'",
+   "facing": "west",
+   "street": "High Street",
+   "landmark": "Corporation Street",
+   "stopType": "BCT",
+   "name": "High Street"
+  },
+  {
+   "atco": "040000003095",
+   "distM": 72,
+   "walkMin": 1,
+   "routes": [
+    "36",
+    "36S",
+    "643"
+   ],
+   "routeDirections": {
+    "36": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "36S": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "643": [
+     "Infant School - Chadwick Street"
+    ]
+   },
+   "gtfsPos": [
+    51.627952,
+    -0.748863
+   ],
+   "naptan": {
+    "CommonName": "Town Hall",
+    "Indicator": "Stop T",
+    "stand": "T",
+    "stand_kind": "stop",
+    "Bearing": "N",
+    "Street": "Queen Victoria Street",
+    "Landmark": "Town Hall",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.627952,
+    "lon": -0.748863
+   },
+   "class": "stand",
+   "label": "Stop T",
+   "standCode": "T",
+   "why": "NaPTAN Indicator 'Stop T'",
+   "facing": "north",
+   "street": "Queen Victoria Street",
+   "landmark": "Town Hall",
+   "stopType": "BCT",
+   "name": "Town Hall"
+  },
+  {
+   "atco": "040000003052",
+   "distM": 139,
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "1S",
+    "31",
+    "33",
+    "34",
+    "41",
+    "654",
+    "WW1"
+   ],
+   "routeDirections": {
+    "41": [
+     "High Wycombe BusStn - Amersham Station"
+    ],
+    "31": [
+     "High Wycombe BusStn - High School"
+    ],
+    "1": [
+     "High Wycombe BusStn - Marlowes"
+    ],
+    "1A": [
+     "High Wycombe BusStn - Townsend Road"
+    ],
+    "1B": [
+     "High Wycombe BusStn - Marlowes"
+    ],
+    "1S": [
+     "High Wycombe BusStn - Townsend Road"
+    ],
+    "33": [
+     "Whitelands Road - Tyzack Road"
+    ],
+    "34": [
+     "Simmons Way - Olympic Way"
+    ],
+    "654": [
+     "Red Lane - Royal Grammar School"
+    ],
+    "WW1": [
+     "Adams Park - Station Interchange"
+    ]
+   },
+   "gtfsPos": [
+    51.629732,
+    -0.74799
+   ],
+   "naptan": {
+    "CommonName": "Castle Street",
+    "Indicator": "Stop V",
+    "stand": "V",
+    "stand_kind": "stop",
+    "Bearing": "E",
+    "Street": "Castle Street",
+    "Landmark": "Corporation Street",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.629732,
+    "lon": -0.74799
+   },
+   "class": "stand",
+   "label": "Stop V",
+   "standCode": "V",
+   "why": "NaPTAN Indicator 'Stop V'",
+   "facing": "east",
+   "street": "Castle Street",
+   "landmark": "Corporation Street",
+   "stopType": "BCT",
+   "name": "Castle Street"
+  },
+  {
+   "atco": "040000003053",
+   "distM": 130,
+   "walkMin": 2,
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "1S",
+    "31",
+    "33",
+    "34",
+    "41",
+    "654",
+    "WW1"
+   ],
+   "routeDirections": {
+    "41": [
+     "Amersham Station - High Wycombe BusStn"
+    ],
+    "31": [
+     "Aylesbury End - High Wycombe BusStn"
+    ],
+    "1": [
+     "Marlowes - High Wycombe BusStn"
+    ],
+    "1A": [
+     "Townsend Road - High Wycombe BusStn"
+    ],
+    "1B": [
+     "Marlowes - High Wycombe BusStn"
+    ],
+    "1S": [
+     "Townsend Road - High Wycombe BusStn"
+    ],
+    "33": [
+     "Tyzack Road - Copyground Lane"
+    ],
+    "34": [
+     "Olympic Way - Simmons Way"
+    ],
+    "654": [
+     "Chadwick Street - Red Lane"
+    ],
+    "WW1": [
+     "Station Interchange - Adams Park"
+    ]
+   },
+   "gtfsPos": [
+    51.629596,
+    -0.747849
+   ],
+   "naptan": {
+    "CommonName": "Castle Street",
+    "Indicator": "Stop W",
+    "stand": "W",
+    "stand_kind": "stop",
+    "Bearing": "W",
+    "Street": "Castle Street",
+    "Landmark": "Corporation Street",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.629596,
+    "lon": -0.747849
+   },
+   "class": "stand",
+   "label": "Stop W",
+   "standCode": "W",
+   "why": "NaPTAN Indicator 'Stop W'",
+   "facing": "west",
+   "street": "Castle Street",
+   "landmark": "Corporation Street",
+   "stopType": "BCT",
+   "name": "Castle Street"
+  },
+  {
+   "atco": "040000003063",
+   "distM": 94,
+   "walkMin": 1,
+   "routes": [
+    "643"
+   ],
+   "routeDirections": {
+    "643": [
+     "Infant School - Chadwick Street"
+    ]
+   },
+   "gtfsPos": [
+    51.629109,
+    -0.747747
+   ],
+   "naptan": {
+    "CommonName": "Crendon Street",
+    "Indicator": "o/s 25",
+    "stand": null,
+    "stand_kind": null,
+    "Bearing": "NE",
+    "Street": "Crendon Street",
+    "Landmark": "Railway Station",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.629109,
+    "lon": -0.747747
+   },
+   "class": "named",
+   "label": "Crendon Street",
+   "why": "no stand code; CommonName is unique inside the frame",
+   "facing": "north-east",
+   "street": "Crendon Street",
+   "landmark": "Railway Station",
+   "stopType": "BCT",
+   "name": "Crendon Street"
+  }
+ ]
+}

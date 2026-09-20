@@ -3,8 +3,19 @@
 
 The stamp is visible when the document is viewed or printed, and carries a short hash of
 the document's own content *with the stamp removed*. That hash is what makes this safe to
-run on every turn from a Stop hook: if the content hash is unchanged the file is not
-rewritten at all, so mtimes do not churn and there is no risk of a hook loop.
+run from a hook: if the content hash is unchanged the file is not rewritten at all, so
+mtimes do not churn and there is no risk of a hook loop.
+
+STAMPED AT COMMIT TIME, SINCE 2026-09-18 (buses-data OA-397, R4 of the process review).
+`--staged` is what the pre-commit hook runs: it stamps the in-scope documents in the
+commit in front of it and re-adds them, so the committed stamp describes the committed
+content BY CONSTRUCTION. Until then a Stop hook ran `--auto` at the end of every turn,
+which meant a commit made mid-turn carried the new content and the old stamp (ten of
+the fifteen early buses-data CI runs failed on exactly that), a re-stamp instruction,
+a hookify rule, a CI audit and a `--root` flag all grew around the gap, and on
+2026-09-09 the end-of-turn rewrite landed BETWEEN a session's review and its commit,
+so the commit lost two rows its message described. `--auto` is kept for a machine
+that still wires it, but no hook here calls it any more.
 
   Markdown   two lines just after the H1:
                  <!-- docstamp v1.4 | 2026-07-27 | sha=3f9a1c2b -->
@@ -24,9 +35,28 @@ Usage:
   docstamp.py --list            list the in-scope documents and exit
   docstamp.py --major FILE      bump the major version of one file (a rewrite)
   docstamp.py --minor FILE      force a minor bump of one file
+  docstamp.py --staged          pre-commit hook mode: stamp the in-scope documents STAGED in
+                                the repository enclosing the working directory, write the
+                                stamp into the index (and the disk copy when it matches),
+                                and exit 0 -- see stamp_staged()
+
+SCOPE: BY DEFAULT A RUN WALKS ONLY THE ROOT CONTAINING THE WORKING DIRECTORY
+(buses-data OA-333, 2026-09-13). Until then every invocation but `--checkout`
+walked EVERY configured root whatever directory you stood in, so a session in one
+repository stamped documents in the others -- a whole-file write into a tree the
+running session does not have checked out, which no gate and no `git status` in
+that session can see. Measured on the day: 169 documents for `buses`, 31 for
+`portal`, 8 for `ops`, 208 for a bare run, so a portal session running the
+documented command touched 177 documents in two repositories it was not working
+in. Two sessions rewrote each other's uncommitted files within the hour, and the
+Stop hook was running the same estate-wide walk unasked after every turn. The run
+SAYS which root it scoped to, and says it louder when it could not place the
+working directory at all and fell back to walking everything.
 
   --dry-run        report what would change, write nothing
   --root NAME      restrict to one root from the policy (buses | portal | ops)
+  --all-roots      walk every configured root rather than the one containing the
+                   working directory -- the pre-OA-333 default, now opt-in
   --checkout [DIR] stamp the checkout at DIR (default: the current directory) instead of
                    the configured root path -- a git worktree, or a clone somewhere else.
                    It walks that ONE checkout and no other, so a session working in a
@@ -237,7 +267,25 @@ def resolve_checkout(policy, checkout, only_root=None):
     are only READING. This script WRITES, and stamping an unknown tree with no
     exclusions would edit the files the policy exists to leave alone. Refusing names
     the one thing that fixes it: say which root applies, with `--root`.
+
+    THE SENTENCE ABOVE USED TO END "You can still only ever stamp the tree you are
+    standing in, which is the property that incident bought", AND THAT WAS FALSE OF
+    THE TOOL (buses-data OA-333, 2026-09-13). It was true only when `--checkout` was
+    passed. Every other invocation walked EVERY configured root whatever directory
+    you stood in -- three of them here -- so the 2026-09-03 fix closed the WORKTREE
+    hole and left the cross-ROOT one wide open, while this docstring told the reader
+    the general property had been bought. It was measured from both ends on
+    2026-09-13: 169 documents for `buses`, 31 for `portal`, 8 for `ops` and 208 for
+    a bare run, so a portal session running the documented command walked 177
+    documents in two repositories it was not working in and the tree it stood in was
+    15% of the total. Two sessions rewrote each other's uncommitted files within the
+    hour, and the Stop hook was running the same estate-wide walk unasked after
+    every turn. `default_root_for_cwd()` below is what actually buys the property
+    this paragraph used to claim; see [The comment wider than its code] in
+    buses-data's failure-shapes list for the shape.
     """
+
+
     checkout = os.path.normpath(os.path.abspath(checkout))
     if not os.path.isdir(checkout):
         raise SystemExit("docstamp --checkout: no such directory: {}".format(checkout))
@@ -287,6 +335,61 @@ def resolve_checkout(policy, checkout, only_root=None):
     return chosen["name"], how
 
 
+def default_root_for_cwd(policy, cwd=None):
+    """The root that CONTAINS `cwd`, or None -- the default scope of a run.
+
+    WHY (buses-data OA-333). Scope used to be "every root in the policy" unless you
+    said otherwise, so the tool's reach had nothing to do with where you were
+    standing. That is wrong for a WRITER by default and it is wrong in the direction
+    that cannot be seen: the write lands in a repository the running session does
+    not have checked out, so no gate, no `git status` and no reviewer in that session
+    can ever notice it. The Stop hook made it constant rather than occasional -- it
+    runs `--auto` with no flags at the end of every turn of every session.
+
+    This is NOT `resolve_checkout`. That one RETARGETS a root at a directory you
+    name, which is how you opt a worktree in; this one only decides which configured
+    root to walk and never moves a root's path. So a run from
+    `Areas/Beaconsfield` stamps the whole `buses` root, exactly as before -- what it
+    no longer does is stamp the portal as well.
+
+    Matching, most specific first, and it returns None rather than guessing:
+      1. cwd IS a configured root path.
+      2. cwd's git common-dir parent is a configured root path -- any worktree or
+         subdirectory of a known repository, which is the ordinary case, since
+         `git_common_checkout` answers from anywhere inside the tree.
+      3. cwd is underneath a configured root path on disk -- the fallback for a
+         directory that is inside a root but not inside its git checkout.
+
+    NONE IS NOT A REFUSAL HERE, AND THAT ASYMMETRY WITH `resolve_checkout` IS
+    DELIBERATE. `--checkout` is a thing you asked for by name, so failing to place it
+    is a mistake worth stopping on. This runs on EVERY invocation including the Stop
+    hook's, where refusing would turn "you are standing somewhere unexpected" into a
+    broken hook. So an unplaceable cwd keeps the old estate-wide behaviour and SAYS
+    SO on the run, which is the conservative direction: it can only ever be as wide
+    as the tool already was.
+    """
+    cwd = os.path.normpath(os.path.abspath(cwd or os.getcwd()))
+    roots = policy.get("roots", [])
+
+    def same(a, b):
+        return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+    for r in roots:
+        if same(r["path"], cwd):
+            return r["name"], "cwd is the root"
+    main = git_common_checkout(cwd)
+    if main:
+        for r in roots:
+            if same(r["path"], main):
+                return r["name"], "cwd is inside the {} checkout".format(r["name"])
+    for r in roots:
+        root_abs = os.path.normcase(os.path.normpath(os.path.abspath(r["path"])))
+        here = os.path.normcase(cwd)
+        if here.startswith(root_abs + os.sep):
+            return r["name"], "cwd is under the root path"
+    return None, None
+
+
 def discover(policy, only_root=None):
     """Walk the configured roots, pruning excluded directories before descending."""
     found = []
@@ -327,9 +430,9 @@ def discover(policy, only_root=None):
 # --------------------------------------------------------------------------- markdown
 
 
-def read_text(path):
-    with open(path, "rb") as fh:
-        raw = fh.read()
+def decode_bytes(raw):
+    """Bytes of a document -> (text with LF line endings, its newline, whether it had a BOM).
+    Split out of read_text() so a STAGED blob can be stamped without a file (OA-397)."""
     bom = raw.startswith(b"\xef\xbb\xbf")
     if bom:
         raw = raw[3:]
@@ -337,12 +440,22 @@ def read_text(path):
     return raw.decode("utf-8").replace("\r\n", "\n"), newline, bom
 
 
-def write_text(path, text, newline, bom):
+def encode_text(text, newline, bom):
     data = text.replace("\n", newline).encode("utf-8")
     if bom:
         data = b"\xef\xbb\xbf" + data
+    return data
+
+
+def read_text(path):
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    return decode_bytes(raw)
+
+
+def write_text(path, text, newline, bom):
     with open(path, "wb") as fh:
-        fh.write(data)
+        fh.write(encode_text(text, newline, bom))
 
 
 def md_strip_stamp(lines):
@@ -385,14 +498,19 @@ def md_insert_at(lines):
     return start
 
 
-def stamp_markdown(abs_path, sha_len, when, force=None, dry_run=False):
-    text, newline, bom = read_text(abs_path)
+def stamp_markdown_text(text, sha_len, when, force=None):
+    """The whole markdown rule as a pure function of the document's TEXT.
+
+    Returns (state, major, minor, new_text). `state` is "unchanged" when the body hash
+    still matches the stamp (and new_text is the input), "stamped" for a document that
+    had no stamp, "bumped" otherwise. Pure so that stamp_staged() can stamp the blob
+    that is about to be committed, which may differ from the file on disk."""
     lines = text.split("\n")
     stripped, existing = md_strip_stamp(lines)
     sha = md_body_hash(stripped, sha_len)
 
     if existing and existing["sha"] == sha and not force:
-        return ("unchanged", existing["major"], existing["minor"])
+        return ("unchanged", existing["major"], existing["minor"], text)
 
     if existing is None:
         major, minor = 1, 0
@@ -411,10 +529,15 @@ def stamp_markdown(abs_path, sha_len, when, force=None, dry_run=False):
         new_lines = head + [""] + block + [""] + tail
     else:
         new_lines = block + [""] + tail
+    return ("stamped" if existing is None else "bumped", major, minor, "\n".join(new_lines))
 
-    if not dry_run:
-        write_text(abs_path, "\n".join(new_lines), newline, bom)
-    return ("stamped" if existing is None else "bumped", major, minor)
+
+def stamp_markdown(abs_path, sha_len, when, force=None, dry_run=False):
+    text, newline, bom = read_text(abs_path)
+    state, major, minor, new_text = stamp_markdown_text(text, sha_len, when, force=force)
+    if state != "unchanged" and not dry_run:
+        write_text(abs_path, new_text, newline, bom)
+    return (state, major, minor)
 
 
 # ------------------------------------------------------------------------- powerpoint
@@ -612,6 +735,151 @@ def check_one(abs_path, sha_len, cfg):
     return ("current" if m.group(4).lower() == sha else "stale"), ver
 
 
+# ------------------------------------------------------------------ at commit time
+
+
+def _git(repo, *args, input_bytes=None):
+    """git in `repo`, inheriting the environment -- inside a pre-commit hook that means
+    GIT_INDEX_FILE, which for a pathspec commit is the TEMPORARY index git will commit
+    from, so an `add` or `update-index` here lands in the commit being made."""
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, input=input_bytes)
+
+
+def root_cfg_for_repo(policy, repo):
+    """Which configured root this repository IS, or None when the policy does not know it.
+
+    Placed the way every other run places its scope -- the checkout, a worktree of it or
+    a subfolder resolve through default_root_for_cwd() -- and then, for a clone whose
+    path matches nothing (a CI workspace, a clone elsewhere), by the names the root goes
+    under in `checkoutDirNames`, which is the auditor's rule for the same question."""
+    name, _how = default_root_for_cwd(policy, repo)
+    if name:
+        return next(r for r in policy["roots"] if r["name"] == name)
+    base = os.path.basename(os.path.normpath(repo))
+    for r in policy["roots"]:
+        if base in (r.get("checkoutDirNames") or []):
+            return r
+    return None
+
+
+def staged_in_scope(rel, cfg):
+    """The three exclusion rules discover() applies, on a repo-relative path."""
+    parts = rel.split("/")
+    dirs = parts[:-1]
+    if any(d in cfg.get("excludeDirNames", []) for d in dirs):
+        return False
+    if any(fnmatch.fnmatch(d, p) for d in dirs for p in cfg.get("excludeDirPatterns", [])):
+        return False
+    return not any(fnmatch.fnmatch(rel, g) for g in cfg.get("excludeGlobs", []))
+
+
+def _blob_is_generated(blob, marker):
+    if not marker:
+        return False
+    head = blob[:8192].decode("utf-8", "replace")
+    return marker in "\n".join(head.split("\n")[:40])
+
+
+def stamp_staged(policy, dry_run=False, quiet=False, cwd=None):
+    """Stamp the in-scope documents in the commit in front of a pre-commit hook.
+
+    THE ONE PLACE A STAMP CAN BE MADE TO DESCRIBE ITS COMMIT BY CONSTRUCTION (buses-data
+    OA-397). The hook runs after the index is built and before the commit object is
+    written, so a stamp written here into the index is the stamp that lands -- there is
+    no window for an edit, a review or another hook to fall into.
+
+    Which content is stamped, and where the result goes:
+      - the STAGED blob is the subject, because that is what git is about to write. When
+        the file on disk is byte-identical to it (the ordinary case) the disk copy is
+        stamped and re-added, so tree and index agree and nothing looks modified after
+        the commit;
+      - when they differ -- a partial stage, or an edit made after `git add` -- the blob
+        is stamped on its own, written into the index with hash-object/update-index, and
+        the disk copy is left exactly as the author has it. Its own stamp catches up at
+        its own commit. Said on the run, because a file that reads "modified" after a
+        commit is otherwise a puzzle.
+    Scope is the policy's: only a repository the policy names is stamped at all, and
+    only documents discover() would walk -- the same exclusions, the same generated
+    marker -- so a hook in a repository outside the policy is a no-op that says so.
+    Always exits 0; the audit that follows in the hook (check_committed_stamps.py
+    --staged) is what refuses, and after this it must never need to."""
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True,
+                         text=True, cwd=cwd)
+    if top.returncode:
+        if not quiet:
+            print("docstamp --staged: not inside a git repository -- nothing to stamp")
+        return 0
+    repo = os.path.normpath(top.stdout.strip())
+    cfg = root_cfg_for_repo(policy, repo)
+    if cfg is None:
+        if not quiet:
+            print("docstamp --staged: {} is not a root the stamp policy names -- nothing to stamp".format(repo))
+        return 0
+    sha_len = policy.get("shaLen", 8)
+    exts = tuple(e.lower() for e in cfg["extensions"])
+    marker = policy.get("generatedMarker")
+    listed = _git(repo, "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
+    rels = [p for p in listed.stdout.decode("utf-8", "replace").split("\0") if p]
+    rels = [p for p in rels if p.lower().endswith(exts) and staged_in_scope(p, cfg)]
+    today = dt.date.today()
+    done = []
+    for rel in rels:
+        abs_path = os.path.join(repo, rel.replace("/", os.sep))
+        blob = _git(repo, "show", ":" + rel).stdout
+        if rel.lower().endswith(".md") and _blob_is_generated(blob, marker):
+            continue
+        try:
+            with open(abs_path, "rb") as fh:
+                disk = fh.read()
+        except OSError:
+            disk = None
+        same = disk is not None and disk == blob
+        if rel.lower().endswith(".md"):
+            if same:
+                state, major, minor = stamp_markdown(abs_path, sha_len, today, dry_run=dry_run)
+                if state != "unchanged" and not dry_run:
+                    _git(repo, "add", "--", rel)
+                where = "tree+index"
+            else:
+                text, newline, bom = decode_bytes(blob)
+                state, major, minor, new_text = stamp_markdown_text(text, sha_len, today)
+                if state != "unchanged" and not dry_run:
+                    data = encode_text(new_text, newline, bom)
+                    h = _git(repo, "hash-object", "-w", "--stdin", input_bytes=data).stdout.decode().strip()
+                    _git(repo, "update-index", "--cacheinfo", "100644,{},{}".format(h, rel))
+                where = "index only (the disk copy differs and is left alone)"
+        else:
+            if same:
+                state, major, minor, _pos, _clash = stamp_pptx(abs_path, sha_len, today, policy.get("pptx", {}), dry_run=dry_run)
+                if state != "unchanged" and not dry_run:
+                    _git(repo, "add", "--", rel)
+                where = "tree+index"
+            else:
+                import tempfile
+                fd, tmp = tempfile.mkstemp(suffix=".pptx")
+                os.close(fd)
+                try:
+                    with open(tmp, "wb") as fh:
+                        fh.write(blob)
+                    state, major, minor, _pos, _clash = stamp_pptx(tmp, sha_len, today, policy.get("pptx", {}), dry_run=dry_run)
+                    if state != "unchanged" and not dry_run:
+                        with open(tmp, "rb") as fh:
+                            data = fh.read()
+                        h = _git(repo, "hash-object", "-w", "--stdin", input_bytes=data).stdout.decode().strip()
+                        _git(repo, "update-index", "--cacheinfo", "100644,{},{}".format(h, rel))
+                finally:
+                    os.unlink(tmp)
+                where = "index only (the disk copy differs and is left alone)"
+        if state != "unchanged":
+            done.append((state, major, minor, rel, where))
+    if not quiet:
+        for state, major, minor, rel, where in done:
+            print("{:8s} v{}.{}  {}  [{}]".format(state, major, minor, rel, where))
+        print("docstamp --staged: {} staged document(s) in scope, {} stamped{}".format(
+            len(rels), len(done), " (dry run, nothing written)" if dry_run else ""))
+    return 0
+
+
 def process(args, policy):
     sha_len = policy.get("shaLen", 8)
     pcfg = policy.get("pptx", {})
@@ -672,11 +940,17 @@ def main(argv=None):
     mode.add_argument("--check", action="store_true", help="audit only; exits 1 on findings")
     mode.add_argument("--backfill", action="store_true", help="stamp unstamped docs, dated from git")
     mode.add_argument("--list", action="store_true", help="list in-scope documents")
+    mode.add_argument("--staged", action="store_true",
+                      help="pre-commit hook mode: stamp the in-scope documents staged in the "
+                           "repository enclosing the working directory, into the index")
     ap.add_argument("--all", action="store_true", help="ignore the mtime gate; full hash scan")
     ap.add_argument("--major", metavar="FILE", help="bump the major version of one file")
     ap.add_argument("--minor", metavar="FILE", help="force a minor bump of one file")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--root", help="restrict to one root name from the policy")
+    ap.add_argument("--all-roots", action="store_true",
+                    help="walk every configured root, not just the one containing the "
+                         "working directory (the pre-OA-333 default)")
     ap.add_argument("--checkout", nargs="?", const=".", metavar="DIR",
                     help="stamp the checkout at DIR (default: the current directory) "
                          "instead of the configured root path -- a worktree, or a clone "
@@ -689,6 +963,11 @@ def main(argv=None):
     policy = load_policy(args.policy)
     sha_len = policy.get("shaLen", 8)
 
+    # --staged resolves its own subject -- the repository enclosing the working
+    # directory -- so none of the root-scoping below applies to it (OA-397).
+    if args.staged:
+        return stamp_staged(policy, dry_run=args.dry_run, quiet=args.quiet)
+
     # --checkout retargets ONE root and then restricts the walk to it, so a run in a
     # worktree can never reach a neighbour's. Said out loud on every run: this moves
     # where an EDIT lands, and a retarget nobody noticed is the failure to avoid.
@@ -697,6 +976,26 @@ def main(argv=None):
         if not args.quiet:
             path = next(r["path"] for r in policy["roots"] if r["name"] == args.root)
             print("checkout: root '{}' ({}) -> {}".format(args.root, how, path))
+
+    # DEFAULT SCOPE IS THE ROOT YOU ARE STANDING IN (buses-data OA-333). Anything
+    # the caller said explicitly wins -- `--root` names one, `--checkout` has just
+    # resolved one, `--all-roots` asks for the old estate-wide walk on purpose.
+    if args.root is None and args.checkout is None and not args.all_roots:
+        name, how = default_root_for_cwd(policy)
+        # ON STDERR, because `--list` and `--check` are read by other programs and a
+        # diagnostic that lands in their DATA is a different bug from the one being
+        # fixed here -- `--list | grep -c .` counted 170 documents for 169 while this
+        # line went to stdout.
+        if name:
+            args.root = name
+            if not args.quiet:
+                sys.stderr.write("scope: root '{}' ({}) -- pass --all-roots to walk "
+                                 "every root\n".format(name, how))
+        elif not args.quiet:
+            # Louder than the placed case on purpose: this is the old behaviour, and
+            # the whole fault was that it never announced itself.
+            sys.stderr.write("scope: EVERY root -- this working directory ({}) is in "
+                             "none of them\n".format(os.getcwd()))
 
     if args.list:
         for name, _root, _abs, rel in discover(policy, args.root):

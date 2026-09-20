@@ -80,11 +80,15 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { readBlockedDir, loopBlockedItems, applyHolds } from './loop_blocked.mjs';
+import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
-import { readDraftsDir, loopDraftItems } from './loop_adhoc.mjs';
+import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
+import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
+import { unsentLetterItem } from './outbound_letter.mjs';
+import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
+import { readScanState, bodsScanItems } from './bods_scan.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -588,18 +592,12 @@ function fromCorrespondence() {
     const status = st ? st[1].trim() : '';
     const declared = [status, h1 ? h1[0] : ''].filter(Boolean);
     if (declared.some((d) => /\bNOT SENT\b|\bDRAFTED\b/i.test(d))) {
-      out.push({
-        key: `corr-unsent-${ref}`, rank: 3, type: 'correspondence',
-        title: `${label}: reply drafted ${last.date}, NOT SENT`,
-        why: 'Only you can send it — there is no reply button on the portal and Claude has no access to email. Until it goes, the person has heard nothing.',
-        who: 'Peter', runbook: 'correspondence',
-        ageDays: daysSince(last.date),
-        do: [
-          { kind: 'shell', cwd: BUSES, cmd: `node Correspondence/to-email.mjs "Correspondence/${ref}/${last.file}"`, note: 'run it AFTER any edits you make' },
-          { kind: 'chat', what: 'Open the .html it writes, Ctrl+A, Ctrl+C, paste into the email. Add the salutation yourself.' },
-          { kind: 'chat', what: 'Then tell Claude it has gone, so the file becomes the sent record.' },
-        ],
-      });
+      // Held-or-not is outbound_letter.mjs's, because a letter nobody is
+      // waiting for is not a debt and rank 3 had no legitimate release.
+      out.push(unsentLetterItem({
+        ref, label, head, date: last.date, file: last.file,
+        buses: BUSES, ageDays: daysSince(last.date),
+      }));
     }
   }
 
@@ -714,6 +712,32 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
+
+// A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is
+// the row that carries it: the board prints a BEHIND deployment and no longer
+// exits 1 on it, so without this nothing would chase a merge nobody deployed.
+// One header read from the live site and two git questions of the portal
+// checkout; a tree with no portal checkout asks nothing of the network, which
+// is what keeps every harness fixture quiet. `--no-live` skips it, as it does
+// on the board.
+{
+  const deployState = args['no-live'] ? null
+    : await readDeployState({ portalDir: PORTAL, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL });
+  const deployPending = deployPendingItems(deployState, { portalDir: PORTAL });
+  for (const it of deployPending.items) add(it);
+  for (const w of deployPending.warnings) warnings.push(w);
+}
+
+// The monthly BODS scan not having RUN is the one fact every `refresh` row below
+// is downstream of, and until 2026-09-18 (buses-data OA-402, R9) nothing asked
+// it: `fromUpcomingReport()` reads the newest report and a report that is three
+// months old produces exactly the same board as a quiet month. One directory
+// listing, no report opened, and a tree with no `_gtfs` at all asks nothing.
+{
+  const scan = bodsScanItems(readScanState({ busesDir: BUSES }), { busesDir: BUSES });
+  for (const it of scan.items) add(it);
+  for (const w of scan.warnings) warnings.push(w);
+}
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell
 // steps name their working directory symbolically ("portal") because the server
@@ -893,8 +917,8 @@ if (upcoming) {
 // routes.json, read directly. A portal older than the route answers 404 and the
 // town is SKIPPED and counted in the header, never silently omitted.
 const landmarkAnswers = await (async () => {
-  if (!SK || !portal) return { items: [], checked: 0, skipped: [] };
-  const { compareTiers } = require(path.join(SK, 'poi_tiers_sync.js'));
+  if (!SK || !portal) return { items: [], checked: 0, skipped: [], orphaned: [], warnings: [] };
+  const { compareTiers, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));
   const { readJson: rj, latestRunDir: lrd } = require(path.join(SK, 'gate_lib.js'));
   const dataDir = process.env.DATA_DIR || path.join(PORTAL, 'data');
   const readTown = (dir) => {
@@ -928,25 +952,54 @@ const landmarkAnswers = await (async () => {
   };
   return landmarkAnswerItems({
     maps: portal.maps, towns: tree.towns, readBlock, readTown, compareTiers,
-    syncCmd: 'node poi_tiers_sync.js',
+    readCandidates: townCandidateKeys, syncCmd: 'node poi_tiers_sync.js',
   });
 })();
 for (const it of landmarkAnswers.items) {
   add({ ...it, do: it.do.map((d) => (d.kind === 'shell' && d.cwd === 'engine-assets' ? { ...d, cwd: SK } : d)) });
 }
-if (landmarkAnswers.skipped.length) warnings.push(`landmark answers: ${landmarkAnswers.skipped.length} town(s) not compared — ${landmarkAnswers.skipped.map((s) => `${s.town} (${s.why})`).join('; ')}`);
+for (const w of landmarkAnswers.warnings) warnings.push(w);
 
-// The scheduled loop's own outbound channel (OA-283). It writes loop/blocked/
-// and stops; until this source nothing Peter runs read that folder, and one of
-// its files was contradicting a row on this very list. `loop/` is gitignored, so
-// absent is the normal state everywhere but this laptop — see loop_blocked.mjs.
-// The holds are applied AFTER every source has run, below, because a hold names
-// a row this file may not have added yet.
-const loopBlocked = loopBlockedItems({ files: readBlockedDir(path.join(BUSES, 'loop', 'blocked')) });
-for (const it of loopBlocked.items) add(it);
+// The scheduled loop's ONE outbound folder to Peter (OA-283, merged with the
+// drop zone by OA-401). It writes loop/your-move/ and stops; until that source
+// nothing Peter runs read it, and one of its files was contradicting a row on
+// this very list. Absent is the normal state everywhere but this laptop, and the
+// classifier, the drafts row and the whole argument are in loop_your_move.mjs.
+// ONE read feeds BOTH builders below: reading it twice is how a file could be a
+// hold to one and a draft to the other. Holds are applied AFTER every source has
+// run, because a hold names a row this file may not have added yet.
+const yourMove = readYourMoveDir(path.join(BUSES, 'loop', 'your-move'));
+const loopHolds = loopHoldItems({ files: yourMove });
+for (const it of loopHolds.items) add(it);
+
+// COMMITTED WORK NOBODY HAS PUSHED, AND NOTHING KNEW IT EXISTED (OA-326,
+// 2026-09-12). `countUnpushed` in the CONDITIONS block above answers only for
+// the branch each of the three checkouts happens to have out, so a branch held
+// in a worktree — or checked out nowhere, the normal end state once a worktree
+// is removed — is invisible to it. On the day this was filed the board printed
+// `the portal  community-bus-maps — main, clean` while 463 insertions with a
+// falsification harness sat on a branch with no pull request and no
+// loop/your-move/ item. Computed rather than declared, for the reason in
+// unpushed_branches.mjs: a rule telling every tick to declare its own residue
+// can be forgotten, and on the day this was found it had been.
+//
+// IT OPENS NO SOCKET. Patch identity from `git cherry` and refs already on the
+// disk; whether a PUSHED branch has an open pull request is the half this
+// deliberately does not ask, and the count it does not raise is reported as a
+// warning so the narrowing is visible rather than silent.
+const stranded = unpushedBranchItems({
+  repos: [
+    { key: 'portal', name: 'community-bus-maps', dir: PORTAL, prPerChange: true },
+    { key: 'engine', name: 'claude-skills', dir: findEngineRepo(), prPerChange: true },
+    { key: 'buses', name: 'buses-data', dir: BUSES, prPerChange: false },
+  ].filter((r) => !!r.dir),
+});
+for (const it of stranded.items) add(it);
+for (const n of stranded.notes) warnings.push(n);
+for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name} could not be read — ${u.why}`);
 
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
-// the last one with no reader: `loop/blocked/` says these items need you and
+// the last one with no reader: `loop/your-move/` says these items need you and
 // `loop/LOCK.d` says a tick is running now, but when the loop is HALTED there is
 // no lock, so `conditions.loopLock` reports `present: false` — identical to
 // health. On 2026-09-09 it stopped four ticks running, three of them on a still
@@ -965,15 +1018,13 @@ const loopIdle = loopRunItems({
 });
 for (const it of loopIdle) add(it);
 
-// THE DROP ZONE (2026-09-10, item 7 of Peter's suggestions review). The fourth
-// and last loop folder with no reader: a tick saves a draft in `loop/adhoc/`
-// when it finds something it cannot act on, the folder is inert by design, and
-// five drafts sat there for up to two days each ending "promote it, or file it,
-// if you agree" — addressed to a reader this board had never shown the folder
-// to. One row for the whole folder, drop zone only; ready/, doing/ and done/
-// are read by the dispatcher, the crash rule and nobody, and counting them here
-// would report a prompt Peter has already triaged as awaiting his triage.
-const loopDrafts = loopDraftItems({ files: readDraftsDir(path.join(BUSES, 'loop', 'adhoc')) });
+// THE DRAFTS IN THE SAME FOLDER (2026-09-10, item 7 of Peter's suggestions
+// review; moved here from the old drop zone by OA-401). Inert was right and
+// unenumerated was not: five drafts sat for up to two days each ending "promote
+// it, or file it, if you agree", addressed to a reader this board had never
+// shown the folder to. One row for all of them at the bottom of YOUR MOVE.
+// `loop/adhoc/ready|doing|done` is a DIFFERENT channel and is not counted.
+const loopDrafts = loopDraftItems({ files: yourMove });
 for (const it of loopDrafts) add(it);
 
 // THE NATIONAL BUS-MAP DIRECTORY'S LINKS (OA-308's "Keeping it true",
@@ -1000,6 +1051,11 @@ for (const it of directoryLinkItems({ state: readDirectoryState(directoryDir) })
 // cadence beyond the monthly link sweep. Reads two tracked files, opens no socket,
 // and must never enter CI: it is a function of the clock (OA-289).
 for (const it of directoryCoverageItems({ state: readCoverageState(directoryDir) })) add(it);
+
+// 7c — the place lookup's edition (buses-data OA-312): the ONS Index of Place Names
+// is republished roughly yearly and nothing in CI may ask how old our copy is
+// (OA-289), so this row asks a person twice a year. The reasoning is in the module.
+for (const it of directoryPlacesItems({ state: readPlacesState(directoryDir) })) add(it);
 
 // 8 — housekeeping: the engine moved on, or nobody has independently verified.
 // Grouped, one item per class. Individually these are 15 near-identical rows
@@ -1113,25 +1169,25 @@ if (s6Stale.length) {
        * question disappeared when it was answered and nothing replaced it, and the
        * instruction survived only as English inside the register.
        *
-       * The row is the ENUMERATION half only. Whether the note was actually written
-       * at the rebuild is a question about the Services panel and is undecided; this
-       * says what is owed and to which map, and it drops off by itself when a map
-       * stops declaring the route off.
+       * ENUMERATION ONLY: which maps still DECLARE the route off, NOT what is owed —
+       * a rebuild pays by printing the line AND clearing the declaration, so a map
+       * that did only the first reads `waiting` owing nothing (OA-285: prose right
+       * 14/14 against the SVGs, this wrong 4). No sniff; OA-285 owns the question.
        */
       const owed = ((v.register && v.register.owed) || []).filter((o) => o.state === 'waiting');
       const carried = ((v.register && v.register.owed) || []).filter((o) => o.state === 'carried');
       if (owed.length || carried.length) {
         add({
           key: 's6-claims-owed', rank: 8, type: 'housekeeping',
-          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} owe${owed.length === 1 ? 's' : ''} a line on the next rebuild of ${[...new Set(owed.map((o) => o.map))].join(', ') || 'a map'}`,
+          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} ${owed.length === 1 ? 'is' : 'are'} still declared off the sheet of ${[...new Set(owed.map((o) => o.map))].join(', ') || 'a map'} — some of them already printed`,
           why: [
             ...owed.map((o) => `${o.id}: ${o.map} — ${o.owes || `${o.route} is decided \`include\` and the map still declares it off`}`),
             ...carried.map((o) => `${o.id}: ${o.map} now lists ${o.route}, so the note looks written — the register entry can be closed`),
-          ].join('; ') + '. An `include` is a decision the sheet has not learned yet: nothing rebuilds on its own, and no byte moves until somebody does.',
+          ].join('; ') + '. READ EACH ENTRY ABOVE BEFORE REBUILDING ANYTHING: this count is of maps that still DECLARE the route off, which is not the same question as whether the line is on the sheet, and the two answers differ today. A rebuild pays an `include` by printing the line and by moving the route out of notOnLeaflet[], and the estate has maps that did the first and not the second — their entry opens DELIVERED or DRAWN and they owe nothing, so rebuilding them would print the note twice. Which artefact settles it is the undecided half of buses-data OA-285; until it is settled the register\'s own note, above, is the thing to believe, and it was checked against the shipped SVGs on 2026-09-16 and found right in every case.',
           who: 'a session, at the next rebuild of that map', runbook: 'S6', towns: [...new Set([...owed, ...carried].map((o) => o.map))],
           do: [
-            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each debt and where it is declared off' },
-            { kind: 'skill', what: 'At the next rebuild of each map above, write the Services-panel or map-notes line the register entry describes — its `reason` and `drawing` say what it must carry — and take the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
+            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each entry and where it is still declared off' },
+            { kind: 'skill', what: 'FIRST read the entry\'s own `drawing` note. Where it opens DELIVERED, DRAWN or PAID the line is already on that sheet and the only thing outstanding is the declaration, so write nothing new. Where it says the service is off the sheet until the next rebuild, that rebuild writes the Services-panel or map-notes line the entry describes — its `reason` and `drawing` say what it must carry — and takes the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
           ],
         });
       }
@@ -1292,9 +1348,9 @@ if (RUN_GATES && SK) {
 // seeded too (seed-demo.mjs), and the evidence that settles it is the ADDRESS
 // -- clerk@ramsey-tc.example, on an RFC 2606 reserved TLD that can never
 // receive mail. A name can look real. A reserved domain cannot be one.
-// OA-283 — a blocked file may name the rows it contradicts, and every source has
+// OA-283 — a hold may name the rows it contradicts, and every source has
 // now run, so the rows exist to be named. Annotating rather than dropping is the
-// point: `loop/blocked/st-ives-v10.2-river.md` contradicts `draft-1`, and a row
+// point: `st-ives-v10.2-river.md` contradicted `draft-1`, and a row
 // that vanished would take its age, its URL and any explanation with it. A hold
 // that matched nothing is a stale `Blocks:` and is said out loud, for the reason
 // `adjudicated` is printed — a suppression nobody can see is how a board starts
@@ -1302,11 +1358,11 @@ if (RUN_GATES && SK) {
 //
 // A HOLD THAT MATCHED NOTHING HAS THREE POSSIBLE CAUSES AND THE FIRST DRAFT
 // NAMED ONLY TWO. It said "either the row has cleared and the blocked file can
-// go, or the key is wrong", which is a claim about the blocked file — and it
+// go, or the key is wrong", which is a claim about the hold file — and it
 // fired on 2026-09-09 for a hold that was working perfectly, because the portal
 // was unreachable that run. `fromRemotePortal()` warns and returns null, every
 // `draft-*` row with it, and `draft-1` is then "not on the board" in a sense
-// that says nothing whatever about the blocked file. Reproduced deliberately
+// that says nothing whatever about the hold file. Reproduced deliberately
 // with `--url https://busmaps.invalid`: both warnings, in that order.
 //
 // It is the worse direction, too. Acting on "the row has cleared" means deleting
@@ -1316,32 +1372,32 @@ if (RUN_GATES && SK) {
 // refuse a fallback that goes below what saying nothing would have given.
 //
 // THERE WAS A FOURTH CAUSE AND THE FIRST FIX DID NOT CATCH IT (buses-73, same
-// evening). `!!portal` asks *did a source return something*, which is not the
-// question — the question is *does this board know about the thing the hold
-// NAMES*. On `--local` the dev checkout returns an object, so `!!portal` was
-// true, and the run printed the confident wording about a hold on the LIVE
-// portal's draft v10.2, which is not in the dev SQLite at all. Measured: that run
-// banners LOCAL, emits ZERO `draft-*` rows, and still concluded the row had
-// cleared. A completeness test that measures the wrong completeness is worse than
-// none, because it reads as the guard being in place.
-//
-// That is this estate's named shape *"the portal" means the VPS* — never the
-// laptop's dev copy, whose rows read exactly like real ones — and both of
-// tonight's faults are instances of it. So the confident sentence now requires
-// the board to be AUTHORITATIVE for the row: a portal source reached, and it the
-// live one. Every `draft-*` row comes from that source, so REMOTE is the whole
-// test today; if a blocked file ever names a row from another source, carry the
-// source on the hold and compare, rather than widening this.
-const heldRows = applyHolds(items, loopBlocked.holds);
+// evening). `!!portal` asks *did a source return something*, not *does this board
+// know about the thing the hold NAMES*. On `--local` the dev checkout returns an
+// object, so `!!portal` was true and the run printed the confident wording about a
+// hold on the LIVE portal's draft v10.2, which is not in the dev SQLite at all:
+// measured, that run banners LOCAL, emits ZERO `draft-*` rows, and still concluded
+// the row had cleared. A completeness test that measures the wrong completeness is
+// worse than none, because it reads as the guard being in place. That is this
+// estate's named shape *"the portal" means the VPS* — never the laptop's dev copy —
+// so the confident sentence now requires the board to be AUTHORITATIVE for the row:
+// a portal source reached, and it the live one. Every `draft-*` row comes from that
+// source, so REMOTE is the whole test; a hold naming another source would carry it.
+const heldRows = applyHolds(items, loopHolds.holds);
 const boardAuthoritative = !!portal && REMOTE;
-for (const h of heldRows.unmatched) {
-  const named = `loop/blocked/${h.file} names worklist row \`${h.key}\``;
-  if (boardAuthoritative) {
-    warnings.push(`${named}, which is not on the board today — the hold did nothing. Either the row has cleared and the blocked file can go, or the key is wrong.`);
+// OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the
+// FILE, so the three branches below do not apply to it. Both rules: loop_your_move.mjs.
+for (const g of groupUnmatched(heldRows.unmatched)) {
+  const plural = g.keys.length > 1;
+  const named = `loop/your-move/${g.file} names worklist ${plural ? 'rows' : 'row'} ${g.keys.map((k) => `\`${k}\``).join(', ')}`;
+  if (!g.looksLikeKeys) {
+    warnings.push(`loop/your-move/${g.file} has a **Blocks:** field that is not a worklist row key — it reads “${g.raw}”. That field names the rows a hold contradicts, one key each, and a sentence belongs in the body. Nothing was held: this is a fault in the FILE and says nothing about any row.`);
+  } else if (boardAuthoritative) {
+    warnings.push(`${named}, which ${plural ? 'are' : 'is'} not on the board today — the hold did nothing. Either the row has cleared and the hold can go, or the key is wrong.`);
   } else if (!portal) {
-    warnings.push(`${named} and this run could not check it: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
+    warnings.push(`${named} and this run could not check ${plural ? 'them' : 'it'}: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
   } else {
-    warnings.push(`${named} and this run cannot check it: it read the DEV CHECKOUT, not the live portal, so a live draft is absent here by construction. NOT evidence the row has cleared — re-run against the live portal before acting on this one.`);
+    warnings.push(`${named} and this run cannot check ${plural ? 'them' : 'it'}: it read the DEV CHECKOUT, not the live portal, so a live draft is absent here by construction. NOT evidence the row has cleared — re-run against the live portal before acting on this one.`);
   }
 }
 
@@ -1476,12 +1532,12 @@ for (const it of limited) {
   // it answers is whether to act at all — which is upstream of how. The row keeps
   // its place, its age and its link; what it loses is the ability to be read as
   // an instruction. Without this the St Ives row said "Send v10.2 for review"
-  // while a blocked file said in terms that v10.2 must not be sent.
+  // while a hold said in terms that v10.2 must not be sent.
   if (it.onHold && it.onHold.length) {
     for (const h of it.onHold) {
       console.log(`    ⚠ ON HOLD — ${h.headline}`);
       if (h.need) console.log(`      ${h.need}`);
-      console.log(`      Raised by the scheduled loop; the whole argument is in loop/blocked/${h.file}`);
+      console.log(`      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`);
     }
     console.log(`    Only once that is settled:`);
   }

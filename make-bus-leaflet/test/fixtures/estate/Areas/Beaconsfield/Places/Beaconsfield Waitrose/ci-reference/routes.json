@@ -1,0 +1,323 @@
+{
+  "engine": "c2d033024c",
+  "place": "Waitrose, Beaconsfield",
+  "placeShort": "Waitrose",
+  "placeTitle": "Buses serving Waitrose",
+  "town": "Beaconsfield New Town",
+  "validFrom": "July 2026",
+  "version": "v1.31",
+  "titleColor": "#4477AA",
+  "anchor": "040000001224",
+  "anchorLabel": "Waitrose",
+  "palette": {
+    "31": "#4477AA",
+    "102": "#EE6677",
+    "103": "#228833",
+    "104": "#CCBB44",
+    "105": "#AA3377",
+    "380": "#EE7733"
+  },
+  "textOn": {
+    "31": "#fff",
+    "102": "#fff",
+    "103": "#fff",
+    "104": "#111",
+    "105": "#fff",
+    "380": "#fff"
+  },
+  "routeOrder": [
+    "31",
+    "102",
+    "103",
+    "104",
+    "105",
+    "380"
+  ],
+  "panelOrder": [
+    "31",
+    "102",
+    "103",
+    "104",
+    "105",
+    "380"
+  ],
+  "orientationRoute": "31",
+  "internalRoads": {
+    "fitExtra": [
+      "040000005005",
+      "040000001224",
+      "040000001222",
+      "040000001220",
+      "040000001219",
+      "040000001221",
+      "040000001223",
+      "040000005004",
+      "040000001225",
+      "040000001227",
+      "040000001228",
+      "040000001226"
+    ],
+    "fitMargin": 8,
+    "termini": {
+      "31": {
+        "start": "High Wycombe",
+        "end": "Old Town"
+      },
+      "102": {
+        "start": "High Wycombe",
+        "end": "Heathrow Airport"
+      },
+      "103": {
+        "start": "High Wycombe",
+        "end": "Windsor"
+      },
+      "104": {
+        "start": "High Wycombe",
+        "end": "Uxbridge"
+      },
+      "105": {
+        "start": "High Wycombe",
+        "end": "Amersham & Chesham"
+      },
+      "380": {
+        "start": "Loudwater",
+        "end": "Seer Green & Jordans"
+      }
+    },
+    "stroke": 2,
+    "gap": 2.6,
+    "skeletonPad": 0.9
+  },
+  "mapNotes": [
+    {
+      "text": "School services 604 & 624 also call at Waitrose (closed-door, term-time only — not shown).",
+      "x": 10,
+      "y": 90,
+      "size": 2.7,
+      "color": "#555"
+    }
+  ],
+  "features": [
+    {
+      "key": "railway",
+      "type": "railway",
+      "label": "Chiltern Main Line",
+      "labelPos": {
+        "x": 150,
+        "y": 20
+      },
+      "labelColor": "#777777",
+      "labelSize": 3.2,
+      "style": {
+        "rail": "chequer"
+      }
+    }
+  ],
+  "internalDesc": {
+    "31": [
+      "31  Beaconsfield – High Wycombe",
+      "Mon–Sat · Carousel · via Holtspur, Penn & Hazlemere"
+    ],
+    "102": [
+      "102  Beaconsfield – Heathrow",
+      "Daily · Carousel · via Gerrards Cross, Denham & Uxbridge"
+    ],
+    "103": [
+      "103  Beaconsfield – Windsor",
+      "Daily · Carousel · via Farnham Common & Slough"
+    ],
+    "104": [
+      "104  Beaconsfield – Uxbridge",
+      "Daily · Carousel · via Gerrards Cross & Denham"
+    ],
+    "105": [
+      "105  Chiltern Hundreds: Wycombe – Amersham",
+      "Mon–Sat · Carousel · via Coleshill & Chesham"
+    ],
+    "380": [
+      "380  Jordans – Beaconsfield – Loudwater",
+      "Tue & Fri (shopper) · Red Eagle · via Seer Green & Holtspur"
+    ]
+  },
+  "poi": {
+    "industrialKeep": "none",
+    "excludeName": [],
+    "tidy": [],
+    "canon": []
+  },
+  "operators": [
+    {
+      "name": "Carousel Buses",
+      "routes": [
+        "31",
+        "102",
+        "103",
+        "104",
+        "105"
+      ]
+    },
+    {
+      "name": "Red Eagle",
+      "routes": [
+        "380"
+      ]
+    }
+  ],
+  "destinations": [
+    {
+      "name": "High Wycombe",
+      "sub": "bus station",
+      "bearing": 292,
+      "routes": [
+        "31",
+        "102",
+        "103",
+        "104",
+        "105"
+      ],
+      "distKm": 8,
+      "minutesToDestination": 26
+    },
+    {
+      "name": "Amersham & Chesham",
+      "sub": "Chiltern Hundreds",
+      "bearing": 353,
+      "routes": [
+        "105"
+      ],
+      "distKm": 13,
+      "minutesToDestination": 52,
+      "stops": [
+        "St Mary's School",
+        "Oakfield Corner",
+        "Chessmount Rise",
+        "Village Hall"
+      ]
+    },
+    {
+      "name": "Seer Green & Jordans",
+      "sub": "Tue & Fri",
+      "bearing": 62,
+      "routes": [
+        "380"
+      ],
+      "limited": true,
+      "distKm": 4,
+      "minutesToDestination": 5,
+      "stops": [
+        "Maxwell Road",
+        "St Mary's School",
+        "Waller Road",
+        "Green East Road"
+      ]
+    },
+    {
+      "name": "Uxbridge",
+      "sub": "via Denham",
+      "bearing": 100,
+      "routes": [
+        "104"
+      ],
+      "distKm": 14,
+      "minutesToDestination": 50,
+      "stops": [
+        "St Mary's School",
+        "London Road",
+        "South Park Crescent",
+        "York Road (UB8)"
+      ]
+    },
+    {
+      "name": "Heathrow Airport",
+      "sub": "via Uxbridge",
+      "bearing": 124,
+      "routes": [
+        "102"
+      ],
+      "distKm": 21,
+      "minutesToDestination": 42,
+      "stops": [
+        "St Mary's School",
+        "Bulstrode Court",
+        "Denham Avenue",
+        "Heathrow Central Bus Station"
+      ]
+    },
+    {
+      "name": "Windsor",
+      "sub": "via Slough",
+      "bearing": 150,
+      "routes": [
+        "103"
+      ],
+      "distKm": 15,
+      "minutesToDestination": 52,
+      "stops": [
+        "St Mary's School",
+        "The Farnham Pump PH",
+        "Middlegreen Road",
+        "Axis Park"
+      ]
+    },
+    {
+      "name": "Beaconsfield Old Town",
+      "sub": "& High School",
+      "bearing": 186,
+      "routes": [
+        "31"
+      ],
+      "distKm": 1,
+      "minutesToDestination": 2,
+      "stops": [
+        "Post Office",
+        "Candlemas Lane",
+        "Aylesbury End",
+        "High School"
+      ]
+    },
+    {
+      "name": "Loudwater",
+      "sub": "Tue & Fri",
+      "bearing": 262,
+      "routes": [
+        "380"
+      ],
+      "limited": true,
+      "distKm": 3,
+      "minutesToDestination": 10,
+      "stops": [
+        "Maxwell Road",
+        "St Mary's School",
+        "Waller Road",
+        "Green East Road"
+      ]
+    }
+  ],
+  "design": {
+    "sheetUrl": "busmaps.uk/m/beaconsfield-waitrose",
+    "sheetUrlLabel": "Latest version:",
+    "frequencyTiers": {
+      "frequent": {
+        "mm": 2.2
+      },
+      "all-day": {
+        "mm": 1.7
+      },
+      "limited": {
+        "mm": 1.2
+      }
+    },
+    "sheetVersion": "build 1.31 · 13 Sep 2026"
+  },
+  "labels": {},
+  "checkedAt": "July 2026",
+  "frequency": {
+    "31": "frequent",
+    "102": "frequent",
+    "103": "frequent",
+    "104": "all-day",
+    "105": "all-day",
+    "380": "limited"
+  },
+  "panelGroups": true
+}

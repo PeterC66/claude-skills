@@ -20,6 +20,18 @@
  * Run it from make-bus-leaflet:
  *     npm run test:prove-red
  *     node tools/prove-red.js --keep      leave the scratch copy for inspection
+ *     node tools/prove-red.js --baseline-only
+ *                                         run the baseline and stop: is this tree
+ *                                         fit to be mutated at all? Seconds rather
+ *                                         than minutes, and the arm the harness
+ *                                         drives end to end
+ *
+ * THREE OUTCOMES, THREE EXIT CODES (buses-data OA-353). 0 every mutation was
+ * caught; 1 the harness RAN and found a hole — a mutation survived, or an anchor
+ * is stale; 2 the harness DID NOT RUN, because the baseline was red and not one
+ * mutation was attempted. Until 2026-09-14 the third shared the second's exit
+ * code and printed one ordinary-looking line, so a day of switched-off coverage
+ * read exactly like a day of ordinary failure. See tools/lib/baseline.js.
  */
 'use strict';
 const fs = require('node:fs');
@@ -27,10 +39,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { scratchDir } = require('../assets/scratch');
+const { EXIT_FOUND_A_HOLE, EXIT_DID_NOT_RUN, checkBaseline, stopLines, readyLine } = require('./lib/baseline');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const KEEP = process.argv.includes('--keep');
+const BASELINE_ONLY = process.argv.includes('--baseline-only');
 /* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
  * the paths printed below would name directories that no longer exist. */
 if (KEEP) require('../assets/scratch').keepScratch();
@@ -312,9 +326,9 @@ const MUTATIONS = [
   // the properties that turn on ORDER and on thresholds, which the 20 maps
   // certify only by accident of what happens to be committed today.
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'the same place mapped as node and building stops collapsing, and prints twice',
-    find: "const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;",
-    to: "const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<6;" },
+    what: 'the same shop under two spellings stops collapsing, so Tesco and Tesco Extra print twice 39 m apart',
+    find: "  if(x.includes(y) || y.includes(x)) return d < 60;",
+    to: "  if(x.includes(y) || y.includes(x)) return d < 6;" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'excludeName narrows to industrial, so a town cannot drop a named shop again',
@@ -340,6 +354,68 @@ const MUTATIONS = [
     what: 'allotments stop being opt-in and appear on every town that has any',
     find: "  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
     to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
+
+  /* poi_select.js OA-340, 2026-09-14 — pubs, the second opt-in category. The
+   * property the opt-in form was CHOSEN for is that a town which has not asked
+   * renders byte-identical, so the first mutation is the one that matters: it is
+   * +116 named symbols across the estate, on pages where 98 labels already do
+   * not fit. The second is subtler — a 'Pub' fallback reads as a NAME to
+   * OA-238's nameless default, so a bare glyph nobody chose reaches the page
+   * wearing a label to get past the rule that exists to stop it. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'pubs stop being opt-in, so every town with a pub gains every pub it has',
+    find: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
+    to: "  if(t.amenity==='pub') return ['pub', t.name||''];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a nameless pub falls back to the word "Pub", which walks it past the nameless-miss default',
+    find: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
+    to: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||'Pub'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a pub stops printing its name, so the category delivers a glass symbol and no Wetherspoon',
+    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];",
+    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key loses its pub row, so the sheet draws a symbol nothing on the page explains',
+    find: "  if(pois.some(p=>p.cat==='pub')) key.push(['pub','Pub']);",
+    to: "" },
+
+  { suite: 'icons.test.js', file: 'icons.js',
+    what: 'the pub glyph is unreachable while its colour stays, so the category ships as a plain dot',
+    find: "    case 'pub':         // a tapered pint glass, its head separated from the beer",
+    to: "    case 'pub-unreachable': // a tapered pint glass, its head separated from the beer" },
+
+  /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
+   * label rule behind them. Two of these guard a THRESHOLD and one guards the
+   * set itself, which is derived from classify() rather than typed -- the
+   * mutation below is what stops that derivation being quietly replaced by a
+   * literal that happens to agree today. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'two DIFFERENT names collapse again when close, so Boots 24 m from Superdrug leaves the St Neots sheet as it did for months',
+    find: "  return false;",
+    to: "  return d < 60;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the same-name radius widens to a chain\'s spacing, so four Boots in Wisbech and five libraries in High Wycombe draw as one again',
+    find: "  if(a.name === b.name) return d < 250;",
+    to: "  if(a.name === b.name) return d < 25000;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the label rule widens back over the symbol-only categories, so an unnamed town hall silently leaves the sheet',
+    find: "  const noName = p => (AUTO_NAMED_CATS.includes(p.cat) ? unnamed(p.name) : !p.name);",
+    to: "  const noName = p => unnamed(p.name);" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a category label counts as a name again, so an unnamed sports centre prints the word "Leisure" and merges with every other one',
+    find: "function unnamed(name){ return !name || CATEGORY_LABELS.has(name); }",
+    to: "function unnamed(name){ return !name; }" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'classify goes back to discarding the real library name, so a town draws one library however many it has',
+    find: "  if(t.amenity==='library')   return ['library', t.name||'Library'];",
+    to: "  if(t.amenity==='library')   return ['library','Library'];" },
 
   // poi_select.js applyTiers - the must / may / miss classification, added
   // 2026-08-31 (OA-202). NOT covered by the byte gate in any degree: no
@@ -379,13 +455,13 @@ const MUTATIONS = [
    * cover at all, and only on the two sheets that lose a symbol; the rest is
    * these four mutations. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'two blank names compare equal again, so the second unnamed chemist in a town is deleted at any distance - no candidate, no chooser row, no key, no error (OA-234)',
-    find: "    for(const q of dedup){ if(q.cat===p.cat && ((q.name===p.name && p.name) || near(q.ll,p.ll))){ continue outer; } }",
-    to: "    for(const q of dedup){ if(q.cat===p.cat && (q.name===p.name || near(q.ll,p.ll))){ continue outer; } }" },
+    what: 'the no-name arm loses its distance bound, so the second unnamed chemist in a town is deleted at any distance - no candidate, no chooser row, no key, no error (OA-234, re-anchored by OA-338)',
+    find: "  if(unnamed(a.name) || unnamed(b.name)) return d < 60;",
+    to: "  if(unnamed(a.name) || unnamed(b.name)) return true;" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless POI defaults to drawn again, so a bare glyph nobody chose takes a full 4.2mm box on three towns (OA-238)',
-    find: "  const defaultRule = p => ({ tier: p.name ? 'may' : 'miss', as: null });",
+    find: "  const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });",
     to: "  const defaultRule = p => ({ tier: 'may', as: null });" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
@@ -870,8 +946,37 @@ const MUTATIONS = [
 
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: "the place schematic stops forcing OVERRIDES_FILE, and a place's forced-POI labels are silently dropped again",
-    find: "             env: { SKILL_ASSETS: SK }, overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
-    to: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' }," },
+    find: "             overridesFile: true, crossings: true, out: 'internal-schematic.svg' },",
+    to: "             crossings: true, out: 'internal-schematic.svg' }," },
+
+  /* buses-data OA-342, 2026-09-14. The mutation IS the bug: take the default back out
+   * and the three rows that named no engine are exactly what they were on 2026-09-13,
+   * when a rollout from a worktree put eight hybrid sheets on buses-data's `main`. */
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the engine stops being set for every row, so a rollout from a worktree draws some sheets with the INSTALLED engine and stamps them with the branch it is rolling out',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}) };" },
+
+  { suite: 'build_s4.test.js', file: 'build_s4.js',
+    what: 'the default is spread OVER a row rather than under it, so a row can no longer override the engine — the direction that cannot lose a row is what makes an omission safe',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}), SKILL_ASSETS: SK };" },
+
+  /* buses-data OA-342 item 3, 2026-09-14 — the END-TO-END pair, and the second of them
+   * is why the new suite exists. `build_s4.test.js` asks sheetEnv() its question
+   * directly, so it cannot see a build path that stops CALLING it: measured, the bypass
+   * below leaves all twelve of that suite's tests green while a hybrid sheet is drawn.
+   * The first is the original bug asserted one level out, because a suite that catches
+   * the bypass and not the bug it was written for is covering the wrong half. */
+  { suite: 'build_s4_engine_end_to_end.test.js', file: 'build_s4.js',
+    what: 'the engine stops being set for every row — the 2026-09-13 bug, seen here as what a spawned generator actually resolved rather than as a key in a returned object',
+    find: "  const env = { SKILL_ASSETS: SK, ...(r.env || {}) };",
+    to: "  const env = { ...(r.env || {}) };" },
+
+  { suite: 'build_s4_engine_end_to_end.test.js', file: 'build_s4.js',
+    what: "the build path stops handing sheetEnv's answer to the spawn, so the RECIPE is immaculate and the sheet is still drawn by whatever engine is installed",
+    find: "    const res = runNode(script, dir, env);",
+    to: "    const res = runNode(script, dir);" },
 
   { suite: 'build_s4.test.js', file: 'build_s4.js',
     what: 'the area internal stops asking for build-meta.json, which is what commit S4 refuses an area without',
@@ -888,10 +993,41 @@ const MUTATIONS = [
     find: "    if (r.fatal && (!res.ok || (r.needsOut && !landed))) {",
     to: "    if (false && r.fatal && (!res.ok || (r.needsOut && !landed))) {" },
 
+  /* render_sweep.js — WHICH ENGINE a --store sweep runs (buses-data OA-342 item 4,
+   * 2026-09-14). The first two mutations ARE the bug: they restore the file exactly
+   * as it stood while the store sweep ran each pack's own entry generator against the
+   * SKILL's shared modules. On a laptop where the two engines agree that is invisible,
+   * which is how it survived — so the suite judges the RESOLUTION, and one case makes
+   * a generator refuse its own environment. */
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: "sweepOne stops passing the engine on, so the pack's generator resolves its shared modules from the skill — a latent hybrid, and the OA-132 shape",
+    find: "        engineDir: map.engineDir || SK,\n",
+    to: "" },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'enumerateStore stops naming the portal engine, so every store map falls back to SK with nothing saying so',
+    find: "      engineDir: portal ? portalFixtureEnv(portal.portalDir, dataDir).SKILL_ASSETS : undefined,",
+    to: "      engineDir: undefined," },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'a portal engine folder is judged present by the FOLDER rather than by a module in it, so an empty engine/ passes and every dependency resolves past it',
+    find: "    ok: fs.existsSync(path.join(engineDir, 'engine_paths.js')),",
+    to: "    ok: fs.existsSync(engineDir)," },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: "the store sweep takes the expert three under the SKILL's file names again, which are not the files the portal runs",
+    find: "    ? { dir: expertDir, schematic: 'gen_internal_schematic.js', diagram: 'gen_internal_diagram.js', boarding: 'gen_boarding.js', portalOwned: true }",
+    to: "    ? { dir: expertDir, schematic: 'schematize_internal.js', diagram: 'diagram_internal.js', boarding: 'gen_boarding.js', portalOwned: true }" },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'the expert three stop being marked portal-owned, so the sweep runs a wrapper whose pre-stage sibling is not in the workspace and calls the crash a map that cannot be re-rendered',
+    find: "  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: expert.portalOwned });",
+    to: "  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: false });" },
+
   { suite: 'rollout_crossings.test.js', file: 'build_s4.js',
     what: "the town schematic stops carrying the self-crossing check, which only a build path can ask (OA-240)",
-    find: "             env: { SKILL_ASSETS: SK }, crossings: true, out: 'internal-schematic.svg' },\n    place:",
-    to: "             env: { SKILL_ASSETS: SK }, out: 'internal-schematic.svg' },\n    place:" },
+    find: "             crossings: true, out: 'internal-schematic.svg' },\n    place:",
+    to: "             out: 'internal-schematic.svg' },\n    place:" },
 
   { suite: 'gate_lib.test.js', file: 'gate_lib.js',
     what: 'line endings are compared literally',
@@ -1824,12 +1960,42 @@ const MUTATIONS = [
 
   // The FOURTH arm, added 2026-09-03 (OA-232 Tier 3.1) so the place skill could
   // stop carrying a resolver of its own. Cut it and a place asset with nothing set
-  // falls straight to one laptop's path — which is the state it was in before,
-  // held up by a private IIFE rather than by anything shared.
+  // cannot resolve a town module at all — which is the state it was in before,
+  // held up by a private IIFE rather than by anything shared. WHAT CUTTING IT COSTS
+  // CHANGED on 2026-09-20 (buses-data OA-342 item 5): it used to fall to one
+  // laptop's path, silently and correctly on that laptop alone; it now refuses. The
+  // mutation is unchanged and so is the suite's job — the consequence got louder.
   { suite: 'engine_paths.test.js', file: 'engine_paths.js',
-    what: "the cross-skill arm goes, so a place asset with no SKILL_ASSETS falls straight to one laptop's path",
+    what: 'the cross-skill arm goes, so a place asset with no SKILL_ASSETS cannot resolve a town module at all',
     find: "    const acrossSkills = path.join(callerDir, ...CROSS_SKILL, name);\n    try { if (fs.existsSync(acrossSkills)) return acrossSkills; } catch (e) {}\n",
     to: "" },
+
+  // THE LAST RESORT IS A REFUSAL, and this mutation is the fault as it actually
+  // stood until 2026-09-20 (buses-data OA-342 item 5). `rollout.js` copied
+  // gen_internal.js into a scratch folder with no SKILL_ASSETS, every shared module
+  // resolved to the engine INSTALLED on this machine rather than the one being
+  // rolled out, and the sheet was stamped with the rolling engine's hash. Eight such
+  // sheets reached `main` as c879f5a1. This puts that return back.
+  //
+  // WHY IT DISCRIMINATES WHERE THE OLD SUITE COULD NOT. On the installed engine the
+  // fallback path and the engine under test are the SAME folder, so an assertion
+  // about which of them answered is vacuous there — the shape gate_lib.js's OA-232
+  // comment calls a latent hybrid, and it is why this survived a year of green runs.
+  // An assertion that it THROWS is vacuous nowhere, and that is the whole reason the
+  // arm became a refusal rather than a warning.
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: 'the last resort silently returns the INSTALLED engine again, so a copied generator draws with an engine nobody asked for',
+    find: "    return refuseNoEngine(name, callerDir);",
+    to: "    return ENGINE_HOME + name;" },
+
+  // The same mutation against the other suite that asks the question, because the
+  // two ask it of different subjects: this one asks it of build_s4.js's RECIPE —
+  // the table whose three bare rows were the original fault — rather than of the
+  // resolver on its own.
+  { suite: 'build_s4.test.js', file: 'engine_paths.js',
+    what: 'the last resort returns the installed engine, so a RECIPE row that loses its SKILL_ASSETS builds a hybrid instead of failing',
+    find: "    return refuseNoEngine(name, callerDir);",
+    to: "    return ENGINE_HOME + name;" },
 
   // spawnTarget — the pre-stages' rule, and the one property of it that dep() does
   // not have: the RUN DIRECTORY, not the caller's folder, answers first.
@@ -2129,6 +2295,56 @@ const MUTATIONS = [
     find: "    const unraised = queuedFacts.filter(q => q.claimed === false);",
     to: "    const unraised = queuedFacts.filter(q => !q.claimed);" },
 
+  // refresh_latest.js — which render the `_latest` mirror is taken from when the
+  // manifest cannot answer (buses-data OA-368). The first mutation is the code as
+  // it stood until 2026-09-16: a text sort, which put `v1.9` after `v1.19` and
+  // delivered two of the first customer's four sheets from renders a fortnight
+  // old. It is worth carrying as a mutation rather than only as a fixed bug
+  // because the fault is INVISIBLE on a map whose low-numbered runs have been
+  // pruned away — four of the estate's twenty are in exactly that state, so the
+  // listing is correct there by retention policy rather than by code.
+  { suite: 'refresh_latest_render_choice.test.js', file: 'refresh_latest.js',
+    what: 'the fallback orders the render listing as TEXT again, so v1.9 beats v1.19 and the mirror is a fortnight old',
+    find: "    .map(d => ({ d, v: versionOfRunDir(d) }))            // stage.js owns that parse (OA-368)",
+    to: "    .map(d => ({ d, v: '0.0' }))" },
+
+  { suite: 'refresh_latest_render_choice.test.js', file: 'refresh_latest.js',
+    what: 'anything in S5-render becomes a candidate, so a stray folder that is not a run at all can be mirrored as the newest render',
+    find: "    .filter(r => r.v)\n",
+    to: "    .map(r => ({ ...r, v: r.v || '0.0' }))\n" },
+
+  /* OA-048. The first two are the bug verbatim, in both directions: the denominator every
+   * S6 coverage percentage is struck over counted routes no sheet draws. */
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'the palette is unioned back in over the draw order, so a route dropped from routeOrder keeps its place in the denominator on the strength of its legend badge — the state this file was written to end',
+    find: "  for (const r of drawnInternal) displayed.add(r);",
+    to: "  for (const r of drawnInternal) displayed.add(r);\n  for (const r of Object.keys(palette)) displayed.add(norm(r));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'a spoke contributes only the entry key, so every service riding on another route\'s spoke drops out of the denominator although it is drawn',
+    find: "  for (const e of (routes.external || [])) for (const r of spokeBadges(e)) displayed.add(norm(r));",
+    to: "  for (const e of (routes.external || [])) displayed.add(norm(e.route));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'routeOrder and the palette go back to being a UNION rather than gen_internal\'s either/or, which is the same fault one step earlier',
+    find: "    ((routes.routeOrder && routes.routeOrder.length) ? routes.routeOrder : Object.keys(palette)).map(norm));",
+    to: "    [...(routes.routeOrder || []), ...Object.keys(palette)].map(norm));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'an empty routeOrder stops reading as an absent one, so a config with the key present and empty draws nothing at all',
+    find: "    ((routes.routeOrder && routes.routeOrder.length) ? routes.routeOrder : Object.keys(palette)).map(norm));",
+    to: "    ((routes.routeOrder) ? routes.routeOrder : Object.keys(palette)).map(norm));" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'spokeBadges stops treating an empty routes[] as an absent one, so a spoke declaring `routes: []` loses its own badge',
+    find: "  return (Array.isArray(entry.routes) && entry.routes.length) ? entry.routes : [entry.route];",
+    to: "  return Array.isArray(entry.routes) ? entry.routes : [entry.route];" },
+
+  { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',
+    what: 'the geometry arm stops falling back when the config names nothing, so a config with no palette and no routeOrder reports on no route at all instead of on all of them',
+    find: "  for (const r of Object.keys(intown || {})) if (!drawnInternal.size || drawnInternal.has(norm(r))) displayed.add(norm(r));",
+    to: "  for (const r of Object.keys(intown || {})) if (drawnInternal.has(norm(r))) displayed.add(norm(r));" },
+
 ];
 
 const scratch = scratchDir('prove-red-');
@@ -2143,16 +2359,24 @@ const rows = [];
 
 // A baseline first: the copied engine, unmutated, must be green. Otherwise every
 // "the suite noticed" below could be the copy failing rather than the mutation.
+// The STOP is reported by tools/lib/baseline.js and exits 2 rather than 1, because
+// "the harness did not run" and "a mutation survived" are two different answers
+// that shared one exit path until OA-353 (buses-data).
 const suites = [...new Set(MUTATIONS.map(m => m.suite))];
-for (const suite of suites) {
-  const r = runSuite(suite);
-  if (r.status !== 0) {
-    console.error(`BASELINE FAILED: ${suite} is red against an unmutated copy of the engine.`);
-    console.error(r.stdout || r.stderr);
-    process.exitCode = 1;
-  }
+const verdict = checkBaseline({ suites, mutationCount: MUTATIONS.length, runSuite });
+if (!verdict.ok) {
+  for (const line of stopLines(verdict)) console.error(line);
+  for (const r of verdict.red) { console.error(`\n--- ${r.suite}, unmutated ---`); console.error(r.output); }
+  if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
+  process.exitCode = EXIT_DID_NOT_RUN;
+  return;
 }
-if (process.exitCode === 1) { if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true }); return; }
+if (BASELINE_ONLY) {
+  console.log(readyLine(verdict));
+  if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
+  else console.log('scratch copy left at ' + scratch);
+  return;
+}
 
 for (const m of MUTATIONS) {
   const p = path.join(engine, m.file);
@@ -2188,4 +2412,4 @@ if (survived || broken) {
 }
 if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
 else console.log('scratch copy left at ' + scratch);
-process.exitCode = (survived || broken) ? 1 : 0;
+process.exitCode = (survived || broken) ? EXIT_FOUND_A_HOLE : 0;

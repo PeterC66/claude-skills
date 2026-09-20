@@ -50,6 +50,7 @@ const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, st
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const CURRENT_ENGINE = computeEngineVersion();
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
@@ -331,13 +332,20 @@ function rolloutOne(t) {
    * 2026-09-03 had no basedOn on their latest S4, and why the guard above has to fall
    * back to timestamps at all. A tool that erases the provenance of its own output is the
    * reason the next tool has to infer it. The ids named here are the ones `pull` will
-   * resolve: pull takes the stage's `latest`, which is exactly what prevS3/prevS2 are. */
+   * resolve: pull takes the stage's `latest`, which is exactly what prevS3/prevS2 are.
+   *
+   * IT IS PASSED TO `commit`, NOT TO `new`, AND FOR A FORTNIGHT IT WAS THE OTHER WAY
+   * ROUND (OA-352, 2026-09-17). `stage.js` reads the flag in its commit handler alone —
+   * `new` creates a folder and writes no run record, so there is nowhere for provenance
+   * to go — and both rollouts passed it on the `new` call and nowhere else. So the fix
+   * OA-225 wrote never wrote a field: from 2026-09-03 every S4 either rollout produced
+   * went into staleInputs()'s timestamp fallback, and nothing anywhere said so, because
+   * `how: 'timestamp'` is reported only when the guard actually fires. `new` now REFUSES
+   * the flag, so this cannot silently come apart again. */
   const s2Latest = (manifest.stages && manifest.stages.S2 && manifest.stages.S2.latest) || null;
   const s3Latest = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.latest) || null;
   const basedOn = [s2Latest && `S2=${s2Latest}`, s3Latest && `S3=${s3Latest}`].filter(Boolean).join(';');
-  const s4Dir = basedOn
-    ? stage(t.dir, 'new', 'S4', '--bump', BUMP, '--based-on', basedOn)
-    : stage(t.dir, 'new', 'S4', '--bump', BUMP);
+  const s4Dir = stage(t.dir, 'new', 'S4', '--bump', BUMP);
   // pull S3 also syncs routes.json's printed version stamp to this run's v<N.N>.
   // THE SAME CALL AS THE SCRATCH BUILD ABOVE (OA-239) — it was two bare pulls and
   // no seedPrevS4 until 2026-09-09, which is the divergence that action is about.
@@ -385,7 +393,12 @@ function rolloutOne(t) {
   const realOutputs = real.outputs;
   const realWarnings = real.warnings;
   const realBlockers = real.blockers;
-  stage(t.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE);
+  // --based-on rides THIS call, not the `new` above: commit is what writes the run
+  // record, so it is the only command that can record what the build was made from
+  // (OA-352). `basedOn` was computed at `new` time deliberately — it names the S2/S3
+  // `latest` the pulls actually resolved, which is the question the field answers.
+  stage(t.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE,
+        ...(basedOn ? ['--based-on', basedOn] : []));
   fs.rmSync(scratch, { recursive: true, force: true });
 
   // Two gates now stand between a committed S4 and a published S5, and they stop for
@@ -476,3 +489,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // silence with a longer summary line.
 const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);
+}
+
+if (require.main === module) main();
+module.exports = { main };

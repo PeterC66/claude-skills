@@ -46,6 +46,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { parseArgs } from './engine.mjs';
 
 const FILE = 'refresh-reviews.json';
 const VERDICTS = ['no-rebuild', 'rebuild-needed'];
@@ -71,9 +72,15 @@ const README = [
   'it, whose frame is different and whose sheet draws a different set of services.',
 ];
 
-const argv = process.argv.slice(2);
-const flag = (name) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : null; };
-const has = (name) => argv.includes('--' + name);
+// The arguments come from engine.mjs's `parseArgs`, which is this skill's one
+// parser (buses-data OA-345). The two helpers below are a thin reading of its
+// result and not a second parser: `flag` is a VALUE or null, `has` is presence.
+// It is also strictly stricter than the hand-rolled version it replaces, which
+// returned the NEXT FLAG's name when a flag was given no value — `--map --scan`
+// yielded the string `--scan` and then failed on a manifest lookup for it.
+const args = parseArgs(process.argv.slice(2));
+const flag = (name) => (typeof args[name] === 'string' ? args[name] : null);
+const has = (name) => name in args;
 const die = (m) => { console.error('refresh_review: ' + m); process.exit(1); };
 
 const mapDir = flag('map');

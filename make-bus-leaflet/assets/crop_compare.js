@@ -35,6 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const A4_W_MM = 297, A4_W_PX = 3508, PX_PER_MM = A4_W_PX / A4_W_MM;
 
 // The one parser (OA-232 Tier 2.5).
@@ -108,3 +109,7 @@ const caption = (t, w) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" w
     console.log(`${path.basename(prefix)}_${i}: ${cx.toFixed(0)},${cy.toFixed(0)} mm  (${SIDE} mm square)`);
   }
 })();
+}
+
+if (require.main === module) main();
+module.exports = { main };

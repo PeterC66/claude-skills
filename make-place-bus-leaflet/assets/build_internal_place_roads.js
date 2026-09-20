@@ -34,6 +34,13 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 // TSK through place_engine.js — see build_internal_place.js's note (OA-232 Tier 3.1).
 const { TOWN_ASSETS } = require('./place_engine.js');
@@ -148,3 +155,7 @@ run('build_internal_place', path.join(PSK, 'build_internal_place.js'), [],
     ver ? { LEAFLET_VERSION: ver } : {});
 
 console.log('road-following internal.svg written (internalRoads).');
+}
+
+if (require.main === module) main();
+module.exports = { main };

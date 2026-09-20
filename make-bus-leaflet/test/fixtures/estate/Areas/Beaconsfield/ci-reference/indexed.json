@@ -1,0 +1,47 @@
+[
+  {
+    "n": 1,
+    "text": "Beaconsfield Squash Club",
+    "id": "poi:leisure:Beaconsfield Squash Club",
+    "at": [
+      96.01891011373026,
+      98.52442589138136
+    ]
+  },
+  {
+    "n": 2,
+    "text": "Holtspur School & Pre-School",
+    "id": "poi:school:Holtspur School & Pre-School",
+    "at": [
+      17.29644580805528,
+      140.0885843556846
+    ]
+  },
+  {
+    "n": 3,
+    "text": "St Mary and All Saints CofE Primary",
+    "id": "poi:school:St Mary and All Saints CofE Primary",
+    "at": [
+      71.69871052055066,
+      68.82371294245883
+    ]
+  },
+  {
+    "n": 4,
+    "text": "The Beacon Center",
+    "id": "poi:leisure:The Beacon Center",
+    "at": [
+      19.471413030974364,
+      144.78234081309677
+    ]
+  },
+  {
+    "n": 5,
+    "text": "The Fitzwilliams Centre",
+    "id": "poi:community:The Fitzwilliams Centre",
+    "at": [
+      95.61457056148603,
+      115.11287959340247
+    ]
+  }
+]

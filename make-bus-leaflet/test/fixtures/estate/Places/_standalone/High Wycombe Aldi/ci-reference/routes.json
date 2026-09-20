@@ -1,0 +1,633 @@
+{
+  "engine": "c2d033024c",
+  "place": "Aldi, Tannery Road",
+  "placeShort": "Aldi",
+  "placeTitle": "Buses serving Aldi, Tannery Road",
+  "town": "High Wycombe",
+  "validFrom": "July 2026",
+  "version": "v1.32",
+  "titleColor": "#332288",
+  "internalTitleColor": "#332288",
+  "anchor": "040000003255",
+  "anchorLabel": "Ford Street stops",
+  "palette": {
+    "27": "#CCBB44",
+    "32": "#CC3311",
+    "34": "#4477AA",
+    "37": "#228833",
+    "102": "#332288",
+    "103": "#332288",
+    "104": "#332288",
+    "105": "#332288",
+    "32A": "#EE7733",
+    "M40": "#332288",
+    "X74": "#332288"
+  },
+  "textOn": {
+    "27": "#111",
+    "32": "#fff",
+    "34": "#fff",
+    "37": "#fff",
+    "102": "#fff",
+    "103": "#fff",
+    "104": "#fff",
+    "105": "#fff",
+    "32A": "#fff",
+    "M40": "#fff",
+    "X74": "#fff"
+  },
+  "routeOrder": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "M40",
+    "X74",
+    "37",
+    "32",
+    "32A",
+    "34",
+    "27"
+  ],
+  "panelOrder": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "M40",
+    "X74",
+    "37",
+    "32",
+    "32A",
+    "34",
+    "27"
+  ],
+  "panelRow": 7.4,
+  "orientationRoute": "102",
+  "internalCorridors": {
+    "102": [
+      "103",
+      "104",
+      "105",
+      "M40",
+      "X74"
+    ]
+  },
+  "internalRoads": {
+    "focus": {
+      "coreKm": 0.7,
+      "comp": 0.55
+    },
+    "roadLabelMax": 18,
+    "badgeEvery": 55,
+    "northArrow": {
+      "x": 18,
+      "y": 56
+    },
+    "termini": {
+      "27": {
+        "start": "town centre & Totteridge",
+        "end": "Totteridge"
+      },
+      "32": {
+        "start": "town centre, Booker & Cressex",
+        "end": "Micklefield"
+      },
+      "34": {
+        "start": "Totteridge & Lane End",
+        "end": "Micklefield"
+      },
+      "37": {
+        "start": "High Wycombe town centre",
+        "end": "Bourne End & Maidenhead"
+      },
+      "102": {
+        "start": "High Wycombe town centre",
+        "end": "Loudwater & Beaconsfield"
+      },
+      "103": {
+        "start": "town centre",
+        "end": "Slough"
+      },
+      "104": {
+        "start": "town centre",
+        "end": "Uxbridge"
+      },
+      "105": {
+        "start": "town centre",
+        "end": "Amersham & Chesham"
+      },
+      "M40": {
+        "start": "town centre",
+        "end": "Uxbridge"
+      },
+      "X74": {
+        "start": "Uxbridge",
+        "end": "town centre"
+      },
+      "32A": {
+        "start": "town centre & Cressex",
+        "end": "Micklefield"
+      }
+    },
+    "fitExtra": [
+      "040000003251",
+      "040000003951",
+      "040000003952",
+      "040000003257",
+      "040000003259",
+      "040000003131",
+      "040000002982",
+      "040000003236",
+      "040000003234",
+      "040000003232",
+      "040000003230",
+      "040000003097",
+      "040000003241",
+      "040000003216",
+      "040000003096",
+      "040000003442",
+      "040000003950",
+      "040000003949",
+      "040000003819",
+      "040000003821",
+      "040000003823",
+      "040000003825",
+      "040000003827",
+      "040000003829",
+      "040000003808",
+      "040000003806",
+      "040000003804",
+      "040000003802",
+      "040000003800",
+      "040000003798",
+      "040000003255"
+    ],
+    "fitMargin": 8,
+    "stroke": 2,
+    "gap": 2.6,
+    "skeletonPad": 0.9
+  },
+  "internalSchematic": {},
+  "features": [
+    {
+      "key": "river",
+      "type": "river",
+      "label": "River Wye",
+      "labelPos": "auto",
+      "labelColor": "#6ba3cc",
+      "labelSize": 3.2
+    },
+    {
+      "key": "railway",
+      "type": "railway",
+      "label": "Chiltern Main Line",
+      "labelPos": {
+        "x": 150,
+        "y": 78
+      },
+      "labelColor": "#777777",
+      "labelSize": 3.2,
+      "style": {
+        "rail": "chequer"
+      }
+    }
+  ],
+  "internalDesc": {
+    "27": [
+      "27  Orchard Road – Totteridge – town centre",
+      "Mon–Fri only · Carousel · about 7 journeys a day"
+    ],
+    "32": [
+      "32  Micklefield – town centre – Booker",
+      "Mon–Sat · Carousel · via Asda & Cressex"
+    ],
+    "34": [
+      "34  Micklefield – Totteridge – Lane End",
+      "Mon–Sat · Carousel · via town centre & Cressex"
+    ],
+    "37": [
+      "37  High Wycombe – Bourne End – Windsor",
+      "Daily · Carousel · via Flackwell Hth & Maidenhead"
+    ],
+    "102": [
+      "102  High Wycombe – Heathrow Airport",
+      "Daily · Carousel · via Beaconsfield & Uxbridge"
+    ],
+    "103": [
+      "103  High Wycombe – Slough – Langley",
+      "Daily · Carousel · via Beaconsfield & Windsor"
+    ],
+    "104": [
+      "104  High Wycombe – Uxbridge",
+      "Mon–Sat · Carousel · via Gerrards Cross & Denham"
+    ],
+    "105": [
+      "105  High Wycombe – Amersham & Chesham",
+      "Mon–Sat · Carousel · via Beaconsfield"
+    ],
+    "32A": [
+      "32A  Micklefield – town centre – Booker",
+      "Sundays + a few Mon–Sat journeys · Carousel"
+    ],
+    "M40": [
+      "M40  High Wycombe – Uxbridge express",
+      "Mon–Sat · First Berkshire · via the M40"
+    ],
+    "X74": [
+      "X74  High Wycombe – Slough – Uxbridge",
+      "Daily · First Berkshire · via Beaconsfield"
+    ]
+  },
+  "poi": {
+    "industrialKeep": "named",
+    "excludeName": [],
+    "tidy": [
+      [
+        " Church of England Primary School$",
+        " C of E Primary"
+      ],
+      [
+        " Combined School$",
+        " School"
+      ],
+      [
+        " Primary School$",
+        " Primary"
+      ],
+      [
+        " Junior School$",
+        " Junior"
+      ],
+      [
+        " Infant School$",
+        " Infants"
+      ],
+      [
+        " Academy$",
+        ""
+      ],
+      [
+        " School$",
+        ""
+      ],
+      [
+        " Industrial Estate$",
+        " Ind Est"
+      ],
+      [
+        " Trade Park$",
+        " Trade Pk"
+      ]
+    ],
+    "canon": []
+  },
+  "operators": [
+    {
+      "name": "Carousel Buses",
+      "routes": [
+        "27",
+        "32",
+        "32A",
+        "34",
+        "37",
+        "102",
+        "103",
+        "104",
+        "105"
+      ]
+    },
+    {
+      "name": "First Berkshire & The Thames Valley",
+      "routes": [
+        "M40",
+        "X74"
+      ]
+    }
+  ],
+  "mapNotes": [
+    {
+      "text": "Route 27 terminates at Orchard Road, beside the store.",
+      "x": 200,
+      "y": 166,
+      "size": 2.6,
+      "color": "#555"
+    },
+    {
+      "text": "All other services use Ford Street or The King George V",
+      "x": 200,
+      "y": 170,
+      "size": 2.6,
+      "color": "#555"
+    },
+    {
+      "text": "PH on London Road — a 2–3 minute walk from Aldi.",
+      "x": 200,
+      "y": 174,
+      "size": 2.6,
+      "color": "#555"
+    },
+    {
+      "text": "School service 37M (term-time only, not shown) also",
+      "x": 200,
+      "y": 180,
+      "size": 2.6,
+      "color": "#555"
+    },
+    {
+      "text": "calls at the London Road stops.",
+      "x": 200,
+      "y": 184,
+      "size": 2.6,
+      "color": "#555"
+    }
+  ],
+  "destinations": [
+    {
+      "name": "Micklefield",
+      "sub": "Woodside Road",
+      "bearing": 353,
+      "routes": [
+        "32",
+        "32A",
+        "34"
+      ],
+      "terminus": {
+        "x": 140.2,
+        "y": 38.6
+      },
+      "distKm": 2,
+      "minutesToDestination": 6
+    },
+    {
+      "name": "Amersham & Chesham",
+      "sub": "via Beaconsfield",
+      "bearing": 46,
+      "routes": [
+        "105"
+      ],
+      "terminus": {
+        "x": 228.9,
+        "y": 40.6
+      },
+      "distKm": 13,
+      "minutesToDestination": 69,
+      "stops": [
+        "The King George V PH",
+        "The Red Lion PH",
+        "Bois Moor Road",
+        "Village Hall"
+      ]
+    },
+    {
+      "name": "Loudwater",
+      "sub": "The Papermill",
+      "bearing": 64,
+      "routes": [
+        "102",
+        "103",
+        "104",
+        "105",
+        "M40",
+        "X74"
+      ],
+      "terminus": {
+        "x": 265.4,
+        "y": 62.7
+      },
+      "distKm": 2,
+      "minutesToDestination": 4
+    },
+    {
+      "name": "Beaconsfield",
+      "sub": "New Town & Old Town",
+      "bearing": 83,
+      "routes": [
+        "102",
+        "103",
+        "104",
+        "105"
+      ],
+      "terminus": {
+        "x": 266.5,
+        "y": 102.7
+      },
+      "distKm": 6,
+      "minutesToDestination": 12
+    },
+    {
+      "name": "Gerrards Cross",
+      "sub": "& Chalfont St Peter",
+      "bearing": 100,
+      "routes": [
+        "104"
+      ],
+      "terminus": {
+        "x": 266.6,
+        "y": 139.2
+      },
+      "distKm": 11,
+      "minutesToDestination": 51,
+      "stops": [
+        "The King George V PH",
+        "Orchard Road",
+        "Gold Hill West",
+        "York Road (UB8)"
+      ]
+    },
+    {
+      "name": "Uxbridge",
+      "sub": "York Road",
+      "bearing": 118,
+      "routes": [
+        "104",
+        "M40",
+        "X74"
+      ],
+      "terminus": {
+        "x": 262.8,
+        "y": 178.5
+      },
+      "distKm": 18,
+      "minutesToDestination": 23
+    },
+    {
+      "name": "Heathrow Airport",
+      "sub": "Bus Station",
+      "bearing": 136,
+      "routes": [
+        "102"
+      ],
+      "terminus": {
+        "x": 218.4,
+        "y": 189.6
+      },
+      "distKm": 24,
+      "minutesToDestination": 59,
+      "stops": [
+        "The King George V PH",
+        "Maxwell Road",
+        "Heusden Way",
+        "Heathrow Central Bus Station"
+      ]
+    },
+    {
+      "name": "Slough",
+      "sub": "Wellington St",
+      "bearing": 155,
+      "routes": [
+        "103",
+        "X74"
+      ],
+      "terminus": {
+        "x": 184.8,
+        "y": 191.1
+      },
+      "distKm": 17,
+      "minutesToDestination": 30
+    },
+    {
+      "name": "Windsor",
+      "sub": "Parish Church",
+      "bearing": 173,
+      "routes": [
+        "37",
+        "103"
+      ],
+      "terminus": {
+        "x": 157.1,
+        "y": 176.1
+      },
+      "distKm": 17,
+      "minutesToDestination": 68
+    },
+    {
+      "name": "Bourne End",
+      "sub": "& Maidenhead",
+      "bearing": 192,
+      "routes": [
+        "37"
+      ],
+      "terminus": {
+        "x": 134.3,
+        "y": 191.3
+      },
+      "distKm": 8,
+      "minutesToDestination": 13,
+      "stops": [
+        "Marsh School",
+        "The Shaw",
+        "Holyport Turn",
+        "Parish Church"
+      ]
+    },
+    {
+      "name": "Lane End",
+      "sub": "via Marlow Road",
+      "bearing": 235,
+      "routes": [
+        "34"
+      ],
+      "terminus": {
+        "x": 45.7,
+        "y": 191.3
+      },
+      "distKm": 8,
+      "minutesToDestination": 50,
+      "stops": [
+        "Hawthorne Road",
+        "Turners Drive",
+        "Rupert Avenue",
+        "Simmons Way"
+      ]
+    },
+    {
+      "name": "Booker & Cressex",
+      "sub": "Asda & Empire Cinema",
+      "bearing": 253,
+      "routes": [
+        "32",
+        "32A",
+        "34"
+      ],
+      "terminus": {
+        "x": 30.2,
+        "y": 155.3
+      },
+      "distKm": 5,
+      "minutesToDestination": 28
+    },
+    {
+      "name": "High Wycombe town centre",
+      "sub": "Bus & Rail Station",
+      "bearing": 270,
+      "routes": [
+        "102",
+        "103",
+        "104",
+        "105",
+        "M40",
+        "X74",
+        "37",
+        "32",
+        "32A",
+        "34",
+        "27"
+      ],
+      "terminus": {
+        "x": 28.5,
+        "y": 118
+      },
+      "distKm": 3,
+      "minutesToDestination": 10
+    },
+    {
+      "name": "Totteridge",
+      "sub": "Hicks Farm Rise",
+      "bearing": 334,
+      "routes": [
+        "27",
+        "34"
+      ],
+      "terminus": {
+        "x": 122.2,
+        "y": 60.9
+      },
+      "distKm": 2,
+      "minutesToDestination": 8
+    }
+  ],
+  "design": {
+    "sheetUrl": "busmaps.uk/m/highwycombe-aldi",
+    "sheetUrlLabel": "Latest version:",
+    "laneOrientation": true,
+    "frequencyTiers": {
+      "frequent": {
+        "mm": 2.2
+      },
+      "all-day": {
+        "mm": 1.7
+      },
+      "limited": {
+        "mm": 1.2
+      }
+    },
+    "sheetVersion": "build 1.32 · 13 Sep 2026"
+  },
+  "labels": {},
+  "checkedAt": "July 2026",
+  "frequency": {
+    "27": "limited",
+    "32": "frequent",
+    "34": "frequent",
+    "37": "frequent",
+    "102": "frequent",
+    "103": "frequent",
+    "104": "all-day",
+    "105": "all-day",
+    "32A": "frequent",
+    "M40": "frequent",
+    "X74": "frequent"
+  },
+  "panelGroups": true
+}

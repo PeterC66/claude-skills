@@ -1,0 +1,15 @@
+{
+ "place": "Aldi",
+ "town": "High Wycombe",
+ "region": "Buckinghamshire",
+ "name": "Aldi",
+ "display": "Aldi, Tannery Road, Tannery Road Trade Park, Totteridge, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP13 7EQ, United Kingdom",
+ "lat": 51.6180732,
+ "lon": -0.7135776,
+ "osm_type": "node",
+ "osm_id": 9658107896,
+ "class": "shop",
+ "type": "supermarket",
+ "walkshedM": 500.0,
+ "ambiguous": true
+}

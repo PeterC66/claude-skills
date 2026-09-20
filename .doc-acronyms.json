@@ -31,10 +31,23 @@
     "the same way here. In a small corpus the word rule is weaker and the",
     "declaration carries more of the load -- which is an argument for a generous",
     "group with its reason written down, NOT for lowering the threshold, because",
-    "lowering it is the direction that swallowed EP."
+    "lowering it is the direction that swallowed EP.",
+    "",
+    "HALTED AND RFC ARRIVED BY A DOCUMENT BEING SPLIT, NOT BY A WORD BEING",
+    "WRITTEN (2026-09-18, buses-data OA-399 R6). Both had been used in",
+    "bus-work/SKILL.md alone for months, and the third scope rule puts a short",
+    "form appearing in fewer than TWO documents out of scope -- one document's",
+    "own vocabulary, whose reader has the introducing sentence in front of",
+    "them. Moving four sections into references/why-these-rules.md changed the",
+    "DOCUMENT COUNT and nothing else, and both crossed the threshold. So this",
+    "check is sensitive to how a corpus is ARRANGED as well as to what it",
+    "says, and a split is a moment to expect findings from it. That is a",
+    "property of the rule working, not a fault in it: two documents using a",
+    "short form is exactly when a reader can meet it without its introduction."
   ],
   "definitions": [],
   "defined": {
+    "RFC": "Request for Comments -- the IETF's numbered standards series. RFC 2606 and RFC 6761 are the two that matter here: they reserve example.com and the .example/.test/.invalid/.localhost domains so they resolve nowhere and accept no mail, which is what makes an un-emailable applicant a seeded record rather than somebody waiting",
     "OA": "Open action -- buses-data's backlog, one file per action at `Development Docs/open-actions/OA-nnn.md`, retired by deleting the file",
     "CORR": "Correspondence thread -- one folder per conversation in buses-data's `Correspondence/`, numbered permanently like an OA",
     "BODS": "Bus Open Data Service -- the Department for Transport service every English bus operator must register its timetables with, and the source of every route this engine draws",
@@ -86,7 +99,7 @@
     },
     {
       "reason": "ordinary English that our house style shouts, or a verdict token a tool prints in capitals -- REUSE and BUY are redteam_source.js's two answers, PARKED is a status. The checker's lower-case-count rule catches this class in a 301-document corpus and is weaker in a 45-document one, which is why they are declared here rather than left to it.",
-      "tokens": ["BUY", "REUSE", "REUSES", "PARKED", "LATE", "GAIN", "LOUDLY", "REFUSE", "NEVER", "BOTH", "DONE", "STALE", "PASS", "HARD", "SOFT"]
+      "tokens": ["BUY", "HALTED", "REUSE", "REUSES", "PARKED", "LATE", "GAIN", "LOUDLY", "REFUSE", "NEVER", "BOTH", "DONE", "STALE", "PASS", "HARD", "SOFT"]
     },
     {
       "reason": "a fragment of something that is not prose at all -- a hex colour, a font name, an encoding, a coordinate system -- that survived the code stripping because it was written bare.",

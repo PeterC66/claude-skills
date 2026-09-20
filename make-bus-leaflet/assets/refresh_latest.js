@@ -13,15 +13,35 @@
 // internal-diagram.jpg from
 // the latest S5 render; the newest disagreements.docx + disagreements.pdf (the
 // customer-facing PDF conversion, see gen_disagreements.py) and verification.docx
-// found anywhere under the town folder. Missing items are skipped silently.
+// found anywhere under THIS map's own folder — never under a map nested inside
+// it, see newestUnder(). Missing items are skipped silently.
 // Final step, always: re-runs collect-maps.ps1 -All at the Buses root, so the
 // Collected_latests review folders never drift from _latest the way High
 // Wycombe Aldi / St Neots Town Centre did on 2026-08-08 (an in-place render
 // edit and a skipped refresh, each caught only because Collected_latests was
 // stale against the newest S5-render — see project_bus_foolproofing_plan.md).
+//
+// --no-collect DOES THE COPY AND SKIPS THAT SWEEP, and it exists for exactly one
+// caller: `stage.js commit S6`, which refreshes this map's mirror as part of the
+// commit (OA-329 fault A). Three reasons the chokepoint may not run the sweep,
+// and the third is the deciding one. It is estate-wide work — collect-maps.ps1
+// -All walks all twenty maps — triggered by an event about ONE map. It needs
+// `powershell`, so a call from `commit` would make an engine unit test depend on
+// a Windows shell, and `commit` is spawned by a dozen of them. And
+// `Collected_latests/` is untracked (.gitignore:152), so no gate, no byte and no
+// CI run depends on it, while `_latest/verification.docx` IS tracked and IS
+// gated — `latest-mirror-gate.js` fails on a mirror that does not match the S6
+// run its own manifest names. So the half with a gate behind it moves into the
+// boundary and the half with none stays where a person drives it; the skipped
+// sweep is PRINTED rather than silent, with the command that does it.
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
-const { loadManifest } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4)
-const TOWN = process.argv[2] || process.cwd();
+const { loadManifest, versionOfRunDir } = require('./stage.js');   // the one manifest reader (OA-232 Tier 2.4), and the one parse of a run dir's version (OA-368)
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
+const ARGV = process.argv.slice(2);
+const NO_COLLECT = ARGV.includes('--no-collect');
+// The folder is the first NON-FLAG argument, so `<dir> --no-collect` and
+// `--no-collect <dir>` both work and a flag can never be mistaken for a town.
+const TOWN = ARGV.filter(a => !a.startsWith('--'))[0] || process.cwd();
 // REFUSE A FOLDER THAT IS NOT A TOWN OR PLACE. There is no walking up: the dir
 // is taken verbatim, so running this from the Buses root with no argument used
 // to create a bogus `Buses/_latest` holding whatever disagreements.docx and
@@ -39,7 +59,32 @@ if (!fs.existsSync(path.join(TOWN, 'manifest.json'))) {
 const OUT = path.join(TOWN, '_latest');
 fs.mkdirSync(OUT, { recursive: true });
 
-// newest S5 render dir from the manifest (fallback: newest S5-render/* by name)
+// newest S5 render dir — from the manifest, which is the answer, and only if the
+// manifest cannot answer from the listing, ordered by VERSION (buses-data OA-368).
+//
+// A TEXT SORT IS THE WRONG INSTRUMENT ON THESE NAMES AND THE ESTATE SAYS SO BY
+// COUNT. An S5 run dir is `v<N.N>_<date>_<hhmm>`, and `v1.9` sorts after `v1.19`
+// exactly as `v2.9` sorts after `v2.32` — measured 2026-09-16 over the 23 map
+// folders, a text sort names the WRONG run in 26 of the 40 versioned stage
+// listings, against 0 of the 80 unversioned ones. The 14 it gets right today are
+// right because a MAJOR bump has kept their minors in single digits (High Wycombe
+// is two builds from breaking) or because prune_runs.py has deleted the low
+// numbers, so the correctness of this listing is currently a property of the
+// RETENTION POLICY, which nobody designed and nobody would think to preserve.
+// The same shell default delivered two of the first customer's four sheets from
+// renders a fortnight old, and the byte gate could not see it: a stale render
+// that still reproduces is indistinguishable, to that gate, from a current one.
+//
+// Ordering is version first and the rest of the name second — within one version
+// the remainder is `_<date>_<hhmm>`, on which a text sort IS a chronological sort,
+// which is what the 80 unversioned listings measure. A directory whose name is not
+// a versioned run is not a candidate at all: St Neots Town Centre carries a stray
+// `_latest/` INSIDE its S5-render, which loses a text sort only by the accident
+// that `_` sorts before `v` — a folder called `z-old` would have won it.
+//
+// AND THE FALLBACK SAYS SO WHEN IT FIRES, because a silent guess that is right on
+// one laptop is how this shipped four times: three of them are named in OA-368,
+// and two of those had written the correct rule down in another file first.
 function latestS5() {
   try {
     const m = loadManifest(TOWN);   // loadManifest from stage.js — one reader (OA-232 Tier 2.4)
@@ -48,17 +93,55 @@ function latestS5() {
   } catch (e) {}
   const base = path.join(TOWN, 'S5-render');
   if (!fs.existsSync(base)) return null;
-  const dirs = fs.readdirSync(base).filter(d => fs.statSync(path.join(base, d)).isDirectory()).sort();
-  return dirs.length ? path.join(base, dirs[dirs.length - 1]) : null;
+  const runs = fs.readdirSync(base)
+    .filter(d => fs.statSync(path.join(base, d)).isDirectory())
+    .map(d => ({ d, v: versionOfRunDir(d) }))            // stage.js owns that parse (OA-368)
+    .filter(r => r.v)
+    .sort((a, b) => {
+      const [amj, amn] = a.v.split('.').map(Number), [bmj, bmn] = b.v.split('.').map(Number);
+      return (amj - bmj) || (amn - bmn) || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+    });
+  if (!runs.length) return null;
+  const pick = runs[runs.length - 1].d;
+  console.error('refresh_latest: manifest.json names no committed S5 run that is on this disk,');
+  console.error('  so the mirror is taken from the newest render BY VERSION: ' + pick);
+  return path.join(base, pick);
 }
-// newest file of a given basename anywhere under the town folder (by mtime),
-// ignoring the _latest copy itself
+// newest file of a given basename anywhere under THIS MAP's folder (by mtime),
+// ignoring the _latest copy itself and ignoring any nested map.
+//
+// A DIRECTORY HOLDING ITS OWN manifest.json IS A DIFFERENT MAP, AND THIS WALK
+// MUST NOT DESCEND INTO IT (OA-329 fault B). A town's folder contains
+// Places/<Place>/, each of which is a map in its own right, so for a town this
+// walk used to consider a PLACE's verification.docx as a candidate for the
+// TOWN's mirror — and being newer, it won. It won twice, and both wrong files
+// were tracked in git: Beaconsfield's _latest/verification.docx was byte-for-byte
+// Beaconsfield Simpson Centre's report, and High Wycombe's was High Wycombe Town
+// Centre's — a current, true statement about a DIFFERENT map, sitting in the
+// folder a reader opens to find out what was checked about the sheet beside it.
+// High Wycombe's mirror reported on a single-stop boarding plan while its
+// _latest/internal.jpg was a 34-route town sheet. Nothing could see it: git
+// status is clean, every byte gate passes, and status.js reads S6 staleness off
+// the manifest and never opens _latest.
+//
+// "Holds a manifest.json" is the estate's EXISTING definition of a different map
+// — it is the same test this file already applies to its own argument above, and
+// the one status.js and the map-population sweeps use — so the narrowing agrees
+// with every other reader rather than inventing a rule of its own. The check is
+// on the CHILD before descending, so the map's own manifest at TOWN never
+// excludes TOWN itself, and Places/ (which holds no manifest) is still entered
+// so that a place nested one level deeper is skipped individually rather than
+// the whole branch being cut off blind.
 function newestUnder(name) {
   let best = null, bestT = -1;
   (function walk(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) { if (e.name !== '_latest') walk(p); }
+      if (e.isDirectory()) {
+        if (e.name === '_latest') continue;
+        if (fs.existsSync(path.join(p, 'manifest.json'))) continue;   // a different map — OA-329 fault B
+        walk(p);
+      }
       else if (e.name === name) { const t = fs.statSync(p).mtimeMs; if (t > bestT) { bestT = t; best = p; } }
     }
   })(TOWN);
@@ -127,7 +210,10 @@ function findBusesRoot(dir) {
   }
 }
 const busesRoot = findBusesRoot(TOWN);
-if (busesRoot) {
+if (NO_COLLECT) {
+  console.log('Collected_latests NOT refreshed (--no-collect). The sweep is one command, from anywhere:'
+    + '\n    powershell -File "' + (busesRoot ? path.join(busesRoot, 'collect-maps.ps1') : '<Buses root>\\collect-maps.ps1') + '" -All');
+} else if (busesRoot) {
   try {
     execFileSync('powershell', ['-File', path.join(busesRoot, 'collect-maps.ps1'), '-All'], { cwd: busesRoot, stdio: 'inherit' });
   } catch (e) {
@@ -136,3 +222,7 @@ if (busesRoot) {
 } else {
   console.error('WARNING: could not find collect-maps.ps1 above ' + TOWN + ' — Collected_latests was NOT refreshed.');
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

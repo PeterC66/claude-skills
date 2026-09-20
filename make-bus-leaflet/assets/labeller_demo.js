@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { Labeller } = require(path.join(__dirname, 'labeller.js'));
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const OUT = process.argv[2] || process.cwd();
 const { W, H } = require(path.join(__dirname, 'page.js'));
 const FRAME = { x0: 6, y0: 30, x1: 196, y1: 192 };
@@ -130,3 +131,7 @@ fs.writeFileSync(path.join(OUT, 'routes.json'), JSON.stringify({ town: 'Labeller
 console.log(`old: ${SYMS.length - a.dropped}/${SYMS.length} placed, ${a.dropped} dropped silently`);
 console.log(`new: ${SYMS.length - b.dropped}/${SYMS.length} placed, ${b.dropped} unplaced` + (b.dropped ? ' -> ' + b.unplaced.map(u => u.text).join(', ') : ''));
 console.log('wrote labeller-old.svg / labeller-new.svg to ' + OUT);
+}
+
+if (require.main === module) main();
+module.exports = { main };

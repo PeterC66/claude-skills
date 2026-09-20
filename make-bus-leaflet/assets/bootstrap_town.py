@@ -116,7 +116,32 @@ def route_far_stop(cur, route_ids, town_ids, clat, clon):
             if not far or d>far[0]: far=(d,nm,float(la),float(lo))
     return far
 
+def osm_note(state):
+    """The line the report prints when no linear feature was suggested. THREE states.
+
+    Until 2026-09-17 this was one string -- `- (none found / skipped)` -- printed
+    identically whether OSM answered and the bbox holds no river, whether
+    --no-osm meant OSM was never asked, or whether both Overpass endpoints
+    failed and the question could not be put at all. A refusal read as an
+    absence measures the instrument instead of the subject, and here it costs
+    the reviewer the one fact that would make them re-run: an empty features[]
+    is a finding about the town in the first case and says nothing at all in
+    the third.
+    """
+    if state=="skipped":
+        return "- (skipped: --no-osm was given, so OSM was never asked about this town)"
+    if state=="refused":
+        return ("- COULD NOT LOOK: both Overpass endpoints failed, so OSM has NOT been asked "
+                "-- a refusal, not an absence. Re-run before treating an empty features[] as "
+                "a finding about this town.")
+    return "- (none found: OSM answered, and the bbox holds no river, canal, railway or A-road)"
+
 def overpass_features(bbox):
+    """Returns (ranked, reached). `reached` is False when no endpoint answered.
+
+    The second value is what `osm_note` turns into a sentence: without it the
+    caller cannot tell an empty list from an unanswered question.
+    """
     s,w,n,e=bbox["s"],bbox["w"],bbox["n"],bbox["e"]
     box=f"{s},{w},{n},{e}"
     ql=f"""[out:json][timeout:40];(
@@ -131,7 +156,7 @@ def overpass_features(bbox):
             d=json.load(urllib.request.urlopen(req,timeout=60)); break
         except Exception: d=None; time.sleep(1)
     feats={}
-    if not d: return []
+    if not d: return [], False
     for el in d.get("elements",[]):
         t=el.get("tags",{})
         if t.get("waterway")=="river": k,typ,lab=("river","river",t.get("name","River"))
@@ -142,7 +167,7 @@ def overpass_features(bbox):
         feats.setdefault((typ,lab),{"key":k,"type":typ,"label":lab,"n":0})
         feats[(typ,lab)]["n"]+=1
     ranked=sorted(feats.values(),key=lambda f:-f["n"])
-    return ranked[:6]
+    return ranked[:6], True
 
 def main():
     ap=argparse.ArgumentParser()
@@ -198,7 +223,11 @@ def main():
                         "bearing":round(_bearing(aclat,aclon,far[2],far[3])),
                         "side":"up","_far_km":round(far[0],1),
                         "stops":["<fill ordered intermediate places to %s>"%far[1]]})
-    feats=[] if a.no_osm else overpass_features(geo["bbox"])
+    if a.no_osm:
+        feats,osm_state=[],"skipped"
+    else:
+        feats,reached=overpass_features(geo["bbox"])
+        osm_state="read" if reached else "refused"
 
     # ---- DRAFT routes.json ----
     draft={
@@ -254,7 +283,7 @@ def main():
         R.append(f"- {e['route']} -> {e['label']}  bearing≈{e['bearing']}°  ({e['_far_km']} km out)")
     R.append(f"\n## Candidate linear features (OSM) -- pick 1-3 and lock")
     for f in feats: R.append(f"- {f['type']}: {f['label']}  (key `{f['key']}`, {f['n']} ways)")
-    if not feats: R.append("- (none found / skipped)")
+    if not feats: R.append(osm_note(osm_state))
     R.append(f"\n## town_prefixes.json entry to add\n```json\n{json.dumps(tp_entry,indent=1,ensure_ascii=False)}\n```")
     R.append(f"\n## Next\n1. Review services vs bustimes (catch community/DRT).  2. Lock palette (river clash!).  "
              f"3. Curate external stops/bearings/sides.  4. Pick features.  5. Fill internalDesc.  "

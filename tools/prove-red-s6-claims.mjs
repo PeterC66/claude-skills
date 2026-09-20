@@ -12,6 +12,12 @@
  * claims before the register existed, then two SILENCES after it — but a green that
  * has been red only on one laptop, once, is still a green that has to be provable.
  *
+ * SINCE 2026-09-17 AN UNCOVERED CLAIM IS NOT RED (buses-data OA-396, R3 of the
+ * process review): a claim nobody has filed yet is a chore the worklist carries, so
+ * case 2 pins it as reported-and-green and case 11 asserts `red: false` beside an
+ * uncovered count of one. A SILENCE, a register fault and `--require-reports` over
+ * no report are still red, and cases 7 and 9 are unchanged.
+ *
  * Every case builds a throwaway git repository, because the tracked half of the
  * checker reads `git ls-files` and the coverage half reads files git ignores — and
  * the split between those two is the thing most worth proving: case 9 shows that a
@@ -135,10 +141,13 @@ console.log('1. THE CONTROL — a town whose only claim is declared off in its o
   check('and it says what it looked at', /1 map\(s\) tracked/.test(r.out) && /1 map\(s\) had an S6 report/.test(r.out) && /own-exclusion 1/.test(r.out), r.out.trim().split('\n').slice(-4).join(' | '));
 }
 
-console.log('\n2. A claim with no home is RED, and the row says every place it looked');
+console.log('\n2. A claim with no home is REPORTED and NOT red (buses-data OA-396), and the row says every place it looked');
 {
   const r = run(repo('uncovered', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'] }, [claim('77')])], EMPTY));
-  check('exit 1', r.code === 1, `exit ${r.code}`);
+  /* Exit 1 until 2026-09-17. A claim nobody has filed is a chore the worklist
+   * carries, so the exit is 0 -- and the two checks below are what keep that green
+   * from being vacuous: the row must still be printed and still say UNCOVERED. */
+  check('exit 0 — a service fact owed is a row, not a red', r.code === 0, `exit ${r.code}`);
   check('the row names the map, the run, the finding and the route', /Fixture  S6 2026-09-01_0000 F001  missing-service  77/.test(r.out), r.out.split('\n').find(l => l.includes('F001')));
   check('and says UNCOVERED with the register as the remedy', /UNCOVERED — no notOnLeaflet, no redteamRejected, no service-facts.json entry/.test(r.out), '');
 }
@@ -164,7 +173,7 @@ console.log('\n4. THE LOAD-BEARING CASE — a place\'s claim is covered by its P
   check('exit 0 — neither claim is a new question', r.code === 0, `exit ${r.code}`);
   check('604 is parent-exclusion and 1 is parent-carries', /parent-exclusion 1/.test(r.out) && /parent-carries 1/.test(r.out), r.out.split('\n').find(l => l.includes('claim(s) on')));
   const r2 = run(repo('standalone-no-parent', [standalone('Lonely', { routeOrder: ['1'] }, [claim('604')])], EMPTY));
-  check('...and a STANDALONE place has no parent to inherit from, so the same claim is red', r2.code === 1 && /UNCOVERED/.test(r2.out), `exit ${r2.code}`);
+  check('...and a STANDALONE place has no parent to inherit from, so the same claim is UNCOVERED (reported, exit 0 since OA-396)', r2.code === 0 && /UNCOVERED/.test(r2.out), `exit ${r2.code}`);
 }
 
 console.log('\n5. A register entry is a home — queued is enough, and scope is honoured');
@@ -174,7 +183,7 @@ console.log('\n5. A register entry is a home — queued is enough, and scope is 
   check('queued entry in scope: exit 0, counted as register-queued', r.code === 0 && /register-queued 1/.test(r.out), `exit ${r.code}`);
   check('and the summary names the queued id so the question is visible', /QUEUED register entry.*SF-001/.test(r.out), r.out.split('\n').find(l => l.includes('QUEUED')));
   const r2 = run(repo('reg-wrong-scope', [t], { facts: [queued('SF-001', '77', ['Elsewhere'])] }));
-  check('the same entry scoped to another map covers nothing here', r2.code === 1 && /UNCOVERED/.test(r2.out), `exit ${r2.code}`);
+  check('the same entry scoped to another map covers nothing here — UNCOVERED, reported, exit 0', r2.code === 0 && /UNCOVERED/.test(r2.out), `exit ${r2.code}`);
   const r3 = run(repo('reg-star', [t], { facts: [queued('SF-001', '77', ['*'])] }));
   check('scope ["*"] covers every map', r3.code === 0, `exit ${r3.code}`);
   const p = place('Fixture', 'Shop', { routeOrder: ['1'] }, [claim('77')]);
@@ -188,7 +197,7 @@ console.log('\n6. Aliases and spellings: bracketed, slashed, and the alias list'
   const r = run(repo('spellings', [t], { facts: [queued('SF-001', 'ZIP2', ['Fixture']), { ...queued('SF-002', 'LGW', ['Fixture']), aliases: ['The Airline'] }] }));
   check('18/18A meets the town\'s OWN 18 (a pairing failure, not a claim); ZIP2(brand) meets a register ZIP2; THEAIRLINE meets the alias', r.code === 0 && /own-carries 1/.test(r.out) && /register-queued 2/.test(r.out), `exit ${r.code}: ${r.out.split('\n').filter(l => /UNCOVERED|SILENT|claim\(s\) on/.test(l)).join(' | ')}`);
   const r2 = run(repo('own-carries-not-for-serves-town', [town('Fixture', { services: [{ route: '18' }] }, { routeOrder: ['18'] }, [claim('18', 'serves-town')])], EMPTY));
-  check('...but a serves-town disagreement about a route we carry is NOT covered by carrying it — that is the disagreement', r2.code === 1 && /UNCOVERED/.test(r2.out), `exit ${r2.code}`);
+  check('...but a serves-town disagreement about a route we carry is NOT covered by carrying it — that is the disagreement, and it is UNCOVERED', r2.code === 0 && /UNCOVERED/.test(r2.out), `exit ${r2.code}`);
 }
 
 console.log('\n7. THE OTHER LOAD-BEARING CASE — a decided entry over a SILENT map is red (the VL14 shape)');
@@ -260,7 +269,7 @@ console.log('\n11. --json carries the same verdict, and an unknown flag is a usa
   const root = repo('json', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'] }, [claim('77')])], EMPTY);
   const r = run(root, '--json');
   let j = null; try { j = JSON.parse(r.out); } catch { /* left null */ }
-  check('parses, red, one uncovered claim named', !!j && j.red === true && j.uncovered.length === 1 && j.uncovered[0].route === '77' && j.claims === 1, r.out.slice(0, 120));
+  check('parses, NOT red, one uncovered claim named (OA-396: owed is a row)', !!j && j.red === false && j.uncovered.length === 1 && j.uncovered[0].route === '77' && j.claims === 1, r.out.slice(0, 120));
   const r2 = spawnSync(process.execPath, [CHECKER, '--all'], { cwd: root, encoding: 'utf8' });
   check('exit 2 and the known flags are listed', r2.status === 2 && /known: --root/.test((r2.stdout || '') + (r2.stderr || '')), `exit ${r2.status}`);
 }
@@ -310,6 +319,21 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
   check('an `include` whose map still declares it off is ENUMERATED and still exit 0 — this is not a finding', r.code === 0 && /1 decided "include" entry is WAITING on a rebuild/.test(r.out), `exit ${r.code}: ${r.out.split('\n').find(l => l.includes('WAITING')) || ''}`);
   check('the row names the entry, the map, the route and the file the exclusion is written in', /SF-001  Fixture  TIGER — waiting; still declared off in Areas.Fixture.S1-services.2026-09-01_0000.verified-services.json/.test(r.out), r.out.split('\n').find(l => l.includes('SF-001')));
   check('and it carries what the register says is owed, so the reader does not have to open the file', /owes: a Services-panel line carrying the booking number/.test(r.out), '');
+
+  /* THE PAIR THE WORDING WAS WRONG ABOUT, and the reason these four assertions exist
+   * (2026-09-19). A rebuild pays an `include` by doing TWO things — printing the line,
+   * and taking the route out of `notOnLeaflet[]` — and several maps in the estate did
+   * the first without the second. Five of the ten waiting pairs are in that state
+   * today. OA-285 probed all 14 then-live pairs against the shipped SVGs on
+   * 2026-09-16: the register's `drawing` prose was right 14 times out of 14 and this
+   * enumeration wrong 4 times, ALWAYS this way round. So the output may say the
+   * DECLARATION is outstanding and must never say the line is missing from the sheet,
+   * because a session that believed that would rebuild the map and print it twice. */
+  const rDelivered = run(repo('owed-delivered-but-declared-off', [offMap('TIGER')], { facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include', drawing: { Fixture: 'DELIVERED 2026-09-11 in v1.24 - the include is paid and this entry owes nothing further.' } })] }));
+  check('an entry whose note says DELIVERED but whose map still declares it off is STILL enumerated, still exit 0', rDelivered.code === 0 && /1 decided "include" entry is WAITING on a rebuild/.test(rDelivered.out), `exit ${rDelivered.code}`);
+  check('and what it says it waits on is the DECLARATION, never that the line is missing from the sheet', /WAITING on a rebuild to take the route out of notOnLeaflet\[\]/.test(rDelivered.out) && !/to put the service on the sheet/.test(rDelivered.out), rDelivered.out.split('\n').find((l) => l.includes('WAITING')) || '(no WAITING line)');
+  check('and it warns in the same breath that this counts declarations rather than ink', /COUNT OF DECLARATIONS AND NOT OF SHEETS MISSING THE LINE/.test(rDelivered.out), rDelivered.out.split('\n').find((l) => l.includes('WAITING')) || '(no WAITING line)');
+  check('and the DELIVERED note itself reaches the reader — the half OA-285 measured as trustworthy 14/14', /owes: DELIVERED 2026-09-11 in v1\.24/.test(rDelivered.out), '');
 
   /* THE COUNT MUST BE ABLE TO ANSWER "NONE OF THEM" — the shape recorded as
    * "the count that equalled the total". Once the map lists the route, the same
@@ -469,14 +493,14 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
   /* CONTROL 2 — a `badgeLabels` line naming a key the map does not carry anywhere
    * is a stale config line, not a home. */
   const rStale = run(repo('alias-control-stale', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'], badgeLabels: { '61EY': '61' } }, [claim('61')])], EMPTY));
-  check('CONTROL: a badgeLabels entry naming a key the map carries NOWHERE is still UNCOVERED and red',
-    rStale.code === 1 && /UNCOVERED/.test(rStale.out), `exit ${rStale.code}`);
+  check('CONTROL: a badgeLabels entry naming a key the map carries NOWHERE is still UNCOVERED (reported, exit 0 since OA-396)',
+    rStale.code === 0 && /UNCOVERED/.test(rStale.out), `exit ${rStale.code}`);
 
   /* CONTROL 3 — the same estate with the badgeLabels line removed is red, which is
    * what makes every green below attributable to the alias and to nothing else. */
   const rNoLabels = run(repo('alias-control-no-labels', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), place('Neots', 'Tesco', { routeOrder: ['61EY'] }, [claim('61')])], EMPTY));
-  check('CONTROL: strip badgeLabels and the identical estate is RED — the alias is what changes the answer',
-    rNoLabels.code === 1 && /UNCOVERED/.test(rNoLabels.out), `exit ${rNoLabels.code}`);
+  check('CONTROL: strip badgeLabels and the identical estate is UNCOVERED — the alias is what changes the answer',
+    rNoLabels.code === 0 && /UNCOVERED/.test(rNoLabels.out), `exit ${rNoLabels.code}`);
 
   /* THE CASE ITSELF — SF-014 on the day it was filed, with nothing written down. */
   const sf014 = [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), aliasPlace([claim('61')])];
@@ -516,7 +540,7 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
    * obey the same rule, or the widening quietly repeals it. */
   const rServes = run(repo('alias-serves-town', [town('Neots', parentTown, badged(), [claim('61', 'serves-town')])], EMPTY));
   check('a serves-town disagreement keyed on the badge, over the map\'s OWN carried route, is STILL UNCOVERED — carrying it is not an answer to "it does not serve"',
-    rServes.code === 1 && /UNCOVERED/.test(rServes.out), `exit ${rServes.code}`);
+    rServes.code === 0 && /UNCOVERED/.test(rServes.out), `exit ${rServes.code}`);
 
   /* THE ASYMMETRY THAT VERSION OF THE ASSERTION FOUND — SETTLED ON 2026-09-11, and
    * the pin now holds the answer rather than the question. The checker excluded
@@ -532,10 +556,10 @@ console.log('\n14. WHAT A DECIDED `include` STILL OWES — enumerated, never red
    * previous version of this comment required. */
   const rServesDirect = run(repo('alias-serves-town-parent-direct', [town('Neots', parentTown, { routeOrder: ['61EY'] }, null), place('Neots', 'Tesco', { routeOrder: ['61EY'] }, [claim('61EY', 'serves-town')])], EMPTY));
   check('no alias in play: a place\'s serves-town claim is NOT covered by its parent town merely carrying the route',
-    rServesDirect.code === 1 && /UNCOVERED/.test(rServesDirect.out) && !/parent-carries/.test(rServesDirect.out), `exit ${rServesDirect.code}`);
+    rServesDirect.code === 0 && /UNCOVERED/.test(rServesDirect.out) && !/parent-carries/.test(rServesDirect.out), `exit ${rServesDirect.code}`);
   const rServesParent = run(repo('alias-serves-town-parent', [town('Neots', parentTown, badged(), null), aliasPlace([claim('61', 'serves-town')])], EMPTY));
   check('...and the alias gives that same answer for the badge spelling — the two spellings must not be classified differently',
-    rServesParent.code === 1 && /UNCOVERED/.test(rServesParent.out), `exit ${rServesParent.code}`);
+    rServesParent.code === 0 && /UNCOVERED/.test(rServesParent.out), `exit ${rServesParent.code}`);
   /* THE CONTROL THAT KEEPS THE NARROWING HONEST: the same parent, the same route,
    * a `missing-service` claim instead — still `parent-carries`, because there the
    * parent carrying the route IS the answer (it is a pairing failure, not a
@@ -821,4 +845,4 @@ if (failures) {
   console.log(`FAILED — ${failures} of ${ran} assertions did not hold`);
   process.exit(1);
 }
-console.log(`OK — all ${ran} assertions held: a claim with no home is red, a parent town's decision reaches its places, a decided entry over a silent map is red, and CI's half says what it did not look at`);
+console.log(`OK — all ${ran} assertions held: a claim with no home is REPORTED and not red (OA-396), a parent town's decision reaches its places, a decided entry over a silent map is red, and CI's half says what it did not look at`);

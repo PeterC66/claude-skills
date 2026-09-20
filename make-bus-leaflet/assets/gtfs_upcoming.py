@@ -209,7 +209,8 @@ def prev_snapshot(updir, today_iso):
     cands = [c for c in cands if os.path.basename(c) < f"snapshot_{today_iso}.json"]
     if not cands:
         return None, None
-    return cands[-1], json.load(open(cands[-1], encoding="utf-8"))
+    with open(cands[-1], encoding="utf-8") as fh:
+        return cands[-1], json.load(fh)
 
 
 def forward_findings(routes, prev_routes, feed_start, today, ahead):
@@ -347,7 +348,8 @@ def main():
     single = a.town or a.place
     gdir = os.path.join(a.root, "_gtfs")
     updir = os.path.join(gdir, "upcoming"); os.makedirs(updir, exist_ok=True)
-    prefixes_cfg = json.load(open(os.path.join(gdir, "town_prefixes.json"), encoding="utf-8"))
+    with open(os.path.join(gdir, "town_prefixes.json"), encoding="utf-8") as fh:
+        prefixes_cfg = json.load(fh)
 
     # Towns come from the hand-maintained registry, places from their manifests. Both end up
     # in one dict keyed by name, which greg.plan() groups by dataset without caring which is
@@ -482,10 +484,17 @@ def main():
         print("\n".join(lines[1:]).strip())  # drop the H1 title; keep feed context + the town section
         return
 
+    # Both handles are closed explicitly. These are the two artefacts the whole
+    # monthly run exists to produce -- next month's comparison basis and the
+    # report a person adjudicates from -- and a write left to the garbage
+    # collector is flushed at refcount zero by happy accident rather than by
+    # anything the language promises.
     snap_path = os.path.join(updir, f"snapshot_{today_iso}.json")
-    json.dump(snapshot, open(snap_path, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
+    with open(snap_path, "w", encoding="utf-8") as fh:
+        json.dump(snapshot, fh, indent=1, ensure_ascii=False)
     rep_path = os.path.join(updir, f"upcoming-report_{today_iso}.md")
-    open(rep_path, "w", encoding="utf-8").write("\n".join(lines))
+    with open(rep_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
 
     if total == 0:
         headline = "Upcoming bus changes: nothing to prepare."

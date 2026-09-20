@@ -18,6 +18,14 @@
 const fs = require('fs');
 // Positional, through the one parser — see aggregate_destinations.js's note.
 const { cli } = require('./place_engine.js');
+
+// ---- main() ---------------------------------------------------------------
+// OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
+// RUN, never when it is required, so make-bus-leaflet/test/place_assets_load.test.js
+// can ask the cheapest question there is — does it LOAD. Nothing inside is
+// re-indented; the diff has to read as "a scope was added".
+function main() {
+
 const a = cli.parseArgs(process.argv.slice(2))._;
 const full = cli.readJson(a[0]);
 const ll = cli.readJson(a[1]);
@@ -63,3 +71,7 @@ for (const r in intown) {
   console.error(r.padEnd(6), 'walkshed', String(intown[r].length).padStart(3),
     '(core', core, '+edge', intown[r].length - core + ')');
 }
+}
+
+if (require.main === module) main();
+module.exports = { main };

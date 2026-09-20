@@ -99,6 +99,60 @@ const DEP_PATTERNS = [
   /SKILL_ASSETS\s*,\s*['"]([\w.-]+\.js)['"]/g,                   // path.join(SKILL_ASSETS,'x.js')
 ];
 
+// WHAT `sk` IS, AND WHY IT IS CHECKED (2026-09-18).
+//
+// Every function below takes a DIRECTORY. Until this guard existed, handing one
+// anything else did not throw: the closure walk skipped every name it could not
+// find, computeEngineVersion hashed each as the literal `MISSING`, and the
+// function returned a perfectly ordinary ten-character hash.
+//
+//   computeEngineVersion('internal')        -> 6ad7e5d648
+//   computeEngineVersion('C:/no/such/dir')  -> 6ad7e5d648
+//   computeEngineVersion(<the real assets>) -> dbc9c983fa
+//
+// The first two are equal BY CONSTRUCTION, not by agreement: both were looking
+// at nothing. OA-310's 2026-09-14 section quotes exactly that pair as evidence
+// that two engines agreed and the change owed no estate rebuild. The conclusion
+// happened to be true — it was re-measured with real directories the same
+// morning — but the measurement could not tell `the engines agree` from
+// `neither engine was read`, and a second reader of the same paragraph made the
+// identical mistake half an hour later. The call reads like
+// `computeEngineVersion(kind)` because this engine really does have three
+// engine kinds, and the parameter is called `sk`.
+//
+// MISSING PER FILE STAYS, and that is the distinction. An engine that has
+// dropped a file since is exactly the state the stamp has to keep describing,
+// so a closure name that is not on disk still hashes as MISSING. What is
+// refused is the case where there is no engine to read at all: a `sk` that is
+// not an existing directory. That is a caller error, it cannot be got wrong
+// silently, and nothing downstream wants the lenient answer — status.js's
+// held-back check already wraps its call in a try/catch and reports the message.
+//
+// WHERE IT IS ASKED, AND WHY NOT EVERYWHERE. This guard is on the TOWN half
+// only: engineFiles(), and therefore computeEngineVersion(), computePlaceEngineVersion()
+// and boardingEngineFiles(), all of which start from it. The PLACE half is
+// deliberately left lenient, and that was not a judgement call — CI answered it.
+// Asking it of placeEngineFiles() too turned two prove-red harnesses red
+// (prove-red-held-back and the cli.js closure test under prove-red): both copy
+// the town skill's assets/ alone into a scratch directory and run it there, so
+// placeAssetsDir() resolves to a sibling make-place-bus-leaflet/assets that is
+// genuinely not on disk, and the place half has ALWAYS hashed as two MISSING
+// entry points in that case. A town engine without the place skill beside it is
+// a real configuration, not a caller error, and the hash it produces has to stay
+// the one it has always produced.
+function assertEngineDir(sk, what) {
+  if (typeof sk !== 'string' || !sk) {
+    throw new TypeError(`${what}: expected a path to an assets DIRECTORY, got ${typeof sk === 'string' ? 'an empty string' : typeof sk}`);
+  }
+  let stat;
+  try { stat = fs.statSync(sk); } catch { stat = null; }
+  if (!stat || !stat.isDirectory()) {
+    throw new Error(`${what}: ${JSON.stringify(sk)} is not a directory, so there is no engine to hash there. `
+      + 'This function takes a path to an assets/ folder, not the NAME of an engine kind — '
+      + 'a bad path used to return a plausible hash computed from files that were all missing.');
+  }
+}
+
 /** The transitive require closure of `entries` under `sk`, sorted. A name in
  * `already` is neither added nor followed: it is hashed by another half. */
 function requireClosure(sk, entries, already = new Set()) {
@@ -125,8 +179,30 @@ function requireClosure(sk, entries, already = new Set()) {
   return [...seen].sort();
 }
 
+// THE SECOND HALF OF THE SAME TRAP: a directory that IS there and is not an
+// engine. Point either of the two template halves at the repository root, or at
+// a stale checkout whose assets/ has moved, and the walk starts from entry
+// points that are all absent — the closure comes back empty and the hash is the
+// same vacuous ten characters as a path that does not exist. So a folder that
+// holds not ONE of the entry points is refused too.
+//
+// This is deliberately asked of the TOWN ENTRY POINTS and not of the closure,
+// not of boardingEngineFiles() and not of placeEngineFiles(): an engine that has
+// dropped gen_boarding.js is a real engine missing a file, and a town skill with
+// no place skill beside it is a real configuration that two prove-red harnesses
+// run in — both are the case MISSING exists to describe.
+function assertIsAnEngine(dir, entries, what) {
+  if (entries.some((name) => fs.existsSync(path.join(dir, name)))) return;
+  throw new Error(`${what}: ${JSON.stringify(dir)} holds none of the entry points ${entries.join(', ')}, `
+    + 'so it is not an engine — hashing it would return a real-looking answer computed entirely from missing files.');
+}
+
 /** Every engine file the entry points reach, transitively, sorted. */
-function engineFiles(sk = SK) { return requireClosure(sk, ENGINE_FILES); }
+function engineFiles(sk = SK) {
+  assertEngineDir(sk, 'engineFiles');
+  assertIsAnEngine(sk, ENGINE_FILES, 'engineFiles');
+  return requireClosure(sk, ENGINE_FILES);
+}
 
 // THE HASH IGNORES LINE ENDINGS, and that is not tidiness (2026-08-28).
 //

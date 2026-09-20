@@ -128,14 +128,14 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
   hg('add', '-A');
   hg('commit', '-q', '-m', 'first');
-  const blocked = path.join(held, 'loop', 'blocked');
-  fs.mkdirSync(blocked, { recursive: true });
+  const yourMove = path.join(held, 'loop', 'your-move');
+  fs.mkdirSync(yourMove, { recursive: true });
   const cond = () => conc.readConditions({ buses: held });
 
   // The clean control first, so the hold cannot be what makes it green.
   let C = cond();
   ok(conc.assess(['buses-tree'], C).verdict === conc.SAFE && C.repos.buses.accounted.length === 0,
-    'clean tree with an empty blocked folder: SAFE, nothing accounted');
+    'clean tree with an empty your-move folder: SAFE, nothing accounted');
 
   // Peter types the salutation and leaves it.
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
@@ -144,7 +144,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
 
   // A tick writes the hold, in the house style: several fields on one line,
   // the path in backticks, prose after it.
-  fs.writeFileSync(path.join(blocked, 'corr-001-salutation.md'),
+  fs.writeFileSync(path.join(yourMove, 'corr-001-salutation.md'),
     '# CORR-001 message 008: the salutation names the correspondent\n\n' +
     `**Raised by:** \`sched-0815\`, 2026-09-10 · **File:** \`${letter}\`, modified and uncommitted since 07:16 local · **Blocks:** corr-unsent-CORR-001\n\n` +
     '## What is needed from you\n\nDecide the salutation.\n');
@@ -168,7 +168,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
 
   // Retiring the hold puts the letter back into the verdict — the direction a
   // rule like this must fail in.
-  fs.rmSync(path.join(blocked, 'corr-001-salutation.md'));
+  fs.rmSync(path.join(yourMove, 'corr-001-salutation.md'));
   C = cond();
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
 
@@ -176,19 +176,117 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   // is residue, and the tree was right to stop on it on 2026-09-09.
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi\n');
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
-  fs.writeFileSync(path.join(blocked, 'residue.md'),
+  fs.writeFileSync(path.join(yourMove, 'residue.md'),
     '# Residue\n\n**Raised by:** `sched-1115`, 2026-09-09 · **File:** `Areas/Ramsey/notes.md`, left behind\n\n## What is needed from you\n\nCommit it.\n');
   C = cond();
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
   ok(C.repos.buses.accounted.length === 0, 'and nothing is listed as accounted', JSON.stringify(C.repos.buses.accounted));
 
   // A hold with no File field, or a File field with no backticked path, is inert.
-  fs.rmSync(path.join(blocked, 'residue.md'));
+  fs.rmSync(path.join(yourMove, 'residue.md'));
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
-  fs.writeFileSync(path.join(blocked, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
+  fs.writeFileSync(path.join(yourMove, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
   C = cond();
   want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
+}
+
+// ---------------------------------------------------------------------------
+// 1c. HOW OLD IS THE DIRT — the instrument OA-386 item 2 asks for
+// ---------------------------------------------------------------------------
+/* `peers.quiescentMin` has a structural ceiling of about an hour, because the
+ * previous scheduled tick's own transcript is always on disk, so it can never
+ * answer "has the owner of this orphan gone home". The subject is the FILE, so
+ * the instrument is the file's mtime. These cases hold the three properties
+ * that make it worth having: it follows the disk, it obeys the SAME
+ * subtraction the count obeys, and it has three answers rather than two. The
+ * last case is the one that keeps it honest — an observation that scores
+ * nothing, so it can never become a mute button. */
+console.log('\n== the age of the dirt (OA-386) ==');
+{
+  const aged = path.join(root, 'aged');
+  const ag = (...a) => execFileSync('git', ['-C', aged, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(path.join(aged, 'Correspondence', 'CORR-001'), { recursive: true });
+  fs.mkdirSync(path.join(aged, 'Areas', 'Ramsey'), { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', aged], { stdio: 'ignore' });
+  ag('config', 'user.email', 'harness@example.invalid');
+  ag('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(aged, '.gitignore'), 'loop/*\n!loop/README.md\n');
+  const letter = 'Correspondence/CORR-001/009-2026-09-17-out.md';
+  fs.writeFileSync(path.join(aged, letter), 'Hi\n');
+  fs.writeFileSync(path.join(aged, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
+  fs.writeFileSync(path.join(aged, 'gone.txt'), 'g\n');
+  ag('add', '-A');
+  ag('commit', '-q', '-m', 'first');
+  const yourMove = path.join(aged, 'loop', 'your-move');
+  fs.mkdirSync(yourMove, { recursive: true });
+
+  const THEN = Date.parse('2026-09-17T12:00:00Z');
+  const setAge = (rel, min) => { const t = (THEN - min * 60000) / 1000; fs.utimesSync(path.join(aged, rel), t, t); };
+  const cond = () => conc.readConditions({ buses: aged, now: THEN });
+  const line = (C) => conc.formatConditions(C).find((l) => /dirt age/.test(l)) || '(no dirt-age line)';
+
+  // THE CONTROL FIRST: nothing dirty, nothing to be old, and no line about it.
+  // Without this a reader could not tell an age of zero from no measurement.
+  let C = cond();
+  ok(C.repos.buses.dirtyAge.paths === 0 && C.repos.buses.dirtyAge.oldestMin === null,
+    'CONTROL — a clean tree reports no dirt age at all', JSON.stringify(C.repos.buses.dirtyAge));
+  ok(!conc.formatConditions(C).some((l) => /dirt age/.test(l)), 'and the conditions block prints no dirt-age line');
+
+  fs.writeFileSync(path.join(aged, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
+  setAge('Areas/Ramsey/notes.md', 360);
+  C = cond();
+  ok(C.repos.buses.dirtyAge.counted === 1 && C.repos.buses.dirtyAge.oldestMin === 360,
+    'a file last written six hours ago reads 360 minutes old', JSON.stringify(C.repos.buses.dirtyAge));
+  ok(/6h old/.test(line(C)) && /mtime/.test(line(C)),
+    'and the block prints it, labelled as an mtime rather than as proof of stillness', line(C));
+
+  setAge('Areas/Ramsey/notes.md', 0);
+  C = cond();
+  ok(C.repos.buses.dirtyAge.oldestMin === 0, 'touch the same file and the same dirt reads young — the number follows the disk', JSON.stringify(C.repos.buses.dirtyAge));
+
+  /* THE SAME SUBTRACTION AS THE COUNT (OA-301). An accounted held letter must be
+   * out of the age as well as out of the count, or the block prints an age for a
+   * file the verdict never counted — two sources for one fact, which is the
+   * exact fault `unaccountedPaths` was introduced to remove. */
+  fs.writeFileSync(path.join(aged, letter), 'Hi Simon\n');
+  setAge(letter, 600);
+  setAge('Areas/Ramsey/notes.md', 5);
+  fs.writeFileSync(path.join(yourMove, 'corr-001-salutation.md'),
+    `# CORR-001: the salutation names the correspondent\n\n**Raised by:** \`sched-0815\`, 2026-09-17 · **File:** \`${letter}\`, modified and uncommitted\n\n## What is needed from you\n\nDecide the salutation.\n`);
+  C = cond();
+  ok(C.repos.buses.dirtyAge.paths === 1 && C.repos.buses.dirtyAge.oldestMin === 5,
+    'a held letter ten hours old is left OUT of the age, exactly as it is left out of the count', JSON.stringify(C.repos.buses.dirtyAge));
+  fs.rmSync(path.join(yourMove, 'corr-001-salutation.md'));
+  C = cond();
+  ok(C.repos.buses.dirtyAge.paths === 2 && C.repos.buses.dirtyAge.oldestMin === 600,
+    'retire the hold and the ten-hour letter is counted and aged again', JSON.stringify(C.repos.buses.dirtyAge));
+
+  /* THREE ANSWERS, NOT TWO. A path git names that is not on the disk is ABSENT,
+   * and a path nobody measured is a REFUSAL — neither may arrive as an age, and
+   * neither may quietly vanish from the total. */
+  fs.writeFileSync(path.join(aged, letter), 'Hi\n');
+  fs.rmSync(path.join(aged, 'gone.txt'));
+  C = cond();
+  const three = C.repos.buses.dirtyAge;
+  ok(three.absent === 1 && three.refused === 0 && three.counted === 1,
+    'a tracked file deleted from the working tree reads ABSENT — not aged, and not refused', JSON.stringify(three));
+  ok(/named by git and not on disk/.test(line(C)), 'and the block says how many it could not age, rather than dropping them', line(C));
+
+  const blind = { staged: [], modified: ['Development Docs/open-actions.md'], untracked: [], accounted: [] };
+  const b = conc.dirtyAge(blind);
+  ok(b.refused === 1 && b.counted === 0 && b.oldestMin === null,
+    'a repo carrying no dirtyAges at all is a REFUSAL over its paths — never an absence, and never an age of zero', JSON.stringify(b));
+
+  /* AND IT SCORES NOTHING. Widening step 2b's quiescence clause to read this is
+   * OA-294's conjunction and Peter's decision; a tick that let its own new
+   * number move a verdict would be granting itself that. Ten-hour-old dirt is
+   * still CHECK FIRST, and that is the whole point of the measurement being an
+   * observation. */
+  fs.writeFileSync(path.join(aged, letter), 'Hi Simon\n');
+  setAge(letter, 600);
+  C = cond();
+  want(conc.assess(['buses-tree'], C), conc.CHECK, 'CONTROL — dirt ten hours old still reads CHECK FIRST: the age is an observation and moves no verdict');
 }
 
 const missing = conc.readRepo({ key: 'x', label: 'x', name: 'nowhere', dir: path.join(root, 'no-such-dir') });
@@ -460,6 +558,110 @@ console.log('\n== the unpushed count, with and without an upstream (OA-313) ==')
 }
 
 // ---------------------------------------------------------------------------
+// 1d. WHAT A DETACHED HEAD IS — deploy residue, or somebody's unlanded work
+// ---------------------------------------------------------------------------
+/* buses-data OA-387. The fault: `portal-write` said of ANY checkout that was not
+ * on `main` that the branch was "somebody's live work", and for two days that
+ * sentence was said hourly about a portal checkout the deploy procedure had
+ * detached and a finished worktree was holding `main` away from. Eleven ticks
+ * read it, correctly declined to deliver, and none went and looked — because a
+ * verdict that says somebody is mid-task reads as transient, and residue is the
+ * opposite: it is still there tomorrow.
+ *
+ * EVERY CASE HERE IS A REAL CLONE WITH A REAL REMOTE, because the whole question
+ * is what git answers about ancestry and about who holds a branch, and a
+ * synthetic conditions object cannot be wrong about that. The pairs matter more
+ * than usual: a rule that called every detachment residue would be as false as
+ * the one it replaces, and in the more dangerous direction.
+ *
+ * WATCHED GO RED AGAINST THE OLD BEHAVIOUR, not only against fixtures, and both
+ * experiments were run and reverted rather than reasoned about. Reinstating the
+ * pre-OA-387 rule — one BETTER TO DELAY for every checkout that is not on main —
+ * reddens 13 cases here and leaves every control green, including the named
+ * feature branch, which is the case the old sentence was right about. Treating
+ * the third answer as residue (`ancestor !== false`) reddens 4, and TWO of them
+ * are `says` assertions rather than verdicts: an unlanded-work detachment and a
+ * refused reading both come out BETTER TO DELAY under the old rule as well, so
+ * the verdict alone cannot tell the fix from its absence and the sentence is
+ * what divides them. Drop either `says` and the regression walks between the
+ * cases that are left. */
+console.log('\n== a detached checkout: residue or unlanded work (OA-387) ==');
+{
+  const originDir = path.join(root, 'origin-d.git');
+  const seed = path.join(root, 'seed-d');
+  const work = path.join(root, 'detached-clone');
+  const held = path.join(root, 'holds-main');
+  execFileSync('git', ['init', '--bare', '-b', 'main', originDir], { stdio: 'ignore' });
+  const sg = (...a) => execFileSync('git', ['-C', seed, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  fs.mkdirSync(seed, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', seed], { stdio: 'ignore' });
+  sg('config', 'user.email', 'harness@example.invalid');
+  sg('config', 'user.name', 'harness');
+  fs.writeFileSync(path.join(seed, 'a.txt'), 'one\n');
+  sg('add', 'a.txt'); sg('commit', '-q', '-m', 'first');
+  sg('remote', 'add', 'origin', originDir); sg('push', '-q', 'origin', 'main');
+  execFileSync('git', ['clone', '-q', originDir, work], { stdio: 'ignore' });
+  const wg = (...a) => execFileSync('git', ['-C', work, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  wg('config', 'user.email', 'harness@example.invalid');
+  wg('config', 'user.name', 'harness');
+
+  const readPortal = () => conc.readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: work });
+  const verdict = () => conc.assess(['portal-write'], conc.readConditions({ portal: work }));
+  const block = () => conc.formatConditions(conc.readConditions({ portal: work })).join('\n');
+
+  // THE CONTROL FIRST, and it is the one that stops a `detached` line appearing
+  // over a checkout that is not detached at all: nothing measured, nothing said.
+  let p = readPortal();
+  ok(p.branch === 'main' && p.detached === null, 'a checkout on main carries NO detachment reading', `branch=${p.branch} detached=${JSON.stringify(p.detached)}`);
+  ok(!/detached/.test(block()), 'and the conditions block prints no detached line at all');
+
+  // The shape the deploy procedure leaves behind: detached at the commit
+  // origin/main already points at.
+  wg('checkout', '-q', '--detach', 'origin/main');
+  p = readPortal();
+  ok(p.branch === '(detached)' && p.detached && p.detached.state === 'read', 'a detached checkout is measured rather than asserted', `${p.branch} ${JSON.stringify(p.detached)}`);
+  ok(p.detached.ancestor === true && p.detached.ref === 'origin/main', 'and standing on published history reads as an ancestor of origin/main', JSON.stringify(p.detached));
+  ok(p.detached.heldBy === null, 'with no worktree holding main, no worktree is named — an absence is not invented');
+  let v = verdict();
+  ok(v.verdict === conc.CHECK, 'deploy residue is CHECK FIRST — go and look — not BETTER TO DELAY', `got ${v.verdict}`);
+  ok(/residue/.test(v.reasons[0].why) && !/somebody's live work/.test(v.reasons[0].why), 'and the reason says RESIDUE, never "somebody\'s live work"', v.reasons[0].why);
+  ok(/nothing clears it on its own/.test(v.reasons[0].why), 'and says in terms that waiting will not fix it — the half that cost eleven ticks');
+  ok(/deploy residue/.test(block()), 'and the conditions block carries the same finding', block());
+
+  // The worktree that holds `main` away from the primary checkout. This is the
+  // fact a reader cannot guess and `git worktree list` has had all along.
+  execFileSync('git', ['-C', work, 'worktree', 'add', '-q', held, 'main'], { stdio: 'ignore' });
+  p = readPortal();
+  ok(p.detached.heldBy !== null && /holds-main/.test(p.detached.heldBy), 'the worktree holding main is NAMED', `heldBy=${p.detached.heldBy}`);
+  ok(/holds-main/.test(verdict().reasons[0].why), 'and the reason says why checking main out again would fail');
+  execFileSync('git', ['-C', work, 'worktree', 'remove', held], { stdio: 'ignore' });
+  ok(readPortal().detached.heldBy === null, 'and removing that worktree takes the name away again');
+
+  // THE OTHER DIRECTION, and it is what stops this becoming a mute button: a
+  // commit that is on no branch is somebody's unlanded work, and waiting IS the
+  // right advice there.
+  fs.writeFileSync(path.join(work, 'b.txt'), 'two\n');
+  wg('add', 'b.txt'); wg('commit', '-q', '-m', 'work nobody has landed');
+  p = readPortal();
+  ok(p.detached.ancestor === false, 'a commit made on the detached head is NOT an ancestor of origin/main', JSON.stringify(p.detached));
+  v = verdict();
+  ok(v.verdict === conc.DELAY, 'unlanded work on a detached head stays BETTER TO DELAY', `got ${v.verdict}`);
+  ok(/NOT on origin\/main/.test(v.reasons[0].why), 'and the reason says which way the ancestry went', v.reasons[0].why);
+
+  // THE THIRD ANSWER. With nothing to compare against, the instrument says it
+  // could not look — it does not fall back to either finding.
+  wg('update-ref', '-d', 'refs/remotes/origin/main');
+  p = readPortal();
+  ok(p.detached.state === 'refused' && p.detached.ancestor === null, 'no origin/main to compare against: COULD NOT LOOK, not a verdict', JSON.stringify(p.detached));
+  ok(/origin\/main/.test(p.detached.why || ''), 'and it says what it could not find', p.detached.why);
+  v = verdict();
+  ok(v.verdict === conc.DELAY && /COULD NOT LOOK/.test(v.reasons[0].why), 'a refusal takes the STRICTER verdict and says so out loud', `${v.verdict}: ${v.reasons[0].why}`);
+  ok(/COULD NOT LOOK/.test(block()), 'and the conditions block does not quietly print nothing', block());
+
+  fs.rmSync(seed, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
 // 2. THE JUDGEMENT — each rule, made red and then cleared
 // ---------------------------------------------------------------------------
 console.log('\n== the rules, each one paired ==');
@@ -545,6 +747,39 @@ says(conc.assess(['portal-write'], cannotCount), /no upstream/, 'and it repeats 
 want(conc.assess(['portal-write'], world({ buses: { unpushed: 0 } })), conc.SAFE, 'and a genuine zero is still SAFE NOW');
 says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: 'default-branch', unpushedBasis: 'origin/main' } })), /origin\/main/, 'a count taken against the default branch says so on the row');
 
+/* OA-387, the judgement half. The observation block above proves what git
+ * answers; these prove what the rule DOES with each answer, including the one
+ * input a real tree cannot produce — a conditions object that carries no
+ * detachment reading at all, which is every caller written before this landed
+ * and every synthetic world in every harness. Falling back to the old sentence
+ * there would reinstate the false claim on the one input that cannot answer
+ * back, so it is a refusal like any other. */
+{
+  const det = (over) => world({ portal: { branch: '(detached)', detached: { state: 'read', ancestor: true, head: 'b461f93', ref: 'origin/main', heldBy: null, why: null, ...over } } });
+  const residue = conc.assess(['portal-write'], det({}));
+  want(residue, conc.CHECK, 'detached at a commit already on origin/main: CHECK FIRST, go and look');
+  says(residue, /residue from the deploy procedure/, 'and it is named as residue');
+  says(residue, /checkout main/, 'and the reason carries the command that clears it');
+  ok(!/somebody's live work/.test(residue.reasons[0].why), 'and never says somebody is working on it', residue.reasons[0].why);
+  // The held-by path is opaque to the rule -- it only has to come back out on
+  // the row -- so it is deliberately NOT the real portal worktree path of the
+  // OA-387 incident. A laptop path in a fixture works everywhere and breaks
+  // nowhere, which is exactly why excusing this file for the idiom would then
+  // excuse a real one too. The distinctive half, the worktree's own name, is
+  // what is asserted, and that is unchanged.
+  says(conc.assess(['portal-write'], det({ heldBy: 'C:/x/cbm-oa261' })), /cbm-oa261/, 'the worktree holding main is named on the row');
+  want(conc.assess(['portal-write'], det({ ancestor: false })), conc.DELAY, 'detached at a commit that is NOT on origin/main: BETTER TO DELAY');
+  want(conc.assess(['portal-write'], det({ state: 'refused', ancestor: null, why: 'there is no origin/main here' })), conc.DELAY, 'a refused reading: BETTER TO DELAY, the stricter answer');
+  says(conc.assess(['portal-write'], det({ state: 'refused', ancestor: null, why: 'there is no origin/main here' })), /COULD NOT LOOK/, 'and it says it could not look rather than implying it did');
+  const unmeasured = world({ portal: { branch: '(detached)' } });
+  want(conc.assess(['portal-write'], unmeasured), conc.DELAY, 'a detached portal with NO reading at all: BETTER TO DELAY');
+  ok(!/somebody's live work/.test(conc.assess(['portal-write'], unmeasured).reasons[0].why),
+    'and it must NOT fall back to the sentence this action was filed about', conc.assess(['portal-write'], unmeasured).reasons[0].why);
+  // The control that keeps the old behaviour where it was right: a NAMED branch
+  // really is somebody's work, and that sentence is correct about it.
+  says(conc.assess(['portal-write'], portalBranch), /somebody's live work/, 'a named feature branch still reads as somebody working');
+}
+
 // --- failing safe ---
 const blind = world({ portal: { present: false, readable: false } });
 want(conc.assess(['portal-write'], blind), conc.CHECK, 'a portal it cannot read is never reported SAFE');
@@ -594,6 +829,68 @@ const rows = [
 ];
 ok(conc.contentions(rows, dirtyTree).length === 1, 'two rows blocked by one thing produce ONE contention line',
   `got ${conc.contentions(rows, dirtyTree).length}`);
+
+// ---------------------------------------------------------------------------
+// 3b. THE STALE-CLAIM MARKER — read off real OA files, judged on AGE
+// ---------------------------------------------------------------------------
+//
+// Deliberately end-to-end rather than over a hand-built claims array. The
+// marker reads `ageDays`, `ageDays` is produced by readClaims parsing a
+// `selected:` line, and a test that hands formatConditions an object it made
+// itself could not tell you the parser ever produces the field — "the subject
+// you named yourself", and the reason `now` was made injectable above.
+console.log('\n== the stale-claim marker ==');
+{
+  const busesDir = path.join(root, 'claims-fixture');
+  const oa = path.join(busesDir, 'Development Docs', 'open-actions');
+  fs.mkdirSync(oa, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', busesDir], { stdio: 'ignore' });
+
+  const NOW = Date.parse('2026-09-13T09:00:00Z');
+  const day = (n) => new Date(NOW - n * 86400000).toISOString().slice(0, 10);
+  const action = (ref, date, session, note) => fs.writeFileSync(path.join(oa, `${ref}.md`),
+    `---\nref: ${ref}\nstatus: open\nselected: ${date}, ${session}, ${note}\n---\n\nbody\n`);
+  const blockAt = (now, dir = busesDir) => conc.formatConditions(conc.readConditions({ buses: dir, now })).join('\n');
+
+  action('OA-901', day(0), 'buses-live', 'being worked right now');
+  action('OA-902', day(3), 'buses-gone', 'nobody is behind this');
+  // A date the regex matches and Date.parse does not. "Could not look" is a
+  // third answer and must never be rendered as a finding.
+  action('OA-903', '2026-13-45', 'buses-odd', 'an age nothing can compute');
+
+  const b = blockAt(NOW);
+  ok(/OA-902 \(3d\).*<< STALE, 3 day\(s\) old/.test(b), 'a claim made before today is MARKED stale, with its age', b);
+  ok(/OA-901 \(today\)(?!.*STALE)/.test(b), 'CONTROL — a claim made today is printed and NOT marked', b);
+  ok(/OA-903(?!.*STALE)/.test(b), 'CONTROL — an age that would not parse is not marked either', b);
+  ok(/claimed BEFORE TODAY/.test(b) && /assemble\.mjs" --who/.test(b),
+    'and one summary line names the count and the command that can release them', b);
+  ok(/an AGE, not a liveness check/.test(b),
+    'the summary says it is an AGE — this board cannot tell a dead session from an idle one', b);
+  ok((b.match(/claimed BEFORE TODAY/g) || []).length === 1, 'the summary is printed once, not once per stale claim', b);
+
+  // THE INJECTION IS LIVE. Same files, clock moved on two days: the claim that
+  // was fresh is now stale. Without this, a marker wired to a hardcoded date
+  // would pass every case above on the day the fixture was written.
+  const later = blockAt(NOW + 2 * 86400000);
+  ok(/OA-901 \(2d\).*<< STALE, 2 day\(s\) old/.test(later), 'two days later the SAME file reads stale — the age is computed, not fixed', later);
+  ok(/3 of those were claimed BEFORE TODAY|2 of those were/.test(later), 'and the count moves with it', later);
+
+  // MUTATION CONTROL — with nothing old, the summary must be ABSENT. A footer
+  // printed unconditionally would satisfy every assertion above.
+  const freshOnly = path.join(root, 'claims-fresh');
+  fs.mkdirSync(path.join(freshOnly, 'Development Docs', 'open-actions'), { recursive: true });
+  execFileSync('git', ['init', '-b', 'main', freshOnly], { stdio: 'ignore' });
+  fs.writeFileSync(path.join(freshOnly, 'Development Docs', 'open-actions', 'OA-904.md'),
+    `---\nref: OA-904\nstatus: open\nselected: ${day(0)}, buses-live, today only\n---\n\nbody\n`);
+  const clean = blockAt(NOW, freshOnly);
+  ok(/OA-904 \(today\)/.test(clean) && !/STALE/.test(clean) && !/claimed BEFORE TODAY/.test(clean),
+    'CONTROL — no stale claim, no marker and no summary line at all', clean);
+
+  // The boundary, stated once rather than inferred from the cases above.
+  ok(conc.isStaleClaim({ ageDays: conc.STALE_CLAIM_AFTER_DAYS }) && !conc.isStaleClaim({ ageDays: 0 })
+    && !conc.isStaleClaim({ ageDays: null }),
+    `the threshold is ${conc.STALE_CLAIM_AFTER_DAYS} day and a null age is not stale`);
+}
 
 // ---------------------------------------------------------------------------
 // 4. THE CONTROL — a quiet machine must say go

@@ -58,7 +58,7 @@ import { execFileSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { readLoopLock, fmtMin } from './loop_lock.mjs';
-import { readBlockedDir, heldPaths } from './loop_blocked.mjs';
+import { readYourMoveDir, heldPaths } from './loop_your_move.mjs';
 
 // ---- verdicts --------------------------------------------------------------
 export const SAFE = 'safe';
@@ -76,6 +76,25 @@ function git(dir, argv) {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000,
     }).replace(/\s+$/, '');
   } catch { return null; }
+}
+
+/*
+ * A git question whose answer is the EXIT STATUS rather than the output, with
+ * three values and not two. `merge-base --is-ancestor` exits 0 for yes and 1
+ * for no, and anything else — a ref that does not resolve, a repository it
+ * cannot read, the binary missing — is neither. `git()` above collapses all of
+ * that to null, which is right when the answer is text and wrong here: reading
+ * "not an ancestor" out of a failure would let a broken read be reported as a
+ * measured fact, which is the shape this estate names *the refusal read as an
+ * absence*. So the caller gets true, false, or null for COULD NOT LOOK.
+ */
+function gitSucceeds(dir, argv) {
+  try {
+    execFileSync('git', ['-C', dir, ...argv], { stdio: 'ignore', timeout: 15000 });
+    return true;
+  } catch (e) {
+    return e && e.status === 1 ? false : null;
+  }
 }
 
 // A porcelain path may be quoted (a space, a non-ASCII byte) and a rename is
@@ -112,7 +131,7 @@ export const topFolders = (r) => [...new Set(allPaths(r).map((p) => p.split('/')
  * OA-301. A DIRTY FILE THAT A LIVE HOLD ALREADY NAMES IS ACCOUNTED FOR.
  *
  * The buses-tree rule exists because `git status` cannot say WHOSE uncommitted
- * files those are. A `loop/blocked/` hold can: its `**File:**` field names the
+ * files those are. A `loop/your-move/` hold can: its `**File:**` field names the
  * path, its body says who it belongs to and why the loop must not touch it. On
  * 2026-09-10 twelve of eighteen ticks stopped on one such file — a letter whose
  * salutation Peter had typed and left for the morning — every one of them
@@ -151,6 +170,77 @@ const accountedSet = (r) => new Set((r.accounted || []).map((a) => a.path));
 /** The dirty paths a verdict should count: everything a live hold does not account for. */
 export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPaths(r).filter((p) => !s.has(p)); };
 const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
+
+/*
+ * OA-386 item 2. HOW OLD IS THE DIRT — the instrument the loop has been asking
+ * for by hand, and the one `quiescentMin` was standing in for and cannot be.
+ *
+ * Step 2 of the loop's task prompt tells a stopped tick to say whether the tree
+ * is MOVING (a live session, which clears itself) or STILL (a leftover, which
+ * does not), and step 2b gates orphan adoption on a quiescence reading. Both
+ * questions are about the ORPHAN, and `peers.quiescentMin` answers a question
+ * about TRANSCRIPTS: the loop fires hourly, so an hour-old sibling tick's
+ * transcript is always on disk and that number has a structural ceiling of
+ * about sixty minutes. Over 106 recorded readings it topped out at 56 against a
+ * threshold of 90, and the one reading that ever cleared 90 did so because the
+ * scheduler MISSED a firing — a quantity whose variance is dominated by the
+ * loop's own uptime, which is the opposite of evidence that a departed session
+ * has gone home. Measured on 2026-09-16 at 05:15Z: peers read `quiescentMin: 3`
+ * (live) while the bar in front of that tick had been byte-unchanged for six
+ * hours. The subject is the file; so the instrument is the file's mtime.
+ *
+ * THREE ANSWERS, NOT TWO, because a stat that refused must never read as a file
+ * that is young or a file that is absent. `read` carries a number; `absent` is
+ * a path git names that is not in the working tree, which is the ordinary shape
+ * of a staged deletion; `refused` is everything else, and it is counted as a
+ * finding rather than skipped — see *the refusal read as an absence*.
+ *
+ * MTIME IS A PROXY AND IS LABELLED AS ONE WHERE IT PRINTS. A file rewritten
+ * with identical bytes reads young, so this number can only ever say the dirt
+ * is at LEAST that old when it is old, and nothing at all when it is young.
+ * That asymmetry points the same way as every other rule here: it can hold a
+ * tick back, never wave one through.
+ *
+ * NOTHING SCORES IT YET, deliberately. Widening step 2b's clause (iv) to read
+ * this instead is [OA-294]'s conjunction and therefore Peter's decision, and a
+ * tick that rewrote its own adoption clause would be granting itself the
+ * capability the clause exists to withhold. What this buys now is the printed
+ * diagnosis step 2 already asks for, and a range to set a threshold FROM.
+ */
+export function readDirtyAges(dir, paths, nowMs = Date.now()) {
+  const out = {};
+  for (const p of paths || []) {
+    try {
+      const st = statSync(path.join(dir, p));
+      out[p] = { state: 'read', ageMin: Math.max(0, Math.round((nowMs - st.mtimeMs) / 60000)), why: null };
+    } catch (e) {
+      const code = (e && e.code) || 'unknown';
+      out[p] = code === 'ENOENT'
+        ? { state: 'absent', ageMin: null, why: 'git names it but it is not in the working tree — a deletion, or a rename away' }
+        : { state: 'refused', ageMin: null, why: `could not stat it (${code}) — this is a refusal, not an absence` };
+    }
+  }
+  return out;
+}
+
+/** The age of the dirt a verdict actually counts: the unaccounted paths only. */
+export function dirtyAge(r) {
+  const ages = r.dirtyAges || null;
+  const paths = unaccountedPaths(r);
+  const out = { paths: paths.length, counted: 0, absent: 0, refused: 0, oldestMin: null, newestMin: null };
+  for (const p of paths) {
+    /* No `dirtyAges` at all means nobody looked — a synthetic conditions object
+     * in a harness, or a reader built before this existed. That is a refusal,
+     * and it is the whole reason the field is counted rather than dropped. */
+    const a = ages ? ages[p] : null;
+    if (!a || a.state === 'refused') { out.refused++; continue; }
+    if (a.state === 'absent') { out.absent++; continue; }
+    out.counted++;
+    if (out.oldestMin === null || a.ageMin > out.oldestMin) out.oldestMin = a.ageMin;
+    if (out.newestMin === null || a.ageMin < out.newestMin) out.newestMin = a.ageMin;
+  }
+  return out;
+}
 
 /*
  * HOW MANY COMMITS NOBODY HAS PUSHED — and against WHAT (buses-data OA-313).
@@ -205,17 +295,99 @@ export function countUnpushed(dir) {
   return out;
 }
 
-export function readRepo({ key, label, name, dir, expect = 'main' }) {
+export const DETACHED = '(detached)';
+
+/*
+ * OA-387. WHAT A DETACHED HEAD ACTUALLY IS, measured rather than asserted.
+ *
+ * `portal-write` used to say of any checkout that was not on `main` that the
+ * branch was "somebody's live work". For two days in September 2026 that
+ * sentence was said about the portal every hour and it was false every time:
+ * a finished worktree held the `main` branch name, `git checkout main` in the
+ * primary checkout therefore failed, and the deploy procedure's
+ * `git checkout origin/main` had left a detached HEAD nothing could undo.
+ * Eleven ticks in a row read *somebody's live work*, correctly declined to
+ * deliver, and none of them went and looked — because a verdict that says
+ * somebody is mid-task reads as transient, and residue is the opposite: it
+ * will still be there tomorrow. That is the same fault as OA-375, a false
+ * reason sitting in front of the one action that clears the estate's red.
+ *
+ * So this asks the two questions that separate them, and the answer to each
+ * is carried rather than folded into a verdict:
+ *
+ *   ancestor — is the detached commit already on origin/<expect>? If it is,
+ *     nothing is stranded here: the checkout is standing on published history
+ *     and the only thing wrong is that no branch name points at it. If it is
+ *     NOT, somebody's commits are sitting on no branch at all, which is the
+ *     one shape where waiting is the right advice.
+ *
+ *   heldBy — which worktree holds <expect>, when one does. This is the fact a
+ *     reader needs and cannot guess: it is WHY the branch cannot simply be
+ *     checked out again, and `git worktree list` has had it all along.
+ *
+ * THREE ANSWERS, NOT TWO. `ancestor` is null for COULD NOT LOOK — no
+ * origin/<expect> to compare against, or a git call that failed for any other
+ * reason — and the rule treats null as the stricter verdict, never as residue.
+ * A repository object carrying no `detached` field at all (a synthetic
+ * conditions object in a harness, a reader written before today) is the same
+ * refusal and is handled the same way.
+ */
+export function readDetachment(dir, expect = 'main') {
+  const out = { state: 'refused', why: null, head: null, ref: null, ancestor: null, heldBy: null };
+  out.head = git(dir, ['rev-parse', '--short', 'HEAD']);
+  const ref = `origin/${expect}`;
+  if (git(dir, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) === null) {
+    out.why = `there is no ${ref} in this checkout to compare the detached commit against`;
+    out.heldBy = worktreeHolding(dir, expect);
+    return out;
+  }
+  out.ref = ref;
+  const anc = gitSucceeds(dir, ['merge-base', '--is-ancestor', 'HEAD', ref]);
+  if (anc === null) {
+    out.why = `git could not answer whether HEAD is an ancestor of ${ref}`;
+    out.heldBy = worktreeHolding(dir, expect);
+    return out;
+  }
+  out.state = 'read';
+  out.ancestor = anc;
+  out.heldBy = worktreeHolding(dir, expect);
+  return out;
+}
+
+/* The worktree holding a branch, if it is not this one. `--porcelain` emits
+ * stanzas of `worktree <path>` / `branch refs/heads/<name>`, so the branch line
+ * is read against the path that preceded it rather than against the newest one
+ * seen. A checkout that cannot answer at all returns null, which prints nothing
+ * — the absence of a name is not a claim that no worktree holds it. */
+export function worktreeHolding(dir, branch) {
+  const out = git(dir, ['worktree', 'list', '--porcelain']);
+  if (!out) return null;
+  const here = path.resolve(dir).replace(/\\/g, '/').toLowerCase();
+  let at = null;
+  for (const line of out.split(/\r?\n/)) {
+    if (line.startsWith('worktree ')) at = line.slice(9).trim().replace(/\\/g, '/');
+    else if (line === `branch refs/heads/${branch}` && at && path.resolve(at).replace(/\\/g, '/').toLowerCase() !== here) return at;
+  }
+  return null;
+}
+
+export function readRepo({ key, label, name, dir, expect = 'main', now = Date.now() }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
-  repo.staged = []; repo.modified = []; repo.untracked = [];
+  repo.staged = []; repo.modified = []; repo.untracked = []; repo.dirtyAges = {};
   repo.unpushed = null; repo.unpushedBasis = null; repo.unpushedFrom = null; repo.unpushedWhy = null;
   repo.touchedTop = []; repo.touchesMapData = false;
+  repo.detached = null;
 
   if (!dir || !existsSync(dir)) return repo;
   repo.present = true;
   if (git(dir, ['rev-parse', '--is-inside-work-tree']) !== 'true') return repo;
   repo.readable = true;
-  repo.branch = git(dir, ['branch', '--show-current']) || '(detached)';
+  repo.branch = git(dir, ['branch', '--show-current']) || DETACHED;
+  // OA-387. Measured beside the branch read that produced it, so the verdict
+  // and the evidence for it can never come from two different reads of the
+  // disk — the property OA-386's dirt ages are built on and for the same
+  // reason. A checkout on a named branch carries null: there is nothing to ask.
+  repo.detached = repo.branch === DETACHED ? readDetachment(dir, expect) : null;
 
   // --untracked-files=normal, not =all: an untracked FOLDER arrives as one entry
   // rather than every file under it. A session mid-task has untracked scratch
@@ -234,6 +406,9 @@ export function readRepo({ key, label, name, dir, expect = 'main' }) {
   }
   repo.touchedTop = topFolders(repo);
   repo.touchesMapData = mapDataHits(repo).length > 0;
+  // OA-386 item 2. Read here, beside the paths it is about, so the age and the
+  // path list can never come from two different reads of the disk.
+  repo.dirtyAges = readDirtyAges(dir, allPaths(repo), now);
 
   // Ahead of its own remote-tracking ref. Deliberately NOT a fetch: this tool
   // promises to touch the network only in --url mode, and a fetch inside a
@@ -246,13 +421,27 @@ export function readRepo({ key, label, name, dir, expect = 'main' }) {
   return repo;
 }
 
+/* A claim dated before today is one nobody is working: sessions here do not
+ * live overnight, so yesterday's claim is the residue of a collision that ended
+ * rather than evidence of one in progress. The number is assemble.mjs's
+ * STALE_AFTER_DAYS and is kept equal to it on purpose — the board and `--who`
+ * are read side by side, and two thresholds that disagreed would be worse than
+ * either. A null age (a `selected:` line whose date would not parse) is NOT
+ * stale: "could not look" is a third answer, never a finding. */
+export const STALE_CLAIM_AFTER_DAYS = 1;
+export const isStaleClaim = (x) => x && x.ageDays !== null && x.ageDays >= STALE_CLAIM_AFTER_DAYS;
+
 // The claims other sessions have written down. This is the one signal that says
 // what somebody is DOING rather than what they have touched, and it is direct
 // evidence: a claim is a session's own statement, checked in and pushed.
-export function readClaims(busesDir, selfSession) {
+//
+// `now` is INJECTABLE rather than read from the clock inside the loop, because
+// the only interesting case here is an age, and a harness that cannot set the
+// date can only assert an age against the day it happens to run.
+export function readClaims(busesDir, selfSession, now = Date.now()) {
   const dir = path.join(busesDir, 'Development Docs', 'open-actions');
   if (!existsSync(dir)) return [];
-  const today = new Date();
+  const today = now;
   const out = [];
   let files;
   try { files = readdirSync(dir).filter((f) => /^OA-\d+\.md$/.test(f)).sort(); } catch { return []; }
@@ -441,14 +630,14 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
 
 export function readConditions({ buses, portal, engine, selfSession, selfId = null, now = Date.now(), projectsDir, peerWindowMin = 20 } = {}) {
   const repos = {
-    buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses }),
-    engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine }),
-    portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal }),
+    buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses, now }),
+    engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine, now }),
+    portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal, now }),
   };
   const out = {
     at: new Date(now).toISOString(),
     repos,
-    claims: buses ? readClaims(buses, selfSession) : [],
+    claims: buses ? readClaims(buses, selfSession, now) : [],
     /* OA-287. The one fact here that git cannot supply: `loop/` is gitignored,
      * so a held lock can never reach the `buses-tree` verdict as an uncommitted
      * file, and every reader of that verdict was blind to the loop by
@@ -466,7 +655,12 @@ export function readConditions({ buses, portal, engine, selfSession, selfId = nu
   /* OA-301, applied at read time so the JSON the loop reads already carries it.
    * `loop/` is gitignored, so an absent folder — every fixture, every clone, CI
    * — accounts for nothing and the verdict is exactly what it was before. */
-  accountFor(out.repos.buses, buses ? heldPaths(readBlockedDir(path.join(buses, 'loop', 'blocked'))) : []);
+  accountFor(out.repos.buses, buses ? heldPaths(readYourMoveDir(path.join(buses, 'loop', 'your-move'))) : []);
+  /* OA-386 item 2, and it is derived AFTER the subtraction above for the reason
+   * OA-301 gives: the count, the folder list, the staged test and now the age
+   * must all come from the same unaccounted set, or the block can print an age
+   * for a file the verdict did not count. */
+  for (const r of Object.values(out.repos)) r.dirtyAge = dirtyAge(r);
   return out;
 }
 
@@ -522,7 +716,39 @@ const RULES = {
   'portal-write': (c) => {
     const p = c.repos.portal, b = c.repos.buses;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
-    if (isOffMain(p)) return [DELAY, `the portal checkout is on ${p.branch}, not ${p.expect || 'main'} — a deliver from here carries that branch, and the branch is somebody's live work`];
+    /*
+     * OA-387. TWO THINGS LOOK ALIKE HERE AND ONLY ONE OF THEM CLEARS ITSELF.
+     * A named branch that is not `main` is somebody working — waiting is the
+     * right advice, so it stays BETTER TO DELAY. A DETACHED head standing on
+     * published history is residue the deploy procedure leaves behind by
+     * design, and nothing will ever clear it: that is CHECK FIRST, which in
+     * this module means go and look, and the reason says what to look at and
+     * why the branch cannot simply be checked out again. The verdict grade is
+     * the smaller half of the fix; the sentence is the half that cost eleven
+     * ticks, because *somebody's live work* reads as transient.
+     */
+    if (isOffMain(p)) {
+      const want = p.expect || 'main';
+      if (p.branch !== DETACHED) {
+        return [DELAY, `the portal checkout is on ${p.branch}, not ${want} — a deliver from here carries that branch, and the branch is somebody's live work`];
+      }
+      /* A detached checkout whose conditions object carries no reading — a
+       * synthetic world in a harness, a caller written before this landed — is
+       * a REFUSAL and not a licence to reuse the old sentence. Falling back to
+       * *somebody's live work* here would reinstate the exact false claim this
+       * rule was rewritten to stop making, on the one input that cannot answer
+       * back. */
+      const d = p.detached || { state: 'refused', ancestor: null, head: null, ref: null, heldBy: null, why: 'nothing measured the detachment — this conditions object carries no reading' };
+      const held = d.heldBy ? ` The worktree at ${d.heldBy} holds ${want}, which is why checking it out again fails.` : '';
+      const dirt = isDirty(p) ? ` There are also ${p.staged.length + p.modified.length} uncommitted change(s) here.` : '';
+      if (d.ancestor === true) {
+        return [CHECK, `the portal checkout is detached at ${d.head}, a commit already on ${d.ref} — this is residue from the deploy procedure, not somebody's work, and nothing clears it on its own.${held}${dirt} Restore it first: git -C "${p.dir}" checkout ${want}`];
+      }
+      if (d.ancestor === false) {
+        return [DELAY, `the portal checkout is detached at ${d.head}, and that commit is NOT on ${d.ref} — it is work nobody has landed, sitting on no branch, so a deliver from here would commit onto no branch either.${held}${dirt}`];
+      }
+      return [DELAY, `the portal checkout is detached at ${d.head || 'an unknown commit'} and this tool COULD NOT LOOK to see whether that is deploy residue or somebody's unlanded work — ${d.why || 'no reason recorded'}.${held}${dirt} Check by hand before delivering`];
+    }
     if (b.readable && b.unpushed > 0) return [CHECK, `${b.name} has ${b.unpushed} unpushed commit(s)${b.unpushedFrom === 'default-branch' ? ` (counted against ${b.unpushedBasis}, which is where they would land)` : ''} — push this side FIRST; the portal's verify.yml reads whatever is on this repo's main at that moment`];
     // OA-313. A count that could not be taken is not a count of zero. Before
     // this, a buses-data checkout with no upstream and no origin said nothing
@@ -593,11 +819,24 @@ const RULES = {
     const mayBeYou = (!c.selfSession && L.name)
       ? ` — if that is YOU, nothing told this board so: re-run it with --session ${L.name} and this row goes back to what it would say with no lock at all`
       : '';
+    /* buses-data OA-407. THE VERDICT IS DELIBERATELY UNCHANGED and the sentence
+     * is what moves. `loop_lock.mjs` has already disbelieved the holder and
+     * rebuilt both times from the directory's own mtime, so the age and the
+     * lease in this sentence are right — there is nothing left for a person to
+     * decide, and reddening the board for a holder that is correctly running is
+     * going red for a chore. What was actually broken was that the board stated
+     * a wrong number in a confident voice; the cure is that the number is right
+     * and the voice says which clock it came from. Escalating this to CHECK
+     * would also put a live tick's lock in front of the next tick's step-2 gate,
+     * which is the harm the two quiet verdicts above exist to prevent. */
+    const stamp = L.stampSuspect
+      ? ` — and its holder file was DISBELIEVED: ${L.stampWhy}, so the times here are the directory's own mtime and a ${fmtMin(L.leaseMin)} lease from it, not what the file says`
+      : '';
     if (L.isTick && L.expired) return [SAFE, null];
     if (L.expired) {
-      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it${mayBeYou}`];
+      return [CHECK, `${who} has held loop/LOCK.d since ${age} and its lease ran out ${fmtMin(L.overdueMin)} ago — a person's lock is never stolen, so nothing will clear it for you: read it, and delete the directory if nobody is behind it${stamp}${mayBeYou}`];
     }
-    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file${mayBeYou}`];
+    return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file${stamp}${mayBeYou}`];
   },
 
   'portal-deploy': (c) => {
@@ -629,20 +868,23 @@ export const NEED_LABEL = {
 
 /*
  * OA-287. WHICH WORK THE LOOP CAN CONTEND FOR, and it is a fact about the loop
- * rather than a judgement about risk. A tick works the shared local trees; it
- * NEVER pushes — a deny rule in buses-data's settings, observed refusing — so it
- * can neither deliver a map nor deploy the portal, and the two portal resources
- * are genuinely not contended. If the loop is ever allowed to push, the harness
- * assertion that a deploy does not carry the lock is what should go red.
+ * rather than a judgement about risk. Until 2026-09-17 a tick NEVER pushed — a
+ * deny rule in buses-data's settings, observed refusing — so it could neither
+ * deliver a map nor deploy the portal, and the two portal resources were
+ * genuinely not contended. buses-data OA-394 (R1 of the 2026-09-17 process
+ * review, Peter's decision) gave the tick the push, the pull request, the merge
+ * and the DEPLOY, so a deploy is contended now and the harness assertion the
+ * old comment promised would go red has been flipped. Delivery of a map was
+ * NOT in that grant, so `portal-write` stays outside the set on purpose.
  */
-const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep']);
+const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep', 'portal-deploy']);
 
 export function assess(needs, conditions) {
   let verdict = SAFE;
   const reasons = [];
   /* OA-287, and stated ONCE here rather than added to a dozen returns in
    * needsOf(). Attaching it at the boundary is what keeps the empty list empty:
-   * `ci-red-` and `loop-blocked-` rows return [] on purpose so that --safe-only
+   * `ci-red-` and `loop-hold-` rows return [] on purpose so that --safe-only
    * can never hide the row saying the repository is broken or that the loop has
    * stopped, and a guard written case by case is exactly how that gets undone by
    * somebody adding the thirteenth case. */
@@ -687,28 +929,38 @@ export function needsOf(item) {
   // the one row that must never be hidden from a session looking for something
   // safe to do is the one saying the repository is broken.
   if (key.startsWith('ci-red-')) return [];
-  // OA-283: the row's own action is "read loop/blocked/<ref>.md and decide". That
+  // OA-283, renamed by OA-401: the row's own action is "read
+  // loop/your-move/<ref>.md and decide". That
   // is a decision, like a drafted reply or an application — it touches no working
   // tree, and whatever the ANSWER turns out to need belongs to the row that
   // answer becomes. Empty for the same load-bearing reason as `ci-red-` above:
   // --safe-only hides every non-SAFE row, and a session looking for something
   // safe to do is exactly who should see that the loop has stopped and why.
-  if (key.startsWith('loop-blocked-')) return [];
+  if (key.startsWith('loop-hold-')) return [];
   // OA-288: the row's action is "commit or revert what git status names", or
   // "delete loop/STOP", or "read the newest run file". None of that writes to a
   // shared tree, and the same load-bearing argument as `ci-red-` and
-  // `loop-blocked-` applies with more force here: --safe-only hides every
+  // `loop-hold-` applies with more force here: --safe-only hides every
   // non-SAFE row, and a row saying THE LOOP HAS STOPPED must never be the one
   // hidden from a session looking for something safe to do. It is also the row
   // most likely to be ABOUT a dirty tree, so classifying it by the tree it
   // reports on would suppress it exactly when it is right.
   if (key === 'loop-idle') return [];
-  // 2026-09-10: the row's action is "read loop/adhoc/ and promote, file or
+  // 2026-09-10: the row's action is "read loop/your-move/ and promote, file or
   // decline each draft" — a triage, done by moving gitignored files. It touches
   // no shared tree, and it is the row most likely to be ABOUT a fix a tick was
   // barred from making, so classifying it by the tree would hide it exactly
   // when it is right.
   if (key === 'loop-drafts') return [];
+  // OA-326 (2026-09-12): the row's action is `git push` plus opening a pull
+  // request, which only Peter can do — the loop is denied the push by design and
+  // that is the reason the row exists. Pushing a branch writes to no working
+  // tree here, and whatever REVIEWING that branch turns out to need belongs to
+  // the row that review becomes. Empty for the same load-bearing reason as
+  // `ci-red-` and `loop-hold-`: --safe-only hides every non-SAFE row, and a
+  // row saying finished work is invisible to everyone but this laptop must not
+  // be the one hidden from a session looking for something safe to do.
+  if (key.startsWith('unpushed-branch-')) return [];
   // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
   // rather than left to fall through the default — the row's own action WRITES to
   // the buses tree twice over. `directory.mjs --links` writes link-check.json, and
@@ -794,17 +1046,58 @@ const repoLine = (r) => {
   return `${r.name} — ${bits.join(', ')}${where}`;
 };
 
+/* OA-386 item 2. One line, printed only where there is unaccounted dirt to be
+ * old, saying how long the thing barring a tick has been sitting there. It is
+ * labelled `mtime` at the point of use because that is what it is: a file
+ * rewritten with identical bytes reads young, so an old answer is evidence and
+ * a young one is not. */
+const ageLine = (r) => {
+  const a = r.dirtyAge;
+  if (!a || !a.paths) return null;
+  const bits = [];
+  if (a.counted) bits.push(a.oldestMin === a.newestMin
+    ? `${fmtMin(a.oldestMin)} old`
+    : `oldest ${fmtMin(a.oldestMin)}, newest ${fmtMin(a.newestMin)}`);
+  if (a.absent) bits.push(`${a.absent} named by git and not on disk`);
+  if (a.refused) bits.push(`${a.refused} COULD NOT LOOK — a refusal, not an absence`);
+  return `${a.paths} unaccounted path(s), ${bits.join('; ')} — mtime, so an OLD answer is evidence that nobody is working on it and a young one is not`;
+};
+
+/* OA-387. A detached checkout prints what it IS, on its own line, under the one
+ * that reports the branch. The reader's question on meeting `(detached)` is
+ * always the same — is this somebody mid-task, or is it left over? — and until
+ * this line existed the board answered it by assertion. `state: 'refused'` says
+ * COULD NOT LOOK in as many words rather than falling silent, because silence
+ * here would be read as the benign answer. */
+const detachedLine = (r) => {
+  const d = r && r.readable && r.branch === DETACHED ? r.detached : null;
+  if (!d) return null;
+  const want = r.expect || 'main';
+  const held = d.heldBy ? ` — ${want} is held by the worktree at ${d.heldBy}` : '';
+  if (d.state !== 'read') return `detached at ${d.head || 'an unknown commit'}: COULD NOT LOOK — ${d.why || 'no reason recorded'}${held}`;
+  if (d.ancestor) return `detached at ${d.head}, already on ${d.ref} — deploy residue, not somebody's work; it will not clear itself${held}`;
+  return `detached at ${d.head}, NOT on ${d.ref} — commits sitting on no branch${held}`;
+};
+
 export function formatConditions(c) {
   const L = [];
+  const age = (r) => { const s = ageLine(r); if (s) L.push(`  ${'dirt age'.padEnd(12)}${s}`); };
+  const detach = (r) => { const s = detachedLine(r); if (s) L.push(`  ${'detached'.padEnd(12)}${s}`); };
   L.push(`  ${'this tree'.padEnd(12)}${repoLine(c.repos.buses)}`);
+  detach(c.repos.buses);
   // OA-301. The subtraction is SHOWN, under the line that still counts the file
   // as uncommitted, because a number that silently got smaller is a number
   // nobody can check — the same rule the activity line follows for demotions.
   for (const a of (c.repos.buses.accounted || [])) {
-    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/blocked/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
+    L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/your-move/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
   }
+  age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);
+  detach(c.repos.engine);
+  age(c.repos.engine);
   L.push(`  ${'the portal'.padEnd(12)}${repoLine(c.repos.portal)}`);
+  detach(c.repos.portal);
+  age(c.repos.portal);
 
   // WITHOUT --session THIS CANNOT SUBTRACT YOURSELF, and a list that shows your
   // own claim back to you as somebody else's work is worse than no list: it
@@ -812,10 +1105,37 @@ export function formatConditions(c) {
   // let the row be read as a peer.
   const others = c.claims.filter((x) => !x.self);
   if (others.length) {
-    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}`;
+    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}${isStaleClaim(x) ? `   << STALE, ${x.ageDays} day(s) old` : ''}`;
     L.push(`  ${'claimed'.padEnd(12)}${say(others[0])}`);
     for (const x of others.slice(1)) L.push(`  ${''.padEnd(12)}${say(x)}`);
     if (!c.selfSession) L.push(`  ${''.padEnd(12)}(one of those may be you — pass --session <this session's name> and it will drop it)`);
+    /* Until 2026-09-13 this block printed the age and said nothing about it, and
+     * a session asked the obvious question: does the board tell me which of these
+     * to RELEASE? It did not. Six claims printed alike, five of them held by
+     * sessions that had ended days earlier and one being worked at that moment,
+     * and nothing in the rendering separated them — so a stale claim went on
+     * refusing `--claim` to everybody, the scheduled loop included, until a person
+     * happened to run `--who`. `--who` is the only thing in the estate that says
+     * STALE, and nothing runs it for you.
+     *
+     * THE MARKER IS ABOUT AGE, AND THE SENTENCE BELOW SAYS SO. This board cannot
+     * tell a dead session from an idle one — its own `activity` line, a few lines
+     * down, is explicit that "an idle prompt looks the same as gone" — so a
+     * marker phrased as liveness would be a claim this file has no evidence for.
+     * What it does know is the date somebody wrote down, and the estate's rule
+     * that a session does not live overnight.
+     *
+     * A COMPUTED AGE IS SAFE HERE AND IS NOT SAFE IN THE INDEX, which is the same
+     * distinction OA-289 was paid for: `open-actions.md` is a generated file under
+     * byte comparison, so an age in it turned `main` red on the calendar. This is
+     * a REPORT, recomputed on every run and compared to nothing. Threshold and
+     * wording are deliberately assemble.mjs's, so the two agree when read side by
+     * side. */
+    const stale = others.filter(isStaleClaim);
+    if (stale.length) {
+      L.push(`  ${''.padEnd(12)}${stale.length} of those ${stale.length === 1 ? 'was' : 'were'} claimed BEFORE TODAY, which is longer than a session lives here — that is an AGE, not a liveness check, and this board cannot tell a dead session from an idle one. If nobody is behind one, release it; --who names each and prints the command:`);
+      L.push(`  ${''.padEnd(12)}  node "Development Docs/open-actions/assemble.mjs" --who`);
+    }
   } else {
     L.push(`  ${'claimed'.padEnd(12)}no open action is claimed by another session`);
   }

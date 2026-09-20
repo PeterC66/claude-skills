@@ -1,0 +1,323 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-06-03T17:30:00Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 3484280272,
+  "lat": 52.5478053,
+  "lon": 0.0872291,
+  "tags": {
+    "name": "March & District Museum",
+    "tourism": "museum",
+    "wikidata": "Q26511028"
+  }
+},
+{
+  "type": "node",
+  "id": 6900241774,
+  "lat": 52.5600848,
+  "lon": 0.0913188,
+  "tags": {
+    "addr:city": "March",
+    "addr:country": "GB",
+    "addr:postcode": "PE15 8SJ",
+    "addr:street": "Station Approach",
+    "name": "March",
+    "naptan:AtcoCode": "9100MRCH",
+    "network": "National Rail",
+    "network:website": "https://www.nationalrail.co.uk/stations/mch/",
+    "network:wikidata": "Q26334",
+    "operator": "Greater Anglia",
+    "public_transport": "station",
+    "railway": "station",
+    "ref:crs": "MCH",
+    "train": "yes",
+    "wheelchair": "yes",
+    "wikidata": "Q2023178",
+    "wikipedia": "en:March railway station"
+  }
+},
+{
+  "type": "node",
+  "id": 9631312337,
+  "lat": 52.5474214,
+  "lon": 0.0877027,
+  "tags": {
+    "name": "Fossils Galore",
+    "tourism": "museum",
+    "website": "https://www.fossilsgalore.com"
+  }
+},
+{
+  "type": "way",
+  "id": 120284474,
+  "center": {
+    "lat": 52.5605113,
+    "lon": 0.0817491
+  },
+  "tags": {
+    "landuse": "allotments",
+    "name": "Oberon Park",
+    "source": "Bing;seen from train"
+  }
+},
+{
+  "type": "way",
+  "id": 133980412,
+  "center": {
+    "lat": 52.5640722,
+    "lon": 0.0727875
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 133981556,
+  "center": {
+    "lat": 52.5511533,
+    "lon": 0.0533872
+  },
+  "tags": {
+    "landuse": "industrial",
+    "name": "QV Foods"
+  }
+},
+{
+  "type": "way",
+  "id": 190610239,
+  "center": {
+    "lat": 52.5660186,
+    "lon": 0.0908725
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 396509031,
+  "center": {
+    "lat": 52.5560081,
+    "lon": 0.1069170
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 396509235,
+  "center": {
+    "lat": 52.5726481,
+    "lon": 0.0873954
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 460490858,
+  "center": {
+    "lat": 52.5658170,
+    "lon": 0.0767741
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 460490871,
+  "center": {
+    "lat": 52.5662822,
+    "lon": 0.0576576
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 460490873,
+  "center": {
+    "lat": 52.5665657,
+    "lon": 0.0635583
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 460931624,
+  "center": {
+    "lat": 52.5355111,
+    "lon": 0.0817163
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 464060702,
+  "center": {
+    "lat": 52.5630297,
+    "lon": 0.1056778
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 464064391,
+  "center": {
+    "lat": 52.5715954,
+    "lon": 0.0603967
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 492135932,
+  "center": {
+    "lat": 52.5302950,
+    "lon": 0.0855947
+  },
+  "tags": {
+    "landuse": "allotments"
+  }
+},
+{
+  "type": "way",
+  "id": 827630588,
+  "center": {
+    "lat": 52.5552850,
+    "lon": 0.1009745
+  },
+  "tags": {
+    "landuse": "industrial",
+    "man_made": "pumping_station",
+    "name": "Water Company"
+  }
+},
+{
+  "type": "way",
+  "id": 890365774,
+  "center": {
+    "lat": 52.5527626,
+    "lon": 0.0728260
+  },
+  "tags": {
+    "landuse": "allotments"
+  }
+},
+{
+  "type": "way",
+  "id": 965955958,
+  "center": {
+    "lat": 52.5559875,
+    "lon": 0.1029801
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 965955959,
+  "center": {
+    "lat": 52.5561383,
+    "lon": 0.1036828
+  },
+  "tags": {
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 965955965,
+  "center": {
+    "lat": 52.5562101,
+    "lon": 0.1086653
+  },
+  "tags": {
+    "barrier": "fence",
+    "landuse": "industrial"
+  }
+},
+{
+  "type": "way",
+  "id": 965959770,
+  "center": {
+    "lat": 52.5573301,
+    "lon": 0.1132618
+  },
+  "tags": {
+    "landuse": "industrial",
+    "man_made": "pumping_station"
+  }
+},
+{
+  "type": "way",
+  "id": 1008728221,
+  "center": {
+    "lat": 52.5578239,
+    "lon": 0.0774649
+  },
+  "tags": {
+    "landuse": "allotments"
+  }
+},
+{
+  "type": "way",
+  "id": 1066923092,
+  "center": {
+    "lat": 52.5348419,
+    "lon": 0.0555791
+  },
+  "tags": {
+    "landuse": "industrial",
+    "name": "Corner Lodge Industrial Estate"
+  }
+},
+{
+  "type": "way",
+  "id": 1490973540,
+  "center": {
+    "lat": 52.5387094,
+    "lon": 0.0839610
+  },
+  "tags": {
+    "landuse": "allotments",
+    "name": "Alms House Allotments"
+  }
+},
+{
+  "type": "way",
+  "id": 1496316702,
+  "center": {
+    "lat": 52.5640805,
+    "lon": 0.0761524
+  },
+  "tags": {
+    "industrial": "trucking",
+    "landuse": "industrial",
+    "name": "Rocma Freight Services"
+  }
+}
+
+  ]
+}

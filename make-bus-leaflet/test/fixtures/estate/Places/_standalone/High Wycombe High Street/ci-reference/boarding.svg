@@ -1,0 +1,574 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 297 210">
+<rect width="297" height="210" fill="#ffffff"/>
+<g font-family="Arial, Helvetica, sans-serif">
+<text x="8" y="14.6" font-size="8.4" font-weight="bold" fill="#1d2125">Where to catch your bus on High Street, High Wycombe</text>
+<text x="8" y="19.6" font-size="3.9" fill="#5a6169">High Street, the Town Hall and Castle Street</text>
+<line x1="8" y1="23" x2="289" y2="23" stroke="#c9cfd5" stroke-width="0.5"/>
+<rect x="8" y="27" width="96" height="123" fill="#f2f4f6" stroke="#c9cfd5" stroke-width="0.4" rx="1.5"/>
+<clipPath id="mapclip"><rect x="8" y="27" width="96" height="123" rx="1.5"/></clipPath>
+<g clip-path="url(#mapclip)">
+<path d="M47.78 134 L57.6 121.16 L58.06 119.83 L58.13 118.42 L57.78 117.05 L57.07 115.83 L51.81 113.69 L49.51 118.56 L47.98 122.38 L47 123.17 L46.22 123.24 L44.99 122.59 L42.23 121.29 L39.1 126.75 L41.25 128.09 L41.71 128.75 L41.69 129.38 L41.59 129.92 L47.78 134 Z" fill="#e4ebe2" stroke="#d2ded0" stroke-width="0.3"/>
+<path d="M59.05 131.82 L63.33 134.67 L75.08 142.81 L76.06 141.35 L82.69 145.54 L80.84 148.08 L83.95 150.71 L76.64 159.97 L74.89 158.32 L73.91 159.29 L66.31 156.37 L58.8 150.12 L60.07 147.01 L63.67 142.52 L55.84 137.56 L56.41 136.7 L57.31 135.03 L59.05 131.82 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M-14.43 130.71 L-13.74 131.27 L-12.8 132.03 L-13.58 132.95 L-14.97 134.73 L-12.99 138.94 L-11.94 140.86 L-10.45 142.5 L-7.65 144.16 L-9.31 153.49 L-5.9 154.56 L-1 145.56 L2.07 145.7 L5.05 144.98 L7.88 143.38 L12.34 146.6 L19.02 137.76 L14 133.94 L15.69 131.84 L-2.36 117.37 L-3.2 116.7 L-14.43 130.71 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M107.84 76.18 L117.21 80.88 L112.03 91.21 L109.92 90.15 L107.62 94.75 L106.72 96.55 L109.84 98.11 L101.75 114.26 L95.07 110.91 L106.4 88.3 L102.7 86.44 L107.84 76.18 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M34.46 126.03 L27.22 136.15 L28.48 137.06 L26.69 139.52 L33.32 144.35 L32.5 145.48 L31.34 147.12 L35.32 149.96 L36.45 148.38 L39.49 144.13 L38.22 143.22 L43.92 135.24 L43.65 132.61 L34.46 126.03 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M52.51 112.19 L51.81 113.69 L49.51 118.56 L47.98 122.38 L47 123.17 L46.22 123.24 L44.99 122.59 L42.23 121.29 L37.38 119 L40.06 113.32 L42.42 108.33 L42.76 107.59 L52.51 112.19 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M20.42 96.76 L17.26 95.47 L11.55 93.13 L7.08 104.02 L6.67 105.01 L8.31 105.69 L6.24 110.74 L13.46 113.7 L20.42 96.76 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M29.55 100.51 L28.66 102.67 L25.22 111.07 L20.26 123.14 L11.12 119.4 L13.46 113.7 L20.42 96.76 L29.55 100.51 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M11.55 93.13 L4.24 90.14 L-0.23 101.03 L7.08 104.02 L11.55 93.13 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M19.02 137.76 L31.34 147.12 L35.32 149.96 L28.55 158.83 L12.34 146.6 L19.02 137.76 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M17.89 17.84 L23.81 20.5 L35.1 25.59 L29.76 37.44 L17.56 64.49 L11.36 78.26 L-5.85 70.5 L0.83 55.69 L17.89 17.84 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M34.66 75.72 L28.22 89.28 L40.12 94.94 L42.35 90.25 L46.56 81.37 L37.56 77.1 L34.66 75.72 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M30.22 70.2 L22.44 66.69 L20.94 66.01 L17.56 64.49 L11.36 78.26 L24.01 83.97 L30.22 70.2 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M28.66 102.67 L39.83 107.26 L41.12 107.8 L42.42 108.33 L40.06 113.32 L38.99 112.92 L37.71 112.43 L36.38 115.65 L25.22 111.07 L28.66 102.67 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M120.66 60.32 L107.79 53.86 L105.66 53.79 L103.6 54.49 L102.39 55.56 L100.68 57.41 L100.05 61.34 L104 63.25 L105.23 63.95 L112.63 67.29 L111.35 70.77 L115.75 72.62 L120.66 60.32 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M92.19 143.73 L91.57 143.49 L90.62 143.13 L87.77 150.61 L108.45 158.47 L106.95 165.97 L114.4 167.46 L116.77 155.58 L110.45 154.32 L111.32 151.12 L109.66 150.66 L108.48 149.94 L94.57 144.64 L92.19 143.73 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M98.72 123.42 L109 127.38 L111.16 121.77 L109.34 121.07 L111.83 114.62 L109.12 113.57 L110.03 111.22 L107.12 110.09 L103.6 119.2 L100.77 118.11 L98.72 123.42 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M86.96 134.8 L89.03 129.5 L93.3 130.85 L91.71 136.41 L89.17 135.45 L85.31 145.34 L83.17 144.51 L86.96 134.8 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M59.05 131.82 L62.36 127.51 L64.85 124.94 L67.78 123.34 L70.54 122.45 L77.2 124.05 L85.64 127.69 L89.03 129.5 L86.96 134.8 L73.56 129.2 L69.92 128.75 L68.23 129.73 L67.34 131.24 L63.33 134.67 L59.05 131.82 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M100.05 61.34 L77.66 107.48 L77.47 109.21 L77.6 110.64 L78.52 112.42 L80.25 113.39 L84.26 115.34 L92.24 119.21 L94.75 113.73 L92.65 113.02 L99.91 98.9 L98.25 98.09 L97.4 97.68 L92.9 95.5 L93.88 93.48 L92.34 92.73 L96.49 84.49 L97.3 82.52 L103.02 85.3 L106.35 78.43 L99.84 75.27 L101.65 71.54 L102.87 69.01 L101.52 68.36 L104 63.25 L100.05 61.34 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M35.4 74.16 L37.49 69.75 L40.39 71.13 L37.56 77.1 L34.66 75.72 L35.4 74.16 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M45.85 52.14 L50.35 54.28 L51.62 54.88 L53.35 51.23 L55.84 52.4 L57.8 48.26 L54.49 46.69 L56.49 42.47 L51.55 40.13 L45.85 52.14 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M37.49 53.11 L47.14 32.05 L36.52 27.37 L27.15 48.42 L37.49 53.11 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M42.75 58.66 L45.85 52.14 L50.35 54.28 L49.55 55.96 L54.71 58.41 L52.42 63.25 L49.76 61.99 L42.75 58.66 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M84.22 46.1 L89.99 48.09 L93.94 50.76 L94.32 55.45 L80.25 83.74 L68.29 106.39 L66.93 107.25 L65.74 107.22 L64.19 106.97 L66.21 102.25 L71.89 88.93 L86.6 58.67 L88.67 54.22 L87.42 52.75 L81.34 50.65 L83.05 45.7 L84.22 46.1 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M29.76 69.33 L35.4 55.76 L27.54 52.5 L21.91 66.07 L29.76 69.33 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M37.49 69.75 L42.75 58.66 L49.76 61.99 L44.5 73.08 L40.39 71.13 L37.49 69.75 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M51.55 40.13 L56.49 42.47 L62.1 45 L64.42 38.82 L58.11 36.48 L52.07 38.63 L51.55 40.13 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M66.87 47.55 L61.85 45.67 L62.1 45 L64.42 38.82 L83.05 45.7 L81.34 50.65 L76.01 48.77 L75 51.44 L72.39 50.47 L73.48 47.55 L68.61 45.73 L67.8 47.89 L66.87 47.55 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M91.71 136.41 L93.3 130.85 L102.39 133.39 L120.12 138.35 L118.29 145.09 L116.77 144.65 L114.65 152.07 L111.32 151.12 L109.66 150.66 L111.93 142.68 L110.21 142.19 L109.73 143.88 L106.89 143.07 L107.63 140.48 L102.1 138.9 L101.63 140.57 L100.44 140.23 L99.01 139.82 L98.78 140.61 L95.97 139.81 L94.57 144.64 L92.19 143.73 L93.94 137.59 L93.55 137.47 L91.57 136.91 L91.71 136.41 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M64.19 106.97 L40.12 94.94 L42.35 90.25 L66.21 102.25 L64.19 106.97 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M79.08 34.19 L73.75 31.25 L77.76 23.99 L78.47 22.7 L83.8 25.63 L82.32 28.31 L79.08 34.19 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M83.81 36.8 L79.08 34.19 L82.32 28.31 L87.05 30.92 L86.81 31.36 L83.81 36.8 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M90.26 40.36 L83.81 36.8 L86.81 31.36 L93.26 34.92 L90.26 40.36 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M104.21 37.7 L108.26 28.87 L104.42 27.11 L103.93 28.18 L100.97 26.82 L99.97 29 L98.87 28.49 L97.26 32.01 L100.27 33.39 L99.89 34.23 L101.68 35.05 L101.11 36.28 L104.21 37.7 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M90.26 40.36 L93.85 42.24 L95.46 42.73 L96.92 43.16 L98.68 43.6 L100.13 43.67 L101.16 43.46 L103.69 38.31 L100.61 36.62 L99.33 38.94 L97.87 38.14 L98.16 37.62 L93.26 34.92 L90.26 40.36 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M73.75 31.25 L65.94 26.25 L70.12 19.57 L77.76 23.99 L73.75 31.25 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M26 135.47 L25.3 134.96 L24.93 135.47 L23.41 134.36 L25.76 131.15 L27.97 132.76 L26 135.47 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M42.23 121.29 L39.1 126.75 L34.85 124.38 L37.38 119 L42.23 121.29 Z" fill="#dfe3e8" stroke="#ccd3da" stroke-width="0.25"/>
+<path d="M101.17 49.05 L95.79 47.6 L93.09 46.56 L52.03 28.24" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M66.93 113.91 L74.3 117.35 L82.83 121.33 L93.59 125.48 L101.28 128.45 L103.6 129.15 L113.98 132.25 L126.76 136.07 L130.57 137.21" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M66.93 113.91 L70.74 109.82 L71.63 108.16 L97.9 55.14 L98.76 53.42 L101.17 49.05" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-38.07 116.67 L-35.76 112.82 L-31.77 102.53 L-29.38 100 L-24.51 99.46 L-6.64 111.42 L-2.28 115.84 L12.7 127.2 L17.21 130.72 L19.03 135.59" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.03 135.59 L23.82 139.11 L29.01 142.91" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M52.03 28.24 L22.11 92" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22.11 92 L47.77 104.55 L62.05 111.53 L66.93 113.91" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M101.17 49.05 L103.11 45.39 L105.38 40.94 L106.11 39.32" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M147.3 66.54 L144.7 66.69 L142.07 65.95 L129.23 60.17 L108.78 51.58 L107.08 51.08 L101.17 49.05" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M41.65 149.07 L45.08 153.81 L44.2 156.83 L36.14 166.58 L26.99 177.66 L25.99 177.62 L22.83 177.48 L20.22 175.57" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22.13 173.18 L30.86 162.46 L40.13 151.08 L41.65 149.07 L44.01 145.65 L50.51 136.23 L60.95 123.17 L62.18 121.49 L64.06 118.35 L66.93 113.91" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M52.03 28.24 L32.1 19.33 L23.27 16.2 L22.45 15.93 L14.49 13.41 L7.11 11.63 L4.39 11.12 L-16.62 7.92 L-20.39 7.34 L-22.96 7.19 L-32.18 6.68 L-40.95 6.17 L-45.89 6.25 L-47.85 5.51" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M57.34 144.18 L53.68 150.66" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M47.25 147.59 L53.68 150.66 L57.43 151.93 L63.48 155.88 L72.45 159.93 L77.13 161.92 L81.42 161.29 L84.2 157.54" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.21 130.72 L22.19 127.89 L26.53 117.46" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M44.01 145.65 L47.25 147.59" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M101.17 49.05 L95.79 47.6 L93.09 46.56 L52.03 28.24" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M66.93 113.91 L74.3 117.35 L82.83 121.33 L93.59 125.48 L101.28 128.45 L103.6 129.15 L113.98 132.25 L126.76 136.07 L130.57 137.21" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M66.93 113.91 L70.74 109.82 L71.63 108.16 L97.9 55.14 L98.76 53.42 L101.17 49.05" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-38.07 116.67 L-35.76 112.82 L-31.77 102.53 L-29.38 100 L-24.51 99.46 L-6.64 111.42 L-2.28 115.84 L12.7 127.2 L17.21 130.72 L19.03 135.59" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.03 135.59 L23.82 139.11 L29.01 142.91" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M52.03 28.24 L22.11 92" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22.11 92 L47.77 104.55 L62.05 111.53 L66.93 113.91" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M101.17 49.05 L103.11 45.39 L105.38 40.94 L106.11 39.32" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M147.3 66.54 L144.7 66.69 L142.07 65.95 L129.23 60.17 L108.78 51.58 L107.08 51.08 L101.17 49.05" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M41.65 149.07 L45.08 153.81 L44.2 156.83 L36.14 166.58 L26.99 177.66 L25.99 177.62 L22.83 177.48 L20.22 175.57" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22.13 173.18 L30.86 162.46 L40.13 151.08 L41.65 149.07 L44.01 145.65 L50.51 136.23 L60.95 123.17 L62.18 121.49 L64.06 118.35 L66.93 113.91" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M52.03 28.24 L32.1 19.33 L23.27 16.2 L22.45 15.93 L14.49 13.41 L7.11 11.63 L4.39 11.12 L-16.62 7.92 L-20.39 7.34 L-22.96 7.19 L-32.18 6.68 L-40.95 6.17 L-45.89 6.25 L-47.85 5.51" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M57.34 144.18 L53.68 150.66" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M47.25 147.59 L53.68 150.66 L57.43 151.93 L63.48 155.88 L72.45 159.93 L77.13 161.92 L81.42 161.29 L84.2 157.54" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.21 130.72 L22.19 127.89 L26.53 117.46" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M44.01 145.65 L47.25 147.59" fill="none" stroke="#e3e8ed" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(94.44 47.08) rotate(21.1)"><text x="0" y="0.7" font-size="2.4" fill="#8d959c" text-anchor="middle">Castle Street</text></g>
+<g transform="translate(70.61 115.63) rotate(25.06)"><text x="0" y="0.7" font-size="2.4" fill="#8d959c" text-anchor="middle">Easton Street</text></g>
+<g transform="translate(37.07 60.12) rotate(-64.85)"><text x="0" y="0.7" font-size="2.4" fill="#8d959c" text-anchor="middle">Corporation Street</text></g>
+<g transform="translate(54.91 108.04) rotate(26.05)"><text x="0" y="0.7" font-size="2.4" fill="#8d959c" text-anchor="middle">High Street</text></g>
+<g transform="translate(55.73 129.7) rotate(-51.35)"><text x="0" y="0.7" font-size="2.4" fill="#8d959c" text-anchor="middle">Queen Victoria Road</text></g>
+<g transform="translate(97.9 55.14)"><rect x="-1.35" y="-2.35" width="2.7" height="4.0" rx="0.6" fill="#ffffff"/><rect x="-0.95" y="-1.95" width="1.9" height="3.2" rx="0.45" fill="#1d2125"/><circle cx="0" cy="-1.15" r="0.42" fill="#e05a4d"/><circle cx="0" cy="-0.35" r="0.42" fill="#e0a63d"/><circle cx="0" cy="0.45" r="0.42" fill="#5aab63"/><rect x="-0.3" y="1.25" width="0.6" height="1.5" fill="#1d2125"/></g>
+<circle cx="24.26" cy="146.34" r="0.95" fill="#ffffff"/>
+<circle cx="24.26" cy="146.34" r="0.62" fill="#6b737b"/>
+<text x="24.26" y="143.34" font-size="2.4" fill="#4a5158" text-anchor="middle">Old Town Hall</text>
+<circle cx="37.55" cy="90.85" r="0.95" fill="#ffffff"/>
+<circle cx="37.55" cy="90.85" r="0.62" fill="#6b737b"/>
+<text x="40.15" y="91.65" font-size="2.4" fill="#4a5158" text-anchor="start">Barclays</text>
+<circle cx="30.74" cy="87.02" r="0.95" fill="#ffffff"/>
+<circle cx="30.74" cy="87.02" r="0.62" fill="#6b737b"/>
+<text x="33.34" y="87.82" font-size="2.4" fill="#4a5158" text-anchor="start">Santander</text>
+<circle cx="58.1" cy="39.23" r="0.95" fill="#ffffff"/>
+<circle cx="58.1" cy="39.23" r="0.62" fill="#6b737b"/>
+<text x="55.5" y="40.03" font-size="2.4" fill="#4a5158" text-anchor="end">Domino's</text>
+<circle cx="86.35" cy="35.18" r="0.95" fill="#ffffff"/>
+<circle cx="86.35" cy="35.18" r="0.62" fill="#6b737b"/>
+<circle cx="47.04" cy="95.45" r="0.95" fill="#ffffff"/>
+<circle cx="47.04" cy="95.45" r="0.62" fill="#6b737b"/>
+<text x="49.64" y="96.25" font-size="2.4" fill="#4a5158" text-anchor="start">Neda Mini Market</text>
+<circle cx="44.39" cy="94.13" r="0.95" fill="#ffffff"/>
+<circle cx="44.39" cy="94.13" r="0.62" fill="#6b737b"/>
+<circle cx="56.44" cy="100.13" r="0.95" fill="#ffffff"/>
+<circle cx="56.44" cy="100.13" r="0.62" fill="#6b737b"/>
+<text x="59.04" y="100.93" font-size="2.4" fill="#4a5158" text-anchor="start">Londis</text>
+<circle cx="12.97" cy="96.73" r="0.95" fill="#ffffff"/>
+<circle cx="12.97" cy="96.73" r="0.62" fill="#6b737b"/>
+<circle cx="75.28" cy="126.11" r="0.95" fill="#ffffff"/>
+<circle cx="75.28" cy="126.11" r="0.62" fill="#6b737b"/>
+<circle cx="41.04" cy="99.51" r="3.7" fill="#ffffff"/>
+<circle cx="41.04" cy="99.51" r="3" fill="#14304f"/>
+<text class="bstand" x="41.04" y="101.06" font-size="4.4" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<circle cx="28.46" cy="99.28" r="3.7" fill="#ffffff"/>
+<circle cx="28.46" cy="99.28" r="3" fill="#14304f"/>
+<text class="bstand" x="28.46" y="100.83" font-size="4.4" font-weight="bold" fill="#ffffff" text-anchor="middle">S</text>
+<circle cx="42.97" cy="140.62" r="3.7" fill="#ffffff"/>
+<circle cx="42.97" cy="140.62" r="3" fill="#14304f"/>
+<text class="bstand" x="42.97" y="142.17" font-size="4.4" font-weight="bold" fill="#ffffff" text-anchor="middle">T</text>
+<circle cx="74.7" cy="36.38" r="3.7" fill="#ffffff"/>
+<circle cx="74.7" cy="36.38" r="3" fill="#14304f"/>
+<text class="bstand" x="74.7" y="37.93" font-size="4.4" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<circle cx="79.83" cy="44.35" r="3.7" fill="#ffffff"/>
+<circle cx="79.83" cy="44.35" r="3" fill="#14304f"/>
+<text class="bstand" x="79.83" y="45.9" font-size="4.4" font-weight="bold" fill="#ffffff" text-anchor="middle">W</text>
+<circle cx="83.54" cy="72.86" r="3" fill="#ffffff"/>
+<circle cx="83.54" cy="72.86" r="2.3" fill="#7a4a12"/>
+<circle cx="83.54" cy="72.86" r="1.0" fill="#ffffff"/>
+<text x="80.14" y="73.76" font-size="2.4" font-weight="bold" fill="#7a4a12" text-anchor="end">Crendon Street</text>
+</g>
+<g stroke="#1d2125" stroke-width="0.45" fill="#1d2125">
+<line x1="98" y1="35" x2="98" y2="30"/>
+<path d="M98 28.6 l1.5 2.2 l-3 0 z" stroke="none"/>
+</g>
+<text x="98" y="37.9" font-size="2.5" fill="#1d2125" text-anchor="middle">N</text>
+<text x="8" y="155" font-size="3.4" font-weight="bold" fill="#1d2125">The stops</text>
+<circle cx="10.6" cy="158.2" r="2.6" fill="#14304f"/>
+<text class="bstand" x="10.6" y="159.35" font-size="3.3" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="15.2" y="159.2" font-size="3.1" fill="#1d2125">Stop R — High Street</text>
+<text x="47.01" y="159.2" font-size="2.5" fill="#5a6169">Buses face east</text>
+<circle cx="10.6" cy="163.4" r="2.6" fill="#14304f"/>
+<text class="bstand" x="10.6" y="164.55" font-size="3.3" font-weight="bold" fill="#ffffff" text-anchor="middle">S</text>
+<text x="15.2" y="164.4" font-size="3.1" fill="#1d2125">Stop S — High Street</text>
+<text x="46.84" y="164.4" font-size="2.5" fill="#5a6169">no bus on this sheet is boarded here</text>
+<circle cx="10.6" cy="168.6" r="2.6" fill="#14304f"/>
+<text class="bstand" x="10.6" y="169.75" font-size="3.3" font-weight="bold" fill="#ffffff" text-anchor="middle">T</text>
+<text x="15.2" y="169.6" font-size="3.1" fill="#1d2125">Stop T — Town Hall</text>
+<text x="44.94" y="169.6" font-size="2.5" fill="#5a6169">no bus on this sheet is boarded here</text>
+<circle cx="10.6" cy="173.8" r="2.6" fill="#14304f"/>
+<text class="bstand" x="10.6" y="174.95" font-size="3.3" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="15.2" y="174.8" font-size="3.1" fill="#1d2125">Stop V — Castle Street</text>
+<text x="49.25" y="174.8" font-size="2.5" fill="#5a6169">Buses face east</text>
+<circle cx="10.6" cy="179" r="2.6" fill="#14304f"/>
+<text class="bstand" x="10.6" y="180.15" font-size="3.3" font-weight="bold" fill="#ffffff" text-anchor="middle">W</text>
+<text x="15.2" y="180" font-size="3.1" fill="#1d2125">Stop W — Castle Street</text>
+<text x="50.11" y="180" font-size="2.5" fill="#5a6169">Buses face west</text>
+<circle cx="10.6" cy="184.2" r="1.9" fill="#7a4a12"/>
+<circle cx="10.6" cy="184.2" r="0.8" fill="#ffffff"/>
+<text x="15.2" y="185.2" font-size="3.1" fill="#1d2125">Crendon Street</text>
+<text x="38.22" y="185.2" font-size="2.5" fill="#5a6169">no bus on this sheet is boarded here</text>
+<text x="110" y="30.2" font-size="4.0" font-weight="bold" fill="#1d2125">Where to board, by destination</text>
+<text x="110" y="35.6" font-size="2.5" font-weight="bold" fill="#5a6169">TO</text>
+<text x="155.28" y="35.6" font-size="2.5" font-weight="bold" fill="#5a6169">BUS</text>
+<text x="196.5" y="35.6" font-size="2.5" font-weight="bold" fill="#5a6169" text-anchor="end">BOARD AT</text>
+<line x1="110" y1="36.8" x2="196.5" y2="36.8" stroke="#c9cfd5" stroke-width="0.4"/>
+<text x="110" y="41.4" font-size="2.95" fill="#1d2125">Amersham</text>
+<rect x="155.28" y="38.8" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.58" y="41.4" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="160.68" y="38.8" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="163.21" y="41.4" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="166.54" y="38.8" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="169.08" y="41.4" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<rect x="172.41" y="38.8" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="174.75" y="41.4" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="193.7" cy="40.4" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="41.5" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="109.2" y="43.13" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="46.23" font-size="2.95" fill="#1d2125">Beaconsfield</text>
+<rect x="155.28" y="43.63" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="162.08" y="43.63" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="165.08" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="168.88" y="43.63" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="171.89" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<rect x="175.69" y="43.63" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="178.69" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">105</text>
+<rect x="182.49" y="43.63" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="185.63" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="193.7" cy="45.23" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="46.33" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="51.05" font-size="2.95" fill="#1d2125">Beaconsfield Services</text>
+<rect x="155.28" y="48.45" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="51.05" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="162.08" y="48.45" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="165.22" y="51.05" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="193.7" cy="50.05" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="51.15" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="52.78" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="55.88" font-size="2.95" fill="#1d2125">Beaconsfield Wilton Park</text>
+<rect x="155.28" y="53.28" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="55.88" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<circle cx="193.7" cy="54.88" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="55.98" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="60.7" font-size="2.95" fill="#1d2125">Beamond End</text>
+<rect x="155.28" y="58.1" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.58" y="60.7" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="160.68" y="58.1" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="163.21" y="60.7" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="166.54" y="58.1" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="169.08" y="60.7" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="193.7" cy="59.7" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="60.8" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="109.2" y="62.43" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="65.53" font-size="2.95" fill="#1d2125">Bourne End</text>
+<rect x="155.28" y="62.93" width="4.67" height="3.7" rx="1.85" fill="#EE6677"/>
+<text x="157.61" y="65.53" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">36</text>
+<rect x="160.74" y="62.93" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="163.08" y="65.53" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="193.7" cy="64.53" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="65.63" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="70.35" font-size="2.95" fill="#1d2125">Bovingdon</text>
+<rect x="155.28" y="67.75" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.58" y="70.35" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="160.68" y="67.75" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="163.21" y="70.35" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="193.7" cy="69.35" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="70.45" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="109.2" y="72.08" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="75.18" font-size="2.95" fill="#1d2125">Bulstrode Park</text>
+<rect x="155.28" y="72.58" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="75.18" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<circle cx="193.7" cy="74.18" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="75.28" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="80.01" font-size="2.95" fill="#1d2125">Butlers Cross</text>
+<rect x="155.28" y="77.41" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="80.01" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="193.7" cy="79.01" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="80.11" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="81.73" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="84.83" font-size="2.95" fill="#1d2125">Chalfont Common</text>
+<rect x="155.28" y="82.23" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="84.83" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="193.7" cy="83.83" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="84.93" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="89.66" font-size="2.95" fill="#1d2125">Chalfont St Giles</text>
+<rect x="155.28" y="87.06" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="89.66" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="193.7" cy="88.66" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="89.76" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="91.38" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="94.48" font-size="2.95" fill="#1d2125">Chalfont St Peter</text>
+<rect x="155.28" y="91.88" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="94.48" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="193.7" cy="93.48" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="94.58" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="99.31" font-size="2.95" fill="#1d2125">Chartridge</text>
+<rect x="155.28" y="96.71" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="99.31" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">105</text>
+<circle cx="193.7" cy="98.31" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="99.41" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="101.04" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="104.14" font-size="2.95" fill="#1d2125">Chesham</text>
+<rect x="155.28" y="101.54" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.58" y="104.14" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="160.68" y="101.54" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="163.21" y="104.14" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="166.54" y="101.54" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="169.08" y="104.14" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="193.7" cy="103.14" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="104.24" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="110" y="108.96" font-size="2.95" fill="#1d2125">Coleshill</text>
+<rect x="155.28" y="106.36" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="108.96" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">105</text>
+<circle cx="193.7" cy="107.96" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="109.06" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="110.69" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="113.79" font-size="2.95" fill="#1d2125">Cookham</text>
+<rect x="155.28" y="111.19" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="157.61" y="113.79" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="193.7" cy="112.79" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="113.89" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="118.61" font-size="2.95" fill="#1d2125">Cores End</text>
+<rect x="155.28" y="116.01" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="157.61" y="118.61" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="193.7" cy="117.61" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="118.71" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="120.34" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="123.44" font-size="2.95" fill="#1d2125">Denham</text>
+<rect x="155.28" y="120.84" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="123.44" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="162.08" y="120.84" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="165.08" y="123.44" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="193.7" cy="122.44" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="123.54" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="128.26" font-size="2.95" fill="#1d2125">Farnham Common</text>
+<rect x="155.28" y="125.66" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="128.26" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="162.08" y="125.66" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="165.22" y="128.26" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="193.7" cy="127.26" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="128.36" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="129.99" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="133.09" font-size="2.95" fill="#1d2125">Farnham Royal</text>
+<rect x="155.28" y="130.49" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="133.09" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="162.08" y="130.49" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="165.22" y="133.09" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="193.7" cy="132.09" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="133.19" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="137.92" font-size="2.95" fill="#1d2125">Fifield</text>
+<rect x="155.28" y="135.32" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="157.61" y="137.92" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="193.7" cy="136.92" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="138.02" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="139.64" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="142.74" font-size="2.95" fill="#1d2125">Flackwell Heath</text>
+<rect x="155.28" y="140.14" width="4.67" height="3.7" rx="1.85" fill="#EE6677"/>
+<text x="157.61" y="142.74" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">36</text>
+<circle cx="193.7" cy="141.74" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="142.84" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="147.57" font-size="2.95" fill="#1d2125">George Green</text>
+<rect x="155.28" y="144.97" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.41" y="147.57" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="193.7" cy="146.57" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="147.67" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="109.2" y="149.29" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="152.39" font-size="2.95" fill="#1d2125">Gerrards Cross</text>
+<rect x="155.28" y="149.79" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="158.28" y="152.39" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="162.08" y="149.79" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="165.08" y="152.39" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="193.7" cy="151.39" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="152.49" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="157.22" font-size="2.95" fill="#1d2125">Great Kingshill</text>
+<rect x="155.28" y="154.62" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.61" y="157.22" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="193.7" cy="156.22" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="157.32" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="109.2" y="158.94" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="110" y="162.04" font-size="2.95" fill="#1d2125">Great Missenden</text>
+<rect x="155.28" y="159.44" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.61" y="162.04" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="193.7" cy="161.04" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="162.14" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="110" y="166.87" font-size="2.95" fill="#1d2125">Hazlemere</text>
+<rect x="155.28" y="164.27" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="157.58" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="160.68" y="164.27" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="163.21" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="166.54" y="164.27" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="169.08" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<rect x="172.41" y="164.27" width="4.67" height="3.7" rx="1.85" fill="#009988"/>
+<text x="174.75" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">31</text>
+<rect x="177.88" y="164.27" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="180.22" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="193.7" cy="165.87" r="2.3" fill="#14304f"/>
+<text class="bstand" x="193.7" y="166.97" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="202.5" y="35.6" font-size="2.5" font-weight="bold" fill="#5a6169">TO</text>
+<text x="247.78" y="35.6" font-size="2.5" font-weight="bold" fill="#5a6169">BUS</text>
+<text x="289" y="35.6" font-size="2.5" font-weight="bold" fill="#5a6169" text-anchor="end">BOARD AT</text>
+<line x1="202.5" y1="36.8" x2="289" y2="36.8" stroke="#c9cfd5" stroke-width="0.4"/>
+<text x="202.5" y="41.4" font-size="2.95" fill="#1d2125">Heath End</text>
+<rect x="247.78" y="38.8" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.11" y="41.4" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="286.2" cy="40.4" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="41.5" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="43.13" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="46.23" font-size="2.95" fill="#1d2125">Hedgerley</text>
+<rect x="247.78" y="43.63" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="254.58" y="43.63" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.72" y="46.23" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="286.2" cy="45.23" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="46.33" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="51.05" font-size="2.95" fill="#1d2125">Hemel Hempstead</text>
+<rect x="247.78" y="48.45" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.08" y="51.05" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="253.18" y="48.45" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="255.71" y="51.05" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="286.2" cy="50.05" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="51.15" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="52.78" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="55.88" font-size="2.95" fill="#1d2125">Hillingdon Heath</text>
+<rect x="247.78" y="53.28" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="55.88" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<circle cx="286.2" cy="54.88" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="55.98" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="60.7" font-size="2.95" fill="#1d2125">Holmer Green</text>
+<rect x="247.78" y="58.1" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.08" y="60.7" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="253.18" y="58.1" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="255.71" y="60.7" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="259.04" y="58.1" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="261.58" y="60.7" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="286.2" cy="59.7" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="60.8" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="62.43" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="65.53" font-size="2.95" fill="#1d2125">Hyde Heath</text>
+<rect x="247.78" y="62.93" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.11" y="65.53" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="286.2" cy="64.53" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="65.63" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="202.5" y="70.35" font-size="2.95" fill="#1d2125">Iver Heath</text>
+<rect x="247.78" y="67.75" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.91" y="70.35" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="286.2" cy="69.35" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="70.45" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="201.7" y="72.08" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="75.18" font-size="2.95" fill="#1d2125">Lane End</text>
+<rect x="247.78" y="72.58" width="4.67" height="3.7" rx="1.85" fill="#4477AA"/>
+<text x="250.11" y="75.18" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">34</text>
+<circle cx="286.2" cy="74.18" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="75.28" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">W</text>
+<text x="202.5" y="80.01" font-size="2.95" fill="#1d2125">Langley</text>
+<rect x="247.78" y="77.41" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="80.01" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<circle cx="286.2" cy="79.01" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="80.11" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="201.7" y="81.73" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="84.83" font-size="2.95" fill="#1d2125">London</text>
+<rect x="247.78" y="82.23" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="84.83" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="254.58" y="82.23" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.58" y="84.83" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<rect x="261.38" y="82.23" width="6.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="264.72" y="84.83" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">M40</text>
+<rect x="268.85" y="82.23" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="271.99" y="84.83" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="286.2" cy="83.83" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="84.93" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="89.66" font-size="2.95" fill="#1d2125">Loudwater</text>
+<rect x="247.78" y="87.06" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="89.66" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="254.58" y="87.06" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.58" y="89.66" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="261.38" y="87.06" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="264.39" y="89.66" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<rect x="268.19" y="87.06" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="271.19" y="89.66" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">105</text>
+<rect x="274.99" y="87.06" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="277.33" y="89.66" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<text x="280.46" y="89.66" font-size="2.4" fill="#5a6169">+2</text>
+<circle cx="286.2" cy="88.66" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="89.76" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="201.7" y="91.38" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="94.48" font-size="2.95" fill="#1d2125">Maidenhead</text>
+<rect x="247.78" y="91.88" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.11" y="94.48" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="286.2" cy="93.48" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="94.58" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="99.31" font-size="2.95" fill="#1d2125">Penn</text>
+<rect x="247.78" y="96.71" width="4.67" height="3.7" rx="1.85" fill="#009988"/>
+<text x="250.11" y="99.31" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">31</text>
+<circle cx="286.2" cy="98.31" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="99.41" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="101.04" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="104.14" font-size="2.95" fill="#1d2125">Penn Street</text>
+<rect x="247.78" y="101.54" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.08" y="104.14" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="253.18" y="101.54" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="255.71" y="104.14" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="259.04" y="101.54" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="261.58" y="104.14" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="286.2" cy="103.14" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="104.24" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="202.5" y="108.96" font-size="2.95" fill="#1d2125">Prestwood</text>
+<rect x="247.78" y="106.36" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.11" y="108.96" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="286.2" cy="107.96" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="109.06" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="110.69" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="113.79" font-size="2.95" fill="#1d2125">Seer Green</text>
+<rect x="247.78" y="111.19" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="113.79" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="286.2" cy="112.79" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="113.89" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="118.61" font-size="2.95" fill="#1d2125">Slough</text>
+<rect x="247.78" y="116.01" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="118.61" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="254.58" y="116.01" width="6.27" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.72" y="118.61" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">X74</text>
+<circle cx="286.2" cy="117.61" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="118.71" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="201.7" y="120.34" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="123.44" font-size="2.95" fill="#1d2125">Tatling End</text>
+<rect x="247.78" y="120.84" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="123.44" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="254.58" y="120.84" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.58" y="123.44" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<circle cx="286.2" cy="122.44" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="123.54" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="128.26" font-size="2.95" fill="#1d2125">Tylers Green</text>
+<rect x="247.78" y="125.66" width="4.67" height="3.7" rx="1.85" fill="#009988"/>
+<text x="250.11" y="128.26" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">31</text>
+<circle cx="286.2" cy="127.26" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="128.36" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="129.99" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="133.09" font-size="2.95" fill="#1d2125">Uxbridge</text>
+<rect x="247.78" y="130.49" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="133.09" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="254.58" y="130.49" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.58" y="133.09" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<rect x="261.38" y="130.49" width="6.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="264.72" y="133.09" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">M40</text>
+<circle cx="286.2" cy="132.09" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="133.19" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="137.92" font-size="2.95" fill="#1d2125">Whelpley Hill</text>
+<rect x="247.78" y="135.32" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.31" y="137.92" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="286.2" cy="136.92" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="138.02" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="139.64" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="142.74" font-size="2.95" fill="#1d2125">Widmer End</text>
+<rect x="247.78" y="140.14" width="4.67" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.11" y="142.74" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">41</text>
+<circle cx="286.2" cy="141.74" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="142.84" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<text x="202.5" y="147.57" font-size="2.95" fill="#1d2125">Winchmore Hill</text>
+<rect x="247.78" y="144.97" width="4.6" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="250.08" y="147.57" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<rect x="253.18" y="144.97" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="255.71" y="147.57" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1A</text>
+<rect x="259.04" y="144.97" width="5.07" height="3.7" rx="1.85" fill="#AA3377"/>
+<text x="261.58" y="147.57" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">1B</text>
+<circle cx="286.2" cy="146.57" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="147.67" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">V</text>
+<rect x="201.7" y="149.29" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="152.39" font-size="2.95" fill="#1d2125">Windsor</text>
+<rect x="247.78" y="149.79" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="152.39" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="254.58" y="149.79" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="256.91" y="152.39" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="286.2" cy="151.39" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="152.49" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="157.22" font-size="2.95" fill="#1d2125">Wooburn</text>
+<rect x="247.78" y="154.62" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.11" y="157.22" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="286.2" cy="156.22" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="157.32" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<rect x="201.7" y="158.94" width="87.5" height="4.83" fill="#f7f8fa"/>
+<text x="202.5" y="162.04" font-size="2.95" fill="#1d2125">Wooburn Green</text>
+<rect x="247.78" y="159.44" width="4.67" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.11" y="162.04" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">37</text>
+<circle cx="286.2" cy="161.04" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="162.14" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="202.5" y="166.87" font-size="2.95" fill="#1d2125">Wooburn Moor</text>
+<rect x="247.78" y="164.27" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="250.78" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">102</text>
+<rect x="254.58" y="164.27" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="257.58" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">103</text>
+<rect x="261.38" y="164.27" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="264.39" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">104</text>
+<rect x="268.19" y="164.27" width="6" height="3.7" rx="1.85" fill="#332288"/>
+<text x="271.19" y="166.87" font-size="2.4" font-weight="bold" fill="#fff" text-anchor="middle">105</text>
+<circle cx="286.2" cy="165.87" r="2.3" fill="#14304f"/>
+<text class="bstand" x="286.2" y="166.97" font-size="3.0" font-weight="bold" fill="#ffffff" text-anchor="middle">R</text>
+<text x="110" y="175.3" font-size="2.4" fill="#5a6169">Stop letters are those printed on the stop itself (NaPTAN); services from the Bus Open Data Service.</text>
+<text x="110" y="178.5" font-size="2.4" fill="#5a6169">Every bus here also calls at the bus station, 600 m north-west; on this sheet you board on the street, in the direction you are going.</text>
+<text x="110" y="181.7" font-size="2.4" fill="#5a6169">Not indexed: school and works journeys (1S, 36S, 37M, 643, 654) and the WW1 shuttle to Adams Park.</text>
+<text x="110" y="184.9" font-size="2.4" fill="#5a6169">Town buses that stay inside High Wycombe (27, 32, 32A and 33) are not listed: this sheet indexes places outside the town.</text>
+<rect x="0" y="186.90" width="297" height="23.10" fill="#fff" fill-opacity="0.97"/>
+<text x="8" y="193.61" font-family="Arial" font-size="2.8" fill="#666">Service data from the Bus Open Data Service; stop names, bay numbers and bearings from NaPTAN (Open Government Licence</text>
+<text x="8" y="197.21" font-family="Arial" font-size="2.8" fill="#666">v3.0).</text>
+<text x="8" y="200.81" font-family="Arial" font-size="2.8" fill="#666">Streets, buildings and landmarks: © OpenStreetMap contributors (ODbL).</text>
+<text x="272.45" y="191.45" font-family="Arial" font-weight="bold" font-size="3.5" fill="#333" text-anchor="end">busmaps.uk/m/high-wycombe-high-street</text>
+<text x="201.82" y="191.45" font-family="Arial" font-size="3.5" fill="#666" text-anchor="end">Latest version:</text>
+<rect x="272.45" y="188.45" width="19.09" height="19.09" fill="#ffffff"/>
+<path d="M275 191h2.97v0.424h-2.97zM279.667 191h0.848v0.424h-0.848zM280.939 191h0.848v0.424h-0.848zM282.636 191h0.848v0.424h-0.848zM284.758 191h0.424v0.424h-0.424zM286.03 191h2.97v0.424h-2.97zM275 191.424h0.424v0.424h-0.424zM277.545 191.424h0.424v0.424h-0.424zM278.394 191.424h0.424v0.424h-0.424zM279.242 191.424h0.848v0.424h-0.848zM280.515 191.424h0.424v0.424h-0.424zM281.364 191.424h1.273v0.424h-1.273zM283.061 191.424h2.545v0.424h-2.545zM286.03 191.424h0.424v0.424h-0.424zM288.576 191.424h0.424v0.424h-0.424zM275 191.848h0.424v0.424h-0.424zM275.848 191.848h1.273v0.424h-1.273zM277.545 191.848h0.424v0.424h-0.424zM279.242 191.848h0.424v0.424h-0.424zM281.364 191.848h0.848v0.424h-0.848zM283.061 191.848h0.424v0.424h-0.424zM284.333 191.848h0.424v0.424h-0.424zM285.182 191.848h0.424v0.424h-0.424zM286.03 191.848h0.424v0.424h-0.424zM286.879 191.848h1.273v0.424h-1.273zM288.576 191.848h0.424v0.424h-0.424zM275 192.273h0.424v0.424h-0.424zM275.848 192.273h1.273v0.424h-1.273zM277.545 192.273h0.424v0.424h-0.424zM279.242 192.273h0.424v0.424h-0.424zM280.091 192.273h0.848v0.424h-0.848zM281.364 192.273h0.424v0.424h-0.424zM282.212 192.273h0.424v0.424h-0.424zM283.909 192.273h0.424v0.424h-0.424zM284.758 192.273h0.848v0.424h-0.848zM286.03 192.273h0.424v0.424h-0.424zM286.879 192.273h1.273v0.424h-1.273zM288.576 192.273h0.424v0.424h-0.424zM275 192.697h0.424v0.424h-0.424zM275.848 192.697h1.273v0.424h-1.273zM277.545 192.697h0.424v0.424h-0.424zM278.394 192.697h1.273v0.424h-1.273zM280.515 192.697h0.424v0.424h-0.424zM282.212 192.697h0.424v0.424h-0.424zM284.333 192.697h0.848v0.424h-0.848zM286.03 192.697h0.424v0.424h-0.424zM286.879 192.697h1.273v0.424h-1.273zM288.576 192.697h0.424v0.424h-0.424zM275 193.121h0.424v0.424h-0.424zM277.545 193.121h0.424v0.424h-0.424zM279.242 193.121h1.273v0.424h-1.273zM280.939 193.121h0.424v0.424h-0.424zM282.212 193.121h0.424v0.424h-0.424zM283.909 193.121h0.424v0.424h-0.424zM284.758 193.121h0.848v0.424h-0.848zM286.03 193.121h0.424v0.424h-0.424zM288.576 193.121h0.424v0.424h-0.424zM275 193.545h2.97v0.424h-2.97zM278.394 193.545h0.424v0.424h-0.424zM279.242 193.545h0.424v0.424h-0.424zM280.091 193.545h0.424v0.424h-0.424zM280.939 193.545h0.424v0.424h-0.424zM281.788 193.545h0.424v0.424h-0.424zM282.636 193.545h0.424v0.424h-0.424zM283.485 193.545h0.424v0.424h-0.424zM284.333 193.545h0.424v0.424h-0.424zM285.182 193.545h0.424v0.424h-0.424zM286.03 193.545h2.97v0.424h-2.97zM279.242 193.97h0.848v0.424h-0.848zM280.515 193.97h0.848v0.424h-0.848zM281.788 193.97h0.848v0.424h-0.848zM283.485 193.97h0.848v0.424h-0.848zM284.758 193.97h0.848v0.424h-0.848zM275 194.394h0.424v0.424h-0.424zM275.848 194.394h0.424v0.424h-0.424zM276.697 194.394h0.424v0.424h-0.424zM277.545 194.394h0.424v0.424h-0.424zM280.091 194.394h0.848v0.424h-0.848zM281.364 194.394h1.273v0.424h-1.273zM283.061 194.394h1.273v0.424h-1.273zM285.182 194.394h0.424v0.424h-0.424zM286.879 194.394h0.424v0.424h-0.424zM288.152 194.394h0.424v0.424h-0.424zM275 194.818h0.424v0.424h-0.424zM275.848 194.818h1.697v0.424h-1.697zM277.97 194.818h1.697v0.424h-1.697zM281.788 194.818h0.424v0.424h-0.424zM284.333 194.818h0.424v0.424h-0.424zM285.182 194.818h1.697v0.424h-1.697zM288.152 194.818h0.848v0.424h-0.848zM275.848 195.242h2.97v0.424h-2.97zM279.242 195.242h0.424v0.424h-0.424zM280.091 195.242h0.848v0.424h-0.848zM282.212 195.242h0.424v0.424h-0.424zM283.909 195.242h0.424v0.424h-0.424zM285.606 195.242h0.424v0.424h-0.424zM286.455 195.242h0.424v0.424h-0.424zM287.727 195.242h0.424v0.424h-0.424zM288.576 195.242h0.424v0.424h-0.424zM275.848 195.667h1.697v0.424h-1.697zM279.242 195.667h0.424v0.424h-0.424zM280.091 195.667h0.424v0.424h-0.424zM281.364 195.667h0.424v0.424h-0.424zM283.061 195.667h0.848v0.424h-0.848zM284.758 195.667h0.848v0.424h-0.848zM286.879 195.667h0.424v0.424h-0.424zM275 196.091h0.848v0.424h-0.848zM276.273 196.091h0.848v0.424h-0.848zM277.545 196.091h0.424v0.424h-0.424zM278.818 196.091h0.424v0.424h-0.424zM279.667 196.091h0.424v0.424h-0.424zM281.364 196.091h0.424v0.424h-0.424zM283.061 196.091h0.424v0.424h-0.424zM284.758 196.091h1.697v0.424h-1.697zM287.303 196.091h0.424v0.424h-0.424zM288.152 196.091h0.848v0.424h-0.848zM275.424 196.515h1.273v0.424h-1.273zM277.121 196.515h0.424v0.424h-0.424zM279.242 196.515h0.424v0.424h-0.424zM281.364 196.515h0.424v0.424h-0.424zM283.061 196.515h0.424v0.424h-0.424zM283.909 196.515h0.424v0.424h-0.424zM285.182 196.515h0.424v0.424h-0.424zM286.03 196.515h0.848v0.424h-0.848zM287.727 196.515h0.424v0.424h-0.424zM288.576 196.515h0.424v0.424h-0.424zM277.121 196.939h2.545v0.424h-2.545zM280.091 196.939h0.424v0.424h-0.424zM280.939 196.939h0.424v0.424h-0.424zM282.636 196.939h0.424v0.424h-0.424zM283.909 196.939h0.848v0.424h-0.848zM285.606 196.939h0.424v0.424h-0.424zM286.879 196.939h2.121v0.424h-2.121zM275 197.364h0.424v0.424h-0.424zM275.848 197.364h1.273v0.424h-1.273zM278.394 197.364h0.424v0.424h-0.424zM279.667 197.364h2.121v0.424h-2.121zM282.212 197.364h1.273v0.424h-1.273zM283.909 197.364h1.697v0.424h-1.697zM286.03 197.364h1.273v0.424h-1.273zM288.152 197.364h0.424v0.424h-0.424zM275.848 197.788h0.848v0.424h-0.848zM277.545 197.788h1.273v0.424h-1.273zM279.242 197.788h0.424v0.424h-0.424zM280.091 197.788h0.424v0.424h-0.424zM282.212 197.788h0.424v0.424h-0.424zM283.485 197.788h1.273v0.424h-1.273zM285.182 197.788h1.273v0.424h-1.273zM275 198.212h0.424v0.424h-0.424zM277.121 198.212h0.424v0.424h-0.424zM279.242 198.212h0.424v0.424h-0.424zM280.939 198.212h0.424v0.424h-0.424zM281.788 198.212h0.848v0.424h-0.848zM283.485 198.212h0.848v0.424h-0.848zM285.182 198.212h1.697v0.424h-1.697zM288.152 198.212h0.848v0.424h-0.848zM275.424 198.636h1.273v0.424h-1.273zM277.121 198.636h0.848v0.424h-0.848zM278.394 198.636h1.273v0.424h-1.273zM280.091 198.636h1.273v0.424h-1.273zM282.636 198.636h0.424v0.424h-0.424zM284.333 198.636h0.424v0.424h-0.424zM286.03 198.636h0.424v0.424h-0.424zM287.727 198.636h1.273v0.424h-1.273zM275.848 199.061h0.424v0.424h-0.424zM278.394 199.061h0.424v0.424h-0.424zM279.242 199.061h0.424v0.424h-0.424zM280.091 199.061h0.848v0.424h-0.848zM281.788 199.061h1.273v0.424h-1.273zM283.485 199.061h1.273v0.424h-1.273zM286.03 199.061h1.273v0.424h-1.273zM288.152 199.061h0.848v0.424h-0.848zM275 199.485h0.848v0.424h-0.848zM276.273 199.485h0.424v0.424h-0.424zM277.545 199.485h0.424v0.424h-0.424zM278.394 199.485h0.424v0.424h-0.424zM279.667 199.485h0.848v0.424h-0.848zM280.939 199.485h0.424v0.424h-0.424zM281.788 199.485h0.424v0.424h-0.424zM282.636 199.485h1.273v0.424h-1.273zM284.333 199.485h0.424v0.424h-0.424zM285.182 199.485h1.273v0.424h-1.273zM287.303 199.485h0.424v0.424h-0.424zM288.576 199.485h0.424v0.424h-0.424zM275.848 199.909h0.848v0.424h-0.848zM277.121 199.909h0.424v0.424h-0.424zM277.97 199.909h1.273v0.424h-1.273zM279.667 199.909h4.242v0.424h-4.242zM284.333 199.909h0.424v0.424h-0.424zM285.182 199.909h0.424v0.424h-0.424zM286.03 199.909h0.424v0.424h-0.424zM287.303 199.909h1.697v0.424h-1.697zM275 200.333h0.424v0.424h-0.424zM275.848 200.333h0.424v0.424h-0.424zM276.697 200.333h2.545v0.424h-2.545zM280.939 200.333h1.697v0.424h-1.697zM283.061 200.333h1.273v0.424h-1.273zM285.182 200.333h0.424v0.424h-0.424zM286.03 200.333h0.848v0.424h-0.848zM287.727 200.333h1.273v0.424h-1.273zM275.424 200.758h1.697v0.424h-1.697zM277.97 200.758h0.424v0.424h-0.424zM278.818 200.758h0.848v0.424h-0.848zM280.091 200.758h0.424v0.424h-0.424zM281.788 200.758h1.273v0.424h-1.273zM283.485 200.758h0.848v0.424h-0.848zM285.606 200.758h0.848v0.424h-0.848zM275 201.182h0.424v0.424h-0.424zM276.697 201.182h0.424v0.424h-0.424zM277.545 201.182h0.848v0.424h-0.848zM278.818 201.182h0.848v0.424h-0.848zM281.364 201.182h0.424v0.424h-0.424zM282.212 201.182h0.424v0.424h-0.424zM283.061 201.182h1.273v0.424h-1.273zM285.182 201.182h2.121v0.424h-2.121zM288.152 201.182h0.424v0.424h-0.424zM278.394 201.606h2.97v0.424h-2.97zM281.788 201.606h0.424v0.424h-0.424zM284.333 201.606h0.424v0.424h-0.424zM285.182 201.606h0.424v0.424h-0.424zM286.879 201.606h0.848v0.424h-0.848zM288.152 201.606h0.848v0.424h-0.848zM275 202.03h2.97v0.424h-2.97zM278.818 202.03h1.273v0.424h-1.273zM282.212 202.03h0.424v0.424h-0.424zM283.909 202.03h0.424v0.424h-0.424zM284.758 202.03h0.848v0.424h-0.848zM286.03 202.03h0.424v0.424h-0.424zM286.879 202.03h0.424v0.424h-0.424zM287.727 202.03h1.273v0.424h-1.273zM275 202.455h0.424v0.424h-0.424zM277.545 202.455h0.424v0.424h-0.424zM278.818 202.455h0.848v0.424h-0.848zM280.091 202.455h0.424v0.424h-0.424zM280.939 202.455h1.273v0.424h-1.273zM285.182 202.455h0.424v0.424h-0.424zM286.879 202.455h0.424v0.424h-0.424zM275 202.879h0.424v0.424h-0.424zM275.848 202.879h1.273v0.424h-1.273zM277.545 202.879h0.424v0.424h-0.424zM278.394 202.879h0.424v0.424h-0.424zM279.242 202.879h0.848v0.424h-0.848zM281.364 202.879h0.424v0.424h-0.424zM283.061 202.879h0.424v0.424h-0.424zM285.182 202.879h2.545v0.424h-2.545zM288.152 202.879h0.424v0.424h-0.424zM275 203.303h0.424v0.424h-0.424zM275.848 203.303h1.273v0.424h-1.273zM277.545 203.303h0.424v0.424h-0.424zM278.818 203.303h0.424v0.424h-0.424zM280.515 203.303h1.273v0.424h-1.273zM283.061 203.303h0.424v0.424h-0.424zM283.909 203.303h0.424v0.424h-0.424zM286.879 203.303h2.121v0.424h-2.121zM275 203.727h0.424v0.424h-0.424zM275.848 203.727h1.273v0.424h-1.273zM277.545 203.727h0.424v0.424h-0.424zM278.394 203.727h0.848v0.424h-0.848zM280.091 203.727h0.424v0.424h-0.424zM280.939 203.727h0.424v0.424h-0.424zM282.636 203.727h0.424v0.424h-0.424zM284.758 203.727h1.273v0.424h-1.273zM286.879 203.727h1.273v0.424h-1.273zM288.576 203.727h0.424v0.424h-0.424zM275 204.152h0.424v0.424h-0.424zM277.545 204.152h0.424v0.424h-0.424zM278.818 204.152h0.424v0.424h-0.424zM279.667 204.152h0.424v0.424h-0.424zM280.515 204.152h0.424v0.424h-0.424zM281.364 204.152h0.424v0.424h-0.424zM282.212 204.152h0.424v0.424h-0.424zM283.061 204.152h0.424v0.424h-0.424zM283.909 204.152h0.848v0.424h-0.848zM285.182 204.152h0.424v0.424h-0.424zM286.879 204.152h0.424v0.424h-0.424zM288.152 204.152h0.424v0.424h-0.424zM275 204.576h2.97v0.424h-2.97zM278.394 204.576h0.424v0.424h-0.424zM279.667 204.576h0.424v0.424h-0.424zM281.788 204.576h1.273v0.424h-1.273zM283.485 204.576h0.848v0.424h-0.848zM284.758 204.576h0.848v0.424h-0.848zM286.03 204.576h0.424v0.424h-0.424zM286.879 204.576h0.424v0.424h-0.424zM288.152 204.576h0.848v0.424h-0.848z" fill="#111111"/>
+<text x="272.45454545454544" y="198.49" font-family="Arial" font-size="2.8" fill="#999" text-anchor="end">build 1.21 · 13 Sep 2026</text>
+<text x="8" y="204.4064" font-family="Arial" font-size="2.8" fill="#999">Valid from August 2026</text>
+<text x="272.45454545454544" y="204.4064" font-family="Arial" font-size="2.8" fill="#999" text-anchor="end">Map design © BusMaps.uk</text>
+</g></svg>

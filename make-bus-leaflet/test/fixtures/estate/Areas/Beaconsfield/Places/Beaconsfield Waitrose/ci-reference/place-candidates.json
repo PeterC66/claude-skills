@@ -1,0 +1,35 @@
+[
+ {
+  "display": "Waitrose, Caledon Close, Beaconsfield New Town, Holtspur, Beaconsfield, Beaconsfield and Chepping Wye Community Board, Knotty Green, Buckinghamshire, England, HP9 2DA, United Kingdom",
+  "lat": 51.6119689,
+  "lon": -0.6448426,
+  "osm_type": "way",
+  "osm_id": 24902092,
+  "class": "amenity",
+  "type": "parking",
+  "name": "Waitrose",
+  "importance": 5.4998855573312234e-05
+ },
+ {
+  "display": "Waitrose, Penn Road, Beaconsfield New Town, Holtspur, Beaconsfield, Beaconsfield and Chepping Wye Community Board, Knotty Green, Buckinghamshire, England, HP9 2PW, United Kingdom",
+  "lat": 51.6122569,
+  "lon": -0.6462755,
+  "osm_type": "way",
+  "osm_id": 24902097,
+  "class": "shop",
+  "type": "supermarket",
+  "name": "Waitrose",
+  "importance": 5.4998855573312234e-05
+ },
+ {
+  "display": "Waitrose, Station Parade, Beaconsfield New Town, Holtspur, Beaconsfield, Beaconsfield and Chepping Wye Community Board, Knotty Green, Buckinghamshire, England, HP9 2PB, United Kingdom",
+  "lat": 51.6119746,
+  "lon": -0.6469974,
+  "osm_type": "node",
+  "osm_id": 13136031462,
+  "class": "highway",
+  "type": "bus_stop",
+  "name": "Waitrose",
+  "importance": 5.4998855573312234e-05
+ }
+]

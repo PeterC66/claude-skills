@@ -49,7 +49,10 @@ const fs = require('fs');
 const path = require('path');
 const { assertNoCollision } = require('./index_guard');
 const { knownOff } = require('./known_off');
+const { checkDrawnWindow } = require('./window_contiguity');
+const { displayedRoutes } = require('./displayed_routes');
 
+function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
 const P = (f) => path.join(DIR, f);
 function readJSON(f, optional) {
@@ -360,35 +363,13 @@ function bearing(a, b) {                   // degrees 0..360 from a to b
 function angleDiff(a, b) { let d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
 
 // ---------- derive the displayed-route set + anchor ----------
-const palette = routes.palette || {};
 
-/* DISPLAYED MEANS ON THE SHEET, NOT PRESENT IN THE GEOMETRY (OA-004, 2026-08-29).
- *
- * `intown` is routes_intown_atco.json -- an S2 output listing the in-town chain of
- * every route NEAR the town. The config then chooses which of them to draw, and a
- * route left out of `palette`/`routeOrder` is skipped by gen_internal entirely.
- * Seeding `displayed` from the geometry therefore counted routes the sheet does
- * not draw, and the consequence was that DROPPING A ROUTE FROM THE CONFIG COULD
- * NOT CLEAR A FINDING ABOUT IT: the map stopped drawing X46, and S6 went on
- * reporting "we include it and draw it" off S2's leftovers.
- *
- * That was found the day Peter adjudicated the X46 question and the sheet was
- * rebuilt without it. Measured across all eight towns before changing anything:
- * every one has geometry and drawn set of exactly equal size with no difference
- * between them, so this narrowing is a NO-OP on the estate as it stands and only
- * bites where a config deliberately omits a route it has geometry for -- which is
- * the case it exists for.
- *
- * The palette is still unioned in below, so a route the config intends to draw is
- * displayed even if S2 gave it no in-town chain; that is a different fault and the
- * no-full-chain check is the one that reports it.
+/* DISPLAYED MEANS ON THE SHEET, NOT PRESENT IN THE GEOMETRY (OA-004, 2026-08-29;
+ * the narrowing that could not bite, and both halves of what does, OA-048 2026-09-19).
+ * The derivation and its whole argument are displayed_routes.js; what stays here is the
+ * call and the fact that `displayed` is the denominator of every coverage figure below.
  */
-const drawnByConfig = new Set([...Object.keys(palette), ...(routes.routeOrder || [])].map(normRoute));
-const displayed = new Set();
-for (const r of Object.keys(intown || {})) if (!drawnByConfig.size || drawnByConfig.has(normRoute(r))) displayed.add(normRoute(r));
-for (const e of (routes.external || [])) displayed.add(normRoute(e.route));
-for (const e of (routes.busway || [])) displayed.add(normRoute(e.route));
-for (const r of Object.keys(palette)) displayed.add(normRoute(r)); // palette = intended to draw
+const { displayed } = displayedRoutes({ routes, intown, norm: normRoute });
 
 // anchor coordinate (for direction checks)
 let anchorLL = null;
@@ -1017,6 +998,15 @@ if (dirUnavailable.length) {
   }
 }
 
+// S-5b: is the DRAWN WINDOW one unbroken run of the chain's IN-TOWN calls?
+// OA-048's third instrument, 2026-09-15. The instrument, its three rejected
+// narrowings and the falsification that rejected an 85% floor are in
+// window_contiguity.js; this is the call, and the summary block below reports
+// how much of it ran. It reaches the routes S-5 cannot (79 of 96 against 26)
+// and does NOT replace S-5: a route drawn the wrong way out of town has a
+// perfectly contiguous window.
+const win = checkDrawnWindow({ displayed, intownCfg, CIRCULAR, intownByNorm, fullEntry, fullDirections, names, add });
+
 // S-6: complexity-ladder remedies assert things about the real world, so check
 // what the generator measured about them. Both are SOFT: they are judgement
 // calls a human signed off, not data errors — but a bundle whose members barely
@@ -1635,6 +1625,21 @@ const out = {
       pct: displayed.size ? Math.round(100 * termChecked.length / displayed.size) : 0,
       accountsForAll: termChecked.length + termUnavailable.length + termSkipped.length === displayed.size,
     },
+    // How much of S-5b ran (OA-048): the same contract as the two above, because a
+    // check that can decline has to say how often it did. `anyDirectionGappy` is
+    // the count BEFORE the completeness floor, so the floor can be re-measured
+    // from the reports rather than from the comment that argues for it.
+    windowCoverage: {
+      checked: win.checked.length,
+      unavailable: win.unavailable.length,
+      unavailableBy: win.unavailable.reduce((a, u) => (a[u.reason] = (a[u.reason] || 0) + 1, a), {}),
+      skipped: win.skipped.length,
+      skippedBy: win.skipped.reduce((a, s) => (a[s.reason] = (a[s.reason] || 0) + 1, a), {}),
+      displayed: displayed.size,
+      pct: displayed.size ? Math.round(100 * win.checked.length / displayed.size) : 0,
+      accountsForAll: win.checked.length + win.unavailable.length + win.skipped.length === displayed.size,
+      anyDirectionGappy: win.anyDirGappy,
+    },
   },
   findings,
 };
@@ -1682,8 +1687,21 @@ if (downgraded.length) {
 if (!dc.accountsForAll) {
   console.log(`        WARNING: ${dc.checked}+${dc.unavailable}+${dc.skipped} != ${dc.displayed} — a route left S-5 by an unrecorded path, so the coverage figure understates the gap.`);
 }
+// S-5b prints beside the other two because its whole point is the denominator.
+const wc = out.summary.windowCoverage;
+console.log(`        drawn-window check ran on ${wc.checked}/${wc.displayed} displayed routes (${wc.pct}%)`
+  + (wc.checked === 0 ? ' — NONE, so this verdict says nothing about holes in the drawn window' : '')
+  + (wc.skipped ? `; ${wc.skipped} not candidates (${Object.entries(wc.skippedBy).map(([k, n]) => `${n} ${k}`).join(', ')})` : '')
+  + (wc.anyDirectionGappy ? `; ${wc.anyDirectionGappy} gappy in some direction before the completeness floor` : ''));
+if (!wc.accountsForAll) {
+  console.log(`        WARNING: ${wc.checked}+${wc.unavailable}+${wc.skipped} != ${wc.displayed} — a route left S-5b by an unrecorded path.`);
+}
 console.log(bar);
 
 // 3 = could not verify (uncurated S1), the same code the refusal above uses;
 // 1 = verified and BLOCKED; 0 = verified and clean.
 process.exit(UNCURATED ? 3 : (out.summary.pass ? 0 : 1));
+}
+
+if (require.main === module) main();
+module.exports = { main };

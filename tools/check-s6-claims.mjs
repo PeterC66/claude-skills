@@ -43,7 +43,14 @@
  *      ALIASED rather than uncovered, and the row names the registered key. Last
  *      because a label can also be a real key on the same map — Wisbech prints "46"
  *      for `46L` and carries a real 46 — so every direct test runs first.
- * Anything else is UNCOVERED, and that is red.
+ * Anything else is UNCOVERED. Until 2026-09-17 that was red; since buses-data OA-396
+ * (R3 of the process review) it is a ROW -- a service fact OWED, printed here, carried
+ * by the bus-work worklist as `s6-claims-uncovered`, and never the exit code, because
+ * a claim nobody has filed yet is a chore and not a fault in a map or a register.
+ * What stays red is a fault in the RECORDS: a register that cannot be read, that
+ * contradicts itself, whose operator strings resolve to nothing or to two, or that
+ * decides a route a map in scope is SILENT about -- and `--require-reports` on a run
+ * that found no report at all.
  *
  * WHY THIS HALF CANNOT RUN IN CI. It reads `verification.json`, which is gitignored
  * because our own code rebuilds it for free. `actions/checkout` therefore produces a
@@ -604,6 +611,19 @@ for (const f of facts) {
 // READ today, and BOTH answers are reachable: `waiting` while the map still declares
 // the route off, `carried` once the map lists it — so this count can say "none of
 // them" as well as "all of them", which is what makes it worth printing.
+//
+// AND `waiting` IS NOT "THE LINE IS MISSING FROM THE SHEET", WHICH IS HOW EVERY
+// CONSUMER USED TO WORD IT. OA-285 probed all 14 then-live pairs against the shipped
+// `ci-reference/` SVGs on 2026-09-16: the register's own `drawing` prose was right 14
+// times out of 14, and this enumeration was wrong 4 times, always `waiting` over a
+// sheet that had already paid. The cause is that a rebuild pays an `include` by doing
+// two things — printing the line, and moving the route out of `notOnLeaflet[]` — and
+// several maps did the first without the second. So the wording here, on the status
+// board and in the worklist row says what is actually read: which maps still DECLARE
+// the route off. Believing otherwise costs a rebuild that prints the note twice.
+// Sniffing /^DELIVERED/ off `drawing` would give a truer count and would settle
+// OA-285's hard half by fiat — which artefact answers it is exactly that action's
+// open question, and a self-declared English string is not among its candidates.
 const owed = [];
 for (const f of facts) {
   if (!f || f.status !== 'decided' || f.outcome !== 'include' || !Array.isArray(f.scope)) continue;
@@ -770,7 +790,11 @@ const registerRecheck = [
 const unreadableDecls = maps.flatMap(m => decl.get(m.name).unreadable);
 
 // ---- verdict ------------------------------------------------------------------
-const red = uncovered.length > 0 || registerFindings.length > 0 || silences.length > 0 || unreadableReports.length > 0 || unreadableDecls.length > 0
+// `uncovered.length > 0` was the first term of this line until 2026-09-17 (buses-data
+// OA-396). A claim with no home is now reported and counted, and it is the worklist's
+// `s6-claims-uncovered` row that chases it; the exit code answers only for a fault in
+// the records. prove-red-s6-claims.mjs case 2 pins the row as reported-and-green.
+const red = registerFindings.length > 0 || silences.length > 0 || unreadableReports.length > 0 || unreadableDecls.length > 0
   || (REQUIRE_REPORTS && reports === 0);
 
 if (AS_JSON) {
@@ -790,7 +814,7 @@ if (AS_JSON) {
   for (const a of aliased) console.log(`  ${REGISTER_NAME}: ${a.text}`);
   for (const l of uncovered) {
     console.log(`  ${l.map}  S6 ${l.run} ${l.id}  ${l.category}  ${l.route}${l.operator ? ` (${l.operator})` : ''}${l.superset ? '  [borrowed answer — may be a superset artefact]' : ''}`);
-    console.log(`      UNCOVERED — no notOnLeaflet, no redteamRejected, ${l.parent ? `nothing in ${l.parent}'s file, ` : ''}no ${REGISTER_NAME} entry in scope. Write the register entry (queued is enough to give it a home).`);
+    console.log(`      UNCOVERED — no notOnLeaflet, no redteamRejected, ${l.parent ? `nothing in ${l.parent}'s file, ` : ''}no ${REGISTER_NAME} entry in scope. Write the register entry (queued is enough to give it a home). A chore on the worklist, not a red.`);
   }
   console.log(`\ncheck-s6-claims — ${path.resolve(ROOT)}`);
   console.log(`  ${maps.length} map(s) tracked; register: ${register ? `${facts.length} fact(s), ${facts.filter(f => f && f.status === 'queued').length} queued, ${facts.filter(f => f && f.status === 'decided').length} decided` : 'ABSENT'}`);
@@ -808,7 +832,7 @@ if (AS_JSON) {
     }
   }
   if (owed.length) {
-    console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to put the service on the sheet, of ${owed.length} in the register — enumeration, not a finding (OA-285):`);
+    console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to take the route out of notOnLeaflet[], of ${owed.length} in the register — enumeration, not a finding (OA-285). THAT IS A COUNT OF DECLARATIONS AND NOT OF SHEETS MISSING THE LINE: each entry's own note below says which, and where it opens DELIVERED the line is already printed:`);
     for (const o of owed) {
       console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}${o.alias ? ` [ALIASED: the map spells it ${o.alias.registered} and badges it "${o.alias.label}"]` : ''}`);
       if (o.owes) console.log(`          owes: ${o.owes}`);

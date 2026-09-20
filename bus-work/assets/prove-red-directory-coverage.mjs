@@ -43,6 +43,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCoverageState, directoryCoverageItems, gateBearingAuthorities, REREAD_DAYS } from './directory_coverage.mjs';
+import { resolveBuses } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 let bad = 0;
@@ -218,7 +219,7 @@ console.log('\n8. the join, asserted directly — the half that can silently nar
 console.log('\n9. the wire in worklist.mjs — literal strings, and they must RUN');
 {
   const src = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  // NOT src.includes(). A mutation sweep on prove-red-loop-blocked.mjs commented
+  // NOT src.includes(). A mutation sweep on prove-red-loop-your-move.mjs commented
   // a wire out and every assertion stayed green, because a commented line still
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
@@ -230,16 +231,32 @@ console.log('\n9. the wire in worklist.mjs — literal strings, and they must RU
 
 console.log('\n10. against the REAL buses-data directory, when it is beside this checkout');
 {
-  const real = path.resolve(HERE, '..', '..', '..', '..', 'Using AI', 'Buses', 'BusMapsUK', 'bus-map-directory');
+  // `--buses`/BUSES_DIR, then the one named laptop path — engine.mjs's order, read
+  // from engine.mjs rather than written out again here, which is what its two
+  // sibling harnesses already do (buses-data OA-345). Until OA-412 this section
+  // walked four levels up from its own file instead, so it could only ever run in
+  // the INSTALLED checkout: every worktree — which is where an engine change is
+  // now made — resolved a path that does not exist and skipped, exactly as CI does.
+  const real = path.join(resolveBuses(), 'BusMapsUK', 'bus-map-directory');
   const st = readCoverageState(real);
   if (!st.coveragePresent) {
-    console.log(`  --  skipped: no bus-map-directory at ${real} (this is a claude-skills checkout)`);
+    console.log(`  --  SKIPPED, and this is not a pass: no bus-map-directory at ${real}, so the real data was not read here. Expected in CI; on the laptop pass BUSES_DIR or run it from the installed checkout.`);
   } else {
     check('the real register and directory both parse', st.unreadable === null, String(st.unreadable));
     const a = gateBearingAuthorities(st);
     check('every authority the real register names joins to a real directory row', a.length > 0, JSON.stringify(a.map((x) => x.lta)));
     check('every one of them carries a parseable checked date', a.every((x) => Number.isFinite(x.at)), JSON.stringify(a.map((x) => [x.lta, x.checked])));
-    check('the real map count is all 20 of them', a.reduce((s, x) => s + x.maps, 0) === 20, String(a.reduce((s, x) => s + x.maps, 0)));
+    // NEVER A TYPED TOTAL. This said `=== 20` until OA-412 and the estate had 21,
+    // so it was red on the one laptop that could see it and green in CI for ever.
+    // The expected number is DERIVED from the register this run has already
+    // parsed, and it is not the same arithmetic as the sum it is compared to:
+    // `joined` groups by `lta` and drops any entry naming no directory row, while
+    // `declared` counts the register's own entries. So the assertion still says
+    // something — the join lost nothing — and it says it at any estate size.
+    const declared = (Array.isArray(st.coverage.maps) ? st.coverage.maps : [])
+      .filter((e) => e && typeof e.lta === 'string' && e.lta.trim() !== '').length;
+    const joined = a.reduce((s, x) => s + x.maps, 0);
+    check(`the real map count is every one of the ${declared} register entries that names an authority — the join lost none`, joined === declared, `${joined} joined against ${declared} declared`);
     // A DATED ASSERTION ABOUT TODAY WOULD BE THE FAULT THIS ROW IS ABOUT, so the
     // clock stays injected even here: the real data is driven from a fixed `now`.
     const fresh = directoryCoverageItems({ state: st, now: Date.parse(a[0].checked) + 1000 });

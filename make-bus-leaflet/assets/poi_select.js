@@ -53,9 +53,10 @@
  *         classified, which is what keeps this block byte-neutral when absent.
  *
  * THE DEFAULT FOR A POI WITH NO NAME IS `miss` (OA-238, 2026-09-04), and it is
- * the one place this block is not byte-neutral when absent. Only `pharmacy` and
- * `gp` can reach here nameless — every other category has a fallback name from
- * `classify()` — and a nameless symbol costs a full box for a glyph nobody chose.
+ * the one place this block is not byte-neutral when absent. `pharmacy`, `gp` and
+ * — since OA-340 — `pub` can reach here nameless; every other category has a
+ * fallback name from `classify()`, and a nameless symbol costs a full box for a
+ * glyph nobody chose.
  * It is still listed in `report.candidates` so the local can name it or confirm
  * the miss; an explicit answer in `poi.tiers` overrides the default either way.
  *
@@ -79,22 +80,41 @@
  * The OSM tag combinations this engine draws, in precedence order — the first
  * match wins, so a leisure centre tagged as a school stays a school only if the
  * school test comes first. Returns [category, name] or null for "not a POI".
- * `allotments` is opt-in per town (poi.include) because most towns do not want
- * them; everything else is on for every town.
+ * `allotments` and `pubs` are opt-in per town (poi.include) because most towns
+ * do not want them; everything else is on for every town.
+ *
+ * WHY `pubs` IS OPT-IN RATHER THAN A CATEGORY LIKE THE OTHERS (OA-340, Peter's
+ * decision of 2026-09-13, taken on the measurement in
+ * `Development Docs/pubs-as-landmarks-measured_2026-09-13.md`). Estate-wide the
+ * category is 116 more named symbols on top of the 340 the eight town sheets
+ * carry — +34%, and +50% on St Neots — onto pages where 98 labels already do not
+ * fit. Branded-only is a defensible 15, but it decides WHICH pubs by a tag that
+ * records a tenancy rather than a landmark. Opt-in is byte-inert on the day it
+ * lands and puts the judgement where the must/may/miss design already puts it:
+ * with the local adviser, who knows that St Neots navigates by three pubs and
+ * not by twenty-one.
  */
 function classify(t, poiCfg) {
   const POI = poiCfg || {};
   if(t.shop==='supermarket') return ['shop', t.name||'Supermarket'];
   if(t.amenity==='pharmacy')  return ['pharmacy', t.name||''];
   if(t.amenity==='doctors')   return ['gp', t.name||''];
-  if(t.amenity==='library')   return ['library','Library'];
-  if(t.tourism==='museum')    return ['museum','Museum'];
-  if(t.amenity==='townhall')  return ['townhall','Town Hall'];
+  if(t.amenity==='library')   return ['library', t.name||'Library'];
+  if(t.tourism==='museum')    return ['museum', t.name||'Museum'];
+  if(t.amenity==='townhall')  return ['townhall', t.name||'Town Hall'];
   if(t.amenity==='community_centre') return ['community', t.name||'Community Centre'];
   if(t.leisure==='sports_centre'||t.leisure==='fitness_centre') return ['leisure', t.name||'Leisure'];
   if(t.amenity==='school')    return ['school', t.name||'School'];
   if(t.leisure==='park'||t.leisure==='recreation_ground') return ['park', t.name||'Park'];
   if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
+  /* Below the named categories on purpose: a pub that OpenStreetMap ALSO tags as
+   * a community centre or a restaurant-with-rooms is the thing that tag says
+   * first, and a town that switched pubs on did not thereby ask for its village
+   * hall to be redrawn as one. The fallback is deliberately blank rather than
+   * 'Pub': a nameless pub is a bare glyph nobody chose, so OA-238's
+   * nameless-`miss` default keeps it off the page while still offering it in the
+   * chooser — see the `noName` rule below. */
+  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];
   if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
   return null;
 }
@@ -116,15 +136,77 @@ function classify(t, poiCfg) {
  * an unnamed green is called "Park" and names nothing — and that clause was in
  * both copies too.
  */
-const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];
+/* `pub` is here because the whole point of the category is *the Wetherspoon* —
+ * a pub symbol with no name beside it is no use to anybody navigating by it
+ * (OA-340). It is also the one auto-named category with a BLANK fallback, so
+ * `noName` below reads an unnamed pub as unnamed and leaves it off the page. */
+const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];
 
 /** Does this POI's own name get printed beside its symbol, or is it symbol-only? */
 function printsName(p){
-  return AUTO_NAMED_CATS.includes(p.cat) && !!p.name && p.name !== 'Park';
+  /* `p.name !== 'Park'` was this rule's first instance and OA-338 generalised it:
+   * an unnamed green called *Park* names nothing, and neither does an unnamed
+   * leisure centre called *Leisure*. One list, in `CATEGORY_LABELS`. */
+  return AUTO_NAMED_CATS.includes(p.cat) && !unnamed(p.name);
 }
 
 /** Two points closer than 60 m are the same place mapped twice. */
-const near = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000)<60;
+/*
+ * A CATEGORY LABEL IS NOT A NAME, and until 2026-09-13 three things treated it
+ * as one (OA-338).
+ *
+ * `classify()` supplies one of these strings when OpenStreetMap has not named
+ * the place. It exists so the sheet can print *Community Centre* under a symbol
+ * rather than nothing, and it is a DISPLAY string — but it was also being used
+ * as the de-duplication identity and as the does-this-have-a-name test, and in
+ * both of those it asserts something the data never said. Two unnamed sports
+ * centres are not the same sports centre because they are both called `Leisure`.
+ *
+ * This set is the whole population of that mistake and is derived from the
+ * fallbacks in `classify()` above; `test/poi_select.test.js` holds it against
+ * them, so a new category with a new fallback cannot quietly escape it.
+ */
+const CATEGORY_LABELS = new Set(['Supermarket','Library','Museum','Town Hall',
+  'Community Centre','Leisure','School','Park','Allotments','Industrial Estate']);
+
+/** True when this POI has no name of its own — blank, or a label standing in for one. */
+function unnamed(name){ return !name || CATEGORY_LABELS.has(name); }
+
+const metresApart = (a,b) => Math.hypot((a[0]-b[0])*111000,(a[1]-b[1])*70000);
+
+/*
+ * IS THIS THE SAME PLACE MAPPED TWICE? Three answers, and each distance is a
+ * measurement rather than a preference (OA-338, 2026-09-13).
+ *
+ *   no name on one side   the only evidence is position, so 60 m — a shop mapped
+ *                         as a node AND as its building. This is the arm OA-234
+ *                         restored for blank names, now reaching the labels too.
+ *   the same real name    250 m, because one site is often mapped as two ways:
+ *                         St Ivo Outdoor 82 m, Wycombe Preparatory 123 m,
+ *                         Westwood Primary 178 m, High March 183 m are all one
+ *                         place. Beyond that a shared name is a CHAIN — four
+ *                         Boots in Wisbech, five libraries in High Wycombe — and
+ *                         collapsing them deleted 32 real places from the estate.
+ *   one name inside the   60 m. `Tesco` and `Tesco Extra` 39 m apart are one shop
+ *   other                 under two spellings; `Superdrug` and `Boots` 24 m apart
+ *                         are two chemists, and the sheet drew one of them.
+ *
+ * Two DIFFERENT names never collapse, at any distance. That is the rule that
+ * puts Boots back on the St Neots sheet, and it is deliberately the loose end of
+ * the three: where OpenStreetMap maps two parts of one site under two names, both
+ * are now drawn. That is the right way round — a spurious symbol is visible on
+ * the page and answerable with `miss` in the landmark chooser, and a deleted one
+ * is neither.
+ */
+function sameThing(a, b){
+  if(a.cat !== b.cat) return false;
+  const d = metresApart(a.ll, b.ll);
+  if(unnamed(a.name) || unnamed(b.name)) return d < 60;
+  if(a.name === b.name) return d < 250;
+  const x = a.name.toLowerCase(), y = b.name.toLowerCase();
+  if(x.includes(y) || y.includes(x)) return d < 60;
+  return false;
+}
 
 function selectPois(elementSets, poiCfg, report) {
   const POI = poiCfg || {};
@@ -176,7 +258,7 @@ function selectPois(elementSets, poiCfg, report) {
    * on today's estate and is here for the town that gets a second one. */
   const dedup=[];
   outer: for(const p of pois){
-    for(const q of dedup){ if(q.cat===p.cat && ((q.name===p.name && p.name) || near(q.ll,p.ll))){ continue outer; } }
+    for(const q of dedup){ if(sameThing(q,p)){ continue outer; } }
     dedup.push(p);
   }
   return applyTiers(dedup, POI, report);
@@ -205,8 +287,9 @@ function applyTiers(pois, POI, report){
   /* THE DEFAULT IS NOT ALWAYS `may` ANY MORE (OA-238, Peter's decision 2026-09-03).
    *
    * A POI with no name prints nothing beside its symbol — `classify()` supplies a
-   * fallback name for every category except `pharmacy` and `gp`, so the whole
-   * population of this rule is a chemist or a surgery OpenStreetMap has not named.
+   * fallback name for every category except `pharmacy`, `gp` and `pub`, so the
+   * population of this rule is a chemist, a surgery, or (since OA-340, on a town
+   * that has switched pubs on) a pub OpenStreetMap has not named.
    * It costs the same 4.2 x 4.2 mm box and the same placer anchor as a named one,
    * for a bare glyph nobody chose. So it defaults to NOT DRAWN.
    *
@@ -224,7 +307,38 @@ function applyTiers(pois, POI, report){
    * says `"may"`, which is why the estate loses two symbols under this change and
    * not three — see report.namelessKeptByTier below, which exists so that is
    * visible at build time rather than being something a reader has to know. */
-  const defaultRule = p => ({ tier: p.name ? 'may' : 'miss', as: null });
+  /* OA-338 WIDENS THIS TO THE CATEGORY LABELS, 2026-09-13, and the paragraph
+   * above is why: it says the whole population of this rule is a chemist or a
+   * surgery, because those are the only two categories `classify()` leaves
+   * blank. That was true of the CODE and never of the RULE. An unnamed sports
+   * centre reached here called `Leisure`, read as named, defaulted to `may` and
+   * printed the word *Leisure* on the sheet beside its symbol — `leisure` is an
+   * auto-named category — which is exactly the bare glyph nobody chose that this
+   * default exists to stop, wearing a label to get past it. Wisbech has four
+   * unnamed sports centres and printed *Leisure*; it is now offered four rows
+   * in the chooser and prints none of them until somebody names one. */
+  /* THE LABEL RULE APPLIES HERE ONLY TO A CATEGORY THAT PRINTS A NAME, and that
+   * narrowing was bought by looking at the artwork rather than by reasoning
+   * (OA-338, the estate rollout). Dropping every label-named POI took eleven
+   * symbols off the estate: ten were `Leisure`, `Community Centre` and
+   * `Allotments` -- auto-named categories where the label WAS the visible word,
+   * and exactly what this default exists to stop. The eleventh was
+   * Beaconsfield's town hall, and it was a plain regression.
+   *
+   * A symbol-only category prints nothing either way, so OA-238's argument --
+   * `a bare glyph nobody chose` -- does not reach it: for a town hall, a library
+   * or a museum the CATEGORY is the choice, the symbol is the information, and
+   * whether OpenStreetMap happens to carry a name changes nothing a reader sees.
+   * For pharmacy and gp, which reach here genuinely blank, the behaviour is
+   * exactly what OA-238 decided and this line is unchanged. A `pub` reaches here
+   * blank too but is auto-named, so it takes the first arm and is missed — which
+   * is OA-340's own answer to *what does a nameless pub do*.
+   *
+   * De-duplication still reads a label as no-name for EVERY category, which is
+   * the other half of OA-338 and is not affected: two unnamed town halls 5 km
+   * apart are two town halls. */
+  const noName = p => (AUTO_NAMED_CATS.includes(p.cat) ? unnamed(p.name) : !p.name);
+  const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });
   const explicit = p => !!(TIERS && ((p.cat + ':' + p.name) in TIERS));
   const ruleFor = p => (explicit(p) ? rule(TIERS[p.cat + ':' + p.name]) : defaultRule(p));
 
@@ -308,4 +422,4 @@ function applyTiers(pois, POI, report){
   return kept;
 }
 
-module.exports = { classify, selectPois, applyTiers, near, AUTO_NAMED_CATS, printsName };
+module.exports = { classify, selectPois, applyTiers, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName };

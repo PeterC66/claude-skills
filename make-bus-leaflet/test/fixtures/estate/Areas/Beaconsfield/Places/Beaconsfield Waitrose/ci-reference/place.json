@@ -1,0 +1,15 @@
+{
+ "place": "Waitrose",
+ "town": "Beaconsfield",
+ "region": "Buckinghamshire",
+ "name": "Waitrose",
+ "display": "Waitrose, Penn Road, Beaconsfield New Town, Holtspur, Beaconsfield, Beaconsfield and Chepping Wye Community Board, Knotty Green, Buckinghamshire, England, HP9 2PW, United Kingdom",
+ "lat": 51.6122569,
+ "lon": -0.6462755,
+ "osm_type": "way",
+ "osm_id": 24902097,
+ "class": "shop",
+ "type": "supermarket",
+ "walkshedM": 500.0,
+ "ambiguous": true
+}

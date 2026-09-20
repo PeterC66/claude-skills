@@ -1,0 +1,57 @@
+[
+ {
+  "display": "High Street, Daws Hill, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 2AZ, United Kingdom",
+  "lat": 51.6290896,
+  "lon": -0.7504688,
+  "osm_type": "way",
+  "osm_id": 26773473,
+  "class": "highway",
+  "type": "pedestrian",
+  "name": "High Street",
+  "importance": 0.0533922247653925
+ },
+ {
+  "display": "High Street, Daws Hill, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 2BE, United Kingdom",
+  "lat": 51.6285952,
+  "lon": -0.7488204,
+  "osm_type": "way",
+  "osm_id": 26518398,
+  "class": "highway",
+  "type": "unclassified",
+  "name": "High Street",
+  "importance": 0.0533922247653925
+ },
+ {
+  "display": "High Street, High Wycombe, Buckinghamshire, England, HP13 5XJ, United Kingdom",
+  "lat": 51.6487953,
+  "lon": -0.7751992,
+  "osm_type": "way",
+  "osm_id": 98933658,
+  "class": "highway",
+  "type": "tertiary",
+  "name": "High Street",
+  "importance": 0.0533922247653925
+ },
+ {
+  "display": "High Street, High Wycombe, Buckinghamshire, England, HP13 5XQ, United Kingdom",
+  "lat": 51.6491166,
+  "lon": -0.7742288,
+  "osm_type": "way",
+  "osm_id": 868337734,
+  "class": "highway",
+  "type": "tertiary",
+  "name": "High Street",
+  "importance": 0.0533922247653925
+ },
+ {
+  "display": "High Street, Daws Hill, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 2BE, United Kingdom",
+  "lat": 51.6286232,
+  "lon": -0.7487067,
+  "osm_type": "node",
+  "osm_id": 7178896995,
+  "class": "highway",
+  "type": "bus_stop",
+  "name": "High Street",
+  "importance": 5.8891432059159496e-05
+ }
+]

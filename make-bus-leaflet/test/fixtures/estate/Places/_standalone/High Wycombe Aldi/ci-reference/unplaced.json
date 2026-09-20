@@ -1,0 +1,20 @@
+[
+  {
+    "id": "poi:leisure:Kingsmead Netball Centre",
+    "text": "Kingsmead Netball Centre",
+    "at": [
+      119.30304160809371,
+      130.0174526335229
+    ],
+    "reason": "no candidate clear"
+  },
+  {
+    "id": "poi:school:Beechview",
+    "text": "Beechview",
+    "at": [
+      13.191463297325384,
+      137.79920705758136
+    ],
+    "reason": "no candidate clear"
+  }
+]

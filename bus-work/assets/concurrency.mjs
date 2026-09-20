@@ -532,6 +532,40 @@ export function readDecisionRows(busesDir) {
 }
 
 /*
+ * Gate the board rows those decisions own, and say so when one names nothing.
+ *
+ * WHY THE WHOLE JOIN IS HERE AND ONE LINE IS IN worklist.mjs. The reader above
+ * and the warning below are one argument, and splitting them would put the
+ * reasoning in one file and the sentence a reader actually sees in another —
+ * which is how a warning ends up saying something its own parser never meant.
+ * `applyHolds` and `groupUnmatched` are INJECTED rather than imported because
+ * they live in `loop_your_move.mjs`, which imports nothing from here today and
+ * must go on being free to.
+ *
+ * UNMATCHED IS ITS OWN SENTENCE AND NOT THE HOLD ONE. A hold's key can go stale
+ * because the queue it named drained, or because this run could not reach the
+ * portal at all, which is why that warning has three branches about whether the
+ * board could even look — a confident *the row has cleared* was printed on
+ * 2026-09-09 about a hold that was working perfectly. A `boardRows:` key names a
+ * row computed from the MAP TREE and the disk, both of which every run reads
+ * whatever else it can reach, so there is no "could not check" case to hedge:
+ * the key is wrong, or the chore is done and the marker can go with it.
+ *
+ * @param {string} busesDir
+ * @param {Array} items  the board's rows, mutated in place with `onHold`
+ * @param {{applyHolds: Function, groupUnmatched: Function}} fns
+ * @returns {string[]} warnings, one per action file whose field matched nothing
+ */
+export function applyDecisionRows(busesDir, items, { applyHolds, groupUnmatched }) {
+  const { unmatched } = applyHolds(items, readDecisionRows(busesDir));
+  return groupUnmatched(unmatched).map((g) => {
+    const plural = g.keys.length > 1;
+    return `Development Docs/open-actions/${g.file} carries \`boardRows: ${g.raw}\`, and ${plural ? 'none of those keys is' : 'that key is'} a row on this board — the marker gated nothing. `
+      + 'Either the chore has been done and the field can go with it, or the key is misspelt; the keys are the `key:` values in worklist.mjs.';
+  });
+}
+
+/*
  * THE FILE'S MTIME IS NOT THE SESSION'S LAST TURN, and on 2026-09-10 that was
  * measured here rather than reasoned about. `sched-1715` read this line saying
  * "2 session transcript(s) written in the last 20 min" while deciding whether

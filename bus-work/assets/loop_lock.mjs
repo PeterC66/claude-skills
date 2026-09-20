@@ -37,6 +37,18 @@ import { resolveBuses } from './engine.mjs';
  * cannot quietly disagree with the prompt. */
 export const DEFAULT_LEASE_MIN = 90;
 
+/* The ceiling the same prompt sets — "never exceed four hours" — and the reason
+ * it is here rather than left as prose: an `expires:` further out than this is
+ * not a long unit of work, it is a stamp that cannot be believed, and believing
+ * it makes the lock immortal. buses-data OA-407. */
+export const MAX_LEASE_MIN = 240;
+
+/* How far ahead of `now` a holder's own taken-at time may sit before it is read
+ * as an impossibility rather than as skew. Both processes run on this laptop
+ * against the same clock, so the honest value is zero and two minutes is pure
+ * slack; the fault this catches is sixty minutes wide. */
+const STAMP_SKEW_TOLERANCE_MS = 2 * 60000;
+
 /* A tick's name is the only self-terminating one on this disk. A person's
  * session sitting idle looks exactly like an abandoned one, and idle is the
  * normal case — so the name decides what may be assumed, and nothing else. */
@@ -84,6 +96,7 @@ export function readLoopLock(busesDir, { selfSession = null, now = Date.now(), l
     name: null, isTick: false, mine: false,
     takenAt: null, takenSource: null, ageMin: null,
     expires: null, expiresSource: null, expired: null, overdueMin: null, remainMin: null,
+    stampAheadMin: null, stampSuspect: false, stampWhy: null,
     leaseMin,
   };
   if (!busesDir) return out;
@@ -120,9 +133,57 @@ export function readLoopLock(busesDir, { selfSession = null, now = Date.now(), l
     }
   }
 
+  /* A TAKEN-AT TIME IN THE FUTURE IS ALWAYS WRONG, and it is the one thing
+   * about a holder file that can be judged without knowing anything else
+   * (buses-data OA-407). It is a physical impossibility rather than a style
+   * rule, so it needs no vocabulary and no schema to catch — which is what
+   * makes it worth having, because the fault that produced it is neither.
+   *
+   * WHAT HAPPENED. The prompt says both instants are UTC with an explicit `Z`.
+   * A tick that read the LOCAL clock and appended a `Z` anyway wrote a British
+   * Summer Time stamp wearing UTC's marker, and `Date.parse` believes a `Z` —
+   * so an hour appeared on both lines at once. The lease inflated by an hour,
+   * and the age went NEGATIVE and was clamped to zero by the Math.max below,
+   * which is what made a twenty-minute-old lock print as `taken 0m ago`. The
+   * clamp was right to keep the number sane and wrong to say nothing: for a
+   * `sched-` holder the steal test is *now is past `expires`*, so an hour of
+   * inflation is an hour of stalled loop after a tick dies.
+   *
+   * SO THE STAMP IS REPORTED AND THEN NOT USED. Both instants came off one
+   * clock, so one being impossible condemns the other; dropping them hands the
+   * taken time to the directory mtime that the atomic `mkdir` set — the one
+   * timestamp on this disk no prose can be wrong about — and the lease to the
+   * fallback below. That is recovery, not repair: `stampSuspect` and
+   * `stampWhy` say the holder was disbelieved and why, because a lease read off
+   * a fallback and read off the holder's own line are different claims, which
+   * is the rule the rest of this file is already built on.
+   *
+   * Only a `holder` value is ever judged. The mtime is authoritative by
+   * construction and is never measured against this. */
+  if (out.takenSource === 'holder' && out.takenAt > now + STAMP_SKEW_TOLERANCE_MS) {
+    out.stampAheadMin = Math.round((out.takenAt - now) / 60000);
+    out.stampSuspect = true;
+    out.stampWhy = `its taken-at time is ${fmtMin(out.stampAheadMin)} in the future, which no clock can be`;
+    out.takenAt = null; out.takenSource = null;
+    out.expires = null; out.expiresSource = null;
+  }
+
   if (out.takenAt === null && dirMtime !== null) {
     out.takenAt = dirMtime;
     out.takenSource = 'mtime';
+  }
+
+  /* THE SECOND IMPOSSIBILITY, and the prompt already forbids it in as many
+   * words: "never exceed four hours". A lease further out than that is not a
+   * long unit of work — the prompt's own answer to one is that it belongs in a
+   * smaller unit — so it is a stamp to disbelieve rather than a holder to wait
+   * for, and believing it is how a lock becomes immortal. Measured against the
+   * taken time rather than against `now`, because what the rule bounds is the
+   * LEASE and not how long ago it started. */
+  if (out.expiresSource === 'holder' && out.takenAt !== null && out.expires > out.takenAt + MAX_LEASE_MIN * 60000) {
+    out.stampSuspect = true;
+    out.stampWhy = `its lease runs ${fmtMin(Math.round((out.expires - out.takenAt) / 60000))} from the moment it was taken, and no lock may exceed ${fmtMin(MAX_LEASE_MIN)}`;
+    out.expires = null; out.expiresSource = null;
   }
   /* "A holder with no parseable expires falls back to taken-plus-ninety — the
    * old behaviour, so an old-format or hand-written lock stays recoverable
@@ -168,5 +229,5 @@ if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` || proc
   const L = readLoopLock(dir, { selfSession: process.argv[3] || null });
   if (!L.present) console.log('loop/LOCK.d is not held.');
   else if (!L.readable) console.log(`loop/LOCK.d is held and its holder file cannot be read (${L.dir}).`);
-  else console.log(`loop/LOCK.d held by ${L.name} — taken ${fmtMin(L.ageMin)} ago (${L.takenSource}), lease ${L.expired ? `EXPIRED ${fmtMin(L.overdueMin)} ago` : `live`} (${L.expiresSource})${L.isTick ? ', a scheduled tick' : ''}${L.mine ? ', and it is yours' : ''}.`);
+  else console.log(`loop/LOCK.d held by ${L.name} — taken ${fmtMin(L.ageMin)} ago (${L.takenSource}), lease ${L.expired ? `EXPIRED ${fmtMin(L.overdueMin)} ago` : `live`} (${L.expiresSource})${L.isTick ? ', a scheduled tick' : ''}${L.mine ? ', and it is yours' : ''}.${L.stampSuspect ? ` ITS HOLDER FILE WAS DISBELIEVED: ${L.stampWhy}.` : ''}`);
 }

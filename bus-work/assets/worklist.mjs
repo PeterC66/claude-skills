@@ -1401,6 +1401,27 @@ for (const g of groupUnmatched(heldRows.unmatched)) {
   }
 }
 
+// OA-414 — the backlog's `decision: peter` marker, joined to the rows it names
+// in `boardRows:`. Same mechanism as a hold and the same renderer, because it is
+// the same fact — this row is not a tick's to act on — arriving from the other
+// end of the backlog. The reader and the whole argument are in concurrency.mjs.
+//
+// UNMATCHED IS ITS OWN SENTENCE AND NOT THE HOLD ONE. A hold's key can go stale
+// because the queue it named drained, which is why that warning has three
+// branches about whether this run could even look. A `boardRows:` key names a
+// row computed from the MAP TREE and the disk, both of which every run reads, so
+// there is no "could not check" case to hedge — the key is wrong, or the chore
+// is done and the marker can go with it.
+const decisionRows = conc.readDecisionRows(BUSES);
+const heldByDecision = applyHolds(items, decisionRows);
+for (const g of groupUnmatched(heldByDecision.unmatched)) {
+  const plural = g.keys.length > 1;
+  warnings.push(
+    `Development Docs/open-actions/${g.file} carries \`boardRows: ${g.raw}\`, and ${plural ? 'none of those keys is' : 'that key is'} a row on this board — the marker gated nothing. `
+    + `Either the chore has been done and the field can go with it, or the key is misspelt; the keys are the \`key:\` values in worklist.mjs.`,
+  );
+}
+
 const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
@@ -1533,11 +1554,22 @@ for (const it of limited) {
   // its place, its age and its link; what it loses is the ability to be read as
   // an instruction. Without this the St Ives row said "Send v10.2 for review"
   // while a hold said in terms that v10.2 must not be sent.
+  // OA-414 — two sources, one renderer. `origin: 'decision'` is a backlog row
+  // marked `decision: peter`; anything else is a hold raised by the loop. They
+  // differ only in the banner and in which file the reader is sent to, and that
+  // second difference is the whole point of carrying the discriminator: a reader
+  // told to look in loop/your-move/ for an action file finds nothing there.
   if (it.onHold && it.onHold.length) {
     for (const h of it.onHold) {
-      console.log(`    ⚠ ON HOLD — ${h.headline}`);
-      if (h.need) console.log(`      ${h.need}`);
-      console.log(`      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`);
+      if (h.origin === 'decision') {
+        console.log(`    ⚠ PETER'S DECISION — ${h.headline}`);
+        if (h.need) console.log(`      ${h.need}`);
+        console.log(`      This row is his to accept or decline; the whole argument is in ${h.source}`);
+      } else {
+        console.log(`    ⚠ ON HOLD — ${h.headline}`);
+        if (h.need) console.log(`      ${h.need}`);
+        console.log(`      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`);
+      }
     }
     console.log(`    Only once that is settled:`);
   }

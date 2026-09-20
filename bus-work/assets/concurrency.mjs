@@ -461,6 +461,77 @@ export function readClaims(busesDir, selfSession, now = Date.now()) {
 }
 
 /*
+ * THE BACKLOG'S DECISION MARKER, JOINED TO THE BOARD IT WAS ASSERTED TO REACH
+ * (OA-414, 2026-09-20).
+ *
+ * `decision: peter` in an action's front matter marks a row whose next move is
+ * his. `assemble.mjs` prints PETER'S DECISION into the index and drops the row
+ * from the loop's open-actions feed, and OA-340 said in as many words that it
+ * also took the row out of THIS board's housekeeping band. It did not: every
+ * board row is recomputed from the map tree, the portal queues or the disk, and
+ * not one of them joins to an action file. On 2026-09-20 a tick took row 6, *8
+ * towns were drawn by an older engine*, three hours after that exact re-stamp
+ * was marked his — re-derived that it could not finish it, and put it down.
+ *
+ * WHY THE ACTION NAMES THE ROW AND NOT THE OTHER WAY ROUND. A board row is
+ * computed; an action is written. The row cannot know which action owns it
+ * without somebody saying so, and the person who knows is the one writing the
+ * marker. So the join is a `boardRows:` field beside `decision:`, carrying the
+ * row keys that decision owns — the same keys a hold names in `**Blocks:**`,
+ * because it is the same question asked from the other end of the backlog.
+ *
+ * WHY IT REUSES applyHolds RATHER THAN GATING THE ROW ITSELF. A row that
+ * VANISHED would take its age, its measurement and its link with it, and the
+ * chore is still true: eight towns really are behind. What the row loses is the
+ * right to be read as an instruction, which is exactly what a hold does to it
+ * already (OA-283). One mechanism, one renderer, two sources — and `origin`
+ * says which, because the two point a reader at different files.
+ *
+ * WHY `boardRows:` IS NOT READ WITHOUT `decision:`. A field that acts on its own
+ * would be a second, quieter way of suppressing a board row, reachable by any
+ * action and answerable to nobody. `assemble.mjs` refuses the combination at
+ * filing time; this reader refuses it again, because the board is read from a
+ * worktree whose index the assembler has not seen.
+ *
+ * @param {string} busesDir  the buses-data checkout
+ * @returns {Array<{key, ref, file, headline, need, raw, origin, source}>}
+ */
+export function readDecisionRows(busesDir) {
+  const dir = path.join(busesDir, 'Development Docs', 'open-actions');
+  if (!existsSync(dir)) return [];
+  let files;
+  try { files = readdirSync(dir).filter((f) => /^OA-\d+\.md$/.test(f)).sort(); } catch { return []; }
+  const out = [];
+  for (const f of files) {
+    let head;
+    try { head = readFileSync(path.join(dir, f), 'utf8').slice(0, 4000); } catch { continue; }
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(head);
+    if (!fm) continue;
+    const field = (k) => {
+      const m = new RegExp(`^${k}:\\s*(.*)$`, 'm').exec(fm[1]);
+      return m ? m[1].replace(/^"(.*)"$/, '$1').trim() : '';
+    };
+    if (field('decision').toLowerCase() !== 'peter') continue;
+    const raw = field('boardRows');
+    if (!raw) continue;
+    const keys = raw.split(/[,\s]+/).map((k) => k.replace(/^`|`$/g, '').trim()).filter(Boolean);
+    for (const key of keys) {
+      out.push({
+        key,
+        ref: f.replace('.md', ''),
+        file: f,
+        headline: `${f.replace('.md', '')} owns this row and is marked \`decision: peter\``,
+        need: field('headline'),
+        raw,
+        origin: 'decision',
+        source: `Development Docs/open-actions/${f}`,
+      });
+    }
+  }
+  return out;
+}
+
+/*
  * THE FILE'S MTIME IS NOT THE SESSION'S LAST TURN, and on 2026-09-10 that was
  * measured here rather than reasoned about. `sched-1715` read this line saying
  * "2 session transcript(s) written in the last 20 min" while deciding whether

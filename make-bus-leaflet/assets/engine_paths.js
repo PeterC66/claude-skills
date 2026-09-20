@@ -17,7 +17,9 @@
  * portal — it would have thrown on the require, before reading an input.
  *
  * So the search is: a SIBLING first, then SKILL_ASSETS, then the place skill's
- * way back across to this folder, then the skill's own path as a last resort. Sibling-first is what lets `status.js` gate a held-back
+ * way back across to this folder — and then it REFUSES, because a fourth answer
+ * could only be the engine that happens to be installed on the machine, which is
+ * not the engine any of the three deployments above is asking about. Sibling-first is what lets `status.js` gate a held-back
  * town against an OLDER engine — it hands the gate a generator from a worktree
  * at that commit and sets SKILL_ASSETS to that worktree's assets, and a search
  * that preferred SKILL_ASSETS over a copied sibling would build a HYBRID engine
@@ -49,12 +51,37 @@
 const fs = require('fs');
 const path = require('path');
 
-/* The last resort, and the only copy of it outside the four bootstraps. It is
- * reached only when a generator has been copied away from its siblings AND the
- * caller set no SKILL_ASSETS — which rollout.js and render_sweep.js both do
- * today, so it is load-bearing rather than decorative. Ending in `/` and
- * concatenated (not path.join'd) so the string this returns is byte-for-byte
- * what the five hand-written copies returned. */
+/* The installed engine on THIS machine, and the only copy of the literal outside
+ * the four bootstraps. `test/engine_paths.test.js` asserts no other engine file
+ * carries it. Ending in `/` and concatenated (not path.join'd) so it is
+ * byte-for-byte what the five hand-written copies produced.
+ *
+ * `dep()` NO LONGER RETURNS IT, AND THE SENTENCE THAT USED TO STAND HERE WAS
+ * FALSE (buses-data OA-342 item 5, 2026-09-20). It read: *reached only when a
+ * generator has been copied away from its siblings AND the caller set no
+ * SKILL_ASSETS — which rollout.js and render_sweep.js both do today, so it is
+ * load-bearing rather than decorative.* Items 1, 2 and 4 of that same row made
+ * every clause of it untrue: build_s4.js sets SKILL_ASSETS for EVERY recipe row
+ * from one base env, and render_sweep.js's runGenerator sets it from the pack's
+ * own engine. gate_lib.js and preview_design.js, the other two copiers, always
+ * did. So nothing in this engine reaches that arm any more, and what it was
+ * load-bearing FOR was the fault: a generator copied for engine A, drawn with
+ * the engine installed at this path, and stamped with A's hash.
+ *
+ * MEASURED BEFORE IT WAS REMOVED, not reasoned about. The arm was instrumented
+ * to record every caller that reached it and the whole suite was run FROM A
+ * WORKTREE — a path that is not this one, so the install and the engine under
+ * test could be told apart, which on the installed engine they cannot. 1001
+ * tests, three hits, and all three were the tests that exist to exercise this
+ * arm: engine_paths.test.js's two temp workspaces and build_s4.test.js's
+ * no-such-run-folder. No production path reached it.
+ *
+ * THE FOUR BOOTSTRAPS STILL CARRY THE LITERAL AND STILL FALL BACK TO IT, which
+ * is a limit rather than an oversight: a bootstrap is the code that finds THIS
+ * file, so it cannot ask this file where to look. What it buys is that the
+ * refusal still arrives — a bootstrap that falls to this path loads the
+ * INSTALLED engine_paths.js, whose dep() then throws on the first sibling it is
+ * asked for, one file later than here and with the same message. */
 const ENGINE_HOME = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/';
 
 /* THE FOURTH ARM IS FOR THE PLACE SKILL, added 2026-09-03 (OA-232 Tier 3.1).
@@ -65,10 +92,28 @@ const ENGINE_HOME = 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/';
  * SKILL_ASSETS, so the search would fall to a path that exists on one laptop.
  * The place skill's own two resolver IIFEs carried this arm and that is why they
  * could not simply be deleted; it is written here instead, once. It is tried
- * BEFORE the laptop and only if it EXISTS, so it changes nothing for a town
+ * BEFORE the refusal and only if it EXISTS, so it changes nothing for a town
  * caller: from the engine's own folder it resolves to that same folder, and from
- * a copied S4 workspace it does not exist and the laptop still answers. */
+ * a copied S4 workspace it does not exist and the refusal below is what answers
+ * — which until 2026-09-20 was the laptop (OA-342 item 5). */
 const CROSS_SKILL = ['..', '..', 'make-bus-leaflet', 'assets'];
+
+/* The fourth answer, and it is a refusal. It is a named function rather than an
+ * inline `throw` for one reason: `tools/prove-red.js` breaks this arm by swapping
+ * the call below for the `return ENGINE_HOME + name` it replaced, and a mutation
+ * wants a one-line anchor with no escapes in it. The message is written for a
+ * BUILD LOG, the only place anybody will meet it. */
+function refuseNoEngine(name, callerDir) {
+  throw new Error(
+    'engine_paths: no engine to resolve "' + name + '" from.\n'
+    + '  The caller was copied away from its siblings and named no engine:\n'
+    + '    caller  ' + callerDir + '\n'
+    + '    wanted  ' + name + '\n'
+    + '  Set SKILL_ASSETS to the assets folder of the engine this build is FOR.\n'
+    + '  Until 2026-09-20 this returned ' + ENGINE_HOME + name + ' instead — the\n'
+    + '  engine INSTALLED on this machine, whatever engine the build was for. That\n'
+    + '  is how eight hybrid sheets reached main (buses-data OA-342).');
+}
 
 /* engineDep(callerDir) -> dep(name) -> an absolute path to load `name` from. */
 function engineDep(callerDir) {
@@ -78,7 +123,7 @@ function engineDep(callerDir) {
     if (process.env.SKILL_ASSETS) return path.join(process.env.SKILL_ASSETS, name);
     const acrossSkills = path.join(callerDir, ...CROSS_SKILL, name);
     try { if (fs.existsSync(acrossSkills)) return acrossSkills; } catch (e) {}
-    return ENGINE_HOME + name;
+    return refuseNoEngine(name, callerDir);
   };
 }
 

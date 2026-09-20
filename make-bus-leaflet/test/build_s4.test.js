@@ -154,8 +154,9 @@ test('the env a row carries is what a copied generator then resolves its sibling
   const before = process.env.SKILL_ASSETS;
   try {
     delete process.env.SKILL_ASSETS;
-    assert.strictEqual(engineDep(RUNDIR)('icons.js'), ENGINE_HOME + 'icons.js',
-      'with no engine named, a copied generator reaches for the machine\'s installed engine');
+    assert.throws(() => engineDep(RUNDIR)('icons.js'), /no engine to resolve "icons\.js"/,
+      'with no engine named, a copied generator must REFUSE rather than reach for whatever '
+      + 'engine is installed on this machine — OA-342 item 5, 2026-09-20');
     for (const [key, byLevel] of Object.entries(RECIPE))
       for (const [level, r] of Object.entries(byLevel)) {
         process.env.SKILL_ASSETS = sheetEnv(r, { dir: RUNDIR }).SKILL_ASSETS;
@@ -165,11 +166,13 @@ test('the env a row carries is what a copied generator then resolves its sibling
   } finally {
     if (before === undefined) delete process.env.SKILL_ASSETS; else process.env.SKILL_ASSETS = before;
   }
-  // WHERE THIS DISCRIMINATES, said out loud because on one machine it does not: the
-  // two paths differ whenever SK is not the installed engine — a worktree, which is
+  // WHERE THIS DISCRIMINATES, said out loud because on one machine it used to not: the
+  // two outcomes differ whenever SK is not the installed engine — a worktree, which is
   // what the engine-PR ordering now requires for every engine change, and a CI clone,
-  // where ENGINE_HOME does not exist at all. Run from the INSTALLED engine the two
-  // are the same folder and only the first assertion above is doing any work.
+  // where ENGINE_HOME does not exist at all. THAT CAVEAT IS SPENT as of OA-342 item 5:
+  // the no-engine case is now a THROW rather than a path, so the first assertion
+  // discriminates on every machine, including the installed engine where the two
+  // folders are the same one.
 });
 
 test('only an area internal asks for build-meta.json', () => {

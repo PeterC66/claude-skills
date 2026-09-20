@@ -1960,12 +1960,42 @@ const MUTATIONS = [
 
   // The FOURTH arm, added 2026-09-03 (OA-232 Tier 3.1) so the place skill could
   // stop carrying a resolver of its own. Cut it and a place asset with nothing set
-  // falls straight to one laptop's path — which is the state it was in before,
-  // held up by a private IIFE rather than by anything shared.
+  // cannot resolve a town module at all — which is the state it was in before,
+  // held up by a private IIFE rather than by anything shared. WHAT CUTTING IT COSTS
+  // CHANGED on 2026-09-20 (buses-data OA-342 item 5): it used to fall to one
+  // laptop's path, silently and correctly on that laptop alone; it now refuses. The
+  // mutation is unchanged and so is the suite's job — the consequence got louder.
   { suite: 'engine_paths.test.js', file: 'engine_paths.js',
-    what: "the cross-skill arm goes, so a place asset with no SKILL_ASSETS falls straight to one laptop's path",
+    what: 'the cross-skill arm goes, so a place asset with no SKILL_ASSETS cannot resolve a town module at all',
     find: "    const acrossSkills = path.join(callerDir, ...CROSS_SKILL, name);\n    try { if (fs.existsSync(acrossSkills)) return acrossSkills; } catch (e) {}\n",
     to: "" },
+
+  // THE LAST RESORT IS A REFUSAL, and this mutation is the fault as it actually
+  // stood until 2026-09-20 (buses-data OA-342 item 5). `rollout.js` copied
+  // gen_internal.js into a scratch folder with no SKILL_ASSETS, every shared module
+  // resolved to the engine INSTALLED on this machine rather than the one being
+  // rolled out, and the sheet was stamped with the rolling engine's hash. Eight such
+  // sheets reached `main` as c879f5a1. This puts that return back.
+  //
+  // WHY IT DISCRIMINATES WHERE THE OLD SUITE COULD NOT. On the installed engine the
+  // fallback path and the engine under test are the SAME folder, so an assertion
+  // about which of them answered is vacuous there — the shape gate_lib.js's OA-232
+  // comment calls a latent hybrid, and it is why this survived a year of green runs.
+  // An assertion that it THROWS is vacuous nowhere, and that is the whole reason the
+  // arm became a refusal rather than a warning.
+  { suite: 'engine_paths.test.js', file: 'engine_paths.js',
+    what: 'the last resort silently returns the INSTALLED engine again, so a copied generator draws with an engine nobody asked for',
+    find: "    return refuseNoEngine(name, callerDir);",
+    to: "    return ENGINE_HOME + name;" },
+
+  // The same mutation against the other suite that asks the question, because the
+  // two ask it of different subjects: this one asks it of build_s4.js's RECIPE —
+  // the table whose three bare rows were the original fault — rather than of the
+  // resolver on its own.
+  { suite: 'build_s4.test.js', file: 'engine_paths.js',
+    what: 'the last resort returns the installed engine, so a RECIPE row that loses its SKILL_ASSETS builds a hybrid instead of failing',
+    find: "    return refuseNoEngine(name, callerDir);",
+    to: "    return ENGINE_HOME + name;" },
 
   // spawnTarget — the pre-stages' rule, and the one property of it that dep() does
   // not have: the RUN DIRECTORY, not the caller's folder, answers first.

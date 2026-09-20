@@ -91,10 +91,11 @@ test('the cross-skill arm answers before the laptop, and it is the place skills 
   const dep = engineDep(place);
   withSkillAssets(null, () => {
     assert.strictEqual(dep('footer.js'), path.join(town, 'footer.js'));
-    // Tried only when it EXISTS, so a name the town folder does not have still
-    // reaches the last resort rather than a path that is not there. This is what
-    // makes the arm inert for every town caller.
-    assert.strictEqual(dep('nothing_here.js'), ENGINE_HOME + 'nothing_here.js');
+    // Tried only when it EXISTS, so a name the town folder does not have falls
+    // PAST this arm rather than returning a path that is not there. This is what
+    // makes the arm inert for every town caller. What is past it is now a
+    // refusal (OA-342 item 5) and was the installed engine until 2026-09-20.
+    assert.throws(() => dep('nothing_here.js'), /no engine to resolve "nothing_here\.js"/);
   });
   // And it LOSES to SKILL_ASSETS, which is what keeps the portal and a held-back
   // gate reading the engine they named rather than whatever is across the tree.
@@ -131,15 +132,31 @@ test('spawnTarget is the pre-stages rule: RUN DIR first, and every arm is checke
   });
 });
 
-test('with none of the three it falls to the laptop, which rollout.js still relies on', () => {
+test('with none of the three it REFUSES, and the message names the caller and the file', () => {
+  // IT USED TO FALL TO THE LAPTOP, and this test used to assert that it did — its
+  // own name said "which rollout.js still relies on", which stopped being true when
+  // items 1, 2 and 4 of buses-data OA-342 gave every copier its engine. What the arm
+  // was load-bearing FOR was the fault the row was filed for: a generator copied for
+  // engine A, drawn with whatever engine is installed at that path, and stamped with
+  // A's hash. Eight such sheets reached main as c879f5a1.
   const s = scratch();
   const dep = engineDep(s.caller);
   withSkillAssets(null, () => {
-    assert.strictEqual(dep('footer.js'), ENGINE_HOME + 'footer.js');
+    assert.throws(() => dep('footer.js'), (e) => {
+      // The message has to be actionable from a build log alone, which is the only
+      // place anybody will meet it: the file that was wanted, the folder that wanted
+      // it, and the variable to set.
+      assert.match(e.message, /no engine to resolve "footer\.js"/);
+      assert.ok(e.message.includes(s.caller), 'the message must name the caller directory');
+      assert.match(e.message, /Set SKILL_ASSETS/);
+      return true;
+    });
   });
   // Concatenated, not path.join'd: this is the string the five hand-written
-  // copies returned, separators and all, and the last resort has to stay that
-  // string or a copied generator loads a different file on the day it is used.
+  // copies returned, separators and all. dep() no longer returns it, but the four
+  // entry-point bootstraps still carry the literal — they are the code that finds
+  // engine_paths.js, so they cannot ask it where to look — and the test below
+  // holds them byte-identical to it.
   assert.ok(ENGINE_HOME.endsWith('/'), 'ENGINE_HOME must end in a separator');
 });
 

@@ -80,7 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched } from './loop_your_move.mjs';
+import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
@@ -1401,6 +1401,9 @@ for (const g of groupUnmatched(heldRows.unmatched)) {
   }
 }
 
+// OA-414 — `decision: peter` + `boardRows:` gates a row: concurrency.mjs.
+for (const w of conc.applyDecisionRows(BUSES, items, { applyHolds, groupUnmatched })) warnings.push(w);
+
 const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
@@ -1533,12 +1536,9 @@ for (const it of limited) {
   // its place, its age and its link; what it loses is the ability to be read as
   // an instruction. Without this the St Ives row said "Send v10.2 for review"
   // while a hold said in terms that v10.2 must not be sent.
+  // OA-414 — two sources, one renderer: `holdBanner` in loop_your_move.mjs.
   if (it.onHold && it.onHold.length) {
-    for (const h of it.onHold) {
-      console.log(`    ⚠ ON HOLD — ${h.headline}`);
-      if (h.need) console.log(`      ${h.need}`);
-      console.log(`      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`);
-    }
+    for (const h of it.onHold) for (const l of holdBanner(h)) console.log(l);
     console.log(`    Only once that is settled:`);
   }
   for (const d of it.do) {

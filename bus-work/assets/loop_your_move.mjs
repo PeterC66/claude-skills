@@ -467,6 +467,33 @@ export function loopDraftItems({ files, now = Date.now() }) {
  *
  * @returns {{applied: number, unmatched: Array}}
  */
+/**
+ * The banner one hold prints above a row's commands, as lines.
+ *
+ * TWO SOURCES, ONE RENDERER, AND `origin` IS THE WHOLE DIFFERENCE (OA-414). A
+ * hold is raised by the loop and lives in `loop/your-move/`; a backlog action
+ * marked `decision: peter` names the rows its decision owns in `boardRows:` and
+ * lives in `Development Docs/open-actions/`. They do the same thing to a row —
+ * it keeps its place, its age and its measurement and loses the right to be read
+ * as an instruction (OA-283) — and they differ only in what to call it and which
+ * file to send the reader to. That second half is why the discriminator is
+ * carried rather than inferred: a reader told to look in `loop/your-move/` for
+ * an action file finds nothing there.
+ *
+ * @param {{origin?: string, headline: string, need?: string, file?: string, source?: string}} h
+ * @returns {string[]}
+ */
+export function holdBanner(h) {
+  const decision = h.origin === 'decision';
+  return [
+    `    ⚠ ${decision ? "PETER'S DECISION" : 'ON HOLD'} — ${h.headline}`,
+    ...(h.need ? [`      ${h.need}`] : []),
+    decision
+      ? `      This row is his to accept or decline; the whole argument is in ${h.source}`
+      : `      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`,
+  ];
+}
+
 export function applyHolds(items, holds) {
   let applied = 0;
   const unmatched = [];

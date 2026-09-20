@@ -36,6 +36,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as conc from './concurrency.mjs';
+/* OA-414 — the decision marker's gate is applyHolds, and a test that asserted
+ * only the parse would not have caught the fault this row was filed about. */
+import { applyHolds } from './loop_your_move.mjs';
 
 /* fileURLToPath, not new URL(...).pathname: this tree lives under
  * "C:\u3a St Ives\.claude\..." and the latter percent-encodes the space. */
@@ -890,6 +893,76 @@ console.log('\n== the stale-claim marker ==');
   ok(conc.isStaleClaim({ ageDays: conc.STALE_CLAIM_AFTER_DAYS }) && !conc.isStaleClaim({ ageDays: 0 })
     && !conc.isStaleClaim({ ageDays: null }),
     `the threshold is ${conc.STALE_CLAIM_AFTER_DAYS} day and a null age is not stale`);
+}
+
+// ---------------------------------------------------------------------------
+// 3c. THE DECISION MARKER, JOINED TO THE BOARD ROW IT NAMES (OA-414)
+// ---------------------------------------------------------------------------
+//
+// PAIRED, AND THE PAIRING IS THE WHOLE TEST. This gate suppresses commands on a
+// board row, so a reader has to be able to see it stop suppressing them. OA-340
+// asserted on 2026-09-20 that `decision: peter` already took its chore out of
+// the board's housekeeping band; it did not, and nothing went red, because
+// there was nothing anywhere that could have. Each case below removes one half
+// of the marker and sees the row come back.
+//
+// END-TO-END OVER REAL FILES for the same reason 3b is: `readDecisionRows`
+// parses front matter off the disk, and a test handing it an object it built
+// itself could not tell you the parser ever produces a key.
+console.log('\n== the backlog decision marker, and the board rows it owns ==');
+{
+  const busesDir = path.join(root, 'decision-fixture');
+  const oa = path.join(busesDir, 'Development Docs', 'open-actions');
+  fs.mkdirSync(oa, { recursive: true });
+  const write = (ref, fm) => fs.writeFileSync(path.join(oa, `${ref}.md`),
+    `---\nref: ${ref}\nstatus: open\nheadline: "what ${ref} is about"\n${fm}---\n\nbody\n`);
+  const keysFor = (ref) => conc.readDecisionRows(busesDir).filter((d) => d.ref === ref).map((d) => d.key);
+
+  write('OA-901', 'decision: peter\nboardRows: engine-stale\n');
+  let got = conc.readDecisionRows(busesDir);
+  ok(got.length === 1 && got[0].key === 'engine-stale' && got[0].ref === 'OA-901',
+    'a `decision: peter` action naming a board row yields that row key', JSON.stringify(got));
+  ok(got[0].origin === 'decision' && /OA-901\.md$/.test(got[0].source) && got[0].need === 'what OA-901 is about',
+    'and it carries its origin, its file and the headline the reader needs', JSON.stringify(got[0]));
+
+  // THE GATE ACTUALLY GATES. applyHolds is the mechanism the renderer reads, so
+  // assert against IT and not against the list — a reader is protected by the
+  // attachment, not by the parse.
+  const rows = [{ key: 'engine-stale', title: 'eight towns' }, { key: 's6-stale', title: 'verification' }];
+  const applied = applyHolds(rows, got);
+  ok(applied.applied === 1 && rows[0].onHold?.length === 1 && !rows[1].onHold,
+    'it attaches to the row it names and to no other row', JSON.stringify(rows));
+
+  // RED → GREEN, arm 1: the decision marker goes and the row is free again.
+  write('OA-901', 'boardRows: engine-stale\n');
+  ok(keysFor('OA-901').length === 0,
+    'CONTROL — `boardRows:` WITHOUT `decision: peter` gates nothing', JSON.stringify(keysFor('OA-901')));
+
+  // RED → GREEN, arm 2: the marker stays and the naming goes. This is the state
+  // the whole estate was in until 2026-09-20 — the marker set, the board
+  // untold — and it must read as no gate rather than as a gate on everything.
+  write('OA-901', 'decision: peter\n');
+  ok(keysFor('OA-901').length === 0,
+    'CONTROL — `decision: peter` with no `boardRows:` gates nothing, which is the pre-OA-414 world', JSON.stringify(keysFor('OA-901')));
+
+  // A wrong value is not a quiet one. `decision: yes` is refused at filing by
+  // assemble.mjs; here it must simply not gate, never gate by truthiness.
+  write('OA-901', 'decision: yes\nboardRows: engine-stale\n');
+  ok(keysFor('OA-901').length === 0, 'CONTROL — a `decision:` value that is not peter gates nothing');
+
+  // Several keys, and the separator is not load-bearing.
+  write('OA-902', 'decision: peter\nboardRows: engine-stale, s6-stale\n');
+  write('OA-903', 'decision: PETER\nboardRows: `nobuild-March`\n');
+  const multi = keysFor('OA-902');
+  ok(multi.length === 2 && multi.includes('engine-stale') && multi.includes('s6-stale'),
+    'one action may own several rows', JSON.stringify(multi));
+  ok(keysFor('OA-903').join() === 'nobuild-March',
+    'the value is case-insensitive and backticks are stripped', JSON.stringify(keysFor('OA-903')));
+
+  // AN EMPTY BACKLOG IS NOT AN ERROR, and a missing folder is not either — the
+  // board runs against trees that have neither.
+  ok(conc.readDecisionRows(path.join(root, 'no-such-tree')).length === 0,
+    'CONTROL — no backlog folder at all reads as no decisions, not as a throw');
 }
 
 // ---------------------------------------------------------------------------

@@ -75,6 +75,15 @@
  * greps. It cannot conjure an answer that does not exist -- a build with no
  * red-team answer at all still exits 10.
  *
+ * A REUSED ANSWER'S WORDS ARE FROZEN, NOT ONLY ITS FACTS (OA found 2026-09-12).
+ * Reuse is decided on the FINGERPRINT above, which is about the world, not about
+ * how one agent chose to phrase what it found -- and a `terminus` or
+ * `not-confirmed` finding that persists across runs compares OUR strings against
+ * THEIRS, so it can be an artefact of the reused answer's vocabulary rather than
+ * a real disagreement. Where such a finding will not clear, buy a fresh answer
+ * before reaching for --reuse-anyway: a new agent may simply phrase the same fact
+ * in words that match.
+ *
  * `--into` defaults to the current directory and `--build` to two levels above
  * it, which is where a town folder sits relative to its S6-verify/<date> run.
  *

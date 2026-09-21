@@ -27,6 +27,15 @@
  * to answer exactly as they do against the real one. Nothing under
  * C:\Claude\community-bus-maps is read, written or checked out.
  *
+ * AND SINCE 2026-09-21 IT COVERS THE FIXTURE COPY TOO (buses-data OA-419). The
+ * portal vendors two things out of two different repositories: the ENGINE, from
+ * the skill tree, and buses-data's GATE FIXTURES, under `gate-fixtures/`. The
+ * board asked the first and not the second, so a re-stamp that recut an area
+ * fixture read exit 0 on the laptop and went red on the next push to buses-data —
+ * the repository that bills. The same three trees, the same one decision, and the
+ * last three cases below are that day: in step, BEHIND, and the branch-only
+ * re-vendor that made two instruments disagree in the same ten minutes.
+ *
  * THE PAIR THAT IS THE ROW. Case 2 puts a STALE file in the checkout while
  * `origin/main` is current, and requires the board to stay GREEN and to name the
  * branch it did not read; case 6 does the population half, adding an unlisted .js
@@ -74,6 +83,16 @@ function manifest(files) {
   }, null, 2);
 }
 
+/* The fixture the OA-419 cases move. One file is enough: the claim under test is
+ * about WHICH TREE is compared, not about how many files differ, and a second
+ * file would only make the assertions longer. The town name is deliberately not a
+ * real one, so a case can never accidentally read the estate. */
+const VENDORED_FIXTURE_DIR = 'gate-fixtures';
+const FIXTURE_TOWN = 'Harness Town';
+const FIXTURE_FILE = 'complexity.json';
+const FIXTURE_CURRENT = '{"labels": 2}\n';
+const FIXTURE_OLD = '{"labels": 1}\n';
+
 const VENDORED = [
   { path: 'qr.js', kind: 'vendored', source: SOURCE_A, vendoredOn: '2026-08-31' },
   { path: 'place/line_endings.js', kind: 'vendored', source: SOURCE_B, vendoredOn: '2026-08-31' },
@@ -102,10 +121,24 @@ function commitAged(dir, message, ageHours) {
 function portalRepo({ mainStale = false, branch = null, branchStale = false,
                       unlistedOnMain = false, unlistedOnBranch = false,
                       worktreeCurrent = false, noGit = false,
-                      revendorRef = null, revendorAgeHours = 0, revendorStale = false } = {}) {
+                      revendorRef = null, revendorAgeHours = 0, revendorStale = false,
+                      fixtureOnMain = null, fixtureOnBranch = null } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
   fs.mkdirSync(path.join(engine, 'place'), { recursive: true });
+
+  /* THE VENDORED FIXTURE COPY (buses-data OA-419). The same three trees as the
+   * engine rows above, about a different file: `gate-fixtures/` holds this
+   * repository's copy of buses-data's `_portal-fixture` folders, and buses-data's
+   * own gates.yml asks whether it has fallen behind by checking this repository
+   * out at its DEFAULT BRANCH. So a re-vendor sitting on a branch is not an
+   * answer, and the only reading that predicts the push is the ref's. */
+  const fixtureFile = path.join(dir, VENDORED_FIXTURE_DIR, 'Areas', '_portal-fixture', FIXTURE_TOWN, FIXTURE_FILE);
+  const writeFixture = (body) => {
+    if (body === null) return;
+    fs.mkdirSync(path.dirname(fixtureFile), { recursive: true });
+    fs.writeFileSync(fixtureFile, body);
+  };
 
   const current = (rel) => fs.readFileSync(path.join(SKILL_ROOT, rel));
   const stale = (rel) => Buffer.concat([current(rel), Buffer.from('\n// a line the source does not have\n')]);
@@ -120,13 +153,14 @@ function portalRepo({ mainStale = false, branch = null, branchStale = false,
     else if (fs.existsSync(extra)) fs.rmSync(extra);
   };
 
-  if (noGit) { writeTree({ staleA: mainStale, unlisted: unlistedOnMain }); return dir; }
+  if (noGit) { writeTree({ staleA: mainStale, unlisted: unlistedOnMain }); writeFixture(fixtureOnMain); return dir; }
 
   git(dir, ['init', '--quiet']);
   git(dir, ['config', 'user.email', 'harness@example.invalid']);
   git(dir, ['config', 'user.name', 'prove-red-portal-drift']);
   git(dir, ['checkout', '--quiet', '-b', 'main']);
   writeTree({ staleA: mainStale, unlisted: unlistedOnMain });
+  writeFixture(fixtureOnMain);
   git(dir, ['add', '-A']);
   git(dir, ['commit', '--quiet', '-m', 'the state of origin/main']);
 
@@ -139,6 +173,7 @@ function portalRepo({ mainStale = false, branch = null, branchStale = false,
   if (branch) {
     git(dir, ['checkout', '--quiet', '-b', branch]);
     writeTree({ staleA: branchStale, unlisted: unlistedOnBranch });
+    writeFixture(fixtureOnBranch);
     git(dir, ['add', '-A']);
     git(dir, ['commit', '--quiet', '-m', 'the state of the feature branch']);
   }
@@ -175,6 +210,18 @@ function portalRepo({ mainStale = false, branch = null, branchStale = false,
  * tree with maps in it would let a byte gate answer for the vendoring row. */
 function emptyBuses() {
   return scratchDir('prove-red-portal-drift-buses-');
+}
+
+/* A Buses tree holding ONE fixture file and no maps, for the OA-419 cases. It is
+ * not `Areas/<town>/` — `_portal-fixture` is the folder the portal vendors and
+ * findTowns() skips names beginning with an underscore, so this adds a fixture to
+ * compare and still no map that could colour the board. */
+function busesWithFixture(body) {
+  const dir = scratchDir('prove-red-portal-drift-buses-fixture-');
+  const f = path.join(dir, 'Areas', '_portal-fixture', FIXTURE_TOWN, FIXTURE_FILE);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, body);
+  return dir;
 }
 
 function board(busesDir, portalDir, statusPath = STATUS, extra = []) {
@@ -368,6 +415,68 @@ const CASES = [
     },
     what: 'the fallback is allowed, and it must SAY it read a working tree',
   },
+
+  /* ---- the VENDORED FIXTURE copy (buses-data OA-419) ---------------------
+   * The three cases below are about `gate-fixtures/`, not about `engine/`. On
+   * 2026-09-21 a nine-town re-stamp recut `Areas/_portal-fixture/St Ives`, the
+   * board read exit 0, and the push went red on buses-data's own gates.yml step
+   * *The portal's vendored fixtures are in step with this repository* — one
+   * billed run, in the one repository that bills. The middle case is that day. */
+  {
+    label: 'control: the portal has vendored the current fixture',
+    make: { fixtureOnMain: FIXTURE_CURRENT },
+    buses: () => busesWithFixture(FIXTURE_CURRENT),
+    expect: 0,
+    also: (json) => {
+      const v = json.portalFixtureVendoring;
+      if (!v) return 'the board did not report on the vendored fixtures at all';
+      if (v.status !== 'in step') return 'a matching fixture read ' + v.status + ': ' + JSON.stringify(v.behind);
+      return null;
+    },
+    what: 'a fixture in step must read green, or the BEHIND below proves nothing',
+  },
+  {
+    label: 'THE ROW: buses-data recut the fixture and nobody re-vendored',
+    make: { fixtureOnMain: FIXTURE_OLD },
+    buses: () => busesWithFixture(FIXTURE_CURRENT),
+    /* GREEN ON PURPOSE. This is a CHORE under OA-396: the artwork is right and
+     * only the next push is blocked, so the board must SAY it and must not go
+     * red. A case expecting exit 1 here would be asking for the thing that rule
+     * exists to stop. */
+    expect: 0,
+    also: (json) => {
+      const v = json.portalFixtureVendoring;
+      if (!v) return 'the board did not report on the vendored fixtures at all';
+      if (v.status !== 'BEHIND') return 'a fixture the portal has not re-vendored read ' + v.status;
+      const hit = (v.behind || []).find((b) => String(b.file).includes(FIXTURE_FILE));
+      if (!hit) return 'BEHIND, but it did not name the file: ' + JSON.stringify(v.behind);
+      if (hit.state !== 'differs') return 'the file was named as ' + hit.state + ', wanted differs';
+      return null;
+    },
+    what: 'the 2026-09-21 red, predicted for free instead of bought at a push',
+  },
+  {
+    /* THE DISCRIMINATOR. This is the state the laptop was actually in that
+     * morning: `npm run fixtures:vendor` said `in step` while CI said six files
+     * BEHIND, minutes apart, about the same two commits — because the script
+     * compares working tree against working tree and a session had already
+     * applied the re-vendor on a branch. Both readings were right about
+     * different questions, and only the ref's answers *will the next push go
+     * red*. It is also the case the self-falsification below requires to fail. */
+    label: 'the re-vendor is on a BRANCH and origin/main is still behind',
+    make: { fixtureOnMain: FIXTURE_OLD, branch: 'vendor/area-fixture', fixtureOnBranch: FIXTURE_CURRENT },
+    buses: () => busesWithFixture(FIXTURE_CURRENT),
+    expect: 0,
+    also: (json) => {
+      const v = json.portalFixtureVendoring;
+      if (!v) return 'the board did not report on the vendored fixtures at all';
+      if (v.status !== 'BEHIND') return 'the board judged the CHECKOUT, not the ref: it read ' + v.status;
+      if (!v.source || v.source.ref !== 'origin/main') return 'the board did not read origin/main: ' + JSON.stringify(v.source);
+      if (v.source.branch !== 'vendor/area-fixture') return 'the board did not name the branch it declined to read: ' + JSON.stringify(v.source);
+      return null;
+    },
+    what: 'a fix on a branch is not an answer to whether the push goes red',
+  },
 ];
 
 const kept = [];
@@ -378,7 +487,7 @@ const kept = [];
  * only in which tree was read — a fact no exit code carries. */
 function runCase(c, statusPath = STATUS) {
   const portal = portalRepo(c.make);
-  const buses = emptyBuses();
+  const buses = c.buses ? c.buses() : emptyBuses();
   kept.push(portal, buses);
   const { code, json } = board(buses, portal, statusPath, c.args || []);
   const wantRed = c.expect !== 0;
@@ -404,8 +513,26 @@ function runCase(c, statusPath = STATUS) {
  * it, and nothing else in this project can tell those two states apart. So the
  * harness falsifies ITSELF: it re-runs those two against the old behaviour and
  * requires both to fail. If a later edit makes them pass under `ref = null` they
- * have stopped testing the thing they are named for, and this says so. */
-function regressedStatus() {
+ * have stopped testing the thing they are named for, and this says so.
+ *
+ * SINCE OA-419 THERE ARE TWO MUTATIONS, one per block, and each is the same
+ * decision written twice: read a NAMED REF, or read whatever is on this disk.
+ * They are separate strings rather than one global replace because `portalDrift()`
+ * and `portalFixtureVendoring()` both open with `const ref = source && source.ref`
+ * and a replace that hit the wrong one would mutate a block the case does not
+ * name — which is the shape of a harness that goes red for a reason of its own. */
+const MUTATION_OA200 = {
+  find: '  const ref = source && source.ref;\n',
+  replace: '  const ref = null; // MUTATED by prove-red-portal-drift.js: the pre-OA-200 reading\n',
+  why: 'portalDrift() no longer picks its ref from portalSource()',
+};
+const MUTATION_OA419 = {
+  find: '  const ref = source && source.ref;   // the ref CI checks out, never this laptop\'s disk',
+  replace: '  const ref = null; // MUTATED by prove-red-portal-drift.js: the pre-OA-419 reading, the DISK',
+  why: 'portalFixtureVendoring() no longer picks its ref from portalSource()',
+};
+
+function regressedStatus(mutations = [MUTATION_OA200]) {
   const root = scratchDir('prove-red-portal-drift-engine-');
   const dst = path.join(root, 'assets');
   fs.mkdirSync(dst, { recursive: true });
@@ -419,9 +546,7 @@ function regressedStatus() {
     if (!src.includes(find)) throw new Error('prove-red-portal-drift: ' + why + ' — re-point this file at whatever replaced `' + find.trim() + '`.');
     src = src.replace(find, replace);
   };
-  edit('  const ref = source && source.ref;',
-       '  const ref = null; // MUTATED by prove-red-portal-drift.js: the pre-OA-200 reading',
-       'portalDrift() no longer picks its ref from portalSource()');
+  for (const m of mutations) edit(m.find, m.replace, m.why);
   /* AND THE SKILL ROOT, WHICH IS NOT DECORATION. status.js derives it from its own
    * location, so a copy running out of the OS temp dir resolves every manifest
    * `source` to a path that does not exist and every row reads MISSING. The first
@@ -471,7 +596,34 @@ for (const sub of REGRESSION_SUBJECTS) {
 }
 if (!KEEP) fs.rmSync(inj.root, { recursive: true, force: true });
 
-const TOTAL = CASES.length + REGRESSION_SUBJECTS.length;
+/* THE SAME SELF-FALSIFICATION FOR THE FIXTURE BLOCK (OA-419). Its discriminating
+ * case is the branch-only re-vendor, for the same reason as the engine one above:
+ * every other fixture case would go the same way whichever tree was read, and
+ * requiring them to fail would be requiring the wrong thing. Under the disk
+ * reading the branch's copy answers and the block reads `in step` — which is
+ * exactly what the bare `fixtures:vendor` said on the laptop that morning while
+ * CI was red. The assertion is on the WORD, not on the colour: this block never
+ * changes the exit code, so a harness reading the exit code alone could not tell
+ * the two readings apart at all. */
+const FIXTURE_REGRESSION = 'the re-vendor is on a BRANCH and origin/main is still behind';
+{
+  const c = CASES.find((x) => x.label === FIXTURE_REGRESSION);
+  if (!c) throw new Error('prove-red-portal-drift: no case named "' + FIXTURE_REGRESSION + '" — the self-falsification list is out of date.');
+  const injF = regressedStatus([MUTATION_OA419]);
+  const r = runCase(c, injF.statusPath);
+  const got = r.json && r.json.portalFixtureVendoring ? r.json.portalFixtureVendoring.status : '(no JSON)';
+  const rightReason = !r.ok && got === 'in step';
+  if (!rightReason) failed++;
+  rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes red' : 'RED, WRONG CAUSE',
+    'with OA-419 removed: ' + c.label,
+    'the fixture block read ' + got + ' (wanted in step)',
+    r.ok ? 'THIS CASE NO LONGER TESTS WHICH TREE WAS READ'
+      : rightReason ? 'the case discriminates: the disk reading calls it in step'
+      : 'wrong for a reason that is not the disk reading']);
+  if (!KEEP) fs.rmSync(injF.root, { recursive: true, force: true });
+}
+
+const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 1;
 const w = [14, 62, 46];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
@@ -482,5 +634,6 @@ if (failed) {
 } else {
   console.log('\nall ' + TOTAL + ' cases behaved as claimed: the verdict is about a named ref, it still goes red when that ref is stale, '
     + 'a local re-vendor that has not merged reads PENDING rather than green, the population follows the ref too, a portal with no git says so, '
+    + 'the VENDORED FIXTURE copy is read off the same ref and says BEHIND without going red, '
     + 'and both tree-reading cases go red the moment OA-200 is taken back out.');
 }

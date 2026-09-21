@@ -93,7 +93,7 @@ def scratch_repo(name, stamp=True):
     lines = ["#!/bin/sh", "set -e"]
     if stamp:
         lines.append('"{}" "{}" --staged --policy "{}" --quiet'.format(py, str(DOCSTAMP).replace("\\", "/"), str(pol).replace("\\", "/")))
-    lines.append('"{}" "{}" --staged || {{ echo "pre-commit: refused -- a staged stamp does not describe its content"; exit 1; }}'.format(py, str(AUDIT).replace("\\", "/")))
+    lines.append('"{}" "{}" --staged --policy "{}" || {{ echo "pre-commit: refused -- a staged stamp does not describe its content"; exit 1; }}'.format(py, str(AUDIT).replace("\\", "/"), str(pol).replace("\\", "/")))
     hook = hooks / "pre-commit"
     hook.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     os.chmod(hook, 0o755)
@@ -234,6 +234,41 @@ git(repo, "add", "docs/c.md")
 r = run([sys.executable, str(DOCSTAMP), "--staged", "--policy", str(pol), "--dry-run"], repo)
 check("exit 0 and 'dry run' in the summary", r.returncode == 0 and "dry run" in r.stdout, r.stdout + r.stderr)
 check("the index blob is untouched", "docstamp" not in run(["git", "show", ":docs/c.md"], repo).stdout)
+
+print("\n9. A LINKED WORKTREE gets its root's exclusions from the audit too (the 2026-09-21 portal refusal)")
+# The audit used to place a repository by its path or its folder name, and a linked
+# worktree has neither -- so it audited with NO exclusions, while the stamper, which
+# places through `git rev-parse --git-common-dir`, correctly left `_archive` alone.
+# A merge in a portal worktree was refused over docs/_archive/GO-LIVE.md. The worktree
+# here lives OUTSIDE the root, under a name no checkoutDirNames lists, so only the
+# common-dir can place it.
+repo3, pol3 = scratch_repo("wtmain", stamp=False)
+write(repo3, "docs/seed.md", stamped_doc)
+git(repo3, "add", "docs/seed.md")
+git(repo3, "commit", "-q", "-m", "seed", "--", "docs/seed.md")
+# The hooks folder is untracked, so a relative core.hooksPath would find nothing in
+# the linked tree; point it at the main checkout's copy by absolute path.
+git(repo3, "config", "core.hooksPath", str(repo3 / ".githooks").replace("\\", "/"))
+wt = pathlib.Path(tempfile.mkdtemp(prefix="prove-staged-linked-")) / "a-name-nobody-listed"
+r = git(repo3, "worktree", "add", "-q", "-b", "side", str(wt))
+check("the linked worktree was created", r.returncode == 0 and wt.is_dir(), r.stdout + r.stderr)
+stale_doc = stamped_doc.replace("First body.", "Edited after its stamp was written.")
+write(wt, "_archive/x.md", stale_doc)
+git(wt, "add", "_archive/x.md")
+c = git(wt, "commit", "-q", "-m", "archive a stale-stamped doc", "--", "_archive/x.md")
+check("a stale stamp under _archive, committed IN THE WORKTREE, is accepted (out of scope)", c.returncode == 0, (c.stdout + c.stderr)[-400:])
+write(wt, "docs/y.md", stale_doc)
+git(wt, "add", "docs/y.md")
+c = git(wt, "commit", "-q", "-m", "a stale in-scope doc", "--", "docs/y.md")
+out = c.stdout + c.stderr
+check("the control: the same stale stamp OUTSIDE _archive in the same worktree is refused", c.returncode != 0 and "docs/y.md" in out, out[-400:])
+git(wt, "reset", "-q", "--", "docs/y.md")
+
+print("\n10. An audit that can place no root SAYS so, instead of silently auditing with no exclusions")
+write(other, "_archive/z.md", stale_doc)
+git(other, "add", "_archive/z.md")
+r = run([sys.executable, str(AUDIT), "--staged", "--policy", str(pol)], other)
+check("the unplaced repository's audit names the fallback", "NO exclusions" in (r.stdout + r.stderr), (r.stdout + r.stderr)[-400:])
 
 print()
 if failures:

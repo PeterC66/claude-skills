@@ -24,17 +24,17 @@ Until that day a hook ran at the end of every Claude session turn and stamped wh
 
 ## What is covered
 
-**84 documents** across three folders:
+Three folders:
 
-| Folder | How many | What |
-|---|---|---|
-| `C:\u3a St Ives\Using AI\Buses` | 46 | 40 Markdown — 17 development plans and handoffs, 7 BusMapsUK business documents, 6 in `Documentation`, the area and place READMEs, the two top-level `README - How to …` guides — plus all 6 PowerPoint decks |
-| `C:\Claude\community-bus-maps` | 31 | The 21 documents in `docs\` (handbook, runbooks, policies), README, CLAUDE.md, CHANGELOG and the rest of the repo root, the engine READMEs |
-| `C:\Claude\community-bus-maps-ops` | 7 | The local-only operations notes |
+| Folder | What |
+|---|---|
+| `C:\u3a St Ives\Using AI\Buses` | Markdown — development plans and handoffs, the BusMapsUK business documents, `Documentation`, the area and place READMEs, the top-level `README - How to …` guides — plus the PowerPoint decks |
+| `C:\Claude\community-bus-maps` | The documents in `docs\` (handbook, runbooks, policies), README, CLAUDE.md, CHANGELOG and the rest of the repo root, the engine READMEs |
+| `C:\Claude\community-bus-maps-ops` | The local-only operations notes |
 
 Only Markdown and PowerPoint. Word, Excel, HTML and PDF are deliberately not covered.
 
-To see the current figure rather than trusting this one, run `python scripts/docstamp.py --list`.
+This page gives no count on purpose: a typed total is wrong by the time it is read. For the current list, run `python scripts/docstamp.py --list --all-roots` from `stamp-docs` — this skill's folder — with no placeholders.
 
 **Generated files are deliberately left alone.** The bus-leaflet stage folders already record their own version and date in the folder name (`S4-generate/v1.3_2026-07-19_0517`), the audit and verification reports stamp themselves as they are written, and the portal's finished map sheets are checked byte-for-byte against a reference — stamping any of those would do damage rather than good.
 
@@ -44,11 +44,11 @@ To see the current figure rather than trusting this one, run `python scripts/doc
 
 **Archived and duplicated documents are left alone too.** `Development Docs\_archive` holds superseded plans kept as a record, so there is nothing for a version stamp to describe. And anything inside a git worktree or a `scratch` folder is skipped, because a worktree is a second copy of the whole repo — without that exclusion, 49 of what looked like 141 documents were duplicates of the other 92, and generated reports were getting stamped there that the policy excludes everywhere else. **Until 4 September 2026 that exclusion was on one root of three**, so the portal root was still walking 60 duplicates and two sessions running the tool at once stamped each other’s work in progress. The rule now lives once, in `baselineExcludeDirNames`, and every root inherits it.
 
-**Which left the session working IN a worktree with no way to stamp its own documents, and `--checkout` is it** (12 September 2026). The exclusion above is about ownership, not about worktrees being worthless — so the answer is not to go looking for them again but to let you name the one you are in. `docstamp.py --all --checkout .` retargets a single root at that directory and walks that checkout alone; it finds which root by asking git for the main checkout behind the worktree, so nothing needs configuring and the directory can be called anything. Before it existed the way through was to copy the policy file, edit the root's path and pass `--policy` — which works, and is the kind of thing that quietly becomes the way it is done. **If it cannot work out which root a directory belongs to it stops rather than stamping it**, because this tool writes: an unplaceable tree stamped "with no exclusions" would edit exactly the files the policy exists to protect. `--root NAME` is the way past, and the refusal says so.
+**A session working IN a worktree needs to do nothing.** The pre-commit hook stamps the commit in front of it wherever it is made, and finds the worktree's root by asking git for the main checkout behind it, so the directory can be called anything.
 
-**And the sentence four paragraphs up — "two sessions running the tool at once stamped each other's work in progress" — named the symptom and the wrong cause, which is why it happened again on 13 September 2026** (buses-data OA-333). That was read as a WORKTREE problem and fixed as one, by moving the duplicate-tree exclusion into the baseline. The real mechanism was that scope had nothing to do with where you were standing: every invocation but `--checkout` walked all three roots, so a session in one repository wrote into the others whatever it did about worktrees. It recurred exactly as before — two sessions, in different repositories, rewriting each other's uncommitted files within an hour, and the Stop hook running the same estate-wide walk unasked after every turn. **A run now walks only the root containing the working directory**, `--all-roots` asks for the old behaviour by name, and every run prints the scope it chose. Measured on the day: 169 documents for `buses`, 31 for `portal`, 8 for `ops`, 208 for a bare run — so a portal session running the documented command had been touching 177 documents in two repositories it was not working in, and the tree it was standing in was 15% of the total.
+**And the sentence four paragraphs up — "two sessions running the tool at once stamped each other's work in progress" — named the symptom and the wrong cause, which is why it happened again on 13 September 2026** (buses-data OA-333). That was read as a WORKTREE problem and fixed as one, by moving the duplicate-tree exclusion into the baseline. The real mechanism was that scope had nothing to do with where you were standing: every invocation but `--checkout` walked all three roots, so a session in one repository wrote into the others whatever it did about worktrees. It recurred exactly as before — two sessions, in different repositories, rewriting each other's uncommitted files within an hour. **A run now walks only the root containing the working directory**, `--all-roots` asks for the old behaviour by name, and every run prints the scope it chose.
 
-**`checkoutDirNames` is read by the auditor, not the stamper, and that is not an oversight.** It answers "what is this repository called when it is checked out somewhere else" for `check_committed_stamps.py`, whose problem is a CI path no root can match. The stamper reaches the same answer through git instead, which is stronger — a name list can only recognise the names somebody thought of.
+**`checkoutDirNames` is the last resort, not the first.** It answers "what is this repository called when it is checked out somewhere else" for a CI path no root can match. Before it, both tools ask git for the main checkout behind the directory, which recognises any worktree whatever its name — and since 21 September 2026 they ask through one shared function, because on that day the auditor's own copy of the question, which lacked the git step, refused a merge in a portal worktree over an archived document the stamper had rightly left alone.
 
 ## Keeping the Markdown tidy
 
@@ -76,16 +76,14 @@ It cannot put wrapping back. There is no undo beyond your own version control.
 
 ## For whoever maintains this
 
-The tools are `scripts/docstamp.py` (stamping, hook-driven), `scripts/reflow_md.py` (Markdown paragraphs, hand-run) and `scripts/check_committed_stamps.py` (audits what is in `HEAD`, not on disk); scope lives in `stamp-policy.json` and all three honour it; `SKILL.md` has the commands, the design, and the gotchas. To check the current state of everything, run these two from `stamp-docs` — no placeholders:
+The tools are `scripts/docstamp.py` (stamping, run by the pre-commit hook), `scripts/reflow_md.py` (Markdown paragraphs, hand-run) and `scripts/check_committed_stamps.py` (audits what is in `HEAD`, not on disk); scope lives in `stamp-policy.json` and all three honour it; `SKILL.md` has the commands, the design, and the gotchas. To check the current state of everything, run these two from `stamp-docs` — no placeholders:
 
 ```bash
 python scripts/docstamp.py --check
 python scripts/check_committed_stamps.py
 ```
 
-Run both from `~/.claude/skills/stamp-docs`. Neither takes an argument: the roots come from `stamp-policy.json`. **Since 2026-08-27 the second one also runs in CI**, from `buses-data`'s `.github/workflows/gates.yml`, which checks this repository out as a fourth checkout and passes the two pushed roots explicitly. So a docstamp that is wrong in `main` is now caught by a machine rather than by somebody happening to run the checker — which is how the last three were found. The third policy root, `community-bus-maps-ops`, is never pushed and is deliberately left out of the CI invocation.
-
-**If you edit a stamped document and commit in the same turn, run `python scripts/docstamp.py --all` first** and commit the stamp with the content. The stamping hook runs at the *end* of the turn, so otherwise it leaves a stamp-only change behind for you to ship separately.
+Neither needs an argument: `stamp-docs` sits inside no policy root, so from there both cover every root in `stamp-policy.json` (the first says so on stderr). **The second also runs in CI**, from `buses-data`'s `.github/workflows/gates.yml`, over the two pushed roots named explicitly; the third policy root, `community-bus-maps-ops`, is never pushed and is deliberately left out.
 
 One lesson worth keeping, from 18 August 2026: `check_committed_stamps.py` reported 16 portal documents as having stale committed stamps, with per-file hashes, and that claim sat in `SKILL.md` as a known problem for a day. All 16 were fine — the tool was mishandling a byte-order mark and every BOM-carrying file failed. Acting on it would have meant 16 needless version bumps in a public repo. **Reproduce one failing case by hand before acting on a batch a tool reports.**
 

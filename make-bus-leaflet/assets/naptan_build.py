@@ -187,8 +187,17 @@ def derive_position(row):
     return None, None, None
 
 
-def derive_stand(indicator):
-    """(stand, stand_kind) for an Indicator, or (None, None) if it is not a stand code."""
+def derive_stand(indicator, bearing=None):
+    """(stand, stand_kind) for an Indicator, or (None, None) if it is not a stand code.
+
+    `bearing` is the same row's own Bearing column, when the caller has it.
+    `BARE_RE` accepts a bare one- or two-letter code with no word in front of
+    it -- right for London's stop letters, and, character for character, the
+    shape of a compass bearing. A bare code identical to the row's own Bearing
+    is a bearing that leaked into Indicator, not a stop letter, and is reported
+    as not-a-stand rather than invented as one -- OA-372. With no bearing to
+    compare against, the ambiguity is unresolved and the bare code stands.
+    """
     ind = (indicator or "").strip()
     if not ind:
         return None, None
@@ -196,7 +205,11 @@ def derive_stand(indicator):
     if m:
         return m.group(2).upper(), m.group(1).lower()
     if BARE_RE.match(ind):
-        return ind.upper(), "bare"
+        code = ind.upper()
+        brg = (bearing or "").strip().upper()
+        if brg and code == brg:
+            return None, None
+        return code, "bare"
     return None, None
 
 
@@ -291,7 +304,7 @@ def insert_csv(con, text, seen):
         if not atco or atco in seen:
             continue
         seen.add(atco)
-        stand, kind = derive_stand(row.get("Indicator"))
+        stand, kind = derive_stand(row.get("Indicator"), row.get("Bearing"))
         lat, lon, src = derive_position(row)
         vals = [(row.get(c) or "").strip() or None for c in COLUMNS]
         batch.append(tuple(vals) + (stand, kind, atco[:3], lat, lon, src))

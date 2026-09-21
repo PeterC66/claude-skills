@@ -19,8 +19,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { classify, selectPois, sameThing, unnamed, CATEGORY_LABELS, printsName } =
-  require('./_engine.js').load('poi_select.js');
+const { classify, selectPois, sameThing, unnamed, CATEGORY_LABELS, printsName,
+        culledAfterTiers, culledAfterTiersNote } = require('./_engine.js').load('poi_select.js');
 
 const node = (lat, lon, tags) => ({ lat, lon, tags });
 
@@ -591,5 +591,118 @@ test('OA-338: sameThing is symmetric, and a different category is never the same
   const b = { cat: 'shop', name: 'Tesco Extra', ll: [52.30035, -0.07] };
   assert.strictEqual(sameThing(a, b), sameThing(b, a));
   assert.strictEqual(sameThing(a, Object.assign({}, b, { cat: 'pharmacy' })), false);
+});
+
+/* ---------------------------------------------------------------------------
+ * OA-250 item 2 — a tier that matched, and was then culled by the sheet.
+ *
+ * NOT COVERED BY THE BYTE GATE, and that is the reason these assertions exist
+ * rather than a preference for them: the whole subject is a place that draws
+ * NOTHING. Delete culledAfterTiers() outright and all fifty committed sheets
+ * still reproduce byte for byte, because the only thing it produces is a line
+ * on stderr about paper that stayed blank. `unknownTierKeys` cannot see it
+ * either — the key matched — and `unplaced.json` cannot, because the label was
+ * never requested. The gap between those two instruments is where High
+ * Wycombe's Library and Museum have been sitting since 2026-09-02.
+ * ------------------------------------------------------------------------- */
+
+// The POI shape applyTiers() hands on: `tierKey` only where the town classified
+// it, and `name` already replaced by any `as`.
+const keptPoi = (cat, name, tierKey, tier) => ({ cat, name, ll: [51.6, -0.75], tierKey, tier });
+
+test('OA-250: a classified place the frame dropped is named, and an unclassified one is not', () => {
+  const kept = [keptPoi('library', 'High Wycombe Library', 'library:High Wycombe Library', 'must'),
+                keptPoi('shop', 'Aldi', null, undefined)];
+  const culled = culledAfterTiers(kept, k => (k === 'library:High Wycombe Library' ? 'core' : null));
+  assert.deepStrictEqual(culled,
+    [{ key: 'library:High Wycombe Library', why: 'core', must: true }],
+    'only the place somebody answered about is owed a sentence');
+});
+
+test('OA-250: a classified place that DID reach the paper is not reported', () => {
+  const kept = [keptPoi('museum', 'Wycombe Museum', 'museum:Wycombe Museum', 'must')];
+  assert.deepStrictEqual(culledAfterTiers(kept, () => null), [],
+    'the whole point is that this warning is silent on a sheet that works');
+});
+
+test('OA-250: `hide` is the customer\'s own answer and is deliberately NOT reported', () => {
+  // The exclusion is the rule, not an oversight. A `hide` override is a sentence
+  // they wrote themselves in a file they can read; the frame and the coreBox are
+  // decisions the engine made about their answer, and only those are owed one.
+  const kept = [keptPoi('shop', 'Morrisons', 'shop:Morrisons', 'must')];
+  assert.deepStrictEqual(culledAfterTiers(kept, () => 'hide'), []);
+  assert.strictEqual(culledAfterTiers(kept, () => 'frame').length, 1,
+    'the same POI culled by the frame instead IS reported');
+});
+
+test('OA-250: the key reported is the one the CUSTOMER wrote, not the renamed one', () => {
+  // `as` replaces the identity inside applyTiers, so by the time a sheet culls a
+  // POI its cat:name is the new string. A message naming that string would send
+  // whoever wrote the answer looking for a key that is not in their config.
+  const renamed = { cat: 'library', name: 'The Library', ll: [51.6, -0.75],
+                    tierKey: 'library:Library', tier: 'may' };
+  const culled = culledAfterTiers([renamed], k => (k === 'library:The Library' ? 'frame' : null));
+  assert.deepStrictEqual(culled, [{ key: 'library:Library', why: 'frame', must: false }],
+    'asked by the CURRENT key, reported under the WRITTEN one');
+});
+
+test('OA-250: two places under one key are ONE row, and it is a must if either was', () => {
+  // High Wycombe carries three Boots. There is still only one answer, written
+  // once, so the customer is owed one sentence — and naming the key three times
+  // would lengthen a message that is already long enough to go unread.
+  const kept = [keptPoi('pharmacy', 'Boots', 'pharmacy:Boots', 'may'),
+                keptPoi('pharmacy', 'Boots', 'pharmacy:Boots', 'must'),
+                keptPoi('pharmacy', 'Boots', 'pharmacy:Boots', 'may')];
+  assert.deepStrictEqual(culledAfterTiers(kept, () => 'core'),
+    [{ key: 'pharmacy:Boots', why: 'core', must: true }]);
+});
+
+test('OA-250: the musts come first, and the order is stable within a tier', () => {
+  const kept = [keptPoi('shop', 'Aldi', 'shop:Aldi', 'may'),
+                keptPoi('library', 'Library', 'library:Library', 'must'),
+                keptPoi('shop', 'Lidl', 'shop:Lidl', 'may'),
+                keptPoi('museum', 'Museum', 'museum:Museum', 'must')];
+  const culled = culledAfterTiers(kept, () => 'core');
+  assert.deepStrictEqual(culled.map(c => c.key),
+    ['library:Library', 'museum:Museum', 'shop:Aldi', 'shop:Lidl'],
+    'a build message is read by a person, and the musts are what they answered hardest');
+});
+
+test('OA-250: the message is silent on a sheet that culled nothing', () => {
+  assert.strictEqual(culledAfterTiersNote([]), '',
+    'a build that says nothing is a build where the answers all landed');
+});
+
+test('OA-250: the message caps the list at six and counts the rest, musts named first', () => {
+  // High Wycombe culls 31 keys. A line naming all of them is a paragraph nobody
+  // reads, with the three that matter buried in it.
+  const rows = Array.from({ length: 31 }, (_, i) =>
+    ({ key: 'shop:S' + i, why: 'core', must: i < 3 }));
+  const note = culledAfterTiersNote(rows);
+  assert.match(note, /^poi\.tiers: 31 classified places matched a key and then fell off this sheet — 3 of them a "must": /);
+  assert.match(note, /, and 25 more\./, 'the tail is counted, not printed');
+  assert.strictEqual((note.match(/"shop:S\d+"/g) || []).length, 6, 'exactly six are named');
+  assert.match(note, /"shop:S0" \(inside the blank coreBox, a "must"\)/);
+  assert.ok(!note.includes('"shop:S6"'), 'the seventh is inside the count, not the list');
+});
+
+test('OA-250: the message says which of the two decisions dropped the place', () => {
+  assert.match(culledAfterTiersNote([{ key: 'shop:Aldi', why: 'frame', must: false }]),
+    /"shop:Aldi" \(outside the frame\)/);
+  assert.match(culledAfterTiersNote([{ key: 'shop:Aldi', why: 'core', must: false }]),
+    /"shop:Aldi" \(inside the blank coreBox\)/);
+});
+
+test('OA-250: applyTiers stamps tierKey, and only where the town classified the place', () => {
+  // The property the test above depends on, asserted against the real chain
+  // rather than against the hand-built shape.
+  const els = [[node(51.61, -0.75, { amenity: 'library', name: 'Hazlemere Library' }),
+                node(51.62, -0.75, { shop: 'supermarket', name: 'Aldi' })]];
+  const kept = selectPois(els, { tiers: { 'library:Hazlemere Library': { tier: 'must', as: 'Library' } } });
+  const byCat = Object.fromEntries(kept.map(p => [p.cat, p]));
+  assert.strictEqual(byCat.library.name, 'Library', 'the rename landed');
+  assert.strictEqual(byCat.library.tierKey, 'library:Hazlemere Library', 'and the written key survived it');
+  assert.strictEqual(byCat.library.tier, 'must');
+  assert.strictEqual(byCat.shop.tierKey, undefined, 'nobody classified the Aldi');
 });
 

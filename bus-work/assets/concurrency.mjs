@@ -1066,6 +1066,20 @@ export function needsOf(item) {
   // row saying finished work is invisible to everyone but this laptop must not
   // be the one hidden from a session looking for something safe to do.
   if (key.startsWith('unpushed-branch-')) return [];
+  // OA-326 item 1 (2026-09-21): the pull-request sweep's two loud rows. Merging
+  // a pull request, closing it, or opening one for a branch that has never had
+  // one happens in a browser or in `gh`; none of it writes to a working tree
+  // here, and whatever REVIEWING that branch turns out to need belongs to the
+  // row that review becomes. Empty for the same load-bearing reason as
+  // `ci-red-`, `loop-hold-` and `unpushed-branch-`: --safe-only hides every
+  // non-SAFE row, and a row saying finished work has been sitting open for
+  // three weeks must not be the one hidden from a session looking for
+  // something safe to do.
+  if (key.startsWith('pr-sweep-stalled-') || key.startsWith('pr-sweep-no-pr-')) return [];
+  // The other two are the sweep's own housekeeping, and they are NOT empty: the
+  // action they offer is `node pr_sweep.mjs`, which writes loop/pr-sweep.json
+  // into the buses tree. Nothing it does needs the engine.
+  if (key === 'pr-sweep-due' || key === 'pr-sweep-record') return ['buses-tree'];
   // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
   // rather than left to fall through the default — the row's own action WRITES to
   // the buses tree twice over. `directory.mjs --links` writes link-check.json, and

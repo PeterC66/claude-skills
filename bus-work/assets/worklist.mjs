@@ -83,6 +83,7 @@ import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
+import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
@@ -998,6 +999,14 @@ const stranded = unpushedBranchItems({
 for (const it of stranded.items) add(it);
 for (const n of stranded.notes) warnings.push(n);
 for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name} could not be read — ${u.why}`);
+
+// AND THE HALF THAT ROW SAYS IT DOES NOT ASK (OA-326 item 1, 2026-09-21): whether
+// a PUSHED branch has a pull request, and whether one has sat open for weeks.
+// IT OPENS NO SOCKET — `node pr_sweep.mjs` writes loop/pr-sweep.json and this only
+// reads it, the directory sweep's shape. The argument is in pr_sweep.mjs's header.
+const prSweep = prSweepItems({ state: readPrSweep(path.join(BUSES, 'loop')), assetsDir: HERE });
+for (const it of prSweep.items) add(it);
+for (const n of prSweep.notes) warnings.push(n);
 
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
 // the last one with no reader: `loop/your-move/` says these items need you and

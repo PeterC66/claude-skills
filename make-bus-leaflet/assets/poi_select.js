@@ -499,8 +499,13 @@ function culledAfterTiersNote(culled){
     + (musts ? ' — ' + musts + ' of them a "must"' : '') + ': '
     + culled.slice(0,6).map(c => '"'+c.key+'" ('+where(c)+(c.must?', a "must"':'')+')').join(', ')
     + (culled.length>6 ? ', and ' + (culled.length-6) + ' more' : '')
+    /* `coreBox` BARE, with no `design.` in front of it: it is a top-level
+     * routes.json key read through complexity_ladder.js, and the prefixed
+     * spelling invented a 37th design key for the register gate to hunt — which
+     * that gate caught in CI, from inside a string, and then again from inside
+     * the comment that explained the first one. */
     + '. The answer was applied and the sheet still cannot show it. Widen or drop'
-    + ' design.coreBox, widen the frame, or tell whoever classified it that this'
+    + ' the coreBox, widen the frame, or tell whoever classified it that this'
     + ' place is off the edge of the town sheet.';
 }
 

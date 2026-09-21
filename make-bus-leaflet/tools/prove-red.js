@@ -448,6 +448,38 @@ const MUTATIONS = [
     find: "    report.renameCollisions = dup;",
     to: "    report.renameCollisions = [];" },
 
+  /* poi_select.js OA-250 item 2, 2026-09-21 — a tier that matched and was then
+   * culled by the sheet. EVERY ONE OF THESE FIVE IS INVISIBLE TO THE BYTE GATE,
+   * without exception and not merely in degree: the whole subject is a place
+   * that draws nothing. Delete culledAfterTiers() outright and all nine
+   * committed internal sheets still reproduce byte for byte — measured on
+   * 2026-09-21, where the change that added it moved zero bytes on all nine.
+   * These mutations are the entire cover for it. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the tier key is not stamped onto the POI, so a classified place the sheet culls can no longer be named at all - the exact silence OA-250 item 2 is about',
+    find: "    if(explicit(p)){ used.add(k); p.tierKey = k; }",
+    to: "    if(explicit(p)){ used.add(k); }" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the key reported is the RENAMED one, so whoever wrote the answer is sent looking for a key that is not in their config',
+    find: "    else byKey.set(p.tierKey, { key: p.tierKey, why: reason, must: p.tier === 'must' });",
+    to: "    else byKey.set(p.tierKey, { key: p.cat + ':' + p.name, why: reason, must: p.tier === 'must' });" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a `hide` the customer wrote themselves is reported as a fault, so the message cries wolf about the one cull that is an answer working',
+    find: "    if(!reason || reason === 'hide') continue;",
+    to: "    if(!reason) continue;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the musts stop sorting first, so on High Wycombe the three answers that matter fall outside the six the line prints and are never seen',
+    find: "  out.sort((a,b) => (b.must - a.must) || 0);       // stable: insertion order within a tier",
+    to: "  out.sort(() => 0);       // stable: insertion order within a tier" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the tail is printed rather than counted, so the build message becomes the 31-key paragraph the cap exists to prevent',
+    find: "    + culled.slice(0,6).map(c => '\"'+c.key+'\" ('+where(c)+(c.must?', a \"must\"':'')+')').join(', ')",
+    to: "    + culled.map(c => '\"'+c.key+'\" ('+where(c)+(c.must?', a \"must\"':'')+')').join(', ')" },
+
   /* poi_select.js OA-234 and OA-238, landed together 2026-09-04 inside OA-229's
    * rollout. All four failure modes here are SILENCE — a POI that is deleted, one
    * that is drawn when nobody asked, a shared key nobody is told about, and a town

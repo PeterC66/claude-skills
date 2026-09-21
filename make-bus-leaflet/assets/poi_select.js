@@ -396,7 +396,14 @@ function applyTiers(pois, POI, report){
     // No early return on a missing TIERS block any more: the nameless default
     // above has to apply to a town that has classified nothing, and Huntingdon
     // and St Neots — the two the estate loses a symbol on — are exactly that.
-    if(explicit(p)) used.add(k);
+    /* The key is stamped onto the POI as well as counted. `as` REPLACES the
+     * identity two lines below, so a caller holding the kept POI afterwards
+     * cannot reconstruct which answer it came from — and the one thing a caller
+     * has to be able to say about a classified place it then drops is which key
+     * the customer wrote. `tierKey` is that key as they wrote it, before any
+     * rename. It is read by gen_internal.js's culledAfterTiers block (OA-250
+     * item 2) and by nothing else; it is not serialised anywhere. */
+    if(explicit(p)){ used.add(k); p.tierKey = k; }
     const r = ruleFor(p);
     if(r.tier === 'miss') continue;                // never drawn, never reserved
     if(r.as) p.name = r.as;                        // a rename REPLACES the identity
@@ -422,4 +429,79 @@ function applyTiers(pois, POI, report){
   return kept;
 }
 
-module.exports = { classify, selectPois, applyTiers, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName };
+/* A TIER THAT MATCHED AND WAS THEN CULLED BY THE SHEET (OA-250 item 2).
+ *
+ * `report.unknownTierKeys` catches the answer that matched nothing. This is the
+ * opposite and quieter failure: the key DID match a real POI, so it is not
+ * unknown, and the place then never became a label candidate on that sheet, so
+ * it is not in `unplaced.json` either. It falls out between the two, and until
+ * this function existed nothing anywhere said so. High Wycombe is the worked
+ * case: the Library and the Museum were both marked `must` in the chooser on
+ * 2026-09-02 and both sit inside that town's 600 m `coreBox`, which the
+ * geographic sheet leaves blank — so the two places a visitor is most likely to
+ * be walking to are the two the sheet cannot name.
+ *
+ * IT LIVES HERE AND NOT IN THE GENERATOR because the tier key is this module's
+ * fact — `as` replaces the identity, so only `tierKey` still holds the key the
+ * customer wrote — while the reason is the generator's, and is passed in. A
+ * generator supplies `why`: a function from the POI's CURRENT key (after any
+ * rename, which is what a frame test would have been given) to a short reason,
+ * or a falsey value when the place was drawn.
+ *
+ * `hide` IS NOT REPORTED, and that exclusion is the point rather than an
+ * oversight. It is an override the customer wrote themselves, in a file they
+ * can read, saying exactly this: an answer that succeeded. The frame and the
+ * core are decisions the ENGINE made about their answer, and those are the ones
+ * they are owed a sentence about.
+ *
+ * Takes the KEPT list — a `miss` never reaches a sheet at all and its absence is
+ * the answer working, not failing.
+ *
+ * ONE ROW PER KEY, not per POI. Where two places share a key — the collision
+ * item 1 of OA-250 is about — there is still only ONE answer, written once, and
+ * the customer is owed one sentence about it. High Wycombe carries three Boots
+ * and would otherwise name the same key three times in a message already long
+ * enough to go unread. A row is `must` if ANY of the places under that key was.
+ *
+ * SORTED, because a build message is read by a person and `must` is the thing
+ * they answered hardest: the strongest answers first, and stable within that so
+ * the line does not reshuffle between two builds of the same sheet. */
+function culledAfterTiers(kept, why){
+  const byKey = new Map();
+  for(const p of kept){
+    if(!p.tierKey) continue;                       // nobody classified this place
+    const reason = why(p.cat + ':' + p.name);
+    if(!reason || reason === 'hide') continue;
+    const row = byKey.get(p.tierKey);
+    if(row){ row.must = row.must || p.tier === 'must'; }
+    else byKey.set(p.tierKey, { key: p.tierKey, why: reason, must: p.tier === 'must' });
+  }
+  const out = [...byKey.values()];
+  out.sort((a,b) => (b.must - a.must) || 0);       // stable: insertion order within a tier
+  return out;
+}
+
+/* The build message for the rows above, or '' when there are none — here rather
+ * than in the generator because gen_internal.js is the file the line ratchet
+ * holds, and a paragraph of prose about tiers is exactly the growth that rule
+ * exists to push back into a module.
+ *
+ * CAPPED AT SIX, like the unplaced-labels line it sits beside. High Wycombe
+ * culls 31 keys; a message naming all of them is a paragraph nobody reads and
+ * the three that matter are buried in it. The `must`s are sorted first and the
+ * count carries the rest. */
+function culledAfterTiersNote(culled){
+  if(!culled.length) return '';
+  const musts = culled.filter(c=>c.must).length;
+  const where = c => (c.why === 'core' ? 'inside the blank coreBox' : 'outside the frame');
+  return 'poi.tiers: ' + culled.length + ' classified place' + (culled.length>1?'s':'')
+    + ' matched a key and then fell off this sheet'
+    + (musts ? ' — ' + musts + ' of them a "must"' : '') + ': '
+    + culled.slice(0,6).map(c => '"'+c.key+'" ('+where(c)+(c.must?', a "must"':'')+')').join(', ')
+    + (culled.length>6 ? ', and ' + (culled.length-6) + ' more' : '')
+    + '. The answer was applied and the sheet still cannot show it. Widen or drop'
+    + ' design.coreBox, widen the frame, or tell whoever classified it that this'
+    + ' place is off the edge of the town sheet.';
+}
+
+module.exports = { classify, selectPois, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName };

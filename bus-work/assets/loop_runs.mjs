@@ -3,7 +3,7 @@
  * OA-288, 2026-09-09).
  *
  * THE THIRD FACT ABOUT THE LOOP, AND THE ONE NOTHING READ. OA-283 gave
- * `loop/blocked/` a reader and OA-287 gave `loop/LOCK.d` one. Between them they
+ * the holds folder a reader (now `loop/your-move/`) and OA-287 gave `loop/LOCK.d` one. Between them they
  * answer *these items need you* and *a tick is running right now*. Neither
  * answers *the loop has fired four times this morning and done nothing*, and the
  * gap is not a rounding error in the coverage: when the loop is halted there is

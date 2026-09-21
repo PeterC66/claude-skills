@@ -67,7 +67,7 @@ Read-only, safe to run at any time, and safe while the dev server is running (th
 
 **A dirty tree is `CHECK FIRST`, not a delay** — `git status` cannot say whose files those are. **Only two things earn `BETTER TO DELAY`**: an estate-wide sweep while `Areas/`, `Places/` or `ci-reference/` is dirty, and a deliver or deploy while the portal checkout is off `main`. A modified `Correspondence/**/*.md` that a live `loop/your-move/` hold names is **accounted for** and subtracted, and the block prints the subtraction rather than hiding it.
 
-**A count that could not be taken is never a count of zero.** `unpushed UNKNOWN` reads `CHECK FIRST`; a claim made before today is marked `STALE, n day(s) old`, which is a statement about AGE and not about liveness, because this board cannot tell a dead session from an idle one.
+**A count that could not be taken is never a count of zero.** `unpushed UNKNOWN` reads `CHECK FIRST`; a claim made before today is marked `EXPIRED, n day(s) old` — a statement about AGE and not about liveness, because this board cannot tell a dead session from an idle one — and an expired row is free: the board prints the `--claim` that takes it without `--force`, never a release (buses-data OA-400).
 
 **A decision is never held back, and that is the most useful thing on the list.** A publish review, an application, a map-request decision, a chase and a drafted reply touch no working tree, so when everything else says wait, those are what to offer.
 

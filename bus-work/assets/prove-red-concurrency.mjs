@@ -834,7 +834,7 @@ ok(conc.contentions(rows, dirtyTree).length === 1, 'two rows blocked by one thin
   `got ${conc.contentions(rows, dirtyTree).length}`);
 
 // ---------------------------------------------------------------------------
-// 3b. THE STALE-CLAIM MARKER — read off real OA files, judged on AGE
+// 3b. THE EXPIRED-CLAIM MARKER — read off real OA files, judged on AGE
 // ---------------------------------------------------------------------------
 //
 // Deliberately end-to-end rather than over a hand-built claims array. The
@@ -842,7 +842,7 @@ ok(conc.contentions(rows, dirtyTree).length === 1, 'two rows blocked by one thin
 // `selected:` line, and a test that hands formatConditions an object it made
 // itself could not tell you the parser ever produces the field — "the subject
 // you named yourself", and the reason `now` was made injectable above.
-console.log('\n== the stale-claim marker ==');
+console.log('\n== the expired-claim marker ==');
 {
   const busesDir = path.join(root, 'claims-fixture');
   const oa = path.join(busesDir, 'Development Docs', 'open-actions');
@@ -862,11 +862,16 @@ console.log('\n== the stale-claim marker ==');
   action('OA-903', '2026-13-45', 'buses-odd', 'an age nothing can compute');
 
   const b = blockAt(NOW);
-  ok(/OA-902 \(3d\).*<< STALE, 3 day\(s\) old/.test(b), 'a claim made before today is MARKED stale, with its age', b);
-  ok(/OA-901 \(today\)(?!.*STALE)/.test(b), 'CONTROL — a claim made today is printed and NOT marked', b);
-  ok(/OA-903(?!.*STALE)/.test(b), 'CONTROL — an age that would not parse is not marked either', b);
-  ok(/claimed BEFORE TODAY/.test(b) && /assemble\.mjs" --who/.test(b),
-    'and one summary line names the count and the command that can release them', b);
+  ok(/OA-902 \(3d\).*<< EXPIRED, 3 day\(s\) old/.test(b), 'a claim made before today is MARKED EXPIRED, with its age', b);
+  ok(/OA-901 \(today\)(?!.*EXPIRED)/.test(b), 'CONTROL — a claim made today is printed and NOT marked', b);
+  ok(/OA-903(?!.*EXPIRED)/.test(b), 'CONTROL — an age that would not parse is not marked either', b);
+  ok(/claimed BEFORE TODAY/.test(b) && /assemble\.mjs" --claim OA-902 --as /.test(b),
+    'and one summary line names the count and prints the --claim that takes one', b);
+  // OA-400 (R7): an expired claim is FREE — --claim takes it without --force. A
+  // board that still says "release it" sends a session to do a chore that no
+  // longer exists, and contradicts assemble.mjs --who printed beside it.
+  ok(!/releas/i.test(b), 'it never tells anyone to RELEASE an expired claim', b);
+  ok(/without --force/.test(b), 'it says the row is free: --claim takes it without --force', b);
   ok(/an AGE, not a liveness check/.test(b),
     'the summary says it is an AGE — this board cannot tell a dead session from an idle one', b);
   ok((b.match(/claimed BEFORE TODAY/g) || []).length === 1, 'the summary is printed once, not once per stale claim', b);
@@ -875,7 +880,7 @@ console.log('\n== the stale-claim marker ==');
   // was fresh is now stale. Without this, a marker wired to a hardcoded date
   // would pass every case above on the day the fixture was written.
   const later = blockAt(NOW + 2 * 86400000);
-  ok(/OA-901 \(2d\).*<< STALE, 2 day\(s\) old/.test(later), 'two days later the SAME file reads stale — the age is computed, not fixed', later);
+  ok(/OA-901 \(2d\).*<< EXPIRED, 2 day\(s\) old/.test(later), 'two days later the SAME file reads expired — the age is computed, not fixed', later);
   ok(/3 of those were claimed BEFORE TODAY|2 of those were/.test(later), 'and the count moves with it', later);
 
   // MUTATION CONTROL — with nothing old, the summary must be ABSENT. A footer
@@ -886,8 +891,8 @@ console.log('\n== the stale-claim marker ==');
   fs.writeFileSync(path.join(freshOnly, 'Development Docs', 'open-actions', 'OA-904.md'),
     `---\nref: OA-904\nstatus: open\nselected: ${day(0)}, buses-live, today only\n---\n\nbody\n`);
   const clean = blockAt(NOW, freshOnly);
-  ok(/OA-904 \(today\)/.test(clean) && !/STALE/.test(clean) && !/claimed BEFORE TODAY/.test(clean),
-    'CONTROL — no stale claim, no marker and no summary line at all', clean);
+  ok(/OA-904 \(today\)/.test(clean) && !/EXPIRED/.test(clean) && !/claimed BEFORE TODAY/.test(clean),
+    'CONTROL — no expired claim, no marker and no summary line at all', clean);
 
   // The boundary, stated once rather than inferred from the cases above.
   ok(conc.isStaleClaim({ ageDays: conc.STALE_CLAIM_AFTER_DAYS }) && !conc.isStaleClaim({ ageDays: 0 })

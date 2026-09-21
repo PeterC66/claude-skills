@@ -33,7 +33,7 @@
  * is actually waiting on.
  *
  * THE LIVE FAILURE THAT EARNED THE HOLDS WAS THE WORST AVAILABLE SHAPE, not an
- * absence. `loop/blocked/st-ives-v10.2-river.md` said in terms *do not send
+ * absence. The hold `st-ives-v10.2-river.md` (then in `loop/blocked/`) said in terms *do not send
  * v10.2 for review* — that draft draws the river in seven fragments, one of them
  * ending at y = -263.76 mm on a 210 mm page — while row 8 of the same day's
  * worklist said "Open the map, check the sheets, then Send v10.2 for review". So

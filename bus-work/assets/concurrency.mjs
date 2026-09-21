@@ -421,9 +421,9 @@ export function readRepo({ key, label, name, dir, expect = 'main', now = Date.no
   return repo;
 }
 
-/* A claim dated before today is one nobody is working: sessions here do not
- * live overnight, so yesterday's claim is the residue of a collision that ended
- * rather than evidence of one in progress. The number is assemble.mjs's
+/* A claim dated before today has EXPIRED (buses-data OA-400, R7): sessions here
+ * do not live overnight, and `assemble.mjs --claim` takes such a row without
+ * --force. The number is assemble.mjs's
  * STALE_AFTER_DAYS and is kept equal to it on purpose — the board and `--who`
  * are read side by side, and two thresholds that disagreed would be worse than
  * either. A null age (a `selected:` line whose date would not parse) is NOT
@@ -1224,7 +1224,7 @@ export function formatConditions(c) {
   // let the row be read as a peer.
   const others = c.claims.filter((x) => !x.self);
   if (others.length) {
-    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}${isStaleClaim(x) ? `   << STALE, ${x.ageDays} day(s) old` : ''}`;
+    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}${isStaleClaim(x) ? `   << EXPIRED, ${x.ageDays} day(s) old` : ''}`;
     L.push(`  ${'claimed'.padEnd(12)}${say(others[0])}`);
     for (const x of others.slice(1)) L.push(`  ${''.padEnd(12)}${say(x)}`);
     if (!c.selfSession) L.push(`  ${''.padEnd(12)}(one of those may be you — pass --session <this session's name> and it will drop it)`);
@@ -1235,7 +1235,9 @@ export function formatConditions(c) {
      * and nothing in the rendering separated them — so a stale claim went on
      * refusing `--claim` to everybody, the scheduled loop included, until a person
      * happened to run `--who`. `--who` is the only thing in the estate that says
-     * STALE, and nothing runs it for you.
+     * STALE, and nothing runs it for you. Since OA-400 such a claim EXPIRES and
+     * --claim takes it, so this says EXPIRED and prints the --claim, never a
+     * release: releasing is for a row you are giving up today.
      *
      * THE MARKER IS ABOUT AGE, AND THE SENTENCE BELOW SAYS SO. This board cannot
      * tell a dead session from an idle one — its own `activity` line, a few lines
@@ -1252,8 +1254,8 @@ export function formatConditions(c) {
      * side. */
     const stale = others.filter(isStaleClaim);
     if (stale.length) {
-      L.push(`  ${''.padEnd(12)}${stale.length} of those ${stale.length === 1 ? 'was' : 'were'} claimed BEFORE TODAY, which is longer than a session lives here — that is an AGE, not a liveness check, and this board cannot tell a dead session from an idle one. If nobody is behind one, release it; --who names each and prints the command:`);
-      L.push(`  ${''.padEnd(12)}  node "Development Docs/open-actions/assemble.mjs" --who`);
+      L.push(`  ${''.padEnd(12)}${stale.length} of those ${stale.length === 1 ? 'was' : 'were'} claimed BEFORE TODAY and ${stale.length === 1 ? 'has' : 'have'} EXPIRED — an AGE, not a liveness check, since this board cannot tell a dead session from an idle one. An expired row is free: --claim takes it without --force and says whose it was:`);
+      L.push(`  ${''.padEnd(12)}  node "Development Docs/open-actions/assemble.mjs" --claim ${stale[0].ref} --as "<your session>, <what you are doing>"`);
     }
   } else {
     L.push(`  ${'claimed'.padEnd(12)}no open action is claimed by another session`);

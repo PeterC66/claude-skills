@@ -455,9 +455,9 @@ function threadSettled(record, lastInboundDate) {
   // and "**Status:** **open, and the ball is with them.**".
   const status = st[1].replace(/^[\s*_]+/, '').trim();
   if (!SETTLED.test(status)) return '';
-  // The stamp is written by the Stop hook after any edit, so it dates the
-  // record. A declaration older than the message it is supposed to cover has
-  // not seen that message, and proves nothing.
+  // The stamp is written at commit time, so it dates the last COMMITTED edit: a
+  // settled status is not read until it is committed. A declaration older than
+  // the message it is supposed to cover has not seen it, and proves nothing.
   const stamp = /<!--\s*docstamp\s+v[\d.]+\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|/.exec(record);
   if (!stamp || stamp[1] < lastInboundDate) return '';
   return status;

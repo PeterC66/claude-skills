@@ -58,7 +58,8 @@
  * i.e. commercial timetable-change dates, which cluster a few times a year.
  * Sixty days cannot straddle two of those. Override with --max-age-days.
  *
- * Run it from the S6 run dir, AFTER stage.js pull S1 S2 S3, with no placeholders:
+ * Run it from the S6 run dir, AFTER stage.js pull S1, pull S2 and pull S3 (three
+ * calls -- pull takes one stage, and "pull S1 S2 S3" reads S2 as a destination), with no placeholders:
  *     node "%SK%\redteam_source.js"
  * or point it anywhere:
  *     node redteam_source.js --into "<S6 run dir>" --build "<town or place folder>"

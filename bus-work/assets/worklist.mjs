@@ -83,6 +83,7 @@ import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
+import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
@@ -998,6 +999,25 @@ const stranded = unpushedBranchItems({
 for (const it of stranded.items) add(it);
 for (const n of stranded.notes) warnings.push(n);
 for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name} could not be read — ${u.why}`);
+
+// AND THE HALF THAT ROW SAYS IT DOES NOT ASK (OA-326 item 1, built 2026-09-21).
+// The source above stops at the remote: a branch that HAS been pushed raises
+// nothing, whether or not a pull request is open for it. On 2026-09-21 that was
+// judged too weak and the evidence is in the action — portal #170 open 21 days
+// and named on no list until the day it merged, dependabot #64 open 31 days,
+// and the one tick that went looking reporting #170 as having never had a pull
+// request at all, because it inferred absence from a list it had filtered.
+//
+// IT OPENS NO SOCKET, AND THAT IS WHY IT IS A FILE. `node pr_sweep.mjs` asks
+// GitHub and writes loop/pr-sweep.json; this reads that record, exactly as the
+// directory link sweep below is read. Nothing importable from pr_sweep.mjs can
+// reach the network — the `gh` calls are under its own entry-point guard.
+const prSweep = prSweepItems({
+  state: readPrSweep(path.join(BUSES, 'loop')),
+  assetsDir: HERE,
+});
+for (const it of prSweep.items) add(it);
+for (const n of prSweep.notes) warnings.push(n);
 
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
 // the last one with no reader: `loop/your-move/` says these items need you and

@@ -503,6 +503,25 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-unpushed-branches
 
+      # buses-data OA-326 item 1 (2026-09-21): the half the step above says at
+      # the point of its own narrowing that it does not ask. The stranded row
+      # stops at the remote -- a branch that HAS been pushed raises nothing,
+      # whether or not a pull request is open for it -- and on 2026-09-21 that
+      # was judged too weak: portal #170 was open for 21 days and named on no
+      # list until the day it merged, dependabot #64 has been open for 31, and
+      # the one tick that went looking reported #170 as having never had a pull
+      # request at all, because it inferred absence from a list it had already
+      # filtered to OPEN. THE SUBJECT SURVIVES actions/checkout NOT AT ALL, so
+      # every case is against a stub: the record is written under the temp dir
+      # and GitHub is a function. Read section 11 first -- it is the one that
+      # holds the shape in place, asserting that the half worklist.mjs imports
+      # contains no call that can reach the network, because a board opening a
+      # socket per branch is a board that fails on a train and is the one change
+      # OA-326 argues hardest against.
+      - name: Prove the pull-request sweep can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-pr-sweep
+
       # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
       # would go red if I pushed now". Read case 2 first and read it as the
       # POINT of the tool rather than as one assertion among thirty: a preflight

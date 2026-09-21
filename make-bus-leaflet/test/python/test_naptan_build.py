@@ -51,19 +51,22 @@ THE RULES BELOW ARE THE ONES THE MODULE'S OWN DOCSTRING CALLS LOAD-BEARING.
    own *present, absent, or COULD NOT LOOK* rule: an area with no rows because
    nobody could download it must not read as an area with no stops.
 
-6. ONE RULE IS WIDER IN THE DOCSTRING THAN IN THE CODE, AND THE TESTS SAY SO.
-   `BARE_RE` is `^[A-Z]{1,2}$` with no IGNORECASE, so a bare one- or two-letter
-   UPPERCASE Indicator becomes a stand code -- which is right for London's stop
-   letters and wrong for a compass bearing written into the same field. Measured
-   against the national register this laptop holds, 127,658 rows: 19 carry
-   `stand_kind='bare'`, and on exactly two of them the Indicator is
-   character-for-character the row's own Bearing (`0590PFF611` "The Peacock" and
-   `40004402014A` "Ashford Hospital Entrance", both `SW`). `boarding_verify.py`
-   prints a bare code as "Stand SW", so those two are the docstring's *inventing
-   a letter* arriving through the one branch with no word in front of it to
-   check. None of the 19 is in ATCO area 050, 057 or 040, so nothing we draw is
-   affected and it is filed rather than fixed -- OA-372 -- and asserted here in
-   BOTH directions so that whichever way it is settled, a test speaks.
+6. A BARE CODE IDENTICAL TO ITS OWN ROW'S BEARING IS NOT A STAND -- OA-372,
+   FIXED. `BARE_RE` is `^[A-Z]{1,2}$` with no IGNORECASE, so a bare one- or
+   two-letter UPPERCASE Indicator becomes a stand code -- right for London's
+   stop letters, and, character for character, the shape of a compass bearing.
+   `derive_stand` now takes the row's own Bearing as a second argument and
+   nulls the stand when the two agree, which is the conservative direction:
+   measured against the national register this laptop holds, 127,658 rows, 19
+   carry `stand_kind='bare'` and exactly two of them are character-for-character
+   their own row's Bearing (`0590PFF611` "The Peacock" and `40004402014A`
+   "Ashford Hospital Entrance", both `SW`) -- the fix removes exactly those two
+   and nothing else on today's register. `boarding_verify.py` printed a bare
+   code as "Stand SW"; that sentence no longer prints for a bearing that leaked
+   in. With no bearing to compare against -- a caller that has only the
+   Indicator -- the ambiguity is unresolved by design and the bare code still
+   stands, because printing a wrong letter and printing none are not the same
+   mistake and only one of them is this row's to fix.
 
 Every case builds its fixtures in a temp directory. Not one reads
 `C:\\u3a St Ives\\Using AI\\Buses\\_gtfs`, for `prove-red-route-collision.py`'s
@@ -228,19 +231,33 @@ class TestDeriveStand(unittest.TestCase):
         self.assertEqual(nb.derive_stand("Stop e"), ("E", "stop"))
         self.assertEqual(nb.derive_stand("e"), (None, None))
 
-    def test_a_bare_code_that_is_the_rows_own_bearing_is_still_a_stand(self):
-        """RULE 6, first direction -- the behaviour as it stands today, so the
-        finding is recorded rather than assumed away. `derive_stand` sees only the
-        Indicator, so a compass bearing written into that field is indistinguishable
-        from a stop letter and becomes one. OA-372."""
-        self.assertEqual(nb.derive_stand("SW"), ("SW", "bare"))
-        self.assertEqual(nb.derive_stand("NE"), ("NE", "bare"))
+    def test_a_bare_code_identical_to_the_rows_own_bearing_is_not_a_stand(self):
+        """RULE 6, fixed. OA-372's two live instances, character for character:
+        a bearing written into Indicator with nothing to distinguish it from a
+        stop letter is reported as not-a-stand once the row's own Bearing says
+        so, rather than invented as one."""
+        self.assertEqual(nb.derive_stand("SW", "SW"), (None, None))
+        self.assertEqual(nb.derive_stand("NE", "NE"), (None, None))
 
-    def test_the_bearing_is_available_on_the_row_that_would_settle_it(self):
-        """RULE 6, second direction. The fix OA-372 describes is possible at all
-        only because Bearing is one of the columns this file already keeps, and a
-        row carrying both is what the two live instances look like. If Bearing ever
-        left `COLUMNS`, the finding would become unfixable in silence."""
+    def test_a_bare_code_is_still_a_stand_when_the_bearing_disagrees_or_is_absent(self):
+        """The control on the case above, both directions. A genuine stop letter
+        that happens to share a shape with a compass word -- Walthamstow
+        Central's second `W`, bearing `N` in the real register -- must not lose
+        its letter because some OTHER stop's bearing matches it; and a caller
+        that has no Bearing to offer is not thereby forbidden from ever seeing a
+        bare code, because the ambiguity it cannot resolve is not evidence of
+        anything."""
+        self.assertEqual(nb.derive_stand("W", "N"), ("W", "bare"))
+        self.assertEqual(nb.derive_stand("WE", ""), ("WE", "bare"))
+        self.assertEqual(nb.derive_stand("WE", None), ("WE", "bare"))
+        self.assertEqual(nb.derive_stand("SW"), ("SW", "bare"))
+
+    def test_the_bearing_is_available_on_the_row_that_settled_it(self):
+        """RULE 6's fix is possible at all only because Bearing is one of the
+        columns this file already keeps, and a row carrying both is what the two
+        live instances look like. If Bearing ever left `COLUMNS`, the fix would
+        become impossible to reach from `insert_csv` and this would fail loudly
+        rather than the check quietly stopping being asked."""
         self.assertIn("Bearing", nb.COLUMNS)
         self.assertIn("Indicator", nb.COLUMNS)
 
@@ -345,6 +362,31 @@ class TestInsertCsv(Scratch):
         con = self.fresh_db()
         nb.insert_csv(con, csv_text([{"ATCOCode": "0500A", "Bearing": "", "Street": " "}]), set())
         self.assertEqual(self.rows(con, "Bearing", "Street"), [(None, None)])
+
+    def test_insert_csv_nulls_a_bare_code_matching_its_own_bearing(self):
+        """End to end, with the two real ATCOCodes OA-372 was filed about:
+        `insert_csv` has the whole row, not just the Indicator, so it is the
+        layer that can actually make the call `derive_stand` alone cannot."""
+        con = self.fresh_db()
+        nb.insert_csv(con, csv_text([
+            {"ATCOCode": "0590PFF611", "CommonName": "The Peacock",
+             "Indicator": "SW", "Bearing": "SW"},
+            {"ATCOCode": "40004402014A", "CommonName": "Ashford Hospital Entrance",
+             "Indicator": "SW", "Bearing": "SW"},
+        ]), set())
+        self.assertEqual(
+            self.rows(con, "stand", "stand_kind"),
+            [(None, None), (None, None)])
+
+    def test_insert_csv_keeps_a_bare_code_whose_bearing_differs(self):
+        """The control for the case above, at the same layer: a genuine bare
+        stop letter is untouched when it does not match its own row's Bearing."""
+        con = self.fresh_db()
+        nb.insert_csv(con, csv_text([
+            {"ATCOCode": "0500WALTH2", "CommonName": "Walthamstow Central",
+             "Indicator": "W", "Bearing": "N"},
+        ]), set())
+        self.assertEqual(self.rows(con, "stand", "stand_kind"), [("W", "bare")])
 
     def test_values_are_stripped(self):
         con = self.fresh_db()

@@ -967,8 +967,13 @@ MUTATIONS = [
     # breach a passenger standing at the stop would see.
     {"suite": "test_naptan_build.py", "file": "naptan_build.py",
      "what": "derive_stand falls back to the raw Indicator, so every 'opp', 'o/s' and 'N-bound' in the register becomes a stand code and is printed on a boarding sheet as one",
-     "find": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return None, None',
-     "to": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return ind.upper(), "indicator"'},
+     "find": '        return code, "bare"\n    return None, None',
+     "to": '        return code, "bare"\n    return ind.upper(), "indicator"'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the bearing check on a bare code is removed, so a compass bearing that leaked into Indicator is invented as a stand again -- OA-372, reverted",
+     "find": '        brg = (bearing or "").strip().upper()\n        if brg and code == brg:\n            return None, None\n        return code, "bare"',
+     "to": '        return code, "bare"'},
 
     {"suite": "test_naptan_build.py", "file": "naptan_build.py",
      "what": "the bare-code pattern gains IGNORECASE, so a lone lower-case letter -- far more often an abbreviation than a flag code -- becomes an invented bay letter",

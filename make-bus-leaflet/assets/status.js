@@ -54,6 +54,7 @@ const path = require('path');
 const { parseArgs, resolveBuses, resolvePortal } = require('./cli');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, EXTERNAL_GENERATOR, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
+const portalFixtures = require('./portal_fixtures');   // the vendored-fixture half of the portal join (OA-419)
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 const quality = require('./quality_gate');
 const { spawnSync } = require('child_process');
@@ -1204,6 +1205,8 @@ const portalFixtureRows = gatePortalFixture();
 const freshnessRows = fixtureFreshness();
 const drift = portalDrift();
 const driftRows = drift.rows;
+// The OTHER half of the same join, in ./portal_fixtures.js — and NOT in `bad` below, because a fixture the portal has not re-vendored is a chore (OA-419).
+const fixtureVendoring = portalFixtures.fixtureVendoring({ portal: PORTAL, buses: BUSES, source: portalSource(), gitIn, gitShow });
 
 // The quality ratchet (Phase 8 item 1). Measured off the ci-reference copies —
 // what actually shipped — so a green byte gate and a green quality row are
@@ -1430,7 +1433,7 @@ async function main() {
   const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
   const commit = commitmentRows();
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1604,6 +1607,7 @@ async function main() {
     }
   }
 
+  portalFixtures.printFixtureVendoring(fixtureVendoring, driftSourceLine(fixtureVendoring && fixtureVendoring.source), PORTAL);
   // On stdout, because the crash's only trace was a stderr line CI sends to the job
   // log while the step summary -- the thing anybody reads -- simply lost the section.
   if (qualityError) console.log('\n=== Quality ratchet ===\n  NOT MEASURED, the gate threw: ' + qualityError

@@ -522,14 +522,16 @@ function runCase(c, statusPath = STATUS) {
  * and a replace that hit the wrong one would mutate a block the case does not
  * name — which is the shape of a harness that goes red for a reason of its own. */
 const MUTATION_OA200 = {
+  file: 'status.js',
   find: '  const ref = source && source.ref;\n',
   replace: '  const ref = null; // MUTATED by prove-red-portal-drift.js: the pre-OA-200 reading\n',
   why: 'portalDrift() no longer picks its ref from portalSource()',
 };
 const MUTATION_OA419 = {
+  file: 'portal_fixtures.js',
   find: '  const ref = source && source.ref;   // the ref CI checks out, never this laptop\'s disk',
   replace: '  const ref = null; // MUTATED by prove-red-portal-drift.js: the pre-OA-419 reading, the DISK',
-  why: 'portalFixtureVendoring() no longer picks its ref from portalSource()',
+  why: 'fixtureVendoring() no longer picks its ref from the source it is handed',
 };
 
 function regressedStatus(mutations = [MUTATION_OA200]) {
@@ -541,22 +543,26 @@ function regressedStatus(mutations = [MUTATION_OA200]) {
     fs.copyFileSync(path.join(ASSETS, e.name), path.join(dst, e.name));
   }
   const f = path.join(dst, 'status.js');
-  let src = fs.readFileSync(f, 'utf8');
-  const edit = (find, replace, why) => {
-    if (!src.includes(find)) throw new Error('prove-red-portal-drift: ' + why + ' — re-point this file at whatever replaced `' + find.trim() + '`.');
-    src = src.replace(find, replace);
+  /* THE MUTATION NAMES ITS OWN FILE. The fixture half lives in portal_fixtures.js
+   * since OA-419, and both modules open their block with the same line — so a
+   * replace that did not say which file it meant would silently mutate the wrong
+   * one and the case would fail for a reason it does not name. */
+  const edit = (file, find, replace, why) => {
+    const target = path.join(dst, file);
+    let src = fs.readFileSync(target, 'utf8');
+    if (!src.includes(find)) throw new Error('prove-red-portal-drift: ' + why + ' — re-point this file at whatever replaced `' + find.trim() + '` in ' + file + '.');
+    fs.writeFileSync(target, src.replace(find, replace));
   };
-  for (const m of mutations) edit(m.find, m.replace, m.why);
+  for (const m of mutations) edit(m.file, m.find, m.replace, m.why);
   /* AND THE SKILL ROOT, WHICH IS NOT DECORATION. status.js derives it from its own
    * location, so a copy running out of the OS temp dir resolves every manifest
    * `source` to a path that does not exist and every row reads MISSING. The first
    * cut of this self-falsification did exactly that and scored both regression
    * cases as "goes red" — red, and for a reason that has nothing to do with which
    * tree was read. A harness that accepts any red is not a harness. */
-  edit("  const SKILL_ROOT = path.resolve(SK, '..', '..');",
+  edit('status.js', "  const SKILL_ROOT = path.resolve(SK, '..', '..');",
        '  const SKILL_ROOT = ' + JSON.stringify(SKILL_ROOT) + ';',
        'portalDrift() no longer derives SKILL_ROOT from SK');
-  fs.writeFileSync(f, src);
   kept.push(root);
   return { statusPath: f, root };
 }

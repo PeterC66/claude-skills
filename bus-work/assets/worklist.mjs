@@ -89,6 +89,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems } from './bods_scan.mjs';
+import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1424,6 +1425,9 @@ shown.sort((a, b) => (a.demo ? 1 : 0) - (b.demo ? 1 : 0)
   || a.rank - b.rank || (b.ageDays || 0) - (a.ageDays || 0) || a.key.localeCompare(b.key));
 const limited = args.limit ? shown.slice(0, Number(args.limit)) : shown;
 
+// OA-417. `shown` and not `limited`, and the reasoning is in portal_clicks.mjs.
+const clicks = portalClicks(shown);
+
 // ---- output ----------------------------------------------------------------
 const meta = {
   generatedAt: new Date().toISOString(),
@@ -1447,6 +1451,8 @@ const meta = {
   // only one of them gets read.
   conditions,
   safeOnly: SAFE_ONLY, unsafeHidden,
+  // OA-417 under OA-221's rule: --json sees what a person sees, from one array.
+  portalClicks: clicks,
   warnings,
 };
 
@@ -1468,6 +1474,8 @@ console.log(`  ${modeLabel}`);
 console.log(bannerRule);
 console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
 console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${shown.length} item(s)\n`);
+// OA-417. Above CONDITIONS: the one block written for Peter. Silent when empty.
+for (const l of formatPortalClicks(clicks, { truncated: limited.length < shown.length })) console.log(l);
 if (SHOW_CONDITIONS) {
   console.log('\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
   for (const l of conc.formatConditions(conditions)) console.log(l);

@@ -255,7 +255,7 @@ Everything else (red-team diff, direction/count sanity, the ladder checks) behav
 
 4. **A place may BORROW its parent town's red-team answer, and every HARD it produces is then restated as a SOFT** (decided by Peter 2026-08-29, OA-141/OA-140). A place draws a subset of its town's services and the town usually already owns a recent blind answer, so seven of the ten unverified place maps cost nothing instead of ~700k tokens. The independence argument survives whole — the red team never saw our data either way, and blindness does not decay by being read twice. What does not survive is the SCOPE: a town answer is about *services serving the town* where a place asks *services calling at these stops*, so it can be legitimately silent about a service reaching the place but not the centre. Evidence, then, and not a verdict.
 
-   Run this **from the place's new S6 run dir**, after `stage.js pull S1 S2 S3`. Both paths are real; the only thing that changes per place is the `--build` value, which names the parent town:
+   Run this **from the place's new S6 run dir**, after `stage.js pull S1`, `pull S2` and `pull S3`. Both paths are real; the only thing that changes per place is the `--build` value, which names the parent town:
 
    ```bash
    node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/redteam_source.js" --build "C:/u3a St Ives/Using AI/Buses/Areas/Beaconsfield" --foreign-build

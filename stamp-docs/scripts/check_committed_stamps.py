@@ -1,10 +1,11 @@
 """Audit the docstamps that are actually COMMITTED, not the ones on disk.
 
-docstamp.py --check hashes the working tree. Nothing gates the commit, so a document
-edited and committed before the Stop hook next fires goes into git carrying the
-previous version, date and sha — and a stale stamp looks exactly as authoritative as
-a correct one to anyone reading the file out of the repo. --check cannot catch this,
-because by the time it runs the working tree has already been fixed.
+The stamp is written at commit time: each repository's pre-commit hook runs
+`docstamp.py --staged`, which stamps the documents in the commit into the index, and
+then runs this audit with --staged. So the audit is the proof that the stamper ran --
+a stale stamp looks exactly as authoritative as a correct one to anyone reading the
+file out of the repo, and `docstamp.py --check` hashes the working tree, not the
+commit.
 
 This hashes HEAD's blobs instead and reports any file whose committed stamp does not
 describe its committed content. It honours the same exclusions as the stamper, so
@@ -23,9 +24,15 @@ change is not this commit's fault, and a hook that refuses an unrelated commit i
 hook that gets `--no-verify`'d within a week. CI still audits everything; this guards
 the edit in front of you. Operates on the repository containing the current directory.
 
-A named repo is matched back to its policy root, by path and then by that root's
-checkoutDirNames — because a CI checkout lives at $GITHUB_WORKSPACE/<repo> and can
-never match a laptop path. Until 2026-08-31 a named repo was audited with NO
+A repo is matched back to its policy root by docstamp.py's own
+`root_cfg_for_repo()` -- the configured path, then ANY LINKED WORKTREE of it through
+`git rev-parse --git-common-dir`, then that root's checkoutDirNames, because a CI
+checkout lives at $GITHUB_WORKSPACE/<repo> and can never match a laptop path. One
+function, so the stamper and its auditor cannot place the same tree differently:
+until 2026-09-21 this file matched by path and name only, so inside a worktree it
+found no root and audited with no exclusions while the stamper, correctly, left
+`_archive` alone -- and a community-bus-maps merge was refused over
+docs/_archive/GO-LIVE.md. Until 2026-08-31 a named repo was audited with NO
 exclusions, which was green for exactly as long as nobody edited a file in an
 excluded tree. The day a round repointed the links inside nine documents it was
 archiving, CI went red about nine files the stamper refuses to stamp: a truthful
@@ -47,6 +54,11 @@ import policy as _shared_policy  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# `--policy PATH`, as docstamp.py takes it, so a harness can name a scratch policy
+# and ask the audit the same question the stamper was asked. None means the real
+# stamp-policy.json beside this skill.
+POLICY_PATH = None
+
 
 def load_docstamp():
     spec = importlib.util.spec_from_file_location(
@@ -66,7 +78,7 @@ def repos_from_policy():
     # the JSON here would give the stamper and its auditor different scopes, which
     # is the fault OA-235 is about, one level down.
     try:
-        data = _shared_policy.load_policy()
+        data = _shared_policy.load_policy(POLICY_PATH)
     except OSError:
         return []
     out, seen = [], set()
@@ -82,46 +94,38 @@ def repos_from_policy():
     return out
 
 
-def repos_from_policy_all():
-    """Every policy root, present on this disk or not.
+_DS = None
 
-    repos_from_policy() keeps only roots that exist AND are git repos, which is
-    right for "audit everything" and wrong for "which root is this path": in CI
-    none of the laptop paths exists, so that list is empty and every named repo
-    would fall through to no exclusions at all.
-    """
-    # Through policy.py so the baseline exclusions reach this audit too. Loading
-    # the JSON here would give the stamper and its auditor different scopes, which
-    # is the fault OA-235 is about, one level down.
-    try:
-        data = _shared_policy.load_policy()
-    except OSError:
-        return []
-    out = []
-    for root in (data.get('roots') or []):
-        cfg = root if isinstance(root, dict) else {'path': root}
-        p = cfg.get('path')
-        if p:
-            out.append((os.path.abspath(os.path.expandvars(os.path.expanduser(p))), cfg))
-    return out
+
+def _docstamp():
+    global _DS
+    if _DS is None:
+        _DS = load_docstamp()
+    return _DS
 
 
 def cfg_for(repo):
-    """The policy root this path IS, so a named repo gets the same exclusions.
+    """The policy root this path IS, so the audit applies the stamper's exclusions.
 
-    Absolute path first, then the root's `checkoutDirNames` — the names the same
-    repository goes by when it is checked out somewhere else. Returns {} when
-    nothing matches, which is the old behaviour, and main() announces it.
+    Asked of docstamp.py's `root_cfg_for_repo()` rather than answered here: the
+    configured path, a linked worktree of it (through `--git-common-dir`, whatever
+    the worktree is called), a directory under it, then the root's
+    `checkoutDirNames` for a clone elsewhere such as a CI workspace. Returns {} when
+    nothing matches, and both callers SAY so -- a silent fallback to no exclusions
+    is how a worktree commit came to be refused over an archived document.
     """
-    target = os.path.normcase(os.path.abspath(repo))
-    base = os.path.basename(os.path.abspath(repo))
-    fallback = None
-    for path, cfg in repos_from_policy_all():
-        if os.path.normcase(path) == target:
-            return cfg
-        if base in (cfg.get('checkoutDirNames') or []):
-            fallback = cfg
-    return fallback or {}
+    try:
+        policy = _shared_policy.load_policy(POLICY_PATH)
+    except OSError:
+        return {}
+    return _docstamp().root_cfg_for_repo(policy, os.path.abspath(repo)) or {}
+
+
+def announce_no_root(repo):
+    sys.stderr.write(
+        'check_committed_stamps: no stamp-policy root matches {} -- audited with NO '
+        'exclusions. If it is a checkout of a policy repository, add its directory name '
+        'to that root\'s checkoutDirNames in stamp-policy.json.\n'.format(repo))
 
 
 def in_scope(rel, cfg):
@@ -150,11 +154,10 @@ def git(repo, *args):
 def check_staged(ds):
     """Compare each STAGED .md against the stamp in the very blob being committed.
 
-    Why the index and not the working tree: `docstamp.py --check` hashes what is on
-    disk, and by the time a pre-commit hook runs the disk copy may already have been
-    fixed by the Stop hook while the STAGED copy is still the stale one. The index is
-    what git is about to write, so it is the only thing that answers the question the
-    commit is actually asking.
+    Why the index and not the working tree: the index is what git is about to write,
+    so it is the only thing that answers the question the commit is actually asking.
+    `docstamp.py --staged` has just stamped it, so a refusal here means the stamper
+    did not run, or ran against a different policy root than this audit found.
     """
     top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], capture_output=True)
     if top.returncode:
@@ -175,7 +178,10 @@ def check_staged(ds):
     # repointed nine archived files' links, the hook demanded a stamp for nine
     # documents the stamper refuses to stamp -- an unsatisfiable refusal, which
     # is the exact shape that earns a `--no-verify` and then never comes back.
-    rels = [f for f in rels if in_scope(f, cfg_for(repo))]
+    cfg = cfg_for(repo)
+    if not cfg and rels:
+        announce_no_root(repo)
+    rels = [f for f in rels if in_scope(f, cfg)]
 
     if not rels:
         return 0
@@ -204,15 +210,24 @@ def check_staged(ds):
         print('  STALE  v%s.%s  %s  %s' % (e['major'], e['minor'], e['date'], rel))
         print('         staged sha=%s  but staged content hashes to %s' % (e['sha'], actual))
     print('')
-    print('The stamp is written by a Stop hook, which runs at the END of a turn, so a')
-    print('commit made during that turn carries the new content and the old sha.')
-    print('Fix, from the repository root:')
-    print('  python "%s" --all' % os.path.join(HERE, 'docstamp.py').replace('\\', '/'))
-    print('then `git add` the document AND its stamp, and commit again.')
+    print('The stamp is written at commit time by the pre-commit hook, which runs')
+    print('`docstamp.py --staged` before this audit -- so the stamper did not run, or')
+    print('did not reach these files. Read the hook output above for its warning. To')
+    print('stamp the staged documents by hand, from the repository root, then commit again:')
+    print('  python "%s" --staged' % os.path.join(HERE, 'docstamp.py').replace('\\', '/'))
     return 1
 
 
 def main():
+    global POLICY_PATH
+    args = sys.argv[1:]
+    if '--policy' in args:
+        i = args.index('--policy')
+        if i + 1 >= len(args):
+            sys.exit('--policy needs a path')
+        POLICY_PATH = args[i + 1]
+        del args[i:i + 2]
+    sys.argv[1:] = args
     ds = load_docstamp()
     if '--staged' in sys.argv[1:]:
         sys.exit(check_staged(ds))
@@ -257,9 +272,7 @@ def main():
         print(f'{ok} stamped .md correct in HEAD, {len(stale)} STALE, {unstamped} unstamped'
               + (f', {skipped} out of policy scope' if skipped else ''))
         if not cfg:
-            print('  (no policy root matches this path - audited with NO exclusions; add its'
-                  ' directory name to that repo root in stamp-policy.json under'
-                  ' checkoutDirNames)')
+            announce_no_root(repo)
         for rel, e, actual in stale:
             print(f'  STALE  v{e["major"]}.{e["minor"]}  {e["date"]}  {rel}')
             print(f'         committed sha={e["sha"]}  but content hashes to {actual}')
@@ -267,7 +280,8 @@ def main():
 
     if total_stale:
         print(f'\n{total_stale} committed stamp(s) do not describe their committed content.')
-        print('Fix: docstamp.py --all, then commit the stamp WITH the content.')
+        print('Each was committed without the pre-commit hook, which stamps at commit time.')
+        print('Fix: docstamp.py --all from that repository root, then commit the stamp.')
     return 1 if total_stale else 0
 
 

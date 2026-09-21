@@ -60,6 +60,12 @@ const check = (name, cond, extra) => {
 };
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-pr-sweep-'));
+/* A fixture repository's directory. Deliberately NOT this laptop's real portal
+ * path: nothing under test opens it -- it is carried into a row's `do.cwd` and
+ * nowhere else -- and `engine_adoption.mjs`'s laptop-path census is right to
+ * call a real one a finding, because a path literal off this one machine is how
+ * a module stops being portable. */
+const FIXTURE_REPO_DIR = '/fixture/community-bus-maps';
 const NOW = Date.UTC(2026, 8, 21, 12, 0);
 const daysAgo = (n) => new Date(NOW - n * 86400000).toISOString();
 const hoursAgo = (n) => new Date(NOW - n * 3600000).toISOString();
@@ -84,7 +90,7 @@ const pr = (number, over, extra = {}) => ({
 /** A record swept `ageHours` ago against one repository. */
 const rec = (ageHours, { open = [], noPr = [], error = null, name = 'community-bus-maps' } = {}) => ({
   checkedAt: hoursAgo(ageHours), tool: 'pr_sweep.mjs',
-  repos: [{ key: 'portal', name, slug: `PeterC66/${name}`, dir: 'C:/Claude/community-bus-maps', error, open, branchesAsked: 4, noPr }],
+  repos: [{ key: 'portal', name, slug: `PeterC66/${name}`, dir: FIXTURE_REPO_DIR, error, open, branchesAsked: 4, noPr }],
 });
 const rows = (loopDir, now = NOW) => prSweepItems({ state: readPrSweep(loopDir), now, assetsDir: HERE });
 const byKey = (r, key) => r.items.find((x) => x.key === key);
@@ -327,7 +333,7 @@ console.log('\n12. THE JOIN ITSELF — the real writer\'s record, read by the re
     ]);
   };
   const result = sweepRepo({
-    repo: { key: 'portal', name: 'community-bus-maps', dir: 'C:/Claude/community-bus-maps' },
+    repo: { key: 'portal', name: 'community-bus-maps', dir: FIXTURE_REPO_DIR },
     branches: [{ branch: 'stray/thing', committedAt: daysAgo(3), subject: 'a stray', insertions: 12 }],
     gh,
   });

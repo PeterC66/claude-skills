@@ -94,6 +94,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+// The argument and path helpers only, and STATICALLY — `engine_adoption.mjs`
+// excuses `parseArgs(process.argv.slice(2))` only where parseArgs is imported
+// from this folder's own engine.mjs, because a module with a parseArgs of its
+// own is the thing that census exists to notice, and a dynamic import reads the
+// same as one. engine.mjs resolves paths and flags and opens no socket, so this
+// costs the reader nothing; `unpushed_branches.mjs`, which shells out to git,
+// stays behind the dynamic import inside main().
+import { parseArgs, resolveBuses, resolvePortal } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -423,10 +431,7 @@ export function sweepRepo({ repo, branches = [], gh = defaultGh }) {
 
 /* The CLI. Runs only when this file is EXECUTED, never when it is imported. */
 async function main() {
-  const [{ readBranches, classifyBranch }, { resolveBuses, resolvePortal, parseArgs }] = await Promise.all([
-    import('./unpushed_branches.mjs'),
-    import('./engine.mjs'),
-  ]);
+  const { readBranches, classifyBranch } = await import('./unpushed_branches.mjs');
   const args = parseArgs(process.argv.slice(2));
   const buses = resolveBuses(args);
   const portal = resolvePortal(args);

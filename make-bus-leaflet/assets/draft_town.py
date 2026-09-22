@@ -1085,6 +1085,22 @@ def main():
                                  for c in sp["endChoice"])
                 end_choices.append(f"**{r}** is labelled **{sp['label']}** "
                                    f"({sp['far_km']} km) -- it could also have been {alts}")
+        else:
+            # A ROUTE THAT GOT NO SPOKE AT ALL, when its own patterns reach out of
+            # town. spoke_for_route() measures a direction by its LAST stop, so a
+            # circular that returns to the bus station reads as never leaving --
+            # and is then silently absent from "Buses from <Town>". Huntingdon's
+            # AW1 is the measured case: the live sheet draws it to "The Alconburys"
+            # and describes it as "circular via RAF Alconbury", and the draft gave
+            # it nothing. Worse than the missing spoke, it made AW1 look like a
+            # town-only service, which is why AW1X could not be folded onto it.
+            # Named rather than guessed, for the same reason as item 16 (OA-436).
+            alt = _end_candidates(ch, ll, anchor_ll, namer, None)
+            if alt:
+                places = ", ".join(f"{c['place']} ({c['km']} km)" for c in alt)
+                end_choices.append(f"**{r}** got NO spoke, yet its own patterns reach {places} "
+                                   f"-- a route that ends where it started reads as never "
+                                   f"leaving town. Decide whether it needs one")
         t = termini_for_route(ch, ll, prefix, namer, a.town)
         if t:
             termini[r] = t

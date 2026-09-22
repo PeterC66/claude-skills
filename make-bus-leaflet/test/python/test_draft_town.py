@@ -783,6 +783,16 @@ class TheEndOfASpokeIsAChoice(unittest.TestCase):
         out = self.candidates({"canonical": [{"stops": ["a", "a"]}]}, "Somewhere")
         self.assertEqual(out, [])
 
+    def test_a_route_with_no_spoke_yet_still_offers_its_ends(self):
+        """Called with chosen=None for a route spoke_for_route() gave nothing.
+        Huntingdon's AW1 is a circular back to the bus station, so it read as
+        never leaving town -- and the live sheet draws it to The Alconburys."""
+        out = self.candidates({"canonical": [{"stops": ["a", "c", "a"]}]}, None)
+        self.assertEqual([c["place"] for c in out], ["Cambridge"])
+
+    def test_a_route_that_really_stays_in_town_offers_nothing(self):
+        self.assertEqual(self.candidates({"canonical": [{"stops": ["a", "a"]}]}, None), [])
+
 
 class SpokesThatWouldOverprint(unittest.TestCase):
     """`decollide_bearings` spreads, and never merges.

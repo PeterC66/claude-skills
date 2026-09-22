@@ -322,6 +322,16 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-bods-scan
 
+      # buses-data OA-426 (2026-09-22), R9 item 2. The refresh GRADE is the fact a
+      # tick will rebuild a town on: SAFE means the scan found nothing needing a
+      # judgement. A grade that never arrives costs a chore; a grade that arrives
+      # from the WRONG RUN is a machine saying "no person needed" about changes
+      # nobody has read, which is why the date rule has a mutation arm of its own.
+      # The file reader is injected; no _gtfs folder, no clock and no network.
+      - name: Prove the refresh grading reaches a row, and refuses when it should
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-refresh-grades
+
       # buses-data OA-402 (2026-09-18), R9. The five numbers R9 is judged on. Two
       # of the five refuse to be computed and say why, and the harness is what
       # holds them to it -- both faults it has already caught produced a PLAUSIBLE

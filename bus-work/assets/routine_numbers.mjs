@@ -29,12 +29,17 @@
  *
  * WHAT EACH NUMBER IS, AND WHAT IT IS NOT:
  *
- *  1. HUMAN TOUCHES PER MAP-MONTH — **not measured.** Nothing on disk distinguishes
- *     a commit Peter made from one a session made in his name; `git` says
- *     "Peter Cooper" for all 103 sessions in the review's window. The instrument
- *     that would make it real is named in `wouldNeed` and it is R9's own item 3:
- *     once a map's manifest records what its build and verification COST, the same
- *     record is the natural place for who performed each step.
+ *  1. HUMAN TOUCHES PER MAP-MONTH — measured from the MANIFESTS since OA-427,
+ *     and reported as not-yet-recorded until they carry anything. `stage.js commit
+ *     --by <who>` writes who performed a stage, `stage_actors.mjs` classifies the
+ *     name with the loop's own `sched-` test, and a touch is a stage committed by a
+ *     session a person started. Git was the wrong instrument and that is the whole
+ *     reason this number was missing: it says "Peter Cooper" for a commit Peter made
+ *     and for one a session made in his name, across all 103 sessions in the
+ *     review's window — and S4, S5 and S6 are gitignored, so most of a map's cost
+ *     never reached git at all. **The rate describes ATTRIBUTED runs alone and
+ *     `coverage` is printed beside it always**, because on the day the flag landed
+ *     no run on disk carried an actor and a rate over nothing is not a low rate.
  *
  *  2. CI RED RATE — measured, per repository, over the window, from `gh run list`
  *     on the default branch. This is the review's sweep 3 as a command. It counts
@@ -76,6 +81,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { parseArgs, resolveBuses, resolvePortal, assetsDir } from './engine.mjs';
+import { stageActors, actorWhy, defaultReadManifests } from './stage_actors.mjs';
 
 export const DEFAULT_WINDOW_DAYS = 30;
 
@@ -139,7 +145,7 @@ export const defaultGhRuns = (dir, { limit = 300, run = execFileSync } = {}) => 
  * a CI red rate of 0% because nobody could ask is the shape this project has a
  * shelf of lessons about.
  */
-export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads = readFileSync, exists = existsSync, ghRuns = defaultGhRuns }) {
+export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads = readFileSync, exists = existsSync, ghRuns = defaultGhRuns, readManifests = defaultReadManifests }) {
   const at = (...p) => path.join(busesDir, ...p);
   const readText = (p) => { try { return exists(p) ? String(reads(p, 'utf8')) : null; } catch { return null; } };
   const listDir = (p) => { try { return exists(p) ? readsDir(p) : null; } catch { return null; } };
@@ -153,7 +159,12 @@ export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads 
    * this core reports as "not measured" rather than as an error. This module
    * lives in `<skills>/bus-work/assets/`, so its siblings are two levels up. */
   const skillsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  /* WHO PERFORMED EACH STAGE (OA-427). Injected like `ghRuns`, and for the same
+   * reason: it is the only other fact here that needs something outside the buses
+   * tree — `gate_lib.js`'s map enumerator, which lives beside this file in the
+   * skills repository — so the harness can hand the core an estate without one. */
   return {
+    manifests: readManifests({ busesDir, skillsAssets: path.join(skillsRoot, 'make-bus-leaflet', 'assets') }),
     runNames,
     runTexts: (runNames || []).map((f) => readText(at('loop', 'runs', f)) || ''),
     yourMoveTexts: (listDir(at('loop', 'your-move')) || []).filter((f) => f.endsWith('.md')).map((f) => readText(at('loop', 'your-move', f)) || ''),
@@ -189,14 +200,32 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
   const since = now - windowDays * 86400000;
   const out = { windowDays, at: new Date(now).toISOString(), numbers: {} };
 
-  // 1 — human touches per map-month: not measured, and this says why.
+  /* 1 — human touches per map-month, from the manifests (OA-427).
+   *
+   * A TOUCH IS A STAGE A PERSON-STARTED SESSION COMMITTED. `stage_actors.mjs`
+   * holds the classification and the denominator argument; what is decided here is
+   * only when the answer may be called MEASURED, and the rule is the narrowest one
+   * available: at least one run in the window carries an actor. A threshold of
+   * "enough" coverage would be a number nobody could defend, so instead `coverage`
+   * travels with the value in every output and is printed beside it always.
+   */
+  const actors = stageActors(facts.manifests, { now, windowDays });
+  const actorsOk = actors.status === 'ok' && actors.attributed > 0;
   out.numbers.humanTouchesPerMapMonth = {
     label: 'Human touches per map-month',
-    measured: false,
-    value: null,
+    measured: actorsOk,
+    value: actorsOk ? actors.perMapMonth : null,
     target: 'falls towards 1',
-    why: 'Nothing on disk tells a commit Peter made from one a session made in his name — git says "Peter Cooper" for both, across all 103 sessions in the review\'s window. Section 10 of the review says the repository cannot measure his time, and a number printed here would be the one number the whole recommendation is judged on, invented.',
-    wouldNeed: 'R9 item 3 puts each build\'s and each verification\'s COST into the map\'s manifest. The same record is where WHO performed each step belongs — once a manifest carries `by: peter` against a step, this becomes a count over the estate and stops being an opinion.',
+    runs: actors.status === 'ok' ? actors.runs : null,
+    attributed: actors.status === 'ok' ? actors.attributed : null,
+    byPerson: actors.status === 'ok' ? actors.byPerson : null,
+    byLoop: actors.status === 'ok' ? actors.byLoop : null,
+    coverage: actors.status === 'ok' ? actors.coverage : null,
+    mapsAttributed: actors.status === 'ok' ? actors.mapsAttributed : null,
+    maps: actors.status === 'ok' ? actors.maps : [],
+    note: 'A touch is one stage committed by a session a person started; a `sched-` tick is not one. The rate is over ATTRIBUTED runs only — read `coverage` with it, never without.',
+    why: actorsOk ? undefined : actorWhy(actors),
+    wouldNeed: actorsOk ? undefined : 'Pass `--by <who>` to `stage.js new` and `stage.js commit` — `sched-HHMM` from a tick, the session name otherwise. Nothing backfills a run committed before OA-427, so the window fills as work is done rather than all at once.',
   };
 
   // 2 — CI red rate, per repository, over the window.
@@ -269,8 +298,17 @@ export function render(r) {
   L.push(`The five numbers — ${r.windowDays}-day window, read ${r.at}`);
   L.push('');
   const n = r.numbers;
-  L.push(`1. ${n.humanTouchesPerMapMonth.label}: NOT MEASURED — ${n.humanTouchesPerMapMonth.why}`);
-  L.push(`   Would need: ${n.humanTouchesPerMapMonth.wouldNeed}`);
+  /* NUMBER 1 IS PRINTED WITH ITS COVERAGE OR NOT AT ALL (OA-427). A rate over
+   * attributed runs alone reads exactly like a rate over the estate, and the one
+   * that will be quoted into a round record is whichever one the line shows. */
+  const h = n.humanTouchesPerMapMonth;
+  if (h.measured) {
+    L.push(`1. ${h.label} (target: ${h.target}): ${h.value.toFixed(2)} — ${h.byPerson} person-started stage(s) over ${h.mapsAttributed} map(s) with recorded work`);
+    L.push(`     coverage: ${h.attributed} of ${h.runs} stage(s) in the window record who performed them (${pct(h.coverage)}); ${h.byLoop} ${h.byLoop === 1 ? 'was a loop tick' : 'were loop ticks'}. The rate describes the attributed ones alone.`);
+  } else {
+    L.push(`1. ${h.label}: NOT MEASURED — ${h.why}`);
+    L.push(`   Would need: ${h.wouldNeed}`);
+  }
   L.push(`2. ${n.ciRedRate.label} (target: ${n.ciRedRate.target}):`);
   for (const p of n.ciRedRate.perRepo) {
     L.push(p.measured ? `     ${p.name}: ${p.red} of ${p.runs} runs red — ${pct(p.rate)}` : `     ${p.name}: NOT MEASURED — ${p.why}`);

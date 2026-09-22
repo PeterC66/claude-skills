@@ -22,7 +22,7 @@
  * an argument and `routineNumbers()` takes its clock, so every window boundary here is
  * exact rather than "run this before the end of the month".
  */
-import { readFacts, routineNumbers, promptBlock, parseRunName, RELAY_PATTERNS, DECISION_PATTERNS, DEFAULT_WINDOW_DAYS } from './routine_numbers.mjs';
+import { readFacts, routineNumbers, render, promptBlock, parseRunName, RELAY_PATTERNS, DECISION_PATTERNS, DEFAULT_WINDOW_DAYS } from './routine_numbers.mjs';
 
 let bad = 0, ran = 0;
 const check = (label, ok, detail) => { ran++; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${label}${ok || detail == null ? '' : ' -- ' + detail}`); };
@@ -37,12 +37,49 @@ const stamp = (msAgo, feed) => {
 };
 const facts = (over = {}) => ({ runNames: [], runTexts: [], yourMoveTexts: [], prompt: null, pages: {}, repos: [], ...over });
 
-console.log('\n1. Human touches: always unmeasured, and always says what would make it real');
+/* One manifest row, for section 1. `stage_actors.mjs` owns the counting and its own
+ * harness falsifies it in forty ways; what is asserted HERE is only the join — that
+ * this file's number changes when the manifests do, and refuses when they say
+ * nothing. Two copies of the same assertions would be the duplication this project
+ * has a shelf of lessons about. */
+const mapWith = (name, ...runs) => ({
+  name, kind: 'area', town: null, dir: `C:/fixture/${name}`,
+  manifest: { town: name, stages: { S1: { name: 'services', latest: null, runs: runs.map(([at, by], i) => {
+    const r = { id: `r${i}`, dir: `S1/r${i}`, at, outputs: ['x.json'] };
+    if (by) r.by = by;
+    return r;
+  }) } } },
+});
+const AT = '2026-10-03T09:00';   // 2 days before NOW, inside the 30-day window
+
+console.log('\n1. Human touches: measured off the manifests, and a refusal when they say nothing');
 {
+  /* THE DEFAULT CASE IS STILL A REFUSAL, and on 2026-09-22 it was the real one:
+   * 1,211 stage runs in the window and not one recording who performed it, because
+   * `--by` did not exist when any of them was committed. A facts object with no
+   * manifests at all — every other stub in this file — must reach the same verdict
+   * as an estate of unattributed runs, because both mean "nothing was consulted". */
   const n = routineNumbers(facts(), { now: NOW }).numbers.humanTouchesPerMapMonth;
-  check('measured is false and value is null — never a number', n.measured === false && n.value === null, JSON.stringify(n.value));
-  check('it names why the repository cannot answer', /cannot measure his time/.test(n.why), n.why);
-  check('and it names the instrument that would change that, rather than only refusing', /manifest/.test(n.wouldNeed), n.wouldNeed);
+  check('measured is false and value is null when no manifest was read', n.measured === false && n.value === null, JSON.stringify(n.value));
+  check('it says no map tree could be read, rather than reporting zero touches', /not a count of zero/.test(n.why), n.why);
+  check('and it names the flag that would change that, rather than only refusing', /--by/.test(n.wouldNeed), n.wouldNeed);
+
+  const unattributed = routineNumbers(facts({ manifests: [mapWith('Alpha', [AT, null], [AT, null])] }), { now: NOW }).numbers.humanTouchesPerMapMonth;
+  check('an estate of runs nobody named is ALSO a refusal, not a rate of zero', unattributed.measured === false && unattributed.value === null);
+  check('but it now says how many runs it looked at — the whole gain over the sentence it replaced', unattributed.runs === 2 && /2 stage\(s\)/.test(unattributed.why), unattributed.why);
+
+  const real = routineNumbers(facts({ manifests: [mapWith('Alpha', [AT, 'buses-29'], [AT, 'sched-1252'])] }), { now: NOW }).numbers.humanTouchesPerMapMonth;
+  check('one attributed run makes it measured, which is the narrowest rule available', real.measured === true);
+  check('and the person-started stage is the touch, while the tick is not', real.value === 1 && real.byPerson === 1 && real.byLoop === 1, JSON.stringify(real.value));
+
+  /* THE COVERAGE MUST TRAVEL WITH THE VALUE. A rate over attributed runs reads
+   * exactly like a rate over the estate, and the one that gets quoted into a round
+   * record is whichever the output shows. */
+  const thinFacts = facts({ manifests: [mapWith('Alpha', [AT, 'buses-29'], [AT, null], [AT, null], [AT, null])] });
+  const thin = routineNumbers(thinFacts, { now: NOW }).numbers.humanTouchesPerMapMonth;
+  check('coverage is reported beside the value, never omitted', thin.coverage === 0.25 && thin.attributed === 1 && thin.runs === 4, JSON.stringify(thin.coverage));
+  const text = render(routineNumbers(thinFacts, { now: NOW }));
+  check('and the printed block carries it on the line under the number', /coverage: 1 of 4 stage\(s\)/.test(text), text.split('\n').slice(2, 4).join(' | '));
 }
 
 console.log('\n2. CI red rate: a repo gh cannot answer for is NOT a rate of zero');

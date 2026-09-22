@@ -851,12 +851,9 @@ const localDirOf = (m) => {
     || tree.places.find((x) => want.includes(x.name.toLowerCase()));
   return pl ? pl.dir : null;
 };
-/* The monthly grading, read once (buses-data OA-426). A refresh row says a town's
- * timetables have moved; the grade says whether moving the sheet needs a person,
- * and it is the fact the loop needs before it can work a refresh row unattended.
- * It is matched to the scan the rows are joined to BY DATE and never otherwise —
- * `refresh_grades.mjs` says why at length. Warnings, not rows: a grading that
- * cannot be read is not work. */
+/* The monthly grading, read once (buses-data OA-426): does moving this sheet need a
+ * PERSON? Matched to the scan the rows join to BY DATE and never otherwise, and
+ * warnings rather than rows — `refresh_grades.mjs` says why at length. */
 const grades = readGradeState({ busesDir: BUSES });
 for (const w of gradeWarnings(grades, upcoming ? upcoming.date : null)) warnings.push(w);
 const townMaps = (town) => {

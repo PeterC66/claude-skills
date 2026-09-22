@@ -166,11 +166,17 @@ test('a missing file is not the same as an empty one', () => tmp(dir => {
     'an absent generator hashed identically to a present but empty one');
 }));
 
+/* `{ commit: null }` ON THE THREE SURGICAL TESTS BELOW, and it is not a
+ * convenience. Since OA-430 a bare stampEngine() asks the enclosing git
+ * repository for the engine commit, so a test that does not name one is a test
+ * whose expected BYTES depend on which checkout it runs in — green on a dirty
+ * tree, red on a clean one, and nothing in the failure saying so. These three are
+ * about the surgical rewrite; the commit half has its own tests under them. */
 test('stamping an existing field rewrites only that field', () => tmp(dir => {
   const p = path.join(dir, 'routes.json');
   const before = '{\n  "engine": "0000000000",\n  "version": "2.1",\n  "design": { "printSafe": 5 }\n}\n';
   fs.writeFileSync(p, before);
-  const r = stampEngine(p, 'abcdef1234');
+  const r = stampEngine(p, 'abcdef1234', { commit: null });
   assert.strictEqual(r.status, 'updated');
   const after = fs.readFileSync(p, 'utf8');
   assert.strictEqual(JSON.parse(after).engine, 'abcdef1234');
@@ -181,7 +187,7 @@ test('stamping an existing field rewrites only that field', () => tmp(dir => {
 test('stamping adds the field when it is absent, and the file stays valid JSON', () => tmp(dir => {
   const p = path.join(dir, 'routes.json');
   fs.writeFileSync(p, '{\n  "version": "2.1"\n}\n');
-  const r = stampEngine(p, 'abcdef1234');
+  const r = stampEngine(p, 'abcdef1234', { commit: null });
   assert.strictEqual(r.status, 'added');
   const obj = JSON.parse(fs.readFileSync(p, 'utf8'));
   assert.strictEqual(obj.engine, 'abcdef1234');
@@ -192,8 +198,73 @@ test('re-stamping the same hash is a no-op and says so', () => tmp(dir => {
   const p = path.join(dir, 'routes.json');
   const text = '{\n  "engine": "abcdef1234",\n  "version": "2.1"\n}\n';
   fs.writeFileSync(p, text);
-  assert.strictEqual(stampEngine(p, 'abcdef1234').status, 'ok');
+  assert.strictEqual(stampEngine(p, 'abcdef1234', { commit: null }).status, 'ok');
   assert.strictEqual(fs.readFileSync(p, 'utf8'), text, 'a no-op stamp still touched the bytes');
+}));
+
+/* ---- THE COMMIT HALF OF THE STAMP (buses-data OA-430) --------------------
+ *
+ * `engine` says whether a map is behind; `engineCommit` is what lets the board get
+ * that engine back and ask whether the map's own committed sheets still reproduce
+ * under it. The pair is a written claim about a join, so what is worth testing is
+ * the rule that keeps it honest: the two fields move together or not at all. */
+test('the commit is recorded beside the hash, and the hash reads first', () => tmp(dir => {
+  const p = path.join(dir, 'routes.json');
+  fs.writeFileSync(p, '{\n  "version": "2.1"\n}\n');
+  const sha = '0123456789abcdef0123456789abcdef01234567';
+  const r = stampEngine(p, 'abcdef1234', { commit: sha });
+  assert.strictEqual(r.commit, sha);
+  const after = fs.readFileSync(p, 'utf8');
+  const obj = JSON.parse(after);
+  assert.strictEqual(obj.engine, 'abcdef1234');
+  assert.strictEqual(obj.engineCommit, sha);
+  assert.strictEqual(obj.version, '2.1', 'adding the pair lost the rest of the file');
+  assert.ok(after.indexOf('"engine"') < after.indexOf('"engineCommit"'),
+    'the hash is what a reader skims for, so it must not end up below the commit');
+}));
+
+test('a stamp that can name no commit REMOVES the old one rather than leaving it', () => tmp(dir => {
+  // A new hash beside a stale commit is the lying pair engineDirForCommit()
+  // exists to refuse — and it would be refused weeks later, about a map nobody is
+  // looking at, with nothing left to say which stamp did it. A map carrying
+  // `engine` and no `engineCommit` is what every map carried before OA-430, and
+  // the board has an answer for that.
+  const p = path.join(dir, 'routes.json');
+  fs.writeFileSync(p, '{\n  "engine": "0000000000",\n  "engineCommit": "1111111111111111111111111111111111111111",\n  "version": "2.1"\n}\n');
+  const r = stampEngine(p, 'abcdef1234', { commit: null, commitWhy: 'the closure was dirty' });
+  assert.strictEqual(r.commitStatus, 'removed');
+  const obj = JSON.parse(fs.readFileSync(p, 'utf8'));
+  assert.strictEqual(obj.engine, 'abcdef1234');
+  assert.ok(!('engineCommit' in obj), 'the stale commit survived a stamp that could not vouch for it');
+  assert.strictEqual(obj.version, '2.1');
+}));
+
+test('removing the commit leaves valid JSON whichever side of it the comma is on', () => tmp(dir => {
+  // The removal has to take the comma with it, and which neighbour owns the comma
+  // depends on where the field sits. Both arrangements, because a rule that
+  // handles one and mangles the other produces a routes.json no generator can read
+  // — and the mangling would land in a tracked ci-reference.
+  for (const before of ['{\n  "engineCommit": "1111111111111111111111111111111111111111",\n  "engine": "0000000000"\n}\n',
+                        '{\n  "engine": "0000000000",\n  "engineCommit": "1111111111111111111111111111111111111111"\n}\n']) {
+    const p = path.join(dir, 'routes.json');
+    fs.writeFileSync(p, before);
+    stampEngine(p, 'abcdef1234', { commit: null });
+    const obj = JSON.parse(fs.readFileSync(p, 'utf8'));   // throws if a comma was left behind
+    assert.strictEqual(obj.engine, 'abcdef1234');
+    assert.ok(!('engineCommit' in obj));
+  }
+}));
+
+test('engineCommitNow names no commit for a tree that is in no repository', () => tmp(dir => {
+  // The whole value of the field is that checking the commit out gets the engine
+  // back. A directory in no git repository cannot support that claim, and neither
+  // can a dirty closure; both are an ABSENCE of the field rather than a guess.
+  // Through _engine.js like every other subject, so a prove-red scratch copy is
+  // what runs — engine_indirection.test.js is the census that enforces it.
+  const { engineCommitNow } = require('./_engine.js').load('engine_commit.js');
+  const r = engineCommitNow(seed(dir, { 'icons.js': 'const a = 1;\n' }));
+  assert.ok(!r.commit, 'a directory in no git repository was given a commit anyway');
+  assert.match(r.why, /no git repository/);
 }));
 
 test('stamping refuses a file that is not JSON, rather than writing over it', () => tmp(dir => {

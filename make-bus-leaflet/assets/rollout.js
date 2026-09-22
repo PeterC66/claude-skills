@@ -238,7 +238,7 @@ function rolloutOne(t) {
       && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE) {
     return { name: t.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current template is `
-                   + `${CURRENT_ENGINE} — status.js gates that as ENGINE STALE. Rebuild and re-stamp with:  `
+                   + `${CURRENT_ENGINE} — status.js reports that as ENGINE STALE -- a chore the worklist carries as one engine-rebuild row, never a red (OA-396, OA-430). Rebuild and re-stamp with:  `
                    + `node rollout.js --town "${t.name}" --apply --force` };
   }
   if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE) {
@@ -277,7 +277,12 @@ function rolloutOne(t) {
   // The generators are copied in by buildSheets() below, from the same live template
   // this pair of lines used to copy — one copy of that rule, not two (OA-310).
   const engineHash = CURRENT_ENGINE;
-  stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
+  // `{ place: false }` is NAMED rather than inferred (OA-430). stampEngine() reads
+  // the path when nothing says which template it is, and a dry run stamps a SCRATCH
+  // routes.json whose path contains no `Places` segment — so a place rollout would
+  // silently check the town closure for cleanliness instead of its own. The caller
+  // knows which tool it is; the path does not.
+  stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash, { place: false });
   // Dry-run parity: stamp the PREVIOUS run's identifier so the label-set diff below
   // compares like with like. Stamping the next one would report the version line as
   // both lost and gained on every town, every time, which is noise that trains you to
@@ -373,7 +378,7 @@ function rolloutOne(t) {
   if (seeded.sidecars.length) {
     console.log(`  ${t.name}: ${seeded.sidecars.length} unplaced-label sidecar(s) in the previous S4 were NOT carried forward — ${seeded.sidecars.join(', ')}. Each is an OUTPUT; the generator that draws that sheet writes its own, or unlinks it when nothing dropped. A sheet this build no longer draws therefore leaves none behind.`);
   }
-  stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
+  stampEngine(path.join(s4Dir, 'routes.json'), engineHash, { place: false });
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
   /* THE REAL RUN, through the same entry point as the dry run above (OA-310).
    *
@@ -479,7 +484,7 @@ console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', ')
 // verdict that names a command the operator has to type. It repeats here.
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(
-  `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp — status.js gates these as ENGINE STALE, `
+  `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp — status.js REPORTS these as ENGINE STALE and the worklist carries one engine-rebuild row each, `
   + `and this tool will not clear them without --force:\n  `
   + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --force`).join('\n  '));
 // STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict

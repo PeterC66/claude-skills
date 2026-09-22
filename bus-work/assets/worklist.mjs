@@ -343,8 +343,9 @@ function fromMapTree() {
   if (!SK) { warnings.push('make-bus-leaflet assets not found — local staleness skipped.'); return { towns: [], places: [] }; }
   if (!existsSync(path.join(BUSES, 'Areas'))) { warnings.push(`No Areas dir under ${BUSES} — local staleness skipped.`); return { towns: [], places: [] }; }
   const { findTowns, findPlaces, readJson, latestRunDir } = require(path.join(SK, 'gate_lib.js'));
-  const { computeEngineVersion } = require(path.join(SK, 'engine_version.js'));
+  const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(SK, 'engine_version.js'));
   const current = computeEngineVersion();
+  const currentPlace = computePlaceEngineVersion();
 
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -399,9 +400,20 @@ function fromMapTree() {
     // A standalone place has no parent town to borrow an answer from, so its S6
     // is the only blind answer it will ever have.
     row.standalone = !p.town;
+    // WHICH ENGINE DREW IT, asked of a place for the first time (OA-430). The
+    // town branch has had these two lines since the hash existed; this one
+    // stopped at "is it built", so eleven of the twelve places were behind for
+    // weeks with nothing in any feed able to say so. Against the PLACE template,
+    // which is a different hash from the town one and not a superset of it.
+    if (s4) {
+      let pr = {};
+      try { pr = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
+      row.engine = pr.engine || null;
+      row.engineStale = pr.engine !== currentPlace;
+    }
     return row;
   });
-  return { towns, places, currentEngine: current };
+  return { towns, places, currentEngine: current, currentPlaceEngine: currentPlace };
 }
 
 // ---- local map tree: upcoming BODS changes ---------------------------------
@@ -1087,16 +1099,37 @@ for (const t of tree.towns.filter((t) => !t.built)) {
     do: [{ kind: 'skill', what: `Run make-bus-leaflet for ${t.name} from whichever stage its manifest reached.` }],
   });
 }
-const engineStale = tree.towns.filter((t) => t.built && t.engineStale);
-if (engineStale.length) {
+/*
+ * ONE REBUILD ROW PER MAP, NOT ONE ROW FOR THE ESTATE (buses-data OA-430, R9 item 6).
+ *
+ * This was a single `engine-stale` row naming every behind town in its `why`, with
+ * `rollout.js --all` for a command — an ALL-OR-NOTHING debt nobody could take a
+ * bite out of, and one a loop tick could not claim at all, its whole contract
+ * being one unit of work ending in a state that commits coherently. The review's
+ * section 9 priced that at fifty towns rebuilt in order before an engine change
+ * could merge. A map is the unit because a map is what rebuilds, versions, commits
+ * and gets looked at, and the estate is done when the last row has gone — a state
+ * readable off this worklist rather than a date somebody has to remember.
+ *
+ * IT CAN BE A ROW AT ALL ONLY BECAUSE IT IS A CHORE: status.js now gates each map
+ * against the engine recorded in its own ci-reference, so a behind map's sheets
+ * are still proved to reproduce under the code that drew them, and being behind is
+ * no longer something the board can go red about.
+ */
+const engineStale = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
+  .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
+for (const { row: mapRow, place } of engineStale) {
+  const live = place ? tree.currentPlaceEngine : tree.currentEngine;
+  const tool = place ? 'rollout_places.js' : 'rollout.js';
+  const sel = `${place ? '--place' : '--town'} "${mapRow.name}"`;
   add({
-    key: 'engine-stale', rank: 8, type: 'housekeeping',
-    title: `${engineStale.length} town${engineStale.length === 1 ? ' was' : 's were'} drawn by an older engine`,
-    why: `${engineStale.map((t) => `${t.name} (v${t.version}, ${t.engine || 'unstamped'})`).join(', ')} — the live template is ${tree.currentEngine}. Harmless until you want the current look; the re-render is mechanical and bumps each town a minor version.`,
-    who: '—', runbook: 'engine', towns: engineStale.map((t) => t.name),
+    key: `engine-rebuild:${mapRow.name}`, rank: 8, type: 'housekeeping',
+    title: `${mapRow.name} was drawn by an older engine`,
+    why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`,
+    who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [
-      { kind: 'shell', cwd: SK || '', cmd: 'node rollout.js --all', note: 'dry-run — shows what would change' },
-      { kind: 'shell', cwd: SK || '', cmd: 'node rollout.js --all --apply', note: 'writes; stops on a lost label' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — shows what would change' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes; stops on a lost label' },
     ],
   });
 }

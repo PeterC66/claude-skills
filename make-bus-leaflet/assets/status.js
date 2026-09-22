@@ -1515,7 +1515,7 @@ async function main() {
   }
   // ENGINE STALE is a CHORE and reads as one (OA-396), and since OA-430 it is one
   // chore PER MAP rather than one for the estate: the worklist turns each name
-  // below into its own `engine-rebuild:<map>` row, which is the unit a loop tick
+  // below into its own `engine-rebuild-<map>` row, which is the unit a loop tick
   // can claim, build and commit on its own. Places are named here for the first
   // time; they were behind for weeks with nothing counting them.
   if (engineStaleRows.length || placeEngineStaleRows.length) console.log('  ENGINE STALE (information, not red): '

@@ -1101,20 +1101,17 @@ for (const t of tree.towns.filter((t) => !t.built)) {
 }
 /*
  * ONE REBUILD ROW PER MAP, NOT ONE ROW FOR THE ESTATE (buses-data OA-430, R9 item 6).
- *
  * This was a single `engine-stale` row naming every behind town in its `why`, with
  * `rollout.js --all` for a command — an ALL-OR-NOTHING debt nobody could take a
  * bite out of, and one a loop tick could not claim at all, its whole contract
- * being one unit of work ending in a state that commits coherently. The review's
- * section 9 priced that at fifty towns rebuilt in order before an engine change
- * could merge. A map is the unit because a map is what rebuilds, versions, commits
- * and gets looked at, and the estate is done when the last row has gone — a state
- * readable off this worklist rather than a date somebody has to remember.
+ * being one unit of work that commits coherently. Section 9 of the review priced
+ * that at fifty towns rebuilt in order before an engine change could merge. A map
+ * is the unit because a map is what rebuilds, versions and gets looked at, and the
+ * estate is done when the last row has gone.
  *
- * IT CAN BE A ROW AT ALL ONLY BECAUSE IT IS A CHORE: status.js now gates each map
- * against the engine recorded in its own ci-reference, so a behind map's sheets
- * are still proved to reproduce under the code that drew them, and being behind is
- * no longer something the board can go red about.
+ * IT CAN BE A ROW AT ALL ONLY BECAUSE IT IS A CHORE: status.js gates each map
+ * against the engine recorded in its own ci-reference, so a behind map's sheets are
+ * still proved to reproduce, and being behind is no longer a red.
  */
 const engineStale = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
   .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
@@ -1123,7 +1120,10 @@ for (const { row: mapRow, place } of engineStale) {
   const tool = place ? 'rollout_places.js' : 'rollout.js';
   const sel = `${place ? '--place' : '--town'} "${mapRow.name}"`;
   add({
-    key: `engine-rebuild:${mapRow.name}`, rank: 8, type: 'housekeeping',
+    // HYPHEN, NOT COLON: a row key is written into `loop/your-move/` as a FIELD, so
+    // `key: engine-rebuild:March` parses as `engine-rebuild` with a value, and
+    // `looksLikeRowKey()` refuses it. A gate caught that, not a reader.
+    key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
     title: `${mapRow.name} was drawn by an older engine`,
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`,
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],

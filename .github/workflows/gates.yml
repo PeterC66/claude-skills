@@ -332,6 +332,23 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-refresh-grades
 
+      # buses-data OA-426 (2026-09-22), R9 item 2, the other half: the thing that
+      # ACTS on that grade. A SAFE refresh corrects an operator name and a set of
+      # days and must touch nothing else -- so the failures that matter are all
+      # failures of restraint, and each has a mutation arm: overwriting a string a
+      # person wrote (Ramsey files its community operator with an `&` where the feed
+      # says `and`, and a spoke as "Mon-Sat (305 Mon-Fri)"), losing the town's own
+      # route order (which no LABEL-SET check can see, because a set has no order,
+      # and which made one map's key read as four badges with no operator beside
+      # them), and letting an empty string into the set of values a label may
+      # mention, which explains every label there is and says nothing. The S1-S5
+      # chain itself is NOT here and the harness says so in its header: driving it
+      # needs the 139 MB feed and a 200 MB town tree, neither of which survives
+      # actions/checkout, so it was proved on the laptop and recorded in the round.
+      - name: Prove the SAFE monthly refresh corrects only what the machine wrote
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-refresh-town
+
       # buses-data OA-427 (2026-09-22), R9 item 3. *Human touches per map-month* is
       # the number R9's recommendation is judged on, and it was a refusal until the
       # manifests started recording who performed each stage. The failure that

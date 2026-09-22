@@ -151,7 +151,17 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
 
 ## `refresh` — a portal map whose services are changing (R4)
 
-1. **Regenerate centrally.** Re-run the map's own skill for the town/place to produce a fresh S5-render dir. Same making step as a build, for an existing map. The worklist item's note carries the specific upcoming changes from the BODS scan — use them to check the regenerated data actually reflects them.
+1. **Regenerate centrally.** The worklist item's note carries the specific upcoming changes from the BODS scan — use them to check the regenerated data actually reflects them. **How you regenerate depends on whether the scan graded this town SAFE**, which the row says in its `why` and carries as its `grade`:
+
+   - **SAFE, and the row carries an `unattended` block** (a town, never a place; buses-data OA-426): the whole rebuild is one command, and it is the row's own first `do` step. Run it from the `make-bus-leaflet` assets folder, `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`; `<Town>` is the town as `Areas/` spells it, `<scan date>` is the report the row is joined to, and `<who>` is your own session name (`sched-HHMM` for a tick), recorded on every stage it opens:
+
+     ```bash
+     python3 refresh_town.py --town "<Town>" --scan <scan date> --apply --by <who>
+     ```
+
+     Leave `--apply` off and it is a dry run that writes nothing and prints what it would change. It patches only the operator names and day strings the feed moved, runs S1, S3, S4 and S5 through the documented stage order, and **refuses rather than half-applying**: a value a person wrote, a label it cannot account for, a blocking build warning or a sheet that will not render each stop it with nothing committed. A non-zero exit is something to read, never something to retry.
+
+   - **ESCALATE, NOTHING, a place, or no grade at all**: re-run the map's own skill for the town/place to produce a fresh S5-render dir, the same making step as a build. A person decides what the sheet should say; the row's `why` names which tags made that true.
 2. **Stage it**, in `PORTAL` (`C:\Claude\community-bus-maps`):
 
    - **Against the live site** (item 4, 2026-08-10): `npm run deliver -- --map <slug> --kind area|place --src "<fresh S5-render dir>" --note "BODS <date> refresh"`. One laptop command — scp's the render to the VPS, verifies it byte-identical *before touching the live service*, stops the portal, runs `propose-update.mjs` inside a throwaway container, restarts, health-checks. Needs `DEPLOY_HOST`/`DEPLOY_SSH_KEY`/`DEPLOY_APP_DIR` in `.env`. `worklist.mjs` prints exactly this form when it's reading the live worklist (`--url`/`BUSMAPS_URL` set).

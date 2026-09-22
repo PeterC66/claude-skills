@@ -90,7 +90,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems } from './bods_scan.mjs';
-import { readGradeState, gradeFor, gradeSentence, gradeWarnings } from './refresh_grades.mjs';
+import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh } from './refresh_grades.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -867,6 +867,8 @@ const localDirOf = (m) => {
  * PERSON? Matched to the scan the rows join to BY DATE and never otherwise, and
  * warnings rather than rows — `refresh_grades.mjs` says why at length. */
 const grades = readGradeState({ busesDir: BUSES });
+/* A refresh row's FIRST step: the one command when a tick can do it, the skill otherwise. */
+const rebuildStep = (u, what) => (u ? { kind: 'shell', cwd: u.cwd, cmd: u.cmd } : { kind: 'skill', what });
 for (const w of gradeWarnings(grades, upcoming ? upcoming.date : null)) warnings.push(w);
 const townMaps = (town) => {
   const lower = town.toLowerCase();
@@ -883,11 +885,13 @@ if (upcoming) {
       const seen = reviewedAgainst(localDirOf(m), upcoming.date);
       if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
+      const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
         title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}`,
         why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date)}`,
         grade: gradeFor(grades, s.town, upcoming.date),
+        unattended: un,
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,
         // REMOTE: the target is the live site, so deliver-map.mjs is the only
@@ -896,25 +900,27 @@ if (upcoming) {
         // below only ever writes to a LOCAL DATA_DIR and would silently do
         // nothing useful against a live worklist. LOCAL: propose-update.mjs
         // directly is still simpler/faster for testing against local dev.
-        do: REMOTE ? [
-          { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
-          { kind: 'shell', cwd: PORTAL, cmd: `npm run deliver -- --map ${m.slug} --kind ${m.kind} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
-        ] : [
-          { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
-          { kind: 'shell', cwd: PORTAL, cmd: `node scripts/propose-update.mjs --map ${m.slug} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
+        do: [
+          rebuildStep(un, `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.`),
+          REMOTE
+            ? { kind: 'shell', cwd: PORTAL, cmd: `npm run deliver -- --map ${m.slug} --kind ${m.kind} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` }
+            : { kind: 'shell', cwd: PORTAL, cmd: `node scripts/propose-update.mjs --map ${m.slug} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
         ],
       });
     }
     if (!maps.length && localTown) {
       const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
       if (seenLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
+      // No portal map means no delivery step, so a SAFE row here is finishable end to end.
+      const unLocal = unattendedRefresh(grades, localTown.name, upcoming.date, { kind: 'area', assetsDir: SK });
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
         title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}`,
         why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.${gradeSentence(grades, localTown.name, upcoming.date)}`,
         grade: gradeFor(grades, localTown.name, upcoming.date),
+        unattended: unLocal,
         who: '—', ageDays: upcoming.ageDays, runbook: 'R4', skill: 'make-bus-leaflet', subject: localTown.name,
-        do: [{ kind: 'skill', what: `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).` }],
+        do: [rebuildStep(unLocal, `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).`)],
       });
     }
   }

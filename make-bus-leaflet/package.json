@@ -32,6 +32,7 @@
     "test:prove-red-stage-actor-callers": "node tools/prove-red-stage-actor-callers.js",
     "test:prove-red-route-collision": "python3 tools/prove-red-route-collision.py",
     "test:prove-red-days-resolution": "python3 tools/prove-red-days-resolution.py",
+    "test:prove-red-refresh-town": "python3 tools/prove-red-refresh-town.py",
     "test:prove-red-variant-fold": "python3 tools/prove-red-variant-fold.py",
     "test:prove-red-consolidation": "python3 tools/prove-red-consolidation.py",
     "test:prove-red-not-in-bods": "python3 tools/prove-red-not-in-bods.py",

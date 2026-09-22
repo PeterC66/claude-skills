@@ -79,6 +79,18 @@ NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS")
 MECHANICAL=("OPERATOR","DAYS")
 
 
+def actionable_rows(changes):
+    """The rows somebody could act on: everything NON_ACTIONABLE above does not excuse.
+
+    ONE PLACE, and the history is the argument. `classify()` re-implemented this
+    filter as the bare literal "COMMUNITY" until 2026-09-15, which graded a town
+    SAFE and left it off the towns-to-review list in the same breath; OA-426's
+    `town_grade_record()` would have been the second copy of it, and two copies of
+    one rule is how they stop agreeing. Both callers ask this.
+    """
+    return [c for c in changes if c[0] not in NON_ACTIONABLE]
+
+
 def classify(changes):
     """Grade a town's changes: SAFE, ESCALATE or NOTHING, with the rows that decided it.
 
@@ -98,7 +110,7 @@ def classify(changes):
     One blocking change escalates the WHOLE town: the grade is the town's, because
     a rebuild is.
     """
-    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]
+    actionable=actionable_rows(changes)
     if not actionable:
         return "NOTHING",[]
     escalating=[c for c in actionable if c[0] not in MECHANICAL]
@@ -131,7 +143,7 @@ def town_grade_record(town, changes):
     person is wanted, and deliberately not the messages, which are prose and
     belong in the report.
     """
-    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]
+    actionable=actionable_rows(changes)
     grade,reasons=classify(changes)
     return {"town":town, "grade":grade, "actionable":len(actionable),
             "reasons":sorted({r[0] for r in reasons})}

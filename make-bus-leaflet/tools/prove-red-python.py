@@ -248,9 +248,9 @@ MUTATIONS = [
     # Their three siblings, which mutated the patch functions, were deleted with
     # them -- there is no applier left for them to be about.
     {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
-     "what": "classify re-spells the non-actionable set as the bare literal COMMUNITY, so an expected absence the report leaves off its review list is auto-applied as SAFE",
-     "find": "    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]",
-     "to": '    actionable=[c for c in changes if c[0]!="COMMUNITY"]'},
+     "what": "the actionable filter re-spells the non-actionable set as the bare literal COMMUNITY, so an expected absence the report leaves off its review list is graded SAFE -- and since OA-426 this one line is asked by the grade AND by the sidecar, so a survivor here is wrong in two artefacts",
+     "find": "    return [c for c in changes if c[0] not in NON_ACTIONABLE]",
+     "to": '    return [c for c in changes if c[0]!="COMMUNITY"]'},
 
     {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
      "what": "SAFE goes back to being the complement of a blocking list, so every tag the report grows is auto-applied on the day it is added",

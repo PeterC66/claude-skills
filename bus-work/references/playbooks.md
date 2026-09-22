@@ -162,6 +162,14 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
      Leave `--apply` off and it is a dry run that writes nothing and prints what it would change. It patches only the operator names and day strings the feed moved, runs S1, S3, S4 and S5 through the documented stage order, and **refuses rather than half-applying**: a value a person wrote, a label it cannot account for, a blocking build warning or a sheet that will not render each stop it with nothing committed. A non-zero exit is something to read, never something to retry.
 
    - **ESCALATE, NOTHING, a place, or no grade at all**: re-run the map's own skill for the town/place to produce a fresh S5-render dir, the same making step as a build. A person decides what the sheet should say; the row's `why` names which tags made that true.
+
+   **Then the month's ink review, before anything is staged** (buses-data OA-429). Staging emails the customer, so a sheet whose ink moved is shown to Peter first, on one page for the whole month, and staged only once he has accepted it; a map whose ink did not move, once the build stamp is ignored, goes ahead without him. It runs from any folder, the path is real, and `<scan date>` is the report the rows are joined to; `--town "<Town>,<Town>"` adds towns a person rebuilt to the SAFE ones the grading names:
+
+     ```bash
+     node "C:/u3a St Ives/.claude/skills/bus-work/assets/ink_review.mjs" --scan <scan date>
+     ```
+
+     It writes the record and his answers to `_gtfs/ink-review_<scan date>.json` and the page, with before-and-after crops of each change, to `loop/ink-review/<scan date>/index.html`. Peter answers in words — *accept Ramsey*, *hold March, the museum icon is doubled* — and the session records each with `--answer "<Town>" --verdict accept|hold --by <who>`. **Stage only what `--deliverable` lists under `deliver`.** An answer is about one build: a map rebuilt after it was accepted is waiting again.
 2. **Stage it**, in `PORTAL` (`C:\Claude\community-bus-maps`):
 
    - **Against the live site** (item 4, 2026-08-10): `npm run deliver -- --map <slug> --kind area|place --src "<fresh S5-render dir>" --note "BODS <date> refresh"`. One laptop command — scp's the render to the VPS, verifies it byte-identical *before touching the live service*, stops the portal, runs `propose-update.mjs` inside a throwaway container, restarts, health-checks. Needs `DEPLOY_HOST`/`DEPLOY_SSH_KEY`/`DEPLOY_APP_DIR` in `.env`. `worklist.mjs` prints exactly this form when it's reading the live worklist (`--url`/`BUSMAPS_URL` set).

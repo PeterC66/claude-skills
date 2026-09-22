@@ -332,6 +332,17 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-refresh-grades
 
+      # buses-data OA-429 (2026-09-23), R9 item 5. The monthly ink review is the
+      # gate in front of delivery, and delivery emails the map's customer. So the
+      # failures that matter are a changed sheet called unchanged (a stamp spelled
+      # another way, a sheet missing from disk read as sameness) and an accept
+      # carried over to a build nobody looked at; each has a case the rule's
+      # absence would flip. The disk is injected; the crops need sharp and are
+      # not here.
+      - name: Prove the ink review shows what moved and gates what was not accepted
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-ink-review
+
       # buses-data OA-426 (2026-09-22), R9 item 2, the other half: the thing that
       # ACTS on that grade. A SAFE refresh corrects an operator name and a set of
       # days and must touch nothing else -- so the failures that matter are all

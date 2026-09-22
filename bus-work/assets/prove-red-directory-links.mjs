@@ -215,7 +215,7 @@ console.log('\n11. the concurrency verdict');
   check('a directory row needs the buses tree', needsOf({ key: 'directory-links-due', type: 'directory-links' }).join() === 'buses-tree');
   check('the dead row says the same', needsOf({ key: 'directory-links-dead', type: 'directory-links' }).join() === 'buses-tree');
   check('it does NOT claim the engine', !needsOf({ key: 'directory-links-dead', type: 'directory-links' }).includes('engine'));
-  check('MUTATION CONTROL — an unknown key of the same type falls to the default', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree');
+  check('MUTATION CONTROL — an unknown key of the same type falls to the default', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree,buses-maps');
 }
 
 console.log('\n12. THE JOIN ITSELF — the real writer\'s output, read by the real reader');

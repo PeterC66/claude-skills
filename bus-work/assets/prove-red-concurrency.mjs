@@ -143,7 +143,13 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   // Peter types the salutation and leaves it.
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'the held letter with NO hold naming it: CHECK FIRST — nothing accounts for it');
+  // OA-434: the letter is FENCED to CORR-001, so it no longer stops the whole
+  // tree; it stops work that writes into a map or letter folder, until a hold
+  // accounts for it.
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'the held letter with NO hold naming it: buses-maps CHECK FIRST — nothing accounts for it');
+  want(conc.assess(['buses-tree'], C), conc.SAFE, '…and buses-tree SAFE: a letter in its own folder does not stop the loop (OA-434)');
+  ok(conc.formatConditions(C).some((l) => /fenced\s+Correspondence\/CORR-001\//.test(l)),
+    'the conditions block SHOWS the fence and names the folder', conc.formatConditions(C).join('\n'));
 
   // A tick writes the hold, in the house style: several fields on one line,
   // the path in backticks, prose after it.
@@ -156,6 +162,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   ok(C.repos.buses.accounted.length === 1 && C.repos.buses.accounted[0].path === letter && C.repos.buses.accounted[0].ref === 'corr-001-salutation',
     'and it is accounted for, by the hold that names it', JSON.stringify(C.repos.buses.accounted));
   want(conc.assess(['buses-tree'], C), conc.SAFE, 'the held letter WITH a live hold naming it: SAFE — this is the case twelve ticks stopped on');
+  want(conc.assess(['buses-maps'], C), conc.SAFE, '…and buses-maps SAFE too, because the hold accounts for it');
   want(conc.assess(['estate-sweep'], C), conc.SAFE, 'and a sweep is not held back by a letter either');
   ok(conc.formatConditions(C).some((l) => /accounted\s+Correspondence\/CORR-001.*corr-001-salutation\.md/.test(l)),
     'the conditions block SHOWS the subtraction and names the hold', conc.formatConditions(C).join('\n'));
@@ -164,16 +171,16 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   // and the sentence counts ONE file and names Areas, not two and Correspondence.
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
   C = cond();
-  const A = conc.assess(['buses-tree'], C);
-  want(A, conc.CHECK, 'a second dirty file outside the hold: CHECK FIRST again');
-  ok(A.reasons.some((x) => /^1 uncommitted file\(s\) here \(Areas\)/.test(x.why)), 'and the reason counts the ONE unaccounted file and names its folder only', A.reasons.map((x) => x.why).join(' | '));
+  const A = conc.assess(['buses-maps'], C);
+  want(A, conc.CHECK, 'a second dirty file outside the hold: buses-maps CHECK FIRST again');
+  ok(A.reasons.some((x) => /^1 uncommitted file\(s\) inside Areas\/Ramsey —/.test(x.why)), 'and the reason counts the ONE unaccounted file and names its folder only', A.reasons.map((x) => x.why).join(' | '));
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
 
   // Retiring the hold puts the letter back into the verdict — the direction a
   // rule like this must fail in.
   fs.rmSync(path.join(yourMove, 'corr-001-salutation.md'));
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
 
   // A hold that names a file OUTSIDE Correspondence/ accounts for nothing: that
   // is residue, and the tree was right to stop on it on 2026-09-09.
@@ -182,7 +189,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   fs.writeFileSync(path.join(yourMove, 'residue.md'),
     '# Residue\n\n**Raised by:** `sched-1115`, 2026-09-09 · **File:** `Areas/Ramsey/notes.md`, left behind\n\n## What is needed from you\n\nCommit it.\n');
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
   ok(C.repos.buses.accounted.length === 0, 'and nothing is listed as accounted', JSON.stringify(C.repos.buses.accounted));
 
   // A hold with no File field, or a File field with no backticked path, is inert.
@@ -191,7 +198,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
   fs.writeFileSync(path.join(yourMove, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
 }
 
 // ---------------------------------------------------------------------------
@@ -704,10 +711,10 @@ says(conc.assess(['buses-tree'], stagedTree), /pathspec/, 'and the remedy named 
   const LETTER = 'Correspondence/CORR-001/008-out.md';
   const heldOnly = world({ buses: { modified: [LETTER] } });
   conc.accountFor(heldOnly.repos.buses, [{ path: LETTER, ref: 'corr-001-salutation' }]);
-  want(conc.assess(['buses-tree'], heldOnly), conc.SAFE, 'synthetic: one held letter, accounted: SAFE');
+  want(conc.assess(['buses-tree', 'buses-maps'], heldOnly), conc.SAFE, 'synthetic: one held letter, accounted: SAFE on both');
   const unheld = world({ buses: { modified: [LETTER] } });
   conc.accountFor(unheld.repos.buses, []);
-  want(conc.assess(['buses-tree'], unheld), conc.CHECK, 'synthetic: the same letter with no hold: CHECK FIRST');
+  want(conc.assess(['buses-maps'], unheld), conc.CHECK, 'synthetic: the same letter with no hold: buses-maps CHECK FIRST');
   const stagedHeld = world({ buses: { staged: [LETTER], modified: ['Documentation/x.md'] } });
   conc.accountFor(stagedHeld.repos.buses, [{ path: LETTER, ref: 'corr-001-salutation' }]);
   const S = conc.assess(['buses-tree'], stagedHeld);
@@ -716,7 +723,49 @@ says(conc.assess(['buses-tree'], stagedTree), /pathspec/, 'and the remedy named 
     'and the staged-count branch is NOT taken for the accounted file', S.reasons.map((x) => x.why).join(' | '));
   const json = world({ buses: { modified: ['Correspondence/CORR-001/_people.local.json'] } });
   conc.accountFor(json.repos.buses, [{ path: 'Correspondence/CORR-001/_people.local.json', ref: 'x' }]);
-  want(conc.assess(['buses-tree'], json), conc.CHECK, 'synthetic: a hold naming a .json under Correspondence/ is outside the scope: CHECK FIRST');
+  want(conc.assess(['buses-maps'], json), conc.CHECK, 'synthetic: a hold naming a .json under Correspondence/ is outside the scope: CHECK FIRST');
+}
+
+// OA-434, the judgement half. Dirt inside ONE map or letter folder is fenced:
+// it leaves buses-tree and stops only work that writes into such a folder.
+// Every case is a pair with its clean control, and the never-fenced shapes
+// are proved to still stop the whole tree — the direction this must fail in.
+{
+  const letter = world({ buses: { modified: ['Correspondence/CORR-010/001-out-a-draft.md'] } });
+  want(conc.assess(['buses-tree'], letter), conc.SAFE, "OA-434: Peter's half-edited letter, no hold: buses-tree SAFE — the case three ticks stopped on");
+  want(conc.assess(['buses-maps'], letter), conc.CHECK, '…and buses-maps CHECK FIRST, so letter and map work still waits');
+  says(conc.assess(['buses-maps'], letter), /inside Correspondence\/CORR-010 —/, '…naming the one folder');
+  const docx = world({ buses: { untracked: ['Areas/Chatteris/S6-verify/2026-09-22_0429/disagreements.docx'] } });
+  want(conc.assess(['buses-tree'], docx), conc.SAFE, 'OA-434: a stray untracked docx in one town: buses-tree SAFE — the case the fourth tick stopped on');
+  want(conc.assess(['buses-maps'], docx), conc.CHECK, '…and buses-maps CHECK FIRST');
+  want(conc.assess(['buses-maps'], CLEAN), conc.SAFE, 'CONTROL — a clean tree: buses-maps SAFE, so the rule is not a constant');
+
+  const staged = world({ buses: { staged: ['Areas/Chatteris/routes.json'] } });
+  want(conc.assess(['buses-tree'], staged), conc.CHECK, 'never fenced: a STAGED file in a town folder still stops the tree');
+  const ref = world({ buses: { untracked: ['Areas/Ramsey/ci-reference/internal.svg'] } });
+  want(conc.assess(['buses-tree'], ref), conc.CHECK, 'never fenced: anything under ci-reference/ still stops the tree');
+  const loose = world({ buses: { untracked: ['Areas/stray.txt'] } });
+  want(conc.assess(['buses-tree'], loose), conc.CHECK, 'never fenced: a file directly under Areas/, in no town, still stops the tree');
+  const corrRoot = world({ buses: { modified: ['Correspondence/README.md'] } });
+  want(conc.assess(['buses-tree'], corrRoot), conc.CHECK, 'never fenced: a file directly under Correspondence/, in no thread, still stops the tree');
+
+  const mixed = world({ buses: { modified: ['Correspondence/CORR-010/001-out-a-draft.md', 'Documentation/x.md'] } });
+  const M = conc.assess(['buses-tree'], mixed);
+  want(M, conc.CHECK, 'a fenced letter beside an ordinary edit: buses-tree CHECK FIRST');
+  ok(M.reasons.some((x) => /^1 uncommitted file\(s\) here \(Documentation\) —/.test(x.why)),
+    '…counting only the unfenced file, and naming only its folder', M.reasons.map((x) => x.why).join(' | '));
+
+  // What the loop actually reads: the per-resource block and the standing tools.
+  const R = conc.resourceVerdicts(docx);
+  ok(R['buses-tree'].verdict === conc.SAFE && R['buses-maps'].verdict === conc.CHECK,
+    'resourceVerdicts carries the split: buses-tree safe, buses-maps check', JSON.stringify(R));
+  const tool = (what) => conc.STANDING_TOOLS.find((t) => t.what.startsWith(what));
+  want(conc.assess(tool('Work an open action').needs, docx), conc.SAFE, 'the open-action standing tool proceeds past a fenced file');
+  want(conc.assess(tool('Run a map build').needs, docx), conc.CHECK, 'a map build does not');
+  want(conc.assess(tool('Full byte gate sweep').needs, docx), conc.CHECK, 'nor does the byte gate sweep, which reads every town');
+  ok(conc.needsOf({ key: 'nobuild-Chatteris' }).includes('buses-maps'), 'a build row needs buses-maps');
+  ok(conc.needsOf({ key: 'corr-owed-CORR-010' }).includes('buses-maps'), 'a correspondence row needs buses-maps');
+  ok(!conc.needsOf({ key: 'directory-links-due' }).includes('buses-maps'), 'CONTROL — a directory row, which writes BusMapsUK/, does not');
 }
 
 // --- the engine ---

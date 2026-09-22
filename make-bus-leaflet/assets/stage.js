@@ -21,13 +21,15 @@
  *
  * Commands:
  *   init  <townDir> <"Town Name">      create manifest.json if absent
- *   new   <S1..S6> [--bump major|minor]  create+print the next run dir (abs path)
+ *   new   <S1..S6> [--bump major|minor] [--by <who>]  create+print the next run dir (abs path)
  *         refuses --based-on: nothing here writes a run record, so it is `commit`
  *         that takes it (OA-352 — both rollouts passed it here and it was discarded)
  *   pull  <S1..S6> [destDir]           copy latest outputs of a stage into destDir (def cwd)
  *   latest <S1..S6>                    print latest run dir (abs) of a stage
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
  *         [--tokens <n>]                 record what this stage cost the session
+ *         [--by <who>]                   record WHO performed it — `sched-HHMM` for a
+ *                                        loop tick, any other name for a person's session
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
  *         and, for S4, refuses a routes.json carrying no "engine" hash or no
  *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
@@ -52,6 +54,30 @@
  * value when it is absent: only the session knows what it spent, and a guessed
  * cost would be indistinguishable from a measured one the moment it was in the
  * file. Both rollouts get the timing for free — they drive `new` and `commit`.
+ *
+ * WHO PERFORMED THE STAGE (OA-427, item 3 of R9). `--by <who>` writes `by` onto
+ * the run record, on exactly the terms `--tokens` is written on: what the caller
+ * states, never a guess, and simply absent when nobody said. It is here because
+ * the one number the process review is judged on — *human touches per map-month*
+ * — could not be measured at all: `routine_numbers.mjs` prints a refusal saying
+ * so in as many words, because git says "Peter Cooper" for a commit Peter made
+ * and for a commit a session made in his name, and nothing else on disk
+ * distinguishes them. A stage is the unit that work is actually done in, so the
+ * manifest is where the distinction can be recorded truthfully at the moment it
+ * is known.
+ *
+ * THE NAME IS THE LOOP'S OWN VOCABULARY AND NOT A NEW ONE. A tick is called
+ * `sched-HHMM` by the scheduled task that runs it, by the claim it writes into an
+ * action's front matter, and by `loop/LOCK.d/holder` — whose steal rule is exactly
+ * "does the first line start with `sched-`". So a reader can classify an actor
+ * with the same test the lock uses, and any other name is a session a person
+ * started. Nothing here interprets the string: `stage.js` records it and the
+ * reader decides, which is what keeps a vocabulary change out of this file.
+ *
+ * `new --by` names who OPENED the stage, and `commit` inherits it when the commit
+ * itself is not told — a stage handed from one session to another is the case
+ * that matters, and there the committer is the honest answer, so an explicit
+ * `--by` on `commit` always wins.
  *
  * THE TWO S4 PROVENANCE STAMPS are separate from the version stamp below and
  * are enforced at `commit` (OA-161): "engine" says which generator drew a map,
@@ -110,6 +136,36 @@ function ts() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
 }
 function isoNow() { return new Date().toISOString().slice(0, 16); }
+
+/** The longest actor name this will record. A session name is `sched-1252` or
+ *  `buses-29`; the cap is here so a shell accident cannot put a paragraph, or a
+ *  pasted command line, into every manifest on the estate. */
+const ACTOR_MAX = 64;
+
+/**
+ * `--by <who>`, validated (OA-427). Returns the trimmed name, or null when the
+ * flag was not given at all.
+ *
+ * THE EMPTY STRING IS A REFUSAL AND NOT AN ABSENCE, which is the whole point of
+ * validating this. `--by ""` and `--by` with the next flag swallowed as its value
+ * are both a caller INTENDING to say who performed the stage and failing to; if
+ * that were quietly treated as "nobody said", the record would be indistinguishable
+ * from a run nobody ever tried to attribute, and the count built on it would be
+ * silently low. `--tokens` refuses a value it cannot use for the same reason.
+ *
+ * A NEWLINE OR A TAB IS REFUSED rather than stripped, because the actor is printed
+ * on one line by `status` and read by a join in `routine_numbers.mjs`, and a name
+ * that had a second line quietly removed is not the name the caller passed.
+ */
+function actorFlag(f) {
+  if (f.by === undefined) return null;
+  if (f.by === true) die('--by needs a name after it — `--by sched-1252` for a loop tick, or the name of the session doing the work (OA-427)', 2);
+  const who = String(f.by).trim();
+  if (!who) die('--by was given an empty name. Leave the flag off entirely if nobody is being recorded: an absent actor is honest and an empty one is a caller that meant to say (OA-427)', 2);
+  if (/[\r\n\t]/.test(who)) die('--by must be a single-line name; got ' + JSON.stringify(f.by), 2);
+  if (who.length > ACTOR_MAX) die(`--by must be at most ${ACTOR_MAX} characters; got ${who.length}. It is a session name, not a description of the work`, 2);
+  return who;
+}
 
 function findTownDir(start) {
   let dir = path.resolve(start || process.cwd());
@@ -409,6 +465,13 @@ function main() {
      * clock. An absent or mismatched `pending` records no duration at all, never a
      * guessed one. */
     sx.pending = { id, startedAt: isoNow() };
+    /* WHO OPENED IT (OA-427). Kept on `pending` beside the clock, for the same
+     * reason the clock is: it is bookkeeping and not the build's, and a stage
+     * abandoned before `commit` still says who started it, which `status` prints
+     * on the OPEN line. `commit` carries it onto the run record unless it is told
+     * otherwise. */
+    const openedBy = actorFlag(f);
+    if (openedBy) sx.pending.by = openedBy;
     saveManifest(townDir, m);
     console.log(dir);   // sole stdout line = absolute path of the new run dir
     return;
@@ -616,6 +679,13 @@ function main() {
       if (!Number.isFinite(t) || t < 0) die('--tokens must be a non-negative number; got ' + JSON.stringify(f.tokens), 2);
       rec.tokens = Math.round(t);
     }
+    /* WHO PERFORMED IT (OA-427). An explicit `--by` on the commit wins; otherwise
+     * the actor `new` recorded is inherited, and only when the pending record names
+     * THIS run — the same condition the clock above is trusted under, and for the
+     * same reason: a stage started, abandoned and started again must not report the
+     * first one's session any more than it reports the first one's clock. */
+    const by = actorFlag(f) || (pend && pend.id === id ? pend.by : null);
+    if (by) rec.by = by;
     if (VERSIONED.has(st)) { const v = id.match(/^v(\d+\.\d+)_/); rec.version = v ? v[1] : null; }
 
     // Guard: never record a build whose printed version stamp disagrees with its
@@ -862,7 +932,8 @@ function main() {
     if (sx.pending && sx.pending.id === id) delete sx.pending;
     saveManifest(townDir, m);
     const cost = [rec.elapsedMin != null ? rec.elapsedMin + ' min' : null,
-      rec.tokens != null ? rec.tokens.toLocaleString('en-GB') + ' tokens' : null].filter(Boolean).join(', ');
+      rec.tokens != null ? rec.tokens.toLocaleString('en-GB') + ' tokens' : null,
+      rec.by ? 'by ' + rec.by : null].filter(Boolean).join(', ');
     console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)${cost ? '  [' + cost + ']' : ''}`);
     // OA-329 fault A — see refreshLatestMirror() above for why this is here, why
     // it is S6 alone, and why it warns rather than refuses.
@@ -883,10 +954,11 @@ function main() {
        * the one moment the number is actually useful while you wait for it. */
       const r = s.runs.find(x => x.id === s.latest);
       const cost = !r ? [] : [r.elapsedMin != null ? r.elapsedMin + ' min' : null,
-        r.tokens != null ? r.tokens.toLocaleString('en-GB') + ' tokens' : null].filter(Boolean);
+        r.tokens != null ? r.tokens.toLocaleString('en-GB') + ' tokens' : null,
+        r.by ? 'by ' + r.by : null].filter(Boolean);
       console.log(`  ${k} ${s.name.padEnd(9)} latest=${latest}${n ? `  [${n} run(s)]` : '  [no runs]'}`
         + (cost.length ? `  cost ${cost.join(', ')}` : '')
-        + (s.pending ? `  OPEN since ${s.pending.startedAt} (${s.pending.id})` : ''));
+        + (s.pending ? `  OPEN since ${s.pending.startedAt} (${s.pending.id})${s.pending.by ? ', by ' + s.pending.by : ''}` : ''));
     }
     return;
   }

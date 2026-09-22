@@ -332,6 +332,17 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-refresh-grades
 
+      # buses-data OA-427 (2026-09-22), R9 item 3. *Human touches per map-month* is
+      # the number R9's recommendation is judged on, and it was a refusal until the
+      # manifests started recording who performed each stage. The failure that
+      # matters is not a wrong rate but a CONFIDENT one -- a rate over attributed
+      # runs read as a rate over the estate, or an unrecorded run counted as a tick
+      # because the loop does most of the work. Both have a mutation arm. Literal
+      # manifests and a literal clock; no Areas folder and no disk.
+      - name: Prove who performed a stage can be counted, and can refuse to be
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-stage-actors
+
       # buses-data OA-402 (2026-09-18), R9. The five numbers R9 is judged on. Two
       # of the five refuse to be computed and say why, and the harness is what
       # holds them to it -- both faults it has already caught produced a PLAUSIBLE

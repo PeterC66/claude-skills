@@ -241,7 +241,7 @@ console.log('\n12. the concurrency verdict');
   // If the prefix rule were removed, `type: 'loop-hold'` would fall to the
   // default arm and return ['buses-tree'] — which --safe-only would then hide.
   // That is the mutation this asserts against.
-  check('MUTATION CONTROL — an unknown type still defaults to buses-tree', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree');
+  check('MUTATION CONTROL — an unknown type still defaults to buses-tree + buses-maps', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree,buses-maps');
 }
 
 console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');

@@ -367,7 +367,7 @@ console.log('\n13. the concurrency verdict');
   // MUTATION CONTROL — without this, "returns []" is satisfied by a needsOf
   // that returns [] for everything of this type.
   check('MUTATION CONTROL — an unknown key of the same type falls to the default, not to empty',
-    needsOf({ key: 'pr-sweep-zzz', type: 'pr-sweep' }).join() === 'buses-tree');
+    needsOf({ key: 'pr-sweep-zzz', type: 'pr-sweep' }).join() === 'buses-tree,buses-maps');
 }
 
 console.log('\n14. the wire in worklist.mjs — literal strings, and they must RUN');

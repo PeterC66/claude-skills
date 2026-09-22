@@ -223,7 +223,7 @@ console.log('\n11. the concurrency verdict');
 {
   check('loop-idle contends with nothing', needsOf({ key: 'loop-idle', type: 'loop-health' }).length === 0,
     JSON.stringify(needsOf({ key: 'loop-idle', type: 'loop-health' })));
-  check('MUTATION CONTROL — an unknown type still defaults to buses-tree', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree');
+  check('MUTATION CONTROL — an unknown type still defaults to buses-tree + buses-maps', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree,buses-maps');
 }
 
 console.log('\n12. the wire in worklist.mjs — literal strings, and it must RUN');

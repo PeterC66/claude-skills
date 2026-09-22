@@ -169,7 +169,56 @@ export function accountFor(repo, holds) {
 const accountedSet = (r) => new Set((r.accounted || []).map((a) => a.path));
 /** The dirty paths a verdict should count: everything a live hold does not account for. */
 export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPaths(r).filter((p) => !s.has(p)); };
-const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
+
+/*
+ * buses-data OA-434. DIRT IN ONE TOWN'S FOLDER IS THAT TOWN'S BUSINESS.
+ *
+ * Until 2026-09-22 one uncommitted path ANYWHERE turned `buses-tree` to CHECK
+ * FIRST, and since every tree-touching unit needs `buses-tree`, one stray file
+ * idled the whole loop. That night four ticks in a row did nothing: three on
+ * Peter's half-edited letter in Correspondence/CORR-010/ (two earlier ticks had
+ * reasoned their way past the same file, so the gate was being decided in
+ * prose), and one on an untracked disagreements.docx under Areas/Chatteris/
+ * that was byte-identical to a committed copy. None of the four meant to write
+ * into either folder, and a tick commits by pathspec, so neither file could
+ * have reached its commit.
+ *
+ * So dirt that sits inside ONE map folder or ONE letter folder is FENCED: it
+ * leaves the `buses-tree` verdict and feeds `buses-maps`, which only work that
+ * writes into a map or letter folder needs. Everything else still counts
+ * against `buses-tree` as before, and three things are never fenced, each
+ * because it can reach somebody else's work:
+ *   - a STAGED path, because it sits in the shared index;
+ *   - anything under ci-reference/, which the byte gate reads for every town;
+ *   - a path directly under Areas/, Places/ or Correspondence/ with no folder,
+ *     which belongs to no one town or thread.
+ * `buses-maps` stays conservative on purpose: any fenced dirt makes it CHECK
+ * FIRST for every map or letter unit, not only the one in that folder, because
+ * no row here can name its folder reliably (a slug is not a folder name).
+ */
+const FENCE_RE = /^((?:Areas|Places)\/[^/]+|Correspondence\/CORR-\d+)\/./;
+export function fenceOf(p) {
+  if (REFERENCE_RE.test(p)) return null;
+  const m = FENCE_RE.exec(p);
+  return m ? m[1] : null;
+}
+/** The unaccounted paths that are fenced to one folder: [{scope, paths}]. */
+export function fencedScopes(r) {
+  const staged = new Set(r.staged || []);
+  const by = new Map();
+  for (const p of unaccountedPaths(r)) {
+    const s = staged.has(p) ? null : fenceOf(p);
+    if (!s) continue;
+    if (!by.has(s)) by.set(s, []);
+    by.get(s).push(p);
+  }
+  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([scope, paths]) => ({ scope, paths }));
+}
+/** The unaccounted paths `buses-tree` still counts: everything not fenced. */
+export function unfencedPaths(r) {
+  const fenced = new Set(fencedScopes(r).flatMap((f) => f.paths));
+  return unaccountedPaths(r).filter((p) => !fenced.has(p));
+}
 
 /*
  * OA-386 item 2. HOW OLD IS THE DIRT — the instrument the loop has been asking
@@ -782,18 +831,30 @@ const RULES = {
     const r = c.repos.buses;
     if (!r.readable) return [CHECK, `could not read the state of ${r.name} at ${r.dir} — assume nothing`];
     // OA-301: a dirty letter a live hold names is accounted for and not counted.
+    // OA-434: dirt fenced to one map or letter folder is `buses-maps`' business.
     // The count, the folders and the staged test all come from the SAME
     // subtracted list, so the sentence cannot name a file it did not count.
-    const paths = unaccountedPaths(r);
+    const paths = unfencedPaths(r);
     const n = paths.length;
     if (!n) return [SAFE, null];
-    const top = unaccountedTop(r);
+    const top = [...new Set(paths.map((p) => p.split('/')[0]))].sort();
     const where = top.slice(0, 4).join(', ') + (top.length > 4 ? ', …' : '');
     const staged = paths.filter((p) => r.staged.includes(p)).length;
     if (staged) {
       return [CHECK, `${n} uncommitted file(s) here (${where}), ${staged} already STAGED in the shared index — commit with a pathspec (git commit -m "…" -- <paths>), never a bare commit`];
     }
     return [CHECK, `${n} uncommitted file(s) here (${where}) — this tool cannot tell yours from a neighbour's; read them, then stage by name and commit with a pathspec`];
+  },
+
+  // OA-434. Work that writes into a map or letter folder, or sweeps every town.
+  'buses-maps': (c) => {
+    const r = c.repos.buses;
+    if (!r.readable) return [CHECK, `could not read the state of ${r.name} at ${r.dir} — assume nothing`];
+    const f = fencedScopes(r);
+    if (!f.length) return [SAFE, null];
+    const n = f.reduce((a, x) => a + x.paths.length, 0);
+    const where = f.slice(0, 4).map((x) => x.scope).join(', ') + (f.length > 4 ? ', …' : '');
+    return [CHECK, `${n} uncommitted file(s) inside ${where} — anything that writes into a map or letter folder, or sweeps every town, waits until they are committed or removed; work that writes nowhere in those folders may go ahead`];
   },
 
   engine: (c) => {
@@ -964,6 +1025,7 @@ const RULES = {
  */
 export const NEED_LABEL = {
   'buses-tree': 'the shared working tree',
+  'buses-maps': 'a map or letter folder',
   engine: 'the engine repo',
   'estate-sweep': 'an estate-wide sweep',
   'portal-write': 'delivery to the live portal',
@@ -982,7 +1044,7 @@ export const NEED_LABEL = {
  * old comment promised would go red has been flipped. Delivery of a map was
  * NOT in that grant, so `portal-write` stays outside the set on purpose.
  */
-const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep', 'portal-deploy']);
+const LOOP_CONTENDS = new Set(['buses-tree', 'buses-maps', 'engine', 'estate-sweep', 'portal-deploy']);
 
 export function assess(needs, conditions) {
   let verdict = SAFE;
@@ -1020,13 +1082,15 @@ export function needsOf(item) {
   const key = String(item.key || '');
   const type = String(item.type || '');
 
-  if (key.startsWith('engine-stale')) return ['buses-tree', 'engine', 'estate-sweep'];
-  if (key.startsWith('s6-stale') || key.startsWith('nobuild-')) return ['buses-tree', 'engine'];
-  if (key.startsWith('corr-owed-')) return ['buses-tree'];
+  // OA-434: every row below that writes into Areas/, Places/ or Correspondence/
+  // also needs `buses-maps`, which is where dirt fenced to one folder is counted.
+  if (key.startsWith('engine-stale')) return ['buses-tree', 'buses-maps', 'engine', 'estate-sweep'];
+  if (key.startsWith('s6-stale') || key.startsWith('nobuild-')) return ['buses-tree', 'buses-maps', 'engine'];
+  if (key.startsWith('corr-owed-')) return ['buses-tree', 'buses-maps'];
   if (key.startsWith('corr-unsent-') || key.startsWith('corr-asked-')) return [];
   // OA-233: pulling an answer writes a new S3 run; building it runs the engine over the tree.
-  if (key.startsWith('landmark-owed-')) return ['buses-tree'];
-  if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'engine'];
+  if (key.startsWith('landmark-owed-')) return ['buses-tree', 'buses-maps'];
+  if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'buses-maps', 'engine'];
   // OA-251: the row's own action is `gh run view --log-failed`, which reads a
   // GitHub run and touches no tree here. Whatever the FIX turns out to need is
   // the fix's business, and will be classified by whatever row that becomes.
@@ -1093,18 +1157,35 @@ export function needsOf(item) {
     case 'gate':
       return ['engine'];
     case 'correspondence':
-      return ['buses-tree'];
+      return ['buses-tree', 'buses-maps'];
     case 'refresh-local':
-      return ['buses-tree', 'engine'];
+      return ['buses-tree', 'buses-maps', 'engine'];
     case 'build': case 'refresh':
-      return ['buses-tree', 'engine', 'portal-write'];
+      return ['buses-tree', 'buses-maps', 'engine', 'portal-write'];
     case 'housekeeping':
-      return ['buses-tree', 'engine'];
+      return ['buses-tree', 'buses-maps', 'engine'];
     default:
       // An unrecognised type is not assumed harmless. Say the type, so whoever
       // added it can come here and answer the question properly.
-      return ['buses-tree'];
+      return ['buses-tree', 'buses-maps'];
   }
+}
+
+/*
+ * OA-434. ONE VERDICT PER RESOURCE, so a tick reads the resource its unit needs
+ * instead of inferring it from whichever standing tool looks most like its
+ * work — which is how the ticks of 2026-09-22 read `buses-tree` off the map
+ * build and the byte gate. Through assess(), so the loop's lock rides along
+ * exactly as it does on every row.
+ */
+export function resourceVerdicts(conditions) {
+  const out = {};
+  for (const need of Object.keys(RULES)) {
+    if (need === 'loop-lock') continue;
+    const { verdict, reasons } = assess([need], conditions);
+    out[need] = { verdict, reasons };
+  }
+  return out;
 }
 
 export function classify(item, conditions) {
@@ -1120,11 +1201,12 @@ export function classify(item, conditions) {
 export const STANDING_TOOLS = [
   { what: 'Print this worklist', cmd: 'node worklist.mjs', needs: [], note: 'read-only; safe while the dev server runs (the portal DB is WAL)' },
   { what: 'Draft a reply / decide in the portal UI', cmd: '(browser, or a chat)', needs: [], note: 'decisions touch no working tree' },
-  { what: 'Full byte gate sweep', cmd: 'node status.js  /  worklist.mjs --gates', needs: ['engine', 'buses-tree'], note: 'regenerates every map to diff it' },
-  { what: 'Push gate results to the portal', cmd: 'node push-status.mjs', needs: ['engine', 'buses-tree'] },
-  { what: 'Run a map build (S1–S6)', cmd: '/make-bus-leaflet', needs: ['buses-tree', 'engine'] },
-  { what: 'Engine rollout across the estate', cmd: 'node rollout.js --all --apply', needs: ['buses-tree', 'engine', 'estate-sweep'] },
+  { what: 'Full byte gate sweep', cmd: 'node status.js  /  worklist.mjs --gates', needs: ['engine', 'buses-tree', 'buses-maps'], note: 'regenerates every map to diff it' },
+  { what: 'Push gate results to the portal', cmd: 'node push-status.mjs', needs: ['engine', 'buses-tree', 'buses-maps'] },
+  { what: 'Run a map build (S1–S6)', cmd: '/make-bus-leaflet', needs: ['buses-tree', 'buses-maps', 'engine'] },
+  { what: 'Engine rollout across the estate', cmd: 'node rollout.js --all --apply', needs: ['buses-tree', 'buses-maps', 'engine', 'estate-sweep'] },
   { what: 'Re-record the quality ledger', cmd: 'node quality_gate.js --accept', needs: ['estate-sweep'] },
+  { what: 'Work an open action or ad-hoc prompt that writes into no map or letter folder', cmd: "(the loop's oa and adhoc feeds)", needs: ['buses-tree'], note: 'OA-434: a stray file fenced to one town or letter does not stop this' },
   { what: 'Deliver a map to the live portal', cmd: 'npm run deliver -- --map <slug>', needs: ['portal-write'] },
   { what: 'Deploy the portal', cmd: 'npm run deploy', needs: ['portal-deploy'] },
 ];
@@ -1209,6 +1291,10 @@ export function formatConditions(c) {
   // nobody can check — the same rule the activity line follows for demotions.
   for (const a of (c.repos.buses.accounted || [])) {
     L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/your-move/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
+  }
+  // OA-434. Fenced dirt is SHOWN too, for the same reason as the subtraction above.
+  for (const f of fencedScopes(c.repos.buses)) {
+    L.push(`  ${'fenced'.padEnd(12)}${f.scope}/ — ${f.paths.length} uncommitted file(s); left OUT of the buses-tree verdict and counted by buses-maps, so only work that writes into a map or letter folder waits`);
   }
   age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);

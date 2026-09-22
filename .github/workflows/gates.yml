@@ -677,6 +677,15 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-redteam-fingerprint
 
+      # OA-427: the red team is the most expensive thing in the skill, and until now
+      # nothing capped a month of it -- a person started every S6, and the budget was
+      # their attention. R9 removes the person. This breaks the ration four ways and
+      # requires the right cases to fail each time, including the arm that would make
+      # an ABSENT budget file refuse every buy and stop the estate dead.
+      - name: Prove the red-team monthly budget can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-redteam-budget
+
       # OA-019: derive_frequency.js tiers a place's LINE WEIGHTS, and fed one of the
       # three places whose S1 predates the frequency fields it returned "limited --
       # ends mid-afternoon" for every lane, from no data at all. This cuts the guard

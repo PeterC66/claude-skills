@@ -43,6 +43,15 @@
  * exit code alone, which is why every case asserts the rows and the source line
  * rather than the colour.
  *
+ * AND SINCE 2026-09-22 (OA-422) A THIRD SHAPE: a re-vendor that merges straight
+ * onto `origin/main`, with no branch left behind to name, used to be DRIFTED the
+ * instant it landed — four reds under unrelated commit subjects on 2026-09-20/21,
+ * each cleared only by the next thing that happened to touch the pin. The three
+ * `(OA-422)` cases give that merge the same grace a pushed branch has always had,
+ * dated from when the mismatching bytes themselves last changed on `origin/main`,
+ * and the control beside the older pair proves it still reddens once that grace
+ * runs out.
+ *
  * Run it from make-bus-leaflet (no placeholders):
  *     npm run test:prove-red-portal-drift
  *     node tools/prove-red-portal-drift.js --keep    leave the scratch repos on disk
@@ -117,8 +126,14 @@ function commitAged(dir, message, ageHours) {
  * board reads; `branch` puts the checkout somewhere else afterwards; `revendorRef`
  * pushes a re-vendor to a remote-tracking ref that is NOT the one the verdict is
  * about, which is the open-PR window. Every knob is one of the trees the row is
- * about, and nothing here touches the real portal. */
-function portalRepo({ mainStale = false, branch = null, branchStale = false,
+ * about, and nothing here touches the real portal.
+ *
+ * `mainStaleAgeHours` (OA-422) dates the commit that puts the stale content on
+ * `main` itself. It defaults to long past the grace window, because every case
+ * that predates OA-422 means "this drift has sat here, settled, forever" and
+ * must keep reading DRIFTED — only the cases that explicitly name a young age
+ * are testing the new merge-lands-with-grace behaviour. */
+function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null, branchStale = false,
                       unlistedOnMain = false, unlistedOnBranch = false,
                       worktreeCurrent = false, noGit = false,
                       revendorRef = null, revendorAgeHours = 0, revendorStale = false,
@@ -162,7 +177,8 @@ function portalRepo({ mainStale = false, branch = null, branchStale = false,
   writeTree({ staleA: mainStale, unlisted: unlistedOnMain });
   writeFixture(fixtureOnMain);
   git(dir, ['add', '-A']);
-  git(dir, ['commit', '--quiet', '-m', 'the state of origin/main']);
+  if (mainStale) commitAged(dir, 'the state of origin/main', mainStaleAgeHours);
+  else git(dir, ['commit', '--quiet', '-m', 'the state of origin/main']);
 
   /* THE REMOTE-TRACKING REF, WRITTEN BY HAND. There is no remote to fetch from
    * and there does not need to be one: `origin/main` is a ref like any other, and
@@ -363,6 +379,53 @@ const CASES = [
     },
     what: 'green here would mean the widening had swallowed the finding the row exists for',
   },
+  /* THE 2026-09-22 ROW (OA-422). A re-vendor PR merges straight onto `main`
+   * with no branch left behind to carry the fix -- the case above's `found`
+   * is null, and until now that meant DRIFTED the instant the merge landed,
+   * with no grace at all. The three cases below are that window, its
+   * boundary, and its own control. */
+  {
+    label: 'a merge onto origin/main itself is amber within the grace (OA-422)',
+    make: { mainStale: true, mainStaleAgeHours: 0 },
+    expect: 0,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (!r) return 'no qr.js row at all';
+      if (r.status !== 'PENDING') return 'expected PENDING, got ' + statusOf(r);
+      if (r.inFlight !== true) return 'expected inFlight, got ' + JSON.stringify(r.inFlight);
+      if (r.pendingOn) return 'there is no separate branch here, and the board named ' + r.pendingOn;
+      return null;
+    },
+    what: 'the remedy already merged; only the pin (or the next re-vendor) has not caught up yet',
+  },
+  {
+    /* The same fixture, proved RED, exactly as the branch-flavoured pair above
+     * does — without this, "expect 0" above is satisfied by a board that
+     * stopped looking at all. */
+    label: '...and the SAME fixture goes red with --drift-grace-hours 0 (OA-422)',
+    make: { mainStale: true, mainStaleAgeHours: 0 },
+    args: ['--drift-grace-hours', '0'],
+    expect: 1,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (statusOf(r) !== 'DRIFTED') return 'expected DRIFTED, got ' + statusOf(r);
+      if (r.inFlight) return 'grace 0 must leave nothing in flight';
+      return null;
+    },
+    what: 'the amber window is a judgement about TIME, so it has to be provable at the boundary',
+  },
+  {
+    label: 'a merge onto origin/main that has sat past the grace is RED again (OA-422)',
+    make: { mainStale: true, mainStaleAgeHours: 48 },
+    expect: 1,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (statusOf(r) !== 'DRIFTED') return 'expected DRIFTED, got ' + statusOf(r);
+      if (r.inFlight) return 'a 48h-old merge must not be in flight';
+      return null;
+    },
+    what: 'an old, settled drift closes its own hole exactly as the 999h default above already does',
+  },
   {
     /* The other direction: a branch that is NOT a re-vendor must not excuse
      * anything. Same shape as the row above, but the branch carries main's stale
@@ -533,6 +596,21 @@ const MUTATION_OA419 = {
   replace: '  const ref = null; // MUTATED by prove-red-portal-drift.js: the pre-OA-419 reading, the DISK',
   why: 'fixtureVendoring() no longer picks its ref from the source it is handed',
 };
+/* THE THIRD, for OA-422: a merge that lands its bytes on `ref` itself no
+ * longer earns any grace at all, which is exactly the reading this row
+ * replaced. Targets the `if (inFlight)` guard rather than the `ageHours`
+ * computation above it, because a case that mutates only the DATE could
+ * still pass by accident if the harness's own clock arithmetic happened to
+ * agree, and a mutation that flips just `row.inFlight` after the guard has
+ * already fired would still leave `row.status` set to PENDING — the guard
+ * itself is the one mutation that removes the grace rather than just its own
+ * label. */
+const MUTATION_OA422 = {
+  file: 'status.js',
+  find: '        if (inFlight) {\n',
+  replace: '        if (false) { // MUTATED by prove-red-portal-drift.js: the pre-OA-422 reading, no grace on a merge\n',
+  why: 'a merge landing directly on origin/main no longer gets any grace window',
+};
 
 function regressedStatus(mutations = [MUTATION_OA200]) {
   const root = scratchDir('prove-red-portal-drift-engine-');
@@ -629,7 +707,33 @@ const FIXTURE_REGRESSION = 'the re-vendor is on a BRANCH and origin/main is stil
   if (!KEEP) fs.rmSync(injF.root, { recursive: true, force: true });
 }
 
-const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 1;
+/* THE SELF-FALSIFICATION FOR THE GRACE WINDOW ITSELF (OA-422). Its
+ * discriminating case is the fresh merge onto `origin/main` with no branch
+ * behind it: every other case above would go the same way whether or not the
+ * grace exists, because they are all either in sync, excused by a BRANCH, or
+ * aged past any grace already. Under the pre-OA-422 reading a fresh merge is
+ * DRIFTED the instant it lands, which is the four-reds cost this row exists
+ * to remove — so the case that must flip from green to red when the window is
+ * mutated away is this one. */
+const GRACE_REGRESSION = 'a merge onto origin/main itself is amber within the grace (OA-422)';
+{
+  const c = CASES.find((x) => x.label === GRACE_REGRESSION);
+  if (!c) throw new Error('prove-red-portal-drift: no case named "' + GRACE_REGRESSION + '" — the self-falsification list is out of date.');
+  const injG = regressedStatus([MUTATION_OA422]);
+  const r = runCase(c, injG.statusPath);
+  const got = r.json ? statusOf(rowFor(r.json, 'qr.js')) : '(no JSON)';
+  const rightReason = !r.ok && got === 'DRIFTED';
+  if (!rightReason) failed++;
+  rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes red' : 'RED, WRONG CAUSE',
+    'with OA-422 removed: ' + c.label,
+    'qr.js read ' + got + ' (wanted DRIFTED)',
+    r.ok ? 'THIS CASE NO LONGER TESTS THE GRACE WINDOW'
+      : rightReason ? 'the case discriminates: a fresh merge was red before the fix'
+      : 'red for a reason that is not the old, grace-less reading']);
+  if (!KEEP) fs.rmSync(injG.root, { recursive: true, force: true });
+}
+
+const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 2;
 const w = [14, 62, 46];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
@@ -641,5 +745,6 @@ if (failed) {
   console.log('\nall ' + TOTAL + ' cases behaved as claimed: the verdict is about a named ref, it still goes red when that ref is stale, '
     + 'a local re-vendor that has not merged reads PENDING rather than green, the population follows the ref too, a portal with no git says so, '
     + 'the VENDORED FIXTURE copy is read off the same ref and says BEHIND without going red, '
-    + 'and both tree-reading cases go red the moment OA-200 is taken back out.');
+    + 'a merge landing straight on origin/main gets the same grace a pushed branch always has, '
+    + 'and all three tree/time-reading cases go red the moment their own fix is taken back out.');
 }

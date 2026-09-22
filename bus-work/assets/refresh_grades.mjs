@@ -149,6 +149,56 @@ export function gradeSentence(state, town, scanDate) {
 }
 
 /**
+ * Can a TICK finish this refresh row by itself, and how far? (buses-data OA-426, R9 item 2.)
+ *
+ * The loop's dispatch rule is that a feed counts only if the run can finish its work
+ * WITHOUT A HUMAN, and until now every refresh row failed that test in the same way: its
+ * first step said *re-run the skill*, which is a person's procedure with a person's
+ * judgements in it, and its second named `<fresh S5-render dir>`, which nothing can fill
+ * in before the first has been done. So the rows sat at rank 5 month after month, and the
+ * grade that would have settled it was written only into a report's heading.
+ *
+ * A SAFE grade is exactly the fact that removes the judgement -- every actionable change
+ * is an operator name or a set of days, fields that decide no colour and move no line --
+ * and `refresh_town.py` is the one command that acts on it. So this returns the command,
+ * with the town and the scan already in it, and the row carries it as its first step.
+ *
+ * IT LIVES HERE AND NOT IN `worklist.mjs`, for the reason this module exists at all: a
+ * decision about what a grade MEANS is the grade reader's, and a copy of it inside a
+ * script nothing can import is a copy no harness can pose. `gradeSentence` above is the
+ * same answer for a person; this is the same answer for a machine, and they are next to
+ * each other so they cannot drift.
+ *
+ * `through: 'S5'` IS A LIMIT AND NOT A FLOURISH. The rebuild is unattended; putting the
+ * result in front of the customer is not, and is filed as its own action (buses-data
+ * OA-428). A tick that read this as permission to deliver would be skipping the one step
+ * where somebody looks at the sheet.
+ *
+ * A PLACE IS NOT COVERED, and the reason is in the grading rather than here:
+ * `gtfs_refresh_report.py` diffs `Areas/<town>` and nothing else, so no place HAS a grade
+ * to be SAFE. `gradeFor` returns null for one and this returns null with it, which is the
+ * honest answer rather than a silent omission.
+ *
+ * `--by` CARRIES A NAME THIS CANNOT KNOW. The run's own name is `sched-HHMM`, chosen when
+ * the tick starts, and it is the same substitution the loop already makes for `--claim`.
+ * It is left as an angle-bracket placeholder for that reason and for no other: recording
+ * a guessed actor would be worse than recording none (OA-427).
+ */
+export function unattendedRefresh(state, town, scanDate, { kind = 'area', assetsDir = null } = {}) {
+  if (kind && kind !== 'area') return null;
+  if (!assetsDir) return null;
+  const g = gradeFor(state, town, scanDate);
+  if (!g || g.grade !== 'SAFE') return null;
+  return {
+    through: 'S5',
+    cwd: assetsDir,
+    cmd: `python3 refresh_town.py --town "${town}" --scan ${scanDate} --apply --by <this run's name>`,
+    then: 'Delivering the result into the portal is a separate step and still wants a person '
+        + 'who has looked at the sheet (buses-data OA-428).',
+  };
+}
+
+/**
  * The warnings the worklist should print about the grading itself. Kept apart from
  * the rows, exactly as `bods_scan.mjs` keeps them: none of these is work, and a
  * board that turned "I could not read a file" into a task would be filing a row

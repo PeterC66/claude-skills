@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   readGradeState, gradeFor, notCheckedFor, gradeSentence, gradeWarnings,
-  defaultReadGradeFiles, SCHEMA,
+  defaultReadGradeFiles, SCHEMA, unattendedRefresh,
 } from './refresh_grades.mjs';
 
 let bad = 0, ran = 0;
@@ -164,6 +164,46 @@ console.log('\n8. The mutation arm: the three ways this reader could be quietly 
   }) }]);
   check('(c) same actionable count, opposite grades — the verdict is the grade, not the size', gradeFor(st, 'Alpha', SCAN).grade === 'SAFE' && gradeFor(st, 'Beta', SCAN).grade === 'ESCALATE');
   check('    and the two sentences differ in what they ask of the reader', /no judgement is wanted/.test(gradeSentence(st, 'Alpha', SCAN)) && /a person decides/.test(gradeSentence(st, 'Beta', SCAN)));
+}
+
+console.log('\n6. Whether a TICK may take the row, and how far (OA-426, R9 item 2)');
+{
+  const st = stateOf([{ date: SCAN, text: payload(SCAN, { March: MARCH, Ely: ELY, 'St Ives': STIVES }) }]);
+  const ASSETS = 'C:/engine/assets';
+  const un = unattendedRefresh(st, 'March', SCAN, { kind: 'area', assetsDir: ASSETS });
+  check('a SAFE town becomes a unit a tick can take', un !== null);
+  check('  and the command names the town and the scan, with nothing left to work out', un && un.cmd.includes('--town "March"') && un.cmd.includes(`--scan ${SCAN}`), un && un.cmd);
+  check('  and it applies rather than reporting', un && un.cmd.includes('--apply'));
+  check('  and it runs in the engine assets folder it was given', un && un.cwd === ASSETS, un && un.cwd);
+  check('  and it stops at S5 — delivering is not a tick\'s move', un && un.through === 'S5', un && un.through);
+  check('  and says so in words, naming the action that owns the rest', un && /OA-428/.test(un.then));
+
+  /* The three refusals, each one a row a tick must NOT take. */
+  check('an ESCALATE town is not a tick\'s row', unattendedRefresh(st, 'Ely', SCAN, { assetsDir: ASSETS }) === null);
+  check('a NOTHING town is not a tick\'s row either', unattendedRefresh(st, 'St Ives', SCAN, { assetsDir: ASSETS }) === null);
+  check('a town with no grading at all is not a tick\'s row', unattendedRefresh(st, 'Wisbech', SCAN, { assetsDir: ASSETS }) === null);
+
+  /* A PLACE has no grade to be SAFE, because the report diffs Areas/<town> only.
+   * Posed with a SAFE record under the place's own name, so the refusal is the KIND
+   * rule doing the work rather than the lookup failing to find anything. */
+  const placeState = stateOf([{ date: SCAN, text: payload(SCAN, { 'Ely Co-op': MARCH }) }]);
+  check('a place is refused even where a SAFE record carries its name', unattendedRefresh(placeState, 'Ely Co-op', SCAN, { kind: 'place', assetsDir: ASSETS }) === null);
+  check('  and the same record WOULD have been taken as an area — so it is the kind that refuses', unattendedRefresh(placeState, 'Ely Co-op', SCAN, { kind: 'area', assetsDir: ASSETS }) !== null);
+
+  /* The date rule reaches this side too: an older grading must not authorise a tick to
+   * rebuild against a scan it has not seen. This is the (b) mutation one layer up. */
+  const staleSt = stateOf([{ date: OLDER, text: payload(OLDER, { March: MARCH }) }]);
+  check('an older grading does not authorise a rebuild for a newer scan', unattendedRefresh(staleSt, 'March', SCAN, { assetsDir: ASSETS }) === null);
+  check('  where the same grading WOULD authorise one for its own scan — so the date is what refuses', unattendedRefresh(staleSt, 'March', OLDER, { assetsDir: ASSETS }) !== null);
+
+  /* No engine on this machine means no command to give, rather than a command that
+   * names a folder which is not there. */
+  check('with no engine assets folder there is no unit, rather than a broken command', unattendedRefresh(st, 'March', SCAN, { assetsDir: null }) === null);
+
+  /* And the prose half still says the same thing as the machine half, which is the
+   * whole reason they live in one module. */
+  check('the sentence and the verdict agree for a SAFE town', /no judgement is wanted/.test(gradeSentence(st, 'March', SCAN)) && unattendedRefresh(st, 'March', SCAN, { assetsDir: ASSETS }) !== null);
+  check('and they agree for an ESCALATE town', /a person decides/.test(gradeSentence(st, 'Ely', SCAN)) && unattendedRefresh(st, 'Ely', SCAN, { assetsDir: ASSETS }) === null);
 }
 
 console.log('');

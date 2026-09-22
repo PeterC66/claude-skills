@@ -29,6 +29,7 @@
     "test:prove-red-stage-run-dir": "node tools/prove-red-stage-run-dir.js",
     "test:prove-red-stage-build-log": "node tools/prove-red-stage-build-log.js",
     "test:prove-red-stage-s6-mirror": "node tools/prove-red-stage-s6-mirror.js",
+    "test:prove-red-stage-actor-callers": "node tools/prove-red-stage-actor-callers.js",
     "test:prove-red-route-collision": "python3 tools/prove-red-route-collision.py",
     "test:prove-red-days-resolution": "python3 tools/prove-red-days-resolution.py",
     "test:prove-red-variant-fold": "python3 tools/prove-red-variant-fold.py",

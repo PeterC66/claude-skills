@@ -40,6 +40,8 @@ on them would be an assertion on somebody else's server.
 """
 import io
 import json
+import shutil
+import tempfile
 import math
 import os
 import types
@@ -445,33 +447,341 @@ class TheTailsUnderInternalRoads(unittest.TestCase):
 # --------------------------------------------------------------------------
 # What is merged, and what is only moved apart
 # --------------------------------------------------------------------------
-class OnlyTheOperatorsOwnVariantClaim(unittest.TestCase):
-    """`variant_families` reads `possibleVariantOf` and nothing else.
+class OnlyTheVariantsThatReallyAreOneLine(unittest.TestCase):
+    """`variant_families` proposes on the route NUMBER and decides on the MAP.
 
-    Drawing 301/301S/301V/301X as four identically-routed coloured lines put
-    four overprinted spokes and duplicated place labels on the first Ramsey
-    draft. Grouping them is the operator's own registration, which is a much
-    narrower claim than "these services co-run" -- that one a human confirms.
+    Drawing 301/301S/301V/301X as four identically-routed coloured lines put four
+    overprinted spokes and duplicated place labels on the first Ramsey draft, so
+    they are grouped. But the operator's registration is a claim about paperwork,
+    not about the road: at St Ives the feed declares 301S a pattern of 301 while
+    the map draws 32 stops for 301S of which 3 are 301's. Accepting that and
+    dropping 301S from the palette would have erased twenty-nine stops of real ink.
+    So a proposal survives only if the town's own drawn stops and both spokes'
+    destinations agree with it. Measured 2026-09-22; OA-436.
     """
 
+    SPOKE = staticmethod(lambda label, stops=(): {"label": label, "stops": list(stops)})
+
+    @staticmethod
+    def PATHS(**routes):
+        """{route: [cell index...]} -> routes_paths.json. One point per 0.001-degree
+        cell, so a route's cell set is exactly the indices named."""
+        return {"routes": {r: {"pts": [[52.0 + i * 0.001, 0.0] for i in idx]}
+                           for r, idx in routes.items()}}
+
+    # ---- what the route number is allowed to propose (no map given: all accepted)
     def test_declared_variants_group_under_their_lead(self):
-        fam = dt.variant_families([
+        fam, rej = dt.variant_families([
             {"route": "301"},
             {"route": "301V", "possibleVariantOf": "301"},
             {"route": "301S", "possibleVariantOf": "301"},
         ])
         self.assertEqual(fam, {"301": ["301S", "301V"]})
+        self.assertEqual(rej, [])
 
     def test_a_lead_the_town_does_not_run_groups_nothing(self):
         self.assertEqual(dt.variant_families([
-            {"route": "9", "possibleVariantOf": "X9"}]), {})
+            {"route": "9", "possibleVariantOf": "X9"}])[0], {})
 
     def test_a_route_is_not_a_variant_of_itself(self):
         self.assertEqual(dt.variant_families([
-            {"route": "7", "possibleVariantOf": "7"}]), {})
+            {"route": "7", "possibleVariantOf": "7"}])[0], {})
 
     def test_no_declaration_merges_nothing(self):
-        self.assertEqual(dt.variant_families([{"route": "46"}, {"route": "47"}]), {})
+        self.assertEqual(dt.variant_families([{"route": "46"}, {"route": "47"}])[0], {})
+
+    def test_variants_group_even_though_the_feed_declares_nothing(self):
+        """Chatteris carries ZIP2 and ZIP3 and no ZIP, so `possibleVariantOf` is
+        empty and both drafted as separate routes. A human put them on one spoke."""
+        self.assertEqual(dt.variant_families(
+            [{"route": "ZIP2"}, {"route": "ZIP3"}, {"route": "302"}])[0],
+            {"ZIP2": ["ZIP3"]})
+
+    def test_variants_group_when_their_base_route_is_absent(self):
+        self.assertEqual(dt.variant_families(
+            [{"route": "301S"}, {"route": "301V"}, {"route": "301X"}])[0],
+            {"301S": ["301V", "301X"]})
+
+    # ---- and what it must NEVER propose, because the tail is the next number
+    def test_two_numbers_in_a_range_are_not_a_family(self):
+        """Ramsey's 303 and 305 share the stem "30", cover identical in-town stops
+        AND both end at Huntingdon, so neither later test would catch them. They
+        are distinct services: decollide_bearings spreads them, nothing merges
+        them. The guard is that a digit after a digit is not a variant marker."""
+        self.assertEqual(dt.variant_families([{"route": "303"}, {"route": "305"}])[0], {})
+        self.assertEqual(dt.variant_families(
+            [{"route": "400"}, {"route": "401"}])[0], {})
+
+    def test_a_longer_number_is_not_a_variant_of_a_shorter_one(self):
+        self.assertEqual(dt.variant_families([{"route": "9"}, {"route": "904"}])[0], {})
+
+    # ---- the map decides
+    def test_a_variant_whose_drawn_line_diverges_is_refused(self):
+        """St Ives' 301S: 7% of its path is 301's and 36% of 301's is its."""
+        fam, rej = dt.variant_families(
+            [{"route": "301"}, {"route": "301S", "possibleVariantOf": "301"}],
+            paths=self.PATHS(**{"301": range(0, 10), "301S": range(8, 30)}),
+            dest={"301": self.SPOKE("Ramsey"), "301S": self.SPOKE("Ramsey")})
+        self.assertEqual(fam, {})
+        self.assertEqual(len(rej), 1)
+        self.assertEqual(rej[0][1], "301S")
+        self.assertIn("60%", rej[0][2])
+
+    def test_a_variant_drawn_on_the_same_line_is_kept(self):
+        fam, rej = dt.variant_families(
+            [{"route": "301"}, {"route": "301V", "possibleVariantOf": "301"}],
+            paths=self.PATHS(**{"301": range(0, 10), "301V": range(0, 10)}),
+            dest={"301": self.SPOKE("Ramsey"), "301V": self.SPOKE("Ramsey")})
+        self.assertEqual(fam, {"301": ["301V"]})
+        self.assertEqual(rej, [])
+
+    def test_the_overlap_must_hold_BOTH_ways(self):
+        """Chatteris' ZIP3 is drawn entirely inside ZIP2 and ZIP2 runs on twice as
+        far: 1.00 one way, 0.53 the other. complexity_score.js insists on mutual
+        overlap so a short shuttle is not bundled into the trunk it shares a mile
+        with -- and the live Chatteris sheet does draw ZIP2 and ZIP3 as two lines."""
+        fam, rej = dt.variant_families(
+            [{"route": "ZIP2"}, {"route": "ZIP3"}],
+            paths=self.PATHS(ZIP2=range(0, 20), ZIP3=range(0, 10)),
+            dest={"ZIP2": self.SPOKE("Ely"), "ZIP3": self.SPOKE("Ely")})
+        self.assertEqual(fam, {})
+        self.assertIn("BOTH ways", rej[0][2])
+
+    def test_a_route_with_no_matched_path_is_left_alone_rather_than_bundled(self):
+        fam, rej = dt.variant_families(
+            [{"route": "301"}, {"route": "301V", "possibleVariantOf": "301"}],
+            paths=self.PATHS(**{"301": range(0, 10)}),
+            dest={"301": self.SPOKE("Ramsey"), "301V": self.SPOKE("Ramsey")})
+        self.assertEqual(fam, {})
+        self.assertIn("nothing", rej[0][2])
+
+    def test_a_variant_heading_somewhere_else_is_refused(self):
+        fam, rej = dt.variant_families(
+            [{"route": "301"}, {"route": "301V", "possibleVariantOf": "301"}],
+            paths=self.PATHS(**{"301": range(0, 10), "301V": range(0, 10)}),
+            dest={"301": self.SPOKE("Ramsey", ["Warboys", "Ramsey"]),
+                  "301V": self.SPOKE("March", ["Chatteris", "March"])})
+        self.assertEqual(fam, {})
+        self.assertIn("different service", rej[0][2])
+
+    def test_a_short_working_of_the_lead_is_kept(self):
+        """301X stops at Warboys and 301 calls at Warboys on its way to Ramsey, so
+        301X is a short working of one line rather than a second one. Requiring the
+        two labels to match outright refused this and left 301X its own colour."""
+        fam, rej = dt.variant_families(
+            [{"route": "301"}, {"route": "301X", "possibleVariantOf": "301"}],
+            paths=self.PATHS(**{"301": range(0, 10), "301X": range(0, 10)}),
+            dest={"301": self.SPOKE("Ramsey", ["Pidley", "Warboys", "Ramsey"]),
+                  "301X": self.SPOKE("Warboys", ["Old Hurst", "Warboys"])})
+        self.assertEqual(fam, {"301": ["301X"]})
+        self.assertEqual(rej, [])
+
+    def test_a_refusal_says_which_member_and_why(self):
+        _, rej = dt.variant_families(
+            [{"route": "301"}, {"route": "301S", "possibleVariantOf": "301"}],
+            paths=self.PATHS(**{"301": range(0, 10), "301S": range(20, 30)}),
+            dest={"301": self.SPOKE("Ramsey"), "301S": self.SPOKE("Ramsey")})
+        lead, member, why = rej[0]
+        self.assertEqual((lead, member), ("301", "301S"))
+        self.assertTrue(why and len(why) > 20)
+
+
+class TheS1RecordSaysWhatItWillNotDraw(unittest.TestCase):
+    """`build_verified_services` moves an A5 drop into `notOnLeaflet[]` (OA-436).
+
+    A route that is merely ABSENT from the S1 record is indistinguishable from one
+    the feed never carried: the monthly refresh proposes it again every month and
+    the reviewer has nothing to disagree with. `notOnLeaflet[]` is the estate's one
+    spelling for "we know about this and deliberately do not draw it" -- the other
+    three (verifiedNotDisplayed, notDisplayed, excluded) are read for ever and
+    written never, which check-exclusion-fields.mjs enforces at commit time.
+    """
+
+    FEED = {"services": [{"route": "9", "operator": "Dews", "days": "Mon-Fri",
+                          "termini": ["Bus Station"]},
+                         {"route": "101", "operator": "Whippet", "days": "Sat & Sun",
+                          "longName": "St Ives - Hunstanton", "termini": ["Travel Hub"]}]}
+    DROP = [{"route": "101", "operator": "Whippet", "days": "Sat & Sun",
+             "longName": "St Ives - Hunstanton",
+             "reason": "its registration ran out on 20260913"}]
+
+    def build(self, dropped):
+        d = tempfile.mkdtemp()
+        try:
+            src = os.path.join(d, "gtfs-services.json")
+            out = os.path.join(d, "verified-services.json")
+            with open(src, "w", encoding="utf-8") as fh:
+                json.dump(self.FEED, fh)
+            kept = dt.build_verified_services(src, out, dropped)
+            with open(out, encoding="utf-8") as fh:
+                return kept, json.load(fh)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_a_dropped_route_leaves_services_and_lands_in_notOnLeaflet(self):
+        kept, rec = self.build(self.DROP)
+        self.assertEqual(kept, ["9"])
+        self.assertEqual([s["route"] for s in rec["services"]], ["9"])
+        self.assertEqual([s["route"] for s in rec["notOnLeaflet"]], ["101"])
+
+    def test_the_entry_carries_the_reason_it_was_dropped(self):
+        _, rec = self.build(self.DROP)
+        self.assertIn("20260913", rec["notOnLeaflet"][0]["reason"])
+        self.assertTrue(rec["notOnLeaflet"][0]["servesTown"])
+        self.assertEqual(rec["notOnLeaflet"][0]["source"], "gtfs")
+
+    def test_nothing_dropped_writes_no_notOnLeaflet_key_at_all(self):
+        kept, rec = self.build([])
+        self.assertEqual(kept, ["9", "101"])
+        self.assertNotIn("notOnLeaflet", rec)
+
+    def test_no_deprecated_spelling_is_ever_written(self):
+        _, rec = self.build(self.DROP)
+        for old in ("verifiedNotDisplayed", "notDisplayed", "excluded"):
+            self.assertNotIn(old, rec)
+
+
+class TheOverlapReportTheReviewQuotes(unittest.TestCase):
+    """`weak_family_rows` reads corridors_report.json's ACTUAL shape (OA-436).
+
+    DRAFT-REVIEW.md item 14 promises "the engine's corridors_report.json flags
+    these as weakly-overlapping". The code behind that sentence looked for
+    `corridors[].overlap` and `corridors[].fraction`. The file has always carried
+    `families[].members[].sharedFraction` and `families[].weakMembers[]`, so the
+    lookup found nothing and the review printed "raised no warnings" next to a
+    report flagging all three members of St Ives' 301 family. The fixture below is
+    that real file, trimmed.
+    """
+
+    REAL = {"town": "St Ives", "sharedMin": 0.6,
+            "families": [{"lead": "301", "routes": ["301", "301V", "301X"],
+                          "members": [{"route": "301", "sharedFraction": 0.328,
+                                       "weakestAgainst": "301V"},
+                                      {"route": "301V", "sharedFraction": 0.075,
+                                       "weakestAgainst": "301"},
+                                      {"route": "301X", "sharedFraction": 0.337,
+                                       "weakestAgainst": "301"}],
+                          "weakMembers": ["301", "301V", "301X"]}]}
+
+    def test_the_real_report_shape_produces_a_row_per_weak_member(self):
+        rows = dt.weak_family_rows(self.REAL)
+        self.assertEqual(len(rows), 3)
+        self.assertTrue(all("301" in r for r in rows))
+        self.assertIn("0.07", " ".join(rows))
+
+    def test_a_family_that_really_co_runs_says_nothing(self):
+        rows = dt.weak_family_rows(
+            {"sharedMin": 0.6,
+             "families": [{"lead": "AW1",
+                           "members": [{"route": "AW1", "sharedFraction": 0.89},
+                                       {"route": "AW1X", "sharedFraction": 1.0}],
+                           "weakMembers": []}]})
+        self.assertEqual(rows, [])
+
+    def test_the_threshold_comes_from_the_report_not_from_a_copy_of_it(self):
+        strict = dt.weak_family_rows(
+            {"sharedMin": 0.95,
+             "families": [{"lead": "A", "members": [{"route": "B",
+                                                     "sharedFraction": 0.9}]}]})
+        self.assertEqual(len(strict), 1)
+
+    def test_an_empty_report_is_not_an_error(self):
+        self.assertEqual(dt.weak_family_rows({}), [])
+        self.assertEqual(dt.weak_family_rows({"families": []}), [])
+
+    def test_a_member_flagged_only_in_weakMembers_is_still_reported(self):
+        rows = dt.weak_family_rows(
+            {"sharedMin": 0.6,
+             "families": [{"lead": "301", "members": [], "weakMembers": ["301V"]}]})
+        self.assertEqual(len(rows), 1)
+        self.assertIn("301V", rows[0])
+
+
+class TheEngineMeasureComputedEarly(unittest.TestCase):
+    """`path_cells` reproduces complexity_score.js's cells, in S3 rather than S4.
+
+    The report that measures a bundle is written in S4, after the bundle has been
+    configured and drawn -- so it could only ever describe a bad bundle, never stop
+    one. These numbers were checked against St Ives' own corridors_report.json on
+    2026-09-22: 0.328 for 301 against 301V and 0.337 for 301 against 301X, out of
+    both this code and the engine's.
+    """
+
+    @staticmethod
+    def paths(**routes):
+        return {"routes": {r: {"pts": [[52.0 + i * 0.001, 0.0] for i in idx]}
+                           for r, idx in routes.items()}}
+
+    def test_one_point_per_cell_gives_one_cell_each(self):
+        cells = dt.path_cells(self.paths(A=range(0, 5)))
+        self.assertEqual(len(cells["A"]), 5)
+
+    def test_points_inside_one_cell_collapse_to_one(self):
+        cells = dt.path_cells({"routes": {"A": {"pts": [[52.0, 0.0], [52.00001, 0.0],
+                                                        [52.00002, 0.0]]}}})
+        self.assertEqual(len(cells["A"]), 1)
+
+    def test_an_empty_file_is_not_an_error(self):
+        self.assertEqual(dt.path_cells({}), {})
+        self.assertEqual(dt.path_cells({"routes": {}}), {})
+
+    def test_overlap_is_reported_both_ways_round(self):
+        cells = dt.path_cells(self.paths(A=range(0, 10), B=range(0, 5)))
+        share = dt._co_run(cells, "B", "A")
+        self.assertEqual(share, (1.0, 0.5))
+
+    def test_a_route_with_no_path_has_no_overlap_to_report(self):
+        cells = dt.path_cells(self.paths(A=range(0, 10)))
+        self.assertIsNone(dt._co_run(cells, "B", "A"))
+
+
+class TheEndOfASpokeIsAChoice(unittest.TestCase):
+    """`_end_candidates` names what the label was chosen BETWEEN (OA-436, for A13).
+
+    The audit asked the drafter to name "the end most journeys reach, or the larger
+    locality". Measured on the six spokes it was filed for, both rules write the
+    label the drafter already produces and the live sheet carries the other one --
+    Cambridge where St Ives' B says Hinchingbrooke, Cambridge where St Neots' 905
+    says Bedford. And on St Ives' 9 and 69 every stop pattern is a single trip, so
+    there is nothing for "most journeys" to count. Which end of a through route to
+    draw is a decision about the whole sheet, so the drafter surfaces it instead.
+    """
+
+    class Namer:
+        def name(self, atco, lat, lon):
+            return {"a": "Town", "b": "Hinchingbrooke", "c": "Cambridge",
+                    "d": "Hamlet"}.get(atco, atco), True
+
+    LL = {"a": (52.30, 0.00), "b": (52.38, 0.00), "c": (52.52, 0.00), "d": (52.42, 0.00)}
+    ANCHOR = (52.30, 0.00)
+
+    def candidates(self, chain, chosen):
+        return dt._end_candidates(chain, self.LL, self.ANCHOR, self.Namer(), chosen)
+
+    def test_a_through_route_offers_both_its_ends(self):
+        out = self.candidates({"canonical": [{"stops": ["c", "a", "b"]},
+                                             {"stops": ["b", "a", "c"]}]}, "Cambridge")
+        self.assertIn("Hinchingbrooke", [c["place"] for c in out])
+
+    def test_the_end_already_chosen_is_not_offered_again(self):
+        out = self.candidates({"canonical": [{"stops": ["a", "c"]}]}, "Cambridge")
+        self.assertEqual([c["place"] for c in out], [])
+
+    def test_a_circular_offers_the_farthest_place_it_reaches(self):
+        """St Ives' 9 is a 35-stop loop back to the bus station, so its LAST stop is
+        the anchor and the drafter silently took the other direction instead."""
+        out = self.candidates({"canonical": [{"stops": ["a", "d", "a"]}]}, "Hemingford")
+        self.assertEqual([c["place"] for c in out], ["Hamlet"])
+
+    def test_a_candidate_carries_its_distance_and_how_long_its_pattern_is(self):
+        out = self.candidates({"canonical": [{"stops": ["a", "d", "c"]}]}, "Town")
+        self.assertTrue(out)
+        self.assertGreater(out[0]["km"], 1.0)
+        self.assertEqual(out[0]["onPattern"], 3)
+
+    def test_a_place_in_the_town_is_never_a_candidate(self):
+        out = self.candidates({"canonical": [{"stops": ["a", "a"]}]}, "Somewhere")
+        self.assertEqual(out, [])
 
 
 class SpokesThatWouldOverprint(unittest.TestCase):

@@ -233,9 +233,22 @@ class PlaceNamer:
 
 
 # ---------------------------------------------------------------- S1: services
-def build_verified_services(gtfs_services_path, out_path):
+def build_verified_services(gtfs_services_path, out_path, dropped=()):
+    """The S1 record: what this town runs, and what it knows about and will not draw.
+
+    `dropped` is bootstrap_town.py's A5 list. Those services are moved OUT of
+    `services[]` and into `notOnLeaflet[]`, which is the estate's one spelling for
+    "we know about this route and deliberately do not draw it" -- the other three
+    are read for ever and written never (check-exclusion-fields.mjs). Recording it
+    matters more than it looks: a route merely MISSING from the S1 record is
+    indistinguishable from one the feed never carried, so the monthly refresh
+    proposes it again every month, and the reviewer has no way to disagree with a
+    decision nothing wrote down. OA-436.
+    """
     facts = json.load(open(gtfs_services_path, encoding="utf-8"))
     services = facts["services"] if "services" in facts else facts
+    by_route = {str(d.get("route")): d for d in (dropped or ())}
+    services = [s for s in services if str(s["route"]) not in by_route]
     # gtfs_query.py's "termini" is raw BODS trip_headsign stop-name text ("Bus
     # Station", "Grays Lane"), never a settlement -- so it is stamped the same way
     # place_verified_services.js already stamps a headsign-sourced termini:
@@ -249,7 +262,14 @@ def build_verified_services(gtfs_services_path, out_path):
                                  "services absent from BODS are NOT included",
                  **({"terminiSource": "gtfs-headsign"} if s.get("termini") else {})}
                 for s in services]
-    json.dump({"services": verified}, open(out_path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+    not_on = [{"route": d.get("route"), "operator": d.get("operator", ""),
+               "days": d.get("days", ""), "name": d.get("longName", ""),
+               "servesTown": True, "source": "gtfs",
+               "reason": d.get("reason", "")} for d in (dropped or ())]
+    out = {"services": verified}
+    if not_on:
+        out["notOnLeaflet"] = not_on
+    json.dump(out, open(out_path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
     return [s["route"] for s in verified]
 
 
@@ -444,31 +464,298 @@ def spoke_for_route(chain, ll, prefix, anchor_ll, namer, town=None):
                     anchor_ll[0], anchor_ll[1], ll[x][0], ll[x][1]) >= 1.0:
                 other = nm
     return {"label": places[-1], "stops": places, "bearing": round(bearing),
-            "far_km": round(dist, 1), "otherEnd": other}
+            "far_km": round(dist, 1), "otherEnd": other,
+            "endChoice": _end_candidates(chain, ll, anchor_ll, namer, places[-1])}
 
 
-def variant_families(services):
-    """Group a route with its GTFS-declared variants -> {lead: [members...]}.
+def _end_candidates(chain, ll, anchor_ll, namer, chosen):
+    """Every place this route could defensibly have been labelled, and its distance.
 
-    Uses ONLY gtfs_query.py's own `possibleVariantOf` field, i.e. the dataset's
-    declaration that 301S/301V/301X are patterns of 301. That is a much narrower
-    claim than the general rung-1 "these different services co-run" (which
-    complexity-triage.md rightly insists a human confirms): here the operator has
-    registered them under one route number. Drawing them as four identically-routed
-    coloured lines is what put four overprinted spokes and duplicated place labels
-    on the first Ramsey draft.
+    OA-436, in place of A13. The audit asked the drafter to "name the end most
+    journeys reach, or the larger locality". Measured on the six spokes it was
+    filed for, BOTH of those rules pick the label the drafter already writes, and
+    the live map's label is the other one:
 
-    Merging is still only a PROPOSAL until gen_internal.js's corridors_report.json
-    confirms the members really do overlap (it warns below 0.6) -- that report is
-    surfaced in DRAFT-REVIEW.md.
+      * St Ives B, Wisbech 60 and St Neots 905 are THROUGH routes. The live sheets
+        name Hinchingbrooke, Downham Market and Bedford; the farther end -- and the
+        larger locality -- is Cambridge, Three Holes' far side, and Cambridge
+        again. "The larger locality" writes the draft's answer, not the map's.
+      * St Ives 9 is a 35-stop circular that ends back at the bus station, so it
+        has no far end at all and the drafter silently took the other direction's
+        3 km out-and-back to Hemingford Abbots. Its farthest stop is a village on
+        the loop, not the Huntingdon the sheet names -- Huntingdon is one of the
+        twelve localities the loop passes through and nothing in the feed ranks it
+        above the other eleven.
+      * Route 9 carries 6 trips at the town and 69 carries 4, and EVERY stop
+        pattern on both is a single trip -- so "the end most journeys reach" has
+        nothing to count.
+
+    Which end of a through route to draw is a decision about the whole sheet (St
+    Ives already draws Cambridge on route A, so B's Cambridge end would duplicate
+    it), and which of a circular's twelve localities is "the" destination is not in
+    the feed. So this stops the drafter presenting a guess as a fact and hands the
+    reviewer the alternatives it chose between -- the house move everywhere else
+    here, as in gtfs_full_chains()'s report of the stops the modal rule threw away.
     """
-    fam = {}
+    seen, out = {chosen}, []
+    for d in chain.get("canonical") or chain.get("directions") or []:
+        stops = [a for a in d["stops"] if a in ll]
+        if len(stops) < 2:
+            continue
+        far = max(stops, key=lambda a: km_between(anchor_ll[0], anchor_ll[1], ll[a][0], ll[a][1]))
+        for a in (stops[-1], far):
+            km = km_between(anchor_ll[0], anchor_ll[1], ll[a][0], ll[a][1])
+            if km < 1.0:
+                continue
+            nm, _ok = namer.name(a, ll[a][0], ll[a][1])
+            if nm and nm not in seen:
+                seen.add(nm); out.append({"place": nm, "km": round(km, 1),
+                                          "onPattern": len(stops)})
+    return out
+
+
+MIN_CORUN = 0.6          # the engine's own corridors_report.json threshold
+
+
+def _sibling_pairs(routes):
+    """Route numbers that LOOK like variants of one service -> [(base, member)].
+
+    Two shapes, and the second is the one GTFS's own declaration cannot reach:
+      * a route that EXTENDS another present route by one or two characters --
+        301S of 301, AW1X of AW1. gtfs_query.py already calls this
+        `possibleVariantOf`, and this reproduces it so the caller has one list.
+      * a set of routes that share a stem of two or more characters once a one- or
+        two-character tail is stripped, where the stem is NOT itself a route --
+        Chatteris' ZIP2 and ZIP3, and 301S/301V/301X in a town whose feed carries
+        no plain 301. `possibleVariantOf` requires the base to be PRESENT, so in
+        those towns it declares nothing and all three drafted as separate routes.
+
+    This only PROPOSES. Whether a pair is one line is decided by the co-run and
+    destination tests in variant_families(), because the shape of a route number is
+    not evidence about the road. _variant_tail() is what keeps the proposals narrow
+    enough for those tests to be meaningful rather than a sieve.
+    """
+    rs = sorted(routes)
+    pairs, claimed = [], set()
+    for r in rs:
+        for b in rs:
+            if r != b and r.startswith(b) and _variant_tail(b, r[len(b):]):
+                pairs.append((b, r)); claimed.add(r); break
+    stems = {}
+    for r in rs:
+        if r in claimed:
+            continue
+        for cut in (1, 2):
+            stem, tail = r[:-cut], r[-cut:]
+            if len(stem) >= 2 and stem not in routes and _variant_tail(stem, tail):
+                stems.setdefault(stem, []).append(r); break
+    for stem, members in stems.items():
+        if len(members) < 2:
+            continue
+        lead, rest = members[0], members[1:]
+        pairs += [(lead, m) for m in rest]
+    return pairs
+
+
+def _variant_tail(stem, tail):
+    """Is `tail` a VARIANT MARKER on `stem`, rather than the next route number?
+
+    It is when it changes character class: a letter after a number (301 -> 301S,
+    AW1 -> AW1X) or a number after a letter (ZIP -> ZIP2). Both are how an operator
+    writes "this is a pattern of that service", and both are what the estate's real
+    families look like.
+
+    It is NOT when the tail continues the class, because then the two names are
+    simply adjacent numbers in a range and nothing about them says one is the
+    other's variant. This is the whole guard: without it "303" and "305" share the
+    stem "30", "9" and "904" share the stem "9", and "400" and "401" share "40" --
+    and Ramsey's 303 and 305 BOTH go to Huntingdon, so the destination test would
+    not have caught them either. decollide_bearings() says why that merge would be
+    wrong: they are genuinely distinct services, and spreading their spokes apart
+    is the remedy, not claiming they are one line.
+    """
+    if not tail or not stem or not tail.isalnum():
+        return False
+    return stem[-1].isdigit() != tail[0].isdigit()
+
+
+CELL_DEG = 0.001         # complexity_score.js's own cell, about 111 m
+
+
+def path_cells(routes_paths):
+    """{route: set(cell)} over the MATCHED paths -- complexity_score.js's measure.
+
+    Deliberately the same arithmetic as that file's detectFamilies(), on the same
+    `routes_paths.json`, so the drafter proposes only what the engine's own
+    corridors_report.json would go on to confirm. Reproduced rather than imported
+    because complexity_score.js is a CLI that wants a built S4, and the merge has
+    to be decided in S3 -- which is the whole reason the after-the-fact report was
+    never able to stop a bad bundle, only describe one. Checked against St Ives'
+    report on 2026-09-22: 0.328 and 0.337 out of this, 0.328 and 0.337 out of it.
+    """
+    pts = {k: v.get("pts") or [] for k, v in (routes_paths.get("routes") or {}).items()}
+    las = [p[0] for v in pts.values() for p in v]
+    if not las:
+        return {}
+    lon_scale = math.cos(((min(las) + max(las)) / 2) * math.pi / 180) or 1.0
+    cell_lo = CELL_DEG / lon_scale
+    return {k: {(math.floor(p[0] / CELL_DEG), math.floor(p[1] / cell_lo)) for p in v}
+            for k, v in pts.items()}
+
+
+def _co_run(cells, member, lead):
+    """MUTUAL overlap, as complexity_score.js insists and for its reason: a
+    one-directional test bundles a short shuttle into the long trunk route it
+    merely shares a mile with. Returns (shared_of_member, shared_of_lead)."""
+    a, b = cells.get(member) or set(), cells.get(lead) or set()
+    if not a or not b:
+        return None
+    inter = len(a & b)
+    return inter / len(a), inter / len(b)
+
+
+def weak_family_rows(cr):
+    """corridors_report.json -> the lines the review should print, or [].
+
+    THIS IS A CHECK THAT LIED, and the shape is why it is now a function with its
+    own tests rather than four lines inside main(). It read `corridors[].overlap`
+    and `corridors[].fraction`; the file has carried `families[].members[]
+    .sharedFraction` and `families[].weakMembers[]` throughout. Neither key it
+    looked for has ever existed, so it found nothing, and DRAFT-REVIEW.md printed
+    "The engine's overlap report raised no warnings" beside a report flagging every
+    member of St Ives' 301 family. A sentence asserting a finding about a file it
+    never read is worse than no sentence: the reviewer stops looking.
+
+    `sharedMin` comes from the report rather than from a constant here, because the
+    engine owns that threshold and a second copy of it drifts.
+    """
+    floor = cr.get("sharedMin", MIN_CORUN)
+    rows = []
+    for fam in (cr.get("families") or cr.get("corridors") or []):
+        lead = fam.get("lead", "?")
+        seen = set()
+        for mem in (fam.get("members") or []):
+            frac = mem.get("sharedFraction", mem.get("overlap", mem.get("fraction")))
+            if isinstance(frac, (int, float)) and frac < floor:
+                route = mem.get("route", "?")
+                seen.add(route)
+                rows.append(f"{lead}/{route} shares {frac:.2f} of its drawn line "
+                            f"(weakest against {mem.get('weakestAgainst', '?')})")
+        for route in (fam.get("weakMembers") or []):
+            if route not in seen:
+                rows.append(f"{lead}/{route} flagged weak by the engine")
+    return rows
+
+
+def _dest_name(spoke):
+    return (spoke or {}).get("label") or "(nowhere out of town)"
+
+
+def _same_road(member_spoke, lead_spoke):
+    """Do two spokes describe one service's road out of town?
+
+    Yes when they name the same destination, and ALSO when one terminates at a
+    place the other calls AT: 301 runs St Ives - Pidley - Warboys - Ramsey and
+    301X stops at Warboys, so 301X is a short working of 301 and not a separate
+    line. Requiring the labels to match outright refused that merge and left 301X
+    in the palette with its own colour for a stretch of road already drawn.
+
+    A shared destination is NOT on its own enough to merge -- Ramsey's 303 and 305
+    both end at Huntingdon by different roads -- which is why this is only ever the
+    second of two tests, behind the in-town co-run one.
+
+    ONE SPOKE AND NO SPOKE IS A REFUSAL, both ways round, and Huntingdon's AW1 and
+    AW1X are the measured case: every stop the map draws for AW1X is AW1's, but
+    AW1X runs on to Alconbury Weald and AW1 stays in town. Fold them and the town
+    loses the only line that reaches Alconbury Weald -- which reads to a passenger
+    as "you cannot get there from here", the exact fault DRAFT-REVIEW.md item 15
+    exists to stop. The other way round is no better: a member that never leaves
+    town, badged onto the lead's spoke, claims a journey it does not run.
+    """
+    if not member_spoke or not lead_spoke:
+        return member_spoke == lead_spoke        # both absent = both stay in town
+    a, b = member_spoke.get("label"), lead_spoke.get("label")
+    return a == b or a in (lead_spoke.get("stops") or []) or b in (member_spoke.get("stops") or [])
+
+
+def variant_families(services, paths=None, dest=None):
+    """Group a route with the variants that really are one line -> {lead:[members]}.
+
+    Returns (families, rejected), rejected being [(lead, member, why)] so the draft
+    review can print what was proposed and turned down.
+
+    WHAT CHANGED IN OA-436, and why it cuts both ways. This used to read ONLY
+    gtfs_query.py's `possibleVariantOf` and accept every declaration unexamined.
+    That was wrong in both directions, and both were measured on 2026-09-22:
+
+      TOO NARROW. `possibleVariantOf` needs the BASE ROUTE to be in the feed at
+      this town. Chatteris carries ZIP2 and ZIP3 and no ZIP, so the feed declared
+      nothing and a human put them on one spoke by hand. _sibling_pairs() now
+      proposes those too.
+
+      TOO WIDE, and this is the expensive half. The feed declares 301S a pattern of
+      301 at St Ives, and on the drawn lines 301S shares 7% of its path with 301
+      while 301 shares 36% of its with 301S: 301S runs right round the town by
+      Burleigh Centre, Burrel Road, Cambridge Drive and Chestnut Road, and 301 does
+      not go near any of them. Accepting that declaration and taking 301S out of
+      the palette would have deleted a line of real ink and left the sheet claiming
+      301 covers ground it never sees.
+
+    SO THE TEST IS THE ENGINE'S OWN, RUN EARLY. corridors_report.json already
+    measures exactly this -- mutual 111m-cell overlap of the matched paths -- but it
+    is written in S4, after the bundle has been configured and drawn, so it could
+    only ever describe a bad bundle and never prevent one. path_cells() computes
+    the same number in S3 off the same S2 file, so the draft proposes only what the
+    report would confirm.
+
+    A SECOND MEASURE WAS TRIED FIRST AND WAS WRONG, which is why this says which.
+    Counting shared IN-TOWN STOPS instead accepted St Ives' 301V and 301X (their
+    three drawn stops are 301's) and Chatteris' ZIP3 (all nine are ZIP2's). The
+    matched paths refuse all three, and on Chatteris the refusal is checkable: the
+    live sheet draws ZIP2 and ZIP3 as two lines sharing one spoke, which is what
+    0.534 mutual overlap should produce. A stop list is not the ink.
+
+    Then the destinations, because geometry alone still bundles Huntingdon's 303
+    and 305 (identical in town) and 301 with 302 at St Ives (mutual overlap 1.000,
+    one going to Ramsey and the other to March).
+
+    `paths` is routes_paths.json, S2's matched geometry. `dest` is {route: spoke}
+    taken BEFORE the merge, each spoke carrying its `label` and ordered `stops`.
+    Called with neither, every proposal is accepted and the behaviour is the old
+    one, which is what keeps the unit tests honest about the difference.
+    """
     known = {s["route"] for s in services}
-    for s in services:
-        base = s.get("possibleVariantOf")
-        if base and base in known and base != s["route"]:
-            fam.setdefault(base, []).append(s["route"])
-    return {lead: sorted(members) for lead, members in fam.items()}
+    cells = path_cells(paths) if paths else None
+    fam, rejected = {}, []
+    for lead, member in _sibling_pairs(known):
+        if cells:
+            share = _co_run(cells, member, lead)
+            if share is None:
+                rejected.append((lead, member,
+                    f"{member} or {lead} has no matched path in this town, so there is nothing "
+                    f"to compare -- left as its own route rather than bundled on trust"))
+                continue
+            if min(share) < MIN_CORUN:
+                rejected.append((lead, member,
+                    f"the drawn lines share {share[0]:.0%} of {member} and {share[1]:.0%} of "
+                    f"{lead} (the engine's own corridor threshold is {MIN_CORUN:.0%} BOTH ways) "
+                    f"-- bundling them would draw one line where the map has two"))
+                continue
+        if dest is not None and not _same_road(dest.get(member), dest.get(lead)):
+            dm, dl = dest.get(member), dest.get(lead)
+            if bool(dm) != bool(dl):
+                out, stays = (member, lead) if dm else (lead, member)
+                why = (f"{out} leaves town for {_dest_name(dm or dl)} and {stays} does not, so "
+                       f"folding them would put {stays} on a spoke it never runs, or drop "
+                       f"{out}'s destination off the map altogether")
+            else:
+                why = (f"{member} goes to {_dest_name(dm)} and {lead} to {_dest_name(dl)}, and "
+                       f"neither terminus is a place the other calls at -- same stem, "
+                       f"different service")
+            rejected.append((lead, member, why))
+            continue
+        fam.setdefault(lead, []).append(member)
+    return {lead: sorted(m) for lead, m in fam.items()}, rejected
 
 
 def decollide_bearings(spokes, min_gap=20):
@@ -583,6 +870,10 @@ def main():
     ap.add_argument("--region", default="Cambridgeshire")
     ap.add_argument("--centre")
     ap.add_argument("--radius-km", type=float, default=1.6)
+    ap.add_argument("--expiring-days", type=int, default=28,
+                    help="A5: drop a service whose GTFS registration ends within this many "
+                         "days of the build. Negative turns the rule off. See "
+                         "bootstrap_town.py's drop_undrawable().")
     ap.add_argument("--max-edge-km", type=float, default=2.5,
                     help="town-edge cap for the drawn buffer stops (derive_intown)")
     ap.add_argument("--buses-root", default=None)
@@ -608,7 +899,8 @@ def main():
     # ---- scaffold: init + S1 + bootstrap draft + town_prefixes registration
     scaffold = [py, os.path.join(HERE, "scaffold_town.py"), a.town,
                 "--region", a.region, "--radius-km", str(a.radius_km),
-                "--buses-root", os.path.join(a.buses_root, "Areas"), "--db", a.db]
+                "--buses-root", os.path.join(a.buses_root, "Areas"), "--db", a.db,
+                "--expiring-days", str(a.expiring_days)]
     if a.centre:
         scaffold += ["--centre", a.centre]
     out = run(scaffold)
@@ -621,8 +913,11 @@ def main():
     prefix = draft["atcoPrefix"]
 
     # ---- S1: GTFS-only verified-services.json (no bustimes/operator cross-check)
+    # A5: bootstrap's drops travel in routes.draft.json and land in the S1 record's
+    # notOnLeaflet[], so the S1 record and the config agree about what is drawn.
     routes = build_verified_services(os.path.join(s1, "gtfs-services.json"),
-                                     os.path.join(s1, "verified-services.json"))
+                                     os.path.join(s1, "verified-services.json"),
+                                     draft.pop("_droppedServices", []))
     node("stage.js", "commit", "S1", s1,
          "--outputs", "verified-services.json,routes.draft.json,gtfs-services.json,bootstrap-report.md",
          "--note", "Tier-2 auto-draft (item 8): GTFS-only, not cross-checked vs bustimes/operator",
@@ -758,7 +1053,7 @@ def main():
         json.load(open(os.path.join(s1, "gtfs-services.json"), encoding="utf-8")).get("services", []),
         key=lambda s: str(s["route"]),
         what="draft_town S1 gtfs-services.json")
-    externals, termini, unnamed, through = [], {}, [], []
+    externals, termini, unnamed, through, end_choices = [], {}, [], [], []
     for r in draft.get("routeOrder", routes):
         ch = chains.get(r)
         if not ch:
@@ -773,6 +1068,13 @@ def main():
             if sp.get("otherEnd"):
                 through.append(f"{r} also reaches {sp['otherEnd']} (it runs THROUGH "
                                f"the town; only {sp['label']} gets a spoke)")
+            # OA-436, in place of A13: the label is a CHOICE wherever the route's
+            # own patterns offer more than one end. See _end_candidates().
+            if sp.get("endChoice"):
+                alts = ", ".join(f"{c['place']} ({c['km']} km, on a {c['onPattern']}-stop pattern)"
+                                 for c in sp["endChoice"])
+                end_choices.append(f"**{r}** is labelled **{sp['label']}** "
+                                   f"({sp['far_km']} km) -- it could also have been {alts}")
         t = termini_for_route(ch, ll, prefix, namer, a.town)
         if t:
             termini[r] = t
@@ -784,7 +1086,15 @@ def main():
     #      s3-config.md: "Pick the same lead as external[].routes" so a family keeps
     #      the same colour on both sheets.
     all_services = list(facts_by_route.values())
-    families = variant_families(all_services)
+    # A12: the test is the MATCHED PATH the sheet will draw (S2's routes_paths.json,
+    # measured exactly as corridors_report.json measures it), and where each route
+    # goes, taken from the spokes before the merge removes the members' own
+    # entries. See variant_families() for why the stop list was not enough.
+    paths = json.load(open(os.path.join(s2, "routes_paths.json"), encoding="utf-8"))
+    spoke_dest = {e["route"]: e for e in externals}
+    families, fam_rejected = variant_families(all_services, paths, spoke_dest)
+    for lead, member, why in fam_rejected:
+        print(f"  NOT merged onto {lead}: {member} -- {why}")
     merged_away = {m for members in families.values() for m in members}
     kept = []
     for e in externals:
@@ -796,6 +1106,32 @@ def main():
         kept.append(e)
     externals = decollide_bearings(kept)
     draft["external"] = externals
+    # A12 -- AND TAKE THE MERGED MEMBERS OUT OF EVERY ROUTE-KEYED MAP, which until
+    # OA-436 the merge did not do. It removed 301S/301V/301X from external[] and
+    # recorded the family in internalCorridors, but bootstrap_town.py had already
+    # given each of them its own palette colour, its own routeOrder and panelOrder
+    # slot, its own internalDesc line and its own row under the operator -- so the
+    # draft still shipped twelve routes where the live St Ives map has nine, and the
+    # Services panel listed three variants that no line on either sheet draws. A
+    # route merged onto another's line is not a route this map has; it is a member
+    # of one. The internalCorridors entry below is where it still exists.
+    if merged_away:
+        for key in ("palette", "textOn", "internalDesc"):
+            if isinstance(draft.get(key), dict):
+                draft[key] = {r: v for r, v in draft[key].items() if r not in merged_away}
+        for key in ("routeOrder", "panelOrder"):
+            if isinstance(draft.get(key), list):
+                draft[key] = [r for r in draft[key] if r not in merged_away]
+        draft["operators"] = [o for o in ({**o, "routes": [r for r in o.get("routes", [])
+                                                           if r not in merged_away]}
+                                          for o in draft.get("operators", []))
+                              if o["routes"]]
+        if draft.get("orientationRoute") in merged_away:
+            draft["orientationRoute"] = (draft["routeOrder"] or [""])[0]
+        if draft.get("routeOrder"):
+            draft["titleColor"] = draft["palette"].get(draft["routeOrder"][0], draft["titleColor"])
+        print(f"  merged variants removed from palette/order/desc/operators: "
+              f"{', '.join(sorted(merged_away))}")
     # internalRoads: THE standard drawing model -- all 7 built towns use it. Gates
     # route badges, "to X" terminus arrows, road names/labels, the north arrow, the
     # version stamp and the focus compression (see gen_internal.js `IR`).
@@ -856,19 +1192,15 @@ def main():
     # footers read no "build 1.0" until the sheets were redrawn.
     node("stage.js", "stamps", s4, cwd=town_dir)
     node("build_s4.js", cwd=s4)
-    # corridors_report.json is the engine's own check on whether a bundled family
-    # REALLY co-runs (it warns below 0.6 overlap). s4-s5-build-and-render.md: "a
-    # family that warns should be dropped, not shipped" -- surfaced, not silently
-    # accepted, since the merge here is a proposal from GTFS's variant declaration.
+    # corridors_report.json is the engine's own confirmation of the bundles the
+    # merge above proposed. s4-s5-build-and-render.md: "a family that warns should
+    # be dropped, not shipped" -- so it is surfaced rather than silently accepted.
+    # weak_family_rows() says what it used to read instead, and what that cost.
     weak_families = []
     cr_path = os.path.join(s4, "corridors_report.json")
     if os.path.exists(cr_path):
         try:
-            cr = json.load(open(cr_path, encoding="utf-8"))
-            for row in (cr.get("corridors") or cr.get("families") or []):
-                frac = row.get("overlap", row.get("fraction"))
-                if isinstance(frac, (int, float)) and frac < 0.6:
-                    weak_families.append(f"{row.get('lead', '?')}/{row.get('route', '?')} overlap {frac:.2f}")
+            weak_families = weak_family_rows(json.load(open(cr_path, encoding="utf-8")))
         except Exception:
             pass
     outputs = "internal.svg,external.svg,build-warnings.txt" + (",corridors_report.json" if os.path.exists(cr_path) else "")
@@ -885,6 +1217,16 @@ def main():
     node("refresh_latest.js", town_dir)
 
     nocheck = "\n".join(f"   - {u}" for u in unnamed) or "   - (none -- every place name resolved confidently)"
+    # A12: the proposals that were TURNED DOWN are the half a reviewer cannot
+    # reconstruct. "No variants were bundled" reads as "the feed declared none";
+    # naming the refusals says a merge was considered and why the map refused it.
+    rejected_block = ("\n".join(f"    - **{m}** was NOT bundled onto {lead}: {why}"
+                                for lead, m, why in fam_rejected)
+                      if fam_rejected else
+                      "    - (no bundle was proposed and turned down)")
+    end_choice_block = ("\n".join(f"    - {c}" for c in end_choices)
+                        if end_choices else
+                        "    - (every spoke had exactly one candidate end)")
     through_block = ("\n".join(f"    - {t}" for t in through)
                      or "    - (none -- every route ends in this town)")
     if band == "GREEN":
@@ -948,9 +1290,12 @@ Before this ships as a real leaflet:
     auto-spread to keep destination lozenges apart, so they are no longer the true
     compass bearings derived from the stops.
 14. **{f"Route variants were bundled into one line/spoke: {json.dumps(families)}" if families else "No route variants were bundled."}**
-    This uses GTFS's own `possibleVariantOf` declaration (301S/301V/301X are patterns
-    of 301), not a judgement that different services co-run -- but it is still a claim
-    worth eyeballing on the map.
+    A bundled member has been taken out of the palette, the route order, the Services
+    panel and the operator list: it is a badge on the lead's spoke and its stops are
+    already on the lead's line. It was only bundled because at least
+    {int(MIN_CORUN*100)}% of the stops this map draws for it are the lead's AND both
+    ends name the same destination -- but that is still a claim worth eyeballing.
+{rejected_block}
     {"**The engine's corridors_report.json flags these as weakly-overlapping (<0.6) -- s4-s5-build-and-render.md says drop a family that warns: " + "; ".join(weak_families) + "**" if weak_families else "The engine's overlap report raised no warnings." if families else ""}
 15. **Routes running THROUGH the town reach a second destination that has no spoke.**
     A spoke is one direction of travel, so a through service can only draw one of its
@@ -959,6 +1304,15 @@ Before this ships as a real leaflet:
     for each whether to add a second spoke (pick a `bearing` and re-check collisions)
     or to accept the omission:
 {through_block}
+16. **Where a spoke's label was a CHOICE, these are the ends it was chosen between.**
+    The drafter picks the farthest end of the route's own stop patterns, which is a
+    rule and not a fact: on the six spokes measured for this on 2026-09-22 the live
+    sheet named the OTHER end every time -- Hinchingbrooke rather than Cambridge on
+    St Ives' B, Bedford rather than Cambridge on St Neots' 905, Downham Market
+    rather than Three Holes on Wisbech's 60. Which end a through route draws is a
+    decision about the whole sheet, and a circular has no far end at all, so this
+    lists the alternatives rather than guessing between them. Check each one:
+{end_choice_block}
 
 Recommended next step: work through `references/s1-services.md` for a real S1 pass
 (replacing the auto-drafted `verified-services.json`), then re-run S2 onward normally.

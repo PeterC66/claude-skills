@@ -24,7 +24,7 @@ Usage:
 Region-agnostic: --db / $CAMBS_GTFS_DB selects the dataset; --region only tunes
 the geocode string + report. Any town whose stops are in the dataset works.
 """
-import sqlite3, sys, json, argparse, os, urllib.request, urllib.parse, math, time
+import sqlite3, sys, json, argparse, os, re, urllib.request, urllib.parse, math, time
 
 HERE=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -34,6 +34,45 @@ import gtfs_regions
 TOL_BRIGHT=["#4477AA","#EE6677","#228833","#CCBB44","#66CCEE","#AA3377","#EE7733","#BBBBBB"]
 LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7733"}   # need dark badge text
 UA={"User-Agent":"make-bus-leaflet/1.0 (bootstrap_town)"}
+
+# A15 -- poi.tidy PROMOTED FROM THE ESTATE, not invented here. Counted over the ten
+# shipped S3 configs on 2026-09-22: " School$" 9 towns, " Primary School$" 6,
+# " Junior School$" 6, " Church of England Primary School$" 5, " Academy$" 4,
+# " Infant School$" 3. Every rule below is one at least three towns had already
+# written out by hand; the tail of one-town rules (" Interchurch Academy$",
+# " Combined School$", …) stays per-town, because it is a local name and not a
+# convergence. The drafter used to write the last rule only, so five towns had to
+# re-type the other five. ORDER IS LOAD-BEARING: poi_select.js applies these in
+# array order, each replace mutating the name, so the long patterns must precede
+# the short ones. Put " School$" first and "Hartford Church of England Primary
+# School" comes out as "Hartford Church of England Primary" -- the later, better
+# rule can no longer match what the earlier one already ate. OA-436.
+POI_TIDY=[[" Church of England Primary School$"," C of E Primary"],
+          [" Primary School$"," Primary"],
+          [" Junior School$"," Junior"],
+          [" Infant School$"," Infants"],
+          [" Academy$",""],
+          [" School$",""]]
+
+# A15 -- the anchor's name, town-qualified. NaPTAN calls St Ives' interchange
+# "Bus Station" and March's "Town Centre": true of a hundred towns, and printed on
+# the sheet as the name of THIS one's. Huntingdon and March both had the town typed
+# in by hand. Qualify only a BARE generic -- Wisbech's "Horse Fair Bus Station" and
+# Beaconsfield's "Old Town" already say which place they are, and prefixing those
+# would produce "Wisbech Horse Fair Bus Station", which no sign in Wisbech says.
+_GENERIC_ANCHOR=re.compile(
+    r"^(?:the\s+)?(?:bus\s*st(?:atio)?n|bus\s*stn|interchange|bus\s*interchange"
+    r"|town\s*centre|city\s*centre|railway\s*station|train\s*station|station)$", re.I)
+
+def qualify_anchor(name, town):
+    """"Bus Station" -> "St Ives Bus Station"; anything already distinctive, unchanged."""
+    if not name or not town:
+        return name
+    if not _GENERIC_ANCHOR.match(name.strip()):
+        return name
+    if town.lower() in name.lower():
+        return name
+    return f"{town} {name.strip()}"
 
 def geocode(name, region):
     q=", ".join([p for p in [name, region, "UK"] if p])
@@ -99,6 +138,69 @@ def pick_anchor(cur, stops):
     meta=next(s for s in stops if s[0]==sid)
     return {"atco":sid,"name":meta[1],"routes":n,"lat":meta[2],"lon":meta[3],
             "namedStation":bool(named)}
+
+def drop_undrawable(cur, services, stops, expiring_days, radius_km):
+    """A5 -- the two services a draft should never have carried, both read off GTFS.
+
+    Returns (kept, [(route, why), ...]); draft_town.py writes both into the S1
+    record, the kept as `services[]` and the dropped as `notOnLeaflet[]`.
+
+    NOTHING here is a judgement about whether a route is WORTH drawing. Huntingdon's
+    400 is a real Dews Mon-Fri service calling at the bus station nine ways with a
+    registration good to June 2027, and Wisbech's X46 runs to May 2027; the live
+    sheets carry neither, and no rule reading GTFS can say why. Those are decisions
+    a person makes and writes into `notOnLeaflet[]` with a reason (Peter, 2026-09-22).
+    These two are the cases where the FEED ITSELF says the route does not belong on
+    a sheet for this town.
+
+    1. THE REGISTRATION HAS RUN OUT, or is about to. `validTo` is the last date any
+       calendar row of this route's town-serving trips covers. Whippet's 101 was
+       drafted onto St Ives and Huntingdon (and three places, and St Ives Bus
+       Station) on 2026-09-22 with a `validTo` of 2026-09-13 -- nine days in the
+       PAST. A leaflet is printed and lives on a noticeboard for months; a service
+       whose registration ends inside the next four weeks is not one a reader can
+       use. The margin is wide because the gap is wide: measured across the three
+       towns drafted that day, every route anybody kept had 252 days left and the
+       only two dropped had -9. There is no case anywhere near the line.
+
+    2. NO STOP INSIDE THE TOWN RADIUS. gtfs_query selects on the ATCO prefix, which
+       is a NaPTAN administrative block and not a circle -- so a route can qualify
+       on a stop the town's own radius excludes. The place drafter's 18A is the
+       measured case (nearest stop 12.9 km from the place, drafted onto two St
+       Neots places); the town half of it is this guard, and on a town whose
+       prefix block sits inside its radius it is expected to drop nothing at all.
+       That is the correct outcome for a guard, not a reason to leave it out.
+    """
+    today=time.strftime("%Y%m%d")
+    horizon=(None if expiring_days<0
+             else time.strftime("%Y%m%d", time.localtime(time.time()+expiring_days*86400)))
+    in_radius={s[0] for s in stops}
+    kept,dropped=[],[]
+    for s in services:
+        vt=s.get("validTo")
+        if horizon and vt and str(vt)<horizon:
+            when="ran out on" if str(vt)<today else "runs out on"
+            dropped.append((s["route"],
+                f"its registration {when} {vt} -- inside the {expiring_days}-day horizon "
+                f"from today ({today}). Use --expiring-days -1 to draft it anyway."))
+            continue
+        rids=[x[0] for x in cur.execute(
+            "SELECT route_id FROM routes WHERE route_short_name=?",(s["route"],)).fetchall()]
+        if rids:
+            ph=",".join("?"*len(rids))
+            # the town's in-radius stop list runs to hundreds, so pull the route's
+            # own stop set once and intersect in Python rather than build that IN-list
+            called={x[0] for x in cur.execute(
+                f"SELECT DISTINCT st.stop_id FROM trips t JOIN stop_times st ON st.trip_id=t.trip_id "
+                f"WHERE t.route_id IN ({ph})",rids).fetchall()}
+            if not (called & in_radius):
+                dropped.append((s["route"],
+                    f"no stop within {radius_km} km of the centre -- it qualified on the "
+                    f"ATCO prefix alone. Widen --radius-km if the town really reaches it."))
+                continue
+        kept.append(s)
+    return kept,dropped
+
 
 def route_far_stop(cur, route_ids, town_ids, clat, clon):
     """Farthest in-town-serving-trip stop from centre, for a draft external spoke."""
@@ -175,6 +277,11 @@ def main():
     ap.add_argument("--region",default="Cambridgeshire")
     ap.add_argument("--centre",help="override geocode: 'lat,lon'")
     ap.add_argument("--radius-km",type=float,default=1.6)
+    ap.add_argument("--expiring-days",type=int,default=28,
+                    help="A5: drop a service whose GTFS registration ends within this "
+                         "many days of today. 0 drops only the ones that have already "
+                         "run out; a negative number turns the rule off and drafts "
+                         "every service the feed carries.")
     ap.add_argument("--db", default=None,
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     ap.add_argument("--out",default=".")
@@ -197,7 +304,9 @@ def main():
     prefixes,prefix_counts=dominant_prefixes(stops)
     anchor=pick_anchor(cur,stops)
     facts=gtfs_query.query(a.db, prefixes=prefixes, town=a.town)
-    services=facts["services"]
+    services,dropped=drop_undrawable(cur, facts["services"], stops, a.expiring_days, a.radius_km)
+    for route,why in dropped:
+        print(f"  DROPPED {route}: {why}")
 
     # palette + textOn (one colour per route, in service order)
     order=[s["route"] for s in services]
@@ -236,26 +345,44 @@ def main():
       "version":"DRAFT 0",
       "_bootstrap":"Auto-drafted by bootstrap_town.py. REVIEW everything marked DRAFT/<...>: confirm services vs bustimes (community/DRT buses are NOT in BODS), choose & lock the palette (watch the river-blue clash), curate external stop chains + bearings/sides, pick the 1-3 linear features, set internalDesc. Then this becomes the S3 routes.json.",
       "anchor":anchor["atco"] if anchor else "<no anchor found>",
-      "anchorLabel":(anchor["name"] if anchor else "<bus station>"),
+      "anchorLabel":qualify_anchor(anchor["name"] if anchor else "<bus station>", a.town),
       "atcoPrefix":prefixes[0],
       "titleColor":palette.get(order[0],"#4477AA") if order else "#4477AA",
-      "internalZoom":{"corePct":0.55,"comp":0.22},
+      # A15: the estate's own answer, not the drafter's first guess. Measured across
+      # the ten shipped configs on 2026-09-22: four towns carry comp 0.3 with core
+      # 0.8-0.85 (Huntingdon, St Neots, Wisbech, The Shelfords) and the three still
+      # on 0.55/0.22 are the ones nobody ever tuned -- including Chatteris, which
+      # this drafter itself wrote. A default three towns have to overwrite is not a
+      # default. See OA-436.
+      "internalZoom":{"corePct":0.8,"comp":0.3},
       "palette":palette,
       "textOn":textOn,
       "routeOrder":order,
       "panelOrder":order,
       "orientationRoute":order[0] if order else "",
       "internalDesc":{r:[f"{a.town} - <dest>","<days, via ...>"] for r in order},
-      "poi":{"industrialKeep":"none","excludeName":[],"tidy":[[" School$",""]],"canon":[]},
+      "poi":{"industrialKeep":"none","excludeName":[],"tidy":list(POI_TIDY),"canon":[]},
       "operators":operators,
-      # Stagger labelPos down the left margin: all three used to share {40,200},
-      # which overprints them into an unreadable smear the moment a town has more
-      # than one feature (Ramsey drew "Bevill's Leam" on top of "River Nene (Old
-      # Course)"). Still a draft position for a human to place properly.
+      # A2: "auto" sites the label on the feature's own ink (gen_internal.js's
+      # AUTOPOS pass) instead of pinning it in page mm. The staggered left-margin
+      # draft this replaces put every label at x=40, y=200 downwards -- and the
+      # footer plate's top is about 188 mm, so the first one landed UNDER the plate
+      # and the rest sat in the panel. Five town histories carry a run whose whole
+      # purpose was moving a drafted feature label back onto the map. A hand-set
+      # constant cannot survive a moving projection; the placer can. See OA-436.
       "features":[{"key":f["key"],"type":f["type"],"label":f["label"],
-                   "labelPos":{"x":40,"y":200-i*7},"labelColor":"#7fb0d8"}
-                  for i,f in enumerate(feats[:3])],
-      "external":ext
+                   "labelPos":"auto","labelColor":"#7fb0d8"}
+                  for f in feats[:3]],
+      "external":ext,
+      # A5 -- WHAT WAS DROPPED, carried forward so draft_town.py can put it in the
+      # S1 record's `notOnLeaflet[]`, which is where this estate says "we know about
+      # this route and deliberately do not draw it" and the only spelling anything
+      # new may write. A route that is merely ABSENT from the config is
+      # indistinguishable from one the feed never carried, and the monthly refresh
+      # then re-proposes it every month. Underscored because it is scaffolding for
+      # the S1 record and not a key of the shipped config. OA-436.
+      "_droppedServices":[{**next((s for s in facts["services"] if s["route"]==r), {"route":r}),
+                           "reason":why} for r,why in dropped]
     }
     rp=os.path.join(a.out,"routes.draft.json")
     json.dump(draft,open(rp,"w",encoding="utf-8"),indent=2,ensure_ascii=False)
@@ -278,6 +405,16 @@ def main():
         R.append(f"- **{s['route']}** {palette.get(s['route'],'')}  {s['operator']}  · {s['days']}  · "
                  f"-> {', '.join(s['headsigns'][:2]) or ', '.join(s['termini'][:2])}{v}"
                  f"  {'[has GTFS shape]' if s['hasGtfsShape'] else ''}")
+    # A5: say what was NOT drafted and why, in the report a human reads. A service
+    # dropped silently is indistinguishable from one the feed never carried, and the
+    # reviewer has no way to disagree with a decision nothing wrote down. OA-436.
+    if dropped:
+        R.append(f"\n## Services the feed carries and this draft DROPPED ({len(dropped)})")
+        R.append("Both rules read GTFS and neither is a judgement about whether the route "
+                 "is worth drawing -- that decision belongs in the town's `notOnLeaflet[]`. "
+                 "If one of these is wrong, the flag to override it is in the reason.")
+        for route,why in dropped:
+            R.append(f"- **{route}** -- {why}")
     R.append(f"\n## Draft external spokes (radial seed -- refine stop chains, side, bearing)")
     for e in ext:
         R.append(f"- {e['route']} -> {e['label']}  bearing≈{e['bearing']}°  ({e['_far_km']} km out)")

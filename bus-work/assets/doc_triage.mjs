@@ -128,7 +128,12 @@ export function draftBody(result, today) {
     lines.push('One command fixes every one of them, and it prints what it changed:');
     lines.push('');
     lines.push('```bash');
-    lines.push('node "C:/u3a St Ives/Using AI/Buses/Documentation/check-memory-paths.mjs" --apply');
+    /* Built from the buses root this run actually resolved, never typed. This
+     * repository is public and machine-independent, and `gate:laptop-paths`
+     * refuses a literal `C:/u3a St Ives/...` in its source — correctly: a path
+     * typed here is a path that is wrong on every machine but one, including in
+     * a worktree of this one. */
+    lines.push(`node "${result.buses.split('\\').join('/')}/Documentation/check-memory-paths.mjs" --apply`);
     lines.push('```');
     lines.push('');
   }

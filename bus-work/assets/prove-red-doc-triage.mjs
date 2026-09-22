@@ -114,8 +114,14 @@ console.log('\nWhat it does when both halves answer:\n');
        * reads these two off the file; a draft that grew either would silently
        * become a rank-3 row claiming to block something. */
       && !body.includes('## What is needed from you')
-      && !/\*\*Blocks:\*\*/.test(body),
-    'both halves found something — stamped, drafted, and the draft carries no ask and no Blocks field'
+      && !/\*\*Blocks:\*\*/.test(body)
+      /* The fix command is BUILT from the buses root this run resolved, never
+       * typed. A literal laptop path here would be wrong on every machine but
+       * one — including in a worktree of that one — and `prove-red-engine-adoption`
+       * refuses one in this repository's source, which is how the first draft
+       * of this file was caught. */
+      && body.includes(`node "${dir.split('\\').join('/')}/Documentation/check-memory-paths.mjs" --apply`),
+    'both halves found something — stamped, drafted, no ask, no Blocks, and the fix command built from the resolved root'
     + (code === 0 ? '' : `  <-- exited ${code}\n${out}`), 'GREEN');
 }
 

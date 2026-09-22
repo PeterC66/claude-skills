@@ -67,6 +67,8 @@
  *     node redteam_source.js --dry-run        decide and report, copy nothing
  *     node redteam_source.js --foreign-build  answer about a DIFFERENT map on purpose
  *     node redteam_source.js --reuse-anyway "<reason>"   override a BUY, on the record
+ *     node redteam_source.js --already-bought "<reason>" record an answer already in the
+ *                                             run dir as the BUY it was (OA-427)
  *
  * --reuse-anyway exists because this guard is cheap to bypass and expensive to
  * obey, and a guard like that gets bypassed silently. It does not soften the
@@ -142,7 +144,10 @@
  *                  a town whose data has just been re-pulled -- not an error).
  *             11 = WAIT -- it would buy, and this month's budget is spent. A chore.
  *              2 = could not decide (no manifest, unreadable candidate, or the
- *                  folder is ambiguous -- see above).
+ *                  folder is ambiguous -- see above), or the run dir already
+ *                  holds an answer no decision accounts for (OA-427).
+ *             A run dir already decided BUY or REUSE exits 10 or 0 again and
+ *             writes nothing: a run dir is decided once.
  */
 'use strict';
 const fs = require('node:fs');
@@ -169,6 +174,8 @@ const INTO = path.resolve(flag('into', process.cwd()));
 const BUILD_GIVEN = 'build' in FLAGS;
 const BUILD = path.resolve(flag('build', path.join(INTO, '..', '..')));
 const MAX_AGE = Number(flag('max-age-days', '60'));
+// Above REUSE_ANYWAY on purpose: prove-red-redteam-fingerprint.js cuts from that line to die().
+const ALREADY_BOUGHT = 'already-bought' in FLAGS ? String(flag('already-bought', '')).trim() : null;
 const REUSE_ANYWAY = 'reuse-anyway' in FLAGS ? String(flag('reuse-anyway', '')).trim() : null;
 
 function die(msg) { console.error('redteam_source.js: ' + msg); process.exit(2); }
@@ -176,6 +183,11 @@ if (REUSE_ANYWAY !== null && (!REUSE_ANYWAY || REUSE_ANYWAY.startsWith('--'))) {
   die('--reuse-anyway needs a reason: --reuse-anyway "the S1 only re-derived frequency fields; no service fact moved".\n'
     + '  An override with no reason on it is indistinguishable from a bypass, which is the whole thing this flag exists to stop.');
 }
+if (ALREADY_BOUGHT !== null && (!ALREADY_BOUGHT || ALREADY_BOUGHT.startsWith('--'))) {
+  die('--already-bought needs a reason: --already-bought "spawned the agent before stage.js refused the commit".\n'
+    + '  It records a purchase nobody decided, so the record has to say why.');
+}
+if (ALREADY_BOUGHT !== null && DRY) die('--already-bought writes a record and --dry-run writes nothing; use one or the other');
 // `cli.readJson` names the file in a parse error; the one-liner here said only
 // "Unexpected token }" about one of the estate's several hundred JSON files.
 const readJ = (f) => readJson(f);
@@ -582,6 +594,55 @@ console.log(`  answers copied to  : ${INTO}`);
 console.log(`  inputs last pulled : ${newestDataAt || '(unknown)'}${newestDataStage ? ' (' + newestDataStage + ')' : ''}`);
 console.log(`  answers on disk    : ${candidates.length}${candidates.length ? ' (newest ' + candidates[0].at + ')' : ''}`);
 console.log(`  window             : ${MAX_AGE} days`);
+
+/* THE RUN DIR MAY ALREADY BE DECIDED (OA-427, 2026-09-23). `stage.js commit S6`
+ * now refuses an answer with no decision beside it, and the natural response to
+ * that refusal is to run this tool AFTER the answer is in place — at which point
+ * the disk walk above finds the run dir's own redteam.json, calls it the newest
+ * candidate, and records a free REUSE of an answer that was just paid for. The
+ * same walk turns a second run after a BUY into a REUSE that overwrites the BUY
+ * record. Either way the month under-counts, which is the evasion the refusal
+ * exists to close. So a run dir is decided ONCE:
+ *
+ *   a BUY or REUSE record here   -> say what it recorded, exit its code, write nothing
+ *   a WAIT record, no answer     -> the month may have turned: decide afresh below
+ *   a WAIT record AND an answer  -> bought against the ration: refuse
+ *   an answer and no record      -> refuse, unless --already-bought "<why>" records
+ *                                   it as the BUY it was, priced like any other
+ *
+ * --dry-run is untouched: it writes no record, so it cannot under-count one. */
+if (!DRY) {
+  const recFile = path.join(INTO, BUDGET.DECISION_FILE);
+  const answerHere = fs.existsSync(path.join(INTO, 'redteam.json'));
+  let prior = null;
+  if (fs.existsSync(recFile)) {
+    try { prior = JSON.parse(fs.readFileSync(recFile, 'utf8')); } catch (e) { die(`${recFile} is not JSON (${e.message}) — remove it and decide again`); }
+  }
+  const was = prior && prior.decision;
+  if (was === 'BUY' || was === 'REUSE') {
+    if (ALREADY_BOUGHT !== null) die(`--already-bought: this run dir is already decided ${was} (${recFile}); nothing to record`);
+    console.log(`\n  ALREADY DECIDED — ${was}, recorded ${prior.at || '(no date)'} in ${recFile}`);
+    console.log(`          ${prior.why || ''}`);
+    console.log('          A run dir is decided once; this writes nothing. Remove the record to decide again.');
+    process.exit(was === 'BUY' ? 10 : 0);
+  }
+  if (answerHere && was === 'WAIT')
+    die(`${INTO} holds a redteam.json beside a WAIT record — the answer was bought after the month's budget said no.\n`
+      + '  Remove the answer, or raise the figure in the budget file and remove the WAIT record, then decide again.');
+  if (answerHere && ALREADY_BOUGHT === null)
+    die(`${INTO} already holds a redteam.json that no decision accounts for.\n`
+      + '  Deciding now would find that answer on disk and record a free REUSE of it.\n'
+      + '  If it was bought here, record the purchase:  --already-bought "<why it was bought unasked>"\n'
+      + '  Otherwise remove it and run this again.');
+  if (ALREADY_BOUGHT !== null) {
+    if (!answerHere) die(`--already-bought: there is no redteam.json in ${INTO} to account for`);
+    const w = writeDecision('BUY', 'bought before it was decided: ' + ALREADY_BOUGHT, { alreadyBought: true });
+    console.log('\n  BUY, RECORDED AFTER THE FACT — the answer here was bought without asking this tool.');
+    console.log('          It counts against the month like any other buy; the budget was not consulted.');
+    if (w) console.log(`          Recorded in ${w}`);
+    process.exit(10);
+  }
+}
 
 if (!candidates.length) {
   buyOrWait(['this build has no red-team answer at all — there is nothing on disk to reuse'],

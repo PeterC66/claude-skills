@@ -543,6 +543,17 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-pr-sweep
 
+      # buses-data, 2026-09-22: the weekly document triage. Its two subjects --
+      # Claude's memory store, and whether a dated document still has live work
+      # behind it -- cannot run in CI at all, so what is falsified here is the
+      # RUNNER: that a checker it cannot run makes it exit 2 rather than report
+      # "nothing to do" about a question it never asked, which is the fault it
+      # was built to end. The fixtures are stub checkers in a temp tree, so this
+      # touches neither the real buses repository nor any memory store.
+      - name: Prove the weekly document triage refuses rather than reporting clear
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-doc-triage
+
       # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
       # would go red if I pushed now". Read case 2 first and read it as the
       # POINT of the tool rather than as one assertion among thirty: a preflight

@@ -236,10 +236,18 @@ class PlaceNamer:
 def build_verified_services(gtfs_services_path, out_path):
     facts = json.load(open(gtfs_services_path, encoding="utf-8"))
     services = facts["services"] if "services" in facts else facts
+    # gtfs_query.py's "termini" is raw BODS trip_headsign stop-name text ("Bus
+    # Station", "Grays Lane"), never a settlement -- so it is stamped the same way
+    # place_verified_services.js already stamps a headsign-sourced termini:
+    # terminiSource: "gtfs-headsign" tells verify_report.js's terminus check
+    # (place-termini-are-headsigns) not to score a non-match as a HARD fault.
+    # Chatteris's first S6 was BLOCKED with six terminus HARDs for exactly this
+    # reason -- unstamped, the check read raw stop names as settlement claims.
     verified = [{**s, "verified": False,
                  "verifySource": "GTFS only (Tier-2 auto-draft) -- NOT cross-checked against "
                                  "bustimes.org or the operator's own timetable; community/DRT "
-                                 "services absent from BODS are NOT included"}
+                                 "services absent from BODS are NOT included",
+                 **({"terminiSource": "gtfs-headsign"} if s.get("termini") else {})}
                 for s in services]
     json.dump({"services": verified}, open(out_path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
     return [s["route"] for s in verified]
@@ -660,6 +668,13 @@ def main():
                                      for el in d.get("elements", []) if el.get("geometry")]
     json.dump(features_geo, open(os.path.join(s2, "features_geo.json"), "w", encoding="utf-8"), ensure_ascii=False)
 
+    # reachExtend for every route: without it (and with --max-edge-km's tight
+    # default), pull_roads.js/match_routes.js never reach past the last in-town
+    # stop, so every exit arrow stops at an interior junction instead of the frame
+    # edge. Chatteris v1.1 shipped that way; v1.2 fixed it by hand.
+    match_cfg = {"reachExtend": {r: {"start": 1, "end": 1} for r in routes}}
+    json.dump(match_cfg, open(os.path.join(s2, "match_cfg.json"), "w", encoding="utf-8"), ensure_ascii=False)
+
     # ---- the ROAD SKELETON: what internalRoads draws its lines along. Both of
     #      these are fully deterministic; skipping them (v1 of this script) is
     #      what cost the draft its road names, badges, arrows and north arrow.
@@ -708,7 +723,7 @@ def main():
     node("stage.js", "commit", "S2", s2,
          "--outputs", "atco2ll.json,atco2name.json,osm.json,osm2.json,features_geo.json,"
                       "routes_full_atco.json,routes_intown_atco.json,routes_atco.json,"
-                      "roads_geo.json,routes_paths.json,complexity.json",
+                      "roads_geo.json,routes_paths.json,complexity.json,match_cfg.json",
          "--note", f"Tier-2 auto-draft: GTFS-only chains/coords, live Overpass POIs/features/roads, "
                    f"map-matched. Complexity: {band}."
                    + (" Remedies: " + "; ".join(curated) if curated else ""),
@@ -829,15 +844,18 @@ def main():
          "--note", "Tier-2 auto-draft: internalRoads + reverse-geocoded place names + GTFS durations",
          cwd=town_dir)
 
-    # ---- S4: generate (unmodified template generators)
+    # ---- S4: generate, routed through build_s4.js (OA-431) -- a bare copy-and-run
+    #      of the two generators sets no SKILL_ASSETS, which engine_paths.js (OA-342)
+    #      refuses: "no engine to resolve ... from". build_s4.js is the one place an
+    #      S4's sheets are drawn (buses-data OA-310) and sets SKILL_ASSETS itself.
     s4 = node("stage.js", "new", "S4", "--bump", "major", cwd=town_dir)
     node("stage.js", "pull", "S2", s4, cwd=town_dir)
     node("stage.js", "pull", "S3", s4, cwd=town_dir)
-    shutil.copy(os.path.join(HERE, "gen_internal.js"), os.path.join(s4, "gen_internal.js"))
-    shutil.copy(os.path.join(HERE, "gen_external_radial.js"), os.path.join(s4, "gen_external.js"))
-    node("engine_version.js", "--stamp", os.path.join(s4, "routes.json"))
-    run([shutil.which("node") or "node", "gen_internal.js"], cwd=s4)
-    run([shutil.which("node") or "node", "gen_external.js"], cwd=s4)
+    # both footer stamps (engine hash + design.sheetVersion) BEFORE generation, or
+    # the sheets are drawn without them -- Chatteris v1.1 stamped after and both
+    # footers read no "build 1.0" until the sheets were redrawn.
+    node("stage.js", "stamps", s4, cwd=town_dir)
+    node("build_s4.js", cwd=s4)
     # corridors_report.json is the engine's own check on whether a bundled family
     # REALLY co-runs (it warns below 0.6 overlap). s4-s5-build-and-render.md: "a
     # family that warns should be dropped, not shipped" -- surfaced, not silently
@@ -853,7 +871,7 @@ def main():
                     weak_families.append(f"{row.get('lead', '?')}/{row.get('route', '?')} overlap {frac:.2f}")
         except Exception:
             pass
-    outputs = "internal.svg,external.svg" + (",corridors_report.json" if os.path.exists(cr_path) else "")
+    outputs = "internal.svg,external.svg,build-warnings.txt" + (",corridors_report.json" if os.path.exists(cr_path) else "")
     node("stage.js", "commit", "S4", s4, "--outputs", outputs,
          "--based-on", f"S2={os.path.basename(s2)};S3={os.path.basename(s3)}",
          "--note", "Tier-2 auto-draft build", cwd=town_dir)

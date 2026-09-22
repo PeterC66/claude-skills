@@ -253,14 +253,17 @@ Read the label-set diff. A `must` on a full sheet displaces `may` labels — tha
 
 ## `housekeeping` — engine-stale renders, missing S6
 
-### Engine-stale
+### Engine-stale — one `engine-rebuild-<map>` row per map since 2026-09-22
 
-The town's shipped build was drawn by an older engine template. Harmless — it is not wrong, just not current — so this is opportunistic work, and it self-heals on the town's next real build. Do it deliberately when the current look matters or before a batch of deliveries.
+The map's shipped build was drawn by an older engine template. Harmless — it is not wrong, just not current — and since buses-data OA-430 it is *provably* not wrong rather than presumed so: each map records the engine commit that drew it in its own `ci-reference/routes.json`, and `status.js` asks a behind map whether its committed sheets still reproduce under **that** engine. A DIFF on such a row is therefore a regression, and being behind is a chore.
+
+**The row is per MAP now, and that is the point.** It used to be a single `engine-stale` row naming every behind town with `rollout.js --all` for a command — an all-or-nothing debt nobody could take a bite out of and a loop tick could not claim at all. Each row is one unit of work that commits coherently, and a place gets one too; places had no staleness row of any kind before. The exact commands come with the row, and these are the shapes they take.
 
 ```powershell
 cd "C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets"
-node rollout.js --all           # dry run: what would change
-node rollout.js --all --apply   # writes; one commit per town, minor version bump each
+node rollout.js --town "St Ives"                    # dry run: what would change
+node rollout.js --town "St Ives" --apply            # writes; minor version bump
+node rollout_places.js --place "High Wycombe Aldi" --apply
 ```
 
 (`--town "St Ives"` for one town; `--place "High Wycombe Aldi"` on `rollout_places.js` for a place. It finds the maps through `--buses`, which defaults to `C:\u3a St Ives\Using AI\Buses`, so only pass that if the tree has moved.) It creates a new S4 from the current template with the config unchanged, diffs the label set against the previous build, renders S5 and refreshes `_latest`. **It stops before publishing if a label was lost** — that is a real signal, not a nuisance; review the loss rather than reaching for `--force`.

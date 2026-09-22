@@ -229,7 +229,7 @@ const conditions = conc.readConditions({
 // a single queue. It is the cheapest thing in this file and the one to reach for
 // before starting work, so it exits before any portal or map-tree read.
 if (CONDITIONS_ONLY) {
-  if (AS_JSON) { console.log(JSON.stringify({ conditions, standingTools: conc.STANDING_TOOLS.map((t) => ({ ...t, ...conc.assess(t.needs, conditions) })) }, null, 2)); process.exit(0); }
+  if (AS_JSON) { console.log(JSON.stringify({ conditions, resources: conc.resourceVerdicts(conditions), standingTools: conc.STANDING_TOOLS.map((t) => ({ ...t, ...conc.assess(t.needs, conditions) })) }, null, 2)); process.exit(0); }
   console.log('\n\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
   for (const l of conc.formatConditions(conditions)) console.log(l);
   console.log('\n\u2500\u2500 WHAT THAT MEANS FOR THE STANDING COMMANDS ' + '\u2500'.repeat(16));

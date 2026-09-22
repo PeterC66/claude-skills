@@ -26,6 +26,11 @@ The classifications:
   [DAYS]      operating days changed (only when both sides parse cleanly)
 
 Writes `_gtfs/refresh-report_<date>.md` and prints a one-line-per-town summary.
+
+Beside it, `_gtfs/refresh-grades_<date>.json` says the same thing as DATA: one entry
+per town with its grade, its actionable count and the tags that escalated it, plus
+the towns this run could not check. Nothing has to parse the prose to learn whether
+a town's refresh needs a person -- see `town_grade_record` (buses-data OA-426).
 Community/DRT services (Villager, FACT, dial-a-ride, ...) are NOT in BODS by design, so
 their absence is reported as expected, not as a withdrawal.
 
@@ -100,6 +105,50 @@ def classify(changes):
     if escalating:
         return "ESCALATE",escalating
     return "SAFE",actionable
+
+def town_grade_record(town, changes):
+    """One town's verdict as DATA, built from the same `changes` the prose is.
+
+    WHY THIS EXISTS. Until now the grade existed only inside the report's own
+    heading -- `## March - 3 to review . SAFE` -- so anything downstream that
+    wanted to know whether a town's refresh needs a person had to parse generated
+    prose to find out. `bods_scan.mjs` states the case against that in as many
+    words: a reader that depends on a generator's wording breaks the first time
+    the generator phrases something differently, which is why it reads report
+    FILENAMES and never a report. buses-data OA-426 needs the grade itself, so the
+    grade gets a file of its own rather than a parser.
+
+    IT IS ONE COMPUTATION, NOT TWO THAT AGREE. `main()` builds the heading from
+    this record and writes this record to the sidecar, so the number in the prose
+    and the number in the JSON cannot drift: there is nowhere for a second rule to
+    live. That is the same argument `classify()` makes above about NON_ACTIONABLE
+    -- a caller that re-implements the filter agrees with itself and proves
+    nothing.
+
+    `reasons` is the tag set of the rows `classify()` says decided the grade,
+    sorted and de-duplicated -- the escalating tags under ESCALATE, the mechanical
+    ones under SAFE, empty under NOTHING. It is enough for a reader to see why a
+    person is wanted, and deliberately not the messages, which are prose and
+    belong in the report.
+    """
+    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]
+    grade,reasons=classify(changes)
+    return {"town":town, "grade":grade, "actionable":len(actionable),
+            "reasons":sorted({r[0] for r in reasons})}
+
+def grades_payload(date, records, not_checked):
+    """The whole sidecar: every town this scan graded, and every town it could not.
+
+    NOT CHECKED IS PART OF THE ANSWER AND NOT AN OMISSION. A town whose dataset
+    was unavailable is diffed against nothing, so it has no grade -- and a reader
+    that saw only `towns` would read its absence as "no changes", which is the
+    exact shape this repository has already paid for once (a month of clean,
+    confident, empty reports written by a path that matched no town). It is listed
+    separately, with the reason, so an absence has to be read as an absence.
+    """
+    return {"date":date, "tool":"gtfs_refresh_report.py", "schema":1,
+            "towns":{r["town"]:{k:v for k,v in r.items() if k!="town"} for r in records},
+            "notChecked":[{"town":t,"reason":why} for t,why in not_checked]}
 
 # The day vocabulary, once. `parse_days` reads it in three places -- a range's two
 # ends and a bare day -- and three copies of one alternation is how they stop
@@ -569,7 +618,7 @@ if __name__=="__main__":
     lines+=["",
            "Diff of the refreshed BODS data against each town's last shipped service list. "
            "Community/pre-book services are expected to be absent from BODS.",""]
-    summary=[]; total_actionable=0; towns_to_review=[]
+    summary=[]; total_actionable=0; towns_to_review=[]; records=[]
     for g in groups:
         for town,cfg in g["towns"]:
             town_dir=os.path.join(root,"Areas",town)
@@ -580,17 +629,18 @@ if __name__=="__main__":
             # NOT-IN-BODS joins COMMUNITY as expected-and-explained: the town has said in
             # its own file why the feed does not carry the route. NOT-IN-BODS? stays
             # actionable -- it is the stale-declaration arm, and the fix is a deletion.
-            actionable=[c for c in d["changes"] if c[0] not in NON_ACTIONABLE]
-            if actionable: total_actionable+=len(actionable); towns_to_review.append(town)
-            verdict = "NO CHANGE" if not d["changes"] else (f"{len(actionable)} to review" if actionable else "only expected community gaps")
+            rec=town_grade_record(town,d["changes"]); records.append(rec)
+            if rec["actionable"]: total_actionable+=rec["actionable"]; towns_to_review.append(town)
+            verdict = "NO CHANGE" if not d["changes"] else (f"{rec['actionable']} to review" if rec["actionable"] else "only expected community gaps")
             # The GRADE, beside the count, since 2026-09-18 (buses-data OA-091). The
             # count says how much there is to read; the grade says whether any of it
             # needs a person, which is the question the reader of this report is
             # actually holding. `actionable` and `grade` are computed from the same
             # `changes` by the same rule, so the heading cannot say "3 to review"
-            # beside "NOTHING".
-            grade,_=classify(d["changes"])
-            verdict = verdict if grade=="NOTHING" else f"{verdict} · {grade}"
+            # beside "NOTHING" — and since OA-426 they are the same RECORD, which is
+            # also what the sidecar carries, so there is nowhere for a second rule
+            # to live.
+            verdict = verdict if rec["grade"]=="NOTHING" else f"{verdict} · {rec['grade']}"
             summary.append(f"  {town}: {verdict}")
             lines.append(f"## {town} — {verdict}")
             lines.append(f"_last verified {d['verifiedOn']} · region {g['region']}_")
@@ -612,6 +662,11 @@ if __name__=="__main__":
         lines.append("")
     out=os.path.join(gdir,f"refresh-report_{today}.md")
     open(out,"w",encoding="utf-8").write("\n".join(lines))
+    # The machine-readable half, BESIDE the prose and never instead of it (OA-426).
+    # A trailing newline because every other text file in this tree carries one and
+    # check-file-hygiene.mjs says so.
+    open(os.path.join(gdir,f"refresh-grades_{today}.json"),"w",encoding="utf-8").write(
+        json.dumps(grades_payload(today,records,skipped),indent=2,ensure_ascii=False)+"\n")
     # one-line summary for the Windows notification
     if total_actionable==0:
         headline="Bus data refreshed - nothing to do."

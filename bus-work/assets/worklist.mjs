@@ -90,6 +90,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems } from './bods_scan.mjs';
+import { readGradeState, gradeFor, gradeSentence, gradeWarnings } from './refresh_grades.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -850,6 +851,14 @@ const localDirOf = (m) => {
     || tree.places.find((x) => want.includes(x.name.toLowerCase()));
   return pl ? pl.dir : null;
 };
+/* The monthly grading, read once (buses-data OA-426). A refresh row says a town's
+ * timetables have moved; the grade says whether moving the sheet needs a person,
+ * and it is the fact the loop needs before it can work a refresh row unattended.
+ * It is matched to the scan the rows are joined to BY DATE and never otherwise —
+ * `refresh_grades.mjs` says why at length. Warnings, not rows: a grading that
+ * cannot be read is not work. */
+const grades = readGradeState({ busesDir: BUSES });
+for (const w of gradeWarnings(grades, upcoming ? upcoming.date : null)) warnings.push(w);
 const townMaps = (town) => {
   const lower = town.toLowerCase();
   return (portal ? portal.maps : []).filter((m) => m.built && (
@@ -868,7 +877,8 @@ if (upcoming) {
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
         title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}`,
-        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.`,
+        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date)}`,
+        grade: gradeFor(grades, s.town, upcoming.date),
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,
         // REMOTE: the target is the live site, so deliver-map.mjs is the only
@@ -892,7 +902,8 @@ if (upcoming) {
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
         title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}`,
-        why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.`,
+        why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.${gradeSentence(grades, localTown.name, upcoming.date)}`,
+        grade: gradeFor(grades, localTown.name, upcoming.date),
         who: '—', ageDays: upcoming.ageDays, runbook: 'R4', skill: 'make-bus-leaflet', subject: localTown.name,
         do: [{ kind: 'skill', what: `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).` }],
       });

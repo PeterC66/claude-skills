@@ -56,6 +56,10 @@ const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, late
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const portalFixtures = require('./portal_fixtures');   // the vendored-fixture half of the portal join (OA-419)
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
+// The engine a map was BUILT with, and how to get it back (OA-430). The worktree
+// machinery lived here until then; it moved so that the stamp's writer and its
+// reader share one statement of what makes a (hash, commit) pair truthful.
+const { engineDirForCommit } = require('./engine_commit');
 const quality = require('./quality_gate');
 const { spawnSync } = require('child_process');
 const { scratchDir } = require('./scratch');
@@ -280,7 +284,8 @@ const engineStaleAllowed = (r) => ENGINE_STALE_ALLOWED.some(a => a.town === r.na
 const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town === name && a.engine === engine) || null;
 
 /*
- * GATE A HELD-BACK TOWN AGAINST THE ENGINE IT WAS BUILT WITH (2026-09-01, OA-214).
+ * GATE EVERY MAP AGAINST THE ENGINE IT WAS BUILT WITH (buses-data OA-430),
+ * WHICH STARTED LIFE AS A HELD-BACK TOWN'S PRIVILEGE (2026-09-01, OA-214).
  *
  * For one day this file answered "is this held-back town's artwork still right?"
  * with "do not ask": the same allowance that excused the engine STAMP was widened
@@ -295,110 +300,45 @@ const allowanceFor = (name, engine) => ENGINE_STALE_ALLOWED.find(a => a.town ===
  * it still reproduce under the engine it was BUILT with", which is exact,
  * falsifiable, and the thing a customer looking at that sheet is entitled to.
  *
- * WHY THE ENTRY NOW CARRIES A COMMIT. An engine version is a hash of a closure of
- * files, not a commit, so `cf683a815c` on its own cannot be checked out. Mapping
- * it back cost a walk through history recomputing the hash at each step; recording
- * the commit at the moment the entry is written costs nothing and means nobody
- * does that walk twice. `cf683a815c` is commit 9347f7d, found that way on
- * 2026-09-01 and then VERIFIED rather than trusted — see below.
+ * OA-430 MADE THAT THE QUESTION FOR EVERY MAP rather than an excused one, and the
+ * reason is arithmetic rather than principle. Gating the estate against the
+ * CURRENT engine means an engine change that moves ink turns every map DIFF at
+ * once, in one step, with no fault anywhere — so the change cannot merge until the
+ * whole estate has been rebuilt in order, and at fifty towns that is a wall. Asked
+ * of each map's own engine, a DIFF says again what it appears to say: this
+ * committed artwork does not reproduce. Being BEHIND is then one rebuild ROW per
+ * map, carried by the bus-work worklist, and never a red.
  *
- * IT VERIFIES THE PAIR BEFORE IT TRUSTS IT. A recorded commit that does not
- * actually produce the recorded hash is a lie that would make every sheet gate
- * against the wrong code and PASS or FAIL for reasons having nothing to do with
- * the town. So the worktree's own engine version is computed and compared, and a
- * mismatch refuses the check rather than reporting a verdict from it.
+ * WHICH COMMIT, AND WHERE IT COMES FROM. `routes.json` carries `engineCommit`
+ * beside `engine` since OA-430 — written by `stampEngine()` at build time, when it
+ * is free, and only when the hashed closure is clean, so the pair cannot lie by
+ * construction. `ENGINE_STALE_ALLOWED` below still supplies one by hand for a map
+ * whose build predates that, which is what OA-214 had to do for every entry:
+ * recovering `cf683a815c` cost a walk back through history recomputing the hash at
+ * each step, and the answer is commit 9347f7d.
  *
- * AND IT CANNOT REACH THE NETWORK. `git worktree add` against objects already in
- * this clone, or nothing. A board that fails on a train is a board nobody runs.
- * Where the commit is absent — a shallow CI checkout is the real case — the town
- * reports UNCHECKED, which is loud, and gates, because "we could not look" must
- * never be quieter than "we looked and it was fine". `gates.yml` fetches that one
- * commit by sha so the check can actually run there.
+ * IT VERIFIES THE PAIR BEFORE IT TRUSTS IT, in engine_commit.js. A recorded commit
+ * that does not actually produce the recorded hash is a lie that would make every
+ * sheet gate against the wrong code and PASS or FAIL for reasons having nothing to
+ * do with the map, so the worktree's own engine version is computed and compared,
+ * and a mismatch refuses the check rather than reporting a verdict from it.
+ *
+ * AND "COULD NOT LOOK" IS LOUD. A map that DIFFs under the live engine and offers
+ * no usable engine of its own reports UNCHECKED and gates, because "we could not
+ * look" must never be quieter than "we looked and it was fine". The machinery —
+ * the worktree, its pruning, the shallow-clone fetch for a one-commit-deep CI
+ * checkout — moved to engine_commit.js, so the writer of a stamp and its reader
+ * share one statement of the rule instead of two.
  */
-/* AND IT MUST NOT LEAK A WORKTREE PER RUN, which the first cut did.
- *
- * `git worktree add` REGISTERS the tree in `.git/worktrees/`, and scratch.js
- * sweeps the directory at exit without telling git — so every board run left a
- * stale registration behind and `git worktree list` grew by one each time. The
- * board is run many times a day, by people and by CI. Measured immediately after
- * the first version: one run, one leaked entry.
- *
- * Pruning BEFORE adding clears whatever a crashed or swept run left; removing at
- * exit clears this one. Both are needed — prune alone leaves today's entry until
- * tomorrow, and remove alone cannot clean up after a run that was killed. */
-const HELD_BACK_WT = new Map();          // commit -> { dir } | { error }
-const HELD_BACK_MADE = [];
-process.on('exit', () => {
-  for (const d of HELD_BACK_MADE) {
-    try { spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'remove', '--force', d], { stdio: 'ignore' }); } catch (e) {}
+function ownEngineFor(name, stampedEngine, stampedCommit, place) {
+  const allowed = allowanceFor(name, stampedEngine);
+  const commit = stampedCommit || (allowed && allowed.commit) || null;
+  if (!commit) {
+    return { error: allowed
+      ? 'the allowance records no `commit`, so there is nothing to check out — add one beside `engine`'
+      : 'its routes.json records no `engineCommit`, so the engine that drew it cannot be checked out' };
   }
-});
-/* IT FETCHES THE COMMIT ITSELF RATHER THAN ASKING CI TO (OA-217, 2026-09-01).
- *
- * A clone made by `actions/checkout` is one commit deep, so a held-back entry
- * naming anything older is simply not in it and the worktree add says `fatal:
- * invalid reference`. That is not a hypothetical: it made buses-data's gates
- * workflow red on 2026-09-01 about a sheet that was perfectly good, while the
- * same board on the laptop — whose clone has the whole history — said PASS.
- *
- * THE FIRST FIX WAS A WORKFLOW STEP, AND THE FIRST FIX WAS IN THE WRONG PLACE.
- * The step that fetches the named shas was written into claude-skills' gates.yml
- * and not into buses-data's, and the sentence "CI is green on it" was true of the
- * one that had it. Two YAML files in two repositories held a setup requirement
- * belonging to THIS function, and nothing made them agree. The remedy for that is
- * not a third file comparing the two: it is for the code with the requirement to
- * satisfy it, which is the same move OA-203 made when it gave the worklist tool a
- * token of its own instead of documenting where to paste a cookie.
- *
- * So a missing object is now a fetch and a retry. On any clone that already has
- * the commit — every laptop, and CI once the fetch has run — the first worktree
- * add succeeds and nothing here touches the network at all. TIMED OUT at 60s
- * because the alternative to a slow answer is no answer: this runs inside a gate
- * whose job timeout is 25 minutes, and a fetch that hangs would spend all of it
- * and report nothing. A failure of any kind leaves the ORIGINAL error, because
- * "the commit is not here" is what the reader has to act on and "and the fetch
- * did not help" is the footnote. */
-function fetchHeldBackCommit(sha) {
-  const remotes = spawnSync('git', ['-C', SKILLS_ROOT, 'remote'], { encoding: 'utf8' });
-  const first = ((remotes.stdout || '').trim().split('\n')[0] || '').trim();
-  if (remotes.status !== 0 || !first) return 'this clone has no remote to fetch it from';
-  const r = spawnSync('git', ['-C', SKILLS_ROOT, 'fetch', '--depth=1', '--no-tags', first, sha],
-    { encoding: 'utf8', timeout: 60000 });
-  if (r.error && r.error.code === 'ETIMEDOUT') return 'the fetch from ' + first + ' timed out after 60s';
-  if (r.status !== 0) return 'fetching it from ' + first + ' failed: '
-    + ((r.stderr || r.stdout || 'no reason given').trim().split('\n').pop() || '').slice(0, 160);
-  return null;
-}
-
-function heldBackEngineDir(name, engine) {
-  const a = allowanceFor(name, engine);
-  if (!a) return null;
-  if (!a.commit) return { error: 'the allowance records no `commit`, so there is nothing to check out — add one beside `engine`' };
-  if (HELD_BACK_WT.has(a.commit)) return HELD_BACK_WT.get(a.commit);
-  let out;
-  try {
-    const dir = path.join(scratchDir('held-back-engine-'), 'wt');
-    spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'prune'], { stdio: 'ignore' });
-    const add = () => spawnSync('git', ['-C', SKILLS_ROOT, 'worktree', 'add', '--quiet', '--detach', dir, a.commit],
-      { encoding: 'utf8' });
-    let r = add();
-    if (r.status !== 0) {
-      const why = fetchHeldBackCommit(a.commit);
-      if (!why) r = add();
-      else r.fetchNote = why;
-    }
-    if (r.status === 0) HELD_BACK_MADE.push(dir);
-    if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git worktree add failed').trim().split('\n')[0]
-      + (r.fetchNote ? ' — and ' + r.fetchNote : ''));
-    const assets = path.join(dir, 'make-bus-leaflet', 'assets');
-    const mod = path.join(assets, 'engine_version.js');
-    if (!fs.existsSync(mod)) throw new Error('that commit has no make-bus-leaflet/assets/engine_version.js');
-    const got = require(mod).computeEngineVersion(assets);
-    if (got !== engine) throw new Error(`commit ${a.commit.slice(0, 7)} produces engine ${got}, not the ${engine} this entry claims`);
-    out = { dir: assets, commit: a.commit };
-  } catch (e) { out = { error: e.message }; }
-  HELD_BACK_WT.set(a.commit, out);
-  return out;
+  return engineDirForCommit({ skillsRoot: SKILLS_ROOT, commit, expect: stampedEngine, place, scratchDir });
 }
 
 function gateTown(t) {
@@ -415,34 +355,37 @@ function gateTown(t) {
   let routesJsonEarly = {};
   try { routesJsonEarly = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
   row.engine = routesJsonEarly.engine || '(none)';
+  row.engineCommit = routesJsonEarly.engineCommit || null;
   row.engineCurrent = routesJsonEarly.engine === CURRENT_ENGINE;
 
-  /* A HELD-BACK TOWN GETS A SECOND QUESTION, NOT A DIFFERENT ONE (OA-214).
+  /* A BEHIND MAP GETS A SECOND QUESTION, NOT A DIFFERENT ONE (OA-214, OA-430).
    *
    * Every town is gated against the LIVE engine first, exactly as it always has
    * been. That is the right question and its answer is usually the end of it —
-   * including for a town in ENGINE_STALE_ALLOWED whose held-back change was
-   * byte-neutral, which is what every such entry was until 2026-09-01. Those
-   * still PASS here and need nothing new.
+   * including for a town whose stamp is behind but whose change was byte-neutral,
+   * which is what every entry in ENGINE_STALE_ALLOWED was until 2026-09-01, and
+   * what all 22 maps in the estate were on the day OA-430 landed. Those still PASS
+   * here and need nothing new, and cost not one worktree.
    *
-   * Only when the live gate says DIFF on a held-back town is there a second
-   * question worth asking, and it is the honest one: does this sheet still
-   * reproduce under the engine it was BUILT with? For one day this file answered
-   * that by excusing the DIFF, which checked nothing at all.
+   * Only when the live gate says DIFF is there a second question worth asking, and
+   * it is the honest one: does this sheet still reproduce under the engine it was
+   * BUILT with? For one day this file answered that by excusing the DIFF, which
+   * checked nothing at all.
    *
-   * ORDERING THIS WAY IS WHAT KEEPS `commit` FROM BECOMING MANDATORY. Demanding
-   * it up front would turn every byte-neutral allowance red for want of a field
-   * it has never needed — and would have broken prove-red-status.js's own
-   * injected exception, which is how the mistake was caught. A commit is required
-   * exactly when the artwork actually moved, which is the only time it can help. */
-  const heldBack = row.engine !== '(none)' && !!allowanceFor(t.name, row.engine);
-  const ownEngine = () => (heldBack ? heldBackEngineDir(t.name, row.engine) : null);
+   * ORDERING THIS WAY IS WHAT KEEPS THE COMMIT FROM BECOMING MANDATORY. Demanding
+   * it up front would turn every byte-neutral map red for want of a field it has
+   * never needed — and would have broken prove-red-status.js's own injected
+   * exception, which is how the mistake was caught the first time. A commit is
+   * required exactly when the artwork actually moved, which is the only occasion
+   * it can help. What changed in OA-430 is only WHO may answer: a town at the
+   * current engine has nothing to ask a second time, and every other map does. */
+  const behind = row.engine !== '(none)' && !row.engineCurrent;
   const gateSheet = (gen, out, opts = {}) => {
     const live = gate(path.join(SK, gen), s4.dir, out, path.join(s4.dir, out), opts).status;
-    if (live !== 'DIFF' || !heldBack) return live;
-    const own = ownEngine();
+    if (live !== 'DIFF' || !behind) return live;
+    const own = ownEngineFor(t.name, row.engine, row.engineCommit, false);
     if (!own || own.error) {
-      row.heldBackUncheckable = (own && own.error) || 'no allowance found';
+      row.ownEngineUncheckable = (own && own.error) || 'no engine to check out';
       return live;                                   // still DIFF, and now also red for not looking
     }
     const again = gate(path.join(own.dir, gen), s4.dir, out, path.join(s4.dir, out),
@@ -583,7 +526,34 @@ function gatePlace(p) {
   let placeRoutes = {};
   try { placeRoutes = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
   row.engine = placeRoutes.engine || '(none)';
+  row.engineCommit = placeRoutes.engineCommit || null;
   row.engineCurrent = placeRoutes.engine === CURRENT_PLACE_ENGINE;
+
+  /* AND A PLACE GETS THE SECOND QUESTION TOO, WHICH IT NEVER HAD (OA-430).
+   *
+   * gateTown() has asked a behind map whether it still reproduces under its own
+   * engine since OA-214; gatePlace() gated every one of its five sheets against
+   * the live place template and nothing else, so the twelve places carried the
+   * whole cost of an engine change with no way to say so. That is the same shape
+   * OA-170 found here fourteen months of maps later — a rule written about a town
+   * and not copied to the place beside it — and the remedy is the same: one
+   * helper, used by every sheet, rather than a second rule.
+   *
+   * `psk` picks the generator out of make-place-bus-leaflet's assets instead of
+   * this one's. Its DEPENDENCIES still come from `engineDir`, because the place
+   * generators resolve their town-skill siblings through SKILL_ASSETS, which is
+   * what runGenerator sets — so a place sheet is regenerated by the checked-out
+   * engine on both halves, and not by a hybrid of one and today's other. */
+  const pGateSheet = (gen, out, opts = {}, psk = false) => {
+    const live = gate(path.join(psk ? PSK : SK, gen), s4.dir, out, path.join(s4.dir, out), opts).status;
+    if (live !== 'DIFF' || row.engine === '(none)' || row.engineCurrent) return live;
+    const own = ownEngineFor(p.name, row.engine, row.engineCommit, true);
+    if (!own || own.error) { row.ownEngineUncheckable = (own && own.error) || 'no engine to check out'; return live; }
+    const again = gate(path.join(psk ? own.placeDir : own.dir, gen), s4.dir, out, path.join(s4.dir, out),
+                       Object.assign({}, opts, { engineDir: own.dir })).status;
+    if (again === 'PASS') { row.gatedOnOwnEngine = own.commit; return 'PASS'; }
+    return again;
+  };
   // The NO-SHEET judgement was applied to `external` in August 2026 and not to
   // `internal`, because at the time every place had an internal map. High Wycombe
   // Town Centre (2026-08-23) is the first that does not -- it carries a boarding
@@ -592,12 +562,12 @@ function gatePlace(p) {
   // declare internal.svg, so this reports '-'; a manifest that DID declare one
   // still gets MISSING.
   const pInt = declares(s4.rec, 'internal.svg') || exists(path.join(s4.dir, 'internal.svg'))
-    ? gate(path.join(SK, 'gen_internal.js'), s4.dir, 'internal.svg', path.join(s4.dir, 'internal.svg'), { ignoreLineRe: PLACE_IGNORE }).status
+    ? pGateSheet('gen_internal.js', 'internal.svg', { ignoreLineRe: PLACE_IGNORE })
     : 'NO-SHEET';
   row.internal = pInt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal.svg') : pInt;
   const genExt = path.join(PSK, 'gen_external_places.js');
   const pExt = exists(genExt)
-    ? gate(genExt, s4.dir, 'external.svg', path.join(s4.dir, 'external.svg')).status
+    ? pGateSheet('gen_external_places.js', 'external.svg', {}, true)
     : 'no-gen';
   row.external = pExt === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'external.svg') : pExt;
   // The boarding sheet joins the board on 2026-08-24, and it starts GREEN because the
@@ -614,7 +584,7 @@ function gatePlace(p) {
   if (!routesJson.boardingPlan) row.boarding = '-';
   else {
     const pBrd = declares(s4.rec, 'boarding.svg') || exists(path.join(s4.dir, 'boarding.svg'))
-      ? gate(path.join(SK, 'gen_boarding.js'), s4.dir, 'boarding.svg', path.join(s4.dir, 'boarding.svg')).status
+      ? pGateSheet('gen_boarding.js', 'boarding.svg')
       : 'NO-SHEET';
     row.boarding = pBrd === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'boarding.svg') : pBrd;
     /* AND IS THE STORED DATA WHAT THE SCRIPT WOULD PRODUCE TODAY? (OA-188)
@@ -675,11 +645,11 @@ function gatePlace(p) {
     // NOT set on the diagram below, exactly as rollout_places.js does not set it
     // there — diagram_internal.js copies its OWN diagram-overrides.json into the
     // workspace as overrides.json, and OVERRIDES_FILE would shadow that file whole.
-    const g = gate(path.join(SK, 'schematize_internal.js'), s4.dir, 'internal-schematic.svg', path.join(s4.dir, 'internal-schematic.svg'), { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true }).status;
+    const g = pGateSheet('schematize_internal.js', 'internal-schematic.svg', { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true });
     row.schematic = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-schematic.svg') : g;
   } else row.schematic = '-';
   if (routesJson.internalDiagram) {
-    const g = gate(path.join(SK, 'diagram_internal.js'), s4.dir, 'internal-diagram.svg', path.join(s4.dir, 'internal-diagram.svg'), { ignoreLineRe: PLACE_IGNORE }).status;
+    const g = pGateSheet('diagram_internal.js', 'internal-diagram.svg', { ignoreLineRe: PLACE_IGNORE });
     row.diagram = g === 'NO-SHEET' ? judgeNoSheet(s4.rec, 'internal-diagram.svg') : g;
   } else row.diagram = '-';
   row.keys = placeKeys(routesJson, row);
@@ -1304,6 +1274,14 @@ const qualityCell = (name) => {
 // code, and it is a different question — reported, never gated, exactly as the
 // Engine column has always shown it.
 const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' && !r.engineCurrent && !engineStaleAllowed(r));
+/* PLACES ARE BEHIND TOO, AND NOTHING COUNTED THEM (OA-430). `engineStale` named
+ * towns only, so the twelve places — eleven of them behind on the day this landed
+ * — appeared in no list the worklist could turn into rebuild rows. Kept as a
+ * SEPARATE array rather than merged into the one above, because the two are
+ * measured against different templates and a reader who cannot tell which is
+ * which cannot act on either. */
+const placeEngineStaleRows = placeRows.filter(r => r.engine && r.engine !== '(none)' && !r.engineCurrent);
+const uncheckableRows = townRows.concat(placeRows).filter(r => r.ownEngineUncheckable);
 
 /* A TOWN HELD BACK FROM AN INK-MOVING ROLLOUT ALSO FAILS THE BYTE GATE, AND THAT
  * IS NOT A SECOND FACT (2026-09-01, OA-214).
@@ -1333,20 +1311,22 @@ const engineStaleRows = townRows.filter(r => r.engine && r.engine !== '(none)' &
 /* THE STOPGAP IS GONE (OA-214, retired 2026-09-01, the day after it landed).
  *
  * For one day a held-back town's DIFF was excused along with its stamp, which
- * kept the board readable and checked nothing. A held-back town is now GATED
- * AGAINST THE ENGINE IT WAS BUILT WITH — see heldBackEngineDir() above — so its
- * verdicts mean what every other town's mean and need no special case here. A
- * DIFF on that row is now a real regression in committed artwork and gates like
- * any other.
+ * kept the board readable and checked nothing. EVERY map that is behind is now
+ * GATED AGAINST THE ENGINE IT WAS BUILT WITH — see ownEngineFor() above, widened
+ * from the held-back town to the whole estate by OA-430 — so its verdicts mean
+ * what every other map's mean and need no special case here. A DIFF on such a row
+ * is a real regression in committed artwork and gates like any other.
  *
- * What DOES gate specially is being unable to look: `heldBackUncheckable` is set
- * when the allowance names no commit, or names one this clone does not have, or
- * names one that does not produce the hash it claims. "We could not check" must
- * never be quieter than "we checked and it was fine", so it is red. */
+ * What DOES gate specially is being unable to look: `ownEngineUncheckable` is set
+ * when a behind map records no commit and no allowance names one, or names one
+ * this clone does not have, or names one that does not produce the hash it
+ * claims. "We could not check" must never be quieter than "we checked and it was
+ * fine", so it is red — on a PLACE as well as on a town, which it was not until
+ * OA-430 gave gatePlace() the second question at all. */
 const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal)
     || String(r.external).startsWith('DIFF') || String(r.external).startsWith('FAIL') || r.external === 'MISSING'
     || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram)
-    || !!r.heldBackUncheckable)
+    || !!r.ownEngineUncheckable)
   || placeRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
     // INDEX-STALE gates (OA-188). The whole character of the state is that every
     // existing check is correctly green, so a column the exit code ignored would
@@ -1356,7 +1336,11 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
     // OA-170. Printing a column the exit code ignores is the shape this row was
     // raised about one level up: a reference with the authority of a golden master
     // and the coverage of a scratch copy.
-    || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram))
+    || ['DIFF', 'FAIL', 'MISSING'].includes(r.schematic) || ['DIFF', 'FAIL', 'MISSING'].includes(r.diagram)
+    // OA-430: a place that could not be gated against its own engine is red here
+    // for the same reason a town is, and this clause is the one the town half had
+    // and the place half did not for the whole of the period both existed.
+    || !!r.ownEngineUncheckable)
   || portalFixtureRows.some(r => ['DIFF', 'FAIL', 'MISSING'].includes(r.internal) || ['DIFF', 'FAIL', 'MISSING'].includes(r.external)
     // INDEX-STALE gates here for the same reason it gates on a place (OA-188): every
     // other check is correctly green in this state, so a column the exit code ignored
@@ -1411,8 +1395,8 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // green, and the same fixture against a copy of this file with the old term
   // put back goes red, so the fixture is known to discriminate.
   //
-  // What still gates about an old engine is `heldBackUncheckable` above -- a
-  // town nobody could gate at all -- because "we could not look" must never be
+  // What still gates about an old engine is `ownEngineUncheckable` above -- a
+  // map nobody could gate at all -- because "we could not look" must never be
   // quieter than "we looked and it was fine".
   //
   // OA-273: a decided fact over a silent map, a register that contradicts
@@ -1466,7 +1450,7 @@ async function main() {
   const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
   const commit = commitmentRows();
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1524,12 +1508,23 @@ async function main() {
       if (row.gatedOnOwnEngine) console.log('    ...and its sheets are GATED AGAINST THAT ENGINE, commit '
         + row.gatedOnOwnEngine.slice(0, 7) + ' — so a PASS on this row means the committed artwork still reproduces'
         + ' under the code that drew it. It is not being excused, it is being asked a different question.');
-      else if (row.heldBackUncheckable) console.log('    ...and its sheets CANNOT BE GATED: ' + row.heldBackUncheckable
+      else if (row.ownEngineUncheckable) console.log('    ...and its sheets CANNOT BE GATED: ' + row.ownEngineUncheckable
         + '. This row is red because nothing could look, which is not the same as a regression — but it must not be quieter than one.');
     }
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }
-  if (engineStaleRows.length) console.log('  ENGINE STALE (information, not red): ' + engineStaleRows.map(r => r.name + ' @ ' + r.engine).join(', ') + '  -- drawn by an older engine; the byte gate is what says whether the artwork is wrong, and the worklist carries this as engine-stale');
+  // ENGINE STALE is a CHORE and reads as one (OA-396), and since OA-430 it is one
+  // chore PER MAP rather than one for the estate: the worklist turns each name
+  // below into its own `engine-rebuild-<map>` row, which is the unit a loop tick
+  // can claim, build and commit on its own. Places are named here for the first
+  // time; they were behind for weeks with nothing counting them.
+  if (engineStaleRows.length || placeEngineStaleRows.length) console.log('  ENGINE STALE (information, not red): '
+    + engineStaleRows.concat(placeEngineStaleRows).map(r => r.name + ' @ ' + r.engine).join(', ')
+    + '  -- drawn by an older engine; the byte gate is what says whether the artwork is wrong, and the worklist carries one engine-rebuild row per map');
+  // ...and being UNABLE TO ASK is the red, printed apart from the chore above so
+  // the two are never read as the same thing.
+  for (const r of uncheckableRows) console.log('  CANNOT GATE ' + r.name + ' @ ' + r.engine + ' AGAINST ITS OWN ENGINE: ' + r.ownEngineUncheckable
+    + '  -- red because nothing could look, which is not a regression and must not be quieter than one.');
   // The S6 column has never gated and now says so (OA-396). It is the chore the
   // review's cause 3 named first, and the answer to "why is main red after a
   // rebuild" was never this column -- but a reader could not tell that from a
@@ -1580,7 +1575,12 @@ async function main() {
     // exception list for places and there should not be one until a measured
     // reason for it exists.
     const peng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
-    console.log(line([r.name, r.town, r.version || '-', peng, r.internal, r.external, r.schematic || '-', r.diagram || '-', r.boarding || '-', qualityCell(r.name), keys, r.s6, ps6age], pw));
+    /* AND A PLACE SAYS WHICH ENGINE ITS PASS CAME FROM, WHICH IT NEVER DID (OA-430).
+     * Found by a harness case going red for the wrong reason: the gate had worked
+     * perfectly and the board simply did not say so, and an unannotated PASS beside
+     * a STALE engine is the ambiguity OA-214 added this word for one table up. */
+    const pown = (v) => (r.gatedOnOwnEngine && String(v).startsWith('PASS')) ? v + ' (own engine)' : v;
+    console.log(line([r.name, r.town, r.version || '-', peng, pown(r.internal), pown(r.external), pown(r.schematic || '-'), pown(r.diagram || '-'), pown(r.boarding || '-'), qualityCell(r.name), keys, r.s6, ps6age], pw));
   }
   // In `bad` since 2026-08-29 -- see the gate expression for why it was not before.
   const drawing = placeRows.filter(r => r.keys && r.keys.state !== 'n/a');

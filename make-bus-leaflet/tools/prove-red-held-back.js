@@ -160,6 +160,7 @@ function liveAllowance() {
 const live = liveAllowance();
 const explicit = !!(TOWN_ARG || COMMIT_ARG);
 let SYNTH = null;                      // set by useSynthetic(), read by runBoard and the cases
+let PLACE = null;                      // the place half of the synthetic fixture (OA-430), or null
 let TOWN, ENGINE, COMMIT, FIXTURE;
 
 function fromEstate(town, commit) {
@@ -203,20 +204,24 @@ function copyDir(a, b) { fs.mkdirSync(b, { recursive: true }); fs.cpSync(a, b, {
  * routes.json. Those two together are what make the live gate say DIFF and the
  * second gate say PASS — the whole precondition the six cases below need, and the
  * thing the estate happens to supply today and will not for ever. */
-function tree() {
+function tree({ stampCommit } = {}) {
   const root = scratchDir('prove-held-back-');
   const src = path.join(BUSES, 'Areas', TOWN);
   const dst = path.join(root, 'Areas', TOWN);
   fs.mkdirSync(dst, { recursive: true });
   fs.copyFileSync(path.join(src, 'manifest.json'), path.join(dst, 'manifest.json'));
   copyDir(path.join(src, 'ci-reference'), path.join(dst, 'ci-reference'));
+  const rjp = path.join(dst, 'ci-reference', 'routes.json');
+  const rj = JSON.parse(fs.readFileSync(rjp, 'utf8'));
   if (SYNTH) {
     fs.writeFileSync(path.join(dst, 'ci-reference', 'internal.svg'), SYNTH.internalSvg);
-    const rjp = path.join(dst, 'ci-reference', 'routes.json');
-    const rj = JSON.parse(fs.readFileSync(rjp, 'utf8'));
     rj.engine = SYNTH.engine;
-    fs.writeFileSync(rjp, JSON.stringify(rj, null, 2));
   }
+  // `stampCommit` is the OA-430 half: the commit written into the MAP's own
+  // routes.json, which is where every map in the estate carries it now and where
+  // the allowance list carried it for exactly one town before.
+  if (stampCommit) rj.engineCommit = stampCommit; else delete rj.engineCommit;
+  if (SYNTH || stampCommit) fs.writeFileSync(rjp, JSON.stringify(rj, null, 2));
   return { root, town: dst };
 }
 
@@ -245,6 +250,15 @@ function useSynthetic(why) {
   const root = scratchDir('prove-held-back-synth-');
   const assets = path.join(root, 'make-bus-leaflet', 'assets');
   copyDir(ASSETS, assets);
+  /* THE PLACE SKILL GOES IN TOO (OA-430), and leaving it out was not a saving.
+   * `computePlaceEngineVersion()` hashes the town closure AND the place one, so a
+   * synthetic engine with no make-place-bus-leaflet cannot produce any place hash
+   * at all: engineDirForCommit would compute every place file as MISSING, refuse
+   * the pair, and cases M and N below would go green through the refusal in K
+   * rather than through anything they are about. Same trap as L's first draft,
+   * one directory further out. */
+  copyDir(path.resolve(ASSETS, '..', '..', 'make-place-bus-leaflet', 'assets'),
+          path.join(root, 'make-place-bus-leaflet', 'assets'));
 
   const gp = path.join(assets, 'gen_internal.js');
   const src = fs.readFileSync(gp, 'utf8');
@@ -304,12 +318,103 @@ function useSynthetic(why) {
     process.exit(1);
   }
 
-  SYNTH = { root, commit, otherCommit, engine, internalSvg };
+  /* AND THE PLACE HALF OF THE SAME FIXTURE (OA-430). `gen_internal.js` draws a
+   * place's internal sheet too, so the one anchored edit moves BOTH hashes and one
+   * synthetic engine serves both halves. The place hash is read out of C1's own
+   * worktree, naming C1's place assets explicitly — placeAssetsDir()'s default
+   * reads PLACE_SKILL_ASSETS from the environment, and a hybrid of C1's town
+   * generators and today's place ones is exactly what gate_lib's own header
+   * records being caught by once. */
+  const placeEngine = require(path.join(c1assets, 'engine_version.js'))
+    .computePlaceEngineVersion(c1assets, path.join(wt, 'make-place-bus-leaflet', 'assets'));
+
+  SYNTH = { root, commit, otherCommit, engine, placeEngine, internalSvg, c1assets };
   COMMIT = commit;
   ENGINE = engine;
   FIXTURE = 'a synthetic engine (' + why + ')';
   console.log('  ..    ' + why + ' — fixture SYNTHESISED: engine ' + engine + ' at ' + commit.slice(0, 7)
-    + ', ' + TOWN + "'s internal sheet redrawn by it");
+    + ', place engine ' + placeEngine + ', ' + TOWN + "'s internal sheet redrawn by it");
+}
+
+/* ---- THE PLACE FIXTURE (OA-430) ------------------------------------------
+ *
+ * A scratch buses tree holding ONE nested place and the shell of its parent town,
+ * with the place's internal sheet redrawn by the synthetic engine and stamped
+ * with the synthetic PLACE hash and commit. That is the same trick `tree()` plays
+ * for a town, and it is needed because the estate supplies no place that is both
+ * behind AND failing to reproduce: on the day this landed all twelve places were
+ * behind and all twelve reproduced, so the place branch of the second question
+ * would have shipped never having been executed at all.
+ *
+ * THE PARENT TOWN COMES TOO, MANIFEST AND ci-reference BOTH, and the second half
+ * of that was learned the hard way: findPlaces() enumerates places THROUGH
+ * findTowns(), so a place with no parent directory is simply not found and the
+ * board exits 0 over an empty estate — the vacuous green this whole file exists
+ * to refuse. Copying the manifest alone is worse still: the board then reads a
+ * manifest naming an S4 run that is not on disk, with no ci-reference to fall
+ * back to, and gate_lib throws ENOENT out of copyJsons before any place is
+ * reached. The town is at the current engine, so it PASSes and takes no part in
+ * the verdicts below.
+ */
+function placeTree({ stampCommit } = {}) {
+  const root = scratchDir('prove-held-back-place-');
+  const src = PLACE.dir;
+  const dstTown = path.join(root, 'Areas', PLACE.town);
+  const dst = path.join(dstTown, 'Places', PLACE.name);
+  fs.mkdirSync(dst, { recursive: true });
+  fs.copyFileSync(path.join(BUSES, 'Areas', PLACE.town, 'manifest.json'), path.join(dstTown, 'manifest.json'));
+  copyDir(path.join(BUSES, 'Areas', PLACE.town, 'ci-reference'), path.join(dstTown, 'ci-reference'));
+  fs.copyFileSync(path.join(src, 'manifest.json'), path.join(dst, 'manifest.json'));
+  copyDir(path.join(src, 'ci-reference'), path.join(dst, 'ci-reference'));
+  fs.writeFileSync(path.join(dst, 'ci-reference', 'internal.svg'), PLACE.internalSvg);
+  const rjp = path.join(dst, 'ci-reference', 'routes.json');
+  const rj = JSON.parse(fs.readFileSync(rjp, 'utf8'));
+  rj.engine = SYNTH.placeEngine;
+  if (stampCommit) rj.engineCommit = stampCommit; else delete rj.engineCommit;
+  fs.writeFileSync(rjp, JSON.stringify(rj, null, 2));
+  return { root, place: dst };
+}
+
+/* The first nested place, in name order, whose internal sheet the synthetic engine
+ * draws DIFFERENTLY FROM TODAY'S — asked of the disk rather than named here, for
+ * the reason OA-219 rewrote the town fixture: a name written into a harness is a
+ * claim about today's estate.
+ *
+ * THE COMPARISON IS SYNTHETIC-AGAINST-TODAY AND NOT SYNTHETIC-AGAINST-THE-STORED
+ * SHEET, and the first draft got that wrong in a way that produced a green case M
+ * and a failing one. A place's committed internal.svg is POST-EDITED by
+ * build_internal_place.js — the title and the "· Map v…" stamp, the two lines
+ * PLACE_IGNORE exists to drop — so any raw generator output differs from it for
+ * reasons the gate is specifically built to ignore. Every candidate therefore
+ * "differed", the first one was taken, its synthetic sheet went into the fixture,
+ * and the live gate then compared two raw outputs whose only real difference the
+ * chosen place did not have. What the fixture actually needs is the difference the
+ * GATE will see, so that is what is asked. */
+function pickPlace() {
+  const areas = path.join(BUSES, 'Areas');
+  const { runGenerator } = require('../assets/gate_lib');
+  for (const town of fs.readdirSync(areas).sort()) {
+    const pdir = path.join(areas, town, 'Places');
+    // The parent must have a ci-reference of its own, or placeTree() cannot build
+    // a tree the board can read at all — see its header.
+    if (!fs.existsSync(pdir) || !fs.existsSync(path.join(areas, town, 'ci-reference', 'routes.json'))) continue;
+    for (const name of fs.readdirSync(pdir).sort()) {
+      const ci = path.join(pdir, name, 'ci-reference');
+      if (!fs.existsSync(path.join(ci, 'internal.svg')) || !fs.existsSync(path.join(ci, 'routes.json'))) continue;
+      const draw = (assetsDir) => {
+        const run = runGenerator(path.join(assetsDir, 'gen_internal.js'), ci, { engineDir: assetsDir });
+        const out = path.join(run.tmpDir, 'internal.svg');
+        const svg = run.ok && fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : null;
+        fs.rmSync(run.tmpDir, { recursive: true, force: true });
+        return svg;
+      };
+      const synth = draw(SYNTH.c1assets);
+      const today = draw(ASSETS);
+      if (!synth || !today || synth === today) continue;
+      return { town, name, dir: path.join(pdir, name), internalSvg: synth };
+    }
+  }
+  return null;
 }
 
 /** A scratch engine whose ENGINE_STALE_ALLOWED is exactly `entries`. */
@@ -468,7 +573,13 @@ if (!TOWN) {
   if (!premise.ok) useSynthetic(premise.why);
 }
 
-console.log(`\nHeld-back engine gate — falsifying on ${TOWN} at engine ${ENGINE}, commit ${COMMIT.slice(0, 7)}`);
+// The place half is picked AFTER the fixture exists, because picking it means
+// drawing each candidate with the synthetic engine and asking whether the bytes
+// moved — the same question the town premise asks, and unanswerable before there
+// is a synthetic engine to ask it of.
+if (SYNTH) PLACE = pickPlace();
+
+console.log(`\nOwn-engine gate — falsifying on ${TOWN} at engine ${ENGINE}, commit ${COMMIT.slice(0, 7)}`);
 console.log(`Fixture: ${FIXTURE}\n`);
 
 /* ---- A: the control ---------------------------------------------------- */
@@ -539,16 +650,27 @@ console.log('\nD  held back, allowance names a commit that does not produce that
   else pass('names the mismatch');
 }
 
-/* ---- E: the exception has not widened ---------------------------------- */
-console.log('\nE  the SAME damaged sheet, with no allowance at all');
+/* ---- E: a behind map with NOTHING to check out is red, not quiet --------
+ *
+ * THIS CASE CHANGED MEANING UNDER OA-430 AND THE OLD WORDING WOULD HAVE HIDDEN IT.
+ * It read "the exception has not widened", and asserted that a town with no
+ * allowance was gated against the CURRENT engine like every ordinary town. Now
+ * every behind map gets the second question, so what this fixture actually poses
+ * is a behind map that records no commit of its own AND has no allowance naming
+ * one — a could-not-look, red for that reason rather than for a DIFF. Same exit
+ * code, different sentence, and a case whose prose has stopped describing the code
+ * is a case nobody can maintain. L below took over the job this one used to do. */
+console.log('\nE  the SAME damaged sheet, no allowance and no engineCommit — nothing to look at');
 {
   const t = tree();
   damage(t.town);
   const { out, code } = runBoard(engineWith([]), t.root);
-  if (code === 0) fail('exit 0 — an ordinary town\'s damaged sheet stopped gating, so this change widened past held-back towns');
+  if (code === 0) fail('exit 0 — a behind map that could not be gated against anything stopped gating');
   else pass(`exit ${code}`);
-  if (/own engine/.test(out)) fail('a town with no allowance was gated against some other engine');
-  else pass('gated against the current engine, as every ordinary town is');
+  if (/own engine/.test(out)) fail('a map naming no commit was gated against some other engine anyway');
+  else pass('did not invent an engine to gate against');
+  if (!/CANNOT GATE|CANNOT BE GATED/.test(out)) fail('it never said it could not look, so this is indistinguishable from an ordinary DIFF');
+  else pass('says it could not look');
 }
 
 /* ---- F: a byte-neutral allowance still needs no commit ------------------ */
@@ -653,7 +775,142 @@ console.log('\nH  held back, the commit is nowhere to be had');
   else pass('says what became of the fetch');
 }
 
+/* ---- I to L: THE SAME GATE, DRIVEN BY THE MAP'S OWN routes.json (OA-430) ----
+ *
+ * Cases A to H pose the commit in status.js's ENGINE_STALE_ALLOWED, which is
+ * where the only commit in the estate lived until OA-430 and where a hand-written
+ * one still may. Every map now carries its own in `ci-reference/routes.json`,
+ * written by stampEngine() at build time, and that is the path the whole estate
+ * takes — so it is the path that has to be watched go red, not the one three
+ * towns a year use.
+ *
+ * THE ALLOWANCE LIST IS EMPTY IN ALL FOUR, deliberately. If any of these passed
+ * while an injected entry happened to be standing, the case would prove that the
+ * allowance still works and say nothing at all about the field it is named for.
+ *
+ *   I  behind, its own commit recorded, artwork untouched  -> PASS (own engine), 0
+ *   J  behind, its own commit recorded, a sheet ALTERED     -> DIFF, exit 1
+ *   K  behind, its own commit names a DIFFERENT engine      -> exit 1, names it
+ *   L  AT THE CURRENT ENGINE, a sheet ALTERED               -> exit 1, no second question
+ *
+ * L IS A CONTROL, AND ITS FIRST DRAFT WAS GREEN FOR THE WRONG REASON — which was
+ * found by mutating the code rather than by reading it, and is why the fixture
+ * below is the fiddliest in the file. It stamped the map with the SYNTHETIC
+ * engine's commit, which does not produce the current hash the map carries, so the
+ * pair was a lie and the case went green through the refusal in K rather than
+ * through being current at all. It now stamps the REAL skills HEAD and runs the
+ * board against the REAL clone, so the only thing standing between this map and a
+ * second question is that it is not behind. A control that is green because the
+ * fixture could not be posed is the most expensive kind of green there is. */
+console.log('\nI  behind, its OWN engineCommit recorded, artwork untouched — the control');
+{
+  const t = tree({ stampCommit: COMMIT });
+  const { out, code } = runBoard(engineWith([]), t.root);
+  if (!/PASS \(own engine\)/.test(out)) fail(`expected PASS (own engine) from routes.json alone; got: ${verdictOf(out)}\n${out.slice(0, 1200)}`);
+  else pass('PASS (own engine), with no allowance anywhere');
+  if (code !== 0) fail(`exit ${code}, expected 0 — a behind map whose sheets reproduce under their own engine is a chore, not a fault`);
+  else pass('exit 0');
+  if (!/ENGINE STALE \(information, not red\)/.test(out)) fail('the board does not report the staleness as the chore the worklist turns into a rebuild row');
+  else pass('reported as a chore the worklist can make a row of');
+}
+
+console.log('\nJ  behind, its OWN engineCommit recorded, a committed sheet ALTERED');
+{
+  const t = tree({ stampCommit: COMMIT });
+  const was = damage(t.town);
+  const { out, code } = runBoard(engineWith([]), t.root);
+  if (/PASS \(own engine\)/.test(out)) fail(`a damaged sheet still reported PASS (own engine) — the routes.json path is not looking at the artwork (damaged "${was}")\n${out.slice(0, 1200)}`);
+  else pass('no longer PASS');
+  if (!/\bDIFF\b/.test(out)) fail(`expected DIFF; row read: ${verdictOf(out)}`);
+  else pass('DIFF');
+  if (code === 0) fail('exit 0 — a regression in committed artwork does not move the exit code, which is the whole thing this file exists to refuse');
+  else pass(`exit ${code}`);
+}
+
+console.log('\nK  behind, its OWN engineCommit names a commit that produces a different engine');
+{
+  const t = tree({ stampCommit: SYNTH ? SYNTH.otherCommit
+    : execFileSync('git', ['-C', SKILLS_REPO, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() });
+  const { out, code } = runBoard(engineWith([]), t.root);
+  if (/PASS \(own engine\)/.test(out)) fail('a stamp whose commit does not produce its own hash was believed — every verdict on that row would be about the wrong code');
+  else pass('did not gate on the wrong engine');
+  if (code === 0) fail('exit 0 — a (hash, commit) pair that cannot both be true was accepted silently');
+  else pass(`exit ${code}`);
+  if (!/produces engine/.test(out)) fail('the board does not name the mismatch it found');
+  else pass('names the mismatch');
+}
+
+console.log('\nL  a map AT THE CURRENT ENGINE, a committed sheet ALTERED — no second question');
+{
+  const OKTOWN = argOf('ok-town', 'Beaconsfield');
+  const okSrc = path.join(BUSES, 'Areas', OKTOWN);
+  if (!fs.existsSync(path.join(okSrc, 'ci-reference', 'routes.json'))) {
+    console.log(`  ..    no ${OKTOWN} to borrow, so this case cannot be posed here — skipped, and said so`);
+  } else {
+    const root = scratchDir('prove-held-back-current-');
+    const dst = path.join(root, 'Areas', OKTOWN);
+    fs.mkdirSync(dst, { recursive: true });
+    fs.copyFileSync(path.join(okSrc, 'manifest.json'), path.join(dst, 'manifest.json'));
+    copyDir(path.join(okSrc, 'ci-reference'), path.join(dst, 'ci-reference'));
+    // A TRUTHFUL pair, which is what makes this a control at all: the real skills
+    // HEAD, in the real clone, against a map whose stamp is the current engine.
+    // Stamping the synthetic commit instead — the first draft — made the pair a
+    // lie, and the case then went green through the refusal case K proves rather
+    // than through being current, which is a control measuring the wrong thing.
+    const rjp = path.join(dst, 'ci-reference', 'routes.json');
+    const rj = JSON.parse(fs.readFileSync(rjp, 'utf8'));
+    const head = execFileSync('git', ['-C', SKILLS_REPO, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    rj.engineCommit = head;
+    fs.writeFileSync(rjp, JSON.stringify(rj, null, 2));
+    damage(dst);
+    const { out, code } = runBoard(engineWith([]), root, SKILLS_REPO);
+    if (/own engine/.test(out)) fail('a map at the CURRENT engine was given a second question — the byte gate now has a way round it');
+    else pass('no second question asked');
+    if (/CANNOT GATE|CANNOT BE GATED/.test(out)) fail('it refused the pair instead of ignoring it, so this case is measuring K and not itself: '
+      + 'the stamped HEAD ' + head.slice(0, 7) + ' must produce the engine ' + OKTOWN + ' carries');
+    else pass('the stamped pair is truthful, so nothing but currency stopped the second question');
+    if (code === 0) fail('exit 0 — a damaged sheet on a current map stopped gating');
+    else pass(`exit ${code}`);
+  }
+}
+
+/* ---- M and N: A PLACE, WHICH HAD NO SECOND QUESTION AT ALL (OA-430) --------
+ *
+ * gatePlace() gated its five sheets against the live place template and nothing
+ * else, from the day it was written until OA-430 — the same shape OA-170 found
+ * here once before, a rule written about a town and never copied to the place
+ * beside it. And the population makes it the half that matters: on the day this
+ * landed all twelve behind maps in the estate were places and not one was a town.
+ *
+ * Posed only when the fixture is synthetic, because a live allowance names a TOWN
+ * and there is no place equivalent of ENGINE_STALE_ALLOWED to borrow from. That
+ * is not a gap: the routes.json path is the one every place actually uses. */
+if (SYNTH && PLACE) {
+  console.log('\nM  a PLACE, behind, its own engineCommit recorded, artwork untouched — the control');
+  {
+    const t = placeTree({ stampCommit: COMMIT });
+    const { out, code } = runBoard(engineWith([]), t.root);
+    if (!/PASS \(own engine\)/.test(out)) fail(`expected PASS (own engine) on ${PLACE.name}; got:\n${out.slice(0, 1400)}`);
+    else pass('PASS (own engine)');
+    if (code !== 0) fail(`exit ${code}, expected 0 — a behind PLACE whose sheets reproduce under their own engine is a chore, not a fault`);
+    else pass('exit 0');
+  }
+
+  console.log('\nN  a PLACE, behind, its own engineCommit recorded, a committed sheet ALTERED');
+  {
+    const t = placeTree({ stampCommit: COMMIT });
+    const was = damage(t.place);
+    const { out, code } = runBoard(engineWith([]), t.root);
+    if (/PASS \(own engine\)/.test(out)) fail(`a damaged place sheet still reported PASS (own engine) (damaged "${was}")\n${out.slice(0, 1400)}`);
+    else pass('no longer PASS');
+    if (code === 0) fail('exit 0 — a regression in a PLACE\'s committed artwork does not move the exit code');
+    else pass(`exit ${code}`);
+  }
+} else if (SYNTH) {
+  console.log('\nM/N  no place whose internal sheet the synthetic engine draws differently — skipped, and said so');
+}
+
 console.log(failures
-  ? `\n${failures} FAILURE(S) — the held-back engine gate is not doing what this file says it does.\n`
-  : '\nAll cases behaved on ' + FIXTURE + ': a held-back town is CHECKED against the engine it was built with, a damaged sheet goes red, an unverifiable allowance goes red, a commit the clone lacks is fetched, and no ordinary town was excused anything.\n');
+  ? `\n${failures} FAILURE(S) — the own-engine gate is not doing what this file says it does.\n`
+  : '\nAll cases behaved on ' + FIXTURE + ': a behind map is CHECKED against the engine it was built with — named by its own routes.json or by an allowance — a damaged sheet goes red, an unverifiable pair goes red, a commit the clone lacks is fetched, and a map at the current engine is given no second chance at all.\n');
 process.exit(failures ? 1 : 0);

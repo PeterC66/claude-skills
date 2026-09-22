@@ -183,11 +183,18 @@ console.log('\n6. Whether a TICK may take the row, and how far (OA-426, R9 item 
   /* A WINDOWS path is where this bites: this estate lives behind a drive letter and
    * backslashes, and a backslash inside a double-quoted shell argument is an escape. The
    * command carries forward slashes for that reason, and Windows accepts them everywhere
-   * this runs. The fixture is String.raw so the harness cannot mangle its own input. */
-  const WINDOWSY = String.raw`C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`;
+   * this runs.
+   *
+   * THE FIXTURE IS NOT THIS LAPTOP'S PATH, and the first version was, which
+   * `prove-red-engine-adoption.mjs` caught on the line it was written: a laptop path on a
+   * CODE line is a finding here, fixture or not. It is also the better fixture, because
+   * what is under test is a backslash and a space, not this estate. Assembled from parts
+   * so no literal separator can be mangled in transit -- which is not hypothetical
+   * either: two earlier attempts at this file had theirs collapsed by the shell. */
+  const BACKSLASH = String.fromCharCode(92);
+  const WINDOWSY = ['D:', 'Bus Maps', 'engine', 'assets'].join(BACKSLASH);
   const winish = unattendedRefresh(st, 'March', SCAN, { assetsDir: WINDOWSY });
-  check('a Windows assets path comes out with forward slashes, not escapes', winish.cmd.includes('"C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_town.py"'), winish.cmd);
-  const BACKSLASH = String.fromCharCode(92);   // a raw template cannot END in one
+  check('a Windows assets path comes out with forward slashes, not escapes', winish.cmd.includes('"D:/Bus Maps/engine/assets/refresh_town.py"'), winish.cmd);
   check('  and no backslash survives into the command', !winish.cmd.includes(BACKSLASH), winish.cmd);
 
   /* The three refusals, each one a row a tick must NOT take. */

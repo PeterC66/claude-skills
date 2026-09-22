@@ -867,6 +867,8 @@ const localDirOf = (m) => {
  * PERSON? Matched to the scan the rows join to BY DATE and never otherwise, and
  * warnings rather than rows — `refresh_grades.mjs` says why at length. */
 const grades = readGradeState({ busesDir: BUSES });
+/* A refresh row's FIRST step: the one command when a tick can do it, the skill otherwise. */
+const rebuildStep = (u, what) => (u ? { kind: 'shell', cwd: u.cwd, cmd: u.cmd } : { kind: 'skill', what });
 for (const w of gradeWarnings(grades, upcoming ? upcoming.date : null)) warnings.push(w);
 const townMaps = (town) => {
   const lower = town.toLowerCase();
@@ -899,8 +901,7 @@ if (upcoming) {
         // nothing useful against a live worklist. LOCAL: propose-update.mjs
         // directly is still simpler/faster for testing against local dev.
         do: [
-          un ? { kind: 'shell', cwd: un.cwd, cmd: un.cmd }
-             : { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
+          rebuildStep(un, `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.`),
           REMOTE
             ? { kind: 'shell', cwd: PORTAL, cmd: `npm run deliver -- --map ${m.slug} --kind ${m.kind} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` }
             : { kind: 'shell', cwd: PORTAL, cmd: `node scripts/propose-update.mjs --map ${m.slug} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
@@ -910,8 +911,7 @@ if (upcoming) {
     if (!maps.length && localTown) {
       const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
       if (seenLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
-      // A town with NO portal map is the easier half: there is no delivery step at the
-      // end, so a SAFE row here is finishable end to end rather than only as far as S5.
+      // No portal map means no delivery step, so a SAFE row here is finishable end to end.
       const unLocal = unattendedRefresh(grades, localTown.name, upcoming.date, { kind: 'area', assetsDir: SK });
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
@@ -920,9 +920,7 @@ if (upcoming) {
         grade: gradeFor(grades, localTown.name, upcoming.date),
         unattended: unLocal,
         who: '—', ageDays: upcoming.ageDays, runbook: 'R4', skill: 'make-bus-leaflet', subject: localTown.name,
-        do: [unLocal
-          ? { kind: 'shell', cwd: unLocal.cwd, cmd: unLocal.cmd }
-          : { kind: 'skill', what: `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).` }],
+        do: [rebuildStep(unLocal, `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).`)],
       });
     }
   }

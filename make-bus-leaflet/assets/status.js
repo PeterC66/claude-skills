@@ -979,6 +979,12 @@ function gatePortalFixture() {
 // would have been a feature that could never fire in the only place the red
 // appeared. Both `gates.yml` workflows now fetch the portal's branch heads for
 // exactly this reason — see the step named beside this behaviour there.
+//
+// AND SINCE 2026-09-22, A MERGE ONTO `ref` ITSELF GETS THE SAME GRACE (OA-422)
+// — the above only ever excused a mismatch waiting SOMEWHERE ELSE, so the
+// instant a re-vendor PR actually merged it went straight to DRIFTED with no
+// grace, which is the four reds under unrelated commit subjects on
+// 2026-09-20/21 this paragraph is about. See `driftLandedAgeHours()` below.
 
 // The portal ref this board's vendoring verdict is about. Null when there is no
 // portal checkout; `ref: null` when there is one and git cannot name anything in
@@ -1038,6 +1044,17 @@ function vendoredOnOtherRef(rel, skillBuf) {
     if (buf && sameBytesIgnoringLineEndings(skillBuf, buf)) return cand;
   }
   return null;
+}
+
+/* OA-422. How long ago the MISMATCHING bytes landed on `ref` -- dated from
+ * the last commit that touched THIS PATH there, never the ref's tip, so a
+ * file drifted for months is not excused by an unrelated commit five minutes
+ * ago. Null when git cannot date it, treated as OVER the grace like the
+ * branch case above. */
+function driftLandedAgeHours(ref, rel) {
+  const ts = gitIn(PORTAL, ['log', '-1', '--format=%ct', ref, '--', rel]);
+  const secs = Number(ts);
+  return ts && Number.isFinite(secs) ? Math.floor((Date.now() / 1000 - secs) / 3600) : null;
 }
 
 // THE UN-VENDOR COUNTERPART OF PENDING (2026-09-02). The grace above understands a
@@ -1147,6 +1164,22 @@ function portalDrift() {
           + (found.ageHours == null ? ' — and git could not date it, so it is not being excused'
              : ' — ' + found.ageHours + 'h old, grace ' + DRIFT_GRACE_HOURS + 'h')
           + (row.inFlight ? '' : '. Past the grace: merge it or drop the branch.');
+      } else {
+        // OA-422. No other ref carries the current source: the mismatch is
+        // already the CURRENT state on `ref` itself, landed by a merge. Grant
+        // the same grace; past it, `inFlight` stays false and the row falls
+        // through to the plain DRIFTED below, exactly as before this case
+        // existed -- there is no branch to name, so this is not a different
+        // flavour of PENDING, just the ordinary red the row was always red for.
+        const ageHours = driftLandedAgeHours(ref, rel);
+        const inFlight = ageHours != null && ageHours < DRIFT_GRACE_HOURS;
+        if (inFlight) {
+          row.status = 'PENDING';
+          row.ageHours = ageHours;
+          row.graceHours = DRIFT_GRACE_HOURS;
+          row.inFlight = true;
+          row.note = 'merged to ' + ref + ', ' + ageHours + 'h ago, grace ' + DRIFT_GRACE_HOURS + 'h';
+        }
       }
     }
     rows.push(row);

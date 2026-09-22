@@ -175,8 +175,27 @@ console.log('\n6. Whether a TICK may take the row, and how far (OA-426, R9 item 
   check('  and the command names the town and the scan, with nothing left to work out', un && un.cmd.includes('--town "March"') && un.cmd.includes(`--scan ${SCAN}`), un && un.cmd);
   check('  and it applies rather than reporting', un && un.cmd.includes('--apply'));
   check('  and it runs in the engine assets folder it was given', un && un.cwd === ASSETS, un && un.cwd);
+  check('  and the command is SELF-CONTAINED: it names the script by absolute path', un && un.cmd.includes(`"${ASSETS}/refresh_town.py"`), un && un.cmd);
+  check('  so a tick never has to cd, which its own prompt forbids in one plain command', un && !/(^|\s)cd\s/.test(un.cmd), un && un.cmd);
   check('  and it stops at S5 — delivering is not a tick\'s move', un && un.through === 'S5', un && un.through);
   check('  and says so in words, naming the action that owns the rest', un && /OA-428/.test(un.then));
+
+  /* A WINDOWS path is where this bites: this estate lives behind a drive letter and
+   * backslashes, and a backslash inside a double-quoted shell argument is an escape. The
+   * command carries forward slashes for that reason, and Windows accepts them everywhere
+   * this runs.
+   *
+   * THE FIXTURE IS NOT THIS LAPTOP'S PATH, and the first version was, which
+   * `prove-red-engine-adoption.mjs` caught on the line it was written: a laptop path on a
+   * CODE line is a finding here, fixture or not. It is also the better fixture, because
+   * what is under test is a backslash and a space, not this estate. Assembled from parts
+   * so no literal separator can be mangled in transit -- which is not hypothetical
+   * either: two earlier attempts at this file had theirs collapsed by the shell. */
+  const BACKSLASH = String.fromCharCode(92);
+  const WINDOWSY = ['D:', 'Bus Maps', 'engine', 'assets'].join(BACKSLASH);
+  const winish = unattendedRefresh(st, 'March', SCAN, { assetsDir: WINDOWSY });
+  check('a Windows assets path comes out with forward slashes, not escapes', winish.cmd.includes('"D:/Bus Maps/engine/assets/refresh_town.py"'), winish.cmd);
+  check('  and no backslash survives into the command', !winish.cmd.includes(BACKSLASH), winish.cmd);
 
   /* The three refusals, each one a row a tick must NOT take. */
   check('an ESCALATE town is not a tick\'s row', unattendedRefresh(st, 'Ely', SCAN, { assetsDir: ASSETS }) === null);

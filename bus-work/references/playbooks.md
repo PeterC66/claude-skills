@@ -153,10 +153,10 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
 
 1. **Regenerate centrally.** The worklist item's note carries the specific upcoming changes from the BODS scan — use them to check the regenerated data actually reflects them. **How you regenerate depends on whether the scan graded this town SAFE**, which the row says in its `why` and carries as its `grade`:
 
-   - **SAFE, and the row carries an `unattended` block** (a town, never a place; buses-data OA-426): the whole rebuild is one command, and it is the row's own first `do` step. Run it from the `make-bus-leaflet` assets folder, `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`; `<Town>` is the town as `Areas/` spells it, `<scan date>` is the report the row is joined to, and `<who>` is your own session name (`sched-HHMM` for a tick), recorded on every stage it opens:
+   - **SAFE, and the row carries an `unattended` block** (a town, never a place; buses-data OA-426): the whole rebuild is one command, and it is the row's own first `do` step. It runs from any folder, because the script finds its own modules and takes the estate as `--root`. `<Town>` is the town as `Areas/` spells it, `<scan date>` is the report the row is joined to, and `<who>` is your own session name (`sched-HHMM` for a tick), recorded on every stage it opens; the path below is real rather than a placeholder:
 
      ```bash
-     python3 refresh_town.py --town "<Town>" --scan <scan date> --apply --by <who>
+     python3 "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_town.py" --town "<Town>" --scan <scan date> --apply --by <who>
      ```
 
      Leave `--apply` off and it is a dry run that writes nothing and prints what it would change. It patches only the operator names and day strings the feed moved, runs S1, S3, S4 and S5 through the documented stage order, and **refuses rather than half-applying**: a value a person wrote, a label it cannot account for, a blocking build warning or a sheet that will not render each stop it with nothing committed. A non-zero exit is something to read, never something to retry.

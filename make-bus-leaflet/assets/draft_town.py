@@ -719,6 +719,16 @@ def variant_families(services, paths=None, dest=None):
     and 305 (identical in town) and 301 with 302 at St Ives (mutual overlap 1.000,
     one going to Ramsey and the other to March).
 
+    THE NUMBER IS NOT STABLE BETWEEN RUNS, and a draft is the right place for that
+    to be true. The matched path comes from pull_roads.js's LIVE Overpass query, so
+    two drafts of the same town on the same feed can disagree: St Ives' 301S
+    against 301 measured 0.069/0.358 on one run and 0.18/0.54 on the next, the
+    route set being identical both times. Far from the threshold that changes
+    nothing -- every member of that family was refused both times -- but a pair
+    sitting near 0.6 could merge on one draft and not the next, so the answer is
+    reported and never assumed: every merge AND every refusal is printed with its
+    own number, to stdout and into DRAFT-REVIEW.md, for somebody to agree with.
+
     `paths` is routes_paths.json, S2's matched geometry. `dest` is {route: spoke}
     taken BEFORE the merge, each spoke carrying its `label` and ordered `stops`.
     Called with neither, every proposal is accepted and the behaviour is the old

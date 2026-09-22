@@ -355,7 +355,19 @@ const _hasTimes = dests.some(b => b.minutesToDestination != null);
 // and their length carries nothing — so it can never carry a bar, and it was the one sheet
 // type saying nothing at all about that. Kept short on purpose: a note long enough to WRAP
 // adds a line to the footer plate, which moves the plate top and refits the whole sheet.
-const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
+// routes.json `checkedAt` — WHEN this place's services were last cross-checked, and the
+// parenthetical is the whole of OA-321. This sheet claimed a cross-check from the day it
+// was written and read the field nowhere, so it asserted the thing OA-153 was raised about
+// — a footer saying it had been checked, on a map a reader had just found four faults on —
+// and was structurally incapable of ever saying when. The 2026-08-28 fix that made the date
+// per-map reached gen_internal.js and gen_external_radial.js and never arrived here.
+// ABSENT => THE PARENTHETICAL IS OMITTED, never guessed, and never defaulted from
+// validFrom: that is when the timetable takes EFFECT, a different claim, and it already
+// disagrees with the real S1 date on Huntingdon. See gen_internal.js's CHECKED_AT for the
+// full reasoning. The date sits after "operators" rather than after "bustimes.org" as it
+// does on the town radial, because this sheet's phrasing puts bustimes.org in the NEXT
+// sentence, where it is about confirming times rather than about what we checked.
+const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators${D.checkedAt ? ` (${D.checkedAt})` : ''}. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
 // design.sheetUrl / design.sheetQr — the printed route back to the current version.
 // Hoisted above footerPlateTop because a QR block can push the plate top UP, and every
 // free-floating page device below works to PLATE_TOP: deriving the plate without the

@@ -257,6 +257,20 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-page-place
 
+      # The same boundary, the other suite. `provenance_date.test.js` asks whether a
+      # generator claiming a cross-check also says WHEN, and its place half is out of
+      # `prove-red.js`'s reach for the same structural reason. Six mutations: the
+      # checkedAt read deleted, the absent case defaulted from validFrom or from any
+      # other string, a month typed into the source, and both arms of the exemption
+      # control -- an excuse granted to a file already fixed, and one outliving the
+      # claim it excused. KNOWN_DATELESS is EMPTY since OA-321, so those last two are
+      # the only things keeping that control from iterating nothing. Case 3 found a
+      # real hole on the day it was written: the old assertion read the rest of the
+      # LINE, and on a one-line footer a later ternary's `: ''` satisfied it. ~4 s.
+      - name: Prove the cross-check date can go red across the skill boundary
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-provenance-place
+
       # The octolinear schematizer has no non-crossing constraint, so it can draw a
       # route crossing itself where the ground does not (buses-data OA-240). The
       # detector is standalone and deliberately OUTSIDE the engine hash closure --

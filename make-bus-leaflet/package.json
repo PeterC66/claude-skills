@@ -65,6 +65,7 @@
     "test:prove-red-wiring": "node tools/prove-red-wiring.js",
     "test:prove-red-engine-indirection": "node tools/prove-red-engine-indirection.js",
     "test:prove-red-page-place": "node tools/prove-red-page-place.js",
+    "test:prove-red-provenance-place": "node tools/prove-red-provenance-place.js",
     "gate:wiring": "node tools/check-wiring.js"
   },
   "keywords": [],

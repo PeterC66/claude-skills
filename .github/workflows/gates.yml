@@ -727,6 +727,21 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-s6-mirror
 
+      # OA-427 item 3. `stage.js --by <who>` was built on 2026-09-22 and measured
+      # the same day: 1,211 stage runs in the 30-day window, not one carrying an
+      # actor, because none of the four callers passed the flag. The check that
+      # fixes that is a source-reading JOIN over those callers, and a source-reading
+      # join is the easiest kind of green-for-ever: a regex that has stopped
+      # matching reports every call site it can see as correct, and it can see none.
+      # Two arms break the subject the two ways this can rot -- a call site that
+      # stops forwarding, and a byArgs that INVENTS a name for the absent case,
+      # which is the dangerous one because it fills the window with a confident
+      # answer instead of an honestly empty one. A third deletes a caller, so a
+      # matcher gone blind cannot pass quietly.
+      - name: Prove the stage-actor caller join can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-actor-callers
+
       # OA-164. `pull` copies the whole run FOLDER while the manifest speaks only
       # of DECLARED outputs, so an undeclared file left in an older stage's folder
       # rides along and clobbers whatever the destination already holds. It cost

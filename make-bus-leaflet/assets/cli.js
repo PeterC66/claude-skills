@@ -114,4 +114,27 @@ function resolvePortal(args = {}, env = process.env) {
   return resolveDir(args.portal, env.BUSMAPS_PORTAL, LAPTOP_PORTAL, '--portal');
 }
 
-module.exports = { parseArgs, die, readJson, resolveBuses, resolvePortal, LAPTOP_BUSES, LAPTOP_PORTAL };
+/*
+ * byArgs — the `--by <who>` pass-through for every tool that drives `stage.js new`
+ * or `stage.js commit`, in ONE place because there are four of them: both rollouts,
+ * `adopt_config.js` and `poi_tiers_sync.js`. OA-427 built the flag on `stage.js` and
+ * measured the result: 1,211 stage runs in the 30-day window, not one of them
+ * carrying an actor, because no caller passed it. The window fills only when every
+ * caller does, and a fifth caller written later is why this is a function rather
+ * than four copies of a ternary.
+ *
+ * IT VALIDATES NOTHING, AND THAT IS THE POINT. `stage.js` owns the rules — empty,
+ * multi-line, over-length — and says so in messages that name OA-427. A bare `--by`
+ * (parseArgs gives `true` when the next argument is missing or is itself a flag) is
+ * therefore forwarded as a bare `--by`, so the operator gets stage.js's own "--by
+ * needs a name after it" rather than a second, drifting copy of it from here. The
+ * one thing this must never do is invent a name: absent is the honest answer when
+ * nobody said, and a guess would be indistinguishable from a statement the moment
+ * it reached the manifest.
+ */
+function byArgs(v) {
+  if (v === undefined || v === null || v === false) return [];
+  return v === true ? ['--by'] : ['--by', String(v)];
+}
+
+module.exports = { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs, LAPTOP_BUSES, LAPTOP_PORTAL };

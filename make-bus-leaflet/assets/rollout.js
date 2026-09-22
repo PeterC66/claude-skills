@@ -19,6 +19,12 @@
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
  *                    [--note "..."] [--apply] [--force] [--buses "<dir>"]
+ *                    [--by <who>]
+ *
+ * `--by <who>` records WHO performed each stage this run opens and commits —
+ * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
+ * forwarded to `stage.js` unchanged and validated there; leaving it off records
+ * nobody, which is honest and is what every run before 2026-09-22 did.
  *
  * Default is DRY RUN: builds each town in a scratch temp dir, reports the
  * label-set diff (gained/lost text vs the currently-shipped SVG) and whether
@@ -44,7 +50,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses } = require('./cli');
+const { parseArgs, resolveBuses, byArgs } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
@@ -82,6 +88,9 @@ const APPLY = !!args.apply;
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
+// WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
+// stage.js is the one authority on what a name may be, so a bad one fails there.
+const BY = byArgs(args.by);
 
 const STAGE_JS = path.join(SK, 'stage.js');
 function stage(cwd, ...cmdArgs) {
@@ -345,7 +354,7 @@ function rolloutOne(t) {
   const s2Latest = (manifest.stages && manifest.stages.S2 && manifest.stages.S2.latest) || null;
   const s3Latest = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.latest) || null;
   const basedOn = [s2Latest && `S2=${s2Latest}`, s3Latest && `S3=${s3Latest}`].filter(Boolean).join(';');
-  const s4Dir = stage(t.dir, 'new', 'S4', '--bump', BUMP);
+  const s4Dir = stage(t.dir, 'new', 'S4', '--bump', BUMP, ...BY);
   // pull S3 also syncs routes.json's printed version stamp to this run's v<N.N>.
   // THE SAME CALL AS THE SCRATCH BUILD ABOVE (OA-239) — it was two bare pulls and
   // no seedPrevS4 until 2026-09-09, which is the divergence that action is about.
@@ -398,7 +407,7 @@ function rolloutOne(t) {
   // (OA-352). `basedOn` was computed at `new` time deliberately — it names the S2/S3
   // `latest` the pulls actually resolved, which is the question the field answers.
   stage(t.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE,
-        ...(basedOn ? ['--based-on', basedOn] : []));
+        ...(basedOn ? ['--based-on', basedOn] : []), ...BY);
   fs.rmSync(scratch, { recursive: true, force: true });
 
   // Two gates now stand between a committed S4 and a published S5, and they stop for
@@ -413,7 +422,7 @@ function rolloutOne(t) {
         + path.join(s4Dir, BUILDLOG.LOG_NAME) + ', fix the config it names, then re-run (or --force to publish anyway).' };
   }
 
-  const s5Dir = stage(t.dir, 'new', 'S5');
+  const s5Dir = stage(t.dir, 'new', 'S5', ...BY);
   stage(t.dir, 'pull', 'S4', s5Dir);
   const renderJs = path.join(SK, 'render.js');
   const jpgOutputs = [];
@@ -422,7 +431,7 @@ function rolloutOne(t) {
     const res = spawnSync(process.execPath, [renderJs, path.join(s5Dir, svg), path.join(s5Dir, jpg)], { encoding: 'utf8' });
     if (res.status === 0) jpgOutputs.push(jpg);
   }
-  stage(t.dir, 'commit', 'S5', s5Dir, '--outputs', jpgOutputs.join(','), '--note', NOTE);
+  stage(t.dir, 'commit', 'S5', s5Dir, '--outputs', jpgOutputs.join(','), '--note', NOTE, ...BY);
   spawnSync(process.execPath, [path.join(SK, 'refresh_latest.js'), t.dir], { encoding: 'utf8' });
   // Keep the small tracked CI reference mirror (see sync_ci_reference.js) in
   // step with what was just published, so CI's gate stays meaningful.

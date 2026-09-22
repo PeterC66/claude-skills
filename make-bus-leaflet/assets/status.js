@@ -980,22 +980,11 @@ function gatePortalFixture() {
 // appeared. Both `gates.yml` workflows now fetch the portal's branch heads for
 // exactly this reason — see the step named beside this behaviour there.
 //
-// AND SINCE 2026-09-22, A MERGE ONTO `ref` ITSELF GETS THE SAME GRACE (OA-422).
-// The pushed-branch case above only ever excuses a mismatch that is sitting
-// SOMEWHERE ELSE, waiting to land; the moment a re-vendor PR actually merges,
-// its bytes are `origin/main` itself and the comparison above went straight
-// from PENDING to DRIFTED with no grace at all — the four reds under unrelated
-// commit subjects on 2026-09-20/21 that this paragraph is about. The fix asks
-// the same question one step later: is the mismatch on `ref` itself YOUNG,
-// dated from the last commit that touched THIS PATH there (`driftLandedAgeHours`),
-// not from the ref's tip and not from when the file was first vendored. A
-// drift that has sat unmerged for months keeps reading the age of its own last
-// touch — old — and stays red exactly as it did before this paragraph existed;
-// only a mismatch whose own history on `ref` is recent reads amber, and only
-// until DRIFT_GRACE_HOURS runs out. See the CONTROL case in
-// tools/prove-red-portal-drift.js that a genuine, ages-old drift with no
-// branch carrying the fix must still read DRIFTED — that is the one case this
-// widening must never turn green.
+// AND SINCE 2026-09-22, A MERGE ONTO `ref` ITSELF GETS THE SAME GRACE (OA-422)
+// — the above only ever excused a mismatch waiting SOMEWHERE ELSE, so the
+// instant a re-vendor PR actually merged it went straight to DRIFTED with no
+// grace, which is the four reds under unrelated commit subjects on
+// 2026-09-20/21 this paragraph is about. See `driftLandedAgeHours()` below.
 
 // The portal ref this board's vendoring verdict is about. Null when there is no
 // portal checkout; `ref: null` when there is one and git cannot name anything in
@@ -1057,20 +1046,11 @@ function vendoredOnOtherRef(rel, skillBuf) {
   return null;
 }
 
-/* OA-422. How long ago the MISMATCHING bytes themselves landed on `ref`, at
- * this one path -- the last commit that touched it there, not the ref's tip.
- * A portal PR that re-vendors a file merges straight onto `origin/main` with
- * no grace at all, unlike the pushed-branch case above, which gets one from
- * the moment it is pushed. That asymmetry is the four-reds-under-an-
- * unrelated-subject cost this row was filed for: the remedy already landed,
- * only the pin (or the next re-vendor) has not caught up yet.
- *
- * Dated from THIS PATH's own history, never the ref's tip: a file that has
- * sat drifted for months does not get excused just because some unrelated
- * commit touched the ref five minutes ago. Null when git cannot date it (no
- * history for the path on this ref at all), which the caller treats as OVER
- * the grace -- an undateable landing is not being excused, the same rule the
- * branch case above already keeps for a ref it cannot date. */
+/* OA-422. How long ago the MISMATCHING bytes landed on `ref` -- dated from
+ * the last commit that touched THIS PATH there, never the ref's tip, so a
+ * file drifted for months is not excused by an unrelated commit five minutes
+ * ago. Null when git cannot date it, treated as OVER the grace like the
+ * branch case above. */
 function driftLandedAgeHours(ref, rel) {
   const ts = gitIn(PORTAL, ['log', '-1', '--format=%ct', ref, '--', rel]);
   const secs = Number(ts);
@@ -1185,18 +1165,12 @@ function portalDrift() {
              : ' — ' + found.ageHours + 'h old, grace ' + DRIFT_GRACE_HOURS + 'h')
           + (row.inFlight ? '' : '. Past the grace: merge it or drop the branch.');
       } else {
-        // OA-422. No OTHER ref carries the current source either -- the
-        // mismatching bytes are already the CURRENT state on `ref` itself,
-        // landed by a merge rather than pending on a branch. Grant the same
-        // grace, dated from when THIS PATH last changed on `ref` rather than
-        // from when the file was first vendored, so a drift that has sat
-        // unmerged for months is unaffected: `ageHours` reads old, `inFlight`
-        // is false, and the row falls through to the PLAIN `DRIFTED` below
-        // exactly as it did before this case existed -- there is no separate
-        // branch to name here, so past the grace this is not a different
-        // flavour of PENDING, it is the ordinary red the row was always red
-        // for. Only a MISMATCH young enough to still be in flight gets a
-        // label of its own.
+        // OA-422. No other ref carries the current source: the mismatch is
+        // already the CURRENT state on `ref` itself, landed by a merge. Grant
+        // the same grace; past it, `inFlight` stays false and the row falls
+        // through to the plain DRIFTED below, exactly as before this case
+        // existed -- there is no branch to name, so this is not a different
+        // flavour of PENDING, just the ordinary red the row was always red for.
         const ageHours = driftLandedAgeHours(ref, rel);
         const inFlight = ageHours != null && ageHours < DRIFT_GRACE_HOURS;
         if (inFlight) {

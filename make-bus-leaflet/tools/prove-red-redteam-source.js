@@ -72,7 +72,11 @@ fs.writeFileSync(copy, broken);
 // on the next run -- which is the harness working: a scratch world that silently
 // lacks a dependency is how a mutation "survives" for the wrong reason. Copied
 // rather than resolved from assets/ so the scratch world stays self-contained.
-for (const sibling of ['cli.js']) {
+// `redteam_budget.js` joined that list on 2026-09-22 (OA-427), when the BUY arm
+// started asking it whether the month has budget left. Same lesson, second
+// helping — and the reason the list is a literal rather than a scan is that a
+// scan would have quietly kept this harness green with the wrong file set.
+for (const sibling of ['cli.js', 'redteam_budget.js']) {
   fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
 }
 

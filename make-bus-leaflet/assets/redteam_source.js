@@ -119,9 +119,28 @@
  * downgrading. Without --foreign-build a cross-map answer is refused outright,
  * so borrowing is always deliberate and always recorded.
  *
+ * THE DECISION IS NOW WRITTEN DOWN (OA-427, 2026-09-22). Every run of this tool
+ * that reaches a verdict drops `redteam-source.json` into the run dir saying
+ * REUSE, BUY or WAIT and why. Two things needed it. A reader could previously
+ * learn what this decided only from a commit note somebody remembered to write,
+ * which is the same "an override that lives in a commit message is not a
+ * mechanism" this file already says about OA-166. And `redteam_budget.js` counts
+ * the month's spend from those records rather than inferring it from a
+ * `redteam.json`'s shape -- a record is a statement, a shape is a guess, and the
+ * two are indistinguishable once a number is in a report.
+ *
+ * AND A BUY IS NOW RATIONED, WHICH IS WHAT WAIT IS. `redteam_budget.js` holds the
+ * month's stated figure; when a BUY would exceed what is left, this says WAIT and
+ * exits 11. That is a CHORE and never a red -- the map waits for the month to turn
+ * or for Peter to raise the figure, and nothing about it is broken. With no
+ * budget file at the estate root nothing is rationed and a BUY is a BUY, because
+ * every S6 before this row was built ran that way and a tool that refused on an
+ * absent file would stop the estate dead the moment it merged.
+ *
  * EXIT CODES.  0 = reused, a redteam.json is now in the run dir.
  *             10 = must spawn the agent (this is the normal, expected outcome for
  *                  a town whose data has just been re-pulled -- not an error).
+ *             11 = WAIT -- it would buy, and this month's budget is spent. A chore.
  *              2 = could not decide (no manifest, unreadable candidate, or the
  *                  folder is ambiguous -- see above).
  */
@@ -140,6 +159,7 @@ const crypto = require('node:crypto');
 // The second arm is kept: it costs a comparison and it is the one that would
 // notice if the shared parser's value rule ever changed under this file.
 const { parseArgs, readJson } = require('./cli.js');
+const BUDGET = require('./redteam_budget.js');
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const FLAGS = parseArgs(process.argv.slice(2));
 const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
@@ -487,6 +507,72 @@ candidates.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : (a.dir < b.dir ?
 const today = new Date().toISOString().slice(0, 10);
 const ageDays = d => Math.round((Date.parse(today) - Date.parse(d)) / 86400000);
 
+/* THE DECISION RECORD (OA-427) ------------------------------------------------
+ *
+ * One statement per run of this tool, in the run dir it was pointed at. It is
+ * deliberately NOT written under --dry-run: a dry run is a question, and a
+ * question that leaves a record saying what was decided is how a report comes to
+ * count a decision nobody took.
+ *
+ * `tokens` is ABSENT here and always will be. This tool decides whether to buy;
+ * it does not perform the buy and cannot know what the agent went on to spend. A
+ * session that knows may add the field afterwards, on `stage.js --tokens` terms,
+ * and `redteam_budget.js` prices a buy that carries no measured cost at the
+ * budget file's own nominal figure and says which it used. A number invented here
+ * would be indistinguishable from a measured one the moment it was in the file.
+ */
+function writeDecision(decision, why, extra) {
+  if (DRY) return null;
+  const dest = path.join(INTO, BUDGET.DECISION_FILE);
+  const rec = { schema: BUDGET.SCHEMA, decision, at: today, map: m.town || path.basename(BUILD), build: BUILD, why, ...(extra || {}) };
+  try { fs.writeFileSync(dest, JSON.stringify(rec, null, 2) + '\n'); return dest; }
+  catch (e) {
+    /* A run dir that cannot be written to is a real problem, but it is not THIS
+     * tool's problem and it must not change the decision: the answer to "reuse or
+     * buy" does not depend on whether the note about it landed. Say it loudly. */
+    console.error(`  ! could not write ${BUDGET.DECISION_FILE} to ${INTO}: ${e.message}`);
+    console.error(`    The decision below stands; the month's spend will under-count it.`);
+    return null;
+  }
+}
+
+/* WHAT THE BUDGET SAYS, asked once and only when the answer is BUY. A REUSE costs
+ * nothing, so rationing one would be rationing the cheap half. */
+function askBudget(reasons) {
+  const root = BUDGET.findEstateRoot(BUILD);
+  if (!root) return { verdict: 'no-budget', why: `no estate root above ${BUILD}, so no budget is stated and nothing is rationed.` };
+  const month = today.slice(0, 7);
+  const state = BUDGET.budgetState({ root, month });
+  const ans = BUDGET.mayBuy(state);
+  return { ...ans, state, root, month };
+}
+
+/* The BUY/WAIT tail, shared by the two places that decide to buy: ask the budget,
+ * print what it said, record it, and exit 10 or 11. Written once because the two
+ * call sites differ only in the reasons they carry, and a second copy of this is
+ * a second place for the exit codes to drift. */
+function buyOrWait(reasons, tail) {
+  const b = askBudget(reasons);
+  if (b.verdict === 'wait') {
+    console.log('\n  WAIT — it would buy, and this month\'s red-team budget is spent. Why it would buy:');
+    for (const r of reasons) console.log('        * ' + r);
+    console.log(`\n        Budget: ${b.why}`);
+    console.log('        THIS IS A CHORE, NOT A FAULT. Nothing here is broken and nothing goes red:');
+    console.log('        the map waits for the month to turn, or for the figure in');
+    console.log(`        ${BUDGET.BUDGET_FILE} at ${b.root} to be raised.`);
+    const w = writeDecision('WAIT', reasons.join('; '), { budget: { month: b.month, remaining: b.remaining, want: b.want } });
+    if (w) console.log(`        Recorded in ${w}`);
+    process.exit(11);
+  }
+  console.log('\n  BUY — spawn the blind agent. Why:');
+  for (const r of reasons) console.log('        * ' + r);
+  for (const line of tail || []) console.log(line);
+  console.log(`\n        Budget: ${b.why}`);
+  const w = writeDecision('BUY', reasons.join('; '), { budget: { month: b.month, remaining: b.remaining ?? null, want: b.want ?? null } });
+  if (w) console.log(`        Recorded in ${w}`);
+  process.exit(10);
+}
+
 console.log(`redteam_source — ${m.town || path.basename(BUILD)}`);
 // Always say which folder that name came out of (OA-141). The name alone cannot
 // distinguish "the map you are standing in" from "its parent town", and for a
@@ -498,9 +584,8 @@ console.log(`  answers on disk    : ${candidates.length}${candidates.length ? ' 
 console.log(`  window             : ${MAX_AGE} days`);
 
 if (!candidates.length) {
-  console.log('\n  BUY — this build has no red-team answer at all. Spawn the blind agent;');
-  console.log('        see references/s6-verify.md for the exact prompt.');
-  process.exit(10);
+  buyOrWait(['this build has no red-team answer at all — there is nothing on disk to reuse'],
+    ['        See references/s6-verify.md for the exact prompt.']);
 }
 
 const best = candidates[0];
@@ -544,15 +629,15 @@ if (age > MAX_AGE) {
 }
 
 if (reasons.length && REUSE_ANYWAY === null) {
-  console.log('\n  BUY — spawn the blind agent. Why:');
-  for (const r of reasons) console.log('        * ' + r);
-  console.log(`\n        The existing answer stays on disk and in git either way; nothing is`);
-  console.log(`        overwritten. Newest is ${best.file}`);
+  const tail = [
+    `\n        The existing answer stays on disk and in git either way; nothing is`,
+    `        overwritten. Newest is ${best.file}`,
+  ];
   if (fp.ok) {
-    console.log(`\n        If you can say why this cannot have changed the answer, say it HERE and not`);
-    console.log(`        in a commit note:  --reuse-anyway "<reason>"`);
+    tail.push(`\n        If you can say why this cannot have changed the answer, say it HERE and not`);
+    tail.push(`        in a commit note:  --reuse-anyway "<reason>"`);
   }
-  process.exit(10);
+  buyOrWait(reasons, tail);
 }
 
 /* THE OVERRIDE, ON THE RECORD (OA-166). It softens nothing about the decision --
@@ -607,6 +692,8 @@ if (DRY) {
 }
 console.log(`\n          Record it: pass --note "...redteam reused from ${best.dir}..." to stage.js commit S6,`);
 console.log(`          so the run says whose research it rests on.`);
+const rw = writeDecision('REUSE', why, { from: best.dir, derivedAt: best.at, ageDays: age, borrowed: !!FOREIGN, overridden: !!override });
+if (rw) console.log(`          Decision recorded in ${rw}`);
 process.exit(0);
 }
 

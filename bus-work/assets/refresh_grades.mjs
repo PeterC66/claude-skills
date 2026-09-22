@@ -183,7 +183,21 @@ export function gradeSentence(state, town, scanDate) {
  * the tick starts, and it is the same substitution the loop already makes for `--claim`.
  * It is left as an angle-bracket placeholder for that reason and for no other: recording
  * a guessed actor would be worse than recording none (OA-427).
+ *
+ * THE COMMAND NAMES THE SCRIPT BY ABSOLUTE PATH, AND THAT IS NOT DECORATION. A tick issues
+ * ONE PLAIN COMMAND per call -- no chains -- and the only `cd` its prompt allows is for the
+ * stage engine, which takes its cwd as its subject. This script does not: it finds its own
+ * modules from its own location and takes the estate as `--root`, so it runs from anywhere.
+ * A `cwd` plus a bare `refresh_town.py` would have obliged the one reader this is FOR to
+ * write a compound its own rules forbid. `cwd` is still reported, for a person who would
+ * rather stand in that folder.
  */
+/* A path this estate holds in Windows form, as a shell argument can carry it. Inside
+ * double quotes a backslash is an escape, and Windows takes forward slashes everywhere
+ * this runs, so the separator is swapped rather than doubled. Written through a char code
+ * because a literal backslash in this position has been mangled in transit before. */
+const posix = (p) => String(p).split(String.fromCharCode(92)).join('/');
+
 export function unattendedRefresh(state, town, scanDate, { kind = 'area', assetsDir = null } = {}) {
   if (kind && kind !== 'area') return null;
   if (!assetsDir) return null;
@@ -192,7 +206,7 @@ export function unattendedRefresh(state, town, scanDate, { kind = 'area', assets
   return {
     through: 'S5',
     cwd: assetsDir,
-    cmd: `python3 refresh_town.py --town "${town}" --scan ${scanDate} --apply --by <this run's name>`,
+    cmd: `python3 "${posix(assetsDir)}/refresh_town.py" --town "${town}" --scan ${scanDate} --apply --by <this run's name>`,
     then: 'Delivering the result into the portal is a separate step and still wants a person '
         + 'who has looked at the sheet (buses-data OA-428).',
   };

@@ -165,6 +165,9 @@ export function mergeAnswers(prev, next) {
   return { ...next, maps: next.maps.map((m) => {
     const p = old.get(m.map.toLowerCase());
     if (!p) return m;
+    /* What was staged is carried whatever the build now is: `deliverable()` asks
+     * whether it was THIS build, so a rebuilt map is deliverable again by itself. */
+    m = { ...m, ...(p.staged ? { staged: p.staged } : {}), ...(p.stagedBefore ? { stagedBefore: p.stagedBefore } : {}) };
     const superseded = [...(p.superseded || [])];
     if (p.answer) {
       if (p.answer.after === m.after && m.status === 'ink-moved') return { ...m, answer: p.answer, superseded };
@@ -189,11 +192,27 @@ export function answer(review, town, verdict, { by, note = null, at }) {
   return { ...review, maps };
 }
 
+/**
+ * Record that `stage_refresh.mjs` staged this build with its customer (OA-428).
+ * Staging emails them, so a build staged once is `staged` and never `deliver`
+ * again; a later build of the same map is deliverable afresh.
+ */
+export function markStaged(review, town, { slug, by, at }) {
+  const i = review.maps.findIndex((m) => m.map.toLowerCase() === String(town || '').toLowerCase());
+  if (i < 0) throw new Refused(`${town} is not in the ${review.scan} review.`);
+  const m = review.maps[i];
+  const stagedBefore = [...(m.stagedBefore || []), ...(m.staged ? [m.staged] : [])];
+  const maps = [...review.maps];
+  maps[i] = { ...m, staged: { after: m.after, slug, by, at }, ...(stagedBefore.length ? { stagedBefore } : {}) };
+  return { ...review, maps };
+}
+
 /** The gate OA-428's delivery step asks. Only `deliver` may be delivered. */
 export function deliverable(review) {
-  const out = { deliver: [], waiting: [], held: [], other: [] };
+  const out = { deliver: [], staged: [], waiting: [], held: [], other: [] };
   for (const m of review.maps) {
-    if (m.status === 'no-ink') out.deliver.push(m.map);
+    if (m.staged && m.staged.after === m.after) out.staged.push(m.map);
+    else if (m.status === 'no-ink') out.deliver.push(m.map);
     else if (m.status !== 'ink-moved') out.other.push(`${m.map} (${m.status})`);
     else if (!m.answer || m.answer.after !== m.after) out.waiting.push(m.map);
     else if (m.answer.verdict === 'accept') out.deliver.push(m.map);
@@ -288,7 +307,7 @@ function main() {
     if (!prev) throw new Refused(`there is no review for ${scan} (${file}), so nothing is deliverable.`);
     const d = deliverable(prev);
     if (args.json) { console.log(JSON.stringify({ scan, ...d })); return; }
-    for (const k of ['deliver', 'waiting', 'held', 'other']) console.log(`${k.padEnd(8)} ${d[k].join(', ') || '—'}`);
+    for (const k of ['deliver', 'staged', 'waiting', 'held', 'other']) console.log(`${k.padEnd(8)} ${d[k].join(', ') || '—'}`);
     return;
   }
   const towns = typeof args.town === 'string' ? args.town.split(',').map((t) => t.trim()).filter(Boolean) : [];

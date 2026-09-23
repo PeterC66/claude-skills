@@ -369,6 +369,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-ink-review
 
+      # buses-data OA-428 (2026-09-23), R9 item 4. Staging a refresh emails the
+      # map's customer, so every case is a way of reaching that command wrongly:
+      # a map the ink review did not let through, a render that is not the build
+      # it compared (joined by version, since S5 names its folder by its own
+      # minute), and one build staged twice. No disk, no portal, no clock.
+      - name: Prove the refresh staging step refuses what the review did not let through
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-stage-refresh
+
       # 2026-09-23. The worktree sweep DELETES things, so every case that matters
       # is a refusal: unmerged, dirty, locked, recently touched, a junction inside,
       # and -- the load-bearing one -- a squash-merged PR whose branch has a commit

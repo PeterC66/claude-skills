@@ -1594,11 +1594,6 @@ MUTATIONS = [
      "to": '            if not far or d<far[0]: far=(d,nm,float(la),float(lo))'},
 
     {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
-     "what": "only one Overpass endpoint is ever tried, so the fallback that exists because that host is regularly busy is gone and the town is reported as having no linear features",
-     "find": '    for host in ("https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"):',
-     "to": '    for host in ("https://overpass-api.de/api/interpreter",):'},
-
-    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
      "what": "more than six candidate features are reported, so the draft's `features[]` takes three from an unranked tail rather than from the top of the ranking",
      "find": '    return ranked[:6], True',
      "to": '    return ranked, True'},
@@ -1613,8 +1608,8 @@ MUTATIONS = [
     # to go red against the code it replaced.
     {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
      "what": "both Overpass endpoints failing goes back to reporting as though OSM had answered, so an unasked question is indistinguishable from a town with no river in it",
-     "find": '    if not d: return [], False',
-     "to": '    if not d: return [], True'},
+     "find": '    except overpass_fetch.OverpassUnreachable: return [], False',
+     "to": '    except overpass_fetch.OverpassUnreachable: return [], True'},
 
     {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
      "what": "a successful Overpass read reports as unreachable, which is the same conflation pointing the other way -- every town would carry the COULD NOT LOOK sentence and the reviewer would stop reading it",
@@ -1624,11 +1619,41 @@ MUTATIONS = [
     {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
      "what": "the refusal loses its own sentence and falls through to the absence's, which is `- (none found / skipped)` restored in everything but wording",
      "find": '''    if state=="refused":
-        return ("- COULD NOT LOOK: both Overpass endpoints failed, so OSM has NOT been asked "
+        return ("- COULD NOT LOOK: every Overpass try failed, so OSM has NOT been asked "
                 "-- a refusal, not an absence. Re-run before treating an empty features[] as "
                 "a finding about this town.")''',
      "to": '''    if False:
         return ""'''},
+
+    # ---------------------------------------------------------------- overpass_fetch.py
+    # OA-339. The first restores what draft_town.py did before 2026-09-23: a pull
+    # that never got an answer is stored as an empty one, which on disk is a town
+    # with no river. The rest are the three rules the module's docstring names.
+    {"suite": "test_overpass_fetch.py", "file": "overpass_fetch.py",
+     "what": "every try failing returns an empty answer instead of raising, so a bad afternoon is stored as `this town has no river`",
+     "find": '    raise OverpassUnreachable("%s: no Overpass host answered in %d tries; last: %s" % (label, tries, last))',
+     "to": '    return {"elements": []}'},
+
+    {"suite": "test_overpass_fetch.py", "file": "overpass_fetch.py",
+     "what": "one try and no retry, which is the rate that lost seven towns in eight on 2026-09-13",
+     "find": '    for n in range(1, tries + 1):',
+     "to": '    for n in range(1, 2):'},
+
+    {"suite": "test_overpass_fetch.py", "file": "overpass_fetch.py",
+     "what": "only the first host is ever tried, so the fallback that exists because that host is regularly busy is gone",
+     "find": '        host = hosts[(n - 1) % len(hosts)]',
+     "to": '        host = hosts[0]'},
+
+    {"suite": "test_overpass_fetch.py", "file": "overpass_fetch.py",
+     "what": "a 200 whose remark says the query timed out is taken as the answer, so a half-collected reply is stored as the whole one",
+     "find": '            if remark:',
+     "to": '            if False:'},
+
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "draft_town writes an empty osm.json when Overpass never answered, which is the OA-339 fault restored at its original call site",
+     "find": '''        raise SystemExit(f"{exc}\\n{dest} was NOT written: an unanswered question is not "
+                         f"an empty answer. Re-run when Overpass is answering.")''',
+     "to": '''        d = {"elements": []}'''},
 
 ]
 

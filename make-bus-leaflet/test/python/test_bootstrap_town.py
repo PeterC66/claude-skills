@@ -338,6 +338,10 @@ class OverpassFeatures(unittest.TestCase):
 
         bt.urllib.request.urlopen = fake
         self.addCleanup(lambda: setattr(bt.urllib.request, "urlopen", real))
+        # OA-339: the shared helper backs off between tries; a test waits for nothing.
+        real_sleep = bt.time.sleep
+        bt.time.sleep = lambda _s: None
+        self.addCleanup(lambda: setattr(bt.time, "sleep", real_sleep))
         return calls
 
     @staticmethod
@@ -394,17 +398,19 @@ class OverpassFeatures(unittest.TestCase):
         self.assertTrue(reached)
         self.assertEqual(feats[0]["label"], "River Nene")
 
-    def test_both_hosts_failing_is_a_REFUSAL_and_says_so(self):
+    def test_every_try_failing_is_a_REFUSAL_and_says_so(self):
         # The fault this suite was written around. Before 2026-09-17 this
         # returned a bare [], which the caller could not tell from a town with
-        # no river in it.
+        # no river in it. Since OA-339 it is more than two tries before it
+        # gives up, because two lost seven towns in eight on 2026-09-13.
         def behaviour(_n):
             raise IOError("no route to host")
 
-        self._urlopen(behaviour)
+        calls = self._urlopen(behaviour)
         feats, reached = bt.overpass_features(self.BBOX)
         self.assertEqual(feats, [])
         self.assertFalse(reached)
+        self.assertGreater(len(calls), 2)
 
     def test_an_empty_answer_is_an_ABSENCE_and_is_distinguishable_from_it(self):
         self._urlopen(lambda _n: _Resp({"elements": []}))

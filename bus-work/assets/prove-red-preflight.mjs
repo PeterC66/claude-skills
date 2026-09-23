@@ -23,7 +23,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preflight, pushScope, tierFor } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -260,6 +260,20 @@ function runWith(fixture, opts = {}) {
   check('tierFor: a workflow edit is full', tierFor(['.github/workflows/gates.yml'], ['^docs/']).tier === 'full');
   check('tierFor: a docsOnly list of nothing makes every push full', tierFor(['docs/x.md'], []).tier === 'full');
   check('pushScope: a folder that is no repository is not claimed as known', pushScope(tmpdir()).known === false);
+}
+
+// CASE 12 — the buses-data backlog arm asks about what is COMMITTED, not the
+// disk. Read from the disk it was red for every session while a neighbour held
+// an uncommitted claim, and the loop stopped pushing (buses-data OA-441). The
+// assembler's own harness proves `--from-index` ignores an unstaged edit; this
+// proves the preflight still asks for it.
+{
+  const fx = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
+  const m = manifestFor(fx.repo);
+  const arm = m && m.checks.find((c) => c.id === 'backlog-index');
+  check('buses-data: the built-in manifest is the one chosen', !!m && m.name === 'buses-data', m ? m.name : 'no manifest');
+  check('buses-data: the backlog arm reads the index, not the working tree', !!arm && arm.args.includes('--check') && arm.args.includes('--from-index'), arm ? arm.args.join(' ') : 'no backlog-index arm');
+  rmSync(fx.root, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

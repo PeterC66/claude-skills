@@ -276,6 +276,57 @@ function runWith(fixture, opts = {}) {
   rmSync(fx.root, { recursive: true, force: true });
 }
 
+// CASE 13 — the portal's vendored fixtures are asked on their own, against the
+// portal's origin/main (buses-data OA-445). The board prints this join and keeps
+// it out of its exit code, so a preflight reading only that exit called a push
+// clean which gates.yml then failed. The red case has the portal's WORKING TREE
+// already matching — the fix applied locally and not merged — because that is
+// the state in which the disk says "in step" and CI says BEHIND.
+{
+  const SCRIPT = path.resolve(HERE, '..', '..', 'make-bus-leaflet', 'assets', 'portal_fixtures.js');
+  const root = mkdtempSync(path.join(tmpdir(), 'preflight-fx-'));
+  const portal = path.join(root, 'portal');
+  const origin = path.join(root, 'portal.git');
+  const rel = path.join('gate-fixtures', 'Areas', '_portal-fixture', 'Town', 'internal.svg');
+  execFileSync('git', ['init', '--bare', '-b', 'main', origin], { stdio: 'ignore' });
+  mkdirSync(path.dirname(path.join(portal, rel)), { recursive: true });
+  git(portal, 'init', '-b', 'main');
+  git(portal, 'config', 'user.email', 'preflight@test');
+  git(portal, 'config', 'user.name', 'preflight');
+  git(portal, 'config', 'commit.gpgsign', 'false');
+  writeFileSync(path.join(portal, rel), '<svg>old</svg>\n');
+  git(portal, 'add', '.');
+  git(portal, 'commit', '-m', 'vendored', '--no-verify');
+  git(portal, 'remote', 'add', 'origin', origin);
+  git(portal, 'push', '-u', 'origin', 'main');
+  const buses = path.join(root, 'buses');
+  const busesFile = path.join(buses, 'Areas', '_portal-fixture', 'Town', 'internal.svg');
+  mkdirSync(path.dirname(busesFile), { recursive: true });
+  const arm = (b) => ({ id: 'portal-fixtures', label: 'fixtures', cmd: NODE, args: [SCRIPT, '--buses', b, '--portal', portal], cannotTell: [2] });
+  const fx = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [arm(buses), arm(path.join(root, 'no-such-buses'))] } });
+  const verdicts = () => preflight({ repo: fx.repo }).checks.map((c) => c.verdict);
+
+  writeFileSync(busesFile, '<svg>old</svg>\n');
+  let [same, absent] = verdicts();
+  check('portal fixtures: in step on origin/main is a pass', same === 'PASS', same);
+  check('portal fixtures: no fixture folder is UNANSWERED, never a pass or a finding', absent === 'UNANSWERED', absent);
+
+  writeFileSync(busesFile, '<svg>new</svg>\n');
+  writeFileSync(path.join(portal, rel), '<svg>new</svg>\n');
+  [same] = verdicts();
+  check('portal fixtures: origin/main behind is red even when the portal disk already matches', same === 'FAIL', same);
+
+  const bd = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
+  const m = manifestFor(bd.repo);
+  rmSync(bd.root, { recursive: true, force: true });
+  const built = m && m.checks.find((c) => c.id === 'portal-fixtures');
+  check('buses-data: the built-in manifest asks the fixture join itself', !!built && built.args[0].endsWith('portal_fixtures.js'), built ? built.args[0] : 'no portal-fixtures arm');
+  check('buses-data: the fixture arm is cheap tier, as gates.yml runs it on every push', !!built && (built.tier || 'cheap') === 'cheap');
+  check('buses-data: the fixture arm declares exit 2 as cannot tell', !!built && (built.cannotTell || []).includes(2));
+  rmSync(root, { recursive: true, force: true });
+  rmSync(fx.root, { recursive: true, force: true });
+}
+
 const total = pass + fails.length;
 if (fails.length) {
   process.stderr.write(`prove-red-preflight: ${fails.length} of ${total} assertion(s) FAILED\n`);

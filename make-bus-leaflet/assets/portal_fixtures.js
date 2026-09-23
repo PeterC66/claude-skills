@@ -144,3 +144,38 @@ function printFixtureVendoring(v, sourceLine, remedyDir) {
 }
 
 module.exports = { fixtureVendoring, printFixtureVendoring, VENDORED_FIXTURE_ROOT };
+
+/*
+ * Standalone, for bus-work's preflight (buses-data OA-445). The board keeps this
+ * section out of its exit code because a behind fixture is a chore, and preflight
+ * read only that exit code — so it called a push clean that gates.yml then failed
+ * on this exact join. Asked here on its own, BEHIND is exactly "would go red".
+ *
+ *   node portal_fixtures.js --buses <buses-data root> --portal <portal checkout>
+ *
+ * Exit 0 in step, 1 BEHIND, 2 cannot tell (no portal, no ref, no fixture folder).
+ * The ref rule is status.js's portalSource(): origin/main, else HEAD.
+ */
+if (require.main === module) {
+  const { execFileSync } = require('node:child_process');
+  const args = require('./cli').parseArgs(process.argv.slice(2));
+  const arg = (n) => (typeof args[n] === 'string' ? args[n] : null);
+  const gitIn = (dir, args) => {
+    try { return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; }
+  };
+  const gitShow = (dir, ref, rel) => {
+    try { return execFileSync('git', ['show', ref + ':' + rel], { cwd: dir, encoding: 'buffer', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }); } catch { return null; }
+  };
+  const buses = arg('buses');
+  const portal = arg('portal');
+  const has = (r) => portal && gitIn(portal, ['rev-parse', '--verify', '--quiet', r]) !== null;
+  const ref = has('origin/main') ? 'origin/main' : has('HEAD') ? 'HEAD' : null;
+  const v = buses && ref ? fixtureVendoring({ portal, buses, source: { ref }, gitIn, gitShow }) : null;
+  if (!v || v.status === 'NO-SOURCE') {
+    console.log('CANNOT TELL  ' + (v ? v.why : !buses ? 'no --buses given' : 'no portal git ref at ' + (portal || '(no --portal given)')));
+    process.exitCode = 2;
+  } else {
+    printFixtureVendoring(v, 'read from the portal\'s ' + ref, portal);
+    process.exitCode = v.status === 'in step' ? 0 : 1;
+  }
+}

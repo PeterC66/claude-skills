@@ -137,6 +137,7 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
                       unlistedOnMain = false, unlistedOnBranch = false,
                       worktreeCurrent = false, noGit = false,
                       revendorRef = null, revendorAgeHours = 0, revendorStale = false,
+                      behindRef = null, behindAgeHours = 18,
                       fixtureOnMain = null, fixtureOnBranch = null } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
@@ -174,6 +175,23 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
   git(dir, ['config', 'user.email', 'harness@example.invalid']);
   git(dir, ['config', 'user.name', 'prove-red-portal-drift']);
   git(dir, ['checkout', '--quiet', '-b', 'main']);
+  /* A BRANCH THAT IS MERELY BEHIND (OA-422, 2026-09-23). `main` first holds
+   * the source's bytes, a branch is cut there that touches only a portal-owned
+   * file, and then `main` moves the vendored file on. The branch still holds
+   * the source's bytes without ever having re-vendored anything — the shape of
+   * portal PR #333, a dependabot bump named as the re-vendor that reddened
+   * buses-data's main on 2026-09-23. */
+  if (behindRef) {
+    writeTree({ staleA: false, unlisted: false });
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'main before it moved the vendored file', behindAgeHours + 1);
+    git(dir, ['checkout', '--quiet', '-b', behindRef]);
+    fs.writeFileSync(path.join(engine, 'wrapper.js'), '// portal-owned, bumped by a dependency PR\n');
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'a dependency bump that never touches the engine', behindAgeHours);
+    git(dir, ['update-ref', 'refs/remotes/origin/' + behindRef, git(dir, ['rev-parse', 'HEAD'])]);
+    git(dir, ['checkout', '--quiet', 'main']);
+  }
   writeTree({ staleA: mainStale, unlisted: unlistedOnMain });
   writeFixture(fixtureOnMain);
   git(dir, ['add', '-A']);
@@ -427,6 +445,22 @@ const CASES = [
     what: 'an old, settled drift closes its own hole exactly as the 999h default above already does',
   },
   {
+    label: 'a branch merely BEHIND main is no witness to a re-vendor (OA-422)',
+    make: { mainStale: true, mainStaleAgeHours: 0, behindRef: 'dependabot', behindAgeHours: 18 },
+    expect: 0,
+    also: (json, dir) => {
+      /* The fixture must not be free: the branch really does carry the source's bytes. */
+      const onBranch = execFileSync('git', ['show', 'origin/dependabot:engine/qr.js'], { cwd: dir });
+      if (!onBranch.equals(fs.readFileSync(path.join(SKILL_ROOT, SOURCE_A)))) return 'the fixture never put the source bytes on the branch';
+      const r = rowFor(json, 'qr.js');
+      if (!r) return 'no qr.js row at all';
+      if (r.pendingOn) return 'a branch that never touched the file was named as the re-vendor: ' + r.pendingOn;
+      if (r.status !== 'PENDING' || r.inFlight !== true) return 'expected the landed-merge grace, got ' + statusOf(r) + ' inFlight ' + JSON.stringify(r.inFlight);
+      return null;
+    },
+    what: 'portal PR #333 did this to buses-data main on 2026-09-23, inside the grace its merge had earned',
+  },
+  {
     /* The other direction: a branch that is NOT a re-vendor must not excuse
      * anything. Same shape as the row above, but the branch carries main's stale
      * content, so no ref anywhere holds the current source. */
@@ -612,6 +646,15 @@ const MUTATION_OA422 = {
   why: 'a merge landing directly on origin/main no longer gets any grace window',
 };
 
+/* AND THE FOURTH, for the 2026-09-23 half of OA-422: any ref holding the
+ * source's bytes is a witness again, whether or not it ever touched the file. */
+const MUTATION_WITNESS = {
+  file: 'status.js',
+  find: ' && changedSinceFork(cand.ref, rel, buf)) return cand;',
+  replace: ') return cand; // MUTATED by prove-red-portal-drift.js: a branch merely behind main is a witness again',
+  why: 'vendoredOnOtherRef() no longer asks whether the ref changed the file',
+};
+
 function regressedStatus(mutations = [MUTATION_OA200]) {
   const root = scratchDir('prove-red-portal-drift-engine-');
   const dst = path.join(root, 'assets');
@@ -733,7 +776,28 @@ const GRACE_REGRESSION = 'a merge onto origin/main itself is amber within the gr
   if (!KEEP) fs.rmSync(injG.root, { recursive: true, force: true });
 }
 
-const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 2;
+/* THE SAME FOR THE WITNESS RULE (OA-422, 2026-09-23). Under the old rule the
+ * behind branch is named, past its grace, and the board goes red — the colour
+ * buses-data's main actually turned. */
+const WITNESS_REGRESSION = 'a branch merely BEHIND main is no witness to a re-vendor (OA-422)';
+{
+  const c = CASES.find((x) => x.label === WITNESS_REGRESSION);
+  if (!c) throw new Error('prove-red-portal-drift: no case named "' + WITNESS_REGRESSION + '" — the self-falsification list is out of date.');
+  const injW = regressedStatus([MUTATION_WITNESS]);
+  const r = runCase(c, injW.statusPath);
+  const row = r.json ? rowFor(r.json, 'qr.js') : null;
+  const rightReason = !r.ok && r.code !== 0 && !!row && row.pendingOn === 'origin/dependabot';
+  if (!rightReason) failed++;
+  rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes red' : 'RED, WRONG CAUSE',
+    'with the witness rule removed: ' + c.label,
+    'qr.js pendingOn ' + (row ? row.pendingOn : '(no row)') + ' (wanted origin/dependabot)',
+    r.ok ? 'THIS CASE NO LONGER TESTS THE WITNESS RULE'
+      : rightReason ? 'the case discriminates: a behind branch was red before the fix'
+      : 'red for a reason that is not the old witness rule']);
+  if (!KEEP) fs.rmSync(injW.root, { recursive: true, force: true });
+}
+
+const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 3;
 const w = [14, 62, 46];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
@@ -746,5 +810,6 @@ if (failed) {
     + 'a local re-vendor that has not merged reads PENDING rather than green, the population follows the ref too, a portal with no git says so, '
     + 'the VENDORED FIXTURE copy is read off the same ref and says BEHIND without going red, '
     + 'a merge landing straight on origin/main gets the same grace a pushed branch always has, '
-    + 'and all three tree/time-reading cases go red the moment their own fix is taken back out.');
+    + 'a branch merely behind main is never named as its re-vendor, '
+    + 'and all four tree/time/witness cases go red the moment their own fix is taken back out.');
 }

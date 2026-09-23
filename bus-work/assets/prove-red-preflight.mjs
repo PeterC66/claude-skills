@@ -23,7 +23,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preflight, pushScope, tierFor, manifestFor } from './preflight.mjs';
+import { createHash } from 'node:crypto';
+import { preflight, pushScope, tierFor, manifestFor, runCheck } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -324,6 +325,43 @@ function runWith(fixture, opts = {}) {
   check('buses-data: the fixture arm is cheap tier, as gates.yml runs it on every push', !!built && (built.tier || 'cheap') === 'cheap');
   check('buses-data: the fixture arm declares exit 2 as cannot tell', !!built && (built.cannotTell || []).includes(2));
   rmSync(root, { recursive: true, force: true });
+  rmSync(fx.root, { recursive: true, force: true });
+}
+
+// CASE 14 — the stamp arm asks about the tree being PUSHED (buses-data OA-449).
+// `docstamp.py --check` resolved to its configured root, so from a worktree it
+// hashed the main checkout, printed ok, and CI went red on the worktree's stale
+// stamp. The fixture is that state for real: a correctly stamped document on the
+// main checkout, and a linked worktree whose commit changed the body and not the
+// stamp. The arm is taken from the built-in manifest and run as the preflight
+// runs it, so what is asserted is the command, not a description of it.
+{
+  const fx = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
+  const stamped = (body) => {
+    const sha = createHash('sha256').update(`# T\n\n${body}\n`, 'utf8').digest('hex').slice(0, 8);
+    return `# T\n<!-- docstamp v1.0 | 2026-09-23 | sha=${sha} -->\n**v1.0** · updated 23 September 2026\n\n${body}\n`;
+  };
+  mkdirSync(path.join(fx.repo, 'docs'), { recursive: true });
+  writeFileSync(path.join(fx.repo, 'docs', 'a.md'), stamped('body one'));
+  git(fx.repo, 'add', 'docs/a.md');
+  git(fx.repo, 'commit', '-m', 'stamped', '--no-verify');
+  const wt = path.join(fx.root, 'wt');
+  git(fx.repo, 'worktree', 'add', wt, '-b', 'wt');
+  const doc = readFileSync(path.join(wt, 'docs', 'a.md'), 'utf8');
+  writeFileSync(path.join(wt, 'docs', 'a.md'), doc.replace('body one', 'body two'));
+  git(wt, 'commit', '-am', 'body changed, stamp not', '--no-verify');
+
+  const armFor = (r) => { const m = manifestFor(r); return m && m.checks.find((c) => c.id === 'docstamp'); };
+  const mainArm = armFor(fx.repo);
+  const wtArm = armFor(wt);
+  check('docstamp: the arm names the tree it was built for', !!wtArm && wtArm.args.includes(wt), wtArm ? wtArm.args.join(' ') : 'no docstamp arm');
+  if (mainArm && wtArm) {
+    const control = runCheck(mainArm, fx.repo);
+    check('docstamp: a correctly stamped checkout passes (control)', control.verdict === 'PASS', `${control.verdict}: ${control.why || control.out || control.err}`);
+    const stale = runCheck(wtArm, wt);
+    check('docstamp: a stale stamp committed in a WORKTREE is red', stale.verdict === 'FAIL', `${stale.verdict}: ${stale.why || stale.out}`);
+    check('docstamp: the red names the stale document', /docs\/a\.md/.test(`${stale.out}\n${stale.err}`), stale.out);
+  }
   rmSync(fx.root, { recursive: true, force: true });
 }
 

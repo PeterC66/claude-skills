@@ -41,9 +41,10 @@
 // its status was read through `tail` — this repository's own *refusal that
 // depended on how you read it*. And a check may declare `echo`, a list of
 // patterns whose matching output lines are surfaced even on a PASS, because
-// `docstamp.py` resolves to its CONFIGURED root rather than the tree you are
-// standing in: its `scope:` line is the only thing that says which tree it read,
-// and the name of the flag says nothing about it.
+// which tree a tool read is invisible in its verdict. `docstamp.py` resolved to
+// its CONFIGURED root rather than the tree being pushed, so from a worktree it
+// passed a stale stamp CI then failed; the stamp arm now runs the committed-stamp
+// auditor against `--repo` itself (buses-data OA-449).
 //
 // WHAT IT IS NOT. It is not fast — running a sibling repository's byte gates is
 // minutes — and it is not run per commit. It is run once per round, and the
@@ -117,9 +118,11 @@ export function tierFor(paths, docsOnly) {
  * anywhere else, or a session with the environment variable set, now gets the
  * engine it is actually running rather than a path that happens to exist here.
  *
- * `skillsRoot` is the tree those two live under; `stamp-docs` is NOT in it —
- * it is a separate skill under the user profile, so it is resolved from
- * USERPROFILE the same way `assetsDir()`'s own last candidate is.
+ * `skillsRoot` is the tree those two live under, and `stamp-docs` is in it too,
+ * so the auditor is asked of that tree first and of the user profile's junction
+ * second. Profile-only, it named a file that does not exist on a CI runner, and
+ * a worktree ran `main`'s copy rather than its own (buses-data OA-449). Neither
+ * found is a null, which the manifest reports as UNANSWERED, never as a pass.
  */
 function skillPaths() {
   const engine = assetsDir();
@@ -129,7 +132,10 @@ function skillPaths() {
     ENGINE: engine,
     SKILLS: skillsRoot,
     TOOLS: skillsRoot ? path.join(skillsRoot, 'tools') : null,
-    STAMP: home ? path.join(home, '.claude', 'skills', 'stamp-docs', 'scripts', 'docstamp.py') : null,
+    STAMP: [skillsRoot, home && path.join(home, '.claude', 'skills')]
+      .filter(Boolean)
+      .map((root) => path.join(root, 'stamp-docs', 'scripts', 'check_committed_stamps.py'))
+      .find((p) => existsSync(p)) || null,
   };
 }
 
@@ -142,7 +148,12 @@ function builtIn(repo) {
       name: 'buses-data',
       docsOnly: ['^Development Docs/', '^Documentation/', '^Correspondence/', '^BusMapsUK/', '^CLAUDE\\.md$', '^README\\.md$', '^loop/README\\.md$'],
       checks: [
-        STAMP && { id: 'docstamp', label: 'every committed document describes its committed content', cmd: 'python3', args: [STAMP, '--check'], echo: ['^scope:'] },
+        /* `check_committed_stamps.py <repo>`, the auditor gates.yml runs, and not
+         * `docstamp.py --check`: that one resolves to its CONFIGURED root whatever
+         * tree you stand in, so from a worktree it hashed the main checkout's
+         * disk, printed ok, and CI went red on the stale stamp this tree carried
+         * (buses-data OA-449). This one reads HEAD of the tree it is given. */
+        STAMP && { id: 'docstamp', label: 'every committed document describes its committed content', cmd: 'python3', args: [STAMP, repo] },
         TOOLS && { id: 'tables', label: 'tables are still tables', cmd: 'node', args: [`${TOOLS}/check-tables.mjs`] },
         TOOLS && { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: [`${TOOLS}/check-doc-links.mjs`] },
         TOOLS && { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: [`${TOOLS}/check-file-hygiene.mjs`, '--root', '.'] },
@@ -174,7 +185,7 @@ function builtIn(repo) {
          * a path literal that simply was not there, which reads as a check that
          * failed rather than as one that could not be run (OA-345). */
         ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the portal\'s vendored fixtures, the area fixture, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
-        ...(STAMP ? [] : ['The docstamp check — neither USERPROFILE nor HOME is set, so stamp-docs could not be located.']),
+        ...(STAMP ? [] : ['The docstamp check — `stamp-docs/scripts/check_committed_stamps.py` is neither in the skills tree nor under the user profile. That is a refusal, not a pass.']),
       ],
     };
   }

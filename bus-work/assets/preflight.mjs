@@ -159,6 +159,11 @@ function builtIn(repo) {
         { id: 'directory-coverage', label: 'every map has an answer to does somebody else map this town', cmd: 'node', args: ['BusMapsUK/bus-map-directory/coverage.mjs', '--check'] },
         TOOLS && { id: 'exclusion-fields', label: 'a town declares a route off in notOnLeaflet[] and nowhere else', cmd: 'node', args: [`${TOOLS}/check-exclusion-fields.mjs`] },
         TOOLS && { id: 's6-claims', label: 'every S6 claim has a home, and the operator join resolves', cmd: 'node', args: [`${TOOLS}/check-s6-claims.mjs`], note: 'run WITHOUT --register-only: the coverage half is the half CI cannot run' },
+        /* The board prints this join and keeps it out of its exit code, because a
+         * behind fixture is a chore (OA-396) — so reading only the board's exit,
+         * this called a push clean that gates.yml then failed (buses-data OA-445).
+         * Cheap tier, because gates.yml runs its twin on EVERY push. */
+        ENGINE && { id: 'portal-fixtures', label: 'the portal\'s vendored fixtures are in step with this repository, on its origin/main', cmd: 'node', args: [`${ENGINE}/portal_fixtures.js`, '--buses', repo, '--portal', resolvePortal()], cannotTell: [2] },
         ENGINE && { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift', tier: 'full', cmd: 'node', args: [`${ENGINE}/status.js`, '--buses', repo, '--portal', resolvePortal()], note: 'no --no-live: the deployment row is the one that flag hides' },
         ENGINE && { id: 'area-fixture', label: 'the committed area fixture reproduces', tier: 'full', cmd: 'node', args: [`${ENGINE}/refresh_area_fixture.js`, '--check'] },
       ].filter(Boolean),
@@ -168,7 +173,7 @@ function builtIn(repo) {
         /* A missing engine tree is a REFUSAL and is said out loud. It used to be
          * a path literal that simply was not there, which reads as a check that
          * failed rather than as one that could not be run (OA-345). */
-        ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the area fixture, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
+        ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the portal\'s vendored fixtures, the area fixture, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
         ...(STAMP ? [] : ['The docstamp check — neither USERPROFILE nor HOME is set, so stamp-docs could not be located.']),
       ],
     };
@@ -222,6 +227,9 @@ export function runCheck(check, repo) {
   if (r.status === null) return { ...check, verdict: 'UNANSWERED', ms, why: `${check.cmd} was killed by ${r.signal || 'a signal'} and never returned a status`, echoed: [] };
   const text = `${r.stdout || ''}\n${r.stderr || ''}`;
   const echoed = (check.echo || []).flatMap((p) => text.split('\n').filter((l) => new RegExp(p).test(l)).map((l) => l.trim()));
+  // A check may declare the exit codes that mean "could not ask", so its refusal
+  // reads as a refusal and never as a finding about the push (property 4).
+  if ((check.cannotTell || []).includes(r.status)) return { ...check, verdict: 'UNANSWERED', status: r.status, ms, why: `${check.id} exited ${r.status}, which it declares as cannot tell: ${tail(r.stdout, 1) || tail(r.stderr, 1)}`, echoed };
   return {
     ...check,
     verdict: r.status === 0 ? 'PASS' : 'FAIL',

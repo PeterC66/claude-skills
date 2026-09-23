@@ -12,8 +12,8 @@
  * session's own branch — rather than one that could not. What was missing, and
  * still is what this module provides, is the CHANNEL for the residue that
  * leaves. On 2026-09-12 `check/schema-version-oa325` sat in the portal with 463
- * insertions, a falsification harness, no pull request and no `loop/blocked/`
- * item, while the board printed `the portal  community-bus-maps — main, clean`.
+ * insertions, a falsification harness, no pull request and no hold in
+ * `loop/your-move/`, while the board printed `the portal  community-bus-maps — main, clean`.
  *
  * WHY `countUnpushed` COULD NOT SEE IT. That function counts `<basis>..HEAD` in
  * the three main checkouts, so it answers only for the branch each checkout
@@ -73,10 +73,10 @@
  * something we have not seen".
  *
  * COMPUTED RATHER THAN DECLARED, AND THAT IS THE POINT. Telling every tick in
- * `loop/README.md` to write a `blocked/` item would be the cheaper change and it
+ * `loop/README.md` to write a `your-move/` hold would be the cheaper change and it
  * is the wrong one: a declaration can be forgotten, and on the day this was
  * found it had been. The standing rule is *do not keep a list — run the one that
- * is computed*. A row raised here for a branch a `loop/blocked/` hold ALSO names
+ * is computed*. A row raised here for a branch a `loop/your-move/` hold ALSO names
  * is correct and deliberate: the computed half must be loud exactly where
  * somebody remembered, or it could not be told from the half that is silent
  * where nobody did.

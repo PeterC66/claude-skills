@@ -37,7 +37,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readYourMoveDir, parseHold, parseDraft, isHold, classify, loopHoldItems, loopDraftItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched } from './loop_your_move.mjs';
+import { readYourMoveDir, parseHold, parseDraft, isHold, classify, loopHoldItems, loopDraftItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched, holdBanner } from './loop_your_move.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -241,7 +241,7 @@ console.log('\n12. the concurrency verdict');
   // If the prefix rule were removed, `type: 'loop-hold'` would fall to the
   // default arm and return ['buses-tree'] — which --safe-only would then hide.
   // That is the mutation this asserts against.
-  check('MUTATION CONTROL — an unknown type still defaults to buses-tree', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree');
+  check('MUTATION CONTROL — an unknown type still defaults to buses-tree + buses-maps', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree,buses-maps');
 }
 
 console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
@@ -254,7 +254,8 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   // line that carries the text and does not begin with `//`.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
-    "import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched } from './loop_your_move.mjs';",
+    // OA-414 added `holdBanner`, which is the renderer the two hold sources share.
+    "import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';",
     "const yourMove = readYourMoveDir(path.join(BUSES, 'loop', 'your-move'));",
     'for (const it of loopHolds.items) add(it);',
     'const heldRows = applyHolds(items, loopHolds.holds);',
@@ -280,7 +281,14 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   // everything, so deleting the marker altogether passed. A mutation run found
   // it. An ordering assertion over a string that may be absent is an assertion
   // that silently becomes vacuous, which is this file's own subject.
-  const iHold = src.indexOf('⚠ ON HOLD —');
+  // OA-414 MOVED THE MARKER'S TEXT AND NOT THE PROPERTY. `holdBanner` in
+  // loop_your_move.mjs builds the banner for both sources — a loop hold and a
+  // backlog row marked `decision: peter` — so the string is no longer in this
+  // file and the anchor here is the CALL. The presence of the marker itself is
+  // asserted below, in the file that now owns it: an ordering check whose anchor
+  // moved out from under it would be the vacuous assertion this block exists to
+  // prevent, arrived at by refactoring rather than by deletion.
+  const iHold = src.indexOf('for (const l of holdBanner(h)) console.log(l);');
   const iDo = src.indexOf("if (d.kind === 'shell') console.log");
   // A hold that matched nothing has THREE causes, and the wire must not name two
   // of them when the third is live. The stale-hold warning fired on 2026-09-09
@@ -316,10 +324,24 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   check('MUTATION CONTROL — the authority test is not `!!portal` alone',
     !liveLine('const boardAuthoritative = !!portal;'), 'a local board would be treated as authoritative');
 
-  check('the ON HOLD marker is present at all', iHold >= 0, 'not found in worklist.mjs');
+  check('the banner CALL is present at all', iHold >= 0, 'not found in worklist.mjs');
   check('the do-loop anchor is present at all', iDo >= 0, 'not found in worklist.mjs');
   check('the hold is rendered above the do steps', iHold >= 0 && iDo >= 0 && iHold < iDo,
     `hold at ${iHold}, do-loop at ${iDo}`);
+
+  // AND THE MARKER ITSELF, in the file that builds it. Asserted as BEHAVIOUR and
+  // not as a source string, because holdBanner is exported and a test that can
+  // call a function has no business grepping for it (OA-414).
+  const loopHold = holdBanner({ headline: 'H', need: 'N', file: 'f.md' }).join('\n');
+  const decision = holdBanner({ origin: 'decision', headline: 'H', need: 'N', source: 'Development Docs/open-actions/OA-1.md' }).join('\n');
+  check('a loop hold still prints ⚠ ON HOLD and sends the reader to loop/your-move/',
+    /⚠ ON HOLD — H/.test(loopHold) && /loop\/your-move\/f\.md/.test(loopHold), loopHold);
+  check("a decision row prints ⚠ PETER'S DECISION and sends the reader to the ACTION file",
+    /⚠ PETER'S DECISION — H/.test(decision) && /open-actions\/OA-1\.md/.test(decision), decision);
+  check('MUTATION CONTROL — the two banners are not the same text',
+    loopHold !== decision && !/loop\/your-move/.test(decision) && !/PETER/.test(loopHold));
+  check('the need line is optional and its absence drops the line rather than printing undefined',
+    holdBanner({ headline: 'H', file: 'f.md' }).length === 2, JSON.stringify(holdBanner({ headline: 'H', file: 'f.md' })));
 }
 
 console.log('\n14. a Blocks field with MORE FIELDS after it on the same line');

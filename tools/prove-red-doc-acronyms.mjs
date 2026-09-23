@@ -193,6 +193,29 @@ console.log('\nThe declaration itself — a refusal, not a silent fallback:\n');
   report(code === 2 && /not there any more/.test(out),
     'an exclusion naming a document that is not there' + (code === 2 ? '' : `  <-- exited ${code}\n${out}`));
 }
+/* A FOLDER EXCLUSION (2026-09-21, for the portal's CHANGELOG.d/ and docs/_archive/,
+ * dated history that gains a file a day and must not be glossed after the fact).
+ * A key ending in `/` excludes everything under it — and ONLY under it: the
+ * dangerous direction is an exclusion that silences a live document, so the
+ * control keeps EP a finding in the two documents outside the folder. */
+{
+  const { code, out } = run({ 'hist/a.md': USES_EP_A, 'hist/b.md': USES_EP_B },
+    { excluded: { 'hist/': 'dated history, not ours to annotate' } });
+  report(code === 0, 'a folder exclusion silences the documents under it'
+    + (code === 0 ? '' : `  <-- exited ${code}\n${out}`), 'GREEN');
+}
+{
+  const { code, out } = run({ 'hist/a.md': USES_EP_A, 'a.md': USES_EP_A, 'b.md': USES_EP_B },
+    { excluded: { 'hist/': 'dated history' } });
+  report(code === 1 && /✗ EP/.test(out) && !/hist\/a\.md/.test(out),
+    'a folder exclusion leaves documents OUTSIDE it counted, and names none inside'
+    + (code === 1 ? '' : `  <-- exited ${code}\n${out}`));
+}
+{
+  const { code, out } = run({ 'a.md': USES_EP_A, 'b.md': USES_EP_B }, { excluded: { 'gone/': 'a folder that has left' } });
+  report(code === 2 && /not there any more/.test(out),
+    'a folder exclusion naming a folder that is not there' + (code === 2 ? '' : `  <-- exited ${code}\n${out}`));
+}
 {
   const { code, out } = run({ 'a.md': USES_EP_A, 'b.md': USES_EP_B }, { definitions: ['no-such-glossary.md'] });
   report(code === 2 && /definitions document/.test(out),

@@ -169,7 +169,56 @@ export function accountFor(repo, holds) {
 const accountedSet = (r) => new Set((r.accounted || []).map((a) => a.path));
 /** The dirty paths a verdict should count: everything a live hold does not account for. */
 export const unaccountedPaths = (r) => { const s = accountedSet(r); return allPaths(r).filter((p) => !s.has(p)); };
-const unaccountedTop = (r) => [...new Set(unaccountedPaths(r).map((p) => p.split('/')[0]))].sort();
+
+/*
+ * buses-data OA-434. DIRT IN ONE TOWN'S FOLDER IS THAT TOWN'S BUSINESS.
+ *
+ * Until 2026-09-22 one uncommitted path ANYWHERE turned `buses-tree` to CHECK
+ * FIRST, and since every tree-touching unit needs `buses-tree`, one stray file
+ * idled the whole loop. That night four ticks in a row did nothing: three on
+ * Peter's half-edited letter in Correspondence/CORR-010/ (two earlier ticks had
+ * reasoned their way past the same file, so the gate was being decided in
+ * prose), and one on an untracked disagreements.docx under Areas/Chatteris/
+ * that was byte-identical to a committed copy. None of the four meant to write
+ * into either folder, and a tick commits by pathspec, so neither file could
+ * have reached its commit.
+ *
+ * So dirt that sits inside ONE map folder or ONE letter folder is FENCED: it
+ * leaves the `buses-tree` verdict and feeds `buses-maps`, which only work that
+ * writes into a map or letter folder needs. Everything else still counts
+ * against `buses-tree` as before, and three things are never fenced, each
+ * because it can reach somebody else's work:
+ *   - a STAGED path, because it sits in the shared index;
+ *   - anything under ci-reference/, which the byte gate reads for every town;
+ *   - a path directly under Areas/, Places/ or Correspondence/ with no folder,
+ *     which belongs to no one town or thread.
+ * `buses-maps` stays conservative on purpose: any fenced dirt makes it CHECK
+ * FIRST for every map or letter unit, not only the one in that folder, because
+ * no row here can name its folder reliably (a slug is not a folder name).
+ */
+const FENCE_RE = /^((?:Areas|Places)\/[^/]+|Correspondence\/CORR-\d+)\/./;
+export function fenceOf(p) {
+  if (REFERENCE_RE.test(p)) return null;
+  const m = FENCE_RE.exec(p);
+  return m ? m[1] : null;
+}
+/** The unaccounted paths that are fenced to one folder: [{scope, paths}]. */
+export function fencedScopes(r) {
+  const staged = new Set(r.staged || []);
+  const by = new Map();
+  for (const p of unaccountedPaths(r)) {
+    const s = staged.has(p) ? null : fenceOf(p);
+    if (!s) continue;
+    if (!by.has(s)) by.set(s, []);
+    by.get(s).push(p);
+  }
+  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([scope, paths]) => ({ scope, paths }));
+}
+/** The unaccounted paths `buses-tree` still counts: everything not fenced. */
+export function unfencedPaths(r) {
+  const fenced = new Set(fencedScopes(r).flatMap((f) => f.paths));
+  return unaccountedPaths(r).filter((p) => !fenced.has(p));
+}
 
 /*
  * OA-386 item 2. HOW OLD IS THE DIRT — the instrument the loop has been asking
@@ -421,9 +470,9 @@ export function readRepo({ key, label, name, dir, expect = 'main', now = Date.no
   return repo;
 }
 
-/* A claim dated before today is one nobody is working: sessions here do not
- * live overnight, so yesterday's claim is the residue of a collision that ended
- * rather than evidence of one in progress. The number is assemble.mjs's
+/* A claim dated before today has EXPIRED (buses-data OA-400, R7): sessions here
+ * do not live overnight, and `assemble.mjs --claim` takes such a row without
+ * --force. The number is assemble.mjs's
  * STALE_AFTER_DAYS and is kept equal to it on purpose — the board and `--who`
  * are read side by side, and two thresholds that disagreed would be worse than
  * either. A null age (a `selected:` line whose date would not parse) is NOT
@@ -458,6 +507,111 @@ export function readClaims(busesDir, selfSession, now = Date.now()) {
     });
   }
   return out;
+}
+
+/*
+ * THE BACKLOG'S DECISION MARKER, JOINED TO THE BOARD IT WAS ASSERTED TO REACH
+ * (OA-414, 2026-09-20).
+ *
+ * `decision: peter` in an action's front matter marks a row whose next move is
+ * his. `assemble.mjs` prints PETER'S DECISION into the index and drops the row
+ * from the loop's open-actions feed, and OA-340 said in as many words that it
+ * also took the row out of THIS board's housekeeping band. It did not: every
+ * board row is recomputed from the map tree, the portal queues or the disk, and
+ * not one of them joins to an action file. On 2026-09-20 a tick took row 6, *8
+ * towns were drawn by an older engine*, three hours after that exact re-stamp
+ * was marked his — re-derived that it could not finish it, and put it down.
+ *
+ * WHY THE ACTION NAMES THE ROW AND NOT THE OTHER WAY ROUND. A board row is
+ * computed; an action is written. The row cannot know which action owns it
+ * without somebody saying so, and the person who knows is the one writing the
+ * marker. So the join is a `boardRows:` field beside `decision:`, carrying the
+ * row keys that decision owns — the same keys a hold names in `**Blocks:**`,
+ * because it is the same question asked from the other end of the backlog.
+ *
+ * WHY IT REUSES applyHolds RATHER THAN GATING THE ROW ITSELF. A row that
+ * VANISHED would take its age, its measurement and its link with it, and the
+ * chore is still true: eight towns really are behind. What the row loses is the
+ * right to be read as an instruction, which is exactly what a hold does to it
+ * already (OA-283). One mechanism, one renderer, two sources — and `origin`
+ * says which, because the two point a reader at different files.
+ *
+ * WHY `boardRows:` IS NOT READ WITHOUT `decision:`. A field that acts on its own
+ * would be a second, quieter way of suppressing a board row, reachable by any
+ * action and answerable to nobody. `assemble.mjs` refuses the combination at
+ * filing time; this reader refuses it again, because the board is read from a
+ * worktree whose index the assembler has not seen.
+ *
+ * @param {string} busesDir  the buses-data checkout
+ * @returns {Array<{key, ref, file, headline, need, raw, origin, source}>}
+ */
+export function readDecisionRows(busesDir) {
+  const dir = path.join(busesDir, 'Development Docs', 'open-actions');
+  if (!existsSync(dir)) return [];
+  let files;
+  try { files = readdirSync(dir).filter((f) => /^OA-\d+\.md$/.test(f)).sort(); } catch { return []; }
+  const out = [];
+  for (const f of files) {
+    let head;
+    try { head = readFileSync(path.join(dir, f), 'utf8').slice(0, 4000); } catch { continue; }
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(head);
+    if (!fm) continue;
+    const field = (k) => {
+      const m = new RegExp(`^${k}:\\s*(.*)$`, 'm').exec(fm[1]);
+      return m ? m[1].replace(/^"(.*)"$/, '$1').trim() : '';
+    };
+    if (field('decision').toLowerCase() !== 'peter') continue;
+    const raw = field('boardRows');
+    if (!raw) continue;
+    const keys = raw.split(/[,\s]+/).map((k) => k.replace(/^`|`$/g, '').trim()).filter(Boolean);
+    for (const key of keys) {
+      out.push({
+        key,
+        ref: f.replace('.md', ''),
+        file: f,
+        headline: `${f.replace('.md', '')} owns this row and is marked \`decision: peter\``,
+        need: field('headline'),
+        raw,
+        origin: 'decision',
+        source: `Development Docs/open-actions/${f}`,
+      });
+    }
+  }
+  return out;
+}
+
+/*
+ * Gate the board rows those decisions own, and say so when one names nothing.
+ *
+ * WHY THE WHOLE JOIN IS HERE AND ONE LINE IS IN worklist.mjs. The reader above
+ * and the warning below are one argument, and splitting them would put the
+ * reasoning in one file and the sentence a reader actually sees in another —
+ * which is how a warning ends up saying something its own parser never meant.
+ * `applyHolds` and `groupUnmatched` are INJECTED rather than imported because
+ * they live in `loop_your_move.mjs`, which imports nothing from here today and
+ * must go on being free to.
+ *
+ * UNMATCHED IS ITS OWN SENTENCE AND NOT THE HOLD ONE. A hold's key can go stale
+ * because the queue it named drained, or because this run could not reach the
+ * portal at all, which is why that warning has three branches about whether the
+ * board could even look — a confident *the row has cleared* was printed on
+ * 2026-09-09 about a hold that was working perfectly. A `boardRows:` key names a
+ * row computed from the MAP TREE and the disk, both of which every run reads
+ * whatever else it can reach, so there is no "could not check" case to hedge:
+ * the key is wrong, or the chore is done and the marker can go with it.
+ *
+ * @param {string} busesDir
+ * @param {Array} items  the board's rows, mutated in place with `onHold`
+ * @param {{applyHolds: Function, groupUnmatched: Function}} fns
+ * @returns {string[]} warnings, one per action file whose field matched nothing
+ */
+export function applyDecisionRows(busesDir, items, { applyHolds, groupUnmatched }) {
+  const { unmatched } = applyHolds(items, readDecisionRows(busesDir));
+  return groupUnmatched(unmatched).map((g) => {
+    const plural = g.keys.length > 1;
+    return `Development Docs/open-actions/${g.file} carries \`boardRows: ${g.raw}\`, and ${plural ? 'none of those keys is' : 'that key is'} a row on this board — the marker gated nothing. `
+      + 'Either the chore has been done and the field can go with it, or the key is misspelt; the keys are the `key:` values in worklist.mjs.';
+  });
 }
 
 /*
@@ -677,18 +831,30 @@ const RULES = {
     const r = c.repos.buses;
     if (!r.readable) return [CHECK, `could not read the state of ${r.name} at ${r.dir} — assume nothing`];
     // OA-301: a dirty letter a live hold names is accounted for and not counted.
+    // OA-434: dirt fenced to one map or letter folder is `buses-maps`' business.
     // The count, the folders and the staged test all come from the SAME
     // subtracted list, so the sentence cannot name a file it did not count.
-    const paths = unaccountedPaths(r);
+    const paths = unfencedPaths(r);
     const n = paths.length;
     if (!n) return [SAFE, null];
-    const top = unaccountedTop(r);
+    const top = [...new Set(paths.map((p) => p.split('/')[0]))].sort();
     const where = top.slice(0, 4).join(', ') + (top.length > 4 ? ', …' : '');
     const staged = paths.filter((p) => r.staged.includes(p)).length;
     if (staged) {
       return [CHECK, `${n} uncommitted file(s) here (${where}), ${staged} already STAGED in the shared index — commit with a pathspec (git commit -m "…" -- <paths>), never a bare commit`];
     }
     return [CHECK, `${n} uncommitted file(s) here (${where}) — this tool cannot tell yours from a neighbour's; read them, then stage by name and commit with a pathspec`];
+  },
+
+  // OA-434. Work that writes into a map or letter folder, or sweeps every town.
+  'buses-maps': (c) => {
+    const r = c.repos.buses;
+    if (!r.readable) return [CHECK, `could not read the state of ${r.name} at ${r.dir} — assume nothing`];
+    const f = fencedScopes(r);
+    if (!f.length) return [SAFE, null];
+    const n = f.reduce((a, x) => a + x.paths.length, 0);
+    const where = f.slice(0, 4).map((x) => x.scope).join(', ') + (f.length > 4 ? ', …' : '');
+    return [CHECK, `${n} uncommitted file(s) inside ${where} — anything that writes into a map or letter folder, or sweeps every town, waits until they are committed or removed; work that writes nowhere in those folders may go ahead`];
   },
 
   engine: (c) => {
@@ -859,6 +1025,7 @@ const RULES = {
  */
 export const NEED_LABEL = {
   'buses-tree': 'the shared working tree',
+  'buses-maps': 'a map or letter folder',
   engine: 'the engine repo',
   'estate-sweep': 'an estate-wide sweep',
   'portal-write': 'delivery to the live portal',
@@ -877,7 +1044,7 @@ export const NEED_LABEL = {
  * old comment promised would go red has been flipped. Delivery of a map was
  * NOT in that grant, so `portal-write` stays outside the set on purpose.
  */
-const LOOP_CONTENDS = new Set(['buses-tree', 'engine', 'estate-sweep', 'portal-deploy']);
+const LOOP_CONTENDS = new Set(['buses-tree', 'buses-maps', 'engine', 'estate-sweep', 'portal-deploy']);
 
 export function assess(needs, conditions) {
   let verdict = SAFE;
@@ -915,13 +1082,15 @@ export function needsOf(item) {
   const key = String(item.key || '');
   const type = String(item.type || '');
 
-  if (key.startsWith('engine-stale')) return ['buses-tree', 'engine', 'estate-sweep'];
-  if (key.startsWith('s6-stale') || key.startsWith('nobuild-')) return ['buses-tree', 'engine'];
-  if (key.startsWith('corr-owed-')) return ['buses-tree'];
+  // OA-434: every row below that writes into Areas/, Places/ or Correspondence/
+  // also needs `buses-maps`, which is where dirt fenced to one folder is counted.
+  if (key.startsWith('engine-stale')) return ['buses-tree', 'buses-maps', 'engine', 'estate-sweep'];
+  if (key.startsWith('s6-stale') || key.startsWith('nobuild-')) return ['buses-tree', 'buses-maps', 'engine'];
+  if (key.startsWith('corr-owed-')) return ['buses-tree', 'buses-maps'];
   if (key.startsWith('corr-unsent-') || key.startsWith('corr-asked-')) return [];
   // OA-233: pulling an answer writes a new S3 run; building it runs the engine over the tree.
-  if (key.startsWith('landmark-owed-')) return ['buses-tree'];
-  if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'engine'];
+  if (key.startsWith('landmark-owed-')) return ['buses-tree', 'buses-maps'];
+  if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'buses-maps', 'engine'];
   // OA-251: the row's own action is `gh run view --log-failed`, which reads a
   // GitHub run and touches no tree here. Whatever the FIX turns out to need is
   // the fix's business, and will be classified by whatever row that becomes.
@@ -961,6 +1130,20 @@ export function needsOf(item) {
   // row saying finished work is invisible to everyone but this laptop must not
   // be the one hidden from a session looking for something safe to do.
   if (key.startsWith('unpushed-branch-')) return [];
+  // OA-326 item 1 (2026-09-21): the pull-request sweep's two loud rows. Merging
+  // a pull request, closing it, or opening one for a branch that has never had
+  // one happens in a browser or in `gh`; none of it writes to a working tree
+  // here, and whatever REVIEWING that branch turns out to need belongs to the
+  // row that review becomes. Empty for the same load-bearing reason as
+  // `ci-red-`, `loop-hold-` and `unpushed-branch-`: --safe-only hides every
+  // non-SAFE row, and a row saying finished work has been sitting open for
+  // three weeks must not be the one hidden from a session looking for
+  // something safe to do.
+  if (key.startsWith('pr-sweep-stalled-') || key.startsWith('pr-sweep-no-pr-')) return [];
+  // The other two are the sweep's own housekeeping, and they are NOT empty: the
+  // action they offer is `node pr_sweep.mjs`, which writes loop/pr-sweep.json
+  // into the buses tree. Nothing it does needs the engine.
+  if (key === 'pr-sweep-due' || key === 'pr-sweep-record') return ['buses-tree'];
   // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
   // rather than left to fall through the default — the row's own action WRITES to
   // the buses tree twice over. `directory.mjs --links` writes link-check.json, and
@@ -974,18 +1157,35 @@ export function needsOf(item) {
     case 'gate':
       return ['engine'];
     case 'correspondence':
-      return ['buses-tree'];
+      return ['buses-tree', 'buses-maps'];
     case 'refresh-local':
-      return ['buses-tree', 'engine'];
+      return ['buses-tree', 'buses-maps', 'engine'];
     case 'build': case 'refresh':
-      return ['buses-tree', 'engine', 'portal-write'];
+      return ['buses-tree', 'buses-maps', 'engine', 'portal-write'];
     case 'housekeeping':
-      return ['buses-tree', 'engine'];
+      return ['buses-tree', 'buses-maps', 'engine'];
     default:
       // An unrecognised type is not assumed harmless. Say the type, so whoever
       // added it can come here and answer the question properly.
-      return ['buses-tree'];
+      return ['buses-tree', 'buses-maps'];
   }
+}
+
+/*
+ * OA-434. ONE VERDICT PER RESOURCE, so a tick reads the resource its unit needs
+ * instead of inferring it from whichever standing tool looks most like its
+ * work — which is how the ticks of 2026-09-22 read `buses-tree` off the map
+ * build and the byte gate. Through assess(), so the loop's lock rides along
+ * exactly as it does on every row.
+ */
+export function resourceVerdicts(conditions) {
+  const out = {};
+  for (const need of Object.keys(RULES)) {
+    if (need === 'loop-lock') continue;
+    const { verdict, reasons } = assess([need], conditions);
+    out[need] = { verdict, reasons };
+  }
+  return out;
 }
 
 export function classify(item, conditions) {
@@ -1001,11 +1201,12 @@ export function classify(item, conditions) {
 export const STANDING_TOOLS = [
   { what: 'Print this worklist', cmd: 'node worklist.mjs', needs: [], note: 'read-only; safe while the dev server runs (the portal DB is WAL)' },
   { what: 'Draft a reply / decide in the portal UI', cmd: '(browser, or a chat)', needs: [], note: 'decisions touch no working tree' },
-  { what: 'Full byte gate sweep', cmd: 'node status.js  /  worklist.mjs --gates', needs: ['engine', 'buses-tree'], note: 'regenerates every map to diff it' },
-  { what: 'Push gate results to the portal', cmd: 'node push-status.mjs', needs: ['engine', 'buses-tree'] },
-  { what: 'Run a map build (S1–S6)', cmd: '/make-bus-leaflet', needs: ['buses-tree', 'engine'] },
-  { what: 'Engine rollout across the estate', cmd: 'node rollout.js --all --apply', needs: ['buses-tree', 'engine', 'estate-sweep'] },
+  { what: 'Full byte gate sweep', cmd: 'node status.js  /  worklist.mjs --gates', needs: ['engine', 'buses-tree', 'buses-maps'], note: 'regenerates every map to diff it' },
+  { what: 'Push gate results to the portal', cmd: 'node push-status.mjs', needs: ['engine', 'buses-tree', 'buses-maps'] },
+  { what: 'Run a map build (S1–S6)', cmd: '/make-bus-leaflet', needs: ['buses-tree', 'buses-maps', 'engine'] },
+  { what: 'Engine rollout across the estate', cmd: 'node rollout.js --all --apply', needs: ['buses-tree', 'buses-maps', 'engine', 'estate-sweep'] },
   { what: 'Re-record the quality ledger', cmd: 'node quality_gate.js --accept', needs: ['estate-sweep'] },
+  { what: 'Work an open action or ad-hoc prompt that writes into no map or letter folder', cmd: "(the loop's oa and adhoc feeds)", needs: ['buses-tree'], note: 'OA-434: a stray file fenced to one town or letter does not stop this' },
   { what: 'Deliver a map to the live portal', cmd: 'npm run deliver -- --map <slug>', needs: ['portal-write'] },
   { what: 'Deploy the portal', cmd: 'npm run deploy', needs: ['portal-deploy'] },
 ];
@@ -1091,6 +1292,10 @@ export function formatConditions(c) {
   for (const a of (c.repos.buses.accounted || [])) {
     L.push(`  ${'accounted'.padEnd(12)}${a.path} — named by loop/your-move/${a.ref}.md, a held letter with Peter's own edit in it; left OUT of the buses-tree verdict, and not yours to touch`);
   }
+  // OA-434. Fenced dirt is SHOWN too, for the same reason as the subtraction above.
+  for (const f of fencedScopes(c.repos.buses)) {
+    L.push(`  ${'fenced'.padEnd(12)}${f.scope}/ — ${f.paths.length} uncommitted file(s); left OUT of the buses-tree verdict and counted by buses-maps, so only work that writes into a map or letter folder waits`);
+  }
   age(c.repos.buses);
   L.push(`  ${'the engine'.padEnd(12)}${repoLine(c.repos.engine)}`);
   detach(c.repos.engine);
@@ -1105,7 +1310,7 @@ export function formatConditions(c) {
   // let the row be read as a peer.
   const others = c.claims.filter((x) => !x.self);
   if (others.length) {
-    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}${isStaleClaim(x) ? `   << STALE, ${x.ageDays} day(s) old` : ''}`;
+    const say = (x) => `${x.session} holds ${x.ref}${x.ageDays === 0 ? ' (today)' : x.ageDays === null ? '' : ` (${x.ageDays}d)`}${x.note ? ` — ${x.note.slice(0, 46)}` : ''}${isStaleClaim(x) ? `   << EXPIRED, ${x.ageDays} day(s) old` : ''}`;
     L.push(`  ${'claimed'.padEnd(12)}${say(others[0])}`);
     for (const x of others.slice(1)) L.push(`  ${''.padEnd(12)}${say(x)}`);
     if (!c.selfSession) L.push(`  ${''.padEnd(12)}(one of those may be you — pass --session <this session's name> and it will drop it)`);
@@ -1116,7 +1321,9 @@ export function formatConditions(c) {
      * and nothing in the rendering separated them — so a stale claim went on
      * refusing `--claim` to everybody, the scheduled loop included, until a person
      * happened to run `--who`. `--who` is the only thing in the estate that says
-     * STALE, and nothing runs it for you.
+     * STALE, and nothing runs it for you. Since OA-400 such a claim EXPIRES and
+     * --claim takes it, so this says EXPIRED and prints the --claim, never a
+     * release: releasing is for a row you are giving up today.
      *
      * THE MARKER IS ABOUT AGE, AND THE SENTENCE BELOW SAYS SO. This board cannot
      * tell a dead session from an idle one — its own `activity` line, a few lines
@@ -1133,8 +1340,8 @@ export function formatConditions(c) {
      * side. */
     const stale = others.filter(isStaleClaim);
     if (stale.length) {
-      L.push(`  ${''.padEnd(12)}${stale.length} of those ${stale.length === 1 ? 'was' : 'were'} claimed BEFORE TODAY, which is longer than a session lives here — that is an AGE, not a liveness check, and this board cannot tell a dead session from an idle one. If nobody is behind one, release it; --who names each and prints the command:`);
-      L.push(`  ${''.padEnd(12)}  node "Development Docs/open-actions/assemble.mjs" --who`);
+      L.push(`  ${''.padEnd(12)}${stale.length} of those ${stale.length === 1 ? 'was' : 'were'} claimed BEFORE TODAY and ${stale.length === 1 ? 'has' : 'have'} EXPIRED — an AGE, not a liveness check, since this board cannot tell a dead session from an idle one. An expired row is free: --claim takes it without --force and says whose it was:`);
+      L.push(`  ${''.padEnd(12)}  node "Development Docs/open-actions/assemble.mjs" --claim ${stale[0].ref} --as "<your session>, <what you are doing>"`);
     }
   } else {
     L.push(`  ${'claimed'.padEnd(12)}no open action is claimed by another session`);

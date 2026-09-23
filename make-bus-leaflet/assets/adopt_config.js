@@ -14,6 +14,10 @@
  *
  * DRY RUN BY DEFAULT — prints what would change per town. Pass --apply to commit.
  *
+ * `--by <who>` records WHO performed the S3 run this opens and commits — `sched-HHMM`
+ * for a loop tick, the session's own name otherwise (OA-427). Forwarded to `stage.js`
+ * unchanged and validated there; leaving it off records nobody, which is honest.
+ *
  * PLACES too, since 2026-08-16 (plan Phase 8 item 4). A place's S3 has exactly the
  * same shape as a town's — `stage.js new/commit S3`, routes.json plus an optional
  * overrides.json — and everything below the target list is target-agnostic, so this
@@ -64,7 +68,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses } = require('./cli');
+const { parseArgs, resolveBuses, byArgs } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, findTowns, findPlaces, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
@@ -72,6 +76,9 @@ function main() {   // OA-344: the body is guarded, not re-indented — see test
 const args = parseArgs(process.argv.slice(2), { repeat: ['town', 'place', 'unset', 'feature-pos', 'set-path'] });
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
+// WHO PERFORMED THE S3 RUN THIS OPENS (OA-427). Forwarded, never interpreted:
+// stage.js is the one authority on what a name may be, so a bad one fails there.
+const BY = byArgs(args.by);
 /* --set-file <path> — the same JSON, read from a UTF-8 FILE.
  *
  * Use this, not --set, for anything containing an en-dash or a middot — which is
@@ -167,13 +174,13 @@ for (const t of targets) {
   console.log(t.name + ': ' + changes.join(', '));
   if (!APPLY) continue;
 
-  const dir = stage(t.dir, 'new', 'S3');
+  const dir = stage(t.dir, 'new', 'S3', ...BY);
   fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(rj, null, 2) + '\n');
   const outputs = ['routes.json'];
   const ov = path.join(prev.dir, 'overrides.json');
   if (fs.existsSync(ov)) { fs.copyFileSync(ov, path.join(dir, 'overrides.json')); outputs.push('overrides.json'); }
   stage(t.dir, 'commit', 'S3', dir, '--outputs', outputs.join(','),
-    '--note', args.note || ('config: ' + changes.join(', ')));
+    '--note', args.note || ('config: ' + changes.join(', ')), ...BY);
   console.log('   committed ' + path.basename(dir));
 }
 

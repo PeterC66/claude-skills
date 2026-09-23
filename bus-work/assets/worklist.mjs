@@ -80,15 +80,18 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched } from './loop_your_move.mjs';
+import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
+import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems } from './bods_scan.mjs';
+import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh } from './refresh_grades.mjs';
+import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -227,7 +230,7 @@ const conditions = conc.readConditions({
 // a single queue. It is the cheapest thing in this file and the one to reach for
 // before starting work, so it exits before any portal or map-tree read.
 if (CONDITIONS_ONLY) {
-  if (AS_JSON) { console.log(JSON.stringify({ conditions, standingTools: conc.STANDING_TOOLS.map((t) => ({ ...t, ...conc.assess(t.needs, conditions) })) }, null, 2)); process.exit(0); }
+  if (AS_JSON) { console.log(JSON.stringify({ conditions, resources: conc.resourceVerdicts(conditions), standingTools: conc.STANDING_TOOLS.map((t) => ({ ...t, ...conc.assess(t.needs, conditions) })) }, null, 2)); process.exit(0); }
   console.log('\n\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
   for (const l of conc.formatConditions(conditions)) console.log(l);
   console.log('\n\u2500\u2500 WHAT THAT MEANS FOR THE STANDING COMMANDS ' + '\u2500'.repeat(16));
@@ -340,8 +343,9 @@ function fromMapTree() {
   if (!SK) { warnings.push('make-bus-leaflet assets not found — local staleness skipped.'); return { towns: [], places: [] }; }
   if (!existsSync(path.join(BUSES, 'Areas'))) { warnings.push(`No Areas dir under ${BUSES} — local staleness skipped.`); return { towns: [], places: [] }; }
   const { findTowns, findPlaces, readJson, latestRunDir } = require(path.join(SK, 'gate_lib.js'));
-  const { computeEngineVersion } = require(path.join(SK, 'engine_version.js'));
+  const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(SK, 'engine_version.js'));
   const current = computeEngineVersion();
+  const currentPlace = computePlaceEngineVersion();
 
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -396,9 +400,20 @@ function fromMapTree() {
     // A standalone place has no parent town to borrow an answer from, so its S6
     // is the only blind answer it will ever have.
     row.standalone = !p.town;
+    // WHICH ENGINE DREW IT, asked of a place for the first time (OA-430). The
+    // town branch has had these two lines since the hash existed; this one
+    // stopped at "is it built", so eleven of the twelve places were behind for
+    // weeks with nothing in any feed able to say so. Against the PLACE template,
+    // which is a different hash from the town one and not a superset of it.
+    if (s4) {
+      let pr = {};
+      try { pr = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
+      row.engine = pr.engine || null;
+      row.engineStale = pr.engine !== currentPlace;
+    }
     return row;
   });
-  return { towns, places, currentEngine: current };
+  return { towns, places, currentEngine: current, currentPlaceEngine: currentPlace };
 }
 
 // ---- local map tree: upcoming BODS changes ---------------------------------
@@ -453,9 +468,9 @@ function threadSettled(record, lastInboundDate) {
   // and "**Status:** **open, and the ball is with them.**".
   const status = st[1].replace(/^[\s*_]+/, '').trim();
   if (!SETTLED.test(status)) return '';
-  // The stamp is written by the Stop hook after any edit, so it dates the
-  // record. A declaration older than the message it is supposed to cover has
-  // not seen that message, and proves nothing.
+  // The stamp is written at commit time, so it dates the last COMMITTED edit: a
+  // settled status is not read until it is committed. A declaration older than
+  // the message it is supposed to cover has not seen it, and proves nothing.
   const stamp = /<!--\s*docstamp\s+v[\d.]+\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|/.exec(record);
   if (!stamp || stamp[1] < lastInboundDate) return '';
   return status;
@@ -848,6 +863,13 @@ const localDirOf = (m) => {
     || tree.places.find((x) => want.includes(x.name.toLowerCase()));
   return pl ? pl.dir : null;
 };
+/* The monthly grading, read once (buses-data OA-426): does moving this sheet need a
+ * PERSON? Matched to the scan the rows join to BY DATE and never otherwise, and
+ * warnings rather than rows — `refresh_grades.mjs` says why at length. */
+const grades = readGradeState({ busesDir: BUSES });
+/* A refresh row's FIRST step: the one command when a tick can do it, the skill otherwise. */
+const rebuildStep = (u, what) => (u ? { kind: 'shell', cwd: u.cwd, cmd: u.cmd } : { kind: 'skill', what });
+for (const w of gradeWarnings(grades, upcoming ? upcoming.date : null)) warnings.push(w);
 const townMaps = (town) => {
   const lower = town.toLowerCase();
   return (portal ? portal.maps : []).filter((m) => m.built && (
@@ -863,10 +885,13 @@ if (upcoming) {
       const seen = reviewedAgainst(localDirOf(m), upcoming.date);
       if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
+      const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
         title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}`,
-        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.`,
+        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date)}`,
+        grade: gradeFor(grades, s.town, upcoming.date),
+        unattended: un,
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,
         // REMOTE: the target is the live site, so deliver-map.mjs is the only
@@ -875,24 +900,27 @@ if (upcoming) {
         // below only ever writes to a LOCAL DATA_DIR and would silently do
         // nothing useful against a live worklist. LOCAL: propose-update.mjs
         // directly is still simpler/faster for testing against local dev.
-        do: REMOTE ? [
-          { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
-          { kind: 'shell', cwd: PORTAL, cmd: `npm run deliver -- --map ${m.slug} --kind ${m.kind} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
-        ] : [
-          { kind: 'skill', what: `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.` },
-          { kind: 'shell', cwd: PORTAL, cmd: `node scripts/propose-update.mjs --map ${m.slug} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
+        do: [
+          rebuildStep(un, `Re-run the ${skill} skill for ${s.town} to produce a fresh S5-render dir.`),
+          REMOTE
+            ? { kind: 'shell', cwd: PORTAL, cmd: `npm run deliver -- --map ${m.slug} --kind ${m.kind} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` }
+            : { kind: 'shell', cwd: PORTAL, cmd: `node scripts/propose-update.mjs --map ${m.slug} --src "<fresh S5-render dir>" --note "BODS ${upcoming.date} refresh"` },
         ],
       });
     }
     if (!maps.length && localTown) {
       const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
       if (seenLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
+      // No portal map means no delivery step, so a SAFE row here is finishable end to end.
+      const unLocal = unattendedRefresh(grades, localTown.name, upcoming.date, { kind: 'area', assetsDir: SK });
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
         title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}`,
-        why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.`,
+        why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.${gradeSentence(grades, localTown.name, upcoming.date)}`,
+        grade: gradeFor(grades, localTown.name, upcoming.date),
+        unattended: unLocal,
         who: '—', ageDays: upcoming.ageDays, runbook: 'R4', skill: 'make-bus-leaflet', subject: localTown.name,
-        do: [{ kind: 'skill', what: `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).` }],
+        do: [rebuildStep(unLocal, `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).`)],
       });
     }
   }
@@ -998,6 +1026,14 @@ for (const it of stranded.items) add(it);
 for (const n of stranded.notes) warnings.push(n);
 for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name} could not be read — ${u.why}`);
 
+// AND THE HALF THAT ROW SAYS IT DOES NOT ASK (OA-326 item 1, 2026-09-21): whether
+// a PUSHED branch has a pull request, and whether one has sat open for weeks.
+// IT OPENS NO SOCKET — `node pr_sweep.mjs` writes loop/pr-sweep.json and this only
+// reads it, the directory sweep's shape. The argument is in pr_sweep.mjs's header.
+const prSweep = prSweepItems({ state: readPrSweep(path.join(BUSES, 'loop')), assetsDir: HERE });
+for (const it of prSweep.items) add(it);
+for (const n of prSweep.notes) warnings.push(n);
+
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
 // the last one with no reader: `loop/your-move/` says these items need you and
 // `loop/LOCK.d` says a tick is running now, but when the loop is HALTED there is
@@ -1069,16 +1105,37 @@ for (const t of tree.towns.filter((t) => !t.built)) {
     do: [{ kind: 'skill', what: `Run make-bus-leaflet for ${t.name} from whichever stage its manifest reached.` }],
   });
 }
-const engineStale = tree.towns.filter((t) => t.built && t.engineStale);
-if (engineStale.length) {
+/*
+ * ONE REBUILD ROW PER MAP, NOT ONE ROW FOR THE ESTATE (buses-data OA-430, R9 item 6).
+ * This was a single `engine-stale` row naming every behind town in its `why`, with
+ * `rollout.js --all` for a command — an ALL-OR-NOTHING debt nobody could take a
+ * bite out of, and one a loop tick could not claim at all, its whole contract
+ * being one unit of work that commits coherently. Section 9 of the review priced
+ * that at fifty towns rebuilt in order before an engine change could merge. A map
+ * is the unit because a map is what rebuilds, versions and gets looked at, and the
+ * estate is done when the last row has gone.
+ *
+ * IT CAN BE A ROW AT ALL ONLY BECAUSE IT IS A CHORE: status.js gates each map
+ * against the engine recorded in its own ci-reference, so a behind map's sheets are
+ * still proved to reproduce, and being behind is no longer a red.
+ */
+const engineStale = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
+  .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
+for (const { row: mapRow, place } of engineStale) {
+  const live = place ? tree.currentPlaceEngine : tree.currentEngine;
+  const tool = place ? 'rollout_places.js' : 'rollout.js';
+  const sel = `${place ? '--place' : '--town'} "${mapRow.name}"`;
   add({
-    key: 'engine-stale', rank: 8, type: 'housekeeping',
-    title: `${engineStale.length} town${engineStale.length === 1 ? ' was' : 's were'} drawn by an older engine`,
-    why: `${engineStale.map((t) => `${t.name} (v${t.version}, ${t.engine || 'unstamped'})`).join(', ')} — the live template is ${tree.currentEngine}. Harmless until you want the current look; the re-render is mechanical and bumps each town a minor version.`,
-    who: '—', runbook: 'engine', towns: engineStale.map((t) => t.name),
+    // HYPHEN, NOT COLON: a row key is written into `loop/your-move/` as a FIELD, so
+    // `key: engine-rebuild:March` parses as `engine-rebuild` with a value, and
+    // `looksLikeRowKey()` refuses it. A gate caught that, not a reader.
+    key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
+    title: `${mapRow.name} was drawn by an older engine`,
+    why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`,
+    who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [
-      { kind: 'shell', cwd: SK || '', cmd: 'node rollout.js --all', note: 'dry-run — shows what would change' },
-      { kind: 'shell', cwd: SK || '', cmd: 'node rollout.js --all --apply', note: 'writes; stops on a lost label' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — shows what would change' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes; stops on a lost label' },
     ],
   });
 }
@@ -1401,6 +1458,9 @@ for (const g of groupUnmatched(heldRows.unmatched)) {
   }
 }
 
+// OA-414 — `decision: peter` + `boardRows:` gates a row: concurrency.mjs.
+for (const w of conc.applyDecisionRows(BUSES, items, { applyHolds, groupUnmatched })) warnings.push(w);
+
 const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
@@ -1420,6 +1480,9 @@ if (SAFE_ONLY) shown = shown.filter((i) => i.safety.verdict === conc.SAFE);
 shown.sort((a, b) => (a.demo ? 1 : 0) - (b.demo ? 1 : 0)
   || a.rank - b.rank || (b.ageDays || 0) - (a.ageDays || 0) || a.key.localeCompare(b.key));
 const limited = args.limit ? shown.slice(0, Number(args.limit)) : shown;
+
+// OA-417. `shown` and not `limited`, and the reasoning is in portal_clicks.mjs.
+const clicks = portalClicks(shown);
 
 // ---- output ----------------------------------------------------------------
 const meta = {
@@ -1444,6 +1507,8 @@ const meta = {
   // only one of them gets read.
   conditions,
   safeOnly: SAFE_ONLY, unsafeHidden,
+  // OA-417 under OA-221's rule: --json sees what a person sees, from one array.
+  portalClicks: clicks,
   warnings,
 };
 
@@ -1465,6 +1530,8 @@ console.log(`  ${modeLabel}`);
 console.log(bannerRule);
 console.log(`BusMaps.uk worklist — ${meta.portal.mode} portal`);
 console.log(`engine ${meta.engine || '?'} · ${upcoming ? `BODS scan ${upcoming.date} (${upcoming.ageDays}d old)` : 'no upcoming-changes report found'} · ${shown.length} item(s)\n`);
+// OA-417. Above CONDITIONS: the one block written for Peter. Silent when empty.
+for (const l of formatPortalClicks(clicks, { truncated: limited.length < shown.length })) console.log(l);
 if (SHOW_CONDITIONS) {
   console.log('\u2500\u2500 CONDITIONS ' + '\u2500'.repeat(46));
   for (const l of conc.formatConditions(conditions)) console.log(l);
@@ -1533,12 +1600,9 @@ for (const it of limited) {
   // its place, its age and its link; what it loses is the ability to be read as
   // an instruction. Without this the St Ives row said "Send v10.2 for review"
   // while a hold said in terms that v10.2 must not be sent.
+  // OA-414 — two sources, one renderer: `holdBanner` in loop_your_move.mjs.
   if (it.onHold && it.onHold.length) {
-    for (const h of it.onHold) {
-      console.log(`    ⚠ ON HOLD — ${h.headline}`);
-      if (h.need) console.log(`      ${h.need}`);
-      console.log(`      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`);
-    }
+    for (const h of it.onHold) for (const l of holdBanner(h)) console.log(l);
     console.log(`    Only once that is settled:`);
   }
   for (const d of it.do) {

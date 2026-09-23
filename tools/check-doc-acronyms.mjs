@@ -127,7 +127,8 @@ const REPO_ROOT = enclosingRepoRoot();
  *     "definitions": ["Documentation/README - Glossary of terms.md"],
  *     "defined":     { "FWT": "why it is defined here and not in a document" },
  *     "notAbbreviations": [ { "reason": "…", "tokens": ["PASS", "HARD"] } ],
- *     "excluded":    { "path/to/imported.md": "why it is not ours" }
+ *     "excluded":    { "path/to/imported.md": "why it is not ours",
+ *                      "a/folder/": "a trailing slash excludes the whole folder" }
  *   }
  *
  * AND WHATEVER GIT KNOWS ABOUT IS ADDED WHETHER IT IS DECLARED OR NOT, so a
@@ -226,7 +227,12 @@ for (const p of DECL.definitions) {
     process.exit(2);
   }
 }
-FILES = FILES.filter((f) => !DECL.excluded.has(f));
+/* A key ending in `/` excludes a FOLDER and everything under it (2026-09-21):
+ * a changelog of dated fragments gains a file a day, and a per-file list of it
+ * would be stale within the week. Only a trailing slash means a folder, so a
+ * file exclusion can never widen into one by accident. */
+const excludedDirs = [...DECL.excluded.keys()].filter((p) => p.endsWith('/'));
+FILES = FILES.filter((f) => !DECL.excluded.has(f) && !excludedDirs.some((d) => f.startsWith(d)));
 
 /* ── Reading a document ───────────────────────────────────────────────────
  * Fenced blocks, inline code, HTML comments (the docstamp) and link targets are

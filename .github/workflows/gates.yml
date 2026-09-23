@@ -348,6 +348,55 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-bods-scan
 
+      # buses-data OA-426 (2026-09-22), R9 item 2. The refresh GRADE is the fact a
+      # tick will rebuild a town on: SAFE means the scan found nothing needing a
+      # judgement. A grade that never arrives costs a chore; a grade that arrives
+      # from the WRONG RUN is a machine saying "no person needed" about changes
+      # nobody has read, which is why the date rule has a mutation arm of its own.
+      # The file reader is injected; no _gtfs folder, no clock and no network.
+      - name: Prove the refresh grading reaches a row, and refuses when it should
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-refresh-grades
+
+      # buses-data OA-429 (2026-09-23), R9 item 5. The monthly ink review is the
+      # gate in front of delivery, and delivery emails the map's customer. So the
+      # failures that matter are a changed sheet called unchanged (a stamp spelled
+      # another way, a sheet missing from disk read as sameness) and an accept
+      # carried over to a build nobody looked at; each has a case the rule's
+      # absence would flip. The disk is injected; the crops need sharp and are
+      # not here.
+      - name: Prove the ink review shows what moved and gates what was not accepted
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-ink-review
+
+      # buses-data OA-426 (2026-09-22), R9 item 2, the other half: the thing that
+      # ACTS on that grade. A SAFE refresh corrects an operator name and a set of
+      # days and must touch nothing else -- so the failures that matter are all
+      # failures of restraint, and each has a mutation arm: overwriting a string a
+      # person wrote (Ramsey files its community operator with an `&` where the feed
+      # says `and`, and a spoke as "Mon-Sat (305 Mon-Fri)"), losing the town's own
+      # route order (which no LABEL-SET check can see, because a set has no order,
+      # and which made one map's key read as four badges with no operator beside
+      # them), and letting an empty string into the set of values a label may
+      # mention, which explains every label there is and says nothing. The S1-S5
+      # chain itself is NOT here and the harness says so in its header: driving it
+      # needs the 139 MB feed and a 200 MB town tree, neither of which survives
+      # actions/checkout, so it was proved on the laptop and recorded in the round.
+      - name: Prove the SAFE monthly refresh corrects only what the machine wrote
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-refresh-town
+
+      # buses-data OA-427 (2026-09-22), R9 item 3. *Human touches per map-month* is
+      # the number R9's recommendation is judged on, and it was a refusal until the
+      # manifests started recording who performed each stage. The failure that
+      # matters is not a wrong rate but a CONFIDENT one -- a rate over attributed
+      # runs read as a rate over the estate, or an unrecorded run counted as a tick
+      # because the loop does most of the work. Both have a mutation arm. Literal
+      # manifests and a literal clock; no Areas folder and no disk.
+      - name: Prove who performed a stage can be counted, and can refuse to be
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-stage-actors
+
       # buses-data OA-402 (2026-09-18), R9. The five numbers R9 is judged on. Two
       # of the five refuse to be computed and say why, and the harness is what
       # holds them to it -- both faults it has already caught produced a PLAUSIBLE
@@ -371,6 +420,15 @@ jobs:
       - name: Prove the complexity band on a map request can go red
         working-directory: skills/bus-work
         run: npm run test:prove-red-complexity-band
+
+      # buses-data OA-417 (2026-09-21): the "waiting on you in the portal" block.
+      # A projection over rows already on the board, so the only way it can be
+      # wrong is by disagreeing with the list under it -- and its last section
+      # greps the PORTAL's own row builder, which is what would catch the step
+      # kind being renamed and the block going silently, greenly empty.
+      - name: Prove the portal-clicks block can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-portal-clicks
 
       # buses-data OA-233 (2026-09-05): the two landmark-answer rows, and the wire
       # that adds them, asserted on the source of the wire as well as the module.
@@ -520,6 +578,36 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-unpushed-branches
 
+      # buses-data OA-326 item 1 (2026-09-21): the half the step above says at
+      # the point of its own narrowing that it does not ask. The stranded row
+      # stops at the remote -- a branch that HAS been pushed raises nothing,
+      # whether or not a pull request is open for it -- and on 2026-09-21 that
+      # was judged too weak: portal #170 was open for 21 days and named on no
+      # list until the day it merged, dependabot #64 has been open for 31, and
+      # the one tick that went looking reported #170 as having never had a pull
+      # request at all, because it inferred absence from a list it had already
+      # filtered to OPEN. THE SUBJECT SURVIVES actions/checkout NOT AT ALL, so
+      # every case is against a stub: the record is written under the temp dir
+      # and GitHub is a function. Read section 11 first -- it is the one that
+      # holds the shape in place, asserting that the half worklist.mjs imports
+      # contains no call that can reach the network, because a board opening a
+      # socket per branch is a board that fails on a train and is the one change
+      # OA-326 argues hardest against.
+      - name: Prove the pull-request sweep can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-pr-sweep
+
+      # buses-data, 2026-09-22: the weekly document triage. Its two subjects --
+      # Claude's memory store, and whether a dated document still has live work
+      # behind it -- cannot run in CI at all, so what is falsified here is the
+      # RUNNER: that a checker it cannot run makes it exit 2 rather than report
+      # "nothing to do" about a question it never asked, which is the fault it
+      # was built to end. The fixtures are stub checkers in a temp tree, so this
+      # touches neither the real buses repository nor any memory store.
+      - name: Prove the weekly document triage refuses rather than reporting clear
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-doc-triage
+
       # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
       # would go red if I pushed now". Read case 2 first and read it as the
       # POINT of the tool rather than as one assertion among thirty: a preflight
@@ -654,6 +742,15 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-redteam-fingerprint
 
+      # OA-427: the red team is the most expensive thing in the skill, and until now
+      # nothing capped a month of it -- a person started every S6, and the budget was
+      # their attention. R9 removes the person. This breaks the ration four ways and
+      # requires the right cases to fail each time, including the arm that would make
+      # an ABSENT budget file refuse every buy and stop the estate dead.
+      - name: Prove the red-team monthly budget can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-redteam-budget
+
       # OA-019: derive_frequency.js tiers a place's LINE WEIGHTS, and fed one of the
       # three places whose S1 predates the frequency fields it returned "limited --
       # ends mid-afternoon" for every lane, from no data at all. This cuts the guard
@@ -703,6 +800,21 @@ jobs:
       - name: Prove the S6 _latest mirror refresh can go red
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-s6-mirror
+
+      # OA-427 item 3. `stage.js --by <who>` was built on 2026-09-22 and measured
+      # the same day: 1,211 stage runs in the 30-day window, not one carrying an
+      # actor, because none of the four callers passed the flag. The check that
+      # fixes that is a source-reading JOIN over those callers, and a source-reading
+      # join is the easiest kind of green-for-ever: a regex that has stopped
+      # matching reports every call site it can see as correct, and it can see none.
+      # Two arms break the subject the two ways this can rot -- a call site that
+      # stops forwarding, and a byArgs that INVENTS a name for the absent case,
+      # which is the dangerous one because it fills the window with a confident
+      # answer instead of an honestly empty one. A third deletes a caller, so a
+      # matcher gone blind cannot pass quietly.
+      - name: Prove the stage-actor caller join can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-actor-callers
 
       # OA-164. `pull` copies the whole run FOLDER while the manifest speaks only
       # of DECLARED outputs, so an undeclared file left in an older stage's folder

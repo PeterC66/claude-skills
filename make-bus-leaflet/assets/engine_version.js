@@ -336,26 +336,86 @@ function isPlaceRun(dir) {
   return path.resolve(dir).split(/[\\/]+/).includes('Places');
 }
 
-// Surgical stamp — same approach as stage.js's syncVersionField: rewrite just
-// the "engine" field so the rest of the file (and any diff against it) stays
-// untouched. Adds the field if absent (appended, valid JSON either way).
-function stampEngine(routesJsonPath, hash) {
-  const raw = fs.readFileSync(routesJsonPath, 'utf8');
-  let obj;
-  try { obj = JSON.parse(raw); } catch (e) { throw new Error(`${routesJsonPath} is not valid JSON — ${e.message}`); }
-  const from = obj.engine;
-  if (from === hash) return { status: 'ok', hash };
-  let patched;
-  if (from !== undefined) {
-    patched = raw.replace(/"engine"(\s*):(\s*)"[^"]*"/, (mm, s1, s2) => `"engine"${s1}:${s2}${JSON.stringify(hash)}`);
+/* Surgical replace of ONE string field — same approach as stage.js's
+ * syncVersionField: rewrite just that field so the rest of the file, and any
+ * diff against it, stays untouched. Adds the field when absent, removes it when
+ * `want` is null, and re-serialises the whole object only when the surgical form
+ * would not parse — which is the same fallback the single-field version had. */
+function patchField(raw, obj, key, want) {
+  const from = obj[key];
+  if (from === want || (from === undefined && want === null)) return { raw, status: 'ok', from };
+  const q = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const candidates = [];
+  if (want === null) {
+    // Two forms, because the comma belongs to whichever neighbour is there.
+    candidates.push(raw.replace(new RegExp(`\\s*"${q}"\\s*:\\s*"[^"]*"\\s*,`), ''));
+    candidates.push(raw.replace(new RegExp(`\\s*,\\s*"${q}"\\s*:\\s*"[^"]*"`), ''));
+  } else if (from !== undefined) {
+    candidates.push(raw.replace(new RegExp(`"${q}"(\\s*):(\\s*)"[^"]*"`), (mm, s1, s2) => `"${key}"${s1}:${s2}${JSON.stringify(want)}`));
   } else {
     // Insert right after the opening brace so it reads first, near "version".
-    patched = raw.replace(/\{/, `{\n  "engine": ${JSON.stringify(hash)},`);
+    candidates.push(raw.replace(/\{/, `{\n  ${JSON.stringify(key)}: ${JSON.stringify(want)},`));
   }
-  let ok = false;
-  try { ok = JSON.parse(patched).engine === hash; } catch { ok = false; }
-  fs.writeFileSync(routesJsonPath, ok ? patched : JSON.stringify({ ...obj, engine: hash }, null, 2) + '\n');
-  return { status: from === undefined ? 'added' : 'updated', from, to: hash };
+  const good = (text) => {
+    try { const re = JSON.parse(text); return want === null ? !(key in re) : re[key] === want; } catch { return false; }
+  };
+  const hit = candidates.find(good);
+  if (hit) return { raw: hit, status: from === undefined ? 'added' : (want === null ? 'removed' : 'updated'), from };
+  const next = { ...obj };
+  if (want === null) delete next[key]; else next[key] = want;
+  return { raw: JSON.stringify(next, null, 2) + '\n', status: from === undefined ? 'added' : (want === null ? 'removed' : 'updated'), from };
+}
+
+/*
+ * stampEngine — write WHICH ENGINE drew this run, as both halves of the answer.
+ *
+ * `engine` is the content hash and has been here since 2026-08-04. `engineCommit`
+ * joined it for buses-data OA-430: the hash says whether a map is BEHIND, and only
+ * the commit lets the board get that engine back and ask the honest question —
+ * does this sheet still reproduce under the code that drew it — instead of the
+ * question an engine change makes false for the whole estate in a single step.
+ *
+ * THE TWO FIELDS MOVE TOGETHER OR NOT AT ALL. Where no commit can be recorded the
+ * old one is REMOVED rather than left standing, because a new hash beside a stale
+ * commit is exactly the lying pair `engineDirForCommit()` exists to refuse — and
+ * it would be refused weeks later, about a map nobody was looking at, with
+ * nothing left to say which stamp did it. A map carrying `engine` and no
+ * `engineCommit` is precisely what every map carried before this existed, and the
+ * board has an answer for it.
+ *
+ * `opts.place` picks the template whose closure has to be clean; left out it is
+ * INFERRED from the path by the same isPlaceRun() rule `--stamp` already uses, so
+ * there is one statement of that rule rather than two. `opts.commit` overrides
+ * the lookup — a backfill, and the falsification harness — and an explicit null
+ * records none.
+ */
+function stampEngine(routesJsonPath, hash, opts = {}) {
+  const raw0 = fs.readFileSync(routesJsonPath, 'utf8');
+  let obj;
+  try { obj = JSON.parse(raw0); } catch (e) { throw new Error(`${routesJsonPath} is not valid JSON — ${e.message}`); }
+
+  let commit = null;
+  let commitWhy = null;
+  if ('commit' in opts) {
+    commit = opts.commit || null;
+    if (!commit) commitWhy = opts.commitWhy || null;
+  } else {
+    const place = 'place' in opts ? !!opts.place : isPlaceRun(path.dirname(path.resolve(routesJsonPath)));
+    const r = require('./engine_commit').engineCommitNow(opts.sk || SK, { place });
+    commit = r.commit || null;
+    commitWhy = r.why || null;
+  }
+  // stderr, never the sheet. build_log.js keeps every generator's stderr, and a
+  // diagnostic drawn onto the artwork would move ink on every map that met it.
+  if (commitWhy) console.error(`engine stamp: no engineCommit recorded for ${path.basename(path.dirname(path.resolve(routesJsonPath)))} — ${commitWhy}`);
+
+  // The commit FIRST, so that when both are being inserted the hash — which is
+  // what a reader skims for — ends up the earlier of the two: each insertion goes
+  // in straight after the opening brace, so the last one written reads first.
+  const b = patchField(raw0, obj, 'engineCommit', commit);
+  const a = patchField(b.raw, { ...obj, engineCommit: commit === null ? undefined : commit }, 'engine', hash);
+  if (a.status !== 'ok' || b.status !== 'ok') fs.writeFileSync(routesJsonPath, a.raw);
+  return { status: a.status, hash, from: a.from, to: hash, commit, commitWhy, commitStatus: b.status };
 }
 
 if (require.main === module) {
@@ -376,13 +436,14 @@ if (require.main === module) {
   if ('stamp' in args) {
     const file = stampArg;
     if (!file) { console.error('engine_version.js: --stamp needs a routes.json path'); process.exit(1); }
-    const r = stampEngine(path.resolve(file), hash);
+    const r = stampEngine(path.resolve(file), hash, { place: wantPlace });
     console.log(r.status === 'ok' ? `engine already current (${hash})` : `engine ${r.status}: ${JSON.stringify(r.from)} -> ${JSON.stringify(r.to)}`);
+    console.log(r.commit ? `engineCommit ${r.commitStatus}: ${r.commit.slice(0, 10)}` : 'engineCommit: none recorded (see the line above on stderr)');
   } else {
     console.log(hash);
   }
 }
 
-module.exports = { computeEngineVersion, stampEngine, engineFiles, ENGINE_FILES,
+module.exports = { computeEngineVersion, stampEngine, patchField, engineFiles, ENGINE_FILES,
   computePlaceEngineVersion, placeEngineFiles, placeAssetsDir, isPlaceRun, PLACE_ENGINE_FILES,
   boardingEngineFiles, BOARDING_ENGINE_FILES, requireClosure };

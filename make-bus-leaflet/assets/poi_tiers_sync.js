@@ -81,7 +81,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { parseArgs, die, readJson, resolveBuses, resolvePortal } = require('./cli.js');
+const { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs } = require('./cli.js');
 const { selectPois } = require('./poi_select.js');
 
 const STAGE_JS = path.join(__dirname, 'stage.js');
@@ -319,21 +319,28 @@ function loadTown(buses, town) {
   return { dir, manifest, rec, s3Dir, routesPath, routes };
 }
 
-/** A new S3 run, cloned from the latest, with the merged routes.json. Returns its dir. */
-function writeNewS3(townInfo, mergedRoutes, note) {
+/**
+ * A new S3 run, cloned from the latest, with the merged routes.json. Returns its dir.
+ *
+ * `by` is the `--by <who>` pass-through (OA-427), already shaped by byArgs(): an
+ * empty array when nobody was named, which spreads to nothing. Forwarded, never
+ * interpreted — stage.js is the one authority on what a name may be.
+ */
+function writeNewS3(townInfo, mergedRoutes, note, by = []) {
   const { dir, rec, s3Dir } = townInfo;
   const stage = (...a) => {
     const r = spawnSync(process.execPath, [STAGE_JS, ...a], { cwd: dir, encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`stage.js ${a.join(' ')} failed:\n${r.stderr || r.stdout}`);
     return r.stdout.trim();
   };
-  const newDir = stage('new', 'S3');
+  const newDir = stage('new', 'S3', ...by);
   for (const f of fs.readdirSync(s3Dir)) fs.copyFileSync(path.join(s3Dir, f), path.join(newDir, f));
   fs.writeFileSync(path.join(newDir, 'routes.json'), JSON.stringify(mergedRoutes, null, 2) + '\n');
   const outputs = (rec.outputs && rec.outputs.length ? rec.outputs : ['routes.json']).join(',');
   const basedOn = rec.basedOn ? Object.entries(rec.basedOn).map(([k, v]) => `${k}=${v}`).join(';') : '';
   const a = ['commit', 'S3', newDir, '--outputs', outputs, '--note', note];
   if (basedOn) a.push('--based-on', basedOn);
+  a.push(...by);
   stage(...a);
   return newDir;
 }
@@ -361,7 +368,7 @@ function printReport(town, cmp, where) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.town || args.town === true) die('Usage: node poi_tiers_sync.js --town "<Town>" [--apply] [--from block.json] [--json] [--url U --token T] [--note "..."]');
+  if (!args.town || args.town === true) die('Usage: node poi_tiers_sync.js --town "<Town>" [--apply] [--from block.json] [--json] [--url U --token T] [--note "..."] [--by <who>]');
   const buses = resolveBuses(args);
   const portalDir = resolvePortal(args);
   const town = String(args.town);
@@ -393,7 +400,7 @@ async function main() {
   const merged = { ...info.routes, poi: { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) } };
   const note = (args.note && args.note !== true) ? String(args.note)
     : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable and ${cmp.orphaned.length} orphaned not written. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
-  const newDir = writeNewS3(info, merged, note);
+  const newDir = writeNewS3(info, merged, note, byArgs(args.by));
   console.log(`\n  wrote and committed a new S3 run: ${newDir}`);
   console.log('  Next: a rollout dry run reads the latest S3 — and it WILL refuse with STALE-INPUTS, because this run');
   console.log('  is S3 moving. When S2 has not moved since the latest S4 (manifest.json: stages.S2.latest), --force is');

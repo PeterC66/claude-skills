@@ -281,31 +281,64 @@ class TheTwoHalvesOfTheSameRule(unittest.TestCase):
         self.assertIn("OA-134", js_src)
 
 
-class TheErrorPathNobodyHasWalked(unittest.TestCase):
-    """A KNOWN divergence in behaviour, asserted here so it is pinned rather than
-    papered over. Filed as OA-369 and deliberately not fixed in this round.
+class TheErrorPathNOWWalked(unittest.TestCase):
+    """The error path that used to crash, FIXED under OA-369 on 2026-09-20.
 
     `service_key` opens with `if not isinstance(s, dict): return str(s)` -- an
     explicit decision that a row need not be a dict. `_message`, the error path,
-    then does `(rows[i] or {}).get("route", "?")`, which raises AttributeError on
-    exactly that input. So the one shape the key function goes out of its way to
-    support is the one shape the refusal cannot report. The JS twin handles it:
-    `rows[i] || {}` followed by `r.route != null ? r.route : '?'` gives '?'.
+    then did `(rows[i] or {}).get("route", "?")`, which defends against None, 0
+    and "" and against nothing else, so a bare route string reached `.get` and
+    raised AttributeError. The one shape the key function goes out of its way to
+    support was the one shape the refusal could not report, and a caller got a
+    traceback from inside the guard instead of the ValueError the module's whole
+    contract is about.
 
-    No live caller reaches it -- `gtfs_refresh_report.py` and `draft_town.py` both
-    pass dicts out of a town's own JSON -- which is why it is filed rather than
-    fixed, and why nothing has ever noticed.
+    The predecessor of this class pinned that behaviour on purpose and went red
+    the moment the fix landed, which is how the change was told it was arriving.
+    These cases replace it, and they are the reason it could retire: the refusal
+    now REPORTS the shape rather than dying on it.
 
-    THIS TEST RETIRES ITSELF. When OA-369 is fixed it goes red, naming the action to
-    close; it must be replaced by the assertion that a ValueError is raised and
-    names both rows.
+    `_route_of` carries the rule and mirrors `collisionMessage` in the JS twin --
+    `rows[i] || {}` followed by `r.route != null ? r.route : '?'`. Both halves of
+    that expression are asserted below, because the second half was a divergence
+    of its own that nothing had named: `.get("route", "?")` applies its default
+    only when the KEY is absent, so a dict carrying an explicit `route: None`
+    printed the word "None" where the twin prints "?".
+
+    Still no live caller reaches any of this -- `gtfs_refresh_report.py` and
+    `draft_town.py` both pass dicts out of a town's own JSON -- so these cases and
+    the twin census above are the only things standing under it.
     """
 
-    def test_a_collision_between_two_non_dict_rows_raises_AttributeError_today(self):
-        with self.assertRaises(AttributeError):
+    def test_a_collision_between_two_non_dict_rows_raises_ValueError_naming_both(self):
+        with self.assertRaises(ValueError) as caught:
             ig.index_unique(["46", "46"], what="bare strings")
+        msg = str(caught.exception)
+        self.assertIn("bare strings: 1 colliding key(s)", msg)
+        self.assertIn("'46' <- #0 ? vs #1 ?", msg)
+        self.assertIn("OA-134", msg)
 
-    def test_service_key_itself_accepts_a_non_dict_which_is_what_makes_it_a_fault(self):
+    def test_a_non_dict_row_is_the_only_thing_that_changed_a_dict_still_reads_its_route(self):
+        with self.assertRaises(ValueError) as caught:
+            ig.index_unique([{"route": "46", "operator": "Lynx"},
+                             {"route": "46", "operator": "Stagecoach East"}], what="two 46s")
+        self.assertIn("'46' <- #0 46 (Lynx) vs #1 46 (Stagecoach East)", str(caught.exception))
+
+    def test_an_explicit_route_of_None_prints_the_same_question_mark_the_twin_prints(self):
+        with self.assertRaises(ValueError) as caught:
+            ig.index_unique([{"key": "x", "route": None}, {"key": "x", "route": None}],
+                            what="null route")
+        self.assertIn("'x' <- #0 ? vs #1 ?", str(caught.exception))
+        self.assertNotIn("None", str(caught.exception))
+
+    def test_route_of_answers_the_three_shapes_directly(self):
+        self.assertEqual(ig._route_of("46"), "?")
+        self.assertEqual(ig._route_of(None), "?")
+        self.assertEqual(ig._route_of({}), "?")
+        self.assertEqual(ig._route_of({"route": None}), "?")
+        self.assertEqual(ig._route_of({"route": "46"}), "46")
+
+    def test_service_key_itself_accepts_a_non_dict_which_is_what_made_it_a_fault(self):
         self.assertEqual(ig.service_key("46"), "46")
         self.assertEqual(ig.service_key(None), "None")
 

@@ -148,8 +148,8 @@ console.log('\n5. the wire — asserted on its SOURCE');
   check('…adds every item it returns', wl.includes('for (const it of landmarkAnswers.items) {'));
   check('an empty run builds no warning sentences at all', landmarkAnswerItems({ maps: [], towns: [], compareTiers, readBlock: () => null, readTown: () => null }).warnings.length === 0);
   check('the two key prefixes are the ones the module writes', mod.includes('key: `landmark-owed-${') && mod.includes('key: `landmark-unbuilt-${'));
-  check('concurrency.mjs classifies landmark-owed- as a buses-tree write', conc.includes("if (key.startsWith('landmark-owed-')) return ['buses-tree'];"));
-  check('…and landmark-unbuilt- as buses-tree + engine', conc.includes("if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'engine'];"));
+  check('concurrency.mjs classifies landmark-owed- as a buses-tree + buses-maps write', conc.includes("if (key.startsWith('landmark-owed-')) return ['buses-tree', 'buses-maps'];"));
+  check('…and landmark-unbuilt- as buses-tree + buses-maps + engine', conc.includes("if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'buses-maps', 'engine'];"));
 }
 
 console.log(bad ? `\n✗ ${bad} check(s) failed` : '\n✓ all landmark-answer checks passed — both rows appear and both go away');

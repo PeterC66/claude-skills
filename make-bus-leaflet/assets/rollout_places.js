@@ -30,7 +30,12 @@
  * Usage:
  *   node rollout_places.js [--place "High Wycombe Aldi"]... [--all]
  *                           [--bump minor|major] [--note "..."] [--apply]
- *                           [--force] [--buses "<dir>"]
+ *                           [--force] [--buses "<dir>"] [--by <who>]
+ *
+ * `--by <who>` records WHO performed each stage this run opens and commits —
+ * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
+ * forwarded to `stage.js` unchanged and validated there; leaving it off records
+ * nobody, which is honest and is what every run before 2026-09-22 did.
  *
  * Default is DRY RUN, identical semantics to rollout.js: builds each place in
  * a scratch temp dir, reports the label-set diff (gained/lost text vs the
@@ -48,7 +53,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses } = require('./cli');
+const { parseArgs, resolveBuses, byArgs } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
@@ -87,6 +92,9 @@ const { scratchDir } = require('./scratch');
 const FORCE = !!args.force;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
+// WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
+// stage.js is the one authority on what a name may be, so a bad one fails there.
+const BY = byArgs(args.by);
 // --keep <dir>: dry run only. Copy each place's built sheets out before the scratch
 // workspace is deleted, so they can be measured and rendered rather than judged from
 // the label-set diff alone. Ignored with --apply (the sheets go to S4 anyway).
@@ -293,7 +301,7 @@ function rolloutOnePlace(p) {
       && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE) {
     return { name: p.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current PLACE template `
-                   + `is ${CURRENT_PLACE_ENGINE} — status.js gates that as ENGINE STALE. Rebuild and re-stamp with:  `
+                   + `is ${CURRENT_PLACE_ENGINE} — status.js reports that as ENGINE STALE -- a chore the worklist carries as one engine-rebuild row, never a red (OA-396, OA-430). Rebuild and re-stamp with:  `
                    + `node rollout_places.js --place "${p.name}" --apply --force` };
   }
   if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE) {
@@ -355,7 +363,12 @@ function rolloutOnePlace(p) {
   }
 
   const engineHash = CURRENT_PLACE_ENGINE;
-  stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash);
+  // `{ place: true }` is NAMED rather than inferred (OA-430). stampEngine() reads
+  // the path when nothing says which template it is, and a dry run stamps a SCRATCH
+  // routes.json whose path contains no `Places` segment — so a place rollout would
+  // silently check the town closure for cleanliness instead of its own. The caller
+  // knows which tool it is; the path does not.
+  stampEngine(path.join(scratch, 'S4', 'routes.json'), engineHash, { place: true });
 
   const s4 = path.join(scratch, 'S4');
   /* ONE BUILD ENTRY POINT FOR BOTH ROLLOUTS AND FOR THE STAGE PATH (buses-data OA-310).
@@ -436,7 +449,7 @@ function rolloutOnePlace(p) {
   const s2Latest = (manifest.stages && manifest.stages.S2 && manifest.stages.S2.latest) || null;
   const s3Latest = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.latest) || null;
   const basedOn = [s2Latest && `S2=${s2Latest}`, s3Latest && `S3=${s3Latest}`].filter(Boolean).join(';');
-  const s4Dir = stage(p.dir, 'new', 'S4', '--bump', BUMP);
+  const s4Dir = stage(p.dir, 'new', 'S4', '--bump', BUMP, ...BY);
   // PULL_STAGES leads with S1 because place.json is an S1 output (pipeline.md P4
   // note) and `pull S2` would never bring it; pull S3 also syncs routes.json's
   // printed version stamp to this run's v<N.N>.
@@ -462,7 +475,7 @@ function rolloutOnePlace(p) {
     s3Carry, stages: PULL_STAGES,
     pull: (st, dest) => stage(p.dir, 'pull', st, dest),
   });
-  stampEngine(path.join(s4Dir, 'routes.json'), engineHash);
+  stampEngine(path.join(s4Dir, 'routes.json'), engineHash, { place: true });
   const sheetStamp = stampSheetVersion(path.join(s4Dir, 'routes.json'), path.basename(s4Dir));
   if (seeded.shadowed.length) {
     console.log(`  ${p.name}: ${seeded.shadowed.length} file(s) existed in a pulled stage with different content and the previous S4's copy was used — ${seeded.shadowed.join(', ')}. That is the rollout rule (same data, new engine); if one of them SHOULD be refreshed, re-run the stage that owns it and commit before rolling out.`);
@@ -493,7 +506,7 @@ function rolloutOnePlace(p) {
   // --based-on rides THIS call, not the `new` above — commit is what writes the run
   // record (OA-352).
   stage(p.dir, 'commit', 'S4', s4Dir, '--outputs', realOutputs.join(','), '--note', NOTE,
-        ...(basedOn ? ['--based-on', basedOn] : []));
+        ...(basedOn ? ['--based-on', basedOn] : []), ...BY);
   fs.rmSync(scratch, { recursive: true, force: true });
 
   if (realBlockers.length && !FORCE) {
@@ -504,7 +517,7 @@ function rolloutOnePlace(p) {
   }
 
 
-  const s5Dir = stage(p.dir, 'new', 'S5');
+  const s5Dir = stage(p.dir, 'new', 'S5', ...BY);
   stage(p.dir, 'pull', 'S4', s5Dir);
   const renderJs = path.join(SK, 'render.js');
   const svgOutputs = realOutputs.filter(f => f.endsWith('.svg'));
@@ -516,7 +529,7 @@ function rolloutOnePlace(p) {
   }
   const s5Outputs = jpgOutputs.concat(svgOutputs);
   if (fs.existsSync(path.join(s5Dir, 'place.json'))) s5Outputs.push('place.json');
-  stage(p.dir, 'commit', 'S5', s5Dir, '--outputs', s5Outputs.join(','), '--note', NOTE);
+  stage(p.dir, 'commit', 'S5', s5Dir, '--outputs', s5Outputs.join(','), '--note', NOTE, ...BY);
   spawnSync(process.execPath, [path.join(SK, 'refresh_latest.js'), p.dir], { encoding: 'utf8' });
   // Keep the small tracked CI reference mirror in step with what was just
   // published (see sync_ci_reference.js). This passed `--town p.town` until
@@ -567,7 +580,7 @@ console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', ')
 // OA-179 — see rollout.js's identical block.
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(
-  `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp — status.js gates these as ENGINE STALE, `
+  `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp — status.js REPORTS these as ENGINE STALE and the worklist carries one engine-rebuild row each, `
   + `and this tool will not clear them without --force:\n  `
   + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --force`).join('\n  '));
 // STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict

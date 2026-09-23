@@ -68,11 +68,30 @@ def assert_no_collision(mapping, items, what):
             (what, n, len(mapping), n - len(mapping)))
 
 
+def _route_of(row):
+    """What a colliding row prints as its route, matching `collisionMessage` in the
+    JS twin exactly -- `r.route != null ? r.route : '?'` over `rows[i] || {}`.
+
+    A row that is NOT A DICT prints "?". `service_key` opens by accepting exactly
+    that shape, so it is the one input the refusal has to be able to report; until
+    OA-369 this read `(row or {}).get("route", "?")`, which defends against None,
+    0 and "" and raised AttributeError on a bare route string -- a traceback from
+    inside the guard instead of the ValueError the module's whole contract is
+    about. A dict whose `route` is absent OR None prints "?" too: `.get` applies
+    its default only when the KEY is missing, so an explicit None used to print
+    the word "None", which is the same divergence one clause along.
+    """
+    if not isinstance(row, dict):
+        return "?"
+    r = row.get("route")
+    return "?" if r is None else r
+
+
 def _message(what, rows, clashes):
     parts = []
     for k, idxs in clashes.items():
         who = " vs ".join(
-            "#%d %s%s" % (i, (rows[i] or {}).get("route", "?"),
+            "#%d %s%s" % (i, _route_of(rows[i]),
                           (" (%s)" % rows[i]["operator"]) if isinstance(rows[i], dict) and rows[i].get("operator") else "")
             for i in idxs)
         parts.append("'%s' <- %s" % (k, who))

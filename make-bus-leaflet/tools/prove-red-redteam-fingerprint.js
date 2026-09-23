@@ -96,7 +96,11 @@ fs.writeFileSync(copy, src);
 // every module it requires by relative path has to be beside it -- the same fix
 // prove-red-redteam-source.js needed on the same day, and for the same reason:
 // a scratch world silently missing a dependency is how a mutation "survives".
-for (const sibling of ['cli.js']) {
+// `redteam_budget.js` joined that list on 2026-09-22 (OA-427). THIRD HELPING of
+// the same lesson: the list is a literal in three harnesses, and adding one
+// dependency reddened two of them with MODULE_NOT_FOUND. That is the design
+// working -- a scan would have kept them green with the wrong file set.
+for (const sibling of ['cli.js', 'redteam_budget.js']) {
   fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
 }
 

@@ -151,7 +151,25 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
 
 ## `refresh` — a portal map whose services are changing (R4)
 
-1. **Regenerate centrally.** Re-run the map's own skill for the town/place to produce a fresh S5-render dir. Same making step as a build, for an existing map. The worklist item's note carries the specific upcoming changes from the BODS scan — use them to check the regenerated data actually reflects them.
+1. **Regenerate centrally.** The worklist item's note carries the specific upcoming changes from the BODS scan — use them to check the regenerated data actually reflects them. **How you regenerate depends on whether the scan graded this town SAFE**, which the row says in its `why` and carries as its `grade`:
+
+   - **SAFE, and the row carries an `unattended` block** (a town, never a place; buses-data OA-426): the whole rebuild is one command, and it is the row's own first `do` step. It runs from any folder, because the script finds its own modules and takes the estate as `--root`. `<Town>` is the town as `Areas/` spells it, `<scan date>` is the report the row is joined to, and `<who>` is your own session name (`sched-HHMM` for a tick), recorded on every stage it opens; the path below is real rather than a placeholder:
+
+     ```bash
+     python3 "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_town.py" --town "<Town>" --scan <scan date> --apply --by <who>
+     ```
+
+     Leave `--apply` off and it is a dry run that writes nothing and prints what it would change. It patches only the operator names and day strings the feed moved, runs S1, S3, S4 and S5 through the documented stage order, and **refuses rather than half-applying**: a value a person wrote, a label it cannot account for, a blocking build warning or a sheet that will not render each stop it with nothing committed. A non-zero exit is something to read, never something to retry.
+
+   - **ESCALATE, NOTHING, a place, or no grade at all**: re-run the map's own skill for the town/place to produce a fresh S5-render dir, the same making step as a build. A person decides what the sheet should say; the row's `why` names which tags made that true.
+
+   **Then the month's ink review, before anything is staged** (buses-data OA-429). Staging emails the customer, so a sheet whose ink moved is shown to Peter first, on one page for the whole month, and staged only once he has accepted it; a map whose ink did not move, once the build stamp is ignored, goes ahead without him. It runs from any folder, the path is real, and `<scan date>` is the report the rows are joined to; `--town "<Town>,<Town>"` adds towns a person rebuilt to the SAFE ones the grading names:
+
+     ```bash
+     node "C:/u3a St Ives/.claude/skills/bus-work/assets/ink_review.mjs" --scan <scan date>
+     ```
+
+     It writes the record and his answers to `_gtfs/ink-review_<scan date>.json` and the page, with before-and-after crops of each change, to `loop/ink-review/<scan date>/index.html`. Peter answers in words — *accept Ramsey*, *hold March, the museum icon is doubled* — and the session records each with `--answer "<Town>" --verdict accept|hold --by <who>`. **Stage only what `--deliverable` lists under `deliver`.** An answer is about one build: a map rebuilt after it was accepted is waiting again.
 2. **Stage it**, in `PORTAL` (`C:\Claude\community-bus-maps`):
 
    - **Against the live site** (item 4, 2026-08-10): `npm run deliver -- --map <slug> --kind area|place --src "<fresh S5-render dir>" --note "BODS <date> refresh"`. One laptop command — scp's the render to the VPS, verifies it byte-identical *before touching the live service*, stops the portal, runs `propose-update.mjs` inside a throwaway container, restarts, health-checks. Needs `DEPLOY_HOST`/`DEPLOY_SSH_KEY`/`DEPLOY_APP_DIR` in `.env`. `worklist.mjs` prints exactly this form when it's reading the live worklist (`--url`/`BUSMAPS_URL` set).
@@ -253,14 +271,17 @@ Read the label-set diff. A `must` on a full sheet displaces `may` labels — tha
 
 ## `housekeeping` — engine-stale renders, missing S6
 
-### Engine-stale
+### Engine-stale — one `engine-rebuild-<map>` row per map since 2026-09-22
 
-The town's shipped build was drawn by an older engine template. Harmless — it is not wrong, just not current — so this is opportunistic work, and it self-heals on the town's next real build. Do it deliberately when the current look matters or before a batch of deliveries.
+The map's shipped build was drawn by an older engine template. Harmless — it is not wrong, just not current — and since buses-data OA-430 it is *provably* not wrong rather than presumed so: each map records the engine commit that drew it in its own `ci-reference/routes.json`, and `status.js` asks a behind map whether its committed sheets still reproduce under **that** engine. A DIFF on such a row is therefore a regression, and being behind is a chore.
+
+**The row is per MAP now, and that is the point.** It used to be a single `engine-stale` row naming every behind town with `rollout.js --all` for a command — an all-or-nothing debt nobody could take a bite out of and a loop tick could not claim at all. Each row is one unit of work that commits coherently, and a place gets one too; places had no staleness row of any kind before. The exact commands come with the row, and these are the shapes they take.
 
 ```powershell
 cd "C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets"
-node rollout.js --all           # dry run: what would change
-node rollout.js --all --apply   # writes; one commit per town, minor version bump each
+node rollout.js --town "St Ives"                    # dry run: what would change
+node rollout.js --town "St Ives" --apply            # writes; minor version bump
+node rollout_places.js --place "High Wycombe Aldi" --apply
 ```
 
 (`--town "St Ives"` for one town; `--place "High Wycombe Aldi"` on `rollout_places.js` for a place. It finds the maps through `--buses`, which defaults to `C:\u3a St Ives\Using AI\Buses`, so only pass that if the tree has moved.) It creates a new S4 from the current template with the config unchanged, diffs the label set against the previous build, renders S5 and refreshes `_latest`. **It stops before publishing if a label was lost** — that is a real signal, not a nuisance; review the loss rather than reaching for `--force`.

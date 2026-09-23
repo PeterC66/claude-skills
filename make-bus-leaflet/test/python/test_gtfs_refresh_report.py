@@ -49,6 +49,7 @@ in the glossary and OA-289, which reddened `main` once a day for as long as a
 claim was held.
 """
 import io
+import json
 import os
 import re
 import shutil
@@ -470,6 +471,76 @@ class TagsTheReportCanEmit(unittest.TestCase):
         a MECHANICAL that has quietly grown a third member."""
         safe = {t for t in self.tags() if rr.classify([change(t, "7")])[0] == "SAFE"}
         self.assertEqual(safe, {"OPERATOR", "DAYS"})
+
+
+class GradeRecordAndSidecar(unittest.TestCase):
+    """The grade as DATA -- `town_grade_record` and `grades_payload` (buses-data OA-426).
+
+    WHY THESE EXIST AT ALL. Until OA-426 the grade was written only into the
+    report's own heading, so the only way to ask "does this town's refresh need a
+    person?" was to parse generated prose. The sidecar answers it as data. What
+    these cases protect is not the JSON's shape but the property the sidecar is
+    worth nothing without: THE RECORD AND THE HEADING ARE ONE COMPUTATION. `main()`
+    builds the heading out of the same record it writes to the file, so a reader
+    that trusts the file is trusting what the report says.
+
+    WHAT THEY DO NOT COVER, said out loud. `main()` is a `__main__` block rather
+    than a function, so nothing here imports the WRITE -- the filename, the
+    directory and the trailing newline are uncovered by this suite, and the thing
+    standing under them is that the line sits two lines below the report's own
+    write and shares its `gdir` and `today`. The CONTENT is covered here, through
+    a real `json.dumps`/`json.loads` round trip, because a payload that cannot be
+    serialised is a monthly job that dies after writing the prose.
+    """
+
+    def rec(self, changes, town="March"):
+        return rr.town_grade_record(town, changes)
+
+    def test_the_grade_is_classify_s_and_not_a_second_rule(self):
+        """Over every tag the report can emit, and both grades of mixture."""
+        cases = [[change(t, "7")] for t in rr.NON_ACTIONABLE + rr.MECHANICAL + ("ADD?", "WITHDRAWN?", "RE-EVAL", "NOT-IN-BODS?")]
+        cases += [[], [change("OPERATOR"), change("ADD?")], [change("COMMUNITY"), change("DAYS")]]
+        for changes in cases:
+            self.assertEqual(self.rec(changes)["grade"], rr.classify(changes)[0], changes)
+
+    def test_the_count_is_the_one_the_heading_prints(self):
+        changes = [change("COMMUNITY", "V1"), change("DAYS", "5"), change("OPERATOR", "6")]
+        self.assertEqual(self.rec(changes)["actionable"], 2)
+
+    def test_a_town_with_a_grade_always_has_something_to_review(self):
+        """The heading cannot say "3 to review" beside "NOTHING", and it cannot say
+        "NO CHANGE" beside "SAFE" either -- which is one property, in both
+        directions, over the same record."""
+        for changes in ([], [change("COMMUNITY")], [change("NOT-IN-BODS")],
+                        [change("DAYS")], [change("ADD?")], [change("COMMUNITY"), change("ADD?")]):
+            r = self.rec(changes)
+            self.assertEqual(r["grade"] == "NOTHING", r["actionable"] == 0, changes)
+
+    def test_reasons_are_the_deciding_tags_deduplicated_and_sorted(self):
+        r = self.rec([change("WITHDRAWN?", "66"), change("ADD?", "X5"), change("WITHDRAWN?", "67")])
+        self.assertEqual(r["reasons"], ["ADD?", "WITHDRAWN?"])
+        self.assertEqual(self.rec([])["reasons"], [])
+
+    def test_the_payload_keys_towns_by_name_and_does_not_repeat_it(self):
+        p = rr.grades_payload("2026-10-01", [self.rec([change("DAYS")], "March")], [])
+        self.assertEqual(list(p["towns"]), ["March"])
+        self.assertNotIn("town", p["towns"]["March"])
+        self.assertEqual(p["towns"]["March"]["grade"], "SAFE")
+        self.assertEqual((p["date"], p["schema"]), ("2026-10-01", 1))
+
+    def test_a_town_that_could_not_be_checked_is_absent_from_towns_and_named(self):
+        """The failure this arm is about is a reader taking an absence for "no
+        changes" -- the shape a month of clean empty reports already cost us."""
+        p = rr.grades_payload("2026-10-01", [self.rec([change("DAYS")], "March")],
+                              [("Wisbech", "dataset not built")])
+        self.assertNotIn("Wisbech", p["towns"])
+        self.assertEqual(p["notChecked"], [{"town": "Wisbech", "reason": "dataset not built"}])
+
+    def test_the_payload_survives_the_round_trip_the_monthly_job_makes(self):
+        p = rr.grades_payload("2026-10-01",
+                              [self.rec([change("ADD?")], "Ely"), self.rec([], "St Ives")],
+                              [("Wisbech", "dataset not built")])
+        self.assertEqual(json.loads(json.dumps(p, ensure_ascii=False)), p)
 
 
 if __name__ == "__main__":

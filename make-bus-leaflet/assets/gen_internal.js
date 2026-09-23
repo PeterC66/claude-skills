@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, printsName } = require(_dep('poi_select.js'));
+const { selectPois, printsName, culledAfterTiers, culledAfterTiersNote } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -924,16 +924,22 @@ const { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, whatBlo
 const POI_HALF=2.1;                             // icon(p.cat,x,y,2.1) => a 4.2 mm box
 function poiSite(p){
   const k=p.cat+':'+p.name; const o=(OV.pois||{})[k]||{};
-  if(o.hide) return null;                       // suppress this POI entirely
+  if(o.hide){ poiCulled.set(k,'hide'); return null; }   // suppress this POI entirely
   let [x,y]=XY(p.ll);
   if(o.pos){ x=o.pos.x; y=o.pos.y; } else if(o.move){ x+=o.move.dx; y+=o.move.dy; }
-  if(IR && (x<MX0+1||x>MX1-1||y<MY0+1||y>MY1-1) && !o.pos && !o.move) return null; // off-frame under roads model
-  if(inCore([x,y])) return null;                // coreBox: the centre is deliberately blank
+  if(IR && (x<MX0+1||x>MX1-1||y<MY0+1||y>MY1-1) && !o.pos && !o.move){ poiCulled.set(k,'frame'); return null; } // off-frame under roads model
+  if(inCore([x,y])){ poiCulled.set(k,'core'); return null; }   // coreBox: the centre is deliberately blank
+  poiCulled.delete(k);
   const n=poiNudge.get(k); if(n){ x+=n[0]; y+=n[1]; }   // design.spreadIcons displacement
   return {k,o,x,y};
 }
 const poiBox=new Map();                         // poi key -> its reserved icon box (design.reserveIcons)
 const poiNudge=new Map();                       // poi key -> [dx,dy] from spreadIcons
+/* WHY poiSite() REFUSED A POI, recorded above rather than re-derived (OA-250
+ * item 2): a second function asking the same three questions would be free to
+ * drift from them, which is why poiSite exists at all. Written on every call and
+ * cleared on a success, so it says what the LAST call decided. */
+const poiCulled=new Map();                      // poi key -> 'hide' | 'frame' | 'core'
 /*
  * design.spreadIcons — pull fused symbols apart.
  *
@@ -3265,6 +3271,13 @@ if(LAB){
       + ' something else off the sheet.'+GUARD_NL);
   }
 }
+
+/* A TIER THAT MATCHED AND WAS THEN CULLED BY THIS SHEET (OA-250 item 2). The
+ * rule and the sentence are poi_select.js's; the REASON is poiSite()'s, and is
+ * the only part of it this file owns. Per-sheet, because the cull is: a pack's
+ * candidates are not any one sheet's, and the schematic inherits this one's. */
+const _culled = culledAfterTiersNote(culledAfterTiers(pois, k => poiCulled.get(k)));
+if(_culled) process.stderr.write(_culled + GUARD_NL);
 
 // ---- north arrow: the line, the arrowhead and the N (north_arrow.js) --------
 // Last, so it sits on top of everything; sited earlier, in the labels block, so

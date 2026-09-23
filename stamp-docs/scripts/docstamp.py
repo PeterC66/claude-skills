@@ -14,8 +14,8 @@ which meant a commit made mid-turn carried the new content and the old stamp (te
 the fifteen early buses-data CI runs failed on exactly that), a re-stamp instruction,
 a hookify rule, a CI audit and a `--root` flag all grew around the gap, and on
 2026-09-09 the end-of-turn rewrite landed BETWEEN a session's review and its commit,
-so the commit lost two rows its message described. `--auto` is kept for a machine
-that still wires it, but no hook here calls it any more.
+so the commit lost two rows its message described. That hook's `--auto` mode (an
+mtime-gated scan of every root) was deleted on 2026-09-21; nothing called it.
 
   Markdown   two lines just after the H1:
                  <!-- docstamp v1.4 | 2026-07-27 | sha=3f9a1c2b -->
@@ -28,8 +28,7 @@ that still wires it, but no hook here calls it any more.
              every slide; colour adapts to background luminance.
 
 Usage:
-  docstamp.py --auto            hook mode: mtime-gated scan, stamp what changed, always exit 0
-  docstamp.py --all             force a full hash scan, ignoring the mtime gate
+  docstamp.py --all             hash-scan the root you are in and stamp what changed
   docstamp.py --backfill        first run: stamp everything unstamped at v1.0, dated from git
   docstamp.py --check           audit only; exits 1 if anything is unstamped or stale
   docstamp.py --list            list the in-scope documents and exit
@@ -74,7 +73,6 @@ import argparse
 import datetime as dt
 import fnmatch
 import hashlib
-import json
 import os
 import re
 import subprocess
@@ -128,23 +126,6 @@ def load_policy(path):
     # baseline each of them unions for itself is the same "written once per place"
     # fault the baseline exists to remove -- see scripts/policy.py (OA-235).
     return _shared_policy.load_policy(path)
-
-
-def state_path(policy_file):
-    return os.path.join(os.path.dirname(policy_file), ".docstamp-state.json")
-
-
-def load_state(policy_file):
-    try:
-        with open(state_path(policy_file), "r", encoding="utf-8") as fh:
-            return json.load(fh)
-    except Exception:
-        return {}
-
-
-def save_state(policy_file, state):
-    with open(state_path(policy_file), "w", encoding="utf-8") as fh:
-        json.dump(state, fh, indent=2)
 
 
 def git_date(root, abs_path):
@@ -343,8 +324,8 @@ def default_root_for_cwd(policy, cwd=None):
     standing. That is wrong for a WRITER by default and it is wrong in the direction
     that cannot be seen: the write lands in a repository the running session does
     not have checked out, so no gate, no `git status` and no reviewer in that session
-    can ever notice it. The Stop hook made it constant rather than occasional -- it
-    runs `--auto` with no flags at the end of every turn of every session.
+    can ever notice it. The retired Stop hook made it constant rather than occasional -- it
+    ran with no flags at the end of every turn of every session.
 
     This is NOT `resolve_checkout`. That one RETARGETS a root at a directory you
     name, which is how you opt a worktree in; this one only decides which configured
@@ -362,9 +343,10 @@ def default_root_for_cwd(policy, cwd=None):
 
     NONE IS NOT A REFUSAL HERE, AND THAT ASYMMETRY WITH `resolve_checkout` IS
     DELIBERATE. `--checkout` is a thing you asked for by name, so failing to place it
-    is a mistake worth stopping on. This runs on EVERY invocation including the Stop
-    hook's, where refusing would turn "you are standing somewhere unexpected" into a
-    broken hook. So an unplaceable cwd keeps the old estate-wide behaviour and SAYS
+    is a mistake worth stopping on. This runs on EVERY invocation, and inside the
+    pre-commit hook through `root_cfg_for_repo()` for both the stamper and its audit,
+    where refusing would turn "you are standing somewhere unexpected" into a refused
+    commit. So an unplaceable cwd keeps the old estate-wide behaviour and SAYS
     SO on the run, which is the conservative direction: it can only ever be as wide
     as the tool already was.
     """
@@ -886,23 +868,8 @@ def process(args, policy):
     files = discover(policy, args.root)
     today = dt.date.today()
 
-    # --auto only hashes files that look newer than the last successful run.
-    gate = None
-    if args.auto and not args.all:
-        st = load_state(args.policy)
-        last = st.get("lastRun")
-        if last:
-            gate = last - 5  # small clock-skew allowance
-
     results = []
     for name, root, abs_path, rel in files:
-        if gate is not None:
-            try:
-                if os.path.getmtime(abs_path) <= gate:
-                    continue
-            except OSError:
-                continue
-
         if args.check:
             state, ver = check_one(abs_path, sha_len, pcfg)
             results.append((state, name, rel, ver, None, []))
@@ -936,14 +903,14 @@ def process(args, policy):
 def main(argv=None):
     ap = argparse.ArgumentParser(add_help=True)
     mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--auto", action="store_true", help="hook mode; always exits 0")
     mode.add_argument("--check", action="store_true", help="audit only; exits 1 on findings")
     mode.add_argument("--backfill", action="store_true", help="stamp unstamped docs, dated from git")
     mode.add_argument("--list", action="store_true", help="list in-scope documents")
     mode.add_argument("--staged", action="store_true",
                       help="pre-commit hook mode: stamp the in-scope documents staged in the "
                            "repository enclosing the working directory, into the index")
-    ap.add_argument("--all", action="store_true", help="ignore the mtime gate; full hash scan")
+    ap.add_argument("--all", action="store_true",
+                    help="hash-scan and stamp (the default action; kept as the documented spelling)")
     ap.add_argument("--major", metavar="FILE", help="bump the major version of one file")
     ap.add_argument("--minor", metavar="FILE", help="force a minor bump of one file")
     ap.add_argument("--dry-run", action="store_true")
@@ -1018,7 +985,6 @@ def main(argv=None):
         print("{}  v{}.{}  {}".format(state, maj, mn, os.path.basename(abs_path)))
         return 0
 
-    run_started = dt.datetime.now().timestamp()
     results = process(args, policy)
 
     if args.check:
@@ -1033,15 +999,6 @@ def main(argv=None):
     changed = [r for r in results if r[0] in ("stamped", "bumped")]
     clashes = [(r[2], r[5]) for r in results if r[5]]
 
-    if args.auto:
-        if changed and not args.quiet:
-            head = ", ".join("{} {}".format(os.path.basename(r[2]), r[3]) for r in changed[:3])
-            more = "" if len(changed) <= 3 else " (+{} more)".format(len(changed) - 3)
-            print("docstamp: stamped {} document(s) - {}{}".format(len(changed), head, more))
-        if not args.dry_run:
-            save_state(args.policy, {"lastRun": run_started})
-        return 0
-
     if not args.quiet:
         for state, root, rel, ver, pos, clash in results:
             if state in ("stamped", "bumped"):
@@ -1053,26 +1010,21 @@ def main(argv=None):
             len(results), len(changed), len(results) - len(changed)))
         for rel, clash in clashes:
             print("WARNING: no clear stamp position in {} (slides {})".format(rel, clash))
-    if not args.dry_run and not args.check:
-        save_state(args.policy, {"lastRun": run_started})
     return 0
 
 
 if __name__ == "__main__":
-    hook_mode = "--auto" in sys.argv
     try:
         sys.exit(main())
     except SystemExit:
         raise
     except Exception:
-        # A hook must never fail the turn: log and exit clean.
+        # Keep a traceback on disk as well as on stderr, then fail with exit 2.
         try:
             with open(LOG_PATH, "a", encoding="utf-8") as fh:
                 fh.write("\n=== {} ===\n{}".format(dt.datetime.now().isoformat(),
                                                    traceback.format_exc()))
         except Exception:
             pass
-        if hook_mode:
-            sys.exit(0)
         traceback.print_exc()
         sys.exit(2)

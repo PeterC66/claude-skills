@@ -36,6 +36,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as conc from './concurrency.mjs';
+/* OA-414 — the decision marker's gate is applyHolds, and a test that asserted
+ * only the parse would not have caught the fault this row was filed about. */
+import { applyHolds } from './loop_your_move.mjs';
 
 /* fileURLToPath, not new URL(...).pathname: this tree lives under
  * "C:\u3a St Ives\.claude\..." and the latter percent-encodes the space. */
@@ -140,7 +143,13 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   // Peter types the salutation and leaves it.
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'the held letter with NO hold naming it: CHECK FIRST — nothing accounts for it');
+  // OA-434: the letter is FENCED to CORR-001, so it no longer stops the whole
+  // tree; it stops work that writes into a map or letter folder, until a hold
+  // accounts for it.
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'the held letter with NO hold naming it: buses-maps CHECK FIRST — nothing accounts for it');
+  want(conc.assess(['buses-tree'], C), conc.SAFE, '…and buses-tree SAFE: a letter in its own folder does not stop the loop (OA-434)');
+  ok(conc.formatConditions(C).some((l) => /fenced\s+Correspondence\/CORR-001\//.test(l)),
+    'the conditions block SHOWS the fence and names the folder', conc.formatConditions(C).join('\n'));
 
   // A tick writes the hold, in the house style: several fields on one line,
   // the path in backticks, prose after it.
@@ -153,6 +162,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   ok(C.repos.buses.accounted.length === 1 && C.repos.buses.accounted[0].path === letter && C.repos.buses.accounted[0].ref === 'corr-001-salutation',
     'and it is accounted for, by the hold that names it', JSON.stringify(C.repos.buses.accounted));
   want(conc.assess(['buses-tree'], C), conc.SAFE, 'the held letter WITH a live hold naming it: SAFE — this is the case twelve ticks stopped on');
+  want(conc.assess(['buses-maps'], C), conc.SAFE, '…and buses-maps SAFE too, because the hold accounts for it');
   want(conc.assess(['estate-sweep'], C), conc.SAFE, 'and a sweep is not held back by a letter either');
   ok(conc.formatConditions(C).some((l) => /accounted\s+Correspondence\/CORR-001.*corr-001-salutation\.md/.test(l)),
     'the conditions block SHOWS the subtraction and names the hold', conc.formatConditions(C).join('\n'));
@@ -161,16 +171,16 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   // and the sentence counts ONE file and names Areas, not two and Correspondence.
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'y\n');
   C = cond();
-  const A = conc.assess(['buses-tree'], C);
-  want(A, conc.CHECK, 'a second dirty file outside the hold: CHECK FIRST again');
-  ok(A.reasons.some((x) => /^1 uncommitted file\(s\) here \(Areas\)/.test(x.why)), 'and the reason counts the ONE unaccounted file and names its folder only', A.reasons.map((x) => x.why).join(' | '));
+  const A = conc.assess(['buses-maps'], C);
+  want(A, conc.CHECK, 'a second dirty file outside the hold: buses-maps CHECK FIRST again');
+  ok(A.reasons.some((x) => /^1 uncommitted file\(s\) inside Areas\/Ramsey —/.test(x.why)), 'and the reason counts the ONE unaccounted file and names its folder only', A.reasons.map((x) => x.why).join(' | '));
   fs.writeFileSync(path.join(held, 'Areas', 'Ramsey', 'notes.md'), 'x\n');
 
   // Retiring the hold puts the letter back into the verdict — the direction a
   // rule like this must fail in.
   fs.rmSync(path.join(yourMove, 'corr-001-salutation.md'));
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'retire the hold and the letter counts again: CHECK FIRST');
 
   // A hold that names a file OUTSIDE Correspondence/ accounts for nothing: that
   // is residue, and the tree was right to stop on it on 2026-09-09.
@@ -179,7 +189,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   fs.writeFileSync(path.join(yourMove, 'residue.md'),
     '# Residue\n\n**Raised by:** `sched-1115`, 2026-09-09 · **File:** `Areas/Ramsey/notes.md`, left behind\n\n## What is needed from you\n\nCommit it.\n');
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'a hold naming a file under Areas/ accounts for NOTHING: CHECK FIRST');
   ok(C.repos.buses.accounted.length === 0, 'and nothing is listed as accounted', JSON.stringify(C.repos.buses.accounted));
 
   // A hold with no File field, or a File field with no backticked path, is inert.
@@ -188,7 +198,7 @@ console.log('\n== a held letter, read from a real tree (OA-301) ==');
   fs.writeFileSync(path.join(held, letter), '# CORR-001 · message 008\n\nHi Simon\n');
   fs.writeFileSync(path.join(yourMove, 'vague.md'), '# Vague\n\n**Raised by:** `sched-0815`, 2026-09-10 · **File:** the Ramsey letter\n\n## What is needed from you\n\nDecide.\n');
   C = cond();
-  want(conc.assess(['buses-tree'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
+  want(conc.assess(['buses-maps'], C), conc.CHECK, 'a hold whose File field carries no backticked path accounts for nothing');
 }
 
 // ---------------------------------------------------------------------------
@@ -701,10 +711,10 @@ says(conc.assess(['buses-tree'], stagedTree), /pathspec/, 'and the remedy named 
   const LETTER = 'Correspondence/CORR-001/008-out.md';
   const heldOnly = world({ buses: { modified: [LETTER] } });
   conc.accountFor(heldOnly.repos.buses, [{ path: LETTER, ref: 'corr-001-salutation' }]);
-  want(conc.assess(['buses-tree'], heldOnly), conc.SAFE, 'synthetic: one held letter, accounted: SAFE');
+  want(conc.assess(['buses-tree', 'buses-maps'], heldOnly), conc.SAFE, 'synthetic: one held letter, accounted: SAFE on both');
   const unheld = world({ buses: { modified: [LETTER] } });
   conc.accountFor(unheld.repos.buses, []);
-  want(conc.assess(['buses-tree'], unheld), conc.CHECK, 'synthetic: the same letter with no hold: CHECK FIRST');
+  want(conc.assess(['buses-maps'], unheld), conc.CHECK, 'synthetic: the same letter with no hold: buses-maps CHECK FIRST');
   const stagedHeld = world({ buses: { staged: [LETTER], modified: ['Documentation/x.md'] } });
   conc.accountFor(stagedHeld.repos.buses, [{ path: LETTER, ref: 'corr-001-salutation' }]);
   const S = conc.assess(['buses-tree'], stagedHeld);
@@ -713,7 +723,49 @@ says(conc.assess(['buses-tree'], stagedTree), /pathspec/, 'and the remedy named 
     'and the staged-count branch is NOT taken for the accounted file', S.reasons.map((x) => x.why).join(' | '));
   const json = world({ buses: { modified: ['Correspondence/CORR-001/_people.local.json'] } });
   conc.accountFor(json.repos.buses, [{ path: 'Correspondence/CORR-001/_people.local.json', ref: 'x' }]);
-  want(conc.assess(['buses-tree'], json), conc.CHECK, 'synthetic: a hold naming a .json under Correspondence/ is outside the scope: CHECK FIRST');
+  want(conc.assess(['buses-maps'], json), conc.CHECK, 'synthetic: a hold naming a .json under Correspondence/ is outside the scope: CHECK FIRST');
+}
+
+// OA-434, the judgement half. Dirt inside ONE map or letter folder is fenced:
+// it leaves buses-tree and stops only work that writes into such a folder.
+// Every case is a pair with its clean control, and the never-fenced shapes
+// are proved to still stop the whole tree — the direction this must fail in.
+{
+  const letter = world({ buses: { modified: ['Correspondence/CORR-010/001-out-a-draft.md'] } });
+  want(conc.assess(['buses-tree'], letter), conc.SAFE, "OA-434: Peter's half-edited letter, no hold: buses-tree SAFE — the case three ticks stopped on");
+  want(conc.assess(['buses-maps'], letter), conc.CHECK, '…and buses-maps CHECK FIRST, so letter and map work still waits');
+  says(conc.assess(['buses-maps'], letter), /inside Correspondence\/CORR-010 —/, '…naming the one folder');
+  const docx = world({ buses: { untracked: ['Areas/Chatteris/S6-verify/2026-09-22_0429/disagreements.docx'] } });
+  want(conc.assess(['buses-tree'], docx), conc.SAFE, 'OA-434: a stray untracked docx in one town: buses-tree SAFE — the case the fourth tick stopped on');
+  want(conc.assess(['buses-maps'], docx), conc.CHECK, '…and buses-maps CHECK FIRST');
+  want(conc.assess(['buses-maps'], CLEAN), conc.SAFE, 'CONTROL — a clean tree: buses-maps SAFE, so the rule is not a constant');
+
+  const staged = world({ buses: { staged: ['Areas/Chatteris/routes.json'] } });
+  want(conc.assess(['buses-tree'], staged), conc.CHECK, 'never fenced: a STAGED file in a town folder still stops the tree');
+  const ref = world({ buses: { untracked: ['Areas/Ramsey/ci-reference/internal.svg'] } });
+  want(conc.assess(['buses-tree'], ref), conc.CHECK, 'never fenced: anything under ci-reference/ still stops the tree');
+  const loose = world({ buses: { untracked: ['Areas/stray.txt'] } });
+  want(conc.assess(['buses-tree'], loose), conc.CHECK, 'never fenced: a file directly under Areas/, in no town, still stops the tree');
+  const corrRoot = world({ buses: { modified: ['Correspondence/README.md'] } });
+  want(conc.assess(['buses-tree'], corrRoot), conc.CHECK, 'never fenced: a file directly under Correspondence/, in no thread, still stops the tree');
+
+  const mixed = world({ buses: { modified: ['Correspondence/CORR-010/001-out-a-draft.md', 'Documentation/x.md'] } });
+  const M = conc.assess(['buses-tree'], mixed);
+  want(M, conc.CHECK, 'a fenced letter beside an ordinary edit: buses-tree CHECK FIRST');
+  ok(M.reasons.some((x) => /^1 uncommitted file\(s\) here \(Documentation\) —/.test(x.why)),
+    '…counting only the unfenced file, and naming only its folder', M.reasons.map((x) => x.why).join(' | '));
+
+  // What the loop actually reads: the per-resource block and the standing tools.
+  const R = conc.resourceVerdicts(docx);
+  ok(R['buses-tree'].verdict === conc.SAFE && R['buses-maps'].verdict === conc.CHECK,
+    'resourceVerdicts carries the split: buses-tree safe, buses-maps check', JSON.stringify(R));
+  const tool = (what) => conc.STANDING_TOOLS.find((t) => t.what.startsWith(what));
+  want(conc.assess(tool('Work an open action').needs, docx), conc.SAFE, 'the open-action standing tool proceeds past a fenced file');
+  want(conc.assess(tool('Run a map build').needs, docx), conc.CHECK, 'a map build does not');
+  want(conc.assess(tool('Full byte gate sweep').needs, docx), conc.CHECK, 'nor does the byte gate sweep, which reads every town');
+  ok(conc.needsOf({ key: 'nobuild-Chatteris' }).includes('buses-maps'), 'a build row needs buses-maps');
+  ok(conc.needsOf({ key: 'corr-owed-CORR-010' }).includes('buses-maps'), 'a correspondence row needs buses-maps');
+  ok(!conc.needsOf({ key: 'directory-links-due' }).includes('buses-maps'), 'CONTROL — a directory row, which writes BusMapsUK/, does not');
 }
 
 // --- the engine ---
@@ -831,7 +883,7 @@ ok(conc.contentions(rows, dirtyTree).length === 1, 'two rows blocked by one thin
   `got ${conc.contentions(rows, dirtyTree).length}`);
 
 // ---------------------------------------------------------------------------
-// 3b. THE STALE-CLAIM MARKER — read off real OA files, judged on AGE
+// 3b. THE EXPIRED-CLAIM MARKER — read off real OA files, judged on AGE
 // ---------------------------------------------------------------------------
 //
 // Deliberately end-to-end rather than over a hand-built claims array. The
@@ -839,7 +891,7 @@ ok(conc.contentions(rows, dirtyTree).length === 1, 'two rows blocked by one thin
 // `selected:` line, and a test that hands formatConditions an object it made
 // itself could not tell you the parser ever produces the field — "the subject
 // you named yourself", and the reason `now` was made injectable above.
-console.log('\n== the stale-claim marker ==');
+console.log('\n== the expired-claim marker ==');
 {
   const busesDir = path.join(root, 'claims-fixture');
   const oa = path.join(busesDir, 'Development Docs', 'open-actions');
@@ -859,11 +911,16 @@ console.log('\n== the stale-claim marker ==');
   action('OA-903', '2026-13-45', 'buses-odd', 'an age nothing can compute');
 
   const b = blockAt(NOW);
-  ok(/OA-902 \(3d\).*<< STALE, 3 day\(s\) old/.test(b), 'a claim made before today is MARKED stale, with its age', b);
-  ok(/OA-901 \(today\)(?!.*STALE)/.test(b), 'CONTROL — a claim made today is printed and NOT marked', b);
-  ok(/OA-903(?!.*STALE)/.test(b), 'CONTROL — an age that would not parse is not marked either', b);
-  ok(/claimed BEFORE TODAY/.test(b) && /assemble\.mjs" --who/.test(b),
-    'and one summary line names the count and the command that can release them', b);
+  ok(/OA-902 \(3d\).*<< EXPIRED, 3 day\(s\) old/.test(b), 'a claim made before today is MARKED EXPIRED, with its age', b);
+  ok(/OA-901 \(today\)(?!.*EXPIRED)/.test(b), 'CONTROL — a claim made today is printed and NOT marked', b);
+  ok(/OA-903(?!.*EXPIRED)/.test(b), 'CONTROL — an age that would not parse is not marked either', b);
+  ok(/claimed BEFORE TODAY/.test(b) && /assemble\.mjs" --claim OA-902 --as /.test(b),
+    'and one summary line names the count and prints the --claim that takes one', b);
+  // OA-400 (R7): an expired claim is FREE — --claim takes it without --force. A
+  // board that still says "release it" sends a session to do a chore that no
+  // longer exists, and contradicts assemble.mjs --who printed beside it.
+  ok(!/releas/i.test(b), 'it never tells anyone to RELEASE an expired claim', b);
+  ok(/without --force/.test(b), 'it says the row is free: --claim takes it without --force', b);
   ok(/an AGE, not a liveness check/.test(b),
     'the summary says it is an AGE — this board cannot tell a dead session from an idle one', b);
   ok((b.match(/claimed BEFORE TODAY/g) || []).length === 1, 'the summary is printed once, not once per stale claim', b);
@@ -872,7 +929,7 @@ console.log('\n== the stale-claim marker ==');
   // was fresh is now stale. Without this, a marker wired to a hardcoded date
   // would pass every case above on the day the fixture was written.
   const later = blockAt(NOW + 2 * 86400000);
-  ok(/OA-901 \(2d\).*<< STALE, 2 day\(s\) old/.test(later), 'two days later the SAME file reads stale — the age is computed, not fixed', later);
+  ok(/OA-901 \(2d\).*<< EXPIRED, 2 day\(s\) old/.test(later), 'two days later the SAME file reads expired — the age is computed, not fixed', later);
   ok(/3 of those were claimed BEFORE TODAY|2 of those were/.test(later), 'and the count moves with it', later);
 
   // MUTATION CONTROL — with nothing old, the summary must be ABSENT. A footer
@@ -883,13 +940,83 @@ console.log('\n== the stale-claim marker ==');
   fs.writeFileSync(path.join(freshOnly, 'Development Docs', 'open-actions', 'OA-904.md'),
     `---\nref: OA-904\nstatus: open\nselected: ${day(0)}, buses-live, today only\n---\n\nbody\n`);
   const clean = blockAt(NOW, freshOnly);
-  ok(/OA-904 \(today\)/.test(clean) && !/STALE/.test(clean) && !/claimed BEFORE TODAY/.test(clean),
-    'CONTROL — no stale claim, no marker and no summary line at all', clean);
+  ok(/OA-904 \(today\)/.test(clean) && !/EXPIRED/.test(clean) && !/claimed BEFORE TODAY/.test(clean),
+    'CONTROL — no expired claim, no marker and no summary line at all', clean);
 
   // The boundary, stated once rather than inferred from the cases above.
   ok(conc.isStaleClaim({ ageDays: conc.STALE_CLAIM_AFTER_DAYS }) && !conc.isStaleClaim({ ageDays: 0 })
     && !conc.isStaleClaim({ ageDays: null }),
     `the threshold is ${conc.STALE_CLAIM_AFTER_DAYS} day and a null age is not stale`);
+}
+
+// ---------------------------------------------------------------------------
+// 3c. THE DECISION MARKER, JOINED TO THE BOARD ROW IT NAMES (OA-414)
+// ---------------------------------------------------------------------------
+//
+// PAIRED, AND THE PAIRING IS THE WHOLE TEST. This gate suppresses commands on a
+// board row, so a reader has to be able to see it stop suppressing them. OA-340
+// asserted on 2026-09-20 that `decision: peter` already took its chore out of
+// the board's housekeeping band; it did not, and nothing went red, because
+// there was nothing anywhere that could have. Each case below removes one half
+// of the marker and sees the row come back.
+//
+// END-TO-END OVER REAL FILES for the same reason 3b is: `readDecisionRows`
+// parses front matter off the disk, and a test handing it an object it built
+// itself could not tell you the parser ever produces a key.
+console.log('\n== the backlog decision marker, and the board rows it owns ==');
+{
+  const busesDir = path.join(root, 'decision-fixture');
+  const oa = path.join(busesDir, 'Development Docs', 'open-actions');
+  fs.mkdirSync(oa, { recursive: true });
+  const write = (ref, fm) => fs.writeFileSync(path.join(oa, `${ref}.md`),
+    `---\nref: ${ref}\nstatus: open\nheadline: "what ${ref} is about"\n${fm}---\n\nbody\n`);
+  const keysFor = (ref) => conc.readDecisionRows(busesDir).filter((d) => d.ref === ref).map((d) => d.key);
+
+  write('OA-901', 'decision: peter\nboardRows: engine-stale\n');
+  let got = conc.readDecisionRows(busesDir);
+  ok(got.length === 1 && got[0].key === 'engine-stale' && got[0].ref === 'OA-901',
+    'a `decision: peter` action naming a board row yields that row key', JSON.stringify(got));
+  ok(got[0].origin === 'decision' && /OA-901\.md$/.test(got[0].source) && got[0].need === 'what OA-901 is about',
+    'and it carries its origin, its file and the headline the reader needs', JSON.stringify(got[0]));
+
+  // THE GATE ACTUALLY GATES. applyHolds is the mechanism the renderer reads, so
+  // assert against IT and not against the list — a reader is protected by the
+  // attachment, not by the parse.
+  const rows = [{ key: 'engine-stale', title: 'eight towns' }, { key: 's6-stale', title: 'verification' }];
+  const applied = applyHolds(rows, got);
+  ok(applied.applied === 1 && rows[0].onHold?.length === 1 && !rows[1].onHold,
+    'it attaches to the row it names and to no other row', JSON.stringify(rows));
+
+  // RED → GREEN, arm 1: the decision marker goes and the row is free again.
+  write('OA-901', 'boardRows: engine-stale\n');
+  ok(keysFor('OA-901').length === 0,
+    'CONTROL — `boardRows:` WITHOUT `decision: peter` gates nothing', JSON.stringify(keysFor('OA-901')));
+
+  // RED → GREEN, arm 2: the marker stays and the naming goes. This is the state
+  // the whole estate was in until 2026-09-20 — the marker set, the board
+  // untold — and it must read as no gate rather than as a gate on everything.
+  write('OA-901', 'decision: peter\n');
+  ok(keysFor('OA-901').length === 0,
+    'CONTROL — `decision: peter` with no `boardRows:` gates nothing, which is the pre-OA-414 world', JSON.stringify(keysFor('OA-901')));
+
+  // A wrong value is not a quiet one. `decision: yes` is refused at filing by
+  // assemble.mjs; here it must simply not gate, never gate by truthiness.
+  write('OA-901', 'decision: yes\nboardRows: engine-stale\n');
+  ok(keysFor('OA-901').length === 0, 'CONTROL — a `decision:` value that is not peter gates nothing');
+
+  // Several keys, and the separator is not load-bearing.
+  write('OA-902', 'decision: peter\nboardRows: engine-stale, s6-stale\n');
+  write('OA-903', 'decision: PETER\nboardRows: `nobuild-March`\n');
+  const multi = keysFor('OA-902');
+  ok(multi.length === 2 && multi.includes('engine-stale') && multi.includes('s6-stale'),
+    'one action may own several rows', JSON.stringify(multi));
+  ok(keysFor('OA-903').join() === 'nobuild-March',
+    'the value is case-insensitive and backticks are stripped', JSON.stringify(keysFor('OA-903')));
+
+  // AN EMPTY BACKLOG IS NOT AN ERROR, and a missing folder is not either — the
+  // board runs against trees that have neither.
+  ok(conc.readDecisionRows(path.join(root, 'no-such-tree')).length === 0,
+    'CONTROL — no backlog folder at all reads as no decisions, not as a throw');
 }
 
 // ---------------------------------------------------------------------------

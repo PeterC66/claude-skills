@@ -248,9 +248,9 @@ MUTATIONS = [
     # Their three siblings, which mutated the patch functions, were deleted with
     # them -- there is no applier left for them to be about.
     {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
-     "what": "classify re-spells the non-actionable set as the bare literal COMMUNITY, so an expected absence the report leaves off its review list is auto-applied as SAFE",
-     "find": "    actionable=[c for c in changes if c[0] not in NON_ACTIONABLE]",
-     "to": '    actionable=[c for c in changes if c[0]!="COMMUNITY"]'},
+     "what": "the actionable filter re-spells the non-actionable set as the bare literal COMMUNITY, so an expected absence the report leaves off its review list is graded SAFE -- and since OA-426 this one line is asked by the grade AND by the sidecar, so a survivor here is wrong in two artefacts",
+     "find": "    return [c for c in changes if c[0] not in NON_ACTIONABLE]",
+     "to": '    return [c for c in changes if c[0]!="COMMUNITY"]'},
 
     {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
      "what": "SAFE goes back to being the complement of a blocking list, so every tag the report grows is auto-applied on the day it is added",
@@ -401,6 +401,22 @@ MUTATIONS = [
      "what": "assert_no_collision never fires, so the after-the-fact check that a dict somebody else built lost nothing always passes",
      "find": '    if len(mapping) != n:',
      "to": '    if len(mapping) != n and False:'},
+
+    # The two below put OA-369 back, one per half of `_route_of`. Both restore a
+    # real shipped behaviour rather than inventing one: the first is the exact
+    # expression the module carried from 2026-08-28 to 2026-09-20, and it is the
+    # only mutation in this file whose fault is that the GUARD ITSELF dies -- the
+    # caller gets an AttributeError traceback in place of the ValueError the whole
+    # module is about, on the one row shape `service_key` accepts by name.
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "a non-dict row reaches .get again, so a bare route string makes the refusal raise AttributeError from inside the guard instead of reporting the collision -- OA-369, which stood for 23 days because no live caller passes a non-dict and neither half moves a drawn byte",
+     "find": '    if not isinstance(row, dict):\n        return "?"',
+     "to": '    if False:\n        return "?"'},
+
+    {"suite": "test_index_guard.py", "file": "index_guard.py",
+     "what": "the route falls back to `.get`'s default, which applies only when the KEY is absent -- so a dict carrying an explicit `route: None` prints the word 'None' where the JS twin prints '?', the second divergence in the same expression and the one nothing had named",
+     "find": '    r = row.get("route")\n    return "?" if r is None else r',
+     "to": '    return row.get("route", "?")'},
 
     # The two below are caught by the TWIN CENSUS and by nothing else in the estate.
     # index_guard.js and index_guard.py are one rule written twice, neither half moves
@@ -951,8 +967,13 @@ MUTATIONS = [
     # breach a passenger standing at the stop would see.
     {"suite": "test_naptan_build.py", "file": "naptan_build.py",
      "what": "derive_stand falls back to the raw Indicator, so every 'opp', 'o/s' and 'N-bound' in the register becomes a stand code and is printed on a boarding sheet as one",
-     "find": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return None, None',
-     "to": '    if BARE_RE.match(ind):\n        return ind.upper(), "bare"\n    return ind.upper(), "indicator"'},
+     "find": '        return code, "bare"\n    return None, None',
+     "to": '        return code, "bare"\n    return ind.upper(), "indicator"'},
+
+    {"suite": "test_naptan_build.py", "file": "naptan_build.py",
+     "what": "the bearing check on a bare code is removed, so a compass bearing that leaked into Indicator is invented as a stand again -- OA-372, reverted",
+     "find": '        brg = (bearing or "").strip().upper()\n        if brg and code == brg:\n            return None, None\n        return code, "bare"',
+     "to": '        return code, "bare"'},
 
     {"suite": "test_naptan_build.py", "file": "naptan_build.py",
      "what": "the bare-code pattern gains IGNORECASE, so a lone lower-case letter -- far more often an abbreviation than a flag code -- becomes an invented bay letter",

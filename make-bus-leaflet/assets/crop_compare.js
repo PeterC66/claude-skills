@@ -10,6 +10,7 @@
  *
  *   node crop_compare.js old.svg new.svg out-prefix [--at x,y --size 40]
  *   node crop_compare.js old.svg new.svg out --poi 3      # 3 densest POI clusters
+ *   node crop_compare.js old.svg new.svg out --diff 3     # 3 places the ink moved
  *
  * Writes <prefix>_<n>_old.png / _new.png (and _pair.png, the two stacked with
  * captions, which is the thing to send to Peter).
@@ -22,6 +23,18 @@
  *   --width px      output width per panel, default 1100 (the crop is rasterised
  *                   at 300 dpi and then scaled, so detail is real)
  *   --label "a|b"   captions for the two panels
+ *   --diff N        instead of --at, find the N places where the two sheets'
+ *                   PIXELS differ most and crop those (buses-data OA-429, the
+ *                   monthly batched review). A sheet pair whose pixels do not
+ *                   differ at all crops nothing and says so — bytes can move
+ *                   without ink moving, and that is the reviewer's to know.
+ *   --json          print one JSON object — the spots cropped and the count of
+ *                   changed pixels — instead of the per-crop lines, for a caller
+ *
+ * WITH --diff, NEUTRALISE THE BUILD STAMP IN BOTH FILES FIRST. Two builds of one
+ * map always differ in the footer's `build N.N · date`, so without that the
+ * densest difference on every pair is the stamp. `ink_review.mjs` in bus-work
+ * does it before calling this.
  *
  * THE TRAP THIS FILE EXISTS TO RECORD: do NOT pass { density: 300 } to sharp for
  * these SVGs. The generators declare width="3508" height="2480" on the root, so
@@ -74,26 +87,76 @@ function densest(pts, side, n) {
   }
   return picked;
 }
+// Where the two rasters differ: a quarter-scale pixel diff binned into 4 mm
+// cells, then the N busiest cells, each at least half a crop from the last so
+// two crops never show the same change. Quarter scale is still 0.34 mm a pixel,
+// finer than any stroke that matters, and it keeps the diff to ~2 M pixels.
+async function diffSpots(aBuf, bBuf, side, n) {
+  const small = (buf) => sharp(buf).resize({ width: Math.round(A4_W_PX / 4) }).removeAlpha().raw()
+    .toBuffer({ resolveWithObject: true });
+  const [a, b] = await Promise.all([small(aBuf), small(bBuf)]);
+  if (a.info.width !== b.info.width || a.info.height !== b.info.height) {
+    return { spots: [], changedPx: null, why: 'the two sheets are not the same size' };
+  }
+  const { width: W, height: H, channels: C } = a.info;
+  const pxPerMm = PX_PER_MM / 4, cell = Math.max(4, Math.round(pxPerMm * 4));
+  const gw = Math.ceil(W / cell), counts = new Map();
+  let changedPx = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * C;
+      let d = 0;
+      for (let c = 0; c < C; c++) d = Math.max(d, Math.abs(a.data[o + c] - b.data[o + c]));
+      if (d <= 24) continue;   // anti-aliasing noise, not ink
+      changedPx++;
+      const k = Math.floor(y / cell) * gw + Math.floor(x / cell);
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+  }
+  const spots = [];
+  for (const [k] of [...counts].sort((p, q) => q[1] - p[1])) {
+    if (spots.length >= n) break;
+    const cx = ((k % gw) + 0.5) * cell / pxPerMm, cy = (Math.floor(k / gw) + 0.5) * cell / pxPerMm;
+    if (spots.some(([x, y]) => Math.abs(x - cx) < side / 2 && Math.abs(y - cy) < side / 2)) continue;
+    spots.push([cx, cy]);
+  }
+  return { spots, changedPx };
+}
+
 const caption = (t, w) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="46">`
   + `<rect width="${w}" height="46" fill="#ffffff"/>`
   + `<text x="10" y="32" font-family="Arial" font-size="26" fill="#1c1f22">${t.replace(/[<&]/g, '')}</text></svg>`);
 
 (async () => {
   const aSvg = fs.readFileSync(oldSvg, 'utf8'), bSvg = fs.readFileSync(newSvg, 'utf8');
-  let spots = flags('at').map(s => s.split(',').map(Number));
-  if (!spots.length) spots = densest(poiPositions(bSvg), SIDE, +flag('poi', 2));
-  if (!spots.length) { console.error('nothing to crop: pass --at x,y'); process.exit(1); }
-
+  const JSON_OUT = FLAGS.json === true;
   // No { density }: the SVG already carries its 300 dpi pixel size. See the header.
   const aBuf = await sharp(Buffer.from(aSvg)).png().toBuffer();
   const bBuf = await sharp(Buffer.from(bSvg)).png().toBuffer();
 
+  let spots = flags('at').map(s => s.split(',').map(Number)), diff = null;
+  if (!spots.length && FLAGS.diff !== undefined) {
+    diff = await diffSpots(aBuf, bBuf, SIDE, +flag('diff', 3));
+    spots = diff.spots;
+    if (!spots.length) {   // not an error: bytes moved and no ink did, or the sizes differ
+      if (JSON_OUT) console.log(JSON.stringify({ spots: [], changedPx: diff.changedPx, why: diff.why || null }));
+      else console.log(`no crop: ${diff.why || 'no pixel differs between the two sheets'}`);
+      return;
+    }
+  }
+  if (!spots.length && FLAGS.diff === undefined) spots = densest(poiPositions(bSvg), SIDE, +flag('poi', 2));
+  if (!spots.length) { console.error('nothing to crop: pass --at x,y'); process.exit(1); }
+  const { width: PW, height: PH } = await sharp(bBuf).metadata();
+
   for (let i = 0; i < spots.length; i++) {
     const [cx, cy] = spots[i];
+    const size = Math.round(SIDE * PX_PER_MM);
+    // Clamped to the page: a change in the footer is a change worth showing, and
+    // a crop box that ran off the edge made sharp throw rather than crop.
     const box = {
-      left: Math.max(0, Math.round((cx - SIDE / 2) * PX_PER_MM)),
-      top: Math.max(0, Math.round((cy - SIDE / 2) * PX_PER_MM)),
-      width: Math.round(SIDE * PX_PER_MM), height: Math.round(SIDE * PX_PER_MM),
+      left: Math.max(0, Math.min(PW - size, Math.round((cx - SIDE / 2) * PX_PER_MM))),
+      top: Math.max(0, Math.min(PH - size, Math.round((cy - SIDE / 2) * PX_PER_MM))),
+      width: Math.min(size, PW), height: Math.min(size, PH),
     };
     const cut = async (buf) => sharp(buf).extract(box).resize({ width: OUTW }).png().toBuffer();
     const a = await cut(aBuf), b = await cut(bBuf);
@@ -106,7 +169,11 @@ const caption = (t, w) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" w
                   { input: caption(CAPS[1] || 'after', OUTW), top: h + 62, left: 0 },
                   { input: b, top: h + 108, left: 0 }])
       .png().toFile(`${prefix}_${i}_pair.png`);
-    console.log(`${path.basename(prefix)}_${i}: ${cx.toFixed(0)},${cy.toFixed(0)} mm  (${SIDE} mm square)`);
+    if (!JSON_OUT) console.log(`${path.basename(prefix)}_${i}: ${cx.toFixed(0)},${cy.toFixed(0)} mm  (${SIDE} mm square)`);
+  }
+  if (JSON_OUT) {
+    console.log(JSON.stringify({ spots: spots.map(([x, y]) => [+x.toFixed(1), +y.toFixed(1)]),
+      changedPx: diff ? diff.changedPx : null, pairs: spots.map((_, i) => `${prefix}_${i}_pair.png`) }));
   }
 })();
 }

@@ -34,6 +34,9 @@ def main():
     ap.add_argument("--region",default="Cambridgeshire")
     ap.add_argument("--centre")
     ap.add_argument("--radius-km",type=float,default=1.6)
+    ap.add_argument("--expiring-days",type=int,default=28,
+                    help="passed to bootstrap_town.py (A5): drop a service whose GTFS "
+                         "registration ends within this many days. Negative turns it off.")
     ap.add_argument("--buses-root",default=None)
     ap.add_argument("--db", default=None,
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
@@ -60,7 +63,8 @@ def main():
     # 3. GTFS facts -> gtfs-services.json (need the prefix; bootstrap derives it,
     #    so run bootstrap first, then gtfs_query with the prefix it found)
     boot=[py, os.path.join(HERE,"bootstrap_town.py"), a.town,
-          "--region", a.region, "--radius-km", str(a.radius_km), "--db", a.db, "--out", s1]
+          "--region", a.region, "--radius-km", str(a.radius_km),
+          "--expiring-days", str(a.expiring_days), "--db", a.db, "--out", s1]
     if a.centre: boot += ["--centre", a.centre]
     print(run(boot))
     draft=json.load(open(os.path.join(s1,"routes.draft.json"),encoding="utf-8"))

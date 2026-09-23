@@ -1655,6 +1655,97 @@ MUTATIONS = [
                          f"an empty answer. Re-run when Overpass is answering.")''',
      "to": '''        d = {"elements": []}'''},
 
+    # ---------------------------------------------------------------- refresh_town.py
+    # OA-457. The one module a scheduled tick runs with nobody watching, and every
+    # refusal in it is raised from `main()`, which `prove-red-refresh-town.py` does not
+    # drive. Each edit below turns one refusal off; the fault it restores is a patched
+    # service list committed over sheets that say something else, or committed at all
+    # for a town a person should have looked at.
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a town with no Areas folder is not refused, so a new town is 'refreshed' instead of drafted",
+     "find": "    if not os.path.isdir(town_dir):",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a town the scan could not check is reported as unknown rather than as not checked, so the remedy named is the wrong one",
+     "find": "    for name, reason in skipped:",
+     "to": "    for name, reason in []:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a town with no shipped service list is not refused, so the refresh dies somewhere later with a stack trace",
+     "find": "    if d is None:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "an ESCALATE town is applied as if SAFE, so a new route or a changed line is committed with no person looking",
+     "find": '    if grade != "SAFE":',
+     "to": '    if grade not in ("SAFE", "ESCALATE"):'},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "the board's grade is trusted rather than cross-checked, so a row graded ESCALATE on scan day is applied today",
+     "find": '        if said.get("grade") != "SAFE":',
+     "to": "        if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a town the scan could not check is applied anyway, with no grading behind it",
+     "find": '    elif status == "not-checked":',
+     "to": "    elif False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a person's wording in routes.json no longer stops the run, so the service list and the sheet disagree",
+     "find": "    if conflicts:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "files that already carry the feed's values are rebuilt anyway, so a refresh with nothing to write mints a new version",
+     "find": "    if not vs_touched and not rj_touched:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "the dry run writes, so looking at a refresh is the same as doing it",
+     "find": "    if not a.apply:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "S1 is committed before the sheets are built -- the order this module was first written in, which left Ramsey's data and sheets disagreeing",
+     "find": '    stage(town_dir, "stamps", s4)',
+     "to": '    stage(town_dir, "commit", "S1", "too-early")\n    stage(town_dir, "stamps", s4)'},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "blocking build warnings are reported as a generic build failure, so the refusal no longer names build-warnings.txt",
+     "find": "    if built.returncode == 3:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a sheet the label diff could not read counts as a sheet with no changed labels",
+     "find": '        if d2["missing"]:',
+     "to": "        if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a label the patch does not explain no longer stops the run, which is the one gate between a SAFE refresh and a changed sheet",
+     "find": "    if unexplained:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "when the engine has moved the refusal no longer says so, so an engine change reads as a mystery about the feed",
+     "find": '        if result["engine"]["moved"]:',
+     "to": "        if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "a sheet that failed to render is left out of a committed S5, so the map is one sheet short with nothing red",
+     "find": "    if failed:",
+     "to": "    if False:"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "--by is dropped, so a tick's stage records name nobody",
+     "find": '    return ["--by", str(who)] if who else []',
+     "to": "    return []"},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "S4 is committed without --based-on, so a later rollout cannot see that its data moved (OA-225)",
+     "find": '"--based-on", "S2=%s;S3=%s" % (s2_latest, os.path.basename(s3))',
+     "to": '"--note", note'},
+
 ]
 
 

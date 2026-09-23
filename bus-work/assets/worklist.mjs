@@ -84,6 +84,7 @@ import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatc
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
+import { worktreeSweepBoard } from './worktree_sweep.mjs';
 import { readDirectoryState, directoryLinkItems } from './directory_links.mjs';
 import { readCoverageState, directoryCoverageItems } from './directory_coverage.mjs';
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
@@ -1033,6 +1034,7 @@ for (const u of stranded.unreadable) warnings.push(`stranded branches: ${u.name}
 const prSweep = prSweepItems({ state: readPrSweep(path.join(BUSES, 'loop')), assetsDir: HERE });
 for (const it of prSweep.items) add(it);
 for (const n of prSweep.notes) warnings.push(n);
+worktreeSweepBoard({ busesDir: BUSES, assetsDir: HERE, add, warnings }); // finished worktrees — the argument is in worktree_sweep.mjs
 
 // IS THE LOOP DOING ANYTHING AT ALL (OA-288). The third fact about the loop and
 // the last one with no reader: `loop/your-move/` says these items need you and

@@ -343,6 +343,14 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-ink-review
 
+      # 2026-09-23. The worktree sweep DELETES things, so every case that matters
+      # is a refusal: unmerged, dirty, locked, recently touched, a junction inside,
+      # and -- the load-bearing one -- a squash-merged PR whose branch has a commit
+      # the PR never carried. Throwaway repositories under the temp dir; no gh.
+      - name: Prove the worktree sweep removes only finished work
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-worktree-sweep
+
       # buses-data OA-426 (2026-09-22), R9 item 2, the other half: the thing that
       # ACTS on that grade. A SAFE refresh corrects an operator name and a set of
       # days and must touch nothing else -- so the failures that matter are all

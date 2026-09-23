@@ -34,8 +34,10 @@
  *         and, for S4, refuses a routes.json carrying no "engine" hash or no
  *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
  *         with no build-warnings.txt at all — every route to an S4 writes one
- *         (--force-nolog overrides, for a build that genuinely drew no sheets)
- *   stamps [runDir]                    write BOTH S4 provenance stamps into that
+ *         (--force-nolog overrides, for a build that genuinely drew no sheets),
+ *         and, for S6, refuses a redteam.json with no redteam-source.json decision
+ *         beside it, or one that says WAIT (--force-decision overrides; OA-427)
+ *   stamps [runDir]                   write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
  *   status                             print a manifest summary
@@ -103,6 +105,7 @@ const VERSIONED = new Set(['S4', 'S5']);
 const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
 const { computeEngineVersion, computePlaceEngineVersion, isPlaceRun, stampEngine } = require('./engine_version');
 const { die: cliDie, parseArgs } = require('./cli.js');
+const { DECISION_FILE: REDTEAM_DECISION_FILE } = require('./redteam_budget.js');
 
 /*
  * die — the refusal, through `cli.die` so there is one of them.
@@ -650,6 +653,49 @@ function main() {
         + `  Override with --force-missing only if the absence is deliberate.`);
     }
     if (absent.length) console.log(`  WARNING: recording ${absent.length} output(s) that do not exist (--force-missing): ${absent.join(', ')}`);
+
+    /* Guard (OA-427): an S6 holding a red-team answer must hold the DECISION that
+     * put it there. `redteam_source.js` writes `redteam-source.json` saying REUSE,
+     * BUY or WAIT, and `redteam_budget.js` counts the month's spend from those
+     * records and nothing else — so an answer bought without asking the tool is a
+     * purchase the ration never saw. Until this guard the month's budget could be
+     * evaded by the simplest route there is: not running the tool.
+     *
+     * THREE SHAPES ARE REFUSED, and a record that says WAIT is one of them: WAIT
+     * means the month had no room, so an answer sitting beside it was bought
+     * against the ration rather than inside it.
+     *
+     * AN S6 WITH NO ANSWER AT ALL IS NOT THIS GUARD'S BUSINESS. Sanity-only mode
+     * (`redteamPresent:false`) is documented and costs nothing, and a WAIT with no
+     * answer is exactly what a rationed month should look like. The question is
+     * whether a PURCHASE went unrecorded, and with no answer there was none.
+     *
+     * S6 ONLY, and a refusal, because this is the one boundary every S6 passes and
+     * nothing is lost by stopping here: the answer stays in the run dir, and
+     * `redteam_source.js --already-bought "<why>"` records it as the buy it was. */
+    if (st === 'S6' && fs.existsSync(path.join(runDir, 'redteam.json'))) {
+      const recFile = path.join(runDir, REDTEAM_DECISION_FILE);
+      let problem = null;
+      if (!fs.existsSync(recFile)) problem = `it holds redteam.json and no ${REDTEAM_DECISION_FILE}`;
+      else {
+        let d = null;
+        try { d = JSON.parse(fs.readFileSync(recFile, 'utf8')); } catch (e) { problem = `${REDTEAM_DECISION_FILE} is not JSON (${e.message})`; }
+        if (!problem && (!d || !['BUY', 'REUSE', 'WAIT'].includes(d.decision)))
+          problem = `${REDTEAM_DECISION_FILE} records no decision (${JSON.stringify(d && d.decision)})`;
+        else if (!problem && d.decision === 'WAIT')
+          problem = `${REDTEAM_DECISION_FILE} says WAIT — the month's budget had no room — and a redteam.json is here anyway`;
+      }
+      if (problem && !f['force-decision']) {
+        die(`S6 run ${id} cannot be committed: ${problem}.\n`
+          + `  The red-team budget counts the month's spend from these records and nothing else,\n`
+          + `  so an answer with no decision beside it is a purchase the ration never saw (OA-427).\n`
+          + `  If this run's answer was bought here, record it as the buy it was:\n`
+          + `    node "%SK%\\redteam_source.js" --into "${runDir}" --already-bought "<why it was bought unasked>"\n`
+          + `  Otherwise remove redteam.json and run redteam_source.js from the run dir, which decides.\n`
+          + `  Override with --force-decision only if the answer is deliberately unaccounted for.`);
+      }
+      if (problem) console.log(`  WARNING: committing an S6 whose red-team answer has no decision (--force-decision): ${problem}`);
+    }
 
     const rec = { id, dir: relDir, at: isoNow(), outputs };
 

@@ -783,6 +783,13 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-s6-mirror
 
+      # OA-427. `stage.js commit S6` refuses a red-team answer with no decision
+      # record beside it, and `redteam_source.js` decides a run dir once, so the
+      # month's budget cannot be evaded by not running the tool. One arm per half.
+      - name: Prove the S6 red-team decision guard can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-s6-decision
+
       # OA-427 item 3. `stage.js --by <who>` was built on 2026-09-22 and measured
       # the same day: 1,211 stage runs in the 30-day window, not one carrying an
       # actor, because none of the four callers passed the flag. The check that

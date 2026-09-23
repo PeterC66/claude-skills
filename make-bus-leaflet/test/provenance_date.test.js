@@ -84,6 +84,37 @@ const ENTRIES = [
 // history out of the code, which is the opposite of what this project wants.
 const MONTH_YEAR = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d\d\b/;
 
+/** The ELSE-BRANCH of the `checkedAt ? … : …` ternary, and only that. Null when there
+ *  is no such ternary.
+ *
+ *  IT USED TO BE `/checkedAt\s*\?([^\n]*)/` — the rest of the LINE — and that read the
+ *  whole footer on any generator that builds its notes as one long template literal.
+ *  `gen_external_places.js` does exactly that, and its line carries two more ternaries
+ *  after this one, both ending `: ''`; so the assertion below was satisfied by a `: ''`
+ *  belonging to `_hasTimes`, and a checkedAt branch defaulting to a made-up date passed.
+ *  It survived as case 3 of tools/prove-red-provenance-place.js on 2026-09-22 and is the
+ *  reason this helper exists: the suite was green about a fault on the one generator
+ *  OA-321 had just brought into its population. The two town generators never exposed it
+ *  because their notes are split one per array element, so the line ended at the ternary.
+ *
+ *  The scan counts BRACES only — never parentheses, which appear inside the string
+ *  literals here (" (") and would unbalance at once — and stops at the first `}` or `;`
+ *  seen at depth 0, which is the end of the enclosing `${…}` placeholder in the two
+ *  radial generators and the end of the statement in gen_internal.js's CHECKED_AT. */
+function checkedAtElse(src) {
+  const at = src.search(/\bcheckedAt\s*\?/);
+  if (at < 0) return null;
+  let depth = 0, colon = -1;
+  for (let i = src.indexOf('?', at) + 1; i < src.length; i++) {
+    const c = src[i];
+    if (c === '{') depth++;
+    else if (c === '}') { if (depth === 0) return colon < 0 ? null : src.slice(colon + 1, i); depth--; }
+    else if (depth === 0 && (c === ';' || c === '\n')) return colon < 0 ? null : src.slice(colon + 1, i);
+    else if (c === ':' && depth === 0 && colon < 0) colon = i;
+  }
+  return null;
+}
+
 /** Source with // line comments and block comments removed. Crude, and enough:
  *  these files contain no string literal carrying "//" or a comment marker. */
 function stripComments(src) {
@@ -100,18 +131,20 @@ for (const [abs, label] of ENTRIES) {
 const DRAWS_FOOTER = [...CODE.keys()].filter((l) => /\bfooterBand\s*\(/.test(CODE.get(l))).sort();
 const CLAIMS_CROSSCHECK = DRAWS_FOOTER.filter((l) => /cross-check/i.test(CODE.get(l)));
 
-// THE EXEMPTION IS LOAD-BEARING AND IT RETIRES ITSELF. gen_external_places.js draws
-// "cross-checked with operators" and reads checkedAt NOWHERE, so its sheet makes the
-// claim and cannot ever say when — the OA-153 fault in its dateless form. The fix is
-// an assets/ change, which owes a portal re-vendor and a rebuild of three live place
-// sheets, so it is FILED as OA-321 rather than made here; a gate that is red on the
-// day it lands is one somebody mutes in its first week. The last test in this file
-// asserts the exemption is still EARNED, so whoever fixes OA-321 is told to delete
-// this entry rather than left to discover it.
-const KNOWN_DATELESS = new Map([
-  ['place/gen_external_places.js',
-   'OA-321 — claims a cross-check and reads checkedAt nowhere; fixing it moves ink on three live place sheets'],
-]);
+// THE EXEMPTION IS LOAD-BEARING AND IT RETIRES ITSELF, AND ON 2026-09-22 IT DID.
+// gen_external_places.js drew "cross-checked with operators" and read checkedAt NOWHERE,
+// so its sheet made the claim and could not ever say when — the OA-153 fault in its
+// dateless form. It was exempted here rather than fixed in place because the fix is an
+// assets/ change owing a portal re-vendor and a rebuild of three live place sheets, and
+// a gate that is red on the day it lands is one somebody mutes in its first week. OA-321
+// then fixed it, and the LAST TEST IN THIS FILE is what said so: with the generator
+// changed and this entry still present, the suite went red naming the file and quoting
+// the reason below, which is how the entry came to be deleted rather than left behind as
+// a stale excuse. THE MAP IS DELIBERATELY LEFT IN PLACE AND EMPTY — the control iterates
+// it, so an empty map is a control that iterates nothing, and the mutation that proves
+// the control still discriminates is case 4 of tools/prove-red-provenance-place.js, which
+// puts a stale entry back and requires the suite to refuse it.
+const KNOWN_DATELESS = new Map([]);
 
 test('the derived population is every generator that draws a footer, and it is not empty', () => {
   // A suite whose population is empty is green by arithmetic. This is the assertion
@@ -151,13 +184,17 @@ for (const g of CLAIMS_CROSSCHECK) {
     // The honest failure mode. A default — most temptingly validFrom, which is a
     // DIFFERENT claim and already disagrees with the real S1 date on Huntingdon —
     // would manufacture a confident wrong date, which is the fault being fixed.
-    const m = CODE.get(g).match(/checkedAt\s*\?([^\n]*)/);
-    assert.ok(m, `${g} does not branch on checkedAt at all`);
-    const branch = m[1];
-    assert.ok(/:\s*''/.test(branch),
-      `${g}'s checkedAt branch must fall back to an empty string, not to another date. Got: ${branch.trim()}`);
+    const branch = checkedAtElse(CODE.get(g));
+    assert.ok(branch !== null, `${g} does not branch on checkedAt at all`);
+    // validFrom FIRST, and the order is load-bearing: it is a strict special case of the
+    // empty-string rule below, so whichever runs first is the message a reader gets. The
+    // named one is worth far more than "not an empty string" — it says which field was
+    // reached for and why that field answers a different question. Until 2026-09-22 the
+    // order did not matter, because the empty-string assertion was passing spuriously.
     assert.ok(!/validFrom/.test(branch),
       `${g} falls back to validFrom, which is when the timetable takes effect — not when it was checked.`);
+    assert.ok(/^\s*(''|"")\s*$/.test(branch),
+      `${g}'s checkedAt branch must fall back to an empty string, not to another date. Got: ${branch.trim()}`);
   });
 }
 

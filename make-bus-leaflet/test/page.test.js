@@ -102,18 +102,23 @@ for (const [abs, label] of CANDIDATES) {
 const OPENS_PAGE = /svgOpen\s*\(|<svg\s+xmlns=/;
 const DRAWS_PAGE = [...SRC.keys()].filter((l) => OPENS_PAGE.test(stripComments(SRC.get(l)))).sort();
 
-// THE EXEMPTION IS LOAD-BEARING AND IT RETIRES ITSELF. gen_external_places.js keeps a
-// second home for the page size — `const W = 297, H = 210` — and writes the root
-// element out as its own literal instead of calling svgOpen(), which is the thirteenth
-// number this test was written to prevent and the one file it could not see. The fix is
-// an assets/ change, which owes a portal re-vendor and `npm run track:engine` in the
-// same commit, so it is FILED as OA-322 rather than made here; a gate that is red on the
-// day it lands is one somebody mutes in its first week. The control below asserts the
-// exemption is still EARNED, so whoever fixes OA-322 is told to delete this entry.
-const KNOWN_LITERAL = new Map([
-  ['place/gen_external_places.js',
-   'OA-322 — a second home for the page size and its own copy of the root element; fixing it owes a re-vendor'],
-]);
+// THE EXEMPTION WAS LOAD-BEARING AND IT RETIRED ITSELF, which is the half worth
+// keeping now the map is empty. gen_external_places.js kept a second home for the page
+// size — `const W = 297, H = 210` — and wrote the root element out as its own literal
+// instead of calling svgOpen(): the thirteenth number this test was written to prevent,
+// in the one file its typed population could not see. It was exempted here on
+// 2026-09-12 and fixed the same day under OA-322, and the control below is what told
+// whoever fixed it to delete the entry — watched, not assumed: with the generator taking
+// both from page.js and the entry still present, this suite reported exactly one failure
+// and it was *every exemption is still earned*, naming the file and the reason.
+//
+// AN EMPTY MAP IS THE INTENDED END STATE AND IT IS NOT A DEAD CONTROL. The per-generator
+// assertion below now runs over place/gen_external_places.js like every other file, so
+// nothing is excused; the control still stands ready for the next entry and fires in both
+// directions — a file that stops breaching the rule, and a file that stops opening a page
+// at all. Add an entry only with an action reference and only when the fix is genuinely
+// somebody else's errand, because an exemption is a gate that is green about its subject.
+const KNOWN_LITERAL = new Map([]);
 
 test('the derived population is every generator that opens a page, and it is not empty', () => {
   // A suite whose population is empty is green by arithmetic. This says the filter

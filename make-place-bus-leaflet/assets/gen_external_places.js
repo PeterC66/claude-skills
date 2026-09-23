@@ -143,7 +143,16 @@ const BFIT = DESIGN.badgeFit !== false;
 const HUBFIT = DESIGN.hubFit !== false;
 const LEGPLACE = !!DESIGN.legendPlace;
 const SPRD = DESIGN.spokeSpread ? (DESIGN.spokeSpread === true ? {} : DESIGN.spokeSpread) : null;
-const W = 297, H = 210;
+// THE PAGE COMES FROM page.js, and until 2026-09-12 this file was the one place in
+// either skill that kept its own copy (OA-322). `const W = 297, H = 210` here was
+// the thirteenth of the twelve numbers page.js was written to end, and the root
+// element below was typed out rather than taken from svgOpen(). page.test.js's
+// census could not see it: its population was three names typed into the test, all
+// of them town files, and the place skill has no test folder of its own. The two
+// pairs are not derivable from each other — 297mm at 300dpi is 3507.87px and the
+// root declares 3508 — so a second home is a second answer, and the one that is
+// wrong is the one nobody edits. page.js's header has the whole reasoning.
+const { W, H, svgOpen } = require(_dep('page.js'));
 // The boxes nothing may be printed over, gathered as the sheet is drawn — the same
 // "claim your space before anything is placed" order gen_internal.js uses. Unlike
 // gen_external_radial.js these are collected UNCONDITIONALLY rather than only under
@@ -253,7 +262,7 @@ function destNode(x, y, label, sub, timeLabel) {
 }
 
 // ---- canvas -----------------------------------------------------------------
-out(`<svg xmlns="http://www.w3.org/2000/svg" width="3508" height="2480" viewBox="0 0 ${W} ${H}">`);
+out(svgOpen(W, H));
 out(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 const TITLE_COL = D.titleColor || Object.values(C)[0] || '#444';
 out(`<text x="10" y="17" font-family="Arial" font-weight="bold" font-size="11" fill="${TITLE_COL}">Buses from ${esc(D.place)}</text>`);
@@ -346,7 +355,23 @@ const _hasTimes = dests.some(b => b.minutesToDestination != null);
 // and their length carries nothing — so it can never carry a bar, and it was the one sheet
 // type saying nothing at all about that. Kept short on purpose: a note long enough to WRAP
 // adds a line to the footer plate, which moves the plate top and refits the whole sheet.
-const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
+// routes.json `checkedAt` — WHEN this place's services were last cross-checked, and the
+// parenthetical is the whole of OA-321. This sheet claimed a cross-check from the day it
+// was written and read the field nowhere, so it asserted the thing OA-153 was raised about
+// — a footer saying it had been checked, on a map a reader had just found four faults on —
+// and was structurally incapable of ever saying when. The 2026-08-28 fix that made the date
+// per-map reached gen_internal.js and gen_external_radial.js and never arrived here.
+// ABSENT => THE PARENTHETICAL IS OMITTED, never guessed, and never defaulted from
+// validFrom: that is when the timetable takes EFFECT, a different claim, and it already
+// disagrees with the real S1 date on Huntingdon. See gen_internal.js's CHECKED_AT for the
+// full reasoning. The date sits after "operators" rather than after "bustimes.org" as it
+// does on the town radial, because this sheet's phrasing puts bustimes.org in the NEXT
+// sentence, where it is about confirming times rather than about what we checked.
+const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators${D.checkedAt ? ` (${D.checkedAt})` : ''}. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
+// No widow: the note's last two words are joined by a NO-BREAK SPACE, which footer.js's
+// wrap never splits on, so the last line is never a single word. The dated note above put
+// "scale." alone on a third line on three place sheets (buses-data OA-321, 2026-09-23).
+const FOOTER_NOTE_TEXT = FOOTER_NOTES.replace(/ (\S+)$/, ' $1');
 // design.sheetUrl / design.sheetQr — the printed route back to the current version.
 // Hoisted above footerPlateTop because a QR block can push the plate top UP, and every
 // free-floating page device below works to PLATE_TOP: deriving the plate without the
@@ -361,7 +386,7 @@ const FOOTER_OPTS = {
   // the credit line (footer.js). Absent => no row, byte-identical.
   sheetVersion: DESIGN.sheetVersion || null,
   ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
-const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTES, safe: PSAFE, ...FOOTER_OPTS });
+const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTE_TEXT, safe: PSAFE, ...FOOTER_OPTS });
 // The frame every free-floating page device works to: inside the title block, above the
 // footer plate, and never nearer the trim than design.printSafe asks for.
 const _SAFE = PSAFE != null ? PSAFE : 0;
@@ -1071,7 +1096,7 @@ if (V2) {
 }
 
 out(footerBand({
-  notes: FOOTER_NOTES,
+  notes: FOOTER_NOTE_TEXT,
   version: D.version, validFrom: D.validFrom || 'Summer 2026',
   safe: PSAFE,
   ...FOOTER_OPTS

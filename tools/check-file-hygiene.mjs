@@ -44,6 +44,15 @@
 // untidiness. A gate red on day one about files nobody may touch is a gate
 // somebody mutes in its first week.
 //
+// GARBLED TEXT IS TIER 1 TOO (buses-data OA-455, 2026-09-23). Python on Windows
+// reads a file in the Windows code page unless told `encoding='utf-8'`, and every
+// en-dash and `·` it writes back becomes a short run of accented letters. It
+// reached a St Neots East render that day, and the first sweep of this check
+// found it in two tracked files nobody had noticed. It is Tier 1 because the
+// place it lands first is generated S3 config, which Tier 2 excuses. A document
+// that QUOTES garbled text on purpose — to explain the fault — names itself in
+// its repository's `quotesGarbled`, file by file, with a reason.
+//
 // Run it from any repository root, or point it elsewhere. No placeholders but
 // the directory:
 //   node tools/check-file-hygiene.mjs
@@ -104,13 +113,16 @@ const BINARY_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.docx', '.
  *   notOurs      {path: reason} — Tier 2 does not apply, named file by file.
  *                A STALE ENTRY IS A HARD ERROR, so a document that leaves cannot
  *                leave an exemption behind.
+ *   quotesGarbled {path: reason} — the GARBLED rule does not apply, named file
+ *                by file, for a document that quotes mojibake to explain it.
+ *                Stale entries are a hard error here too.
  *
  * Absent is not an error: the bare rules are the right default for a repository
  * nobody has declared anything about.
  */
 function declarations(root) {
   const p = path.join(root, '.file-hygiene.json');
-  if (!existsSync(p)) return { neverRead: [], notAuthored: [], notOurs: new Map(), declared: false };
+  if (!existsSync(p)) return { neverRead: [], notAuthored: [], notOurs: new Map(), quotesGarbled: new Map(), declared: false };
   let raw;
   try {
     raw = JSON.parse(readFileSync(p, 'utf8'));
@@ -128,6 +140,7 @@ function declarations(root) {
     neverRead: (raw.neverRead ?? []).map((s) => re(s, `neverRead ${JSON.stringify(s)}`)),
     notAuthored: (raw.notAuthored ?? []).map(([s, why]) => [re(s, `notAuthored ${JSON.stringify(s)}`), why]),
     notOurs: new Map(Object.entries(raw.notOurs ?? {})),
+    quotesGarbled: new Map(Object.entries(raw.quotesGarbled ?? {})),
     declared: true,
   };
 }
@@ -140,12 +153,62 @@ const DECL = declarations(ROOT);
  * in no position to make it. Without this gate the pre-commit hook refused every
  * commit in any repository whose root was not the checker's own. */
 if (!staged) {
-  for (const rel of DECL.notOurs.keys()) {
+  for (const rel of [...DECL.notOurs.keys(), ...DECL.quotesGarbled.keys()]) {
     if (!existsSync(path.join(ROOT, rel))) {
       console.error(`check-file-hygiene: ${ROOT}/.file-hygiene.json exempts ${rel}, which is not there any more — remove the entry or fix the path.`);
       process.exit(2);
     }
   }
+}
+
+/* GARBLED TEXT, detected by REVERSING the fault rather than by a typed list of
+ * its symptoms — so no file, this one included, has to spell a garbled
+ * sequence out. Every run of characters the Windows code page can produce is
+ * mapped back to the bytes it came from; if those bytes hold a well-formed
+ * UTF-8 character, the run is UTF-8 that was read as Windows-1252. Latin-1's
+ * C1 controls are mapped too, because a Latin-1 read leaves those behind
+ * invisibly (four em-dashes in buses-data's failure-shapes document, found by
+ * the first sweep, showed on screen as a bare accented `a`).
+ *
+ * THE DECODED CHARACTER MUST BE A REAL ONE. Genuine text can put code-page
+ * letters side by side by chance: a list of sample glyphs in
+ * font_metrics_build.js reads as the bytes of a four-byte sequence, but one
+ * that decodes to an UNASSIGNED code point. Requiring an assigned, printable
+ * result is what separates the two. */
+const FROM_CP = new Map();
+{
+  const cp = new TextDecoder('windows-1252');
+  for (let b = 0x80; b <= 0xff; b++) {
+    const ch = cp.decode(Uint8Array.of(b));
+    if (!FROM_CP.has(ch)) FROM_CP.set(ch, b);
+    if (b <= 0x9f && !FROM_CP.has(String.fromCharCode(b))) FROM_CP.set(String.fromCharCode(b), b);
+  }
+}
+const UTF8 = new TextDecoder('utf-8', { fatal: true });
+const NOT_A_CHARACTER = /[\p{Cn}\p{Cc}\p{Cs}\p{Co}]/u;
+
+/** The garbled runs in `text`, each as it appears — empty when there are none. */
+function garbledRuns(text) {
+  const chars = Array.from(text);
+  const runs = [];
+  for (let i = 0; i < chars.length;) {
+    if (!FROM_CP.has(chars[i])) { i++; continue; }
+    let j = i;
+    while (j < chars.length && FROM_CP.has(chars[j])) j++;
+    const bytes = chars.slice(i, j).map((c) => FROM_CP.get(c));
+    for (let k = 0; k < bytes.length; k++) {
+      const lead = bytes[k];
+      const n = lead >= 0xc2 && lead <= 0xdf ? 1 : lead >= 0xe0 && lead <= 0xef ? 2 : lead >= 0xf0 && lead <= 0xf4 ? 3 : 0;
+      if (!n || k + n >= bytes.length) continue;
+      let ch;
+      try { ch = UTF8.decode(Uint8Array.from(bytes.slice(k, k + n + 1))); } catch { continue; }
+      if (NOT_A_CHARACTER.test(ch)) continue;
+      runs.push(chars.slice(i, j).join(''));
+      break;
+    }
+    i = j;
+  }
+  return runs;
 }
 
 function tracked(root) {
@@ -195,6 +258,16 @@ for (const rel of files) {
   const lf = (latin.match(/\n/g) || []).length - crlf;
   if (crlf && lf) {
     findings.push([rel, 'MIXED-EOL', `${crlf} CRLF and ${lf} LF line(s) — an edit matching on surrounding text will not match`]);
+  }
+  if (!DECL.quotesGarbled.has(rel)) {
+    const runs = garbledRuns(d.toString('utf8'));
+    if (runs.length) {
+      /* A C1 control prints as nothing, so it is spelled out — or a Latin-1
+       * garbling reads on screen as one harmless accented letter. */
+      const visible = (r) => JSON.stringify(r).replace(/[\u0080-\u009f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+      const shown = [...new Set(runs)].slice(0, 3).map(visible).join(', ');
+      findings.push([rel, 'GARBLED', `${runs.length} run(s) of UTF-8 read as the Windows code page, e.g. ${shown} — rewrite them as the characters they were`]);
+    }
   }
 
   // ---- Tier 2: house style, files this repository counts as its own.

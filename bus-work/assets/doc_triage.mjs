@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
- * doc_triage.mjs — the weekly pass over the two document checks that CANNOT run
- * in CI, and the draft that carries what they find to Peter (buses-data, asked
+ * doc_triage.mjs — the weekly pass over the document questions that nothing
+ * else asks, and the draft that carries what they find to Peter (buses-data, asked
  * for 2026-09-22).
  *
  * WHY THIS EXISTS. `Development Docs/README.md` has said since 2026-09-21 that
@@ -17,7 +17,7 @@
  *
  * WHAT IT DOES, AND THE ORDER IS THE DESIGN.
  *
- *   1. Runs both checkers with `--json`, so nothing here greps a report. A
+ *   1. Runs all three checkers with `--json`, so nothing here greps a report. A
  *      runner that reads prose goes quiet the day somebody improves a sentence.
  *   2. Writes `loop/doc-triage.json`. That file is the STAMP the loop prompt's
  *      `find -mmin` test reads, exactly as `pr-sweep.json` is, and it is written
@@ -34,6 +34,15 @@
  * The rule this follows is the estate's own — a tick may write where the history
  * is readable, and `loop/` and the map trees are both.
  *
+ * THE THIRD HALF, `list-not-filed.mjs` (buses-data OA-446, 2026-09-23). Asked
+ * the same week: what reminds Peter that a plan holds a step nobody filed? Nothing
+ * did — `check-doc-coverage.mjs` asks whether a DOCUMENT is held by a live row,
+ * never whether every ITEM in it is. An item a document deliberately leaves is now
+ * a line beginning `**Not filed:**`, and this pass lists every one. Unlike the
+ * other two its subject DOES survive `actions/checkout`; it is here rather than in
+ * CI because it exits 0 whatever it finds, and a question in a CI log has no
+ * reader. The draft is where somebody reads it.
+ *
  * ONE DRAFT, REWRITTEN, NEVER DELETED. `loop/your-move/` is the one outbound
  * folder and a draft there is Peter's triage; n drafts for n weeks of the same
  * unanswered finding would bury the thing somebody is actually waiting on. So
@@ -49,12 +58,12 @@
  * and not decoration.
  *
  * A CHECKER IT CANNOT RUN IS EXIT 2, NEVER A CLEAN REPORT. If a script is missing
- * or dies, this says so and refuses; a triage that silently drops one of its two
+ * or dies, this says so and refuses; a triage that silently drops one of its
  * halves would report "nothing to do" about a question it never asked.
  *
  * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
  *
- *   node doc_triage.mjs                 run both checks, stamp, draft if needed
+ *   node doc_triage.mjs                 run all three, stamp, draft if needed
  *   node doc_triage.mjs --dry-run       report only; write neither file
  *
  * `--buses <dir>` points at a different buses tree; `--out <file>` and
@@ -93,18 +102,29 @@ function runChecker(buses, script, flags) {
 export function triage(buses) {
   const candidates = runChecker(buses, 'list-archive-candidates.mjs', ['--json']);
   const memory = runChecker(buses, 'check-memory-paths.mjs', ['--json']);
-  return { buses, candidates, memory };
+  const notFiled = runChecker(buses, 'list-not-filed.mjs', ['--json']);
+  return { buses, candidates, memory, notFiled };
 }
 
 /** The draft's body. Deliberately carries no ask and no Blocks field. */
 export function draftBody(result, today) {
   const cands = result.candidates.data?.candidates ?? [];
   const stale = result.memory.data?.stale ?? [];
+  const marks = result.notFiled.data?.markers ?? [];
   const lines = [];
   lines.push('# The weekly document triage found something');
   lines.push('');
-  lines.push(`Written by the scheduled loop's weekly pass on ${today}. Both of these checks are local-only by construction — their subjects do not survive \`actions/checkout\`, so CI has no copy of either and never will. Nothing here blocks anything; each item is a question or a chore.`);
+  lines.push(`Written by the scheduled loop's weekly pass on ${today}. None of these questions is asked anywhere else — two cannot run in CI because their subjects do not survive \`actions/checkout\`, and the third would have no reader there. Nothing here blocks anything; each item is a question or a chore.`);
   lines.push('');
+
+  if (marks.length) {
+    lines.push(`## ${marks.length} item${marks.length === 1 ? '' : 's'} a document marks **Not filed** — work no row carries`);
+    lines.push('');
+    lines.push('Each is a line in a working document that begins `**Not filed:**`: a step somebody meant to do and left in the document rather than filing a row. Each leaves by an edit to that same line — **file it** (`assemble.mjs --next`, then the line becomes `**Filed:** OA-nnn`) or **declare it a finding** (`**Finding only:**` and the reason). See *Work a document holds that no row carries* in `Development Docs/README.md`.');
+    lines.push('');
+    for (const m of marks) lines.push(`- \`${m.document}:${m.line}\` — ${m.item}`);
+    lines.push('');
+  }
 
   if (cands.length) {
     lines.push(`## ${cands.length} archive candidate${cands.length === 1 ? '' : 's'} — a question, not a fault`);
@@ -160,7 +180,7 @@ function main() {
   /* A HALF THAT COULD NOT RUN IS A REFUSAL. Reporting "nothing to do" about a
    * question that was never asked is the shape this whole family exists to
    * prevent. */
-  const broken = [result.candidates, result.memory].filter((r) => !r.ok);
+  const broken = [result.candidates, result.memory, result.notFiled].filter((r) => !r.ok);
   if (broken.length) {
     for (const b of broken) console.error(`doc_triage: ${b.why}`);
     console.error('doc_triage: refusing — a triage that drops one of its halves cannot report clear.');
@@ -169,7 +189,8 @@ function main() {
 
   const cands = result.candidates.data.candidates ?? [];
   const stale = result.memory.data.stale ?? [];
-  const found = cands.length + stale.length;
+  const marks = result.notFiled.data.markers ?? [];
+  const found = cands.length + stale.length + marks.length;
   const today = new Date().toISOString().slice(0, 10);
 
   const loopDir = path.join(buses, 'loop');
@@ -185,11 +206,13 @@ function main() {
     memoryStores: result.memory.data.stores ?? [],
     memoryPathsRead: result.memory.data.scannedPaths ?? null,
     datedDocuments: result.candidates.data.dated ?? null,
+    notFiledItems: marks.length,
+    workingDocuments: result.notFiled.data.documents ?? null,
     draft: found ? draftFile : null,
   };
 
-  console.log(`${cands.length} archive candidate(s); ${stale.length} stale memory path(s).`);
-  console.log(`  read ${stamp.datedDocuments} dated document(s) and ${stamp.memoryPathsRead} memory path(s) across ${stamp.memoryStores.length} store(s)`);
+  console.log(`${cands.length} archive candidate(s); ${stale.length} stale memory path(s); ${marks.length} item(s) marked Not filed.`);
+  console.log(`  read ${stamp.datedDocuments} dated document(s), ${stamp.workingDocuments} working document(s) and ${stamp.memoryPathsRead} memory path(s) across ${stamp.memoryStores.length} store(s)`);
 
   if (dryRun) {
     console.log('\n--dry-run: neither the stamp nor the draft was written.');

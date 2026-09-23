@@ -1144,6 +1144,12 @@ export function needsOf(item) {
   // action they offer is `node pr_sweep.mjs`, which writes loop/pr-sweep.json
   // into the buses tree. Nothing it does needs the engine.
   if (key === 'pr-sweep-due' || key === 'pr-sweep-record') return ['buses-tree'];
+  // 2026-09-23: the worktree sweep, the same split. A kept-worktree or stray
+  // row is a person deciding whether leftover files are wanted — no shared tree.
+  // The due/record rows offer `node worktree_sweep.mjs --apply`, which writes
+  // loop/worktree-sweep.json into the buses tree.
+  if (key.startsWith('worktree-sweep-kept-') || key.startsWith('worktree-sweep-stray-')) return [];
+  if (key === 'worktree-sweep-due' || key === 'worktree-sweep-record') return ['buses-tree'];
   // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
   // rather than left to fall through the default — the row's own action WRITES to
   // the buses tree twice over. `directory.mjs --links` writes link-check.json, and

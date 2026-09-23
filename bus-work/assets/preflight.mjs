@@ -147,7 +147,14 @@ function builtIn(repo) {
         TOOLS && { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: [`${TOOLS}/check-doc-links.mjs`] },
         TOOLS && { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: [`${TOOLS}/check-file-hygiene.mjs`, '--root', '.'] },
         TOOLS && { id: 'acronyms', label: 'every short form can be looked up', cmd: 'node', args: [`${TOOLS}/check-doc-acronyms.mjs`] },
-        { id: 'backlog-index', label: 'the backlog index matches every action file', cmd: 'node', args: ['Development Docs/open-actions/assemble.mjs', '--check'] },
+        /* --from-index, because a push carries what is COMMITTED and CI checks it
+         * out with nothing else beside it. Read from the disk, this arm went red
+         * for every session whenever a neighbour held an uncommitted `--claim` —
+         * a difference the push did not contain — and the loop, which pushes on
+         * exit 0 only, stopped pushing (buses-data OA-441). The index is the
+         * committed tree plus whatever the caller has staged, and a claim is
+         * never staged by the tool that writes it. */
+        { id: 'backlog-index', label: 'the backlog index matches every committed action file', cmd: 'node', args: ['Development Docs/open-actions/assemble.mjs', '--check', '--from-index'] },
         { id: 'doc-coverage', label: 'every working document is reachable from live work', cmd: 'node', args: ['Documentation/check-doc-coverage.mjs'] },
         { id: 'directory-coverage', label: 'every map has an answer to does somebody else map this town', cmd: 'node', args: ['BusMapsUK/bus-map-directory/coverage.mjs', '--check'] },
         TOOLS && { id: 'exclusion-fields', label: 'a town declares a route off in notOnLeaflet[] and nowhere else', cmd: 'node', args: [`${TOOLS}/check-exclusion-fields.mjs`] },

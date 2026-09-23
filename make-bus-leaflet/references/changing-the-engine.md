@@ -322,6 +322,8 @@ The table that used to sit here listed eleven files, and `status.js` listed the 
 node scripts/check-vendored.mjs --update
 ```
 
+**PUSH THE PORTAL RE-VENDOR BRANCH BEFORE YOU MERGE THE ENGINE PULL REQUEST — THAT IS WHAT TURNS ITS `status` GREEN (2026-09-23).** An engine pull request that changes a vendored file opens with `status` red on a `DRIFTED` row, and `status` is a required check with no bypass. It is not red *by construction*, although buses-data OA-322 said it was for three days. The `status` job fetches every portal branch tip, and `status.js` reads a row as `PENDING`, which is not a fault, when a pushed portal branch already carries the new bytes and is younger than the grace window. So the order is: copy the file into a portal branch, restamp the manifest, recut and vendor the fixtures, and **push**. Then re-run the engine PR's `status` job, because a run that started before the push cannot see the branch. Merge the engine PR, then the portal PR. claude-skills #4 and #98 both merged this way, with community-bus-maps #355 and #357.
+
 ### AND RE-CUT BOTH COMMITTED FIXTURES, IN THE SAME BREATH (OA-182)
 
 **There are two, and since 2026-09-01 both are a script.** Re-vendoring makes the portal run the new code; the fixtures are what its byte gates compare against, and a fixture frozen alongside the change passes its own gate **by construction** — the old engine reproduces the old sheet perfectly and `verify` reports PASS about code that has not shipped. The area one was forgotten twice in three days: once caught by somebody reading an unrelated backlog row, once by a portal PR's `verify` job going red.

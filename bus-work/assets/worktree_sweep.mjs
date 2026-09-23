@@ -234,6 +234,19 @@ export function worktreeSweepItems({ state, now = Date.now(), cadenceDays = CADE
   return { items, notes };
 }
 
+/**
+ * The whole of worklist.mjs's use of this file, in one call, because that file
+ * sits under a line ceiling (make-bus-leaflet/tools/line-ratchet.json) and its
+ * rule is that new logic lives in a module. Reads the record and adds the rows;
+ * no git, no network.
+ */
+export function worktreeSweepBoard({ busesDir, assetsDir, add, warnings }) {
+  const r = worktreeSweepItems({ state: readWorktreeSweep(path.join(busesDir, 'loop')), assetsDir });
+  for (const it of r.items) add(it);
+  for (const n of r.notes) warnings.push(n);
+  return r;
+}
+
 /* ─────────────────────── the writer: git, gh and the disk ─────────────────────── */
 
 const run = (cmd, argv, cwd) => {

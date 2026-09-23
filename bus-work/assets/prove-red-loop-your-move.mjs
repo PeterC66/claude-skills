@@ -37,7 +37,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readYourMoveDir, parseHold, parseDraft, isHold, classify, loopHoldItems, loopDraftItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched, holdBanner } from './loop_your_move.mjs';
+import { readYourMoveDir, parseHold, parseDraft, isHold, classify, loopHoldItems, loopDraftItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -255,7 +255,8 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
     // OA-414 added `holdBanner`, which is the renderer the two hold sources share.
-    "import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';",
+    // OA-409 added `staleBlocksWarning`, the authoritative branch's wording.
+    "import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';",
     "const yourMove = readYourMoveDir(path.join(BUSES, 'loop', 'your-move'));",
     'for (const it of loopHolds.items) add(it);',
     'const heldRows = applyHolds(items, loopHolds.holds);',
@@ -317,7 +318,9 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   // one of two things is true is not an assertion about both.
   const safetyLines = src.split('\n').filter((l) => l.includes('NOT evidence the row has cleared') && !l.trim().startsWith('//') && !l.trim().startsWith('*')).length;
   check('BOTH non-authoritative branches carry "NOT evidence the row has cleared"', safetyLines === 2, `found on ${safetyLines} live line(s), expected 2`);
-  check('the CONFIDENT stale wording survives for an authoritative board', liveLine('Either the row has cleared and the hold can go, or the key is wrong.'));
+  // OA-409 moved the confident wording into `staleBlocksWarning`, whose three
+  // states are asserted as behaviour in case 24; what must RUN here is the call.
+  check('the authoritative branch CALLS staleBlocksWarning', liveLine('warnings.push(staleBlocksWarning(g));'));
   // The mutation this is really about: `!!portal` alone. Asserting the literal
   // with `&& REMOTE` is what makes dropping it red, and a substring test would
   // not — `!!portal` is a substring of `!!portal && REMOTE`.
@@ -711,6 +714,39 @@ console.log('\n23. THE CLASSIFIER — the FILE says what it is, and both bands a
   mk(hp, 'a-hold-naming-a-path.md', '# H\n\n**File:** `Correspondence/CORR-001/008-out.md`\n\n## What is needed from you\n\nFinish the letter.\n');
   const held = heldPaths(readYourMoveDir(hp));
   check('CONTROL — the same field in a HOLD does account for it', held.length === 1 && held[0].path === 'Correspondence/CORR-001/008-out.md', JSON.stringify(held));
+}
+
+console.log('\n24. a spent Blocks field on a LIVE hold is not advice to delete the hold (OA-409)');
+{
+  // THREE STATES, over real files. The old sentence was right for the first and
+  // wrong for the second, and the second is the one that deletes a question
+  // waiting on Peter. The third is the control: a Blocks-only hold whose row has
+  // cleared has nothing left to say, and must still read as it always did.
+  const dir = path.join(tmp, 'oa409', 'loop', 'your-move');
+  mk(dir, 'live-ask.md', '# Decide the stamp rule\n\n**Raised by:** `sched-1`, 2026-09-18 · **Blocks:** `ci-red-PeterC66/buses-data`\n\n## What is needed from you\n\nChoose between the two commit rules.\n');
+  mk(dir, 'field-only.md', '# Hold on the CI red\n\n**Blocks:** `ci-red-PeterC66/buses-data`\n');
+  mk(dir, 'live-row.md', '# Hold on a live draft\n\n**Blocks:** `draft-1`\n\n## What is needed from you\n\nLook at the river.\n');
+  const r = loopHoldItems({ files: readYourMoveDir(dir) });
+  const res = applyHolds([{ key: 'draft-1', title: 'x', do: [] }], r.holds);
+  const groups = groupUnmatched(res.unmatched);
+  const live = groups.find((g) => g.file === 'live-ask.md');
+  const spent = groups.find((g) => g.file === 'field-only.md');
+  check('the hold on a LIVE row is not unmatched at all', !groups.some((g) => g.file === 'live-row.md') && res.applied === 1, JSON.stringify(groups.map((g) => g.file)));
+  check('a file with a What-is-needed section groups with asks: true', live && live.asks === true, JSON.stringify(live));
+  check('a Blocks-only file groups with asks: false', spent && spent.asks === false, JSON.stringify(spent));
+  const wLive = live ? staleBlocksWarning(live) : '';
+  const wSpent = spent ? staleBlocksWarning(spent) : '';
+  check('a LIVE ask is never told the hold can go', !/the hold can go/.test(wLive), wLive);
+  check('…it is told the FIELD is spent and the hold is not', /the field is spent, the hold is not/.test(wLive) && /leave the file where it is/.test(wLive), wLive);
+  check('…and still names the file and the key', wLive.startsWith('loop/your-move/live-ask.md names worklist row `ci-red-PeterC66/buses-data`'), wLive);
+  check('CONTROL — a spent field on a spent hold reads EXACTLY as it did before OA-409',
+    wSpent === 'loop/your-move/field-only.md names worklist row `ci-red-PeterC66/buses-data`, which is not on the board today — the hold did nothing. Either the row has cleared and the hold can go, or the key is wrong.', wSpent);
+  check('CONTROL — the two wordings differ', wLive !== wSpent);
+  // An empty ask is still an ask: the section is the marker, its paragraph is not.
+  const emptyAsk = parseHold({ name: 'e.md', text: '# H\n\n**Blocks:** draft-9\n\n## What is needed from you\n', mtimeMs: 0 });
+  check('an empty What-is-needed section still counts as asking', emptyAsk.asks === true, JSON.stringify(emptyAsk));
+  check('plural keys keep the plural wording on a live ask',
+    /names worklist rows `a-1`, `b-2`, which are not on the board today/.test(staleBlocksWarning({ file: 'p.md', keys: ['a-1', 'b-2'], asks: true })));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

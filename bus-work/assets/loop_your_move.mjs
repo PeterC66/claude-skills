@@ -260,6 +260,11 @@ export function parseHold(f) {
     raisedBy: plain(raisedBy, 200),
     blocks,
     blocksRaw,
+    // OA-409. Does the file still carry its ASK, independent of its `Blocks:`
+    // field? A field is one consequence a hold has for one row, and the ask
+    // outlives it — so when the row a field names has cleared, this is what
+    // decides whether the file can go or only the field can.
+    asks: neededSection(text) !== null,
     raisedOn: iso ? iso[1] : null,
     mtimeMs: f.mtimeMs,
   };
@@ -398,7 +403,7 @@ export function loopHoldItems({ files, now = Date.now() }) {
     const stamp = b.raisedOn ? Date.parse(`${b.raisedOn}T00:00:00Z`) : b.mtimeMs;
     const ageDays = Number.isFinite(stamp) ? Math.max(0, Math.floor((now - stamp) / 86400000)) : null;
 
-    for (const key of b.blocks) holds.push({ key, ref: b.ref, file: b.file, headline: b.headline, need: b.need, raw: b.blocksRaw });
+    for (const key of b.blocks) holds.push({ key, ref: b.ref, file: b.file, headline: b.headline, need: b.need, raw: b.blocksRaw, asks: b.asks });
 
     items.push({
       key: `loop-hold-${b.ref}`, rank: 3, type: 'loop-hold',
@@ -523,17 +528,48 @@ export function applyHolds(items, holds) {
  * different remedies, and the second is the only one that is a claim about the
  * board. See `looksLikeRowKey` for why it may choose wording and nothing else.
  *
- * @param {Array<{key, ref, file, headline, need, raw}>} unmatched  from applyHolds
- * @returns {Array<{file, ref, raw, keys: string[], looksLikeKeys: boolean}>}
+ * `asks` is true when the file still carries its *What is needed* section, which
+ * is what `staleBlocksWarning` turns on (OA-409).
+ *
+ * @param {Array<{key, ref, file, headline, need, raw, asks}>} unmatched  from applyHolds
+ * @returns {Array<{file, ref, raw, keys: string[], asks: boolean, looksLikeKeys: boolean}>}
  */
 export function groupUnmatched(unmatched) {
   const byFile = new Map();
   for (const h of unmatched || []) {
     const file = h.file || '(unknown file)';
-    if (!byFile.has(file)) byFile.set(file, { file, ref: h.ref || '', raw: h.raw || '', keys: [] });
+    if (!byFile.has(file)) byFile.set(file, { file, ref: h.ref || '', raw: h.raw || '', keys: [], asks: false });
     const g = byFile.get(file);
     if (!g.keys.includes(h.key)) g.keys.push(h.key);
     if (!g.raw && h.raw) g.raw = h.raw;
+    if (h.asks) g.asks = true;
   }
   return [...byFile.values()].map((g) => ({ ...g, looksLikeKeys: g.keys.every(looksLikeRowKey) }));
+}
+
+/**
+ * What an AUTHORITATIVE board says about a hold whose `Blocks:` keys are all
+ * well-formed and all absent (OA-409, 2026-09-23).
+ *
+ * THERE ARE THREE STATES, AND THE OLD SENTENCE NAMED TWO. It said *either the
+ * row has cleared and the hold can go, or the key is wrong* — both claims about
+ * the FIELD, followed by a remedy for the FILE. A hold is not its field: the
+ * field names one row it contradicts, and the *What is needed* section is the
+ * question, which outlives the row. On 2026-09-18 a live hold sat in exactly
+ * that state — its `ci-red-…` row had cleared and its ask, a choice between two
+ * commit rules only Peter can make, was still unanswered — and the old sentence
+ * told the reader to delete it. So a file that still asks is told the FIELD is
+ * spent and the ask is not; only a file with no ask left keeps the old advice.
+ *
+ * @param {{file: string, keys: string[], asks?: boolean}} g  from groupUnmatched
+ * @returns {string}
+ */
+export function staleBlocksWarning(g) {
+  const plural = g.keys.length > 1;
+  const named = `loop/your-move/${g.file} names worklist ${plural ? 'rows' : 'row'} ${g.keys.map((k) => `\`${k}\``).join(', ')}`;
+  const head = `${named}, which ${plural ? 'are' : 'is'} not on the board today — the hold did nothing.`;
+  if (g.asks) {
+    return `${head} Either the row has cleared or the key is wrong — but the file still carries a "What is needed" section, so its ASK is not answered by that: the field is spent, the hold is not. Correct or remove the **Blocks:** line and leave the file where it is.`;
+  }
+  return `${head} Either the row has cleared and the hold can go, or the key is wrong.`;
 }

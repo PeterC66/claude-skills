@@ -60,6 +60,12 @@ const DECL = JSON.stringify({
   notAuthored: [['/S[1-6]-[a-z]+/', 'generated stage output'], ['^_archive/', 'a record']],
   notOurs: { 'imported.md': 'a converted PDF kept verbatim' },
 }, null, 1) + '\n';
+const QUOTES = JSON.stringify({ quotesGarbled: { 'gotchas.md': 'quotes the fault to teach it' } }, null, 1) + '\n';
+
+/* The fault itself, done on purpose: a string's UTF-8 bytes read back as the
+ * Windows code page, or as Latin-1. */
+const as1252 = (s) => new TextDecoder('windows-1252').decode(Buffer.from(s, 'utf8'));
+const asLatin1 = (s) => Buffer.from(s, 'utf8').toString('latin1');
 
 const CASES = [
   // ---- the five faults, each planted on purpose
@@ -94,6 +100,22 @@ const CASES = [
 
   // ---- the control that must stay green
   ['CONTROL — a clean corpus', { 'a.md': CLEAN, 'b.json': '{\n  "a": 1\n}\n', 'c.js': 'const x = 1;\n' }, null, null],
+
+  // ---- GARBLED (buses-data OA-455): UTF-8 read as the Windows code page. Every
+  //      garbled string here is MADE at run time by doing the fault on purpose,
+  //      so no file has to spell one out — this one included.
+  ['an en-dash read as Windows-1252', { 'a.md': `# Doc\n\nRoute 18 ${as1252('–')} Cambridge.\n` }, 'GARBLED', null],
+  ['a middle dot read as Windows-1252', { 'routes.json': `{\n  "d": "Mon ${as1252('·')} Fri"\n}\n` }, 'GARBLED', null],
+  ['an em-dash read as Latin-1, whose C1 controls print as nothing', { 'a.md': `# Doc\n\nA ${asLatin1('—')} B.\n` }, 'GARBLED', null],
+  ['a four-byte emoji read as Windows-1252', { 'a.md': `# Doc\n\nBus ${as1252('🚌')} stop.\n` }, 'GARBLED', null],
+  ['GARBLED is Tier 1 — still reported in declared generated output', { 'imported.md': CLEAN, 'Areas/T/S3-config/x/routes.json': `{\n  "d": "A ${as1252('–')} B"\n}\n`, 'ok.md': CLEAN }, 'GARBLED', DECL],
+  ['a document that quotes the fault, declared in quotesGarbled', { 'gotchas.md': `# Doc\n\nAn en-dash comes out as ${as1252('–')}.\n`, 'ok.md': CLEAN }, null, QUOTES],
+  ['CONTROL — the same quotation in a file the declaration does not name', { 'gotchas.md': CLEAN, 'other.md': `# Doc\n\nAn en-dash comes out as ${as1252('–')}.\n` }, 'GARBLED', QUOTES],
+  ['CONTROL — real accented text and symbols are not garbled', { 'a.md': '# Café\n\nA façade, naïve, £5, 20°C, São Paulo, Cwmbrân — 10–12 · “quoted” … ×2 → next.\n' }, null, null],
+  /* The false positive the first sweep found: a list of sample glyphs whose
+   * code-page bytes happen to form a four-byte sequence, but one that decodes
+   * to an UNASSIGNED code point. */
+  ['CONTROL — adjacent glyphs whose bytes decode to no real character', { 'a.js': "const SAMPLE = '£€–—·•©®°éèáàóúüöäñ’‘“”…×';\n" }, null, null],
 ];
 
 let failed = 0;
@@ -135,6 +157,13 @@ for (const [what, files, expect, decl] of CASES) {
   const st = run({ 'a.md': CLEAN }, { decl: gone, args: ['--staged'] });
   if (st.code !== 0) fail('CONTROL — the same stale entry under --staged', `expected exit 0 (a corpus claim --staged cannot make), got ${st.code}\n      ${st.out.trim()}`);
   else console.log('ok    CONTROL — --staged does not make that corpus claim');
+
+  /* And the same for quotesGarbled (OA-455): an excuse for a document that has
+   * gone must not outlive it. */
+  const goneQ = JSON.stringify({ quotesGarbled: { 'never-existed.md': 'a reason' } });
+  const q = run({ 'a.md': CLEAN }, { decl: goneQ });
+  if (q.code !== 2 || !q.out.includes('never-existed.md')) fail('a stale quotesGarbled entry', `expected exit 2 naming it, got ${q.code}\n      ${q.out.trim()}`);
+  else console.log('ok    a stale quotesGarbled entry — refused by name, exit 2');
 }
 
 /* An unknown flag is refused BY NAME rather than ignored: a checker a typo can
@@ -197,5 +226,5 @@ function bareRun(files, from = '') {
   } else console.log(`ok    the same corpus either way — ${n(below.out)} tracked file(s) from both`);
 }
 
-console.log(`\nprove-red-file-hygiene: ${CASES.length + 8} cases, ${failed} failed.`);
+console.log(`\nprove-red-file-hygiene: ${CASES.length + 9} cases, ${failed} failed.`);
 process.exit(failed ? 1 : 0);

@@ -43,7 +43,15 @@ node "%BW%\prove-red-town-status.mjs"
 
 **It runs no byte gate and re-renders nothing** — for gates, vendoring drift and the quality ratchet, that is still `status.js`.
 
-## Step 1 — Print the worklist (always start here)
+## Step 1 — Print the board AND the worklist, and show Peter both (always start here)
+
+**Peter expects the board every time this skill runs, and has had to ask for it more than once** (2026-09-23: *"once again you did not list the board"*). The board is `status.js` and it answers a different question from the worklist: the worklist ranks what is WAITING, the board shows the STATE of every map — version, engine, gate PASS/DIFF, S6 age, feed staleness, vendoring drift, the quality ratchet, commitments and the deployment. Some of that appears nowhere on the worklist (on 2026-09-23 the FEED STALE booklets were on the board only), and the board is also what corrects the worklist when they disagree (that day the worklist warned of a deploy mismatch that the board's fetch showed was only a stale local clone). So run both, and open the answer with a compact summary of the board — towns, places, portal, deployment, quality, commitments, exit code — before the ranked worklist. Run it from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own folder, as buses-data's `CLAUDE.md` requires; both arguments are real paths, neither is a placeholder:
+
+```bash
+node assets/status.js --buses "C:/u3a St Ives/Using AI/Buses" --portal "C:/Claude/community-bus-maps"
+```
+
+It re-runs every byte gate, so it takes about a minute; start it alongside the worklist rather than after it.
 
 Let `BW=C:\u3a St Ives\.claude\skills\bus-work\assets` (this skill lives in the bus skills repo alongside `make-bus-leaflet`, and is junctioned into `~\.claude\skills\` like the others).
 

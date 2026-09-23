@@ -60,23 +60,20 @@
  * on the one laptop where the skill and the portal happen to agree is a fallback
  * that reports on an engine no deployment runs, which is this whole file's subject.
  *
- * AND THE EXPERT THREE CANNOT BE SWEPT IN --store MODE AT ALL — they are reported
- * `PORTAL-GEN` and counted, never run. Three measurements, in this order:
- * store.js gives the schematic and the diagram `gens: ['gen_internal_schematic.js']`
- * and `['gen_internal_diagram.js']` out of `engine/expert/`, which are PORTAL
- * WRAPPERS and not this engine's `schematize_internal.js` / `diagram_internal.js`
- * at all; the wrapper resolves its pre-stage as `path.join(__dirname, …)`, and
- * runGenerator's workspace holds the map's json and ONE copied generator, so
- * running it there dies with `Cannot find module …/schematize_internal.js`
- * (measured against store map 2, 2026-09-14); and running the SKILL's copy in its
- * place answers about a different program — with `SK` modules it is a sheet no
- * deployment runs, and with the portal's it is precisely the hybrid the paragraph
- * above removes. A verdict about a different program is worse than a gap, so this
- * says `PORTAL-GEN` and the summary prints the count. The gap is REAL and is
- * recorded as what is left of buses-data OA-342 item 4 — closing it means giving
- * `runGenerator` a way to carry a generator's siblings, which reopens the rule
- * OA-232 set deliberately (*the workspace is the map's data and nothing else*),
- * so it is a change of its own and not a line in this one.
+ * AND THE EXPERT THREE ARE RUN IN PLACE, THE WAY THE PORTAL RUNS THEM. store.js
+ * gives the schematic and the diagram `gens: ['gen_internal_schematic.js']` and
+ * `['gen_internal_diagram.js']` out of `engine/expert/` — PORTAL WRAPPERS, not this
+ * engine's `schematize_internal.js` / `diagram_internal.js`. The wrapper resolves
+ * its pre-stage as `path.join(__dirname, …)` and the pre-stage finds the pack's
+ * `gen_internal.js` in its cwd, so a COPIED wrapper dies with `Cannot find module
+ * …/schematize_internal.js` (measured against store map 2, 2026-09-14). From
+ * 2026-09-14 to 2026-09-24 they were therefore reported `PORTAL-GEN` and never
+ * run. They now run as renderMap.js runs them: the wrapper by its own path
+ * (`inPlace`), in a workspace holding the pack's json AND the pack's own
+ * generators (`withPackGens`) — the map's data and nothing else, so the rule
+ * gate_lib.js's copyJsons header states still holds. The workspace is a scratch
+ * copy, never the store, so a sweep still writes nothing into a live pack.
+ * Closed buses-data OA-342 item 4.
  *
  * Usage — every argument below is a real path on this machine, no placeholders:
  *
@@ -224,9 +221,8 @@ function sheetsFor(dataDir, { isPlace, preferPackGen, expertDir }) {
   //
   // AND IN --store MODE THE TEMPLATE IS NOT THE SKILL'S. `expertDir` is set only
   // there, and it marks these three `portalOwned` — the sweep names the file the
-  // portal would actually run and then declines to run it, because it cannot: the
-  // wrapper needs its pre-stage sibling and this workspace holds one generator.
-  // The header records the three measurements. Tree mode is unchanged and still
+  // portal would actually run, and sweepOne runs it where it lives, beside its
+  // pre-stage, as the header says. Tree mode is unchanged and still
   // sweeps all three from SK, which is the right answer there: nothing in a tree
   // sweep is pretending to model the portal.
   const expert = expertDir
@@ -319,15 +315,6 @@ function sweepOne(map, flags) {
         rows.push({ sheet: s.key, verdict: 'NO-GEN', lines: [], refusals: [], refused: 0, detail: s.gen });
         continue;
       }
-      // PORTAL-GEN carries the same SHAPE as every other row, for the reason the
-      // NO-GEN paragraph above was written. It is not a failure and not a pass:
-      // it is this sweep saying which file the portal runs and that it cannot run
-      // it here. Counted in the summary so the gap is a number rather than a
-      // silence.
-      if (s.portalOwned) {
-        rows.push({ sheet: s.key, verdict: 'PORTAL-GEN', lines: [], refusals: [], refused: 0, detail: s.gen });
-        continue;
-      }
       /* WHICH ENGINE (OA-342 item 4). `map.engineDir` is the portal's own
        * `engine/` in store mode and undefined in tree mode, where runGenerator's
        * `SK` default is already right. portalFixtureEnv() is asked for it rather
@@ -339,9 +326,14 @@ function sweepOne(map, flags) {
        * base-overrides.json, which is the same content by a shorter route — but
        * this file composes the framing itself (readFraming, and --drop-framing),
        * which is the OA-137 fix and the reason the whole header exists. extraEnv
-       * is applied last inside runGenerator, so the composed file wins. */
+       * is applied last inside runGenerator, so the composed file wins.
+       *
+       * A portal-owned wrapper runs where it lives, beside the pack's own
+       * generators, because that is how renderMap.js runs it — see the header. */
       const run = runGenerator(s.gen, map.dataDir, {
         engineDir: map.engineDir || SK,
+        inPlace: !!s.portalOwned,
+        withPackGens: !!s.portalOwned,
         extraEnv: { STRICT_GUARDS: '1', OVERRIDES_FILE: ovFile },
       });
       const lines = guardLines(run.stderr);
@@ -451,15 +443,6 @@ function main() {
     console.log('');
     console.log(`${results.length} maps swept, ${bad.length} cannot be re-rendered`
       + (bad.length ? ` (${total} refusal${total === 1 ? '' : 's'} in total).` : '.'));
-    // The gap, as a number. A sweep that silently covers fewer sheets than the
-    // maps declare reports the same cheerful green as one that covers them all —
-    // which is the argument --expect already makes about MAPS, made here about
-    // SHEETS.
-    const notSwept = results.reduce((n, r) => n + r.rows.filter((x) => x.verdict === 'PORTAL-GEN').length, 0);
-    if (notSwept) {
-      console.log(`${notSwept} sheet${notSwept === 1 ? '' : 's'} NOT swept: portal-owned expert generators,`
-        + ' which need their pre-stage sibling and cannot run in this workspace (buses-data OA-342 item 4).');
-    }
     if (bad.length) {
       // Group by the SENTENCE, not by map: OA-137's whole finding was that one
       // cause accounted for all seven, and a per-map listing buries that.

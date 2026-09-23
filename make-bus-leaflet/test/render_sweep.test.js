@@ -26,6 +26,12 @@
  * 5 maps that cannot be re-rendered, while the pre-fix call (engineDir defaulting to
  * SK) stayed green on the same broken engine. Same reason build_s4.test.js keeps its
  * byte-identity acceptance test out of CI.
+ *
+ * The expert three were run the same way on 2026-09-24, when they began to be swept
+ * at all: all six expert sheets across the five packs ran clean, and a copy of the
+ * portal engine with its schematic pre-stage and gen_boarding.js made to throw took
+ * the sweep from 0 to 5 maps that cannot be re-rendered, with the one untouched
+ * diagram still clean.
  */
 'use strict';
 const test = require('node:test');
@@ -113,7 +119,7 @@ test('the expert three resolve from the PORTAL expert dir under the PORTAL file 
   assert.strictEqual(path.basename(by.boarding.gen), 'gen_boarding.js');
   for (const k of ['schematic', 'diagram', 'boarding']) {
     assert.strictEqual(path.dirname(by[k].gen), portal.expertDir, `${k} must come from the portal's expert dir`);
-    assert.strictEqual(by[k].portalOwned, true, `${k} must be marked so sweepOne declines to run it`);
+    assert.strictEqual(by[k].portalOwned, true, `${k} must be marked so sweepOne runs it in place`);
   }
   fs.rmSync(p.dir, { recursive: true, force: true });
 });
@@ -163,6 +169,57 @@ test('sweepOne RUNS the generator under the engine the map names, not under the 
   const internal = rows.find((r) => r.sheet === 'internal');
   assert.strictEqual(internal.verdict, 'n/a',
     `the generator refused its environment: ${internal.detail}`);
+  fs.rmSync(p.dir, { recursive: true, force: true });
+});
+
+/* THE EXPERT THREE ARE RUN, the way renderMap.js runs them (OA-342 item 4's
+ * remainder, 2026-09-24). Until then a store sweep reported them `PORTAL-GEN` and
+ * never ran them, because a COPIED wrapper cannot find the pre-stage beside it.
+ *
+ * The fixture is the real shape of the dependency, not a stand-in for it: a
+ * wrapper that spawns its pre-stage from `__dirname`, exactly as
+ * engine/expert/gen_internal_schematic.js does, and a pre-stage that judges its
+ * own workspace and exits non-zero on anything wrong — so the sweep's verdict is
+ * the assertion, as in the case above. It asks three things: the pack's own
+ * gen_internal.js is beside it (the pre-stage's spawnTarget looks there first),
+ * the shared modules are the PORTAL's, and nothing is in the workspace that the
+ * pack does not hold — the rule gate_lib.js's copyJsons header states. And the
+ * workspace must not BE the pack: a sweep that ran in the store would write into
+ * a live map. */
+test('sweepOne RUNS a portal-owned expert wrapper in place, beside its pre-stage, over the pack and nothing else', () => {
+  const p = fakePortal({ internalSchematic: {} });
+  const portal = portalEngine(p.storeDir);
+  fs.writeFileSync(path.join(p.dataDir, 'gen_internal.js'), '// the pack\'s own generator\n');
+  fs.writeFileSync(path.join(p.dataDir, 'stops.json'), '[]');
+  fs.writeFileSync(path.join(portal.expertDir, 'gen_internal_schematic.js'), [
+    "const { spawnSync } = require('child_process');",
+    "const path = require('path');",
+    "const r = spawnSync(process.execPath, [path.join(__dirname, 'schematize_internal.js')], { cwd: process.cwd(), env: process.env, encoding: 'utf8' });",
+    "process.stderr.write(r.stderr || '');",
+    'process.exit(r.status === null ? 1 : r.status);',
+  ].join('\n'));
+  fs.writeFileSync(path.join(portal.expertDir, 'schematize_internal.js'), [
+    "const fs = require('fs');",
+    "const path = require('path');",
+    `const pack = ${JSON.stringify(p.dataDir)};`,
+    `const want = ${JSON.stringify(portal.engineDir)};`,
+    'const bad = [];',
+    "if (path.resolve(process.cwd()) === path.resolve(pack)) bad.push('ran in the live pack');",
+    "if (!fs.existsSync('gen_internal.js')) bad.push('the pack\\'s gen_internal.js is not in the workspace');",
+    "if (process.env.SKILL_ASSETS !== want) bad.push('SKILL_ASSETS was ' + process.env.SKILL_ASSETS);",
+    "for (const f of fs.readdirSync('.')) if (!fs.existsSync(path.join(pack, f))) bad.push('the workspace holds ' + f + ', which the pack does not');",
+    "if (bad.length) { process.stderr.write(bad.join('; ') + '\\n'); process.exit(1); }",
+    "fs.writeFileSync('internal-schematic.svg', '<svg/>');",
+  ].join('\n'));
+
+  const [map] = enumerateStore(p.storeDir, portal);
+  const { rows } = sweepOne(map, {});
+  const schematic = rows.find((r) => r.sheet === 'schematic');
+  assert.ok(schematic, 'the schematic sheet must be enumerated');
+  assert.strictEqual(schematic.verdict, 'n/a',
+    `the wrapper did not run as the portal runs it: ${schematic.verdict} ${schematic.detail}`);
+  assert.ok(!fs.existsSync(path.join(p.dataDir, 'internal-schematic.svg')),
+    'the sweep wrote into the store');
   fs.rmSync(p.dir, { recursive: true, force: true });
 });
 

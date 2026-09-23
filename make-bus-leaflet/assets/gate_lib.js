@@ -70,11 +70,32 @@ function copyJsons(dataDir, destDir) {
  * old 2.3 mm marker size explicitly) while its SCHEMATIC did not. A PASS from a
  * hybrid engine is worth nothing, and this one was one sheet away from being
  * believed. `engineDir` defaults to `SK`, so every existing caller is unchanged. */
-function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace = false, engineDir = SK } = {}) {
+/* `inPlace` and `withPackGens` — RUN A PORTAL-OWNED GENERATOR THE WAY THE PORTAL
+ * RUNS IT (buses-data OA-342 item 4, 2026-09-24).
+ *
+ * The portal's expert wrappers (engine/expert/gen_internal_schematic.js and its
+ * two siblings) find their pre-stage as `path.join(__dirname, …)`, and the
+ * pre-stage finds `gen_internal.js` in its cwd. renderMap.js satisfies both by
+ * spawning the wrapper by its ABSOLUTE path with cwd = the pack's data folder,
+ * which holds the pack's own generators. A copied wrapper satisfies neither.
+ *
+ * So `inPlace` spawns the generator where it lives instead of copying it, and
+ * `withPackGens` copies the data folder's own top-level `*.js` into the
+ * workspace beside its json. Neither reopens the rule above: in a store the
+ * pack's generators ARE the map's data, and nothing here copies a file out of
+ * SK or any other engine — which is what the icons.js copy did. Both default
+ * off, so every existing caller is unchanged. */
+function runGenerator(genPath, dataDir, { extraEnv = {}, overridesFromWorkspace = false, engineDir = SK, inPlace = false, withPackGens = false } = {}) {
   const tmp = mkTmp();
   copyJsons(dataDir, tmp);
-  const destGen = path.join(tmp, path.basename(genPath));
-  fs.copyFileSync(genPath, destGen);
+  if (withPackGens) {
+    for (const name of fs.readdirSync(dataDir)) {
+      const p = path.join(dataDir, name);
+      if (name.endsWith('.js') && fs.statSync(p).isFile()) fs.copyFileSync(p, path.join(tmp, name));
+    }
+  }
+  const destGen = inPlace ? genPath : path.join(tmp, path.basename(genPath));
+  if (!inPlace) fs.copyFileSync(genPath, destGen);
   const env = { ...process.env, SKILL_ASSETS: engineDir };
   delete env.LEAFLET_DIR;
   delete env.OVERRIDES_FILE;

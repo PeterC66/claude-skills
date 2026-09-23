@@ -80,7 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner } from './loop_your_move.mjs';
+import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
@@ -1452,7 +1452,8 @@ for (const g of groupUnmatched(heldRows.unmatched)) {
   if (!g.looksLikeKeys) {
     warnings.push(`loop/your-move/${g.file} has a **Blocks:** field that is not a worklist row key — it reads “${g.raw}”. That field names the rows a hold contradicts, one key each, and a sentence belongs in the body. Nothing was held: this is a fault in the FILE and says nothing about any row.`);
   } else if (boardAuthoritative) {
-    warnings.push(`${named}, which ${plural ? 'are' : 'is'} not on the board today — the hold did nothing. Either the row has cleared and the hold can go, or the key is wrong.`);
+    // OA-409: a file that still asks is told the FIELD is spent, not the hold.
+    warnings.push(staleBlocksWarning(g));
   } else if (!portal) {
     warnings.push(`${named} and this run could not check ${plural ? 'them' : 'it'}: the portal queues were skipped, so every row that source would have raised is missing. NOT evidence the row has cleared — do not act on this one until a run that reaches the portal repeats it.`);
   } else {

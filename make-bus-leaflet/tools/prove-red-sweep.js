@@ -25,8 +25,11 @@
  *                                                carry a side file. Was written as
  *                                                "0 refusals" and that premise has
  *                                                EXPIRED — see below
- *   4  mutant,  --drop-framing      7 refusals   what OA-137 actually measured —
- *                                                the composition left out
+ *   4  mutant,  --drop-framing      1 refusal    what OA-137 actually measured —
+ *                                   per map git  the composition left out; seven
+ *                                   says has no  then, eight since St Neots East,
+ *                                   features[]   and derived, not typed (OA-450)
+ *                                   nor river
  *
  * Two more rows were added on 2026-09-17 and they are about the SCAFFOLDING the
  * four stand on rather than about the river:
@@ -103,11 +106,11 @@ const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : u
 const ANCHOR = '} else if(!(river||[]).length){';
 const MUTANT = '} else if(false){';
 
-/* The seven, by name. Asserting the COUNT alone would pass if the sweep found
- * seven different maps for seven different reasons, which is the shape of every
- * miscounted finding in this project's history — including OA-137's own, which
- * named "the St Neots, Godmanchester and Ely places" when two of the seven are
- * nowhere near the Great Ouse. Name them. */
+/* Run 4's maps are asserted BY NAME (expectUnframed, below). Asserting the COUNT
+ * alone would pass if the sweep found seven different maps for seven different
+ * reasons, which is the shape of every miscounted finding in this project's
+ * history — including OA-137's own, which named "the St Neots, Godmanchester and
+ * Ely places" when two of the seven are nowhere near the Great Ouse. */
 /*
  * What run 3 should expect, derived from run 4's own answer rather than
  * re-derived here.
@@ -134,15 +137,52 @@ function framed(parsed) {
   return set;
 }
 
-const EXPECT_SEVEN = [
-  'Beaconsfield Simpson Centre',
-  'Ely Co-op',
-  'Godmanchester Co-op Cambridge Road',
-  'Godmanchester Co-op Ermine Street',
-  'St Ives Bus Station',
-  'St Neots Co-op',
-  'St Neots Tesco Extra',
-];
+/*
+ * What run 4 should expect, BY NAME, asked of git rather than typed (OA-450).
+ *
+ * This was a hand-typed list of seven until 2026-09-23, when the St Neots East
+ * place map made it eight and turned every falsifying run on buses-data's main
+ * red with nothing about the estate wrong — the `20` in estateSize() below, over
+ * again. Run 3 could derive from run 4; run 4 cannot derive from itself, because
+ * it IS the answer under test. So its expectation comes from the other instrument
+ * estateSize() already uses: the tracked `<map>/ci-reference/` mirrors, which the
+ * sweep never reads.
+ *
+ * The predicate is the guard clause the mutation removes, and no more: the map
+ * has an internal sheet (a mirrored internal.svg — the two High Wycombe places
+ * that draw only a schematic have none, and gen_internal never runs for them),
+ * its routes.json names no features[], and its river_geo.json is absent or
+ * empty. Framing is dropped in run 4, so the side file does not enter into it.
+ * The March lesson above is why river geometry is in the predicate: a rule that
+ * forgets any one of the three lists a map the mutant cannot reach, and the row
+ * goes red naming it — a loud wrong, not a quiet one.
+ *
+ * NULL with its reason when git cannot be asked, as estateSize() does, and an
+ * EMPTY set is refused too: a mutant that can reach no map proves nothing.
+ */
+function expectUnframed(busesDir) {
+  const r = spawnSync('git', ['-C', busesDir, 'ls-files', '--', '*ci-reference/*'], { encoding: 'utf8' });
+  if (r.error) return { names: null, why: `could not run git: ${r.error.message}` };
+  if (r.status !== 0) return { names: null, why: `git ls-files exited ${r.status} in ${busesDir}` };
+  const tracked = new Set((r.stdout || '').split('\n').map((l) => l.trim()).filter(Boolean));
+  const names = [];
+  for (const f of tracked) {
+    if (!f.endsWith('/ci-reference/routes.json')) continue;
+    const mirror = f.slice(0, -'/routes.json'.length);
+    if (!tracked.has(mirror + '/internal.svg')) continue;
+    let rj, river = [];
+    try { rj = JSON.parse(fs.readFileSync(path.join(busesDir, f), 'utf8')); }
+    catch (e) { return { names: null, why: `could not read ${f}: ${e.message}` }; }
+    if (tracked.has(mirror + '/river_geo.json')) {
+      try { river = JSON.parse(fs.readFileSync(path.join(busesDir, mirror, 'river_geo.json'), 'utf8')); }
+      catch (e) { return { names: null, why: `could not read ${mirror}/river_geo.json: ${e.message}` }; }
+    }
+    if ((rj.features || []).length || (river || []).length) continue;
+    names.push(path.basename(path.dirname(mirror)));
+  }
+  if (!names.length) return { names: null, why: 'no mirrored map has an internal sheet with neither features[] nor river geometry, so the mutant has nothing to reach' };
+  return { names: names.sort(), why: null };
+}
 const RIVER_MSG = 'has no geometry of its own on this sheet at all';
 
 function copyDir(from, to) {
@@ -294,15 +334,18 @@ try {
           : `refused on [${r.names.join(', ')}], expected exactly [${unprotected.join(', ')}]`);
     }
 
+    const want = expectUnframed(BUSES);
     if (m2.fatal) check('4 mutant, --drop-framing', false, m2.fatal);
+    else if (!want.names) check('4 mutant, --drop-framing', false, `COULD NOT DERIVE what to expect \u2014 ${want.why}`);
     else {
       const r = refusing(m2.parsed);
-      const sameMaps = JSON.stringify(r.names) === JSON.stringify(EXPECT_SEVEN);
-      const ok = m2.status === 1 && sameMaps && r.total === 7 && r.everyOneOnTheRiver;
+      const sameMaps = JSON.stringify(r.names) === JSON.stringify(want.names);
+      const ok = m2.status === 1 && sameMaps && r.total === want.names.length && r.everyOneOnTheRiver;
       check('4 mutant, --drop-framing  [what OA-137 measured]', ok,
-        ok ? 'the named seven, 7 refusals in total \u2014 one each, all on the orphan river'
+        ok ? `the ${want.names.length} maps git says carry neither features[] nor river geometry,`
+            + ` ${r.total} refusals in total \u2014 one each, all on the orphan river`
           : `got ${r.names.length} maps (${r.names.join(', ')}), ${r.total} refusals,`
-            + ` river-on-every-map=${r.everyOneOnTheRiver}`);
+            + ` river-on-every-map=${r.everyOneOnTheRiver}; expected [${want.names.join(', ')}]`);
     }
   }
 } finally {

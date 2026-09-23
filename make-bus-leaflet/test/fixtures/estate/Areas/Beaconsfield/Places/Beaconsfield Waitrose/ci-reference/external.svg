@@ -142,8 +142,8 @@
 <text x="66.82" y="135.50" font-family="Arial" font-size="2.9" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Waller Road</text>
 <rect x="0" y="186.90" width="297" height="23.10" fill="#fff" fill-opacity="0.97"/>
 <text x="8" y="193.61" font-family="Arial" font-size="2.8" fill="#666">Reachable destinations &amp; routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with</text>
-<text x="8" y="197.21" font-family="Arial" font-size="2.8" fill="#666">operators (July 2026). Confirm live times &amp; fares at bustimes.org or operator apps. Journey times shown are approximate. Diagram — not to</text>
-<text x="8" y="200.81" font-family="Arial" font-size="2.8" fill="#666">scale.</text>
+<text x="8" y="197.21" font-family="Arial" font-size="2.8" fill="#666">operators (July 2026). Confirm live times &amp; fares at bustimes.org or operator apps. Journey times shown are approximate. Diagram — not</text>
+<text x="8" y="200.81" font-family="Arial" font-size="2.8" fill="#666">to scale.</text>
 <text x="275.10" y="191.45" font-family="Arial" font-weight="bold" font-size="3.5" fill="#333" text-anchor="end">busmaps.uk/m/beaconsfield-waitrose</text>
 <text x="211.46" y="191.45" font-family="Arial" font-size="3.5" fill="#666" text-anchor="end">Latest version:</text>
 <rect x="275.10" y="188.10" width="19.79" height="19.79" fill="#ffffff"/>

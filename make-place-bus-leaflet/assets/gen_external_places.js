@@ -368,6 +368,10 @@ const _hasTimes = dests.some(b => b.minutesToDestination != null);
 // does on the town radial, because this sheet's phrasing puts bustimes.org in the NEXT
 // sentence, where it is about confirming times rather than about what we checked.
 const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators${D.checkedAt ? ` (${D.checkedAt})` : ''}. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
+// No widow: the note's last two words are joined by a NO-BREAK SPACE, which footer.js's
+// wrap never splits on, so the last line is never a single word. The dated note above put
+// "scale." alone on a third line on three place sheets (buses-data OA-321, 2026-09-23).
+const FOOTER_NOTE_TEXT = FOOTER_NOTES.replace(/ (\S+)$/, ' $1');
 // design.sheetUrl / design.sheetQr — the printed route back to the current version.
 // Hoisted above footerPlateTop because a QR block can push the plate top UP, and every
 // free-floating page device below works to PLATE_TOP: deriving the plate without the
@@ -382,7 +386,7 @@ const FOOTER_OPTS = {
   // the credit line (footer.js). Absent => no row, byte-identical.
   sheetVersion: DESIGN.sheetVersion || null,
   ...(DESIGN.sheetUrlLabel !== undefined ? { urlLabel: DESIGN.sheetUrlLabel } : {}) };
-const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTES, safe: PSAFE, ...FOOTER_OPTS });
+const PLATE_TOP = footerPlateTop({ notes: FOOTER_NOTE_TEXT, safe: PSAFE, ...FOOTER_OPTS });
 // The frame every free-floating page device works to: inside the title block, above the
 // footer plate, and never nearer the trim than design.printSafe asks for.
 const _SAFE = PSAFE != null ? PSAFE : 0;
@@ -1092,7 +1096,7 @@ if (V2) {
 }
 
 out(footerBand({
-  notes: FOOTER_NOTES,
+  notes: FOOTER_NOTE_TEXT,
   version: D.version, validFrom: D.validFrom || 'Summer 2026',
   safe: PSAFE,
   ...FOOTER_OPTS

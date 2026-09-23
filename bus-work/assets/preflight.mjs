@@ -118,9 +118,11 @@ export function tierFor(paths, docsOnly) {
  * anywhere else, or a session with the environment variable set, now gets the
  * engine it is actually running rather than a path that happens to exist here.
  *
- * `skillsRoot` is the tree those two live under; `stamp-docs` is NOT in it —
- * it is a separate skill under the user profile, so it is resolved from
- * USERPROFILE the same way `assetsDir()`'s own last candidate is.
+ * `skillsRoot` is the tree those two live under, and `stamp-docs` is in it too,
+ * so the auditor is asked of that tree first and of the user profile's junction
+ * second. Profile-only, it named a file that does not exist on a CI runner, and
+ * a worktree ran `main`'s copy rather than its own (buses-data OA-449). Neither
+ * found is a null, which the manifest reports as UNANSWERED, never as a pass.
  */
 function skillPaths() {
   const engine = assetsDir();
@@ -130,7 +132,10 @@ function skillPaths() {
     ENGINE: engine,
     SKILLS: skillsRoot,
     TOOLS: skillsRoot ? path.join(skillsRoot, 'tools') : null,
-    STAMP: home ? path.join(home, '.claude', 'skills', 'stamp-docs', 'scripts', 'check_committed_stamps.py') : null,
+    STAMP: [skillsRoot, home && path.join(home, '.claude', 'skills')]
+      .filter(Boolean)
+      .map((root) => path.join(root, 'stamp-docs', 'scripts', 'check_committed_stamps.py'))
+      .find((p) => existsSync(p)) || null,
   };
 }
 
@@ -180,7 +185,7 @@ function builtIn(repo) {
          * a path literal that simply was not there, which reads as a check that
          * failed rather than as one that could not be run (OA-345). */
         ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the portal\'s vendored fixtures, the area fixture, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
-        ...(STAMP ? [] : ['The docstamp check — neither USERPROFILE nor HOME is set, so stamp-docs could not be located.']),
+        ...(STAMP ? [] : ['The docstamp check — `stamp-docs/scripts/check_committed_stamps.py` is neither in the skills tree nor under the user profile. That is a refusal, not a pass.']),
       ],
     };
   }

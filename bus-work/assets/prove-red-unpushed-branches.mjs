@@ -398,6 +398,75 @@ control(dead.items.length === 0 && dead.unreadable.length === 1,
   'a git that answers nothing produces a stated refusal, never a row');
 
 // ---------------------------------------------------------------------------
+// 6. THE PROTECTED TRUNK (OA-326 item 2) — commits on a PR-per-change repo's
+//    own main that nothing else carries. A fresh clone, mutated step by step,
+//    so the four-row assertion above keeps its own fixture.
+// ---------------------------------------------------------------------------
+console.log('\n== commits on a protected trunk ==');
+
+const tw = path.join(root, 'trunkwork');
+const tg = (...a) => execFileSync('git', ['-C', tw, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+const tcommit = (name, body) => { fs.writeFileSync(path.join(tw, name), body); tg('add', name); tg('commit', '-m', `trunk ${name}`); };
+const trunkRows = (prPerChange = true) => unpushedBranchItems({ repos: [{ key: 't', name: 'trunkfix', dir: tw, prPerChange }], git: defaultGit });
+const trunkRow = (r) => r.items.find((i) => i.key === 'unpushed-branch-t--trunk');
+try {
+  execFileSync('git', ['clone', origin, tw], { stdio: 'ignore' });
+  tg('config', 'user.email', 'harness@example.invalid');
+  tg('config', 'user.name', 'harness');
+} catch (e) {
+  console.log(`\n  Cannot build the trunk fixture (${String(e.message).split('\n')[0]}). Nothing was tested.`);
+  process.exit(2);
+}
+
+control(!trunkRow(trunkRows()), 'a trunk level with its remote raises nothing');
+
+tcommit('t1.txt', 'a\n');
+const r1 = trunkRows();
+ok(!!trunkRow(r1), 'ONE commit on a protected trunk, carried by nothing, raises the trunk row', JSON.stringify(r1.items.map((i) => i.key)));
+ok(/^1 commit/.test((trunkRow(r1) || {}).title?.split(': ')[1] || '') && /trunk t1\.txt/.test((trunkRow(r1) || {}).detail || ''),
+  'and it counts the commit and names it by subject', `${(trunkRow(r1) || {}).title} | ${(trunkRow(r1) || {}).detail}`);
+ok((trunkRow(r1) || { do: [] }).do.some((d) => d.kind === 'shell' && d.cmd.includes(`-C "${tw}" branch from-main-`)),
+  'and its first command branches the commits off, with the repository inside it', JSON.stringify((trunkRow(r1) || {}).do));
+control(!trunkRow(trunkRows(false)), 'the same commits in a DIRECT-PUSH repository raise nothing — there a push is the remedy');
+
+// Branched off and pushed: the ordinary way out. Carried by ancestry.
+tg('branch', 'carried-by-ancestry', 'main');
+tg('push', '-u', 'origin', 'carried-by-ancestry');
+tg('fetch', '--prune');
+const r2 = trunkRows();
+control(!trunkRow(r2), 'once a pushed branch contains those commits, the trunk row goes', JSON.stringify(r2.items.map((i) => i.key)));
+ok(r2.notes.some((n) => /its local main is 1 commit/.test(n) && /carried-by-ancestry/.test(n)),
+  'and the note says the trunk is ahead and names what carries it', r2.notes.join(' | '));
+
+// A cherry-pick onto a branch cut from the remote trunk: a different SHA, the
+// same patch. `--contains` would miss it; patch identity must not.
+tcommit('t2.txt', 'b\n');
+tg('checkout', '-b', 'carried-by-patch', 'origin/main');
+tg('cherry-pick', 'main~1');
+tg('cherry-pick', 'main');
+tg('push', '-u', 'origin', 'carried-by-patch');
+tg('checkout', 'main');
+tg('branch', '-D', 'carried-by-ancestry');
+tg('push', 'origin', '--delete', 'carried-by-ancestry');
+tg('fetch', '--prune');
+const r3 = trunkRows();
+control(!trunkRow(r3), 'commits CHERRY-PICKED onto a pushed branch count as carried — patch identity, not ancestry',
+  JSON.stringify(r3.items.map((i) => `${i.key} ${i.detail}`)));
+
+// One more commit that nothing carries: the row returns, and counts ONE.
+tcommit('t3.txt', 'c\n');
+const r4 = trunkRows();
+ok(!!trunkRow(r4) && /^1 commit/.test(trunkRow(r4).title.split(': ')[1]) && /t3\.txt/.test(trunkRow(r4).detail) && !/t1\.txt/.test(trunkRow(r4).detail),
+  'with two carried and one not, the row counts the ONE that is not, and names only it', `${(trunkRow(r4) || {}).title} | ${(trunkRow(r4) || {}).detail}`);
+
+// A LOCAL branch carrying it hands over to that branch's own stranded row.
+tg('branch', 'local-copy', 'main');
+const r5 = trunkRows();
+ok(!trunkRow(r5) && r5.items.some((i) => i.ref === 'local-copy'),
+  'an unpushed LOCAL branch carrying the commit silences the trunk row and raises its own stranded row instead',
+  JSON.stringify(r5.items.map((i) => i.key)));
+
+// ---------------------------------------------------------------------------
 console.log(`\n${bad === 0 ? 'PROVEN' : 'FAILED'} — ${bad} miss(es); ${controls} of the assertions are controls asserting silence.`);
 try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* the temp dir is the OS's problem */ }
 process.exit(bad === 0 ? 0 : 1);

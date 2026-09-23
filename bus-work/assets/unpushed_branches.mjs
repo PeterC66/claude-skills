@@ -293,6 +293,67 @@ export function readBranches(dir, git = defaultGit) {
 }
 
 /**
+ * Commits on the LOCAL trunk whose patches no remote ref and no other local
+ * branch carries (buses-data OA-326 item 2, folded from OA-330, 2026-09-23).
+ *
+ * WHY THIS IS NOT A BRANCH ROW. `readBranches` skips the trunk by design, and
+ * `countUnpushed` reports a commit on `main` as a bare number — `claude-skills —
+ * main, clean, 2 unpushed` — which is the right answer for buses-data, where the
+ * remedy is a push and the loop makes it. In a PROTECTED repository the same
+ * number means something else: a direct push of those commits is refused, so
+ * they reach the remote only by being branched off and proposed. The board
+ * stated the count and not that consequence.
+ *
+ * CARRIED IS ASKED BY PATCH IDENTITY, for the same reason as the branch rows.
+ * The usual way out is `git branch <b> main` or a cherry-pick onto a worktree
+ * branch; a cherry-pick changes the SHA and keeps the patch, so `--contains`
+ * would call it uncarried. `git cherry <ref> <trunk> <base>` marks each commit
+ * of base..trunk `-` when that ref has an equivalent patch, and a commit is
+ * carried when ANY other ref marks it so. A pushed carrier is the pull-request
+ * sweep's to judge and a local one gets its own stranded row, so either way the
+ * trunk row says nothing about it.
+ *
+ * @returns {{trunk: string, ahead: Array<{sha, subject}>, uncarried: Array<{sha, subject}>, carriers: string[]}|null}
+ *   null when the local trunk does not exist or git refused — NOT ASKED, never "none"
+ */
+export function trunkAhead(dir, git, base) {
+  const trunk = base.replace(/^origin\//, '');
+  if (git(dir, ['rev-parse', '--verify', '--quiet', `refs/heads/${trunk}^{commit}`]) === null) return null;
+  const own = git(dir, ['cherry', base, trunk]);
+  if (own === null) return null;
+  const ahead = lines(own).filter((l) => l.startsWith('+')).map((l) => l.slice(2).trim());
+  const out = { trunk, ahead: [], uncarried: [], carriers: [] };
+  if (!ahead.length) return out;
+
+  const refs = git(dir, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/', 'refs/remotes/']);
+  if (refs === null) return null;
+  const carried = new Set();
+  for (const ref of lines(refs)) {
+    if (ref === trunk || ref === base || /\/HEAD$/.test(ref) || ref === 'origin') continue;
+    const marks = git(dir, ['cherry', ref, trunk, base]);
+    if (marks === null) continue;
+    // A commit the ref already has BY ANCESTRY is not listed at all — `cherry`
+    // lists only what is not in the ref's history — so carried is everything
+    // ahead that this ref does not mark `+`, not only what it marks `-`.
+    const missing = new Set(lines(marks).filter((l) => l.startsWith('+')).map((l) => l.slice(2).trim()));
+    let any = false;
+    for (const sha of ahead) {
+      if (missing.has(sha)) continue;
+      carried.add(sha);
+      any = true;
+    }
+    if (any) out.carriers.push(ref);
+  }
+  for (const sha of ahead) {
+    const subject = git(dir, ['log', '-1', '--format=%s', sha]) || '';
+    const row = { sha: sha.slice(0, 7), subject };
+    out.ahead.push(row);
+    if (!carried.has(sha)) out.uncarried.push(row);
+  }
+  return out;
+}
+
+/**
  * What this branch is, in one word.
  *
  *   merged       — the trunk already has every one of its patches
@@ -347,6 +408,43 @@ export function unpushedBranchItems({ repos, git = defaultGit, now = Date.now() 
       unreadable.push({ name: repo.name, why: read.why || 'unknown' });
       continue;
     }
+    // THE TRUNK ITSELF, and only where it is protected. In a direct-push
+    // repository a commit on main is a push away and the conditions line
+    // already counts it; here nothing but a branch and a pull request moves it.
+    const t = repo.prPerChange ? trunkAhead(repo.dir, git, read.base) : null;
+    if (t && t.ahead.length && !t.uncarried.length) {
+      notes.push(`${repo.name}: its local ${t.trunk} is ${t.ahead.length} commit(s) ahead of ${read.base}, and every one is `
+        + `carried by another ref, so it is not raised: ${t.carriers.join(', ')}`);
+    }
+    if (t && t.uncarried.length) {
+      const n = t.uncarried.length;
+      const fresh = `from-${t.trunk}-${t.uncarried[0].sha}`;
+      items.push({
+        key: `unpushed-branch-${repo.key}--trunk`,
+        rank: 3, type: 'unpushed-branch',
+        title: `${repo.name}: ${n} commit(s) on its own ${t.trunk} are on no remote and in no branch — and ${t.trunk} is protected, so they cannot be pushed as they are`,
+        why: `${repo.name} is PR-per-change with branch protection, so a direct push of ${t.trunk} is refused. `
+          + `No other ref, local or remote, carries ${n === 1 ? 'this patch' : 'these patches'}, so the only copy is this laptop's ${t.trunk}, `
+          + `and the pull-request sweep cannot see it because it is not a branch.`,
+        detail: t.uncarried.map((c) => `${c.sha} ${c.subject || '(no subject)'}`).join('\n'),
+        who: 'Peter', runbook: 'git', ref: t.trunk, repo: repo.name, ageDays: null,
+        do: [
+          { kind: 'shell', cwd: repo.dir,
+            cmd: `git -C "${repo.dir}" branch ${fresh} ${t.trunk}`,
+            note: 'one self-contained command; run it from anywhere — copies the commits onto a branch of their own' },
+          { kind: 'shell', cwd: repo.dir,
+            cmd: `git -C "${repo.dir}" push -u origin ${fresh}`,
+            note: 'then open the pull request for it — once the branch exists this row hands over to that branch\'s own row, which goes when it is pushed' },
+          { kind: 'chat',
+            what: `Only once that branch is pushed, put the local ${t.trunk} back on ${read.base} — with ${t.trunk} checked out, `
+              + `\`git reset --keep ${read.base}\` — or the next commit there starts the same problem again.` },
+          { kind: 'chat',
+            what: 'Since OA-394 a tick may push and open pull requests, and it still will not do this one: whether '
+              + `somebody else's commits on ${t.trunk} are finished is a decision, not a permission.` },
+        ],
+      });
+    }
+
     const graded = read.branches.map((b) => ({ ...b, grade: classifyBranch(b) }));
     const pushed = graded.filter((b) => b.grade === 'pushed');
     const gone = graded.filter((b) => b.grade === 'gone-upstream');

@@ -39,11 +39,12 @@ const RUNNER = path.join(HERE, 'doc_triage.mjs');
 const stub = (json, code = 0) =>
   `console.log(${JSON.stringify(JSON.stringify(json, null, 1))});\nprocess.exit(${code});\n`;
 
-function fixture({ candidates, memory, drafts = {} }) {
+function fixture({ candidates, memory, notFiled = CLEAN_NF, drafts = {} }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doctriage-'));
   fs.mkdirSync(path.join(dir, 'Documentation'), { recursive: true });
   if (candidates !== null) fs.writeFileSync(path.join(dir, 'Documentation', 'list-archive-candidates.mjs'), candidates, 'utf8');
   if (memory !== null) fs.writeFileSync(path.join(dir, 'Documentation', 'check-memory-paths.mjs'), memory, 'utf8');
+  if (notFiled !== null) fs.writeFileSync(path.join(dir, 'Documentation', 'list-not-filed.mjs'), notFiled, 'utf8');
   const ym = path.join(dir, 'loop', 'your-move');
   if (Object.keys(drafts).length) fs.mkdirSync(ym, { recursive: true });
   for (const [name, body] of Object.entries(drafts)) fs.writeFileSync(path.join(ym, name), body, 'utf8');
@@ -57,6 +58,7 @@ const run = (dir, extra = []) => {
 
 const CLEAN_CANDS = stub({ root: '.', dated: 23, liveActions: 135, candidates: [] });
 const CLEAN_MEM = stub({ stores: ['S'], scannedPaths: 452, stale: [] });
+const CLEAN_NF = stub({ root: '.', documents: 31, markers: [] });
 
 let failed = 0;
 const ran = { 'RED  ': 0, GREEN: 0 };
@@ -93,12 +95,25 @@ console.log('A half it cannot run — it must REFUSE, and name which half:\n');
     + (code === 2 ? '' : `  <-- exited ${code}\n${err}`));
 }
 
-console.log('\nWhat it does when both halves answer:\n');
+{
+  /* The third half, added 2026-09-23 (buses-data OA-446). A buses tree older
+   * than list-not-filed.mjs must make the triage refuse, never report that no
+   * document holds unfiled work. */
+  const dir = fixture({ candidates: CLEAN_CANDS, memory: CLEAN_MEM, notFiled: null });
+  const { code, err } = run(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
+  report(code === 2 && /list-not-filed\.mjs is not at/.test(err),
+    'the not-filed lister missing — exit 2, named, never "no unfiled work"'
+    + (code === 2 ? '' : `  <-- exited ${code}\n${err}`));
+}
+
+console.log('\nWhat it does when every half answers:\n');
 
 {
   const dir = fixture({
     candidates: stub({ dated: 23, candidates: [{ document: 'Development Docs/x_2026-01-01.md', namedBy: ['Development Docs/y_2026-01-02.md'] }] }),
     memory: stub({ stores: ['S'], scannedPaths: 10, stale: [{ store: '/a/C--proj/memory', file: 'm.md', path: 'Development Docs/z.md', isNow: 'Development Docs/_archive/z.md' }] }),
+    notFiled: stub({ documents: 31, markers: [{ document: 'Development Docs/plan_2026-01-01.md', line: 42, item: 'widen the census.' }] }),
   });
   const { code, out } = run(dir);
   const draft = path.join(dir, 'loop', 'your-move', 'doc-triage.md');
@@ -108,6 +123,8 @@ console.log('\nWhat it does when both halves answer:\n');
   const stamp = JSON.parse(stampRaw);
   report(code === 0
       && stamp.archiveCandidates === 1 && stamp.staleMemoryPaths === 1
+      && stamp.notFiledItems === 1 && stamp.workingDocuments === 31
+      && body.includes('`Development Docs/plan_2026-01-01.md:42` — widen the census.')
       && body.includes('Development Docs/x_2026-01-01.md')
       && body.includes('Development Docs/_archive/z.md')
       /* THE PROPERTY THAT MAKES IT A DRAFT RATHER THAN A HOLD. loop_your_move.mjs
@@ -121,7 +138,7 @@ console.log('\nWhat it does when both halves answer:\n');
        * refuses one in this repository's source, which is how the first draft
        * of this file was caught. */
       && body.includes(`node "${dir.split('\\').join('/')}/Documentation/check-memory-paths.mjs" --apply`),
-    'both halves found something — stamped, drafted, no ask, no Blocks, and the fix command built from the resolved root'
+    'every half found something — stamped, drafted, no ask, no Blocks, and the fix command built from the resolved root'
     + (code === 0 ? '' : `  <-- exited ${code}\n${out}`), 'GREEN');
 }
 

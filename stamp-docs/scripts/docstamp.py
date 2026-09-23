@@ -178,6 +178,16 @@ def mtime_date(abs_path):
 GENERATED_MARKER_LINES = 40
 
 
+def _is_marker_line(line, marker):
+    """A line IS the generated marker only when it BEGINS with it. A document that
+    merely MENTIONS the marker -- in backticks, in a sentence -- is not generated.
+    Until buses-data OA-446 (2026-09-23) this was `marker in line`, so
+    Development Docs/README.md, which quotes the marker while explaining which two
+    documents carry it, was skipped by --staged as "generated" while the pre-commit
+    audit, which does not skip generated files, refused the commit as stale."""
+    return line.lstrip().startswith(marker)
+
+
 def is_generated(abs_path, marker):
     if not marker or not abs_path.lower().endswith(".md"):
         return False
@@ -186,7 +196,7 @@ def is_generated(abs_path, marker):
             for i, line in enumerate(fh):
                 if i >= GENERATED_MARKER_LINES:
                     return False
-                if marker in line:
+                if _is_marker_line(line, marker):
                     return True
     except OSError:
         return False
@@ -759,7 +769,7 @@ def _blob_is_generated(blob, marker):
     if not marker:
         return False
     head = blob[:8192].decode("utf-8", "replace")
-    return marker in "\n".join(head.split("\n")[:40])
+    return any(_is_marker_line(line, marker) for line in head.split("\n")[:GENERATED_MARKER_LINES])
 
 
 def stamp_staged(policy, dry_run=False, quiet=False, cwd=None):

@@ -158,15 +158,16 @@ module.exports = { fixtureVendoring, printFixtureVendoring, VENDORED_FIXTURE_ROO
  */
 if (require.main === module) {
   const { execFileSync } = require('node:child_process');
-  const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
+  const args = require('./cli').parseArgs(process.argv.slice(2));
+  const arg = (n) => (typeof args[n] === 'string' ? args[n] : null);
   const gitIn = (dir, args) => {
     try { return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; }
   };
   const gitShow = (dir, ref, rel) => {
     try { return execFileSync('git', ['show', ref + ':' + rel], { cwd: dir, encoding: 'buffer', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }); } catch { return null; }
   };
-  const buses = arg('--buses');
-  const portal = arg('--portal');
+  const buses = arg('buses');
+  const portal = arg('portal');
   const has = (r) => portal && gitIn(portal, ['rev-parse', '--verify', '--quiet', r]) !== null;
   const ref = has('origin/main') ? 'origin/main' : has('HEAD') ? 'HEAD' : null;
   const v = buses && ref ? fixtureVendoring({ portal, buses, source: { ref }, gitIn, gitShow }) : null;

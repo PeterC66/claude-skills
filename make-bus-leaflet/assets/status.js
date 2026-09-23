@@ -1007,11 +1007,20 @@ function otherRemoteRefs(mainRef) {
 /* Does some other fetched ref already carry the current source for this file?
  * Returns the NEWEST such ref, because a rollout's own branch is the newest
  * thing in the repository and an older branch that happens to agree is the less
- * informative answer. Null when nothing does — which is a real DRIFTED. */
+ * informative answer. Null when nothing does — which is a real DRIFTED.
+ * A ref that never touched the file since forking is no witness (OA-422): it
+ * holds `ref`'s PAST bytes, which match an engine pin `ref` has moved ahead of —
+ * a stale dependabot branch reddened buses-data that way on 2026-09-23. */
+const _mergeBases = new Map();
+function changedSinceFork(cand, rel, buf) {
+  if (!_mergeBases.has(cand)) _mergeBases.set(cand, gitIn(PORTAL, ['merge-base', _driftMainRef, cand]) || null);
+  const baseBuf = _mergeBases.get(cand) ? gitShow(PORTAL, _mergeBases.get(cand), rel) : null;
+  return !baseBuf || !sameBytesIgnoringLineEndings(baseBuf, buf);
+}
 function vendoredOnOtherRef(rel, skillBuf) {
   for (const cand of otherRemoteRefs(_driftMainRef)) {
     const buf = gitShow(PORTAL, cand.ref, rel);
-    if (buf && sameBytesIgnoringLineEndings(skillBuf, buf)) return cand;
+    if (buf && sameBytesIgnoringLineEndings(skillBuf, buf) && changedSinceFork(cand.ref, rel, buf)) return cand;
   }
   return null;
 }

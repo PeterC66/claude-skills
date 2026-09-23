@@ -368,10 +368,14 @@ const _hasTimes = dests.some(b => b.minutesToDestination != null);
 // does on the town radial, because this sheet's phrasing puts bustimes.org in the NEXT
 // sentence, where it is about confirming times rather than about what we checked.
 const FOOTER_NOTES = `Reachable destinations & routes serving them, from the UK Bus Open Data Service (Open Government Licence v3.0), cross-checked with operators${D.checkedAt ? ` (${D.checkedAt})` : ''}. Confirm live times & fares at bustimes.org or operator apps.${_hasTimes ? ' Journey times shown are approximate.' : ''}${DESIGN.scaleBar !== false ? ' Diagram — not to scale.' : ''}`;
-// No widow: the note's last two words are joined by a NO-BREAK SPACE, which footer.js's
-// wrap never splits on, so the last line is never a single word. The dated note above put
-// "scale." alone on a third line on three place sheets (buses-data OA-321, 2026-09-23).
-const FOOTER_NOTE_TEXT = FOOTER_NOTES.replace(/ (\S+)$/, ' $1');
+// No widow, and no broken date: the note's last two words, and the two words of
+// a "(Month YYYY)" date, are joined by a NO-BREAK SPACE (an escape, so it can be seen),
+// which footer.js's wrap never splits on. It matches the text rather than naming the
+// date field, so the provenance suite's "reads checkedAt" test sees only the clause above.
+// Before this, "scale." sat alone on three sheets and Ely Co-op's date split (OA-321).
+const NBSP = '\u00a0';
+const FOOTER_NOTE_TEXT = FOOTER_NOTES.replace(/\((\w+) (\d{4})\)/g, `($1${NBSP}$2)`)
+  .replace(/ (\S+)$/, NBSP + '$1');
 // design.sheetUrl / design.sheetQr — the printed route back to the current version.
 // Hoisted above footerPlateTop because a QR block can push the plate top UP, and every
 // free-floating page device below works to PLATE_TOP: deriving the plate without the

@@ -1056,6 +1056,30 @@ const MUTATIONS = [
     find: "  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: expert.portalOwned });",
     to: "  const add = (key, name, out) => sheets.push({ key, gen: path.join(expert.dir, name), out, portalOwned: false });" },
 
+  /* The expert three RUN in a --store sweep since 2026-09-24 (OA-342 item 4's
+   * remainder). The first mutation is the file as it stood from 2026-09-14 to
+   * 2026-09-24: the wrapper named, then skipped as PORTAL-GEN. The next two take
+   * away one half each of running it the way renderMap.js does. */
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'a store sweep goes back to naming the expert three PORTAL-GEN and never running them',
+    find: "      const run = runGenerator(s.gen, map.dataDir, {\n",
+    to: "      if (s.portalOwned) { rows.push({ sheet: s.key, verdict: 'PORTAL-GEN', lines: [], refusals: [], refused: 0, detail: s.gen }); continue; }\n      const run = runGenerator(s.gen, map.dataDir, {\n" },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: 'the expert wrapper is COPIED into the workspace again, away from the pre-stage it finds by __dirname',
+    find: "        inPlace: !!s.portalOwned,",
+    to: "        inPlace: false," },
+
+  { suite: 'render_sweep.test.js', file: 'render_sweep.js',
+    what: "the pack's own generators stay out of the workspace, so the pre-stage cannot find the gen_internal.js the portal would run",
+    find: "        withPackGens: !!s.portalOwned,",
+    to: "        withPackGens: false," },
+
+  { suite: 'render_sweep.test.js', file: 'gate_lib.js',
+    what: 'runGenerator runs a portal-owned wrapper in the LIVE pack instead of in a scratch copy of it',
+    find: "  const res = spawnSync(process.execPath, [destGen], { cwd: tmp, env, encoding: 'utf8' });",
+    to: "  const res = spawnSync(process.execPath, [destGen], { cwd: inPlace ? dataDir : tmp, env, encoding: 'utf8' });" },
+
   { suite: 'rollout_crossings.test.js', file: 'build_s4.js',
     what: "the town schematic stops carrying the self-crossing check, which only a build path can ask (OA-240)",
     find: "             crossings: true, out: 'internal-schematic.svg' },\n    place:",

@@ -33,7 +33,9 @@ derive_intown.js, pull_roads.js, match_routes.js, complexity_score.js,
 gen_internal.js, gen_external_radial.js, gtfs_duration.py, render.js -- against a
 real feed and the Overpass API, so a test of it would be a test of those, and
 the deciding functions it calls between them are every one of them reachable from
-here. `overpass`, `pois_query` and `feature_query` build a query string for a
+here. `overpass` is driven only for what it does with an answer or a refusal
+(OA-339), through a replaced `overpass_fetch.fetch`; the retrying itself is
+`test_overpass_fetch.py`'s. `pois_query` and `feature_query` build a query string for a
 remote service and are left with `test_module_load.py`, for the same reason
 `test_gen_verification.py` leaves the created/modified stamps alone: an assertion
 on them would be an assertion on somebody else's server.
@@ -914,6 +916,37 @@ class EveryDraftedServiceSaysItIsUnverified(unittest.TestCase):
         dt.build_verified_services(src, self.out)
         with io.open(src, encoding="utf-8") as fh:
             self.assertNotIn("verified", json.load(fh)["services"][0])
+
+
+class AnUnansweredPullIsNotAnEmptyOne(unittest.TestCase):
+    """OA-339: `overpass()` used to write {"elements": []} when two tries failed.
+
+    The helper it now calls is replaced for the duration, so these ask what
+    draft_town DOES with an answer or a refusal, and reach no server.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.dest = os.path.join(self.tmp, "osm.json")
+        self.saved = dt.overpass_fetch.fetch
+        self.addCleanup(setattr, dt.overpass_fetch, "fetch", self.saved)
+
+    def test_a_refusal_stops_the_stage_and_writes_nothing(self):
+        def refuse(*_a, **_k):
+            raise dt.overpass_fetch.OverpassUnreachable("osm.json: no Overpass host answered")
+        dt.overpass_fetch.fetch = refuse
+        with self.assertRaises(SystemExit) as cm:
+            dt.overpass("q", self.dest)
+        self.assertFalse(os.path.exists(self.dest), "a refusal was written to disk as an answer")
+        self.assertIn("NOT written", str(cm.exception.code))
+
+    def test_an_answer_is_written_as_it_came(self):
+        answer = {"version": 0.6, "elements": [{"type": "node", "id": 7}]}
+        dt.overpass_fetch.fetch = lambda *_a, **_k: answer
+        self.assertEqual(dt.overpass("q", self.dest), answer)
+        with open(self.dest, encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh), answer)
 
 
 if __name__ == "__main__":

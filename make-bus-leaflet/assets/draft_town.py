@@ -54,6 +54,7 @@ import urllib.parse, urllib.request
 from datetime import date
 import gtfs_regions
 import index_guard
+import overpass_fetch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UA = {"User-Agent": "make-bus-leaflet/1.0 (draft_town Tier-2)"}
@@ -827,18 +828,15 @@ def termini_for_route(chain, ll, prefix, namer, town=None):
 
 
 # ------------------------------------------------------------------ Overpass
+# OA-339: this used to write {"elements": []} to `dest` when two tries failed,
+# which on disk is a town with no landmarks or no river. A failed pull is now a
+# failed stage, and `dest` is written only with a real answer.
 def overpass(query, dest):
-    d = None
-    for host in ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"):
-        try:
-            req = urllib.request.Request(host, data=urllib.parse.urlencode({"data": query}).encode(), headers=UA)
-            d = json.load(urllib.request.urlopen(req, timeout=90))
-            break
-        except Exception:
-            d = None
-            time.sleep(1)
-    if d is None:
-        d = {"elements": []}
+    try:
+        d = overpass_fetch.fetch(query, timeout=90, label=os.path.basename(dest))
+    except overpass_fetch.OverpassUnreachable as exc:
+        raise SystemExit(f"{exc}\n{dest} was NOT written: an unanswered question is not "
+                         f"an empty answer. Re-run when Overpass is answering.")
     json.dump(d, open(dest, "w", encoding="utf-8"), ensure_ascii=False)
     return d
 

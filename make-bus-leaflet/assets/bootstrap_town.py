@@ -30,6 +30,7 @@ HERE=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gtfs_query  # reuse the BODS facts query
 import gtfs_regions
+import overpass_fetch
 
 TOL_BRIGHT=["#4477AA","#EE6677","#228833","#CCBB44","#66CCEE","#AA3377","#EE7733","#BBBBBB"]
 LIGHT={"#CCBB44","#66CCEE","#BBBBBB","#EE7733"}   # need dark badge text
@@ -233,7 +234,7 @@ def osm_note(state):
     if state=="skipped":
         return "- (skipped: --no-osm was given, so OSM was never asked about this town)"
     if state=="refused":
-        return ("- COULD NOT LOOK: both Overpass endpoints failed, so OSM has NOT been asked "
+        return ("- COULD NOT LOOK: every Overpass try failed, so OSM has NOT been asked "
                 "-- a refusal, not an absence. Re-run before treating an empty features[] as "
                 "a finding about this town.")
     return "- (none found: OSM answered, and the bbox holds no river, canal, railway or A-road)"
@@ -252,13 +253,12 @@ def overpass_features(bbox):
       way["railway"="rail"]({box});
       way["highway"~"^(trunk|primary)$"]["ref"]({box});
     );out tags 60;"""
-    for host in ("https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"):
-        try:
-            req=urllib.request.Request(host,data=urllib.parse.urlencode({"data":ql}).encode(),headers=UA)
-            d=json.load(urllib.request.urlopen(req,timeout=60)); break
-        except Exception: d=None; time.sleep(1)
+    # OA-339: two tries lost seven towns in eight on a bad afternoon; the shared
+    # helper retries across three hosts. The refusal stays a refusal, not a raise:
+    # this list is a SUGGESTION for a reviewer, and osm_note says it could not look.
+    try: d=overpass_fetch.fetch(ql,timeout=60,label="candidate features")
+    except overpass_fetch.OverpassUnreachable: return [], False
     feats={}
-    if not d: return [], False
     for el in d.get("elements",[]):
         t=el.get("tags",{})
         if t.get("waterway")=="river": k,typ,lab=("river","river",t.get("name","River"))

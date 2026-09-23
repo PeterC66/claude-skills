@@ -41,9 +41,10 @@
 // its status was read through `tail` — this repository's own *refusal that
 // depended on how you read it*. And a check may declare `echo`, a list of
 // patterns whose matching output lines are surfaced even on a PASS, because
-// `docstamp.py` resolves to its CONFIGURED root rather than the tree you are
-// standing in: its `scope:` line is the only thing that says which tree it read,
-// and the name of the flag says nothing about it.
+// which tree a tool read is invisible in its verdict. `docstamp.py` resolved to
+// its CONFIGURED root rather than the tree being pushed, so from a worktree it
+// passed a stale stamp CI then failed; the stamp arm now runs the committed-stamp
+// auditor against `--repo` itself (buses-data OA-449).
 //
 // WHAT IT IS NOT. It is not fast — running a sibling repository's byte gates is
 // minutes — and it is not run per commit. It is run once per round, and the
@@ -129,7 +130,7 @@ function skillPaths() {
     ENGINE: engine,
     SKILLS: skillsRoot,
     TOOLS: skillsRoot ? path.join(skillsRoot, 'tools') : null,
-    STAMP: home ? path.join(home, '.claude', 'skills', 'stamp-docs', 'scripts', 'docstamp.py') : null,
+    STAMP: home ? path.join(home, '.claude', 'skills', 'stamp-docs', 'scripts', 'check_committed_stamps.py') : null,
   };
 }
 
@@ -142,7 +143,12 @@ function builtIn(repo) {
       name: 'buses-data',
       docsOnly: ['^Development Docs/', '^Documentation/', '^Correspondence/', '^BusMapsUK/', '^CLAUDE\\.md$', '^README\\.md$', '^loop/README\\.md$'],
       checks: [
-        STAMP && { id: 'docstamp', label: 'every committed document describes its committed content', cmd: 'python3', args: [STAMP, '--check'], echo: ['^scope:'] },
+        /* `check_committed_stamps.py <repo>`, the auditor gates.yml runs, and not
+         * `docstamp.py --check`: that one resolves to its CONFIGURED root whatever
+         * tree you stand in, so from a worktree it hashed the main checkout's
+         * disk, printed ok, and CI went red on the stale stamp this tree carried
+         * (buses-data OA-449). This one reads HEAD of the tree it is given. */
+        STAMP && { id: 'docstamp', label: 'every committed document describes its committed content', cmd: 'python3', args: [STAMP, repo] },
         TOOLS && { id: 'tables', label: 'tables are still tables', cmd: 'node', args: [`${TOOLS}/check-tables.mjs`] },
         TOOLS && { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: [`${TOOLS}/check-doc-links.mjs`] },
         TOOLS && { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: [`${TOOLS}/check-file-hygiene.mjs`, '--root', '.'] },

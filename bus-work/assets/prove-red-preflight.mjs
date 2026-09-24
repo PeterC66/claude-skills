@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -362,6 +362,25 @@ function runWith(fixture, opts = {}) {
     check('docstamp: a stale stamp committed in a WORKTREE is red', stale.verdict === 'FAIL', `${stale.verdict}: ${stale.why || stale.out}`);
     check('docstamp: the red names the stale document', /docs\/a\.md/.test(`${stale.out}\n${stale.err}`), stale.out);
   }
+  rmSync(fx.root, { recursive: true, force: true });
+}
+
+// CASE 15 — the portal has a manifest, and its npm arms can START (buses-data
+// OA-343 item 2). Before 2026-09-24 community-bus-maps matched nothing and got
+// the case-7 refusal; and every npm arm anywhere was `spawnSync('npm')`, which is
+// ENOENT on Windows, so claude-skills' unit and wiring arms were UNANSWERED on
+// the one machine that runs them. The arm is RUN, not described: `--version`
+// through the same resolver, so a resolver that names a missing CLI fails here.
+{
+  const fx = makeRepo({ manifest: null, pushed: ['engine/vendored.json', 'scripts/run-tests.mjs', 'docs/one.md'] });
+  const m = manifestFor(fx.repo);
+  check('portal: the built-in manifest is the one chosen', !!m && m.name === 'community-bus-maps', m ? m.name : 'no manifest');
+  check('portal: a prose-only push is still the FULL tier, as test.yml has no paths filter', !!m && tierFor(['docs/one.md'], m.docsOnly).tier === 'full');
+  const ids = m ? m.checks.map((c) => c.id) : [];
+  for (const id of ['npm-test', 'verify-area', 'verify-place', 'verify-defaults', 'selfsufficient']) check(`portal: the manifest asks ${id}`, ids.includes(id), ids.join(','));
+  const probe = runCheck({ id: 'npm-version', label: 'npm starts', ...npmArm(['--version']) }, fx.repo);
+  check('npmArm: an npm arm starts and passes, rather than being UNANSWERED', probe.verdict === 'PASS', `${probe.verdict}: ${probe.why || probe.err || ''}`);
+  check('npmArm: and it printed a version, so exit 0 was npm answering', /^\d+\.\d+/.test(probe.out || ''), JSON.stringify(probe.out));
   rmSync(fx.root, { recursive: true, force: true });
 }
 

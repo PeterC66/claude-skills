@@ -281,6 +281,29 @@ git(other, "add", "_archive/z.md")
 r = run([sys.executable, str(AUDIT), "--staged", "--policy", str(pol)], other)
 check("the unplaced repository's audit names the fallback", "NO exclusions" in (r.stdout + r.stderr), (r.stdout + r.stderr)[-400:])
 
+print("\n11. The audit's Fix line names --checkout for a worktree, and the command it names works (2026-09-24)")
+# `docstamp.py --all` stamps the root's CONFIGURED path, so the old Fix line, run in a
+# linked worktree, stamped the main checkout, reported everything current and left
+# the worktree stale. A stale stamp committed past the hook in the worktree of case 9:
+write(wt, "docs/y.md", stale_doc)
+git(wt, "add", "docs/y.md")
+c = git(wt, "commit", "-q", "--no-verify", "-m", "stale past the hook", "--", "docs/y.md")
+check("the stale stamp was committed in the worktree past the hook", c.returncode == 0, (c.stdout + c.stderr)[-400:])
+r = run([sys.executable, str(AUDIT), "--policy", str(pol3), str(wt)], repo3)
+out = r.stdout + r.stderr
+check("the audit refuses the worktree's HEAD", r.returncode == 1, out[-400:])
+check("its Fix line names --checkout and the worktree", "--checkout" in out and str(wt) in out, out[-400:])
+d = run([sys.executable, str(DOCSTAMP), "--checkout", str(wt), "--policy", str(pol3), "--quiet"], repo3)
+git(wt, "commit", "-q", "--no-verify", "-m", "restamp", "--", "docs/y.md")
+r = run([sys.executable, str(AUDIT), "--policy", str(pol3), str(wt)], repo3)
+check("running the named command and committing clears the audit", r.returncode == 0, (d.stdout + d.stderr + r.stdout + r.stderr)[-400:])
+# The control: the configured root itself keeps the short spelling.
+write(repo3, "docs/seed.md", stale_doc)
+git(repo3, "commit", "-q", "--no-verify", "-m", "stale in the root", "--", "docs/seed.md")
+r = run([sys.executable, str(AUDIT), "--policy", str(pol3), str(repo3)], repo3)
+out = r.stdout + r.stderr
+check("in the configured root the Fix line says --all and not --checkout", r.returncode == 1 and "--all" in out and "--checkout" not in out, out[-400:])
+
 print()
 if failures:
     print("FAILED -- {} of {} assertions did not hold: {}".format(len(failures), ran, "; ".join(failures)))

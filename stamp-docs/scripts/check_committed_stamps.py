@@ -236,7 +236,7 @@ def main():
     if not repos:
         sys.exit('no git repositories found — pass them as arguments')
 
-    total_stale = 0
+    total_stale, fixes = 0, []
     for repo, cfg in repos:
         r = git(repo, 'ls-files', '*.md')
         if r.returncode:
@@ -277,12 +277,37 @@ def main():
             print(f'  STALE  v{e["major"]}.{e["minor"]}  {e["date"]}  {rel}')
             print(f'         committed sha={e["sha"]}  but content hashes to {actual}')
         total_stale += len(stale)
+        if stale:
+            fixes.append(fix_line(repo, cfg))
 
     if total_stale:
         print(f'\n{total_stale} committed stamp(s) do not describe their committed content.')
         print('Each was committed without the pre-commit hook, which stamps at commit time.')
-        print('Fix: docstamp.py --all from that repository root, then commit the stamp.')
+        for line in fixes:
+            print(line)
     return 1 if total_stale else 0
+
+
+def fix_line(repo, cfg):
+    """The command that restamps THIS tree, which is not always `--all`.
+
+    `docstamp.py --all` stamps the root's CONFIGURED path, so from a linked worktree
+    of buses-data it stamped the main checkout, reported everything current, and left
+    the worktree stale -- the fix line sent the reader round that loop (2026-09-24).
+    `--checkout <tree>` retargets the one root to the tree audited here. Only a tree
+    that IS the configured path keeps the short spelling.
+    """
+    here =os.path.normcase(os.path.normpath(os.path.abspath(repo)))
+    p = cfg.get('path') if cfg else None
+    if p:
+        p = os.path.normcase(os.path.normpath(os.path.abspath(
+            os.path.expandvars(os.path.expanduser(p)))))
+    script = os.path.join(HERE, 'docstamp.py').replace('\\', '/')
+    if p and p == here:
+        return f'Fix: python "{script}" --all from {repo}, then commit the stamp.'
+    return (f'Fix: python "{script}" --checkout "{os.path.abspath(repo)}", then commit the '
+            'stamp -- this tree is not the configured root, so --all would stamp that '
+            'root instead.')
 
 
 if __name__ == '__main__':

@@ -1619,7 +1619,17 @@ if(CORE){
 out(`</g>`);
 
 // ---- reserve protected areas so labels avoid them ----
-reserve(197,0,297,210,'the services panel');
+// design.exitCaptionsInPanel (OA-416): the labeller learns the panel's real height just
+// before the solve, so a "to X" caption (only) may use the empty column below it.
+const EXIT_IN_PANEL = !!(LAB && DESIGN.exitCaptionsInPanel);
+function panelDeps(sink){ return {
+  out: sink, esc, badge, badgeXWs, icon,
+  OV, RJ, DESIGN, INTDESC, FONT,
+  PANEL_SCALE_ON, PRINT_SAFE, FOOTER_SAFE, FOOTER_PLATE_TOP,
+  CORR, CPAL, laneKey, TRIM, panelOrder, order, pois,
+  FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET,
+}; }
+reserve(197,0,297,210,'the services panel', !EXIT_IN_PANEL);
 reserve(0,0,86,26,'the title block');
 // ---- the north arrow --------------------------------------------------------
 // DEFAULT ON for internalRoads; internalRoads.northArrow:false suppresses it, and
@@ -2457,6 +2467,7 @@ if(IR && TRIM){
           const only = DESIGN.exitDevice ? inboardKeys(-dx,-dy) : null;
           pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
             at:[(rx0+rx1)/2, ry], text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
+            ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:{}),
             ...(only?{only, leader:false}:{}) });
           return;
         }
@@ -2993,6 +3004,10 @@ if(LAB){
   };
   if(NORTH.on) NORTH.site(spotSearch, reserve, m=>process.stderr.write(m));
   if(SCALE_BAR_ON) drawScaleDevice(spotSearch);
+  // A silent dry run of the panel gives its endY; the real call below repeats its stderr.
+  if(EXIT_IN_PANEL){ const say=process.stderr.write; let P=null; process.stderr.write=()=>true;
+    try { P=drawServicesPanel(panelDeps(()=>{})); } finally { process.stderr.write=say; }
+    LAB.block([197,0,297,(P && P.endY!=null ? P.endY : 210)+3],'the services panel'); }
   if(process.env.DBG_LABELS) for(const r of LAB.solve()){
     console.error('  '+(r.placed?'placed':'UNPLACED').padEnd(9)
       +(r.placed?(r.pos||'fixed').padEnd(6)+(r.leader?'leader ':'       '):'      ')
@@ -3000,6 +3015,9 @@ if(LAB){
       +(r.placed?'-> '+r.x.toFixed(1)+','+r.y.toFixed(1)+'  ':'')+r.it.text);
   }
   out(LAB.svg());
+  // ...and is ink the place index must stop at (whatBlocksInk reads `placed`).
+  if(EXIT_IN_PANEL) for(const r of LAB.solve())
+    if(r.placed && r.b && /^term:/.test(r.id) && r.b[2] > MX1+2) reserve(r.b[0], r.b[1], r.b[2], r.b[3], 'an exit caption');
   /* THE COMPASS GETS A SECOND LOOK, NOW THAT THE LABELS ARE DOWN (OA-124).
    *
    * `site()` runs before the solve and takes the blank corner nearest a frame
@@ -3067,13 +3085,7 @@ for(const f of FEATURES) drawFeatureLabel(f);
 // The whole right-hand column is in services_panel.js: the Services list in its
 // four layouts, the pictogram Key, the frequency-tier rows and the fare note. It
 // draws through `out` and returns nothing — no name it declares is read below.
-const PANEL = drawServicesPanel({
-  out, esc, badge, badgeXWs, icon,
-  OV, RJ, DESIGN, INTDESC, FONT,
-  PANEL_SCALE_ON, PRINT_SAFE, FOOTER_SAFE, FOOTER_PLATE_TOP,
-  CORR, CPAL, laneKey, TRIM, panelOrder, order, pois,
-  FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET,
-});
+const PANEL = drawServicesPanel(panelDeps(out));
 
 /* ---- THE NUMBERED PLACE INDEX (2026-08-30, OA-078) -------------------------
  *

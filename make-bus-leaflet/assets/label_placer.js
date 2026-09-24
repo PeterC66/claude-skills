@@ -76,8 +76,10 @@ function labelPlacer(deps) {
   // sometimes the cheapest thing going (caught in the first St Ives v2 render).
   const LAB = V2 ? new Labeller({ page:[297,210], frame:{x0:MX0,y0:MY0,x1:MX1,y1:MY1},
                                   bounds:{x0:1, y0:1, x1:MX1+2, y1:FOOTER_PLATE_TOP-0.4} }) : null;
-  function reserve(x0,y0,x1,y1,tag){placed.push([x0,y0,x1,y1]); placedTags[placed.length-1]=tag||'';
-    if(LAB) LAB.block([x0,y0,x1,y1],tag);}
+  // `labToo:false` claims the box for the old placer and the ink probes only, leaving
+  // the labeller to be told later (design.exitCaptionsInPanel, gen_internal.js).
+  function reserve(x0,y0,x1,y1,tag,labToo){placed.push([x0,y0,x1,y1]); placedTags[placed.length-1]=tag||'';
+    if(LAB && labToo!==false) LAB.block([x0,y0,x1,y1],tag);}
   // Everything a box would land on, named. `overlaps` answers yes or no, which is all
   // a placer needs and not enough for a build warning a person has to act on.
   const whatBlocks=(b)=>placed.map((o,i)=>hit(b,o)

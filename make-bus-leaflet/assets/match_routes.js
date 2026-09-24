@@ -70,7 +70,9 @@ const atco2ll = JSON.parse(fs.readFileSync(DIR + '/atco2ll.json', 'utf8'));
 const FULL = JSON.parse(fs.readFileSync(DIR + '/routes_full_atco.json', 'utf8'));
 const INTOWN = JSON.parse(fs.readFileSync(DIR + '/routes_intown_atco.json', 'utf8'));
 // optional match_cfg.json: { viaPrefixes:{route:[ATCO prefixes]}, viaExclude:{route:[ATCOs]},
-//                              viaChain:{route:'canonical'|'intown'} }
+//                              viaChain:{route:'canonical'|'intown'}, edgeSnap:true }
+// edgeSnap lets a stop that is too far from any road NODE snap to the road EDGE —
+// see the EDGE SNAP note beside snap() below.
 // viaPrefixes restricts a route's via stops to the listed prefixes — use it to
 // drop variant-journey detours baked into the canonical chain (e.g. St Ives 9's
 // Hilton/Elsworth village loop) so the drawn line follows the MAIN journey.
@@ -136,6 +138,73 @@ function snap(ll) {
   }
   return (best != null && bd * 1000 <= SNAP_M) ? best : null;
 }
+// EDGE SNAP, opt-in with match_cfg.json "edgeSnap": true (buses-data OA-416, 2026-09-24).
+// snap() above looks only at NODES, so a stop beside a long straight road with few
+// nodes fails it even when it sits on the kerb, and its leg falls back to a straight
+// chord. Whittlesey's X32 was drawn across the fields from Coates to March that way:
+// Grandford Drove (0500FMARC016) is 128 m from the nearest node of the A141 and a few
+// metres from the road itself. With edgeSnap on, a stop that fails the node snap but
+// lies within SNAP_M of an EDGE gets a virtual node on that edge, and the edge is split
+// in two for every route, so they all keep one corridor key along it. A stop that
+// snapped before snaps exactly as before, and with the key absent nothing below runs,
+// so no committed map's routes_paths.json moves because this exists.
+// Virtual nodes take NEGATIVE ids: OSM ids are positive, and gen_internal.js and
+// diagram_internal.js order an edge's two ends by comparing them as numbers.
+const EDGE_SNAP = MCFG.edgeSnap === true;
+const vnodeOf = new Map();           // ATCO -> virtual node id
+const edgeSnaps = [];                // what was split, for the log and the output
+function splitNearestEdge(a, ll) {
+  const px = ll[1] * k0, py = ll[0];
+  let best = null;
+  const seen = new Set();
+  for (const [u, list] of adj) for (const e of list) {
+    if (seen.has(e.key)) continue; seen.add(e.key);
+    const A = nodeLL.get(u), B = nodeLL.get(e.to);
+    const ax = A[1] * k0, ay = A[0], bx = B[1] * k0, by = B[0];
+    const vx = bx - ax, vy = by - ay, L2 = vx * vx + vy * vy;
+    if (!L2) continue;
+    const t = ((px - ax) * vx + (py - ay) * vy) / L2;
+    if (t <= 0 || t >= 1) continue;                   // an end is a node, and the node snap already failed
+    const d = Math.hypot(px - (ax + vx * t), py - (ay + vy * t)) * 111.32;
+    if (!best || d < best.d) best = { u, w: e.to, key: e.key, t, d };
+  }
+  if (!best || best.d * 1000 > SNAP_M) return null;
+  const A = nodeLL.get(best.u), B = nodeLL.get(best.w);
+  const v = -(vnodeOf.size + 1);
+  nodeLL.set(v, [A[0] + (B[0] - A[0]) * best.t, A[1] + (B[1] - A[1]) * best.t]);
+  const full = adj.get(best.u).find(e => e.to === best.w);
+  const pen = full.cost / (kmLL(A, B) || 1e-9);
+  const way = edgeWay[best.key];
+  adj.set(best.u, adj.get(best.u).filter(e => e.to !== best.w));
+  adj.set(best.w, adj.get(best.w).filter(e => e.to !== best.u));
+  adj.set(v, []);
+  for (const n of [best.u, best.w]) {
+    const c = kmLL(nodeLL.get(v), nodeLL.get(n)) * pen, k = ekey(v, n);
+    adj.get(v).push({ to: n, cost: c, key: k });
+    adj.get(n).push({ to: v, cost: c, key: k });
+    edgeWay[k] = way;
+  }
+  vnodeOf.set(a, v);
+  edgeSnaps.push({ stop: a, m: +(best.d * 1000).toFixed(1), way: way ? way.way : null, name: way ? way.name : null });
+  return v;
+}
+if (EDGE_SNAP) {
+  // every stop any drawn route could use, split BEFORE matching so the routes agree
+  const want = new Set();
+  for (const r in INTOWN) {
+    const full = FULL[r]; if (!full) continue;
+    for (const d of [...(full.canonical || []), ...(full.directions || [])]) for (const a of (d.stops || [])) want.add(a);
+    for (const a of INTOWN[r]) want.add(a);
+  }
+  for (const a of [...want].sort()) {
+    const ll = atco2ll[a];
+    if (!ll || !inBbox(ll) || snap(ll) != null) continue;
+    splitNearestEdge(a, ll);
+  }
+  console.log('edgeSnap: ' + edgeSnaps.length + ' stop(s) snapped to a road edge'
+    + (edgeSnaps.length ? ' — ' + edgeSnaps.map(s => s.stop + ' ' + s.m + ' m on ' + (s.name || 'way ' + s.way)).join('; ') : ''));
+}
+const snapStop = a => vnodeOf.get(a) ?? snap(atco2ll[a]);
 // binary-heap Dijkstra with early exit
 function dijkstra(src, dst) {
   if (src === dst) return [src];
@@ -200,7 +269,7 @@ for (const r in INTOWN) {
   }
   if (vias.length < 2) { console.log(r + ': <2 in-bbox stops, skipped'); continue; }
 
-  const snapped = vias.map(a => ({ a, n: snap(atco2ll[a]) }));
+  const snapped = vias.map(a => ({ a, n: snapStop(a) }));
   const pts = [], edges = [], fallbacks = [];
   const push = (ll) => { const p = pts[pts.length - 1]; if (!p || p[0] !== ll[0] || p[1] !== ll[1]) return pts.push(ll); return pts.length; };
   push(snapped[0].n != null ? nodeLL.get(snapped[0].n) : atco2ll[snapped[0].a]);
@@ -282,6 +351,7 @@ if (farReport.length) {
   console.error('match_routes: ' + farReport.length + ' route(s) draw a tick more than ' + PROJ_WARN_M
     + ' m from their own line — ' + farReport.map(f => f.r).join(', ') + '. Look at the sheet before shipping it.');
 }
+if (EDGE_SNAP) OUT.edgeSnaps = edgeSnaps;       // absent unless opted in, so no committed file moves
 fs.writeFileSync(DIR + '/routes_paths.json', JSON.stringify(OUT));
 console.log('routes_paths.json written: ' + Object.keys(OUT.routes).length + ' routes, ' + Object.keys(OUT.edgeWay).length + ' road edges used');
 }

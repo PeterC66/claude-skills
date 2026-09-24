@@ -63,6 +63,7 @@
     "test:prove-red-asset-load": "node tools/prove-red-asset-load.js",
     "test:prove-red-external-spokes": "python3 tools/prove-red-external-spokes.py",
     "test:prove-red-via-chain": "node tools/prove-red-via-chain.js",
+    "test:prove-red-edge-snap": "node tools/prove-red-edge-snap.js",
     "test:prove-lane-mirror": "node tools/prove-lane-mirror.js",
     "census:lanes": "node tools/lane-census.js",
     "measure:days-vocabulary": "python3 tools/days-vocabulary.py",

@@ -864,6 +864,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-via-chain
 
+      # buses-data OA-416. match_routes.js snaps a stop to the nearest road NODE within
+      # 120 m, so a stop on the kerb of a long straight road with few nodes fails the snap
+      # and its leg is drawn as a straight chord -- Whittlesey's X32 crossed the fields
+      # from Coates to March that way. `edgeSnap` is the opt-in repair. This runs the real
+      # A141 geometry at Westry through match_routes.js and requires the default to
+      # reproduce the fault, the lever to remove it, both routes over the split edge to
+      # share its corridor tokens, and the lever to be inert where every stop snaps --
+      # then disables the lever and requires the fix case to fail.
+      - name: Prove the edge snap can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-edge-snap
+
       # OA-200. The board's VENDORING verdict used to compare each skill source
       # against the portal's WORKING TREE, so it was a claim about whichever branch
       # a mutable local checkout happened to be on. On 2026-08-31 it named

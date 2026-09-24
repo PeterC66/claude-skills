@@ -80,6 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
+import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
@@ -617,29 +618,9 @@ function fromCorrespondence() {
     }
   }
 
-  // A question we asked and never got an answer to. WAITING ON OTHERS, not your
-  // move -- but invisible entirely until now, and one of these is a question the
-  // correspondent volunteered to go and research for us.
-  const areas = path.join(BUSES, 'Areas');
-  if (existsSync(areas)) {
-    for (const town of readdirSync(areas, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()) {
-      const f = path.join(areas, town, 'local-decisions.json');
-      if (!existsSync(f)) continue;
-      let doc;
-      try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
-      const asked = (doc.decisions || []).filter((d) => d?.answer?.state === 'asked');
-      if (!asked.length) continue;
-      const oldest = asked.map((d) => d.raised).filter(Boolean).sort()[0];
-      out.push({
-        key: `corr-asked-${town}`, rank: 9, type: 'correspondence',
-        title: `${town}: ${asked.length} question(s) asked locally and still unanswered`,
-        why: `${asked.map((d) => d.id).join(', ')} — nothing but a person on the ground can settle these, and the map is drawn on our own judgement until one does.`,
-        who: 'the local adviser', runbook: 'correspondence',
-        ageDays: oldest ? daysSince(oldest) : null,
-        do: [{ kind: 'chat', what: `Read Areas/${town}/local-decisions.json. Chase only if it has gone quiet — silence is not agreement, and it is not a refusal either.` }],
-      });
-    }
-  }
+  // Every map's local-decisions.json, town and place: questions asked and
+  // unanswered, and questions never put to anyone (buses-data OA-083).
+  out.push(...localDecisionItems(BUSES, daysSince));
   return out;
 }
 

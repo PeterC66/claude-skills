@@ -237,9 +237,11 @@ def main():
         + (("An independent blind red-team agent re-derived "
             + ("that map's" if borrowed else "the town's")
             + " services from scratch "
-            "(operator, termini, operating days, and whether each route serves the town) using "
-            "bustimes.org plus a second source, with no sight of our stored data; its findings "
-            "were then diffed against our pipeline. ") if rt else
+            "(operator, termini, operating days, and whether each route serves the town) from "
+            "at least two independent sources, as its prompt requires: a primary source other "
+            "than bustimes.org (council pages, Traveline, BODS or the operator's own timetables), "
+            "with bustimes.org allowed only as a cross-check. It had no sight of our stored "
+            "data; its findings were then diffed against our pipeline. ") if rt else
            "NOTE: no red-team file was present, so only the structural / geographic sanity "
            "checks ran. ")
         + "In addition, structural and geographic sanity checks were run against the stored "

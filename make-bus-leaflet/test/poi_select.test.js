@@ -706,3 +706,20 @@ test('OA-250: applyTiers stamps tierKey, and only where the town classified the 
   assert.strictEqual(byCat.shop.tierKey, undefined, 'nobody classified the Aldi');
 });
 
+
+/* OA-165 (buses-data), decided by Peter 2026-09-21: the schematic honours a POI's
+ * `force` and drops its geographic `label.offset` and `label.anchor`, because a
+ * millimetre nudge chosen against the geographic layout lands somewhere unrelated
+ * once the geometry is redrawn octolinearly. High Wycombe Aldi is the case that
+ * found it: with the offset its Aldi label sat on the route 27 line. */
+test('the schematic drops a hand-set label offset and anchor; every other sheet keeps them', () => {
+  const { poiLabelOverride } = require('./_engine.js').load('poi_select.js');
+  const aldi = { offset: { dx: 3.2, dy: -1.8 }, anchor: 'start' };
+  assert.deepStrictEqual(poiLabelOverride(aldi, undefined), aldi, 'the geographic sheet keeps the nudge');
+  assert.deepStrictEqual(poiLabelOverride(aldi, 'diagram'), aldi, 'only the schematic is decided');
+  assert.strictEqual(poiLabelOverride(aldi, 'schematic'), null, 'on the schematic the placer seats it');
+  assert.deepStrictEqual(poiLabelOverride({ offset: { dx: 1, dy: 1 }, hide: true }, 'schematic'), { hide: true },
+    'a key that is not layout survives the filter');
+  assert.strictEqual(poiLabelOverride(undefined, 'schematic'), null);
+  assert.deepStrictEqual(aldi, { offset: { dx: 3.2, dy: -1.8 }, anchor: 'start' }, 'the override is not mutated');
+});

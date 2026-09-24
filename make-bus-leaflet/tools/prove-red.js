@@ -325,6 +325,14 @@ const MUTATIONS = [
   // optional branch is exercised by at least one committed map. These six guard
   // the properties that turn on ORDER and on thresholds, which the 20 maps
   // certify only by accident of what happens to be committed today.
+  // buses-data OA-165: exactly ONE committed map carries a label offset on a sheet
+  // that is schematised (High Wycombe Aldi), so the byte gate holds this rule by
+  // one place's data; the mutation holds it by the rule.
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: "the schematic honours a geographic label offset again, and puts Aldi's name on the route 27 line",
+    find: "  if(!label || notToScale !== 'schematic') return label || null;",
+    to: "  return label || null;" },
+
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'the same shop under two spellings stops collapsing, so Tesco and Tesco Extra print twice 39 m apart',
     find: "  if(x.includes(y) || y.includes(x)) return d < 60;",

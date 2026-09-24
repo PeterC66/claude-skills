@@ -150,6 +150,23 @@ function printsName(p){
   return AUTO_NAMED_CATS.includes(p.cat) && !unnamed(p.name);
 }
 
+/*
+ * Which half of a POI's hand-set `label` a sheet honours (buses-data OA-165,
+ * decided by Peter 2026-09-21). `force` says DRAW THIS NAME and is about the
+ * map's content, so it holds on every sheet and is not read here. `label.offset`
+ * and `label.anchor` are a millimetre nudge chosen by eye against the GEOGRAPHIC
+ * layout; the schematic has redrawn that geometry octolinearly, so the same nudge
+ * lands somewhere unrelated — on High Wycombe Aldi it put the Aldi label on the
+ * route 27 line against a stop. On the schematic both are dropped and the placer
+ * seats the label itself; every other key survives, and a label left with nothing
+ * in it is no label. Any other sheet gets the block unchanged.
+ */
+function poiLabelOverride(label, notToScale){
+  if(!label || notToScale !== 'schematic') return label || null;
+  const { offset, anchor, ...rest } = label;
+  return Object.keys(rest).length ? rest : null;
+}
+
 /** Two points closer than 60 m are the same place mapped twice. */
 /*
  * A CATEGORY LABEL IS NOT A NAME, and until 2026-09-13 three things treated it
@@ -509,4 +526,4 @@ function culledAfterTiersNote(culled){
     + ' place is off the edge of the town sheet.';
 }
 
-module.exports = { classify, selectPois, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName };
+module.exports = { classify, selectPois, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

@@ -158,6 +158,20 @@ export function npmArm(args) {
   return cli ? { cmd: process.execPath, args: [cli, ...args] } : { cmd: 'npm', args };
 }
 
+/*
+ * A check may carry `when`, a list of patterns: it is asked only if a pushed
+ * path matches one, on top of its tier. An unknown scope or `--all` asks it
+ * anyway, because "could not tell what the push holds" must never skip a check.
+ * These are the paths that move what the estate harnesses read: the engine pin,
+ * and any map's tracked golden master.
+ */
+const ESTATE_INPUTS = ['^engine\\.lock\\.json$', '(^|/)ci-reference/'];
+
+export function triggered(check, scope, all) {
+  if (!check.when || all || !scope.known) return true;
+  return scope.paths.some((p) => check.when.some((w) => new RegExp(w).test(p)));
+}
+
 /** The built-in manifests, used only where a repository declares none of its own. */
 function builtIn(repo) {
   const has = (p) => existsSync(path.join(repo, p));
@@ -196,10 +210,22 @@ function builtIn(repo) {
         ENGINE && { id: 'portal-fixtures', label: 'the portal\'s vendored fixtures are in step with this repository, on its origin/main', cmd: 'node', args: [`${ENGINE}/portal_fixtures.js`, '--buses', repo, '--portal', resolvePortal()], cannotTell: [2] },
         ENGINE && { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift', tier: 'full', cmd: 'node', args: [`${ENGINE}/status.js`, '--buses', repo, '--portal', resolvePortal()], note: 'no --no-live: the deployment row is the one that flag hides' },
         ENGINE && { id: 'area-fixture', label: 'the committed area fixture reproduces', tier: 'full', cmd: 'node', args: [`${ENGINE}/refresh_area_fixture.js`, '--check'] },
+        /* The two falsification steps a pin bump fails on (buses-data OA-462).
+         * On 2026-09-24 a push moving engine.lock.json passed this preflight with
+         * the board green and failed gates.yml at *Prove the byte gates can go
+         * red*: High Wycombe Aldi, the place-schematic donor, predated the engine
+         * change, so the harness's own CONTROL diffed. The board cannot see that,
+         * because a harness's control is not a board row. Run as gates.yml runs
+         * them, from make-bus-leaflet with --buses and --portal, and only when
+         * the push moves the pin or a golden master: they take minutes, and every
+         * other push reads inputs neither harness is about. */
+        ENGINE && { id: 'prove-red-gates', label: 'the byte gates can go red — every control reproduces under this engine', tier: 'full', when: ESTATE_INPUTS, cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-gates.js', '--buses', repo, '--portal', resolvePortal()] },
+        ENGINE && { id: 'prove-red-status', label: 'the status board separates a fault from a chore', tier: 'full', when: ESTATE_INPUTS, cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-status.js', '--buses', repo, '--portal', resolvePortal()] },
       ].filter(Boolean),
       unanswered: [
         'Whether the PORTAL suite is green — its `verify:area` gates a fixture that lives in this repository, and nothing on this side runs another repository\'s gates.',
         'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers.',
+        'The estate harnesses gates.yml runs beyond prove-red-gates and prove-red-status — held-back, rollout-stamp, unrendered, sweep, prove-s6, attribution, the _latest mirrors. Only the two a pin bump has been seen to fail are asked, and only when the push moves engine.lock.json or a ci-reference/.',
         /* A missing engine tree is a REFUSAL and is said out loud. It used to be
          * a path literal that simply was not there, which reads as a check that
          * failed rather than as one that could not be run (OA-345). */
@@ -378,6 +404,7 @@ function report(result, quiet) {
   } else if (result.engine) {
     L.push(`  Whether these verdicts transfer to CI's engine: ${result.engine.why}.`);
   }
+  for (const c of result.notTriggered || []) L.push(`  ${c.id} — ${c.label}: not asked, because no pushed path matches ${c.when.join(' or ')}.`);
   for (const u of result.unanswered || []) L.push(`  ${u}`);
   for (const c of unanswered) L.push(`  ${c.id}: ${c.why}`);
   L.push('');
@@ -396,7 +423,10 @@ export function preflight({ repo, all = false }) {
     };
   }
   const tier = scope.known ? tierFor(scope.paths, manifest.docsOnly || []) : { tier: 'full', beyond: [] };
-  const wanted = all || tier.tier === 'full' ? manifest.checks : manifest.checks.filter((c) => (c.tier || 'cheap') === 'cheap');
+  const inTier = all || tier.tier === 'full' ? manifest.checks : manifest.checks.filter((c) => (c.tier || 'cheap') === 'cheap');
+  const wanted = inTier.filter((c) => triggered(c, scope, all));
+  // Named in the report, so a check that was not triggered reads as not asked and never as a pass.
+  const notTriggered = inTier.filter((c) => !triggered(c, scope, all)).map((c) => ({ id: c.id, label: c.label, when: c.when }));
   const checks = wanted.map((c) => runCheck(c, repo));
   /* Resolved, not typed — and `engineTransfers` already reports an unresolved
    * tree as `known: false` with its reason, which is the answer a refusal wants
@@ -405,7 +435,7 @@ export function preflight({ repo, all = false }) {
   const failed = checks.filter((c) => c.verdict === 'FAIL').length;
   const unanswered = checks.filter((c) => c.verdict === 'UNANSWERED').length;
   const exit = failed ? EXIT_FAILED : (unanswered || !scope.known) ? EXIT_CANNOT_TELL : EXIT_OK;
-  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, engine, unanswered: manifest.unanswered || [], exit };
+  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, unanswered: manifest.unanswered || [], exit };
 }
 
 function main() {

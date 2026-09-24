@@ -249,6 +249,18 @@ class TheQualifications(GenVerificationCase):
         self.assertNotIn("This verdict is qualified", r.whole)
         self.assertIn("re-derived the town's services", r.whole)
 
+    def test_the_standing_prose_does_not_name_bustimes_as_the_method(self):
+        """It said the red team worked "using bustimes.org plus a second source" --
+        the method the red-team prompt in references/s6-verify.md forbids in bold.
+        The prose may claim only what the prompt asks: a non-bustimes primary,
+        bustimes at most a cross-check (buses-data OA-420)."""
+        r = self.render({"town": "T", "generatedAt": "2026-09-15T10:00", "redteamPresent": True,
+                         "findings": [], "summary": {"hard": 0, "soft": 0, "pass": True,
+                                                     "verdict": "pass"}})
+        self.assertNotIn("using bustimes.org", r.whole)
+        self.assertIn("a primary source other than bustimes.org", r.whole)
+        self.assertIn("only as a cross-check", r.whole)
+
     def test_an_uncurated_run_says_what_could_not_run(self):
         r = self.render({"town": "T", "generatedAt": "2026-09-15T10:00", "uncuratedS1": True,
                          "findings": [], "summary": {"hard": 0, "soft": 0, "pass": False,

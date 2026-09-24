@@ -420,6 +420,88 @@ export function worktreeHolding(dir, branch) {
   return null;
 }
 
+/*
+ * buses-data OA-375. WHAT A PORTAL COMMAND ACTUALLY TAKES FROM THE LAPTOP.
+ *
+ * The deploy rule used to say `npm run deploy ships the CHECKED-OUT commit`,
+ * and it does not: every step of `scripts/deploy.mjs` is an ssh to the host,
+ * and the commit that goes live is whatever the HOST's own `git pull` brings.
+ * `deliver-map.mjs` is the same shape — it scp's renders up from buses-data and
+ * works on the host. The laptop's checkout supplies exactly one thing to
+ * either: the SCRIPT that runs, and the local modules it imports. So the
+ * question that has an answer is whether that script differs from origin/<expect>
+ * — and on 2026-09-15 it did not, and a DELAY on the false reason stood in front
+ * of the one deploy that cleared the estate's only red.
+ *
+ * Compared as the WORKING TREE against origin/<expect>, because npm runs the
+ * file on disk, committed or not. The script's relative imports are followed,
+ * so an edited `scripts/lib/*.mjs` counts as an edited recipe; the npm script
+ * line itself is compared too, since `package.json` is what npm reads first.
+ *
+ * THREE ANSWERS, as in readDetachment: `same` true or false, or null for COULD
+ * NOT LOOK — no origin/<expect>, or a git call that failed — with `why`.
+ */
+export const PORTAL_RECIPES = {
+  deploy: { npm: 'deploy', entry: 'scripts/deploy.mjs' },
+  deliver: { npm: 'deliver', entry: 'scripts/deliver-map.mjs' },
+};
+
+const IMPORT_RE = /(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s+)['"](\.{1,2}\/[^'"]+)['"]/gm;
+
+function recipeFiles(dir, entry) {
+  const seen = new Set();
+  const todo = [entry];
+  while (todo.length) {
+    const rel = todo.pop();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    let src;
+    try { src = readFileSync(path.join(dir, rel), 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(IMPORT_RE)) {
+      const next = path.posix.normalize(path.posix.join(path.posix.dirname(rel), m[1]));
+      if (!seen.has(next)) todo.push(next);
+    }
+  }
+  return [...seen].sort();
+}
+
+function npmScript(text, name) {
+  try { return (JSON.parse(text).scripts || {})[name] ?? null; } catch { return undefined; }
+}
+
+export function readRecipe(dir, { npm, entry }, expect = 'main') {
+  const ref = `origin/${expect}`;
+  const out = { entry, ref: null, files: [], same: null, differs: [], why: null };
+  if (git(dir, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) === null) {
+    out.why = `there is no ${ref} in this checkout to compare ${entry} against`;
+    return out;
+  }
+  out.ref = ref;
+  out.files = recipeFiles(dir, entry);
+  const diff = git(dir, ['diff', '--name-only', ref, '--', ...out.files]);
+  if (diff === null) { out.why = `git could not compare ${entry} with ${ref}`; return out; }
+  out.differs = diff ? diff.split(/\r?\n/).filter(Boolean) : [];
+  let local;
+  try { local = readFileSync(path.join(dir, 'package.json'), 'utf8'); } catch { local = null; }
+  const theirs = git(dir, ['show', `${ref}:package.json`]);
+  if (local === null || theirs === null) { out.why = `could not read package.json here and on ${ref}`; return out; }
+  const a = npmScript(local, npm), b = npmScript(theirs, npm);
+  if (a === undefined || b === undefined) { out.why = `package.json does not parse here or on ${ref}`; return out; }
+  if (a !== b) out.differs.push(`package.json (the "${npm}" script)`);
+  out.same = out.differs.length === 0;
+  return out;
+}
+
+export function readRecipes(dir, expect = 'main') {
+  const out = {};
+  for (const [k, r] of Object.entries(PORTAL_RECIPES)) out[k] = readRecipe(dir, r, expect);
+  return out;
+}
+
+/* The one sentence both rules print for a recipe that differs, so the files
+ * named are the measurement and not a paraphrase of it. */
+const recipeDiffers = (r) => `${r.differs.slice(0, 3).join(', ')}${r.differs.length > 3 ? ', …' : ''} ${r.differs.length === 1 ? 'differs' : 'differ'} from ${r.ref}`;
+
 export function readRepo({ key, label, name, dir, expect = 'main', now = Date.now() }) {
   const repo = { key, label, name, dir, present: false, readable: false, branch: null, expect };
   repo.staged = []; repo.modified = []; repo.untracked = []; repo.dirtyAges = {};
@@ -788,6 +870,8 @@ export function readConditions({ buses, portal, engine, selfSession, selfId = nu
     engine: readRepo({ key: 'engine', label: 'the engine', name: 'claude-skills', dir: engine, now }),
     portal: readRepo({ key: 'portal', label: 'the portal', name: 'community-bus-maps', dir: portal, now }),
   };
+  // OA-375. Only the portal runs a command whose recipe is the laptop's script.
+  if (repos.portal.readable) repos.portal.recipes = readRecipes(portal, repos.portal.expect);
   const out = {
     at: new Date(now).toISOString(),
     repos,
@@ -895,25 +979,38 @@ const RULES = {
      */
     if (isOffMain(p)) {
       const want = p.expect || 'main';
+      /* OA-375. A deliver does not carry the branch: it scp's renders up from
+       * buses-data and works on the host. What the branch supplies is the copy
+       * of deliver-map.mjs that runs, so that is what is asked. Matching
+       * origin/main, a named branch changes nothing a deliver does and falls
+       * through to the checks below; differing, it would deliver by this
+       * branch's recipe; unmeasured, it is the stricter answer. */
       if (p.branch !== DETACHED) {
-        return [DELAY, `the portal checkout is on ${p.branch}, not ${want} — a deliver from here carries that branch, and the branch is somebody's live work`];
+        const r = p.recipes && p.recipes.deliver;
+        if (r && r.same === false) {
+          return [DELAY, `the portal checkout is on ${p.branch}, and a deliver runs THIS checkout's copy of the script: ${recipeDiffers(r)}, so it would deliver by that branch's recipe`];
+        }
+        if (!r || r.same === null) {
+          return [DELAY, `the portal checkout is on ${p.branch}, not ${want}, and this tool COULD NOT LOOK to see whether its copy of scripts/deliver-map.mjs matches ${want} — ${(r && r.why) || 'nothing measured the script'}. A deliver runs that copy; check it by hand`];
+        }
+      } else {
+        /* A detached checkout whose conditions object carries no reading — a
+         * synthetic world in a harness, a caller written before this landed — is
+         * a REFUSAL and not a licence to reuse the old sentence. Falling back to
+         * *somebody's live work* here would reinstate the exact false claim this
+         * rule was rewritten to stop making, on the one input that cannot answer
+         * back. */
+        const d = p.detached || { state: 'refused', ancestor: null, head: null, ref: null, heldBy: null, why: 'nothing measured the detachment — this conditions object carries no reading' };
+        const held = d.heldBy ? ` The worktree at ${d.heldBy} holds ${want}, which is why checking it out again fails.` : '';
+        const dirt = isDirty(p) ? ` There are also ${p.staged.length + p.modified.length} uncommitted change(s) here.` : '';
+        if (d.ancestor === true) {
+          return [CHECK, `the portal checkout is detached at ${d.head}, a commit already on ${d.ref} — this is residue from the deploy procedure, not somebody's work, and nothing clears it on its own.${held}${dirt} Restore it first: git -C "${p.dir}" checkout ${want}`];
+        }
+        if (d.ancestor === false) {
+          return [DELAY, `the portal checkout is detached at ${d.head}, and that commit is NOT on ${d.ref} — it is work nobody has landed, sitting on no branch, so a deliver from here would commit onto no branch either.${held}${dirt}`];
+        }
+        return [DELAY, `the portal checkout is detached at ${d.head || 'an unknown commit'} and this tool COULD NOT LOOK to see whether that is deploy residue or somebody's unlanded work — ${d.why || 'no reason recorded'}.${held}${dirt} Check by hand before delivering`];
       }
-      /* A detached checkout whose conditions object carries no reading — a
-       * synthetic world in a harness, a caller written before this landed — is
-       * a REFUSAL and not a licence to reuse the old sentence. Falling back to
-       * *somebody's live work* here would reinstate the exact false claim this
-       * rule was rewritten to stop making, on the one input that cannot answer
-       * back. */
-      const d = p.detached || { state: 'refused', ancestor: null, head: null, ref: null, heldBy: null, why: 'nothing measured the detachment — this conditions object carries no reading' };
-      const held = d.heldBy ? ` The worktree at ${d.heldBy} holds ${want}, which is why checking it out again fails.` : '';
-      const dirt = isDirty(p) ? ` There are also ${p.staged.length + p.modified.length} uncommitted change(s) here.` : '';
-      if (d.ancestor === true) {
-        return [CHECK, `the portal checkout is detached at ${d.head}, a commit already on ${d.ref} — this is residue from the deploy procedure, not somebody's work, and nothing clears it on its own.${held}${dirt} Restore it first: git -C "${p.dir}" checkout ${want}`];
-      }
-      if (d.ancestor === false) {
-        return [DELAY, `the portal checkout is detached at ${d.head}, and that commit is NOT on ${d.ref} — it is work nobody has landed, sitting on no branch, so a deliver from here would commit onto no branch either.${held}${dirt}`];
-      }
-      return [DELAY, `the portal checkout is detached at ${d.head || 'an unknown commit'} and this tool COULD NOT LOOK to see whether that is deploy residue or somebody's unlanded work — ${d.why || 'no reason recorded'}.${held}${dirt} Check by hand before delivering`];
     }
     if (b.readable && b.unpushed > 0) return [CHECK, `${b.name} has ${b.unpushed} unpushed commit(s)${b.unpushedFrom === 'default-branch' ? ` (counted against ${b.unpushedBasis}, which is where they would land)` : ''} — push this side FIRST; the portal's verify.yml reads whatever is on this repo's main at that moment`];
     // OA-313. A count that could not be taken is not a count of zero. Before
@@ -922,7 +1019,12 @@ const RULES = {
     // an absence*, and the one direction in which being wrong ships a deliver
     // against fixtures GitHub has never seen.
     if (b.readable && b.unpushed === null) return [CHECK, `could not count what ${b.name} has not pushed — ${b.unpushedWhy || 'no basis to count against'}. The portal's verify.yml reads whatever is on that repo's main, so check by hand before delivering`];
-    if (isDirty(p)) return [CHECK, `${p.staged.length + p.modified.length} uncommitted change(s) in the portal checkout`];
+    // OA-375. On main the same question stands: a checkout behind origin/main,
+    // or an edited script, runs a recipe nobody has landed. Dirt anywhere ELSE
+    // is not read by a deliver, so a measured match lets it pass.
+    const r = p.recipes && p.recipes.deliver;
+    if (r && r.same === false) return [CHECK, `a deliver runs this checkout's copy of the script, and ${recipeDiffers(r)} — fast-forward or commit it before delivering`];
+    if (isDirty(p) && !(r && r.same === true)) return [CHECK, `${p.staged.length + p.modified.length} uncommitted change(s) in the portal checkout`];
     return [SAFE, null];
   },
 
@@ -1005,12 +1107,28 @@ const RULES = {
     return [DELAY, `${who} holds loop/LOCK.d, taken ${age}, lease live for another ${fmtMin(L.remainMin)} — that is a run in progress on the shared trees, not a stale file${stamp}${mayBeYou}`];
   },
 
+  /*
+   * buses-data OA-375. `npm run deploy` does NOT ship the checked-out commit:
+   * every step of scripts/deploy.mjs is an ssh, and the host pulls its own
+   * tracking branch. The laptop supplies the recipe and nothing else, so the
+   * branch and the dirt are asked about only through it. A measured match is
+   * SAFE whatever branch the checkout is on — the state of 2026-09-15, when the
+   * old sentence stood in front of the estate's only red. With no reading at
+   * all (a synthetic world, a caller written before this) a clean checkout on
+   * main keeps its old SAFE, since HEAD's script is main's; anything else is
+   * the stricter answer, and says it could not look.
+   */
   'portal-deploy': (c) => {
     const p = c.repos.portal;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
-    if (isOffMain(p)) return [DELAY, `npm run deploy ships the CHECKED-OUT commit, and this checkout is on ${p.branch}, not ${p.expect || 'main'}`];
-    if (isDirty(p)) return [CHECK, `${p.staged.length + p.modified.length} uncommitted change(s) in the portal checkout — deploy ships the commit, not these`];
-    return [SAFE, null];
+    const want = p.expect || 'main';
+    const r = p.recipes && p.recipes.deploy;
+    if (r && r.same === true) return [SAFE, null];
+    if (r && r.same === false) {
+      return [DELAY, `npm run deploy runs THIS checkout's copy of the deploy script, and ${recipeDiffers(r)} — it would deploy by ${isOffMain(p) ? `${p.branch}'s` : 'an unlanded'} recipe. What goes live is whatever the host pulls either way`];
+    }
+    if (!isOffMain(p) && !isDirty(p)) return [SAFE, null];
+    return [CHECK, `this tool COULD NOT LOOK to see whether the checkout's copy of scripts/deploy.mjs matches ${want} — ${(r && r.why) || 'nothing measured the script'}. The checkout is ${isOffMain(p) ? `on ${p.branch}` : `dirty`}, and npm run deploy runs that copy; what goes live is whatever the host pulls`];
   },
 };
 

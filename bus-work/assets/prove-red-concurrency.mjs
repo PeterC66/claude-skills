@@ -671,6 +671,69 @@ console.log('\n== a detached checkout: residue or unlanded work (OA-387) ==');
   fs.rmSync(seed, { recursive: true, force: true });
 }
 
+/* buses-data OA-375. What a portal command takes from the laptop is its script
+ * and that script's local imports, compared as the WORKING TREE against
+ * origin/main because npm runs the file on disk. A real clone, because the
+ * answer is what git and the import walk say, and each red is paired with the
+ * edit that produced it. */
+console.log('\n== the recipe a portal command runs (OA-375) ==');
+{
+  const originDir = path.join(root, 'origin-r.git');
+  const work = path.join(root, 'recipe-clone');
+  execFileSync('git', ['init', '--bare', '-b', 'main', originDir], { stdio: 'ignore' });
+  execFileSync('git', ['clone', '-q', originDir, work], { stdio: 'ignore' });
+  const wg = (...a) => execFileSync('git', ['-C', work, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  wg('config', 'user.email', 'harness@example.invalid');
+  wg('config', 'user.name', 'harness');
+  wg('checkout', '-q', '-b', 'main');
+  const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(work, rel)), { recursive: true }); fs.writeFileSync(path.join(work, rel), text); };
+  put('package.json', JSON.stringify({ scripts: { deploy: 'node scripts/deploy.mjs', deliver: 'node scripts/deliver-map.mjs' } }, null, 2) + '\n');
+  put('scripts/deploy.mjs', "import { arg } from './lib/cli.mjs';\nimport { hostEnv } from './lib/host-env.mjs';\n");
+  put('scripts/deliver-map.mjs', "import { arg } from './lib/cli.mjs';\n");
+  put('scripts/lib/cli.mjs', 'export const arg = 1;\n');
+  put('scripts/lib/host-env.mjs', "import { arg } from './cli.mjs';\nexport const hostEnv = arg;\n");
+  put('public/app.js', 'one\n');
+  wg('add', '-A'); wg('commit', '-q', '-m', 'first'); wg('push', '-q', 'origin', 'main');
+
+  let r = conc.readRecipes(work);
+  ok(r.deploy.same === true && r.deliver.same === true, 'a checkout level with origin/main: both recipes match', JSON.stringify(r));
+  ok(r.deploy.files.join() === 'scripts/deploy.mjs,scripts/lib/cli.mjs,scripts/lib/host-env.mjs', 'and the deploy recipe follows its imports, one level down and two', r.deploy.files.join());
+  ok(!r.deliver.files.includes('scripts/lib/host-env.mjs'), 'and the deliver recipe does not borrow the deploy script\'s imports', r.deliver.files.join());
+
+  // A FEATURE BRANCH THAT CHANGES NOTHING A DEPLOY RUNS — the 2026-09-15 state.
+  wg('checkout', '-q', '-b', 'oa-327-deploy-history');
+  put('public/app.js', 'two\n');
+  wg('commit', '-q', '-am', 'the branch changes the site, not the deploy');
+  put('public/app.js', 'three, uncommitted\n');
+  r = conc.readRecipes(work);
+  ok(r.deploy.same === true, 'a branch that edits only the site leaves the deploy recipe matching', JSON.stringify(r.deploy));
+  let v = conc.assess(['portal-deploy'], conc.readConditions({ portal: work }));
+  ok(v.verdict === conc.SAFE, 'and the deploy is SAFE NOW from it, dirt and all', `${v.verdict}: ${v.reasons.map((x) => x.why).join(' | ')}`);
+
+  // An IMPORT edited, uncommitted — the working tree is what npm runs.
+  put('scripts/lib/host-env.mjs', "import { arg } from './cli.mjs';\nexport const hostEnv = arg + 1;\n");
+  r = conc.readRecipes(work);
+  ok(r.deploy.same === false && r.deploy.differs.join() === 'scripts/lib/host-env.mjs', 'an uncommitted edit to an IMPORT makes the deploy recipe differ, and is named', JSON.stringify(r.deploy));
+  ok(r.deliver.same === true, 'and leaves the deliver recipe, which does not import it, matching', JSON.stringify(r.deliver));
+  v = conc.assess(['portal-deploy'], conc.readConditions({ portal: work }));
+  ok(v.verdict === conc.DELAY && /host-env\.mjs/.test(v.reasons[0].why), 'so the deploy is BETTER TO DELAY, naming the file', `${v.verdict}: ${v.reasons.map((x) => x.why).join(' | ')}`);
+  wg('checkout', '-q', '--', 'scripts/lib/host-env.mjs');
+
+  // The npm line is part of the recipe: npm reads package.json first.
+  put('package.json', JSON.stringify({ scripts: { deploy: 'node --inspect scripts/deploy.mjs', deliver: 'node scripts/deliver-map.mjs' } }, null, 2) + '\n');
+  r = conc.readRecipes(work);
+  ok(r.deploy.same === false && /package\.json/.test(r.deploy.differs.join()), 'a changed npm "deploy" line makes the recipe differ', JSON.stringify(r.deploy));
+  ok(r.deliver.same === true, 'and a package.json change that leaves "deliver" alone does not touch the deliver recipe', JSON.stringify(r.deliver));
+  wg('checkout', '-q', '--', 'package.json');
+
+  // THE THIRD ANSWER: nothing to compare against.
+  wg('update-ref', '-d', 'refs/remotes/origin/main');
+  r = conc.readRecipes(work);
+  ok(r.deploy.same === null && /origin\/main/.test(r.deploy.why || ''), 'no origin/main: COULD NOT LOOK, with the reason, never a match', JSON.stringify(r.deploy));
+  v = conc.assess(['portal-deploy'], conc.readConditions({ portal: work }));
+  ok(v.verdict === conc.CHECK && /COULD NOT LOOK/.test(v.reasons[0].why), 'and off main that is CHECK FIRST, said out loud', `${v.verdict}: ${v.reasons.map((x) => x.why).join(' | ')}`);
+}
+
 // ---------------------------------------------------------------------------
 // 2. THE JUDGEMENT — each rule, made red and then cleared
 // ---------------------------------------------------------------------------
@@ -786,7 +849,10 @@ want(conc.assess(['estate-sweep'], world({ buses: { modified: ['Documentation/x.
 want(conc.assess(['portal-write'], CLEAN), conc.SAFE, 'portal on main and clean: SAFE NOW');
 const portalBranch = world({ portal: { branch: 'oa-220-landmark-chooser' } });
 want(conc.assess(['portal-write'], portalBranch), conc.DELAY, 'portal on a feature branch: BETTER TO DELAY');
-says(conc.assess(['portal-deploy'], portalBranch), /oa-220-landmark-chooser/, 'and the deploy rule names the branch it would ship');
+// OA-375: this used to assert that the deploy rule "names the branch it would
+// ship". A deploy ships no branch — the host pulls its own — so with no script
+// reading the rule names the branch as the thing it could not look past.
+says(conc.assess(['portal-deploy'], portalBranch), /COULD NOT LOOK.*oa-220-landmark-chooser/, 'and the deploy rule says it could not compare the script on that branch');
 want(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), conc.CHECK, 'unpushed commits here: CHECK FIRST before portal work');
 says(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), /verify\.yml/, 'and it says WHY the order matters');
 // OA-313. A count that could not be TAKEN used to fall through this rule as
@@ -827,9 +893,41 @@ says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: '
   want(conc.assess(['portal-write'], unmeasured), conc.DELAY, 'a detached portal with NO reading at all: BETTER TO DELAY');
   ok(!/somebody's live work/.test(conc.assess(['portal-write'], unmeasured).reasons[0].why),
     'and it must NOT fall back to the sentence this action was filed about', conc.assess(['portal-write'], unmeasured).reasons[0].why);
-  // The control that keeps the old behaviour where it was right: a NAMED branch
-  // really is somebody's work, and that sentence is correct about it.
-  says(conc.assess(['portal-write'], portalBranch), /somebody's live work/, 'a named feature branch still reads as somebody working');
+  // buses-data OA-375 retired the control that stood here — *a named feature
+  // branch still reads as somebody's live work* — because a deliver never read
+  // the branch in the first place; the discriminator that replaced it is below.
+  ok(!/somebody's live work/.test(conc.assess(['portal-write'], portalBranch).reasons[0].why),
+    'a named branch with no script reading says it could not look, not that somebody is working', conc.assess(['portal-write'], portalBranch).reasons[0].why);
+}
+
+/* buses-data OA-375, the judgement half. What a portal command takes from the
+ * laptop is its SCRIPT, so the branch is asked about only through the script.
+ * The pair is the point: a feature branch whose recipe matches origin/main is
+ * SAFE for both commands — the state of 2026-09-15, when the old sentence
+ * delayed the one deploy that cleared the estate's red — and one whose recipe
+ * differs is not, and says which file. A rule that went SAFE on every branch
+ * passes the first and fails the second; the old rule fails the first. */
+{
+  const rec = (same, differs = []) => ({ entry: 'scripts/x.mjs', ref: 'origin/main', files: [], same, differs, why: same === null ? 'there is no origin/main here' : null });
+  const branchWith = (deploy, deliver, over = {}) => world({ portal: { branch: 'oa-327-deploy-history', recipes: { deploy, deliver }, ...over } });
+  const matches = branchWith(rec(true), rec(true));
+  want(conc.assess(['portal-deploy'], matches), conc.SAFE, 'a feature branch whose deploy script matches origin/main: SAFE NOW — the host pulls its own branch');
+  want(conc.assess(['portal-write'], matches), conc.SAFE, 'and a deliver from it is SAFE NOW too — it scp\'s from buses-data');
+  want(conc.assess(['portal-deploy'], branchWith(rec(true), rec(true), { modified: ['public/app/admin.js'] })), conc.SAFE, 'dirt the deploy script does not read does not hold back a deploy');
+  const edited = branchWith(rec(false, ['scripts/lib/host-env.mjs']), rec(false, ['scripts/deliver-map.mjs']));
+  want(conc.assess(['portal-deploy'], edited), conc.DELAY, 'a branch whose deploy recipe differs: BETTER TO DELAY');
+  says(conc.assess(['portal-deploy'], edited), /scripts\/lib\/host-env\.mjs differs from origin\/main/, 'and it names the file that differs, an import and not only the entry script');
+  ok(!/CHECKED-OUT/.test(conc.assess(['portal-deploy'], edited).reasons[0].why), 'and never says the deploy ships the checked-out commit');
+  want(conc.assess(['portal-write'], edited), conc.DELAY, 'a branch whose deliver script differs: BETTER TO DELAY');
+  says(conc.assess(['portal-write'], edited), /deliver-map\.mjs differs/, 'and it names the deliver script');
+  const onMainBehind = world({ portal: { recipes: { deploy: rec(false, ['scripts/deploy.mjs']), deliver: rec(false, ['scripts/deliver-map.mjs']) } } });
+  want(conc.assess(['portal-deploy'], onMainBehind), conc.DELAY, 'on main but with a deploy script origin/main does not have: BETTER TO DELAY');
+  want(conc.assess(['portal-write'], onMainBehind), conc.CHECK, 'and a deliver there is CHECK FIRST, naming the fast-forward');
+  const blindScript = branchWith(rec(null), rec(null));
+  want(conc.assess(['portal-deploy'], blindScript), conc.CHECK, 'a script it could not compare, off main: CHECK FIRST, never SAFE');
+  says(conc.assess(['portal-deploy'], blindScript), /COULD NOT LOOK/, 'and it says so');
+  want(conc.assess(['portal-write'], blindScript), conc.DELAY, 'and a deliver there keeps the stricter answer');
+  want(conc.assess(['portal-deploy'], world({ portal: { modified: ['scripts/deploy.mjs'] } })), conc.CHECK, 'unmeasured and dirty on main: CHECK FIRST');
 }
 
 // --- failing safe ---

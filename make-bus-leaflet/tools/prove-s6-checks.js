@@ -1240,6 +1240,34 @@ console.log('\n14. known-off — a route the town has already ruled off is a dec
     drawnV ? JSON.stringify(rows(drawnV, 'known-off', '50').map(f => f.severity + ': ' + String(f.message).slice(0, 80))) : 'no report');
 
   /*
+   * THE SKIP-LIST PAIR (Soham, 2026-09-24). match_cfg.json `skipRoutes` stops
+   * match_routes.js drawing a line, but the route stays in routes_intown_atco.json,
+   * so a route declared off AND skipped read as drawn and went HARD. Quiet when the
+   * declared route is the one skipped; still HARD when the skip list names some
+   * OTHER route — without that half, a checker that ignored the drawn set whenever
+   * match_cfg.json existed would pass.
+   */
+  const declareSkipped = (name, skip) => {
+    const d = stage('wisbech', name);
+    injectMissingService(d);
+    const vs = readJ(d, 'verified-services.json');
+    vs.notDisplayed = [...(vs.notDisplayed || []), { route: '50', reason: REASON }];
+    writeJ(d, 'verified-services.json', vs);
+    const mc = fs.existsSync(path.join(d, 'match_cfg.json')) ? readJ(d, 'match_cfg.json') : {};
+    mc.skipRoutes = skip;
+    writeJ(d, 'match_cfg.json', mc);
+    return verify(d).v;
+  };
+  const skipV = declareSkipped('ko-skipped', ['50']);
+  check('a declared route that match_cfg.json skipRoutes keeps lineless is NOT drawn', 'no hard known-off on 50',
+    !!skipV && !rows(skipV, 'known-off', '50').some(f => f.severity === 'hard'),
+    skipV ? JSON.stringify(rows(skipV, 'known-off', '50').map(f => f.severity + ': ' + String(f.message).slice(0, 80))) : 'no report');
+  const skipOtherV = declareSkipped('ko-skipped-other', ['ZZ98']);
+  check('a skip list naming a DIFFERENT route mutes nothing', 'hard known-off on 50 survives skipRoutes ["ZZ98"]',
+    !!skipOtherV && rows(skipOtherV, 'known-off', '50').some(f => f.severity === 'hard'),
+    skipOtherV ? JSON.stringify(rows(skipOtherV, 'known-off', '50').map(f => f.severity + ': ' + String(f.message).slice(0, 80))) : 'no report');
+
+  /*
    * LOUD ARM 2 — the precedence that must NOT change. `notOnLeaflet` with
    * `servesTown:false` had the one reader S6 already possessed, and it raises
    * the louder `serves-town-conflict`. Folding it into known-off would have

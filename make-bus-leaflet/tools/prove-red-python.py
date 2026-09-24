@@ -1522,8 +1522,20 @@ MUTATIONS = [
 
     {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
      "what": "the registry is never written, so the scaffold prints `registered <town>` about a file it did not change",
-     "find": '            json.dump(tp,open(tp_path,"w",encoding="utf-8"),indent=1,ensure_ascii=False)',
+     "find": '            write_like_before(tp_path, json.dumps(tp,indent=1,ensure_ascii=False))',
      "to": '            pass'},
+
+    # Soham, 2026-09-24: the registry was rewritten CRLF with no final newline over a
+    # committed LF file, so every scaffold dirtied every line of it.
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the registry is rewritten in the platform's line endings rather than the file's own, so on Windows every line of a committed LF file changes",
+     "find": '    eol = "\\r\\n" if b"\\r\\n" in raw else "\\n"',
+     "to": '    eol = "\\r\\n"'},
+
+    {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
+     "what": "the final newline is dropped, so the last line of the registry changes on every scaffold",
+     "find": '    if raw.endswith(b"\\n"):',
+     "to": '    if False:'},
 
     {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
      "what": "the review checklist is written under a different name, so the path the run prints is not the file it wrote",

@@ -138,6 +138,9 @@ const intown    = readJSON('routes_intown_atco.json');
 const ll        = readJSON('atco2ll.json');
 const names     = readJSON('atco2name.json', true) || {};
 const intownCfg = readJSON('intown_cfg.json', true) || {};
+// match_cfg.json skipRoutes get NO line but stay in routes_intown_atco.json, which
+// gen_internal reads for stops. S-1b/S-1d subtract them (Soham, 2026-09-24; gotchas.md).
+const SKIPPED   = (readJSON('match_cfg.json', true) || {}).skipRoutes || [];
 
 // ---------- helpers ----------
 const findings = [];
@@ -544,7 +547,7 @@ for (const r of displayed) {
  *     just is not true any more.
  */
 for (const d of NOT_SHOWN) {
-  const drawn = intownByNorm(d) || [];
+  const drawn = lineDrawnStops(d);
   if (drawn.length >= 2) {
     add('hard', 'declared-not-shown',
       `routes.json declares route ${d} is not shown on this map, but the drawn set gives it ${drawn.length} stops — the sheet draws it. Either the declaration is stale, or it is silencing a finding about a route that is on the sheet.`,
@@ -565,7 +568,7 @@ for (const d of NOT_SHOWN) {
  * alone.
  */
 for (const [norm, rec] of KNOWN_OFF) {
-  const drawn = intownByNorm(norm) || [];
+  const drawn = lineDrawnStops(norm);
   if (drawn.length >= 2) {
     add('hard', 'known-off',
       `${rec.field} declares route ${rec.route} is deliberately not carried (${rec.reason || 'no reason recorded'}), but the drawn set gives it ${drawn.length} stops — the sheet draws it. Either the declaration is stale, or it is silencing a finding about a route that is on the sheet.`,
@@ -623,6 +626,8 @@ for (const r of displayed) {
 }
 function normRouteKey(r) { return Object.keys(intown || {}).find(k => normRoute(k) === normRoute(r)); }
 function intownByNorm(r) { const k = normRouteKey(r); return k ? intown[k] : null; }
+// the drawn stops of a route that really gets a LINE: a skipRoutes entry gets none
+function lineDrawnStops(r) { return SKIPPED.some(x => normRoute(x) === normRoute(r)) ? [] : (intownByNorm(r) || []); }
 
 // Locality tokens at both ends of every direction of a route's full chain.
 // Chain ends OUTSIDE the NaPTAN "0500H<LLLL>nnn" locality-coded style yield no token

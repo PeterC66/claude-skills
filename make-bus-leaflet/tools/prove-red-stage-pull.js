@@ -63,6 +63,16 @@ const MUTATIONS = [
       'the pull says which stale copy it refreshed, and names the stage that owns it',
     ],
   },
+  {
+    // Soham, 2026-09-24: `stamps` then `pull S3` into the same S4 folder, and
+    // `commit S4` refused with nothing having said why the stamps had gone.
+    what: 'the lost-stamps warning cut out — a pull that undoes `stage.js stamps` says nothing',
+    find: '    if (stampsIn(dest) < stampedBefore)\n',
+    replace: '    if (false)\n',
+    mustFail: [
+      'a pull that replaces a STAMPED routes.json says the stamps are gone and names the order',
+    ],
+  },
 ];
 
 const src = fs.readFileSync(SRC, 'utf8');

@@ -28,6 +28,21 @@ def run(cmd, **kw):
         sys.stderr.write(p.stdout+"\n"+p.stderr+"\n"); raise SystemExit(f"command failed: {' '.join(cmd)}")
     return p.stdout.strip()
 
+def write_like_before(path, text):
+    """Rewrite a committed file in the line endings and final newline it already has.
+
+    Text-mode open() on Windows turns every \\n into \\r\\n, and json.dump writes no
+    final newline, so registering Soham on 2026-09-24 rewrote the whole of buses-data's
+    LF town_prefixes.json (.gitattributes eol=lf) as CRLF with no newline at the end,
+    and every scaffold dirtied every line of it. Match the bytes that were there."""
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    eol = "\r\n" if b"\r\n" in raw else "\n"
+    if raw.endswith(b"\n"):
+        text += "\n"
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text.replace("\n", eol))
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("town")
@@ -104,7 +119,7 @@ def main():
                       f"Add it there and set \"region\" on {a.town} in town_prefixes.json, or the "
                       f"monthly refresh cannot check this town.")
             tp[a.town]=entry
-            json.dump(tp,open(tp_path,"w",encoding="utf-8"),indent=1,ensure_ascii=False)
+            write_like_before(tp_path, json.dumps(tp,indent=1,ensure_ascii=False))
             print(f"registered {a.town} in {tp_path}")
         elif a.town in tp:
             print(f"{a.town} already in town_prefixes.json - left as it stands")

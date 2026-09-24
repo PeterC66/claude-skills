@@ -197,3 +197,39 @@ test('CONTROL — the guard is keyed on the DECLARED set, not on the file name',
   assert.strictEqual(run(town, ['pull', 'S2', d]).status, 0);
   assert.strictEqual(whose(d), 'S2 declared this one');
 });
+
+/* Soham, 2026-09-24 — a pull that UNDOES the S4 stamps.
+ *
+ * `stage.js stamps <S4 dir>` writes the engine hash and design.sheetVersion into
+ * that folder's routes.json. Running `pull S3` into the same folder afterwards is
+ * a declared-output overwrite — correct, per the CONTROL above — and it replaces
+ * the stamped file with S3's unstamped one, so `commit S4` then refuses. The pull
+ * cannot know the order was wrong, but it can see that it took the stamps away.
+ */
+const STAMPED = '{"whose":"the stamped S4 copy","engine":"abc1234567","design":{"sheetVersion":"v1.1 · 24 Sep 2026"}}';
+
+test('a pull that replaces a STAMPED routes.json says the stamps are gone and names the order', () => {
+  const town = townWithStray();
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'routes.json'), STAMPED);
+  const r = run(town, ['pull', 'S3', d]);
+  assert.strictEqual(r.status, 0, 'a warning, not a refusal: overwriting a declared output is what a pull is for');
+  assert.strictEqual(whose(d), 'the curated config');
+  assert.match(r.stdout, /WARNING: this pull replaced a STAMPED routes\.json/);
+  assert.match(r.stdout, /stage\.js stamps/, 'the warning must name the command that puts them back');
+});
+
+test('CONTROL — no warning when the routes.json being replaced carried no stamps', () => {
+  const town = townWithStray();
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'routes.json'), '{"whose":"an unstamped copy"}');
+  assert.doesNotMatch(run(town, ['pull', 'S3', d]).stdout, /STAMPED/);
+});
+
+test('CONTROL — no warning when the incoming routes.json carries the stamps too', () => {
+  const town = newTown();
+  stageRun(town, 'S3', 'S3-config', '2026-09-24_1408', { 'routes.json': STAMPED }, ['routes.json']);
+  const d = dest(town, 'S4-work');
+  fs.writeFileSync(path.join(d, 'routes.json'), STAMPED);
+  assert.doesNotMatch(run(town, ['pull', 'S3', d]).stdout, /STAMPED/);
+});

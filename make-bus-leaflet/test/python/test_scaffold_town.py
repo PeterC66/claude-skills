@@ -466,5 +466,62 @@ class WhenTheBootstrapFoundNoPrefix(Scaffold):
         self.assertTrue(os.path.isfile(os.path.join(self.s1, "SCAFFOLD-NEXT.md")))
 
 
+class TheBytesOfTheRegistry(Scaffold):
+    """Registering a town must change ONE entry of `town_prefixes.json`, not every line.
+
+    Soham, 2026-09-24: the committed file is LF with a final newline, because
+    buses-data's `.gitattributes` says `eol=lf`, and the scaffold rewrote it through
+    a text-mode `open()` -- CRLF on Windows -- and `json.dump`, which writes no final
+    newline. The diff was the whole file, and it had to be normalised by hand before
+    the commit. Asserted on the BYTES, since `json.load` reads both shapes alike and
+    a test that parsed the result would pass on the broken writer. The CRLF case is
+    what keeps this honest on Linux CI, where text mode writes LF anyway and the LF
+    case alone would only catch the missing final newline.
+    """
+
+    COMMITTED = '{\n "St Ives": {\n  "prefixes": [\n   "050"\n  ]\n }\n}\n'
+
+    def setUp(self):
+        Scaffold.setUp(self)
+        self.two_regions()
+
+    def write_raw(self, text):
+        with open(self.tp_path, "wb") as fh:
+            fh.write(text.encode("utf-8"))
+
+    def raw(self):
+        with open(self.tp_path, "rb") as fh:
+            return fh.read()
+
+    def test_an_LF_file_with_a_final_newline_stays_exactly_that(self):
+        self.write_raw(self.COMMITTED)
+        self.scaffold()
+        raw = self.raw()
+        self.assertNotIn(b"\r\n", raw)
+        self.assertTrue(raw.endswith(b"}\n"), "the final newline was dropped: %r" % raw[-12:])
+        self.assertIn(self.TOWN, self.registered())
+
+    def test_the_lines_that_were_there_are_byte_for_byte_unchanged(self):
+        """The whole point: the diff is the new entry and nothing else."""
+        self.write_raw(self.COMMITTED)
+        self.scaffold()
+        self.assertTrue(self.raw().startswith(b'{\n "St Ives": {\n  "prefixes": [\n   "050"\n  ]\n },\n'),
+                        self.raw()[:80])
+
+    def test_a_CRLF_file_stays_CRLF(self):
+        """Preserve what is there, rather than impose LF: a checkout under
+        core.autocrlf=true holds CRLF, and forcing LF would dirty it just the same."""
+        self.write_raw(self.COMMITTED.replace("\n", "\r\n"))
+        self.scaffold()
+        raw = self.raw()
+        self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"), "a bare LF crept in")
+        self.assertTrue(raw.endswith(b"}\r\n"))
+
+    def test_a_file_with_no_final_newline_is_not_given_one(self):
+        self.write_raw(self.COMMITTED.rstrip("\n"))
+        self.scaffold()
+        self.assertTrue(self.raw().endswith(b"}"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -493,6 +493,14 @@ function main() {
     if (!sx.latest) die('no committed runs for ' + st + ' to pull');
     const r = sx.runs.find(x => x.id === sx.latest);
     const dest = path.resolve(rest[1] || process.cwd());
+    // Soham, 2026-09-24: `stamps` into an S4 folder, THEN `pull S3` into the same
+    // folder, put S3's unstamped routes.json on top and `commit S4` refused. The order
+    // is pull, stamps, build -- so say so when a pull has just undone the stamps.
+    const stampsIn = (d) => {
+      try { return 2 - missingStamps(JSON.parse(fs.readFileSync(path.join(d, 'routes.json'), 'utf8'))).length; }
+      catch (e) { return 0; }
+    };
+    const stampedBefore = stampsIn(dest);
     const shadowed = copyInto(path.join(townDir, r.dir), dest, new Set(r.outputs || []));
     console.log(`pulled ${st} (${r.id}) -> ${dest}`);
     /* WHICH SKIPS ARE WORTH SAYING OUT LOUD (narrowed the same day it was written).
@@ -549,6 +557,8 @@ function main() {
     // Keep the on-map version stamp in step with the run dir it just landed in.
     // Silent when there is nothing to do (unversioned dest, no routes.json, or
     // already correct) — it should only speak when it changed something.
+    if (stampsIn(dest) < stampedBefore)
+      console.log(`  WARNING: this pull replaced a STAMPED routes.json and the S4 provenance stamps are gone. The order is pull, then \`stage.js stamps "${dest}"\`, then build — \`commit S4\` will refuse until you stamp again.`);
     const sv = syncVersionField(dest);
     if (sv.status === 'updated') console.log(`  version stamp: "${sv.from}" -> "${sv.to}" (from run dir v${sv.want})`);
     else if (sv.status === 'no-field') console.log(`  note: routes.json has no "version" field — the map will print no version stamp`);

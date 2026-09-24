@@ -139,6 +139,25 @@ function skillPaths() {
   };
 }
 
+/*
+ * An npm arm, run as `node npm-cli.js`, because `spawnSync('npm')` with no shell
+ * is ENOENT on Windows — npm is `npm.cmd` there, and Node refuses to spawn a
+ * `.cmd` without a shell. Until 2026-09-24 the claude-skills manifest's `unit`
+ * and `wiring` arms were therefore UNANSWERED on the only machine that runs this
+ * (buses-data OA-343): honest, since a refusal exits 2, and never once asked.
+ * The CLI is looked for beside the running node, in the Windows layout and then
+ * the Unix one; neither found falls back to plain `npm`, whose failure to start
+ * is reported as UNANSWERED by `runCheck` rather than as a pass.
+ */
+export function npmArm(args) {
+  const dir = path.dirname(process.execPath);
+  const cli = [
+    path.join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(dir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ].find((p) => existsSync(p));
+  return cli ? { cmd: process.execPath, args: [cli, ...args] } : { cmd: 'npm', args };
+}
+
 /** The built-in manifests, used only where a repository declares none of its own. */
 function builtIn(repo) {
   const has = (p) => existsSync(path.join(repo, p));
@@ -198,11 +217,53 @@ function builtIn(repo) {
         { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: ['tools/check-doc-links.mjs'] },
         { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: ['tools/check-file-hygiene.mjs', '--root', '.'] },
         { id: 'acronyms', label: 'every short form can be looked up', cmd: 'node', args: ['tools/check-doc-acronyms.mjs'] },
-        { id: 'unit', label: 'the unit suite', tier: 'full', cmd: 'npm', args: ['test', '--prefix', 'make-bus-leaflet'] },
-        { id: 'wiring', label: 'every test:/gate: script is run by a workflow, through its npm script', tier: 'full', cmd: 'npm', args: ['run', 'gate:wiring', '--prefix', 'make-bus-leaflet'] },
+        { id: 'unit', label: 'the unit suite', tier: 'full', ...npmArm(['test', '--prefix', 'make-bus-leaflet']) },
+        { id: 'wiring', label: 'every test:/gate: script is run by a workflow, through its npm script', tier: 'full', ...npmArm(['run', 'gate:wiring', '--prefix', 'make-bus-leaflet']) },
       ],
       unanswered: [
         'Whether an engine change has its estate rebuild — `prove-red-held-back` needs a town in buses-data carrying the new engine stamp, and that town is in the other repository (OA-341).',
+      ],
+    };
+  }
+  /* The portal, community-bus-maps (buses-data OA-343 item 2). Until 2026-09-24
+   * it matched nothing, so the preflight REFUSED there, which was honest and
+   * useless. It is a built-in rather than a `.preflight.json` in that repository
+   * because every documentation checker lives in the skills tree, and a declared
+   * manifest could only reach them by a literal path on one laptop — the fault
+   * OA-345 removed from the two manifests above.
+   *
+   * `docsOnly` IS EMPTY ON PURPOSE, so every push with content is the full tier.
+   * The portal's `test.yml` has no `paths:` filter by design, and it is right not
+   * to: `test-changelog.mjs` reads `CHANGELOG.d/`, the schema harnesses read
+   * `docs/`, `check-chrome.mjs` reads `public/`, so a push of prose alone can
+   * redden `npm test` there. A cheap tier would be the preflight copying a
+   * population CI does not have. Measured on 2026-09-24: `npm test` 5 min 5 s,
+   * the four byte-identical steps 1 min 46 s together.
+   *
+   * The checks are the steps of `test.yml` and `verify.yml` in their order, one
+   * per step, so a red names the step that will go red. */
+  if (has('engine/vendored.json') && has('scripts/run-tests.mjs')) {
+    return {
+      name: 'community-bus-maps',
+      docsOnly: [],
+      checks: [
+        { id: 'prove-red-run-tests', label: 'the test runner can go red', ...npmArm(['run', 'test:prove-red-run-tests']) },
+        { id: 'npm-test', label: 'the portal suite, npm test', tier: 'full', ...npmArm(['test']) },
+        TOOLS && { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: [`${TOOLS}/check-file-hygiene.mjs`, '--root', '.'] },
+        TOOLS && { id: 'tables', label: 'tables are still tables', cmd: 'node', args: [`${TOOLS}/check-tables.mjs`, '--tree', '.'] },
+        TOOLS && { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: [`${TOOLS}/check-doc-links.mjs`] },
+        TOOLS && { id: 'acronyms', label: 'every short form can be looked up', cmd: 'node', args: [`${TOOLS}/check-doc-acronyms.mjs`] },
+        { id: 'verify-area', label: 'verify:area — the portal reproduces a shipped town sheet', tier: 'full', ...npmArm(['run', 'verify:area']) },
+        { id: 'verify-place', label: 'verify:place — the vendored place engine reproduces a shipped place sheet', tier: 'full', ...npmArm(['run', 'verify:place']) },
+        { id: 'verify-defaults', label: 'verify:defaults — every design/labels escape hatch is still live code', tier: 'full', ...npmArm(['run', 'verify:defaults']) },
+        { id: 'prove-red-selfsufficient', label: 'the self-sufficiency gate can go red', tier: 'full', ...npmArm(['run', 'test:prove-red-selfsufficient']) },
+        { id: 'selfsufficient', label: 'the vendored engine renders with nothing but this repository', tier: 'full', ...npmArm(['run', 'test:selfsufficient']) },
+      ].filter(Boolean),
+      unanswered: [
+        '`render-parity.yml` — it rasterises inside the production Docker image on Linux, and glyph outlines differ from this laptop by design, so a local answer would not be the one CI gives.',
+        '`audit.yml` — `npm audit` asks the registry, and anything that needs the network is not asked here.',
+        'Whether this branch is current with the portal\'s origin/main — its protection requires an up-to-date branch, and a verdict about a stale base is a verdict about the wrong tree.',
+        ...(TOOLS ? [] : ['The four documentation checks — NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
       ],
     };
   }

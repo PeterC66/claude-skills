@@ -612,6 +612,18 @@ class TheSheetItself(Fixture):
         self.assertTrue(any("this check is blind" in m
                             for _, _, m in self.findings(out, "HARD", "S-4")), out)
 
+    def test_a_frame_with_no_stand_codes_draws_no_glyphs_and_that_is_not_blindness(self):
+        """OA-371. A frame of roadside stops has no bay code to draw, so the
+        generator tags nothing and the empty set is the right answer. The
+        control is the test above: one lettered stand in the frame and the
+        same empty sheet is HARD."""
+        rc, out = self.run_verify(
+            stands=[{"atco": "QUAY", "label": "The Quay", "walkMin": 1, "distM": 20}],
+            dests=[{"destination": "Huntingdon", "boardAt": "The Quay", "boardAtAtco": "QUAY"}],
+            extra_trips=[("T12", "12", ["QUAY", "HUNT"], "S1")],
+            svg=sheet(["Huntingdon"], glyphs=()))
+        self.assertClean(rc, out)
+
     def test_an_absent_sheet_is_reported_as_skipped_rather_than_passed(self):
         """A run with no artefact to read must not print the same thing as a
         run that read one and liked it."""

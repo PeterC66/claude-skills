@@ -912,8 +912,18 @@ MUTATIONS = [
     # drops rows fails here and nowhere else.
     {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
      "what": "the generator can stop tagging bay glyphs and S-4 goes silently blind -- every remaining assertion then passes over an empty set, which reads exactly like a sheet whose bays are all correct",
-     "find": '        if not glyphs:',
+     "find": '        if not glyphs and coded:',
      "to": '        if False:'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "no stand in the frame is ever counted as coded, so the blindness question is never asked on a bus station either and a generator that stopped tagging its bays passes",
+     "find": '            if why == "stand code":',
+     "to": '            if False:'},
+
+    {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
+     "what": "the blindness question is asked of a frame with no stand codes, so a correct sheet for a pair of roadside stops fails HARD because there was no bay to tag (OA-371)",
+     "find": '        if not glyphs and coded:',
+     "to": '        if not glyphs:'},
 
     {"suite": "test_boarding_verify.py", "file": "boarding_verify.py",
      "what": "any abbreviation anywhere on the sheet excuses every missing destination, so a generator that dropped all but one row is green",

@@ -949,5 +949,22 @@ class AnUnansweredPullIsNotAnEmptyOne(unittest.TestCase):
             self.assertEqual(json.load(fh), answer)
 
 
+class ANewMapIsDrawnNorthUp(unittest.TestCase):
+    """buses-data OA-454: the drafter pins north, and never over a person's angle."""
+
+    def test_a_draft_with_no_design_block_is_pinned_north(self):
+        self.assertEqual(dt.pin_north({})["design"], {"fixedOrientation": "north"})
+
+    def test_the_rest_of_an_existing_design_block_is_kept(self):
+        draft = dt.pin_north({"design": {"footerSafe": True}})
+        self.assertEqual(draft["design"], {"footerSafe": True, "fixedOrientation": "north"})
+
+    def test_an_angle_somebody_chose_is_left_alone(self):
+        for chosen in (-35, "auto", 0):
+            with self.subTest(chosen=chosen):
+                draft = dt.pin_north({"design": {"fixedOrientation": chosen}})
+                self.assertEqual(draft["design"]["fixedOrientation"], chosen)
+
+
 if __name__ == "__main__":
     unittest.main()

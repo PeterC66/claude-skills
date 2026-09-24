@@ -20,6 +20,7 @@
   "routeOrder": ["18", "18A", "C2", "150", "61EY", "69"],
   "panelOrder": ["18", "18A", "C2", "150", "61EY", "69"],
   "orientationRoute": "61EY",
+  "design": { "fixedOrientation": "north" },
   "internalDesc": {
     "18": ["Cambridge - St Neots", "Mon-Sat, via Papworth"],
     "18A": ["Cambridge - St Neots", "Mon-Sat"],

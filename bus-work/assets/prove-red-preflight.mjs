@@ -19,12 +19,12 @@
 // testing the fake. The checks themselves are `node -e` one-liners, so nothing
 // here depends on the estate's real checkers being installed.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -382,6 +382,63 @@ function runWith(fixture, opts = {}) {
   check('npmArm: an npm arm starts and passes, rather than being UNANSWERED', probe.verdict === 'PASS', `${probe.verdict}: ${probe.why || probe.err || ''}`);
   check('npmArm: and it printed a version, so exit 0 was npm answering', /^\d+\.\d+/.test(probe.out || ''), JSON.stringify(probe.out));
   rmSync(fx.root, { recursive: true, force: true });
+}
+
+// CASE 16 — a push that moves the ENGINE PIN asks the estate harnesses (buses-data
+// OA-462). 280bd51c moved engine.lock.json, passed this preflight with the board
+// green, and failed gates.yml at *Prove the byte gates can go red*, because a
+// harness's control diffed. The fixture is that shape: a `when` arm standing for
+// the harness, exiting 1, beside a board arm that passes. The red is asserted
+// first; the controls then show the arm stays out of a push it is not about, and
+// that a scope the tool cannot read never skips it.
+{
+  const WHEN = ['^engine\\.lock\\.json$', '(^|/)ci-reference/'];
+  const manifest = { name: 'fixture', docsOnly: ['^docs/'], checks: [{ ...scripted('board', 0), tier: 'full' }, { ...scripted('harness', 1, 'CONTROL DIFF — High Wycombe Aldi'), tier: 'full', when: WHEN }] };
+
+  const pin = makeRepo({ manifest, pushed: ['engine.lock.json'] });
+  let { result, ran } = runWith(pin);
+  check('pin push: the estate harness RAN', ran.includes('harness'), ran.join(','));
+  check('pin push: its control diff is a FAIL', result.checks.find((c) => c.id === 'harness')?.verdict === 'FAIL');
+  check('pin push: a green board does not carry the push — exit 1', result.exit === 1, `exit ${result.exit}`);
+  rmSync(pin.root, { recursive: true, force: true });
+
+  const ref = makeRepo({ manifest, pushed: ['Areas/Ramsey/ci-reference/internal.svg'] });
+  ({ ran } = runWith(ref));
+  check('golden-master push: the estate harness ran', ran.includes('harness'), ran.join(','));
+  rmSync(ref.root, { recursive: true, force: true });
+
+  const data = makeRepo({ manifest, pushed: ['Areas/Ramsey/verified-services.json'] });
+  ({ result, ran } = runWith(data));
+  check('control: a full-tier push that moves neither does NOT run it', !ran.includes('harness') && ran.includes('board'), ran.join(','));
+  check('control: and exits 0', result.exit === 0, `exit ${result.exit}`);
+  check('control: the arm is named as not asked, never counted as a pass', result.notTriggered.some((c) => c.id === 'harness') && !result.checks.some((c) => c.id === 'harness'));
+  rmSync(data.root, { recursive: true, force: true });
+
+  const blind = makeRepo({ manifest, upstream: false });
+  ({ ran } = runWith(blind));
+  check('no upstream: a scope it cannot read asks the when-arm anyway', ran.includes('harness'), ran.join(','));
+  rmSync(blind.root, { recursive: true, force: true });
+
+  const forced = makeRepo({ manifest, pushed: ['docs/one.md'] });
+  ({ ran } = runWith(forced, { all: true }));
+  check('--all asks the when-arm over a docs-only push', ran.includes('harness'), ran.join(','));
+  rmSync(forced.root, { recursive: true, force: true });
+
+  // The built-in buses-data manifest carries both arms, triggered by the pin and
+  // not by a map's own data, and runs each as gates.yml does: from make-bus-leaflet.
+  const bd = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
+  const m = manifestFor(bd.repo);
+  rmSync(bd.root, { recursive: true, force: true });
+  for (const id of ['prove-red-gates', 'prove-red-status']) {
+    const arm = m && m.checks.find((c) => c.id === id);
+    check(`buses-data: the built-in manifest asks ${id}`, !!arm, m ? m.checks.map((c) => c.id).join(',') : 'no manifest');
+    if (!arm) continue;
+    const known = (paths) => ({ known: true, paths });
+    check(`buses-data: ${id} is triggered by engine.lock.json`, triggered(arm, known(['engine.lock.json']), false));
+    check(`buses-data: ${id} is triggered by a ci-reference/`, triggered(arm, known(['Places/X/ci-reference/routes.json']), false));
+    check(`buses-data: ${id} is NOT triggered by a map's S3 config`, !triggered(arm, known(['Areas/Ramsey/S3-config/2026-09-24_1000/routes.json']), false));
+    check(`buses-data: ${id} runs from make-bus-leaflet, where its script is`, !!arm.cwd && existsSync(path.join(arm.cwd, arm.args[0])), `${arm.cwd} + ${arm.args[0]}`);
+  }
 }
 
 const total = pass + fails.length;

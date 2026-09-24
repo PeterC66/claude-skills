@@ -64,6 +64,9 @@ const RUNS = {
   stneots: 'Areas/St Neots/S6-verify/2026-08-28_1347',
   //  a PLACE: no intown_cfg.json, so no in-town prefix and no buffer stops at all
   place: 'Areas/St Neots/Places/St Neots Town Centre/S6-verify/2026-08-21_1912',
+  //  route T5 leaves south-east to Fordham, then turns south-west to Cambridge:
+  //  101 degrees between its edge stop and its terminus, on a correct sheet (OA-416)
+  soham: 'Areas/Soham/S6-verify/2026-09-24_1414',
 };
 
 const TMP = scratchDir('prove-s6-');
@@ -1741,6 +1744,74 @@ console.log('\n21. displayed — the coverage denominator is what the two sheets
   check('and the spoke\'s own route is still displayed beside it', `${norm(R0.external[0].route)} did not lose its place to the rider`,
     !!c.v && c.v.inputs.displayedRoutes.map(norm).includes(norm(R0.external[0].route)),
     c.v ? c.v.inputs.displayedRoutes.join(',') : 'no verification.json');
+}
+/* ---- 22. a route that TURNS after leaving town is not drawn the wrong way (OA-416) */
+console.log('\n22. Direction — a route that turns after leaving town is SOFT, a reversed one is still HARD');
+{
+  /*
+   * Soham's T5 leaves south-east to Fordham (edge bearing ~127) and swings south-west
+   * to Cambridge (~228): more than 90 degrees, which was a HARD on a sheet drawing
+   * the real road. A terminus disagreement is now HARD only when the chain's own
+   * next stops past the edge disagree too. Both halves are proved here, on the same
+   * route, so neither can pass on data that has stopped exhibiting its case.
+   */
+  const a = stage('soham', 's22-turns');
+  const q = verify(a);
+  const t5 = q.v && q.v.findings.find(f => f.category === 'direction' && f.route === 'T5');
+  if (!t5 || !(t5.evidence.angleApart > 90)) throw new Error(`prove-s6-checks 22: fixture assumption broken — Soham T5's edge stop is no longer more than 90 degrees off its terminus (${t5 ? t5.evidence.angleApart : 'no direction finding'}), so this case cannot show a turn; pick another turning route, do not delete the case`);
+  check('a route that turns after leaving town is not called reversed', 'no hard direction on T5',
+    !has(q.v, 'hard', 'direction', 'T5'), JSON.stringify(q.v.findings.filter(f => f.route === 'T5').map(f => f.severity + '/' + f.category)));
+  check('and it still says so, naming the stops that prove the turn', 'a soft direction on T5 with turns:true and a continuation within 90 degrees',
+    t5.severity === 'soft' && t5.evidence.turns === true && t5.evidence.continuationApart <= 90 && (t5.evidence.continuation || []).length > 0,
+    JSON.stringify(t5.evidence));
+
+  /*
+   * The same route, genuinely reversed: T5's buffer stops moved 6 km out on a
+   * bearing more than 90 degrees clear of EVERY undrawn stop of its chain — so of
+   * every terminus candidate and of whatever continuation the engine picks. The
+   * chain's real next stops stay where they are, so both instruments disagree,
+   * and it must go HARD.
+   */
+  const c = stage('soham', 's22-reversed');
+  const cfg = readJ(c, 'intown_cfg.json'), ll = readJ(c, 'atco2ll.json');
+  const anchor = ll[cfg.anchor];
+  const seq = readJ(c, 'routes_intown_atco.json')['T5'];
+  const extra = new Set(cfg.extraCore || []);
+  const buffers = seq.filter(x => !(x.startsWith(cfg.prefix) || extra.has(x)));
+  if (buffers.length < 2) throw new Error('prove-s6-checks 22: fixture assumption broken — T5 no longer has two buffer stops');
+  const toR = Math.PI / 180;
+  const bearing = (p, r) => {
+    const dLon = (r[1] - p[1]) * toR, la1 = p[0] * toR, la2 = r[0] * toR;
+    const y = Math.sin(dLon) * Math.cos(la2);
+    const x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  };
+  const angleDiff = (x, y) => { const d = Math.abs(x - y) % 360; return d > 180 ? 360 - d : d; };
+  // Clear of every undrawn chain stop AND every chain end: an end can be a drawn
+  // in-town stop (Soham Railway Station is both), and the engine compares against it.
+  const fe = readJ(c, 'routes_full_atco.json')['T5'];
+  const drawn = new Set(seq);
+  const dirs = [...Object.values(fe.directions || {}), ...(fe.canonical || [])];
+  const ends = dirs.flatMap(d => [d.stops[0], d.stops[d.stops.length - 1]]);
+  const others = [...new Set([...dirs.flatMap(d => d.stops).filter(s => !drawn.has(s)), ...ends])]
+    .filter(s => ll[s] && s !== cfg.anchor).map(s => bearing(anchor, ll[s]));
+  let escape = 0, margin = -1;
+  for (let b = 0; b < 360; b++) {
+    const m = Math.min(...others.map(x => angleDiff(b, x)));
+    if (m > margin) { margin = m; escape = b; }
+  }
+  if (margin <= 90) throw new Error(`prove-s6-checks 22: fixture assumption broken — T5's chain spans too widely to express a reversal (best margin ${margin.toFixed(0)}deg)`);
+  const km = 6;
+  for (const x of buffers) {
+    ll[x] = [anchor[0] + (km / 111) * Math.cos(escape * toR),
+             anchor[1] + (km / (111 * Math.cos(anchor[0] * toR))) * Math.sin(escape * toR)];
+  }
+  writeJ(c, 'atco2ll.json', ll);
+  const r = verify(c);
+  const h = r.v && r.v.findings.find(f => f.category === 'direction' && f.route === 'T5' && f.severity === 'hard');
+  check('the same route genuinely reversed still goes HARD', 'hard direction on T5, its continuation more than 90 degrees off too',
+    !!h && h.evidence.continuationApart > 90,
+    r.v ? JSON.stringify(r.v.findings.filter(f => f.route === 'T5').map(f => `${f.severity}/${f.category} ${f.evidence.continuationApart}`)) : 'no report');
 }
 console.log('\n' + '='.repeat(78));
 console.log(failures

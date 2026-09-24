@@ -467,17 +467,25 @@ def main():
         # bays either. Tagging the glyph at the point it is drawn makes the
         # question exact: these elements, and only these, claim to be stand codes.
         sanctioned = set()
+        coded = 0
         for a in by_atco:
-            lab, _ = naptan_label(a)
+            lab, why = naptan_label(a)
             if not lab:
                 continue
             sanctioned.add(lab)
+            if why == "stand code":
+                coded += 1
             m = re.match(r"^(?:Bay|Stand|Stop|Gate|Platform|Stance|Berth)\s+(.+)$", lab)
             if m:
                 sanctioned.add(m.group(1))
         glyphs = re.findall(r'<text[^>]*class="bstand"[^>]*>(.*?)</text>', svg, re.S)
         glyphs = [re.sub(r"<[^>]+>", "", g).strip() for g in glyphs]
-        if not glyphs:
+        # The blindness question is only a question where there was something
+        # to see. A frame whose stops carry no stand code at all -- a pair of
+        # roadside stops by a supermarket, say -- gives the generator no bay to
+        # tag, so an empty set is the honest answer there and not a fault
+        # (OA-371). One coded stand in the frame and it is HARD exactly as before.
+        if not glyphs and coded:
             hard("S-4", "no class=\"bstand\" glyphs found in the sheet — either nothing was "
                         "drawn, or the generator stopped tagging them and this check is blind")
         for t in sorted(set(glyphs)):

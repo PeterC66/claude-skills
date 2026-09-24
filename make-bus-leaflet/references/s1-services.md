@@ -44,6 +44,18 @@ Detailed steps for S1 of the `make-bus-leaflet` workflow. See SKILL.md for the s
 7. `stage.js commit S1 "$S1" --outputs gtfs-services.json,verified-services.json,disagreements.json,disagreements.docx,disagreements.pdf`.
 
 
+## Near a council boundary — ask the neighbour before S1 is done (2026-09-24, buses-data OA-416)
+
+**A town within reach of another council has services that council's sources know about and ours may not.** The feed is one BODS region filtered to its own ATCO areas, so it keeps a journey only if that journey calls at one of them; bustimes.org and the S6 red team are county-blind, but a neighbouring council's own bus pages and its community-transport and demand-responsive lists are read by nobody unless somebody thinks to. The question was first asked by Peter of Soham, a few miles from Suffolk, and it took four separate reads to answer *nothing missed*.
+
+**So `bootstrap_town.py` now asks it for every new town**, in a `## Boundary check` section of `bootstrap-report.md`: every other NaPTAN ATCO area with a stop within 10 km of the centre, its three nearest place names, and how many of its stops the region dataset holds. It never refuses anything; it says what to read. Two lines matter most:
+
+- **`!! … of this town's OWN stops are coded in area …`** — a town that straddles a boundary. The feed only keeps journeys through kept prefixes, so confirm those stops are served in the dataset, and rebuild it with the area added to `--keep-prefixes` if they are not.
+- **`NONE of its stops are in this region's feed`** — a neighbour whose operators may publish to a different BODS region. Check whether any of its services call in the town, because the dataset cannot show them.
+
+**For each area it names, before S1 is committed:** search that council's own bus site and its community-transport and demand-responsive lists for the town, read the town's bustimes.org locality page, and write the answer into the S1 notes or the thread record — including when the answer is *nothing missed*, as Soham's is (buses-data `Correspondence/CORR-012/README.md`), because an unrecorded check is indistinguishable from one never made. A school contract bus from the neighbour's schools will not show in any of these, and is not drawn anyway.
+
+
 ## A service that is in NO feed at all — the hand-authored chain (2026-09-11, buses-data OA-286)
 
 **Before you conclude a community service cannot be drawn, download whatever the operator publishes.** OA-286 was filed saying Wisbech's route 68 had *"eight or nine place NAMES, from prose"* and was therefore undrawable. It does not: `fact-cambs.co.uk/Route-68.html` links a PNG headed *Route 68 Timetable / Wisbech town circular / Times updated 1st June 2026*, with all 38 calling points in order and five hourly journeys. Nobody had looked. The premise was an inference from the sources that happened to be to hand — two newspaper reports and a council listing — rather than a fact about the world. A community operator that runs a fixed route usually publishes a timetable somewhere, often as an image a text fetch will not show you; fetch the page, list its links, and read the PNG or PDF.

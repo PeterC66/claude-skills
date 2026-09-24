@@ -239,7 +239,7 @@ const MUTATIONS = [
 
   { suite: 'label_placer.test.js', file: 'label_placer.js',
     what: "reserve stops telling the v2 solver, so v2 places labels over ink v1 would have dodged",
-    find: "    if(LAB) LAB.block([x0,y0,x1,y1],tag);}",
+    find: "    if(LAB && labToo!==false) LAB.block([x0,y0,x1,y1],tag);}",
     to: "    ;}" },
 
   { suite: 'label_placer.test.js', file: 'label_placer.js',

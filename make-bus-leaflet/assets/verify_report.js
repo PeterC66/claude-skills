@@ -51,6 +51,7 @@ const { assertNoCollision } = require('./index_guard');
 const { knownOff } = require('./known_off');
 const { checkDrawnWindow } = require('./window_contiguity');
 const { displayedRoutes } = require('./displayed_routes');
+const { continuationBearing } = require('./direction_continuation');
 
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
@@ -865,42 +866,6 @@ function chainContinuesBeyondDrawn(fe, seq) {
   }
   return false;
 }
-/*
- * WHICH WAY DOES THE CHAIN GO NEXT? (buses-data OA-416, 2026-09-24.)
- *
- * For every direction of the full chain that calls at the edge stop, walk OUTWARD
- * from it — toward the side holding fewer drawn stops, which is the side the
- * sheet stops drawing — and take the first few stops the bus calls at next: at
- * least three, and on until the last is a kilometre past the edge, six at most.
- * The bearing from the anchor to the last of them says where the route really
- * goes once it has left town. Of all directions, the one closest to the edge
- * bearing is kept — the same "closest end" leniency the terminus check has
- * always had, because a through route's other direction heads the other way.
- * null when the edge is a chain end or sits on no direction: nothing beyond it.
- */
-function continuationBearing(fe, edge, drawn, bEdge) {
-  let best = null;
-  for (const d of fullDirections(fe)) {
-    const i = d.stops.indexOf(edge);
-    if (i < 0) continue;
-    let before = 0, after = 0;
-    for (let j = 0; j < d.stops.length; j++) if (j !== i && drawn.has(d.stops[j])) (j < i ? before++ : after++);
-    const steps = before === after ? [1, -1] : [after < before ? 1 : -1];
-    for (const step of steps) {
-      const got = [];
-      for (let j = i + step; j >= 0 && j < d.stops.length && got.length < 6; j += step) {
-        const a = d.stops[j];
-        if (!ll[a] || drawn.has(a)) continue;
-        got.push(a);
-        if (got.length >= 3 && haversineKm(ll[edge], ll[a]) >= 1) break;
-      }
-      if (!got.length) continue;
-      const b = bearing(anchorLL, ll[got[got.length - 1]]);
-      if (!best || angleDiff(bEdge, b) < angleDiff(bEdge, best.bearing)) best = { stops: got, bearing: b };
-    }
-  }
-  return best;
-}
 if (anchorLL) {
   for (const r of displayed) {
     if (CIRCULAR.has(r)) { dirSkipped.push({ route: r, reason: 'circular' }); continue; }
@@ -980,23 +945,10 @@ if (anchorLL) {
       const b = bearing(anchorLL, ll[a]), dd = angleDiff(bEdge, b);
       if (dd < diff) { diff = dd; bTerm = b; term = a; }
     }
-    /*
-     * A ROUTE THAT LEAVES ONE WAY AND THEN TURNS IS NOT DRAWN THE WRONG WAY
-     * (buses-data OA-416, 2026-09-24). The terminus comparison above assumes a
-     * route heads out of town roughly toward where it ends, and a real road need
-     * not. Soham's T5 leaves south-east to Fordham (127°) and then swings
-     * south-west through Burwell and the Swaffhams to Cambridge (228°): 101°
-     * apart, a HARD, on a sheet that draws exactly the road the bus takes.
-     *
-     * So a terminus disagreement is only a HARD when the chain's OWN next few
-     * stops past the edge disagree too — continuationBearing() below. Those stops
-     * are a few km out, not 20, so a road's legitimate curvature cannot swallow
-     * the signal the way it did for both instruments measured on 2026-08-29
-     * (references/s6-verify.md), and a buffer stop that sits where the route does
-     * not go still fails both. Where the continuation agrees, the finding is a
-     * SOFT naming the turn, never silence: it is still a claim somebody can read.
-     */
-    const cont = diff > 90 ? continuationBearing(fe, edge, new Set(seq), bEdge) : null;
+    // A route that leaves one way and then TURNS is not reversed (OA-416): a terminus
+    // disagreement is HARD only if the chain's own next stops disagree too.
+    const cont = diff > 90 ? continuationBearing(fullDirections(fe), edge, new Set(seq), bEdge,
+      { ll, anchorLL, haversineKm, bearing, angleDiff }) : null;
     const contDiff = cont ? angleDiff(bEdge, cont.bearing) : null;
     const contEv = cont ? { continuation: cont.stops, continuationNames: cont.stops.map(a => names[a] || null),
       continuationBearing: +cont.bearing.toFixed(1), continuationApart: +contDiff.toFixed(1) } : {};

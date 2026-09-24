@@ -443,6 +443,87 @@ class OsmNote(unittest.TestCase):
         self.assertEqual(bt.osm_note("anything else"), bt.osm_note("read"))
 
 
+def _naptan_db(path, stops):
+    """A NaPTAN sqlite holding the four columns boundary_areas reads, derived
+    lat/lon as the real register carries them (never Latitude/Longitude)."""
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE naptan (ATCOCode TEXT, LocalityName TEXT, lat REAL, lon REAL)")
+    con.executemany("INSERT INTO naptan VALUES (?,?,?,?)", stops)
+    con.commit()
+    con.close()
+    return path
+
+
+class Boundary(unittest.TestCase):
+    """The boundary question (buses-data OA-416, Soham, 2026-09-24): which other
+    council areas are within reach, and whether the report tells the reviewer to
+    read them. Centre 52.0, 0.0; 0.01 deg of latitude is about 1.1 km."""
+
+    def setUp(self):
+        self.dir = _stubs.scratch("bootstrap-boundary-")
+
+    def _db(self, stops):
+        return _naptan_db(os.path.join(self.dir, "n.sqlite"), stops)
+
+    def test_a_missing_register_is_a_refusal_and_says_so(self):
+        state, rows = bt.boundary_areas(os.path.join(self.dir, "absent.sqlite"), 52.0, 0.0, 1.6)
+        self.assertEqual((state, rows), ("no-register", []))
+        text = "\n".join(bt.boundary_section(state, rows, 1.6, naptan_db="absent.sqlite"))
+        self.assertIn("NOT CHECKED", text)
+        self.assertNotIn("No other council", text)
+
+    def test_one_council_only_says_there_is_nothing_more_to_ask(self):
+        db = self._db([("0500AAA01", "Town", 52.0, 0.0), ("0500AAA02", "Village", 52.05, 0.0)])
+        state, rows = bt.boundary_areas(db, 52.0, 0.0, 1.6)
+        self.assertEqual([r["area"] for r in rows], ["050"])
+        text = "\n".join(bt.boundary_section(state, rows, 1.6))
+        self.assertIn("No other council area", text)
+        self.assertNotIn("Before S1 is done", text)
+
+    def test_a_neighbour_within_reach_is_named_with_its_nearest_places_first(self):
+        db = self._db([
+            ("0500AAA01", "Town", 52.0, 0.0),
+            ("3900BBB01", "Far Suffolk", 52.08, 0.0),   # ~8.9 km
+            ("3900BBB02", "Near Suffolk", 52.04, 0.0),  # ~4.4 km
+            ("2900CCC01", "Beyond reach", 52.2, 0.0),   # ~22 km, outside 10 km
+        ])
+        state, rows = bt.boundary_areas(db, 52.0, 0.0, 1.6)
+        self.assertEqual([r["area"] for r in rows], ["050", "390"])
+        self.assertEqual(rows[1]["places"], ["Near Suffolk", "Far Suffolk"])
+        self.assertEqual((rows[1]["inTown"], rows[1]["near"]), (0, 2))
+        text = "\n".join(bt.boundary_section(state, rows, 1.6))
+        self.assertIn("Area 390 (Near Suffolk, Far Suffolk)", text)
+        self.assertIn("Before S1 is done", text)
+        self.assertNotIn("290", text)
+
+    def test_a_town_whose_own_stops_span_two_councils_is_flagged(self):
+        db = self._db([
+            ("0500AAA01", "Town", 52.0, 0.0), ("0500AAA02", "Town", 52.001, 0.0),
+            ("3900BBB01", "Town edge", 52.005, 0.0),    # ~0.6 km: inside the town radius
+        ])
+        state, rows = bt.boundary_areas(db, 52.0, 0.0, 1.6)
+        text = "\n".join(bt.boundary_section(state, rows, 1.6))
+        self.assertIn("!! 1 of this town's OWN stops are coded in area 390", text)
+        self.assertIn("not area 050", text)
+
+    def test_the_feed_count_separates_an_area_the_dataset_holds_from_one_it_does_not(self):
+        db = self._db([("0500AAA01", "Town", 52.0, 0.0), ("3900BBB01", "Suffolk", 52.04, 0.0),
+                       ("2900CCC01", "Essex", 51.96, 0.0)])
+        g = _stops_db(os.path.join(self.dir, "g.sqlite"), [
+            {"stop_id": "0500AAA01", "stop_name": "Town", "stop_lat": "52.0", "stop_lon": "0.0"},
+            {"stop_id": "3900BBB01", "stop_name": "Suffolk", "stop_lat": "52.04", "stop_lon": "0.0"}])
+        con, cur = _cur(g)
+        try:
+            state, rows = bt.boundary_areas(db, 52.0, 0.0, 1.6, gtfs_cur=cur)
+        finally:
+            con.close()
+        feed = {r["area"]: r["inFeed"] for r in rows}
+        self.assertEqual((feed["390"], feed["290"]), (1, 0))
+        text = "\n".join(bt.boundary_section(state, rows, 1.6))
+        self.assertIn("1 of its stops are in this region's feed", text)
+        self.assertIn("NONE of its stops are in this region's feed", text)
+
+
 class Palette(unittest.TestCase):
     """The badge colours, and the one invariant that decides whether text is legible."""
 

@@ -232,6 +232,23 @@ test('a label is refused space outside the hard bounds, however cheap it looks',
   if (r.placed) assert.ok(r.b[2] <= 55 + 1e-9, `box ran to x=${r.b[2]}, past the hard bound at 55`);
 });
 
+test('a label may carry its own hard bounds, and only that label gets them', () => {
+  // design.exitCaptionsInPanel hands the "to X" captions the empty panel column
+  // and nothing else: the same text at the same point, with and without its own
+  // bounds, must be confined by the sheet's limit in one case and not the other.
+  const sheet = { x0: 0, y0: 0, x1: 55, y1: 100 };
+  const wide = { x0: 0, y0: 0, x1: 100, y1: 100 };
+  const L = new Labeller({ page: [100, 100], bounds: sheet });
+  L.block([0, 0, 100, 44], 'above');           // leave only the band y 44..56 near the anchor
+  L.block([0, 56, 100, 100], 'below');
+  L.block([30, 44, 54, 56], 'the map');        // and nothing on the map side of it
+  L.add({ id: 'term:a', at: [54.5, 50], text: 'to Cambridge', size: 3, mustPlace: true, bounds: wide });
+  L.add({ id: 'poi:b', at: [54.5, 50.5], text: 'to Cambridge', size: 3 });
+  const [a, b] = L.solve();
+  assert.ok(a.placed && a.b[2] > 55, `the caption with its own bounds should use the space past x=55 (got ${a.placed ? a.b[2] : 'unplaced'})`);
+  assert.ok(!b.placed || b.b[2] <= 55 + 1e-9, `a label without its own bounds ran to x=${b.placed ? b.b[2] : '-'}, past the sheet's limit at 55`);
+});
+
 test('Grid.cover reports the fraction of a box that is inked, not merely whether any of it is', () => {
   const g = new Grid(100, 100, 0.5);
   const box = [10, 10, 20, 20];

@@ -239,6 +239,98 @@ def osm_note(state):
                 "a finding about this town.")
     return "- (none found: OSM answered, and the bbox holds no river, canal, railway or A-road)"
 
+# THE BOUNDARY QUESTION (buses-data OA-416, 2026-09-24). Soham sits a few miles
+# from Suffolk, and Peter asked whether anything could have been missed for that
+# reason. Nothing had been, but only four separate reads could say so, and no
+# build had ever been told to make them: the feed is one BODS region filtered to
+# its own ATCO areas, bustimes and the red team are county-blind, and a
+# neighbouring council's own bus pages and community-transport list are read by
+# nobody unless somebody thinks to. So the draft now names every other council
+# area within reach of the town, and the report tells the reviewer what to read
+# for each one before S1 is done. It is a prompt to look, never a finding.
+BOUNDARY_NEAR_KM = 10.0
+
+def boundary_areas(naptan_db, lat, lon, town_km, near_km=BOUNDARY_NEAR_KM, gtfs_cur=None):
+    """Which NaPTAN ATCO areas (the first three digits of an ATCO code, one per
+    council) have stops within `near_km` of the centre, and within `town_km`.
+
+    Returns (state, rows). `state` is "read", or "no-register" when the NaPTAN
+    sqlite is absent -- kept apart as osm_note keeps its states, because "no other
+    council nearby" and "the register was never opened" must not print the same
+    line. Each row: {area, inTown, near, places, inFeed}, town stops first, then
+    most stops. `places` is up to three locality names, nearest first, so the
+    reader can recognise the council without a name table. `inFeed` counts that
+    area's stops in this region's GTFS (None when no cursor is given): zero means
+    no journey that calls there is in the dataset at all.
+    """
+    if not naptan_db or not os.path.exists(naptan_db):
+        return "no-register", []
+    con = sqlite3.connect(naptan_db)
+    try:
+        rows = con.execute("SELECT ATCOCode, LocalityName, lat, lon FROM naptan").fetchall()
+    finally:
+        con.close()
+    areas = {}
+    for atco, loc, la, lo in rows:
+        try: la, lo = float(la), float(lo)
+        except (TypeError, ValueError): continue
+        d = _km(lat, lon, la, lo)
+        if d > near_km: continue
+        key = str(atco)[:3]
+        a = areas.setdefault(key, {"area": key, "inTown": 0, "near": 0, "_loc": {}})
+        a["near"] += 1
+        if d <= town_km: a["inTown"] += 1
+        if loc and (loc not in a["_loc"] or d < a["_loc"][loc]): a["_loc"][loc] = d
+    out = []
+    for a in areas.values():
+        a["places"] = [n for n, _ in sorted(a.pop("_loc").items(), key=lambda kv: kv[1])[:3]]
+        a["inFeed"] = None
+        if gtfs_cur is not None:
+            a["inFeed"] = gtfs_cur.execute(
+                "SELECT COUNT(*) FROM stops WHERE stop_id LIKE ?", (a["area"] + "%",)).fetchone()[0]
+        out.append(a)
+    out.sort(key=lambda a: (-a["inTown"], -a["near"], a["area"]))
+    return "read", out
+
+def boundary_section(state, rows, town_km, near_km=BOUNDARY_NEAR_KM, naptan_db=None):
+    """The report lines for boundary_areas()'s answer."""
+    L = [f"\n## Boundary check -- other council areas within {near_km:g} km"]
+    if state == "no-register":
+        L.append(f"- NOT CHECKED: no NaPTAN register at {naptan_db or '(none given)'}, so this "
+                 "is a refusal, not an absence. Build it with naptan_build.py and re-run.")
+        return L
+    if not rows:
+        L.append(f"- NOT CHECKED: the NaPTAN register holds no stop within {near_km:g} km, "
+                 "which says more about --centre than about the town.")
+        return L
+    home = rows[0]
+    L.append(f"- This town's own stops (within {town_km:g} km): " +
+             (", ".join(f"area {r['area']} x{r['inTown']}" for r in rows if r["inTown"]) or "none"))
+    split = [r for r in rows[1:] if r["inTown"]]
+    for r in split:
+        L.append(f"- !! {r['inTown']} of this town's OWN stops are coded in area {r['area']} "
+                 f"({', '.join(r['places'])}), not area {home['area']}. The region dataset keeps a "
+                 "journey only if it calls at a kept ATCO prefix: confirm these stops are served in "
+                 "the feed, and add the area to --keep-prefixes if they are not.")
+    others = [r for r in rows[1:] if not r["inTown"]]
+    if not others and not split:
+        L.append(f"- No other council area within {near_km:g} km. Nothing more to ask.")
+        return L
+    for r in others:
+        feed = "" if r["inFeed"] is None else (
+            f"; {r['inFeed']} of its stops are in this region's feed" if r["inFeed"]
+            else "; NONE of its stops are in this region's feed")
+        L.append(f"- Area {r['area']} ({', '.join(r['places'])}): {r['near']} stops within "
+                 f"{near_km:g} km{feed}")
+    L.append("Before S1 is done, for EACH area above: (1) search that council's own bus pages "
+             "and its community-transport and demand-responsive lists for this town; (2) read "
+             "bustimes.org's locality page, which does not stop at a county line; (3) if that "
+             "area's stops are NOT in this feed, its operators may publish to another BODS region, "
+             "so check whether any of its services call here. Record the answer in the S1 notes, "
+             "including when it is 'nothing missed'. See references/s1-services.md, "
+             "'Near a council boundary'.")
+    return L
+
 def overpass_features(bbox):
     """Returns (ranked, reached). `reached` is False when no endpoint answered.
 
@@ -286,6 +378,8 @@ def main():
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
     ap.add_argument("--out",default=".")
     ap.add_argument("--no-osm",action="store_true",help="skip the Overpass feature suggestion")
+    ap.add_argument("--naptan",default=None,
+                    help="NaPTAN stop register for the boundary check; defaults to naptan.sqlite beside --db")
     a=ap.parse_args()
     # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
     a.db = gtfs_regions.resolve_db(a.db)
@@ -415,6 +509,11 @@ def main():
                  "If one of these is wrong, the flag to override it is in the reason.")
         for route,why in dropped:
             R.append(f"- **{route}** -- {why}")
+    # The boundary question: which other councils are within reach, and what to read
+    # for each before S1 is done. Beside the services, because it is about them.
+    naptan_db=a.naptan or os.path.join(os.path.dirname(os.path.abspath(a.db)),"naptan.sqlite")
+    b_state,b_rows=boundary_areas(naptan_db,geo["lat"],geo["lon"],a.radius_km,gtfs_cur=cur)
+    R.extend(boundary_section(b_state,b_rows,a.radius_km,naptan_db=naptan_db))
     R.append(f"\n## Draft external spokes (radial seed -- refine stop chains, side, bearing)")
     for e in ext:
         R.append(f"- {e['route']} -> {e['label']}  bearing≈{e['bearing']}°  ({e['_far_km']} km out)")

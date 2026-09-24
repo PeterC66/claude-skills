@@ -307,7 +307,9 @@ class Labeller {
   // Cost of putting `it` at this candidate. null = impossible.
   _cost(it, cand, skipBoxes, relaxHard) {
     const b = cand.box;
-    const B = this.bounds;
+    // A label may carry its own hard limit (design.exitCaptionsInPanel gives the
+    // "to X" captions the empty panel column); absent, the sheet's applies.
+    const B = it.bounds || this.bounds;
     if (B && (b[0] < B.x0 || b[2] > B.x1 || b[1] < B.y0 || b[3] > B.y1)) return null;
     let hardPenalty = 0;
     if (this.hard.any(b)) {

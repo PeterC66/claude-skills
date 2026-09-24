@@ -1589,6 +1589,16 @@ MUTATIONS = [
      "to": '    named=[(sid,n) for sid,n in rows if STN.search(nm_by.get(sid,"") or "")]'},
 
     {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "the boundary check's reach is ignored, so a council 20 km away is named as a neighbour and the reviewer is sent to read pages that cannot matter",
+     "find": '        if d > near_km: continue',
+     "to": '        if d > near_km * 10: continue'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
+     "what": "no stop is ever counted as inside the town, so a town whose own stops straddle two councils -- the case the feed's prefix filter can silently drop -- is never flagged",
+     "find": '        if d <= town_km: a["inTown"] += 1',
+     "to": '        pass'},
+
+    {"suite": "test_bootstrap_town.py", "file": "bootstrap_town.py",
      "what": "the anchor candidates are ordered quietest-first, so the fallback picks the least-served stop in town and `nmax` -- which the naming gate is measured against -- becomes the minimum",
      "find": '        WHERE st.stop_id IN ({ph}) GROUP BY st.stop_id ORDER BY n DESC""", ids).fetchall()',
      "to": '        WHERE st.stop_id IN ({ph}) GROUP BY st.stop_id ORDER BY n ASC""", ids).fetchall()'},

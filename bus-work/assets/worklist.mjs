@@ -80,6 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
+import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
@@ -617,64 +618,9 @@ function fromCorrespondence() {
     }
   }
 
-  // A question we asked and never got an answer to. WAITING ON OTHERS, not your
-  // move -- but invisible entirely until now, and one of these is a question the
-  // correspondent volunteered to go and research for us.
-  //
-  // Every MAP's file, not every town's (buses-data OA-083). A place map keeps its
-  // own local-decisions.json beside its own manifest, under
-  // Areas/<town>/Places/<place>/, and until 2026-09-24 this loop read one level
-  // only -- so all four place maps' questions, including the estate's only
-  // blocking decision nobody had asked, raised nothing anywhere. A place row is
-  // keyed by the place's name, which is how the portal and the board name it.
-  const areas = path.join(BUSES, 'Areas');
-  const subdirs = (d) => (existsSync(d) ? readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() : []);
-  const maps = [];
-  for (const town of subdirs(areas)) {
-    maps.push({ name: town, rel: `Areas/${town}` });
-    for (const place of subdirs(path.join(areas, town, 'Places'))) maps.push({ name: place, rel: `Areas/${town}/Places/${place}` });
-  }
-  for (const { name, rel } of maps) {
-    const f = path.join(BUSES, rel, 'local-decisions.json');
-    if (!existsSync(f)) continue;
-    let doc;
-    try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
-    const all = (doc.decisions || []).filter(Boolean);
-    const asked = all.filter((d) => d?.answer?.state === 'asked');
-    if (asked.length) {
-      const oldest = asked.map((d) => d.raised).filter(Boolean).sort()[0];
-      out.push({
-        key: `corr-asked-${name}`, rank: 9, type: 'correspondence',
-        title: `${name}: ${asked.length} question(s) asked locally and still unanswered`,
-        why: `${asked.map((d) => d.id).join(', ')} — nothing but a person on the ground can settle these, and the map is drawn on our own judgement until one does.`,
-        who: 'the local adviser', runbook: 'correspondence',
-        ageDays: oldest ? daysSince(oldest) : null,
-        do: [{ kind: 'chat', what: `Read ${rel}/local-decisions.json. Chase only if it has gone quiet — silence is not agreement, and it is not a refusal either.` }],
-      });
-    }
-    // A question with NO recorded answer state at all -- `answer` null or absent,
-    // which references/local-decisions.md makes the value a decision is born
-    // with. Nobody is waiting on it, which is exactly why it raised nothing: on
-    // 2026-09-19 six of the estate's decisions were in this state, one of them
-    // blocking, and the only record that they existed was the file itself. It is
-    // OUR move -- put the question to somebody, or record that it was put -- so
-    // it ranks with the housekeeping rather than with a person waiting.
-    // Deliberately NOT `open` or `partly-answered`: those are states somebody
-    // wrote, and this row is about the question nobody has touched since.
-    const unasked = all.filter((d) => d.answer == null || d.answer.state == null);
-    if (unasked.length) {
-      const oldest = unasked.map((d) => d.raised).filter(Boolean).sort()[0];
-      const blocking = unasked.filter((d) => d.severity === 'blocking').length;
-      out.push({
-        key: `corr-unasked-${name}`, rank: 8, type: 'correspondence',
-        title: `${name}: ${unasked.length} local question(s) recorded but never put to anyone${blocking ? ` (${blocking} blocking)` : ''}`,
-        why: `${unasked.map((d) => d.id).join(', ')} — each has no answer state at all, so no row asks after it; the sheet prints our default until somebody local is asked.`,
-        who: 'Peter', runbook: 'correspondence',
-        ageDays: oldest ? daysSince(oldest) : null,
-        do: [{ kind: 'chat', what: `Read ${rel}/local-decisions.json. Put each question to whoever can answer it, then set its answer to { "state": "asked" } — or, if it was already asked, record that.` }],
-      });
-    }
-  }
+  // Every map's local-decisions.json, town and place: questions asked and
+  // unanswered, and questions never put to anyone (buses-data OA-083).
+  out.push(...localDecisionItems(BUSES, daysSince));
   return out;
 }
 

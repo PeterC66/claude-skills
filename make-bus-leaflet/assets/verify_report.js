@@ -51,6 +51,7 @@ const { assertNoCollision } = require('./index_guard');
 const { knownOff } = require('./known_off');
 const { checkDrawnWindow } = require('./window_contiguity');
 const { displayedRoutes } = require('./displayed_routes');
+const { continuationBearing } = require('./direction_continuation');
 
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
@@ -944,10 +945,22 @@ if (anchorLL) {
       const b = bearing(anchorLL, ll[a]), dd = angleDiff(bEdge, b);
       if (dd < diff) { diff = dd; bTerm = b; term = a; }
     }
-    if (diff > 90) {
+    // A route that leaves one way and then TURNS is not reversed (OA-416): a terminus
+    // disagreement is HARD only if the chain's own next stops disagree too.
+    const cont = diff > 90 ? continuationBearing(fullDirections(fe), edge, new Set(seq), bEdge,
+      { ll, anchorLL, haversineKm, bearing, angleDiff }) : null;
+    const contDiff = cont ? angleDiff(bEdge, cont.bearing) : null;
+    const contEv = cont ? { continuation: cont.stops, continuationNames: cont.stops.map(a => names[a] || null),
+      continuationBearing: +cont.bearing.toFixed(1), continuationApart: +contDiff.toFixed(1) } : {};
+    if (diff > 90 && cont && contDiff <= 90) {
+      add('soft', 'direction',
+        `Route ${r} leaves town on bearing ${bEdge.toFixed(0)}° and its terminus lies at ${bTerm.toFixed(0)}° (${diff.toFixed(0)}° apart), but the chain's own next stops past the edge (${cont.stops.map(a => names[a] || a).join(', ')}) lie at ${cont.bearing.toFixed(0)}°, ${contDiff.toFixed(0)}° from it: the route turns after leaving town, so this is not a reversal — glance at the drawn arm.`,
+        { route: r, edge, edgeName: names[edge] || null, edgeBearing: +bEdge.toFixed(1), terminus: term, terminusName: names[term] || null, terminusBearing: +bTerm.toFixed(1), angleApart: +diff.toFixed(1), turns: true, ...contEv }, r);
+    } else if (diff > 90) {
       add('hard', 'direction',
-        `Route ${r} appears drawn the wrong way: its edge stop leaves town on bearing ${bEdge.toFixed(0)}° but the terminus lies at ${bTerm.toFixed(0)}° (${diff.toFixed(0)}° apart).`,
-        { route: r, edge, edgeName: names[edge] || null, edgeBearing: +bEdge.toFixed(1), terminus: term, terminusName: names[term] || null, terminusBearing: +bTerm.toFixed(1), angleApart: +diff.toFixed(1) }, r);
+        `Route ${r} appears drawn the wrong way: its edge stop leaves town on bearing ${bEdge.toFixed(0)}° but the terminus lies at ${bTerm.toFixed(0)}° (${diff.toFixed(0)}° apart)`
+        + (cont ? `, and the chain's own next stops past the edge lie at ${cont.bearing.toFixed(0)}° (${contDiff.toFixed(0)}° apart).` : ', and the chain has no stops beyond the edge to say otherwise.'),
+        { route: r, edge, edgeName: names[edge] || null, edgeBearing: +bEdge.toFixed(1), terminus: term, terminusName: names[term] || null, terminusBearing: +bTerm.toFixed(1), angleApart: +diff.toFixed(1), ...contEv }, r);
     } else if (diff > 55) {
       add('soft', 'direction',
         `Route ${r}: edge stop bearing (${bEdge.toFixed(0)}°) is somewhat off the terminus bearing (${bTerm.toFixed(0)}°, ${diff.toFixed(0)}° apart) — check the drawn arm.`,

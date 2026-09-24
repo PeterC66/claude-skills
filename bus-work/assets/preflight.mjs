@@ -217,11 +217,18 @@ function builtIn(repo) {
         { id: 'doc-links', label: 'links, anchors and documented commands resolve', cmd: 'node', args: ['tools/check-doc-links.mjs'] },
         { id: 'file-hygiene', label: 'no BOM, no trailing whitespace, no missing final newline', cmd: 'node', args: ['tools/check-file-hygiene.mjs', '--root', '.'] },
         { id: 'acronyms', label: 'every short form can be looked up', cmd: 'node', args: ['tools/check-doc-acronyms.mjs'] },
+        /* The same `node --test` population as CI's `unit` step: counted from both
+         * runs on 2026-09-24 (buses-data loop, sched-0657), the SAME test count on
+         * each side. The seven CI reports as skipped need a buses-data estate beside
+         * the checkout, so here they run and assert and CI's are the weaker answer.
+         * What the arm does NOT cover is the rest of CI's `unit` JOB, which the
+         * unanswered list below says out loud. */
         { id: 'unit', label: 'the unit suite', tier: 'full', ...npmArm(['test', '--prefix', 'make-bus-leaflet']) },
         { id: 'wiring', label: 'every test:/gate: script is run by a workflow, through its npm script', tier: 'full', ...npmArm(['run', 'gate:wiring', '--prefix', 'make-bus-leaflet']) },
       ],
       unanswered: [
         'Whether an engine change has its estate rebuild — `prove-red-held-back` needs a town in buses-data carrying the new engine stamp, and that town is in the other repository (OA-341).',
+        'Everything else in CI\'s `unit` job beyond `npm test` — the Python unit suite (`npm run test:python`), every prove-red harness, the generator ceilings, the design-key register and the LF check. The `unit` arm here is `node --test` only, so a push that breaks one of those goes red in CI after passing here.',
       ],
     };
   }

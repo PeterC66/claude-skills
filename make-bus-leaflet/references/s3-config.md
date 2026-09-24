@@ -307,6 +307,8 @@ By default the internal sheet is rotated by **PCA onto the principal axis of its
 
 Anything else **throws** rather than falling back to auto, because a silent fallback would draw a perfectly plausible sheet at the wrong angle and nothing downstream would question it.
 
+**A new map is north up** (buses-data OA-454, Peter, 2026-09-23: "north up unless there is definitely a better orientation"). The engine's default is still PCA, so no existing map moves; what changed is that `draft_town.py` and the place template `routes.example.place.json` both write `"fixedOrientation": "north"`, and a person who finds a better angle replaces it. An existing map switches at its next rebuild unless north costs too much map scale, which OA-454 measures first.
+
 **Precedence:** `overrides.json` `rotationDeg` → `design.fixedOrientation` → `internalRoads.rotationDeg` → PCA. The older `internalRoads.rotationDeg` still works and is unchanged; `fixedOrientation` exists alongside it because it is **top-level**, so it is available to a town on the classic model (`internalRoads: false`), which previously had no config route to a fixed angle at all — only the editor's `overrides.json`.
 
 **Numbers are written through unnormalised, on purpose.** `-66` and `294` are the same bearing to a reader and *not* the same to the FPU — `Math.cos(-66°)` and `Math.cos(294°)` differ in the last bits. Normalising them would silently move the drawn coordinates and break byte-identity against the equivalent `internalRoads.rotationDeg`. Verified: a sheet built with `fixedOrientation: -66` is byte-identical to the same sheet built with `internalRoads.rotationDeg: -66`.

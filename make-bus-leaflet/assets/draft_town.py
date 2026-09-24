@@ -794,6 +794,22 @@ def decollide_bearings(spokes, min_gap=20):
     return spokes
 
 
+def pin_north(draft):
+    """A NEW map is drawn north up (buses-data OA-454, Peter, 2026-09-23).
+
+    Without `design.fixedOrientation` gen_internal.js turns the sheet by PCA to
+    fill A4 and re-derives the angle every build, so a route change can swing a
+    sheet between versions and a reader cannot check it against the ground --
+    11 of 21 internal sheets were turned more than 40 degrees. The decision was
+    "north up unless there is definitely a better orientation", so the drafter
+    writes "north" and a person who finds a better angle replaces it. A value
+    already present is somebody's decision and is left alone.
+    """
+    design = draft.setdefault("design", {})
+    design.setdefault("fixedOrientation", "north")
+    return draft
+
+
 def _bearing(la1, lo1, la2, lo2):
     y = math.sin(math.radians(lo2 - lo1)) * math.cos(math.radians(la2))
     x = (math.cos(math.radians(la1)) * math.sin(math.radians(la2))
@@ -1183,6 +1199,7 @@ def main():
         if not dest:
             dest = (f.get("headsigns") or f.get("termini") or ["<dest>"])[0]
         draft["internalDesc"][r] = [f"{a.town} - {dest}", f.get("days", "")]
+    pin_north(draft)
     draft["validFrom"] = date.today().strftime("%B %Y")
     draft["version"] = "1.0"
     draft["_bootstrap"] = ("Tier-2 auto-draft (process-efficiency-plan item 8, "

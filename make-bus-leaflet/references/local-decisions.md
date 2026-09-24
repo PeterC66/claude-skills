@@ -48,7 +48,7 @@ It holds every local question raised for that map, answered or not, for the life
   "map": "St Neots Town Centre",
   "kind": "place",
   "updated": "2026-08-25",
-  "_status": "Phase 0 — recorded only. No generator, gate or portal panel READS this file; bus-work's worklist.mjs raises a row for each `asked` decision in Areas/<town>/ (not yet under Places/). An answer reaches a sheet by hand, and `appliedIn` names the S3 run where that happened. OA-083 is the row that would change that.",
+  "_status": "Phase 0 — recorded only. No generator, gate or portal panel READS this file; bus-work's worklist.mjs raises a row for each map's `asked` decisions and another for its never-asked ones, in Areas/<town>/ and in its Places/. An answer reaches a sheet by hand, and `appliedIn` names the S3 run where that happened. OA-083 is the row that would change that.",
   "decisions": [
     {
       "id": "c2-stub-name",

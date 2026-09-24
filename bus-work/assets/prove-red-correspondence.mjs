@@ -285,6 +285,33 @@ expect('a question left at "asked" is raised, as WAITING ON OTHERS', { key: 'cor
 write('Areas/Testtown/local-decisions.json', decisions('answered'));
 expect('answering it clears the row', { key: 'corr-asked-Testtown', present: false });
 
+// 4a. a PLACE map's file, one level down (buses-data OA-083). Until 2026-09-24
+// the reader stopped at Areas/<town>/, so every one of these was silent. Run
+// against the one-level reader, the first case here goes red.
+write('Areas/Testtown/Places/Test Market/local-decisions.json', decisions('asked'));
+expect('a place map\'s "asked" question is raised under the place\'s name', { key: 'corr-asked-Test Market', present: true, rank: 9 });
+write('Areas/Testtown/Places/Test Market/local-decisions.json', decisions('answered'));
+expect('and answering it clears that row too', { key: 'corr-asked-Test Market', present: false });
+
+// 4b. a question nobody was ever asked -- `answer: null`, the value a decision
+// is born with. Before 2026-09-24 this raised nothing, because the only row
+// looked for `asked`; the case goes red against that reader.
+const unasked = (answer) => JSON.stringify({
+  map: 'Test Market', kind: 'place',
+  decisions: [{ id: 'which-stand', raised: '2026-08-25', severity: 'blocking', answer }],
+}, null, 1);
+write('Areas/Testtown/Places/Test Market/local-decisions.json', unasked(null));
+expect('a question with no answer state is raised as never put to anyone', { key: 'corr-unasked-Test Market', present: true, rank: 8 });
+expect('and it is not mistaken for one somebody was asked', { key: 'corr-asked-Test Market', present: false });
+write('Areas/Testtown/Places/Test Market/local-decisions.json', unasked({ state: 'asked' }));
+expect('recording that it was asked moves it off the never-asked row', { key: 'corr-unasked-Test Market', present: false });
+expect('and onto the waiting row', { key: 'corr-asked-Test Market', present: true, rank: 9 });
+// THE GREEN THAT MATTERS: a state somebody wrote is not "never asked", or the
+// row would nag about every question Peter has deliberately left open.
+write('Areas/Testtown/Places/Test Market/local-decisions.json', unasked({ state: 'open' }));
+expect('a question somebody marked "open" is not called never-asked', { key: 'corr-unasked-Test Market', present: false });
+fs.rmSync(path.join(root, 'Areas', 'Testtown', 'Places'), { recursive: true, force: true });
+
 // 5. a tree with no Correspondence at all must be silent, not an error
 fs.rmSync(path.join(root, 'Correspondence'), { recursive: true, force: true });
 fs.rmSync(path.join(root, 'Areas', 'Testtown'), { recursive: true, force: true });

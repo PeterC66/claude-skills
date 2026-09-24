@@ -78,6 +78,13 @@ const T = {
   laneCrossDeg: 25,       // two route ribbons crossing SHALLOWER than this are swapping sides
   laneCrossSiteMm: 4,     // intersections closer than this are one visual crossing
   laneCrossWarn: 0,       // any shallow crossing is worth naming
+  // --- added 2026-09-24, OA-081: Cerović's "no more than five bends over a
+  // line's whole length", on the octilinear schematic only. See measure 9. ---
+  bendBudget: 5,          // bends per route before the route is over budget
+  bendLegMm: 4,       // a straight run this long is a LEG; = schematize_internal's minLeg default
+  bendHeadingTolDeg: 8,   // chords within this of a run's heading continue the run
+  bendMinDeg: 20,         // two legs turning less than this are one line, not a bend
+  bendReverseDeg: 150,    // ...and more than this is an out-and-back, not a bend
 };
 
 // ------------------------------------------------------------------- parsing
@@ -564,7 +571,7 @@ function analyse(svgPath) {
 
   const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [],
                    underLegend: [], routeUnderLegend: [], unplaced: [], nearEdge: [],
-                   labelOverBadge: [], badgeOverBadge: [], laneCross: [], lozengeOverlap: [] };
+                   labelOverBadge: [], badgeOverBadge: [], laneCross: [], lozengeOverlap: [], routeBends: [] };
 
   /*
    * WHAT THE LEGEND IS BURYING.
@@ -1464,6 +1471,75 @@ function analyse(svgPath) {
   for (const s3 of sites)
     detail.laneCross.push({ at: [+s3.x.toFixed(1), +s3.y.toFixed(1)], deg: s3.deg, hits: s3.n, cols: s3.cols });
 
+  // --- 9. BENDS PER ROUTE, AGAINST CEROVIĆ'S BUDGET OF FIVE (OA-081) -----
+  //
+  // The one INAT rule that transfers to our sheets and that nothing checked:
+  // schematize_internal.js snaps legs to eight directions and welds them at
+  // junctions, but never counts how often a route changes direction.
+  //
+  // THE SCHEMATIC ONLY, and null everywhere else. A geographic internal follows
+  // the streets and turns wherever they do, so a count there measures the town;
+  // an external radial draws every spoke straight, so it is zero by construction.
+  //
+  // A BEND IS BETWEEN LEGS, NOT AT A VERTEX. The schematic rounds every corner
+  // into several 1-3mm chords, so counting turning vertices counted one 45-degree
+  // corner three or four times — measured 2026-09-24 over the eight committed
+  // schematics, a vertex count put the median route at 10 bends and a 1.5mm
+  // change in the clustering window moved it to 2. So a route's polyline is cut
+  // into straight RUNS (chords within bendHeadingTolDeg of the run's heading),
+  // runs shorter than bendLegMm are dropped as corner fillets, and a bend is a
+  // heading change of at least bendMinDeg between consecutive legs. bendLegMm is
+  // the schematizer's own minLeg default: the shortest leg it will emit. Median 7
+  // bends per route with it, 32 of 71 routes within budget.
+  //
+  // An out-and-back turn (more than bendReverseDeg) is a terminus loop drawn in
+  // one stroke, not a bend. A route sharing its hue with another (a corridor
+  // colour) is counted as one line, because on the page it is one.
+  const isSchematic = base === 'internal-schematic';
+  if (isSchematic && palette && palette.size) {
+    const D = Math.PI / 180;
+    const wrap = (t) => { while (t > Math.PI) t -= 2 * Math.PI; while (t < -Math.PI) t += 2 * Math.PI; return t; };
+    const byCol = new Map();
+    for (const s2 of P.strokes) {
+      if (!palette.has(s2.stroke) || !isRouteInk(s2)) continue;
+      const [a, b] = s2.seg;
+      // Panel swatches and chrome sit outside the map frame; only the map counts.
+      if (P.mapFrame) {
+        const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        if (mx < P.mapFrame.x0 || mx > P.mapFrame.x1 || my < P.mapFrame.y0 || my > P.mapFrame.y1) continue;
+      }
+      // Re-join the chords into polylines: a new one starts at a new path
+      // element or wherever a chord does not begin where the last one ended.
+      let lines = byCol.get(s2.stroke);
+      if (!lines) byCol.set(s2.stroke, lines = []);
+      const cur = lines[lines.length - 1];
+      if (cur && cur.seq === s2.seq && Math.hypot(a[0] - cur.end[0], a[1] - cur.end[1]) < 0.01) {
+        cur.pts.push(b); cur.end = b;
+      } else lines.push({ seq: s2.seq, pts: [a, b], end: b });
+    }
+    for (const [col, lines] of byCol) {
+      let bends = 0;
+      for (const { pts } of lines) {
+        const runs = [];
+        let run = null;
+        for (let k = 1; k < pts.length; k++) {
+          const dx = pts[k][0] - pts[k - 1][0], dy = pts[k][1] - pts[k - 1][1];
+          const L = Math.hypot(dx, dy);
+          if (L < 1e-6) continue;
+          const h = Math.atan2(dy, dx);
+          if (run && Math.abs(wrap(h - run.h)) <= T.bendHeadingTolDeg * D) run.L += L;
+          else runs.push(run = { h, L });
+        }
+        const legs = runs.filter(r => r.L >= T.bendLegMm);
+        for (let k = 1; k < legs.length; k++) {
+          const turn = Math.abs(wrap(legs[k].h - legs[k - 1].h));
+          if (turn >= T.bendMinDeg * D && turn <= T.bendReverseDeg * D) bends++;
+        }
+      }
+      detail.routeBends.push({ col, bends, over: bends > T.bendBudget });
+    }
+  }
+
   const m = {
     pointLabelsOverInk: detail.overInk.filter(d => d.kind === 'point').length,
     roadLabelsOverInk: detail.overInk.filter(d => d.kind === 'road').length,
@@ -1501,6 +1577,10 @@ function analyse(svgPath) {
       ? detail.labelOverBadge.filter(d => d.kind === 'point' && /^to\s/.test(d.text)).length : null,
     badgeOverBadge: (palette && palette.size) ? detail.badgeOverBadge.length : null,
     laneCrossings: (palette && palette.size) ? detail.laneCross.length : null,
+    // --- added 2026-09-24, OA-081 --- null off the schematic; see measure 9.
+    routesOverBendBudget: (isSchematic && palette && palette.size) ? detail.routeBends.filter(r => r.over).length : null,
+    maxRouteBends: (isSchematic && palette && palette.size)
+      ? detail.routeBends.reduce((mx, r) => Math.max(mx, r.bends), 0) : null,
     // --- added 2026-08-28, OA-060 ---
     // null on every sheet that is not an external, and null on an external whose
     // lozenge signature found nothing at all; see measure 7b for why the second
@@ -1647,6 +1727,12 @@ function analyse(svgPath) {
   if (m.lozengeOverlap > 0) fails.push(m.lozengeOverlap + ' destination lozenges printed on each other');
   if (m.lozengeOverlapState === 'signature-lost') warns.push('external sheet with NO terminus lozenge found - the lozengeOverlap measure is blind here');
   if (m.laneCrossings > T.laneCrossWarn) warns.push(m.laneCrossings + ' shallow route crossings');
+  // OA-081: REPORTED, NOT SCORED, by the same rule as labelsOverBadge — it is
+  // non-zero on most schematics the day it lands, so scoring it would fail the
+  // ratchet everywhere at once. It stays out of hard and soft, so the ledger
+  // quality_gate.js keeps is unmoved by it.
+  if (m.routesOverBendBudget > 0) warns.push(m.routesOverBendBudget + ' route'
+    + (m.routesOverBendBudget === 1 ? '' : 's') + ' over the ' + T.bendBudget + '-bend budget (worst ' + m.maxRouteBends + ')');
   if (m.colourClashOnMap > 0) warns.push('route hues that read alike running together');
   else if (m.colourClashInPanel > 0) warns.push('route hues that read alike in the panel');
 

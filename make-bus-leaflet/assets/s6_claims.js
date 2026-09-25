@@ -128,12 +128,22 @@ function printSection({ verdict, error }, log = console.log) {
   // times out of 14 and this enumeration wrong 4 times, always `waiting` over a sheet
   // that had paid. So this line no longer says the note is owed, and no longer ends
   // on "not on a map until a rebuild writes it" -- for several of these it already is.
+  //
+  // SINCE 2026-09-25 AN ENTRY WITH A `probe` IS READ OFF THE SHIPPED SHEET (`basis:
+  // 'sheet'`), and for those `waiting` does mean the ink lacks the note. The rest
+  // are still declarations and are worded as such.
   const owed = (v.register && v.register.owed) || [];
   if (owed.length) {
     const waiting = owed.filter(o => o.state === 'waiting');
-    log('  still DECLARED OFF at the next rebuild: ' + owed.map(o => o.id + ' (' + o.map + (o.state === 'carried' ? ' — now carried, close the entry' : '') + ')').join(', ')
-      + ' — ' + waiting.length + ' of ' + owed.length + ' still declare the route off. That counts declarations, not ink: read each entry\'s own note before rebuilding, because one that opens DELIVERED is already printed and a rebuild would print it twice.');
+    const inkWaiting = waiting.filter(o => o.basis === 'sheet');
+    const declWaiting = waiting.filter(o => o.basis !== 'sheet');
+    const bySheet = owed.filter(o => o.basis === 'sheet').length;
+    const parts = [];
+    if (inkWaiting.length) parts.push('NOT YET PRINTED on the shipped sheet: ' + inkWaiting.map(o => o.id + ' (' + o.map + ')').join(', '));
+    if (declWaiting.length) parts.push('still DECLARED OFF, with no probe read off a sheet: ' + declWaiting.map(o => o.id + ' (' + o.map + ')').join(', ') + ' — that counts declarations, not ink: read each entry\'s own note before rebuilding, because one that opens DELIVERED is already printed and a rebuild would print it twice');
+    log('  decided includes: ' + waiting.length + ' of ' + owed.length + ' waiting, ' + bySheet + ' read off the shipped sheets' + (parts.length ? '. ' + parts.join('; ') + '.' : ' — every one is paid.'));
   }
+  if (v.register && Array.isArray(v.register.unprinted)) for (const u of v.register.unprinted) log('  RED ' + u.text);
   if (v.red) log('  RED — a claim with no home, or a decision no sheet has learned. Run tools/check-s6-claims.mjs from the buses root for the remedy on each row.');
   else log('  every claim has a home, and the register contradicts no map.');
 }

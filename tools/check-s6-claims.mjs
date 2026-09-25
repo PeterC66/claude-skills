@@ -91,8 +91,11 @@
  * outcome says the service should be ON the sheet at the next rebuild, so the
  * `notOnLeaflet[]` entry that satisfies the silence check is the UNFINISHED state
  * rather than the finished one, and nothing counted the waiting ones. Printed, never
- * red: whether the note was written at the rebuild is a question about the Services
- * panel, and which artefact answers it is undecided.
+ * red. SINCE 2026-09-25 THE SHIPPED SHEET ANSWERS IT: an entry's `probe` is a short
+ * phrase, and where the map has tracked `ci-reference/` SVGs the pair is `carried`
+ * when one of them prints it and `waiting` when none does, whatever the map declares.
+ * The one red is a map that LISTS the route while no sheet prints the phrase — the
+ * records and the ink disagree, and one of them is wrong.
  *
  * FROM `git ls-files` FOR THE TRACKED INPUTS, from the disk for the reports. The
  * manifests, S1 files and S3 files are what the repository carries; the reports are
@@ -358,6 +361,16 @@ for (const [i, f] of facts.entries()) {
     if (f.outcome && !OUTCOMES.has(f.outcome)) registerFindings.push({ kind: 'shape', text: `${at}: outcome "${f.outcome}" is not one of ${[...OUTCOMES].join(', ')}.` });
   } else if (f.status !== undefined) registerFindings.push({ kind: 'shape', text: `${at}: status "${f.status}" is not queued or decided.` });
   if (missing.length) registerFindings.push({ kind: 'shape', text: `${at} is missing ${missing.join(', ')}.` });
+  // `probe` (OA-285): a phrase for every map in scope, or one per map it names.
+  if (f.probe !== undefined) {
+    const p = f.probe;
+    if (typeof p === 'string') { if (p.trim() === '') registerFindings.push({ kind: 'shape', text: `${at}: \`probe\` is an empty string — a phrase that matches every sheet proves nothing.` }); }
+    else if (!p || typeof p !== 'object' || Array.isArray(p)) registerFindings.push({ kind: 'shape', text: `${at}: \`probe\` must be a phrase, or an object from map name to phrase.` });
+    else for (const [mName, phrase] of Object.entries(p)) {
+      if (typeof phrase !== 'string' || phrase.trim() === '') registerFindings.push({ kind: 'shape', text: `${at}: \`probe\` for "${mName}" is not a non-empty phrase.` });
+      if (Array.isArray(f.scope) && !f.scope.includes(mName) && !f.scope.includes('*')) registerFindings.push({ kind: 'shape', text: `${at}: \`probe\` names "${mName}", which is not in its scope — a phrase for a map the entry does not reach is read by nothing.` });
+    }
+  }
 }
 
 // Contradiction: two decided entries about one (route, operator) asserting opposite facts.
@@ -622,8 +635,55 @@ for (const f of facts) {
 // board and in the worklist row says what is actually read: which maps still DECLARE
 // the route off. Believing otherwise costs a rebuild that prints the note twice.
 // Sniffing /^DELIVERED/ off `drawing` would give a truer count and would settle
-// OA-285's hard half by fiat — which artefact answers it is exactly that action's
-// open question, and a self-declared English string is not among its candidates.
+// OA-285's hard half by fiat — a self-declared English string is not evidence.
+//
+// THE SHEET SETTLES IT, 2026-09-25 (OA-285's hard half). Of the three candidates —
+// a declared field, a text search of the shipped SVG, moving the entry out of
+// notOnLeaflet[] — the second was measured and the other two fell: the Shelfords
+// keeps a paid entry declared off ON PURPOSE, so a declaration cannot be the
+// answer, and a second declaration is still only a declaration. So an entry may
+// carry `probe`, a SHORT phrase (never a quoted sentence — the `drawing` strings are
+// accurate and not verbatim), and where the map has tracked `ci-reference/` SVGs the
+// pair's state is read off them. The text of every <text> node is joined with a
+// space before matching, because a mapNotes block is one node per rendered line and
+// the estate has no <tspan>; the match ignores case and runs of white space.
+// `ci-reference/` is TRACKED, so unlike the S6 half this survives actions/checkout
+// and CI asks it too. With no probe, or no tracked sheet, the pair falls back to the
+// declaration and says so (`basis`).
+//
+// ONE RED, AND ONLY ONE: a map that LISTS the route — the state a rebuild that paid
+// ends in — while none of its shipped sheets prints the phrase. Either the note was
+// lost from the ink or the probe is wrong, and both are faults in a record somebody
+// fixes. `waiting` over a map that still declares the route off stays a row.
+let trackedSheets = null;
+function sheetsOf(m) {
+  if (trackedSheets === null) {
+    try { trackedSheets = execFileSync('git', ['ls-files', '-z', '--', '*ci-reference/*.svg'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean); }
+    catch { trackedSheets = []; }
+  }
+  const prefix = `${m.dir}/ci-reference/`;
+  return trackedSheets.filter(p => p.startsWith(prefix) && !p.slice(prefix.length).includes('/')).sort();
+}
+const fold = (s) => String(s).replace(/\s+/g, ' ').trim().toLowerCase();
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const sheetTexts = new Map();
+function sheetText(rel) {
+  if (!sheetTexts.has(rel)) {
+    let svg = '';
+    try { svg = readFileSync(path.join(ROOT, rel), 'utf8'); } catch { /* an unreadable sheet prints nothing */ }
+    const nodes = [...svg.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)].map(x => x[1]
+      .replace(/<[^>]+>/g, '')
+      .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, e) => e[0] === '#' ? String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : (ENTITIES[e.toLowerCase()] ?? all)));
+    sheetTexts.set(rel, fold(nodes.join(' ')));
+  }
+  return sheetTexts.get(rel);
+}
+function probeFor(f, name) {
+  if (typeof f.probe === 'string' && f.probe.trim() !== '') return f.probe.trim();
+  if (f.probe && typeof f.probe === 'object' && !Array.isArray(f.probe) && typeof f.probe[name] === 'string' && f.probe[name].trim() !== '') return f.probe[name].trim();
+  return null;
+}
+const unprinted = [];
 const owed = [];
 for (const f of facts) {
   if (!f || f.status !== 'decided' || f.outcome !== 'include' || !Array.isArray(f.scope)) continue;
@@ -648,8 +708,17 @@ for (const f of facts) {
       else if (alias.field === 'off') offKey = null;
       else continue;                      // a redteamRejected alias is neither carried nor waiting
     }
+    const probe = probeFor(f, name);
+    const files = probe ? sheetsOf(mapByName.get(name)) : [];
+    const printedIn = files.filter(p => sheetText(p).includes(fold(probe))).map(p => path.basename(p));
+    const sheet = probe ? { probe, sheets: files.length, printedIn } : null;
+    const basis = probe && files.length ? 'sheet' : 'declaration';
+    const state = basis === 'sheet' ? (printedIn.length ? 'carried' : 'waiting') : (carried ? 'carried' : 'waiting');
+    if (basis === 'sheet' && carried && !printedIn.length) unprinted.push({ id: f.id, map: name, route: f.route, probe,
+      text: `${f.id}: ${name} LISTS ${f.route}, the state a rebuild that paid this \`include\` ends in, but none of its ${files.length} shipped ci-reference sheet(s) prints the probe "${probe}". Either the note has gone from the ink or the probe is wrong — read the sheet and fix whichever it is.` });
     owed.push({
-      id: f.id, route: f.route, map: name, state: carried ? 'carried' : 'waiting',
+      id: f.id, route: f.route, map: name, state, basis, sheet,
+      declared: carried ? 'listed' : 'off',
       alias: alias ? { label: alias.label, registered: alias.registered, field: alias.field, declaredIn: alias.declaredIn } : null,
       where: carried ? null : (offKey ? d.off.get(offKey).where : alias.where),
       owes: (f.drawing && typeof f.drawing === 'object' && f.drawing[name]) || null,
@@ -794,7 +863,7 @@ const unreadableDecls = maps.flatMap(m => decl.get(m.name).unreadable);
 // OA-396). A claim with no home is now reported and counted, and it is the worklist's
 // `s6-claims-uncovered` row that chases it; the exit code answers only for a fault in
 // the records. prove-red-s6-claims.mjs case 2 pins the row as reported-and-green.
-const red = registerFindings.length > 0 || silences.length > 0 || unreadableReports.length > 0 || unreadableDecls.length > 0
+const red = registerFindings.length > 0 || silences.length > 0 || unprinted.length > 0 || unreadableReports.length > 0 || unreadableDecls.length > 0
   || (REQUIRE_REPORTS && reports === 0);
 
 if (AS_JSON) {
@@ -803,7 +872,7 @@ if (AS_JSON) {
     claims: claims.length, uncovered, queued: queued.map(l => ({ map: l.map, route: l.route, id: l.covered.id })),
     coveredBy: claims.reduce((acc, l) => { const k = l.covered ? l.covered.by : 'UNCOVERED'; acc[k] = (acc[k] || 0) + 1; return acc; }, {}),
     aliasedClaims: claims.filter(l => l.covered && l.covered.by === 'badge-alias').map(l => ({ map: l.map, run: l.run, id: l.id, category: l.category, route: l.route, ...l.covered })),
-    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, recheck: registerRecheck, findings: registerFindings, silences, aliased, owed, operators: operatorJoin },
+    register: { present: !!register, facts: facts.length, queued: facts.filter(f => f && f.status === 'queued').length, decided: facts.filter(f => f && f.status === 'decided').length, queuedFacts, recheck: registerRecheck, findings: registerFindings, silences, aliased, owed, unprinted, operators: operatorJoin },
     registerOnly: REGISTER_ONLY, requireReports: REQUIRE_REPORTS, red,
   }, null, 2));
 } else {
@@ -831,10 +900,19 @@ if (AS_JSON) {
       console.log(`      ${q.id}  ${q.route}  scope ${q.scope.join(', ') || '(none)'} — ${how}`);
     }
   }
+  for (const u of unprinted) console.log(`  ${REGISTER_NAME}: ${u.text}`);
   if (owed.length) {
-    console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to take the route out of notOnLeaflet[], of ${owed.length} in the register — enumeration, not a finding (OA-285). THAT IS A COUNT OF DECLARATIONS AND NOT OF SHEETS MISSING THE LINE: each entry's own note below says which, and where it opens DELIVERED the line is already printed:`);
+    const bySheet = owed.filter(o => o.basis === 'sheet').length;
+    if (bySheet === 0) console.log(`  ${owedWaiting.length} decided "include" ${owedWaiting.length === 1 ? 'entry is' : 'entries are'} WAITING on a rebuild to take the route out of notOnLeaflet[], of ${owed.length} in the register — enumeration, not a finding (OA-285). THAT IS A COUNT OF DECLARATIONS AND NOT OF SHEETS MISSING THE LINE: each entry's own note below says which, and where it opens DELIVERED the line is already printed:`);
+    else console.log(`  ${owedWaiting.length} of ${owed.length} decided "include" pair(s) are WAITING on a rebuild to print the note — enumeration, not a finding (OA-285). ${bySheet} ${bySheet === 1 ? 'is' : 'are'} read off the map's shipped ci-reference sheets, which print the entry's probe phrase or do not${bySheet < owed.length ? `; ${owed.length - bySheet} ${owed.length - bySheet === 1 ? 'has' : 'have'} no probe or no tracked sheet and ${owed.length - bySheet === 1 ? 'is' : 'are'} read from the declaration, which counts declarations and not ink` : ''}:`);
     for (const o of owed) {
-      console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}${o.alias ? ` [ALIASED: the map spells it ${o.alias.registered} and badges it "${o.alias.label}"]` : ''}`);
+      const tail = o.alias ? ` [ALIASED: the map spells it ${o.alias.registered} and badges it "${o.alias.label}"]` : '';
+      if (o.basis === 'sheet' && o.state === 'carried') {
+        console.log(`      ${o.id}  ${o.map}  ${o.route} — printed: ${o.sheet.printedIn.join(', ')} carries "${o.sheet.probe}", so the include is paid${o.declared === 'off' ? ` (the map still declares it off in ${o.where}, which is allowed: the sheet is the answer)` : ''}${tail}`);
+        continue;
+      }
+      if (o.basis === 'sheet') console.log(`      ${o.id}  ${o.map}  ${o.route} — waiting; none of its ${o.sheet.sheets} shipped sheet(s) prints "${o.sheet.probe}"${o.declared === 'off' ? `; declared off in ${o.where}` : ''}${tail}`);
+      else console.log(`      ${o.id}  ${o.map}  ${o.route} — ${o.state === 'waiting' ? `waiting; still declared off in ${o.where}` : 'the map now lists this route, so the note looks written — close the register entry'}${o.sheet ? ' [it has a probe but no tracked ci-reference sheet, so this is read from the declaration]' : ''}${tail}`);
       if (o.owes) console.log(`          owes: ${o.owes}`);
     }
   }
@@ -870,7 +948,7 @@ if (AS_JSON) {
     if (queued.length) console.log(`  ${queued.length} claim(s) have a home only as a QUEUED register entry — a question written down, not yet answered: ${[...new Set(queued.map(l => l.covered.id))].join(', ')}`);
     if (REQUIRE_REPORTS && reports === 0) console.log('  RED: --require-reports and no map had a verification.json to read. This is a laptop-only check; a run that finds nothing has checked nothing.');
   }
-  if (red) console.log(`  ${uncovered.length} uncovered claim(s), ${registerFindings.length} register finding(s), ${silences.length} silence(s).`);
+  if (red) console.log(`  ${uncovered.length} uncovered claim(s), ${registerFindings.length} register finding(s), ${silences.length} silence(s), ${unprinted.length} listed include(s) no sheet prints.`);
   else console.log('  every claim has a home, and the register contradicts no map.');
 }
 process.exit(red ? 1 : 0);

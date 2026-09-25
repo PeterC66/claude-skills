@@ -93,6 +93,12 @@ function repo(name, maps, register) {
     const md = path.join(root, m.dir); mkdirSync(md, { recursive: true });
     writeFileSync(path.join(md, 'manifest.json'), JSON.stringify({ town: path.basename(m.dir), stages }, null, 1));
     toAdd.push(path.join(m.dir, 'manifest.json'));
+    // `sheets`: { 'internal.svg': '<svg>…' } — the map's TRACKED ci-reference/ (OA-285).
+    for (const [name, svg] of Object.entries(m.sheets || {})) {
+      const d = path.join(md, 'ci-reference'); mkdirSync(d, { recursive: true });
+      writeFileSync(path.join(d, name), svg);
+      toAdd.push(path.join(m.dir, 'ci-reference', name));
+    }
   }
   if (register !== null && register !== undefined) {
     writeFileSync(path.join(root, 'service-facts.json'), typeof register === 'string' ? register : JSON.stringify(register, null, 1));
@@ -837,6 +843,75 @@ console.log('\n17. THE COVERAGE ROW — given an operator, which places? (buses-
    * and nothing else, so unlike the S6 half there is nothing here actions/checkout destroys. */
   const rCi = run(repo('cov-register-only', estate, reg(withService(0, { maps: ['Alpha', 'Beta'] }))), '--register-only');
   check('--register-only runs the coverage join too', rCi.code === 1 && /is not SF-101's `scope`/.test(rCi.out), `exit ${rCi.code}`);
+}
+
+console.log('\n18. THE SHIPPED SHEET SETTLES AN `include` — a probe phrase read off ci-reference/ (buses-data OA-285, 2026-09-25)');
+{
+  /* Case 14 counts DECLARATIONS, and on 2026-09-16 that count was wrong on 4 of 14
+   * pairs, always `waiting` over a sheet that had paid. An entry's `probe` makes the
+   * INK the answer. Every assertion here has its control on the same fixture with
+   * one thing changed, because a probe that could only ever say "printed" is the
+   * gate that never goes red. */
+  const svg = (...lines) => `<svg xmlns="http://www.w3.org/2000/svg">${lines.map((l, i) => `<text x="1" y="${i + 1}">${l}</text>`).join('')}</svg>`;
+  const NOTE = svg('Also serving Fixture, not on this map:', 'Tiger on Demand &#8211; a pre-booked minibus');
+  const BLANK = svg('Buses within Fixture', 'Key');
+  const offWith = (sheets) => ({ ...town('Fixture', { services: [{ route: '1' }], notOnLeaflet: [{ route: 'TIGER', note: 'paid at the first build' }] }, { routeOrder: ['1'] }, null), sheets });
+  const listsWith = (sheets) => ({ ...town('Fixture', { services: [{ route: '1' }, { route: 'TIGER' }] }, { routeOrder: ['1', 'TIGER'] }, null), sheets });
+  const inc = (extra) => ({ facts: [decided('SF-001', 'TIGER', ['Fixture'], { outcome: 'include', drawing: { Fixture: 'DELIVERED' }, ...extra })] });
+
+  const rPrinted = run(repo('probe-printed', [offWith({ 'internal.svg': NOTE, 'external.svg': BLANK })], inc({ probe: 'Tiger on Demand' })));
+  check('a map DECLARING the route off whose sheet prints the probe is PAID — the Shelfords shape, and exit 0',
+    rPrinted.code === 0 && /0 of 1 decided "include" pair\(s\) are WAITING/.test(rPrinted.out) && /printed: internal\.svg carries "Tiger on Demand"/.test(rPrinted.out),
+    rPrinted.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '(no SF-001 line)');
+  const rAbsent = run(repo('probe-absent', [offWith({ 'internal.svg': BLANK, 'external.svg': BLANK })], inc({ probe: 'Tiger on Demand' })));
+  check('CONTROL, the same map with the note gone from the ink: WAITING, named, still exit 0 — a chore, not a fault',
+    rAbsent.code === 0 && /1 of 1 decided "include" pair\(s\) are WAITING/.test(rAbsent.out) && /none of its 2 shipped sheet\(s\) prints "Tiger on Demand"/.test(rAbsent.out),
+    rAbsent.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '(no SF-001 line)');
+
+  /* THE ONE RED: the records say paid and the ink says not. */
+  const rLost = run(repo('probe-lost', [listsWith({ 'internal.svg': BLANK })], inc({ probe: 'Tiger on Demand' })));
+  check('a map that LISTS the route while no sheet prints the probe is RED, and named',
+    rLost.code === 1 && /Fixture LISTS TIGER.*prints the probe "Tiger on Demand"/.test(rLost.out),
+    `exit ${rLost.code}: ${rLost.out.split('\n').find((l) => l.includes('LISTS')) || ''}`);
+  const rKept = run(repo('probe-kept', [listsWith({ 'internal.svg': NOTE })], inc({ probe: 'Tiger on Demand' })));
+  check('CONTROL, the same listed map with the note on the sheet: green', rKept.code === 0 && /printed: internal\.svg/.test(rKept.out), `exit ${rKept.code}`);
+
+  /* A mapNotes block is one <text> per rendered line, so a phrase broken across a
+   * line must still be found; case and runs of white space are ignored. A sentence
+   * the sheet never printed must not be. */
+  const SPLIT = svg('Also serving Fixture: Tiger', 'on   Demand, no membership');
+  const rSplit = run(repo('probe-split', [offWith({ 'internal.svg': SPLIT })], inc({ probe: 'tiger on demand' })));
+  check('a phrase broken across two text nodes, in another case, is still found', rSplit.code === 0 && /printed: internal\.svg/.test(rSplit.out), rSplit.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '');
+  const rWrong = run(repo('probe-wrong', [offWith({ 'internal.svg': SPLIT })], inc({ probe: 'Dial-a-Ride' })));
+  check('CONTROL, a phrase that sheet does not carry is not found in it', rWrong.code === 0 && /waiting; none of its 1/.test(rWrong.out), rWrong.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '');
+
+  /* A probe per map, and a map with no tracked sheet falls back and SAYS so. */
+  const rPerMap = run(repo('probe-per-map', [offWith({ 'internal.svg': NOTE })], inc({ probe: { Fixture: 'pre-booked minibus' } })));
+  check('a probe keyed by map name is read for that map', rPerMap.code === 0 && /carries "pre-booked minibus"/.test(rPerMap.out), rPerMap.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '');
+  const rNoSheet = run(repo('probe-no-sheet', [offWith({})], inc({ probe: 'Tiger on Demand' })));
+  check('a probe with no tracked ci-reference sheet falls back to the declaration and says so',
+    rNoSheet.code === 0 && /waiting; still declared off in .*no tracked ci-reference sheet/.test(rNoSheet.out), rNoSheet.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '');
+  const rUntracked = repo('probe-untracked', [offWith({})], inc({ probe: 'Tiger on Demand' }));
+  mkdirSync(path.join(rUntracked, 'Areas', 'Fixture', 'ci-reference'), { recursive: true });
+  writeFileSync(path.join(rUntracked, 'Areas', 'Fixture', 'ci-reference', 'internal.svg'), NOTE);
+  const rUntrackedRun = run(rUntracked);
+  check('an UNTRACKED sheet is not a shipped sheet and answers nothing', rUntrackedRun.code === 0 && /no tracked ci-reference sheet/.test(rUntrackedRun.out), rUntrackedRun.out.split('\n').find((l) => l.includes('SF-001  Fixture')) || '');
+
+  for (const [name, probe, re] of [
+    ['an empty probe', '  ', /`probe` is an empty string/],
+    ['a probe for a map outside the scope', { Elsewhere: 'Tiger' }, /`probe` names "Elsewhere", which is not in its scope/],
+    ['a probe that is a list', ['Tiger'], /`probe` must be a phrase, or an object/],
+  ]) {
+    const r = run(repo(`probe-shape-${name.replace(/\W+/g, '-')}`, [offWith({ 'internal.svg': NOTE })], inc({ probe })));
+    check(`${name} is a register finding, exit 1`, r.code === 1 && re.test(r.out), `exit ${r.code}`);
+  }
+
+  /* CI SEES IT: ci-reference/ is tracked, so --register-only reads the ink too. */
+  const rCi = run(repo('probe-register-only', [listsWith({ 'internal.svg': BLANK })], inc({ probe: 'Tiger on Demand' })), '--register-only', '--json');
+  let j = null; try { j = JSON.parse(rCi.out); } catch { /* left null */ }
+  check('--register-only --json: red, register.unprinted names it, and owed[] carries basis and sheet',
+    !!j && j.red === true && j.register.unprinted.length === 1 && j.register.owed[0].basis === 'sheet' && j.register.owed[0].state === 'waiting' && j.register.owed[0].sheet.sheets === 1,
+    j ? JSON.stringify(j.register.owed[0]) : rCi.out.slice(0, 160));
 }
 
 console.log('\n' + '='.repeat(78));

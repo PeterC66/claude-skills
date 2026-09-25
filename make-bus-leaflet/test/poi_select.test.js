@@ -141,6 +141,33 @@ test('the same place mapped as node and building collapses — under 60 m, same 
   assert.strictEqual(apart.length, 2, '220 m apart is two shops');
 });
 
+test('OA-347: a NAMED member replaces an unnamed one it duplicates, whatever the file order', () => {
+  // March: node/9272750116 is a sports centre with no name, way/190610244 is the
+  // same site as `George Campbell Leisure Centre`, 19 m away, and the node comes
+  // first in osm.json. Keeping the first threw the name away and left the site
+  // blank on the sheet, because the survivor was `Leisure`, a category label,
+  // which the tier default then `miss`ed. Read off report.candidates, the list
+  // BEFORE tiers drop anything, because a `miss` survivor never reaches `out`.
+  const bare  = node(52.3,      -0.07, { leisure: 'sports_centre', sport: 'swimming' });
+  const named = node(52.30017,  -0.07, { leisure: 'sports_centre', name: 'George Campbell Leisure' });
+  const cands = (els) => { const r = {}; selectPois(els, {}, r); return r.candidates; };
+  const fwd = cands([[bare, named]]);
+  assert.deepStrictEqual(fwd.map(c => c.key), ['leisure:George Campbell Leisure'],
+    'the unnamed node survived and the name was thrown away — the March regression');
+  assert.deepStrictEqual(fwd[0].ll, [52.30017, -0.07], 'the name brings its own coordinate');
+  assert.strictEqual(fwd[0].printsName, true);
+  // The control the other way round: an unnamed newcomer never displaces a name.
+  const rev = cands([[named, bare]]);
+  assert.deepStrictEqual(rev.map(c => c.key), ['leisure:George Campbell Leisure']);
+  assert.deepStrictEqual(rev[0].ll, [52.30017, -0.07]);
+  // And two unnamed members still keep the first, so file order decides every
+  // tie it decided before. (Two NAMED members keeping the first is the Co-op
+  // test above.)
+  const bare2 = node(52.30017, -0.07, { leisure: 'sports_centre' });
+  assert.deepStrictEqual(cands([[bare, bare2]]).map(c => c.ll), [[52.3, -0.07]]);
+  assert.deepStrictEqual(cands([[bare2, bare]]).map(c => c.ll), [[52.30017, -0.07]]);
+});
+
 test('a near-duplicate in a DIFFERENT category is a different place and survives', () => {
   const out = selectPois([[node(52.3, -0.07, { shop: 'supermarket', name: 'Co-op' }),
                            node(52.30005, -0.07, { amenity: 'pharmacy', name: 'Co-op Pharmacy' })]], {});

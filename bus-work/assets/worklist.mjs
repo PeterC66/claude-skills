@@ -1209,25 +1209,26 @@ if (s6Stale.length) {
        * question disappeared when it was answered and nothing replaced it, and the
        * instruction survived only as English inside the register.
        *
-       * ENUMERATION ONLY: which maps still DECLARE the route off, NOT what is owed —
-       * a rebuild pays by printing the line AND clearing the declaration, so a map
-       * that did only the first reads `waiting` owing nothing (OA-285: prose right
-       * 14/14 against the SVGs, this wrong 4). No sniff; OA-285 owns the question.
+       * THE SHEET ANSWERS IT WHERE IT CAN (OA-285, 2026-09-25). A pair whose entry
+       * carries a `probe` and whose map has tracked ci-reference/ SVGs has `basis:
+       * 'sheet'`, and `waiting` then means the shipped ink does not print the note.
+       * Any other pair is read from the DECLARATION, which a rebuild can leave behind
+       * after printing the line (prose right 14/14 against the SVGs, that reading
+       * wrong 4) — so those still say "declared off", never "missing". A paid pair
+       * is not work, so only `waiting` raises the row.
        */
       const owed = ((v.register && v.register.owed) || []).filter((o) => o.state === 'waiting');
-      const carried = ((v.register && v.register.owed) || []).filter((o) => o.state === 'carried');
-      if (owed.length || carried.length) {
+      if (owed.length) {
+        const byDecl = owed.filter((o) => o.basis !== 'sheet');
         add({
           key: 's6-claims-owed', rank: 8, type: 'housekeeping',
-          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} ${owed.length === 1 ? 'is' : 'are'} still declared off the sheet of ${[...new Set(owed.map((o) => o.map))].join(', ') || 'a map'} — some of them already printed`,
-          why: [
-            ...owed.map((o) => `${o.id}: ${o.map} — ${o.owes || `${o.route} is decided \`include\` and the map still declares it off`}`),
-            ...carried.map((o) => `${o.id}: ${o.map} now lists ${o.route}, so the note looks written — the register entry can be closed`),
-          ].join('; ') + '. READ EACH ENTRY ABOVE BEFORE REBUILDING ANYTHING: this count is of maps that still DECLARE the route off, which is not the same question as whether the line is on the sheet, and the two answers differ today. A rebuild pays an `include` by printing the line and by moving the route out of notOnLeaflet[], and the estate has maps that did the first and not the second — their entry opens DELIVERED or DRAWN and they owe nothing, so rebuilding them would print the note twice. Which artefact settles it is the undecided half of buses-data OA-285; until it is settled the register\'s own note, above, is the thing to believe, and it was checked against the shipped SVGs on 2026-09-16 and found right in every case.',
-          who: 'a session, at the next rebuild of that map', runbook: 'S6', towns: [...new Set([...owed, ...carried].map((o) => o.map))],
+          title: `${owed.length} decided service fact${owed.length === 1 ? '' : 's'} ${owed.length === 1 ? 'is' : 'are'} not yet printed on the sheet of ${[...new Set(owed.map((o) => o.map))].join(', ')}${byDecl.length ? ` — ${byDecl.length} of them read only from a declaration, so possibly already printed` : ''}`,
+          why: owed.map((o) => `${o.id}: ${o.map} — ${o.basis === 'sheet' ? `none of its shipped sheets prints "${o.sheet.probe}". ` : 'still declared off, and no probe phrase could be read off a shipped sheet. '}${o.owes || `${o.route} is decided \`include\``}`).join('; ')
+            + (byDecl.length ? '. READ THE ENTRY BEFORE REBUILDING A MAP READ FROM ITS DECLARATION: where its note opens DELIVERED or DRAWN the line is already printed and a rebuild would print it twice; giving the entry a `probe` makes the shipped sheet answer instead.' : '. Each is read off the shipped ci-reference sheets against the entry\'s `probe` phrase (buses-data OA-285), so the note is genuinely absent from the ink.'),
+          who: 'a session, at the next rebuild of that map', runbook: 'S6', towns: [...new Set(owed.map((o) => o.map))],
           do: [
-            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each entry and where it is still declared off' },
-            { kind: 'skill', what: 'FIRST read the entry\'s own `drawing` note. Where it opens DELIVERED, DRAWN or PAID the line is already on that sheet and the only thing outstanding is the declaration, so write nothing new. Where it says the service is off the sheet until the next rebuild, that rebuild writes the Services-panel or map-notes line the entry describes — its `reason` and `drawing` say what it must carry — and takes the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
+            { kind: 'shell', cwd: BUSES, cmd: 'node "' + checker + '"', note: 'names each entry, whether the shipped sheet or the declaration answered, and what it waits on' },
+            { kind: 'skill', what: 'FIRST read the entry\'s own `drawing` note. For a pair read from its declaration, where the note opens DELIVERED, DRAWN or PAID the line is already on that sheet, so write nothing new. Otherwise the next rebuild writes the Services-panel or map-notes line the entry describes — its `reason` and `drawing` say what it must carry — and takes the route out of notOnLeaflet[] in the same run. Runbook: make-bus-leaflet/references/s6-verify.md, "What happens to a claim".' },
           ],
         });
       }

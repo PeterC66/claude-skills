@@ -1209,13 +1209,12 @@ if (s6Stale.length) {
        * question disappeared when it was answered and nothing replaced it, and the
        * instruction survived only as English inside the register.
        *
-       * THE SHEET ANSWERS IT WHERE IT CAN (OA-285, 2026-09-25). A pair whose entry
-       * carries a `probe` and whose map has tracked ci-reference/ SVGs has `basis:
-       * 'sheet'`, and `waiting` then means the shipped ink does not print the note.
-       * Any other pair is read from the DECLARATION, which a rebuild can leave behind
-       * after printing the line (prose right 14/14 against the SVGs, that reading
-       * wrong 4) — so those still say "declared off", never "missing". A paid pair
-       * is not work, so only `waiting` raises the row.
+       * THE SHEET ANSWERS IT WHERE IT CAN (OA-285, 2026-09-25). A pair with a `probe`
+       * and tracked ci-reference/ SVGs has `basis: 'sheet'`: `waiting` means the ink
+       * lacks the note. Any other pair is read from the DECLARATION, which a rebuild
+       * can leave behind after printing the line (prose right 14/14 against the SVGs,
+       * that reading wrong 4), so it says "declared off", never "missing". A paid
+       * pair is not work, so only `waiting` raises the row.
        */
       const owed = ((v.register && v.register.owed) || []).filter((o) => o.state === 'waiting');
       if (owed.length) {

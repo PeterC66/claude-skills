@@ -96,7 +96,8 @@
 <circle cx="13.00" cy="59.80" r="2.9" fill="#228833" stroke="#fff" stroke-width="0.7"/>
 <text x="13.00" y="59.80" font-family="Arial" font-weight="bold" font-size="2.75" fill="#fff" text-anchor="middle" dominant-baseline="central">33A</text>
 <text x="19" y="60.00" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">Fenland Assoc. for Community Transport</text>
-<text x="10" y="69.40" font-family="Arial" font-size="2.9" fill="#666">56 runs as two arms — to Manea and to Wisbech.</text>
+<text x="10" y="69.40" font-family="Arial" font-weight="bold" font-size="2.9" fill="#666">56</text>
+<text x="14.03" y="69.40" font-family="Arial" font-size="2.9" fill="#666">runs as two arms — to Manea and to Wisbech.</text>
 <rect x="6.00" y="76.00" width="98.80" height="28.35" rx="2" fill="#ffffff" fill-opacity="0.94" stroke="#ccc" stroke-width="0.4"/>
 <text x="9.40" y="83.18" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">How to use this map</text>
 <text x="9.40" y="88.56" font-family="Arial" font-size="3.2" fill="#555">•</text>

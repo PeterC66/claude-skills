@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -439,6 +439,99 @@ function runWith(fixture, opts = {}) {
     check(`buses-data: ${id} is NOT triggered by a map's S3 config`, !triggered(arm, known(['Areas/Ramsey/S3-config/2026-09-24_1000/routes.json']), false));
     check(`buses-data: ${id} runs from make-bus-leaflet, where its script is`, !!arm.cwd && existsSync(path.join(arm.cwd, arm.args[0])), `${arm.cwd} + ${arm.args[0]}`);
   }
+}
+
+// CASE 17 — an estate harness runs at the engine the push PINS, not at the
+// checkout's main (buses-data OA-466). On 2026-09-25 claude-skills main had moved
+// the control town's ink, so the preflight's prove-red-gates said CONTROL DIFF on
+// a push CI then proved 11 of 11 at the pin. The fixture is that state: a skills
+// repository whose PIN commit's harness passes and whose HEAD's fails, and a
+// buses repository pinning the first. The arm's `cwd` is the checkout, exactly as
+// the built-in manifest writes it, so today's code runs HEAD's copy and goes red.
+{
+  const WHEN = ['^engine\\.lock\\.json$', '(^|/)ci-reference/'];
+  const skills = mkdtempSync(path.join(tmpdir(), 'preflight-skills-'));
+  git(skills, 'init', '-b', 'main');
+  git(skills, 'config', 'user.email', 'preflight@test');
+  git(skills, 'config', 'user.name', 'preflight');
+  git(skills, 'config', 'commit.gpgsign', 'false');
+  const tool = path.join(skills, 'make-bus-leaflet', 'tools', 'h.js');
+  mkdirSync(path.dirname(tool), { recursive: true });
+  const harness = (tag, code) => `require('fs').appendFileSync(process.env.PF_LOG, '${tag}\\n'); console.log(${JSON.stringify(code ? 'CONTROL DIFF' : 'proved')}); process.exit(${code});\n`;
+  writeFileSync(tool, harness('pin', 0));
+  git(skills, 'add', '.');
+  git(skills, 'commit', '-m', 'pinned engine', '--no-verify');
+  const pinSha = git(skills, 'rev-parse', 'HEAD').trim();
+  writeFileSync(tool, harness('main', 1));
+  git(skills, 'commit', '-am', 'main moved the control town', '--no-verify');
+
+  const arm = { id: 'harness', label: 'estate harness', tier: 'full', when: WHEN, atPin: 'make-bus-leaflet', cwd: path.join(skills, 'make-bus-leaflet'), cmd: NODE, args: ['tools/h.js'] };
+  const pinned = (commit) => {
+    const fx = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [arm] } });
+    writeFileSync(path.join(fx.repo, 'engine.lock.json'), JSON.stringify({ commit }));
+    git(fx.repo, 'add', 'engine.lock.json');
+    git(fx.repo, 'commit', '-m', 'move the pin', '--no-verify');
+    return fx;
+  };
+  const worktrees = () => git(skills, 'worktree', 'list').trim().split('\n').length;
+
+  let fx = pinned(pinSha);
+  let { result, ran } = runWith(fx, { skillsRoot: skills });
+  const h = result.checks.find((c) => c.id === 'harness');
+  check('at-pin: the harness ran the PINNED commit\'s copy, not main\'s', ran.includes('pin') && !ran.includes('main'), ran.join(','));
+  check('at-pin: so a push CI would pass is a PASS here', h?.verdict === 'PASS', `${h?.verdict}: ${h?.out || h?.why || ''}`);
+  check('at-pin: the report says which commit and how', result.pin?.commit === pinSha && result.pin?.via === 'worktree', JSON.stringify(result.pin));
+  check('at-pin: the worktree it made is gone afterwards', worktrees() === 1, git(skills, 'worktree', 'list'));
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // The dangerous direction: a pin whose harness FAILS stays red when main passes.
+  git(skills, 'checkout', '-q', pinSha);
+  writeFileSync(tool, harness('pin', 1));
+  git(skills, 'commit', '-qam', 'a pin that really diffs', '--no-verify');
+  const badPin = git(skills, 'rev-parse', 'HEAD').trim();
+  git(skills, 'checkout', '-q', 'main');
+  writeFileSync(tool, harness('main', 0));
+  git(skills, 'commit', '-qam', 'main passes', '--no-verify');
+  fx = pinned(badPin);
+  ({ result, ran } = runWith(fx, { skillsRoot: skills }));
+  check('at-pin: a pin whose control diffs is RED even while main passes', result.checks.find((c) => c.id === 'harness')?.verdict === 'FAIL' && ran.includes('pin'), ran.join(','));
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // Already AT the pin: the checkout itself is used and no worktree is made.
+  const mainSha = git(skills, 'rev-parse', 'HEAD').trim();
+  fx = pinned(mainSha);
+  ({ result, ran } = runWith(fx, { skillsRoot: skills }));
+  check('at-pin: a checkout already at the pin runs in place', result.pin?.via === 'checkout' && ran.includes('main'), JSON.stringify(result.pin));
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // A pin the clone cannot produce is UNANSWERED: not main's verdict, not a pass.
+  fx = pinned('0123456789abcdef0123456789abcdef01234567');
+  ({ result, ran } = runWith(fx, { skillsRoot: skills }));
+  const ghost = result.checks.find((c) => c.id === 'harness');
+  check('at-pin: an unknown pin is UNANSWERED and nothing ran', ghost?.verdict === 'UNANSWERED' && ran.length === 0, `${ghost?.verdict}; ran ${ran.join(',')}`);
+  check('at-pin: and it exits 2', result.exit === 2, `exit ${result.exit}`);
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // No engine.lock.json at HEAD: the same refusal, saying why.
+  fx = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [arm] }, pushed: ['Places/X/ci-reference/routes.json'] });
+  ({ result } = runWith(fx, { skillsRoot: skills }));
+  const nolock = result.checks.find((c) => c.id === 'harness');
+  check('at-pin: no engine.lock.json is UNANSWERED and says so', nolock?.verdict === 'UNANSWERED' && /engine\.lock\.json/.test(nolock?.why || ''), `${nolock?.verdict}: ${nolock?.why}`);
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // The caveat compares against the pin, which is what CI checks out.
+  check('engineTransfers: a checkout off the pin does not transfer', engineTransfers(skills, pinSha).transfers === false);
+  check('engineTransfers: a checkout at the pin transfers', engineTransfers(skills, mainSha).transfers === true);
+
+  // And the built-in buses-data arms carry the mark.
+  const bd = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
+  const m = manifestFor(bd.repo);
+  rmSync(bd.root, { recursive: true, force: true });
+  for (const id of ['prove-red-gates', 'prove-red-status']) {
+    const a = m && m.checks.find((c) => c.id === id);
+    check(`buses-data: ${id} runs at the pin, from make-bus-leaflet`, a?.atPin === 'make-bus-leaflet', a ? String(a.atPin) : 'no arm');
+  }
+  rmSync(skills, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

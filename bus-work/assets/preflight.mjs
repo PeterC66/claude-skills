@@ -50,7 +50,8 @@
 // minutes — and it is not run per commit. It is run once per round, and the
 // thing it replaces is three CI round trips plus the analysis between them.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs, assetsDir, resolvePortal } from './engine.mjs';
 
@@ -218,9 +219,16 @@ function builtIn(repo) {
          * because a harness's control is not a board row. Run as gates.yml runs
          * them, from make-bus-leaflet with --buses and --portal, and only when
          * the push moves the pin or a golden master: they take minutes, and every
-         * other push reads inputs neither harness is about. */
-        ENGINE && { id: 'prove-red-gates', label: 'the byte gates can go red — every control reproduces under this engine', tier: 'full', when: ESTATE_INPUTS, cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-gates.js', '--buses', repo, '--portal', resolvePortal()] },
-        ENGINE && { id: 'prove-red-status', label: 'the status board separates a fault from a chore', tier: 'full', when: ESTATE_INPUTS, cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-status.js', '--buses', repo, '--portal', resolvePortal()] },
+         * other push reads inputs neither harness is about.
+         *
+         * `atPin`, because gates.yml runs both from claude-skills checked out at
+         * engine.lock.json's commit, not at main (buses-data OA-466). On
+         * 2026-09-25 main had moved Beaconsfield's ink, the harness's control
+         * town, so this arm said CONTROL DIFF where CI would have proved 11 of 11
+         * — a refusal of a push CI would pass. `cwd` stays the local checkout's
+         * folder so the arm reads where its script is; `atPin` re-roots it. */
+        ENGINE && { id: 'prove-red-gates', label: 'the byte gates can go red — every control reproduces under the pinned engine', tier: 'full', when: ESTATE_INPUTS, atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-gates.js', '--buses', repo, '--portal', resolvePortal()] },
+        ENGINE && { id: 'prove-red-status', label: 'the status board separates a fault from a chore, under the pinned engine', tier: 'full', when: ESTATE_INPUTS, atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-status.js', '--buses', repo, '--portal', resolvePortal()] },
       ].filter(Boolean),
       unanswered: [
         'Whether the PORTAL suite is green — its `verify:area` gates a fixture that lives in this repository, and nothing on this side runs another repository\'s gates.',
@@ -326,7 +334,13 @@ const tail = (s, n) => (s || '').trim().split('\n').filter(Boolean).slice(-n).jo
 export function runCheck(check, repo) {
   const started = Date.now();
   const cwd = check.cwd ? path.resolve(repo, check.cwd) : repo;
-  const r = spawnSync(check.cmd, check.args || [], { cwd, encoding: 'utf8' });
+  // `unsetEnv` names variables the check must NOT inherit — the engine resolvers
+  // read BUS_SKILL_ASSETS before their own folder, so a pinned harness would
+  // otherwise load main's generators. Names rather than an env object, because
+  // the check is spread into `--json` output and an env object would print it.
+  const env = { ...process.env };
+  for (const k of check.unsetEnv || []) delete env[k];
+  const r = spawnSync(check.cmd, check.args || [], { cwd, encoding: 'utf8', env });
   const ms = Date.now() - started;
   if (r.error) return { ...check, verdict: 'UNANSWERED', ms, why: `${check.cmd} could not be run: ${r.error.code || r.error.message}`, echoed: [] };
   if (r.status === null) return { ...check, verdict: 'UNANSWERED', ms, why: `${check.cmd} was killed by ${r.signal || 'a signal'} and never returned a status`, echoed: [] };
@@ -347,24 +361,88 @@ export function runCheck(check, repo) {
 }
 
 /**
+ * The engine commit this push PINS — read from `HEAD:engine.lock.json`, because
+ * that committed file is what gates.yml's `engine-pin.mjs --print` reads, and a
+ * pin edited on disk and not committed is not in the push.
+ */
+export function pinnedCommit(repo) {
+  const r = git(repo, ['show', 'HEAD:engine.lock.json']);
+  if (!r.ok) return { why: 'HEAD carries no engine.lock.json, so there is no pinned engine to run at' };
+  let commit;
+  try { commit = JSON.parse(r.out).commit; } catch (e) { return { why: `HEAD:engine.lock.json does not parse: ${e.message}` }; }
+  if (typeof commit !== 'string' || !/^[0-9a-f]{7,40}$/.test(commit)) return { why: 'HEAD:engine.lock.json names no commit' };
+  return { commit };
+}
+
+/**
+ * A claude-skills tree AT `commit`: the checkout itself when it already is that
+ * commit and clean under both skills, otherwise a detached worktree in the temp
+ * directory — the move `engine_commit.js` makes for a map's own engine.
+ *
+ * `node_modules` is not in git, so the worktree borrows the checkout's by a
+ * junction; the engine's one dependency is sharp, which no generator's bytes
+ * depend on. A commit the clone lacks is fetched once from its first remote.
+ * The caller hands the result to `releaseEngine`, which removes the worktree;
+ * a run killed before that leaves a registration `worktree prune` clears next
+ * time, which is why prune runs BEFORE the add.
+ */
+export function engineAtPin(skillsRoot, commit) {
+  if (!skillsRoot || !existsSync(path.join(skillsRoot, '.git'))) return { why: `no claude-skills checkout found at ${skillsRoot || '(unresolved)'}` };
+  const want = git(skillsRoot, ['rev-parse', '--verify', '--quiet', `${commit}^{commit}`]);
+  const head = git(skillsRoot, ['rev-parse', 'HEAD']);
+  const dirty = git(skillsRoot, ['status', '--porcelain', '--untracked-files=no', '--', 'make-bus-leaflet', 'make-place-bus-leaflet']);
+  if (want.ok && head.ok && want.out === head.out && dirty.ok && !dirty.out) return { root: skillsRoot, commit: head.out, via: 'checkout' };
+  const dir = mkdtempSync(path.join(tmpdir(), 'preflight-pin-'));
+  const wt = path.join(dir, 'skills');
+  git(skillsRoot, ['worktree', 'prune']);
+  const add = () => git(skillsRoot, ['worktree', 'add', '--quiet', '--detach', wt, commit]);
+  let r = add();
+  if (!r.ok) {
+    const remote = (git(skillsRoot, ['remote']).out.split('\n')[0] || '').trim();
+    if (remote && git(skillsRoot, ['fetch', '--quiet', '--no-tags', remote, commit]).ok) r = add();
+  }
+  if (!r.ok) {
+    rmSync(dir, { recursive: true, force: true });
+    return { why: `could not check claude-skills out at the pin ${commit.slice(0, 7)}: ${r.err.split('\n')[0] || `git exited ${r.status}`}` };
+  }
+  const mods = path.join(skillsRoot, 'make-bus-leaflet', 'node_modules');
+  if (existsSync(mods)) {
+    try { symlinkSync(mods, path.join(wt, 'make-bus-leaflet', 'node_modules'), 'junction'); } catch { /* a harness that needs it then fails loudly, by itself */ }
+  }
+  return { root: wt, commit: git(wt, ['rev-parse', 'HEAD']).out, via: 'worktree', dir, skillsRoot };
+}
+
+/** Remove a worktree `engineAtPin` made; the checkout itself is left alone. */
+export function releaseEngine(e) {
+  if (!e || e.via !== 'worktree') return;
+  git(e.skillsRoot, ['worktree', 'remove', '--force', e.root]);
+  rmSync(e.dir, { recursive: true, force: true });
+  git(e.skillsRoot, ['worktree', 'prune']);
+}
+
+/**
  * The sibling caveat, and it is the one nobody thinks to ask.
  *
- * `buses-data`'s `gates.yml` checks `claude-skills` out with NO `ref:`, so the
- * engine a push is gated against is whatever that repository's `main` holds when
- * the run starts — never the working tree these gates just ran against. A local
- * PASS therefore transfers only while the engine tree is clean and level with
- * its own origin, and when it is not, saying so is worth more than the PASS.
+ * `buses-data`'s `gates.yml` checks `claude-skills` out at engine.lock.json's
+ * `commit` (OA-398) — never the working tree these gates just ran against. The
+ * arms marked `atPin` run at that commit whatever this checkout holds; every
+ * other arm runs from the checkout, so ITS verdict transfers only while the
+ * checkout is clean and AT the pin. Until 2026-09-25 this compared against
+ * origin/main and told the reader CI did too, a year's worth of comment written
+ * before the pin existed (buses-data OA-466). With no pin to read it falls back
+ * to origin/main and says so.
  */
-export function engineTransfers(engineRepo) {
+export function engineTransfers(engineRepo, pin = null) {
   if (!engineRepo || !existsSync(path.join(engineRepo, '.git'))) return { known: false, why: `no engine checkout found at ${engineRepo || '(unresolved)'}` };
   const dirty = git(engineRepo, ['status', '--porcelain', '--', 'make-bus-leaflet/assets', 'make-place-bus-leaflet/assets']);
-  const ahead = git(engineRepo, ['rev-list', '--count', 'origin/main..HEAD']);
+  const head = git(engineRepo, ['rev-parse', 'HEAD']);
+  const against = pin || 'origin/main';
+  const target = git(engineRepo, ['rev-parse', '--verify', '--quiet', `${against}^{commit}`]);
   const branch = git(engineRepo, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  if (!dirty.ok || !ahead.ok) return { known: false, why: 'the engine checkout could not be read' };
+  if (!dirty.ok || !head.ok) return { known: false, why: 'the engine checkout could not be read' };
   const dirtyFiles = dirty.out ? dirty.out.split('\n').filter(Boolean).length : 0;
-  const aheadN = Number(ahead.out || 0);
-  const transfers = dirtyFiles === 0 && aheadN === 0 && branch.out === 'main';
-  return { known: true, transfers, dirtyFiles, ahead: aheadN, branch: branch.out };
+  const level = target.ok && target.out === head.out;
+  return { known: true, transfers: dirtyFiles === 0 && level, dirtyFiles, against: pin ? `the pin ${pin.slice(0, 7)}` : 'origin/main (no pin was readable)', head: head.out.slice(0, 7), branch: branch.out };
 }
 
 function report(result, quiet) {
@@ -397,10 +475,13 @@ function report(result, quiet) {
   }
   L.push('');
   L.push('WHAT THIS DID NOT ASK:');
+  if (result.pin && result.pin.via) {
+    L.push(`  (The arms marked at-pin ran from claude-skills ${result.pin.commit.slice(0, 7)}, by ${result.pin.via === 'worktree' ? 'a detached worktree, since removed' : 'this checkout, which is already there'}.)`);
+  }
   if (result.engine && result.engine.known && !result.engine.transfers) {
-    L.push(`  Whether these verdicts TRANSFER. CI gates this repository against claude-skills' origin/main; the engine here is on ${result.engine.branch}, ${result.engine.ahead} commit(s) ahead of origin/main, with ${result.engine.dirtyFiles} uncommitted file(s) under a hashed assets folder. A byte gate that passed locally was measured against an engine CI will not use.`);
+    L.push(`  Whether the OTHER engine-reading verdicts TRANSFER. CI gates this repository against claude-skills at ${result.engine.against}; the checkout here is at ${result.engine.head} (${result.engine.branch}), with ${result.engine.dirtyFiles} uncommitted file(s) under a hashed assets folder. The board and the fixture arms were measured against an engine CI will not use.`);
   } else if (result.engine && result.engine.known) {
-    L.push('  The engine checkout is on main, clean under assets/ and level with origin/main, so a byte-gate verdict here is about the same engine CI will check out.');
+    L.push(`  The engine checkout is clean under assets/ and at ${result.engine.against}, so a byte-gate verdict here is about the same engine CI will check out.`);
   } else if (result.engine) {
     L.push(`  Whether these verdicts transfer to CI's engine: ${result.engine.why}.`);
   }
@@ -412,7 +493,19 @@ function report(result, quiet) {
   return L.join('\n');
 }
 
-export function preflight({ repo, all = false }) {
+/*
+ * An `atPin` arm runs from `<the engine at the pin>/<atPin>`, with the engine
+ * resolvers' environment overrides removed. A pin that cannot be read or
+ * checked out makes the arm UNANSWERED — never a run at main, which is the
+ * wrong answer this exists to stop, and never a pass.
+ */
+const PIN_UNSET = ['BUS_SKILL_ASSETS', 'PLACE_SKILL_ASSETS'];
+function runAtPin(check, repo, pinEngine) {
+  if (!pinEngine.root) return { ...check, verdict: 'UNANSWERED', ms: 0, why: pinEngine.why, echoed: [] };
+  return runCheck({ ...check, cwd: path.join(pinEngine.root, check.atPin), unsetEnv: [...(check.unsetEnv || []), ...PIN_UNSET] }, repo);
+}
+
+export function preflight({ repo, all = false, skillsRoot }) {
   const scope = pushScope(repo);
   const manifest = manifestFor(repo);
   if (!manifest) {
@@ -427,15 +520,25 @@ export function preflight({ repo, all = false }) {
   const wanted = inTier.filter((c) => triggered(c, scope, all));
   // Named in the report, so a check that was not triggered reads as not asked and never as a pass.
   const notTriggered = inTier.filter((c) => !triggered(c, scope, all)).map((c) => ({ id: c.id, label: c.label, when: c.when }));
-  const checks = wanted.map((c) => runCheck(c, repo));
+  const skills = skillsRoot || skillPaths().SKILLS;
+  const pin = pinnedCommit(repo);
+  let pinEngine = null;
+  if (wanted.some((c) => c.atPin)) pinEngine = pin.commit ? engineAtPin(skills, pin.commit) : { why: pin.why };
+  let checks;
+  try {
+    checks = wanted.map((c) => (c.atPin ? runAtPin(c, repo, pinEngine) : runCheck(c, repo)));
+  } finally {
+    releaseEngine(pinEngine);
+  }
   /* Resolved, not typed — and `engineTransfers` already reports an unresolved
    * tree as `known: false` with its reason, which is the answer a refusal wants
    * rather than a literal that happens to exist on one laptop (OA-345). */
-  const engine = manifest.name === 'buses-data' ? engineTransfers(skillPaths().SKILLS) : null;
+  const engine = manifest.name === 'buses-data' ? engineTransfers(skills, pin.commit || null) : null;
   const failed = checks.filter((c) => c.verdict === 'FAIL').length;
   const unanswered = checks.filter((c) => c.verdict === 'UNANSWERED').length;
   const exit = failed ? EXIT_FAILED : (unanswered || !scope.known) ? EXIT_CANNOT_TELL : EXIT_OK;
-  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, unanswered: manifest.unanswered || [], exit };
+  const pinReport = pinEngine ? (pinEngine.root ? { commit: pinEngine.commit, via: pinEngine.via } : { why: pinEngine.why }) : null;
+  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, unanswered: manifest.unanswered || [], exit };
 }
 
 function main() {

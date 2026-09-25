@@ -1116,9 +1116,10 @@ for (const { row: mapRow, place } of engineStale) {
     title: `${mapRow.name} was drawn by an older engine`,
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`,
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
-    do: [
-      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — shows what would change' },
-      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes; stops on a lost label' },
+    do: [ // the dry run's verdict picks the write; why --force is its own step: playbooks.md, Engine-stale
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — its verdict decides which of the next two to run' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes, when the dry run showed the ink moving; stops on a lost label, which is to be reviewed, never forced' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply --force`, note: 'ONLY when the dry run said STAMP-STALE (sheets already PASS, only the engine stamp is old); never for a lost label, STALE-INPUTS or any other verdict' },
     ],
   });
 }

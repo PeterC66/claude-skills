@@ -108,6 +108,11 @@ const VENDORED = [
   { path: 'wrapper.js', kind: 'portal-owned', reason: 'a portal wrapper with no counterpart in the skills' },
 ];
 
+/* THE UN-VENDOR ROW (buses-data OA-472). A file origin/main vendors whose skill
+ * source is GONE — the only state in which status.js asks whether some branch is
+ * removing it. The source path is deliberately one that does not exist. */
+const GONE = { path: 'gone.js', kind: 'vendored', source: 'make-bus-leaflet/assets/oa472-no-such-source.js', vendoredOn: '2026-09-25' };
+
 /* Commit with a CONTROLLED date. The grace rule is the only part of the
  * vendoring row that contains a judgement about time, so the harness has to be
  * able to put a commit on either side of the boundary. Both variables are set
@@ -138,6 +143,7 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
                       worktreeCurrent = false, noGit = false,
                       revendorRef = null, revendorAgeHours = 0, revendorStale = false,
                       behindRef = null, behindAgeHours = 18,
+                      unvendor = null, unvendorAgeHours = 0,
                       fixtureOnMain = null, fixtureOnBranch = null } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
@@ -159,8 +165,12 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
   const current = (rel) => fs.readFileSync(path.join(SKILL_ROOT, rel));
   const stale = (rel) => Buffer.concat([current(rel), Buffer.from('\n// a line the source does not have\n')]);
 
-  const writeTree = ({ staleA, unlisted }) => {
-    fs.writeFileSync(path.join(engine, 'vendored.json'), manifest(VENDORED));
+  /* `withGone` puts the OA-472 row and its file into the tree; off, both are absent. */
+  const writeTree = ({ staleA, unlisted, withGone = false }) => {
+    fs.writeFileSync(path.join(engine, 'vendored.json'), manifest(withGone ? [...VENDORED, GONE] : VENDORED));
+    const gone = path.join(engine, GONE.path);
+    if (withGone) fs.writeFileSync(gone, '// vendored on main, its skill source since removed\n');
+    else if (fs.existsSync(gone)) fs.rmSync(gone);
     fs.writeFileSync(path.join(engine, 'qr.js'), staleA ? stale(SOURCE_A) : current(SOURCE_A));
     fs.writeFileSync(path.join(engine, 'place', 'line_endings.js'), current(SOURCE_B));
     fs.writeFileSync(path.join(engine, 'wrapper.js'), '// portal-owned\n');
@@ -192,7 +202,22 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
     git(dir, ['update-ref', 'refs/remotes/origin/' + behindRef, git(dir, ['rev-parse', 'HEAD'])]);
     git(dir, ['checkout', '--quiet', 'main']);
   }
-  writeTree({ staleA: mainStale, unlisted: unlistedOnMain });
+  /* A BRANCH CUT BEFORE THE FILE WAS VENDORED (OA-472, 2026-09-25). `main` first
+   * holds a tree without the GONE row, a branch is cut there that touches only a
+   * portal-owned file, and then `main` vendors the file. The branch lacks row and
+   * file both, by being older — portal #364's shape the day J10 added arm_note.js. */
+  if (unvendor === 'predates') {
+    writeTree({ staleA: false, unlisted: false, withGone: false });
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'main before it vendored gone.js', unvendorAgeHours + 1);
+    git(dir, ['checkout', '--quiet', '-b', 'predates']);
+    fs.writeFileSync(path.join(engine, 'wrapper.js'), '// portal-owned, edited on a branch older than gone.js\n');
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'a branch that never had gone.js', unvendorAgeHours);
+    git(dir, ['update-ref', 'refs/remotes/origin/predates', git(dir, ['rev-parse', 'HEAD'])]);
+    git(dir, ['checkout', '--quiet', 'main']);
+  }
+  writeTree({ staleA: mainStale, unlisted: unlistedOnMain, withGone: !!unvendor });
   writeFixture(fixtureOnMain);
   git(dir, ['add', '-A']);
   if (mainStale) commitAged(dir, 'the state of origin/main', mainStaleAgeHours);
@@ -203,6 +228,17 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
    * status.js reaches it through rev-parse and `git show`, both of which are
    * indifferent to how it got there. */
   git(dir, ['update-ref', 'refs/remotes/origin/main', git(dir, ['rev-parse', 'HEAD'])]);
+
+  /* A REAL UN-VENDOR (the 2026-09-02 grace): a branch cut from main while it
+   * vendored gone.js, which drops the row and the file together. */
+  if (unvendor === 'removes') {
+    git(dir, ['checkout', '--quiet', '-b', 'unvendor']);
+    writeTree({ staleA: mainStale, unlisted: unlistedOnMain, withGone: false });
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'the un-vendor, sitting in an open PR', unvendorAgeHours);
+    git(dir, ['update-ref', 'refs/remotes/origin/unvendor', git(dir, ['rev-parse', 'HEAD'])]);
+    git(dir, ['checkout', '--quiet', 'main']);
+  }
 
   if (branch) {
     git(dir, ['checkout', '--quiet', '-b', branch]);
@@ -460,6 +496,38 @@ const CASES = [
     },
     what: 'portal PR #333 did this to buses-data main on 2026-09-23, inside the grace its merge had earned',
   },
+  /* THE UN-VENDOR WITNESS (OA-472). The first case is the control: without it,
+   * the second could pass by a board that no longer credits ANY un-vendor. */
+  {
+    label: 'control: a branch that removes a vendored file is its un-vendor, amber',
+    make: { unvendor: 'removes', unvendorAgeHours: 0 },
+    expect: 0,
+    also: (json) => {
+      const r = rowFor(json, 'gone.js');
+      if (!r) return 'no gone.js row at all';
+      if (r.status !== 'PENDING' || r.unvendor !== true) return 'expected an un-vendor PENDING, got ' + statusOf(r);
+      if (r.pendingOn !== 'origin/unvendor') return 'expected pendingOn origin/unvendor, got ' + r.pendingOn;
+      return null;
+    },
+    what: 'the 2026-09-02 grace: a real un-vendor in an open PR is amber, not MISSING',
+  },
+  {
+    label: 'a branch cut BEFORE the file was vendored is no witness to its removal (OA-472)',
+    make: { unvendor: 'predates', unvendorAgeHours: 0 },
+    expect: 1,
+    also: (json, dir) => {
+      /* The fixture must not be free: the branch really lacks the row and the file. */
+      const m = JSON.parse(execFileSync('git', ['show', 'origin/predates:engine/vendored.json'], { cwd: dir, encoding: 'utf8' }));
+      if (m.files.some(e => e.path === GONE.path)) return 'the fixture branch still names gone.js';
+      if (git(dir, ['ls-tree', '--name-only', 'origin/predates', 'engine/']).split('\n').includes('engine/' + GONE.path)) return 'the fixture branch still holds gone.js';
+      const r = rowFor(json, 'gone.js');
+      if (!r) return 'no gone.js row at all';
+      if (r.pendingOn) return 'a branch older than the file was named as its un-vendor: ' + r.pendingOn;
+      if (statusOf(r) !== 'MISSING') return 'expected MISSING, got ' + statusOf(r);
+      return null;
+    },
+    what: 'portal #364 did this to buses-data main on 2026-09-25, the day J10 vendored arm_note.js',
+  },
   {
     /* The other direction: a branch that is NOT a re-vendor must not excuse
      * anything. Same shape as the row above, but the branch carries main's stale
@@ -655,6 +723,15 @@ const MUTATION_WITNESS = {
   why: 'vendoredOnOtherRef() no longer asks whether the ref changed the file',
 };
 
+/* AND THE FIFTH, for OA-472: a branch that never had the file is an un-vendor
+ * witness again, as long as it lacks the row and the file. */
+const MUTATION_OA472 = {
+  file: 'status.js',
+  find: '    if (!forkBlob(cand.ref, rel)) continue;',
+  replace: '    // MUTATED by prove-red-portal-drift.js: a branch older than the file is a witness again',
+  why: 'unvendoredOnOtherRef() no longer asks whether the branch ever had the file',
+};
+
 function regressedStatus(mutations = [MUTATION_OA200]) {
   const root = scratchDir('prove-red-portal-drift-engine-');
   const dst = path.join(root, 'assets');
@@ -797,7 +874,28 @@ const WITNESS_REGRESSION = 'a branch merely BEHIND main is no witness to a re-ve
   if (!KEEP) fs.rmSync(injW.root, { recursive: true, force: true });
 }
 
-const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 3;
+/* AND FOR THE UN-VENDOR WITNESS (OA-472). Under the old rule the older branch is
+ * named, inside the grace, and the board stays green over a vendored file with no
+ * source — a real MISSING hidden by a branch's age. */
+const UNVENDOR_REGRESSION = 'a branch cut BEFORE the file was vendored is no witness to its removal (OA-472)';
+{
+  const c = CASES.find((x) => x.label === UNVENDOR_REGRESSION);
+  if (!c) throw new Error('prove-red-portal-drift: no case named "' + UNVENDOR_REGRESSION + '" — the self-falsification list is out of date.');
+  const injU = regressedStatus([MUTATION_OA472]);
+  const r = runCase(c, injU.statusPath);
+  const row = r.json ? rowFor(r.json, 'gone.js') : null;
+  const rightReason = !r.ok && !!row && row.pendingOn === 'origin/predates';
+  if (!rightReason) failed++;
+  rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes red' : 'RED, WRONG CAUSE',
+    'with the OA-472 rule removed: ' + c.label,
+    'gone.js pendingOn ' + (row ? row.pendingOn : '(no row)') + ' (wanted origin/predates)',
+    r.ok ? 'THIS CASE NO LONGER TESTS THE UN-VENDOR WITNESS'
+      : rightReason ? 'the case discriminates: an older branch hid the file before the fix'
+      : 'wrong for a reason that is not the old witness rule']);
+  if (!KEEP) fs.rmSync(injU.root, { recursive: true, force: true });
+}
+
+const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 4;
 const w = [14, 62, 46];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
@@ -811,5 +909,6 @@ if (failed) {
     + 'the VENDORED FIXTURE copy is read off the same ref and says BEHIND without going red, '
     + 'a merge landing straight on origin/main gets the same grace a pushed branch always has, '
     + 'a branch merely behind main is never named as its re-vendor, '
-    + 'and all four tree/time/witness cases go red the moment their own fix is taken back out.');
+    + 'a branch older than a vendored file is never named as its un-vendor, '
+    + 'and all five tree/time/witness cases go red the moment their own fix is taken back out.');
 }

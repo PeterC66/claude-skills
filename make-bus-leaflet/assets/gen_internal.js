@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, printsName, poiLabelOverride, culledAfterTiers, culledAfterTiersNote } = require(_dep('poi_select.js'));
+const { selectPois, placerIds, printsName, poiLabelOverride, culledAfterTiers, culledAfterTiersNote } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -798,7 +798,7 @@ const POI = (function(){
 const poiReport = {};
 const pois = selectPois(
   ['osm.json','osm2.json'].map(f => JSON.parse(fs.readFileSync(DIR+'/'+f,'utf8')).elements),
-  POI, poiReport);
+  POI, poiReport), poiUid = placerIds(pois);   // one placer identity per POI (OA-250)
 /* A `poi.tiers` key that named nothing is the one way the customer's answer can
  * fail in silence — they classified a place, and no sheet ever changed. Say so at
  * build time, where whoever wrote the key is standing. */
@@ -810,7 +810,7 @@ if((poiReport.unknownTierKeys||[]).length) process.stderr.write('poi.tiers: '
   + ' de-duplication; poi_worksheet.js prints the keys this town actually has.'+GUARD_NL);
 if((poiReport.renameCollisions||[]).length) process.stderr.write('poi.tiers: a rename has'
   + ' collided — ' + poiReport.renameCollisions.map(k=>'"'+k+'"').join(', ')
-  + ' now names more than one POI, so they share an override key and a placer anchor.'
+  + ' now names more than one POI, so they share an override key and a tier answer.'
   + ' Give one of them a different "as", or classify one of them "miss".'+GUARD_NL);
 /* Two POIs with the same key BEFORE any rename. Only reachable since 2026-09-04
  * (OA-234), and widened again by OA-338, which is why the text below no longer
@@ -818,12 +818,12 @@ if((poiReport.renameCollisions||[]).length) process.stderr.write('poi.tiers: a r
  * 2.9 km apart — and that sentence contradicted the key it was printing. Said
  * rather than collapsed, because collapsing it is the fault OA-234 removed; but
  * it is real, and every key-addressed thing downstream (the tier answer,
- * internal.pois, unplaced.json, the placer's anchor id) can hold only one. */
+ * internal.pois) cannot tell them apart; the placer can since OA-250 (placerIds). */
 if((poiReport.duplicateCandidateKeys||[]).length) process.stderr.write('poi: two POIs share'
   + ' one key — ' + poiReport.duplicateCandidateKeys.map(k=>'"'+k+'"').join(', ')
   + '. They are far enough apart to be different places, but the key is'
-  + ' "<category>:<name>", so a tier answer, an internal.pois override and a placer'
-  + ' anchor id can each address only one of them. Give one of them a poi.tiers "as",'
+  + ' "<category>:<name>", so a tier answer and an internal.pois override cannot'
+  + ' address one of them without the other. Give one of them a poi.tiers "as",'
   + ' or a name of its own in OpenStreetMap if it has none.'+GUARD_NL);
 /* A nameless POI is `miss` by default (OA-238). This town has said otherwise, so
  * the sheet carries a symbol with no name on purpose. Not a fault — it is the
@@ -930,8 +930,8 @@ function poiSite(p){
   if(IR && (x<MX0+1||x>MX1-1||y<MY0+1||y>MY1-1) && !o.pos && !o.move){ poiCulled.set(k,'frame'); return null; } // off-frame under roads model
   if(inCore([x,y])){ poiCulled.set(k,'core'); return null; }   // coreBox: the centre is deliberately blank
   poiCulled.delete(k);
-  const n=poiNudge.get(k); if(n){ x+=n[0]; y+=n[1]; }   // design.spreadIcons displacement
-  return {k,o,x,y};
+  const u=poiUid.get(p)||k, n=poiNudge.get(u); if(n){ x+=n[0]; y+=n[1]; }   // u: placer id (OA-250); n: spreadIcons
+  return {k,u,o,x,y};
 }
 const poiBox=new Map();                         // poi key -> its reserved icon box (design.reserveIcons)
 const poiNudge=new Map();                       // poi key -> [dx,dy] from spreadIcons
@@ -959,7 +959,7 @@ function spreadIcons(){
   const S=[]; const cap=(DESIGN.spreadMax!=null?DESIGN.spreadMax:2.6);
   const sep=(DESIGN.iconMinSep!=null?DESIGN.iconMinSep:3.2);
   for(const p of pois){ const s=poiSite(p); if(!s) continue;
-    S.push({k:s.k, x0:s.x, y0:s.y, x:s.x, y:s.y, pinned:!!(s.o.pos||s.o.move)}); }
+    S.push({k:s.u, x0:s.x, y0:s.y, x:s.x, y:s.y, pinned:!!(s.o.pos||s.o.move)}); }
   for(let it=0; it<24; it++){
     let worst=0;
     for(let i=0;i<S.length;i++) for(let j=i+1;j<S.length;j++){
@@ -985,14 +985,14 @@ function spreadIcons(){
 function reserveIcons(){
   for(const p of pois){ const s=poiSite(p); if(!s) continue;
     const b=[s.x-POI_HALF, s.y-POI_HALF, s.x+POI_HALF, s.y+POI_HALF];
-    placed.push(b); iconBoxes.add(b); poiBox.set(s.k, b);
+    placed.push(b); iconBoxes.add(b); poiBox.set(s.u, b);
     // v2 also wants every symbol as an ANCHOR, labelled or not: the placer costs a
     // position that sits nearer someone else's symbol than its own, which is what
     // stops a name reading as if it belongs to the thing next door.
     // The anchor id must be the SAME id the label is queued under, or the placer
     // reads a POI's own symbol as a foreign one sitting 0 mm away and charges the
     // full ambiguity penalty to every candidate it has.
-    if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.k); }
+    if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.u); }
   }
 }
 /* The `must` tier (poi.tiers — OA-202, and the key OA-066 had been waiting for).
@@ -1011,15 +1011,15 @@ function reserveIcons(){
 const MUST = new Set();
 function poiMark(p){
   const s=poiSite(p); if(!s) return;
-  const {k,o,x,y}=s;
+  const {k,u,o,x,y}=s;
   out(gk('poi',k,icon(p.cat,x,y,2.1,ICON_INK,ICON_SET)));
   const auto = printsName(p);   // the rule lives in poi_select.js — it had two copies
   const must = p.tier==='must' && !!p.name;
   const showName = o.force===true || must || (auto && o.force!==false);
   if(!showName) return;
-  const opt = {id:'poi:'+k};
-  if(must){ opt.priority=10; opt.mustPlace=true; MUST.add('poi:'+k); }
-  placeLabel(x,y,p.name,2.5,'#222',false,poiLabelOverride(o.label,RJ.notToScale),poiBox.get(k)||null,opt);
+  const opt = {id:'poi:'+u};
+  if(must){ opt.priority=10; opt.mustPlace=true; MUST.add('poi:'+u); }
+  placeLabel(x,y,p.name,2.5,'#222',false,poiLabelOverride(o.label,RJ.notToScale),poiBox.get(u)||null,opt);
 }
 
 out(svgOpen(W, H));

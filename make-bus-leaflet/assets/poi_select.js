@@ -28,6 +28,8 @@
  *      point within 60 m, which is what collapses the same shop mapped as node
  *      and building. Two blank names are not a match (OA-234) — they used to be,
  *      and the second unnamed chemist in a town was deleted at any distance.
+ *      The first of a pair survives, unless it is unnamed and the second is
+ *      not (OA-347): then the named one replaces it.
  *   7. tiers      — the customer's must / may / miss answer, plus rename, over a
  *      default that is `may` for a named POI and `miss` for a nameless one.
  * Tidying runs BEFORE de-duplication on purpose: two spellings of one name are
@@ -272,10 +274,24 @@ function selectPois(elementSets, poiCfg, report) {
    * row was originally filed about — so applyTiers REPORTS it below rather than
    * this line hiding it. Measured over all 18 sheet-drawing maps' latest S2
    * sweeps on 2026-09-04: zero POIs un-deleted anywhere, so the fix is byte-inert
-   * on today's estate and is here for the town that gets a second one. */
+   * on today's estate and is here for the town that gets a second one.
+   *
+   * A NAMED newcomer REPLACES an unnamed incumbent (OA-347, 2026-09-25). Keeping
+   * the first meant file order chose between two records of one place, and in
+   * March it chose the nameless node over `George Campbell Leisure` 19 m away,
+   * so the site went blank. The name is strictly more information than its twin
+   * holds, so it wins, bringing its own coordinate. Every tie — both named, both
+   * unnamed — still keeps the first. Measured over the 11 committed packs on
+   * 2026-09-14: March is the only candidate list this changes. */
   const dedup=[];
   outer: for(const p of pois){
-    for(const q of dedup){ if(sameThing(q,p)){ continue outer; } }
+    for(let i=0; i<dedup.length; i++){
+      const q=dedup[i];
+      if(sameThing(q,p)){
+        if(unnamed(q.name) && !unnamed(p.name)) dedup[i]=p;
+        continue outer;
+      }
+    }
     dedup.push(p);
   }
   return applyTiers(dedup, POI, report);

@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -531,6 +531,39 @@ function runWith(fixture, opts = {}) {
     const a = m && m.checks.find((c) => c.id === id);
     check(`buses-data: ${id} runs at the pin, from make-bus-leaflet`, a?.atPin === 'make-bus-leaflet', a ? String(a.atPin) : 'no arm');
   }
+  rmSync(skills, { recursive: true, force: true });
+}
+
+// CASE 18 — releasing the pin's worktree leaves the checkout's node_modules alone.
+// engineAtPin lends the worktree the checkout's make-bus-leaflet/node_modules by a
+// junction, and releaseEngine removed the worktree with `git worktree remove
+// --force`, which on Windows followed the junction and emptied the real folder.
+// On 2026-09-25 every full-tier preflight left the engine checkout without sharp,
+// and render.js failed with "Cannot find module 'sharp'" for every session after.
+{
+  const skills = mkdtempSync(path.join(tmpdir(), 'preflight-junction-'));
+  git(skills, 'init', '-b', 'main');
+  git(skills, 'config', 'user.email', 'preflight@test');
+  git(skills, 'config', 'user.name', 'preflight');
+  git(skills, 'config', 'commit.gpgsign', 'false');
+  mkdirSync(path.join(skills, 'make-bus-leaflet'), { recursive: true });
+  writeFileSync(path.join(skills, 'make-bus-leaflet', 'a.js'), '1\n');
+  writeFileSync(path.join(skills, '.gitignore'), 'node_modules/\n');
+  git(skills, 'add', '.');
+  git(skills, 'commit', '-m', 'pinned engine', '--no-verify');
+  const pinSha = git(skills, 'rev-parse', 'HEAD').trim();
+  writeFileSync(path.join(skills, 'make-bus-leaflet', 'a.js'), '2\n');
+  git(skills, 'commit', '-qam', 'main moved', '--no-verify');
+  const sentinel = path.join(skills, 'make-bus-leaflet', 'node_modules', 'sharp', 'package.json');
+  mkdirSync(path.dirname(sentinel), { recursive: true });
+  writeFileSync(sentinel, '{}\n');
+
+  const e = engineAtPin(skills, pinSha);
+  check('junction: the pin is served from a worktree', e.via === 'worktree', JSON.stringify(e));
+  check('junction: the worktree can see the checkout\'s packages', existsSync(path.join(e.root || '', 'make-bus-leaflet', 'node_modules', 'sharp', 'package.json')));
+  releaseEngine(e);
+  check('junction: the worktree is gone after release', !existsSync(e.root || '') && git(skills, 'worktree', 'list').trim().split('\n').length === 1, git(skills, 'worktree', 'list'));
+  check('junction: the CHECKOUT\'s node_modules survives the release', existsSync(sentinel), `${sentinel} is gone`);
   rmSync(skills, { recursive: true, force: true });
 }
 

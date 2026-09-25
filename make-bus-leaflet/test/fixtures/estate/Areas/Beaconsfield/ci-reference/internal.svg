@@ -1706,6 +1706,8 @@
 <text x="72.67435360139476" y="55.37441861973848" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="15.239911434958836" cy="69.31980583638146" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
 <text x="15.239911434958836" y="69.31980583638146" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
+<circle cx="49.43441203772947" cy="77.3348186769477" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="49.43441203772947" y="77.3348186769477" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="97.79490340700896" cy="105.55798361973726" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
 <text x="97.79490340700896" y="105.55798361973726" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="56.83474667291049" cy="158.13274750902795" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
@@ -1716,8 +1718,6 @@
 <text x="86.25902615011609" y="127.67607072264502" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="83.32510440437662" cy="52.1674984172069" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
 <text x="83.32510440437662" y="52.1674984172069" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
-<circle cx="51.09813746894282" cy="81.6068648016557" r="2.4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
-<text x="51.09813746894282" y="81.6068648016557" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">31</text>
 <circle cx="66.44824864619534" cy="66.74116136384913" r="2.4" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
 <text x="66.44824864619534" y="66.74116136384913" font-family="Arial" font-weight="bold" font-size="2.40" fill="#111" text-anchor="middle" dominant-baseline="central">104</text>
 <circle cx="81.51965571526262" cy="35.861744561154396" r="2.4" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>

@@ -723,3 +723,23 @@ test('the schematic drops a hand-set label offset and anchor; every other sheet 
   assert.strictEqual(poiLabelOverride(undefined, 'schematic'), null);
   assert.deepStrictEqual(aldi, { offset: { dx: 3.2, dy: -1.8 }, anchor: 'start' }, 'the override is not mutated');
 });
+
+/* placerIds (buses-data OA-250). Two POIs sharing `<category>:<name>` were queued
+ * to the labeller under one id, and it files results by id, so one record was
+ * drawn twice and the other place's caption vanished. The first keeps the key, so
+ * a sheet with no collision moves no byte; a twin is `#2`. A named pair and an
+ * unnamed pair, because the unnamed one prints no caption and doubles nothing a
+ * reader can see — it shares an icon box and a nudge instead. */
+test('placerIds gives every POI its own id and leaves an uncollided key as it was', () => {
+  const { placerIds } = require('./_engine.js').load('poi_select.js');
+  const lidlA = { cat: 'shop', name: 'Lidl' }, lidlB = { cat: 'shop', name: 'Lidl' };
+  const gymA = { cat: 'leisure', name: '' }, gymB = { cat: 'leisure', name: '' }, gymC = { cat: 'leisure', name: '' };
+  const aldi = { cat: 'shop', name: 'Aldi' };
+  const ids = placerIds([lidlA, aldi, gymA, lidlB, gymB, gymC]);
+  assert.strictEqual(ids.get(lidlA), 'shop:Lidl', 'the first keeps its key');
+  assert.strictEqual(ids.get(lidlB), 'shop:Lidl#2', 'a named twin is told apart');
+  assert.strictEqual(ids.get(aldi), 'shop:Aldi', 'no collision, no suffix');
+  assert.deepStrictEqual([gymA, gymB, gymC].map(p => ids.get(p)), ['leisure:', 'leisure:#2', 'leisure:#3'],
+    'an unnamed pair is told apart too, in the order given');
+  assert.strictEqual(new Set(ids.values()).size, 6, 'no two POIs share an id');
+});

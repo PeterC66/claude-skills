@@ -526,4 +526,33 @@ function culledAfterTiersNote(culled){
     + ' place is off the edge of the town sheet.';
 }
 
-module.exports = { classify, selectPois, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+/* ONE PLACER IDENTITY PER POI, whatever its key (buses-data OA-250 item 1).
+ *
+ * The labeller files every result under the label's id, so two POIs queued as the
+ * same `poi:<category>:<name>` came back as ONE record read twice: the second
+ * caption printed on top of the first at byte-identical coordinates, the first
+ * POI's own name was lost without appearing in unplaced.json, and its icon box and
+ * spreadIcons nudge were the other one's. Nine captions on four committed sheets
+ * were doubled that way (High Wycombe's Aldi and British Legion, St Neots' two
+ * Lidls 2.9 km apart), measured 2026-09-17 and again 2026-09-24.
+ *
+ * The FIRST POI with a key keeps the key itself, so a sheet with no collision
+ * moves no byte; the second is `<key>#2`, the third `<key>#3`, in the order
+ * selectPois returned them — which is file order, so it is stable between builds.
+ * This is the RENDER identity only: the override key, the tier answer and the
+ * editor's data-key are still `<category>:<name>` and still address both places,
+ * which is the half of OA-250 this does not close. A reader of `poi:` ids in
+ * unplaced.json strips the `#n` to get back to the key (poi_worksheet.js).
+ *
+ * Returns a Map from each POI object to its id. */
+function placerIds(pois){
+  const seen = new Map(), ids = new Map();
+  for(const p of pois){
+    const k = p.cat + ':' + p.name, i = (seen.get(k) || 0) + 1;
+    seen.set(k, i);
+    ids.set(p, i === 1 ? k : k + '#' + i);
+  }
+  return ids;
+}
+
+module.exports = { classify, selectPois, placerIds, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

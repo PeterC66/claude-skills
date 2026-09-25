@@ -44,6 +44,7 @@ const { wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('ex
 // relocating itself or a drop already counted by the sidecar. None of those is a
 // refusal and none becomes one here.
 const { refuse: guardRefuse, report: reportRefusals } = require(_from('strict_guards.js'));
+const { armItemsFrom, drawArmNote } = require(_from('arm_note.js'));
 
 // ---- main() ---------------------------------------------------------------
 // OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
@@ -587,20 +588,10 @@ let _boxWarned = false;   // OA-157 — see buildLegend
 // two arms — to Manea and to Wisbech"), or use D.externalNote to override.
 // Hoisted above buildLegend because its TEXT does not depend on where the legend
 // sits — only its wrap width and position do.
-//
-// J10 (buses-data OA-040): the AUTO note is one line per route with the route number
-// in bold, because the run-on paragraph it used to be read as one sentence ("9 runs as
-// two arms — to Hilton & Elsworth and to Huntingdon. 301 runs as two arms — …") and
-// was what widened the panel. armItems keeps the routes apart so buildLegend can do
-// that; a hand-written externalNote is prose and is still wrapped as one paragraph.
+// The auto note is one line per route (J10, buses-data OA-040) -- see arm_note.js.
 let armNote = D.externalNote;
 let armItems = null;
-if(armNote===undefined){
-  const arms={}; EXT.forEach(b=>{(arms[b.route]=arms[b.route]||[]).push(b.label);});
-  armItems = Object.entries(arms).filter(([,v])=>v.length>1)
-    .map(([r,v])=>({ route: String(r), rest: `runs as two arms — to ${v.slice(0,-1).join(', ')} and to ${v[v.length-1]}.` }));
-  armNote = armItems.map(it=>it.route+' '+it.rest).join('  ');
-}
+if(armNote===undefined) ({ items: armItems, note: armNote } = armItemsFrom(EXT));
 /*
  * ART — the artwork's own claimed boxes, snapshotted BEFORE the legend adds any
  * badge boxes of its own. design.legendPlace searches against this, so the legend
@@ -716,35 +707,10 @@ function buildLegend(lx, ly, dx, dy){
     // Measured in mm on the real advances, not in characters: the note now fills the
     // width it is given instead of stopping ~16% short of it (see measureText).
     const _panelW = _box ? (_box.w - 8) : Math.max(panelMaxX - lx, 100);
-    if(armItems){
-      // One item per route, each starting on its own line; an item longer than the
-      // panel still wraps. The bold number is its own <text>, so the sheet gains no
-      // new SVG element, and the rest starts one space after its REAL bold width.
-      let row = 0, noteMaxX = _nx;
-      armItems.forEach(it=>{
-        wrapMm(it.route+' '+it.rest, _panelW, 2.9).forEach((ln,j)=>{
-          const yy = (_ny+row*3.6).toFixed(2);
-          if(j===0){
-            const bw = measureText(it.route,2.9,true), sp = measureText(' ',2.9);
-            const tail = ln.slice(it.route.length+1);
-            out(`<text x="${_nx}" y="${yy}" font-family="Arial" font-weight="bold" font-size="2.9" fill="#666">${esc(it.route)}</text>`);
-            if(tail) out(`<text x="${(_nx+bw+sp).toFixed(2)}" y="${yy}" font-family="Arial" font-size="2.9" fill="#666">${esc(tail)}</text>`);
-            noteMaxX = Math.max(noteMaxX, _nx + bw + sp + measureText(tail,2.9));
-          } else {
-            out(`<text x="${_nx}" y="${yy}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`);
-            noteMaxX = Math.max(noteMaxX, _nx + measureText(ln,2.9));
-          }
-          row++;
-        });
-      });
-      panelMaxX = Math.max(panelMaxX, noteMaxX);
-      panelMaxY = Math.max(panelMaxY, _ny + (row-1)*3.6 + 2);
-    } else {
-      const _noteLines = wrapMm(armNote, _panelW, 2.9);
-      _noteLines.forEach((ln,i)=>out(`<text x="${_nx}" y="${(_ny+i*3.6).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666">${esc(ln)}</text>`));
-      panelMaxX = Math.max(panelMaxX, _nx + Math.max(..._noteLines.map(ln=>measureText(ln,2.9))));
-      panelMaxY = Math.max(panelMaxY, _ny + (_noteLines.length-1)*3.6 + 2);
-    }
+    const _ink = drawArmNote({ items: armItems, note: armNote, x: _nx, y: _ny, width: _panelW,
+      out: s => out(s), wrapMm, measureText, esc });
+    panelMaxX = Math.max(panelMaxX, _ink.maxX);
+    panelMaxY = Math.max(panelMaxY, _ink.maxY);
   }
   out = realOut;
   // legendAt.box may override just one dimension (e.g. width, to steer clear of a spoke

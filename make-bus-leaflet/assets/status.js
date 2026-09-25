@@ -1012,9 +1012,12 @@ function otherRemoteRefs(mainRef) {
  * holds `ref`'s PAST bytes, which match an engine pin `ref` has moved ahead of —
  * a stale dependabot branch reddened buses-data that way on 2026-09-23. */
 const _mergeBases = new Map();
-function changedSinceFork(cand, rel, buf) {
+function forkBlob(cand, rel) {   // `rel` as it stood where `cand` forked from the ref
   if (!_mergeBases.has(cand)) _mergeBases.set(cand, gitIn(PORTAL, ['merge-base', _driftMainRef, cand]) || null);
-  const baseBuf = _mergeBases.get(cand) ? gitShow(PORTAL, _mergeBases.get(cand), rel) : null;
+  return _mergeBases.get(cand) ? gitShow(PORTAL, _mergeBases.get(cand), rel) : null;
+}
+function changedSinceFork(cand, rel, buf) {
+  const baseBuf = forkBlob(cand, rel);
   return !baseBuf || !sameBytesIgnoringLineEndings(baseBuf, buf);
 }
 function vendoredOnOtherRef(rel, skillBuf) {
@@ -1053,7 +1056,9 @@ function driftLandedAgeHours(ref, rel) {
 // row AT ALL, and the file is not in that branch's tree either. A branch that merely
 // edits the row, or that leaves the file behind, is no witness -- so a file deleted
 // from the skill tree by accident is still MISSING, immediately, which is the case
-// this whole check exists for. The grace expires like the other one.
+// this whole check exists for. The grace expires like the other one. And the branch
+// must have HAD the file (OA-472): one cut before it was vendored passes both tests by
+// being old, and on 2026-09-25 such a branch was named as arm_note.js's un-vendor.
 const normaliseEnginePath = (p) => 'engine/' + String(p).split(String.fromCharCode(92)).join('/');
 function unvendoredOnOtherRef(rel) {
   for (const cand of otherRemoteRefs(_driftMainRef)) {
@@ -1065,6 +1070,7 @@ function unvendoredOnOtherRef(rel) {
     const stillNamed = files.some((e) => normaliseEnginePath(e.path) === rel);
     if (stillNamed) continue;                       // the row survives there: no witness
     if (gitShow(PORTAL, cand.ref, rel)) continue;   // the file survives there: no witness
+    if (!forkBlob(cand.ref, rel)) continue;         // it never had the file: no witness
     return cand;
   }
   return null;

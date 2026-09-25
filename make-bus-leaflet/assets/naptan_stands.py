@@ -188,7 +188,14 @@ def routes_by_stop(full):
     return out
 
 
-COMPASS_INDICATOR = re.compile(r"(N|NE|E|SE|S|SW|W|NW)[- ]?bound", re.IGNORECASE)
+COMPASS_INDICATOR = re.compile(
+    r"(N|NE|E|SE|S|SW|W|NW|North|East|South|West)[- ]?bound", re.IGNORECASE)
+
+# The written-out word and its abbreviation are ONE flag (buses-data OA-319).
+# Without this, "Eastbound" and "E-bound" read as two different words, and a
+# cluster whose flags say both -- Edison Square, Loxbeare Drive (0490) -- is
+# "rescued" as though every flag faced a different way.
+COMPASS_ABBREVIATION = {"NORTH": "N", "EAST": "E", "SOUTH": "S", "WEST": "W"}
 
 
 def compass_word(indicator):
@@ -204,7 +211,8 @@ def compass_word(indicator):
     m = COMPASS_INDICATOR.fullmatch((indicator or "").strip())
     if not m:
         return None
-    return "%s-bound" % m.group(1).upper()
+    point = m.group(1).upper()
+    return "%s-bound" % COMPASS_ABBREVIATION.get(point, point)
 
 
 def tidy_name(common, indicator, disambiguate=False):

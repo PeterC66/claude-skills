@@ -130,12 +130,15 @@ function loadMap(mapDir) {
    * and saying so is more use to a local than picking one. */
   const dropped = new Set(), indexed = new Set();
   const ciDir = path.join(mapDir, 'ci-reference');
+  // A second POI sharing a key is placed as `poi:<key>#2` (OA-250); its answer is
+  // still written against `<key>`, so the suffix comes off here.
+  const keyOf = id => String(id).slice(4).replace(/#\d+$/, '');
   if (fs.existsSync(ciDir)) {
     for (const f of fs.readdirSync(ciDir)) {
       if (/^unplaced.*\.json$/.test(f)) for (const it of (readJson(path.join(ciDir, f)) || []))
-        if (String(it.id || '').startsWith('poi:')) dropped.add(String(it.id).slice(4));
+        if (String(it.id || '').startsWith('poi:')) dropped.add(keyOf(it.id));
       if (f === 'indexed.json') for (const it of (readJson(path.join(ciDir, f)) || []))
-        if (String(it.id || '').startsWith('poi:')) indexed.add(String(it.id).slice(4));
+        if (String(it.id || '').startsWith('poi:')) indexed.add(keyOf(it.id));
     }
   }
   return { mapDir, source: inp.source, cfg, pois, report, dropped, indexed };

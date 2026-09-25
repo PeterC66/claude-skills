@@ -1116,18 +1116,7 @@ for (const { row: mapRow, place } of engineStale) {
     title: `${mapRow.name} was drawn by an older engine`,
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`,
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
-    /* THE DRY RUN'S VERDICT PICKS THE WRITE, AND THE COMMON ONE NEEDS --force (2026-09-25).
-     * A behind map whose sheets already PASS under the live template answers
-     * STAMP-STALE, and the tool will not rebuild that without --force — so the row's
-     * only write step, a bare --apply, was refused on the first place a session worked
-     * (Beaconsfield Simpson Centre, buses-data 1f8a7382), with a note that made --force
-     * read as the lost-label override. It is one flag with four meanings in the rollout
-     * tools: rebuild a stamp-stale map, finish an UNRENDERED S4, roll old geometry past
-     * STALE-INPUTS, publish past a lost label. Only the first is this row's business.
-     * STAMP-STALE is safe to force because the tools test it after the other two guards
-     * and only when every sheet is byte-identical under the live template, so no label
-     * can be lost. Hence a third step, gated on that word, rather than --force folded in. */
-    do: [
+    do: [ // the dry run's verdict picks the write; why --force is its own step: playbooks.md, Engine-stale
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — its verdict decides which of the next two to run' },
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes, when the dry run showed the ink moving; stops on a lost label, which is to be reviewed, never forced' },
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply --force`, note: 'ONLY when the dry run said STAMP-STALE (sheets already PASS, only the engine stamp is old); never for a lost label, STALE-INPUTS or any other verdict' },

@@ -53,6 +53,17 @@
  * reader knew the name, a `-missed` file would have parsed as an ordinary feed and
  * been counted as a WORKING tick: the one thing it certainly was not.
  *
+ * `busy` IS THE FOURTH, AND IT IS NEITHER IDLE NOR WORKING (buses-data adhoc
+ * `tick-counts`, 2026-09-26). A scheduled run that finds `loop/LOCK.d` held by
+ * ANOTHER TICK (`sched-…`) whose lease is live stands down, and until then it
+ * named itself `-none`. That day a 20-tick `/ticks` run held the lock while the
+ * hourly schedule fired into it twice (`1221-none`, `1515-none`), and each one
+ * inflated the idle rate — yet the queue was being worked the whole time, by the
+ * tick holding the lock. So a stand-down to a live TICK is `-busy`, and it is
+ * TRANSPARENT: it neither continues nor breaks the idle run, and it is not
+ * working. A stand-down to a PERSON's session stays `-none`: that is loop time
+ * the queue really lost, and the row names that holder as its cause.
+ *
  * THE CADENCE IS DERIVED FROM THE FILENAMES, NOT CONFIGURED. OA-288 asked for a
  * threshold taken from the schedule rather than from taste. The schedule is not
  * readable from here — the cron lives in the desktop app's scheduled-task store,
@@ -139,8 +150,15 @@ export function cadenceMin(runs, fallback = 60) {
  */
 export const UNREACHED = new Set(['none', 'around', 'missed']);
 
-/** Feeds that did no work at all — every UNREACHED feed except `around`. */
-const DID_NOTHING = new Set(['none', 'missed']);
+/**
+ * A tick that stood down because another tick held a live lock — see the header.
+ * Skipped by the idle walk and absent from `working`. Exported for
+ * `routine_numbers.mjs`, which takes it out of the idle ratio's denominator too.
+ */
+export const DEFERRED = new Set(['busy']);
+
+/** Feeds that did no work at all — every UNREACHED feed except `around`, and `busy`. */
+const DID_NOTHING = new Set(['none', 'missed', ...DEFERRED]);
 
 /**
  * @param {{runs: Array, now?: number, fallbackMin?: number}} p
@@ -157,7 +175,8 @@ export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
   let idle = 0;
   let around = 0;
   let missed = 0;
-  for (let i = list.length - 1; i >= 0 && UNREACHED.has(list[i].feed); i--) {
+  for (let i = list.length - 1; i >= 0 && (UNREACHED.has(list[i].feed) || DEFERRED.has(list[i].feed)); i--) {
+    if (DEFERRED.has(list[i].feed)) continue;
     idle++;
     if (list[i].feed === 'around') around++;
     if (list[i].feed === 'missed') missed++;

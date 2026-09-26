@@ -912,22 +912,10 @@ LEG.buf.forEach(out);
  *
  * `bullets` and `heading` override the lot for a town that wants its own words.
  *
- * ON BY DEFAULT since 2026-08-24, `howToUse:false` to refuse it. All 8 towns had
- * opted in, which is the definition of a default here. NOTE what was NOT flipped:
- * every one of those towns also stores its own three `bullets`, a hand-picked subset
- * of the five derived below, and those stay explicit — they are per-map content, not
- * a repeated flag, and unsetting them would grow every town's panel by two bullets.
- *
- * THREE IS THE DERIVED DEFAULT since 2026-09-26 (buses-data OA-437, OA-443). The
- * "per-map content" above was the same sentence nine times: eight stored `bullets`
- * are the first three below, character for character, with the hub interpolated
- * (The Shelfords words its hub shorter than its externalHubLabel). The
- * towns that stored nothing — Chatteris, Soham, Whittlesey — drew all six, so the
- * estate disagreed with itself by where a config was typed. Dropped: the operators
- * panel and the stops along a line, which no stored three ever carried, and the
- * journey-time bullet — all nine stored towns carry times and none printed it, and
- * the footer already says "Journey times shown are approximate" wherever they do.
- * Kept: not-to-scale, the one sentence the sheet would otherwise never say at all.
+ * ON BY DEFAULT since 2026-08-24, `howToUse:false` to refuse it. THREE BULLETS since
+ * 2026-09-26 (buses-data OA-437, OA-443): eight of nine stored `bullets` were these
+ * three verbatim, and the towns storing none drew six. The journey-time bullet went
+ * too — no stored town printed it, and the footer already says times are approximate.
  */
 const HOWTO = DESIGN.howToUse === false ? null
   : (DESIGN.howToUse == null || DESIGN.howToUse === true ? {} : DESIGN.howToUse);

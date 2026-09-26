@@ -63,6 +63,7 @@ function s4(town, id, withLog) {
   const d = path.join(town, 'S4-generate', id);
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, 'internal.svg'), '<svg/>');
+  fs.writeFileSync(path.join(d, 'gen_internal.js'), '');  // the sheet's generator (OA-318)
   const ver = (id.match(/^v([0-9]+\.[0-9]+)_/) || [, '9.9'])[1];
   fs.writeFileSync(path.join(d, 'routes.json'), JSON.stringify({
     version: ver, town: 'Logton', engine: 'deadbeef01',

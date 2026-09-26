@@ -35,6 +35,9 @@
  *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
  *         with no build-warnings.txt at all — every route to an S4 writes one
  *         (--force-nolog overrides, for a build that genuinely drew no sheets),
+ *         and an AREA S4 that drew internal.svg / external.svg without carrying
+ *         gen_internal.js / gen_external.js, which the portal re-draws it from
+ *         (--force-nogen overrides; buses-data OA-318),
  *         and, for S6, refuses a redteam.json with no redteam-source.json decision
  *         beside it, or one that says WAIT (--force-decision overrides; OA-427),
  *         and, for S5, refuses a routes.json that differs (bar "version") from the
@@ -1018,6 +1021,39 @@ function main() {
             + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
             + `  Override with --force-nolog only if this build genuinely drew no sheets.`);
         console.log(`  WARNING: committing an S4 with no ${LOG} (--force-nolog)`);
+      }
+
+      /* Guard (buses-data OA-318, the last item): an AREA S4 carries the generator
+       * of every sheet it drew. The portal re-draws an area map on the host from the
+       * payload's OWN `gen_internal.js` and `gen_external.js` — `propose-update.mjs`
+       * refuses a payload with neither, and one carrying only some fails the host's
+       * pre-flight verify with `Cannot find module '…/gen_external.js'`. That is how
+       * St Neots v4.0 was assembled on 2026-09-11: `stage.js` and the generators run
+       * in place drew identical bytes, and nothing on the laptop could tell, because
+       * the byte gate reproduces the sheet with the ENGINE's generators, not the run's.
+       *
+       * `build_s4.js` copies them in on every build, so this guard is green on every
+       * S4 that came through the one entry point — measured 2026-09-26: all 12 area
+       * maps' latest S4 carry both. It exists for the build that did not.
+       *
+       * PLACES ARE EXCLUDED, structurally: the portal stages a place map with its
+       * vendored place engine and reads no generator from the payload. It asks about
+       * a sheet only when that sheet is present, so a partial build is the OA-206
+       * guard's business above, not this one's.
+       */
+      if (!isPlaceRun(runDir)) {
+        const GENS = [['gen_internal.js', 'internal.svg'], ['gen_external.js', 'external.svg']];
+        const noGen = GENS.filter(([g, svg]) => fs.existsSync(path.join(runDir, svg)) && !fs.existsSync(path.join(runDir, g)));
+        if (noGen.length && !f['force-nogen']) {
+          die(`${id} drew ${noGen.map(([, s]) => s).join(' and ')} but does not carry ${noGen.map(([g]) => g).join(' or ')}\n`
+            + `  The portal re-draws an area map on the host from the payload's own generators,\n`
+            + `  so this build would fail its pre-flight verify with "Cannot find module" —\n`
+            + `  and the byte gate cannot see it, because it draws with the engine's copy.\n`
+            + `  Build the sheets through the one entry point, which copies them in for you:\n`
+            + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
+            + `  Override with --force-nogen only if this S4 will never be delivered.`);
+        }
+        if (noGen.length) console.log(`  WARNING: committing an area S4 without ${noGen.map(([g]) => g).join(' or ')} (--force-nogen)`);
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;

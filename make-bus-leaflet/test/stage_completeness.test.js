@@ -68,6 +68,9 @@ function s4(mapDir, rj, files) {
     JSON.stringify(Object.assign({ version: '9.9' }, STAMPED, rj)));
   fs.writeFileSync(path.join(d, 'build-warnings.txt'), 'OK  nothing to report\n');
   for (const [name, body] of Object.entries(files)) fs.writeFileSync(path.join(d, name), body);
+  // And the generator of each sheet drawn, for the same reason again (OA-318).
+  if (files['internal.svg']) fs.writeFileSync(path.join(d, 'gen_internal.js'), '');
+  if (files['external.svg']) fs.writeFileSync(path.join(d, 'gen_external.js'), '');
   return d;
 }
 const META = JSON.stringify({ generator: 'gen_internal.js', sheet: 'internal',

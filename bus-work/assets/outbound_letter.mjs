@@ -75,9 +75,12 @@ export function unsentLetterItem({ ref, label, head, date, file, buses, ageDays 
     who: 'Peter', runbook: 'correspondence',
     ageDays,
     do: [
-      { kind: 'shell', cwd: buses, cmd: `node Correspondence/to-email.mjs "Correspondence/${ref}/${file}"`, note: 'run it AFTER any edits you make' },
-      { kind: 'chat', what: 'Open the .html it writes, Ctrl+A, Ctrl+C, paste into the email. Add the salutation yourself.' },
-      { kind: 'chat', what: 'Then tell Claude it has gone, so the file becomes the sent record.' },
+      // The send page and file-sent.mjs replaced "open the .html, Ctrl+A, add
+      // the salutation yourself" on 2026-09-26 (buses-data OA-469): the name is
+      // filled in, and the record is read from the email that actually went.
+      { kind: 'shell', cwd: buses, cmd: `node Correspondence/send-page.mjs "Correspondence/${ref}/${file}"`, note: 'or ask Claude for the send page' },
+      { kind: 'chat', what: 'On the page: Open a new message, Copy the letter, paste it, drag in the files, change anything you like, and send.' },
+      { kind: 'chat', what: 'In Zoho, open it in Sent, then More Actions > Save as > EML, and tell Claude "sent": it files what went with file-sent.mjs.' },
     ],
   };
 }

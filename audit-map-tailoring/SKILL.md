@@ -13,13 +13,14 @@ description: Audit how much of every BusMaps.uk map is still configured by hand 
 
 ## The scripts
 
-All in this skill's `assets/`, all read-only except `draft_towns.mjs`, which writes only its scratch root. Each takes `--buses <estate root>` (default: `BUSES_DIR`, then the laptop), prints its answer on stdout, and exits 2 on misuse. They require the sibling `make-bus-leaflet/assets` (`gate_lib.js`'s estate walk, `cli.js`), so run them from a checkout that has both. Placeholders below: `<assets folder>` is the `make-bus-leaflet/assets` of the drafter under test; `<scratch root>` is an empty folder outside every repository.
+All in this skill's `assets/`, all read-only except `draft_towns.mjs` and `draft_places.mjs`, which write only their scratch root. Each takes `--buses <estate root>` (default: `BUSES_DIR`, then the laptop), prints its answer on stdout, and exits 2 on misuse. They require the sibling `make-bus-leaflet/assets` (`gate_lib.js`'s estate walk, `cli.js`), so run them from a checkout that has both. Placeholders below: `<assets folder>` is the `make-bus-leaflet/assets` of the drafter under test; `<scratch root>` is an empty folder outside every repository.
 
 | Script | Answers | Minutes |
 |---|---|---|
 | `inventory.mjs [--keys] [--json <file>]` | the per-map tailoring table; latest S3 against `ci-reference`; every `overrides.json` and hand chain, live or dead; with `--keys`, every config key and how many maps carry it | <1 |
 | `history.mjs [--detail] [--since YYYY-MM-DD]` | every S3 run by cause (keyword-classified), and every run whose note names Peter | <1 |
-| `places.mjs` | how many drafted place-destination names survived review | <1 |
+| `places.mjs [--drafts <scratch root>]` | how many drafted place-destination names survived review — each place's own committed draft, or with `--drafts` the fresh ones `draft_places.mjs` wrote | <1 |
+| `draft_places.mjs --assets <place assets folder> --scratch <scratch root>` | re-drafts every place's destination list offline, from its own `ci-reference/` inputs and `_gtfs/naptan.sqlite`; `<place assets folder>` is the `make-place-bus-leaflet/assets` of the drafter under test | <1 |
 | `draft_towns.mjs --assets <assets folder> --scratch <scratch root> [--town <Name>]... [--fresh]` | re-drafts every town (from `_gtfs/town_prefixes.json`) into the scratch root; says which reached S3 and why the others stopped | ~2–5 a town |
 | `compare_drafts.mjs --scratch <scratch root> [--town <Name>]...` | each draft against the live S3, key by key | <1 |
 | `portal_query.mjs` | prints the ONE read-only command Peter runs to list the live portal's customer edits | 0 |
@@ -29,7 +30,7 @@ All in this skill's `assets/`, all read-only except `draft_towns.mjs`, which wri
 1. **Start in a buses-data worktree** for the record (`git worktree add .claude/worktrees/<name> -b work/<name>` from `C:\u3a St Ives\Using AI\Buses`, then `git config core.hooksPath .githooks` in it), and read the previous record in full — above all its sections 5 and 7.
 2. **Get a current drafter.** Make a detached `claude-skills` worktree at `origin/main` and use ITS `make-bus-leaflet/assets` as `<assets folder>`: `git -C "C:/u3a St Ives/.claude/skills" fetch origin`, then `git -C "C:/u3a St Ives/.claude/skills" worktree add --detach "C:/u3a St Ives/.claude/skills-wt/<name>" origin/main`. The shared checkout can be behind — on 2026-09-22 it was one commit short of the drafter fix the audit was meant to measure.
 3. **Run the three quick readers** — `inventory.mjs --json <file outside the repo>`, `history.mjs`, `places.mjs` — from this skill's `assets/`.
-4. **Re-draft the towns** with `draft_towns.mjs` in the FOREGROUND (the Bash tool's 10-minute limit: pass `--town` in batches of two or three). Then `compare_drafts.mjs`.
+4. **Re-draft the towns** with `draft_towns.mjs` in the FOREGROUND (the Bash tool's 10-minute limit: pass `--town` in batches of two or three). Then `compare_drafts.mjs`. **Re-draft the places** with `draft_places.mjs` into a second scratch root, and read `places.mjs --drafts <that root>` beside step 3's `places.mjs`: step 3 says how the maps WERE drafted, this says how the current drafter does (OA-438, 2026-09-26: 44 of 92 names survive, against 7).
 5. **Ask Peter to run the portal command** that `portal_query.mjs` prints, and read its output from his paste or the Terminal panel. Do not read the laptop's `portal.sqlite` instead.
 6. **Read who asked.** For every hand change you are about to describe, read the S3 run's `note` in the map's `manifest.json` (or `history.mjs --detail`). Only a note that names Peter makes a change his.
 7. **Sort every finding into the three buckets** below, and against the previous record: closed, still open, changed, new.

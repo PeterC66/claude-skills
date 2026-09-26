@@ -37,7 +37,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { load } = require('./_engine.js');
-const { drawServicesPanel } = load('services_panel.js');
+const { drawServicesPanel, minorityNotes } = load('services_panel.js');
 const { svgPrimitives } = load('svg_primitives.js');
 const FONT = load('font_metrics.js');
 
@@ -367,6 +367,50 @@ test('the not-shown note falls back to the short form, then keeps the subtitle',
   });
   assert.match(nothing.err, /panel: service 1 draws no line, but its row has no room to say so/);
   assert.ok(!/xxx|yyy/.test(nothing.svg), 'neither note is drawn when neither fits');
+});
+
+// ---------------------------------------------------------------------------
+// the minority workings the drawn line leaves out (buses-data OA-452 item 1)
+// ---------------------------------------------------------------------------
+
+// St Neots' 18 as journey_weights.py wrote it on 2026-09-26, cut to what matters:
+// the line keeps St Neots and Cambourne, a 7-of-25 working runs by Caxton and
+// Eynesbury, a 3-of-25 loop stays inside St Neots, and one journey goes elsewhere.
+const JW18 = { 18: {
+  'Cambridge to St Neots': { localities: ['Cambourne', 'St Neots'], minority: [
+    { stops: ['C1', 'E1'], journeys: 7, of: 25, localities: ['Caxton', 'Eynesbury', 'St Neots'] },
+    { stops: ['RS'], journeys: 3, of: 25, localities: ['St Neots'] },
+    { stops: ['N1'], journeys: 1, of: 24, localities: ['Newnham'] },
+  ] },
+  'St Neots to Cambridge': { localities: ['St Neots', 'Cambourne'], minority: [
+    { stops: ['E1'], journeys: 4, of: 25, localities: ['Eynesbury'] },
+  ] },
+} };
+
+test('a working is named by the places the line does not reach, else by its first stop', () => {
+  const m = minorityNotes(JW18, { atco2name: { RS: 'Railway Station' } });
+  assert.strictEqual(m[18].long, 'some journeys via Caxton, Eynesbury & Railway Station');
+  // One journey is not "some journeys"; it is left to stderr's count, not the sheet.
+  assert.ok(!/Newnham/.test(m[18].long));
+  assert.deepStrictEqual(m[18].runs.map((u) => u.journeys), [7, 3, 4]);
+});
+
+test('routes.json minorityNote replaces the words, or silences a route', () => {
+  assert.strictEqual(minorityNotes(JW18, { override: { 18: 'some journeys via Eynesbury' } })[18].long,
+    'some journeys via Eynesbury');
+  assert.strictEqual(minorityNotes(JW18, { override: { 18: false } }), null);
+  assert.strictEqual(minorityNotes(null), null, 'no journey_weights.json, nothing to say');
+});
+
+test('the panel row says it, falls back to the short form, and CONTROL: absent means byte-identical', () => {
+  const MINORITY = { 1: { long: 'some journeys via Caxton', short: 'some journeys vary',
+    runs: [{ words: ['Caxton'], journeys: 7, of: 25 }] } };
+  const on = run({ MINORITY });
+  assert.match(on.svg, /Mon–Sat · some journeys via Caxton</);
+  assert.match(on.err, /panel: service 1 — some journeys via Caxton \(7 of 25: Caxton\)/);
+  const long = { 1: { ...MINORITY[1], long: 'some journeys via ' + 'Little Gransden, '.repeat(8) + 'Eynesbury' } };
+  assert.match(run({ MINORITY: long }).svg, /Mon–Sat · some journeys vary</);
+  assert.strictEqual(run({ MINORITY: null }).svg, run().svg);
 });
 
 // ---------------------------------------------------------------------------

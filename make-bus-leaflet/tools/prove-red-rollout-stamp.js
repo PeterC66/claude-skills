@@ -111,7 +111,7 @@ const pass = (m) => console.log('  ok    ' + m);
 /* ---- fixture ---------------------------------------------------------- */
 const srcTown = townPick.dir;
 
-function buildFixture() {
+function buildFixture({ withData = false } = {}) {
   const tmp = scratchDir('prove-rollout-stamp-');
   const dst = path.join(tmp, 'Areas', TOWN);
   fs.mkdirSync(dst, { recursive: true });
@@ -126,7 +126,38 @@ function buildFixture() {
   if (!rec) { console.error('prove-red-rollout-stamp: no latest S3 run in the manifest.'); process.exit(1); }
   fs.cpSync(path.join(srcTown, rec.dir), path.join(dst, rec.dir), { recursive: true });
   stampCurrent(path.join(dst, 'ci-reference', 'routes.json'), computeEngineVersion());
+  dataCopied = withData && copyDataStages(srcTown, dst, man, ['S2']);
   return tmp;
+}
+
+/* The DATA stages a real rebuild pulls — S2 for a town, S1 and S2 for a place — and
+ * only for G and N, the two cases that must get through the scratch build. Copied
+ * when the source estate has them and silently not otherwise: CI's fixture estate
+ * carries no S2, and there G and N assert the weaker thing they can see (below). */
+let dataCopied = false;   // set by the last fixture built: did its data stages come with it?
+function copyDataStages(src, dst, man, stages) {
+  let all = true;
+  for (const st of stages) {
+    const sx = man.stages && man.stages[st];
+    const rec = sx && sx.runs && sx.runs.find((x) => x.id === sx.latest);
+    if (rec && fs.existsSync(path.join(src, rec.dir))) fs.cpSync(path.join(src, rec.dir), path.join(dst, rec.dir), { recursive: true });
+    else all = false;
+  }
+  return all;
+}
+/* G and N ask one question of the flag — did it take the map PAST the fast path and
+ * into the rebuild? — and a stronger one where the data is on disk to answer it. */
+function assertReachedRebuild(v, out, code, full) {
+  if (['STAMP-STALE', 'UP-TO-DATE', 'NOT-STAMP-STALE'].includes(v) || v === '(no verdict line)')
+    return fail(`expected the rebuild, got ${v}. The flag did not take the map past STAMP-STALE.\n${out}`);
+  pass(`${v} — past STAMP-STALE and into the rebuild`);
+  if (!full) return pass('this estate has no data stages to finish the scratch build with, so the reach is all it can show');
+  if (v !== 'DRY-RUN') fail(`with the data on disk the scratch build should finish as DRY-RUN, got ${v}.\n${out}`);
+  else pass('DRY-RUN — the scratch build finished');
+  if (/LOST in /.test(out)) fail(`the rebuild of a stamp-stale map lost a label — PASS on every sheet should make that impossible.\n${out}`);
+  else pass('no label lost');
+  if (code !== 0) fail(`exit ${code}, expected 0`);
+  else pass('exit 0');
 }
 
 const routesOf = (tmp) => path.join(tmp, 'Areas', TOWN, 'ci-reference', 'routes.json');
@@ -137,8 +168,8 @@ function editRoutes(tmp, fn) {
   fs.writeFileSync(p, JSON.stringify(j, null, 2));
 }
 
-function runRollout(tmp) {
-  const r = spawnSync(process.execPath, [ROLLOUT, '--buses', tmp, '--town', TOWN],
+function runRollout(tmp, extra = []) {
+  const r = spawnSync(process.execPath, [ROLLOUT, '--buses', tmp, '--town', TOWN, ...extra],
     { encoding: 'utf8', cwd: path.join(ROOT, 'assets') });
   return { out: (r.stdout || '') + (r.stderr || ''), code: r.status };
 }
@@ -176,9 +207,9 @@ console.log(`\nB  ${TOWN}, sheets unchanged, stamp rewritten to an old hash — 
   // accept a crash. Both hashes and the command the operator has to type.
   if (!out.includes(OLD)) fail(`the message does not name the stale hash ${OLD}`);
   else pass('names the stale hash');
-  if (!new RegExp(`node rollout\\.js --town "${TOWN}" --apply --force`).test(out))
-    fail('the message does not name the --force command that clears it — the whole point of the verdict');
-  else pass('names the --force command');
+  if (!new RegExp(`node rollout\\.js --town "${TOWN}" --apply --rebuild-stale`).test(out))
+    fail('the message does not name the --rebuild-stale command that clears it — the whole point of the verdict (OA-473: not --force)');
+  else pass('names the --rebuild-stale command');
   if (!/draw the CURRENT sheets from an OLD engine stamp/.test(out)) fail('the summary block did not print');
   else pass('the summary block repeats it');
   // Deliberately exit 0: status.js is the board and already gates this.
@@ -215,6 +246,119 @@ console.log(`\nD  ${TOWN}, stale stamp AND a sheet that really differs — must 
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+/* ---- G to L: --rebuild-stale (buses-data OA-473) -----------------------
+ *
+ * The flag exists so a loop tick can clear a STAMP-STALE map without being handed
+ * --force, which also means "finish an UNRENDERED S4", "roll old geometry past
+ * STALE-INPUTS" and "publish past a lost label or a blocking warning". So one case
+ * shows it opening the state it names (G) and the rest show it opening nothing else:
+ * a map whose ink would move (H), a current map (I), --force alongside it (J), a map
+ * whose data has moved (K) and a map with an unrendered S4 (L). K and L carry a stale
+ * stamp too, so the only thing refusing them is the guard in front of the stamp test.
+ *
+ * The lost-label and blocking-warning refusals are asked in M, from the source,
+ * because neither is reachable in a dry run: a lost label needs a sheet that does
+ * not reproduce, which is H's state and refused before any build, and a blocker
+ * refuses only under --apply, which this fixture cannot run. */
+const manifestOf = (tmp) => path.join(tmp, 'Areas', TOWN, 'manifest.json');
+function editManifest(tmp, fn) {
+  const p = manifestOf(tmp);
+  const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+  fn(j);
+  fs.writeFileSync(p, JSON.stringify(j, null, 2));
+}
+const latestS4 = (j) => j.stages.S4.runs.find((r) => r.id === j.stages.S4.latest);
+
+console.log(`\nG  ${TOWN}, stale stamp, --rebuild-stale — the flag opens the state it names  (slow: this one rebuilds)`);
+{
+  const tmp = buildFixture({ withData: true });
+  editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
+  const { out, code } = runRollout(tmp, ['--rebuild-stale']);
+  assertReachedRebuild(verdict(out), out, code, dataCopied);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nH  ${TOWN}, stale stamp AND a sheet that really differs, --rebuild-stale — must refuse`);
+{
+  const tmp = buildFixture();
+  editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
+  const svg = path.join(tmp, 'Areas', TOWN, 'ci-reference', 'internal.svg');
+  fs.writeFileSync(svg, fs.readFileSync(svg, 'utf8').replace('</svg>', '<!-- prove-red-rollout-stamp: forced DIFF --></svg>'));
+  const { out, code } = runRollout(tmp, ['--rebuild-stale']);
+  const v = verdict(out);
+  if (v !== 'NOT-STAMP-STALE') fail(`expected NOT-STAMP-STALE, got ${v}. The flag has widened into an ink-moving rebuild, which is plain --apply's and a person's.\n${out}`);
+  else pass('NOT-STAMP-STALE');
+  if (!/internal would change/.test(out)) fail('the refusal does not name the sheet that would change');
+  else pass('names the sheet that would change');
+  if (code !== 1) fail(`exit ${code}, expected 1 — a tick reads a non-zero exit as a hold`);
+  else pass('exit 1');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nI  ${TOWN}, stamp current, --rebuild-stale — nothing to do`);
+{
+  const tmp = buildFixture();
+  const { out, code } = runRollout(tmp, ['--rebuild-stale']);
+  const v = verdict(out);
+  if (v !== 'UP-TO-DATE') fail(`expected UP-TO-DATE, got ${v}.\n${out}`);
+  else pass('UP-TO-DATE');
+  if (code !== 0) fail(`exit ${code}, expected 0`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nJ  ${TOWN}, --rebuild-stale with --force — a usage error`);
+{
+  const tmp = buildFixture();
+  const { out, code } = runRollout(tmp, ['--rebuild-stale', '--force']);
+  if (code !== 2) fail(`exit ${code}, expected 2. Together the two flags would hand a tick every meaning of --force.\n${out}`);
+  else pass('exit 2');
+  if (!/--rebuild-stale and --force together/.test(out)) fail('the refusal does not say why');
+  else pass('says why');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nK  ${TOWN}, stale stamp AND S2 moved since the S4, --rebuild-stale — STALE-INPUTS must still refuse`);
+{
+  const tmp = buildFixture();
+  editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
+  editManifest(tmp, (j) => { const r = latestS4(j); r.basedOn = Object.assign({}, r.basedOn, { S2: 'prove-red-not-the-latest' }); });
+  const { out, code } = runRollout(tmp, ['--rebuild-stale']);
+  const v = verdict(out);
+  if (v !== 'STALE-INPUTS') fail(`expected STALE-INPUTS, got ${v}. The flag has bypassed the data-moved guard.\n${out}`);
+  else pass('STALE-INPUTS');
+  if (code !== 1) fail(`exit ${code}, expected 1`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nL  ${TOWN}, stale stamp AND an S4 no S5 rendered, --rebuild-stale — UNRENDERED must still refuse`);
+{
+  const tmp = buildFixture();
+  editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
+  editManifest(tmp, (j) => {
+    const ver = String(latestS4(j).version);
+    j.stages.S5.runs = j.stages.S5.runs.filter((r) => String(r.version) !== ver);
+  });
+  const { out, code } = runRollout(tmp, ['--rebuild-stale']);
+  const v = verdict(out);
+  if (v !== 'UNRENDERED') fail(`expected UNRENDERED, got ${v}. The flag has bypassed the unrendered-S4 guard.\n${out}`);
+  else pass('UNRENDERED');
+  if (code !== 1) fail(`exit ${code}, expected 1`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log('\nM  both tools: the flag never sets FORCE, and the lost-label and blocking-warning refusals still read it');
+for (const [label, file] of [['rollout.js', ROLLOUT], ['rollout_places.js', path.join(ROOT, 'assets', 'rollout_places.js')]]) {
+  const src = fs.readFileSync(file, 'utf8');
+  if (!/^const FORCE = !!args\.force;$/m.test(src)) fail(`${label}: FORCE is no longer args.force alone — the flag may have been folded into it`);
+  else pass(`${label}: FORCE is args.force alone`);
+  if (!/if \(anyLost && !FORCE\)/.test(src)) fail(`${label}: the lost-label refusal no longer reads \`anyLost && !FORCE\``);
+  else pass(`${label}: the lost-label refusal reads !FORCE`);
+  if (!/if \(realBlockers\.length && !FORCE\)/.test(src)) fail(`${label}: the blocking-warning refusal no longer reads \`realBlockers.length && !FORCE\``);
+  else pass(`${label}: the blocking-warning refusal reads !FORCE`);
+  if (/FORCE\s*=\s*[^;]*REBUILD_STALE|REBUILD_STALE\s*\|\|/.test(src)) fail(`${label}: REBUILD_STALE is combined into a force-like condition`);
+  else pass(`${label}: REBUILD_STALE is combined into nothing force-like`);
+}
+
 /* ---- E and F: the place half -------------------------------------------
  *
  * `rollout_places.js` got the identical change and is a SEPARATE FILE with a
@@ -243,7 +387,7 @@ const srcPlace = placePick.dir;
 if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
   fail(`no ci-reference/routes.json for the place ${PLACE} under ${srcPlace} — the place half is UNPROVEN, which is a failure, not a skip. Name another with --place.`);
 } else {
-  function buildPlaceFixture() {
+  function buildPlaceFixture({ withData = false } = {}) {
     const tmp = scratchDir('prove-rollout-stamp-p-');
     const townDst = path.join(tmp, 'Areas', PLACE_TOWN);
     fs.mkdirSync(townDst, { recursive: true });
@@ -260,11 +404,12 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
     if (rec) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });
     stampCurrent(path.join(dst, 'ci-reference', 'routes.json'), computePlaceEngineVersion());
+    dataCopied = withData && copyDataStages(srcPlace, dst, man, ['S1', 'S2']);
     return tmp;
   }
   const placeRoutes = (tmp) => path.join(tmp, 'Areas', PLACE_TOWN, 'Places', PLACE, 'ci-reference', 'routes.json');
-  function runPlaces(tmp) {
-    const r = spawnSync(process.execPath, [ROLLOUT_PLACES, '--buses', tmp, '--place', PLACE],
+  function runPlaces(tmp, extra = []) {
+    const r = spawnSync(process.execPath, [ROLLOUT_PLACES, '--buses', tmp, '--place', PLACE, ...extra],
       { encoding: 'utf8', cwd: path.join(ROOT, 'assets') });
     return { out: (r.stdout || '') + (r.stderr || ''), code: r.status };
   }
@@ -301,9 +446,9 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     else pass('STAMP-STALE');
     if (!/current PLACE template/.test(out)) fail('the message does not say PLACE template — a place compared against the town hash is the OA-168 bug coming back');
     else pass('names the PLACE template');
-    if (!new RegExp(`node rollout_places\\.js --place "${PLACE}" --apply --force`).test(out))
-      fail('the message does not name the rollout_places --force command');
-    else pass('names the rollout_places --force command');
+    if (!new RegExp(`node rollout_places\\.js --place "${PLACE}" --apply --rebuild-stale`).test(out))
+      fail('the message does not name the rollout_places --rebuild-stale command');
+    else pass('names the rollout_places --rebuild-stale command');
     // The town hash and the place hash are different numbers, and this asserts
     // the place arm quoted the place one. If they were ever equal this assertion
     // would be vacuous, so it says so rather than passing quietly.
@@ -315,8 +460,49 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     else pass('exit 0, as designed');
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+
+  // N and O: the place tool's copy of --rebuild-stale is wired up — it opens the
+  // state it names and refuses a sheet that would change (OA-473).
+  console.log(`\nN  place ${PLACE}, stale stamp, --rebuild-stale — the flag opens the state it names  (slow: this one rebuilds)`);
+  {
+    const tmp = buildPlaceFixture({ withData: true });
+    const p = placeRoutes(tmp);
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    j.engine = 'a0a0a0a0a0';
+    fs.writeFileSync(p, JSON.stringify(j, null, 2));
+    const { out, code } = runPlaces(tmp, ['--rebuild-stale']);
+    assertReachedRebuild(placeVerdict(out), out, code, dataCopied);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+
+  console.log(`\nO  place ${PLACE}, stale stamp AND a sheet that really differs, --rebuild-stale — must refuse`);
+  {
+    const tmp = buildPlaceFixture();
+    const p = placeRoutes(tmp);
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    j.engine = 'a0a0a0a0a0';
+    fs.writeFileSync(p, JSON.stringify(j, null, 2));
+    const svg = path.join(path.dirname(p), 'internal.svg');
+    fs.writeFileSync(svg, fs.readFileSync(svg, 'utf8').replace('</svg>', '<!-- prove-red-rollout-stamp: forced DIFF --></svg>'));
+    const { out, code } = runPlaces(tmp, ['--rebuild-stale']);
+    const v = placeVerdict(out);
+    if (v !== 'NOT-STAMP-STALE') fail(`expected NOT-STAMP-STALE, got ${v}.\n${out}`);
+    else pass('NOT-STAMP-STALE');
+    if (code !== 1) fail(`exit ${code}, expected 1`);
+    else pass('exit 1');
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+
+  console.log(`\nP  place ${PLACE}, --rebuild-stale with --force — a usage error`);
+  {
+    const tmp = buildPlaceFixture();
+    const { code } = runPlaces(tmp, ['--rebuild-stale', '--force']);
+    if (code !== 2) fail(`exit ${code}, expected 2`);
+    else pass('exit 2');
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 console.log('');
 if (failures) { console.error(`prove-red-rollout-stamp: ${failures} assertion(s) failed.`); process.exit(1); }
-console.log('prove-red-rollout-stamp: 6 cases across both rollout tools — 2 findings and 4 controls, all as expected.');
+console.log('prove-red-rollout-stamp: every case across both rollout tools, the --rebuild-stale refusals included, as expected.');

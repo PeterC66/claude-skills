@@ -23,6 +23,8 @@
  *   4  an UNDECLARED sheet absent               -> exit 0              (a control that must stay green)
  *   5  `--apply` on case 1's damage             -> exit 0, and a re-check is clean
  *   6  an empty estate                          -> exit 2, not 0 and not 1
+ *   7  `--apply` on every place internal sheet  -> the place title is kept, never
+ *                                                  the generator's "Buses within"
  *
  * 2 IS THE ONE THE ORDERING TRAP TURNS ON. `prove-red-held-back` needs a donor
  * pack whose stamp IS the current engine; a stale stamp makes the harness exit 1
@@ -200,10 +202,52 @@ console.log('\n6  an empty estate — could not look, which is neither pass nor 
   else pass('says what it could not find');
 }
 
+/* ---- 7: --apply on a PLACE keeps the place's title ---------------------- */
+/* The gate draws a place's internal sheets with the town generator, whose title
+ * is the raw "Buses within <Town>"; a build then rewrites it to the place title,
+ * and the fixture estate skips that step. `PLACE_IGNORE` hides the title line
+ * from the comparison, so an --apply that wrote the drawn bytes whole replaced
+ * "Buses serving Aldi, Tannery Road" with "Buses within High Wycombe" and every
+ * check stayed green (buses-data OA-465, and OA-282 where `keepIgnoredLines`
+ * fixed it). This case is the check that was missing: damage every place sheet
+ * the gate reads with PLACE_IGNORE, --apply, and require each ignored line to
+ * be the committed one — never the generator's own title. */
+console.log('\n7  --apply on a place sheet — the place title survives, not the generator\'s');
+{
+  const root = copy();
+  const { PLACE_IGNORE } = require('../assets/gate_lib');
+  const sheets = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/^internal(-schematic)?\.svg$/.test(e.name) && path.basename(d) === 'ci-reference'
+        && /(^|[\\/])Places[\\/]/.test(path.relative(root, p))) sheets.push(p);
+    }
+  };
+  walk(root);
+  if (!sheets.length) fail('the fixture estate has no place internal sheet, so this case measures nothing');
+  const ignored = (s) => s.split('\n').filter((l) => PLACE_IGNORE.test(l));
+  const before = new Map(sheets.map((f) => [f, fs.readFileSync(f, 'utf8')]));
+  for (const f of sheets) fs.writeFileSync(f, before.get(f).replace('</svg>', '<!-- prove-red-fixture-estate --></svg>'));
+  const applied = run(root, ['--apply']);
+  if (applied.code !== 0) fail(`--apply exited ${applied.code}\n${applied.out}`);
+  else pass(`--apply exits 0 over ${sheets.length} place sheet(s)`);
+  for (const f of sheets) {
+    const label = path.relative(root, f).split(path.sep).join('/');
+    const want = ignored(before.get(f));
+    const got = ignored(fs.readFileSync(f, 'utf8'));
+    if (!want.some((l) => />Buses serving /.test(l))) fail(`${label}: the committed title is not a place title, so this sheet proves nothing`);
+    if (got.some((l) => />Buses within /.test(l))) fail(`${label}: --apply wrote the generator's raw "Buses within" title over the place title`);
+    else if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${label}: --apply changed the title or stamp line:\n    was ${want.join(' | ')}\n    now ${got.join(' | ')}`);
+    else pass(`${label}: title kept`);
+  }
+}
+
 if (failures) {
   console.error(`\nprove-red-fixture-estate: ${failures} assertion(s) failed.`);
   process.exit(1);
 }
 console.log('\nprove-red-fixture-estate: three drift shapes go red, the undeclared-sheet control stays green, --apply'
-  + ' really clears what --check reports, and an empty estate is exit 2 rather than a finding'
-  + ' (7 scratch copies, nothing under test/fixtures/estate touched).');
+  + ' really clears what --check reports and keeps a place sheet\'s own title, and an empty estate is exit 2'
+  + ' rather than a finding (8 scratch copies, nothing under test/fixtures/estate touched).');

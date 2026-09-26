@@ -11,9 +11,7 @@
 //                     if any; defaults to the route with the most in-town stops)
 //   atcoPrefix        in-town stop ATCO prefix for road labels (defaults to the
 //                     anchor with its trailing digits stripped, e.g. 0500HSTIV)
-//   internalDesc{}    {route:[title,subtitle]} for the Services panel
-//   minorityNote{}    {route:"words"|false} replaces or silences the generated
-//                     "some journeys via ..." (journey_weights.json, OA-452)
+//   internalDesc{}    {route:[title,subtitle]} for the Services panel; minorityNote{} its OA-452 words
 //   poi{}             POI filter/tidy rules (industrialKeep, excludeName, tidy,
 //                     canon, include e.g. ["allotments"])
 //   internalCorridors bundle co-running services into ONE line with a badge
@@ -197,7 +195,7 @@ const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
 const { svgPrimitives } = require(_dep('svg_primitives.js'));
 const { linearFeatures } = require(_dep('linear_features.js'));
 const { labelPlacer } = require(_dep('label_placer.js'));
-const { drawServicesPanel, minorityNotes } = require(_dep('services_panel.js'));
+const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
@@ -758,17 +756,6 @@ const { CORR, CPAL, laneKey, colourShared, CBOX, THIN } = complexityLadder({ RJ,
 
 // Internal Services-panel descriptions {route:[title,subtitle]}.
 const INTDESC = RJ.internalDesc || {};
-// The minority workings the drawn line leaves out (buses-data OA-452 item 1), read
-// from the journey_weights.json that S2 wrote and `stage.js pull S2` brings in beside
-// atco2name.json. intown_cfg.json "journeyWeights": false turns the S2 drop off, and
-// so turns off the words about it. No file => null => byte-identical.
-const MINORITY = (function(){
-  let jw = null, ic = {};
-  try{ jw = JSON.parse(fs.readFileSync(DIR+'/journey_weights.json','utf8')); }catch(e){ return null; }
-  try{ ic = JSON.parse(fs.readFileSync(DIR+'/intown_cfg.json','utf8')); }catch(e){}
-  if(ic.journeyWeights === false) return null;
-  return minorityNotes(jw, { atco2name, override: RJ.minorityNote || {} });
-})();
 // Orientation route for road-name labels: the town circular if named, else the
 // route with the most in-town stops (so road labels still align on towns with
 // no circular).
@@ -1640,7 +1627,7 @@ function panelDeps(sink){ return {
   OV, RJ, DESIGN, INTDESC, FONT,
   PANEL_SCALE_ON, PRINT_SAFE, FOOTER_SAFE, FOOTER_PLATE_TOP,
   CORR, CPAL, laneKey, TRIM, panelOrder, order, pois,
-  FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET, MINORITY,
+  FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET, MINORITY: readMinorityNotes(DIR, { atco2name, override: RJ.minorityNote }),
 }; }
 reserve(197,0,297,210,'the services panel', !EXIT_IN_PANEL);
 reserve(0,0,86,26,'the title block');

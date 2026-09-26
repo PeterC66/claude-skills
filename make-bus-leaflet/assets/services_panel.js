@@ -35,6 +35,7 @@
  * re-indented two spaces and otherwise unchanged.
  */
 'use strict';
+const fs = require('fs');
 const path = require('path');
 // PAGE_W — the sheet width in mm, from page.js (OA-224 Tier 3.4). It was the bare
 // literal 297 at six arithmetic sites here, all of them `297 - printSafe` asking
@@ -87,6 +88,19 @@ function minorityNotes(JW, { atco2name = {}, override = {} } = {}) {
     res[route] = { long: 'some journeys via ' + joinAnd(words), short: 'some journeys vary', runs };
   }
   return Object.keys(res).length ? res : null;
+}
+/* readMinorityNotes — minorityNotes() over a build folder. gen_internal.js calls this
+ * rather than reading the files itself, because the generator is under a line
+ * ceiling (tools/line-ratchet.js) and the OA-001 rule is that new logic goes into a
+ * module. `journey_weights.json` is S2's, brought into the build by `stage.js pull
+ * S2`; intown_cfg.json "journeyWeights": false turns the S2 drop off, and so the
+ * words about it. No file => null => every sheet byte-identical. */
+function readMinorityNotes(dir, { atco2name, override } = {}) {
+  let jw, ic = {};
+  try { jw = JSON.parse(fs.readFileSync(path.join(dir, 'journey_weights.json'), 'utf8')); } catch (e) { return null; }
+  try { ic = JSON.parse(fs.readFileSync(path.join(dir, 'intown_cfg.json'), 'utf8')); } catch (e) { /* optional */ }
+  if (ic.journeyWeights === false) return null;
+  return minorityNotes(jw, { atco2name, override: override || {} });
 }
 
 function drawServicesPanel(deps) {
@@ -783,4 +797,4 @@ function drawServicesPanel(deps) {
            rhythm: { gapDown, CAP, DESC, AIR_BELOW_HEAD, AIR_ABOVE_HEAD } };
 }
 
-module.exports = { drawServicesPanel, minorityNotes };
+module.exports = { drawServicesPanel, minorityNotes, readMinorityNotes };

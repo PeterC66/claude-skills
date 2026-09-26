@@ -37,7 +37,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { load } = require('./_engine.js');
-const { drawServicesPanel, minorityNotes } = load('services_panel.js');
+const { drawServicesPanel, minorityNotes, readMinorityNotes } = load('services_panel.js');
 const { svgPrimitives } = load('svg_primitives.js');
 const FONT = load('font_metrics.js');
 
@@ -400,6 +400,18 @@ test('routes.json minorityNote replaces the words, or silences a route', () => {
     'some journeys via Eynesbury');
   assert.strictEqual(minorityNotes(JW18, { override: { 18: false } }), null);
   assert.strictEqual(minorityNotes(null), null, 'no journey_weights.json, nothing to say');
+});
+
+test('readMinorityNotes reads the build folder, and intown_cfg journeyWeights:false silences it', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'minority-'));
+  try {
+    assert.strictEqual(readMinorityNotes(d, {}), null, 'no journey_weights.json, nothing to say');
+    fs.writeFileSync(path.join(d, 'journey_weights.json'), JSON.stringify(JW18));
+    assert.match(readMinorityNotes(d, { atco2name: { RS: 'Railway Station' } })[18].long, /Caxton, Eynesbury & Railway Station$/);
+    fs.writeFileSync(path.join(d, 'intown_cfg.json'), JSON.stringify({ journeyWeights: false }));
+    assert.strictEqual(readMinorityNotes(d, {}), null, 'the S2 drop is off, so are the words');
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 
 test('the panel row says it, falls back to the short form, and CONTROL: absent means byte-identical', () => {

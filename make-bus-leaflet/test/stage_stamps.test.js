@@ -48,6 +48,7 @@ function s4(town, rj, id) {
   const d = path.join(town, 'S4-generate', id || 'v9.9_2026-08-29_1200');
   fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, 'internal.svg'), '<svg/>');
+  fs.writeFileSync(path.join(d, 'gen_internal.js'), '');  // the sheet's generator (OA-318)
   fs.writeFileSync(path.join(d, 'routes.json'),
     JSON.stringify(Object.assign({ version: '9.9', town: 'Stampton' }, rj)));
   // The orientation record an area S4 has to carry (OA-206). This file is about the

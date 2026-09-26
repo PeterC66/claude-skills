@@ -1964,6 +1964,17 @@ const MUTATIONS = [
     what: 'the re-stamped "version" counts as a difference, so every ordinary S5 whose pull re-stamped it is refused',
     find: "          try { const j = JSON.parse(t); delete j.version; return JSON.stringify(j); } catch (e) { return t; } };",
     to: "          try { const j = JSON.parse(t); return JSON.stringify(j); } catch (e) { return t; } };" },
+
+  /* buses-data OA-318, the last item. The area S4 generator guard. */
+  { suite: 'stage_s4_generators.test.js', file: 'stage.js',
+    what: 'an area S4 drawn in place commits without its generators, so the host pre-flight fails with Cannot find module gen_external.js',
+    find: "        if (noGen.length && !f['force-nogen']) {",
+    to: "        if (false) {" },
+
+  { suite: 'stage_s4_generators.test.js', file: 'stage.js',
+    what: 'the guard stops asking only about sheets that were drawn and demands both generators always',
+    find: "        const noGen = GENS.filter(([g, svg]) => fs.existsSync(path.join(runDir, svg)) && !fs.existsSync(path.join(runDir, g)));",
+    to: "        const noGen = GENS;" },
   /* OA-224 Tier 3.1. cli.js is the one parser and the one estate resolver, so it
    * is the one place a mistake reaches nine scripts at once. Each mutation below
    * is a change that LOOKS like a tidy-up and silently alters every caller. */

@@ -917,6 +917,17 @@ LEG.buf.forEach(out);
  * every one of those towns also stores its own three `bullets`, a hand-picked subset
  * of the five derived below, and those stay explicit — they are per-map content, not
  * a repeated flag, and unsetting them would grow every town's panel by two bullets.
+ *
+ * THREE IS THE DERIVED DEFAULT since 2026-09-26 (buses-data OA-437, OA-443). The
+ * "per-map content" above was the same sentence nine times: eight stored `bullets`
+ * are the first three below, character for character, with the hub interpolated
+ * (The Shelfords words its hub shorter than its externalHubLabel). The
+ * towns that stored nothing — Chatteris, Soham, Whittlesey — drew all six, so the
+ * estate disagreed with itself by where a config was typed. Dropped: the operators
+ * panel and the stops along a line, which no stored three ever carried, and the
+ * journey-time bullet — all nine stored towns carry times and none printed it, and
+ * the footer already says "Journey times shown are approximate" wherever they do.
+ * Kept: not-to-scale, the one sentence the sheet would otherwise never say at all.
  */
 const HOWTO = DESIGN.howToUse === false ? null
   : (DESIGN.howToUse == null || DESIGN.howToUse === true ? {} : DESIGN.howToUse);
@@ -931,10 +942,7 @@ if(HOWTO){
       'Find where you want to go, around the edge of the diagram.',
       `Follow its coloured line in to ${HUB_PROSE} at the centre.`,
       'The badge on that line is the bus service number.',
-      'The panel headed “Operators & services” says who runs it.',
-      'Names printed along a line are its main stops, not every stop.',
     ];
-    if(_hasTimes) b.push('A time under a destination is a typical whole journey, not a timetable.');
     if(DESIGN.scaleBar === false) b.push('Not to scale — directions and distances are simplified.');
     return b;
   })();

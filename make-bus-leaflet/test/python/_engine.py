@@ -32,23 +32,42 @@ ENGINE_DIR = os.path.abspath(
 )
 
 
-def module_names():
+# The place skill's assets, the JS suite's `PLACE_SKILL_ASSETS` read the same way:
+# the variable when a mutation run points it at a copy, the sibling skill otherwise.
+# It is resolved from THIS file and not from ENGINE_DIR, because a mutation run
+# copies only the town engine and the place skill is not beside that copy.
+PLACE_DIR = os.path.abspath(
+    os.environ.get("PLACE_SKILL_ASSETS")
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..",
+                    "make-place-bus-leaflet", "assets")
+)
+
+
+def module_names(directory=None):
     """Every Python module in the engine, DERIVED from the directory.
 
     Derived rather than typed, for the reason `test/generator_load.test.js`
     exists: a hand-kept list cannot notice the file nobody listed, which is the
-    only file an import test is there to protect.
+    only file an import test is there to protect. `directory` defaults to the
+    town engine; `PLACE_DIR` asks the same of the place skill (OA-323 item 2).
     """
+    directory = directory or ENGINE_DIR
     return sorted(
-        f[:-3] for f in os.listdir(ENGINE_DIR)
+        f[:-3] for f in os.listdir(directory)
         if f.endswith(".py") and not f.startswith("_")
     )
 
 
-def load(name):
-    """Import `<ENGINE_DIR>/<name>.py` under a private name, fresh every time."""
-    path = os.path.join(ENGINE_DIR, name + ".py")
-    spec = importlib.util.spec_from_file_location("engine_under_test_" + name, path)
+def load(name, directory=None):
+    """Import `<directory>/<name>.py` under a private name, fresh every time.
+
+    `directory` defaults to ENGINE_DIR. A place module imports town siblings
+    (`import gtfs_query`, `import cli`), so ENGINE_DIR stays on the path behind it.
+    """
+    directory = directory or ENGINE_DIR
+    path = os.path.join(directory, name + ".py")
+    prefix = "engine_under_test_" if directory == ENGINE_DIR else "place_under_test_"
+    spec = importlib.util.spec_from_file_location(prefix + name, path)
     mod = importlib.util.module_from_spec(spec)
     # Registered before exec so a module that imports itself, or that another
     # engine module imports, resolves rather than re-entering.
@@ -58,6 +77,8 @@ def load(name):
     # gtfs_query as gq`). Those have to resolve against the copy under test, not
     # against the real assets/, or a mutation run would half-load each.
     sys.path.insert(0, ENGINE_DIR)
+    if directory != ENGINE_DIR:
+        sys.path.insert(0, directory)
     try:
         spec.loader.exec_module(mod)
     finally:

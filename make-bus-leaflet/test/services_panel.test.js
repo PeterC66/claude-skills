@@ -74,7 +74,7 @@ const run = (over = {}) => {
     order: ['1', '2', '3'],
     pois: [{ cat: 'shop' }, { cat: 'gp' }],
     FTIER: null,
-    FTIER_LABEL: { frequent: 'Frequent — turn up and go', limited: 'Limited — check times' },
+    FTIER_LABEL: { frequent: 'Frequent — at least every 30 minutes', limited: 'Limited — check times' },
     IR: { stroke: 2.6 },
     ICON_INK: '#444', ICON_SET: 'line',
     ...over,
@@ -316,7 +316,7 @@ test('a tier row is drawn only for a tier a DRAWN route uses', () => {
     RJ: { panelRow: 8, keyRow: 4.4, panelBadge: 4, frequency: { 1: 'frequent', 9: 'limited' } },
     order: ['1', '2', '3'],       // route 9 is in `frequency` and is not drawn
   });
-  assert.match(svg, /Frequent — turn up and go/);
+  assert.match(svg, /Frequent — at least every 30 minutes/);
   assert.ok(!/Limited — check times/.test(svg),
     'the tier belongs to a service this sheet does not draw, so it earns no row');
 });

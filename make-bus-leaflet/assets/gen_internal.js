@@ -484,7 +484,7 @@ const fcap = r => { const t=ftier(r); return (t && t.dash) ? 'butt' : 'round'; }
 // Default wording for the Key row. A tier may override it with `label`; an unknown
 // tier name falls back to itself, so a town can invent a fourth class and still
 // get a row rather than a silent line style.
-const FTIER_LABEL = { frequent:'Frequent — turn up and go',
+const FTIER_LABEL = { frequent:'Frequent — at least every 30 minutes',
                       'all-day':'Runs through the day',
                       limited:'Limited — check times' };
 // ---- internalDiagram render extensions (tube-map diagram, 2026-07-10) ------

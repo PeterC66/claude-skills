@@ -675,7 +675,7 @@ function drawServicesPanel(deps) {
    * space from below the Key to beside it.
    *
    * Only the PICTOGRAM rows column up. The frequency-tier rows underneath keep one column
-   * on purpose: their labels are sentences ("Frequent — turn up and go"), not nouns, and
+   * on purpose: their labels are sentences ("Frequent — at least every 30 minutes"), not nouns, and
    * two columns of those read as a paragraph broken in half.
    *
    * Column width comes from the panel, not from a constant, so a town that has moved or

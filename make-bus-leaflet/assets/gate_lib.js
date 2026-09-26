@@ -251,6 +251,23 @@ function labelDiff(oldSvgPath, newSvgPath) {
   };
 }
 
+/* ROUTE HUES THAT READ ALIKE AND RUN TOGETHER on a sheet a rollout has just built
+ * (buses-data OA-071, 2026-09-26). Peter ruled on 2026-09-25 that each clashing pair is
+ * recoloured "at that map's next rebuild", and the rebuild every map is owed is a
+ * rollout -- which carries S3's routes.json forward unchanged BY DESIGN, so it can never
+ * make that recolour, and printed nothing to say one was owed. quality_metrics.js
+ * already measures it (colourClashOnMap); this asks the same question of the scratch
+ * build, so the rebuild says what it cannot do instead of the ruling waiting on memory.
+ * Reported, never gating. The sheet's routes.json must sit beside it, as it does in S4:
+ * without one the measure has no palette and answers [] -- "could not tell", which is
+ * why the caller prints nothing rather than "no clash". Required lazily, because
+ * quality_metrics.js is large and only a rollout asks. */
+function huesAlikeOnMap(svgPath) {
+  if (!fs.existsSync(svgPath) || !fs.existsSync(path.join(path.dirname(svgPath), 'routes.json'))) return [];
+  try { return require('./quality_metrics.js').analyse(svgPath).detail.clashMap || []; }
+  catch { return []; }
+}
+
 /* WHICH LABELS KEPT THEIR TEXT AND CHANGED PLACE (buses-data OA-463, 2026-09-26).
  * The three arrays above are about a SET of strings, and a label that moves is in
  * both sets, so they cannot see it. On 2026-09-24 OA-165 moved two forced labels on
@@ -823,7 +840,7 @@ function portalFixtureEnv(portalDir, dataDir) {
 }
 
 module.exports = {
-  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
+  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, huesAlikeOnMap, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
   gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, staleInputs, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

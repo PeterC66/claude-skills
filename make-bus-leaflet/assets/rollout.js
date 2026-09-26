@@ -61,7 +61,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses, byArgs } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
+const { SK, gate, labelDiff, huesAlikeOnMap, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -347,6 +347,7 @@ function rolloutOne(t) {
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
     diffs[name] = d;
+    d.huesAlike = huesAlikeOnMap(path.join(s4, name));   // OA-071: owed, never gating
     if (d.lost.length) anyLost = true;
   }
 
@@ -502,6 +503,10 @@ for (const t of selected) {
       // Same text, new place (OA-463): the three lines above compare SETS of strings and
       // cannot see it. Reported, never gating.
       if (d.moved && d.moved.length) console.log(`    MOVED in ${file}: ${d.moved.join(' | ')}`);
+      // OA-071. A rollout carries S3 unchanged, so it cannot make the recolour Peter ruled
+      // is owed at a map's next rebuild; it can say so. Reported, never gating.
+      if (d.huesAlike && d.huesAlike.length) console.log(`    HUES ALIKE in ${file}: ` + d.huesAlike.map(c => `${c.a} vs ${c.b} (dE ${c.dE})`).join(', ')
+        + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
     }
   }
   // Blocking warnings always print in full; the rest print as a count, with the

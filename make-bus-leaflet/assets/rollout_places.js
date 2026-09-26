@@ -60,7 +60,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses, byArgs } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
+const { SK, gate, labelDiff, huesAlikeOnMap, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
 // (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
@@ -443,6 +443,7 @@ function rolloutOnePlace(p) {
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
     diffs[name] = d;
+    d.huesAlike = huesAlikeOnMap(path.join(s4, name));   // OA-071: owed, never gating
     if (d.lost.length) anyLost = true;
   }
 
@@ -612,6 +613,10 @@ for (const p of selected) {
       // Same text, new place (OA-463): the three lines above compare SETS of strings and
       // cannot see it. Reported, never gating.
       if (d.moved && d.moved.length) console.log(`    MOVED in ${file}: ${d.moved.join(' | ')}`);
+      // OA-071. A rollout carries S3 unchanged, so it cannot make the recolour Peter ruled
+      // is owed at a map's next rebuild; it can say so. Reported, never gating.
+      if (d.huesAlike && d.huesAlike.length) console.log(`    HUES ALIKE in ${file}: ` + d.huesAlike.map(c => `${c.a} vs ${c.b} (dE ${c.dE})`).join(', ')
+        + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
     }
   }
   for (const w of (r.blockers || [])) console.log(`    BLOCKING [${w.source}] ${w.text}`);

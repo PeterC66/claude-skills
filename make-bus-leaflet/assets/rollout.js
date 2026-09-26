@@ -499,6 +499,9 @@ for (const t of selected) {
       // printed: a check that silently forgives is the next --force habit starting.
       if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
+      // Same text, new place (OA-463): the three lines above compare SETS of strings and
+      // cannot see it. Reported, never gating.
+      if (d.moved && d.moved.length) console.log(`    MOVED in ${file}: ${d.moved.join(' | ')}`);
     }
   }
   // Blocking warnings always print in full; the rest print as a count, with the

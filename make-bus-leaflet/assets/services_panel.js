@@ -35,12 +35,73 @@
  * re-indented two spaces and otherwise unchanged.
  */
 'use strict';
+const fs = require('fs');
 const path = require('path');
 // PAGE_W — the sheet width in mm, from page.js (OA-224 Tier 3.4). It was the bare
 // literal 297 at six arithmetic sites here, all of them `297 - printSafe` asking
 // where the printable area ends. The three left below are quoting the number to a
 // reader, not computing with it.
 const { W: PAGE_W } = require(path.join(__dirname, 'page.js'));
+
+/* minorityNotes — the words for the workings a route's drawn line leaves out
+ * (buses-data OA-452 item 1).
+ *
+ * Since OA-452 the engine draws each direction from the stop pattern MOST journeys
+ * run: `journey_weights.py` lists the stops fewer than half the passing journeys
+ * call at, and `derive_intown.js` takes them off the line. Peter's ruling of
+ * 2026-09-25 had two halves — draw the majority, and NAME the minority — and this is
+ * the second. Without it St Neots' sheet would lose the Eynesbury journeys of the 18
+ * in silence, which is a different wrong from drawing them as the route.
+ *
+ * A working is named by the NaPTAN localities of its stops that the drawn line does
+ * NOT already reach (the route's kept `localities`, every direction): the 18's
+ * 7-of-25 working is "Caxton, Longstowe, … & Eynesbury". A working entirely inside
+ * places the line already serves — the station loop, all of it in St Neots — is
+ * named by its first stop instead ("Railway Station"). Fewer than MIN_JOURNEYS
+ * journeys is not "some journeys", so a single working is left to stderr.
+ *
+ * `override` is routes.json `minorityNote`: {"<route>": "words"} replaces the
+ * generated words, {"<route>": false} says nothing for that route. Returns
+ * {route: {long, short, runs}} for the routes that have something to say, or null.
+ */
+const MINORITY_MIN_JOURNEYS = 2;
+function minorityNotes(JW, { atco2name = {}, override = {} } = {}) {
+  if (!JW || typeof JW !== 'object') return null;
+  const joinAnd = (w) => w.length < 2 ? w.join('') : w.slice(0, -1).join(', ') + ' & ' + w[w.length - 1];
+  const res = {};
+  for (const route of Object.keys(JW)) {
+    const dirs = Object.values(JW[route] || {}).filter((d) => d && Array.isArray(d.minority));
+    const served = new Set([].concat(...dirs.map((d) => d.localities || [])));
+    const words = [], runs = [];
+    for (const d of dirs) for (const m of d.minority) {
+      if (!(m.journeys >= MINORITY_MIN_JOURNEYS)) continue;
+      let w = (m.localities || []).filter((l) => !served.has(l));
+      if (!w.length && m.stops && m.stops.length && atco2name[m.stops[0]]) w = [atco2name[m.stops[0]]];
+      if (!w.length) continue;
+      runs.push({ words: w, journeys: m.journeys, of: m.of });
+      for (const x of w) if (!words.includes(x)) words.push(x);
+    }
+    const ov = override && Object.prototype.hasOwnProperty.call(override, route) ? override[route] : undefined;
+    if (ov === false) continue;
+    if (typeof ov === 'string' && ov) { res[route] = { long: ov, short: ov, runs }; continue; }
+    if (!words.length) continue;
+    res[route] = { long: 'some journeys via ' + joinAnd(words), short: 'some journeys vary', runs };
+  }
+  return Object.keys(res).length ? res : null;
+}
+/* readMinorityNotes — minorityNotes() over a build folder. gen_internal.js calls this
+ * rather than reading the files itself, because the generator is under a line
+ * ceiling (tools/line-ratchet.js) and the OA-001 rule is that new logic goes into a
+ * module. `journey_weights.json` is S2's, brought into the build by `stage.js pull
+ * S2`; intown_cfg.json "journeyWeights": false turns the S2 drop off, and so the
+ * words about it. No file => null => every sheet byte-identical. */
+function readMinorityNotes(dir, { atco2name, override } = {}) {
+  let jw, ic = {};
+  try { jw = JSON.parse(fs.readFileSync(path.join(dir, 'journey_weights.json'), 'utf8')); } catch (e) { return null; }
+  try { ic = JSON.parse(fs.readFileSync(path.join(dir, 'intown_cfg.json'), 'utf8')); } catch (e) { /* optional */ }
+  if (ic.journeyWeights === false) return null;
+  return minorityNotes(jw, { atco2name, override: override || {} });
+}
 
 function drawServicesPanel(deps) {
   const {
@@ -56,6 +117,7 @@ function drawServicesPanel(deps) {
     pois,                              // which Key pictogram rows this sheet earns
     FTIER, FTIER_LABEL,                // design.frequencyTiers and its default words
     IR, ICON_INK, ICON_SET,            // internalRoads stroke width; the icon style
+    MINORITY,                          // minorityNotes(): the workings the line leaves out (OA-452)
   } = deps;
   // ---------- right service panel ----------
   const PX=(OV.panel&&OV.panel.x!=null)?OV.panel.x:200; let py=(OV.panel&&OV.panel.y!=null)?OV.panel.y:14;
@@ -207,7 +269,10 @@ function drawServicesPanel(deps) {
   // push off the page, and the stderr line is what a build reader acts on.
   const NOT_SHOWN_NOTE = RJ.notShownNote || 'not shown on this map';
   const NOT_SHOWN_SHORT = RJ.notShownNoteShort || 'not shown';
-  function panelSub(routeKey, sub, x, size){
+  function panelSub(routeKey, sub, x, size, right){
+    return minoritySub(routeKey, notShownSub(routeKey, sub, x, size), x, size, right);
+  }
+  function notShownSub(routeKey, sub, x, size){
     if(PRINT_SAFE==null || !NOT_DRAWN.has(routeKey)) return sub;
     const avail = (PAGE_W-PRINT_SAFE) - x;
     for(const note of [NOT_SHOWN_NOTE, NOT_SHOWN_SHORT]){
@@ -217,6 +282,29 @@ function drawServicesPanel(deps) {
     process.stderr.write(`panel: service ${routeKey} draws no line, but its row has no room to say so — "${sub}" already fills the column. Shorten the subtitle, or set routes.json notShownNoteShort.\n`);
     return sub;
   }
+  /* The minority working's words go on the same row, by the same discipline as the
+   * not-shown note above: measure, fall back, and say so on stderr rather than push
+   * words off the sheet. The ladder prefers the NAMED form, even at the 2.4 mm floor
+   * subFit may then shrink the row to, over the unnamed one at full size — naming the
+   * workings is the half of Peter's ruling this exists for. `right` is the row's own
+   * boundary (its column edge on a multi-column panel). Absent MINORITY, this returns
+   * `sub` untouched, which keeps every map with no journey_weights.json byte-identical. */
+  function minoritySub(routeKey, sub, x, size, right){
+    const mn = MINORITY && MINORITY[routeKey];
+    if(!mn) return sub;
+    const avail = (right!=null ? right : PAGE_W-(PRINT_SAFE==null?0:PRINT_SAFE)) - x;
+    const floor = PRINT_SAFE==null ? size : Math.min(size, 2.4);
+    const forms = mn.long===mn.short ? [mn.long] : [mn.long, mn.short];
+    for(const [note, sz] of [[forms[0], size], [forms[0], floor]].concat(forms[1] ? [[forms[1], size], [forms[1], floor]] : [])){
+      const t = sub ? sub+' · '+note : note;
+      if(FONT.textWidth(t,sz,false) <= avail) return t;
+    }
+    process.stderr.write(`panel: service ${routeKey} runs minority workings the line leaves out (${mn.long}), but its row has no room to say so — shorten its subtitle, or set routes.json minorityNote["${routeKey}"].\n`);
+    return sub;
+  }
+  if(MINORITY) for(const r of panelOrder) if(MINORITY[r])
+    process.stderr.write(`panel: service ${r} — ${MINORITY[r].long} (`
+      + MINORITY[r].runs.map((u)=>u.journeys+' of '+u.of+': '+u.words.join(', ')).join('; ') + ').\n');
   /* subFit — the width discipline the comment above says the plain row does not have.
    *
    * Returns the size (mm) to SET a subtitle at so it fits the space it is given,
@@ -328,6 +416,11 @@ function drawServicesPanel(deps) {
       // doubt on the whole row.
       { const missing = L.mem.filter(m=>NOT_DRAWN.has(m));
         if(PRINT_SAFE!=null && missing.length) sub = sub.concat(missing.join(', ')+' '+NOT_SHOWN_NOTE); }
+      // The minority workings (OA-452) take a line of their own here, because a lane
+      // grows lines rather than widening one; the wrap below fits it. A lane of
+      // several names which service it means, as the not-shown note does.
+      if(MINORITY) for(const m of L.mem) if(MINORITY[m])
+        sub = sub.concat((L.mem.length>1 ? m+': ' : '')+MINORITY[m].long);
       // WRAP before shrinking. "a lane takes as many subtitle lines as it needs"
       // is already this row's design — the six-service Loudwater corridor uses
       // four — so a subtitle too wide for its column should take another line
@@ -526,7 +619,7 @@ function drawServicesPanel(deps) {
       out(`<text x="${cx+7.6+2*CXWP}" y="${cy-0.6}" font-family="Arial" font-weight="bold" font-size="${PS?PS.sub:2.9}" fill="#111">${esc(d[0])}</text>`);
       // subFit: this row's own column is the boundary, not the sheet — a two-column
       // panel that measured to the trim would let column 1 run under column 2.
-      const _sx=cx+7.6+2*CXWP, _ssz=PS?PS.dense:2.3, _stext=panelSub(r,d[1],_sx,_ssz);
+      const _sx=cx+7.6+2*CXWP, _ssz=PS?PS.dense:2.3, _stext=panelSub(r,d[1],_sx,_ssz,cx+cw);
       const _sfz=(PRINT_SAFE==null)?_ssz:subFit(r,_stext,_sx,_ssz,cx+cw);
       out(`<text x="${_sx}" y="${subY.toFixed(2)}" font-family="Arial" font-size="${_sfz}" fill="#555">${esc(_stext)}</text>`);
       if(row===per-1) lastSubY=subY;
@@ -704,4 +797,4 @@ function drawServicesPanel(deps) {
            rhythm: { gapDown, CAP, DESC, AIR_BELOW_HEAD, AIR_ABOVE_HEAD } };
 }
 
-module.exports = { drawServicesPanel };
+module.exports = { drawServicesPanel, minorityNotes, readMinorityNotes };

@@ -69,6 +69,36 @@ class Assign(unittest.TestCase):
         self.assertIsNone(jw.assign([["A", "B", "C"]], ["B", "Z"]))
 
 
+class Localities(unittest.TestCase):
+    """A minority run is named by where it goes, not by its first stop (OA-452 item 1)."""
+
+    def naptan(self, rows):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE naptan (ATCOCode TEXT, LocalityName TEXT)")
+        con.executemany("INSERT INTO naptan VALUES (?,?)", rows)
+        return con
+
+    def test_localities_in_chain_order_with_repeats_removed(self):
+        res = {"18": {"A to B": {"minority": [{"stops": ["S1", "S2", "S3", "S4"]}]}}}
+        con = self.naptan([("S1", "Caxton"), ("S2", "Caxton"), ("S3", "Longstowe"), ("S4", "Caxton")])
+        jw.add_localities(res, con.cursor())
+        self.assertEqual(res["18"]["A to B"]["minority"][0]["localities"], ["Caxton", "Longstowe"])
+
+    def test_the_direction_lists_the_localities_of_the_stops_it_keeps(self):
+        res = {"18": {"A to B": {"passing": {"K1": 9, "S1": 9, "K2": 9}, "drop": ["S1"],
+                                 "minority": [{"stops": ["S1"]}]}}}
+        con = self.naptan([("K1", "St Neots"), ("S1", "Eynesbury"), ("K2", "Cambourne")])
+        jw.add_localities(res, con.cursor())
+        self.assertEqual(res["18"]["A to B"]["localities"], ["St Neots", "Cambourne"])
+
+    def test_a_stop_naptan_does_not_know_contributes_nothing(self):
+        res = {"18": {"A to B": {"minority": [{"stops": ["S1", "GONE"]}]}}}
+        con = self.naptan([("S1", "Eynesbury")])
+        jw.add_localities(res, con.cursor())
+        self.assertEqual(res["18"]["A to B"]["minority"][0]["localities"], ["Eynesbury"])
+
+
 class EndToEnd(unittest.TestCase):
 
     def test_the_file_derive_intown_reads(self):

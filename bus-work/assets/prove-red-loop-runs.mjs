@@ -165,6 +165,23 @@ console.log('\n3c. OA-408 — a `-missed` run continues the idle count and is NO
   check('around and missed together: both named in the title', /1 of them worked around the bar.*1 of them leaving no run file/.test(both.title), both.title);
 }
 
+console.log('\n3d. adhoc tick-counts — a `-busy` stand-down is TRANSPARENT: neither idle nor working');
+{
+  // The 2026-09-26 shape: a /ticks run held the lock and the hourly schedule
+  // fired into it. Under the old name each stand-down was `-none` and one of them
+  // plus a real gate-stop would have raised the row about a loop that was busy.
+  const h = health(mkRuns('busy', ['0715-OA', '0815-busy', '0915-none', '1015-busy']));
+  check('busy ticks do not count — only the one none is idle', h.idle === 1, String(h.idle));
+  check('and no row at the default threshold', loopRunItems({ health: h, treeDirty: true }).length === 0);
+  check('a busy tick is NOT working — lastWorkingAt stays at 07:15',
+    h.lastWorkingAt === new Date(2026, 8, 9, 7, 15).getTime(), new Date(h.lastWorkingAt).toString());
+  // Transparent, not a reset: two real gate-stops either side of a busy one still
+  // make a run of two, so `busy` has not become a synonym for a working feed.
+  const across = health(mkRuns('busy-across', ['0715-OA', '0815-none', '0915-busy', '1015-none']));
+  check('none, busy, none still counts TWO — busy does not break the run', across.idle === 2, String(across.idle));
+  check('and raises the row', loopRunItems({ health: across }).length === 1);
+}
+
 console.log('\n4. one idle tick is below the threshold');
 {
   const h = health(mkRuns('one', ['0915-bus-work', '1015-none']));

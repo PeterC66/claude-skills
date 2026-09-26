@@ -29,15 +29,39 @@
  * (no --town/--place: sync every town + every place). `--town` takes a town and its
  * own nested places; `--place` takes one place by name and is the only way to reach
  * a STANDALONE place, which has no parent town to be named by.
+ *
+ * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ (buses-data OA-451 item 3).
+ * With no --town/--place this rewrites every map's tracked golden master, and
+ * the shared parser ignores a flag it does not know and files a bare word under
+ * `_`. So `--help` was a whole-estate sync, and on 2026-09-23 it stripped
+ * `engineCommit` from ten towns' ci-reference/routes.json; on 2026-09-25 a bare
+ * folder path — meant as the place — did the same to seven. An unknown flag, a
+ * positional argument, or --town/--place/--buses with no value now exits 2 and
+ * writes nothing; --help prints this usage and exits 0.
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses } = require('./cli');
+const { parseArgs, resolveBuses, die } = require('./cli');
 const { findTowns, findPlaces, readJson, latestRunDir } = require('./gate_lib');
 const { lfBytes } = require('./line_endings');
 
+const USAGE = 'Usage: node sync_ci_reference.js [--buses "<Buses dir>"] [--town "<Name>"] [--place "<Place name>"]\n' +
+  '  no --town/--place: sync EVERY town and place into its tracked ci-reference/.';
+const FLAGS = new Set(['buses', 'town', 'place', 'help']);
+
+function checkArgs(args) {
+  if (args.help === true) { console.log(USAGE); process.exit(0); }
+  const unknown = Object.keys(args).filter(k => k !== '_' && !FLAGS.has(k));
+  if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a sync with no --town/--place rewrites every map.\n${USAGE}`);
+  if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a map with --town or --place.\n${USAGE}`);
+  for (const k of ['town', 'place']) {
+    if (args[k] === true) die(`--${k} needs a name.\n${USAGE}`);
+  }
+}
+
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const args = parseArgs(process.argv.slice(2));
+checkArgs(args);
 const BUSES = resolveBuses(args);
 
 function syncOne(dir) {

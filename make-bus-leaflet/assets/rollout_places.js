@@ -261,11 +261,32 @@ function rolloutOnePlace(p) {
     : !fs.existsSync(path.join(prevS4.dir, 'boarding.svg')) ? { status: 'MISSING' }
     : gate(GEN_BOARDING, prevS4.dir, 'boarding.svg', path.join(prevS4.dir, 'boarding.svg'));
   const ok = (g) => g.status === 'PASS' || g.status === 'SKIP';
-  const shipped = [hadInternal && 'internal', hadExternal && 'external', wantsBoarding && 'boarding'].filter(Boolean);
   // The built S4's routes.json is read again further down as `_s4rj`, for the
   // stale-S3 refusal. The stamp question is asked BEFORE any of that, so it is
   // read here and reused there rather than opened twice.
   const _s4rjEarly = readJson(path.join(prevS4.dir, 'routes.json')) || {};
+  /* AND THE DERIVED SHEETS, AS rollout.js HAS GATED THEM SINCE 2026-08-28 (buses-data
+   * OA-463, 2026-09-26). This fast path gated internal, external and boarding and never
+   * the schematic, which High Wycombe Aldi ships: on 2026-09-24 OA-165 moved two forced
+   * labels on that schematic, this tool said "every sheet gates PASS", sched-1305 took it
+   * at its word, and the pin bump went red in CI. The town tool learned this exact lesson
+   * on OA-147 — the two fast paths are one guard written twice, and fixing one is how a
+   * guard covers a class once rather than completely.
+   *
+   * Keyed and optioned exactly as status.js's gatePlace gates the same two sheets, so the
+   * board and this tool cannot disagree: PLACE_IGNORE on both, `overridesFromWorkspace`
+   * on the schematic only (the schematiser's nested workspace drops overrides.json, and
+   * the build passes OVERRIDES_FILE; diagram_internal.js copies its own
+   * diagram-overrides.json in, which OVERRIDES_FILE would shadow). A sheet the config asks
+   * for and the S4 does not hold gates NO-SHEET, which is not ok() — so it gets built. */
+  const schematicGate = !_s4rjEarly.internalSchematic ? { status: 'SKIP' }
+    : gate(path.join(SK, 'schematize_internal.js'), prevS4.dir, 'internal-schematic.svg',
+           path.join(prevS4.dir, 'internal-schematic.svg'), { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true });
+  const diagramGate = !_s4rjEarly.internalDiagram ? { status: 'SKIP' }
+    : gate(path.join(SK, 'diagram_internal.js'), prevS4.dir, 'internal-diagram.svg',
+           path.join(prevS4.dir, 'internal-diagram.svg'), { ignoreLineRe: PLACE_IGNORE });
+  const shipped = [hadInternal && 'internal', hadExternal && 'external', wantsBoarding && 'boarding',
+                   _s4rjEarly.internalSchematic && 'schematic', _s4rjEarly.internalDiagram && 'diagram'].filter(Boolean);
   /* AND THE STAMP (OA-179) — see the long note in rollout.js's rolloutOne().
    * Identical shape, identical reasoning, different template: a place is
    * measured against computePlaceEngineVersion(), because a place gets its own
@@ -310,7 +331,7 @@ function rolloutOnePlace(p) {
   }
 
   const stampedEngine = _s4rjEarly.engine;
-  const allPass = ok(internalGate) && ok(externalGate) && ok(boardingGate);
+  const allPass = ok(internalGate) && ok(externalGate) && ok(boardingGate) && ok(schematicGate) && ok(diagramGate);
   const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE;
   if (isStampStale && !FORCE && !REBUILD_STALE) {
     return { name: p.name, status: 'STAMP-STALE',
@@ -588,6 +609,9 @@ for (const p of selected) {
       // printed: a check that silently forgives is the next --force habit starting.
       if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
+      // Same text, new place (OA-463): the three lines above compare SETS of strings and
+      // cannot see it. Reported, never gating.
+      if (d.moved && d.moved.length) console.log(`    MOVED in ${file}: ${d.moved.join(' | ')}`);
     }
   }
   for (const w of (r.blockers || [])) console.log(`    BLOCKING [${w.source}] ${w.text}`);

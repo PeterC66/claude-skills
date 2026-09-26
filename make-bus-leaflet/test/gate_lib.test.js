@@ -63,7 +63,7 @@ test('the version stamp never counts as content lost or gained', () => tmp(dir =
   // what made a scratch build report a false LOST/GAINED pair on 2026-08-09.
   const older = put(dir, 'old.svg', SVG.replace('Valid from Summer 2026', 'Valid from Spring 2026'));
   const newer = put(dir, 'new.svg', SVG);
-  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [] });
+  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [], moved: [] });
   assert.ok(G.VERSION_STAMP_RE.test('Map v2.1 · 2026-08-10'), 'the pre-2026-08-10 stamp format is still recognised');
 }));
 

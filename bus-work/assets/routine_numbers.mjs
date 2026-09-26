@@ -49,7 +49,8 @@
  *
  *  3. IDLE TICKS — measured, from the NAMES of the files in `loop/runs/`, on
  *     `loop_runs.mjs`'s rule: a `-none` tick stopped before dispatch, an `-around`
- *     tick worked but never reached the barred resource. Both count as idle for
+ *     tick worked but never reached the barred resource, and a `-missed` record is
+ *     a scheduled run that left no file of its own (OA-408). All three count as idle for
  *     this ratio, because R9's target — *below five per cent once the tree is not
  *     shared* — is about loop time that did not move the queue. No run file is ever
  *     opened, for `loop_runs.mjs`'s reason: they are prose a fresh session writes
@@ -190,10 +191,12 @@ export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads 
  * disagree with it: the shape this repository files under *look for the helper
  * before you build it*. */
 export { parseRunName } from './loop_runs.mjs';
-import { parseRunName } from './loop_runs.mjs';
+import { parseRunName, UNREACHED } from './loop_runs.mjs';
 
-/** Feeds that mean the tick did not move the queue — loop_runs.mjs's UNREACHED. */
-export const IDLE_FEEDS = new Set(['none', 'around']);
+/** Feeds that mean the tick did not move the queue — loop_runs.mjs's UNREACHED,
+ * imported for the parser's reason above: a second copy of this set would have
+ * gone on counting a `-missed` run (OA-408) as a tick that worked. */
+export const IDLE_FEEDS = UNREACHED;
 
 /** The five numbers, from `readFacts()`'s output. */
 export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_WINDOW_DAYS } = {}) {
@@ -260,6 +263,7 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
     rate: runs.length ? idle.length / runs.length : null,
     none: runs.filter((r) => r.feed === 'none').length,
     around: runs.filter((r) => r.feed === 'around').length,
+    missed: runs.filter((r) => r.feed === 'missed').length,
     why: facts.runNames === null ? 'no loop/runs/ folder in this tree' : undefined,
   };
 
@@ -313,7 +317,7 @@ export function render(r) {
   for (const p of n.ciRedRate.perRepo) {
     L.push(p.measured ? `     ${p.name}: ${p.red} of ${p.runs} runs red — ${pct(p.rate)}` : `     ${p.name}: NOT MEASURED — ${p.why}`);
   }
-  L.push(`3. ${n.idleTicks.label} (target: ${n.idleTicks.target}): ${n.idleTicks.measured ? `${n.idleTicks.idle} of ${n.idleTicks.ticks} ticks — ${pct(n.idleTicks.rate)} (${n.idleTicks.none} none, ${n.idleTicks.around} around)` : `NOT MEASURED — ${n.idleTicks.why}`}`);
+  L.push(`3. ${n.idleTicks.label} (target: ${n.idleTicks.target}): ${n.idleTicks.measured ? `${n.idleTicks.idle} of ${n.idleTicks.ticks} ticks — ${pct(n.idleTicks.rate)} (${n.idleTicks.none} none, ${n.idleTicks.around} around, ${n.idleTicks.missed} missed)` : `NOT MEASURED — ${n.idleTicks.why}`}`);
   L.push(`4. ${n.relayedCommands.label}: at least ${n.relayedCommands.value} of ${n.relayedCommands.files} run records and your-move files — a LOWER BOUND, never a total`);
   L.push(`     control: ${n.relayedCommands.decisions} of the same files carry a DECISION only Peter can make (send, approve, answer), which is not a relay — so the patterns bite and ${n.relayedCommands.value} is low because relays are rarer, not because the regex is dead`);
   L.push(`5. ${n.wordsBeforeActing.label}: task prompt ${n.wordsBeforeActing.taskPrompt === null ? '—' : n.wordsBeforeActing.taskPrompt} words${n.wordsBeforeActing.pages.length ? '; ' + n.wordsBeforeActing.pages.map((p) => `${p.name} ${p.words}`).join(', ') : ''}`);

@@ -665,6 +665,8 @@ function drawServicesPanel(deps) {
   // chosen for. The Key row is the half that is easy to forget and the half a
   // reader needs: a symbol nothing explains is a puzzle, not a landmark.
   if(pois.some(p=>p.cat==='pub')) key.push(['pub','Pub']);
+  // `station` is the third (OA-453), appended last in the same shape.
+  if(pois.some(p=>p.cat==='station')) key.push(['station','Railway station']);
   /* design.keyCols — lay the pictogram rows out in N columns instead of one.
    *
    * The Services panel is ~92mm wide and a Key row is a 4mm symbol plus a name; the longest

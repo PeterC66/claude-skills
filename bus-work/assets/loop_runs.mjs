@@ -42,6 +42,17 @@
  * something. Naming it is the tick's job at step 7 of the task prompt; this module
  * still reads nothing but the filename.
  *
+ * `missed` IS THE THIRD STATE, AND IT IS WRITTEN BY SOMEBODY ELSE (buses-data
+ * OA-408, decided by Peter 2026-09-21). A scheduled run that dies in three seconds
+ * on a session limit never reads its prompt and leaves no file here, so the
+ * listing above could not see it at all. The NEXT tick joins the scheduler's own
+ * run list against this folder and writes `<stamp>-missed.md` for each run with no
+ * file. Such a run fired and did nothing, so it continues the idle run exactly as
+ * `none` does and is never `working` — and it is counted apart, because its cause
+ * is the scheduler's recorded message and not anything in the tree. Until this
+ * reader knew the name, a `-missed` file would have parsed as an ordinary feed and
+ * been counted as a WORKING tick: the one thing it certainly was not.
+ *
  * THE CADENCE IS DERIVED FROM THE FILENAMES, NOT CONFIGURED. OA-288 asked for a
  * threshold taken from the schedule rather than from taste. The schedule is not
  * readable from here — the cron lives in the desktop app's scheduled-task store,
@@ -122,32 +133,40 @@ export function cadenceMin(runs, fallback = 60) {
 /**
  * A feed that means the run never reached `buses-data`'s own queue — `none` for a
  * gate-stop before dispatch, `around` for a tick that dispatched and worked
- * somewhere the bar left open. Both continue the run the row counts.
+ * somewhere the bar left open, `missed` for a scheduled run that left no file of
+ * its own. All three continue the run the row counts. Exported, because
+ * `routine_numbers.mjs` counts the same idleness and once carried its own copy.
  */
-const UNREACHED = new Set(['none', 'around']);
+export const UNREACHED = new Set(['none', 'around', 'missed']);
+
+/** Feeds that did no work at all — every UNREACHED feed except `around`. */
+const DID_NOTHING = new Set(['none', 'missed']);
 
 /**
  * @param {{runs: Array, now?: number, fallbackMin?: number}} p
- * @returns {{ran: boolean, lastAt, ageMin, cadence, idle: number, around: number, lastWorkingAt}}
+ * @returns {{ran: boolean, lastAt, ageMin, cadence, idle: number, around: number, missed: number, lastWorkingAt}}
  *   `idle` is the number of CONSECUTIVE most-recent ticks that never reached the
- *   queue — `none` or `around`. `around` is how many of those did work anyway.
+ *   queue — `none`, `around` or `missed`. `around` is how many of those did work
+ *   anyway, and `missed` how many left no file of their own.
  */
 export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
   const list = (runs || []).slice();
   const cadence = cadenceMin(list, fallbackMin);
-  if (!list.length) return { ran: false, lastAt: null, ageMin: null, cadence, idle: 0, around: 0, lastWorkingAt: null };
+  if (!list.length) return { ran: false, lastAt: null, ageMin: null, cadence, idle: 0, around: 0, missed: 0, lastWorkingAt: null };
   const last = list[list.length - 1];
   let idle = 0;
   let around = 0;
+  let missed = 0;
   for (let i = list.length - 1; i >= 0 && UNREACHED.has(list[i].feed); i--) {
     idle++;
     if (list[i].feed === 'around') around++;
+    if (list[i].feed === 'missed') missed++;
   }
   // NOT the complement of the loop above, and that is the whole substance of
   // OA-303. An `around` tick did a real unit of work, so it belongs here and sets
   // `lastWorkingAt`; it also belongs in the run above, because the bar it worked
-  // around is still there. Only a `none` tick is in neither.
-  const working = list.filter((r) => r.feed !== 'none');
+  // around is still there. A `none` or a `missed` run is in neither.
+  const working = list.filter((r) => !DID_NOTHING.has(r.feed));
   return {
     ran: true,
     lastAt: last.at,
@@ -155,6 +174,7 @@ export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
     cadence,
     idle,
     around,
+    missed,
     lastWorkingAt: working.length ? working[working.length - 1].at : null,
   };
 }
@@ -208,19 +228,24 @@ export function loopRunItems({ health, idleThreshold = 2, stopFile = false, tree
   // sentence on a board this project does not ship — and with `around` counted in
   // the run, the old wording would have been false rather than merely imprecise.
   const around = h.around || 0;
+  // OA-408. A `missed` run is one the scheduler fired and no tick ever wrote up,
+  // so "done nothing" stays true of it; what the title adds is that the cause is
+  // in the scheduler's own record, which the `-missed` file quotes.
+  const missed = h.missed || 0;
+  const missedClause = missed ? `, ${missed} of them leaving no run file of their own` : '';
   const title = !idling
     ? 'The scheduled loop is halted by `loop/STOP`'
     : around
-      ? `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} without reaching its own queue — ${around} of them worked around the bar rather than clearing it (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`
-      : `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} and done nothing (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`;
+      ? `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} without reaching its own queue — ${around} of them worked around the bar rather than clearing it${missedClause} (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`
+      : `The scheduled loop has fired ${h.idle} time${h.idle === 1 ? '' : 's'} and done nothing${missedClause} (last tick ${hhmm(h.lastAt)}, ${ago(h.ageMin)} ago)`;
 
   return [{
     key: 'loop-idle', rank, type: 'loop-health',
     title,
-    why: `${causes.join(' Also: ')}${around ? `  ${around} of those ${h.idle} tick${h.idle === 1 ? '' : 's'} found work in a tree the bar left open and named itself \`-around\`, so the count below measures how long the queue has been out of reach rather than how idle the loop has been.` : ''}${h.lastWorkingAt ? `  The last tick that finished a unit of work was ${hhmm(h.lastWorkingAt)}.` : ''} Each stopped tick still wrote a file in \`loop/runs/\` saying why; this row exists because nothing read them.`,
+    why: `${causes.join(' Also: ')}${around ? `  ${around} of those ${h.idle} tick${h.idle === 1 ? '' : 's'} found work in a tree the bar left open and named itself \`-around\`, so the count below measures how long the queue has been out of reach rather than how idle the loop has been.` : ''}${missed ? `  ${missed} of those ${h.idle} run${h.idle === 1 ? '' : 's'} never reached a prompt: the scheduler fired ${missed === 1 ? 'it' : 'them'}, no tick wrote a file, and a later tick recorded ${missed === 1 ? 'it' : 'each'} as \`-missed\` with the scheduler's own status and message — read ${missed === 1 ? 'that file' : 'those files'} for the cause, which no tree state explains.` : ''}${h.lastWorkingAt ? `  The last tick that finished a unit of work was ${hhmm(h.lastWorkingAt)}.` : ''} Each stopped tick still wrote a file in \`loop/runs/\` saying why; this row exists because nothing read them.`,
     who: 'Peter', runbook: 'loop',
     ageDays: h.ageMin == null ? null : Math.floor(h.ageMin / 1440),
-    idle: h.idle, around, cadenceMin: h.cadence,
+    idle: h.idle, around, missed, cadenceMin: h.cadence,
     do: [
       ...(treeDirty ? [{ kind: 'shell', cwd: busesDir, cmd: 'git status --porcelain', note: 'commit or revert what this names, and the next tick runs' }] : []),
       ...(stopFile ? [{ kind: 'shell', cwd: busesDir, cmd: 'rm -f loop/STOP', note: 'only when you actually want the loop back' }] : []),

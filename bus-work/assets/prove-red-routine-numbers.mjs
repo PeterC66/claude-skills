@@ -117,6 +117,11 @@ console.log('\n3. Idle ticks — and case (a) is a REGRESSION this harness caugh
   check('    2 of 4 are idle — 50%, with none and around split out', n.idle === 2 && n.none === 1 && n.around === 1 && Math.abs(n.rate - 0.5) < 1e-9, JSON.stringify(n));
   check('    and parseRunName lowercases the feed, which is the rule this now borrows', parseRunName(stamp(0, 'OA')).feed === 'oa');
 
+  // (b) OA-408: a `-missed` record is a scheduled run that left no file of its own.
+  // It is idle, and counted apart; the set is loop_runs.mjs's, not a copy.
+  const m = routineNumbers(facts({ runNames: [stamp(1 * DAY, 'OA'), stamp(2 * DAY, 'missed')] }), { now: NOW }).numbers.idleTicks;
+  check('(b) a missed run is idle and counted as missed', m.ticks === 2 && m.idle === 1 && m.missed === 1 && m.none === 0, JSON.stringify(m));
+
   const old = routineNumbers(facts({ runNames: [stamp(90 * DAY, 'none'), stamp(1 * DAY, 'OA')] }), { now: NOW }).numbers.idleTicks;
   check('a tick outside the window is in neither the numerator nor the denominator', old.ticks === 1 && old.idle === 0, JSON.stringify(old));
   const absent = routineNumbers(facts({ runNames: null }), { now: NOW }).numbers.idleTicks;

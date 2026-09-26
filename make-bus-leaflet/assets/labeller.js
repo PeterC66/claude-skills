@@ -233,6 +233,8 @@ class Labeller {
    *   size      mm
    *   priority  higher goes first and gets the better spots (default 0)
    *   own       [x0,y0,x1,y1] this label's OWN symbol, exempt from the hard grid
+   *   ownMarks  [[x0,y0,x1,y1], ...] the marks inside `own` the label may still not
+   *             cover — its badges, as against the space around them (OA-302)
    *   fixed     {x, y, anchor} skip placement entirely (a hand-placed override)
    *   prefer    [dx, dy] the direction the caller would rather the label sat in.
  *             Costed at wPrefer, not enforced — see _preference().
@@ -325,6 +327,24 @@ class Labeller {
         if (!relaxHard) return null;
         hardPenalty = this.o.wHard;
       }
+    }
+    /* `ownMarks` — THE EXEMPTION IS DIRECTIONAL (2026-09-26, buses-data OA-302).
+     * `own` says a label's own symbols may not BLOCK it, and for a terminus caption
+     * it is the whole badge row plus 3.6 mm, so until now sliding back over its own
+     * badge cost nothing: Huntingdon printed "401to Leighton Bromswold", the caption
+     * starting 0.4 mm inside the disc, because the E spot at the nominal 2.6 mm gap
+     * is inside a 3.0 mm badge and was the cheapest candidate on the list. The
+     * marks are the badges themselves, and covering one is treated exactly as a
+     * foreign symbol is: refused in the strict pass, `wHard` in the relaxed one, so
+     * a mustPlace destination is still never dropped for it. ADDED to any foreign
+     * penalty, never merged with it: on Huntingdon every candidate already pays
+     * `wHard` for something else, and with a max() the spot on the badge tied the
+     * spot beside it and won on distance. */
+    if (it.ownMarks) for (const m of it.ownMarks) {
+      if (!boxesHit(b, m)) continue;
+      if (!relaxHard) return null;
+      hardPenalty += this.o.wHard;
+      break;
     }
     for (const pb of this.placedBoxes) {
       if (skipBoxes && skipBoxes.has(pb)) continue;

@@ -2399,7 +2399,7 @@ if(IR && TRIM){
     }
     aplaced.push([bx,by]);
     let bxMin=Infinity,bxMax=-Infinity,byMin=Infinity,byMax=-Infinity;
-    const pendingTermini=[];
+    const pendingTermini=[], clusterMarks=[];
     groups.forEach((g,gidx)=>{
       const ry=by+(gidx-(groups.length-1)/2)*RH;
       let lastX=bx;
@@ -2412,6 +2412,7 @@ if(IR && TRIM){
         // 3.0mm frame-cut badge under one 2.6mm in-town one, including St Neots'
         // diagram where two of them share a centre EXACTLY.
         noteBadge(bxi,ry,3.0+CXW,3.0,3.0);
+        clusterMarks.push([bxi-3.2-CXW,ry-3.2,bxi+3.2+CXW,ry+3.2]);   // the frame-exit reserve's own box
         bxMin=Math.min(bxMin,bxi); bxMax=Math.max(bxMax,bxi); byMin=Math.min(byMin,ry); byMax=Math.max(byMax,ry); });
       if(!g.label) return;
       // A "to X" shared by 2+ differently-coloured routes (e.g. 18 + 905 both to
@@ -2490,8 +2491,12 @@ if(IR && TRIM){
     // "to St Ives" and "to Huntingdon" both came inside and printed over the
     // ribbon (3 -> 5 defects); left alone, one of them keeps a clean spot (3 -> 4)
     // and neither is dropped, because both are mustPlace.
+    // ...and `ownMarks` is the other half of that exemption (OA-302): the space
+    // around the cluster may not block its caption, but the badges themselves may
+    // not be covered — "401to Leighton Bromswold" on Huntingdon was the E spot at
+    // the nominal gap, inside its own 3.0 mm disc, and cost nothing.
     if(LAB) for(const t of pendingTermini)
-      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6]}, t));
+      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6], ownMarks:clusterMarks}, t));
   }
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;

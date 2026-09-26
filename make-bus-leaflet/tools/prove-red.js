@@ -382,8 +382,8 @@ const MUTATIONS = [
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a pub stops printing its name, so the category delivers a glass symbol and no Wetherspoon',
-    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];",
-    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];" },
+    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub','station'];",
+    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','station'];" },
 
   { suite: 'services_panel.test.js', file: 'services_panel.js',
     what: 'the Key loses its pub row, so the sheet draws a symbol nothing on the page explains',
@@ -394,6 +394,39 @@ const MUTATIONS = [
     what: 'the pub glyph is unreachable while its colour stays, so the category ships as a plain dot',
     find: "    case 'pub':         // a tapered pint glass, its head separated from the beer",
     to: "    case 'pub-unreachable': // a tapered pint glass, its head separated from the beer" },
+
+  /* OA-453, 2026-09-26 — stations, the third opt-in, guarded the pub's way:
+   * the opt-in itself, the blank fallback, the miniature exclusion, the name,
+   * the Key row and the glyph each have a mutation their own test must catch. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'stations stop being opt-in, so every town near a railway gains its station',
+    find: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];",
+    to: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a nameless station falls back to "Station", which walks it past the nameless-miss default',
+    find: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];",
+    to: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||'Station'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a miniature park railway is drawn as a station',
+    find: "(t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return",
+    to: "(t.railway==='station'||t.railway==='halt')) return" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a station stops printing its name, so the sheet says *a station* and never which',
+    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub','station'];",
+    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key loses its station row, so the sheet draws a train nothing on the page explains',
+    find: "  if(pois.some(p=>p.cat==='station')) key.push(['station','Railway station']);",
+    to: "" },
+
+  { suite: 'icons.test.js', file: 'icons.js',
+    what: 'the station glyph is unreachable while its colour stays, so the category ships as a plain dot',
+    find: "    case 'station':     // a train seen head on: solid cab with a knocked-out",
+    to: "    case 'station-unreachable': // a train seen head on: solid cab with a knocked-out" },
 
   /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
    * label rule behind them. Two of these guard a THRESHOLD and one guards the

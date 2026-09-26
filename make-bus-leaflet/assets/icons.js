@@ -86,6 +86,10 @@ const GRID_COL = {
   // top of `leisure` (#e07b00) and `library` (#8a5a00), and a category a town
   // opts into has to be told apart from the ones that are always on.
   pub: '#8e3b46',
+  // OA-453. Indigo, not the red a railway sign suggests: red is `gp` (#d00),
+  // and the pub's rose-brown sits next to it. The train-front SHAPE is what
+  // tells it from `school`'s blue at 4.2 mm; the colour only has to not clash.
+  station: '#2b3990',
 };
 /* `cw > 0` draws the same glyph as one white silhouette fattened by cw, to be
  * laid down before the real one. It is a separate PASS rather than
@@ -163,6 +167,15 @@ function gridGlyph(cat, col, cw = 0) {
                         // drawing decision for a person with a proof at 4.2 mm.
       return f('M6.6,4.6 H17.4 L15.4,20.8 H8.6 Z')
            + k('M7.2,9.2 H16.8 L16.6,10.9 H7.4 Z');
+    case 'station':     // a train seen head on: solid cab with a knocked-out
+                        // windscreen and two lamps, standing on two splayed
+                        // rails. Not the double-arrow — that is a registered
+                        // mark, and a map that borrows it claims to be National
+                        // Rail's. The rails are strokes at GW, like the runner's
+                        // limbs, so they survive the charcoal pass.
+      return f('M8,2.8 H16 C17.6,2.8 18.6,3.8 18.6,5.4 V17.4 H5.4 V5.4 C5.4,3.8 6.4,2.8 8,2.8 Z')
+           + k('M7.6,5.2 H16.4 V10.2 H7.6 Z M7.8,12.8 h2.4 v2.2 h-2.4 Z M13.8,12.8 h2.4 v2.2 h-2.4 Z')
+           + st('M8.6,18.4 L6.2,21.2 M15.4,18.4 L17.8,21.2');
     default:
       return dot(12, 12, 7);
   }
@@ -235,6 +248,10 @@ function icon(cat, x, y, s = 2.2, ink, set) {
     case 'pub': // pint glass: beer under a pale head
       return T(`<path d="M-1.35,-2.1 H1.35 L0.95,2.3 H-0.95 Z" fill="#8e3b46"/>
         <path d="M-1.29,-2.1 H1.29 L1.16,-1.15 H-1.16 Z" fill="#f2e3c6"/>`);
+    case 'station': // train front: cab, pale windscreen, two rails
+      return T(`<rect x="-1.5" y="-2.3" width="3" height="3.6" rx="0.6" fill="#2b3990"/>
+        <rect x="-1" y="-1.7" width="2" height="1.2" fill="#ffffff"/>
+        <path d="M-0.8,1.5 L-1.4,2.4 M0.8,1.5 L1.4,2.4" stroke="#2b3990" stroke-width="0.45" fill="none"/>`);
     default:
       return `<circle cx="${x}" cy="${y}" r="${s*0.7}" fill="#888"/>`;
   }

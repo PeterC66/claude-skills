@@ -110,6 +110,38 @@ test('OA-340: two Red Lions is what OA-250 says it is — both drawn, one key, a
     { include: ['pubs'] }).length, 1);
 });
 
+/* ---------------------------------------------------------------------------
+ * OA-453 — stations, the third opt-in category, in the pub's exact shape.
+ * St Neots East named its station with a hand-pinned note because no category
+ * could draw one. The node below is the one in that map's own pull.
+ * ------------------------------------------------------------------------- */
+
+test('OA-453: stations are opt-in per town, and neither other opt-in buys them', () => {
+  const stn = { railway: 'station', name: 'St Neots' };
+  assert.strictEqual(classify(stn, {}), null, 'a town that has asked for nothing draws no station');
+  assert.strictEqual(classify(stn, { include: ['pubs', 'allotments'] }), null,
+    'and asking for pubs and allotments has not thereby asked for stations');
+  assert.deepStrictEqual(classify(stn, { include: ['stations'] }), ['station', 'St Neots']);
+  assert.deepStrictEqual(classify({ railway: 'halt', name: 'Shippea Hill' }, { include: ['stations'] }),
+    ['station', 'Shippea Hill'], 'a halt is a small station, and a reader can catch a train there');
+  assert.strictEqual(classify({ railway: 'station', station: 'miniature', name: 'Park Railway' }, { include: ['stations'] }),
+    null, 'a miniature park railway is not a station a bus reader is looking for');
+});
+
+test('OA-453: a station prints its name, and a NAMELESS station is offered but not drawn', () => {
+  assert.ok(printsName({ cat: 'station', name: 'St Neots' }),
+    'the symbol says *a station*; only the name says WHICH');
+  assert.strictEqual(classify({ railway: 'station' }, { include: ['stations'] })[1], '',
+    'the fallback is BLANK, like the pub\'s — a "Station" label would sneak past the nameless default');
+  const report = {};
+  const out = selectPois([[node(52.2265, -0.2505, { railway: 'station', name: 'St Neots' }),
+                           node(52.2400, -0.2505, { railway: 'station' })]],
+    { include: ['stations'] }, report);
+  assert.deepStrictEqual(out.map(p => p.name), ['St Neots'], 'OA-238: a bare glyph nobody chose stays off the sheet');
+  assert.deepStrictEqual(report.candidates.map(c => c.key), ['station:St Neots', 'station:'],
+    'and it is still OFFERED in the chooser');
+});
+
 test('a way with only a centre is placed at its centre', () => {
   // NAMED on purpose since OA-338: an unnamed library is called `Library`, which
   // is a category label rather than a name, so it now defaults to `miss` and this

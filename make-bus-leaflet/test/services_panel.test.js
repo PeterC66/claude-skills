@@ -293,6 +293,16 @@ test('OA-340: a pub on the sheet earns a Key row, and no pub earns none', () => 
   assert.ok(!/>Pub</.test(without.svg), 'a category with no POI earns no row');
 });
 
+test('OA-453: a station on the sheet earns a Key row, after the pub, and no station earns none', () => {
+  const withStn = run({ pois: [{ cat: 'shop' }, { cat: 'station' }, { cat: 'pub' }] });
+  assert.match(withStn.svg, /Railway station</);
+  assert.match(withStn.svg, /<icon cat="station"/, 'the row carries the real pictogram, not a placeholder');
+  assert.ok(withStn.svg.indexOf('Pub<') < withStn.svg.indexOf('Railway station<'),
+    'appended LAST, so no existing Key row moves on a sheet that opts in to nothing');
+  const without = run({ pois: [{ cat: 'shop' }, { cat: 'pub' }] });
+  assert.ok(!/Railway station</.test(without.svg), 'a category with no POI earns no row');
+});
+
 test('footerSafe:false leaves the Key pitch alone however long the Key is', () => {
   const many = ['shop', 'gp', 'pharmacy', 'library', 'museum', 'leisure', 'school', 'park',
     'industrial', 'community', 'townhall'].map((cat) => ({ cat }));

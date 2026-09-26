@@ -82,7 +82,7 @@
  * The OSM tag combinations this engine draws, in precedence order — the first
  * match wins, so a leisure centre tagged as a school stays a school only if the
  * school test comes first. Returns [category, name] or null for "not a POI".
- * `allotments` and `pubs` are opt-in per town (poi.include) because most towns
+ * `allotments`, `pubs` and `stations` are opt-in per town (poi.include) because most towns
  * do not want them; everything else is on for every town.
  *
  * WHY `pubs` IS OPT-IN RATHER THAN A CATEGORY LIKE THE OTHERS (OA-340, Peter's
@@ -117,6 +117,14 @@ function classify(t, poiCfg) {
    * nameless-`miss` default keeps it off the page while still offering it in the
    * chooser — see the `noName` rule below. */
   if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];
+  /* OA-453, the third opt-in: a railway station, which every reader knows and no
+   * sheet could mark — St Neots East named its station with a hand-pinned note.
+   * Opt-in for the same reason as pubs: a town that says nothing renders byte for
+   * byte as it did, and whether a station is worth its box is a local answer. A
+   * `halt` is a small station and counts; `station=miniature` is a park railway
+   * and does not. The fallback is BLANK, like the pub's, so an unnamed station is
+   * offered in the chooser and kept off the page by OA-238's nameless default. */
+  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];
   if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
   return null;
 }
@@ -140,9 +148,11 @@ function classify(t, poiCfg) {
  */
 /* `pub` is here because the whole point of the category is *the Wetherspoon* —
  * a pub symbol with no name beside it is no use to anybody navigating by it
- * (OA-340). It is also the one auto-named category with a BLANK fallback, so
- * `noName` below reads an unnamed pub as unnamed and leaves it off the page. */
-const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];
+ * (OA-340). It is also an auto-named category with a BLANK fallback, so
+ * `noName` below reads an unnamed pub as unnamed and leaves it off the page.
+ * `station` (OA-453) is the other, for the same reason: a station symbol is
+ * worth its box because it says WHICH station. */
+const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub','station'];
 
 /** Does this POI's own name get printed beside its symbol, or is it symbol-only? */
 function printsName(p){
@@ -320,9 +330,10 @@ function applyTiers(pois, POI, report){
   /* THE DEFAULT IS NOT ALWAYS `may` ANY MORE (OA-238, Peter's decision 2026-09-03).
    *
    * A POI with no name prints nothing beside its symbol — `classify()` supplies a
-   * fallback name for every category except `pharmacy`, `gp` and `pub`, so the
-   * population of this rule is a chemist, a surgery, or (since OA-340, on a town
-   * that has switched pubs on) a pub OpenStreetMap has not named.
+   * fallback name for every category except `pharmacy`, `gp`, `pub` and `station`,
+   * so the population of this rule is a chemist, a surgery, or (since OA-340 and
+   * OA-453, on a town that has switched them on) a pub or a station OpenStreetMap
+   * has not named.
    * It costs the same 4.2 x 4.2 mm box and the same placer anchor as a named one,
    * for a bare glyph nobody chose. So it defaults to NOT DRAWN.
    *
@@ -365,7 +376,8 @@ function applyTiers(pois, POI, report){
    * For pharmacy and gp, which reach here genuinely blank, the behaviour is
    * exactly what OA-238 decided and this line is unchanged. A `pub` reaches here
    * blank too but is auto-named, so it takes the first arm and is missed — which
-   * is OA-340's own answer to *what does a nameless pub do*.
+   * is OA-340's own answer to *what does a nameless pub do*. A `station` (OA-453)
+   * takes the same arm for the same reason.
    *
    * De-duplication still reads a label as no-name for EVERY category, which is
    * the other half of OA-338 and is not affected: two unnamed town halls 5 km

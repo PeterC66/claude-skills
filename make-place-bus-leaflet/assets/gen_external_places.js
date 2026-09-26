@@ -453,33 +453,25 @@ const badgeClash = (x, y, hw, hh) => BADGES.some(g => -badgeGap(g, { x, y, hw, h
  * `maxShift` degrees of its true bearing. The clamp is the honesty control: a spoke can
  * be nudged to the edge of its compass sector but never into the opposite one.
  *
- * Absent the key no bearing moves and every sheet is byte-identical. A place with
- * hand-pinned bearings in overrides.json should not turn it on — those are inputs
- * here and would be spread along with the rest.
- *
- * THE CRUSH IS MEASURED WITH THE KEY OFF TOO (OA-314). The 18° warning used to live
- * only inside the opted-in branch, so the map most likely to need the feature was the
- * one map that said nothing: three Co-op sheets sat at 5° and 6° with clean
- * build-warnings.txt files. The warning goes to stderr only; no ink moves.
+ * Absent the key no bearing moves and every sheet is byte-identical, but the crush is
+ * still measured and warned on (OA-314: three Co-op sheets sat at 5° and 6° with clean
+ * warnings files). A place with hand-pinned bearings in overrides.json should not turn
+ * it on — those are inputs here and would be spread along with the rest.
  */
 const norm360 = a => ((a % 360) + 360) % 360;
 const BEARINGS = (() => {
   const raw = dests.map(b => { const ov = (OV.branches || {})[b.name] || {};
     return norm360(ov.bearing != null ? ov.bearing : b.bearing); });
   if (raw.length < 2) return raw;
+  const order = raw.map((_, i) => i).sort((a, b) => raw[a] - raw[b]);
   if (!SPRD) {
-    const ord = raw.map((_, i) => i).sort((a, b) => raw[a] - raw[b]);
-    let k0 = 0;
-    const g = ord.map((idx, k) => norm360(raw[ord[(k + 1) % ord.length]] - raw[idx]) || 360);
-    g.forEach((v, k) => { if (v < g[k0]) k0 = k; });
-    if (g[k0] < 18) process.stderr.write('spokeSpread is off and two spokes are ' + g[k0].toFixed(0)
-      + '° apart ("' + dests[ord[k0]].name + '" and "' + dests[ord[(k0 + 1) % ord.length]].name
-      + '"). Merge co-terminating destinations, or set design.spokeSpread.\n');
+    const g = order.map((idx, k) => norm360(raw[order[(k + 1) % order.length]] - raw[idx]) || 360), k0 = g.indexOf(Math.min(...g));
+    if (g[k0] < 18) process.stderr.write('spokeSpread is off and two spokes are ' + g[k0].toFixed(0) + '° apart ("' + dests[order[k0]].name
+      + '" and "' + dests[order[(k0 + 1) % order.length]].name + '"). Merge co-terminating destinations, or set design.spokeSpread.\n');
     return raw;
   }
   const maxShift = SPRD.maxShift != null ? SPRD.maxShift : 30;
   const strength = SPRD.strength != null ? SPRD.strength : 1;
-  const order = raw.map((_, i) => i).sort((a, b) => raw[a] - raw[b]);
   const step = 360 / order.length;
   let sx = 0, sy = 0;
   order.forEach((idx, k) => { const d = (raw[idx] - k * step) * Math.PI / 180; sx += Math.cos(d); sy += Math.sin(d); });

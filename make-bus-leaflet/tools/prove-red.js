@@ -1953,6 +1953,17 @@ const MUTATIONS = [
     what: 'an area S4 with no orientation record commits anyway, so the rotation the build chose is lost with nothing said',
     find: "          if (why && !f['force-meta']) {",
     to: "          if (false) {" },
+
+  /* buses-data OA-318 item 3. The S5 config guard, both ways it can be undone. */
+  { suite: 'stage_s5_config.test.js', file: 'stage.js',
+    what: 'an S5 holding a superseded routes.json commits, so the portal re-draws the sheet its S4 corrected (St Neots v4.0)',
+    find: "        if (body(mine) !== body(theirs)) {",
+    to: "        if (false) {" },
+
+  { suite: 'stage_s5_config.test.js', file: 'stage.js',
+    what: 'the re-stamped "version" counts as a difference, so every ordinary S5 whose pull re-stamped it is refused',
+    find: "          try { const j = JSON.parse(t); delete j.version; return JSON.stringify(j); } catch (e) { return t; } };",
+    to: "          try { const j = JSON.parse(t); return JSON.stringify(j); } catch (e) { return t; } };" },
   /* OA-224 Tier 3.1. cli.js is the one parser and the one estate resolver, so it
    * is the one place a mistake reaches nine scripts at once. Each mutation below
    * is a change that LOOKS like a tidy-up and silently alters every caller. */

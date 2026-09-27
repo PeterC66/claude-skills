@@ -76,6 +76,16 @@ BODS gives five stop columns and no way to tell same-named stops apart — Cambr
 
 How much stand cover exists town by town is measured in `Development Docs/stand-coverage_2026-08-22.md` — short answer, lettering is an authority's policy rather than a national standard: Buckinghamshire letters its on-street town-centre stops, Cambridgeshire letters only its bus stations. **Read that measurement with its own correction, though** — it counts clusters of *same-named* stops, and the 2026-08-22 boarding-plan prototype showed that is not the question the product asks: at St Ives the busiest service boards 47 m away under a different name, so the place scores "fully lettered" and would still misdirect most of its readers (`Development Docs/boarding-plan-product_2026-08-22.md` §7.1). Re-counting against the frame is an open action.
 
+### The monthly refresh, and the applier it retired
+
+*Moved out of `SKILL.md`'s GTFS-tooling bullet on 27 September 2026, after the Opus 5.5 prompt audit; the rules stayed there, the dates and incidents came here.*
+
+**`notInBods` was introduced by OA-259 on 2026-09-06**, and since the same day a town writes *known and deliberately not drawn* into `notOnLeaflet[]` and nowhere else. **The scheduled task's name is historical** — it was *Refresh Cambridgeshire bus data* when Cambridgeshire was the only region, and the script now refreshes every built one. The dataset's `arrival_time`/`departure_time` columns, which `gtfs_duration.py` needs, were added on 2026-08-03, which is why an older db has to be rebuilt before it can fill `minutesToDestination`.
+
+**The grading dates from buses-data OA-091, 2026-09-18.** `classify()` being an allowlist, and taking its non-actionable set from `NON_ACTIONABLE` rather than a second copy, were both live faults until 2026-09-15. **The grade has been DATA as well as prose since 2026-09-22** (buses-data OA-426), when `refresh-grades_<date>.json` began to be written beside the report.
+
+**`auto_refresh_month.py`, the Tier-1 unattended applier that rebuilt S1→S5 for a SAFE town and staged a portal proposed-update, was retired on a measurement**: across three runs and 24 town-months its SAFE path fired **once**, and that once was wrong, because the day string it would have copied came from a `gtfs_query` fold that turns a single `calendar_dates` addition into a weekly day (buses-data OA-410). An unattended applier is only as safe as the weakest number it copies.
+
 ## The run folders
 
 ### What a skipped `_latest` refresh cost, twice
@@ -97,3 +107,29 @@ How much stand cover exists town by town is measured in `Development Docs/stand-
 **The complexity gate must run after `match_routes.js`**, and that is a measurement rather than a preference: Ramsey read GREEN without the road match and AMBER with it, because the gate scores straight-line geometry otherwise and its calibration does not hold.
 
 **The unattended draft was verified end to end on a real new town** — Ramsey, Cambridgeshire, 8 services, AMBER — producing route badges, terminus arrows, road names, north arrow, version stamp and real destinations (March, Peterborough, Huntingdon, St Ives) with journey times, and `status.js` passed it alongside all 7 towns that existed then.
+
+### The three S4 refusals, and the builds that earned them
+
+*Moved out of `SKILL.md`'s Stages 4 & 5 paragraph on 27 September 2026, after the Opus 5.5 prompt audit.*
+
+**`build_s4.js` is buses-data OA-310, 2026-09-12.** Until it landed only the two rollouts ever wrote `build-warnings.txt`, and both of those refuse a DATA change, so a config rebuild was the one kind of build that produced no record of what the engine refused to draw.
+
+**The missing-sheet refusal is OA-206.** Wisbech v3.1 was hand-built on 2026-08-31 without `internal-schematic.svg`, and `commit`, every byte gate and the quality ratchet all accepted it; the only thing that said so was `sync_ci_reference.js` reporting a DELETION against the golden master.
+
+**The `build-meta.json` refusal exists because `gen_internal.js` writes it only when `BUILD_META_DIR` is set**, and until 2026-09-12 only `rollout.js` set it, so a hand build had to remember `BUILD_META_DIR="<the run dir>" node "%SK%\gen_internal.js"` or it lost the record of which way up the sheet was drawn.
+
+**The `build-warnings.txt` refusal arrived on 2026-09-12 (OA-310 item 2)** — the boundary half of the same fix, because `commit` cannot produce the log and a refusal is its only honest move. **It was scoped to a log that had GONE rather than one a map never had, and since 2026-09-14 it is the flat rule**: the three maps the scoping existed for — Huntingdon v5.0, Wisbech v4.1 and St Neots v4.0, data changes built before `build_s4.js` existed — were rebuilt in place and re-committed on 2026-09-13 with all nine sheets byte-identical, so every map in the estate now has one and no map is left that a flat *every S4 must have one* is unfair to. The scoping was itself the hole: a map whose predecessor declared no log got no protection at all, which is how those three stayed logless.
+
+## The gates in CI
+
+### Why no workflow here clones buses-data
+
+*Moved out of `SKILL.md`'s `changing-the-engine.md` bullet on 27 September 2026, after the Opus 5.5 prompt audit.*
+
+**The arrangement was rewritten on 2026-09-18 by `buses-data` OA-398.** Before it, this repository's `status` job cloned `buses-data` with a token and gated its whole estate on every engine push.
+
+**What that bought is two things the old arrangement could not give.** `CROSS_REPO_PAT2` expires on 22 November 2026 and `status` is a required check here with strict mode on, so its expiry would have blocked every pull request outright. And a verdict here was about whatever `buses-data`'s `main` held for the minutes the job ran — run 34607735390 went red on the quality ratchet four minutes after an innocent engine commit, because of a commit pushed 95 minutes earlier in another repository.
+
+**What it cost is stated plainly rather than hidden**: this job no longer gates twenty-one maps on every engine push, and four harnesses moved to `buses-data`'s workflow because their subject is that estate — the S6 falsification, the render sweep, the exclusion-parity join's real half and the stray-output sweep. Narrower and truthful, against wider and floating.
+
+**`check-vendored.mjs` has read the requires out of the code itself since 2026-08-26**, because a file the portal has never been given is in neither the manifest nor the tree, so no drift table could warn about it.

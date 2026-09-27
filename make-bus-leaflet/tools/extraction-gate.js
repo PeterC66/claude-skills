@@ -9,7 +9,9 @@
  * Run from `make-bus-leaflet/`. --buses and --portal override the two paths
  * below. Two more exist for the prove-red harness and are not needed by hand:
  * --file <path> keeps the baseline somewhere other than tools/, and
- * --swap <generator>=<path> runs that generator from <path> instead of assets/.
+ * --swap <generator>=<path> runs that generator from <path> instead of assets/;
+ * a swapped gen_internal.js also replaces the one the schematic and diagram
+ * pre-stages spawn, as an edit to assets/ would (OA-489).
  *
  * IT ASKS TWO QUESTIONS, and the second is the one a refactor needs.
  *
@@ -161,8 +163,29 @@ function jobsFor(unit, isPlace) {
     .map(([sheet, dir, gen, file, opts]) => ({ key: `${unit.name}/${sheet}`, gen: SWAP[gen] || path.join(dir, gen), data: s4.dir, file, opts }));
 }
 
+// A SWAPPED gen_internal.js MUST REACH THE ONE THE PRE-STAGES SPAWN (buses-data
+// OA-489). schematize_internal.js and diagram_internal.js each run their own
+// gen_internal.js, found by engine_paths.js spawnTarget(): the run directory
+// first, then SKILL_ASSETS, which runGenerator points at assets/. It copies only
+// the JSONs into the run directory, so a swap stopped at the outer generator and
+// the nested one was always assets/'s — while a real edit to that file moves
+// both sheets. Stage the data with the swapped copy beside it instead, which is
+// the run-directory arm a real build's own copy takes.
+const NESTS_GEN_INTERNAL = new Set(['schematize_internal.js', 'diagram_internal.js']);
+
 function drawHash(job) {
-  const run = G.runGenerator(job.gen, job.data, { overridesFromWorkspace: !!job.opts.overridesFromWorkspace });
+  let data = job.data;
+  let stage = null;
+  if (SWAP['gen_internal.js'] && NESTS_GEN_INTERNAL.has(path.basename(job.gen))) {
+    stage = G.mkTmp();
+    for (const name of fs.readdirSync(job.data)) {
+      if (name.endsWith('.json') && fs.statSync(path.join(job.data, name)).isFile()) fs.copyFileSync(path.join(job.data, name), path.join(stage, name));
+    }
+    fs.copyFileSync(SWAP['gen_internal.js'], path.join(stage, 'gen_internal.js'));
+    data = stage;
+  }
+  const run = G.runGenerator(job.gen, data, { overridesFromWorkspace: !!job.opts.overridesFromWorkspace, withPackGens: !!stage });
+  if (stage) G.rmTmp(stage);
   const outPath = path.join(run.tmpDir, job.file);
   let h = 'FAIL';
   if (run.ok && fs.existsSync(outPath)) {

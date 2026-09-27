@@ -868,6 +868,12 @@ def pois_query(bbox):
   way["shop"="supermarket"]({box});
   node["leisure"~"^(sports_centre|fitness_centre|park|recreation_ground)$"]({box});
   way["leisure"~"^(sports_centre|fitness_centre|park|recreation_ground)$"]({box});
+  node["railway"~"^(station|halt)$"]({box});
+  way["railway"~"^(station|halt)$"]({box});
+  node["amenity"="pub"]({box});
+  way["amenity"="pub"]({box});
+  node["landuse"="allotments"]({box});
+  way["landuse"="allotments"]({box});
 )
 ;
 out center tags;"""

@@ -30,8 +30,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseRunName, readRuns, cadenceMin, loopHealth, loopRunItems } from './loop_runs.mjs';
-import { needsOf } from './concurrency.mjs';
+import { parseRunName, readRuns, cadenceMin, loopHealth, loopRunItems, silenceOld, silentSlots, loopSilentItems } from './loop_runs.mjs';
+import { needsOf, readSessionTurns } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 let bad = 0;
@@ -276,6 +276,7 @@ console.log('\n11. the concurrency verdict');
 {
   check('loop-idle contends with nothing', needsOf({ key: 'loop-idle', type: 'loop-health' }).length === 0,
     JSON.stringify(needsOf({ key: 'loop-idle', type: 'loop-health' })));
+  check('loop-silent contends with nothing', needsOf({ key: 'loop-silent', type: 'loop-health' }).length === 0);
   check('MUTATION CONTROL — an unknown type still defaults to buses-tree + buses-maps', needsOf({ key: 'zzz', type: 'never-heard-of-it' }).join() === 'buses-tree,buses-maps');
 }
 
@@ -287,18 +288,72 @@ console.log('\n12. the wire in worklist.mjs — literal strings, and it must RUN
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
-    "import { readRuns, loopHealth, loopRunItems } from './loop_runs.mjs';",
+    "import { readRuns, loopHealth, loopRunItems, silenceOld, loopSilentItems } from './loop_runs.mjs';",
     "readRuns(path.join(BUSES, 'loop', 'runs'))",
     "stopFile: existsSync(path.join(BUSES, 'loop', 'STOP')),",
     'treeDirty: !!(conditions.repos.buses && conditions.repos.buses.dirty),',
     'heldBy: (conditions.loopLock && conditions.loopLock.name) || null,',
     'for (const it of loopIdle) add(it);',
+    'if (silenceOld(loopState)) {',
+    "for (const it of loopSilentItems({ health: loopState, turns: conc.readSessionTurns({ since: loopState.lastAt }) })) add(it);",
   ]) check(`worklist.mjs RUNS: ${lit.slice(0, 58)}`, liveLine(lit), 'absent, or commented out');
   // The causes must come from `conditions`, which the run has already gathered
   // and PRINTED, or the row can contradict the block above it. Both reads
   // asserted, counted, so removing one cannot pass on the other.
   const fromConditions = src.split('\n').filter((l) => l.includes('conditions.') && l.includes('loopIdle') === false && /treeDirty|heldBy/.test(l) && !l.trim().startsWith('//')).length;
   check('BOTH causes are read from conditions', fromConditions === 2, `found ${fromConditions}, expected 2`);
+}
+
+console.log('\n13. silence with witnesses (OA-408 item 3)');
+{
+  // An hourly history ending 04:15, read at various hours on the 9th.
+  const dir = mkRuns('silent', ['0015-OA', '0115-OA', '0215-OA', '0315-OA', '0415-OA']);
+  const at = (h, m = 0) => new Date(2026, 8, 9, h, m).getTime();
+  const hAt = (h, m = 0) => health(dir, at(h, m));
+  check('the history reads hourly', hAt(12).cadence === 60, String(hAt(12).cadence));
+  // THE MORNING: app opened 09:00, sessions busy until 09:40, no tick yet. One slot.
+  const morning = [at(9, 1), at(9, 20), at(9, 40)];
+  check('CONTROL — the morning after (one active slot) raises nothing', loopSilentItems({ health: hAt(9, 45), turns: morning }).length === 0);
+  // A busy morning with no tick for three hours: three slots after 04:15.
+  const busy = [at(9, 30), at(10, 30), at(11, 30)];
+  const rows = loopSilentItems({ health: hAt(11, 45), turns: busy });
+  check('three active slots raise the row', rows.length === 1, String(rows.length));
+  check('…keyed loop-silent', rows[0] && rows[0].key === 'loop-silent');
+  check('…at chore rank, never a red', rows[0] && rows[0].rank === 8 && rows[0].type === 'loop-health');
+  check('…naming the three slots', rows[0] && rows[0].silentSlots === 3 && /in 3 of the/.test(rows[0].title), rows[0] && rows[0].title);
+  check('two active slots do not', loopSilentItems({ health: hAt(11, 45), turns: busy.slice(0, 2) }).length === 0);
+  // Many turns inside ONE slot are one slot, not many.
+  check('ten turns in one hour are one slot', silentSlots({ health: hAt(11, 45), turns: Array.from({ length: 10 }, (_, i) => at(9, 20 + i)) }).length === 1);
+  // The first cadence after the last tick counts for nothing: the next tick is not late yet.
+  const early = silentSlots({ health: hAt(11, 45), turns: [at(4, 30), at(5, 10)] });
+  check('a turn in the first cadence is no slot', early.length === 0, early.join());
+  // And no row at all until the newest run is three cadences old, whatever the turns.
+  check('silenceOld is false two hours after the last tick', silenceOld(hAt(6, 10)) === false);
+  check('silenceOld is true three hours after', silenceOld(hAt(7, 20)) === true);
+  check('…and without it the row is not raised, whatever the turns', loopSilentItems({ health: hAt(6, 10), turns: [at(5, 20), at(5, 40)] }).length === 0);
+  const tick = mkRuns('silent-cleared', ['0015-OA', '0115-OA', '0215-OA', '0315-OA', '0415-OA', '1115-OA']);
+  check('CONTROL — a tick at 11:15 ends the silence', loopSilentItems({ health: health(tick, at(11, 45)), turns: busy }).length === 0);
+  check('never-ran raises nothing', loopSilentItems({ health: health(path.join(tmp, 'nowhere2')), turns: busy }).length === 0);
+
+  // The reader, against a REAL projects folder — a fake cannot be absent.
+  const proj = path.join(tmp, 'projects');
+  const pdir = path.join(proj, 'C--u3a-St-Ives-Using-AI-Buses');
+  fs.mkdirSync(pdir, { recursive: true });
+  const line = (ms) => JSON.stringify({ type: 'user', timestamp: new Date(ms).toISOString() }) + '\n';
+  fs.writeFileSync(path.join(pdir, 'a.jsonl'), [at(0, 30), at(9, 30), at(10, 30)].map(line).join(''), 'utf8');
+  fs.writeFileSync(path.join(pdir, 'b.jsonl'), line(at(11, 30)), 'utf8');
+  fs.mkdirSync(path.join(proj, 'C--Some-Other-Project'), { recursive: true });
+  fs.writeFileSync(path.join(proj, 'C--Some-Other-Project', 'c.jsonl'), line(at(9, 45)), 'utf8');
+  const turns = readSessionTurns({ projectsDir: proj, since: at(4, 15), now: Date.now() });
+  check('reads every turn after since, from every Buses transcript', turns.length === 3 && turns[0] === at(9, 30), JSON.stringify(turns));
+  check('…ignores another project', !turns.includes(at(9, 45)));
+  check('…and those turns raise the row', loopSilentItems({ health: hAt(11, 45), turns }).length === 1);
+  // A file whose mtime predates since is not opened: nothing in it can be newer.
+  const old = new Date(at(4, 0));
+  fs.utimesSync(path.join(pdir, 'a.jsonl'), old, old);
+  check('a transcript last written before since is skipped', readSessionTurns({ projectsDir: proj, since: at(4, 15), now: Date.now() }).length === 1);
+  check('absent projects folder: [] and no throw', readSessionTurns({ projectsDir: path.join(tmp, 'no-projects'), since: 0 }).length === 0);
+  check('no since: []', readSessionTurns({ projectsDir: proj }).length === 0);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -83,6 +83,19 @@
  * of the last tick is reported inside the row rather than being a trigger of its
  * own.
  *
+ * THE ONE EXCEPTION IS SILENCE WITH WITNESSES (buses-data OA-408 item 3, Peter,
+ * 2026-09-21: "prefer a false alarm to silence"). A stale newest run is
+ * innocent when the app was shut and damning when it was open, and the
+ * transcripts under `~/.claude/projects/` say which: every turn any session
+ * took carries a timestamp. `loopSilentItems` counts the cadence-long slots
+ * after the newest run that hold at least one turn, skipping the first slot
+ * (the next tick is not due until it ends), and raises a CHORE row at three.
+ * Slots, not elapsed time, is what keeps the morning quiet: the app opened at
+ * 08:00 after a 01:15 tick is one slot of activity, and the tick that fires on
+ * launch writes a file and ends the silence before a second slot fills. The
+ * turns are read by `concurrency.mjs`'s `readSessionTurns`, and only when the
+ * newest run is already three cadences old; this module still opens nothing.
+ *
  * SILENCE IS A REQUIREMENT. `loop/` is gitignored apart from its README, so an
  * absent folder is the normal state in a fresh clone, in a worktree, in CI and in
  * every other harness's fixture — the named shape *the subject that does not
@@ -269,6 +282,56 @@ export function loopRunItems({ health, idleThreshold = 2, stopFile = false, tree
       ...(treeDirty ? [{ kind: 'shell', cwd: busesDir, cmd: 'git status --porcelain', note: 'commit or revert what this names, and the next tick runs' }] : []),
       ...(stopFile ? [{ kind: 'shell', cwd: busesDir, cmd: 'rm -f loop/STOP', note: 'only when you actually want the loop back' }] : []),
       { kind: 'chat', what: 'The newest file in loop/runs/ is that tick\'s own account of why it stopped — open it if the causes above do not explain it.' },
+    ],
+  }];
+}
+
+/**
+ * Is the silence long enough to be worth reading the transcripts for? The board
+ * asks this first, so `readSessionTurns` costs nothing on a working loop.
+ */
+export function silenceOld(health, minSlots = 3) {
+  const h = health || {};
+  return !!(h.ran && h.ageMin != null && h.cadence && h.ageMin >= minSlots * h.cadence);
+}
+
+/**
+ * The cadence-long slots after the newest run file that hold at least one
+ * session turn — slot 1 is the first one the next tick was due to END, so a
+ * turn inside the first cadence counts for nothing. Sorted slot numbers.
+ */
+export function silentSlots({ health, turns }) {
+  const h = health || {};
+  if (!h.ran || !h.cadence) return [];
+  const slotMs = h.cadence * 60000;
+  const seen = new Set();
+  for (const t of turns || []) {
+    const k = Math.floor((t - h.lastAt) / slotMs);
+    if (k >= 1) seen.add(k);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * The silent-loop row (buses-data OA-408 item 3): no run file for `minSlots`
+ * cadences while sessions were active. A CHORE — rank 8, never a red — because
+ * the evidence is circumstantial: a session at a prompt is not proof the
+ * scheduler could have fired, and Peter ruled that a false alarm is the price.
+ */
+export function loopSilentItems({ health, turns, minSlots = 3 }) {
+  const h = health || {};
+  if (!silenceOld(h, minSlots)) return [];
+  const slots = silentSlots({ health: h, turns });
+  if (slots.length < minSlots) return [];
+  return [{
+    key: 'loop-silent', rank: 8, type: 'loop-health',
+    title: `The scheduled loop has written no run file for ${ago(h.ageMin)} (last tick ${hhmm(h.lastAt)}), though sessions were working in ${slots.length} of the ${Math.floor(h.ageMin / h.cadence)} cadences since`,
+    why: `The loop's cadence is ${h.cadence} min, measured from the run filenames. A stale newest run is normal while the desktop app is shut, so it raises nothing by itself; this row is raised because session transcripts show the app open in ${slots.length} separate ${h.cadence}-minute slots after the last tick, and no tick wrote a file in any of them. Either the scheduler did not fire, or it fired and each run died before its prompt (a session limit, a crash) — the scheduler's own run list for \`bus-loop\` says which. A chore, not a fault: a session sitting at a prompt is weak evidence, and Peter chose a false alarm over silence (OA-408, 2026-09-21).`,
+    who: 'Peter', runbook: 'loop',
+    ageDays: Math.floor(h.ageMin / 1440),
+    silentSlots: slots.length, cadenceMin: h.cadence,
+    do: [
+      { kind: 'chat', what: 'Open the scheduled task bus-loop in the desktop app and read its recent runs: a run with an error message is a -missed tick; no runs at all means the schedule is off.' },
     ],
   }];
 }

@@ -297,6 +297,39 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
   return dir;
 }
 
+/* A SYNTHETIC CLAUDE-SKILLS (buses-data OA-480), handed to status.js as
+ * SKILLS_REPO. HEAD is the PIN, holding SOURCE_A's current bytes; `ahead` says
+ * where the portal's bytes — mainStale's, the `stale()` content — live in its
+ * history: 'main', a later commit on origin/main (the re-vendored portal the pin
+ * has not caught up with); 'branch', a commit on an unmerged side branch; 'before',
+ * a commit OLDER than the pin (a portal behind the engine). `originMain: false`
+ * leaves the clone with no origin/main, the depth-1 checkout gates.yml used to have. */
+function skillsRepo({ ahead = 'main', originMain = true } = {}) {
+  const dir = scratchDir('prove-red-portal-drift-skills-');
+  const file = path.join(dir, SOURCE_A);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const cur = fs.readFileSync(path.join(SKILL_ROOT, SOURCE_A));
+  const moved = Buffer.concat([cur, Buffer.from('\n// a line the source does not have\n')]);
+  git(dir, ['init', '--quiet']);
+  git(dir, ['config', 'user.email', 'harness@example.invalid']);
+  git(dir, ['config', 'user.name', 'prove-red-portal-drift']);
+  git(dir, ['checkout', '--quiet', '-b', 'main']);
+  const put = (buf, msg) => { fs.writeFileSync(file, buf); git(dir, ['add', '-A']); git(dir, ['commit', '--quiet', '-m', msg]); return git(dir, ['rev-parse', 'HEAD']); };
+  if (ahead === 'before') put(moved, 'the engine as it was before the pin');
+  const pin = put(cur, 'the pinned engine');
+  let tip;
+  if (ahead === 'main') tip = put(moved, 'the engine after the pin, re-vendored into the portal');
+  else {
+    if (ahead === 'branch') { git(dir, ['checkout', '--quiet', '-b', 'side']); put(moved, 'an engine PR nobody merged'); git(dir, ['checkout', '--quiet', 'main']); }
+    fs.writeFileSync(path.join(dir, 'README.md'), 'main moved on without touching the source\n');
+    git(dir, ['add', '-A']); git(dir, ['commit', '--quiet', '-m', 'an unrelated change on main']);
+    tip = git(dir, ['rev-parse', 'HEAD']);
+  }
+  if (originMain) git(dir, ['update-ref', 'refs/remotes/origin/main', tip]);
+  git(dir, ['checkout', '--quiet', '--detach', pin]);
+  return dir;
+}
+
 /* An empty Buses tree, so that nothing but the portal can colour the board. A
  * tree with maps in it would let a byte gate answer for the vendoring row. */
 function emptyBuses() {
@@ -315,12 +348,12 @@ function busesWithFixture(body) {
   return dir;
 }
 
-function board(busesDir, portalDir, statusPath = STATUS, extra = []) {
+function board(busesDir, portalDir, statusPath = STATUS, extra = [], env = process.env) {
   let out, code = 0;
   try {
     out = execFileSync(process.execPath,
       [statusPath, '--buses', busesDir, '--portal', portalDir, '--no-quality', '--no-live', '--json', ...extra],
-      { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+      { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', env });
   } catch (e) {
     if (typeof e.status !== 'number') throw e;
     code = e.status; out = e.stdout;
@@ -534,6 +567,42 @@ const CASES = [
     },
     what: 'three unpruned portal refs held the buses-data push on 2026-09-27, each a PR merged a day or two before',
   },
+  /* THE PIN BEHIND THE PORTAL (buses-data OA-480). Every one past the grace, on a
+   * synthetic claude-skills: the first is the chore, the other three the doubts
+   * that must stay red. main here went red on every push from 07:45 on 2026-09-27. */
+  {
+    label: 'the portal AHEAD of the pin, on a later claude-skills main, is PIN-BEHIND (OA-480)',
+    make: { mainStale: true, mainStaleAgeHours: 48 }, skills: { ahead: 'main' },
+    expect: 0,
+    also: (json) => {
+      const r = rowFor(json, 'qr.js');
+      if (!r || r.same !== false) return 'the fixture never made qr.js differ from the pin';
+      if (r.status !== 'PIN-BEHIND' || !r.pinBehind || !r.pinBehind.commit) return 'expected PIN-BEHIND naming a commit, got ' + statusOf(r);
+      return null;
+    },
+    what: 'icons.js, services_panel.js and gen_external_radial.js reddened buses-data main this way',
+  },
+  {
+    label: 'the same bytes only on an unmerged claude-skills BRANCH are DRIFTED (OA-480)',
+    make: { mainStale: true, mainStaleAgeHours: 48 }, skills: { ahead: 'branch' },
+    expect: 1,
+    also: (json) => statusOf(rowFor(json, 'qr.js')) === 'DRIFTED' ? null : 'expected DRIFTED, got ' + statusOf(rowFor(json, 'qr.js')),
+    what: 'a portal re-vendored from a PR that never merged is not an engine anybody can adopt',
+  },
+  {
+    label: 'a portal BEHIND the pin is DRIFTED however far main has moved (OA-480)',
+    make: { mainStale: true, mainStaleAgeHours: 48 }, skills: { ahead: 'before' },
+    expect: 1,
+    also: (json) => statusOf(rowFor(json, 'qr.js')) === 'DRIFTED' ? null : 'expected DRIFTED, got ' + statusOf(rowFor(json, 'qr.js')),
+    what: 'the original drift this row exists for: the portal needs a re-vendor',
+  },
+  {
+    label: 'a skills clone with no origin/main cannot tell, so DRIFTED (OA-480)',
+    make: { mainStale: true, mainStaleAgeHours: 48 }, skills: { ahead: 'main', originMain: false },
+    expect: 1,
+    also: (json) => statusOf(rowFor(json, 'qr.js')) === 'DRIFTED' ? null : 'expected DRIFTED, got ' + statusOf(rowFor(json, 'qr.js')),
+    what: 'could-not-look fails towards red: gates.yml without its fetch of claude-skills main',
+  },
   /* THE UN-VENDOR WITNESS (OA-472). The first case is the control: without it,
    * the second could pass by a board that no longer credits ANY un-vendor. */
   {
@@ -691,12 +760,13 @@ const kept = [];
 function runCase(c, statusPath = STATUS) {
   const portal = portalRepo(c.make);
   const buses = c.buses ? c.buses() : emptyBuses();
-  kept.push(portal, buses);
-  const { code, json } = board(buses, portal, statusPath, c.args || []);
+  const skills = c.skills ? skillsRepo(c.skills) : null;   // OA-480
+  kept.push(portal, buses, ...(skills ? [skills] : []));
+  const { code, json } = board(buses, portal, statusPath, c.args || [], skills ? { ...process.env, SKILLS_REPO: skills } : process.env);
   const wantRed = c.expect !== 0;
   const colourOk = (code !== 0) === wantRed;
   const alsoWhy = json ? c.also(json, portal) : 'the board printed no parseable JSON';
-  if (!KEEP) { fs.rmSync(portal, { recursive: true, force: true }); fs.rmSync(buses, { recursive: true, force: true }); }
+  if (!KEEP) for (const d of [portal, buses, skills].filter(Boolean)) fs.rmSync(d, { recursive: true, force: true });
   return {
     ok: colourOk && !alsoWhy,
     verdict: !colourOk ? (wantRed ? 'SURVIVED' : 'CONTROL RED') : alsoWhy ? 'VACUOUS' : wantRed ? 'caught' : 'green',
@@ -769,6 +839,22 @@ const MUTATION_OA472 = {
   find: '    if (!forkBlob(cand.ref, rel)) continue;',
   replace: '    // MUTATED by prove-red-portal-drift.js: a branch older than the file is a witness again',
   why: 'unvendoredOnOtherRef() no longer asks whether the branch ever had the file',
+};
+
+/* AND THE SIXTH AND SEVENTH, for OA-480: PIN-BEHIND folded back into the exit
+ * code (the red main carried), and the witness widened from `pin..origin/main` to
+ * every ref, which would excuse a branch or a portal behind the pin. */
+const MUTATION_OA480_GATE = {
+  file: 'status.js',
+  find: '!r.inFlight && !r.pinBehind)',
+  replace: '!r.inFlight) // MUTATED by prove-red-portal-drift.js: PIN-BEHIND gates again',
+  why: 'the exit code no longer exempts a PIN-BEHIND row',
+};
+const MUTATION_OA480_WITNESS = {
+  file: 'pin_behind.js',
+  find: "['log', '--format=%H', pinSha + '..' + tipSha, '--', rel]",
+  replace: "['log', '--format=%H', '--all', '--', rel] /* MUTATED by prove-red-portal-drift.js */",
+  why: 'pin_behind.js no longer confines the witness to pin..origin/main',
 };
 
 function regressedStatus(mutations = [MUTATION_OA200]) {
@@ -954,7 +1040,46 @@ const SQUASH_REGRESSION = 'a branch already squash-merged into main is no witnes
   if (!KEEP) fs.rmSync(injS.root, { recursive: true, force: true });
 }
 
-const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 5;
+/* AND FOR PIN-BEHIND (OA-480): the chore goes red when it is gated again, and the
+ * two stay-red cases go green when the witness is any ref rather than pin..main. */
+const PIN_REGRESSIONS = [
+  { mutation: MUTATION_OA480_GATE, label: 'the portal AHEAD of the pin, on a later claude-skills main, is PIN-BEHIND (OA-480)', wantCode: 1, want: 'PIN-BEHIND' },
+  { mutation: MUTATION_OA480_WITNESS, label: 'the same bytes only on an unmerged claude-skills BRANCH are DRIFTED (OA-480)', wantCode: 0, want: 'PIN-BEHIND' },
+  { mutation: MUTATION_OA480_WITNESS, label: 'a portal BEHIND the pin is DRIFTED however far main has moved (OA-480)', wantCode: 0, want: 'PIN-BEHIND' },
+];
+for (const p of PIN_REGRESSIONS) {
+  const c = CASES.find((x) => x.label === p.label);
+  if (!c) throw new Error('prove-red-portal-drift: no case named "' + p.label + '" — the self-falsification list is out of date.');
+  const injP = regressedStatus([p.mutation]);
+  const r = runCase(c, injP.statusPath);
+  const got = r.json ? statusOf(rowFor(r.json, 'qr.js')) : '(no JSON)';
+  const rightReason = !r.ok && r.code === p.wantCode && got === p.want;
+  if (!rightReason) failed++;
+  rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes wrong' : 'WRONG, BAD CAUSE',
+    'with ' + p.mutation.why + ': ' + c.label,
+    'exit ' + r.code + ', qr.js read ' + got + ' (wanted exit ' + p.wantCode + ', ' + p.want + ')',
+    r.ok ? 'THIS CASE NO LONGER TESTS THE PIN-BEHIND RULE'
+      : rightReason ? 'the case discriminates' : 'wrong for a reason that is not the mutation']);
+  if (!KEEP) fs.rmSync(injP.root, { recursive: true, force: true });
+}
+
+/* AND THE WORKLIST'S HALF (OA-480): pinBehindRows() names qr.js against a later
+ * main and nothing against a side branch, from the lock's pin rather than HEAD. */
+const PIN_ROWS = [{ ahead: 'main', want: 1 }, { ahead: 'branch', want: 0 }, { ahead: 'before', want: 0 }];
+for (const p of PIN_ROWS) {
+  const portal = portalRepo({ mainStale: true, mainStaleAgeHours: 48 });
+  const skills = skillsRepo({ ahead: p.ahead });
+  const pin = git(skills, ['rev-parse', 'HEAD']);
+  git(skills, ['checkout', '--quiet', '--detach', 'refs/remotes/origin/main']);   // the laptop: checkout at main, pin in the lock
+  const got = require('../assets/pin_behind.js').pinBehindRows({ portal, skillsRoot: skills, pin }).rows;
+  const ok = got.length === p.want && (!p.want || got[0].file === 'qr.js');
+  if (!ok) failed++;
+  rows.push([ok ? (p.want ? 'green' : 'caught') : 'WRONG', 'pinBehindRows, the portal\'s bytes ' + (p.ahead === 'main' ? 'on a later main' : p.ahead === 'branch' ? 'on a side branch' : 'before the pin'),
+    got.length + ' row(s), wanted ' + p.want, 'the worklist\'s engine-stale-pin row is the same witness as the board\'s']);
+  if (!KEEP) for (const d of [portal, skills]) fs.rmSync(d, { recursive: true, force: true });
+}
+
+const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 5 + PIN_REGRESSIONS.length + PIN_ROWS.length;
 const w = [14, 62, 46];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
@@ -970,5 +1095,6 @@ if (failed) {
     + 'a branch merely behind main is never named as its re-vendor, '
     + 'a branch older than a vendored file is never named as its un-vendor, '
     + 'a branch already squash-merged into main is never named as its re-vendor, '
-    + 'and all six tree/time/witness cases go red the moment their own fix is taken back out.');
+    + 'a portal ahead of the pinned engine on a later claude-skills main is a PIN-BEHIND chore while a branch, a behind portal or a clone with no main stays DRIFTED, '
+    + 'and every tree/time/witness/pin case goes wrong the moment its own fix is taken back out.');
 }

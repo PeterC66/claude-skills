@@ -197,13 +197,20 @@ export function answer(review, town, verdict, { by, note = null, at }) {
  * Staging emails them, so a build staged once is `staged` and never `deliver`
  * again; a later build of the same map is deliverable afresh.
  */
-export function markStaged(review, town, { slug, by, at }) {
+export function markStaged(review, town, { slug, by, at, notify }) {
   const i = review.maps.findIndex((m) => m.map.toLowerCase() === String(town || '').toLowerCase());
   if (i < 0) throw new Refused(`${town} is not in the ${review.scan} review.`);
   const m = review.maps[i];
   const stagedBefore = [...(m.stagedBefore || []), ...(m.staged ? [m.staged] : [])];
   const maps = [...review.maps];
-  maps[i] = { ...m, staged: { after: m.after, slug, by, at }, ...(stagedBefore.length ? { stagedBefore } : {}) };
+  maps[i] = { ...m, staged: { after: m.after, slug, by, at, ...(notify ? { notify } : {}) }, ...(stagedBefore.length ? { stagedBefore } : {}) };
+  return { ...review, maps };
+}
+
+/** Record that the round's digest email went for these towns' current stagings (buses-data OA-152). */
+export function markNotified(review, towns, { by, at }) {
+  const want = new Set(towns.map((t) => String(t).toLowerCase()));
+  const maps = review.maps.map((m) => (want.has(m.map.toLowerCase()) && m.staged ? { ...m, staged: { ...m.staged, notified: { by, at } } } : m));
   return { ...review, maps };
 }
 

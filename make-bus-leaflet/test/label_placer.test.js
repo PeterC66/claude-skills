@@ -315,3 +315,26 @@ test('the darkening loop is bounded, so a colour it cannot fix returns rather th
   const { api } = make({ DESIGN: { labelInkMinContrast: 99 } });
   assert.strictEqual(api.inkOnWhite('#DDCC77'), '#0c0b07');
 });
+
+// buses-data OA-470. The numbers are Beaconsfield v2.5's: a pharmacy symbol at
+// (45.34, 81.41) and the 380 badge box the sprinkled pass tried at (49.43, 77.33).
+test('overlapsRound: a POI symbol is its inscribed disc, so a corner-only clip is clear', () => {
+  const { api } = make();
+  const icon = [45.34 - 2.1, 81.41 - 2.1, 45.34 + 2.1, 81.41 + 2.1];
+  api.placed.push(icon); api.iconBoxes.add(icon);
+  const badge = [49.43 - 2.3, 77.33 - 2.3, 49.43 + 2.3, 77.33 + 2.3];
+  assert.ok(api.overlaps(badge), 'the square box DOES clip the badge box — the false collision');
+  assert.ok(!api.overlapsRound(badge), 'the disc does not, so the badge is placed');
+});
+
+test('overlapsRound is never stricter than the square, and every other box is still a box', () => {
+  const { api } = make();
+  const icon = [8, 8, 12.2, 12.2];
+  api.placed.push(icon); api.iconBoxes.add(icon);
+  // Along an axis the inscribed disc reaches the square's edge and no further:
+  // sized to the white halo it reached past it and cost Ely Co-op a 129 badge.
+  assert.ok(!api.overlapsRound([12.3, 9.9, 16, 10.3]), 'just past the square along an axis is clear');
+  assert.ok(api.overlapsRound([12.0, 9.9, 16, 10.3]), 'inside it along an axis is a hit');
+  api.reserve(30, 30, 34.2, 34.2, 'a label');
+  assert.ok(api.overlapsRound([34.0, 34.0, 36, 36]), 'a corner clip on a NON-icon box is still a hit');
+});

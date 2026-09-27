@@ -22,7 +22,14 @@
 //   route with no nearby out-of-town stop (e.g. an express) doesn't draw a long spoke
 //   to a village 8 km away. Core stops are always kept regardless of distance. Omit to
 //   keep all buffer stops.
-const fs=require('fs');
+//
+// journey_weights.json (buses-data OA-452): when journey_weights.py has written one
+// BESIDE routes_full.json, each direction first loses the stops it lists as `drop` —
+// the deviations fewer than half the passing journeys call at (St Neots' 18 station
+// loop, 3 of 25) — so a direction is drawn from the pattern most journeys run. An S2
+// folder without the file, or intown_cfg.json "journeyWeights": false, derives
+// exactly as before.
+const fs=require('fs'), path=require('path');
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const full=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 const ll=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
@@ -51,11 +58,18 @@ function clipDir(stops){               // core stops + buf-neighborhood, in chai
   const out=[]; for(let i=0;i<n;i++) if(keep[i] && (isCore(chain[i]) || !farFromTown(chain[i]))) out.push(chain[i]);
   return out;
 }
+const JWP=path.join(path.dirname(process.argv[2]),'journey_weights.json');
+const JW=cfg.journeyWeights!==false && fs.existsSync(JWP) ? JSON.parse(fs.readFileSync(JWP,'utf8')) : null;
+const majority=(route,d)=>{
+  const drop=new Set((((JW||{})[route]||{})[d.name]||{}).drop||[]);
+  for(const a of drop) if(d.stops.includes(a)) console.error(route.padEnd(5),'minority',a,'('+d.name+')');
+  return drop.size ? d.stops.filter(a=>!drop.has(a)) : d.stops;
+};
 const intown={};
 for(const route in full){
   const dirs=full[route].canonical || full[route].directions;
   const seen=new Set(), list=[];
-  for(const d of dirs) for(const a of clipDir(d.stops)) if(!seen.has(a)){ seen.add(a); list.push(a); }
+  for(const d of dirs) for(const a of clipDir(majority(route,d))) if(!seen.has(a)){ seen.add(a); list.push(a); }
   if(CIRC.has(route) && list.length && list[0]!==list[list.length-1]) list.push(list[0]);
   intown[route]=list;
 }

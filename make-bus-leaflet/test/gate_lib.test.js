@@ -63,7 +63,7 @@ test('the version stamp never counts as content lost or gained', () => tmp(dir =
   // what made a scratch build report a false LOST/GAINED pair on 2026-08-09.
   const older = put(dir, 'old.svg', SVG.replace('Valid from Summer 2026', 'Valid from Spring 2026'));
   const newer = put(dir, 'new.svg', SVG);
-  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [] });
+  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [], moved: [] });
   assert.ok(G.VERSION_STAMP_RE.test('Map v2.1 · 2026-08-10'), 'the pre-2026-08-10 stamp format is still recognised');
 }));
 
@@ -473,3 +473,25 @@ test('no engine file spells an external generator name for itself', () => {
   assert.deepStrictEqual(offenders, [],
     'an external generator name is being assembled — gate_lib.EXTERNAL_GENERATOR is the one name');
 });
+
+/* buses-data OA-071. A rollout carries S3's colours unchanged, so it cannot make the
+ * recolour Peter ruled is owed at a map's next rebuild; huesAlikeOnMap is how it says
+ * so. Three cases, because the third is the one that lies: two alike hues running
+ * together are reported, the same two far apart are not, and a sheet with no
+ * routes.json beside it answers [] -- "could not tell" -- rather than throwing. */
+test('huesAlikeOnMap reports alike hues that run together, and only those', () => tmp((dir) => {
+  const sheet = (y2) => ['<svg viewBox="0 0 297 210">',
+    '<line x1="20" y1="50" x2="200" y2="50" stroke="#e41a1c" stroke-width="2"/>',
+    `<line x1="20" y1="${y2}" x2="200" y2="${y2}" stroke="#e8141f" stroke-width="2"/>`,
+    '<line x1="20" y1="150" x2="200" y2="150" stroke="#377eb8" stroke-width="2"/>',
+    '</svg>'].join('\n');
+  const near = put(dir, 'near.svg', sheet(52));
+  const far = put(dir, 'far.svg', sheet(100));
+  assert.deepStrictEqual(G.huesAlikeOnMap(near), [], 'no routes.json: no palette, so no answer');
+  put(dir, 'routes.json', JSON.stringify({ palette: { A: '#e41a1c', B: '#e8141f', C: '#377eb8' } }));
+  const got = G.huesAlikeOnMap(near);
+  assert.strictEqual(got.length, 1, JSON.stringify(got));
+  assert.deepStrictEqual([got[0].a, got[0].b].sort(), ['A', 'B']);
+  assert.deepStrictEqual(G.huesAlikeOnMap(far), [], 'alike but never together is the panel venue, not this one');
+  assert.deepStrictEqual(G.huesAlikeOnMap(path.join(dir, 'absent.svg')), []);
+}));

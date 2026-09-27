@@ -169,10 +169,11 @@ export function gradeSentence(state, town, scanDate) {
  * same answer for a person; this is the same answer for a machine, and they are next to
  * each other so they cannot drift.
  *
- * `through: 'S5'` IS A LIMIT AND NOT A FLOURISH. The rebuild is unattended; putting the
- * result in front of the customer is not, and is filed as its own action (buses-data
- * OA-428). A tick that read this as permission to deliver would be skipping the one step
- * where somebody looks at the sheet.
+ * `through: 'S5'` IS A LIMIT AND NOT A FLOURISH. This command stops at the render;
+ * putting the result in front of the customer is a separate, gated step (buses-data
+ * OA-428). Since 2026-09-25 a tick may take it, but only through `stage_refresh.mjs` and
+ * only for a town the month's ink review (`ink_review.mjs --deliverable`, OA-429) lists
+ * under `deliver` -- the review is where somebody looks at a sheet whose ink moved.
  *
  * A PLACE IS NOT COVERED, and the reason is in the grading rather than here:
  * `gtfs_refresh_report.py` diffs `Areas/<town>` and nothing else, so no place HAS a grade
@@ -207,8 +208,9 @@ export function unattendedRefresh(state, town, scanDate, { kind = 'area', assets
     through: 'S5',
     cwd: assetsDir,
     cmd: `python3 "${posix(assetsDir)}/refresh_town.py" --town "${town}" --scan ${scanDate} --apply --by <this run's name>`,
-    then: 'Delivering the result into the portal is a separate step and still wants a person '
-        + 'who has looked at the sheet (buses-data OA-428).',
+    then: 'Delivering the result into the portal is a separate step: stage it only with '
+        + 'stage_refresh.mjs, and only once `ink_review.mjs --deliverable` lists the town under '
+        + 'deliver (buses-data OA-428, OA-429).',
   };
 }
 

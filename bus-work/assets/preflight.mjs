@@ -50,7 +50,7 @@
 // minutes — and it is not run per commit. It is run once per round, and the
 // thing it replaces is three CI round trips plus the analysis between them.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync, lstatSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs, assetsDir, resolvePortal } from './engine.mjs';
@@ -412,9 +412,19 @@ export function engineAtPin(skillsRoot, commit) {
   return { root: wt, commit: git(wt, ['rev-parse', 'HEAD']).out, via: 'worktree', dir, skillsRoot };
 }
 
-/** Remove a worktree `engineAtPin` made; the checkout itself is left alone. */
+/**
+ * Remove a worktree `engineAtPin` made; the checkout itself is left alone.
+ *
+ * The borrowed node_modules junction is unlinked FIRST. `git worktree remove
+ * --force` deletes recursively, and on Windows it follows a junction, so until
+ * 2026-09-25 every release emptied the checkout's own make-bus-leaflet/node_modules
+ * and render.js lost sharp for every session after (prove-red-preflight case 18).
+ * `rmdirSync` on a junction removes the link alone and refuses a real folder.
+ */
 export function releaseEngine(e) {
   if (!e || e.via !== 'worktree') return;
+  const borrowed = path.join(e.root, 'make-bus-leaflet', 'node_modules');
+  try { if (lstatSync(borrowed).isSymbolicLink()) rmdirSync(borrowed); } catch { /* absent, or not ours: nothing to unlink */ }
   git(e.skillsRoot, ['worktree', 'remove', '--force', e.root]);
   rmSync(e.dir, { recursive: true, force: true });
   git(e.skillsRoot, ['worktree', 'prune']);

@@ -19,6 +19,17 @@
  *     The record is `staged` on the map in `_gtfs/ink-review_<scan>.json`, beside
  *     Peter's answer, and a LATER build of the same map is deliverable afresh.
  *
+ * ONE EMAIL PER CUSTOMER PER SCAN (buses-data OA-152). The loop stages one town a
+ * tick, and `propose-update` would email each map's customer as it went — one
+ * notice per map, a tick apart. So the deliver command runs with `--no-notify`,
+ * the staging is recorded as owed a digest, and when the LAST deliverable town of
+ * the scan is staged this tool sends the portal's `notify-update-round.mjs` for
+ * every map owed one, over ssh as the deliver command reaches the host, and
+ * records `notified`. The server groups the maps by customer. A map Peter has not
+ * answered does not hold the digest back; if he accepts it later it goes out in a
+ * digest of its own. `--flush` sends whatever is owed now, for a person clearing
+ * a hold.
+ *
  * WHERE IT STOPS. At the version STAGED beside the live map, read back from the
  * portal's own worklist as waiting on its customer. Publication is the customer's
  * Accept, a third party's act, and nothing here reaches for it. A place map is
@@ -40,8 +51,11 @@
  *
  *   node stage_refresh.mjs --scan <scan> --town "<Town>" --map <slug>                  dry run
  *   node stage_refresh.mjs --scan <scan> --town "<Town>" --map <slug> --apply --by <who>
+ *   node stage_refresh.mjs --scan <scan> --flush                                        dry run
+ *   node stage_refresh.mjs --scan <scan> --flush --apply --by <who>
  *
- * The read-back needs BUSMAPS_URL and BUSMAPS_TOKEN, which the portal's own .env
+ * The read-back needs BUSMAPS_URL and BUSMAPS_TOKEN, and the digest DEPLOY_HOST
+ * and DEPLOY_APP_DIR (DEPLOY_SSH_KEY optional), all of which the portal's own .env
  * carries. Exit 0 on success, 2 on a refusal or a hold (the message names which).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -49,7 +63,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
-import { deliverable, markStaged, Refused } from './ink_review.mjs';
+import { deliverable, markStaged, markNotified, Refused } from './ink_review.mjs';
 
 /* The portal's `deliver` npm script, run as its own command line rather than
  * through npm, because npm on Windows is a .cmd that Node will not spawn without
@@ -115,6 +129,39 @@ export function readBack({ maps, items, slug }) {
   return item ? { ok: true, name: map.name, key: item.key } : { ok: false, name: map.name, why: `the portal lists no update to "${map.name}" waiting on its customer` };
 }
 
+/**
+ * Is the scan's digest due, and for which maps? (buses-data OA-152.) A map is OWED
+ * the email when its current build was staged by this tool with `notify: 'digest'`
+ * and no `notified` is recorded. Stagings made before the digest existed carry no
+ * `notify` and were emailed one by one then, so they are never owed. The digest
+ * waits while any map is still under `deliver` — the next tick stages it — and
+ * does NOT wait for a map Peter has not answered: an answer may never come, and
+ * a map he accepts later goes out in a later digest of its own. `force` is a
+ * person's `--flush`, which sends whatever is owed now.
+ */
+export function planFlush(review, { force = false } = {}) {
+  if (!review || !Array.isArray(review.maps)) return { due: false, why: 'there is no ink review for this scan', towns: [], slugs: [] };
+  const owed = review.maps.filter((m) => m.staged && m.staged.after === m.after && m.staged.notify === 'digest' && !m.staged.notified);
+  const towns = owed.map((m) => m.map), slugs = owed.map((m) => m.staged.slug);
+  if (!owed.length) return { due: false, why: 'nothing staged in this scan is owed an email', towns, slugs };
+  const left = deliverable(review).deliver;
+  if (left.length && !force) return { due: false, why: `${left.join(', ')} still to be staged, and the digest goes when the last of them is`, towns, slugs };
+  return { due: true, towns, slugs };
+}
+
+/** The remote command that sends the digest: the portal's own caller, inside its container. */
+export const flushRemote = (slugs) => `docker compose exec -T portal node scripts/notify-update-round.mjs --map ${slugs.join(',')}`;
+
+/**
+ * The ssh argv for it, from the portal's .env as `deliver-map.mjs` reads it, with
+ * BatchMode as that script uses: an unattended tick must fail, not wait on a prompt.
+ */
+export function flushArgs({ host, key, appDir, slugs }) {
+  if (!host || !appDir) throw new Refused('DEPLOY_HOST and DEPLOY_APP_DIR are not both set in the portal\'s .env, so the digest cannot be sent.');
+  if (!slugs.length || slugs.some((s) => !/^[a-z0-9][a-z0-9-]*$/.test(s))) throw new Refused(`the digest's map slugs are not all slugs: ${JSON.stringify(slugs)}.`);
+  return [...(key ? ['-i', key] : []), '-o', 'BatchMode=yes', host, `cd ${appDir} && ${flushRemote(slugs)}`];
+}
+
 /* ------------------------------------------------------------------ the edge */
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
@@ -133,6 +180,23 @@ async function fetchReadBack(slug) {
   } catch (e) { return { ok: false, why: `the portal could not be read (${e.message})` }; }
 }
 
+/* Send the digest if it is due, and record it. A non-zero exit is a HOLD, never a
+ * retry: notify-update-round refuses the whole round before sending, but a failure
+ * after that is indistinguishable from one before it at this end. */
+function flush({ file, review, portal, by, force }) {
+  const f = planFlush(review, { force });
+  if (!f.due) { console.log(`stage_refresh: no digest yet — ${f.why}.`); return; }
+  const hand = `npm --prefix "${portal.replace(/\\/g, '/')}" run ssh -- "${flushRemote(f.slugs)}"`;
+  console.log(`stage_refresh: the digest is due for ${f.towns.join(', ')}. The command, as a person would run it:`);
+  console.log(`  ${hand}`);
+  if (!by) { console.log('  dry run: nobody was emailed. Add --apply --by <who> to send it.'); return; }
+  const argv = flushArgs({ host: process.env.DEPLOY_HOST, key: process.env.DEPLOY_SSH_KEY, appDir: process.env.DEPLOY_APP_DIR, slugs: f.slugs });
+  const res = spawnSync('ssh', argv, { stdio: 'inherit' });
+  if (res.status !== 0) throw new Refused(`the digest for ${f.towns.join(', ')} exited ${res.status ?? res.error}, so no email is recorded. This is a HOLD, never a retry: those maps are staged and their customers may NOT have been told. Check /app/admin's audit trail for notify.update-ready-batch; if it is absent, a person sends it with --flush.`);
+  writeFileSync(file, JSON.stringify(markNotified(review, f.towns, { by, at: new Date().toISOString() }), null, 2) + '\n');
+  console.log(`stage_refresh: one digest per customer sent for ${f.towns.join(', ')}, and recorded in ${file}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const portal = resolvePortal(args);
@@ -140,6 +204,13 @@ async function main() {
   const busesDir = resolveBuses(args);
   const scan = typeof args.scan === 'string' ? args.scan : null;
   const town = typeof args.town === 'string' ? args.town : null;
+  const by = typeof args.by === 'string' && args.by.trim() ? args.by.trim() : null;
+  if (args.flush) {
+    if (!scan) throw new Refused('--flush needs --scan <date>.');
+    if (args.apply && !by) throw new Refused('--by is required with --apply: an email nobody sent is not a record.');
+    const file = path.join(busesDir, '_gtfs', `ink-review_${scan}.json`);
+    return flush({ file, review: readJson(file), portal, by: args.apply ? by : null, force: true });
+  }
   if (!scan || !town) throw new Refused('--scan <date> and --town "<Town>" are both required.');
   const file = path.join(busesDir, '_gtfs', `ink-review_${scan}.json`);
   const review = readJson(file);
@@ -149,21 +220,27 @@ async function main() {
   if (!existsSync(src)) throw new Refused(`${plan.town}'s render folder ${src} is in its manifest and not on disk.`);
   const pkg = readJson(path.join(portal, 'package.json'));
   if (!pkg || !pkg.scripts || pkg.scripts.deliver !== DELIVER_SCRIPT) throw new Refused(`the portal's deliver script is no longer \`${DELIVER_SCRIPT}\` (${portal}), so this tool would not be running what npm runs — update DELIVER_SCRIPT.`);
-  const deliverArgs = ['--map', plan.slug, '--kind', 'area', '--src', src, '--note', plan.note];
+  const deliverArgs = ['--map', plan.slug, '--kind', 'area', '--src', src, '--note', plan.note, '--no-notify'];
   console.log(`stage_refresh: ${plan.town} ${plan.after} is deliverable. The command, in ${portal}:`);
   console.log(`  npm run deliver -- ${deliverArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`);
-  if (!args.apply) { console.log('  dry run: nothing was staged and nobody was emailed. Add --apply --by <who> to stage it.'); return; }
+  if (!args.apply) {
+    console.log('  dry run: nothing was staged and nobody was emailed. Add --apply --by <who> to stage it.');
+    const after = planFlush(markStaged(review, plan.town, { slug: plan.slug, by: 'dry-run', at: '', notify: 'digest' }));
+    console.log(after.due ? `  staging it would make the digest due, for ${after.towns.join(', ')}.` : `  staging it would send no digest yet — ${after.why}.`);
+    return;
+  }
 
-  const by = typeof args.by === 'string' && args.by.trim() ? args.by.trim() : null;
   if (!by) throw new Refused('--by is required with --apply: a staging nobody ran is not a record.');
   const [node, ...rest] = DELIVER_SCRIPT.split(' ');
   const res = spawnSync(node === 'node' ? process.execPath : node, [...rest, ...deliverArgs], { cwd: portal, stdio: 'inherit' });
-  if (res.status !== 0) throw new Refused(`the deliver command exited ${res.status ?? res.error}, so nothing was recorded. This is a HOLD naming ${plan.town}, never a retry: past its step 4 the customer may already have been emailed, and the deliver script leaves the portal stopped after an import failure.`);
-  writeFileSync(file, JSON.stringify(markStaged(review, plan.town, { slug: plan.slug, by, at: new Date().toISOString() }), null, 2) + '\n');
-  console.log(`stage_refresh: ${plan.town} ${plan.after} staged and recorded in ${file}`);
+  if (res.status !== 0) throw new Refused(`the deliver command exited ${res.status ?? res.error}, so nothing was recorded. This is a HOLD naming ${plan.town}, never a retry: the deliver script leaves the portal stopped after an import failure, and a staging may have landed that this record does not show.`);
+  const staged = markStaged(review, plan.town, { slug: plan.slug, by, at: new Date().toISOString(), notify: 'digest' });
+  writeFileSync(file, JSON.stringify(staged, null, 2) + '\n');
+  console.log(`stage_refresh: ${plan.town} ${plan.after} staged without an email and recorded in ${file}`);
   const rb = await fetchReadBack(plan.slug);
-  if (!rb.ok) throw new Refused(`staged by the deliver command's own account, and NOT read back: ${rb.why}. Look at /app/admin → Refreshes before anything else; do not stage it again.`);
+  if (!rb.ok) throw new Refused(`staged by the deliver command's own account, and NOT read back: ${rb.why}. Its customer has NOT been emailed. Look at /app/admin → Refreshes before anything else; do not stage it again.`);
   console.log(`stage_refresh: read back — "${rb.name}" is waiting on its customer (${rb.key}). Publishing it is their Accept.`);
+  flush({ file, review: staged, portal, by, force: false });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

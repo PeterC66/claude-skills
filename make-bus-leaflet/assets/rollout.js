@@ -18,8 +18,17 @@
  *
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
- *                    [--note "..."] [--apply] [--force] [--buses "<dir>"]
- *                    [--by <who>]
+ *                    [--note "..."] [--apply] [--force | --rebuild-stale]
+ *                    [--buses "<dir>"] [--by <who>]
+ *
+ * `--rebuild-stale` rebuilds a map ONLY when its verdict is STAMP-STALE — every
+ * sheet already gates PASS and only the engine stamp is old — and bypasses nothing
+ * (buses-data OA-473). `--force` means four things here: rebuild a stamp-stale map,
+ * finish an UNRENDERED S4, roll old geometry past STALE-INPUTS, publish past a lost
+ * label or a blocking warning. This flag is the first of those and none of the
+ * others, so a loop tick can clear an engine-rebuild row without being handed the
+ * other three. A map in any other state is refused as NOT-STAMP-STALE (exit 1) or
+ * left UP-TO-DATE; the two flags together are a usage error.
  *
  * `--by <who>` records WHO performed each stage this run opens and commits —
  * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
@@ -52,7 +61,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses, byArgs } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
+const { SK, gate, labelDiff, huesAlikeOnMap, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -86,6 +95,14 @@ const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 const FORCE = !!args.force;
+// OA-473: rebuild a STAMP-STALE map and nothing else. It never sets FORCE, so every
+// refusal below that reads `!FORCE` still refuses with it set.
+const REBUILD_STALE = !!args['rebuild-stale'];
+if (REBUILD_STALE && FORCE) {
+  console.error('rollout: --rebuild-stale and --force together are a contradiction. --rebuild-stale exists so that');
+  console.error('  a stamp-only rebuild does not need --force; pass one or the other.');
+  process.exit(2);
+}
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
 // WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
@@ -165,8 +182,10 @@ function rolloutOne(t) {
    * *which engine reproduces this*, and those are different claims. The byte
    * gate already answers the second; this field is the only record of the
    * first, and it is what `track:engine` and the whole OA-130 tracking decision
-   * rest on. So the rebuild is real work and --force is the right way to ask
-   * for it; the bug was only ever that nobody was told.
+   * rest on. So the rebuild is real work; the bug was only ever that nobody was
+   * told. It was asked for with --force until 2026-09-26, and is now asked for with
+   * --rebuild-stale, because --force also meant three things a loop tick must never
+   * be handed and auto mode rightly refused it (OA-473).
    *
    * IT READS THE SAME FILE STATUS.JS READS — the latest S4 run's routes.json,
    * not ci-reference — so the two tools cannot disagree about the input. And it
@@ -234,17 +253,28 @@ function rolloutOne(t) {
   }
 
   const stampedEngine = rj.engine;
-  if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE
-      && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE) {
+  const allPass = sheetGates.every(([, g]) => g.status === 'PASS');
+  const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE;
+  if (isStampStale && !FORCE && !REBUILD_STALE) {
     return { name: t.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current template is `
                    + `${CURRENT_ENGINE} — status.js reports that as ENGINE STALE -- a chore the worklist carries as one engine-rebuild row, never a red (OA-396, OA-430). Rebuild and re-stamp with:  `
-                   + `node rollout.js --town "${t.name}" --apply --force` };
+                   + `node rollout.js --town "${t.name}" --apply --rebuild-stale` };
   }
-  if (sheetGates.every(([, g]) => g.status === 'PASS') && !FORCE) {
+  if (allPass && !FORCE && !isStampStale) {
     return { name: t.name, status: 'UP-TO-DATE',
              detail: sheetGates.map(([n]) => n).join('+')
                    + ' already gate PASS against the current template, and the engine stamp is current' };
+  }
+  /* --rebuild-stale GOES NO FURTHER THAN THE STATE IT NAMES (OA-473). Reaching here
+   * with it set and the map not STAMP-STALE means a sheet would change under the live
+   * template: an ink-moving rebuild, whose label diff a person reads. That is plain
+   * --apply's job, not this flag's, so it is refused rather than quietly widened. */
+  if (REBUILD_STALE && !isStampStale) {
+    const moving = sheetGates.filter(([, g]) => g.status !== 'PASS').map(([n]) => n);
+    return { name: t.name, status: 'NOT-STAMP-STALE',
+             detail: `--rebuild-stale rebuilds only a STAMP-STALE map, and ${moving.join('+')} would change under the live template. `
+                   + `Read the dry run without the flag, then:  node rollout.js --town "${t.name}" --apply` };
   }
 
   let routesJson = {};
@@ -317,6 +347,7 @@ function rolloutOne(t) {
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
     diffs[name] = d;
+    d.huesAlike = huesAlikeOnMap(path.join(s4, name));   // OA-071: owed, never gating
     if (d.lost.length) anyLost = true;
   }
 
@@ -469,6 +500,13 @@ for (const t of selected) {
       // printed: a check that silently forgives is the next --force habit starting.
       if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
+      // Same text, new place (OA-463): the three lines above compare SETS of strings and
+      // cannot see it. Reported, never gating.
+      if (d.moved && d.moved.length) console.log(`    MOVED in ${file}: ${d.moved.join(' | ')}`);
+      // OA-071. A rollout carries S3 unchanged, so it cannot make the recolour Peter ruled
+      // is owed at a map's next rebuild; it can say so. Reported, never gating.
+      if (d.huesAlike && d.huesAlike.length) console.log(`    HUES ALIKE in ${file}: ` + d.huesAlike.map(c => `${c.a} vs ${c.b} (dE ${c.dE})`).join(', ')
+        + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
     }
   }
   // Blocking warnings always print in full; the rest print as a count, with the
@@ -485,8 +523,8 @@ console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', ')
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(
   `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp — status.js REPORTS these as ENGINE STALE and the worklist carries one engine-rebuild row each, `
-  + `and this tool will not clear them without --force:\n  `
-  + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --force`).join('\n  '));
+  + `and this tool rebuilds them only when asked, with the flag that permits that state and no other:\n  `
+  + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --rebuild-stale`).join('\n  '));
 // STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict
 // that names work the operator has to go and do somewhere else, and a per-map line
 // scrolls past. It is the one refusal here whose remedy is NOT this tool (OA-225).
@@ -501,7 +539,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS', 'NOT-STAMP-STALE'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);
 }
 

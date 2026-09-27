@@ -29,14 +29,29 @@ one spoke.
 
 Only ever ADDS a "stops" array to a destination lacking one -- re-run safely.
 
+STOP LOCALITIES (buses-data OA-311). Beside every `stops` array it writes, and
+beside any existing one that lacks it, this also writes `stopLocalities`: the
+same length, each entry the NaPTAN `LocalityName` of that stop, or null where it
+cannot say. A stop name is a bare string -- "York Road (UB8)", "Drake Road" --
+and `CommonName` resolves to one locality for under a fifth of the names the
+/maps search indexes, so the portal cannot join it after the fact. Here the
+ATCO code is still in hand (GTFS stop_id IS the NaPTAN ATCOCode), so the join
+is exact for a stop this script picks. For a `stops` array it did not write --
+hand-kept, or written before this existed -- each name is resolved against the
+ATCOs of that name on the destination's own routes' chains, and kept only when
+they all agree on one locality; a name that cannot be pinned is null, never a
+guess. The register is `_gtfs/naptan.sqlite`, found by walking up from --dir
+unless --naptan names it; without it no localities are written and the script
+says so on stderr.
+
 NOTE: gtfs_duration.py's journey_minutes still matches destinations by name
 substring, which is the same failure this script's pick_direction was changed
 to stop relying on. It is a separate fix and has not been made.
 
 Usage:
-  python derive_stops.py routes.json --dir . [--max-stops 4]
+  python derive_stops.py routes.json --dir . [--max-stops 4] [--naptan <naptan.sqlite>]
 """
-import json, os, argparse, math
+import json, os, argparse, math, sqlite3, sys
 
 # Two directions whose closest approach to the target differs by less than this
 # are not meaningfully distinguished by geometry -- see pick_direction().
@@ -162,6 +177,60 @@ def _truncate_at_destination(downstream, atco2name):
     return downstream
 
 
+def find_up(start_dir, *rel):
+    """The first `<ancestor>/<rel...>` that exists, walking up from start_dir."""
+    d = os.path.abspath(start_dir)
+    while True:
+        cand = os.path.join(d, *rel)
+        if os.path.exists(cand):
+            return cand
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def load_localities(naptan_db, atcos):
+    """{ATCO: LocalityName} for just the ATCOs asked about, from naptan.sqlite."""
+    out = {}
+    want = sorted(set(a for a in atcos if a))
+    if not naptan_db or not want:
+        return out
+    con = sqlite3.connect(naptan_db)
+    try:
+        for i in range(0, len(want), 500):
+            chunk = want[i:i + 500]
+            q = ("SELECT ATCOCode, LocalityName FROM naptan WHERE ATCOCode IN (%s)"
+                 % ",".join("?" * len(chunk)))
+            for atco, loc in con.execute(q, chunk):
+                if loc:
+                    out[atco] = loc
+    finally:
+        con.close()
+    return out
+
+
+def resolve_localities(names, routes, chains, atco2name, loc_of):
+    """Localities for a `stops` array this script did not pick, so has no ATCOs for.
+
+    Each name is matched against the stops OF THAT NAME on the destination's own
+    routes' chains, and kept only when every such stop lies in the same locality.
+    Two localities, or none, is null: a guessed locality would put a map in front
+    of the wrong search, which is the fault this field exists to remove."""
+    by_name = {}
+    for r in routes or []:
+        for d in (chains.get(r) or {}).get('directions', []):
+            for sid in d.get('stops') or []:
+                nm = atco2name.get(sid)
+                if nm:
+                    by_name.setdefault(nm, set()).add(sid)
+    out = []
+    for nm in names:
+        locs = set(loc_of.get(s) for s in by_name.get(nm, ())) - {None}
+        out.append(next(iter(locs)) if len(locs) == 1 else None)
+    return out
+
+
 def sample_names(names, max_stops):
     """Keep the terminus (last) always; evenly sample the intermediates down
     to max_stops-1 if there are more than that."""
@@ -182,13 +251,24 @@ def main():
     ap.add_argument('routes_json')
     ap.add_argument('--dir', default='.', help='directory holding the P2 chain files')
     ap.add_argument('--max-stops', type=int, default=4)
+    ap.add_argument('--naptan', help='naptan.sqlite (default: _gtfs/naptan.sqlite, found walking up from --dir)')
     a = ap.parse_args()
+
+    naptan_db = a.naptan or find_up(a.dir, '_gtfs', 'naptan.sqlite')
+    if naptan_db and not os.path.exists(naptan_db):
+        sys.exit(f"derive_stops: --naptan {naptan_db} does not exist")
+    if not naptan_db:
+        sys.stderr.write("derive_stops: no _gtfs/naptan.sqlite above --dir, so NO stopLocalities "
+                         "are written and the /maps search cannot place these stops "
+                         "(build it with make-bus-leaflet/assets/naptan_build.py)\n")
+    picked_atcos = {}
 
     def load(name):
         with open(os.path.join(a.dir, name), encoding='utf-8') as f:
             return json.load(f)
 
-    D = json.load(open(a.routes_json, encoding='utf-8'))
+    with open(a.routes_json, encoding='utf-8') as f:
+        D = json.load(f)
     chains = load('routes_full_atco.json')
     atco2ll = load('atco2ll.json')
     atco2name = load('atco2name.json')
@@ -232,23 +312,54 @@ def main():
         # "Bus Station" reads as if the bus had already arrived. An unqualified repeat
         # is worse than a shorter list, and the sampler has plenty of other stops.
         term_name = atco2name.get(downstream[-1])
-        names = []
+        picked = []                       # (name, ATCO) -- the ATCO is what pins the locality
         for k, sid in enumerate(downstream):
             nm = atco2name.get(sid)
-            if not nm or (names and names[-1] == nm):
+            if not nm or (picked and picked[-1][0] == nm):
                 continue
             if nm == term_name and k != len(downstream) - 1:
                 continue
-            names.append(nm)
-        if not names:
+            picked.append((nm, sid))
+        if not picked:
             noroute += 1; continue
-        b['stops'] = sample_names(names, a.max_stops)
+        picked = sample_names(picked, a.max_stops)
+        b['stops'] = [nm for nm, _ in picked]
+        picked_atcos[id(b)] = [sid for _, sid in picked]
         filled += 1
         print(f"  {routes[0]:6s} -> {b.get('name',''):20s} {' / '.join(b['stops'])}")
 
+    located = add_stop_localities(D, picked_atcos, chains, atco2name, naptan_db)
+
     with open(a.routes_json, 'w', encoding='utf-8') as f:
         json.dump(D, f, indent=1, ensure_ascii=False)
-    print(f"filled {filled}, left {skipped} (already set), {noroute} had no usable chain, wrote {a.routes_json}")
+    print(f"filled {filled}, left {skipped} (already set), {noroute} had no usable chain, "
+          f"{located} given stopLocalities, wrote {a.routes_json}")
+
+
+def add_stop_localities(D, picked_atcos, chains, atco2name, naptan_db):
+    """Write `stopLocalities` beside every `stops` array that lacks one; returns how many.
+
+    `picked_atcos` maps id(destination) to the ATCOs this run picked for it, which
+    join exactly; any other `stops` array is resolved by name (resolve_localities)."""
+    if not naptan_db:
+        return 0
+    todo = [b for b in D.get('destinations', []) if b.get('stops') and 'stopLocalities' not in b]
+    if not todo:
+        return 0
+    atcos = set(s for v in picked_atcos.values() for s in v)
+    for b in todo:
+        for r in b.get('routes') or []:
+            for d in (chains.get(r) or {}).get('directions', []):
+                atcos.update(d.get('stops') or [])
+    loc_of = load_localities(naptan_db, atcos)
+    for b in todo:
+        sids = picked_atcos.get(id(b))
+        if sids is not None:
+            b['stopLocalities'] = [loc_of.get(s) for s in sids]
+        else:
+            b['stopLocalities'] = resolve_localities(b['stops'], b.get('routes'), chains,
+                                                     atco2name, loc_of)
+    return len(todo)
 
 
 if __name__ == '__main__':

@@ -912,11 +912,10 @@ LEG.buf.forEach(out);
  *
  * `bullets` and `heading` override the lot for a town that wants its own words.
  *
- * ON BY DEFAULT since 2026-08-24, `howToUse:false` to refuse it. All 8 towns had
- * opted in, which is the definition of a default here. NOTE what was NOT flipped:
- * every one of those towns also stores its own three `bullets`, a hand-picked subset
- * of the five derived below, and those stay explicit — they are per-map content, not
- * a repeated flag, and unsetting them would grow every town's panel by two bullets.
+ * ON BY DEFAULT since 2026-08-24, `howToUse:false` to refuse it. THREE BULLETS since
+ * 2026-09-26 (buses-data OA-437, OA-443): eight of nine stored `bullets` were these
+ * three verbatim, and the towns storing none drew six. The journey-time bullet went
+ * too — no stored town printed it, and the footer already says times are approximate.
  */
 const HOWTO = DESIGN.howToUse === false ? null
   : (DESIGN.howToUse == null || DESIGN.howToUse === true ? {} : DESIGN.howToUse);
@@ -931,10 +930,7 @@ if(HOWTO){
       'Find where you want to go, around the edge of the diagram.',
       `Follow its coloured line in to ${HUB_PROSE} at the centre.`,
       'The badge on that line is the bus service number.',
-      'The panel headed “Operators & services” says who runs it.',
-      'Names printed along a line are its main stops, not every stop.',
     ];
-    if(_hasTimes) b.push('A time under a destination is a typical whole journey, not a timetable.');
     if(DESIGN.scaleBar === false) b.push('Not to scale — directions and distances are simplified.');
     return b;
   })();

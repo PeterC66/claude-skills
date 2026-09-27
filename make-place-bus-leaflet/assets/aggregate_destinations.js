@@ -10,20 +10,87 @@
 //   2. Cluster those end-points geographically (union within clusterKm) so that
 //      several stops that are really the same destination — "Bus Station",
 //      "Market Square" both = St Neots town centre — collapse into ONE spoke.
-//   3. Each cluster becomes a destination: label = its most common stop name,
+//   3. Each cluster becomes a destination: label = the settlement most of its
+//      end-points are in (see placeName below), else its most common stop name,
 //      bearing = true bearing from the place to the cluster centroid, routes = every
 //      route reaching it, distKm = distance. Pure local loops (both ends in the
 //      walkshed) are reported separately, not drawn as spokes.
 // The result is a DRAFT for human review (per the skill's "suggest, then confirm"
 // rule) — merge/relabel clusters, then paste into routes.json `destinations`.
 //
-// Usage: node aggregate_destinations.js <routes_full.json> <atco2ll.json> <atco2name.json> <place.json> [clusterKm] [out]
+// Naming (OA-438): with --localities <atco2locality.json>, written by
+// stop_localities.py from NaPTAN through the town drafter's own PlaceNamer, a
+// cluster is named after its SETTLEMENT and not its stop. Before that, 7 of 87
+// drafted names across ten places survived review: the drafter wrote "Bus
+// Station", "Market Square", "Newlands Cottages" and a person rewrote nearly every
+// one to the town the stop is in. Without the flag the old stop-name behaviour is
+// unchanged.
+//
+// Usage: node aggregate_destinations.js <routes_full.json> <atco2ll.json> <atco2name.json> <place.json> [clusterKm] [out] [--localities <atco2locality.json>]
 const fs = require('fs');
 // Positional, through the one parser: cli.parseArgs puts positionals in `_`, so
 // the six arguments below are unchanged and a `--flag` can be added later without
 // a second parser appearing here (OA-232 Tier 3.1, satellite F8). readJson names
 // the file it could not read, which `JSON.parse(fs.readFileSync(...))` does not.
 const { cli } = require('./place_engine.js');
+
+// ---- naming ---------------------------------------------------------------
+// NaPTAN makes every Greater London locality a child of "London" -- Uxbridge and
+// Heathrow Airport among them -- and London is a region, not a place a bus sheet
+// sends anyone to, so a locality is never climbed to it. Measured on the first run
+// of this rule, where Beaconsfield's Uxbridge and Heathrow spokes both came out as
+// "London".
+const NOT_A_DESTINATION = new Set(['London']);
+
+// The settlement a reader would call a stop, from NaPTAN's [locality, parent]:
+//   * the place's own town proper        -> the town (labelClusters decides whether
+//     that spoke is "the town centre");
+//   * a district of the place's own town -> the district (Eynesbury, Micklefield),
+//     because inside your own town the district is the useful answer;
+//   * a district of any other town       -> that town (Newnham -> Cambridge), because
+//     from outside it the town is.
+// null when NaPTAN does not know the stop; the caller then uses the stop name.
+function placeName(atco, loc, town) {
+  const l = loc && loc[atco];
+  if (!l || !l[0]) return null;
+  const [name, parent] = l;
+  if (parent && parent !== town && !NOT_A_DESTINATION.has(parent)) return parent;
+  return name;
+}
+
+// The most common value, ties to the first seen.
+function modal(xs) {
+  const cnt = new Map();
+  for (const x of xs) cnt.set(x, (cnt.get(x) || 0) + 1);
+  let best = null, n = 0;
+  for (const [x, c] of cnt) if (c > n) { best = x; n = c; }
+  return best;
+}
+
+// Label each cluster: its modal settlement, else its modal stop name. Where several
+// spokes land on one settlement, the one most routes reach (ties to the first found)
+// keeps the bare name and the rest are told apart by their stop -- Godmanchester
+// ships "Huntingdon" beside "Hinchingbrooke Hospital", Ely ships one "Cambridge". A
+// spoke into the place's OWN town is "<Town> town centre" only when it is the only
+// one; High Wycombe's places reach five corners of their own town, and calling
+// Orchard Road and Adams Park the town centre would be wrong.
+function labelClusters(groups, town) {
+  const out = groups.map(g => {
+    const named = g.map(e => e.place).filter(Boolean);
+    return { label: named.length ? modal(named) : modal(g.map(e => e.name)),
+      stop: modal(g.map(e => e.name)), routes: new Set(g.map(e => e.route)).size };
+  });
+  const by = {};
+  out.forEach((o, i) => { (by[o.label] = by[o.label] || []).push(i); });
+  const names = out.map(o => o.label);
+  for (const [label, idx] of Object.entries(by)) {
+    if (idx.length === 1) { if (town && label === town) names[idx[0]] = `${town} town centre`; continue; }
+    const keep = town && label === town ? -1
+      : idx.reduce((b, i) => out[i].routes > out[b].routes ? i : b, idx[0]);
+    for (const i of idx) if (i !== keep && out[i].stop !== label) names[i] = `${label} (${out[i].stop})`;
+  }
+  return names;
+}
 
 // ---- main() ---------------------------------------------------------------
 // OA-323, Tier 4.1 for the place skill: the body below runs only when this file is
@@ -32,7 +99,9 @@ const { cli } = require('./place_engine.js');
 // re-indented; the diff has to read as "a scope was added".
 function main() {
 
-const a = cli.parseArgs(process.argv.slice(2))._;
+const args = cli.parseArgs(process.argv.slice(2));
+const a = args._;
+const LOC = args.localities ? cli.readJson(args.localities) : null;
 const full = cli.readJson(a[0]);
 const ll = cli.readJson(a[1]);
 const nm = cli.readJson(a[2]);
@@ -67,7 +136,8 @@ for (const route in full) {
     const [la, lo] = ll[end];
     const dk = km(PLAT, PLON, la, lo);
     if (dk <= WALK) continue;    // still inside the walkshed => not a real destination
-    reached.push({ route, atco: end, lat: la, lon: lo, name: nm[end] || end, distKm: dk });
+    reached.push({ route, atco: end, lat: la, lon: lo, name: nm[end] || end,
+      place: placeName(end, LOC, place.town), distKm: dk });
   }
   if (!reached.length) { localLoops.push(route); continue; }
   // dedup identical ends within a route
@@ -87,12 +157,12 @@ const groups = {};
 eps.forEach((e, i) => { (groups[find(i)] = groups[find(i)] || []).push(e); });
 
 // 3. build destinations
-const dests = Object.values(groups).map(g => {
+const glist = Object.values(groups);
+const labels = labelClusters(glist, LOC && place.town);
+const dests = glist.map((g, gi) => {
   const clat = g.reduce((s, e) => s + e.lat, 0) / g.length;
   const clon = g.reduce((s, e) => s + e.lon, 0) / g.length;
-  const cnt = {};
-  g.forEach(e => { cnt[e.name] = (cnt[e.name] || 0) + 1; });
-  const label = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
+  const label = labels[gi];
   const routes = [...new Set(g.map(e => e.route))].sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
   return {
     name: label,
@@ -105,7 +175,7 @@ const dests = Object.values(groups).map(g => {
 }).sort((a, b) => a.distKm - b.distKm);
 
 fs.writeFileSync(OUT, JSON.stringify({ place: place.name, center: [PLAT, PLON],
-  clusterKm: CLUSTER_KM, destinations: dests, localLoops }, null, 1));
+  clusterKm: CLUSTER_KM, ...(LOC ? { naming: 'locality' } : {}), destinations: dests, localLoops }, null, 1));
 
 console.log(`# Destination aggregation — ${place.name}  (clusterKm ${CLUSTER_KM})`);
 console.log(`${dests.length} destination(s):`);
@@ -116,4 +186,4 @@ console.log(`Wrote ${OUT}`);
 }
 
 if (require.main === module) main();
-module.exports = { main };
+module.exports = { main, placeName, labelClusters };

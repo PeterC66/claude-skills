@@ -82,7 +82,7 @@
  * where nobody did.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 
 /** Split a git ref listing safely; a missing or empty answer is no branches. */
 const lines = (s) => String(s || '').split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -100,6 +100,53 @@ export const defaultGit = (dir, argv) => {
     }).replace(/\s+$/, '');
   } catch { return null; }
 };
+
+/*
+ * MANY GIT QUESTIONS AT ONCE, AND WHY (OA-476, 2026-09-26). Asked one at a time
+ * this source cost 103 s of a 118.5 s board: ~900 git processes over 206 local
+ * branches in three repositories, each ~100 ms to start on Windows and ~250 ms for
+ * a `cherry`, and the Bash tool gives up at 120 s. Every question is a read of
+ * refs already on the disk and none depends on another in the same phase, so
+ * each phase below asks its batch eight wide — measured on the portal's 99
+ * branches, `git cherry` went from 30.8 s one at a time to 7.5 s eight wide.
+ *
+ * The pool runs in ONE child node process so that every caller, and the
+ * injectable `git` the harness stubs, stays synchronous. Each answer means what
+ * `defaultGit`'s does — trailing whitespace trimmed, `null` on any failure, the
+ * same 20 s limit and 1 MB output ceiling — and a pool that cannot run at all
+ * falls back to asking one at a time rather than answering nothing.
+ */
+const POOL = `
+import { execFile } from 'node:child_process';
+let s = ''; for await (const c of process.stdin) s += c;
+const { dir, argvs, width } = JSON.parse(s);
+const out = new Array(argvs.length).fill(null);
+let next = 0;
+const one = () => new Promise((done) => {
+  const i = next++;
+  if (i >= argvs.length) return done(false);
+  execFile('git', ['-C', dir, ...argvs[i]], { encoding: 'utf8', timeout: 20000, maxBuffer: 1024 * 1024, windowsHide: true },
+    (e, so) => { out[i] = e ? null : so.replace(/\\s+$/, ''); done(true); });
+});
+await Promise.all(Array.from({ length: width }, async () => { while (await one()); }));
+process.stdout.write(JSON.stringify(out));
+`;
+export const defaultGitMany = (dir, argvs, width = 8) => {
+  if (!argvs.length) return [];
+  if (argvs.length === 1) return [defaultGit(dir, argvs[0])];
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', POOL], {
+    input: JSON.stringify({ dir, argvs, width }), encoding: 'utf8', windowsHide: true,
+    maxBuffer: 256 * 1024 * 1024, timeout: 20000 * Math.ceil(argvs.length / width) + 30000,
+  });
+  try {
+    const out = JSON.parse(r.stdout);
+    if (Array.isArray(out) && out.length === argvs.length) return out;
+  } catch { /* fall through to one at a time */ }
+  return argvs.map((a) => defaultGit(dir, a));
+};
+
+/** The batch runner that goes with a `git`: the pool for the real one, one at a time for a stub. */
+const manyFor = (git) => (git === defaultGit ? defaultGitMany : (dir, argvs) => argvs.map((a) => git(dir, a)));
 
 /**
  * Which ref is this repository's trunk, according to the repository itself.
@@ -183,25 +230,33 @@ export function defaultRef(dir, git) {
  * @returns {string[]|null} null when git refused a question, never [] for that
  */
 export function addedAndAbsent(dir, git, base, branch) {
-  const mb = git(dir, ['merge-base', base, branch]);
-  if (!mb) return null;
-  const added = git(dir, ['diff', '--name-only', '--diff-filter=A', mb, branch]);
-  if (added === null) return null;
-  const out = [];
-  for (const p of lines(added)) {
-    // `cat-file -e` prints nothing and exits 0 when the path exists, so an
-    // empty string is PRESENT and only null is absent-or-refused. Both read as
-    // "the trunk has it" here, which is the quiet direction.
-    if (git(dir, ['cat-file', '-e', `${base}:${p}`]) !== null) continue;
-    // ABSENT FROM THE TIP IS NOT ENOUGH, and the harness's control is what said
-    // so rather than any reasoning here. A branch can add a file, land, and the
-    // trunk drop that file later — then the path is missing from the tip while
-    // the work is long since merged. So ask the trunk's HISTORY: a path it has
-    // never once touched is a path this branch's landing never carried.
-    const seen = git(dir, ['rev-list', '--max-count=1', base, '--', p]);
-    if (seen === null || seen !== '') continue;
-    out.push(p);
-  }
+  return addedAndAbsentMany(dir, manyFor(git), base, [branch])[0];
+}
+
+/** `addedAndAbsent` for many branches, each step asked as one batch. Same answer per branch. */
+function addedAndAbsentMany(dir, gitMany, base, branches) {
+  const out = branches.map(() => null);
+  const mbs = gitMany(dir, branches.map((b) => ['merge-base', base, b]));
+  const withMb = branches.map((b, i) => i).filter((i) => mbs[i]);
+  const addeds = gitMany(dir, withMb.map((i) => ['diff', '--name-only', '--diff-filter=A', mbs[i], branches[i]]));
+  const paths = []; // [branch index, path]
+  withMb.forEach((i, k) => {
+    if (addeds[k] === null) return;
+    out[i] = [];
+    for (const p of lines(addeds[k])) paths.push([i, p]);
+  });
+  // `cat-file -e` prints nothing and exits 0 when the path exists, so an
+  // empty string is PRESENT and only null is absent-or-refused. Both read as
+  // "the trunk has it" here, which is the quiet direction.
+  const present = gitMany(dir, paths.map(([, p]) => ['cat-file', '-e', `${base}:${p}`]));
+  const absent = paths.filter((_, k) => present[k] === null);
+  // ABSENT FROM THE TIP IS NOT ENOUGH, and the harness's control is what said
+  // so rather than any reasoning here. A branch can add a file, land, and the
+  // trunk drop that file later — then the path is missing from the tip while
+  // the work is long since merged. So ask the trunk's HISTORY: a path it has
+  // never once touched is a path this branch's landing never carried.
+  const seen = gitMany(dir, absent.map(([, p]) => ['rev-list', '--max-count=1', base, '--', p]));
+  absent.forEach(([i, p], k) => { if (seen[k] === '') out[i].push(p); });
   return out;
 }
 
@@ -219,9 +274,10 @@ export function addedAndAbsent(dir, git, base, branch) {
  *
  * @param {string} dir
  * @param {(dir: string, argv: string[]) => string|null} git
+ * @param {(dir: string, argvs: string[][]) => Array<string|null>} [gitMany] the same questions asked as one batch
  * @returns {{readable: boolean, why: string|null, base: string|null, branches: Array}}
  */
-export function readBranches(dir, git = defaultGit) {
+export function readBranches(dir, git = defaultGit, gitMany = manyFor(git)) {
   const out = { readable: false, why: null, base: null, branches: [] };
   if (!dir || git(dir, ['rev-parse', '--is-inside-work-tree']) !== 'true') {
     out.why = 'not a git working tree';
@@ -245,16 +301,19 @@ export function readBranches(dir, git = defaultGit) {
     'refs/heads/']);
   if (raw === null) { out.why = 'could not list refs/heads/'; return out; }
 
-  for (const line of lines(raw)) {
-    const [branch, upstream = '', track = '', when = '', subject = ''] = line.split('\t');
-    if (!branch || branch === trunk) continue;
+  // Each question below is asked of every branch as ONE batch (see POOL above);
+  // the per-branch logic and every answer are what they were one at a time.
+  const rows = lines(raw)
+    .map((line) => line.split('\t'))
+    .filter(([branch]) => branch && branch !== trunk);
 
-    // PATCH IDENTITY, NOT AHEAD-COUNT. `git cherry <base> <branch>` marks each
-    // commit `+` when the base has no equivalent patch and `-` when it does.
-    const cherry = git(dir, ['cherry', base, branch]);
-    if (cherry === null) continue;  // a branch we cannot read is not a finding
-    const unmerged = lines(cherry).filter((l) => l.startsWith('+')).length;
-
+  // PATCH IDENTITY, NOT AHEAD-COUNT. `git cherry <base> <branch>` marks each
+  // commit `+` when the base has no equivalent patch and `-` when it does.
+  const cherries = gitMany(dir, rows.map(([branch]) => ['cherry', base, branch]));
+  const read = [];
+  rows.forEach(([branch, upstream = '', track = '', when = '', subject = ''], i) => {
+    if (cherries[i] === null) return;  // a branch we cannot read is not a finding
+    const unmerged = lines(cherries[i]).filter((l) => l.startsWith('+')).length;
     const upstreamGone = /\[gone\]/.test(track);
     // A branch may be on the remote without an upstream ever being configured —
     // `git push origin <b>` without -u. Ask the ref directly rather than trust
@@ -269,26 +328,38 @@ export function readBranches(dir, git = defaultGit) {
     // upstream counts only when it is a ref of its OWN, never the trunk every
     // branch here forks from.
     const ownUpstream = !!upstream && upstream !== base;
-    const onRemote = !upstreamGone
-      && (git(dir, ['rev-parse', '--verify', '--quiet', `origin/${branch}^{commit}`]) !== null
-        || (ownUpstream && git(dir, ['rev-parse', '--verify', '--quiet', `${upstream}^{commit}`]) !== null));
+    read.push({ branch, upstream, upstreamGone, ownUpstream, unmerged, when, subject });
+  });
 
-    let insertions = null;
-    const stat = git(dir, ['diff', '--shortstat', `${base}...${branch}`]);
-    const m = /(\d+) insertion/.exec(stat || '');
-    if (m) insertions = Number(m[1]);
+  // onRemote: the branch's own name on origin first, then its own upstream — the
+  // second asked only where the first said no, exactly as `||` asked it.
+  const live = read.filter((r) => !r.upstreamGone);
+  const byName = gitMany(dir, live.map((r) => ['rev-parse', '--verify', '--quiet', `origin/${r.branch}^{commit}`]));
+  const needUp = live.filter((r, k) => byName[k] === null && r.ownUpstream);
+  const byUp = gitMany(dir, needUp.map((r) => ['rev-parse', '--verify', '--quiet', `${r.upstream}^{commit}`]));
+  const onRemote = new Set([
+    ...live.filter((_, k) => byName[k] !== null),
+    ...needUp.filter((_, k) => byUp[k] !== null),
+  ]);
 
-    // DID THIS BRANCH GAIN WORK AFTER ITS SQUASH LANDED? Asked only of a gone
-    // upstream, because that is the only grade whose verdict it can change, and
-    // `null` means NOT ASKED rather than none found — the same three-valued
-    // shape as `readable` above, for the same reason.
-    const addedMissing = upstreamGone ? addedAndAbsent(dir, git, base, branch) : null;
+  const stats = gitMany(dir, read.map((r) => ['diff', '--shortstat', `${base}...${r.branch}`]));
 
+  // DID THIS BRANCH GAIN WORK AFTER ITS SQUASH LANDED? Asked only of a gone
+  // upstream, because that is the only grade whose verdict it can change, and
+  // `null` means NOT ASKED rather than none found — the same three-valued
+  // shape as `readable` above, for the same reason.
+  const gone = read.filter((r) => r.upstreamGone);
+  const goneAdded = addedAndAbsentMany(dir, gitMany, base, gone.map((r) => r.branch));
+  const addedMissing = new Map(gone.map((r, k) => [r, goneAdded[k]]));
+
+  read.forEach((r, i) => {
+    const m = /(\d+) insertion/.exec(stats[i] || '');
     out.branches.push({
-      branch, upstream, upstreamGone, onRemote, unmerged, addedMissing,
-      committedAt: when || null, subject: subject || '', insertions,
+      branch: r.branch, upstream: r.upstream, upstreamGone: r.upstreamGone, onRemote: onRemote.has(r),
+      unmerged: r.unmerged, addedMissing: r.upstreamGone ? addedMissing.get(r) : null,
+      committedAt: r.when || null, subject: r.subject || '', insertions: m ? Number(m[1]) : null,
     });
-  }
+  });
   return out;
 }
 
@@ -316,7 +387,7 @@ export function readBranches(dir, git = defaultGit) {
  * @returns {{trunk: string, ahead: Array<{sha, subject}>, uncarried: Array<{sha, subject}>, carriers: string[]}|null}
  *   null when the local trunk does not exist or git refused — NOT ASKED, never "none"
  */
-export function trunkAhead(dir, git, base) {
+export function trunkAhead(dir, git, base, gitMany = manyFor(git)) {
   const trunk = base.replace(/^origin\//, '');
   if (git(dir, ['rev-parse', '--verify', '--quiet', `refs/heads/${trunk}^{commit}`]) === null) return null;
   const own = git(dir, ['cherry', base, trunk]);
@@ -328,10 +399,11 @@ export function trunkAhead(dir, git, base) {
   const refs = git(dir, ['for-each-ref', '--format=%(refname:short)', 'refs/heads/', 'refs/remotes/']);
   if (refs === null) return null;
   const carried = new Set();
-  for (const ref of lines(refs)) {
-    if (ref === trunk || ref === base || /\/HEAD$/.test(ref) || ref === 'origin') continue;
-    const marks = git(dir, ['cherry', ref, trunk, base]);
-    if (marks === null) continue;
+  const others = lines(refs).filter((ref) => !(ref === trunk || ref === base || /\/HEAD$/.test(ref) || ref === 'origin'));
+  const allMarks = gitMany(dir, others.map((ref) => ['cherry', ref, trunk, base]));
+  others.forEach((ref, k) => {
+    const marks = allMarks[k];
+    if (marks === null) return;
     // A commit the ref already has BY ANCESTRY is not listed at all — `cherry`
     // lists only what is not in the ref's history — so carried is everything
     // ahead that this ref does not mark `+`, not only what it marks `-`.
@@ -343,13 +415,13 @@ export function trunkAhead(dir, git, base) {
       any = true;
     }
     if (any) out.carriers.push(ref);
-  }
-  for (const sha of ahead) {
-    const subject = git(dir, ['log', '-1', '--format=%s', sha]) || '';
-    const row = { sha: sha.slice(0, 7), subject };
+  });
+  const subjects = gitMany(dir, ahead.map((sha) => ['log', '-1', '--format=%s', sha]));
+  ahead.forEach((sha, k) => {
+    const row = { sha: sha.slice(0, 7), subject: subjects[k] || '' };
     out.ahead.push(row);
     if (!carried.has(sha)) out.uncarried.push(row);
-  }
+  });
   return out;
 }
 

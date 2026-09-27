@@ -110,6 +110,38 @@ test('OA-340: two Red Lions is what OA-250 says it is — both drawn, one key, a
     { include: ['pubs'] }).length, 1);
 });
 
+/* ---------------------------------------------------------------------------
+ * OA-453 — stations, the third opt-in category, in the pub's exact shape.
+ * St Neots East named its station with a hand-pinned note because no category
+ * could draw one. The node below is the one in that map's own pull.
+ * ------------------------------------------------------------------------- */
+
+test('OA-453: stations are opt-in per town, and neither other opt-in buys them', () => {
+  const stn = { railway: 'station', name: 'St Neots' };
+  assert.strictEqual(classify(stn, {}), null, 'a town that has asked for nothing draws no station');
+  assert.strictEqual(classify(stn, { include: ['pubs', 'allotments'] }), null,
+    'and asking for pubs and allotments has not thereby asked for stations');
+  assert.deepStrictEqual(classify(stn, { include: ['stations'] }), ['station', 'St Neots']);
+  assert.deepStrictEqual(classify({ railway: 'halt', name: 'Shippea Hill' }, { include: ['stations'] }),
+    ['station', 'Shippea Hill'], 'a halt is a small station, and a reader can catch a train there');
+  assert.strictEqual(classify({ railway: 'station', station: 'miniature', name: 'Park Railway' }, { include: ['stations'] }),
+    null, 'a miniature park railway is not a station a bus reader is looking for');
+});
+
+test('OA-453: a station prints its name, and a NAMELESS station is offered but not drawn', () => {
+  assert.ok(printsName({ cat: 'station', name: 'St Neots' }),
+    'the symbol says *a station*; only the name says WHICH');
+  assert.strictEqual(classify({ railway: 'station' }, { include: ['stations'] })[1], '',
+    'the fallback is BLANK, like the pub\'s — a "Station" label would sneak past the nameless default');
+  const report = {};
+  const out = selectPois([[node(52.2265, -0.2505, { railway: 'station', name: 'St Neots' }),
+                           node(52.2400, -0.2505, { railway: 'station' })]],
+    { include: ['stations'] }, report);
+  assert.deepStrictEqual(out.map(p => p.name), ['St Neots'], 'OA-238: a bare glyph nobody chose stays off the sheet');
+  assert.deepStrictEqual(report.candidates.map(c => c.key), ['station:St Neots', 'station:'],
+    'and it is still OFFERED in the chooser');
+});
+
 test('a way with only a centre is placed at its centre', () => {
   // NAMED on purpose since OA-338: an unnamed library is called `Library`, which
   // is a category label rather than a name, so it now defaults to `miss` and this
@@ -139,6 +171,33 @@ test('the same place mapped as node and building collapses — under 60 m, same 
   const apart = selectPois([[node(52.3, -0.07, { shop: 'supermarket', name: 'Tesco' }),
                              node(52.302, -0.07, { shop: 'supermarket', name: 'Tesco Extra' })]], {});
   assert.strictEqual(apart.length, 2, '220 m apart is two shops');
+});
+
+test('OA-347: a NAMED member replaces an unnamed one it duplicates, whatever the file order', () => {
+  // March: node/9272750116 is a sports centre with no name, way/190610244 is the
+  // same site as `George Campbell Leisure Centre`, 19 m away, and the node comes
+  // first in osm.json. Keeping the first threw the name away and left the site
+  // blank on the sheet, because the survivor was `Leisure`, a category label,
+  // which the tier default then `miss`ed. Read off report.candidates, the list
+  // BEFORE tiers drop anything, because a `miss` survivor never reaches `out`.
+  const bare  = node(52.3,      -0.07, { leisure: 'sports_centre', sport: 'swimming' });
+  const named = node(52.30017,  -0.07, { leisure: 'sports_centre', name: 'George Campbell Leisure' });
+  const cands = (els) => { const r = {}; selectPois(els, {}, r); return r.candidates; };
+  const fwd = cands([[bare, named]]);
+  assert.deepStrictEqual(fwd.map(c => c.key), ['leisure:George Campbell Leisure'],
+    'the unnamed node survived and the name was thrown away — the March regression');
+  assert.deepStrictEqual(fwd[0].ll, [52.30017, -0.07], 'the name brings its own coordinate');
+  assert.strictEqual(fwd[0].printsName, true);
+  // The control the other way round: an unnamed newcomer never displaces a name.
+  const rev = cands([[named, bare]]);
+  assert.deepStrictEqual(rev.map(c => c.key), ['leisure:George Campbell Leisure']);
+  assert.deepStrictEqual(rev[0].ll, [52.30017, -0.07]);
+  // And two unnamed members still keep the first, so file order decides every
+  // tie it decided before. (Two NAMED members keeping the first is the Co-op
+  // test above.)
+  const bare2 = node(52.30017, -0.07, { leisure: 'sports_centre' });
+  assert.deepStrictEqual(cands([[bare, bare2]]).map(c => c.ll), [[52.3, -0.07]]);
+  assert.deepStrictEqual(cands([[bare2, bare]]).map(c => c.ll), [[52.30017, -0.07]]);
 });
 
 test('a near-duplicate in a DIFFERENT category is a different place and survives', () => {

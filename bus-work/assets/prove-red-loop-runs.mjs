@@ -129,6 +129,59 @@ console.log('\n3b. OA-303 — an `around` tick does NOT reset the count, and is 
   check('CONTROL — around is 0 once the run is broken', cleared.around === 0, String(cleared.around));
 }
 
+console.log('\n3c. OA-408 — a `-missed` run continues the idle count and is NOT working');
+{
+  // A scheduled run that died before reading its prompt left no file; the next
+  // tick wrote `-missed` for it from the scheduler's run list. Before this reader
+  // knew the name it parsed as an ordinary feed and RESET the count as though it
+  // had worked, which is the mutation the first assertion here catches.
+  const h = health(mkRuns('missed', ['0715-OA', '0815-none', '0915-missed', '1015-missed']));
+  check('-none, -missed, -missed counts THREE', h.idle === 3, String(h.idle));
+  check('and two of the three are named as missed', h.missed === 2, String(h.missed));
+  check('and none as around', h.around === 0, String(h.around));
+  check('a missed run is NOT working — lastWorkingAt stays at 07:15',
+    h.lastWorkingAt === new Date(2026, 8, 9, 7, 15).getTime(), new Date(h.lastWorkingAt).toString());
+  const rows = loopRunItems({ health: h });
+  check('the row is raised', rows.length === 1, String(rows.length));
+  const row = rows[0] || { title: '(no row was raised)', why: '', missed: null };
+  check('title keeps "done nothing", which IS true of a missed run', /fired 3 times and done nothing/.test(row.title), row.title);
+  check('title counts the missed runs', /2 of them leaving no run file of their own/.test(row.title), row.title);
+  check('why sends the reader to the -missed files for the cause', /recorded each as `-missed`/.test(row.why), row.why.slice(0, 120));
+  check('the count is on the row for a caller', row.missed === 2, `missed=${row.missed}`);
+
+  // Two missed runs alone reach the threshold: the loop can be silent for a whole
+  // morning with no tick of its own, and this is the case the join exists for.
+  const only = health(mkRuns('missed-only', ['0715-OA', '0815-missed', '0915-missed']));
+  check('two missed runs alone raise the row', loopRunItems({ health: only }).length === 1, String(only.idle));
+
+  // CONTROL — with no missed run the wording is untouched, and a working tick
+  // still resets the count, so `missed` has not become a synonym for any feed.
+  const plain = loopRunItems({ health: health(mkRuns('missed-ctl', ['0815-none', '0915-none'])) })[0];
+  check('CONTROL — no missed clause when there is no missed run', !/leaving no run file/.test(plain.title) && !/-missed/.test(plain.why), plain.title);
+  const cleared = health(mkRuns('missed-cleared', ['0815-missed', '0915-missed', '1015-OA']));
+  check('CONTROL — a working tick after missed runs resets to 0', cleared.idle === 0 && cleared.missed === 0, JSON.stringify(cleared));
+  // With around AND missed in one run, both clauses are said.
+  const both = loopRunItems({ health: health(mkRuns('missed-around', ['0815-around', '0915-missed'])) })[0];
+  check('around and missed together: both named in the title', /1 of them worked around the bar.*1 of them leaving no run file/.test(both.title), both.title);
+}
+
+console.log('\n3d. adhoc tick-counts — a `-busy` stand-down is TRANSPARENT: neither idle nor working');
+{
+  // The 2026-09-26 shape: a /ticks run held the lock and the hourly schedule
+  // fired into it. Under the old name each stand-down was `-none` and one of them
+  // plus a real gate-stop would have raised the row about a loop that was busy.
+  const h = health(mkRuns('busy', ['0715-OA', '0815-busy', '0915-none', '1015-busy']));
+  check('busy ticks do not count — only the one none is idle', h.idle === 1, String(h.idle));
+  check('and no row at the default threshold', loopRunItems({ health: h, treeDirty: true }).length === 0);
+  check('a busy tick is NOT working — lastWorkingAt stays at 07:15',
+    h.lastWorkingAt === new Date(2026, 8, 9, 7, 15).getTime(), new Date(h.lastWorkingAt).toString());
+  // Transparent, not a reset: two real gate-stops either side of a busy one still
+  // make a run of two, so `busy` has not become a synonym for a working feed.
+  const across = health(mkRuns('busy-across', ['0715-OA', '0815-none', '0915-busy', '1015-none']));
+  check('none, busy, none still counts TWO — busy does not break the run', across.idle === 2, String(across.idle));
+  check('and raises the row', loopRunItems({ health: across }).length === 1);
+}
+
 console.log('\n4. one idle tick is below the threshold');
 {
   const h = health(mkRuns('one', ['0915-bus-work', '1015-none']));

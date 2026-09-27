@@ -626,7 +626,7 @@
 <g transform="translate(247.5 101.91199999999999) scale(0.2) translate(-12 -12)"><path d="M12,2.2 V8" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6,2.4 L17,3.8 L12.6,5.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M3.6,7.6 H20.4 V19 H3.6 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M2,19 H22 V21.4 H2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M12,2.2 V8" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6,2.4 L17,3.8 L12.6,5.2 Z" fill="#33383d"/><path d="M3.6,7.6 H20.4 V19 H3.6 Z" fill="#33383d"/><path d="M5.6,10 h2.6 v2.6 h-2.6 Z M15.8,10 h2.6 v2.6 h-2.6 Z M10.4,13 h3.2 v6 h-3.2 Z" fill="#ffffff"/><path d="M2,19 H22 V21.4 H2 Z" fill="#33383d"/></g>
 <text x="251.5" y="102.91199999999999" font-family="Arial" font-size="2.9" fill="#222">Town Hall</text>
 <path d="M201.00 112.91h4.00" fill="none" stroke="#555" stroke-width="2.2" stroke-linecap="round"/>
-<text x="207" y="113.91" font-family="Arial" font-size="2.9" fill="#222">Frequent — turn up and go</text>
+<text x="207" y="113.91" font-family="Arial" font-size="2.9" fill="#222">Frequent — at least every 30 minutes</text>
 <path d="M201.00 117.31h4.00" fill="none" stroke="#555" stroke-width="1.7" stroke-linecap="round"/>
 <text x="207" y="118.31" font-family="Arial" font-size="2.9" fill="#222">Runs through the day</text>
 <path d="M201.00 121.71h4.00" fill="none" stroke="#555" stroke-width="1.2" stroke-linecap="round"/>

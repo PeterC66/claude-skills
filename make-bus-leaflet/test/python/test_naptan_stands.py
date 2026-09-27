@@ -74,32 +74,25 @@ class CompassWord(unittest.TestCase):
         self.assertIsNone(ns.compass_word("S-bound side"))
         self.assertIsNone(ns.compass_word("towards S-bound"))
 
-    def test_THE_WRITTEN_OUT_FORM_IS_NOT_RECOGNISED_and_the_docstring_says_it_is(self):
-        """Asserted as it BEHAVES, and the behaviour contradicts the docstring above it.
-
-        `compass_word`'s own docstring says "S-bound", "S bound" and "Southbound"
-        "cannot be mistaken for three different flags". The third one is not true:
-        the pattern is an ABBREVIATION followed by "bound", so "Southbound" fails
-        `fullmatch` and the stop prints with no qualifier at all.
-
-        Measured against `_gtfs/naptan.sqlite` on 2026-09-11 rather than argued:
-        127,658 stops carry 12,165 abbreviated compass indicators and **1,125
-        written-out ones** -- Northbound 262, Southbound 259, Westbound 206,
-        Eastbound 204, plus lower-case variants -- of which 40 are in Cambridgeshire
-        (ATCO 0500) and 922 in the two Buckinghamshire blocks (0400, 0490). The pair
-        that states the fault exactly is `0500SBARN007 New Road Eastbound` and
-        `0500SBARN003 New Road Westbound`: same CommonName, opposite directions, and
-        `tidy_name(disambiguate=True)` prints both as a bare "New Road" because
-        neither indicator is recognised -- on a sheet whose entire subject is
-        direction.
-
-        This test is deliberately GREEN on today's behaviour. Widening the pattern
-        moves ink on any place sheet carrying such a stop, so it is a build and a
-        crop rather than an edit, and it is filed as its own action. The test is
-        here so the day somebody widens it, this file says what it was.
+    def test_the_written_out_form_normalises_to_the_abbreviated_one(self):
+        """buses-data OA-319, widened 2026-09-25 on Peter's ruling. Until then the
+        pattern was an ABBREVIATION followed by "bound", so "Southbound" failed
+        `fullmatch` and the stop printed with no qualifier, while the docstring
+        promised the opposite. The pair that stated the fault is
+        `0500SBARN007 New Road Eastbound` and `0500SBARN003 New Road Westbound`.
+        The history, with the 2026-09-11 national measurement, is behind
+        `git show 5fdd294d:"Development Docs/open-actions/OA-319.md"` in buses-data.
         """
-        for written in ("Northbound", "Southbound", "Eastbound", "Westbound", "southbound"):
-            self.assertIsNone(ns.compass_word(written), written)
+        for written, flag in (("Northbound", "N-bound"), ("Southbound", "S-bound"),
+                              ("Eastbound", "E-bound"), ("Westbound", "W-bound"),
+                              ("southbound", "S-bound"), ("North bound", "N-bound"),
+                              ("WEST-BOUND", "W-bound")):
+            self.assertEqual(ns.compass_word(written), flag, written)
+
+    def test_a_written_out_word_is_still_held_to_the_WHOLE_indicator(self):
+        self.assertIsNone(ns.compass_word("Southbound side"))
+        self.assertIsNone(ns.compass_word("Northern"))
+        self.assertIsNone(ns.compass_word("Southwestbound"))
 
 
 class TidyName(unittest.TestCase):
@@ -349,6 +342,36 @@ class FrameUniqueness(unittest.TestCase):
         fault it is rescuing from, spelled more confidently."""
         rc, out = self.build([("S1", "Station Road", "N-bound", 60),
                               ("S2", "Station Road", "N-bound", 80)])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out["verdict"], "REFUSE")
+
+    def test_written_out_flags_facing_opposite_ways_are_rescued(self):
+        """OA-319: New Road, Eastbound and Westbound, printed as a bare "New Road"
+        twice until the pattern learned the written-out words."""
+        rc, out = self.build([("R1", "New Road", "Eastbound", 60),
+                              ("R2", "New Road", "Westbound", 80)])
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.labels(out),
+                         {"R1": "New Road (E-bound)", "R2": "New Road (W-bound)"})
+
+    def test_EDISON_SQUARE_Eastbound_and_E_bound_are_ONE_flag_not_two(self):
+        """OA-319's first falsification case, from the real `0490` cluster: four
+        flags, and two of them say east in different spellings. Widened WITHOUT
+        normalisation they read as four different words and the cluster is
+        falsely rescued; normalised, two flags print "E-bound" and it is refused."""
+        rc, out = self.build([("ES1", "Edison Square", "E-bound", 40),
+                              ("ES2", "Edison Square", "S-bound", 60),
+                              ("ES3", "Edison Square", "Eastbound", 80),
+                              ("ES4", "Edison Square", "Westbound", 100)])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out["verdict"], "REFUSE")
+
+    def test_LOXBEARE_DRIVE_Northbound_and_N_bound_are_ONE_flag_not_two(self):
+        """OA-319's second falsification case, the same shape pointing north."""
+        rc, out = self.build([("LD1", "Loxbeare Drive", "SE-bound", 40),
+                              ("LD2", "Loxbeare Drive", "N-bound", 60),
+                              ("LD3", "Loxbeare Drive", "Northbound", 80),
+                              ("LD4", "Loxbeare Drive", "Southbound", 100)])
         self.assertEqual(rc, 1)
         self.assertEqual(out["verdict"], "REFUSE")
 

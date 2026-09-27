@@ -35,8 +35,13 @@
  *         "design.sheetVersion" build stamp (--force-stamps overrides), and an S4
  *         with no build-warnings.txt at all — every route to an S4 writes one
  *         (--force-nolog overrides, for a build that genuinely drew no sheets),
+ *         and an AREA S4 that drew internal.svg / external.svg without carrying
+ *         gen_internal.js / gen_external.js, which the portal re-draws it from
+ *         (--force-nogen overrides; buses-data OA-318),
  *         and, for S6, refuses a redteam.json with no redteam-source.json decision
- *         beside it, or one that says WAIT (--force-decision overrides; OA-427)
+ *         beside it, or one that says WAIT (--force-decision overrides; OA-427),
+ *         and, for S5, refuses a routes.json that differs (bar "version") from the
+ *         S4 it renders (--force-stale-config overrides; buses-data OA-318)
  *   stamps [runDir]                   write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
@@ -707,6 +712,46 @@ function main() {
       if (problem) console.log(`  WARNING: committing an S6 whose red-team answer has no decision (--force-decision): ${problem}`);
     }
 
+    /* Guard (buses-data OA-318 item 3): an S5 must carry the CONFIG of the S4 it
+     * renders. The portal stores a payload's routes.json and re-draws from it, so an
+     * S5 holding sheets from one S4 beside the routes.json of an EARLIER one publishes
+     * the earlier sheet — St Neots v4.0, where a second `pull S4` into the same folder
+     * refreshed the SVGs and kept the superseded config, and every laptop gate PASSed
+     * because ci-reference/ is mirrored from S4, which was right. `pull` now refreshes
+     * such a copy; this asks the same question of a folder assembled any other way, at
+     * the one boundary every S5 passes.
+     *
+     * The S4 is the one named in --based-on, else S4's latest — which is what `pull S4`
+     * takes, and what both rollouts pull. `version` is left out of the comparison
+     * because `pull` re-stamps it to the destination's run dir. An S4 folder that has
+     * been pruned, or either side having no routes.json, is not this guard's business:
+     * there is nothing on disk to compare, and it says so rather than passing silently. */
+    if (st === 'S5') {
+      const s4 = m.stages.S4;
+      const s4Id = basedOn.S4 || (s4 && s4.latest);
+      const s4Rec = s4Id && s4 && s4.runs.find(r => r.id === s4Id);
+      const mine = path.join(runDir, 'routes.json');
+      const theirs = s4Rec && path.join(townDir, s4Rec.dir, 'routes.json');
+      if (!s4Rec) {
+        if (s4Id) console.log(`  note: S4 run ${s4Id} is not in the manifest, so this S5's routes.json was not compared with it`);
+      } else if (!fs.existsSync(mine) || !fs.existsSync(theirs)) {
+        console.log(`  note: this S5's routes.json was not compared with S4 ${s4Id} — ${!fs.existsSync(mine) ? 'the S5 folder has none' : 'that S4 folder has none (pruned?)'}`);
+      } else {
+        const body = (p) => { const t = fs.readFileSync(p, 'utf8');
+          try { const j = JSON.parse(t); delete j.version; return JSON.stringify(j); } catch (e) { return t; } };
+        if (body(mine) !== body(theirs)) {
+          if (!f['force-stale-config'])
+            die(`S5 run ${id} cannot be committed: its routes.json differs from the one in S4 ${s4Id} (${s4Rec.dir}).\n`
+              + `  The portal re-draws a delivered map from the payload's routes.json, so this S5 would\n`
+              + `  publish a sheet drawn from a config its own S4 did not use (OA-318, St Neots v4.0).\n`
+              + `  Pull the S4 again, which refreshes a stale copy, and re-render:\n`
+              + `    node "%SK%\\stage.js" pull S4 "${runDir}"\n`
+              + `  Override with --force-stale-config only if the difference is deliberate.`);
+          console.log(`  WARNING: committing an S5 whose routes.json differs from S4 ${s4Id} (--force-stale-config)`);
+        }
+      }
+    }
+
     const rec = { id, dir: relDir, at: isoNow(), outputs };
 
     /* THE COST OF THE STAGE (OA-105). `startedAt` and `at` are both UTC minutes
@@ -976,6 +1021,39 @@ function main() {
             + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
             + `  Override with --force-nolog only if this build genuinely drew no sheets.`);
         console.log(`  WARNING: committing an S4 with no ${LOG} (--force-nolog)`);
+      }
+
+      /* Guard (buses-data OA-318, the last item): an AREA S4 carries the generator
+       * of every sheet it drew. The portal re-draws an area map on the host from the
+       * payload's OWN `gen_internal.js` and `gen_external.js` — `propose-update.mjs`
+       * refuses a payload with neither, and one carrying only some fails the host's
+       * pre-flight verify with `Cannot find module '…/gen_external.js'`. That is how
+       * St Neots v4.0 was assembled on 2026-09-11: `stage.js` and the generators run
+       * in place drew identical bytes, and nothing on the laptop could tell, because
+       * the byte gate reproduces the sheet with the ENGINE's generators, not the run's.
+       *
+       * `build_s4.js` copies them in on every build, so this guard is green on every
+       * S4 that came through the one entry point — measured 2026-09-26: all 12 area
+       * maps' latest S4 carry both. It exists for the build that did not.
+       *
+       * PLACES ARE EXCLUDED, structurally: the portal stages a place map with its
+       * vendored place engine and reads no generator from the payload. It asks about
+       * a sheet only when that sheet is present, so a partial build is the OA-206
+       * guard's business above, not this one's.
+       */
+      if (!isPlaceRun(runDir)) {
+        const GENS = [['gen_internal.js', 'internal.svg'], ['gen_external.js', 'external.svg']];
+        const noGen = GENS.filter(([g, svg]) => fs.existsSync(path.join(runDir, svg)) && !fs.existsSync(path.join(runDir, g)));
+        if (noGen.length && !f['force-nogen']) {
+          die(`${id} drew ${noGen.map(([, s]) => s).join(' and ')} but does not carry ${noGen.map(([g]) => g).join(' or ')}\n`
+            + `  The portal re-draws an area map on the host from the payload's own generators,\n`
+            + `  so this build would fail its pre-flight verify with "Cannot find module" —\n`
+            + `  and the byte gate cannot see it, because it draws with the engine's copy.\n`
+            + `  Build the sheets through the one entry point, which copies them in for you:\n`
+            + `    cd "${runDir}" && node "%SK%\\build_s4.js"\n`
+            + `  Override with --force-nogen only if this S4 will never be delivered.`);
+        }
+        if (noGen.length) console.log(`  WARNING: committing an area S4 without ${noGen.map(([g]) => g).join(' or ')} (--force-nogen)`);
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;

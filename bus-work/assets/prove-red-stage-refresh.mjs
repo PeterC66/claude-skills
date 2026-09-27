@@ -14,8 +14,8 @@
  * answer would flip if the rule were gone, shown beside it, so each rule is
  * load-bearing rather than merely present. No disk, no portal, no clock.
  */
-import { planStage, readBack, newestRender, DELIVER_SCRIPT } from './stage_refresh.mjs';
-import { deliverable, markStaged, mergeAnswers, answer, Refused } from './ink_review.mjs';
+import { planStage, readBack, newestRender, planFlush, flushArgs, DELIVER_SCRIPT } from './stage_refresh.mjs';
+import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
 const check = (label, ok, detail) => { ran++; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${label}${ok || detail == null ? '' : ' -- ' + detail}`); };
@@ -91,6 +91,30 @@ console.log('\n4. The read-back finds the update waiting on its customer, and no
 
 console.log('\n5. It runs what npm runs');
 check('DELIVER_SCRIPT is the deliver command line, node first', DELIVER_SCRIPT.split(' ')[0] === 'node' && /scripts\/deliver-map\.mjs$/.test(DELIVER_SCRIPT));
+
+console.log('\n6. One digest per scan, when the last town is staged (OA-152)');
+{
+  const r = review(map('March', 'no-ink'), map('Ely', 'no-ink'), map('Soham', 'ink-moved'));
+  const one = markStaged(r, 'March', { slug: 'march', by: 'sched-0100', at: 'T1', notify: 'digest' });
+  check('with a town still to stage, the digest is not due, and names what it waits for', !planFlush(one).due && /Ely still to be staged/.test(planFlush(one).why), JSON.stringify(planFlush(one)));
+  check('  and a person\'s --flush sends what is owed now', planFlush(one, { force: true }).due && planFlush(one, { force: true }).slugs.join() === 'march');
+  const two = markStaged(one, 'Ely', { slug: 'ely', by: 'sched-0200', at: 'T2', notify: 'digest' });
+  const f = planFlush(two);
+  check('once the last deliverable town is staged, the digest is due for every map owed one', f.due && f.slugs.join() === 'march,ely' && f.towns.join() === 'March,Ely', JSON.stringify(f));
+  check('  and a map Peter has not answered does not hold it back — the wait is on deliver alone', deliverable(two).waiting.join() === 'Soham');
+  const sent = markNotified(two, f.towns, { by: 'sched-0200', at: 'T3' });
+  check('a digest recorded as sent is not sent again', !planFlush(sent).due && /nothing staged in this scan is owed/.test(planFlush(sent).why), JSON.stringify(planFlush(sent)));
+  check('  and without the record it WOULD have been — the record is load-bearing', planFlush(two).due);
+  const legacy = markStaged(r, 'March', { slug: 'march', by: 'sched-1215', at: 'T0' });
+  check('a staging from before the digest (no notify) was emailed then and is never owed', !planFlush(legacy, { force: true }).due);
+  const accepted = markStaged(answer(sent, 'Soham', 'accept', { by: 'buses-29', at: 'T4' }), 'Soham', { slug: 'soham', by: 'sched-0300', at: 'T5', notify: 'digest' });
+  check('a map accepted after the digest goes out in one of its own, alone', planFlush(accepted).due && planFlush(accepted).slugs.join() === 'soham', JSON.stringify(planFlush(accepted)));
+  const rebuilt = mergeAnswers(sent, review(map('March', 'no-ink', { after: NEWER }), map('Ely', 'no-ink'), map('Soham', 'ink-moved')));
+  check('a LATER build of a notified map is deliverable, and nothing is owed until it is staged', deliverable(rebuilt).deliver.join() === 'March' && !planFlush(rebuilt, { force: true }).due, JSON.stringify(planFlush(rebuilt, { force: true })));
+  check('the ssh argv runs the portal\'s own caller in its app folder, in batch mode', (() => { const a = flushArgs({ host: 'u@h', key: 'k', appDir: '/opt/x', slugs: ['march', 'ely'] }); return a.join(' ') === '-i k -o BatchMode=yes u@h cd /opt/x && docker compose exec -T portal node scripts/notify-update-round.mjs --map march,ely'; })());
+  check('  and refuses with no host, rather than guessing one', /DEPLOY_HOST/.test(refusal(() => flushArgs({ host: '', appDir: '/opt/x', slugs: ['march'] })) || ''));
+  check('  and refuses a slug that could carry a shell word', /not all slugs/.test(refusal(() => flushArgs({ host: 'u@h', appDir: '/opt/x', slugs: ['march;rm'] })) || ''));
+}
 
 console.log(`\n${ran - bad} of ${ran} passed`);
 process.exit(bad ? 1 : 0);

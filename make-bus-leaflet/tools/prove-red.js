@@ -382,8 +382,8 @@ const MUTATIONS = [
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a pub stops printing its name, so the category delivers a glass symbol and no Wetherspoon',
-    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];",
-    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments'];" },
+    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub','station'];",
+    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','station'];" },
 
   { suite: 'services_panel.test.js', file: 'services_panel.js',
     what: 'the Key loses its pub row, so the sheet draws a symbol nothing on the page explains',
@@ -394,6 +394,69 @@ const MUTATIONS = [
     what: 'the pub glyph is unreachable while its colour stays, so the category ships as a plain dot',
     find: "    case 'pub':         // a tapered pint glass, its head separated from the beer",
     to: "    case 'pub-unreachable': // a tapered pint glass, its head separated from the beer" },
+
+  /* OA-453, 2026-09-26 — stations, the third opt-in, guarded the pub's way:
+   * the opt-in itself, the blank fallback, the miniature exclusion, the name,
+   * the Key row and the glyph each have a mutation their own test must catch. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'stations stop being opt-in, so every town near a railway gains its station',
+    find: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];",
+    to: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a nameless station falls back to "Station", which walks it past the nameless-miss default',
+    find: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];",
+    to: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||'Station'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a miniature park railway is drawn as a station',
+    find: "(t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return",
+    to: "(t.railway==='station'||t.railway==='halt')) return" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a station stops printing its name, so the sheet says *a station* and never which',
+    find: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub','station'];",
+    to: "const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub'];" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'the Key loses its station row, so the sheet draws a train nothing on the page explains',
+    find: "  if(pois.some(p=>p.cat==='station')) key.push(['station','Railway station']);",
+    to: "" },
+
+  { suite: 'icons.test.js', file: 'icons.js',
+    what: 'the station glyph is unreachable while its colour stays, so the category ships as a plain dot',
+    find: "    case 'station':     // a train seen head on: solid cab with a knocked-out",
+    to: "    case 'station-unreachable': // a train seen head on: solid cab with a knocked-out" },
+
+  /* 2026-09-27 — the town POI pull must ask for what poi.include can switch on.
+   * Beaconsfield switched pubs on and has them only from a one-off top-up; a
+   * fresh pull from either query would have brought back none. One mutation per
+   * dropped line, in both copies of the query, and one for a category added to
+   * classify() that no pull asks for. */
+  { suite: 'poi_pull_query.test.js', file: 'overpass-pois.txt',
+    what: 'the town pull template stops asking for pub nodes, so poi.include: ["pubs"] draws nothing',
+    find: '  node["amenity"="pub"](52.308,-0.100,52.345,-0.045);\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'overpass-pois.txt',
+    what: 'the town pull template stops asking for allotment areas, so poi.include: ["allotments"] draws nothing',
+    find: '  way["landuse"="allotments"](52.308,-0.100,52.345,-0.045);\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'draft_town.py',
+    what: 'the unattended drafter stops asking for pubs',
+    find: '  way["amenity"="pub"]({box});\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'draft_town.py',
+    what: 'the unattended drafter stops asking for stations, as it never did before 2026-09-27',
+    find: '  node["railway"~"^(station|halt)$"]({box});\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'poi_select.js',
+    what: 'classify() gains an opt-in category that no pull asks for',
+    find: "  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];",
+    to: "  if((POI.include||[]).includes('cafes') && t.amenity==='cafe') return ['cafe', t.name||''];\n  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];" },
 
   /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
    * label rule behind them. Two of these guard a THRESHOLD and one guards the
@@ -1953,6 +2016,28 @@ const MUTATIONS = [
     what: 'an area S4 with no orientation record commits anyway, so the rotation the build chose is lost with nothing said',
     find: "          if (why && !f['force-meta']) {",
     to: "          if (false) {" },
+
+  /* buses-data OA-318 item 3. The S5 config guard, both ways it can be undone. */
+  { suite: 'stage_s5_config.test.js', file: 'stage.js',
+    what: 'an S5 holding a superseded routes.json commits, so the portal re-draws the sheet its S4 corrected (St Neots v4.0)',
+    find: "        if (body(mine) !== body(theirs)) {",
+    to: "        if (false) {" },
+
+  { suite: 'stage_s5_config.test.js', file: 'stage.js',
+    what: 'the re-stamped "version" counts as a difference, so every ordinary S5 whose pull re-stamped it is refused',
+    find: "          try { const j = JSON.parse(t); delete j.version; return JSON.stringify(j); } catch (e) { return t; } };",
+    to: "          try { const j = JSON.parse(t); return JSON.stringify(j); } catch (e) { return t; } };" },
+
+  /* buses-data OA-318, the last item. The area S4 generator guard. */
+  { suite: 'stage_s4_generators.test.js', file: 'stage.js',
+    what: 'an area S4 drawn in place commits without its generators, so the host pre-flight fails with Cannot find module gen_external.js',
+    find: "        if (noGen.length && !f['force-nogen']) {",
+    to: "        if (false) {" },
+
+  { suite: 'stage_s4_generators.test.js', file: 'stage.js',
+    what: 'the guard stops asking only about sheets that were drawn and demands both generators always',
+    find: "        const noGen = GENS.filter(([g, svg]) => fs.existsSync(path.join(runDir, svg)) && !fs.existsSync(path.join(runDir, g)));",
+    to: "        const noGen = GENS;" },
   /* OA-224 Tier 3.1. cli.js is the one parser and the one estate resolver, so it
    * is the one place a mistake reaches nine scripts at once. Each mutation below
    * is a change that LOOKS like a tidy-up and silently alters every caller. */

@@ -2,7 +2,7 @@
  * label_placer.js — the reserved-box list, and what is allowed to sit where.
  *
  * CONTRACT. `labelPlacer(deps)` returns `{ placed, iconBoxes, hit, overlaps,
- * overlapsNoIcons, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite }`. A
+ * overlapsNoIcons, overlapsRound, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite }`. A
  * factory, and
  * unlike the other extracted modules it OWNS MUTABLE STATE on purpose: the
  * whole point of `placed` is that one list is shared by every pass that claims
@@ -64,6 +64,20 @@ function labelPlacer(deps) {
   const hit=(b,o)=>!(b[2]<o[0]||b[0]>o[2]||b[3]<o[1]||b[1]>o[3]);
   const overlaps=(b,skip)=>placed.some(o=>o!==skip && hit(b,o));
   const overlapsNoIcons=(b)=>placed.some(o=>!iconBoxes.has(o) && hit(b,o));
+  /* A POI SYMBOL IS A DISC, and its reserved box is the square round it (buses-data
+   * OA-470). icons.js draws the symbol as a dark disc of the box's half-width, so a
+   * box that only clips the square's CORNER does not touch the symbol. On
+   * Beaconsfield a route badge was dropped for a 0.3 mm corner overlap with a
+   * pharmacy symbol it cleared by 0.6 mm, and a road name then took the space and
+   * printed under the symbol. The disc is the INSCRIBED one, not the white halo
+   * round it: sized to the halo it reached past the square along the axes, and on
+   * Ely Co-op that cost a 129 badge the square had allowed. Inscribed, the test is
+   * never stricter than the square, so a sheet can only gain. Every other reserved
+   * box is still a box. */
+  const hitsDisc=(b,o)=>{ const cx=(o[0]+o[2])/2, cy=(o[1]+o[3])/2, r=(o[2]-o[0])/2;
+    const dx=cx-Math.max(b[0],Math.min(cx,b[2])), dy=cy-Math.max(b[1],Math.min(cy,b[3]));
+    return dx*dx+dy*dy < r*r; };
+  const overlapsRound=(b)=>placed.some(o=>iconBoxes.has(o) ? hitsDisc(b,o) : hit(b,o));
   // labels.engine:"v2" — one shared placer for the point labels (labeller.js). It is fed
   // from the SAME reserve() calls the old placer uses, so nothing has to be remembered
   // twice, plus the route ink read straight off the SVG this file has already emitted.
@@ -201,7 +215,7 @@ function labelPlacer(deps) {
     out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" ${italic?'font-style="italic" ':''}fill="${col}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(text)}</text>`);
     return true;
   }
-  return { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite };
+  return { placed, iconBoxes, hit, overlaps, overlapsNoIcons, overlapsRound, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite };
 }
 
 module.exports = { labelPlacer };

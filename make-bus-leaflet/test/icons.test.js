@@ -82,6 +82,8 @@ test('and every category draws its OWN glyph rather than the fallback dot (OA-34
   }
   assert.notStrictEqual(icon('pub', 10, 10, 2.2), icon('a-category-that-does-not-exist', 10, 10, 2.2),
     'the legacy icon set has no pub either, so it draws the grey default blob');
+  assert.notStrictEqual(icon('station', 10, 10, 2.2), icon('a-category-that-does-not-exist', 10, 10, 2.2),
+    'the legacy icon set has no station either (OA-453), so it draws the grey default blob');
 });
 
 test('the grid set is drawn charcoal by parameter, never by running inkify over it', () => {

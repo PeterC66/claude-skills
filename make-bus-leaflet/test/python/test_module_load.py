@@ -61,5 +61,31 @@ class ModuleLoad(unittest.TestCase):
         self.assertEqual(failures, [], "module(s) failed to import:\n  " + "\n  ".join(failures))
 
 
+class PlaceModuleLoad(unittest.TestCase):
+    """The same question asked of the place skill's Python (buses-data OA-323 item 2).
+
+    `module_names()` lists the TOWN assets, so the four `.py` files in
+    `make-place-bus-leaflet/assets/` were importable by nothing here: the JS half
+    got `place_assets_load.test.js` on 2026-09-12 and this half was a stated
+    remainder. A missing folder FAILS rather than skips -- the population is
+    resolved from this file, not from a mutation copy, so an absent folder means
+    the skill moved, and a skip would be the silent vanishing the JS half refuses.
+    """
+
+    def test_place_population_is_not_empty(self):
+        self.assertTrue(os.path.isdir(_engine.PLACE_DIR), "no place skill at %s" % _engine.PLACE_DIR)
+        names = _engine.module_names(_engine.PLACE_DIR)
+        self.assertGreater(len(names), 2, "found %d Python modules in %s" % (len(names), _engine.PLACE_DIR))
+
+    def test_every_place_module_imports(self):
+        failures = []
+        for name in _engine.module_names(_engine.PLACE_DIR):
+            try:
+                _engine.load(name, _engine.PLACE_DIR)
+            except Exception as exc:                      # noqa: BLE001 -- the subject IS any exception
+                failures.append("%s.py: %s: %s" % (name, type(exc).__name__, exc))
+        self.assertEqual(failures, [], "place module(s) failed to import:\n  " + "\n  ".join(failures))
+
+
 if __name__ == "__main__":
     unittest.main()

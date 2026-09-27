@@ -30,7 +30,21 @@
  * Usage:
  *   node rollout_places.js [--place "High Wycombe Aldi"]... [--all]
  *                           [--bump minor|major] [--note "..."] [--apply]
- *                           [--force] [--buses "<dir>"] [--by <who>]
+ *                           [--force | --rebuild-stale] [--buses "<dir>"]
+ *                           [--by <who>] [--keep "<dir>"] [--warnings]
+ *                           [--refresh-index --asof YYYY-MM-DD] [--help]
+ *
+ * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ, as in sync_ci_reference.js
+ * (buses-data OA-451 item 3). With no --place this considers every place, and the
+ * shared parser ignores a flag it does not know and files a bare word under `_`,
+ * so `--help` was a dry run over every place and a bare place name was
+ * the same. It wrote nothing, being a dry run, but the same slip with --apply
+ * beside it is a whole-estate rebuild. An unknown flag or a positional argument
+ * now exits 2 before anything is read; --help prints the usage and exits 0.
+ *
+ * `--rebuild-stale` rebuilds a place ONLY when its verdict is STAMP-STALE and
+ * bypasses nothing — identical to rollout.js's flag; see the paragraph there
+ * (buses-data OA-473).
  *
  * `--by <who>` records WHO performed each stage this run opens and commits —
  * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
@@ -53,9 +67,9 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs } = require('./cli');
+const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
+const { SK, gate, labelDiff, huesAlikeOnMap, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
 // (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
@@ -79,7 +93,19 @@ const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
+const USAGE = 'Usage: node rollout_places.js [--place "<Place name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
+  '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
+  '         [--warnings] [--refresh-index --asof YYYY-MM-DD]\n' +
+  '  Dry run unless --apply. No --place: consider EVERY place.';
+const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
+  'keep', 'warnings', 'refresh-index', 'asof', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
+if (args.help === true) { console.log(USAGE); process.exit(0); }
+{
+  const unknown = Object.keys(args).filter(k => k !== '_' && !FLAGS.has(k));
+  if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --place takes every place.\n${USAGE}`);
+  if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a place with --place.\n${USAGE}`);
+}
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
@@ -90,6 +116,14 @@ const { assembleS4Inputs } = require('./seed_prev_s4');
 const PULL_STAGES = ['S1', 'S2', 'S3'];
 const { scratchDir } = require('./scratch');
 const FORCE = !!args.force;
+// OA-473: rebuild a STAMP-STALE place and nothing else. It never sets FORCE, so every
+// refusal below that reads `!FORCE` still refuses with it set.
+const REBUILD_STALE = !!args['rebuild-stale'];
+if (REBUILD_STALE && FORCE) {
+  console.error('rollout_places: --rebuild-stale and --force together are a contradiction. --rebuild-stale exists so');
+  console.error('  that a stamp-only rebuild does not need --force; pass one or the other.');
+  process.exit(2);
+}
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
 // WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
@@ -248,11 +282,32 @@ function rolloutOnePlace(p) {
     : !fs.existsSync(path.join(prevS4.dir, 'boarding.svg')) ? { status: 'MISSING' }
     : gate(GEN_BOARDING, prevS4.dir, 'boarding.svg', path.join(prevS4.dir, 'boarding.svg'));
   const ok = (g) => g.status === 'PASS' || g.status === 'SKIP';
-  const shipped = [hadInternal && 'internal', hadExternal && 'external', wantsBoarding && 'boarding'].filter(Boolean);
   // The built S4's routes.json is read again further down as `_s4rj`, for the
   // stale-S3 refusal. The stamp question is asked BEFORE any of that, so it is
   // read here and reused there rather than opened twice.
   const _s4rjEarly = readJson(path.join(prevS4.dir, 'routes.json')) || {};
+  /* AND THE DERIVED SHEETS, AS rollout.js HAS GATED THEM SINCE 2026-08-28 (buses-data
+   * OA-463, 2026-09-26). This fast path gated internal, external and boarding and never
+   * the schematic, which High Wycombe Aldi ships: on 2026-09-24 OA-165 moved two forced
+   * labels on that schematic, this tool said "every sheet gates PASS", sched-1305 took it
+   * at its word, and the pin bump went red in CI. The town tool learned this exact lesson
+   * on OA-147 — the two fast paths are one guard written twice, and fixing one is how a
+   * guard covers a class once rather than completely.
+   *
+   * Keyed and optioned exactly as status.js's gatePlace gates the same two sheets, so the
+   * board and this tool cannot disagree: PLACE_IGNORE on both, `overridesFromWorkspace`
+   * on the schematic only (the schematiser's nested workspace drops overrides.json, and
+   * the build passes OVERRIDES_FILE; diagram_internal.js copies its own
+   * diagram-overrides.json in, which OVERRIDES_FILE would shadow). A sheet the config asks
+   * for and the S4 does not hold gates NO-SHEET, which is not ok() — so it gets built. */
+  const schematicGate = !_s4rjEarly.internalSchematic ? { status: 'SKIP' }
+    : gate(path.join(SK, 'schematize_internal.js'), prevS4.dir, 'internal-schematic.svg',
+           path.join(prevS4.dir, 'internal-schematic.svg'), { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true });
+  const diagramGate = !_s4rjEarly.internalDiagram ? { status: 'SKIP' }
+    : gate(path.join(SK, 'diagram_internal.js'), prevS4.dir, 'internal-diagram.svg',
+           path.join(prevS4.dir, 'internal-diagram.svg'), { ignoreLineRe: PLACE_IGNORE });
+  const shipped = [hadInternal && 'internal', hadExternal && 'external', wantsBoarding && 'boarding',
+                   _s4rjEarly.internalSchematic && 'schematic', _s4rjEarly.internalDiagram && 'diagram'].filter(Boolean);
   /* AND THE STAMP (OA-179) — see the long note in rollout.js's rolloutOne().
    * Identical shape, identical reasoning, different template: a place is
    * measured against computePlaceEngineVersion(), because a place gets its own
@@ -297,16 +352,23 @@ function rolloutOnePlace(p) {
   }
 
   const stampedEngine = _s4rjEarly.engine;
-  if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE
-      && stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE) {
+  const allPass = ok(internalGate) && ok(externalGate) && ok(boardingGate) && ok(schematicGate) && ok(diagramGate);
+  const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE;
+  if (isStampStale && !FORCE && !REBUILD_STALE) {
     return { name: p.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current PLACE template `
                    + `is ${CURRENT_PLACE_ENGINE} — status.js reports that as ENGINE STALE -- a chore the worklist carries as one engine-rebuild row, never a red (OA-396, OA-430). Rebuild and re-stamp with:  `
-                   + `node rollout_places.js --place "${p.name}" --apply --force` };
+                   + `node rollout_places.js --place "${p.name}" --apply --rebuild-stale` };
   }
-  if (ok(internalGate) && ok(externalGate) && ok(boardingGate) && !FORCE) {
+  if (allPass && !FORCE && !isStampStale) {
     return { name: p.name, status: 'UP-TO-DATE',
              detail: shipped.join('+') + ' already gate PASS against the current template, and the engine stamp is current' };
+  }
+  // --rebuild-stale goes no further than the state it names (OA-473) — see rollout.js.
+  if (REBUILD_STALE && !isStampStale) {
+    return { name: p.name, status: 'NOT-STAMP-STALE',
+             detail: `--rebuild-stale rebuilds only a STAMP-STALE place, and a sheet would change under the live template. `
+                   + `Read the dry run without the flag, then:  node rollout_places.js --place "${p.name}" --apply` };
   }
 
   // ---- build in a scratch workspace first (this is also the entire dry-run) ----
@@ -402,6 +464,7 @@ function rolloutOnePlace(p) {
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
     diffs[name] = d;
+    d.huesAlike = huesAlikeOnMap(path.join(s4, name));   // OA-071: owed, never gating
     if (d.lost.length) anyLost = true;
   }
 
@@ -568,6 +631,13 @@ for (const p of selected) {
       // printed: a check that silently forgives is the next --force habit starting.
       if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
+      // Same text, new place (OA-463): the three lines above compare SETS of strings and
+      // cannot see it. Reported, never gating.
+      if (d.moved && d.moved.length) console.log(`    MOVED in ${file}: ${d.moved.join(' | ')}`);
+      // OA-071. A rollout carries S3 unchanged, so it cannot make the recolour Peter ruled
+      // is owed at a map's next rebuild; it can say so. Reported, never gating.
+      if (d.huesAlike && d.huesAlike.length) console.log(`    HUES ALIKE in ${file}: ` + d.huesAlike.map(c => `${c.a} vs ${c.b} (dE ${c.dE})`).join(', ')
+        + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
     }
   }
   for (const w of (r.blockers || [])) console.log(`    BLOCKING [${w.source}] ${w.text}`);
@@ -581,8 +651,8 @@ console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', ')
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(
   `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp — status.js REPORTS these as ENGINE STALE and the worklist carries one engine-rebuild row each, `
-  + `and this tool will not clear them without --force:\n  `
-  + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --force`).join('\n  '));
+  + `and this tool rebuilds them only when asked, with the flag that permits that state and no other:\n  `
+  + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --rebuild-stale`).join('\n  '));
 // STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict
 // that names work the operator has to go and do somewhere else, and a per-map line
 // scrolls past. It is the one refusal here whose remedy is NOT this tool (OA-225).
@@ -597,7 +667,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS', 'NOT-STAMP-STALE'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);
 }
 

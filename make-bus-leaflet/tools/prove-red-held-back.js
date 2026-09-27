@@ -535,7 +535,12 @@ function posePremise() {
 /* A donor for the synthetic fixture: the first town, in name order, whose stamped
  * engine IS the current one. Asked rather than remembered — a name written here
  * would be a claim about today's estate, which is the whole complaint OA-219 was
- * filed about. */
+ * filed about.
+ *
+ * The refusal says WHERE the remedy is (buses-data OA-341 item 2). The stamp is
+ * computed from the engine in front of you, so any edit to a hashed engine file
+ * empties the donor set at once; that reads as advice about a stale estate unless
+ * the message says which estate was read and what re-stamps it. */
 function pickDonor() {
   const areas = path.join(BUSES, 'Areas');
   const current = require('../assets/engine_version').computeEngineVersion();
@@ -544,8 +549,15 @@ function pickDonor() {
     if (!fs.existsSync(rjp)) continue;
     try { if (JSON.parse(fs.readFileSync(rjp, 'utf8')).engine === current) return name; } catch (e) {}
   }
-  console.error('prove-red-held-back: no town carries the current engine stamp ' + current + ', so there is nothing '
-    + 'to redraw a synthetic held-back sheet from. Rebuild a town, or run this after the next rollout.');
+  const fixture = path.resolve(BUSES).toLowerCase().startsWith(path.resolve(SKILLS_REPO).toLowerCase() + path.sep);
+  console.error('prove-red-held-back: no town under ' + areas + ' carries the current engine stamp ' + current
+    + ', so there is nothing to redraw a synthetic held-back sheet from. The stamp is computed from the engine in '
+    + 'front of you, so any edit to a hashed engine file makes every town a non-donor at once.');
+  console.error(fixture
+    ? '  This is the fixture estate in claude-skills: re-stamp it in the same change, from make-bus-leaflet, with '
+      + 'npm run fixture:estate -- --apply'
+    : '  This is a real estate, outside claude-skills: rebuild one town there under this engine, or point --buses '
+      + 'at the fixture estate, make-bus-leaflet/test/fixtures/estate, which CI gates instead.');
   process.exit(1);
 }
 

@@ -11,7 +11,7 @@
 //                     if any; defaults to the route with the most in-town stops)
 //   atcoPrefix        in-town stop ATCO prefix for road labels (defaults to the
 //                     anchor with its trailing digits stripped, e.g. 0500HSTIV)
-//   internalDesc{}    {route:[title,subtitle]} for the Services panel
+//   internalDesc{}    {route:[title,subtitle]} for the Services panel; minorityNote{} its OA-452 words
 //   poi{}             POI filter/tidy rules (industrialKeep, excludeName, tidy,
 //                     canon, include e.g. ["allotments"])
 //   internalCorridors bundle co-running services into ONE line with a badge
@@ -195,7 +195,7 @@ const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
 const { svgPrimitives } = require(_dep('svg_primitives.js'));
 const { linearFeatures } = require(_dep('linear_features.js'));
 const { labelPlacer } = require(_dep('label_placer.js'));
-const { drawServicesPanel } = require(_dep('services_panel.js'));
+const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
@@ -484,7 +484,7 @@ const fcap = r => { const t=ftier(r); return (t && t.dash) ? 'butt' : 'round'; }
 // Default wording for the Key row. A tier may override it with `label`; an unknown
 // tier name falls back to itself, so a town can invent a fourth class and still
 // get a row rather than a silent line style.
-const FTIER_LABEL = { frequent:'Frequent — turn up and go',
+const FTIER_LABEL = { frequent:'Frequent — at least every 30 minutes',
                       'all-day':'Runs through the day',
                       limited:'Limited — check times' };
 // ---- internalDiagram render extensions (tube-map diagram, 2026-07-10) ------
@@ -916,7 +916,7 @@ const { featOv, featStyle, featSegs, drawFeature } = linearFeatures({
 // In label_placer.js, which owns the shared `placed` list every pass on this
 // sheet reserves into, both placers, and — as a lodger — the route-ink
 // contrast floor.
-const { placed, iconBoxes, hit, overlaps, overlapsNoIcons, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite } = labelPlacer({
+const { placed, iconBoxes, hit, overlaps, overlapsNoIcons, overlapsRound, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite } = labelPlacer({
   out, esc, Labeller, DESIGN, V2, IR, MX0, MY0, MX1, MY1, FOOTER_PLATE_TOP,
 });
 // Where a POI's symbol lands, and whether it is drawn at all — split out of poiMark so
@@ -1627,7 +1627,7 @@ function panelDeps(sink){ return {
   OV, RJ, DESIGN, INTDESC, FONT,
   PANEL_SCALE_ON, PRINT_SAFE, FOOTER_SAFE, FOOTER_PLATE_TOP,
   CORR, CPAL, laneKey, TRIM, panelOrder, order, pois,
-  FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET,
+  FTIER, FTIER_LABEL, IR, ICON_INK, ICON_SET, MINORITY: readMinorityNotes(DIR, { atco2name, override: RJ.minorityNote }),
 }; }
 reserve(197,0,297,210,'the services panel', !EXIT_IN_PANEL);
 reserve(0,0,86,26,'the title block');
@@ -2529,7 +2529,7 @@ if(IR && TRIM){
         const gxw=badgeXWs(grp,2.4);
         if(bplaced.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<9+gxw))continue;
         const gh=grp.length===1?2.3:(grp.length-1)/2*5.3+2.3;
-        if(overlaps([p[0]-2.3-gxw,p[1]-gh,p[0]+2.3+gxw,p[1]+gh]))continue;
+        if(overlapsRound([p[0]-2.3-gxw,p[1]-gh,p[0]+2.3+gxw,p[1]+gh]))continue;   // a symbol is a disc (OA-470)
         bplaced.push(p); const bs=badgeStack(p[0],p[1],grp,2.4);
         noteBadge(p[0],p[1],2.4+bs.xw,bs.h,2.4);
         for(const g of grp) badged.add(g);

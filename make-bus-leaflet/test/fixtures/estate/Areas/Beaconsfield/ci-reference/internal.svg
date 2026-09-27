@@ -1706,6 +1706,8 @@
 <text x="72.67435360139476" y="55.37441861973848" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="15.239911434958836" cy="69.31980583638146" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
 <text x="15.239911434958836" y="69.31980583638146" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
+<circle cx="49.43441203772947" cy="77.3348186769477" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
+<text x="49.43441203772947" y="77.3348186769477" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="97.79490340700896" cy="105.55798361973726" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
 <text x="97.79490340700896" y="105.55798361973726" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="56.83474667291049" cy="158.13274750902795" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
@@ -1716,8 +1718,6 @@
 <text x="86.25902615011609" y="127.67607072264502" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
 <circle cx="83.32510440437662" cy="52.1674984172069" r="2.4" fill="#EE7733" stroke="#fff" stroke-width="0.7"/>
 <text x="83.32510440437662" y="52.1674984172069" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">380</text>
-<circle cx="51.09813746894282" cy="81.6068648016557" r="2.4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>
-<text x="51.09813746894282" y="81.6068648016557" font-family="Arial" font-weight="bold" font-size="2.40" fill="#fff" text-anchor="middle" dominant-baseline="central">31</text>
 <circle cx="66.44824864619534" cy="66.74116136384913" r="2.4" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
 <text x="66.44824864619534" y="66.74116136384913" font-family="Arial" font-weight="bold" font-size="2.40" fill="#111" text-anchor="middle" dominant-baseline="central">104</text>
 <circle cx="81.51965571526262" cy="35.861744561154396" r="2.4" fill="#CCBB44" stroke="#fff" stroke-width="0.7"/>
@@ -1870,7 +1870,7 @@
 <g transform="translate(247.5 101.909) scale(0.2) translate(-12 -12)"><path d="M12,2.2 V8" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6,2.4 L17,3.8 L12.6,5.2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M3.6,7.6 H20.4 V19 H3.6 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M2,19 H22 V21.4 H2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M12,2.2 V8" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6,2.4 L17,3.8 L12.6,5.2 Z" fill="#33383d"/><path d="M3.6,7.6 H20.4 V19 H3.6 Z" fill="#33383d"/><path d="M5.6,10 h2.6 v2.6 h-2.6 Z M15.8,10 h2.6 v2.6 h-2.6 Z M10.4,13 h3.2 v6 h-3.2 Z" fill="#ffffff"/><path d="M2,19 H22 V21.4 H2 Z" fill="#33383d"/></g>
 <text x="251.5" y="102.909" font-family="Arial" font-size="2.9" fill="#222">Town Hall</text>
 <path d="M201.00 112.91h4.00" fill="none" stroke="#555" stroke-width="2.2" stroke-linecap="round"/>
-<text x="207" y="113.91" font-family="Arial" font-size="2.9" fill="#222">Frequent — turn up and go</text>
+<text x="207" y="113.91" font-family="Arial" font-size="2.9" fill="#222">Frequent — at least every 30 minutes</text>
 <path d="M201.00 117.31h4.00" fill="none" stroke="#555" stroke-width="1.7" stroke-linecap="round"/>
 <text x="207" y="118.31" font-family="Arial" font-size="2.9" fill="#222">Runs through the day</text>
 <path d="M201.00 121.71h4.00" fill="none" stroke="#555" stroke-width="1.2" stroke-linecap="round"/>

@@ -159,6 +159,27 @@ const ev = require('../assets/engine_version');
 /* Written as LF, always, whichever side the bytes came from. See the `--seed`
  * block below for the measurement that earned this. */
 const toLf = (buf) => Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
+
+/* A PLACE SHEET'S IGNORED LINES ARE KEPT FROM THE COMMITTED COPY ON --apply.
+ * The gate draws a place's internal sheets with the shared town generator and
+ * skips the two lines the place post-edit rewrites (`PLACE_IGNORE`: the title
+ * and the "· Map v…" stamp). Writing the drawn bytes whole therefore replaced
+ * "Buses serving Waitrose" with "Buses within Beaconsfield New Town" -- a change
+ * the gate cannot see, found on the first ink-moving re-cut after the place
+ * fixtures were seeded (buses-data OA-282, 2026-09-26). So each ignored line of
+ * the drawn sheet takes the committed sheet's line of the same rank; if the two
+ * disagree on how many there are, the drawn sheet is written as it is and the
+ * tool says so. */
+function keepIgnoredLines(drawn, committed, re, label) {
+  const keep = committed.split('\n').filter(l => re.test(l));
+  const lines = drawn.split('\n');
+  if (lines.filter(l => re.test(l)).length !== keep.length) {
+    console.log(`  note     ${label}: ignored-line counts differ, so the drawn title and stamp were written as drawn`);
+    return drawn;
+  }
+  let k = 0;
+  return lines.map(l => (re.test(l) ? keep[k++] : l)).join('\n');
+}
 function maps() {
   const towns = gl.findTowns(ESTATE);
   const places = gl.findPlaces(towns, ESTATE);
@@ -287,7 +308,11 @@ function run() {
         const was = fs.statSync(committed).size;
         const now = fs.statSync(drawn).size;
         console.log(`  redrawn  ${m.label} · ${s.out}  ${was} B -> ${now} B`);
-        if (APPLY) fs.writeFileSync(committed, toLf(fs.readFileSync(drawn)));
+        if (APPLY) {
+          const ignore = s.opts && s.opts.ignoreLineRe;
+          const text = toLf(fs.readFileSync(drawn)).toString('utf8');
+          fs.writeFileSync(committed, ignore ? keepIgnoredLines(text, fs.readFileSync(committed, 'utf8'), ignore, `${m.label} · ${s.out}`) : text);
+        }
       } else {
         console.log(`  ${v.status.padEnd(8)} ${m.label} · ${s.out}  ${v.detail || ''}`);
       }

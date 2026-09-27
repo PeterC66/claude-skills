@@ -38,7 +38,9 @@
  *
  * TIERS — must / may / miss, and why they sit HERE (OA-202, 2026-08-31).
  * `poi.tiers` is an object keyed on the POI's identity, `"<cat>:<name>"`, the
- * same key `internal.pois` overrides use. Each value is either the bare string
+ * same key `internal.pois` overrides use — or, for one place of a same-key pair,
+ * `"osm:<type>/<id>"`, which wins over `<cat>:<name>` (OA-250; keyedAnswer()).
+ * Each value is either the bare string
  * `"must"` / `"may"` / `"miss"`, or `{ "tier": "...", "as": "display name" }`.
  *
  *   miss  dropped RIGHT HERE, at selection. That timing is the whole saving and
@@ -251,8 +253,9 @@ function sameThing(a, b){
  * osm.json/osm2.json files carry a typed, unique id on every element (measured
  * 2026-09-27). It was dropped HERE, by the `{cat,name,ll}` literal below.
  *
- * Carried, not yet READ: nothing keys on it in this commit, so the sheets are
- * byte-identical. An element with no typed id (a hand-made test fixture) gives
+ * READ since step 2 (2026-09-27): a tier answer or an `internal.pois` override
+ * may be keyed `osm:<type>/<id>` instead, through keyedAnswer() below. No map
+ * writes one yet, so the sheets are byte-identical. An element with no typed id (a hand-made test fixture) gives
  * a record with no `osm` key at all, rather than `osm: null`, so the records
  * every existing caller compares are unchanged. A de-duplicated pair keeps the
  * id of whichever record survives, which is the one whose name and coordinate
@@ -260,6 +263,37 @@ function sameThing(a, b){
  */
 function osmId(e){
   return (e && typeof e.type === 'string' && e.id != null) ? e.type + '/' + e.id : null;
+}
+
+/*
+ * keyedAnswer — the one lookup every key-addressed answer goes through: a tier
+ * in `poi.tiers` and an `internal.pois` override (buses-data OA-250, step 2).
+ *
+ * `osm:<type>/<id>` FIRST, then `<cat>:<name>`. The element id is the key that
+ * can tell a same-name pair apart, so where a map holds both for one place the
+ * id is the more specific answer and wins; the other place of the pair still
+ * reads the `<cat>:<name>` answer. Returns `{ key, v }` — the key that matched,
+ * as the customer wrote it, and its value — or null.
+ *
+ * Nothing in the estate writes an `osm:` key on the day this lands, so every
+ * lookup falls through to `<cat>:<name>` exactly as before and no sheet moves.
+ * Own properties only: a JSON object's prototype has no key with a colon in it,
+ * so this answers as `in` did for every key that can be written.
+ */
+function keyedAnswer(map, p){
+  if(!map || !p) return null;
+  const own = k => Object.prototype.hasOwnProperty.call(map, k);
+  if(p.osm && own('osm:' + p.osm)) return { key: 'osm:' + p.osm, v: map['osm:' + p.osm] };
+  const k = p.cat + ':' + p.name;
+  return own(k) ? { key: k, v: map[k] } : null;
+}
+
+/* A POI's `internal.pois` override (hide / pos / move), or {} — gen_internal.js
+ * reads it twice and both must agree. `p` is the KEPT POI, so a tiers `as` has
+ * already replaced its name; its element id does not move with a rename. */
+function poiOverride(ovPois, p){
+  const a = keyedAnswer(ovPois, p);
+  return (a && a.v) || {};
 }
 
 function selectPois(elementSets, poiCfg, report) {
@@ -411,8 +445,10 @@ function applyTiers(pois, POI, report){
    * apart are two town halls. */
   const noName = p => (AUTO_NAMED_CATS.includes(p.cat) ? unnamed(p.name) : !p.name);
   const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });
-  const explicit = p => !!(TIERS && ((p.cat + ':' + p.name) in TIERS));
-  const ruleFor = p => (explicit(p) ? rule(TIERS[p.cat + ':' + p.name]) : defaultRule(p));
+  // `osm:<type>/<id>` before `<cat>:<name>` (OA-250) — see keyedAnswer().
+  const answer = p => keyedAnswer(TIERS, p);
+  const explicit = p => !!answer(p);
+  const ruleFor = p => { const a = answer(p); return a ? rule(a.v) : defaultRule(p); };
 
   /* CANDIDATES — every identity that got this far, whatever its tier, filled
    * whether or not this town has classified anything.
@@ -462,13 +498,12 @@ function applyTiers(pois, POI, report){
     // fault — it is the customer's answer — but it is the one case where the sheet
     // disagrees with the default, so say which town and which key.
     report.namelessKeptByTier = pois.filter(p => !p.name && explicit(p) && ruleFor(p).tier !== 'miss')
-                                    .map(p => p.cat + ':' + p.name);
+                                    .map(p => answer(p).key);
   }
 
   const used = new Set();
   const kept = [];
   for(const p of pois){
-    const k = p.cat+':'+p.name;
     // No early return on a missing TIERS block any more: the nameless default
     // above has to apply to a town that has classified nothing, and Huntingdon
     // and St Neots — the two the estate loses a symbol on — are exactly that.
@@ -478,8 +513,12 @@ function applyTiers(pois, POI, report){
      * has to be able to say about a classified place it then drops is which key
      * the customer wrote. `tierKey` is that key as they wrote it, before any
      * rename. It is read by gen_internal.js's culledAfterTiers block (OA-250
-     * item 2) and by nothing else; it is not serialised anywhere. */
-    if(explicit(p)){ used.add(k); p.tierKey = k; }
+     * item 2) and by nothing else; it is not serialised anywhere.
+     * Only the key that APPLIED counts as used: a `<cat>:<name>` answer whose
+     * every place is answered by an `osm:` key took effect nowhere, and is
+     * reported in unknownTierKeys like any other answer nobody saw land. */
+    const a = answer(p);
+    if(a){ used.add(a.key); p.tierKey = a.key; }
     const r = ruleFor(p);
     if(r.tier === 'miss') continue;                // never drawn, never reserved
     if(r.as) p.name = r.as;                        // a rename REPLACES the identity
@@ -665,4 +704,4 @@ function mergePoiOverlay(base, ov) {
   return out;
 }
 
-module.exports = { classify, selectPois, placerIds, mergePoiOverlay, OPT_IN_CATS, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

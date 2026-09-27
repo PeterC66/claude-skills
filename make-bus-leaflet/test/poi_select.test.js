@@ -838,6 +838,49 @@ test('OA-250: an element with no typed id gives a record with no osm key, not os
   assert.ok(!('osm' in out[0]), 'every caller comparing {cat,name,ll} records sees them unchanged');
 });
 
+/* OA-250 step 2 — the id is READ: a tier answer or an internal.pois override
+ * keyed `osm:<type>/<id>` addresses one place of a same-key pair, and wins over
+ * the pair's `<cat>:<name>` answer for that place only. */
+const { keyedAnswer, poiOverride } = require('./_engine.js').load('poi_select.js');
+const redLions = () => [[el('node', 11, 52.30, -0.07, { amenity: 'pub', name: 'Red Lion' }),
+                         el('way', 22, 52.32, -0.07, { amenity: 'pub', name: 'Red Lion' })]];
+
+test('OA-250: an osm: tier answer misses ONE Red Lion and leaves its twin drawn', () => {
+  const report = {};
+  const out = selectPois(redLions(), { include: ['pubs'], tiers: { 'osm:way/22': 'miss' } }, report);
+  assert.deepStrictEqual(out.map(p => p.osm), ['node/11'], 'only the way is missed');
+  assert.deepStrictEqual(report.unknownTierKeys, [], 'the osm: key matched and is not reported unknown');
+  assert.deepStrictEqual(report.candidates.map(c => c.tier), ['may', 'miss'],
+    'the chooser shows the answer on the place it was written for');
+});
+
+test('OA-250: an osm: answer wins over the cat:name answer for its own place only', () => {
+  const report = {};
+  const out = selectPois(redLions(), { include: ['pubs'],
+    tiers: { 'pub:Red Lion': 'must', 'osm:node/11': { tier: 'may', as: 'Red Lion (Bridge St)' } } }, report);
+  assert.deepStrictEqual(out.map(p => [p.osm, p.name, p.tier || 'may', p.tierKey]),
+    [['node/11', 'Red Lion (Bridge St)', 'may', 'osm:node/11'],
+     ['way/22',  'Red Lion',             'must', 'pub:Red Lion']]);
+  assert.deepStrictEqual(report.unknownTierKeys, []);
+});
+
+test('OA-250: a cat:name answer shadowed on every place it names is reported unknown', () => {
+  const report = {};
+  selectPois(redLions(), { include: ['pubs'],
+    tiers: { 'pub:Red Lion': 'must', 'osm:node/11': 'may', 'osm:way/22': 'may' } }, report);
+  assert.deepStrictEqual(report.unknownTierKeys, ['pub:Red Lion'], 'it took effect nowhere, so the customer is told');
+});
+
+test('OA-250: poiOverride reads osm: before cat:name, and {} when neither is there', () => {
+  const ov = { 'pub:Red Lion': { hide: true }, 'osm:way/22': { move: { dx: 1, dy: 2 } } };
+  const a = { cat: 'pub', name: 'Red Lion', osm: 'node/11' }, b = { cat: 'pub', name: 'Red Lion', osm: 'way/22' };
+  assert.deepStrictEqual(poiOverride(ov, a), { hide: true });
+  assert.deepStrictEqual(poiOverride(ov, b), { move: { dx: 1, dy: 2 } });
+  assert.deepStrictEqual(poiOverride(ov, { cat: 'pub', name: 'Bell' }), {});
+  assert.deepStrictEqual(poiOverride(undefined, a), {});
+  assert.deepStrictEqual(keyedAnswer(ov, b), { key: 'osm:way/22', v: ov['osm:way/22'] }, 'names the key that applied');
+});
+
 // ---------------------------------------------------------------------------
 // OA-439 — the customer's overrides laid over a town's poi block. One rule for
 // the generator and the portal's chooser, so the chooser cannot offer a

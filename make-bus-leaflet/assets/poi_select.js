@@ -5,7 +5,8 @@
  * CONTRACT. `selectPois(elementSets, poiCfg)` takes raw OpenStreetMap elements
  * (one array per source file, in the order they should be considered) and the
  * town's `routes.json` `poi` block, and returns the drawable list:
- * `[{ cat, name, ll:[lat,lon] }, …]`. It reads no files, touches no globals and
+ * `[{ cat, name, ll:[lat,lon], osm? }, …]`, `osm` being the source element's
+ * `<type>/<id>` wherever it had one (see osmId below). It reads no files, touches no globals and
  * makes no decisions about DRAWING — placement, icons, collision and the
  * overrides in `internal.pois` all stay with the caller. Extracted from
  * gen_internal.js on 2026-08-27 (OA-129 Phase 3); `classify` had exactly one
@@ -237,6 +238,30 @@ function sameThing(a, b){
   return false;
 }
 
+/*
+ * osmId — the OpenStreetMap element a POI was built from, as `<type>/<id>`
+ * (`node/123`, `way/456`), the form openstreetmap.org uses in its own URLs.
+ *
+ * THE STABLE KEY STARTS HERE (buses-data OA-250, Peter's ruling of 2026-09-26).
+ * `<cat>:<name>` is the key every tier answer, `internal.pois` override and
+ * portal `data-key` is written against, and two places sharing it cannot be
+ * told apart — 14 keys collided across 6 maps on 2026-09-24. The element id is
+ * the one identity that does not collide and does not move when somebody
+ * renames the place. The S2 pull never lost it: all 46 committed ci-reference
+ * osm.json/osm2.json files carry a typed, unique id on every element (measured
+ * 2026-09-27). It was dropped HERE, by the `{cat,name,ll}` literal below.
+ *
+ * Carried, not yet READ: nothing keys on it in this commit, so the sheets are
+ * byte-identical. An element with no typed id (a hand-made test fixture) gives
+ * a record with no `osm` key at all, rather than `osm: null`, so the records
+ * every existing caller compares are unchanged. A de-duplicated pair keeps the
+ * id of whichever record survives, which is the one whose name and coordinate
+ * are drawn.
+ */
+function osmId(e){
+  return (e && typeof e.type === 'string' && e.id != null) ? e.type + '/' + e.id : null;
+}
+
 function selectPois(elementSets, poiCfg, report) {
   const POI = poiCfg || {};
   let pois=[];
@@ -244,7 +269,9 @@ function selectPois(elementSets, poiCfg, report) {
     for(const e of (elements||[])){
       const t=e.tags||{}; const c=classify(t, POI); if(!c) continue;
       const ll=e.lat!=null?[e.lat,e.lon]:(e.center?[e.center.lat,e.center.lon]:null); if(!ll) continue;
-      pois.push({cat:c[0], name:c[1], ll});
+      const p={cat:c[0], name:c[1], ll};
+      const id=osmId(e); if(id) p.osm=id;
+      pois.push(p);
     }
   }
   // industrial: keep a named list (array), drop all ("none"), or keep any named (default)
@@ -409,7 +436,11 @@ function applyTiers(pois, POI, report){
     report.candidates = pois.map(p => {
       const k = p.cat + ':' + p.name;
       const r = ruleFor(p);
-      return { key:k, cat:p.cat, name:p.name, ll:p.ll, tier:r.tier, as:r.as, printsName:printsName(p) };
+      const c = { key:k, cat:p.cat, name:p.name, ll:p.ll, tier:r.tier, as:r.as, printsName:printsName(p) };
+      // The chooser's future stable key (OA-250). The portal picks candidate
+      // fields by name (src/routes/editor.js), so an extra one is inert there.
+      if(p.osm) c.osm = p.osm;
+      return c;
     });
     /* TWO CANDIDATES SHARING ONE KEY, which only became possible on 2026-09-04
      * (OA-234). Until then de-duplication deleted the second unnamed POI of a
@@ -583,4 +614,55 @@ function placerIds(pois){
   return ids;
 }
 
-module.exports = { classify, selectPois, placerIds, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+/**
+ * The categories a town switches on rather than gets — the three `classify()`
+ * reads from `poi.include`. A customer's category switch may name these and
+ * nothing else; every other category is on for every town and is answered one
+ * place at a time with a tier.
+ */
+const OPT_IN_CATS = ['allotments', 'pubs', 'stations'];
+
+/**
+ * A town's `routes.json` poi block with the customer's overrides laid over it —
+ * the ONE place that rule lives, so the generator and the portal's landmark
+ * chooser cannot disagree about what a map would draw (buses-data OA-439, B1 of
+ * the config tailoring audit).
+ *
+ * `ov` is the overrides file's `internal` object. Two keys are read:
+ *
+ *   poiTiers   { "<cat>:<name>": {tier, as?} } — merged per key over poi.tiers,
+ *              the overrides winning (OA-212; this is the block that used to be
+ *              written inline in gen_internal.js).
+ *   poiInclude { "<opt-in category>": true | false } — the category switch.
+ *              `true` adds the category to poi.include and `false` removes it,
+ *              so a customer can switch pubs OFF on a town whose pack switched
+ *              them on as well as on where it did not. A key outside
+ *              OPT_IN_CATS, or a value that is not a boolean, is ignored here:
+ *              the portal's safeSubset.js refuses it with a reason before it is
+ *              ever saved, and a generator is the wrong place to explain one.
+ *
+ * ABSENT, THIS RETURNS `base` ITSELF, untouched and unallocated, which is what
+ * keeps every map with no answer byte-identical — the same promise the inline
+ * block made.
+ */
+function mergePoiOverlay(base, ov) {
+  const b = base || {};
+  const o = ov || {};
+  const tiers = o.poiTiers && typeof o.poiTiers === 'object' && Object.keys(o.poiTiers).length ? o.poiTiers : null;
+  const sw = o.poiInclude && typeof o.poiInclude === 'object' && !Array.isArray(o.poiInclude) ? o.poiInclude : null;
+  const touches = sw && OPT_IN_CATS.some((c) => typeof sw[c] === 'boolean');
+  if (!tiers && !touches) return b;
+  const out = Object.assign({}, b);
+  if (tiers) out.tiers = Object.assign({}, b.tiers || {}, tiers);
+  if (touches) {
+    let inc = Array.isArray(b.include) ? b.include.slice() : [];
+    for (const c of OPT_IN_CATS) {
+      if (sw[c] === true && !inc.includes(c)) inc.push(c);
+      if (sw[c] === false) inc = inc.filter((x) => x !== c);
+    }
+    out.include = inc;
+  }
+  return out;
+}
+
+module.exports = { classify, selectPois, placerIds, mergePoiOverlay, OPT_IN_CATS, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

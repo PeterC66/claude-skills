@@ -864,6 +864,52 @@ export function readPeerActivity({ windowMin = 20, projectsDir, match = /Buses/i
   return out;
 }
 
+/*
+ * Every turn any session took after `since`, as sorted ms — the evidence
+ * `loop_runs.mjs`'s silent-loop row needs that the desktop app was OPEN while
+ * no tick wrote a run file (buses-data OA-408 item 3, Peter's rule of
+ * 2026-09-21: "no run file for three cadences while sessions were active").
+ *
+ * WHOLE FILES, NOT TAILS, because the question is the reverse of the peer
+ * reading's. That one wants the NEWEST turn and a tail has it; this one wants
+ * every hour a session was working, and a three-hour session's 64 KB tail holds
+ * its last few minutes — so a tail reader would see one busy afternoon as one
+ * active hour and stay silent, the direction Peter ruled against.
+ *
+ * THE COST IS BOUNDED BY THE CALLER, not here: the board asks this only when
+ * the newest run file is already three cadences old, which on a working loop is
+ * never, and then reads only transcripts whose mtime is after `since` — a turn
+ * cannot be newer than the write that recorded it. Timestamps are capped at the
+ * mtime for `lastEntryMs`'s reason. Absent or unreadable returns [], and the
+ * row reads [] as "no evidence", never as "silent".
+ */
+export function readSessionTurns({ projectsDir, match = /Buses/i, since, now = Date.now() } = {}) {
+  const root = projectsDir || path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude', 'projects');
+  const out = [];
+  if (!Number.isFinite(since)) return out;
+  let dirs;
+  try { dirs = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && match.test(e.name)); } catch { return out; }
+  for (const d of dirs) {
+    const p = path.join(root, d.name);
+    let entries;
+    try { entries = readdirSync(p).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
+    for (const f of entries) {
+      const full = path.join(p, f);
+      let s;
+      try { s = statSync(full); } catch { continue; }
+      if (s.mtimeMs <= since) continue;
+      let text;
+      try { text = readFileSync(full, 'latin1'); } catch { continue; }
+      const cap = Math.min(s.mtimeMs, now);
+      for (const h of text.match(/"timestamp":"[^"]+"/g) || []) {
+        const ms = Date.parse(h.slice(13, -1));
+        if (Number.isFinite(ms) && ms > since && ms <= cap) out.push(ms);
+      }
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
+
 export function readConditions({ buses, portal, engine, selfSession, selfId = null, now = Date.now(), projectsDir, peerWindowMin = 20 } = {}) {
   const repos = {
     buses: readRepo({ key: 'buses', label: 'this tree', name: 'buses-data', dir: buses, now }),
@@ -1233,6 +1279,9 @@ export function needsOf(item) {
   // most likely to be ABOUT a dirty tree, so classifying it by the tree it
   // reports on would suppress it exactly when it is right.
   if (key === 'loop-idle') return [];
+  // OA-408 item 3: the silent-loop row's action is "read the scheduler's run
+  // list", a read in the desktop app. Empty for loop-idle's reason.
+  if (key === 'loop-silent') return [];
   // 2026-09-10: the row's action is "read loop/your-move/ and promote, file or
   // decline each draft" — a triage, done by moving gitignored files. It touches
   // no shared tree, and it is the row most likely to be ABOUT a fix a tick was

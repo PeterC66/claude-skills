@@ -19,7 +19,15 @@
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
  *                    [--note "..."] [--apply] [--force | --rebuild-stale]
- *                    [--buses "<dir>"] [--by <who>]
+ *                    [--buses "<dir>"] [--by <who>] [--warnings] [--help]
+ *
+ * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ, as in rollout_places.js and
+ * sync_ci_reference.js (buses-data OA-451 item 3). With no --town this considers
+ * every town, and the shared parser ignores a flag it does not know and files a bare
+ * word under `_`, so `--help` was a dry run over every town and a bare town name was
+ * the same. It wrote nothing, being a dry run, but the same slip with --apply beside
+ * it is a whole-estate rebuild. An unknown flag or a positional argument now exits 2
+ * before anything is read; --help prints the usage and exits 0.
  *
  * `--rebuild-stale` rebuilds a map ONLY when its verdict is STAMP-STALE — every
  * sheet already gates PASS and only the engine stamp is old — and bypasses nothing
@@ -59,7 +67,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs } = require('./cli');
+const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, huesAlikeOnMap, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
@@ -92,7 +100,18 @@ const { assembleS4Inputs } = require('./seed_prev_s4');
 const PULL_STAGES = ['S2', 'S3'];
 const S3_CARRY = ['routes.json', 'overrides.json'];
 
+const USAGE = 'Usage: node rollout.js [--town "<Town name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
+  '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
+  '  Dry run unless --apply. No --town: consider EVERY town.';
+const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
+  'warnings', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
+if (args.help === true) { console.log(USAGE); process.exit(0); }
+{
+  const unknown = Object.keys(args).filter(k => k !== '_' && !FLAGS.has(k));
+  if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --town takes every town.\n${USAGE}`);
+  if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a town with --town.\n${USAGE}`);
+}
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 const FORCE = !!args.force;

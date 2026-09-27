@@ -428,6 +428,36 @@ const MUTATIONS = [
     find: "    case 'station':     // a train seen head on: solid cab with a knocked-out",
     to: "    case 'station-unreachable': // a train seen head on: solid cab with a knocked-out" },
 
+  /* 2026-09-27 — the town POI pull must ask for what poi.include can switch on.
+   * Beaconsfield switched pubs on and has them only from a one-off top-up; a
+   * fresh pull from either query would have brought back none. One mutation per
+   * dropped line, in both copies of the query, and one for a category added to
+   * classify() that no pull asks for. */
+  { suite: 'poi_pull_query.test.js', file: 'overpass-pois.txt',
+    what: 'the town pull template stops asking for pub nodes, so poi.include: ["pubs"] draws nothing',
+    find: '  node["amenity"="pub"](52.308,-0.100,52.345,-0.045);\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'overpass-pois.txt',
+    what: 'the town pull template stops asking for allotment areas, so poi.include: ["allotments"] draws nothing',
+    find: '  way["landuse"="allotments"](52.308,-0.100,52.345,-0.045);\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'draft_town.py',
+    what: 'the unattended drafter stops asking for pubs',
+    find: '  way["amenity"="pub"]({box});\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'draft_town.py',
+    what: 'the unattended drafter stops asking for stations, as it never did before 2026-09-27',
+    find: '  node["railway"~"^(station|halt)$"]({box});\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'poi_select.js',
+    what: 'classify() gains an opt-in category that no pull asks for',
+    find: "  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];",
+    to: "  if((POI.include||[]).includes('cafes') && t.amenity==='cafe') return ['cafe', t.name||''];\n  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];" },
+
   /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
    * label rule behind them. Two of these guard a THRESHOLD and one guards the
    * set itself, which is derived from classify() rather than typed -- the

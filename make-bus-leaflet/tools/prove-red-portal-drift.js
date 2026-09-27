@@ -143,6 +143,7 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
                       worktreeCurrent = false, noGit = false,
                       revendorRef = null, revendorAgeHours = 0, revendorStale = false,
                       behindRef = null, behindAgeHours = 18,
+                      squashedRef = null, squashedAgeHours = 48,
                       unvendor = null, unvendorAgeHours = 0,
                       fixtureOnMain = null, fixtureOnBranch = null } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
@@ -201,6 +202,26 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
     commitAged(dir, 'a dependency bump that never touches the engine', behindAgeHours);
     git(dir, ['update-ref', 'refs/remotes/origin/' + behindRef, git(dir, ['rev-parse', 'HEAD'])]);
     git(dir, ['checkout', '--quiet', 'main']);
+  }
+  /* A BRANCH ALREADY SQUASH-MERGED (OA-479, 2026-09-27). A re-vendor branch
+   * carries the source's bytes, `main` lands the same bytes as its own squash
+   * commit, and `main` then moves the file on. The branch is deleted on origin
+   * but this checkout never pruned it -- the three portal refs that held
+   * buses-data's push on 2026-09-27 until `git fetch --prune` dropped them. */
+  if (squashedRef) {
+    writeTree({ staleA: false, unlisted: false });
+    fs.writeFileSync(path.join(engine, 'qr.js'), Buffer.concat([current(SOURCE_A), Buffer.from('\n// before the re-vendor\n')]));
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'main before the re-vendor', squashedAgeHours + 2);
+    git(dir, ['checkout', '--quiet', '-b', squashedRef]);
+    fs.writeFileSync(path.join(engine, 'qr.js'), current(SOURCE_A));
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'the re-vendor PR', squashedAgeHours + 1);
+    git(dir, ['update-ref', 'refs/remotes/origin/' + squashedRef, git(dir, ['rev-parse', 'HEAD'])]);
+    git(dir, ['checkout', '--quiet', 'main']);
+    fs.writeFileSync(path.join(engine, 'qr.js'), current(SOURCE_A));
+    git(dir, ['add', '-A']);
+    commitAged(dir, 'the same re-vendor, squash-merged', squashedAgeHours);
   }
   /* A BRANCH CUT BEFORE THE FILE WAS VENDORED (OA-472, 2026-09-25). `main` first
    * holds a tree without the GONE row, a branch is cut there that touches only a
@@ -496,6 +517,23 @@ const CASES = [
     },
     what: 'portal PR #333 did this to buses-data main on 2026-09-23, inside the grace its merge had earned',
   },
+  {
+    label: 'a branch already squash-merged into main is no witness (OA-479)',
+    make: { mainStale: true, mainStaleAgeHours: 0, squashedRef: 'squashed', squashedAgeHours: 48 },
+    expect: 0,
+    also: (json, dir) => {
+      /* The fixture must not be free: the branch carries the source's bytes and is not an ancestor of main. */
+      const onBranch = execFileSync('git', ['show', 'origin/squashed:engine/qr.js'], { cwd: dir });
+      if (!onBranch.equals(fs.readFileSync(path.join(SKILL_ROOT, SOURCE_A)))) return 'the fixture never put the source bytes on the branch';
+      try { execFileSync('git', ['merge-base', '--is-ancestor', 'origin/squashed', 'origin/main'], { cwd: dir, stdio: 'ignore' }); return 'the branch is an ancestor of main, so this is not a squash merge'; } catch { /* as intended */ }
+      const r = rowFor(json, 'qr.js');
+      if (!r) return 'no qr.js row at all';
+      if (r.pendingOn) return 'a branch whose bytes already landed on main was named as the re-vendor: ' + r.pendingOn;
+      if (r.status !== 'PENDING' || r.inFlight !== true) return 'expected the landed-merge grace, got ' + statusOf(r) + ' inFlight ' + JSON.stringify(r.inFlight);
+      return null;
+    },
+    what: 'three unpruned portal refs held the buses-data push on 2026-09-27, each a PR merged a day or two before',
+  },
   /* THE UN-VENDOR WITNESS (OA-472). The first case is the control: without it,
    * the second could pass by a board that no longer credits ANY un-vendor. */
   {
@@ -714,13 +752,14 @@ const MUTATION_OA422 = {
   why: 'a merge landing directly on origin/main no longer gets any grace window',
 };
 
-/* AND THE FOURTH, for the 2026-09-23 half of OA-422: any ref holding the
- * source's bytes is a witness again, whether or not it ever touched the file. */
+/* AND THE FOURTH, for the 2026-09-23 half of OA-422 and for OA-479: any ref
+ * holding the source's bytes is a witness again, even bytes main already had --
+ * a branch merely behind main, and a squash-merged branch nobody pruned. */
 const MUTATION_WITNESS = {
   file: 'status.js',
-  find: ' && changedSinceFork(cand.ref, rel, buf)) return cand;',
-  replace: ') return cand; // MUTATED by prove-red-portal-drift.js: a branch merely behind main is a witness again',
-  why: 'vendoredOnOtherRef() no longer asks whether the ref changed the file',
+  find: ' && !landedOnMain(cand.ref, rel)) return cand;',
+  replace: ') return cand; // MUTATED by prove-red-portal-drift.js: bytes main already had are a witness again',
+  why: 'vendoredOnOtherRef() no longer asks whether main already had the ref bytes',
 };
 
 /* AND THE FIFTH, for OA-472: a branch that never had the file is an un-vendor
@@ -895,7 +934,27 @@ const UNVENDOR_REGRESSION = 'a branch cut BEFORE the file was vendored is no wit
   if (!KEEP) fs.rmSync(injU.root, { recursive: true, force: true });
 }
 
-const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 4;
+/* AND FOR THE SQUASH-MERGED WITNESS (OA-479). Under the old rule the stale ref is
+ * named, past its grace, and the board goes red -- the preflight's red that morning. */
+const SQUASH_REGRESSION = 'a branch already squash-merged into main is no witness (OA-479)';
+{
+  const c = CASES.find((x) => x.label === SQUASH_REGRESSION);
+  if (!c) throw new Error('prove-red-portal-drift: no case named "' + SQUASH_REGRESSION + '" — the self-falsification list is out of date.');
+  const injS = regressedStatus([MUTATION_WITNESS]);
+  const r = runCase(c, injS.statusPath);
+  const row = r.json ? rowFor(r.json, 'qr.js') : null;
+  const rightReason = !r.ok && r.code !== 0 && !!row && row.pendingOn === 'origin/squashed';
+  if (!rightReason) failed++;
+  rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes red' : 'RED, WRONG CAUSE',
+    'with the OA-479 rule removed: ' + c.label,
+    'qr.js pendingOn ' + (row ? row.pendingOn : '(no row)') + ' (wanted origin/squashed)',
+    r.ok ? 'THIS CASE NO LONGER TESTS THE SQUASH-MERGE RULE'
+      : rightReason ? 'the case discriminates: an unpruned merged branch was red before the fix'
+      : 'red for a reason that is not the old witness rule']);
+  if (!KEEP) fs.rmSync(injS.root, { recursive: true, force: true });
+}
+
+const TOTAL = CASES.length + REGRESSION_SUBJECTS.length + 5;
 const w = [14, 62, 46];
 for (const r of rows) console.log(r[0].padEnd(w[0]) + r[1].padEnd(w[1]) + r[2].padEnd(w[2]) + r[3]);
 if (KEEP) for (const k of kept) console.log('kept  ' + k);
@@ -910,5 +969,6 @@ if (failed) {
     + 'a merge landing straight on origin/main gets the same grace a pushed branch always has, '
     + 'a branch merely behind main is never named as its re-vendor, '
     + 'a branch older than a vendored file is never named as its un-vendor, '
-    + 'and all five tree/time/witness cases go red the moment their own fix is taken back out.');
+    + 'a branch already squash-merged into main is never named as its re-vendor, '
+    + 'and all six tree/time/witness cases go red the moment their own fix is taken back out.');
 }

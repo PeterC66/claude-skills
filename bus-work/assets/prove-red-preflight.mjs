@@ -531,6 +531,8 @@ function runWith(fixture, opts = {}) {
     const a = m && m.checks.find((c) => c.id === id);
     check(`buses-data: ${id} runs at the pin, from make-bus-leaflet`, a?.atPin === 'make-bus-leaflet', a ? String(a.atPin) : 'no arm');
   }
+  const prs = m && m.checks.find((c) => c.id === 'prove-red-status');
+  check('buses-data: prove-red-status prunes the portal first (OA-479)', typeof prs?.prunePortal === 'string' && prs.prunePortal.length > 0, JSON.stringify(prs?.prunePortal));
   rmSync(skills, { recursive: true, force: true });
 }
 
@@ -565,6 +567,45 @@ function runWith(fixture, opts = {}) {
   check('junction: the worktree is gone after release', !existsSync(e.root || '') && git(skills, 'worktree', 'list').trim().split('\n').length === 1, git(skills, 'worktree', 'list'));
   check('junction: the CHECKOUT\'s node_modules survives the release', existsSync(sentinel), `${sentinel} is gone`);
   rmSync(skills, { recursive: true, force: true });
+}
+
+// CASE 19 — OA-479. A check naming `prunePortal` has that clone's refs for
+// branches origin has DELETED pruned before it runs: the shape of a squash-merged
+// portal PR whose ref the pinned board read as a re-vendor past its grace on
+// 2026-09-27. The probe check itself fails while the stale ref exists, so a prune
+// that never ran, or ran after the checks, is red here.
+{
+  const root = mkdtempSync(path.join(tmpdir(), 'preflight-prune-'));
+  const origin = path.join(root, 'portal-origin.git');
+  const portal = path.join(root, 'portal');
+  execFileSync('git', ['init', '--bare', '-b', 'main', origin], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  mkdirSync(portal);
+  git(portal, 'init', '-b', 'main');
+  git(portal, 'config', 'user.email', 'preflight@test');
+  git(portal, 'config', 'user.name', 'preflight');
+  git(portal, 'config', 'commit.gpgsign', 'false');
+  writeFileSync(path.join(portal, 'a.txt'), '1\n');
+  git(portal, 'add', 'a.txt');
+  git(portal, 'commit', '-m', 'base', '--no-verify');
+  git(portal, 'remote', 'add', 'origin', origin);
+  git(portal, 'push', 'origin', 'main', 'main:merged');
+  git(portal, 'fetch', 'origin');
+  git(origin, 'branch', '-D', 'merged');   // squash-merged and deleted on origin
+  const stale = () => spawnSync('git', ['-C', portal, 'rev-parse', '--verify', '--quiet', 'refs/remotes/origin/merged']).status === 0;
+  check('prune: the fixture really holds the stale ref', stale());
+  const probe = {
+    id: 'probe', label: 'the stale ref is gone before I run', prunePortal: portal, cmd: NODE,
+    args: ['-e', `require('fs').appendFileSync(process.env.PF_LOG, 'probe\\n'); const r = require('child_process').spawnSync('git', ['-C', ${JSON.stringify(portal)}, 'rev-parse', '--verify', '--quiet', 'refs/remotes/origin/merged']); process.exit(r.status === 0 ? 1 : 0);`],
+  };
+  const fx = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [probe] }, pushed: ['docs/a.md'] });
+  const { result, ran } = runWith(fx);
+  const p = result.checks.find((c) => c.id === 'probe');
+  check('prune: the probe ran', ran.includes('probe'), ran.join(','));
+  check('prune: the stale ref was gone BEFORE the check ran', p?.verdict === 'PASS', `${p?.verdict}: ${p?.out || p?.why || ''}`);
+  check('prune: the result names what it pruned', (result.pruned || []).some((x) => x.ok && x.refs.includes('origin/merged')), JSON.stringify(result.pruned));
+  check('prune: a live branch survives', spawnSync('git', ['-C', portal, 'rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']).status === 0);
+  rmSync(fx.root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

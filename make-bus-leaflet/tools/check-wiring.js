@@ -135,9 +135,11 @@ const NOT_IN_CI = {
  */
 const RAW_STEPS = {
   'Install engine dependencies':
-    'npm ci — installing the dependencies is what makes the scripts runnable, so it cannot itself be one. Appears in both the unit and the status job',
+    'npm ci — installing the dependencies is what makes the scripts runnable, so it cannot itself be one. Appears in every unit job and the status job',
   'Unit suite':
     '`npm test` is npm\'s own lifecycle script and `npm run test` is the same command; there is nothing to drift',
+  'All three unit jobs succeeded':
+    'the join that keeps the required check named `unit` true of all three unit jobs. It reads `needs`, which exists only inside the workflow run, so no script outside it has anything to be given',
   'Install the engine\'s Python dependencies':
     'pip install -r requirements.txt — the same shape as npm ci, one layer down',
   'Prove the stamp policy and its scope rule can go red':

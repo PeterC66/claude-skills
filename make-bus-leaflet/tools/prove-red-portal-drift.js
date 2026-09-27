@@ -113,6 +113,13 @@ const VENDORED = [
  * removing it. The source path is deliberately one that does not exist. */
 const GONE = { path: 'gone.js', kind: 'vendored', source: 'make-bus-leaflet/assets/oa472-no-such-source.js', vendoredOn: '2026-09-25' };
 
+/* THE ADDED ROW (buses-data OA-487). A file an engine change ADDED after the pin:
+ * the portal vendors it, and the pinned checkout has no source for it at all. The
+ * source path is deliberately one that does not exist here; skillsRepo({ added })
+ * decides whether some claude-skills commit after the pin ever had these bytes. */
+const ADDED = { path: 'added.js', kind: 'vendored', source: 'make-bus-leaflet/assets/oa487-added-after-pin.js', vendoredOn: '2026-09-27' };
+const ADDED_BYTES = Buffer.from('// a module an engine change added after the pin\n');
+
 /* Commit with a CONTROLLED date. The grace rule is the only part of the
  * vendoring row that contains a judgement about time, so the harness has to be
  * able to put a commit on either side of the boundary. Both variables are set
@@ -144,7 +151,7 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
                       revendorRef = null, revendorAgeHours = 0, revendorStale = false,
                       behindRef = null, behindAgeHours = 18,
                       squashedRef = null, squashedAgeHours = 48,
-                      unvendor = null, unvendorAgeHours = 0,
+                      unvendor = null, unvendorAgeHours = 0, added = false,
                       fixtureOnMain = null, fixtureOnBranch = null } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
@@ -166,9 +173,12 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
   const current = (rel) => fs.readFileSync(path.join(SKILL_ROOT, rel));
   const stale = (rel) => Buffer.concat([current(rel), Buffer.from('\n// a line the source does not have\n')]);
 
-  /* `withGone` puts the OA-472 row and its file into the tree; off, both are absent. */
+  /* `withGone` puts the OA-472 row and its file into the tree; off, both are absent.
+   * `added` (OA-487) does the same for the ADDED row, on every tree this builds. */
   const writeTree = ({ staleA, unlisted, withGone = false }) => {
-    fs.writeFileSync(path.join(engine, 'vendored.json'), manifest(withGone ? [...VENDORED, GONE] : VENDORED));
+    fs.writeFileSync(path.join(engine, 'vendored.json'),
+      manifest([...VENDORED, ...(withGone ? [GONE] : []), ...(added ? [ADDED] : [])]));
+    if (added) fs.writeFileSync(path.join(engine, ADDED.path), ADDED_BYTES);
     const gone = path.join(engine, GONE.path);
     if (withGone) fs.writeFileSync(gone, '// vendored on main, its skill source since removed\n');
     else if (fs.existsSync(gone)) fs.rmSync(gone);
@@ -303,8 +313,11 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
  * history: 'main', a later commit on origin/main (the re-vendored portal the pin
  * has not caught up with); 'branch', a commit on an unmerged side branch; 'before',
  * a commit OLDER than the pin (a portal behind the engine). `originMain: false`
- * leaves the clone with no origin/main, the depth-1 checkout gates.yml used to have. */
-function skillsRepo({ ahead = 'main', originMain = true } = {}) {
+ * leaves the clone with no origin/main, the depth-1 checkout gates.yml used to have.
+ * `added` (OA-487) creates ADDED's source with the portal's bytes AFTER the pin:
+ * 'main' on origin/main (casing_width.js on 2026-09-27), 'branch' on an unmerged
+ * side branch; absent, no commit anywhere ever had it. */
+function skillsRepo({ ahead = 'main', originMain = true, added = null } = {}) {
   const dir = scratchDir('prove-red-portal-drift-skills-');
   const file = path.join(dir, SOURCE_A);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -324,6 +337,15 @@ function skillsRepo({ ahead = 'main', originMain = true } = {}) {
     fs.writeFileSync(path.join(dir, 'README.md'), 'main moved on without touching the source\n');
     git(dir, ['add', '-A']); git(dir, ['commit', '--quiet', '-m', 'an unrelated change on main']);
     tip = git(dir, ['rev-parse', 'HEAD']);
+  }
+  if (added) {
+    const addedFile = path.join(dir, ADDED.source);
+    fs.mkdirSync(path.dirname(addedFile), { recursive: true });
+    if (added === 'branch') git(dir, ['checkout', '--quiet', '-b', 'side-added']);
+    fs.writeFileSync(addedFile, ADDED_BYTES);
+    git(dir, ['add', '-A']); git(dir, ['commit', '--quiet', '-m', 'an engine change that adds a module']);
+    if (added === 'branch') git(dir, ['checkout', '--quiet', 'main']);
+    else tip = git(dir, ['rev-parse', 'HEAD']);
   }
   if (originMain) git(dir, ['update-ref', 'refs/remotes/origin/main', tip]);
   git(dir, ['checkout', '--quiet', '--detach', pin]);
@@ -603,6 +625,36 @@ const CASES = [
     also: (json) => statusOf(rowFor(json, 'qr.js')) === 'DRIFTED' ? null : 'expected DRIFTED, got ' + statusOf(rowFor(json, 'qr.js')),
     what: 'could-not-look fails towards red: gates.yml without its fetch of claude-skills main',
   },
+  /* A FILE ADDED AFTER THE PIN (buses-data OA-487). The pinned checkout has no
+   * source for it, so the row never reached the differ branch above: the first
+   * is the chore, the other two the MISSING that must stay red. */
+  {
+    label: 'a file ADDED after the pin, vendored from a later claude-skills main, is PIN-BEHIND (OA-487)',
+    make: { added: true }, skills: { added: 'main' },
+    expect: 0,
+    also: (json) => {
+      if (fs.existsSync(path.join(SKILL_ROOT, ADDED.source))) return 'the fixture source exists in this checkout, so the row never reaches the no-source branch';
+      const r = rowFor(json, ADDED.path);
+      if (!r) return 'no ' + ADDED.path + ' row at all';
+      if (r.status !== 'PIN-BEHIND' || !r.pinBehind || !r.pinBehind.commit) return 'expected PIN-BEHIND naming a commit, got ' + statusOf(r);
+      return null;
+    },
+    what: 'casing_width.js reddened buses-data main this way on 2026-09-27 (run 36324597706)',
+  },
+  {
+    label: 'a vendored file no claude-skills commit ever had is MISSING (OA-487)',
+    make: { added: true }, skills: {},
+    expect: 1,
+    also: (json) => statusOf(rowFor(json, ADDED.path)) === 'MISSING' ? null : 'expected MISSING, got ' + statusOf(rowFor(json, ADDED.path)),
+    what: 'a require that throws, with nothing to adopt: the red this row always was',
+  },
+  {
+    label: 'a new file only on an unmerged claude-skills BRANCH is MISSING (OA-487)',
+    make: { added: true }, skills: { added: 'branch' },
+    expect: 1,
+    also: (json) => statusOf(rowFor(json, ADDED.path)) === 'MISSING' ? null : 'expected MISSING, got ' + statusOf(rowFor(json, ADDED.path)),
+    what: 'a module vendored from a PR that never merged is not an engine anybody can adopt',
+  },
   /* THE UN-VENDOR WITNESS (OA-472). The first case is the control: without it,
    * the second could pass by a board that no longer credits ANY un-vendor. */
   {
@@ -857,6 +909,15 @@ const MUTATION_OA480_WITNESS = {
   why: 'pin_behind.js no longer confines the witness to pin..origin/main',
 };
 
+/* AND THE EIGHTH, for OA-487: a row with no source at the pin is MISSING again
+ * without asking whether a later claude-skills main added it. */
+const MUTATION_OA487 = {
+  file: 'status.js',
+  find: 'const hit = !skillBuf && refBuf &&',
+  replace: 'const hit = false /* MUTATED by prove-red-portal-drift.js: the pre-OA-487 reading */ &&',
+  why: 'a row with no source at the pin no longer asks pin_behind.js',
+};
+
 function regressedStatus(mutations = [MUTATION_OA200]) {
   const root = scratchDir('prove-red-portal-drift-engine-');
   const dst = path.join(root, 'assets');
@@ -1046,18 +1107,22 @@ const PIN_REGRESSIONS = [
   { mutation: MUTATION_OA480_GATE, label: 'the portal AHEAD of the pin, on a later claude-skills main, is PIN-BEHIND (OA-480)', wantCode: 1, want: 'PIN-BEHIND' },
   { mutation: MUTATION_OA480_WITNESS, label: 'the same bytes only on an unmerged claude-skills BRANCH are DRIFTED (OA-480)', wantCode: 0, want: 'PIN-BEHIND' },
   { mutation: MUTATION_OA480_WITNESS, label: 'a portal BEHIND the pin is DRIFTED however far main has moved (OA-480)', wantCode: 0, want: 'PIN-BEHIND' },
+  // OA-487: the added file goes red without the fix, and a branch-only one goes green with a widened witness.
+  { mutation: MUTATION_OA487, label: 'a file ADDED after the pin, vendored from a later claude-skills main, is PIN-BEHIND (OA-487)', file: ADDED.path, wantCode: 1, want: 'MISSING' },
+  { mutation: MUTATION_OA480_WITNESS, label: 'a new file only on an unmerged claude-skills BRANCH is MISSING (OA-487)', file: ADDED.path, wantCode: 0, want: 'PIN-BEHIND' },
 ];
 for (const p of PIN_REGRESSIONS) {
   const c = CASES.find((x) => x.label === p.label);
   if (!c) throw new Error('prove-red-portal-drift: no case named "' + p.label + '" — the self-falsification list is out of date.');
   const injP = regressedStatus([p.mutation]);
   const r = runCase(c, injP.statusPath);
-  const got = r.json ? statusOf(rowFor(r.json, 'qr.js')) : '(no JSON)';
+  const file = p.file || 'qr.js';
+  const got = r.json ? statusOf(rowFor(r.json, file)) : '(no JSON)';
   const rightReason = !r.ok && r.code === p.wantCode && got === p.want;
   if (!rightReason) failed++;
   rows.push([r.ok ? 'STILL PASSES' : rightReason ? 'goes wrong' : 'WRONG, BAD CAUSE',
     'with ' + p.mutation.why + ': ' + c.label,
-    'exit ' + r.code + ', qr.js read ' + got + ' (wanted exit ' + p.wantCode + ', ' + p.want + ')',
+    'exit ' + r.code + ', ' + file + ' read ' + got + ' (wanted exit ' + p.wantCode + ', ' + p.want + ')',
     r.ok ? 'THIS CASE NO LONGER TESTS THE PIN-BEHIND RULE'
       : rightReason ? 'the case discriminates' : 'wrong for a reason that is not the mutation']);
   if (!KEEP) fs.rmSync(injP.root, { recursive: true, force: true });
@@ -1096,5 +1161,6 @@ if (failed) {
     + 'a branch older than a vendored file is never named as its un-vendor, '
     + 'a branch already squash-merged into main is never named as its re-vendor, '
     + 'a portal ahead of the pinned engine on a later claude-skills main is a PIN-BEHIND chore while a branch, a behind portal or a clone with no main stays DRIFTED, '
+    + 'a file added after the pin is the same chore while one no merged commit ever had stays MISSING, '
     + 'and every tree/time/witness/pin case goes wrong the moment its own fix is taken back out.');
 }

@@ -87,5 +87,30 @@ class PlaceModuleLoad(unittest.TestCase):
         self.assertEqual(failures, [], "place module(s) failed to import:\n  " + "\n  ".join(failures))
 
 
+class AuditModuleLoad(unittest.TestCase):
+    """The same question asked of audit-bus-leaflet's Python (buses-data OA-323 item 4).
+
+    `gen_image_audit.py` was imported by nothing in CI. A missing folder FAILS, as
+    the place half does. stamp-docs' `scripts/` is NOT a population here, and that
+    is a scope, not a gap: `prove_policy.py` imports docstamp, check_committed_stamps,
+    reflow_md and policy at its top, and gates.yml runs it, so an import error in
+    any of the four already goes red there.
+    """
+
+    def test_audit_population_is_not_empty(self):
+        self.assertTrue(os.path.isdir(_engine.AUDIT_DIR), "no audit skill at %s" % _engine.AUDIT_DIR)
+        names = _engine.module_names(_engine.AUDIT_DIR)
+        self.assertGreater(len(names), 0, "found no Python modules in %s" % _engine.AUDIT_DIR)
+
+    def test_every_audit_module_imports(self):
+        failures = []
+        for name in _engine.module_names(_engine.AUDIT_DIR):
+            try:
+                _engine.load(name, _engine.AUDIT_DIR)
+            except Exception as exc:                      # noqa: BLE001 -- the subject IS any exception
+                failures.append("%s.py: %s: %s" % (name, type(exc).__name__, exc))
+        self.assertEqual(failures, [], "audit module(s) failed to import:\n  " + "\n  ".join(failures))
+
+
 if __name__ == "__main__":
     unittest.main()

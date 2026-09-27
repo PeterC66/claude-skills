@@ -43,6 +43,14 @@ PLACE_DIR = os.path.abspath(
 )
 
 
+# The audit skill's assets (OA-323 item 4), resolved from THIS file for the same
+# reason: a mutation run copies only the town engine.
+AUDIT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..",
+                 "audit-bus-leaflet", "assets")
+)
+
+
 def module_names(directory=None):
     """Every Python module in the engine, DERIVED from the directory.
 

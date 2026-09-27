@@ -13,6 +13,7 @@
 // Overpass etiquette: GET with an explicit User-Agent (Node fetch sends none
 // and gets 406 — see gotchas), retry across mirrors.
 const fs = require('fs');
+const { loadJourneyDrops } = require('./journey_drop');
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const ARGV = process.argv.slice(2);
@@ -47,7 +48,7 @@ if (!n) throw new Error('no stop coords found');
 // out past where the fisheye + frame actually cut the tail. This feeds EXTRA
 // geometry only; routes_intown_atco.json (which stops get ticks/badges) is
 // untouched. Candidate stops are filtered through the SAME viaPrefixes/
-// viaExclude rules match_routes applies, so an excluded variant-loop (e.g. St
+// viaExclude rules and journey_weights.json minority drops match_routes applies, so an excluded variant-loop (e.g. St
 // Ives 9's Hilton/Elsworth village detour) is never silently reintroduced.
 // Config: match_cfg.json "reachExtend":{ "<route>":{ "start":N, "end":N } }
 //   start/end = how many extra filtered-chain stops to add beyond the current
@@ -63,6 +64,7 @@ try {
       const f = FULL[r]; if (!f) continue;
       const can = (f.canonical && f.canonical[0]) || (f.directions && f.directions[0]); if (!can) continue;
       let chain = can.stops.filter(a => atco2ll[a]);
+      const jd = loadJourneyDrops(DIR)(r, can.name); if (jd.size) chain = chain.filter(a => !jd.has(a));   // OA-452, as match_routes
       const vp = (MCFG.viaPrefixes || {})[r]; if (vp) chain = chain.filter(a => vp.some(p => a.startsWith(p)));
       const vx = (MCFG.viaExclude || {})[r]; if (vx) chain = chain.filter(a => !vx.includes(a));
       const inIdx = []; chain.forEach((a, i) => { if (inDisp(atco2ll[a])) inIdx.push(i); });

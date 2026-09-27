@@ -614,4 +614,55 @@ function placerIds(pois){
   return ids;
 }
 
-module.exports = { classify, selectPois, placerIds, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+/**
+ * The categories a town switches on rather than gets — the three `classify()`
+ * reads from `poi.include`. A customer's category switch may name these and
+ * nothing else; every other category is on for every town and is answered one
+ * place at a time with a tier.
+ */
+const OPT_IN_CATS = ['allotments', 'pubs', 'stations'];
+
+/**
+ * A town's `routes.json` poi block with the customer's overrides laid over it —
+ * the ONE place that rule lives, so the generator and the portal's landmark
+ * chooser cannot disagree about what a map would draw (buses-data OA-439, B1 of
+ * the config tailoring audit).
+ *
+ * `ov` is the overrides file's `internal` object. Two keys are read:
+ *
+ *   poiTiers   { "<cat>:<name>": {tier, as?} } — merged per key over poi.tiers,
+ *              the overrides winning (OA-212; this is the block that used to be
+ *              written inline in gen_internal.js).
+ *   poiInclude { "<opt-in category>": true | false } — the category switch.
+ *              `true` adds the category to poi.include and `false` removes it,
+ *              so a customer can switch pubs OFF on a town whose pack switched
+ *              them on as well as on where it did not. A key outside
+ *              OPT_IN_CATS, or a value that is not a boolean, is ignored here:
+ *              the portal's safeSubset.js refuses it with a reason before it is
+ *              ever saved, and a generator is the wrong place to explain one.
+ *
+ * ABSENT, THIS RETURNS `base` ITSELF, untouched and unallocated, which is what
+ * keeps every map with no answer byte-identical — the same promise the inline
+ * block made.
+ */
+function mergePoiOverlay(base, ov) {
+  const b = base || {};
+  const o = ov || {};
+  const tiers = o.poiTiers && typeof o.poiTiers === 'object' && Object.keys(o.poiTiers).length ? o.poiTiers : null;
+  const sw = o.poiInclude && typeof o.poiInclude === 'object' && !Array.isArray(o.poiInclude) ? o.poiInclude : null;
+  const touches = sw && OPT_IN_CATS.some((c) => typeof sw[c] === 'boolean');
+  if (!tiers && !touches) return b;
+  const out = Object.assign({}, b);
+  if (tiers) out.tiers = Object.assign({}, b.tiers || {}, tiers);
+  if (touches) {
+    let inc = Array.isArray(b.include) ? b.include.slice() : [];
+    for (const c of OPT_IN_CATS) {
+      if (sw[c] === true && !inc.includes(c)) inc.push(c);
+      if (sw[c] === false) inc = inc.filter((x) => x !== c);
+    }
+    out.include = inc;
+  }
+  return out;
+}
+
+module.exports = { classify, selectPois, placerIds, mergePoiOverlay, OPT_IN_CATS, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

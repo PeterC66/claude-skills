@@ -495,3 +495,23 @@ test('huesAlikeOnMap reports alike hues that run together, and only those', () =
   assert.deepStrictEqual(G.huesAlikeOnMap(far), [], 'alike but never together is the panel venue, not this one');
   assert.deepStrictEqual(G.huesAlikeOnMap(path.join(dir, 'absent.svg')), []);
 }));
+
+/* buses-data OA-477. owedOnSheet is what both rollouts and `stage.js commit S4`
+ * print beside HUES ALIKE: the same analyse() also names every map symbol printed
+ * on a route badge. The symbol is drawn by icons.js, so a change of symbol form
+ * shows here; the badge is only a badge once routes.json gives its colour. */
+test('owedOnSheet names a symbol on a badge, and only once the palette is known', () => tmp((dir) => {
+  const { icon } = load('icons.js');
+  const sheet = (x) => '<svg viewBox="0 0 297 210">'
+    + '<circle cx="100" cy="80" r="2.6" fill="#4477aa" stroke="#fff" stroke-width="0.7"/>'
+    + icon('pharmacy', x, 80, 2.2, undefined, 'grid') + '</svg>';
+  const on = put(dir, 'on.svg', sheet(101));
+  const off = put(dir, 'off.svg', sheet(110));
+  assert.deepStrictEqual(G.owedOnSheet(on), { huesAlike: [], iconOverBadge: [] }, 'no routes.json: no palette, so no answer');
+  put(dir, 'routes.json', JSON.stringify({ palette: { A: '#4477aa' } }));
+  const got = G.owedOnSheet(on).iconOverBadge;
+  assert.strictEqual(got.length, 1, JSON.stringify(got));
+  assert.deepStrictEqual(got[0].badge, [100, 80]);
+  assert.deepStrictEqual(G.owedOnSheet(off).iconOverBadge, []);
+  assert.deepStrictEqual(G.owedOnSheet(path.join(dir, 'absent.svg')), { huesAlike: [], iconOverBadge: [] });
+}));

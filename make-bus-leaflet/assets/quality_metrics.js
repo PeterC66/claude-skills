@@ -582,7 +582,7 @@ function analyse(svgPath) {
 
   const detail = { overInk: [], labelPairs: [], duplicates: [], iconPairs: [], labelIcon: [], inFooter: [], intoPanel: [], tiny: [],
                    underLegend: [], routeUnderLegend: [], unplaced: [], nearEdge: [],
-                   labelOverBadge: [], badgeOverBadge: [], laneCross: [], lozengeOverlap: [], routeBends: [] };
+                   labelOverBadge: [], badgeOverBadge: [], iconOverBadge: [], laneCross: [], lozengeOverlap: [], routeBends: [] };
 
   /*
    * WHAT THE LEGEND IS BURYING.
@@ -1363,6 +1363,29 @@ function analyse(svgPath) {
       rad: [+a.ry.toFixed(2), +b.ry.toFixed(2)],
     });
   }
+  // A map SYMBOL printed on a route badge (buses-data OA-477, 2026-09-27). Neither
+  // `lbl/ic` nor `badgeOverBadge` can see it: the first asks about a label, the
+  // second about two badges, and a pharmacy symbol sitting on Ramsey's RH2 disc was
+  // found by eye (OA-153) and could be computed by nothing. The rule is the one
+  // badgeOverBadge turns on, with the symbol taken as a disc of its drawn radius --
+  // a disc is a stadium whose core has zero length -- so a stadium badge is still
+  // measured as the box it is and not as a circle its half-width wide. A symbol is
+  // charged ONCE, against the badge it sinks deepest into. REPORTED, NOT SCORED, by
+  // the labelsOverBadge rule: non-zero on most internal sheets the day it lands, so
+  // it stays out of hard and soft and the quality_gate.js ledger is unmoved by it.
+  for (const ic of P.icons) {
+    if (ic.cx >= panelX0 - 1 || ic.cy >= footerTop) continue;     // panel key and footer chrome
+    const disc = { cx: ic.cx, cy: ic.cy, rx: ic.r, ry: ic.r };
+    let worst = null;
+    for (const g of badges) {
+      const deep = -gapMm(disc, g);
+      if (deep > T.badgeOverlapMm && (!worst || deep > worst.deep)) worst = { deep, g };
+    }
+    if (worst) detail.iconOverBadge.push({
+      at: [+ic.cx.toFixed(1), +ic.cy.toFixed(1)], badge: [+worst.g.cx.toFixed(1), +worst.g.cy.toFixed(1)],
+      deep: +worst.deep.toFixed(2),
+    });
+  }
 
   // --- 7b. A TERMINUS LOZENGE PRINTED ON ANOTHER TERMINUS LOZENGE -------
   //
@@ -1601,6 +1624,8 @@ function analyse(svgPath) {
     exitCaptionOverBadge: (palette && palette.size)
       ? detail.labelOverBadge.filter(d => d.kind === 'point' && /^to\s/.test(d.text)).length : null,
     badgeOverBadge: (palette && palette.size) ? detail.badgeOverBadge.length : null,
+    // --- added 2026-09-27, OA-477 --- reported, not scored; see measure 7.
+    iconOverBadge: (palette && palette.size) ? detail.iconOverBadge.length : null,
     laneCrossings: (palette && palette.size) ? detail.laneCross.length : null,
     // --- added 2026-09-24, OA-081 --- null off the schematic; see measure 9.
     routesOverBendBudget: (isSchematic && palette && palette.size) ? detail.routeBends.filter(r => r.over).length : null,
@@ -1746,6 +1771,8 @@ function analyse(svgPath) {
   if (m.labelsOverBadge > 0) warns.push(m.labelsOverBadge + ' labels printed over a route badge'
     + ' (' + m.exitCaptionOverBadge + ' of them frame-exit captions, ' + m.labelsOverBadgeNet + ' placer-attributable)');
   if (m.badgeOverBadge > 0) fails.push(m.badgeOverBadge + ' route badges printed on each other');
+  // OA-477: reported, not scored, by the labelsOverBadge rule -- see measure 7.
+  if (m.iconOverBadge > 0) warns.push(m.iconOverBadge + ' map symbol' + (m.iconOverBadge === 1 ? '' : 's') + ' printed on a route badge');
   // OA-060, same treatment and the same reason: reported until the sheets are
   // clean, then folded in. `signature-lost` is louder than any count, because it
   // means this measure has stopped being able to see its own subject.
@@ -1881,6 +1908,7 @@ ${results.length} sheets Â· ${results.filter(r => r.fails.length).length} FAIL Â
     // actually needs: OA-023/OA-024/OA-060 are all "which pass stamped these two".
     if (r.detail.labelOverBadge.length) console.log('  label over a route badge: ' + r.detail.labelOverBadge.map(d => `"${d.text}" on the badge at ${d.at}`).join(', '));
     if (r.detail.lozengeOverlap.length) console.log('  lozenge on a lozenge: ' + r.detail.lozengeOverlap.map(d => `"${d.text}" over "${d.under}" (${d.over[0]}x${d.over[1]}mm)`).join(', '));
+    if (r.detail.iconOverBadge.length) console.log('  symbol on a badge: ' + r.detail.iconOverBadge.map(d => `${d.at} on the badge at ${d.badge} (${d.deep}mm deep)`).join(', '));
     if (r.detail.badgeOverBadge.length) console.log('  badge on a badge: ' + r.detail.badgeOverBadge.map(d => `${d.at} r${d.rad[0]} x ${d.and} r${d.rad[1]} (overlap ${d.over[0]}x${d.over[1]}mm)`).join(', '));
     if (r.share) console.log('  ink share by 9th: ' + r.share.map(s=>(s*100).toFixed(0)+"%").join(" "));
   }

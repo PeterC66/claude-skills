@@ -69,7 +69,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, huesAlikeOnMap, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
+const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
@@ -370,7 +370,8 @@ function rolloutOne(t) {
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
     diffs[name] = d;
-    d.huesAlike = huesAlikeOnMap(path.join(s4, name));   // OA-071: owed, never gating
+    // OA-071 and OA-477: what the drawn sheet owes its S3, reported and never gating.
+    Object.assign(d, owedOnSheet(path.join(s4, name)));
     if (d.lost.length) anyLost = true;
   }
 
@@ -530,6 +531,10 @@ for (const t of selected) {
       // is owed at a map's next rebuild; it can say so. Reported, never gating.
       if (d.huesAlike && d.huesAlike.length) console.log(`    HUES ALIKE in ${file}: ` + d.huesAlike.map(c => `${c.a} vs ${c.b} (dE ${c.dE})`).join(', ')
         + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
+      // OA-477, beside it for the same reason: moving or hiding the symbol is an S3 edit
+      // (overrides.json internal.pois, or poi.excludeName). Reported, never gating.
+      if (d.iconOverBadge && d.iconOverBadge.length) console.log(`    SYMBOL ON A BADGE in ${file}: ` + d.iconOverBadge.map(c => `${c.at} on the badge at ${c.badge} (${c.deep}mm deep)`).join(', ')
+        + ` — owed a move or hide in S3 (buses-data OA-477); this rollout carries S3 unchanged and cannot make it`);
     }
   }
   for (const l of (r.owed || [])) console.log(`    OWED IN S3: ${l} — this rollout carries S3 unchanged and cannot make it`);

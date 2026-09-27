@@ -55,6 +55,7 @@ const { parseArgs, resolveBuses, resolvePortal } = require('./cli');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, EXTERNAL_GENERATOR, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const portalFixtures = require('./portal_fixtures');   // the vendored-fixture half of the portal join (OA-419)
+const { pinBehindAsker } = require('./pin_behind');     // a portal AHEAD of this pin is a chore (OA-480)
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 // The engine a map was BUILT with, and how to get it back (OA-430). The worktree
 // machinery lived here until then; it moved so that the stamp's writer and its
@@ -1100,6 +1101,7 @@ function portalDrift() {
   const SKILL_ROOT = path.resolve(SK, '..', '..');   // …/.claude/skills
   const entries = Array.isArray(manifest.files) ? manifest.files : [];
   const rows = [];
+  let pinAsker = null;
 
   for (const e of entries) {
     if (e.kind === 'portal-owned') continue;         // no source to compare against
@@ -1164,6 +1166,10 @@ function portalDrift() {
           row.graceHours = DRIFT_GRACE_HOURS;
           row.inFlight = true;
           row.note = 'merged to ' + ref + ', ' + ageHours + 'h ago, grace ' + DRIFT_GRACE_HOURS + 'h';
+        } else {
+          // OA-480: past the grace, bytes a later claude-skills main had are the pin behind, a chore; see pin_behind.js.
+          const hit = (pinAsker || (pinAsker = pinBehindAsker(SKILLS_ROOT))).commitFor(e.source, refBuf);
+          if (hit) Object.assign(row, { status: 'PIN-BEHIND', pinBehind: hit, note: 'the portal carries claude-skills ' + hit.commit + ', ahead of this pin ' + hit.pin });
         }
       }
     }
@@ -1379,7 +1385,8 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   // is gone used to be unconditionally red, so an UN-vendor in flight had no grace
   // at all while a re-vendor in flight had twelve hours -- and nothing could clear
   // it but the merge. A MISSING file with no such branch is red exactly as before.
-  || driftRows.some(r => r.same !== true && !r.inFlight)
+  // PIN-BEHIND (OA-480) is the portal AHEAD of the pinned engine: a chore, the worklist's `engine-stale-pin` row.
+  || driftRows.some(r => r.same !== true && !r.inFlight && !r.pinBehind)
   // OA-057, GATED FROM 2026-08-29 and reported-only before that. The rule the
   // column was held out under is that a check red on the day it lands gets muted
   // within the week, and seven of the ten places that draw an internal sheet were
@@ -1648,10 +1655,11 @@ async function main() {
       // An in-flight row is amber, so it says so in the verdict column rather
       // than reading PENDING beside a row that gates and one that does not.
       const verdict = r.inFlight ? 'pending' : (r.status || (r.same === null ? 'MISSING' : r.same ? 'in sync' : 'DRIFTED'));
-      console.log('  ' + verdict.padEnd(9) + r.file
+      console.log('  ' + verdict.padEnd(11) + r.file
         + (r.pendingOn ? '  — on ' + r.pendingOn
             + (r.ageHours == null ? ', undateable' : ', ' + r.ageHours + 'h old, grace ' + r.graceHours + 'h')
-            + (r.inFlight ? '' : ' — PAST THE GRACE') : ''));
+            + (r.inFlight ? '' : ' — PAST THE GRACE') : '')
+        + (r.pinBehind ? '  — ' + r.note + ' (a chore, not red: adopt it with engine-pin.mjs --bump)' : ''));
     }
   }
 

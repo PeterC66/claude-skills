@@ -153,6 +153,7 @@ Every time, without being asked:
 1. **Re-run the worklist** and confirm the item is gone. If it is still there, it is not done — say so.
 2. Tell Peter what changed in one or two lines: the version number, the map, the customer, what the next actor is.
 3. If anything about the *procedure* proved wrong or fiddly, fix it here (this file, the playbooks, or `worklist.mjs`) in the same session rather than leaving it for the next one.
+4. **End the message with the cost tag**, on a line of its own, so buses-data's `BusMapsUK/ai-cost/measure-ai-tokens.mjs` charges the tokens to the right bucket: `cost-tag: [update:<map>]` for a refresh, rebuild or fix of existing maps (several comma-separated, each by its folder name under `Areas/` or `Places/`), `cost-tag: [setup:<map>]` for a map's first build, `cost-tag: [dev]` for engine, portal or tool code, `cost-tag: [overhead]` for a review, an application, correspondence or anything else.
 
 ## Before you push — `preflight.mjs` answers *what would go red if I pushed now*
 

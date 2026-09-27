@@ -1123,8 +1123,9 @@ function portalDrift() {
           pendingOn: gone.ref, ageHours: gone.ageHours, graceHours: DRIFT_GRACE_HOURS,
           note: 'un-vendored on ' + gone.ref + ', not merged to ' + ref
             + (inFlight ? '' : '. Past the grace: merge it or drop the branch.') });
-      } else {
-        rows.push({ file: label, same: null });
+      } else {   // OA-487: a file ADDED after the pin is PIN-BEHIND as below; one no pin..origin/main commit had stays MISSING
+        const hit = !skillBuf && refBuf && (pinAsker || (pinAsker = pinBehindAsker(SKILLS_ROOT))).commitFor(e.source, refBuf);
+        rows.push(hit ? { file: label, same: null, status: 'PIN-BEHIND', pinBehind: hit, note: 'the portal carries claude-skills ' + hit.commit + ', ahead of this pin ' + hit.pin + ', which has no such file' } : { file: label, same: null });
       }
       continue;
     }

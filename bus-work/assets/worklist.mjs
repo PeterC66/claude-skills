@@ -1126,6 +1126,8 @@ for (const { row: mapRow, place } of engineStale) {
     ],
   });
 }
+// OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
+if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }
 const s6StalePlaces = (tree.places || []).filter((p) => p.built && p.s6Stale);
 if (s6StalePlaces.length) {
   /*
@@ -1362,7 +1364,7 @@ if (RUN_GATES && SK) {
     const bad = [
       ...gates.towns.filter((t) => t.internal === 'DIFF' || t.external === 'DIFF').map((t) => `town ${t.name}`),
       ...gates.places.filter((p) => p.internal === 'DIFF' || p.external === 'DIFF').map((p) => `place ${p.name}`),
-      ...(gates.portalDrift || []).filter((d) => d.same === false).map((d) => `portal vendoring ${d.file}`),
+      ...(gates.portalDrift || []).filter((d) => d.same === false && !d.inFlight && !d.pinBehind).map((d) => `portal vendoring ${d.file}`),
     ];
     for (const b of bad) {
       add({ key: `gate-${b}`, rank: 0, type: 'gate', title: `Gate FAILS: ${b}`, why: 'Regenerating from the current engine does not reproduce the committed output. Investigate before shipping anything.', who: '—', runbook: 'engine', do: [{ kind: 'shell', cwd: SK, cmd: 'node status.js' }] });

@@ -228,11 +228,11 @@ function builtIn(repo) {
          * — a refusal of a push CI would pass. `cwd` stays the local checkout's
          * folder so the arm reads where its script is; `atPin` re-roots it. */
         ENGINE && { id: 'prove-red-gates', label: 'the byte gates can go red — every control reproduces under the pinned engine', tier: 'full', when: ESTATE_INPUTS, atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-gates.js', '--buses', repo, '--portal', resolvePortal()] },
-        ENGINE && { id: 'prove-red-status', label: 'the status board separates a fault from a chore, under the pinned engine', tier: 'full', when: ESTATE_INPUTS, atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), cmd: 'node', args: ['tools/prove-red-status.js', '--buses', repo, '--portal', resolvePortal()] },
+        ENGINE && { id: 'prove-red-status', label: 'the status board separates a fault from a chore, under the pinned engine', tier: 'full', when: ESTATE_INPUTS, atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), prunePortal: resolvePortal(), cmd: 'node', args: ['tools/prove-red-status.js', '--buses', repo, '--portal', resolvePortal()] },
       ].filter(Boolean),
       unanswered: [
         'Whether the PORTAL suite is green — its `verify:area` gates a fixture that lives in this repository, and nothing on this side runs another repository\'s gates.',
-        'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers.',
+        'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers. The one exception is a `git remote prune origin` of the portal before prove-red-status (OA-479), which only deletes refs to branches origin no longer has.',
         'The estate harnesses gates.yml runs beyond prove-red-gates and prove-red-status — held-back, rollout-stamp, unrendered, sweep, prove-s6, attribution, the _latest mirrors. Only the two a pin bump has been seen to fail are asked, and only when the push moves engine.lock.json or a ci-reference/.',
         /* A missing engine tree is a REFUSAL and is said out loud. It used to be
          * a path literal that simply was not there, which reads as a check that
@@ -466,6 +466,7 @@ function report(result, quiet) {
     if (result.scope.dirtyCount) L.push(`  NOTE ${result.scope.dirtyCount} file(s) are modified and are NOT in this push — this preflight measured the WORKING TREE, which is not what would be pushed`);
   }
   L.push(`  checks from ${result.source}`);
+  for (const p of result.pruned || []) L.push(p.ok ? `  pruned ${p.refs.length} stale remote-tracking ref(s) in ${p.dir}${p.refs.length ? `: ${p.refs.join(', ')}` : ''}` : `  NOTE could not prune ${p.dir} (${p.why}); a branch deleted on origin may read as an unmerged re-vendor`);
   L.push('');
   for (const c of result.checks) {
     const mark = c.verdict === 'PASS' ? ' ok ' : c.verdict === 'FAIL' ? 'FAIL' : ' ?? ';
@@ -534,6 +535,14 @@ export function preflight({ repo, all = false, skillsRoot }) {
   const pin = pinnedCommit(repo);
   let pinEngine = null;
   if (wanted.some((c) => c.atPin)) pinEngine = pin.commit ? engineAtPin(skills, pin.commit) : { why: pin.why };
+  /* OA-479: a squash-merged portal branch deleted on origin keeps its
+   * remote-tracking ref here until somebody prunes, and the PINNED board reads it
+   * as a re-vendor past its grace -- the 2026-09-27 red. Pruning deletes only refs
+   * whose branch origin no longer has; a failure is reported, never fatal. */
+  const pruned = [...new Set(wanted.map((c) => c.prunePortal).filter(Boolean))].map((dir) => {
+    const r = spawnSync('git', ['-C', dir, 'remote', 'prune', 'origin'], { encoding: 'utf8', timeout: 60000 });
+    return { dir, ok: r.status === 0, refs: ((r.stdout || '').match(/\[pruned\] (\S+)/g) || []).map((m) => m.slice(9)), why: (r.stderr || '').trim() || (r.error && r.error.message) || '' };
+  });
   let checks;
   try {
     checks = wanted.map((c) => (c.atPin ? runAtPin(c, repo, pinEngine) : runCheck(c, repo)));
@@ -548,7 +557,7 @@ export function preflight({ repo, all = false, skillsRoot }) {
   const unanswered = checks.filter((c) => c.verdict === 'UNANSWERED').length;
   const exit = failed ? EXIT_FAILED : (unanswered || !scope.known) ? EXIT_CANNOT_TELL : EXIT_OK;
   const pinReport = pinEngine ? (pinEngine.root ? { commit: pinEngine.commit, via: pinEngine.via } : { why: pinEngine.why }) : null;
-  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, unanswered: manifest.unanswered || [], exit };
+  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, pruned, unanswered: manifest.unanswered || [], exit };
 }
 
 function main() {

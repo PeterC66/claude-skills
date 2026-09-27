@@ -1008,22 +1008,22 @@ function otherRemoteRefs(mainRef) {
  * Returns the NEWEST such ref, because a rollout's own branch is the newest
  * thing in the repository and an older branch that happens to agree is the less
  * informative answer. Null when nothing does — which is a real DRIFTED.
- * A ref that never touched the file since forking is no witness (OA-422): it
- * holds `ref`'s PAST bytes, which match an engine pin `ref` has moved ahead of —
- * a stale dependabot branch reddened buses-data that way on 2026-09-23. */
-const _mergeBases = new Map();
+ * A ref holding bytes `ref` has ALREADY HAD is no witness: a branch merely behind
+ * (OA-422, a dependabot branch, 2026-09-23) or one squash-merged and deleted on
+ * origin but never pruned here (OA-479, three portal refs, 2026-09-27). */
+const _mergeBases = new Map(), _landed = new Map();
 function forkBlob(cand, rel) {   // `rel` as it stood where `cand` forked from the ref
   if (!_mergeBases.has(cand)) _mergeBases.set(cand, gitIn(PORTAL, ['merge-base', _driftMainRef, cand]) || null);
   return _mergeBases.get(cand) ? gitShow(PORTAL, _mergeBases.get(cand), rel) : null;
 }
-function changedSinceFork(cand, rel, buf) {
-  const baseBuf = forkBlob(cand, rel);
-  return !baseBuf || !sameBytesIgnoringLineEndings(baseBuf, buf);
+function landedOnMain(cand, rel) {
+  if (!_landed.has(rel)) _landed.set(rel, new Set(String(gitIn(PORTAL, ['log', '--raw', '--no-abbrev', '--no-renames', '--format=', _driftMainRef, '--', rel]) || '').split('\n').map((l) => l.split(/\s+/)[3]).filter(Boolean)));
+  return _landed.get(rel).has(gitIn(PORTAL, ['rev-parse', cand + ':' + rel]));
 }
 function vendoredOnOtherRef(rel, skillBuf) {
   for (const cand of otherRemoteRefs(_driftMainRef)) {
     const buf = gitShow(PORTAL, cand.ref, rel);
-    if (buf && sameBytesIgnoringLineEndings(skillBuf, buf) && changedSinceFork(cand.ref, rel, buf)) return cand;
+    if (buf && sameBytesIgnoringLineEndings(skillBuf, buf) && !landedOnMain(cand.ref, rel)) return cand;
   }
   return null;
 }

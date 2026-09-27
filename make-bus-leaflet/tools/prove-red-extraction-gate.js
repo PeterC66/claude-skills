@@ -26,6 +26,8 @@
  *   C  the radial draws every hub box a mm shorter   -> exit 1, an external sheet "drawn"
  *   D  no baseline at all                            -> exit 2
  *   E  a baseline from before the template half      -> exit 2, not a quiet compare of half
+ *   F  B's swap also moves a schematic sheet         -> the swap reaches the gen_internal.js
+ *                                                        the schematic pre-stage spawns (OA-489)
  *
  * The mutations are written to scratch copies and handed to the gate with
  * --swap, so nothing under assets/ is touched: every file there is vendored into
@@ -97,6 +99,17 @@ for (const [id, what, gen, find, to, sheet] of [
   if (m.err) { check(id, what, false, m.err); continue; }
   const r = gate(['--swap', m.swap]);
   check(id, what, r.code === 1 && new RegExp(`drawn +[^\\n]*/${sheet}:`).test(r.out), r.out);
+  // F rides on B's run. The schematic pre-stage spawns its OWN gen_internal.js,
+  // so a swap that stopped at the outer generator left every schematic green
+  // while a real edit to assets/gen_internal.js moves them (OA-489). Watched
+  // failing before the fix: 4 internal sheets moved, 0 of 3 schematics. The
+  // diagram pre-stage spawns the same way and gets the same staging, but no map
+  // in this estate or buses-data gates a diagram while it is parked, so that arm
+  // is unproved until one does.
+  if (id === 'B') {
+    check('F', 'the same swap reaches the nested gen_internal.js -> a schematic sheet drawn differently',
+      /drawn +[^\n]*\/schematic:/.test(r.out), r.out);
+  }
 }
 
 fs.rmSync(baseFile);

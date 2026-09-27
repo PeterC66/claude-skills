@@ -466,6 +466,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-worktree-sweep
 
+      # 2026-09-27. The pull-request train replaced pr-train.yml, whose bot-made
+      # branch updates started runs GitHub held for a maintainer's approval. The
+      # case that matters is an up-to-date PR with NO checks -- what a held run
+      # looks like -- which must never be read as "on its way". Literal gh
+      # answers; no network.
+      - name: Prove the pull-request train picks the right pull request
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-pr-train
+
       # buses-data OA-426 (2026-09-22), R9 item 2, the other half: the thing that
       # ACTS on that grade. A SAFE refresh corrects an operator name and a set of
       # days and must touch nothing else -- so the failures that matter are all

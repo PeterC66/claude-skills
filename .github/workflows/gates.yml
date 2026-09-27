@@ -876,6 +876,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-edge-snap
 
+      # buses-data OA-452. journey_weights.json took a route's minority stops off its
+      # TICKS (derive_intown.js) but not its LINE (match_routes.js, built from the
+      # canonical direction), so St Neots v5.0 drew the 18's line down the 7-of-25
+      # Eynesbury working until viaExclude was set by hand to the same stops. This runs
+      # a main road with a spur through match_routes.js and requires the line to go up
+      # the spur with no file, stay on the road with one, be untouched when the file is
+      # switched off or names another direction -- then disables the drop and requires
+      # the fix case to fail.
+      - name: Prove the journey-weighted line can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-journey-line
+
       # OA-200. The board's VENDORING verdict used to compare each skill source
       # against the portal's WORKING TREE, so it was a claim about whichever branch
       # a mutable local checkout happened to be on. On 2026-08-31 it named

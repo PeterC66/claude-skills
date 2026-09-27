@@ -417,6 +417,26 @@ Case 1's threshold is measured, not chosen: 500 m sits 1.63× below what the fix
 
 The separate claim that the lever is **inert by default** is not asserted here but measured against real data: re-running the shipped `match_routes.js` over Ramsey's committed S2 with no `match_cfg.json` reproduces `routes_paths.json` with `edgeWay` identical and the only per-route difference being `projMaxM` itself.
 
+## Prove the JOURNEY-WEIGHTED line can go red — added 2026-09-27
+
+```bash
+npm run test:prove-red-journey-line
+```
+
+Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`; there are no placeholders. `tools/prove-red-journey-line.js` falsifies `match_routes.js` reading `journey_weights.json` (buses-data OA-452). The file took a route's minority stops off its ticks through `derive_intown.js` but not off its line, which `match_routes.js` builds from the canonical direction, so St Neots v5.0 drew the 18's ticks on the majority pattern and its line down the 7-of-25 Eynesbury working until `match_cfg.json viaExclude["18"]` was set by hand to the same 24 stops. The fixture is a 2 km main road with a 670 m spur and one route whose canonical direction calls at the spur's tip; the instrument is how far north of the road the line goes.
+
+| Case | Must report |
+|---|---|
+| 1 | no `journey_weights.json` — the line runs up the spur (668 m) |
+| 2 | the file drops the spur stop — the line stays on the road (0 m) |
+| 3 | `intown_cfg.json "journeyWeights": false` — byte-identical to case 1 |
+| 4 | the drop listed under the OTHER direction's name — byte-identical to case 1 |
+| 5 | **PROVE RED** — with the drop cut out of a copy of `match_routes.js`, case 2 must fail |
+
+The claim that the change is inert for every map already built was measured on real data: over St Neots' committed S2 `2026-09-27_0221`, the new `match_routes.js` with `viaExclude["18"]` deleted reproduces the committed `routes_paths.json` byte for byte, and the old one with it deleted does not.
+
+**The broken copy now resolves its requires.** Every harness that breaks `match_routes.js` writes the copy to the temp folder and counts a throw as red. When `match_routes.js` gained `require('./journey_drop')`, every such copy threw on that line, and `prove-red-via-chain` and `prove-red-edge-snap` went on printing PASS for case 5 with *match_routes.js threw* as the reason — a red for the wrong reason, caught on this change before it was committed. `tools/lib/broken_copy.js` rewrites each `require('./x')` in the copy to the original's folder; all three harnesses use it, and each case 5 now reports its measurement rather than a throw.
+
 ## A copy kept as a FIXTURE is the oracle for an extraction — added 2026-09-02
 
 `pre_stages.test.js` holds the 40-line projection that `diagram_internal.js` and `schematize_internal.js` each carried until OA-230 gave them the real `projection.js`. It is kept there as the FIXTURE, not the subject: the test calls the module exactly as the pre-stages now do and asserts, to the last float, that the numbers are the old ones — under five configs, including two the estate does not have (a lens present, the three-zone fisheye), so the byte gate's one green on 13 sheets is held for cases the sheets never exercise. The mutation that certifies the fixture is a real oracle is on `projection.js` itself: changing the fit-margin default turns this suite red while `projection.test.js` stays green, because only the comparison knows what the old numbers were.

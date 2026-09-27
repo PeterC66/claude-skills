@@ -177,13 +177,24 @@ function parseSvg(svg) {
     }
 
     if (tag === 'g') {
-      // An icon is emitted as exactly `<g transform="translate(x y) scale(s)">`
-      // (icons.js). Badges translate but never scale, which is what separates them.
+      // An icon is emitted by icons.js in one of two forms. Badges translate but
+      // never scale, which is what separates both from a badge.
+      //   grid set (b379206, 2026-08-16 on): `translate(x y) scale(s/10) translate(-12 -12)`
+      //     a 24-unit grid centred on (12,12) whose 20-unit live area is the
+      //     2s mm box the engine reserves, so the symbol is centred at (x, y)
+      //     with radius 10 grid units.
+      //   older set: `translate(x y) scale(s/2.2)`, drawn within a 4.2 mm box
+      //     about the origin.
+      // Reading the grid form as the older one put every symbol 2.4 mm up and
+      // left of where it is drawn, at a tenth of its size, and labelIcon read
+      // almost nothing for six weeks (buses-data OA-477).
       if (!selfClose) stack.push({ m, style, clipped: top.clipped || /clip-path=/.test(raw) });
-      if (/translate\([^)]*\)\s*scale\(/.test(a.transform || '')) {
-        const [cx, cy] = apply(m, 0, 0);
+      const tf = a.transform || '';
+      if (/translate\([^)]*\)\s*scale\(/.test(tf)) {
+        const grid = /scale\([^)]*\)\s*translate\(\s*-12[\s,]+-12\s*\)/.test(tf);
+        const [cx, cy] = grid ? apply(m, 12, 12) : apply(m, 0, 0);
         const sc = Math.abs(m[0]) || 1;
-        icons.push({ cx, cy, r: 2.1 * sc, seq: seq++ });     // icons.js draws within a 4.2mm box
+        icons.push({ cx, cy, r: (grid ? 10 : 2.1) * sc, seq: seq++ });
       }
       continue;
     }
@@ -704,8 +715,22 @@ function analyse(svgPath) {
   // counting that would report ~290 collisions that are simply the design.
   // Exclude the nearest icon to the label's anchor; anything else it covers is
   // a genuine defect (St Ives' "Waitrose" eaten by the library icon).
+  // The symbol is a disc and the label a rotated quad, so the test is exact:
+  // centre inside the quad, or an edge nearer than the radius. An AABB of a
+  // diagonal road name covers symbols the name never reaches, and with the
+  // symbol read at its real size (OA-477) that tripled some sheets' counts.
+  const discTouchesQuad = (ic, q) => {
+    let sgn = 0, inside = true;
+    for (let i = 0; i < q.length; i++) {
+      const p = q[i], n = q[(i + 1) % q.length];
+      if (segDistance([ic.cx, ic.cy], [p, n]) < ic.r) return true;
+      const cr = Math.sign((n[0] - p[0]) * (ic.cy - p[1]) - (n[1] - p[1]) * (ic.cx - p[0]));
+      if (cr && sgn && cr !== sgn) inside = false;
+      if (cr) sgn = cr;
+    }
+    return inside;
+  };
   for (const L of mapLabels) {
-    const b = quadBox(L.quad);
     let own = null, bestD = Infinity;
     for (const ic of P.icons) {
       const d = Math.hypot(ic.cx - L.x, ic.cy - L.y);
@@ -714,7 +739,7 @@ function analyse(svgPath) {
     if (bestD > 8) own = null;                    // not this label's symbol at all
     for (const ic of P.icons) {
       if (ic === own) continue;
-      if (ic.cx + ic.r > b.x0 && ic.cx - ic.r < b.x1 && ic.cy + ic.r > b.y0 && ic.cy - ic.r < b.y1)
+      if (discTouchesQuad(ic, L.quad))
         detail.labelIcon.push({ text: L.text, at: [+ic.cx.toFixed(1), +ic.cy.toFixed(1)] });
     }
   }

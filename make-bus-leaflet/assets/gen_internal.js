@@ -198,6 +198,7 @@ const { labelPlacer } = require(_dep('label_placer.js'));
 const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
+const { smoothCasingWidths } = require(_dep('casing_width.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
 // coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
@@ -1364,7 +1365,7 @@ if(IR){
     : drawnCovers1;
   SKEL=[];                                       // [{c,p,q,name}] for road labels
   const eSeen=new Set();
-  let _wmax=0, _capped=0;
+  let _wmax=0, _capped=0; const CAS=[];
   for(const r of order){ const o=RPP[r]; if(!o)continue; const Pp=o.P,E=o.E;
     for(let i=0;i<E.length;i++){ const t=E[i]; if(!t)continue; const c=canonOf(t);
       if(eSeen.has(c))continue; eSeen.add(c);
@@ -1420,8 +1421,14 @@ if(IR){
         const dn=bundle.filter(s=>drawnCovers(s,M)).length;
         console.error('CASE '+nm+' bundle='+nb+' drawn='+dn+' w='+w.toFixed(2)+' mid='+mid.toFixed(2)); }
       SKEL.push({c, p:Pp[i], q:Pp[i+1], name:(RP.edgeWay[c]&&RP.edgeWay[c].name)||null});
-      out(`<path d="M${p0x.toFixed(2)} ${p0y.toFixed(2)}L${p1x.toFixed(2)} ${p1y.toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${w.toFixed(2)}" stroke-linecap="round"/>`);
+      CAS.push({x0:p0x, y0:p0y, x1:p1x, y1:p1y, w});
     } }
+  // internalRoads.casingSmooth (OA-064): narrow a segment to the length-weighted median
+  // width of the casing within k x its own width, so a junction's discs stop fusing
+  // into a lobe; casing_width.js has the measurement. Absent => byte-identical.
+  const _ks = IR.casingSmooth===true ? 1 : +IR.casingSmooth;
+  const casW = _ks>0 ? smoothCasingWidths(CAS, _ks) : CAS.map(g=>g.w);
+  CAS.forEach((g,j)=>out(`<path d="M${g.x0.toFixed(2)} ${g.y0.toFixed(2)}L${g.x1.toFixed(2)} ${g.y1.toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${casW[j].toFixed(2)}" stroke-linecap="round"/>`));
   if(process.env.DBG_CASE) console.error('CASE max casing width '+_wmax.toFixed(2)+' mm (uncapped)'
     + (IR.skeletonMaxW!=null ? '; skeletonMaxW '+IR.skeletonMaxW+' mm clamped '+_capped+' segment(s)' : ''));
   // -- keyRoads: named roads drawn at skeleton weight regardless of bus usage

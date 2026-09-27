@@ -844,8 +844,7 @@ for (const f of ['osm.json', 'osm2.json']) {
   }
   wjson(f, o);
 }
-// journey_weights.json: the panel's minority-working note (buses-data OA-452), as in schematize_internal.js.
-for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'river_geo.json', 'journey_weights.json']) {
+for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'river_geo.json', 'journey_weights.json']) { // journey_weights: the panel's minority note (buses-data OA-452)
   try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { }
 }
 // diagram-overrides.json (S3-owned, optional) -> the WORKSPACE overrides.json:

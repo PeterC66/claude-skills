@@ -679,10 +679,7 @@ for (const f of ['osm.json', 'osm2.json']) {
   }
   wjson(f, o);
 }
-// straight copies (river_geo.json handled above — it needs the warp, not this).
-// journey_weights.json carries no coordinates, only which workings the drawn line
-// leaves out, and the Services panel names them from it (buses-data OA-452) — left
-// out of this list, the schematic sheet printed no minority note at all.
+// straight copies (river_geo.json handled above — it needs the warp, not this; journey_weights.json is the panel's minority note, buses-data OA-452)
 for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'journey_weights.json']) {
   try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { }
 }

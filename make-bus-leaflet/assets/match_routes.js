@@ -23,11 +23,15 @@
 // Run from the town's S2 dir:  node match_routes.js
 // Needs: roads_geo.json, atco2ll.json, routes_full_atco.json,
 //        routes_intown_atco.json (the drawn subset).
+// Reads journey_weights.json when S2 step 3b wrote one: the canonical chain loses
+// the stops it lists as `drop` for that direction, so the LINE follows the pattern
+// most journeys run, as the ticks already do (buses-data OA-452; journey_drop.js).
 // Output: routes_paths.json {
 //   routes: { r: { pts:[[lat,lon]..], edges:[key|null per segment],
 //                  stopT:{ATCO:{i,t,d}}, fallbacks:[{from,to,why}] } },
 //   edgeWay: { "nodeA|nodeB": {way,name,highway} } }
 const fs = require('fs');
+const { loadJourneyDrops } = require('./journey_drop');
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const SNAP_M = 120, SERVICE_PEN = 1.6, LIVING_PEN = 1.3;
@@ -96,6 +100,7 @@ const INTOWN = JSON.parse(fs.readFileSync(DIR + '/routes_intown_atco.json', 'utf
 // better single direction is still picking one, and one direction cannot describe a
 // loop. Read the 350 m warning below for the list of routes worth setting it on.
 const MCFG = (function(){ try{ return JSON.parse(fs.readFileSync(DIR + '/match_cfg.json','utf8')); }catch(e){ return {}; } })();
+const jwDrop = loadJourneyDrops(DIR);
 const [BS, BW, BN, BE] = RG.bbox;
 const inBbox = ll => ll[0] >= BS && ll[0] <= BN && ll[1] >= BW && ll[1] <= BE;
 
@@ -256,6 +261,12 @@ for (const r in INTOWN) {
   const chain = VC === 'intown' ? (INTOWN[r] || []) : can.stops;
   if (VC === 'intown' && chain.length < 2) console.error('match_routes: ' + r + ' — viaChain "intown" but its displayed chain has ' + chain.length + ' stop(s); falling back to the canonical direction.');
   let vias = (VC === 'intown' && chain.length >= 2 ? chain : can.stops).filter(a => atco2ll[a] && inBbox(atco2ll[a]));
+  // journey_weights.json: the canonical direction's minority stops come off the line
+  // (OA-452). Not under viaChain "intown", whose chain derive_intown already weighed.
+  if (!(VC === 'intown' && chain.length >= 2)) {
+    const jd = jwDrop(r, can.name);
+    if (jd.size) { const n0 = vias.length; vias = vias.filter(a => !jd.has(a)); if (vias.length < n0) console.error('match_routes: ' + r + ' — ' + (n0 - vias.length) + ' minority stop(s) off the line (journey_weights.json, ' + can.name + ')'); }
+  }
   const vp = (MCFG.viaPrefixes || {})[r];
   if (vp) vias = vias.filter(a => vp.some(p => a.startsWith(p)));
   const vx = (MCFG.viaExclude || {})[r];

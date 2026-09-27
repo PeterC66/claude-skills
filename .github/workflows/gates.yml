@@ -1402,6 +1402,17 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-gates -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate" --portal "$GITHUB_WORKSPACE/community-bus-maps"
 
+      # AND THE REFACTOR GATE, WHICH COULD NOT GO RED FOR A TEMPLATE EDIT
+      # (buses-data OA-486, 2026-09-27). `gate:extraction` compared status.js's
+      # verdicts and nothing else, and since OA-430 those gate a behind map
+      # against the engine that drew it -- so with every map held back, an
+      # ink-moving edit to assets/ left all 119 verdicts identical. It now also
+      # redraws every gated sheet with the working templates; this proves that
+      # half turns red for a mutated generator, on the fixture estate.
+      - name: Prove the extraction gate can go red for a template edit
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-extraction-gate -- --buses "$GITHUB_WORKSPACE/skills/make-bus-leaflet/test/fixtures/estate" --portal "$GITHUB_WORKSPACE/community-bus-maps"
+
       # THE S6 FALSIFICATION HAS MOVED TO buses-data (OA-398, 2026-09-18), and it
       # is a NARROWING, so the guarantee is re-established at the point of it.
       # `npm run test:prove-s6` seeds from a town's TRACKED S1/S2/S3 runs and its

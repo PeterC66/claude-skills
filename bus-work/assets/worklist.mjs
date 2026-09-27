@@ -82,7 +82,7 @@ import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
-import { readRuns, loopHealth, loopRunItems, silenceOld, loopSilentItems } from './loop_runs.mjs';
+import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
 import { worktreeSweepBoard } from './worktree_sweep.mjs';
@@ -1037,12 +1037,8 @@ const loopIdle = loopRunItems({
   busesDir: BUSES,
 });
 for (const it of loopIdle) add(it);
-
-// OA-408 item 3: the loop that left NO file. The transcripts are read only once
-// the newest run is three cadences old, so a working loop costs nothing here.
-if (silenceOld(loopState)) {
-  for (const it of loopSilentItems({ health: loopState, turns: conc.readSessionTurns({ since: loopState.lastAt }) })) add(it);
-}
+// OA-408 item 3: the loop that left NO file; transcripts are read only once the newest run is three cadences old.
+for (const it of loopSilentItems({ health: loopState, readTurns: conc.readSessionTurns })) add(it);
 
 // THE DRAFTS IN THE SAME FOLDER (2026-09-10, item 7 of Peter's suggestions
 // review; moved here from the old drop zone by OA-401). Inert was right and

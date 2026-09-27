@@ -288,14 +288,13 @@ console.log('\n12. the wire in worklist.mjs — literal strings, and it must RUN
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
-    "import { readRuns, loopHealth, loopRunItems, silenceOld, loopSilentItems } from './loop_runs.mjs';",
+    "import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';",
     "readRuns(path.join(BUSES, 'loop', 'runs'))",
     "stopFile: existsSync(path.join(BUSES, 'loop', 'STOP')),",
     'treeDirty: !!(conditions.repos.buses && conditions.repos.buses.dirty),',
     'heldBy: (conditions.loopLock && conditions.loopLock.name) || null,',
     'for (const it of loopIdle) add(it);',
-    'if (silenceOld(loopState)) {',
-    "for (const it of loopSilentItems({ health: loopState, turns: conc.readSessionTurns({ since: loopState.lastAt }) })) add(it);",
+    'for (const it of loopSilentItems({ health: loopState, readTurns: conc.readSessionTurns })) add(it);',
   ]) check(`worklist.mjs RUNS: ${lit.slice(0, 58)}`, liveLine(lit), 'absent, or commented out');
   // The causes must come from `conditions`, which the run has already gathered
   // and PRINTED, or the row can contradict the block above it. Both reads
@@ -331,6 +330,12 @@ console.log('\n13. silence with witnesses (OA-408 item 3)');
   check('silenceOld is false two hours after the last tick', silenceOld(hAt(6, 10)) === false);
   check('silenceOld is true three hours after', silenceOld(hAt(7, 20)) === true);
   check('…and without it the row is not raised, whatever the turns', loopSilentItems({ health: hAt(6, 10), turns: [at(5, 20), at(5, 40)] }).length === 0);
+  // The reader is the board's only cost, so a working loop must never reach it.
+  let reads = 0;
+  const reader = ({ since }) => { reads++; return since === at(4, 15) ? busy : []; };
+  loopSilentItems({ health: hAt(6, 10), readTurns: reader });
+  check('a young silence never calls the reader', reads === 0, String(reads));
+  check('an old one calls it from the newest run, and raises the row', loopSilentItems({ health: hAt(11, 45), readTurns: reader }).length === 1 && reads === 1, String(reads));
   const tick = mkRuns('silent-cleared', ['0015-OA', '0115-OA', '0215-OA', '0315-OA', '0415-OA', '1115-OA']);
   check('CONTROL — a tick at 11:15 ends the silence', loopSilentItems({ health: health(tick, at(11, 45)), turns: busy }).length === 0);
   check('never-ran raises nothing', loopSilentItems({ health: health(path.join(tmp, 'nowhere2')), turns: busy }).length === 0);

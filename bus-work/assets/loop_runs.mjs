@@ -318,10 +318,12 @@ export function silentSlots({ health, turns }) {
  * the evidence is circumstantial: a session at a prompt is not proof the
  * scheduler could have fired, and Peter ruled that a false alarm is the price.
  */
-export function loopSilentItems({ health, turns, minSlots = 3 }) {
+export function loopSilentItems({ health, turns, readTurns, minSlots = 3 }) {
   const h = health || {};
   if (!silenceOld(h, minSlots)) return [];
-  const slots = silentSlots({ health: h, turns });
+  // `readTurns` is `concurrency.mjs`'s `readSessionTurns`, passed in so this
+  // module still opens nothing and a working loop never reaches the read.
+  const slots = silentSlots({ health: h, turns: turns || (readTurns ? readTurns({ since: h.lastAt }) : []) });
   if (slots.length < minSlots) return [];
   return [{
     key: 'loop-silent', rank: 8, type: 'loop-health',

@@ -64,6 +64,125 @@ on:
   workflow_dispatch:
 
 jobs:
+  # THE UNIT SUITE RUNS AS THREE PARALLEL JOBS AND ONE JOIN (2026-09-27).
+  # As one job, `unit` took 6m41s, and strict protection re-runs it on every branch
+  # update, so a queue of N pull requests paid it N-1 more times. Two steps were
+  # most of that: the Python mutation proof (2m30s) and the JS one with its
+  # did-not-run twin (2m04s). Each now has a job of its own beside `unit-rest`,
+  # which runs everything else, and the job still NAMED `unit` -- the required
+  # check branch protection asks for by name -- needs all three and passes only if
+  # every one of them succeeded. Protection did not change, a red in any part is a
+  # red `unit`, and the wall clock is the slowest of the three.
+  # THE JOIN IS `if: always()` ON PURPOSE: without it a failed part would leave
+  # `unit` SKIPPED, and GitHub counts a skipped required check as passing.
+
+  unit-python:
+    runs-on: ubuntu-latest
+    steps:
+      # Setup copied from `unit-rest` below, which says why Node is 24 and Python 3.13.
+      - name: Checkout claude-skills (engine)
+        uses: actions/checkout@v7
+        with:
+          path: skills
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: skills/make-bus-leaflet/package-lock.json
+
+      - name: Install engine dependencies
+        working-directory: skills/make-bus-leaflet
+        run: npm ci
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: skills/make-bus-leaflet/requirements.txt
+
+      - name: Install the engine's Python dependencies
+        working-directory: skills/make-bus-leaflet
+        run: pip install -r requirements.txt
+
+      - name: Prove the Python unit suite can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-python
+
+      - name: Python unit suite
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:python
+
+  unit-mutation:
+    runs-on: ubuntu-latest
+    steps:
+      # Setup copied from `unit-rest` below, which says why Node is 24 and Python 3.13.
+      - name: Checkout claude-skills (engine)
+        uses: actions/checkout@v7
+        with:
+          path: skills
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: skills/make-bus-leaflet/package-lock.json
+
+      - name: Install engine dependencies
+        working-directory: skills/make-bus-leaflet
+        run: npm ci
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: skills/make-bus-leaflet/requirements.txt
+
+      - name: Install the engine's Python dependencies
+        working-directory: skills/make-bus-leaflet
+        run: pip install -r requirements.txt
+
+      # THE MUTATION SUITE, WHICH HAD NEVER RUN HERE. `npm test` in `unit-rest` is
+      # `node --test` -- it proves the unit tests pass. This breaks the engine on
+      # purpose, once per mutation (read the count off the run, not off this
+      # comment -- it said 226 for five days after it was 249), and requires each
+      # mutation to redden the test that
+      # names it: it proves the unit tests can FAIL, which is the only thing that
+      # makes their green mean anything. `git log -S "prove-red.js"` over this
+      # file returns nothing, so until 2026-09-02 the only machine that had ever
+      # seen it was the one it was written on -- the exact fault OA-218 fixed for
+      # the OTHER two harnesses on 2026-08-28, one file short. Found by
+      # `gate:wiring`, on its first run. ~90 s, no other repository.
+      - name: Prove the unit suite can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red
+
+      # AND PROVE THAT THE STEP ABOVE CAN SAY IT DID NOT RUN (buses-data OA-353).
+      # `prove-red.js` stops before mutating anything if the unmutated copy is
+      # already red -- correctly, since a mutation measured against a failing copy
+      # proves nothing. Until 2026-09-14 that stop printed one ordinary line and
+      # exited 1, exactly like `a mutation SURVIVED`, and it hid a whole day in
+      # which the answer to *can these mutations fail?* was nobody has asked. It
+      # now exits 2 and says `0 of N mutations ran`. Seven cases: five drive the
+      # verdict with a stub runner in milliseconds, and two run
+      # `prove-red.js --baseline-only` end to end -- green here, and red on a
+      # scratch copy of the skill with one baseline suite deliberately broken,
+      # because the first five would all pass against a module nothing called.
+      # ~60 s, no other repository.
+      - name: Prove the mutation harness can say it DID NOT RUN
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-baseline
+
+  unit:
+    needs: [unit-python, unit-mutation, unit-rest]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All three unit jobs succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: echo "$RESULTS" | jq -e 'to_entries | map(.value.result) | all(. == "success")'
+
   # The unit suite needs NO repository but this one, so it must not sit behind the
   # cross-repo checkout: a CROSS_REPO_PAT2 expiry would otherwise take 423 tests
   # down with the byte gates, and the token expires on a known date (22 Nov 2026).
@@ -73,7 +192,7 @@ jobs:
   # of passing was somebody remembering to run them on the laptop they were
   # written on. The three harnesses below are the ones that need no dataset and no
   # built map; the rest stay in `status`, where their fixtures are.
-  unit:
+  unit-rest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout claude-skills (engine)
@@ -143,14 +262,6 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: pip install -r requirements.txt
 
-      - name: Prove the Python unit suite can go red
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-python
-
-      - name: Python unit suite
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:python
-
       # stamp-docs' own harness, and it had never run anywhere but a laptop
       # (buses-data OA-333). It falsifies the shared exclusion baseline, the JOIN
       # between the three scripts that read it, and -- since 2026-09-13 -- the rule
@@ -202,37 +313,6 @@ jobs:
       - name: The generators have not grown past their ceilings
         working-directory: skills/make-bus-leaflet
         run: npm run gate:line-ratchet
-
-      # THE MUTATION SUITE, WHICH HAD NEVER RUN HERE. `npm test` above is
-      # `node --test` -- it proves the unit tests pass. This breaks the engine on
-      # purpose, once per mutation (read the count off the run, not off this
-      # comment -- it said 226 for five days after it was 249), and requires each
-      # mutation to redden the test that
-      # names it: it proves the unit tests can FAIL, which is the only thing that
-      # makes their green mean anything. `git log -S "prove-red.js"` over this
-      # file returns nothing, so until 2026-09-02 the only machine that had ever
-      # seen it was the one it was written on -- the exact fault OA-218 fixed for
-      # the OTHER two harnesses on 2026-08-28, one file short. Found by
-      # `gate:wiring` below, on its first run. ~90 s, no other repository.
-      - name: Prove the unit suite can go red
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red
-
-      # AND PROVE THAT THE STEP ABOVE CAN SAY IT DID NOT RUN (buses-data OA-353).
-      # `prove-red.js` stops before mutating anything if the unmutated copy is
-      # already red -- correctly, since a mutation measured against a failing copy
-      # proves nothing. Until 2026-09-14 that stop printed one ordinary line and
-      # exited 1, exactly like `a mutation SURVIVED`, and it hid a whole day in
-      # which the answer to *can these mutations fail?* was nobody has asked. It
-      # now exits 2 and says `0 of N mutations ran`. Seven cases: five drive the
-      # verdict with a stub runner in milliseconds, and two run
-      # `prove-red.js --baseline-only` end to end -- green here, and red on a
-      # scratch copy of the skill with one baseline suite deliberately broken,
-      # because the first five would all pass against a module nothing called.
-      # ~60 s, no other repository.
-      - name: Prove the mutation harness can say it DID NOT RUN
-        working-directory: skills/make-bus-leaflet
-        run: npm run test:prove-red-baseline
 
       # The convention `_engine.js` and test/README.md have both stated since
       # August, now with something enforcing it. A suite that requires its subject

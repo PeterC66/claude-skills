@@ -1267,6 +1267,23 @@ const MUTATIONS = [
     find: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels",
     to: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels + (m.labelsOverBadge || 0)" },
 
+  // buses-data OA-477, 2026-09-27: a map symbol on a route badge, reported and not
+  // scored for the same reason -- 62 on 16 of the 58 ci-reference sheets the day it
+  // landed. The third is the stadium read as a disc its half-width wide, the fault
+  // badgeOverBadge's first cut had.
+  { suite: 'quality_metrics_icons.test.js', file: 'quality_metrics.js',
+    what: 'iconOverBadge is folded into hard while it is non-zero on sixteen sheets',
+    find: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels",
+    to: "    + (m.panelOnlyServices || 0) + m.strandedFeatureLabels + (m.iconOverBadge || 0)" },
+  { suite: 'quality_metrics_icons.test.js', file: 'quality_metrics.js',
+    what: 'a sheet with no palette reports no symbol on a badge as a clean ZERO instead of UNKNOWN',
+    find: '    iconOverBadge: (palette && palette.size) ? detail.iconOverBadge.length : null,',
+    to: '    iconOverBadge: detail.iconOverBadge.length,' },
+  { suite: 'quality_metrics_icons.test.js', file: 'quality_metrics.js',
+    what: 'a symbol over a stadium badge is measured against a disc its half-width wide',
+    find: '      const deep = -gapMm(disc, g);',
+    to: '      const deep = -gapMm(disc, { cx: g.cx, cy: g.cy, rx: g.rx, ry: g.rx });' },
+
   // OA-148, 2026-08-30. The AABB is what this measure USED to test, and it was
   // reporting two road names as sitting on badges their glyphs come nowhere near.
   // The second mutation is the other direction and matters just as much: a test

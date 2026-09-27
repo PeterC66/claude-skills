@@ -38,6 +38,11 @@
  * import graph is loaded here all the same, because every module it imports is a
  * library and is imported on its own.
  *
+ * OA-323 item 4 (2026-09-27) added audit-map-tailoring/assets/ and
+ * review-bus-codebases/assets/, whose scripts no harness imports at all. Adding
+ * them went red naming exactly their eight scripts as undeclared, which is the
+ * question asked; the eight are declared below and lib.mjs is imported.
+ *
  * THE HARNESSES ARE OUT OF THE POPULATION BY NAME, and that is a scope, not a gap:
  * a prove-red-*.mjs is a script by design and each is run by its own CI step.
  *
@@ -55,7 +60,7 @@ const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 const SKILLS = path.resolve(__dirname, '..', '..');
-const FOLDERS = ['bus-work/assets', 'tools', 'tools/lib'];
+const FOLDERS = ['bus-work/assets', 'tools', 'tools/lib', 'audit-map-tailoring/assets', 'review-bus-codebases/assets'];
 
 const present = FOLDERS.filter((d) => fs.existsSync(path.join(SKILLS, d)));
 for (const d of FOLDERS) {
@@ -98,17 +103,26 @@ const RUNS_AT_LOAD = new Map([
   ['tools/check-file-hygiene.mjs', 'a checker: walks the enclosing repository at load'],
   ['tools/check-s6-claims.mjs', 'a checker: walks the enclosing repository at load'],
   ['tools/check-tables.mjs', 'a checker: walks the enclosing repository at load'],
+  ['audit-map-tailoring/assets/compare_drafts.mjs', 'compares a scratch draft tree named on its command line with the estate'],
+  ['audit-map-tailoring/assets/draft_places.mjs', 're-drafts every place into a scratch root named on its command line'],
+  ['audit-map-tailoring/assets/draft_towns.mjs', 're-drafts every town into a scratch root named on its command line'],
+  ['audit-map-tailoring/assets/history.mjs', 'reads every S3 run in the estate and prints them by cause'],
+  ['audit-map-tailoring/assets/inventory.mjs', 'walks the estate and prints the tailoring inventory'],
+  ['audit-map-tailoring/assets/places.mjs', 'walks the estate\'s places and prints the drafted-against-shipped table'],
+  ['audit-map-tailoring/assets/portal_query.mjs', 'prints the one read-only command Peter runs against the live portal'],
+  ['review-bus-codebases/assets/measure.mjs', 'reads three checkouts and prints the codebase review\'s standing counts'],
 ]);
 
 const IMPORTABLE = MJS.filter((f) => !RUNS_AT_LOAD.has(f));
 
 test('the population is these folders on disk, and it is not empty', () => {
   if (!present.length) return;
-  // A floor, not today's count: 29 importable and 39 in all on 2026-09-27. Falling
-  // below it means files left the population, which is the direction that hides.
-  assert.ok(MJS.length >= 39, 'expected at least 39 satellite .mjs, got ' + MJS.length + ': ' + MJS.join(', '));
-  assert.ok(IMPORTABLE.length >= 29,
-    'fewer satellite modules can be imported than on 2026-09-27 (29) — this has gone backwards. Got: ' + IMPORTABLE.join(', '));
+  // A floor, not today's count: 31 importable and 49 in all on 2026-09-27, after
+  // OA-323 item 4 added two folders. Falling below it means files left the
+  // population, which is the direction that hides.
+  assert.ok(MJS.length >= 49, 'expected at least 49 satellite .mjs, got ' + MJS.length + ': ' + MJS.join(', '));
+  assert.ok(IMPORTABLE.length >= 31,
+    'fewer satellite modules can be imported than on 2026-09-27 (31) — this has gone backwards. Got: ' + IMPORTABLE.join(', '));
 });
 
 test('every satellite .mjs parses', () => {

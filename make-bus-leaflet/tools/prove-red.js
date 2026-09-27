@@ -528,8 +528,13 @@ const MUTATIONS = [
    * These mutations are the entire cover for it. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'the tier key is not stamped onto the POI, so a classified place the sheet culls can no longer be named at all - the exact silence OA-250 item 2 is about',
-    find: "    if(explicit(p)){ used.add(k); p.tierKey = k; }",
-    to: "    if(explicit(p)){ used.add(k); }" },
+    find: "    if(a){ used.add(a.key); p.tierKey = a.key; }",
+    to: "    if(a){ used.add(a.key); }" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'an osm:<type>/<id> answer is never looked up, so one place of a same-name pair cannot be answered without the other (OA-250 step 2)',
+    find: "  if(p.osm && own('osm:' + p.osm))",
+    to: "  if(false && p.osm && own('osm:' + p.osm))" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'the key reported is the RENAMED one, so whoever wrote the answer is sent looking for a key that is not in their config',

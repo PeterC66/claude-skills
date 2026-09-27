@@ -163,6 +163,31 @@ test('merge keeps source-only keys, takes the portal on conflict, skips unreacha
   assert.ok(!('industrial:X' in m));
 });
 
+test('the category switch (OA-439): on adds, off removes, anything else is no opinion', () => {
+  const a = S.compareInclude([], { pubs: true });
+  assert.deepStrictEqual([a.to, a.on, a.off, a.owed], [['pubs'], ['pubs'], [], true]);
+  const b = S.compareInclude(['pubs', 'allotments'], { pubs: false, stations: true });
+  assert.deepStrictEqual(b.to, ['allotments', 'stations']);
+  assert.deepStrictEqual([b.on, b.off], [['stations'], ['pubs']]);
+  // Already true of the source, an empty switch, no switch, a junk value, a
+  // category outside the three: all owe nothing and change nothing.
+  for (const [src, sw] of [[['pubs'], { pubs: true }], [[], { pubs: false }], [['pubs'], {}], [['pubs'], undefined], [[], { pubs: 'yes' }], [[], { museums: true }]]) {
+    const c = S.compareInclude(src, sw);
+    assert.strictEqual(c.owed, false, JSON.stringify([src, sw]));
+    assert.deepStrictEqual(c.to, src);
+  }
+  // A source with no include at all reads as [], never undefined.
+  assert.deepStrictEqual(S.compareInclude(undefined, {}).from, []);
+});
+
+test('switchOf answers every opt-in category, so an S3 compared against its S4 owes exactly the difference', () => {
+  assert.deepStrictEqual(S.switchOf(['stations']), { allotments: false, pubs: false, stations: true });
+  assert.deepStrictEqual(S.switchOf(undefined), { allotments: false, pubs: false, stations: false });
+  const c = S.compareInclude(['pubs'], S.switchOf(['stations']));
+  assert.deepStrictEqual([c.on, c.off], [['stations'], ['pubs']]);
+  assert.strictEqual(S.compareInclude(['pubs'], S.switchOf(['pubs'])).owed, false);
+});
+
 test('the town -> map rule: one AREA map by name, case-insensitively; none or two is a refusal', () => {
   const maps = [
     { id: 3, kind: 'area', name: 'High Wycombe' },

@@ -31,7 +31,16 @@
  *   node rollout_places.js [--place "High Wycombe Aldi"]... [--all]
  *                           [--bump minor|major] [--note "..."] [--apply]
  *                           [--force | --rebuild-stale] [--buses "<dir>"]
- *                           [--by <who>]
+ *                           [--by <who>] [--keep "<dir>"] [--warnings]
+ *                           [--refresh-index --asof YYYY-MM-DD] [--help]
+ *
+ * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ, as in sync_ci_reference.js
+ * (buses-data OA-451 item 3). With no --place this considers every place, and the
+ * shared parser ignores a flag it does not know and files a bare word under `_`,
+ * so `--help` was a dry run over every place and a bare place name was
+ * the same. It wrote nothing, being a dry run, but the same slip with --apply
+ * beside it is a whole-estate rebuild. An unknown flag or a positional argument
+ * now exits 2 before anything is read; --help prints the usage and exits 0.
  *
  * `--rebuild-stale` rebuilds a place ONLY when its verdict is STAMP-STALE and
  * bypasses nothing — identical to rollout.js's flag; see the paragraph there
@@ -58,7 +67,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs } = require('./cli');
+const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, huesAlikeOnMap, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const BUILDLOG = require('./build_log');
@@ -84,7 +93,19 @@ const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
+const USAGE = 'Usage: node rollout_places.js [--place "<Place name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
+  '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
+  '         [--warnings] [--refresh-index --asof YYYY-MM-DD]\n' +
+  '  Dry run unless --apply. No --place: consider EVERY place.';
+const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
+  'keep', 'warnings', 'refresh-index', 'asof', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
+if (args.help === true) { console.log(USAGE); process.exit(0); }
+{
+  const unknown = Object.keys(args).filter(k => k !== '_' && !FLAGS.has(k));
+  if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --place takes every place.\n${USAGE}`);
+  if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a place with --place.\n${USAGE}`);
+}
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).

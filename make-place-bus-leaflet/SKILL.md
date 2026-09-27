@@ -275,6 +275,8 @@ Run it from anywhere inside the Buses tree. `%TSK%` is the town skill's assets f
 ## Review (end of every session)
 Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the project memory (`project_bus_leaflets.md` / the place-skill memory). Flag out-of-scope items rather than silently fixing. This step is itself a standing rule.
 
+**End your final message with the cost tag**, on a line of its own, so buses-data's `BusMapsUK/ai-cost/measure-ai-tokens.mjs` charges the session's tokens to this place: `cost-tag: [setup:<place>]` for its first build, `cost-tag: [update:<place>]` for any later work, where `<place>` is its folder name under `Areas/<Town>/Places/` or `Places/_standalone/`. Several places are comma-separated inside one bracket; engine work that was most of the session is `cost-tag: [dev]`.
+
 ## Reference files (load on demand)
 - **[references/pipeline.md](references/pipeline.md)** — the full P1–P5 command walkthrough with the St Neots Tesco Extra numbers.
 - **[references/aggregation.md](references/aggregation.md)** — the destination-aggregation algorithm, clustering, curation rules.

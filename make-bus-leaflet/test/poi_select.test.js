@@ -837,3 +837,45 @@ test('OA-250: an element with no typed id gives a record with no osm key, not os
   const out = selectPois([[node(52.3, -0.07, { amenity: 'library', name: 'Ash Library' })]], {});
   assert.ok(!('osm' in out[0]), 'every caller comparing {cat,name,ll} records sees them unchanged');
 });
+
+// ---------------------------------------------------------------------------
+// OA-439 — the customer's overrides laid over a town's poi block. One rule for
+// the generator and the portal's chooser, so the chooser cannot offer a
+// category the sheet would not draw.
+const { mergePoiOverlay, OPT_IN_CATS } = require('./_engine.js').load('poi_select.js');
+
+test('OA-439: no overlay returns the base object itself, so a map with no answer is byte-identical', () => {
+  const base = { include: ['pubs'], tiers: { 'pub:The Bell': { tier: 'must' } } };
+  assert.strictEqual(mergePoiOverlay(base, {}), base);
+  assert.strictEqual(mergePoiOverlay(base, undefined), base);
+  assert.strictEqual(mergePoiOverlay(base, { poiTiers: {}, poiInclude: {} }), base);
+  assert.strictEqual(mergePoiOverlay(base, { poiInclude: { museums: true, pubs: 'yes' } }), base,
+    'a key outside the opt-in set, or a non-boolean, touches nothing');
+  assert.deepStrictEqual(mergePoiOverlay(undefined, undefined), {});
+});
+
+test('OA-439: tiers merge per key with the overrides winning, as the inline block did', () => {
+  const base = { tiers: { 'park:Ash Park': { tier: 'miss' }, 'shop:Tesco': { tier: 'must' } } };
+  const out = mergePoiOverlay(base, { poiTiers: { 'park:Ash Park': { tier: 'must' } } });
+  assert.deepStrictEqual(out.tiers, { 'park:Ash Park': { tier: 'must' }, 'shop:Tesco': { tier: 'must' } });
+  assert.deepStrictEqual(base.tiers['park:Ash Park'], { tier: 'miss' }, 'the base is not mutated');
+});
+
+test('OA-439: the category switch adds and removes an opt-in category, and nothing else', () => {
+  assert.deepStrictEqual(OPT_IN_CATS, ['allotments', 'pubs', 'stations']);
+  assert.deepStrictEqual(mergePoiOverlay({}, { poiInclude: { pubs: true } }).include, ['pubs']);
+  const base = { include: ['pubs', 'allotments'] };
+  const off = mergePoiOverlay(base, { poiInclude: { pubs: false, stations: true } });
+  assert.deepStrictEqual(off.include, ['allotments', 'stations']);
+  assert.deepStrictEqual(base.include, ['pubs', 'allotments'], 'the base is not mutated');
+  assert.deepStrictEqual(mergePoiOverlay(base, { poiInclude: { pubs: true } }).include, ['pubs', 'allotments'],
+    'switching on what is already on adds no second copy');
+});
+
+test('OA-439: a switched-on category reaches the selector, and a switched-off one leaves it', () => {
+  const els = [[node(52.3, -0.07, { amenity: 'pub', name: 'The Bell' })]];
+  assert.strictEqual(selectPois(els, mergePoiOverlay({}, {})).length, 0);
+  const on = selectPois(els, mergePoiOverlay({}, { poiInclude: { pubs: true } }));
+  assert.deepStrictEqual(on.map((p) => p.cat + ':' + p.name), ['pub:The Bell']);
+  assert.strictEqual(selectPois(els, mergePoiOverlay({ include: ['pubs'] }, { poiInclude: { pubs: false } })).length, 0);
+});

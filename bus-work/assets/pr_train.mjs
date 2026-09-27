@@ -46,6 +46,7 @@
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from './engine.mjs';
 
 const FAILED = new Set(['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE']);
 
@@ -90,18 +91,17 @@ export function decideTrain(prs) {
 
 /* ---- the half that touches GitHub; runs only when this file is EXECUTED ---- */
 
-function parseArgs(argv) {
-  const a = { repo: 'PeterC66/claude-skills', apply: false, watch: false, maxMinutes: 120, interval: 60 };
-  for (let i = 0; i < argv.length; i++) {
-    const f = argv[i];
-    if (f === '--apply') a.apply = true;
-    else if (f === '--watch') a.watch = true;
-    else if (f === '--repo') a.repo = argv[++i];
-    else if (f === '--max-minutes') a.maxMinutes = Number(argv[++i]);
-    else if (f === '--interval') a.interval = Number(argv[++i]);
-    else { console.error(`pr_train: unknown flag ${f}`); process.exit(2); }
-  }
-  if (!a.repo || !(a.maxMinutes > 0) || !(a.interval > 0)) { console.error('pr_train: --repo, --max-minutes and --interval need a value'); process.exit(2); }
+/* The shared parser (engine.mjs) gives { flag: value | true }; this only checks it. */
+function readArgs(f) {
+  const known = new Set(['_', 'apply', 'watch', 'repo', 'max-minutes', 'interval']);
+  for (const k of Object.keys(f)) if (!known.has(k)) { console.error(`pr_train: unknown flag --${k}`); process.exit(2); }
+  const a = {
+    repo: f.repo === undefined ? 'PeterC66/claude-skills' : f.repo,
+    apply: f.apply === true, watch: f.watch === true,
+    maxMinutes: f['max-minutes'] === undefined ? 120 : Number(f['max-minutes']),
+    interval: f.interval === undefined ? 60 : Number(f.interval),
+  };
+  if (typeof a.repo !== 'string' || !(a.maxMinutes > 0) || !(a.interval > 0)) { console.error('pr_train: --repo, --max-minutes and --interval need a value'); process.exit(2); }
   if (a.watch && !a.apply) { console.error('pr_train: --watch acts, so it needs --apply'); process.exit(2); }
   return a;
 }
@@ -142,7 +142,7 @@ async function pass(a) {
 }
 
 async function main() {
-  const a = parseArgs(process.argv.slice(2));
+  const a = readArgs(parseArgs(process.argv.slice(2)));
   if (!a.watch) { await pass(a); return; }
   const until = Date.now() + a.maxMinutes * 60000;
   while (Date.now() < until) {

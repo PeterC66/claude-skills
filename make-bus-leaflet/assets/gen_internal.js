@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, placerIds, printsName, poiLabelOverride, culledAfterTiers, culledAfterTiersNote } = require(_dep('poi_select.js'));
+const { selectPois, placerIds, mergePoiOverlay, printsName, poiLabelOverride, culledAfterTiers, culledAfterTiersNote } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -780,15 +780,15 @@ const PREFIX = RJ.atcoPrefix || String(ANCHOR).replace(/\d+$/,'');
 // anything reserves a box. Sharing the key would have hidden the distinction
 // that the tier mechanism exists to make.
 //
+// THE CATEGORY SWITCH ARRIVES THE SAME WAY (OA-439), as `internal.poiInclude`,
+// `{pubs: true}` adding an opt-in category to `poi.include` and `false` taking
+// it away. Both merges live in poi_select.js's mergePoiOverlay(), because the
+// portal's chooser must enumerate with the same rule the sheet is drawn with.
+//
 // ABSENT, THIS IS THE OLD OBJECT UNTOUCHED, which is what keeps the change
 // byte-inert for every map that has no answer yet — the merge allocates nothing
 // when there is nothing to merge.
-const POI = (function(){
-  const base = RJ.poi || {};
-  const ovt = OV.poiTiers;
-  if(!ovt || typeof ovt !== 'object' || !Object.keys(ovt).length) return base;
-  return Object.assign({}, base, { tiers: Object.assign({}, base.tiers || {}, ovt) });
-})();
+const POI = mergePoiOverlay(RJ.poi, OV);
 // ===========================================================================
 
 // ---------- classify POIs from raw OSM ----------

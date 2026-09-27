@@ -19,7 +19,15 @@
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
  *                    [--note "..."] [--apply] [--force | --rebuild-stale]
- *                    [--buses "<dir>"] [--by <who>]
+ *                    [--buses "<dir>"] [--by <who>] [--warnings] [--help]
+ *
+ * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ, as in rollout_places.js and
+ * sync_ci_reference.js (buses-data OA-451 item 3). With no --town this considers
+ * every town, and the shared parser ignores a flag it does not know and files a bare
+ * word under `_`, so `--help` was a dry run over every town and a bare town name was
+ * the same. It wrote nothing, being a dry run, but the same slip with --apply beside
+ * it is a whole-estate rebuild. An unknown flag or a positional argument now exits 2
+ * before anything is read; --help prints the usage and exits 0.
  *
  * `--rebuild-stale` rebuilds a map ONLY when its verdict is STAMP-STALE — every
  * sheet already gates PASS and only the engine stamp is old — and bypasses nothing
@@ -59,9 +67,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs } = require('./cli');
+const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, huesAlikeOnMap, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
+const { owedLines } = require('./owed_at_rebuild');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -91,7 +100,18 @@ const { assembleS4Inputs } = require('./seed_prev_s4');
 const PULL_STAGES = ['S2', 'S3'];
 const S3_CARRY = ['routes.json', 'overrides.json'];
 
+const USAGE = 'Usage: node rollout.js [--town "<Town name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
+  '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
+  '  Dry run unless --apply. No --town: consider EVERY town.';
+const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
+  'warnings', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
+if (args.help === true) { console.log(USAGE); process.exit(0); }
+{
+  const unknown = Object.keys(args).filter(k => k !== '_' && !FLAGS.has(k));
+  if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --town takes every town.\n${USAGE}`);
+  if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a town with --town.\n${USAGE}`);
+}
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 const FORCE = !!args.force;
@@ -279,6 +299,9 @@ function rolloutOne(t) {
 
   let routesJson = {};
   try { routesJson = readJson(path.join(prevS3.dir, 'routes.json')); } catch (e) {}
+  // OA-074/OA-082: what this map's S3 owes by Peter's rulings, which a rollout carries
+  // unchanged and so cannot make. Printed beside HUES ALIKE; never gating.
+  const owed = owedLines(t.dir, routesJson);
 
   // ---- build in a scratch workspace first (this is also the entire dry-run) ----
   // Item 3 (2026-08-04): S3 no longer carries a frozen COPY of the generators —
@@ -353,7 +376,7 @@ function rolloutOne(t) {
 
   if (!APPLY) {
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: t.name, status: 'DRY-RUN', diffs, anyLost, warnings, blockers, version: prevS4.rec.version };
+    return { name: t.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version };
   }
 
   // A lost label stops the rollout BEFORE anything is written -- see the same
@@ -363,7 +386,7 @@ function rolloutOne(t) {
   // against the PLACE rollout only, because that is where it was hit; the town
   // rollout was written from the same template and had it too.
   if (anyLost && !FORCE) {
-    return { name: t.name, status: 'REVIEW-NEEDED', diffs, warnings, blockers,
+    return { name: t.name, status: 'REVIEW-NEEDED', diffs, owed, warnings, blockers,
       detail: 'a label was lost vs the previous build, and NOTHING was written. Inspect the dry run, then re-run with --force (or fix the cause and re-run).' };
   }
 
@@ -452,7 +475,7 @@ function rolloutOne(t) {
   // reached it. Both are recoverable — S4 is committed and inert until pulled — and
   // both clear with --force once a human has read what happened.
   if (realBlockers.length && !FORCE) {
-    return { name: t.name, status: 'REVIEW-NEEDED', diffs, s4Dir, warnings: realWarnings, blockers: realBlockers,
+    return { name: t.name, status: 'REVIEW-NEEDED', diffs, owed, s4Dir, warnings: realWarnings, blockers: realBlockers,
       detail: 'S4 committed but NOT rendered/published — ' + realBlockers.length + ' blocking build warning'
         + (realBlockers.length > 1 ? 's' : '') + ' (the engine refused to draw something, or a label names nothing). Read '
         + path.join(s4Dir, BUILDLOG.LOG_NAME) + ', fix the config it names, then re-run (or --force to publish anyway).' };
@@ -473,7 +496,7 @@ function rolloutOne(t) {
   // step with what was just published, so CI's gate stays meaningful.
   spawnSync(process.execPath, [path.join(SK, 'sync_ci_reference.js'), '--buses', BUSES, '--town', t.name], { encoding: 'utf8' });
 
-  return { name: t.name, status: 'DONE', diffs, anyLost, warnings: realWarnings, blockers: realBlockers, s4Dir, s5Dir, version: BUMP, sheetStamp };
+  return { name: t.name, status: 'DONE', diffs, owed, anyLost, warnings: realWarnings, blockers: realBlockers, s4Dir, s5Dir, version: BUMP, sheetStamp };
 }
 
 // ---- run ---------------------------------------------------------------
@@ -509,6 +532,7 @@ for (const t of selected) {
         + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
     }
   }
+  for (const l of (r.owed || [])) console.log(`    OWED IN S3: ${l} — this rollout carries S3 unchanged and cannot make it`);
   // Blocking warnings always print in full; the rest print as a count, with the
   // detail in the run folder's build-warnings.txt (or under --warnings here).
   for (const w of (r.blockers || [])) console.log(`    BLOCKING [${w.source}] ${w.text}`);

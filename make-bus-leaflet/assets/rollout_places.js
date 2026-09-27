@@ -70,6 +70,7 @@ const path = require('path');
 const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, huesAlikeOnMap, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
+const { owedLines } = require('./owed_at_rebuild');
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
 // (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
@@ -261,6 +262,9 @@ function rolloutOnePlace(p) {
     : { status: 'SKIP' };
   let routesJson = {};
   try { routesJson = readJson(path.join(prevS3.dir, 'routes.json')); } catch (e) {}
+  // OA-074/OA-082: what this map's S3 owes by Peter's rulings, which a rollout carries
+  // unchanged and so cannot make. Printed beside HUES ALIKE; never gating.
+  const owed = owedLines(p.dir, routesJson);
 
   // The boarding sheet has to be in the fast path too, or a place whose ONLY stale
   // sheet is its boarding plan reports UP-TO-DATE and is skipped — including the case
@@ -485,7 +489,7 @@ function rolloutOnePlace(p) {
       }
     }
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'DRY-RUN', diffs, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null };
+    return { name: p.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null };
   }
 
   // A lost label stops the rollout BEFORE anything is written.
@@ -498,7 +502,7 @@ function rolloutOnePlace(p) {
   // above, which is the same build, so nothing is gained by getting here first.
   if (anyLost && !FORCE) {
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'REVIEW-NEEDED', diffs, warnings, blockers,
+    return { name: p.name, status: 'REVIEW-NEEDED', diffs, owed, warnings, blockers,
       detail: 'a label was lost vs the previous build, and NOTHING was written. Re-run with --keep <dir> to inspect the sheets, then --force to publish anyway (or fix the cause and re-run).' };
   }
 
@@ -573,7 +577,7 @@ function rolloutOnePlace(p) {
   fs.rmSync(scratch, { recursive: true, force: true });
 
   if (realBlockers.length && !FORCE) {
-    return { name: p.name, status: 'REVIEW-NEEDED', diffs, s4Dir, warnings: realWarnings, blockers: realBlockers,
+    return { name: p.name, status: 'REVIEW-NEEDED', diffs, owed, s4Dir, warnings: realWarnings, blockers: realBlockers,
       detail: 'S4 committed but NOT rendered/published — ' + realBlockers.length + ' blocking build warning'
         + (realBlockers.length > 1 ? 's' : '') + ' (the engine refused to draw something, or a label names nothing). Read '
         + path.join(s4Dir, BUILDLOG.LOG_NAME) + ', fix the config it names, then re-run (or --force to publish anyway).' };
@@ -603,7 +607,7 @@ function rolloutOnePlace(p) {
   // would silently not happen. `--place` names one place in any layout.
   spawnSync(process.execPath, [path.join(SK, 'sync_ci_reference.js'), '--buses', BUSES, '--place', p.name], { encoding: 'utf8' });
 
-  return { name: p.name, status: 'DONE', diffs, anyLost, warnings: realWarnings, blockers: realBlockers, s4Dir, s5Dir, version: BUMP, sheetStamp };
+  return { name: p.name, status: 'DONE', diffs, owed, anyLost, warnings: realWarnings, blockers: realBlockers, s4Dir, s5Dir, version: BUMP, sheetStamp };
 }
 
 // ---- run ---------------------------------------------------------------
@@ -640,6 +644,7 @@ for (const p of selected) {
         + ` — owed a recolour in S3 (buses-data OA-071); this rollout carries S3 unchanged and cannot make it`);
     }
   }
+  for (const l of (r.owed || [])) console.log(`    OWED IN S3: ${l} — this rollout carries S3 unchanged and cannot make it`);
   for (const w of (r.blockers || [])) console.log(`    BLOCKING [${w.source}] ${w.text}`);
   const soft = (r.warnings || []).filter(w => w.severity === 'WARN');
   if (soft.length && args.warnings) for (const w of soft) console.log(`    warn [${w.source}] ${w.text}`);

@@ -850,6 +850,18 @@ const MUTATIONS = [
     find: '    const oy = (a.ry + b.ry) - Math.abs(a.cy - b.cy);',
     to: '    const oy = (Math.max(a.rx, a.ry) + Math.max(b.rx, b.ry)) - Math.abs(a.cy - b.cy);' },
 
+  // OA-477: the grid-set symbol read at its grid corner, which is what the
+  // parser did for six weeks while every suite here stayed green.
+  { suite: 'quality_metrics_icons.test.js', file: 'quality_metrics.js',
+    what: 'a grid-set symbol is read at its grid corner, 2.4 mm up and left of where it is drawn',
+    find: '        const [cx, cy] = grid ? apply(m, 12, 12) : apply(m, 0, 0);',
+    to: '        const [cx, cy] = apply(m, 0, 0);' },
+
+  { suite: 'quality_metrics_icons.test.js', file: 'quality_metrics.js',
+    what: 'a label is tested as the axis-aligned box around it, so a diagonal name covers symbols it never reaches',
+    find: '      if (discTouchesQuad(ic, L.quad))',
+    to: '      if (((b) => ic.cx + ic.r > b.x0 && ic.cx - ic.r < b.x1 && ic.cy + ic.r > b.y0 && ic.cy - ic.r < b.y1)(quadBox(L.quad)))' },
+
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'a label over a route badge stops counting',
     find: "        detail.labelOverBadge.push({ text: L.text, kind: L.kind, at: [+g.cx.toFixed(1), +g.cy.toFixed(1)] });",

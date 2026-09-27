@@ -348,6 +348,30 @@ function syncVersionField(runDir, { check = false } = {}) {
   return { status: 'updated', from, to, want, file };
 }
 
+/* WHAT THIS REBUILD OWES ITS S3, said at the moment it can still be made (buses-data
+ * OA-071, OA-074, OA-082; 2026-09-27). Peter ruled on 2026-09-25 that three S3 changes
+ * are made "at each map's next rebuild", and the rollouts learned to say so -- but a
+ * FULL rebuild passes through here and not through a rollout, and on 2026-09-27 St Ives
+ * and St Neots were both rebuilt from a new S3 that took none of them. So committing an
+ * S3 prints what its routes.json still owes, and committing an S4 prints any alike-hue
+ * pair its sheets carry, since that one needs a drawn sheet to measure. Reported, never
+ * gating, and required lazily so a stage boundary that owes nothing pays nothing. */
+function printOwed(st, townDir, runDir, outputs) {
+  try {
+    if (st === 'S3') {
+      const rj = JSON.parse(fs.readFileSync(path.join(runDir, 'routes.json'), 'utf8'));
+      for (const l of require('./owed_at_rebuild').owedLines(townDir, rj)) console.log(`  OWED IN S3: ${l}`);
+    } else if (st === 'S4') {
+      const { huesAlikeOnMap } = require('./gate_lib');
+      for (const name of outputs.filter((o) => /\.svg$/i.test(o))) {
+        const c = huesAlikeOnMap(path.join(runDir, name));
+        if (c.length) console.log(`  HUES ALIKE in ${name}: ` + c.map((x) => `${x.a} vs ${x.b} (dE ${x.dE})`).join(', ')
+          + ' — owed a recolour in S3 (buses-data OA-071)');
+      }
+    }
+  } catch { /* a report that cannot be made is not a reason to fail a commit */ }
+}
+
 /*
  * REFRESH THIS MAP'S `_latest` MIRROR AFTER AN S6 COMMIT (OA-329 fault A).
  *
@@ -1072,6 +1096,7 @@ function main() {
     // OA-329 fault A — see refreshLatestMirror() above for why this is here, why
     // it is S6 alone, and why it warns rather than refuses.
     if (st === 'S6') refreshLatestMirror(townDir);
+    printOwed(st, townDir, runDir, outputs);
     return;
   }
 

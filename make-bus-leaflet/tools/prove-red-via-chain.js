@@ -36,6 +36,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync } = require('child_process');
 const { scratchDir } = require('../assets/scratch');
+const { writeBrokenCopy } = require('./lib/broken_copy');
 
 const MATCH = path.join(__dirname, '..', 'assets', 'match_routes.js');
 let failures = 0;
@@ -134,8 +135,7 @@ if (src.split(ANCHOR).length !== 2) {
   ok('5. PROVE RED — the anchor this harness breaks still exists in match_routes.js', false,
      'the line it edits has moved; rewrite this case rather than deleting it');
 } else {
-  const broken = path.join(os.tmpdir(), 'match_routes_broken_' + process.pid + '.js');
-  fs.writeFileSync(broken, src.replace(ANCHOR, '  let vias = (can.stops)'));
+  const broken = writeBrokenCopy(MATCH, ANCHOR, '  let vias = (can.stops)', 'match_routes_broken');
   let red = false, why = '';
   try {
     const b = run(broken, { viaChain: { L1: 'intown' } }).routes.L1;

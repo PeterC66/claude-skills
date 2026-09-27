@@ -263,9 +263,22 @@ function labelDiff(oldSvgPath, newSvgPath) {
  * why the caller prints nothing rather than "no clash". Required lazily, because
  * quality_metrics.js is large and only a rollout asks. */
 function huesAlikeOnMap(svgPath) {
-  if (!fs.existsSync(svgPath) || !fs.existsSync(path.join(path.dirname(svgPath), 'routes.json'))) return [];
-  try { return require('./quality_metrics.js').analyse(svgPath).detail.clashMap || []; }
-  catch { return []; }
+  return owedOnSheet(svgPath).huesAlike;
+}
+
+/* What a drawn sheet owes its next S3, in one analyse() (buses-data OA-477): the
+ * alike-hue pairs above, and every map symbol printed on a route badge -- the
+ * measure OA-153 (Ramsey's pharmacy on its RH2) had no way to ask, which the fix
+ * is an S3 edit for (overrides.json internal.pois hide/move, or poi.excludeName).
+ * Both need the route palette, so a sheet with no routes.json beside it owes
+ * nothing that can be established. Reported, never gating. */
+function owedOnSheet(svgPath) {
+  const none = { huesAlike: [], iconOverBadge: [] };
+  if (!fs.existsSync(svgPath) || !fs.existsSync(path.join(path.dirname(svgPath), 'routes.json'))) return none;
+  try {
+    const d = require('./quality_metrics.js').analyse(svgPath).detail;
+    return { huesAlike: d.clashMap || [], iconOverBadge: d.iconOverBadge || [] };
+  } catch { return none; }
 }
 
 /* WHICH LABELS KEPT THEIR TEXT AND CHANGED PLACE (buses-data OA-463, 2026-09-26).
@@ -840,7 +853,7 @@ function portalFixtureEnv(portalDir, dataDir) {
 }
 
 module.exports = {
-  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, huesAlikeOnMap, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
+  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, huesAlikeOnMap, owedOnSheet, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
   gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, staleInputs, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

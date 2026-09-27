@@ -362,11 +362,13 @@ function printOwed(st, townDir, runDir, outputs) {
       const rj = JSON.parse(fs.readFileSync(path.join(runDir, 'routes.json'), 'utf8'));
       for (const l of require('./owed_at_rebuild').owedLines(townDir, rj)) console.log(`  OWED IN S3: ${l}`);
     } else if (st === 'S4') {
-      const { huesAlikeOnMap } = require('./gate_lib');
+      const { owedOnSheet } = require('./gate_lib');
       for (const name of outputs.filter((o) => /\.svg$/i.test(o))) {
-        const c = huesAlikeOnMap(path.join(runDir, name));
+        const { huesAlike: c, iconOverBadge: ib } = owedOnSheet(path.join(runDir, name));
         if (c.length) console.log(`  HUES ALIKE in ${name}: ` + c.map((x) => `${x.a} vs ${x.b} (dE ${x.dE})`).join(', ')
           + ' — owed a recolour in S3 (buses-data OA-071)');
+        if (ib.length) console.log(`  SYMBOL ON A BADGE in ${name}: ` + ib.map((x) => `${x.at} on the badge at ${x.badge} (${x.deep}mm deep)`).join(', ')
+          + ' — owed a move or hide in S3 (buses-data OA-477)');
       }
     }
   } catch { /* a report that cannot be made is not a reason to fail a commit */ }

@@ -802,3 +802,38 @@ test('placerIds gives every POI its own id and leaves an uncollided key as it wa
     'an unnamed pair is told apart too, in the order given');
   assert.strictEqual(new Set(ids.values()).size, 6, 'no two POIs share an id');
 });
+
+/* ---------------------------------------------------------------------------
+ * OA-250 — the stable key's first step: every POI carries the OpenStreetMap
+ * element it was built from, `<type>/<id>`, on its record and on its candidate.
+ * Peter ruled on 2026-09-26 for this key over refusing the ambiguity, because
+ * with it the customer has nothing to fix. Nothing reads it yet; these hold that
+ * it arrives, that it tells a same-key pair apart, and that de-duplication hands
+ * on the SURVIVOR's id and not the discarded twin's. */
+const el = (type, id, lat, lon, tags) => ({ type, id, lat, lon, tags });
+
+test('OA-250: two Red Lions share a key and do NOT share an element id', () => {
+  const report = {};
+  const out = selectPois([[el('node', 11, 52.30, -0.07, { amenity: 'pub', name: 'Red Lion' }),
+                           el('way', 22, 52.32, -0.07, { amenity: 'pub', name: 'Red Lion' })]],
+    { include: ['pubs'] }, report);
+  assert.deepStrictEqual(out.map(p => p.osm), ['node/11', 'way/22']);
+  assert.deepStrictEqual(report.duplicateCandidateKeys, ['pub:Red Lion'], 'the cat:name collision is unchanged');
+  assert.deepStrictEqual(report.candidates.map(c => c.osm), ['node/11', 'way/22'],
+    'the chooser can address one Red Lion without the other');
+});
+
+test('OA-250: a de-duplicated pair keeps the id of the record that is drawn', () => {
+  const bare  = el('node', 9272750116, 52.3,     -0.07, { leisure: 'sports_centre' });
+  const named = el('way',  190610244,  52.30017, -0.07, { leisure: 'sports_centre', name: 'George Campbell Leisure' });
+  for (const order of [[bare, named], [named, bare]]) {
+    const r = {}; selectPois([order], {}, r);
+    assert.deepStrictEqual(r.candidates.map(c => c.osm), ['way/190610244'],
+      'the named way replaces the bare node, and brings its own id with its name and coordinate');
+  }
+});
+
+test('OA-250: an element with no typed id gives a record with no osm key, not osm: null', () => {
+  const out = selectPois([[node(52.3, -0.07, { amenity: 'library', name: 'Ash Library' })]], {});
+  assert.ok(!('osm' in out[0]), 'every caller comparing {cat,name,ll} records sees them unchanged');
+});

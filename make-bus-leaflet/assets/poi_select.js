@@ -5,7 +5,8 @@
  * CONTRACT. `selectPois(elementSets, poiCfg)` takes raw OpenStreetMap elements
  * (one array per source file, in the order they should be considered) and the
  * town's `routes.json` `poi` block, and returns the drawable list:
- * `[{ cat, name, ll:[lat,lon] }, …]`. It reads no files, touches no globals and
+ * `[{ cat, name, ll:[lat,lon], osm? }, …]`, `osm` being the source element's
+ * `<type>/<id>` wherever it had one (see osmId below). It reads no files, touches no globals and
  * makes no decisions about DRAWING — placement, icons, collision and the
  * overrides in `internal.pois` all stay with the caller. Extracted from
  * gen_internal.js on 2026-08-27 (OA-129 Phase 3); `classify` had exactly one
@@ -237,6 +238,30 @@ function sameThing(a, b){
   return false;
 }
 
+/*
+ * osmId — the OpenStreetMap element a POI was built from, as `<type>/<id>`
+ * (`node/123`, `way/456`), the form openstreetmap.org uses in its own URLs.
+ *
+ * THE STABLE KEY STARTS HERE (buses-data OA-250, Peter's ruling of 2026-09-26).
+ * `<cat>:<name>` is the key every tier answer, `internal.pois` override and
+ * portal `data-key` is written against, and two places sharing it cannot be
+ * told apart — 14 keys collided across 6 maps on 2026-09-24. The element id is
+ * the one identity that does not collide and does not move when somebody
+ * renames the place. The S2 pull never lost it: all 46 committed ci-reference
+ * osm.json/osm2.json files carry a typed, unique id on every element (measured
+ * 2026-09-27). It was dropped HERE, by the `{cat,name,ll}` literal below.
+ *
+ * Carried, not yet READ: nothing keys on it in this commit, so the sheets are
+ * byte-identical. An element with no typed id (a hand-made test fixture) gives
+ * a record with no `osm` key at all, rather than `osm: null`, so the records
+ * every existing caller compares are unchanged. A de-duplicated pair keeps the
+ * id of whichever record survives, which is the one whose name and coordinate
+ * are drawn.
+ */
+function osmId(e){
+  return (e && typeof e.type === 'string' && e.id != null) ? e.type + '/' + e.id : null;
+}
+
 function selectPois(elementSets, poiCfg, report) {
   const POI = poiCfg || {};
   let pois=[];
@@ -244,7 +269,9 @@ function selectPois(elementSets, poiCfg, report) {
     for(const e of (elements||[])){
       const t=e.tags||{}; const c=classify(t, POI); if(!c) continue;
       const ll=e.lat!=null?[e.lat,e.lon]:(e.center?[e.center.lat,e.center.lon]:null); if(!ll) continue;
-      pois.push({cat:c[0], name:c[1], ll});
+      const p={cat:c[0], name:c[1], ll};
+      const id=osmId(e); if(id) p.osm=id;
+      pois.push(p);
     }
   }
   // industrial: keep a named list (array), drop all ("none"), or keep any named (default)
@@ -409,7 +436,11 @@ function applyTiers(pois, POI, report){
     report.candidates = pois.map(p => {
       const k = p.cat + ':' + p.name;
       const r = ruleFor(p);
-      return { key:k, cat:p.cat, name:p.name, ll:p.ll, tier:r.tier, as:r.as, printsName:printsName(p) };
+      const c = { key:k, cat:p.cat, name:p.name, ll:p.ll, tier:r.tier, as:r.as, printsName:printsName(p) };
+      // The chooser's future stable key (OA-250). The portal picks candidate
+      // fields by name (src/routes/editor.js), so an extra one is inert there.
+      if(p.osm) c.osm = p.osm;
+      return c;
     });
     /* TWO CANDIDATES SHARING ONE KEY, which only became possible on 2026-09-04
      * (OA-234). Until then de-duplication deleted the second unnamed POI of a

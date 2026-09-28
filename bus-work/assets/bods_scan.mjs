@@ -62,6 +62,11 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { resolveBuses } from './engine.mjs';
 
+/* The other half of the question -- a refresh that ran and was never committed
+ * (buses-data OA-505) -- lives in its own module and is re-exported here, so the
+ * worklist asks both through one import and did not grow past its line ceiling. */
+export { readGtfsDirt, gtfsUncommittedItems } from './gtfs_uncommitted.mjs';
+
 /**
  * A calendar month plus a grace. The scheduled task fires on the 1st, so the
  * longest legitimate gap between two consecutive scheduled scans is 31 days

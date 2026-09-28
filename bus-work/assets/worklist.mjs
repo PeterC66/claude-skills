@@ -92,7 +92,7 @@ import { readCoverageState, directoryCoverageItems } from './directory_coverage.
 import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
-import { readScanState, bodsScanItems } from './bods_scan.mjs';
+import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh } from './refresh_grades.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
@@ -726,15 +726,15 @@ for (const it of fromCommitments()) add(it);
   for (const w of deployPending.warnings) warnings.push(w);
 }
 
-// The monthly BODS scan not having RUN is the one fact every `refresh` row below
-// is downstream of, and until 2026-09-18 (buses-data OA-402, R9) nothing asked
-// it: `fromUpcomingReport()` reads the newest report and a report that is three
-// months old produces exactly the same board as a quiet month. One directory
-// listing, no report opened, and a tree with no `_gtfs` at all asks nothing.
+// The monthly BODS scan not having RUN (buses-data OA-402, R9) is the one fact
+// every `refresh` row below is downstream of: a stale report and a quiet month
+// are the same board. Its other half is a scan that ran and was never COMMITTED
+// (OA-505): the refresh script has no git calls. One directory listing and one
+// `git status -- _gtfs`; a tree with no `_gtfs` at all asks nothing.
 {
   const scan = bodsScanItems(readScanState({ busesDir: BUSES }), { busesDir: BUSES });
-  for (const it of scan.items) add(it);
-  for (const w of scan.warnings) warnings.push(w);
+  const dirt = gtfsUncommittedItems(readGtfsDirt({ busesDir: BUSES }), { busesDir: BUSES });
+  for (const r of [scan, dirt]) { for (const it of r.items) add(it); warnings.push(...r.warnings); }
 }
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell

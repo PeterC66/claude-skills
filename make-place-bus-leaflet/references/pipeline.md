@@ -1,4 +1,6 @@
-# P1–P5 pipeline — full walkthrough (with the St Neots Tesco Extra numbers)
+# P1–P6 pipeline — full walkthrough (with the St Neots Tesco Extra numbers)
+
+**This walkthrough is the St Neots Tesco Extra build of v1.0, and it is not the whole list of tools.** P1 to P5 are below. P6, verify, is the `S6` slot in [the stage table](../SKILL.md#stages-folder-versioning-shared-stagejs), and it runs the town skill's S6 against a place. Tools that arrived after this page was written are documented in [`SKILL.md`'s reuse map](../SKILL.md#reuse-map--what-is-shared-vs-new-read-this-first) and [its process](../SKILL.md#process--the-five-stages-autonomous-confirm-only-genuine-blockers): `pull_features`, `stop_localities`, `unserved_stops`, `seed_palette`, `derive_frequency`, `solve_external_layout`, `place_verified_services` and `gtfs_upcoming`. Where this page and `SKILL.md` disagree, `SKILL.md` is the one kept current.
 
 `%TSK%` = town skill assets (shared engine). `%PSK%` = this skill's assets. Worked example folder: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra\` (v1.0).
 

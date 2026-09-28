@@ -11,3 +11,7 @@ Subject: the skills in repo claude-skills at `C:\u3a St Ives\.claude\skills\` ot
 Also read the top-level `CLAUDE.md` and `.github/workflows/gates.yml` only to know which of these skills have tests in CI and which have none.
 
 Review for: duplication against the town engine (quantify it), consistency of conventions with make-bus-leaflet (CLI flags, exit codes, manifest handling, JSON output, naming), the module-system split, test coverage per skill (count test files and prove-red harnesses per skill, and what has zero), whether each `SKILL.md`'s commands match the code's actual flags, and the vendoring implications (which of these files are vendored into the portal per `C:\Claude\community-bus-maps\engine\vendored.json`; read that file).
+
+## Also look at
+
+**Added 2026-09-28, after the fifth run.** `audit-map-tailoring/` — its `SKILL.md` and `assets/` (`draft_places.mjs`, `draft_towns.mjs` and whatever else is there). No brief named it, so no reviewer was assigned to it, and the fifth run found the bare-`python` spawn that G6 had closed eight days earlier back in two of its files (G12). Review it for the same things as the skills above: conventions against make-bus-leaflet, whether its commands match its flags, whether anything of it runs in CI, and any code copied from the engine.

@@ -110,7 +110,7 @@ const RUNS_AT_LOAD = new Map([
   ['audit-map-tailoring/assets/inventory.mjs', 'walks the estate and prints the tailoring inventory'],
   ['audit-map-tailoring/assets/places.mjs', 'walks the estate\'s places and prints the drafted-against-shipped table'],
   ['audit-map-tailoring/assets/portal_query.mjs', 'prints the one read-only command Peter runs against the live portal'],
-  ['review-bus-codebases/assets/measure.mjs', 'reads three checkouts and prints the codebase review\'s standing counts'],
+  ['review-bus-codebases/assets/test-measure.mjs', 'the measurer\'s test: builds scratch git repositories and asserts at load, run by its own CI step (test:measure)'],
 ]);
 
 const IMPORTABLE = MJS.filter((f) => !RUNS_AT_LOAD.has(f));

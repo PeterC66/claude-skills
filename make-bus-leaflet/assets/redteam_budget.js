@@ -105,23 +105,18 @@ const defaultReadEstate = (root) => {
   const budgetText = fs.existsSync(budgetPath) ? fs.readFileSync(budgetPath, 'utf8') : null;
   const decisions = [];
   const runs = [];
-  const mapDirs = [];
-  for (const top of ['Areas', 'Places']) {
-    const dir = path.join(root, top);
-    if (!fs.existsSync(dir)) continue;
-    for (const name of fs.readdirSync(dir)) {
-      const d = path.join(dir, name);
-      if (!fs.existsSync(path.join(d, 'manifest.json'))) continue;
-      mapDirs.push({ map: name, dir: d });
-      /* A place may sit inside a town folder; one level of nesting is what this
-       * estate has and what `Places/` was made for, so this does not recurse. */
-      for (const sub of fs.readdirSync(d)) {
-        const sd = path.join(d, sub);
-        if (sub === 'S6-verify' || !fs.existsSync(path.join(sd, 'manifest.json'))) continue;
-        mapDirs.push({ map: `${name}/${sub}`, dir: sd });
-      }
-    }
-  }
+  /* ONE WALK: gate_lib's, which every other consumer of "the estate" uses. This
+   * tool had its own until 2026-09-28 — every folder under Areas/ and Places/ plus
+   * one nested level — and so saw neither a place under its town
+   * (Areas/<Town>/Places/<Place>, two levels down) nor one under a bucket
+   * (Places/_standalone/<Place>): 7 of September's 18 decision records were
+   * invisible to the ration (codebase review 2026-09-28, R2 N40). A map is keyed
+   * by its folder relative to the root, which is unique where a bare name need
+   * not be. */
+  const { findTowns, findPlaces } = require('./gate_lib');
+  const towns = findTowns(root);
+  const mapDirs = [...towns, ...findPlaces(towns, root)]
+    .map(({ dir }) => ({ map: path.relative(root, dir).split(path.sep).join('/'), dir }));
   for (const { map, dir } of mapDirs) {
     const s6 = path.join(dir, 'S6-verify');
     if (!fs.existsSync(s6)) continue;

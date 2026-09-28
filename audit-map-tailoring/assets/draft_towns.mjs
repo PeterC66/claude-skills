@@ -81,7 +81,7 @@ for (const t of towns) {
   const log = path.join(scratch, `log_${t}.txt`);
   console.error(`drafting ${t} ...`);
   const t0 = Date.now();
-  const r = spawnSync('python', argv, { encoding: 'utf8', maxBuffer: 1 << 28 });
+  const r = spawnSync('python3', argv, { encoding: 'utf8', maxBuffer: 1 << 28 });
   fs.writeFileSync(log, (r.stdout || '') + '\n' + (r.stderr || ''));
   const out = (r.stdout || '') + (r.stderr || '');
   const s3 = fs.existsSync(path.join(areas, t, 'S3-config')) && fs.readdirSync(path.join(areas, t, 'S3-config')).some(d => fs.existsSync(path.join(areas, t, 'S3-config', d, 'routes.json')));

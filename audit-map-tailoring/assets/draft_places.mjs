@@ -42,7 +42,7 @@ for (const m of estate(buses).filter(x => x.kind !== 'town')) {
   fs.mkdirSync(out, { recursive: true });
   const ci = f => path.join(m.ciDir, f);
   const loc = path.join(out, 'atco2locality.json');
-  const r1 = spawnSync('python', [path.join(assets, 'stop_localities.py'), ci('routes_full_atco.json'), '--out', loc, '--naptan', naptan], { encoding: 'utf8' });
+  const r1 = spawnSync('python3', [path.join(assets, 'stop_localities.py'), ci('routes_full_atco.json'), '--out', loc, '--naptan', naptan], { encoding: 'utf8' });
   if (r1.status !== 0) { rows.push([short(m), '**failed**', `stop_localities: ${(r1.stderr || r1.stdout).trim().split('\n').pop()}`]); continue; }
   // clusterKm as the place was drafted with, so only the NAMING differs.
   const old = (() => { try { return JSON.parse(fs.readFileSync(ci('destinations.draft.json'), 'utf8')).clusterKm; } catch { return null; } })();

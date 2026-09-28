@@ -42,9 +42,12 @@ function estate({ budget, runs = [] }) {
   fs.writeFileSync(path.join(root, 'service-facts.json'), '{}\n');
   if (budget !== undefined) fs.writeFileSync(path.join(root, B.BUDGET_FILE), typeof budget === 'string' ? budget : JSON.stringify(budget, null, 2));
   for (const r of runs) {
-    const dir = path.join(root, 'Areas', r.map, 'S6-verify', r.run);
+    /* `where` is the map folder relative to the estate root, for the cases about
+     * the three place layouts; a town under Areas/ is the default. */
+    const mapDir = path.join(root, ...(r.where ? r.where.split('/') : ['Areas', r.map]));
+    const dir = path.join(mapDir, 'S6-verify', r.run);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(root, 'Areas', r.map, 'manifest.json'), JSON.stringify({ town: r.map }));
+    fs.writeFileSync(path.join(mapDir, 'manifest.json'), JSON.stringify({ town: r.map }));
     /* `raw` writes the file's bytes verbatim, for the cases about a record this
      * cannot read. It is a separate key from `decision` on purpose: the first
      * version of this helper overloaded one key on `typeof === 'string'`, and
@@ -150,7 +153,7 @@ test('a decision record this cannot read is ignored and named, never counted', (
   const s = B.budgetState({ root, month: '2026-09' });
   assert.equal(s.buys, 0);
   assert.equal(s.unreadable.length, 1);
-  assert.match(B.report(s).join('\n'), /ignored A 2026-09-02_0900/);
+  assert.match(B.report(s).join('\n'), /ignored Areas\/A 2026-09-02_0900/);
 });
 
 test('a budget missing nominalBuyTokens is unreadable, not half-usable', () => {
@@ -171,4 +174,27 @@ test('the estate root is found by its marker, walking up from a run dir', () => 
   const root = estate({ budget: OK_BUDGET, runs: [{ map: 'A', run: '2026-09-02_0900', decision: 'BUY' }] });
   const deep = path.join(root, 'Areas', 'A', 'S6-verify', '2026-09-02_0900');
   assert.equal(path.resolve(B.findEstateRoot(deep)), path.resolve(root));
+});
+
+/* ONE WALK (codebase review 2026-09-28, R2 N40). This tool walked the estate for
+ * itself — every folder under Areas/ and Places/ plus one nested level — and so
+ * saw neither a place under its town (Areas/<Town>/Places/<Place>, two levels
+ * down) nor one filed under a bucket (Places/_standalone/<Place>). On the day, 7
+ * of September's 18 decision records sat in those two layouts, and the ration
+ * could not see them. It now asks gate_lib's findTowns/findPlaces, the walk every
+ * other consumer uses; this case holds it to all three layouts and to the fixture
+ * exclusion that walk carries. */
+test('every place layout is counted, and the portal fixture is not', () => {
+  const root = estate({ budget: OK_BUDGET, runs: [
+    { map: 'March', run: '2026-09-02_0900', decision: 'BUY' },
+    { map: 'Town East', where: 'Areas/March/Places/Town East', run: '2026-09-03_0900', decision: 'BUY' },
+    { map: 'Ely Co-op', where: 'Places/_standalone/Ely Co-op', run: '2026-09-04_0900', decision: 'REUSE' },
+    { map: 'Loose Place', where: 'Places/Loose Place', run: '2026-09-05_0900', decision: 'BUY' },
+    { map: 'fixture', where: 'Places/_portal-fixture', run: '2026-09-06_0900', decision: 'BUY' },
+  ] });
+  const s = B.budgetState({ root, month: '2026-09' });
+  assert.equal(s.buys, 3, 'a town, a place under its town and a place with no town: three buys, and the fixture is not one');
+  assert.equal(s.reuses, 1, 'the REUSE under Places/_standalone is seen');
+  assert.equal(s.coverage.s6Runs, 4, 'four S6 runs, in four layouts, and none of them in the fixture');
+  assert.equal(s.spent, 300000);
 });

@@ -83,6 +83,7 @@ import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';
+import { adhocNotTakenFor } from './loop_ready.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
 import { worktreeSweepBoard } from './worktree_sweep.mjs';
@@ -1048,6 +1049,7 @@ for (const it of loopSilentItems({ health: loopState, readTurns: conc.readSessio
 // `loop/adhoc/ready|doing|done` is a DIFFERENT channel and is not counted.
 const loopDrafts = loopDraftItems({ files: yourMove });
 for (const it of loopDrafts) add(it);
+for (const it of adhocNotTakenFor(BUSES)) add(it);   // OA-503: a ready/ file the loop is not taking; see loop_ready.mjs
 
 // THE NATIONAL BUS-MAP DIRECTORY'S LINKS (OA-308's "Keeping it true",
 // 2026-09-11). A hundred-odd URLs belonging to seventy-six councils, which rot

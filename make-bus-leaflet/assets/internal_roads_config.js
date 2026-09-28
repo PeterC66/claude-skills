@@ -24,10 +24,12 @@
  */
 'use strict';
 
-/* gap >= stroke + ~1 mm so bundled lanes read separately (gen_internal.js's header). */
+/* gap >= stroke + ~1 mm so bundled lanes read separately (gen_internal.js's header).
+ * casingSmooth: 1 is the default since 2026-09-28 (buses-data OA-064, Peter's ruling):
+ * the junction lobe is narrowed on every sheet, and an explicit 0 opts a map out. */
 const IR_DEFAULTS = Object.freeze({ stroke: 1.7, gap: 2.8, skeleton: '#e4e4e4', skeletonPad: 1.3,
   contextRoads: true, contextColor: '#f0f0f0', contextWidth: 0.45,
-  roadLabelMax: 12, badgeEvery: 70 });
+  roadLabelMax: 12, badgeEvery: 70, casingSmooth: 1 });
 const FOCUS_DEFAULTS = Object.freeze({ coreKm: 1.1, comp: 0.5 });
 
 /* A FOUR-LANE DEFAULT WAS TRIED HERE ON 2026-08-24 AND MEASURED WRONG. Peter asked

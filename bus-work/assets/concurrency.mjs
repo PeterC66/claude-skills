@@ -1288,6 +1288,10 @@ export function needsOf(item) {
   // barred from making, so classifying it by the tree would hide it exactly
   // when it is right.
   if (key === 'loop-drafts') return [];
+  // OA-503: the row's action is "read the run file, then split the ready/ file
+  // or move it back to loop/your-move/", which moves gitignored files only.
+  // Empty for loop-drafts' reason.
+  if (key.startsWith('adhoc-not-taken/')) return [];
   // OA-326 (2026-09-12): the row's action is `git push` plus opening a pull
   // request, which only Peter can do — the loop is denied the push by design and
   // that is the reason the row exists. Pushing a branch writes to no working

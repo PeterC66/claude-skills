@@ -448,7 +448,7 @@ function gateTown(t) {
   else {
     row.s6 = s6.rec.id;
     row.s6Age = daysSince(s6.rec.at);
-    row.s6Stale = newestDataAt && s6.rec.at < newestDataAt;
+    row.s6Stale = newestDataAt && s6.rec.at < newestDataAt; row.s6StaleSince = row.s6Stale ? require('./s6_stale_limit.js').staleSince(m, s6.rec.at) : null;
   }
   return row;
 }
@@ -513,7 +513,7 @@ function gatePlace(p) {
   const pData = ['S1', 'S2', 'S3'].map(k => m.stages[k] && m.stages[k].runs.find(r => r.id === m.stages[k].latest)).filter(Boolean);
   const pNewest = pData.reduce((acc, r) => (!acc || r.at > acc ? r.at : acc), null);
   if (!ps6) { row.s6 = 'NEVER'; row.s6Age = null; }
-  else { row.s6 = ps6.rec.id; row.s6Age = daysSince(ps6.rec.at); row.s6Stale = pNewest && ps6.rec.at < pNewest; }
+  else { row.s6 = ps6.rec.id; row.s6Age = daysSince(ps6.rec.at); row.s6Stale = pNewest && ps6.rec.at < pNewest; row.s6StaleSince = row.s6Stale ? require('./s6_stale_limit.js').staleSince(m, ps6.rec.at) : null; }
   if (!s4) { row.internal = 'NO-BUILD'; row.external = '-'; row.boarding = '-'; row.schematic = '-'; row.diagram = '-'; return row; }
 
   // The engine hash, on the same terms as a town (OA-161). The places table had
@@ -1471,10 +1471,11 @@ function commitBad(c) {
 
 async function main() {
   const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
+  const s6Limit = await require('./s6_stale_limit.js').measure({ towns: townRows, places: placeRows, liveUrl: LIVE_URL, noLive: NO_LIVE, today: args['owed-today'] });   // OA-484 item 2
   const commit = commitmentRows();
   const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL });   // a chore, never in `bad` (OA-488)
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), processSize: procSize }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), s6Limit, processSize: procSize }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1484,7 +1485,7 @@ async function main() {
       fs.writeFileSync(JSON_OUT, payload + '\n');
     } else {
       console.log(payload);
-      return bad || deployBad(deploy) || commitBad(commit);
+      return bad || deployBad(deploy) || commitBad(commit) || require('./s6_stale_limit.js').isRed(s6Limit);
     }
   }
 
@@ -1549,15 +1550,9 @@ async function main() {
   // the two are never read as the same thing.
   for (const r of uncheckableRows) console.log('  CANNOT GATE ' + r.name + ' @ ' + r.engine + ' AGAINST ITS OWN ENGINE: ' + r.ownEngineUncheckable
     + '  -- red because nothing could look, which is not a regression and must not be quieter than one.');
-  // The S6 column has never gated and now says so (OA-396). It is the chore the
-  // review's cause 3 named first, and the answer to "why is main red after a
-  // rebuild" was never this column -- but a reader could not tell that from a
-  // cell that reads STALE in the same font as DIFF.
-  const s6StaleTowns = townRows.filter(r => r.s6Stale).map(r => r.name);
-  const s6StalePlaces = placeRows.filter(r => r.s6Stale).map(r => r.name);
-  if (s6StaleTowns.length || s6StalePlaces.length) console.log('  S6 STALE (information, not red): '
-    + [s6StaleTowns.length ? 'towns ' + s6StaleTowns.join(', ') : '', s6StalePlaces.length ? 'places ' + s6StalePlaces.join(', ') : ''].filter(Boolean).join('; ')
-    + '  -- the data moved since the last verification report; a chore the worklist carries as s6-stale, never a red');
+  // A stale S6 is a chore (OA-396) until a PUBLISHED map has carried it past its
+  // limit (OA-484); the line, the limit and the reason are in s6_stale_limit.js.
+  require('./s6_stale_limit.js').printSection(s6Limit, townRows, placeRows);
   // OA-188 — named in full, because the cell can only hold a word. A drift that a
   // DIFF verdict is masking is printed here too: the sheet has two problems and
   // the cell can only say one of them.
@@ -1719,7 +1714,7 @@ async function main() {
 
   printDeployment(deploy, LIVE_URL);
 
-  return bad || deployBad(deploy) || commitBad(commit);
+  return bad || deployBad(deploy) || commitBad(commit) || require('./s6_stale_limit.js').isRed(s6Limit);
 }
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is

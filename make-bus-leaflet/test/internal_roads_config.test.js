@@ -32,12 +32,13 @@ test('only an explicit false is the classic model, and it is null rather than an
   assert.notStrictEqual(internalRoadsConfig({ internalRoads: 0 }), null);
 });
 
-test('the nine defaults are the ones gen_internal.js carried, byte for byte', () => {
+test('the defaults are the nine gen_internal.js carried, plus casingSmooth: 1 since 2026-09-28', () => {
   // The numbers are the drawn defaults on every roads-model sheet in the estate.
   // Changing one moves ink on eighteen maps; changing it HERE by accident is what
-  // this pin is for.
+  // this pin is for. casingSmooth joined by Peter's ruling (buses-data OA-064).
   assert.deepStrictEqual(IR_DEFAULTS, { stroke: 1.7, gap: 2.8, skeleton: '#e4e4e4', skeletonPad: 1.3,
-    contextRoads: true, contextColor: '#f0f0f0', contextWidth: 0.45, roadLabelMax: 12, badgeEvery: 70 });
+    contextRoads: true, contextColor: '#f0f0f0', contextWidth: 0.45, roadLabelMax: 12, badgeEvery: 70,
+    casingSmooth: 1 });
   assert.deepStrictEqual(FOCUS_DEFAULTS, { coreKm: 1.1, comp: 0.5 });
   assert.ok(Object.isFrozen(IR_DEFAULTS) && Object.isFrozen(FOCUS_DEFAULTS), 'a caller must not be able to edit the defaults for everyone');
 });
@@ -48,6 +49,13 @@ test('a town key wins over the default, one level down for focus, and the rest o
   assert.strictEqual(o.stroke, 1.7);
   assert.deepStrictEqual(o.keyRoads, ['High Street']);
   assert.deepStrictEqual(o.focus, { coreKm: 1.1, comp: 0.7 });
+});
+
+test('casingSmooth is on when absent, and an explicit 0 still opts a map out', () => {
+  assert.strictEqual(internalRoadsConfig({}).casingSmooth, 1);
+  assert.strictEqual(internalRoadsConfig({ internalRoads: true }).casingSmooth, 1);
+  assert.strictEqual(internalRoadsConfig({ internalRoads: { casingSmooth: 0 } }).casingSmooth, 0);
+  assert.strictEqual(internalRoadsConfig({ internalRoads: { casingSmooth: 2 } }).casingSmooth, 2);
 });
 
 test('the reading is a COPY — the town config object is not mutated', () => {

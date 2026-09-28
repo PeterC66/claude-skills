@@ -1,11 +1,11 @@
 /*
  * casing_width — internalRoads.casingSmooth (buses-data OA-064).
  *
- * The estate cannot certify this key: no committed map sets it, so every byte
- * gate runs the OFF path. What is held here is the rule the measurement chose —
- * NARROWING ONLY, a length-weighted median, along the casing graph, within
- * k x the segment's own width — and that gen_internal.js leaves the casing alone
- * when the key is absent.
+ * ON BY DEFAULT since 2026-09-28 (internal_roads_config.js), so the byte gates
+ * run the ON path and an explicit 0 is the path they cannot see. What is held here
+ * is the rule the measurement chose — NARROWING ONLY, a length-weighted median,
+ * along the casing graph, within k x the segment's own width — and that
+ * gen_internal.js leaves the casing alone when the key is 0.
  */
 'use strict';
 const test = require('node:test');

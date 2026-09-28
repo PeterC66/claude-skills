@@ -280,12 +280,25 @@ for (const rel of files) {
   if (/\n{4,}/.test(text)) findings.push([rel, 'BLANK-RUN', 'three or more consecutive blank lines']);
 }
 
+/* THE VERDICT IS AN exitCode, NEVER A process.exit() (buses-data OA-513). On
+ * 2026-09-28 the portal's `tests` job was cancelled at its 15-minute cap twice,
+ * each time with "all clean" printed and this process still alive: Node 24
+ * deadlocked in native teardown, the main thread and a V8 GC worker both parked
+ * on a futex. Measured on ubuntu-latest, 800 runs a cell: `process.exit()` here
+ * hung about 1 run in 80 (59 of 4,800 controls), and ending by falling off the
+ * script hung 0 of 1,600 — as did `--single-threaded-gc` and `--v8-pool-size=1`,
+ * which is what names the race: exit() tearing V8 down under a GC task that
+ * reading 670 files left in flight. A trivial `node -e` never hung. So the
+ * success and finding paths set the code and let the script end; the exit(2)
+ * refusals above stay, because they leave before any of that work is done.
+ * `prove-red-file-hygiene.mjs` asserts this tail has no process.exit in it. */
 const scope = staged ? 'staged' : `tracked in ${ROOT}`;
 const decl = DECL.declared ? '' : ' (no .file-hygiene.json — bare rules)';
 if (!findings.length) {
   console.log(`check-file-hygiene: ${checked} text file(s) ${scope}${decl} — all clean.`);
-  process.exit(0);
+  process.exitCode = 0;
+} else {
+  for (const [rel, kind, why] of findings) console.error(`${rel}\n    ${kind}: ${why}`);
+  console.error(`\ncheck-file-hygiene: ${findings.length} finding(s) across ${checked} text file(s) ${scope}${decl}.`);
+  process.exitCode = 1;
 }
-for (const [rel, kind, why] of findings) console.error(`${rel}\n    ${kind}: ${why}`);
-console.error(`\ncheck-file-hygiene: ${findings.length} finding(s) across ${checked} text file(s) ${scope}${decl}.`);
-process.exit(1);

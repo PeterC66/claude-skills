@@ -1,0 +1,9 @@
+{
+  "name": "review-bus-codebases",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The codebase-review skill. This package.json exists to NAME the measurer's test so gates.yml can schedule it and check-wiring.js can see it, not to add dependencies: it imports node builtins only, so `npm run` works here with no install. buses-data codebase review 2026-09-28, Tier 1.5.",
+  "scripts": {
+    "test:measure": "node assets/test-measure.mjs"
+  }
+}

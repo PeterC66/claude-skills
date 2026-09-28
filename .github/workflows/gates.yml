@@ -410,6 +410,13 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-commitments
 
+      # buses-data codebase review 2026-09-28, Tier 1.5. The review's own
+      # measurer had never had a test, and the fifth run found three of its
+      # faults by hand. Scratch git repositories only; no real checkout is read.
+      - name: Test the codebase-review measurer
+        working-directory: skills/review-bus-codebases
+        run: npm run test:measure
+
       # buses-data OA-396 (2026-09-17). The board stopped reddening on a pending
       # deploy that day, so the worklist row is now the ONLY thing that chases a
       # merge nobody deployed -- which is why its falsifier runs here and not

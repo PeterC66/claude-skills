@@ -47,7 +47,7 @@ python scripts/docstamp.py --staged             # what the pre-commit hook runs:
 python scripts/docstamp.py --all --all-roots    # every root, not just the one you are in
 ```
 
-Add `--dry-run` to any of them. A walk covers only the root containing the working directory and prints which — from `stamp-docs`, which is in no root, that means every root, and it says so; `--root buses|portal|ops` names one instead, and `--checkout [DIR]` points one root at a checkout you name (a worktree, placed through git) and walks only that. None of these is an everyday step any more — the hook stamps every commit, in a worktree or not. `--staged` takes none of them: its subject is the repository enclosing the working directory, and a repository the policy does not name is a no-op that says so.
+Add `--dry-run` to any of them. A walk covers only the root containing the working directory and prints which, with the absolute path it will write — standing in a linked worktree of a root, that path is the worktree and not the main checkout (buses-data OA-495, 28 September 2026: until then `--all` from `.claude/worktrees/<name>` stamped the main checkout and said only `cwd is inside the buses checkout`); from `stamp-docs`, which is in no root, that means every root, and it says so; `--root buses|portal|ops` names one instead, and `--checkout [DIR]` points one root at a checkout you name (a worktree, placed through git) and walks only that. None of these is an everyday step any more — the hook stamps every commit, in a worktree or not. `--staged` takes none of them: its subject is the repository enclosing the working directory, and a repository the policy does not name is a no-op that says so.
 
 ## Markdown paragraphs
 

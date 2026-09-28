@@ -266,6 +266,43 @@ with tempfile.TemporaryDirectory() as tmp:
            "a sibling sharing a root's name PREFIX is not inside it -- got {!r}".format(name))
 
 
+print("\n\n--all from a LINKED WORKTREE stamps that worktree, not the main checkout (buses-data OA-495):\n")
+
+with tempfile.TemporaryDirectory() as tmp:
+    # On 2026-09-27 `--all` from a buses-data worktree bumped open-actions.md in the
+    # MAIN checkout and printed only "cwd is inside the buses checkout". Run for real,
+    # as a subprocess, because the fault was in main()'s wiring and not in any helper.
+    # The control runs the same command from the main checkout and must stamp THERE --
+    # without it, a change that stamped nothing anywhere would pass the first half.
+    home = real_repo(tmp, "home-repo")
+    tree = pathlib.Path(tmp) / "some-worktree"
+    git("worktree", "add", "-q", "--detach", str(tree), cwd=home)
+    body = "# A document\n\nOne paragraph.\n"
+    for d in (home, tree):
+        (d / "doc.md").write_text(body, encoding="utf-8")
+    pol3 = write_policy({"baselineExcludeDirNames": [".git"],
+                         "roots": [root("home", path=str(home))]})
+
+    def run_all(cwd):
+        return subprocess.run([sys.executable, str(HERE / "docstamp.py"), "--all", "--policy", pol3],
+                              cwd=str(cwd), capture_output=True, text=True)
+
+    r = run_all(tree)
+    tree_doc = (tree / "doc.md").read_text(encoding="utf-8")
+    home_doc = (home / "doc.md").read_text(encoding="utf-8")
+    report(r.returncode == 0 and tree_doc != body,
+           "--all from the worktree stamps the WORKTREE's document (exit {})".format(r.returncode))
+    report(home_doc == body, "...and leaves the main checkout's document untouched")
+    report(os.path.normcase(str(tree)) in os.path.normcase(r.stderr),
+           "...and its scope line names the worktree's absolute path -- got {!r}".format(r.stderr.strip()))
+
+    # THE CONTROL: the same command from the main checkout stamps the main checkout.
+    r = run_all(home)
+    report(r.returncode == 0 and (home / "doc.md").read_text(encoding="utf-8") != body,
+           "the control: --all from the main checkout stamps the main checkout (exit {})".format(r.returncode))
+    os.unlink(pol3)
+
+
 print("\n{}".format("{} CASE(S) FAILED".format(failed) if failed
                     else "The baseline behaves in both directions, all readers agree, "
                          "and --checkout refuses what it cannot place."))

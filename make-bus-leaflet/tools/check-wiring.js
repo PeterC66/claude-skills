@@ -4,6 +4,13 @@
  *
  *   node tools/check-wiring.js            # report; exit 1 if anything is unwired
  *   node tools/check-wiring.js --list     # print the full table, exit 0
+ *   node tools/check-wiring.js --json     # the same answer as JSON on stdout,
+ *                                         # plus every `npm run` invocation CI
+ *                                         # makes; exit code as the report
+ *
+ * `--json` exists for `tools/prove-all.js` (buses-data OA-351), which runs every
+ * invocation this file finds. It adds no enumeration of its own: the list of
+ * harnesses has one owner, and it is this file.
  *
  * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
  * folder. No placeholders.
@@ -109,6 +116,8 @@ const NOT_IN_CI = {
       'seeds from a town\'s TRACKED S1/S2/S3 runs and its redteam.json, and is bound to one town by name — its route families, its headsigns, its stop codes. That is a claim about buses-data\'s estate rather than about this engine, and the fixture estate here carries ci-reference packs and one S3 run per map, which is deliberately not enough to pose it. Wired into buses-data\'s own gates.yml on 2026-09-18 (OA-398) IN THE SAME CHANGE that removed it here, because it ran nowhere else and a move without the other half is a deletion. It would come back if this repository gained a fixture town with full stage runs',
     'test:prove-red-sweep':
       'its run-4 case asserts an EXACT SET OF SEVEN MAPS BY NAME — the packs with no river geometry of their own — which is a fact about buses-data\'s estate and about nothing here. Re-deriving that set for the fixture estate would be a second implementation of the engine\'s own protection rule, and the harness\'s own header records that the first attempt at exactly that confidently listed a town the rule does not reach. It already ran in buses-data\'s gates.yml, so 2026-09-18 (OA-398) removed it here rather than moving it. It would come back if the fixture estate could state that set without re-deriving it',
+    'prove:all':
+      'it IS the local run of every step here (buses-data OA-351): it reads this file\'s --json and runs each `npm run` invocation CI makes, so scheduling it would run every harness twice. It would belong in CI only if the workflow stopped running its harnesses one step at a time',
     'measure:days-vocabulary':
       'needs the buses estate, and answers a question — which `days` strings eight towns actually wrote, and what parse_days makes of each — rather than a pass/fail. It is the standing re-measurement behind the fixture list in test/python/test_gtfs_refresh_report.py, which is a copy of an estate this repository cannot see; run it from the buses-data root whenever a town file gains a service, and reconcile what it prints against that list. A gate here would have to assert the vocabulary, and the vocabulary is the half people are allowed to change',
   },
@@ -178,11 +187,12 @@ const RAW_STEPS = {
 
 const args = process.argv.slice(2);
 if (args.some((a) => a === '--help' || a === '-h')) {
-  console.log('usage: node tools/check-wiring.js [--list]   (run from make-bus-leaflet/)');
+  console.log('usage: node tools/check-wiring.js [--list | --json]   (run from make-bus-leaflet/)');
   process.exit(2);
 }
 const listAll = args.includes('--list');
-const unknown = args.filter((a) => a !== '--list');
+const asJson = args.includes('--json');
+const unknown = args.filter((a) => a !== '--list' && a !== '--json');
 if (unknown.length) {
   console.error(`unknown argument: ${unknown.join(' ')}`);
   process.exit(2);
@@ -314,6 +324,14 @@ const NAMES_A_FILE = /[\w./@-]*[\w-]+\.(?:js|mjs|cjs|py)\b/;
 
 /** One manifest's answer, so the report can say how big the join actually is. */
 const audited = [];
+/*
+ * Every `npm run <script> [-- <args>]` line a step runs in a manifest's own
+ * working-directory, with its arguments as the workflow spells them. Read by
+ * `--json` only; the report above does not need them. The same line appearing
+ * twice in one manifest is one invocation.
+ */
+const invocations = [];
+const NPM_RUN_LINE = /^npm run ([\w:.-]+)(?:\s+--\s+(.*))?\s*$/;
 
 for (const rel of manifestDirs) {
   const dir = path.join(SKILLS, ...rel.split('/'));
@@ -420,6 +438,14 @@ for (const rel of manifestDirs) {
     }
   }
 
+  for (const st of mySteps) {
+    for (const line of st.cmds) {
+      const m = line.match(NPM_RUN_LINE);
+      if (!m || invocations.some((v) => v.manifest === rel && v.line === line)) continue;
+      invocations.push({ manifest: rel, step: st.name, script: m[1], args: m[2] || '', line });
+    }
+  }
+
   audited.push({ rel, tools: toolFiles.length, gates: gateScripts.length, steps: mySteps.length });
 }
 
@@ -489,6 +515,20 @@ for (const name of Object.keys(RAW_STEPS)) {
 // the join, or fail to.
 const declaredExceptions = Object.values(NOT_IN_CI).reduce((n, t) => n + Object.keys(t).length, 0);
 const byStatus = (s) => rows.filter((r) => r.status === s).length;
+
+if (asJson) {
+  process.stdout.write(JSON.stringify({
+    skills: SKILLS,
+    manifests: audited,
+    rows,
+    notInCi: NOT_IN_CI,
+    invocations,
+    rawSteps: rawSteps.map((s) => s.name),
+    findings,
+  }, null, 2) + '\n');
+  process.exit(findings.length ? 1 : 0);
+}
+
 console.log(`check-wiring — ${SKILLS}`);
 console.log(`  ${audited.length} package manifest(s) in the join, ${rows.length} script(s) naming a file between them`);
 for (const a of audited) {

@@ -18,6 +18,9 @@ S1=$(node "$TSK/stage.js" new S1); cd "$S1"
 python3 "$PSK/resolve_place.py" "Tesco Extra" --town "St Neots" --region "Cambridgeshire" --radius-m 500
 #   -> Tesco Extra [shop/supermarket] 52.21023,-0.26990  (chosen)
 #   review place-candidates.json; --pick N if the auto-pick is wrong
+# OR, when the customer named bus stops rather than a feature (OA-451 item 1):
+#   python3 "$PSK/resolve_place.py" "St Neots East" --town "St Neots" --region "Cambridgeshire" --stops CMBGJWJP,CMBGJWJT --radius-m 900
+#   -> the midpoint of the two NaPTAN stops, read from _gtfs/naptan.sqlite; no geocode
 node "$TSK/stage.js" commit S1 "$S1" --outputs place.json,place-candidates.json,gtfs-services.json
 ```
 `resolve_place.py` auto-picks the first candidate whose OSM class is place-like (shop/amenity/leisure/railway/…). It sets `ambiguous:true` if another candidate shares the name — then confirm with `--pick`. `--region` is **required** and is checked against `_gtfs/regions.json` before any network call: it narrows the geocode *and* becomes the dataset a standalone place is change-scanned against, so there is deliberately no default (OA-025).

@@ -367,22 +367,22 @@ class TheRegistration(Scaffold):
         self.scaffold()
         self.assertEqual(self.registered()["St Ives"], {"prefixes": ["050"]})
 
-    def test_a_NON_DEFAULT_dataset_records_its_region_on_the_entry(self):
+    def test_a_new_town_records_its_region_on_the_entry(self):
         """The Beaconsfield fault, stated as an assertion. Without `region` the
-        monthly refresh diffs this town against the default region's data,
-        matches nothing, and reports every one of its routes as withdrawn."""
+        monthly refresh has no dataset to diff this town against."""
         self.two_regions(default="cambridgeshire")
         _, out, _ = self.scaffold()
         self.assertEqual(self.registered()[self.TOWN].get("region"), "buckinghamshire")
-        self.assertIn("non-default dataset", out)
+        self.assertIn("region: buckinghamshire", out)
 
-    def test_a_town_on_the_DEFAULT_dataset_records_no_region(self):
-        """The other direction, and it has to be asserted or the rule above
-        would be satisfied by writing `region` on everything -- at which point
-        the field stops carrying any information about which towns are unusual."""
+    def test_a_declared_default_does_not_stop_the_region_being_recorded(self):
+        """There is no default region, so a `_default` naming this town's own
+        dataset must not excuse the entry from carrying it. Until buses-data
+        OA-370 it did: the entry was left bare, and was then right only for as
+        long as the registry kept that `_default`."""
         self.two_regions(default="buckinghamshire")
         self.scaffold()
-        self.assertNotIn("region", self.registered()[self.TOWN])
+        self.assertEqual(self.registered()[self.TOWN].get("region"), "buckinghamshire")
 
     def test_a_dataset_in_NO_registry_warns_and_says_what_to_do(self):
         """A third state, not a second. The town is still registered -- the

@@ -48,8 +48,10 @@ that session can see. Measured on the day: 169 documents for `buses`, 31 for
 `portal`, 8 for `ops`, 208 for a bare run, so a portal session running the
 documented command touched 177 documents in two repositories it was not working
 in. Two sessions rewrote each other's uncommitted files within the hour, and the
-Stop hook was running the same estate-wide walk unasked after every turn. The run
-SAYS which root it scoped to, and says it louder when it could not place the
+Stop hook was running the same estate-wide walk unasked after every turn. Standing in a
+LINKED WORKTREE of a root, the walk is that worktree, with the root's policy
+(buses-data OA-495, 2026-09-28) -- until then it walked the main checkout. The run
+SAYS which root it scoped to and the absolute path it walks, and says it louder when it could not place the
 working directory at all and fell back to walking everything.
 
   --dry-run        report what would change, write nothing
@@ -229,6 +231,33 @@ def git_common_checkout(path):
         return os.path.normpath(os.path.dirname(common))
     except Exception:
         return None
+
+
+def linked_worktree_top(path):
+    """The top of the LINKED worktree containing `path`, or None when `path` is in a
+    main checkout, or in no git tree at all.
+
+    WHY (buses-data OA-495, 2026-09-27). `default_root_for_cwd()` places a worktree by
+    its git common-dir, which is the MAIN checkout -- right for choosing WHICH root's
+    policy applies, wrong for choosing where the walk runs. `--all` from
+    `.claude/worktrees/<name>` hash-scanned and wrote the main checkout, and said only
+    `cwd is inside the buses checkout`, which reads as confirmation. main() uses this
+    to point the default scope at the tree you are standing in, as `--checkout .` does.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", path, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=20,
+        )
+        if out.returncode != 0 or not out.stdout.strip():
+            return None
+        top = os.path.normpath(out.stdout.strip())
+    except Exception:
+        return None
+    main = git_common_checkout(path)
+    if not main or os.path.normcase(main) == os.path.normcase(top):
+        return None
+    return top
 
 
 def resolve_checkout(policy, checkout, only_root=None):
@@ -965,9 +994,20 @@ def main(argv=None):
         # line went to stdout.
         if name:
             args.root = name
+            # A LINKED WORKTREE OF THAT ROOT IS WALKED ITSELF, not its main checkout
+            # (buses-data OA-495): the policy is the root's, the tree is the one you
+            # stand in -- what `--checkout .` does. OA-333's rule that worktrees are
+            # never DISCOVERED still holds; this scopes to the one you are inside.
+            cfg = next(r for r in policy["roots"] if r["name"] == name)
+            wt = linked_worktree_top(os.getcwd())
+            if wt and os.path.normcase(os.path.normpath(cfg["path"])) == \
+                    os.path.normcase(os.path.normpath(git_common_checkout(wt) or "")):
+                cfg["path"] = wt
+                how = "cwd is inside a worktree of the {} checkout".format(name)
             if not args.quiet:
-                sys.stderr.write("scope: root '{}' ({}) -- pass --all-roots to walk "
-                                 "every root\n".format(name, how))
+                # The ABSOLUTE PATH, because the path is what the old line left out.
+                sys.stderr.write("scope: root '{}' ({}) -> {} -- pass --all-roots to walk "
+                                 "every root\n".format(name, how, cfg["path"]))
         elif not args.quiet:
             # Louder than the placed case on purpose: this is the old behaviour, and
             # the whole fault was that it never announced itself.

@@ -1022,7 +1022,7 @@ def main():
 
     def score():
         try:
-            return json.loads(node("complexity_score.js", "--dir", s2, "--json", "--no-fail", check=False))
+            return json.loads(node("complexity_score.js", "--dir", s2, "--json", "--no-fail", "--apply", check=False))
         except Exception:
             return {"band": "UNKNOWN"}
 

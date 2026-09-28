@@ -188,6 +188,24 @@ if (ALREADY_BOUGHT !== null && (!ALREADY_BOUGHT || ALREADY_BOUGHT.startsWith('--
     + '  It records a purchase nobody decided, so the record has to say why.');
 }
 if (ALREADY_BOUGHT !== null && DRY) die('--already-bought writes a record and --dry-run writes nothing; use one or the other');
+
+/* ONLY AN S6 RUN DIR IS WRITTEN INTO (buses-data loop, 2026-09-28). --into
+ * defaults to the cwd, and the tool writes `redteam-source.json` there and may
+ * copy a `redteam.json` beside it. On 2026-09-28 tick sched-0314 ran it from
+ * the buses-data repository ROOT with --build naming a place: it wrote both
+ * files at the root, and the next two calls, for two DIFFERENT places, read
+ * that stray record as "ALREADY DECIDED". The ambiguity guard below could not
+ * see it, because the root has no manifest above it to disagree with. So a
+ * run that can write refuses unless --into is `<build>/S6-verify/<run id>`,
+ * the only shape stage.js ever creates. --dry-run writes nothing and so cannot
+ * plant a stray record; it stays usable from anywhere, as the OA-141 tests use it. */
+if (!DRY && path.basename(path.dirname(INTO)) !== 'S6-verify') {
+  die(`--into is not an S6 run folder: ${INTO}\n`
+    + '  This tool writes redteam-source.json (and may copy redteam.json) into --into, which defaults to the\n'
+    + '  current directory, and a later run reads that record as the decision for whatever map it is asked about.\n'
+    + '  Stand in the run dir stage.js made — cd "<build>/S6-verify/<run id>" — or pass --into "<that folder>".\n'
+    + '  To decide without writing anything, add --dry-run.');
+}
 // `cli.readJson` names the file in a parse error; the one-liner here said only
 // "Unexpected token }" about one of the estate's several hundred JSON files.
 const readJ = (f) => readJson(f);
@@ -617,6 +635,26 @@ if (!DRY) {
   let prior = null;
   if (fs.existsSync(recFile)) {
     try { prior = JSON.parse(fs.readFileSync(recFile, 'utf8')); } catch (e) { die(`${recFile} is not JSON (${e.message}) — remove it and decide again`); }
+  }
+  /* THE RECORD MUST BE ABOUT THIS BUILD (buses-data OA-492, 2026-09-27). A record
+   * left by a call about another map — St Neots' REUSE, read next by a call for
+   * High Wycombe from the same folder — was reported as "ALREADY DECIDED" for the
+   * second map with no warning. Every record names its map and build (see
+   * writeDecision), so compare them: the map name first, because the same map
+   * reached through a worktree has a different path; the path only when an older
+   * record carries no map. A record naming neither predates both and is trusted. */
+  if (prior) {
+    const thisMap = m.town || path.basename(BUILD);
+    const foreign = prior.map ? prior.map !== thisMap
+      : (prior.build ? path.resolve(prior.build) !== BUILD : false);
+    if (foreign)
+      die(`${recFile} is a decision about another map, not this one.\n`
+        + `  recorded for : ${prior.map || '(no map)'}  (${prior.build || 'no build path'})\n`
+        + `  this call    : ${thisMap}  (${BUILD})\n`
+        + '  Reading it as this map\'s decision is the OA-492 failure. Stand in this map\'s own\n'
+        + '  S6 run folder, or remove the stray record, and decide again. If this run folder\n'
+        + '  deliberately carries the other map\'s answer, ask about that map as it was decided:\n'
+        + `      --build "${prior.build || '<that map\'s folder>'}" --foreign-build`);
   }
   const was = prior && prior.decision;
   if (was === 'BUY' || was === 'REUSE') {

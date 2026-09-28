@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readReady, readRunsSince, verdict, adhocNotTakenItems } from './loop_ready.mjs';
+import { readReady, readRunsSince, verdict, adhocNotTakenItems, adhocNotTakenFor } from './loop_ready.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -153,12 +153,21 @@ console.log('\n8. the wire in worklist.mjs — literal strings, and it must RUN'
   const src = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
-    "import { readReady, readRunsSince, adhocNotTakenItems } from './loop_ready.mjs';",
-    "readReady(path.join(BUSES, 'loop', 'adhoc', 'ready'))",
-    'readRunsSince(readyRunsDir, readyNow - 48 * 3600000)',
-    ') add(it);',
+    "import { adhocNotTakenFor } from './loop_ready.mjs';",
+    'for (const it of adhocNotTakenFor(BUSES)) add(it);',
   ]) check(`worklist.mjs RUNS: ${lit.slice(0, 58)}`, liveLine(lit), 'absent, or commented out');
-  check('the call and its add() are one live line', src.split('\n').some((l) => /^for \(const it of adhocNotTakenItems\(/.test(l) && l.endsWith(') add(it);')));
+}
+
+console.log('\n9. the helper the wire calls reads the right two folders');
+{
+  // The wire is one line, so the paths live in adhocNotTakenFor. Build a buses
+  // root and prove the helper finds both folders under it.
+  const now = at(14, 0);
+  const t = mkLoop('helper', READY, [at(10, 15), at(11, 15), at(12, 15), at(13, 15)].map(oaRun));
+  const root = path.dirname(path.dirname(t.rn));
+  const rs = adhocNotTakenFor(root, now);
+  check('adhocNotTakenFor(<buses root>) raises the same two rows', keys(rs) === 'adhoc-not-taken/places-issues,adhoc-not-taken/wisbech-capacity', keys(rs));
+  check('and an absent root raises none', adhocNotTakenFor(path.join(tmp, 'no-buses'), now).length === 0);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -105,6 +105,17 @@ export function verdict(run, file, others = []) {
   return 'passed';
 }
 
+/**
+ * The board's one call, against a buses-data root: `worklist.mjs` carries only
+ * the import and this line, because its size is ratcheted (OA-001). `ready/` is
+ * the one place in `loop/adhoc/` it reads, and only for a file the loop is NOT
+ * TAKING. A ready/ file is already promoted, so this is not a triage row.
+ */
+export function adhocNotTakenFor(busesDir, now = Date.now()) {
+  const loop = path.join(busesDir, 'loop');
+  return adhocNotTakenItems({ ready: readReady(path.join(loop, 'adhoc', 'ready')), runs: readRunsSince(path.join(loop, 'runs'), now - 48 * 3600000), now });
+}
+
 const hhmm = (ms) => new Date(ms).toTimeString().slice(0, 5);
 
 /**

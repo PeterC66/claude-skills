@@ -65,6 +65,9 @@
  *                                                      WRONG rather than misses
  *  14  a NOT_IN_CI table keyed to a manifest that
  *      is not in the repository                     -> exit 1
+ *  18  `--json` lists each step's `npm run` with its
+ *      arguments and its manifest, and not a `#`
+ *      line — the list prove-all.js runs (OA-351)
  *
  * CASES 8-14 ARE OA-346 (buses-data), from the 2026-09-14 review's R2 N34 and
  * R3 G3. Case 13 is the one to read: `bus-work` and `make-bus-leaflet` both call
@@ -538,6 +541,34 @@ withTree({
   if (code === 1 && /tools\/lib\/orphan\.js is required by no tracked source/.test(out)) ok('control: a comment naming a library is not a require — it is still reported');
   else fail(`a library mentioned only in a comment was accepted as loaded (exit ${code})\n${out}`);
 });
+
+// 18 — `--json` lists the invocations prove-all.js will run -------------------
+// (buses-data OA-351.) prove:all runs exactly this list and nothing else, so a
+// list that dropped a step, kept a commented one, or lost a step's arguments
+// would make a local run look clean while running less than CI does. One tree
+// asks all three: a step with `-- <args>`, a `#` line naming a harness, and a
+// second manifest's step, which must be attributed to ITS manifest.
+{
+  const t = tree({
+    tools: { ...SELF, 'prove-red-thing.js': null },
+    scripts: { ...SELF_SCRIPT, 'test:thing': 'node tools/prove-red-thing.js' },
+    manifests: { 'other-skill': { 'test:theirs': 'node assets/prove-red-theirs.mjs' } },
+    steps: [SELF_STEP,
+      { name: 'Thing', run: ['npm run test:thing -- --buses "/somewhere"', '# npm run test:ghost'] },
+      { name: 'Theirs', dir: 'skills/other-skill', run: 'npm run test:theirs' }],
+    patch: noExceptions,
+  });
+  made.push(t.tmp);
+  const r = spawnSync(process.execPath, [path.join(t.engine, 'tools', 'check-wiring.js'), '--json'],
+    { cwd: t.engine, encoding: 'utf8' });
+  let j = null;
+  try { j = JSON.parse(r.stdout); } catch { /* reported below */ }
+  const inv = (j && j.invocations) || [];
+  const got = inv.map((v) => `${v.manifest}|${v.script}|${v.args}`).sort().join('\n');
+  const want = ['make-bus-leaflet|gate:wiring|', 'make-bus-leaflet|test:thing|--buses "/somewhere"', 'other-skill|test:theirs|'].sort().join('\n');
+  if (r.status === 0 && got === want) ok('--json lists every invocation with its arguments and its own manifest, and no commented one');
+  else fail(`--json invocations were wrong (exit ${r.status})\n  want:\n${want}\n  got:\n${got}\n${r.stderr || ''}`);
+}
 
 for (const t of made) fs.rmSync(t, { recursive: true, force: true });
 

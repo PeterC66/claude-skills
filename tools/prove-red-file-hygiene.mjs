@@ -19,7 +19,7 @@
 // Run from this repository's root (the claude-skills checkout). No placeholders:
 //   node tools/prove-red-file-hygiene.mjs
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -226,5 +226,21 @@ function bareRun(files, from = '') {
   } else console.log(`ok    the same corpus either way — ${n(below.out)} tracked file(s) from both`);
 }
 
-console.log(`\nprove-red-file-hygiene: ${CASES.length + 9} cases, ${failed} failed.`);
-process.exit(failed ? 1 : 0);
+/* THE VERDICT LEAVES BY exitCode, NOT process.exit() (buses-data OA-513). A
+ * process.exit() after the checker's work hung Node 24's teardown about one run
+ * in 80 on ubuntu-latest, and every case above still passes when it does — the
+ * verdict is printed and the code is right; the process simply never ends. No
+ * behavioural case can catch a 1-in-80 hang, so this reads the source: from the
+ * verdict's first line to the end of the file, no process.exit may appear. */
+{
+  const src = readFileSync(CHECKER, 'utf8');
+  const at = src.indexOf("const scope = staged ? 'staged'");
+  const tail = at === -1 ? '' : src.slice(at).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  if (at === -1) fail('the verdict leaves by exitCode', 'could not find the verdict block (`const scope = staged ...`) — the harness no longer knows where the verdict is');
+  else if (/process\.exit\s*\(/.test(tail)) fail('the verdict leaves by exitCode', 'process.exit() is back after the verdict — the Node 24 teardown hang of 2026-09-28 (OA-513)');
+  else if (!/process\.exitCode\s*=\s*1/.test(tail)) fail('the verdict leaves by exitCode', 'no `process.exitCode = 1` on the finding path — a finding would exit 0');
+  else console.log('ok    the verdict leaves by exitCode — no process.exit() after the work');
+}
+
+console.log(`\nprove-red-file-hygiene: ${CASES.length + 10} cases, ${failed} failed.`);
+process.exitCode = failed ? 1 : 0;

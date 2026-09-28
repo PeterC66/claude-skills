@@ -33,7 +33,7 @@ yet -- the place skill's equivalent of --fill, run at P3):
 same trap documented in s1-services.md / town_prefixes.json for Beaconsfield
 and High Wycombe): give the same lat,lon,km used for that town's S1 query.
 """
-import sqlite3, argparse, os, json, statistics
+import sqlite3, argparse, os, json, re, statistics
 from math import radians, sin, cos, asin, sqrt
 from collections import Counter
 import gtfs_regions
@@ -78,7 +78,34 @@ def resolve_origin_stop_ids(cur, prefixes=None, near=None):
                 pass
     return ids
 
-def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_majority_fallback=False, sample=300):
+def _names_locality(dest_l, locality):
+    """True when a NaPTAN LocalityName is a whole-word part of a destination
+    label: "Eynesbury" in "eynesbury tesco", "St Neots" in "st neots town
+    centre", but not "Bourn" in "cambourne"."""
+    loc = _norm_stop_name(locality)
+    return bool(loc) and re.search(r'(?<![a-z0-9])' + re.escape(loc) + r'(?![a-z0-9])', dest_l) is not None
+
+def load_localities(naptan_db, cur):
+    """{stop_id: NaPTAN LocalityName} for every stop in this GTFS db, or {} when
+    the register is absent. GTFS stop_id IS the NaPTAN ATCOCode, so the join is
+    exact -- the same register derive_stops.py writes stopLocalities from."""
+    if not naptan_db or not os.path.exists(naptan_db):
+        return {}
+    ids = [r[0] for r in cur.execute("SELECT stop_id FROM stops")]
+    out = {}
+    con = sqlite3.connect(naptan_db)
+    try:
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            q = "SELECT ATCOCode, LocalityName FROM naptan WHERE ATCOCode IN (%s)" % ','.join('?' * len(chunk))
+            for atco, loc in con.execute(q, chunk):
+                if loc: out[atco] = loc
+    finally:
+        con.close()
+    return out
+
+def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_majority_fallback=False, sample=300,
+                    locality_of=None, via_stop=None):
     """Median scheduled minutes from the last stop matching `prefixes` to the
     destination, across up to `sample` trips of `route_short_name` that call
     at the origin. GTFS stop names are POI/street names ("Superstore"), not
@@ -97,6 +124,17 @@ def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_m
     must not block the fallback that would otherwise correctly handle the
     common single-arm case where name-matching fails because GTFS uses POI
     names, not village names).
+
+    Two opt-in keys, both passed by --fill-place (buses-data OA-451 item 4,
+    where they took St Neots East from 1 matched spoke in 6 to 6 in 6):
+    `locality_of` ({stop_id: NaPTAN LocalityName}) also accepts a trip whose
+    terminus lies in a locality the destination label names -- a place spoke
+    is labelled by locality ("Cambridge", "Eynesbury Tesco") while its GTFS
+    terminus is a POI ("Drummer St Bus Station", "Tesco"). `via_stop` (the
+    spoke's own last-listed stop name) is tried only when the terminus rules
+    leave fewer than three trips, and times each trip to its FIRST call at a
+    stop of that name after the origin -- a place spoke may be a stop the
+    route passes rather than ends at (Cambourne's De La Warr Way on the 18).
     Returns (minutes_or_None, n_trips_sampled)."""
     route_ids = [r[0] for r in cur.execute(
         "SELECT DISTINCT route_id FROM routes WHERE route_short_name=?", (route_short_name,))]
@@ -128,11 +166,13 @@ def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_m
         trips.append((origin_i, rows, headsign or ''))
         terminus_counts[(rows[-1]['stop_name'] or '').lower()] += 1
 
-    def _matches(headsign, last_name):
+    def _matches(headsign, last_name, last_id=None):
         # trip_headsign usually names the destination TOWN literally ("Cambridge
         # Drummer St Bus Station"); the final stop's own name is often just the
         # POI ("Drummer St Bus Station") with no town in it, so check both.
-        return dest_l in headsign.lower() or dest_l in (last_name or '').lower()
+        if dest_l in headsign.lower() or dest_l in (last_name or '').lower():
+            return True
+        return bool(locality_of) and _names_locality(dest_l, locality_of.get(last_id))
 
     def _arrival_index(origin_i, rows):
         """Which stop to time the journey TO.
@@ -166,23 +206,34 @@ def journey_minutes(cur, origin_stop_ids, route_short_name, dest_substr, allow_m
                 return j
         return end
 
-    def _durations(filter_fn):
+    def _durations(filter_fn, end_fn=_arrival_index):
         out = []
         for origin_i, rows, headsign in trips:
-            if filter_fn and not filter_fn(headsign, rows[-1]['stop_name']):
+            if filter_fn and not filter_fn(headsign, rows[-1]['stop_name'], rows[-1]['stop_id']):
                 continue
-            end_i = _arrival_index(origin_i, rows)
+            end_i = end_fn(origin_i, rows)
+            if end_i is None: continue
             t0 = _to_seconds(rows[origin_i]['departure_time'] or rows[origin_i]['arrival_time'])
             t1 = _to_seconds(rows[end_i]['arrival_time'] or rows[end_i]['departure_time'])
             if t0 is None or t1 is None or t1 < t0: continue
             out.append((t1 - t0) / 60)
         return out
 
+    def _via_index(origin_i, rows):
+        want = _norm_stop_name(via_stop)
+        for j in range(origin_i + 1, len(rows)):
+            if _norm_stop_name(rows[j]['stop_name']) == want:
+                return j
+        return None
+
     durations = _durations(_matches)
+    if len(durations) < 3 and via_stop:
+        wider = _durations(None, _via_index)
+        if len(wider) > len(durations): durations = wider
     if len(durations) < 3 and allow_majority_fallback and terminus_counts:
         majority_terminus, majority_n = terminus_counts.most_common(1)[0]
         if majority_n >= 3:
-            wider = _durations(lambda h, l: (l or '').lower() == majority_terminus)
+            wider = _durations(lambda h, l, i: (l or '').lower() == majority_terminus)
             if len(wider) > len(durations): durations = wider
     if len(durations) < 3: return None, len(durations)  # too thin a sample to trust
     return round(statistics.median(durations)), len(durations)
@@ -203,6 +254,8 @@ if __name__ == "__main__":
     ap.add_argument("--fill-place", help="routes.json path (place skill): fill every destinations[] entry lacking minutesToDestination")
     ap.add_argument("--db", default=None,
                    help="this region's sqlite. NO DEFAULT - every region is treated the same (see _gtfs/regions.json); $GTFS_DB also works.")
+    ap.add_argument("--naptan", default=None,
+                   help="--fill-place: the NaPTAN register (default: naptan.sqlite beside --db); without it spokes match by name only")
     a = ap.parse_args()
     # No default region: resolve --db / $GTFS_DB, or fail listing the built regions.
     a.db = gtfs_regions.resolve_db(a.db)
@@ -244,15 +297,25 @@ if __name__ == "__main__":
         # town's split route is (see journey_minutes' allow_majority_fallback doc) --
         # only trust the terminus-name fallback when this route names exactly one spoke.
         route_dest_count = Counter(r for b in dests for r in (b.get("routes") or []))
+        # a place spoke is labelled by NaPTAN locality and may be a stop the route
+        # passes rather than ends at -- see journey_minutes' locality_of / via_stop
+        naptan_db = a.naptan or os.path.join(os.path.dirname(os.path.abspath(a.db)), "naptan.sqlite")
+        if a.naptan and not os.path.exists(a.naptan):
+            ap.error(f"--naptan {a.naptan} does not exist")
+        locality_of = load_localities(naptan_db, cur)
+        if not locality_of:
+            print(f"  (no NaPTAN register at {naptan_db}: spokes match by name only)")
         filled = 0; skipped = 0
         for b in dests:
             if b.get("minutesToDestination") is not None:
                 skipped += 1; continue
             dest_clean = _clean_dest(b.get("name", ""))
+            via = b["stops"][-1] if b.get("stops") else None
             best = None; best_n = 0
             for r in (b.get("routes") or []):
                 single_arm = route_dest_count[r] == 1
-                mins, n = journey_minutes(cur, origin_stop_ids, r, dest_clean, allow_majority_fallback=single_arm)
+                mins, n = journey_minutes(cur, origin_stop_ids, r, dest_clean, allow_majority_fallback=single_arm,
+                                          locality_of=locality_of, via_stop=via)
                 if mins is not None and (best is None or mins < best):
                     best = mins; best_n = n
             if best is not None:

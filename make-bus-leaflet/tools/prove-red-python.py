@@ -479,6 +479,26 @@ MUTATIONS = [
      "find": "    return label.split('(')[0].strip()",
      "to": "    return label.strip()"},
 
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "a place spoke stops matching its terminus by NaPTAN locality, so 'Cambridge' misses 'Drummer St Bus Station' and --fill-place leaves St Neots East's spokes blank again (buses-data OA-451 item 4)",
+     "find": "        return bool(locality_of) and _names_locality(dest_l, locality_of.get(last_id))",
+     "to": "        return False"},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the locality match loses its word boundary, so 'Bourn' is found inside 'Cambourne' and a spoke is timed to the wrong village",
+     "find": "    return bool(loc) and re.search(r'(?<![a-z0-9])' + re.escape(loc) + r'(?![a-z0-9])', dest_l) is not None",
+     "to": "    return bool(loc) and loc in dest_l"},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "a spoke the route passes rather than ends at is never timed, so Cambourne on the 18 prints no minutes",
+     "find": "    if len(durations) < 3 and via_stop:",
+     "to": "    if False:"},
+
+    {"suite": "test_gtfs_duration.py", "file": "gtfs_duration.py",
+     "what": "the via-stop timing stops being a fallback and overrides a terminus answer, so a destination trips END at is timed off trips that merely pass a same-named stop",
+     "find": "    if len(durations) < 3 and via_stop:",
+     "to": "    if via_stop:"},
+
     # ---------------------------------------------------------------- gtfs_query.py
     # S1 runs this module and its output IS the town's verified-services.json, so
     # every break below reaches a printed sheet and none of them can be seen by a

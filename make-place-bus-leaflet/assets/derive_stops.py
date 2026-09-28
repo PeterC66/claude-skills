@@ -44,9 +44,10 @@ guess. The register is `_gtfs/naptan.sqlite`, found by walking up from --dir
 unless --naptan names it; without it no localities are written and the script
 says so on stderr.
 
-NOTE: gtfs_duration.py's journey_minutes still matches destinations by name
-substring, which is the same failure this script's pick_direction was changed
-to stop relying on. It is a separate fix and has not been made.
+NOTE: gtfs_duration.py --fill-place reads the `stops` this script writes -- it
+times a spoke the route passes rather than ends at to the last-listed stop --
+so run this first (buses-data OA-451 item 4). It also matches a terminus by
+NaPTAN locality now, not only by name substring.
 
 Usage:
   python derive_stops.py routes.json --dir . [--max-stops 4] [--naptan <naptan.sqlite>]

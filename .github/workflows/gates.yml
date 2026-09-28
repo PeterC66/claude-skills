@@ -600,6 +600,16 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-runs
 
+      # buses-data OA-503 (2026-09-28): a file in loop/adhoc/ready/ that the ticks
+      # keep naming and never take. The loop looked healthy all day while it passed
+      # over two of Peter's promoted files 34 times. Same checkout caveat as the
+      # step above: both folders are gitignored, so the harness builds real ones
+      # under the temp dir. Its controls matter as much as its row: the standing
+      # weekly triage is passed over as not due every hour and must raise nothing.
+      - name: Prove the not-taken ready-file row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-loop-ready
+
       # buses-data OA-153 (2026-09-10): town_status.mjs answers "what is the status
       # of <map>?" and three of its four answers are NEGATIVES -- not on the public
       # site, no thread names it, nothing outstanding -- which look identical whether

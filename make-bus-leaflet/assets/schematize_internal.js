@@ -74,7 +74,7 @@ const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
   try { if (fs.existsSync(across)) return across; } catch (e) {}
   return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
-const { engineDep, spawnTarget } = require(_EP);
+const { engineDep, spawnTarget, copyWorkspaceInputs } = require(_EP);
 const _dep = engineDep(__dirname);
 // The projection, the internalRoads reading and esc are the ENGINE's, not copies
 // (OA-230, 2026-09-02); resolved the way every entry point resolves a sibling.
@@ -575,6 +575,7 @@ const warp = roadGraph.makeWarp(SN);   // samples the SOLVED SN, so it is built 
 const WD = path.join(DIR, SCH.workDir);
 fs.mkdirSync(WD, { recursive: true });
 const wjson = (f, o) => fs.writeFileSync(path.join(WD, f), JSON.stringify(o));
+copyWorkspaceInputs(DIR, WD);   // every input, FIRST, so the warped files below overwrite theirs (OA-491)
 
 // routes_paths.json: same shape, pts mapped through the solved graph
 {
@@ -678,10 +679,6 @@ for (const f of ['osm.json', 'osm2.json']) {
     if (e.center) { const q = INV(warp(XY([e.center.lat, e.center.lon]))); e.center.lat = rll(q[0]); e.center.lon = rll(q[1]); }
   }
   wjson(f, o);
-}
-// straight copies (river_geo.json handled above — it needs the warp, not this; journey_weights.json is the panel's minority note, buses-data OA-452)
-for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'journey_weights.json']) {
-  try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { }
 }
 // workspace routes.json: rotation + fisheye are baked into the coordinates, so
 // neutralise both; context roads default OFF for the tube-map look; then any

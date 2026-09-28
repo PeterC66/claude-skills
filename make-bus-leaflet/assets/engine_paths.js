@@ -166,4 +166,27 @@ function spawnTarget(runDir, callerDir) {
   };
 }
 
-module.exports = { ENGINE_HOME, CROSS_SKILL, engineDep, siblingOf, spawnTarget };
+/* copyWorkspaceInputs(runDir, workDir) — EVERY INPUT ARRIVES BY DEFAULT (buses-data
+ * OA-491). The same two pre-stages run that generator one folder down, in a
+ * workspace they write, and until 2026-09-28 each copied the rest of its inputs
+ * from its own hand-kept list. A file gen_internal.js learned to read was absent
+ * there until somebody noticed a quieter sheet: overrides.json, unplaced.json
+ * coming back out, and journey_weights.json (OA-452), the third.
+ *
+ * So every top-level .json of the run folder is copied — the set gate_lib.js's
+ * copyJsons() hands a gate — and the caller calls this BEFORE writing the files it
+ * warps, so its versions overwrite the copies. NOT_INPUTS is the one list left and
+ * each entry is there for a reason, not merely copied: the generator's own OUTPUTS,
+ * which a stale copy would pass off as this run's, and overrides.json, whose
+ * geographic coordinates neither workspace has ever read — build_s4.js hands a place
+ * schematic its overrides as OVERRIDES_FILE, a town schematic draws without them,
+ * and the diagram copies its own diagram-overrides.json in under that name. */
+const NOT_INPUTS = new Set(['overrides.json', 'unplaced.json', 'indexed.json', 'corridors_report.json', 'build-meta.json']);
+function copyWorkspaceInputs(runDir, workDir) {
+  for (const f of fs.readdirSync(runDir)) {
+    if (!f.endsWith('.json') || NOT_INPUTS.has(f) || !fs.statSync(path.join(runDir, f)).isFile()) continue;
+    fs.copyFileSync(path.join(runDir, f), path.join(workDir, f));
+  }
+}
+
+module.exports = { ENGINE_HOME, CROSS_SKILL, engineDep, siblingOf, spawnTarget, copyWorkspaceInputs, NOT_INPUTS };

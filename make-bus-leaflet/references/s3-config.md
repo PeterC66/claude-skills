@@ -78,17 +78,17 @@ node poi_worksheet.js --map "Areas/High Wycombe"
 
 ### The complexity-remedy keys
 
-From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-in; **absent ⇒ byte-identical**, like every other key here.
+From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-in; **absent ⇒ byte-identical**, like every other key here — except `casingSmooth`, which is ON by default since 2026-09-28.
 
-#### `internalRoads.casingSmooth` — narrow a casing segment to the road around it (2026-09-27)
+#### `internalRoads.casingSmooth` — narrow a casing segment to the road around it (2026-09-27; the default since 2026-09-28)
 
 ```json
-"internalRoads": { "casingSmooth": 1 }
+"internalRoads": { "casingSmooth": 0 }
 ```
 
-Absent ⇒ **byte-identical**, proved on all 23 committed internal sheets the day it was built. `true` means `1`. The number is `k`: each segment's width becomes the smaller of its own width and the length-weighted median width of the casing within `k` × its own width of its midpoint, walking along the casing — `casing_width.js` holds the rule and why each part of it is there. It is the answer to the junction lobe described under `skeletonMaxW` below, and unlike the ceiling it leaves a real wide street alone, because a street's median is itself.
+**Absent means `1` since 2026-09-28**, by Peter's ruling on buses-data OA-064: the default lives in `internal_roads_config.js`, and each map takes it at its own rebuild row rather than in one estate sweep. Write `0` to opt a map out and draw every segment at its own width, which is what every sheet drew before that date. `true` means `1`. The number is `k`: each segment's width becomes the smaller of its own width and the length-weighted median width of the casing within `k` × its own width of its midpoint, walking along the casing — `casing_width.js` holds the rule and why each part of it is there. It is the answer to the junction lobe described under `skeletonMaxW` below, and unlike the ceiling it leaves a real wide street alone, because a street's median is itself.
 
-**Use `1`.** Measured over the estate (buses-data OA-064): it takes High Wycombe's centre disc (13% of its casing ink) and Huntingdon's, most of Wisbech's and March's knots, and nothing from a street; `2` starts cutting street width at junctions. On the three maps that carry `skeletonMaxW` it draws less casing than the ceiling does without the ceiling set, so the intent is to switch those three to this key and drop the ceiling — each after a crop.
+**Use `1`.** Measured over the estate (buses-data OA-064): it takes High Wycombe's centre disc (13% of its casing ink) and Huntingdon's, most of Wisbech's and March's knots, and nothing from a street; `2` starts cutting street width at junctions. On the three maps that carry `skeletonMaxW` it draws less casing than the ceiling does without the ceiling set, so each of those three drops the ceiling in the S3 of its own rebuild row, after a crop against `loop/your-move/oa064-crops/` in buses-data.
 
 #### `internalRoads.skeletonMaxW` — a ceiling on the grey road casing (2026-08-23)
 

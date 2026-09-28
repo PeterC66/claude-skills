@@ -716,8 +716,11 @@ for (const f of facts) {
     const state = basis === 'sheet' ? (printedIn.length ? 'carried' : 'waiting') : (carried ? 'carried' : 'waiting');
     if (basis === 'sheet' && carried && !printedIn.length) unprinted.push({ id: f.id, map: name, route: f.route, probe,
       text: `${f.id}: ${name} LISTS ${f.route}, the state a rebuild that paid this \`include\` ends in, but none of its ${files.length} shipped ci-reference sheet(s) prints the probe "${probe}". Either the note has gone from the ink or the probe is wrong — read the sheet and fix whichever it is.` });
+    // `decidedOn` rides along BARE, for the board's 14-day limit (buses-data OA-484):
+    // the date is data, and comparing it with today stays the board's job (OA-289).
     owed.push({
       id: f.id, route: f.route, map: name, state, basis, sheet,
+      decidedOn: typeof f.decidedOn === 'string' ? f.decidedOn : null,
       declared: carried ? 'listed' : 'off',
       alias: alias ? { label: alias.label, registered: alias.registered, field: alias.field, declaredIn: alias.declaredIn } : null,
       where: carried ? null : (offKey ? d.off.get(offKey).where : alias.where),

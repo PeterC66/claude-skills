@@ -66,16 +66,52 @@ function nothingToGate(v) {
  * stopped counting on 2026-09-17 (buses-data OA-396): it is printed below and the
  * worklist chases it, but it is a chore and the checker's own `red` no longer
  * includes it. This reads that `red` rather than recomputing it, so the two can
- * never disagree about what a red is.
+ * never disagree about what a red is — and adds the one red the checker may not
+ * take, because it reads the clock: a decided fact past its limit (below).
  */
-function isRed({ verdict, error }) { return error !== null || !!(verdict && verdict.red && !nothingToGate(verdict)); }
+function isRed({ verdict, error, today = todayIso() }) {
+  if (error !== null) return true;
+  if (!verdict || nothingToGate(verdict)) return false;
+  return !!verdict.red || owedOverdue(verdict, today).length > 0;
+}
+
+/*
+ * A DECIDED FACT MAY WAIT FOR A REBUILD, BUT NOT FOR EVER (buses-data OA-484,
+ * Peter's ruling of 2026-09-28). A `waiting` include is a live sheet known to
+ * contradict a decided fact, and on 2026-09-27 five of them had waited 16–24 days
+ * as a chore nobody was obliged to reach. So a pair turns RED fourteen days after
+ * the LATER of its `decidedOn` and OWED_LIMIT_LANDED, the day this limit landed:
+ * the pairs already waiting on that day get one fortnight to be rebuilt rather
+ * than reddening the board on landing, which is how a check gets muted.
+ *
+ * The clock is read HERE, on the board, and never in check-s6-claims.mjs, which
+ * hands `decidedOn` over bare (OA-289). A pair read from its DECLARATION counts
+ * too: past the limit, the remedy for one whose line is in fact printed is a
+ * `probe`, so the shipped sheet can answer. `today` is injectable, so the red can
+ * be proved rather than waited for (status.js --owed-today).
+ */
+const OWED_LIMIT_DAYS = 14;
+const OWED_LIMIT_LANDED = '2026-09-28';
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+function addDays(iso, n) { return new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
+
+/** Every waiting pair with the day its limit runs out (`due`); red once today is past it. */
+function owedClock(verdict) {
+  const owed = (verdict && verdict.register && verdict.register.owed) || [];
+  return owed.filter(o => o.state === 'waiting').map(o => {
+    const from = [o.decidedOn, OWED_LIMIT_LANDED].filter(d => typeof d === 'string' && ISO.test(d)).sort().pop();
+    return { ...o, clockFrom: from, due: addDays(from, OWED_LIMIT_DAYS) };
+  });
+}
+function owedOverdue(verdict, today = todayIso()) { return owedClock(verdict).filter(o => today > o.due); }
 
 /**
  * Print the section. Printed whether or not anything is wrong, because the count
  * of QUEUED claims is the queue Peter works, and a section that appears only when
  * red is one nobody learns to read.
  */
-function printSection({ verdict, error }, log = console.log) {
+function printSection({ verdict, error, today = todayIso() }, log = console.log) {
   log('\n=== S6 claims (service-facts.json, tools/check-s6-claims.mjs) ===');
   if (error) {
     log('  NOT MEASURED: ' + error);
@@ -142,10 +178,16 @@ function printSection({ verdict, error }, log = console.log) {
     if (inkWaiting.length) parts.push('NOT YET PRINTED on the shipped sheet: ' + inkWaiting.map(o => o.id + ' (' + o.map + ')').join(', '));
     if (declWaiting.length) parts.push('still DECLARED OFF, with no probe read off a sheet: ' + declWaiting.map(o => o.id + ' (' + o.map + ')').join(', ') + ' — that counts declarations, not ink: read each entry\'s own note before rebuilding, because one that opens DELIVERED is already printed and a rebuild would print it twice');
     log('  decided includes: ' + waiting.length + ' of ' + owed.length + ' waiting, ' + bySheet + ' read off the shipped sheets' + (parts.length ? '. ' + parts.join('; ') + '.' : ' — every one is paid.'));
+    const clock = owedClock(v);
+    const late = clock.filter(o => today > o.due);
+    if (clock.length) log('  limit (' + OWED_LIMIT_DAYS + ' days, OA-484): ' + clock.map(o => o.id + ' (' + o.map + ') ' + (today > o.due ? 'OVERDUE, was due by ' : 'due by ') + o.due).join(', '));
+    for (const o of late) log('  RED ' + o.id + ': ' + o.map + ' has waited past ' + o.due + ' to print ' + o.route + ', decided ' + (o.decidedOn || 'on no recorded date')
+      + '. Rebuild the map so the sheet carries it' + (o.basis === 'sheet' ? '.' : ', or give the entry a `probe` if the line is already printed.'));
   }
   if (v.register && Array.isArray(v.register.unprinted)) for (const u of v.register.unprinted) log('  RED ' + u.text);
   if (v.red) log('  RED — a claim with no home, or a decision no sheet has learned. Run tools/check-s6-claims.mjs from the buses root for the remedy on each row.');
+  else if (owedOverdue(v, today).length) log('  RED — a decided fact has waited past its limit for the rebuild that prints it.');
   else log('  every claim has a home, and the register contradicts no map.');
 }
 
-module.exports = { measure, isRed, printSection, nothingToGate, CHECKER };
+module.exports = { measure, isRed, printSection, nothingToGate, owedClock, owedOverdue, OWED_LIMIT_DAYS, OWED_LIMIT_LANDED, CHECKER };

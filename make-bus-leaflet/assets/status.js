@@ -1255,8 +1255,8 @@ if (!NO_QUALITY) {
 }
 // S6 claims (buses-data OA-273): every service claim on every latest S6 report has a
 // home, and service-facts.json contradicts no map. The whole argument is in
-// s6_claims.js; this board runs the coverage half because only this laptop can.
-const s6Claims = require('./s6_claims.js').measure(BUSES);
+// s6_claims.js, with --owed-today; this board runs the coverage half because only this laptop can.
+const s6Claims = { ...require('./s6_claims.js').measure(BUSES), ...(typeof args['owed-today'] === 'string' ? { today: args['owed-today'] } : {}) };
 // Sheets belonging to one town/place, so a row can sit beside its byte-gate row.
 const qualityFor = (name) => qualityRows.filter(r => r.key.startsWith(name + ' · '));
 const qualityCell = (name) => {
@@ -1474,7 +1474,7 @@ async function main() {
   const commit = commitmentRows();
   const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL });   // a chore, never in `bad` (OA-488)
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, processSize: procSize }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), processSize: procSize }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.

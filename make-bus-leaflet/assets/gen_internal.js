@@ -1426,7 +1426,7 @@ if(IR){
     } }
   // internalRoads.casingSmooth (OA-064): narrow a segment to the length-weighted median
   // width of the casing within k x its own width, so a junction's discs stop fusing
-  // into a lobe; casing_width.js has the measurement. Absent => byte-identical.
+  // into a lobe; casing_width.js has the measurement. Default 1 since 2026-09-28; 0 opts out.
   const _ks = IR.casingSmooth===true ? 1 : +IR.casingSmooth;
   const casW = _ks>0 ? smoothCasingWidths(CAS, _ks) : CAS.map(g=>g.w);
   CAS.forEach((g,j)=>out(`<path d="M${g.x0.toFixed(2)} ${g.y0.toFixed(2)}L${g.x1.toFixed(2)} ${g.y1.toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${casW[j].toFixed(2)}" stroke-linecap="round"/>`));

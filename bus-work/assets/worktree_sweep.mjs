@@ -47,7 +47,20 @@
  *
  * Removal is `git worktree remove` without --force, so git itself refuses
  * anything dirty a second time. The branch is deleted afterwards only when the
- * MERGED proof above held, and the remote branch is never touched.
+ * MERGED proof above held; the remote branch is left to the BRANCHES pass.
+ *
+ * BRANCHES (added 2026-09-28). Removing a worktree took its local branch, but
+ * nothing took a branch that never had one, or the REMOTE branch a merged PR
+ * left behind: claude-skills had no "delete head branch on merge", and on
+ * 2026-09-28 it held 113 remote branches, 107 of them merged, plus 46 local
+ * branches with no worktree, all merged. After the worktrees, every local
+ * branch not checked out anywhere, and every `origin/*` branch, is deleted when
+ * the SAME MERGED proof holds for its tip, no pull request from it is OPEN, and
+ * its tip commit (and, for a local branch, its reflog) is IDLE_HOURS old. A
+ * local branch goes with `git branch -D` (squash-merged branches are never
+ * ancestors, so -d would refuse them all; the proof is what -d would have
+ * checked); a remote one with `git push origin --delete`, which GitHub can undo
+ * with "Restore branch" on the pull request. `main` is never a candidate.
  *
  * STRAY FOLDERS. Under each `<repo>/.claude/worktrees/` and the engine's sibling
  * `skills-wt/`, a folder no worktree is registered at is removed when it holds
@@ -125,6 +138,32 @@ export function proveMerged({ ancestorOfMain, prs, headWithin }) {
     if (within === true) return { proved: true, how: `PR #${pr.number} merged` };
   }
   return { proved: false, why: `PR #${merged[0].number} merged, but this worktree has commits that PR did not carry` };
+}
+
+/**
+ * The decision for one branch, local or remote. PURE, like classifyWorktree.
+ *
+ * @param {object} b  { name, merged:{proved,how?,why?}, openPr:number|null, checkedOut:boolean, lastMovedMs:number|null }
+ * @returns {{remove:boolean, reason:string}}
+ */
+export function classifyBranch(b, { now = Date.now(), idleHours = IDLE_HOURS } = {}) {
+  const keep = (reason) => ({ remove: false, reason });
+  if (!b.name || b.name === 'main' || b.name === 'HEAD') return keep('the trunk');
+  if (b.checkedOut) return keep('checked out in a worktree');
+  if (b.openPr) return keep(`pull request #${b.openPr} is OPEN`);
+  if (!b.merged || !b.merged.proved) return keep(b.merged && b.merged.why ? `not merged — ${b.merged.why}` : 'not merged');
+  if (!Number.isFinite(b.lastMovedMs)) return keep('its last activity could not be dated');
+  const idle = (now - b.lastMovedMs) / HOUR;
+  if (idle < idleHours) return keep(`last moved ${Math.floor(idle)} hour(s) ago, under ${idleHours}`);
+  return { remove: true, reason: `merged (${b.merged.how}), idle ${Math.floor(idle / 24)} day(s)` };
+}
+
+/** Parse `git for-each-ref --format=%(refname:short)%09%(objectname)%09%(committerdate:unix)`. Pure. */
+export function parseRefs(text) {
+  return String(text || '').split(/\r?\n/).filter(Boolean).map((l) => {
+    const [name, oid, ct] = l.split('\t');
+    return { name, oid, commitMs: Number(ct) * 1000 };
+  });
 }
 
 /** Parse `git worktree list --porcelain`. Pure. The first entry is the main checkout. */
@@ -317,6 +356,57 @@ function headWithinFactory(dir, head, prs) {
   };
 }
 
+/** Every pull request in the repository, once — one call instead of one per branch. null if gh refused. */
+function ghAllPrs(dir) {
+  const r = run('gh', ['pr', 'list', '--state', 'all', '--limit', '2000', '--json', 'number,state,headRefName,headRefOid'], dir);
+  if (!r.ok) return null;
+  try { const v = JSON.parse(r.out); return Array.isArray(v) ? v : null; } catch { return null; }
+}
+
+/**
+ * The BRANCHES pass (see the header). Runs after the worktrees, so a branch
+ * whose worktree was just removed is already gone and one still checked out
+ * is never a candidate.
+ */
+export function sweepBranches({ repo, apply, now, idleHours, log }) {
+  const res = { deleted: [], kept: [], failed: [] };
+  const list = git(repo.dir, 'worktree', 'list', '--porcelain');
+  if (!list.ok) { res.failed.push({ branch: null, reason: `git worktree list failed — ${list.err}` }); return res; }
+  const checkedOut = new Set(parseWorktreeList(list.out).map((w) => w.branch).filter(Boolean));
+  const allPrs = repo.prPerChange ? ghAllPrs(repo.dir) : null;
+  const common = git(repo.dir, 'rev-parse', '--path-format=absolute', '--git-common-dir');
+  const fmt = '--format=%(refname:short)%09%(objectname)%09%(committerdate:unix)';
+  const passes = [
+    { where: 'local', refs: parseRefs(git(repo.dir, 'for-each-ref', fmt, 'refs/heads').out).map((r) => ({ ...r, branch: r.name })) },
+    { where: 'remote', refs: parseRefs(git(repo.dir, 'for-each-ref', fmt, 'refs/remotes/origin').out)
+      .filter((r) => r.name.startsWith('origin/')).map((r) => ({ ...r, branch: r.name.slice('origin/'.length) })) },
+  ];
+  for (const { where, refs } of passes) {
+    for (const r of refs) {
+      const prs = allPrs ? allPrs.filter((p) => p.headRefName === r.branch) : null;
+      const open = (prs || []).find((p) => p.state === 'OPEN');
+      let lastMovedMs = r.commitMs;
+      if (where === 'local' && common.ok) {
+        const t = mtime(path.join(common.out.trim(), 'logs', 'refs', 'heads', ...r.branch.split('/')));
+        if (t && t > lastMovedMs) lastMovedMs = t;
+      }
+      const anc = git(repo.dir, 'merge-base', '--is-ancestor', r.oid, 'origin/main').ok;
+      const merged = proveMerged({ ancestorOfMain: anc, prs: repo.prPerChange ? prs : null, headWithin: headWithinFactory(repo.dir, r.oid, prs || []) });
+      const v = classifyBranch({ name: r.branch, merged, openPr: open ? open.number : null,
+        checkedOut: where === 'local' && checkedOut.has(r.branch), lastMovedMs }, { now, idleHours });
+      const entry = { branch: r.branch, where, oid: r.oid, reason: v.reason };
+      if (!v.remove) { if (r.branch !== 'main' && r.branch !== 'HEAD') res.kept.push(entry); continue; }
+      if (!apply) { res.deleted.push({ ...entry, wouldDelete: true }); log(`  DELETE  ${where} branch ${r.branch} — ${v.reason}`); continue; }
+      const del = where === 'local' ? git(repo.dir, 'branch', '-D', r.branch) : git(repo.dir, 'push', '-q', 'origin', '--delete', r.branch);
+      if (!del.ok) { res.failed.push({ ...entry, reason: `delete refused — ${del.err}` }); log(`  FAILED  ${where} branch ${r.branch} — ${del.err}`); continue; }
+      res.deleted.push(entry);
+      log(`  deleted ${where} branch ${r.branch} (${r.oid.slice(0, 7)}) — ${v.reason}`);
+    }
+  }
+  if (res.kept.length) log(`  kept ${res.kept.length} branch(es): ${res.kept.map((k) => `${k.where === 'remote' ? 'origin/' : ''}${k.branch}`).join(', ')}`);
+  return res;
+}
+
 export function sweepRepo({ repo, apply, now, idleHours, strayRoots, log }) {
   const out = { key: repo.key, name: repo.name, dir: repo.dir, error: null, removed: [], kept: [], strays: [], failed: [] };
   const fetched = git(repo.dir, 'fetch', '-q', '--prune', 'origin');
@@ -360,6 +450,8 @@ export function sweepRepo({ repo, apply, now, idleHours, strayRoots, log }) {
     log(`  removed ${label}${branchDeleted ? ' and its local branch' : ''}`);
   }
   if (apply) git(repo.dir, 'worktree', 'prune');
+  out.branches = sweepBranches({ repo, apply, now, idleHours, log });
+  out.failed.push(...out.branches.failed);
 
   for (const root of strayRoots) {
     let names;
@@ -418,7 +510,8 @@ async function main() {
     console.log(`\nwritten: ${outFile}`);
   }
   const n = (f) => results.reduce((a, r) => a + f(r), 0);
-  console.log(`\n${apply ? 'removed' : 'would remove'} ${n((r) => r.removed.length)} worktree(s) and ${n((r) => r.strays.filter((s) => s.files === 0).length)} empty folder(s); kept ${n((r) => r.kept.length)}, of which ${n((r) => r.kept.filter((k) => k.mergedButKept).length)} are merged and need a person.`);
+  const nb = (where) => n((r) => (r.branches ? r.branches.deleted.filter((d) => d.where === where).length : 0));
+  console.log(`\n${apply ? 'removed' : 'would remove'} ${n((r) => r.removed.length)} worktree(s), ${nb('local')} local and ${nb('remote')} remote branch(es), and ${n((r) => r.strays.filter((s) => s.files === 0).length)} empty folder(s); kept ${n((r) => r.kept.length)}, of which ${n((r) => r.kept.filter((k) => k.mergedButKept).length)} are merged and need a person.`);
   process.exit(failures ? 1 : 0);
 }
 

@@ -26,7 +26,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  classifyWorktree, proveMerged, parseWorktreeList, worktreeSweepItems, sweepRepo, findLinks, IDLE_HOURS, CADENCE_DAYS,
+  classifyWorktree, classifyBranch, proveMerged, parseWorktreeList, worktreeSweepItems, sweepRepo, findLinks, IDLE_HOURS, CADENCE_DAYS,
 } from './worktree_sweep.mjs';
 import { needsOf } from './concurrency.mjs';
 
@@ -65,6 +65,15 @@ for (const [name, patch, mbk] of refusals) {
 }
 check(`idle boundary is ${IDLE_HOURS}h exactly`, classifyWorktree({ ...good, lastMovedMs: NOW - IDLE_HOURS * H }, { now: NOW }).remove === true
   && classifyWorktree({ ...good, lastMovedMs: NOW - IDLE_HOURS * H + 1 }, { now: NOW }).remove === false);
+
+console.log('\n1b. classifyBranch — each refusal against a control that deletes');
+const goodB = { name: 'b', merged: { proved: true, how: 'PR #9 merged' }, openPr: null, checkedOut: false, lastMovedMs: NOW - 48 * H };
+check('control: merged, not checked out, no open PR, idle 48h → DELETE', classifyBranch(goodB, { now: NOW }).remove === true);
+for (const [name, patch] of [
+  ['main', { name: 'main' }], ['origin/HEAD', { name: 'HEAD' }], ['checked out in a worktree', { checkedOut: true }],
+  ['an OPEN pull request', { openPr: 12 }], ['not merged', { merged: { proved: false, why: 'x' } }],
+  ['moved 23h ago', { lastMovedMs: NOW - 23 * H }], ['undatable', { lastMovedMs: null }],
+]) check(`${name} → keep`, classifyBranch({ ...goodB, ...patch }, { now: NOW }).remove === false);
 
 console.log('\n2. proveMerged — the squash-merge case, and a commit after the merge');
 check('ancestor of origin/main → proved', proveMerged({ ancestorOfMain: true, prs: null, headWithin: () => null }).proved);
@@ -118,6 +127,12 @@ try {
   const target = path.join(T, 'precious'); fs.mkdirSync(target); fs.writeFileSync(path.join(target, 'keep.txt'), 'keep\n');
   const linked = mk('linked');                  // merged, clean (ignored junction) → kept, target intact
   fs.symlinkSync(target, path.join(linked, 'node_modules'), 'junction');
+  // Branches with no worktree, and on the remote.
+  g(main, 'branch', 'bare-done');               // local, merged by ancestry → deleted
+  g(main, 'branch', 'bare-ahead', 'ahead');      // local, carries the unpushed commit → kept
+  g(main, 'push', '-q', 'origin', 'HEAD:refs/heads/remote-done');   // remote, on main → deleted
+  g(main, 'push', '-q', 'origin', 'ahead:refs/heads/remote-ahead'); // remote, NOT on main → kept
+  g(main, 'fetch', '-q', 'origin');
   fs.mkdirSync(path.join(wts, 'empty-stray', 'sub'), { recursive: true });
   fs.mkdirSync(path.join(wts, 'full-stray')); fs.writeFileSync(path.join(wts, 'full-stray', 'work.txt'), 'x\n');
 
@@ -132,6 +147,10 @@ try {
 
   const early = sweepRepo({ ...opts, apply: false, now: Date.now() });
   check('control: the same tree swept NOW removes nothing (idle guard)', early.removed.length === 0);
+  check('control: ...and deletes no branch', early.branches.deleted.length === 0, JSON.stringify(early.branches.deleted));
+  const lookB = look.branches.deleted.map((d) => `${d.where}:${d.branch}`).sort().join();
+  check('report mode: would delete exactly bare-done and origin/remote-done', lookB === 'local:bare-done,remote:remote-done', lookB);
+  check('report mode: deletes no branch', !!g(main, 'branch', '--list', 'bare-done').trim() && !!g(origin, 'branch', '--list', 'remote-done').trim());
 
   const res = sweepRepo({ ...opts, apply: true });
   check('apply: "done" worktree folder is gone', !fs.existsSync(done));
@@ -142,6 +161,12 @@ try {
   check('apply: the junction TARGET still holds its file', fs.readFileSync(path.join(target, 'keep.txt'), 'utf8') === 'keep\n');
   check('apply: empty stray folder removed', !fs.existsSync(path.join(wts, 'empty-stray')));
   check('apply: stray folder with a file left alone, and reported', fs.existsSync(path.join(wts, 'full-stray', 'work.txt')) && res.strays.some((s) => s.files === 1 && !s.removed));
+  check('apply: merged local branch with no worktree is deleted', !g(main, 'branch', '--list', 'bare-done').trim());
+  check('apply: local branch carrying an unpushed commit is KEPT', !!g(main, 'branch', '--list', 'bare-ahead').trim());
+  check('apply: local branches still checked out are KEPT', ['ahead', 'dirty', 'linked'].every((b) => g(main, 'branch', '--list', b).trim()));
+  check('apply: merged remote branch is deleted ON THE REMOTE', !g(origin, 'branch', '--list', 'remote-done').trim());
+  check('apply: unmerged remote branch is KEPT on the remote', !!g(origin, 'branch', '--list', 'remote-ahead').trim());
+  check('apply: main survives, locally and on the remote', !!g(main, 'branch', '--list', 'main').trim() && !!g(origin, 'branch', '--list', 'main').trim());
   check('apply: git no longer lists "done"', !parseWorktreeList(g(main, 'worktree', 'list', '--porcelain')).some((w) => w.branch === 'done'));
 } finally {
   // Remove the junction first so the cleanup cannot follow it.

@@ -429,5 +429,69 @@ class WhichArm(unittest.TestCase):
                          (50, 3))
 
 
+LOVES_WAY = ("0500HSTNS113", "Loves Way", 52.2275, -0.2433)
+DE_LA_WARR = ("0500SCAMB007", "De La Warr Way", 52.2190, -0.0800)
+TESCO = ("0500HEYNE001", "Tesco", 52.2200, -0.2600)
+
+
+class APlaceSpoke(unittest.TestCase):
+    """--fill-place, buses-data OA-451 item 4: St Neots East matched 1 spoke in 6.
+
+    A place spoke is labelled by NaPTAN locality ("Cambridge", "Eynesbury
+    Tesco") while its GTFS terminus is a POI, and it may be a stop the route
+    passes rather than ends at. Both keys are opt-in, so a town's --fill is
+    unchanged."""
+
+    def _to(self, stop, mins, n=3, head="Service 905"):
+        return [_trip("T%d" % i, "R1", head, [
+            ("0500HSTNS113", "%02d:00:00" % (9 + i)),
+            (stop[0], "%02d:%02d:00" % (9 + i, mins))]) for i in range(n)]
+
+    def test_a_terminus_in_the_locality_the_label_names_matches(self):
+        cur = _db(self, _stops(LOVES_WAY, DRUMMER), self._to(DRUMMER, 45))
+        loc = {"0590HCAMB001": "Cambridge"}
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Cambridge"), (None, 0))
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Cambridge",
+                                            locality_of=loc), (45, 3))
+
+    def test_the_locality_may_be_one_word_of_a_longer_label(self):
+        cur = _db(self, _stops(LOVES_WAY, TESCO), self._to(TESCO, 4))
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Eynesbury Tesco",
+                                            locality_of={"0500HEYNE001": "Eynesbury"}), (4, 3))
+
+    def test_a_locality_inside_another_word_is_not_a_match(self):
+        """Bourn is a real locality, and Cambourne is not in it."""
+        cur = _db(self, _stops(LOVES_WAY, DE_LA_WARR), self._to(DE_LA_WARR, 16))
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Cambourne",
+                                            locality_of={"0500SCAMB007": "Bourn"}), (None, 0))
+
+    def test_a_spoke_the_route_passes_is_timed_to_its_first_call(self):
+        """The 18 runs on through Cambourne to Cambridge; the spoke is De La Warr Way."""
+        trips = [_trip("T%d" % i, "R1", "Drummer St", [
+            ("0500HSTNS113", "%02d:00:00" % h),
+            ("0500SCAMB007", "%02d:16:00" % h),
+            ("0590HCAMB001", "%02d:50:00" % h)]) for i, h in enumerate((9, 10, 11))]
+        cur = _db(self, _stops(LOVES_WAY, DE_LA_WARR, DRUMMER), trips)
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Cambourne"), (None, 0))
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Cambourne",
+                                            via_stop="De La Warr Way"), (16, 3))
+
+    def test_a_terminus_answer_is_not_replaced_by_the_via_stop(self):
+        """via_stop is a fallback: three trips that END at the destination win."""
+        trips = self._to(DRUMMER, 45, head="Cambridge") + [
+            _trip("V%d" % i, "R1", "Elsewhere", [
+                ("0500HSTNS113", "%02d:00:00" % (13 + i)),
+                ("0590HCAMB001", "%02d:30:00" % (13 + i)),
+                ("0500SCAMB007", "%02d:40:00" % (13 + i))]) for i in range(4)]
+        cur = _db(self, _stops(LOVES_WAY, DRUMMER, DE_LA_WARR), trips)
+        self.assertEqual(gd.journey_minutes(cur, {"0500HSTNS113"}, "46", "Cambridge",
+                                            via_stop="Drummer St Bus Station"), (45, 3))
+
+    def test_no_register_is_no_localities_and_not_an_error(self):
+        cur = _db(self, _stops(LOVES_WAY), [])
+        self.assertEqual(gd.load_localities(None, cur), {})
+        self.assertEqual(gd.load_localities(os.path.join(_stubs.scratch("no-naptan-"), "absent.sqlite"), cur), {})
+
+
 if __name__ == "__main__":
     unittest.main()

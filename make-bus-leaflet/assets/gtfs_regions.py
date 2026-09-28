@@ -37,13 +37,21 @@ DEFAULT_REGION = None
 
 
 def load(gdir):
-    """-> (regions dict, default region name). Missing/broken registry => empty + default."""
+    """-> (regions dict, DEFAULT_REGION). Missing/broken registry => empty.
+
+    The second value is always DEFAULT_REGION, which is None: a `_default` key in
+    regions.json is NOT read (buses-data OA-370, 2026-09-28). It used to be, so the
+    no-default rule held only because of what the registry happened to contain, and
+    a town located by `near` -- which gives the prefix guard nothing to check -- was
+    planned against a declared default in silence. The pair is kept so callers need
+    not change.
+    """
     try:
         cfg = json.load(open(os.path.join(gdir, "regions.json"), encoding="utf-8"))
     except Exception:
         return {}, DEFAULT_REGION
     regions = {k: v for k, v in (cfg.get("regions") or {}).items() if not k.startswith("_")}
-    return regions, (cfg.get("_default") or DEFAULT_REGION)
+    return regions, DEFAULT_REGION
 
 
 def feed_info(gdir, db):
@@ -150,16 +158,20 @@ def plan(gdir, prefixes_cfg, db_override=None):
     An explicit --db overrides the registry entirely (single-dataset and testing use);
     every town is then read from it and nothing is skipped.
     """
-    regions, default = load(gdir)
+    regions, _ = load(gdir)
     order, groups, skipped = [], {}, []
     for town, cfg in prefixes_cfg.items():
         if town.startswith("_"):
             continue
-        name = cfg.get("region") or default
+        name = cfg.get("region")
         if db_override:
             db, reason = db_override, None
         else:
             r = regions.get(name)
+            if not name:
+                skipped.append((town, "has no \"region\" in town_prefixes.json, and there is "
+                                      "no default region"))
+                continue
             if not r:
                 skipped.append((town, f"region '{name}' is not registered in regions.json"))
                 continue

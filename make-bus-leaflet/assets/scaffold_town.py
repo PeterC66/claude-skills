@@ -102,18 +102,19 @@ def main():
         tp=json.load(open(tp_path,encoding="utf-8"))
         if a.town not in tp and prefix:
             entry={"prefixes":[prefix]}
-            # Record the region whenever this town's dataset is NOT the default one. Without it
-            # the monthly refresh diffs the town against the default region's data, matches
-            # nothing, and reports every one of its routes as withdrawn - which is exactly what
-            # happened to Beaconsfield for a month.
+            # Record the region on EVERY town. There is no default region (buses-data OA-370
+            # stopped greg.load() reading `_default`), so a town without it is refused by the
+            # monthly refresh; before 2026-08-21 such a town was diffed against the default
+            # region's data, matched nothing, and reported every route as withdrawn - which is
+            # exactly what happened to Beaconsfield for a month.
             gdir=os.path.dirname(a.db)
-            regions,default=greg.load(gdir)
+            regions,_=greg.load(gdir)
             here=os.path.normcase(os.path.abspath(a.db))
             match=[n for n,r in regions.items()
                    if r.get("db") and os.path.normcase(os.path.abspath(r["db"]))==here]
-            if match and match[0]!=default:
+            if match:
                 entry["region"]=match[0]
-                print(f"  region: {match[0]} (non-default dataset)")
+                print(f"  region: {match[0]}")
             elif not match:
                 print(f"  WARNING: {os.path.basename(a.db)} is not registered in regions.json. "
                       f"Add it there and set \"region\" on {a.town} in town_prefixes.json, or the "

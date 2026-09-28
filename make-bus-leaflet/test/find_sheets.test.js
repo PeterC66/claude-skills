@@ -87,28 +87,77 @@ test('only .svg files inside a folder actually named ci-reference count', () => 
 });
 
 /*
- * THE SOURCE-LEVEL HALF, for the consumers that cannot be required.
- * `contact_sheet.js`, `attribution-gate.js` and `prove-lane-mirror.js` all run
- * top-to-bottom at load, so the only way to ask whether one has grown its own
- * walk back is to read it. Each of the three had its own copy before Tier 1.3
- * and Tier 3.2; two of the copies filtered differently from the shared one.
+ * THE SOURCE-LEVEL HALF, AS A CENSUS (codebase review 2026-09-28, R2 N41).
+ * Until that day this was a list of three named importers — contact_sheet.js,
+ * attribution-gate.js and prove-lane-mirror.js — and a list of named files is
+ * exactly what let the walk be written again somewhere nobody had named:
+ * font_metrics_build.js harvested glyphs from Areas/ alone, and redteam_budget.js
+ * counted decision records one folder deep, missing 7 of September's 18.
+ *
+ * So it now reads EVERY .js and .mjs in assets/ and tools/ and asks one question:
+ * does it join or read `Areas` or `Places` under a root for itself? The owner of
+ * the walk is gate_lib.js. Anything else that does must be on the allowlist below
+ * WITH A REASON, and the reasons are all the same kind: a donor pick or a fixture
+ * builder, which chooses ONE map to borrow or makes an empty tree, and never
+ * reports a figure over the estate. A file that reports a figure over the estate
+ * and walks for itself is the bug this test exists for.
+ *
+ * The allowlist is held to the disk both ways: an entry that no longer matches is
+ * stale and must go, so the list cannot fill up with names that excuse nothing.
  */
-const IMPORTERS = [
-  { file: path.join(ASSETS, 'contact_sheet.js'), from: /require\('\.\/quality_metrics'\)/ },
-  { file: path.join(TOOLS, 'attribution-gate.js'), from: /require\('\.\.\/assets\/gate_lib'\)/ },
-  { file: path.join(TOOLS, 'prove-lane-mirror.js'), from: /require\('\.\.\/assets\/gate_lib\.js'\)/ },
+const OWNER = 'assets/gate_lib.js';
+const WALKS_ITSELF = [
+  /readdirSync\([^)]*'(Areas|Places)'/,
+  /path\.join\([A-Za-z_.]+, '(Areas|Places)'\)/,
+  // redteam_budget.js's own walk, before 2026-09-28: `for (const top of ['Areas', 'Places'])`.
+  /\[\s*'Areas',\s*'Places'\s*\]/,
 ];
+const ALLOWED = {
+  'tools/prove-known-off-parity.js': 'locates the buses-data checkout by its Areas/ folder, then reads each town\'s own routes.json for a parity probe; it reports no estate figure',
+  'tools/prove-red-deploy-grace.js': 'builds an EMPTY Areas/ and Places/ as a fixture; it walks nothing',
+  'tools/prove-red-fixture-estate.js': 'picks the first town with a ci-reference as a donor for a mutation; one map, not a population',
+  'tools/prove-red-held-back.js': 'picks a donor town and a donor place for its mutations; one map each, not a population',
+  'tools/prove-red-status.js': 'picks a donor town whose routes.json it can re-stamp; one map, not a population',
+  'tools/prove-red.js': 'the text of a mutation against gate_lib\'s own findSheets line, not a walk',
+  /* Three walks of their own over BOTH roots, so none has the Areas-only bug; they
+   * walk for something gate_lib does not enumerate (a POI config, a run folder, a
+   * fixture file). Converging them is Tier 3 of the 2026-09-28 review ("the seven
+   * estate walkers", R2 F1), which asked for this census first. */
+  'assets/poi_worksheet.js': 'walks both roots for every map\'s S3 config; carried to Tier 3 of the 2026-09-28 review (R2 F1)',
+  'assets/stray_outputs.js': 'walks both roots for stage run folders, which gate_lib does not enumerate; carried to Tier 3 (R2 F1)',
+  'assets/portal_fixtures.js': 'names the two FIXTURE roots it vendors to the portal, not the estate; it reads _portal-fixture, which every estate walk excludes',
+};
 
-test('the three script consumers import the walk and define no walk of their own', () => {
-  for (const { file, from } of IMPORTERS) {
-    const src = fs.readFileSync(file, 'utf8');
-    const name = path.basename(file);
-    assert.ok(from.test(src), `${name} no longer imports the module that owns findSheets`);
-    assert.ok(/\bfindSheets\b/.test(src), `${name} does not mention findSheets at all`);
-    // A `function findSheets(` of its own is the copy; a projection of the
-    // shared list (attribution-gate needs a map name beside each path) is not,
-    // so what is banned is the readdir walk, not the wrapper.
-    assert.ok(!/readdirSync\([^)]*'Areas'/.test(src) && !/path\.join\([A-Za-z]+, 'Areas'\)/.test(src),
-      `${name} walks Areas/ itself again`);
+function sources() {
+  const out = [];
+  for (const dir of [ASSETS, TOOLS]) {
+    for (const f of fs.readdirSync(dir)) {
+      if (!/\.m?js$/.test(f)) continue;
+      out.push({ rel: `${path.basename(dir)}/${f}`, src: fs.readFileSync(path.join(dir, f), 'utf8') });
+    }
+  }
+  return out;
+}
+
+test('no file in assets/ or tools/ walks Areas/ or Places/ for itself, bar the owner and a reasoned allowlist', () => {
+  const walkers = sources().filter(({ src }) => WALKS_ITSELF.some((re) => re.test(src))).map(({ rel }) => rel);
+  assert.ok(walkers.includes(OWNER), 'the census pattern no longer finds gate_lib\'s own walk, so it would find nobody else\'s either');
+  const unexplained = walkers.filter((r) => r !== OWNER && !(r in ALLOWED));
+  assert.deepStrictEqual(unexplained, [],
+    'these files walk the estate for themselves; send them through gate_lib.findSheets/findTowns/findPlaces, or add them to ALLOWED with a reason');
+  const stale = Object.keys(ALLOWED).filter((r) => !walkers.includes(r));
+  assert.deepStrictEqual(stale, [], 'these ALLOWED entries no longer walk anything; remove them');
+});
+
+test('the former hand-listed consumers still import the walk', () => {
+  for (const [rel, from] of [
+    ['assets/contact_sheet.js', /require\('\.\/quality_metrics'\)/],
+    ['tools/attribution-gate.js', /require\('\.\.\/assets\/gate_lib'\)/],
+    ['tools/prove-lane-mirror.js', /require\('\.\.\/assets\/gate_lib\.js'\)/],
+    ['assets/font_metrics_build.js', /require\('\.\/gate_lib'\)\.findSheets/],
+    ['assets/redteam_budget.js', /require\('\.\/gate_lib'\)/],
+  ]) {
+    const src = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+    assert.ok(from.test(src), `${rel} no longer imports the module that owns the walk`);
   }
 });

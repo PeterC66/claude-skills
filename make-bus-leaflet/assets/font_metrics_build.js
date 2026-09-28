@@ -112,19 +112,16 @@ function harvest(busesDir) {
   const set = new Set();
   for (let c = 0x20; c < 0x7f; c++) set.add(String.fromCharCode(c));
   for (const ch of '£€–—·•©®°éèáàóúüöäñ’‘“”…×') set.add(ch);
-  let n = 0;
-  (function walk(d) {
-    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); continue; }
-      if (!e.name.endsWith('.svg') || path.basename(d) !== 'ci-reference') continue;
-      n++;
-      const svg = fs.readFileSync(p, 'utf8');
-      for (const m of svg.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)) for (const ch of DEC(m[1])) set.add(ch);
-    }
-  })(path.join(busesDir, 'Areas'));
-  return { chars: [...set].filter(c => c >= ' ').sort(), sheets: n };
+  /* gate_lib's findSheets, the one sheet walk (codebase review 2026-09-28, R2
+   * N41). This had its own walk of Areas/ alone, so a glyph that appeared only
+   * on a Places/_standalone sheet was never harvested — the bug find_sheets.test.js
+   * names, a sixth time. That test's census now finds any seventh. */
+  const sheets = require('./gate_lib').findSheets(busesDir);
+  for (const p of sheets) {
+    const svg = fs.readFileSync(p, 'utf8');
+    for (const m of svg.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)) for (const ch of DEC(m[1])) set.add(ch);
+  }
+  return { chars: [...set].filter(c => c >= ' ').sort(), sheets: sheets.length };
 }
 
 // ------------------------------------------------------------------- main

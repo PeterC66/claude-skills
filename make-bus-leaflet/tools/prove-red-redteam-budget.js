@@ -89,6 +89,7 @@ const ARMS = [
       'a REUSE costs nothing and is counted apart from a BUY',
       "another month's buys are not this month's spend",
       'an explicit price beats the nominal one when asking whether a buy fits',
+      'every place layout is counted, and the portal fixture is not',
       /* NOT the coverage case. It asserts how many runs carry a record, which is
        * a count of files and says nothing about what they cost — so it is right
        * that zeroing the nominal price leaves it green, and claiming it here
@@ -102,6 +103,14 @@ const ARMS = [
       'const unrecorded = [];',
       'the coverage count'),
     mustFail: ['an S6 run with no decision record is counted as unrecorded, not as zero'],
+  },
+  {
+    name: 'the one walk — the places are dropped from the estate',
+    apply: (s) => mutate(s,
+      'const mapDirs = [...towns, ...findPlaces(towns, root)]',
+      'const mapDirs = [...towns]',
+      'the one walk'),
+    mustFail: ['every place layout is counted, and the portal fixture is not'],
   },
   {
     name: 'the absent-file arm — no budget stated reads as "no"',
@@ -126,7 +135,9 @@ function runAgainst(source) {
   // The subject's siblings, for the reason prove-red-redteam-source.js states at
   // length: a scratch world that silently lacks a dependency is how a mutation
   // "survives" for the wrong reason.
-  for (const sibling of ['cli.js']) fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
+  // gate_lib and its two load-time requires carry the estate walk since
+  // 2026-09-28 (codebase review R2 N40).
+  for (const sibling of ['cli.js', 'gate_lib.js', 'line_endings.js', 'scratch.js']) fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
   const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', TEST],
     { cwd: ROOT, encoding: 'utf8', env: { ...process.env, REDTEAM_BUDGET_JS: copy } });
   const out = r.stdout + r.stderr;
@@ -149,7 +160,7 @@ let bad = false;
  * below says nothing about the mutation. */
 const base = runAgainst(ORIGINAL);
 const CASES = [...base.passed, ...base.failed];
-if (CASES.length !== 12) { console.error(`FAIL: expected 12 cases in the suite, found ${CASES.length}`); bad = true; }
+if (CASES.length !== 13) { console.error(`FAIL: expected 13 cases in the suite, found ${CASES.length}`); bad = true; }
 if (base.failed.size) { console.error(`FAIL: the unmutated suite is not green (${[...base.failed].join('; ')})`); bad = true; }
 if (bad) { console.error('\n--- baseline output ---\n' + base.out); process.exit(1); }
 console.log(`baseline     : ${CASES.length} cases, all green`);
@@ -176,4 +187,4 @@ if (fs.readFileSync(SRC, 'utf8') !== ORIGINAL) {
 }
 
 if (bad) process.exit(1);
-console.log('\nOK — all four budget rules were watched going red, and the unrationed arm stayed green under the other three.');
+console.log(`\nOK — all ${ARMS.length} arms were watched going red, and each case stayed green under every arm that does not claim it.`);

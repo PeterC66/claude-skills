@@ -627,6 +627,66 @@ function offsetPolyline(pts, d) {
 }
 
 /*
+ * Cut the swallowtail a lane offset ties at a tight inside corner (OA-176 4.14,
+ * 2026-09-28): the knot beside Ramsey Forty Foot Village Hall.
+ *
+ * A lane moved `d` mm off its route is a curve of radius r − d round a corner of
+ * radius r. Where the route turns back on itself inside d — RH5 at x=159.9,
+ * y=45.5 turns through ~150 degrees in 0.4 mm and sits 4.2 mm out, the innermost
+ * of four lanes — the offset overshoots the corner, runs back past its own
+ * approach and crosses it: a closed loop about 6 mm of ink long that nothing in
+ * the road network explains. Neither the mid-normal vertex nor laneVertex()'s
+ * mitre can prevent it, because the loop is made by segments on either side of
+ * the corner, not by the corner vertex (design.laneRibbon, tried 2026-09-27,
+ * leaves it standing). What a drawn parallel does at such a corner is stop
+ * where its two sides meet, so that is what this does: find a crossing between
+ * two segments of the OFFSET polyline, i < j − 1, whose raw counterparts do not
+ * cross, and pull every vertex between them onto the crossing point.
+ *
+ * Same number of points out as in, so `stopT`'s (i, t) indices survive; a stop
+ * on the cut stretch is drawn at the crossing, which is where the lane now
+ * turns. The loop is only a swallowtail if it is SHORT on the route: the raw
+ * arc between the two segments is held to `reach` (default 2·max|d| over the
+ * stretch), because a route that goes round a block and crosses its own lane a
+ * street later is a real crossing, and the raw test catches only the ones the
+ * route draws itself. Returns the cut runs, and hands each to `trace` if given,
+ * so the generator's DBG_LANES log can name them without growing the generator.
+ */
+function trimSwallowtails(drawn, raw, { reach, offsets, trace } = {}) {
+  const n = drawn.length;
+  const out = drawn.map(p => [p[0], p[1]]);
+  const cut = [];
+  if (n < 4 || raw.length !== n) return { points: out, cut };
+  const cum = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(raw[i][0] - raw[i - 1][0], raw[i][1] - raw[i - 1][1]));
+  const off = (i) => offsets && offsets[i] ? Math.hypot(offsets[i][0], offsets[i][1]) : Math.hypot(drawn[i][0] - raw[i][0], drawn[i][1] - raw[i][1]);
+  const cross = (a, b, c, d) => {
+    const rx = b[0] - a[0], ry = b[1] - a[1], sx = d[0] - c[0], sy = d[1] - c[1];
+    const den = rx * sy - ry * sx; if (Math.abs(den) < 1e-12) return null;
+    const t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / den;
+    const u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / den;
+    return (t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9) ? [a[0] + rx * t, a[1] + ry * t] : null;
+  };
+  let i = 0;
+  while (i < n - 3) {
+    let hit = null;
+    for (let j = i + 2; j < n - 1; j++) {
+      let big = 0; for (let k = i; k <= j + 1; k++) big = Math.max(big, off(k));
+      const R = reach == null ? 2 * big : reach;
+      if (cum[j] - cum[i + 1] > R) break;                    // too far along the route to be a corner's knot
+      const p = cross(out[i], out[i + 1], out[j], out[j + 1]);
+      if (!p || cross(raw[i], raw[i + 1], raw[j], raw[j + 1])) continue;
+      hit = { j, p };                                        // keep looking: the widest loop from i is the knot
+    }
+    if (!hit) { i++; continue; }
+    for (let k = i + 1; k <= hit.j; k++) out[k] = [hit.p[0], hit.p[1]];
+    cut.push({ i, j: hit.j, at: hit.p }); if (trace) trace(cut[cut.length - 1]);
+    i = hit.j;
+  }
+  return { points: out, cut };
+}
+
+/*
  * The stroke-dasharray for member j of n on a shared stretch drawn as colour
  * blocks of `block` mm: one block on, the other n-1 off, and the j-th block of
  * each period. The PHASE IS IN THE ARRAY — a leading zero-length dash and a gap
@@ -642,4 +702,4 @@ function alternation(n, j, block) {
   return phase > 0 ? `0 ${f(phase)} ${f(block)} ${f(P - block - phase)}` : `${f(block)} ${f(P - block)}`;
 }
 
-module.exports = { pointSegDist, corridorNeighbours, liesAlongside, chainPairs, orientSegments, makeRefDir, laneVertex, smoothHeadings, foldRetrace, sharedRuns, offsetPolyline, alternation };
+module.exports = { pointSegDist, corridorNeighbours, liesAlongside, chainPairs, orientSegments, makeRefDir, laneVertex, smoothHeadings, foldRetrace, sharedRuns, offsetPolyline, trimSwallowtails, alternation };

@@ -1304,6 +1304,7 @@ if(IR){
         lb:Math.hypot(Pp[i+1][0]-Pp[i][0],Pp[i+1][1]-Pp[i][1]) }); }
       else { sx=(v[i-1][0]+v[i][0])/2; sy=(v[i-1][1]+v[i][1])/2; }
       return [p[0]+sx+ro.dx, p[1]+sy+ro.dy]; });
+    if(DESIGN.laneTrim===true) SH[r]=LN.trimSwallowtails(SH[r],Pp.map(p=>[p[0]+ro.dx,p[1]+ro.dy]),{trace:process.env.DBG_LANES&&(c=>console.error(`TRIM ${r}	seg=${c.i}..${c.j}	at=${c.at[0].toFixed(2)},${c.at[1].toFixed(2)}	fr=${inFrame(c.at)?1:0}`))}).points; // OA-176 4.14, opt-in: lane_normals.js says why
   }
   // -- cut each route at the frame: keep from the last entry before its first
   //    in-frame stop to the first exit after its last in-frame stop; remember

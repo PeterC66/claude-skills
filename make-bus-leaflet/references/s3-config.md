@@ -303,6 +303,16 @@ The stronger form of the key above, built for the CORR-001 reader's proposal tha
 
 **Beaconsfield Simpson Centre carries it** (v1.29 on 2026-09-04, rebuilt as v1.30 on 2026-09-05 when the second half landed); no other map does. Adoption is per map on a crop pack, the way `laneOrientation` was adopted; `node adopt_config.js --town "<Town>" --set '{"design":{"laneRibbon":true}}' --apply`, run from the skill's `assets/` folder with `<Town>` the town's own name as `status.js` prints it, is the adoption, and `--unset design.laneRibbon` the revert, because absence is off. A map whose one-way loop is worth its 2 mm declines the key.
 
+### `design.laneTrim` — cut the loop a lane ties at a tight inside corner (2026-09-28, OA-176 4.14 — opt-in, absent ⇒ byte-identical)
+
+```json
+"design": { "laneTrim": true }
+```
+
+A lane moved d mm off its route follows a curve of radius r − d round a corner of radius r. Where the route turns back on itself tighter than the lane's offset, the lane overshoots the corner, runs back past its own approach and crosses it, drawing a closed loop that no road explains: RH5 beside Ramsey Forty Foot Village Hall, the innermost of four lanes 4.2 mm out, draws one about 6 mm long. `laneTrim` finds each crossing between two segments of a route's drawn lane whose raw counterparts do not cross, within twice the lane's offset along the route, and pulls the vertices between them onto the crossing. A route that really crosses its own path is never cut. The code, and why neither the mid-normal vertex nor `laneRibbon`'s mitre can prevent the loop, is `trimSwallowtails` in `assets/lane_normals.js`.
+
+**Measured on 2026-09-28** with `node tools/lane-census.js --buses "C:/u3a St Ives/Using AI/Buses" --trim`, run from the skill's own folder, where the path is the buses-data repository and not a placeholder: every one of the 23 committed internal sheets carries at least one such loop in frame. Re-run it rather than quoting a count. Freeing the ink moves labels: on Ramsey the sheet gains Bury Road and Wells Bridge and loses Great Whyte, so adoption is per map on a crop pack, the way `laneOrientation` was adopted — `node adopt_config.js --town "<Town>" --set '{"design":{"laneTrim":true}}' --apply`, run from the skill's `assets/` folder with `<Town>` the town's own name as `status.js` prints it, and `--unset design.laneTrim` to revert.
+
 ### `design.fixedOrientation` — pin which way up the map is drawn (2026-08-21 — opt-in, absent ⇒ byte-identical)
 
 ```json

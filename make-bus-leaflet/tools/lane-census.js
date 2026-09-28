@@ -35,6 +35,9 @@
  *   mirror   — the same, excluding pairs where either normal is off-axis
  *   pinch    — the lane index or the bundle size changes
  *   blip     — the bundle changes for one segment and its neighbours agree
+ *   trim     — in-frame swallowtails `design.laneTrim` (OA-176 4.14) cut at a
+ *              tight inside corner. Zero unless the sheet adopted the key or
+ *              the run passed `--trim`, which forces it the way `--ribbon` does
  *   fold     — in-frame vertices the key's second half (OA-176 4.24) moved onto
  *              an earlier leg of the same route: the retrace drawn once. Zero
  *              in a live run unless the sheet has adopted the key
@@ -64,8 +67,8 @@ const FLAGS = parseArgs(process.argv.slice(2));
 const BUSES = resolveBuses(FLAGS);
 const FAMILY = typeof FLAGS.family === 'string' ? FLAGS.family : null;
 const STYLE = typeof FLAGS.style === 'string' ? FLAGS.style : 'alternate';
-const FORCE = FLAGS.ribbon === true || !!FAMILY;
-const VAR = typeof FLAGS.tag === 'string' ? FLAGS.tag : (FAMILY ? 'family' : FORCE ? 'ribbon' : 'live');
+const FORCE = FLAGS.ribbon === true || FLAGS.trim === true || !!FAMILY;
+const VAR = typeof FLAGS.tag === 'string' ? FLAGS.tag : (FAMILY ? 'family' : FLAGS.ribbon === true ? 'ribbon' : FORCE ? 'trim' : 'live');
 const ONLY = typeof FLAGS.only === 'string' ? FLAGS.only : null;
 const OUT = path.join(typeof FLAGS.out === 'string' ? FLAGS.out : path.join(os.tmpdir(), 'busmaps-lane-census'), VAR);
 const CA = Math.cos(22 * Math.PI / 180);
@@ -75,7 +78,7 @@ const dirs = [...new Set(G.findSheets(BUSES)
   .filter(p => path.basename(p) === 'internal.svg')
   .map(p => path.dirname(p)))].sort();
 
-const tot = { offaxis: 0, mirror: 0, mirrorAll: 0, pinch: 0, blip: 0, fold: 0, segs: 0 };
+const tot = { offaxis: 0, mirror: 0, mirrorAll: 0, pinch: 0, blip: 0, fold: 0, trim: 0, segs: 0 };
 const detail = [];
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -91,6 +94,7 @@ for (const dir of dirs) {
     for (const f of fs.readdirSync(dir)) if (f.endsWith('.json')) fs.copyFileSync(path.join(dir, f), path.join(data, f));
     const rj = JSON.parse(fs.readFileSync(path.join(data, 'routes.json'), 'utf8'));
     if (FLAGS.ribbon === true) { rj.design = rj.design || {}; rj.design.laneRibbon = true; }
+    if (FLAGS.trim === true) { rj.design = rj.design || {}; rj.design.laneTrim = true; }
     if (FAMILY) { const [lead, rest] = FAMILY.split(':'); rj.internalCorridors = rj.internalCorridors || {};
       rj.internalCorridors[lead] = { routes: (rest || '').split(',').filter(Boolean), style: STYLE }; }
     fs.writeFileSync(path.join(data, 'routes.json'), JSON.stringify(rj, null, 2));
@@ -103,8 +107,9 @@ for (const dir of dirs) {
   fs.copyFileSync(path.join(run.tmpDir, 'internal.svg'), path.join(sheetDir, 'internal.svg'));
   fs.copyFileSync(path.join(data, 'routes.json'), path.join(sheetDir, 'routes.json'));
 
-  const byRoute = {}; const folds = [];
+  const byRoute = {}; const folds = []; const trims = [];
   for (const l of run.stderr.split('\n')) {
+    if (l.startsWith('TRIM ') && /	fr=1$/.test(l)) { trims.push(l.slice(5).replace(/	/g, ' ')); continue; }
     if (l.startsWith('FOLD ') && /\tfr=1$/.test(l)) { folds.push(l.slice(5).replace(/\t/g, ' ')); continue; }
     if (!l.startsWith('LANE ')) continue;
     const parts = l.split('\t'); const r = parts[0].slice(5); const f = { r };
@@ -115,8 +120,8 @@ for (const dir of dirs) {
     f.side = f.axis >= 0 ? 1 : -1; f.off = Math.abs(f.axis) < CA;
     (byRoute[r] = byRoute[r] || []).push(f);
   }
-  const c = { offaxis: 0, mirror: 0, mirrorAll: 0, pinch: 0, blip: 0, fold: folds.length, segs: 0 };
-  const sites = folds.map(f => 'fold ' + f);
+  const c = { offaxis: 0, mirror: 0, mirrorAll: 0, pinch: 0, blip: 0, fold: folds.length, trim: trims.length, segs: 0 };
+  const sites = folds.map(f => 'fold ' + f).concat(trims.map(t => 'trim ' + t));
   for (const r in byRoute) {
     const a = byRoute[r].sort((x, y) => x.seg - y.seg);
     for (let i = 0; i < a.length; i++) {
@@ -137,7 +142,7 @@ for (const dir of dirs) {
     }
   }
   for (const k in tot) tot[k] += c[k];
-  console.log(`${name.padEnd(52)} segs=${c.segs} offaxis=${c.offaxis} mirror=${c.mirror} mirrorAll=${c.mirrorAll} pinch=${c.pinch} blip=${c.blip} fold=${c.fold}`);
+  console.log(`${name.padEnd(52)} segs=${c.segs} offaxis=${c.offaxis} mirror=${c.mirror} mirrorAll=${c.mirrorAll} pinch=${c.pinch} blip=${c.blip} fold=${c.fold} trim=${c.trim}`);
   detail.push(`## ${name}\n` + sites.join('\n'));
 }
 console.log('TOTAL', JSON.stringify(tot));

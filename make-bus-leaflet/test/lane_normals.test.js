@@ -431,3 +431,58 @@ test('alternation: the n members’ dash arrays tile one period exactly once, an
   assert.strictEqual(LN.alternation(2, 0, 3), '3 3', 'the leader needs no phase');
   assert.strictEqual(LN.alternation(2, 1, 3), '0 3 3 0', 'the second member’s phase is a zero-length dash then a gap of one block');
 });
+
+// trimSwallowtails (OA-176 4.14, 2026-09-28): the Ramsey Forty Foot knot. The
+// lane is offset the way gen_internal does without the ribbon key — each
+// vertex takes the mean of its two segments' normals — because that is the
+// offsetter that tied it.
+const midOffset = (P, d) => {
+  const v = [];
+  for (let i = 0; i < P.length - 1; i++) { const dx = P[i + 1][0] - P[i][0], dy = P[i + 1][1] - P[i][1], L = Math.hypot(dx, dy); v.push([-dy / L * d, dx / L * d]); }
+  return P.map((p, i) => { const o = i === 0 ? v[0] : i === P.length - 1 ? v[v.length - 1] : [(v[i - 1][0] + v[i][0]) / 2, (v[i - 1][1] + v[i][1]) / 2]; return [p[0] + o[0], p[1] + o[1]]; });
+};
+const crossesItself = (P) => {
+  for (let i = 0; i < P.length - 1; i++) for (let j = i + 2; j < P.length - 1; j++) {
+    const [a, b, c, d] = [P[i], P[i + 1], P[j], P[j + 1]];
+    const rx = b[0] - a[0], ry = b[1] - a[1], sx = d[0] - c[0], sy = d[1] - c[1], den = rx * sy - ry * sx;
+    if (Math.abs(den) < 1e-12) continue;
+    const t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / den, u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / den;
+    if (t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6) return true;
+  }
+  return false;
+};
+// a tight right-hand turn with two short segments at the corner
+const TURN = [[0, 0], [5, 0], [6, 0.3], [6, 1], [5.5, 5], [5, 10]];
+
+test('trimSwallowtails cuts the loop a lane 2 mm INSIDE a tight corner ties, and keeps every vertex', () => {
+  const drawn = midOffset(TURN, 2);
+  assert.ok(crossesItself(drawn), 'the fixture must tie the knot, or this test proves nothing');
+  const { points, cut } = LN.trimSwallowtails(drawn, TURN);
+  assert.strictEqual(points.length, drawn.length, 'same vertex count, so stopT indices survive');
+  assert.strictEqual(cut.length, 1);
+  assert.ok(!crossesItself(points), 'the trimmed lane no longer crosses itself');
+  for (let k = cut[0].i + 1; k <= cut[0].j; k++) assert.deepStrictEqual(points[k], cut[0].at, 'the loop is pulled onto the crossing');
+  assert.deepStrictEqual(points[0], drawn[0]); assert.deepStrictEqual(points[5], drawn[5]);
+});
+
+test('trimSwallowtails leaves the lane OUTSIDE the same corner exactly as drawn', () => {
+  const drawn = midOffset(TURN, -2);
+  const { points, cut } = LN.trimSwallowtails(drawn, TURN);
+  assert.strictEqual(cut.length, 0);
+  assert.deepStrictEqual(points, drawn);
+});
+
+test('trimSwallowtails never cuts a crossing the route itself makes', () => {
+  // a route that really does cross its own path: the lane at 0 offset is the route
+  const LOOP = [[0, 0], [4, 4], [4, 0], [0, 4]];
+  const { points, cut } = LN.trimSwallowtails(LOOP, LOOP);
+  assert.strictEqual(cut.length, 0);
+  assert.deepStrictEqual(points, LOOP);
+});
+
+test('trimSwallowtails leaves a loop longer on the route than reach, which is not a corner knot', () => {
+  const drawn = midOffset(TURN, 2);
+  const { points, cut } = LN.trimSwallowtails(drawn, TURN, { reach: 0.1 });
+  assert.strictEqual(cut.length, 0);
+  assert.deepStrictEqual(points, drawn);
+});

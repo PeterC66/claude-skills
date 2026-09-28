@@ -740,6 +740,16 @@ MUTATIONS = [
      "to": 'DEFAULT_REGION = "cambridgeshire"'},
 
     {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "load() reads `_default` out of regions.json again, so the no-default rule holds only while the registry happens not to declare one -- and a town located by `near`, which the prefix guard cannot check, is then planned against it in silence (buses-data OA-370)",
+     "find": '    return regions, DEFAULT_REGION',
+     "to": '    return regions, (cfg.get("_default") or DEFAULT_REGION)'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
+     "what": "a town with no region key is refused as `region 'None' is not registered` instead of being told which key it is missing, so the reader goes looking in regions.json for a fault that is in town_prefixes.json",
+     "find": '            if not name:',
+     "to": '            if False:'},
+
+    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
      "what": "resolve_db guesses instead of refusing, so any ad-hoc query run without --db is answered from a dataset nobody chose and reports an out-of-region town as entirely withdrawn",
      "find": '    raise SystemExit(',
      "to": '    return "cambridgeshire.sqlite" or SystemExit('},
@@ -822,11 +832,6 @@ MUTATIONS = [
      "what": "a region registered without an explicit db no longer falls back to <region>.sqlite beside the registry, so adding a region the documented short way breaks the plan",
      "find": '            db = r.get("db") or os.path.join(gdir, f"{name}.sqlite")',
      "to": '            db = r.get("db")'},
-
-    {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
-     "what": "a town's own region key is ignored in favour of the registry's declared default, which is the Beaconsfield failure arriving through the registry rather than through a missing key",
-     "find": '        name = cfg.get("region") or default',
-     "to": '        name = cfg.get("region")'},
 
     {"suite": "test_gtfs_regions.py", "file": "gtfs_regions.py",
      "what": "--db stops overriding the registry, so the single-dataset and testing path starts skipping the very towns it was passed to force through",
@@ -1531,9 +1536,9 @@ MUTATIONS = [
      "to": '        if prefix:'},
 
     {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
-     "what": "`region` is written on every town including the default region's own, so the field stops distinguishing the towns the monthly refresh must treat specially",
-     "find": '            if match and match[0]!=default:',
-     "to": '            if match:'},
+     "what": "`region` is left off a town whose dataset is registered, so the monthly refresh -- which has no default region since buses-data OA-370 -- refuses the town it was just told about",
+     "find": '            if match:',
+     "to": '            if False and match:'},
 
     {"suite": "test_scaffold_town.py", "file": "scaffold_town.py",
      "what": "a dataset registered in no regions.json is registered silently, which is exactly how Beaconsfield spent a month being diffed against Cambridgeshire",

@@ -196,15 +196,15 @@ class TestLoad(RegistryCase):
         self.write_registry(None, raw='{"_comment": "nothing here yet"}')
         self.assertEqual(gr.load(self.gdir), ({}, None))
 
-    def test_a_declared_default_is_still_honoured(self):
-        """CLAUSE 6, first direction. The docstring says there is no default region;
-        the code still reads `_default` from the registry. This test records what
-        the code does today, so that removing the read is a deliberate act with a
-        red test to justify it rather than a silent tidy-up."""
+    def test_a_declared_default_is_not_read(self):
+        """CLAUSE 6. The docstring says there is no default region, and since
+        buses-data OA-370 the code agrees: a `_default` in the registry is inert.
+        Until then it was read, and the rule held only because of what
+        regions.json happened to contain."""
         self.write_registry({"cambridgeshire": self.region("cambridgeshire")},
                             default="cambridgeshire")
         _, default = gr.load(self.gdir)
-        self.assertEqual(default, "cambridgeshire")
+        self.assertIsNone(default)
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +519,7 @@ class TestPlan(RegistryCase):
         groups, skipped = gr.plan(self.gdir, {"Beaconsfield": {"prefixes": ["0400"]}})
         self.assertEqual(groups, [])
         self.assertEqual(len(skipped), 1)
-        self.assertIn("not registered", skipped[0][1])
+        self.assertIn('no "region"', skipped[0][1])
 
     def test_an_unbuilt_dataset_is_skipped_naming_the_file(self):
         self.write_registry({"westyorkshire": self.region("westyorkshire", built=False)})
@@ -619,36 +619,32 @@ class TestPlan(RegistryCase):
 
     # -- clause 6, the dormant re-entry point -------------------------------
 
-    def test_a_declared_default_catches_a_prefixed_town_on_the_guard(self):
-        """CLAUSE 6, measured. With `_default` restored, a town missing its region
-        key is joined to the default -- and the prefix guard is what stops it. This
-        is the half that is covered."""
-        self.registry_of_three()
-        groups, skipped = gr.plan(self.gdir, {"Beaconsfield": {"prefixes": ["0400"]}})
-        self.assertIn("not registered", skipped[0][1])
-
+    def test_a_declared_default_does_not_take_a_prefixed_town(self):
+        """CLAUSE 6. With `_default` declared, a town missing its region key is
+        refused for the missing key. Before buses-data OA-370 it was joined to
+        the default, and only the prefix guard stopped it."""
         self.write_registry({
             "cambridgeshire": self.region("cambridgeshire", keep=CAMBS_KEEP),
             "buckinghamshire": self.region("buckinghamshire", keep=BUCKS_KEEP),
         }, default="cambridgeshire")
         groups, skipped = gr.plan(self.gdir, {"Beaconsfield": {"prefixes": ["0400"]}})
         self.assertEqual(groups, [])
-        self.assertIn("cannot occur", skipped[0][1])
+        self.assertIn('no "region"', skipped[0][1])
 
-    def test_a_declared_default_silently_takes_a_near_located_town(self):
-        """CLAUSE 6, the hole, asserted rather than described. A town with no
-        prefixes gives the guard nothing to check, so with `_default` declared it is
-        planned against that region in silence -- no skip, no note, and a monthly
-        diff against a dataset nobody chose for it. Nothing takes this path today
-        (`regions.json` declares no `_default`), which is exactly why only a test
-        can hold it. OA-370."""
+    def test_a_declared_default_does_not_take_a_near_located_town(self):
+        """CLAUSE 6, the hole buses-data OA-370 closed. A town with no prefixes
+        gives the guard nothing to check, so with `_default` declared it used to
+        be planned against that region in silence -- no skip, no note, and a
+        monthly diff against a dataset nobody chose for it. It is now refused,
+        naming the missing key."""
         self.write_registry({
             "cambridgeshire": self.region("cambridgeshire", keep=CAMBS_KEEP),
         }, default="cambridgeshire")
         groups, skipped = gr.plan(self.gdir, {"Somewhere": {"near": [52.3, -0.07]}})
-        self.assertEqual(skipped, [])
-        self.assertEqual(groups[0]["region"], "cambridgeshire")
-        self.assertEqual([t for t, _ in groups[0]["towns"]], ["Somewhere"])
+        self.assertEqual(groups, [])
+        self.assertEqual(len(skipped), 1)
+        self.assertEqual(skipped[0][0], "Somewhere")
+        self.assertIn('no "region"', skipped[0][1])
 
 
 # ---------------------------------------------------------------------------

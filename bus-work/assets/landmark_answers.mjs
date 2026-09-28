@@ -36,6 +36,14 @@
  * only a result that says `owed` is asked the expensive question — memoised per
  * town, because the two rows below compare the same tree twice.
  *
+ * THE CATEGORY SWITCH IS OWED LIKE A KEY (OA-439, 2026-09-28). The Landmarks
+ * page's pubs / allotments / stations switch arrives in the block as `include`
+ * and is compared by the engine's `compareInclude()` — row 1 against the S3's
+ * poi.include, row 2 the S3's against the S4's through `switchOf()`. Both are
+ * optional arguments, and absent the rows are exactly what they were. When the
+ * switch is owed, the candidate list is asked with the include the answer would
+ * leave, so a pub the customer switched on and tiered is not called orphaned.
+ *
  * PURE ON PURPOSE. Everything I/O-shaped arrives as arguments — the map list, a
  * `readBlock(map)` that returns the portal's block or null, and a `readTown(dir)`
  * that returns {s3Tiers, s4Tiers, poiCfg} or null — so prove-red-landmark-answers.mjs
@@ -49,13 +57,15 @@
  * @param {Array<{id, name, kind, slug}>} p.maps  portal maps (any mode)
  * @param {Array<{name, dir}>} p.towns            local towns (gate_lib.findTowns shape)
  * @param {(map) => object|null} p.readBlock      the portal's poi-tiers block, or null if unreadable
- * @param {(dir) => object|null} p.readTown       {s3Tiers, s4Tiers, poiCfg, s3Id, s4Version} or null
+ * @param {(dir) => object|null} p.readTown       {s3Tiers, s4Tiers, poiCfg, s3Id, s4Version, s4Include?} or null
  * @param {(src, por, poiCfg, candidates) => object} p.compareTiers  the engine's rule
- * @param {(dir) => string[]|null} [p.readCandidates]  the town's identities today, or null
+ * @param {(srcInclude, portalSwitch) => object} [p.compareInclude]  the engine's switch rule (OA-439)
+ * @param {(include) => object} [p.switchOf]      an include array as a switch, for S3 against S4
+ * @param {(dir, include?) => string[]|null} [p.readCandidates]  the town's identities today, or null
  * @param {string} [p.syncCmd]                    how to run poi_tiers_sync.js, for the row
  * @returns {{ items, checked, skipped: Array<{town, why}>, orphaned: Array<{town, keys}> }}
  */
-export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareTiers, readCandidates, syncCmd = 'node poi_tiers_sync.js' }) {
+export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareTiers, compareInclude, switchOf, readCandidates, syncCmd = 'node poi_tiers_sync.js' }) {
   const items = [];
   const skipped = [];
   const orphaned = [];
@@ -64,20 +74,27 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
     const t = (towns || []).find((x) => x.name.toLowerCase() === String(name || '').trim().toLowerCase());
     return t ? t.dir : null;
   };
-  // Memoised per town, and never asked for a town that owes nothing.
+  // Memoised per town and include, and never asked for a town that owes nothing.
   const cands = new Map();
-  const candidatesFor = (dir) => {
+  const candidatesFor = (dir, include) => {
     if (!readCandidates) return null;
-    if (!cands.has(dir)) { try { cands.set(dir, readCandidates(dir)); } catch { cands.set(dir, null); } }
-    return cands.get(dir);
+    const k = `${dir}\0${include ? include.join(',') : ''}`;
+    if (!cands.has(k)) { try { cands.set(k, include ? readCandidates(dir, include) : readCandidates(dir)); } catch { cands.set(k, null); } }
+    return cands.get(k);
   };
   /* One comparison, narrowed only when the cheap one found something to narrow. */
-  const compare = (src, por, poiCfg, dir) => {
+  const compare = (src, por, poiCfg, dir, include) => {
     const cheap = compareTiers(src, por, poiCfg);
     if (!cheap.owed) return cheap;
-    const c = candidatesFor(dir);
+    const c = candidatesFor(dir, include);
     return c ? compareTiers(src, por, poiCfg, c) : cheap;
   };
+  /* The switch, or a comparison that owes nothing when the engine's rule was not passed. */
+  const NONE = { on: [], off: [], owed: false };
+  const switchDiff = (from, sw) => (compareInclude && sw && typeof sw === 'object' ? compareInclude(from, sw) : NONE);
+  const switchLines = (inc) => [...inc.on.map((c) => `+ ${c} switched on`), ...inc.off.map((c) => `- ${c} switched off`)];
+  const switchWhy = (inc) => (inc.owed ? ` The category switch changes poi.include: ${[...inc.on.map((c) => `${c} on`), ...inc.off.map((c) => `${c} off`)].join(', ')}.` : '');
+  const owedTitle = (n, inc) => [n ? `${n} key${n === 1 ? '' : 's'}` : '', inc.owed ? 'the category switch' : ''].filter(Boolean).join(' and ');
   for (const m of maps || []) {
     if (m.kind !== 'area') continue;
     const dir = townDir(m.name);
@@ -89,16 +106,17 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
     // 1. portal -> source
     const block = readBlock(m);
     if (block && block.tiers) {
-      const c = compare(town.s3Tiers || {}, block.tiers, town.poiCfg || {}, dir);
+      const inc = switchDiff((town.poiCfg || {}).include, block.include);
+      const c = compare(town.s3Tiers || {}, block.tiers, town.poiCfg || {}, dir, inc.owed ? inc.to : undefined);
       if (c.orphaned && c.orphaned.length) orphaned.push({ town: m.name, keys: c.orphaned.map((o) => o.key) });
-      if (c.owed) {
+      if (c.owed || inc.owed) {
         const n = c.added.length + c.changed.length;
         items.push({
           key: `landmark-owed-${m.slug || m.name}`, rank: 7, type: 'landmark-answer',
-          title: `${m.name}: a landmark answer in the portal is not in the town's source data (${n} key${n === 1 ? '' : 's'})`,
-          why: `Someone answered on /landmarks and the answer lives only in the portal's overrides. A rebuild from source would start again from raw OpenStreetMap. ${c.added.length} added, ${c.changed.length} changed${c.unreachable.length ? `; ${c.unreachable.length} unreachable (dropped before tiers run, not counted)` : ''}.`,
+          title: `${m.name}: a landmark answer in the portal is not in the town's source data (${owedTitle(n, inc)})`,
+          why: `Someone answered on /landmarks and the answer lives only in the portal's overrides. A rebuild from source would start again from raw OpenStreetMap. ${c.added.length} added, ${c.changed.length} changed${c.unreachable.length ? `; ${c.unreachable.length} unreachable (dropped before tiers run, not counted)` : ''}.${switchWhy(inc)}`,
           who: '—', runbook: 'landmarks', town: m.name, slug: m.slug, mapId: m.id,
-          detail: [...c.added.map((k) => `+ ${k}`), ...c.changed.map((x) => `~ ${x.key}: ${x.from.tier} -> ${x.to.tier}`)].slice(0, 8).join('\n'),
+          detail: [...switchLines(inc), ...c.added.map((k) => `+ ${k}`), ...c.changed.map((x) => `~ ${x.key}: ${x.from.tier} -> ${x.to.tier}`)].slice(0, 8).join('\n'),
           do: [
             { kind: 'shell', cwd: 'engine-assets', cmd: `${syncCmd} --town "${m.name}"` },
             { kind: 'chat', what: 'Read the ADDED / CHANGED lines. If they are the customer’s answer, re-run with --apply: it writes a NEW S3 run and the unbuilt row below takes over.' },
@@ -111,15 +129,18 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
 
     // 2. source -> build
     if (town.s4Tiers !== undefined) {
+      // An S4 routes.json that could not say what it included is no opinion, not
+      // an empty include: `s4Include` undefined owes nothing on the switch.
+      const inc2 = switchOf && town.s4Include !== undefined ? switchDiff(town.s4Include, switchOf((town.poiCfg || {}).include)) : NONE;
       const c2 = compare(town.s4Tiers || {}, town.s3Tiers || {}, town.poiCfg || {}, dir);
-      if (c2.owed) {
+      if (c2.owed || inc2.owed) {
         const n = c2.added.length + c2.changed.length;
         items.push({
           key: `landmark-unbuilt-${m.slug || m.name}`, rank: 7, type: 'landmark-answer',
-          title: `${m.name}: the source carries a landmark answer its latest build (v${town.s4Version || '?'}) has not drawn (${n} key${n === 1 ? '' : 's'})`,
-          why: 'The byte gate reads the build’s own routes.json, so an answer waiting in S3 shows on no board. This is a content change and is entitled to its own version, note and a look at the artwork — not a ride inside an engine bump.',
+          title: `${m.name}: the source carries a landmark answer its latest build (v${town.s4Version || '?'}) has not drawn (${owedTitle(n, inc2)})`,
+          why: `The byte gate reads the build’s own routes.json, so an answer waiting in S3 shows on no board. This is a content change and is entitled to its own version, note and a look at the artwork — not a ride inside an engine bump.${switchWhy(inc2)}`,
           who: '—', runbook: 'landmarks', town: m.name, slug: m.slug, mapId: m.id,
-          detail: [...c2.added.map((k) => `+ ${k}`), ...c2.changed.map((x) => `~ ${x.key}: ${x.from.tier} -> ${x.to.tier}`)].slice(0, 8).join('\n'),
+          detail: [...switchLines(inc2), ...c2.added.map((k) => `+ ${k}`), ...c2.changed.map((x) => `~ ${x.key}: ${x.from.tier} -> ${x.to.tier}`)].slice(0, 8).join('\n'),
           do: [
             { kind: 'shell', cwd: 'engine-assets', cmd: `node rollout.js --town "${m.name}"` },
             { kind: 'chat', what: 'Read the label-set diff, look at the artwork where a must displaced a may, then --apply --bump major with a note that says whose answer this is.' },

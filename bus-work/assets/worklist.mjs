@@ -928,7 +928,7 @@ if (upcoming) {
 // town is SKIPPED and counted in the header, never silently omitted.
 const landmarkAnswers = await (async () => {
   if (!SK || !portal) return { items: [], checked: 0, skipped: [], orphaned: [], warnings: [] };
-  const { compareTiers, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));
+  const { compareTiers, compareInclude, switchOf, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));
   const { readJson: rj, latestRunDir: lrd } = require(path.join(SK, 'gate_lib.js'));
   const dataDir = process.env.DATA_DIR || path.join(PORTAL, 'data');
   const readTown = (dir) => {
@@ -937,9 +937,9 @@ const landmarkAnswers = await (async () => {
     let routes; try { routes = rj(path.join(s3.dir, 'routes.json')); } catch { return null; }
     const poi = routes.poi || {};
     const s4 = lrd(m, dir, 'S4');
-    let s4Tiers;
-    if (s4) { try { s4Tiers = (rj(path.join(s4.dir, 'routes.json')).poi || {}).tiers || {}; } catch { s4Tiers = undefined; } }
-    return { s3Tiers: poi.tiers || {}, s4Tiers, poiCfg: poi, s3Id: s3.rec.id, s4Version: s4 ? s4.rec.version : null };
+    let s4Tiers, s4Include; // the S4's poi.include feeds the category-switch half of the unbuilt row (OA-439)
+    if (s4) { try { const p4 = rj(path.join(s4.dir, 'routes.json')).poi || {}; s4Tiers = p4.tiers || {}; s4Include = p4.include || []; } catch { s4Tiers = undefined; } }
+    return { s3Tiers: poi.tiers || {}, s4Tiers, s4Include, poiCfg: poi, s3Id: s3.rec.id, s4Version: s4 ? s4.rec.version : null };
   };
   const blocks = new Map();
   if (REMOTE && TOKEN) {
@@ -958,10 +958,10 @@ const landmarkAnswers = await (async () => {
     try { ov = JSON.parse(readFileSync(ovPath, 'utf8')); } catch { /* no overrides yet */ }
     try { pack = ((JSON.parse(readFileSync(packPath, 'utf8')).poi || {}).tiers) || {}; } catch { /* no pack */ }
     const saved = (ov.internal && ov.internal.poiTiers) || {};
-    return { tiers: { ...pack, ...saved } };
+    return { tiers: { ...pack, ...saved }, include: (ov.internal && ov.internal.poiInclude) || {} };
   };
   return landmarkAnswerItems({
-    maps: portal.maps, towns: tree.towns, readBlock, readTown, compareTiers,
+    maps: portal.maps, towns: tree.towns, readBlock, readTown, compareTiers, compareInclude, switchOf,
     readCandidates: townCandidateKeys, syncCmd: 'node poi_tiers_sync.js',
   });
 })();

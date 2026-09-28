@@ -41,7 +41,7 @@ const check = (name, cond, extra) => {
 const ENGINE = path.resolve(HERE, '..', '..', 'make-bus-leaflet', 'assets');
 const syncPath = path.join(ENGINE, 'poi_tiers_sync.js');
 if (!fs.existsSync(syncPath)) { console.error(`prove-red-landmark-answers: ${syncPath} not found — the engine must sit beside bus-work`); process.exit(2); }
-const { compareTiers } = require(syncPath);
+const { compareTiers, compareInclude, switchOf } = require(syncPath);
 
 // OA-354's candidate list, as a fake reader. The real one runs the selector over
 // a town's osm.json; what this harness must prove is the WIRE and the branches,
@@ -54,11 +54,11 @@ const maps = [
   { id: 4, kind: 'area', name: 'Nowhere', slug: 'nowhere' },          // no town folder here
 ];
 const towns = [{ name: 'Testtown', dir: '/fake/Areas/Testtown' }];
-const run = ({ block, s3, s4, poiCfg = {}, candidates }) => landmarkAnswerItems({
-  maps, towns, compareTiers,
+const run = ({ block, s3, s4, s4Include, poiCfg = {}, candidates, asked }) => landmarkAnswerItems({
+  maps, towns, compareTiers, compareInclude, switchOf,
   readBlock: () => block,
-  readTown: () => ({ s3Tiers: s3, s4Tiers: s4, poiCfg, s3Id: 'S3-x', s4Version: '1.0' }),
-  readCandidates: candidates === undefined ? undefined : () => candidates,
+  readTown: () => ({ s3Tiers: s3, s4Tiers: s4, s4Include, poiCfg, s3Id: 'S3-x', s4Version: '1.0' }),
+  readCandidates: candidates === undefined ? undefined : (dir, include) => { if (asked) asked.push(include); return typeof candidates === 'function' ? candidates(include) : candidates; },
 });
 const keys = (r) => r.items.map((i) => i.key).sort();
 
@@ -114,6 +114,36 @@ console.log('\n3. source -> build');
   check('an answer still in the portal raises the OWED row and not the unbuilt one', keys(d).join(',') === 'landmark-owed-testtown', keys(d).join(','));
 }
 
+console.log('\n3b. the CATEGORY SWITCH — the second half of an answer (OA-439)');
+{
+  const a = run({ block: { tiers: {}, include: { pubs: true } }, s3: {}, s4: {}, s4Include: [] });
+  check('the portal switched pubs ON and the source lacks them: landmark-owed row', keys(a).includes('landmark-owed-testtown'), keys(a).join(','));
+  check('…naming the switch in its detail and its title', a.items[0].detail.includes('+ pubs switched on') && a.items[0].title.includes('the category switch'), JSON.stringify(a.items[0]));
+  const b = run({ block: { tiers: {}, include: { pubs: true } }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
+  check('the source already includes pubs: the row goes', keys(b).length === 0, keys(b).join(','));
+  const c = run({ block: { tiers: {}, include: { pubs: false } }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
+  check('switched OFF where the source has them is owed too', keys(c).includes('landmark-owed-testtown') && c.items[0].detail.includes('- pubs switched off'), keys(c).join(','));
+  const d = run({ block: { tiers: {}, include: {} }, s3: {}, s4: {}, s4Include: [] });
+  check('an empty switch owes nothing', keys(d).length === 0, keys(d).join(','));
+  const e = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
+  check('a block with no `include` (an older portal) owes nothing on the switch', keys(e).length === 0, keys(e).join(','));
+  const f = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: [], poiCfg: { include: ['stations'] } });
+  check('S3 switched stations on and the S4 was built without: landmark-unbuilt row', keys(f).includes('landmark-unbuilt-testtown') && f.items[0].detail.includes('+ stations switched on'), keys(f).join(','));
+  const g = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: ['stations'], poiCfg: { include: ['stations'] } });
+  check('…and built with them: the row goes', keys(g).length === 0, keys(g).join(','));
+  const h = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: undefined, poiCfg: { include: ['stations'] } });
+  check('an S4 whose include could not be read is no opinion, not a debt', keys(h).length === 0, keys(h).join(','));
+  // A pub the customer switched on AND tiered must not read as orphaned: the
+  // candidates are asked with the include the answer would leave the town with.
+  const asked = [];
+  const withPubs = (inc) => (inc && inc.includes('pubs') ? [...CANDS, 'pub:The Swan'] : CANDS);
+  const i = run({ block: { tiers: { 'pub:The Swan': { tier: 'must' } }, include: { pubs: true } }, s3: {}, s4: {}, s4Include: [], candidates: withPubs, asked });
+  check('a tiered pub under a switch-on is OWED, not orphaned', i.orphaned.length === 0 && i.items[0].detail.includes('+ pub:The Swan'), JSON.stringify(i.orphaned));
+  check('…because the candidates were asked with the merged include', asked.some((x) => Array.isArray(x) && x.includes('pubs')), JSON.stringify(asked));
+  const j = landmarkAnswerItems({ maps, towns, compareTiers, readBlock: () => ({ tiers: {}, include: { pubs: true } }), readTown: () => ({ s3Tiers: {}, s4Tiers: {}, s4Include: [], poiCfg: {} }) });
+  check('without the engine’s compareInclude passed, the rows are exactly what they were', j.items.length === 0, JSON.stringify(j.items));
+}
+
 console.log('\n4. what is skipped is counted, never silent');
 {
   const a = run({ block: null, s3: {}, s4: {} });
@@ -139,7 +169,9 @@ console.log('\n5. the wire — asserted on its SOURCE');
   const mod = fs.readFileSync(path.join(HERE, 'landmark_answers.mjs'), 'utf8');
   check('worklist.mjs imports landmarkAnswerItems from ./landmark_answers.mjs', wl.includes("import { landmarkAnswerItems } from './landmark_answers.mjs';"));
   check('…and calls it', wl.includes('return landmarkAnswerItems({'));
-  check('…with the ENGINE\u2019s compareTiers, required from the skill assets', wl.includes("const { compareTiers, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));"));
+  check('…with the ENGINE\u2019s compareTiers, required from the skill assets', wl.includes("const { compareTiers, compareInclude, switchOf, townCandidateKeys } = require(path.join(SK, 'poi_tiers_sync.js'));"));
+  check('…and passes the switch rule to the module (OA-439)', wl.includes('readTown, compareTiers, compareInclude, switchOf,'));
+  check('…and reads the S4’s include and the local store’s poiInclude', wl.includes('s4Include = p4.include || [];') && wl.includes('include: (ov.internal && ov.internal.poiInclude) || {}'));
   check('…and the ENGINE’s candidate reader, so the orphan rule is the engine’s and not a copy', wl.includes('readCandidates: townCandidateKeys,'));
   check('…and drains EVERY warning the module built, rather than composing one of its own', wl.includes('for (const w of landmarkAnswers.warnings) warnings.push(w);'));
   check('the module is what writes the skipped sentence', mod.includes('town(s) not compared'));

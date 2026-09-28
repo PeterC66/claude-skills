@@ -40,6 +40,11 @@
  * as CHANGED with both values so the older one is not lost silently. A key only
  * in the portal is ADDED.
  *
+ * AND THE CATEGORY SWITCH TRAVELS WITH THE TIERS (OA-439, 2026-09-28). The
+ * Landmarks page switches pubs, allotments and stations on or off per map, and
+ * /poi-tiers returns that as `include`; it is carried into poi.include by
+ * compareInclude() below, printed as its own block, and owed like a key.
+ *
  * EXCEPT THE KEYS THE SELECTOR DROPS BEFORE TIERS EVER RUN. applyTiers() runs
  * after selection, so a key for a POI that selection has already removed matches
  * nothing and lands in report.unknownTierKeys — the build-time signal that means
@@ -82,7 +87,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs } = require('./cli.js');
-const { selectPois } = require('./poi_select.js');
+const { selectPois, mergePoiOverlay, OPT_IN_CATS } = require('./poi_select.js');
 
 const STAGE_JS = path.join(__dirname, 'stage.js');
 
@@ -152,7 +157,7 @@ function poiInputs(mapDir) {
  * is filled whether or not the town has classified anything, and it is read
  * BEFORE `as` renaming, which is the identity a tier key is written against.
  */
-function townCandidateKeys(mapDir) {
+function townCandidateKeys(mapDir, include) {
   const inp = poiInputs(mapDir);
   if (!inp) return null;
   const sets = ['osm.json', 'osm2.json']
@@ -162,8 +167,14 @@ function townCandidateKeys(mapDir) {
   const cfgPath = fs.existsSync(path.join(inp.dir, 'routes.json'))
     ? path.join(inp.dir, 'routes.json') : path.join(mapDir, 'ci-reference', 'routes.json');
   let cfg; try { cfg = readJson(cfgPath); } catch { return null; }
+  // `include`, when given, is the poi.include the answer would leave the town
+  // with (OA-439). A customer who switched pubs on and then tiered a pub has a
+  // pub key the on-disk include cannot see, and without this it would read as
+  // ORPHANED — a customer's answer quietly written off, the failure the fail-open
+  // rule above exists to avoid.
+  const poi = Array.isArray(include) ? { ...(cfg.poi || {}), include } : (cfg.poi || {});
   const report = {};
-  try { selectPois(sets, cfg.poi || {}, report); } catch { return null; }
+  try { selectPois(sets, poi, report); } catch { return null; }
   return Array.isArray(report.candidates) ? report.candidates.map((c) => c.key) : null;
 }
 
@@ -255,6 +266,41 @@ function mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) {
   const out = {};
   for (const k of Object.keys(merged).sort()) out[k] = denormRule(merged[k]);
   return out;
+}
+
+/**
+ * THE CATEGORY SWITCH (OA-439). The second half of a landmark answer: the
+ * Landmarks page's checkbox per opt-in category, saved as `internal.poiInclude`
+ * ({pubs: true, allotments: false}) and returned by /poi-tiers as `include`.
+ *
+ * The merge is poi_select.js's own mergePoiOverlay(), the function the generator
+ * lays the switch over routes.json with — so what this writes into S3 is exactly
+ * what the portal's render already drew, and there is no second copy of the rule
+ * to drift. `true` adds a category, `false` removes it, anything else is no
+ * opinion. An empty or absent switch is owed nothing and changes nothing.
+ *
+ *   from  the source's poi.include (an array, [] when it has none)
+ *   to    what it would be with the switch laid over it
+ *   on    categories the switch adds;  off  categories it removes
+ *   owed  on or off is non-empty
+ */
+function compareInclude(sourceInclude, portalSwitch) {
+  const from = Array.isArray(sourceInclude) ? sourceInclude.slice() : [];
+  const merged = mergePoiOverlay({ include: from }, { poiInclude: portalSwitch });
+  const to = Array.isArray(merged.include) ? merged.include : from;
+  const on = to.filter((c) => !from.includes(c));
+  const off = from.filter((c) => !to.includes(c));
+  return { from, to, on, off, owed: on.length + off.length > 0 };
+}
+
+/**
+ * A poi.include array as the switch that would reproduce it — every opt-in
+ * category answered, true or false. For comparing two SOURCES (S3 against the
+ * S4 that drew it), where one side is an array rather than a customer's switch.
+ */
+function switchOf(include) {
+  const inc = Array.isArray(include) ? include : [];
+  return Object.fromEntries(OPT_IN_CATS.map((c) => [c, inc.includes(c)]));
 }
 
 /** The portal map that IS this town: one area map whose name equals the folder. */
@@ -363,7 +409,15 @@ function printReport(town, cmp, where) {
     console.log('    or leave it and report it is a decision about somebody else\'s saved answer — so this tool only reports it.');
   }
   if (!cmp.narrowed) console.log('  (no ci-reference or S2 geometry in this tree, so a stale identity cannot be told from a real debt — every ADDED key below is unverified)');
-  console.log(cmp.owed ? `  => the source is OWED ${cmp.added.length + cmp.changed.length} key(s)` : '  => nothing owed — the source already carries the portal\'s answer');
+  const inc = cmp.include;
+  if (inc && inc.owed) {
+    console.log(`  CATEGORY SWITCH: poi.include [${inc.from.join(', ')}] -> [${inc.to.join(', ')}]`);
+    for (const c of inc.on) console.log(`    + ${c} switched on`);
+    for (const c of inc.off) console.log(`    - ${c} switched off`);
+  }
+  const n = cmp.added.length + cmp.changed.length;
+  const owed = [n ? `${n} key(s)` : '', inc && inc.owed ? 'the category switch' : ''].filter(Boolean).join(' and ');
+  console.log(owed ? `  => the source is OWED ${owed}` : '  => nothing owed — the source already carries the portal\'s answer');
 }
 
 async function main() {
@@ -376,30 +430,39 @@ async function main() {
   const poiCfg = info.routes.poi || {};
   const sourceTiers = poiCfg.tiers || {};
 
-  let portalTiers, where, mapLabel = '';
+  let portalTiers, portalSwitch, where, mapLabel = '';
   if (args.from && args.from !== true) {
     const blk = readJson(String(args.from));
     portalTiers = blk.tiers || blk;
+    portalSwitch = blk.tiers ? blk.include : undefined;
     where = `from ${args.from}`;
   } else {
     const { url, token } = portalCredentials(args, portalDir);
     if (!url || !token) die('No portal named: pass --url and --token, set BUSMAPS_URL/BUSMAPS_TOKEN, or put them in the portal checkout\'s .env (--portal DIR).');
     const { block, map } = await fetchPortalBlock({ url, token, town, mapId: args['map-id'] });
     portalTiers = block.tiers || {};
+    portalSwitch = block.include;
     mapLabel = `map ${map.id} (${map.slug || map.name})`;
     where = `from ${url}, ${mapLabel}, ${block.counts ? `${block.counts.answered} answered (${block.counts.saved} saved in the portal, ${block.counts.pack} in its pack)` : `${Object.keys(portalTiers).length} keys`}`;
   }
 
-  const candidates = townCandidateKeys(info.dir);
-  const cmp = compareTiers(sourceTiers, portalTiers, poiCfg, candidates);
+  // The switch first: the candidates a tier key is checked against are the ones
+  // the town would have AFTER it, or a pub answer reads as orphaned (OA-439).
+  const include = compareInclude(poiCfg.include, portalSwitch);
+  const candidates = townCandidateKeys(info.dir, include.owed ? include.to : undefined);
+  const cmp = { ...compareTiers(sourceTiers, portalTiers, poiCfg, candidates), include };
+  cmp.owed = cmp.owed || include.owed;
   if (args.json) { console.log(JSON.stringify({ town, source: info.rec.id, where, ...cmp }, null, 2)); return; }
   printReport(town, cmp, where);
 
   if (!args.apply) { if (cmp.owed) console.log('\n  dry run — pass --apply to write a new S3 run carrying the merge'); return; }
   if (!cmp.owed) { console.log('\n  --apply: nothing to write'); return; }
-  const merged = { ...info.routes, poi: { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) } };
+  const poi = { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) };
+  if (include.owed) poi.include = include.to;
+  const merged = { ...info.routes, poi };
+  const switched = include.owed ? `; poi.include [${include.from.join(', ')}] -> [${include.to.join(', ')}] from the category switch (OA-439)` : '';
   const note = (args.note && args.note !== true) ? String(args.note)
-    : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable and ${cmp.orphaned.length} orphaned not written. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
+    : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable and ${cmp.orphaned.length} orphaned not written${switched}. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
   const newDir = writeNewS3(info, merged, note, byArgs(args.by));
   console.log(`\n  wrote and committed a new S3 run: ${newDir}`);
   console.log('  Next: a rollout dry run reads the latest S3 — and it WILL refuse with STALE-INPUTS, because this run');
@@ -408,7 +471,7 @@ async function main() {
   console.log(`    node rollout.js --town "${town}" --force --buses "${buses}"`);
 }
 
-module.exports = { normRule, normTiers, denormRule, unreachableKeys, unreachableReasons, poiInputs, townCandidateKeys, compareTiers, mergeTiers, findPortalMap, portalCredentials, fetchPortalBlock };
+module.exports = { normRule, normTiers, denormRule, unreachableKeys, unreachableReasons, poiInputs, townCandidateKeys, compareTiers, mergeTiers, compareInclude, switchOf, findPortalMap, portalCredentials, fetchPortalBlock };
 
 if (require.main === module) {
   // exitCode rather than exit(): a hard exit under an open fetch handle trips a

@@ -636,6 +636,26 @@ if (!DRY) {
   if (fs.existsSync(recFile)) {
     try { prior = JSON.parse(fs.readFileSync(recFile, 'utf8')); } catch (e) { die(`${recFile} is not JSON (${e.message}) — remove it and decide again`); }
   }
+  /* THE RECORD MUST BE ABOUT THIS BUILD (buses-data OA-492, 2026-09-27). A record
+   * left by a call about another map — St Neots' REUSE, read next by a call for
+   * High Wycombe from the same folder — was reported as "ALREADY DECIDED" for the
+   * second map with no warning. Every record names its map and build (see
+   * writeDecision), so compare them: the map name first, because the same map
+   * reached through a worktree has a different path; the path only when an older
+   * record carries no map. A record naming neither predates both and is trusted. */
+  if (prior) {
+    const thisMap = m.town || path.basename(BUILD);
+    const foreign = prior.map ? prior.map !== thisMap
+      : (prior.build ? path.resolve(prior.build) !== BUILD : false);
+    if (foreign)
+      die(`${recFile} is a decision about another map, not this one.\n`
+        + `  recorded for : ${prior.map || '(no map)'}  (${prior.build || 'no build path'})\n`
+        + `  this call    : ${thisMap}  (${BUILD})\n`
+        + '  Reading it as this map\'s decision is the OA-492 failure. Stand in this map\'s own\n'
+        + '  S6 run folder, or remove the stray record, and decide again. If this run folder\n'
+        + '  deliberately carries the other map\'s answer, ask about that map as it was decided:\n'
+        + `      --build "${prior.build || '<that map\'s folder>'}" --foreign-build`);
+  }
   const was = prior && prior.decision;
   if (was === 'BUY' || was === 'REUSE') {
     if (ALREADY_BOUGHT !== null) die(`--already-bought: this run dir is already decided ${was} (${recFile}); nothing to record`);

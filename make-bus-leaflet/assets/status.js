@@ -55,8 +55,7 @@ const { parseArgs, resolveBuses, resolvePortal } = require('./cli');
 const { SK, gate, sameIgnoringLineEndings, findTowns, findPlaces, readJson, latestRunDir, EXTERNAL_GENERATOR, dataScriptDrift, dataFeedDrift, PLACE_IGNORE, portalFixtureEnv } = require('./gate_lib');
 const { sameBytesIgnoringLineEndings } = require('./line_endings');
 const portalFixtures = require('./portal_fixtures');   // the vendored-fixture half of the portal join (OA-419)
-const { pinBehindAsker } = require('./pin_behind');
-const processSizeMod = require('./process_size');   // the process's own size, a chore (OA-488)     // a portal AHEAD of this pin is a chore (OA-480)
+const { pinBehindAsker } = require('./pin_behind');     // a portal AHEAD of this pin is a chore (OA-480)
 const { computeEngineVersion, computePlaceEngineVersion } = require('./engine_version');
 // The engine a map was BUILT with, and how to get it back (OA-430). The worktree
 // machinery lived here until then; it moved so that the stamp's writer and its
@@ -1473,7 +1472,7 @@ function commitBad(c) {
 async function main() {
   const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
   const commit = commitmentRows();
-  const procSize = processSizeMod.processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL });
+  const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL });   // a chore, never in `bad` (OA-488)
   if (AS_JSON || JSON_OUT) {
     const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, processSize: procSize }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
@@ -1685,10 +1684,7 @@ async function main() {
   // S6 claims (OA-273): printed whether or not anything is wrong — the queued
   // count is the queue Peter works. Section text and why: s6_claims.js.
   require('./s6_claims.js').printSection(s6Claims);
-
-  // The process's own size (OA-488): memory words, linked worktrees, pushes.
-  // Printed, never in `bad` -- a big number is a chore, not a fault.
-  processSizeMod.printSection(procSize);
+  require('./process_size').printSection(procSize);   // OA-488: printed, never in `bad`
 
   // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
   // computed once, above the JSON branch, so both output forms agree — see there.

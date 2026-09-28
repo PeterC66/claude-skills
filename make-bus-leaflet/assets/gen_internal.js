@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, placerIds, mergePoiOverlay, printsName, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride } = require(_dep('poi_select.js'));
+const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -1018,7 +1018,7 @@ function poiMark(p){
   const must = p.tier==='must' && !!p.name;
   const showName = o.force===true || must || (auto && o.force!==false);
   if(!showName) return;
-  const opt = {id:'poi:'+u};
+  const opt = {id:'poi:'+u, priority:labelPriority(p)};   // a pub's name seats last (poi_select.js)
   if(must){ opt.priority=10; opt.mustPlace=true; MUST.add('poi:'+u); }
   placeLabel(x,y,p.name,2.5,'#222',false,poiLabelOverride(o.label,RJ.notToScale),poiBox.get(u)||null,opt);
 }

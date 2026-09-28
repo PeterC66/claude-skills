@@ -86,6 +86,24 @@ test('and every category draws its OWN glyph rather than the fallback dot (OA-34
     'the legacy icon set has no station either (OA-453), so it draws the grey default blob');
 });
 
+test('every category classify() can return has a glyph in BOTH sets (OA-497, the join)', () => {
+  // Read from the classifier itself, so a category added there without a drawing
+  // fails here rather than shipping as a dot: the 28 September review added five.
+  const { classify, OPT_IN_CATS } = require('./_engine.js').load('poi_select.js');
+  const TAGS = [{ shop: 'supermarket' }, { amenity: 'pharmacy' }, { amenity: 'doctors' }, { amenity: 'library' },
+    { tourism: 'museum' }, { amenity: 'townhall' }, { amenity: 'community_centre' }, { leisure: 'sports_centre' },
+    { amenity: 'school' }, { leisure: 'park', name: 'P' }, { amenity: 'hospital' }, { amenity: 'theatre' },
+    { amenity: 'cinema' }, { amenity: 'college' }, { landuse: 'allotments' }, { amenity: 'post_office' },
+    { amenity: 'pub' }, { railway: 'station' }, { landuse: 'industrial' }];
+  const cats = new Set(TAGS.map((t) => (classify(t, { include: OPT_IN_CATS }) || [])[0]));
+  assert.ok(!cats.has(undefined), 'a sample stopped classifying');
+  const dot = icon('a-category-that-does-not-exist', 10, 10, 2.2);
+  for (const cat of cats) {
+    assert.ok(GRID_COL[cat], `${cat} has no grid colour, so the grid set draws it as a dot`);
+    assert.notStrictEqual(icon(cat, 10, 10, 2.2), dot, `${cat} has no legacy drawing`);
+  }
+});
+
 test('the grid set is drawn charcoal by parameter, never by running inkify over it', () => {
   // "Authored one-colour-per-glyph, so charcoal is a parameter rather than a
   // regex over the artwork — inkify is not used on this set and must not be."

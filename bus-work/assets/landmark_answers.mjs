@@ -57,10 +57,10 @@
  * @param {Array<{id, name, kind, slug}>} p.maps  portal maps (any mode)
  * @param {Array<{name, dir}>} p.towns            local towns (gate_lib.findTowns shape)
  * @param {(map) => object|null} p.readBlock      the portal's poi-tiers block, or null if unreadable
- * @param {(dir) => object|null} p.readTown       {s3Tiers, s4Tiers, poiCfg, s3Id, s4Version, s4Include?} or null
+ * @param {(dir) => object|null} p.readTown       {s3Tiers, s4Tiers, poiCfg, s3Id, s4Version, s4Include?, s4Exclude?} or null
  * @param {(src, por, poiCfg, candidates) => object} p.compareTiers  the engine's rule
- * @param {(srcInclude, portalSwitch) => object} [p.compareInclude]  the engine's switch rule (OA-439)
- * @param {(include) => object} [p.switchOf]      an include array as a switch, for S3 against S4
+ * @param {(srcInclude, portalSwitch, srcExclude?) => object} [p.compareInclude]  the engine's switch rule (OA-439; exclude since OA-497)
+ * @param {(include, exclude?) => object} [p.switchOf]  a poi block's switches as a switch, for S3 against S4
  * @param {(dir, include?) => string[]|null} [p.readCandidates]  the town's identities today, or null
  * @param {string} [p.syncCmd]                    how to run poi_tiers_sync.js, for the row
  * @returns {{ items, checked, skipped: Array<{town, why}>, orphaned: Array<{town, keys}> }}
@@ -91,7 +91,7 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
   };
   /* The switch, or a comparison that owes nothing when the engine's rule was not passed. */
   const NONE = { on: [], off: [], owed: false };
-  const switchDiff = (from, sw) => (compareInclude && sw && typeof sw === 'object' ? compareInclude(from, sw) : NONE);
+  const switchDiff = (from, sw, fromExclude) => (compareInclude && sw && typeof sw === 'object' ? compareInclude(from, sw, fromExclude) : NONE);
   const switchLines = (inc) => [...inc.on.map((c) => `+ ${c} switched on`), ...inc.off.map((c) => `- ${c} switched off`)];
   const switchWhy = (inc) => (inc.owed ? ` The category switch changes poi.include: ${[...inc.on.map((c) => `${c} on`), ...inc.off.map((c) => `${c} off`)].join(', ')}.` : '');
   const owedTitle = (n, inc) => [n ? `${n} key${n === 1 ? '' : 's'}` : '', inc.owed ? 'the category switch' : ''].filter(Boolean).join(' and ');
@@ -106,8 +106,11 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
     // 1. portal -> source
     const block = readBlock(m);
     if (block && block.tiers) {
-      const inc = switchDiff((town.poiCfg || {}).include, block.include);
-      const c = compare(town.s3Tiers || {}, block.tiers, town.poiCfg || {}, dir, inc.owed ? inc.to : undefined);
+      const inc = switchDiff((town.poiCfg || {}).include, block.include, (town.poiCfg || {}).exclude);
+      // The config AFTER the switch (OA-497): a tier on a category the same answer
+      // switches on must not be culled as unreachable by the config before it.
+      const cfg = inc.owed ? { ...(town.poiCfg || {}), include: inc.to, exclude: inc.excludeTo } : (town.poiCfg || {});
+      const c = compare(town.s3Tiers || {}, block.tiers, cfg, dir, inc.owed ? inc.to : undefined);
       if (c.orphaned && c.orphaned.length) orphaned.push({ town: m.name, keys: c.orphaned.map((o) => o.key) });
       if (c.owed || inc.owed) {
         const n = c.added.length + c.changed.length;
@@ -131,7 +134,7 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
     if (town.s4Tiers !== undefined) {
       // An S4 routes.json that could not say what it included is no opinion, not
       // an empty include: `s4Include` undefined owes nothing on the switch.
-      const inc2 = switchOf && town.s4Include !== undefined ? switchDiff(town.s4Include, switchOf((town.poiCfg || {}).include)) : NONE;
+      const inc2 = switchOf && town.s4Include !== undefined ? switchDiff(town.s4Include, switchOf((town.poiCfg || {}).include, (town.poiCfg || {}).exclude), town.s4Exclude) : NONE;
       const c2 = compare(town.s4Tiers || {}, town.s3Tiers || {}, town.poiCfg || {}, dir);
       if (c2.owed || inc2.owed) {
         const n = c2.added.length + c2.changed.length;

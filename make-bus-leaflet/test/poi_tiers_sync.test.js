@@ -69,15 +69,22 @@ test('a portal answer with NO `as` keeps the source’s rename — an absent ren
   assert.deepStrictEqual(renamed['community:Bellfield'], { tier: 'may', as: 'Bellfield Hub' });
 });
 
-test('industrial keys are UNREACHABLE under industrialKeep "none" and reachable otherwise', () => {
+test('industrial keys are UNREACHABLE while estates are off, and reachable once they are on', () => {
   const portal = { 'industrial:Cressex': { tier: 'miss' }, 'shop:Asda': { tier: 'must' } };
   assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'none' }), ['industrial:Cressex']);
-  assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'named' }), []);
-  assert.deepStrictEqual(S.unreachableKeys(portal, {}), []);
+  assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'named', include: ['industrial'] }), []);
+  assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'named' }), ['industrial:Cressex'],
+    'industrialKeep chooses which estates, and does not switch them on');
+  // OA-497: estates are off by default, so a town that says nothing cannot reach one.
+  assert.deepStrictEqual(S.unreachableKeys(portal, {}), ['industrial:Cressex']);
+  assert.deepStrictEqual(S.unreachableKeys(portal, { include: ['industrial'] }), []);
+  // And a default-ON category switched off is culled the same way.
+  assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'must' }, { exclude: ['pubs'] }), ['pub:The Bell']);
+  assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'must' }, {}), []);
   const none = S.compareTiers({}, portal, { industrialKeep: 'none' });
   assert.deepStrictEqual(none.added, ['shop:Asda']);
   assert.deepStrictEqual(none.unreachable, ['industrial:Cressex']);
-  const named = S.compareTiers({}, portal, { industrialKeep: 'named' });
+  const named = S.compareTiers({}, portal, { industrialKeep: 'named', include: ['industrial'] });
   assert.deepStrictEqual(named.added.sort(), ['industrial:Cressex', 'shop:Asda']);
   assert.deepStrictEqual(named.unreachable, []);
 });
@@ -164,14 +171,20 @@ test('merge keeps source-only keys, takes the portal on conflict, skips unreacha
 });
 
 test('the category switch (OA-439): on adds, off removes, anything else is no opinion', () => {
-  const a = S.compareInclude([], { pubs: true });
-  assert.deepStrictEqual([a.to, a.on, a.off, a.owed], [['pubs'], ['pubs'], [], true]);
-  const b = S.compareInclude(['pubs', 'allotments'], { pubs: false, stations: true });
-  assert.deepStrictEqual(b.to, ['allotments', 'stations']);
-  assert.deepStrictEqual([b.on, b.off], [['stations'], ['pubs']]);
+  const a = S.compareInclude([], { allotments: true });
+  assert.deepStrictEqual([a.to, a.on, a.off, a.owed], [['allotments'], ['allotments'], [], true]);
+  const b = S.compareInclude(['pubs', 'allotments'], { allotments: false, industrial: true });
+  assert.deepStrictEqual(b.to, ['pubs', 'industrial']);
+  assert.deepStrictEqual([b.on, b.off], [['industrial'], ['allotments']]);
+  // OA-497: pubs and stations are on by default, so switching one off is owed
+  // and lands in poi.exclude, and switching one on where nothing said off is not.
+  const p = S.compareInclude(['pubs'], { pubs: false });
+  assert.deepStrictEqual([p.to, p.excludeTo, p.on, p.off, p.owed], [[], ['pubs'], [], ['pubs'], true]);
+  const q = S.compareInclude([], { stations: true }, ['stations']);
+  assert.deepStrictEqual([q.excludeTo, q.on, q.owed], [[], ['stations'], true]);
   // Already true of the source, an empty switch, no switch, a junk value, a
-  // category outside the three: all owe nothing and change nothing.
-  for (const [src, sw] of [[['pubs'], { pubs: true }], [[], { pubs: false }], [['pubs'], {}], [['pubs'], undefined], [[], { pubs: 'yes' }], [[], { museums: true }]]) {
+  // category outside the switchable set: all owe nothing and change nothing.
+  for (const [src, sw] of [[['pubs'], { pubs: true }], [[], { pubs: true }], [[], { allotments: false }], [['pubs'], {}], [['pubs'], undefined], [[], { pubs: 'yes' }], [[], { museums: true }]]) {
     const c = S.compareInclude(src, sw);
     assert.strictEqual(c.owed, false, JSON.stringify([src, sw]));
     assert.deepStrictEqual(c.to, src);
@@ -181,10 +194,10 @@ test('the category switch (OA-439): on adds, off removes, anything else is no op
 });
 
 test('switchOf answers every opt-in category, so an S3 compared against its S4 owes exactly the difference', () => {
-  assert.deepStrictEqual(S.switchOf(['stations']), { allotments: false, pubs: false, stations: true });
-  assert.deepStrictEqual(S.switchOf(undefined), { allotments: false, pubs: false, stations: false });
-  const c = S.compareInclude(['pubs'], S.switchOf(['stations']));
-  assert.deepStrictEqual([c.on, c.off], [['stations'], ['pubs']]);
+  assert.deepStrictEqual(S.switchOf(['allotments']), { allotments: true, pubs: true, stations: true, postoffices: false, industrial: false });
+  assert.deepStrictEqual(S.switchOf(undefined, ['pubs']), { allotments: false, pubs: false, stations: true, postoffices: false, industrial: false });
+  const c = S.compareInclude(['allotments'], S.switchOf(['industrial'], ['pubs']));
+  assert.deepStrictEqual([c.on, c.off], [['industrial'], ['allotments', 'pubs']]);
   assert.strictEqual(S.compareInclude(['pubs'], S.switchOf(['pubs'])).owed, false);
 });
 

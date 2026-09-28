@@ -85,10 +85,17 @@
  * The OSM tag combinations this engine draws, in precedence order — the first
  * match wins, so a leisure centre tagged as a school stays a school only if the
  * school test comes first. Returns [category, name] or null for "not a POI".
- * `allotments`, `pubs` and `stations` are opt-in per town (poi.include) because most towns
- * do not want them; everything else is on for every town.
+ * The switchable categories are OPT_IN_CATS, read through categoryOn(); every
+ * other category is on for every town.
  *
- * WHY `pubs` IS OPT-IN RATHER THAN A CATEGORY LIKE THE OTHERS (OA-340, Peter's
+ * PUBS WERE OPT-IN FROM 13 SEPTEMBER AND ARE ON BY DEFAULT FROM 28 SEPTEMBER.
+ * Peter's review of that date kept the category switchable, so a town can still
+ * switch them off, and turned the default round. Their labels are seated after
+ * every other name (labelPriority() below), which is the answer to the crowding
+ * the measurement found. The original reasoning follows, because it is why the
+ * switch exists at all.
+ *
+ * WHY `pubs` WAS OPT-IN RATHER THAN A CATEGORY LIKE THE OTHERS (OA-340, Peter's
  * decision of 2026-09-13, taken on the measurement in
  * `Development Docs/pubs-as-landmarks-measured_2026-09-13.md`). Estate-wide the
  * category is 116 more named symbols on top of the 340 the eight town sheets
@@ -99,19 +106,47 @@
  * with the local adviser, who knows that St Neots navigates by three pubs and
  * not by twenty-one.
  */
+/*
+ * THE 28 SEPTEMBER 2026 REVIEW (Peter's decisions, buses-data OA-497). Every
+ * category below is one of three things, and this list is the whole answer:
+ *   A  always drawn: supermarket, GP, pharmacy, library, museum, town hall,
+ *      community centre, leisure, school, park, and the four the review added,
+ *      hospital, theatre or arts centre, cinema, college or university.
+ *   switchable: OPT_IN_CATS, read through categoryOn(). `pubs` and `stations`
+ *      are ON unless a town switches them off (DEFAULT_ON_CATS); `allotments`,
+ *      `postoffices` and `industrial` (B) are OFF unless a town switches them on.
+ *   C  not fetched and not drawn: market places, places of worship, dentists,
+ *      hotels, police, care homes, toilets, nature reserves, golf, cemeteries,
+ *      retail parks. They have no line here on purpose.
+ * The four new A categories go AFTER `park`, so an element that matched an older
+ * category still matches it: a college that is also tagged a sports centre stays
+ * a leisure centre, exactly as it was drawn before the review.
+ */
 function classify(t, poiCfg) {
   const POI = poiCfg || {};
+  const on = (cat) => categoryOn(POI, cat);
   if(t.shop==='supermarket') return ['shop', t.name||'Supermarket'];
   if(t.amenity==='pharmacy')  return ['pharmacy', t.name||''];
   if(t.amenity==='doctors')   return ['gp', t.name||''];
   if(t.amenity==='library')   return ['library', t.name||'Library'];
-  if(t.tourism==='museum')    return ['museum', t.name||'Museum'];
+  /* The pull asked for `amenity=museum` and this read only `tourism=museum`, so a
+   * drafted town lost every museum OpenStreetMap tags the first way. Both now. */
+  if(t.tourism==='museum'||t.amenity==='museum') return ['museum', t.name||'Museum'];
   if(t.amenity==='townhall')  return ['townhall', t.name||'Town Hall'];
   if(t.amenity==='community_centre') return ['community', t.name||'Community Centre'];
   if(t.leisure==='sports_centre'||t.leisure==='fitness_centre') return ['leisure', t.name||'Leisure'];
   if(t.amenity==='school')    return ['school', t.name||'School'];
   if(t.leisure==='park'||t.leisure==='recreation_ground') return ['park', t.name||'Park'];
-  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
+  /* The four A categories the review added. `hospital` and `theatre` were in the
+   * pull and dropped here in silence; `cinema` and `college` were not fetched. */
+  if(t.amenity==='hospital')  return ['hospital', t.name||'Hospital'];
+  if(t.amenity==='theatre'||t.amenity==='arts_centre') return ['theatre', t.name||'Theatre'];
+  if(t.amenity==='cinema')    return ['cinema', t.name||'Cinema'];
+  if(t.amenity==='college'||t.amenity==='university') return ['college', t.name||'College'];
+  if(on('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
+  /* A post office counter inside a supermarket is tagged on the supermarket and is
+   * drawn as one, by the first line above; this finds the ones that stand alone. */
+  if(on('postoffices') && t.amenity==='post_office') return ['postoffice', t.name||'Post Office'];
   /* Below the named categories on purpose: a pub that OpenStreetMap ALSO tags as
    * a community centre or a restaurant-with-rooms is the thing that tag says
    * first, and a town that switched pubs on did not thereby ask for its village
@@ -119,17 +154,34 @@ function classify(t, poiCfg) {
    * 'Pub': a nameless pub is a bare glyph nobody chose, so OA-238's
    * nameless-`miss` default keeps it off the page while still offering it in the
    * chooser — see the `noName` rule below. */
-  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];
+  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||''];
   /* OA-453, the third opt-in: a railway station, which every reader knows and no
    * sheet could mark — St Neots East named its station with a hand-pinned note.
-   * Opt-in for the same reason as pubs: a town that says nothing renders byte for
-   * byte as it did, and whether a station is worth its box is a local answer. A
+   * Switchable for the same reason as pubs, and on by default like them since the
+   * 28 September review: whether a station is worth its box is a local answer. A
    * `halt` is a small station and counts; `station=miniature` is a park railway
    * and does not. The fallback is BLANK, like the pub's, so an unnamed station is
    * offered in the chooser and kept off the page by OA-238's nameless default. */
-  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];
-  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
+  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];
+  /* Industrial estates became switchable, off by default, in the 28 September
+   * review. `poi.industrialKeep` still decides WHICH estates, once they are on. */
+  if(on('industrial') && t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
   return null;
+}
+
+/*
+ * A STATION'S PRINTED NAME (buses-data OA-497). OpenStreetMap names a station
+ * after its town — every station in the estate's pulls on 2026-09-28 was, High
+ * Wycombe, March and St Neots — so on the town's own sheet the bare name reads
+ * as a PLACE label, not a landmark. That was tolerable while a town had to switch
+ * stations on and could rename it with `as`; with stations on by default it would
+ * print on every sheet, so the word goes on here. A name that already says what
+ * it is keeps its own words, and a blank one stays blank so OA-238's nameless
+ * default still keeps it off the page.
+ */
+function stationName(name){
+  if(!name) return '';
+  return /\b(station|halt|parkway)\b/i.test(name) ? name : name + ' Station';
 }
 
 /*
@@ -154,7 +206,11 @@ function classify(t, poiCfg) {
  * (OA-340). It is also an auto-named category with a BLANK fallback, so
  * `noName` below reads an unnamed pub as unnamed and leaves it off the page.
  * `station` (OA-453) is the other, for the same reason: a station symbol is
- * worth its box because it says WHICH station. */
+ * worth its box because it says WHICH station.
+ * The five categories the 28 September review added (hospital, theatre, cinema,
+ * college, post office) are SYMBOL-ONLY, like the library and the museum: they
+ * cost a box and no label on pages where labels already do not fit, and a local
+ * who wants the name printed says `must`, which prints it whatever the category. */
 const AUTO_NAMED_CATS = ['shop','leisure','school','park','community','allotments','pub','station'];
 
 /** Does this POI's own name get printed beside its symbol, or is it symbol-only? */
@@ -163,6 +219,20 @@ function printsName(p){
    * an unnamed green called *Park* names nothing, and neither does an unnamed
    * leisure centre called *Leisure*. One list, in `CATEGORY_LABELS`. */
   return AUTO_NAMED_CATS.includes(p.cat) && !unnamed(p.name);
+}
+
+/*
+ * THE PLACER'S RANK FOR A POI'S NAME (buses-data OA-497, the 28 September
+ * review). The labeller seats labels greedily in `priority` order, highest
+ * first, then longest name first (labeller.js solve()), so a name queued lower is
+ * seated only into the space every other name has left. Pubs went on by default
+ * on that condition: when labels compete, a pub's name loses to a supermarket's,
+ * and to a GP's or a pharmacy's where a `must` prints one (those enter at 10).
+ * Every other POI keeps the default 0, which keeps every sheet with no pub on it
+ * byte-identical.
+ */
+function labelPriority(p){
+  return p && p.cat === 'pub' ? -1 : 0;
 }
 
 /*
@@ -199,7 +269,8 @@ function poiLabelOverride(label, notToScale){
  * them, so a new category with a new fallback cannot quietly escape it.
  */
 const CATEGORY_LABELS = new Set(['Supermarket','Library','Museum','Town Hall',
-  'Community Centre','Leisure','School','Park','Allotments','Industrial Estate']);
+  'Community Centre','Leisure','School','Park','Allotments','Industrial Estate',
+  'Hospital','Theatre','Cinema','College','Post Office']);
 
 /** True when this POI has no name of its own — blank, or a label standing in for one. */
 function unnamed(name){ return !name || CATEGORY_LABELS.has(name); }
@@ -654,12 +725,42 @@ function placerIds(pois){
 }
 
 /**
- * The categories a town switches on rather than gets — the three `classify()`
- * reads from `poi.include`. A customer's category switch may name these and
- * nothing else; every other category is on for every town and is answered one
- * place at a time with a tier.
+ * The categories a town can switch — the ones `classify()` reads through
+ * categoryOn(). A customer's category switch may name these and nothing else;
+ * every other category is on for every town and is answered one place at a time
+ * with a tier. `postoffices` and `industrial` joined on 28 September 2026.
  */
-const OPT_IN_CATS = ['allotments', 'pubs', 'stations'];
+const OPT_IN_CATS = ['allotments', 'pubs', 'stations', 'postoffices', 'industrial'];
+
+/**
+ * The switchable categories that are ON until a town switches them off (the 28
+ * September 2026 review). The rest of OPT_IN_CATS are off until switched on.
+ */
+const DEFAULT_ON_CATS = ['pubs', 'stations'];
+
+/*
+ * IS THIS SWITCHABLE CATEGORY DRAWN FOR THIS TOWN? The one answer, read by
+ * classify() and exported so the portal's Landmarks page can ask the same
+ * question rather than read `poi.include` as if it were the whole answer.
+ *
+ *   poi.exclude  switched OFF. Wins over everything, so a town can turn off a
+ *                category that is on by default. Written by mergePoiOverlay()
+ *                for a default-on category and never needed for the others.
+ *   poi.include  switched ON, as it has always meant.
+ *   otherwise    DEFAULT_ON_CATS decides.
+ *
+ * `poi.industrialKeep` does NOT switch estates on. On 2026-09-28 only St Ives
+ * (a named list) and High Wycombe Aldi ("named") were drawing any, and both were
+ * our own choices rather than a customer's, so Peter ruled they follow the new
+ * default like every other map; industrialKeep still chooses WHICH estates once
+ * a town has switched them on.
+ */
+function categoryOn(poiCfg, cat){
+  const P = poiCfg || {};
+  if (Array.isArray(P.exclude) && P.exclude.includes(cat)) return false;
+  if (Array.isArray(P.include) && P.include.includes(cat)) return true;
+  return DEFAULT_ON_CATS.includes(cat);
+}
 
 /**
  * A town's `routes.json` poi block with the customer's overrides laid over it —
@@ -675,7 +776,10 @@ const OPT_IN_CATS = ['allotments', 'pubs', 'stations'];
  *   poiInclude { "<opt-in category>": true | false } — the category switch.
  *              `true` adds the category to poi.include and `false` removes it,
  *              so a customer can switch pubs OFF on a town whose pack switched
- *              them on as well as on where it did not. A key outside
+ *              them on as well as on where it did not. Where removing it from
+ *              poi.include is not enough — a DEFAULT_ON_CATS category — `false`
+ *              also adds it to poi.exclude, and `true` takes it back out. A
+ *              category that is off without one never gets one. A key outside
  *              OPT_IN_CATS, or a value that is not a boolean, is ignored here:
  *              the portal's safeSubset.js refuses it with a reason before it is
  *              ever saved, and a generator is the wrong place to explain one.
@@ -695,13 +799,26 @@ function mergePoiOverlay(base, ov) {
   if (tiers) out.tiers = Object.assign({}, b.tiers || {}, tiers);
   if (touches) {
     let inc = Array.isArray(b.include) ? b.include.slice() : [];
+    let exc = Array.isArray(b.exclude) ? b.exclude.slice() : [];
+    // Each switch writes the least that makes categoryOn() give its answer: an
+    // include entry only where the category would otherwise be off, an exclude
+    // entry only where it would otherwise be on.
+    const now = (c) => categoryOn(Object.assign({}, b, { include: inc, exclude: exc }), c);
     for (const c of OPT_IN_CATS) {
-      if (sw[c] === true && !inc.includes(c)) inc.push(c);
-      if (sw[c] === false) inc = inc.filter((x) => x !== c);
+      if (sw[c] === true) {
+        exc = exc.filter((x) => x !== c);
+        if (!now(c)) inc.push(c);
+      }
+      if (sw[c] === false) {
+        inc = inc.filter((x) => x !== c);
+        if (now(c)) exc.push(c);
+      }
     }
     out.include = inc;
+    // Only written when there is something in it, or when the pack had one.
+    if (exc.length || Array.isArray(b.exclude)) out.exclude = exc;
   }
   return out;
 }
 
-module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

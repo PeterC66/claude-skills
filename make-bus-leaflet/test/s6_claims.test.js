@@ -113,3 +113,41 @@ test('CONTROL: a queued entry with no claims list at all is still named — the 
   }));
   assert.match(find(out, /^ {2}queued:/), /SF-008/);
 });
+
+/* THE 14-DAY LIMIT (buses-data OA-484, Peter's ruling of 2026-09-28). A decided
+ * include still waiting for the rebuild that prints it turns the board red
+ * fourteen days after the LATER of its decidedOn and the day the limit landed. */
+const owedV = (owed) => verdict({ facts: owed.length, decided: owed.length, register: { owed } });
+const waitingPair = (extra = {}) => ({ id: 'SF-011', route: 'TIGER', map: 'March', state: 'waiting', basis: 'sheet', sheet: { probe: 'x', sheets: 2, printedIn: [] }, decidedOn: '2026-09-04', ...extra });
+
+test('RED: a waiting pair one day past its limit reddens the board and is named', () => {
+  const v = owedV([waitingPair()]);
+  assert.strictEqual(S6.isRed({ verdict: v, error: null, today: '2026-10-13' }), true);
+  const out = []; S6.printSection({ verdict: v, error: null, today: '2026-10-13' }, (s) => out.push(s));
+  assert.match(find(out, /^ {2}RED SF-011/), /March has waited past 2026-10-12/);
+});
+
+test('CONTROL: the same pair ON its due day is green, and the section says when it falls due', () => {
+  const v = owedV([waitingPair()]);
+  assert.strictEqual(S6.isRed({ verdict: v, error: null, today: '2026-10-12' }), false);
+  const out = []; S6.printSection({ verdict: v, error: null, today: '2026-10-12' }, (s) => out.push(s));
+  assert.match(find(out, /^ {2}limit/), /SF-011 \(March\) due by 2026-10-12/);
+  assert.strictEqual(find(out, /^ {2}RED/), '');
+});
+
+test('the clock starts at the LATER date: a fact decided after the landing gets its own fourteen days', () => {
+  const [c] = S6.owedClock(owedV([waitingPair({ decidedOn: '2026-10-05' })]));
+  assert.strictEqual(c.due, '2026-10-19');
+  const [old] = S6.owedClock(owedV([waitingPair({ decidedOn: '2026-08-01' })]));
+  assert.strictEqual(old.due, '2026-10-12', 'a fact decided before the landing is timed from ' + S6.OWED_LIMIT_LANDED);
+});
+
+test('CONTROL: a PAID pair is never overdue, however old', () => {
+  const v = owedV([waitingPair({ state: 'carried', decidedOn: '2026-01-01' })]);
+  assert.strictEqual(S6.isRed({ verdict: v, error: null, today: '2027-01-01' }), false);
+});
+
+test('CONTROL: a tree with nothing to gate is never reddened by the limit', () => {
+  const v = { notARepository: true, why: 'fixture', register: { present: false, findings: [], silences: [], owed: [waitingPair()] }, reports: 0, uncovered: [], red: false };
+  assert.strictEqual(S6.isRed({ verdict: v, error: null, today: '2027-01-01' }), false);
+});

@@ -93,6 +93,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems } from './bods_scan.mjs';
+import { readGtfsDirt, gtfsUncommittedItems } from './gtfs_uncommitted.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh } from './refresh_grades.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
@@ -735,6 +736,16 @@ for (const it of fromCommitments()) add(it);
   const scan = bodsScanItems(readScanState({ busesDir: BUSES }), { busesDir: BUSES });
   for (const it of scan.items) add(it);
   for (const w of scan.warnings) warnings.push(w);
+}
+
+// The other half: a refresh that DID run and was never committed (buses-data
+// OA-505). The refresh script has no git calls and from 1 October runs with no
+// dialog, so nothing else would say that _gtfs/ holds a month nobody committed.
+// One `git status` limited to _gtfs; ignored builds never count.
+{
+  const dirt = gtfsUncommittedItems(readGtfsDirt({ busesDir: BUSES }), { busesDir: BUSES });
+  for (const it of dirt.items) add(it);
+  for (const w of dirt.warnings) warnings.push(w);
 }
 
 // Ranks 1-6 and 9 — the portal's own queues, ranked by the portal. Its shell

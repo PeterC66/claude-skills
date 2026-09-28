@@ -435,6 +435,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-bods-scan
 
+      # buses-data OA-505 (2026-09-28), codebase review Tier 2.1. The other half
+      # of the BODS-scan row: a refresh that ran and was never committed. The
+      # refresh script has no git calls, so this row is the only thing that says
+      # _gtfs/ holds a month nobody committed. Stub git for most cases, then one
+      # throwaway repository in the runner's temp folder; no network.
+      - name: Prove the uncommitted-refresh row can appear and stay quiet
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-gtfs-uncommitted
+
       # buses-data OA-426 (2026-09-22), R9 item 2. The refresh GRADE is the fact a
       # tick will rebuild a town on: SAFE means the scan found nothing needing a
       # judgement. A grade that never arrives costs a chore; a grade that arrives

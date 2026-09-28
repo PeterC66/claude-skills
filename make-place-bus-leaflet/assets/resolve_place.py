@@ -12,8 +12,13 @@ a POINT feature (a named place) rather than a whole town, and surfaces ambiguity
 Usage:
   python resolve_place.py "<place>" --town "<Town/area>" --region <Region>
       [--radius-m 500] [--pick N] [--out place.json]
+  python resolve_place.py "<place>" --town "<Town/area>" --region <Region>
+      --stops <ATCO or NaPTAN code>[,<code>...] [--naptan <naptan.sqlite>] [--radius-m 500]
+  python resolve_place.py "<place>" --town "<Town/area>" --region <Region>
+      --at <lat>,<lon> [--radius-m 500]
 
-  "<place>"   the feature name as a person would say it, e.g. "Tesco Extra".
+  "<place>"   the feature name as a person would say it, e.g. "Tesco Extra". In the
+              --stops and --at modes it is the map's name, e.g. "St Neots East".
   --town      town/area for disambiguation, e.g. "St Neots". Strongly recommended.
   --region    REQUIRED. The registered GTFS region this place sits in, e.g.
               "Cambridgeshire". Used twice, which is why it is not optional: it
@@ -22,6 +27,22 @@ Usage:
               --region to be told which regions are registered.
   --pick N    force selection of the Nth candidate (1-based) when auto-pick is wrong.
   --radius-m  walkshed radius stored on place.json (default 500). Overridable later.
+  --stops     centre on BUS STOPS rather than a named feature: a comma-separated list
+              of ATCO codes or the NaptanCodes printed on the flag (CMBGJWJP). Each
+              is looked up in `_gtfs/naptan.sqlite` (found walking up from the cwd,
+              or --naptan), and the centre is their midpoint. No network call.
+  --at        centre on a coordinate the customer gave, "52.2275,-0.24335". No
+              network call. Write it --at=<lat>,<lon> if the first number is
+              negative, or argparse reads it as a flag.
+
+BY STOPS (2026-09-28, buses-data OA-451 item 1). A customer who names bus stops
+rather than a feature -- St Neots East was "the Loves Way stops" -- used to force a
+hand-written place.json, because Nominatim resolves names and a stop pair has none.
+--stops writes the same file that build wrote by hand: the midpoint, class
+highway/bus_stop, and place-candidates.json holding the NaPTAN rows it came from. An
+unknown or inactive code is refused rather than dropped, and so is a stop outside
+the walkshed: a map centred on the stops the customer named that does not reach one
+of them is not the map they asked for, so raise --radius-m or name fewer stops.
 
 Writes place.json (the chosen feature) + place-candidates.json (all matches, for
 the caller to eyeball). Prints the candidate list. It does NOT finalise anything
@@ -44,7 +65,7 @@ last one. The value is now required and validated against the registry, and an
 unregistered name fails naming the regions that exist rather than being written to
 disk for the change scan to trip over three weeks later.
 """
-import sys, json, argparse, urllib.request, urllib.parse
+import sys, os, json, math, sqlite3, argparse, urllib.request, urllib.parse
 
 UA = {"User-Agent": "make-place-bus-leaflet/1.0 (resolve_place)"}
 # Nominatim classes that plausibly are a "place you would centre a leaflet on".
@@ -114,6 +135,133 @@ def require_registered_region(a):
             "Add it to _gtfs/regions.json and build its sqlite, or use one of the above.")
 
 
+def find_naptan(start_dir):
+    """Walk up from start_dir looking for _gtfs/naptan.sqlite."""
+    d = os.path.abspath(start_dir)
+    while True:
+        cand = os.path.join(d, "_gtfs", "naptan.sqlite")
+        if os.path.exists(cand):
+            return cand
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def metres(lat1, lon1, lat2, lon2):
+    """Great-circle distance in metres."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = (math.sin((p2 - p1) / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2)
+    return 2 * 6371000 * math.asin(math.sqrt(a))
+
+
+def lookup_stops(db, codes):
+    """The NaPTAN row for each code, in the order given; refuse a code it cannot place.
+
+    A code may be the ATCOCode or the NaptanCode on the flag. A code NaPTAN does not
+    know, or knows only as inactive, stops the run: dropping it would centre the map
+    on the stops that are left and say nothing.
+    """
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    rows, bad = [], []
+    for code in codes:
+        r = con.execute(
+            "SELECT * FROM naptan WHERE ATCOCode = ? COLLATE NOCASE OR NaptanCode = ? COLLATE NOCASE",
+            (code, code)).fetchone()
+        if r is None:
+            bad.append(f"{code}: not in NaPTAN")
+        elif (r["Status"] or "").lower() != "active":
+            bad.append(f"{code}: NaPTAN marks it {r['Status']!r}, not active")
+        elif r["lat"] is None or r["lon"] is None:
+            bad.append(f"{code}: NaPTAN has no position for it")
+        else:
+            rows.append(r)
+    con.close()
+    if bad:
+        raise SystemExit("--stops: cannot place every stop named, so nothing was written.\n  "
+                         + "\n  ".join(bad))
+    return rows
+
+
+def resolve_by_stops(a):
+    """(place, candidates) centred on the midpoint of the named stops. See BY STOPS."""
+    codes = [c.strip() for c in a.stops.split(",") if c.strip()]
+    if not codes:
+        raise SystemExit("--stops names no stop.")
+    db = a.naptan or find_naptan(os.getcwd())
+    if not db or not os.path.exists(db):
+        raise SystemExit("--stops: no _gtfs/naptan.sqlite above the current folder; pass "
+                         "--naptan, or build it with make-bus-leaflet/assets/naptan_build.py.")
+    rows = lookup_stops(db, codes)
+    lat = sum(r["lat"] for r in rows) / len(rows)
+    lon = sum(r["lon"] for r in rows) / len(rows)
+    far = [(r["ATCOCode"], metres(lat, lon, r["lat"], r["lon"])) for r in rows]
+    outside = [f"{atco} is {m:.0f} m from the centre" for atco, m in far if m > a.radius_m]
+    if outside:
+        raise SystemExit(f"--stops: a named stop falls outside the {a.radius_m:.0f} m walkshed, "
+                         "so the map would not reach it:\n  " + "\n  ".join(outside)
+                         + "\nRaise --radius-m, or name fewer stops.")
+    names = sorted({r["CommonName"] for r in rows})
+    loc = rows[0]["LocalityName"] or rows[0]["ParentLocalityName"] or ""
+    spread = max(metres(r1["lat"], r1["lon"], r2["lat"], r2["lon"]) for r1 in rows for r2 in rows)
+    listed = " and ".join(f"{r['NaptanCode'] or r['ATCOCode']} ({r['ATCOCode']}, {r['Indicator'] or '-'})"
+                          for r in rows)
+    what = "midpoint of" if len(rows) > 1 else "the stop"
+    display = f"{' / '.join(names)} stop{'s' if len(rows) > 1 else ''}, {loc} — {what} {listed}"
+    if len(rows) > 1:
+        display += f", {spread:.0f} m apart"
+    place = {
+        "place": a.place, "town": a.town, "region": a.region,
+        "name": a.place, "display": display,
+        "lat": round(lat, 7), "lon": round(lon, 7),
+        "osm_type": None, "osm_id": None,
+        "class": "highway", "type": "bus_stop",
+        "walkshedM": a.radius_m, "ambiguous": False,
+    }
+    cands = {
+        "query": a.place,
+        "resolvedBy": f"--stops {','.join(codes)}: the midpoint of the NaPTAN rows below, "
+                      f"read from {os.path.basename(db)}; no geocode.",
+        "candidates": [{"atco": r["ATCOCode"], "naptanCode": r["NaptanCode"], "name": r["CommonName"],
+                        "indicator": r["Indicator"], "bearing": r["Bearing"],
+                        "locality": r["LocalityName"], "lat": r["lat"], "lon": r["lon"]} for r in rows],
+        "ambiguous": False,
+    }
+    return place, cands
+
+
+def resolve_at(a):
+    """(place, candidates) centred on a coordinate the customer gave."""
+    try:
+        lat, lon = (float(x) for x in a.at.split(","))
+    except ValueError:
+        raise SystemExit(f"--at {a.at!r}: expected <lat>,<lon>, e.g. 52.2275,-0.24335")
+    if not (49 <= lat <= 61 and -9 <= lon <= 2.5):
+        raise SystemExit(f"--at {a.at!r} is not in Great Britain -- is it <lat>,<lon> the right way round?")
+    place = {
+        "place": a.place, "town": a.town, "region": a.region,
+        "name": a.place, "display": f"{a.place} — the point {lat},{lon} given with --at",
+        "lat": lat, "lon": lon, "osm_type": None, "osm_id": None,
+        "class": None, "type": None, "walkshedM": a.radius_m, "ambiguous": False,
+    }
+    cands = {"query": a.place, "resolvedBy": f"--at {lat},{lon}; no geocode.",
+             "candidates": [], "ambiguous": False}
+    return place, cands
+
+
+def write_direct(a, place, cands):
+    json.dump(cands, open("place-candidates.json", "w", encoding="utf-8"), indent=1, ensure_ascii=False)
+    json.dump(place, open(a.out, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
+    print(f"# Place resolution — {a.place!r} in {a.town or '(no town given)'}, {cands['resolvedBy']}")
+    for c in cands["candidates"]:
+        print(f"  {c['atco']}  {c['naptanCode']}  {c['name']} ({c['indicator']}, {c['bearing']})"
+              f"  {c['lat']:.5f},{c['lon']:.5f}")
+    print(f"\nChosen centre: {place['lat']:.6f}, {place['lon']:.6f}   walkshed {a.radius_m:.0f} m")
+    print(f"Wrote {a.out} and place-candidates.json")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("place")
@@ -125,11 +273,20 @@ def main():
     ap.add_argument("--limit", type=int, default=8)
     ap.add_argument("--pick", type=int, default=0, help="1-based candidate to force")
     ap.add_argument("--out", default="place.json")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--stops", help="centre on these bus stops: ATCO or NaPTAN codes, comma-separated")
+    mode.add_argument("--at", help="centre on this point: <lat>,<lon>")
+    ap.add_argument("--naptan", help="--stops: naptan.sqlite (default: _gtfs/naptan.sqlite above the cwd)")
     a = ap.parse_args()
     try: sys.stdout.reconfigure(encoding="utf-8")
     except Exception: pass
 
     require_registered_region(a)
+
+    if a.stops or a.at:
+        place, cands = resolve_by_stops(a) if a.stops else resolve_at(a)
+        write_direct(a, place, cands)
+        return
 
     q = ", ".join([p for p in [a.place, a.town, a.region, "UK"] if p])
     cands = geocode(q, a.limit)

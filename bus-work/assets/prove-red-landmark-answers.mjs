@@ -80,8 +80,8 @@ console.log('\n2. the unreachable key — the row nothing could clear');
 {
   const a = run({ block: { tiers: { 'industrial:Estate': { tier: 'miss' } } }, s3: {}, s4: {}, poiCfg: { industrialKeep: 'none' } });
   check('an industrial key under industrialKeep "none" owes nothing', keys(a).length === 0, keys(a).join(','));
-  const b = run({ block: { tiers: { 'industrial:Estate': { tier: 'miss' } } }, s3: {}, s4: {}, poiCfg: { industrialKeep: 'named' } });
-  check('…and the same key under "named" IS owed — the rule is the config, not the category', keys(b).includes('landmark-owed-testtown'));
+  const b = run({ block: { tiers: { 'industrial:Estate': { tier: 'miss' } } }, s3: {}, s4: {}, poiCfg: { industrialKeep: 'named', include: ['industrial'] } });
+  check('…and the same key with estates switched on under "named" IS owed — the rule is the config, not the category', keys(b).includes('landmark-owed-testtown'));
 }
 
 console.log('\n2b. the ORPHANED key — an answer whose POI has since been named (OA-354)');
@@ -116,31 +116,37 @@ console.log('\n3. source -> build');
 
 console.log('\n3b. the CATEGORY SWITCH — the second half of an answer (OA-439)');
 {
-  const a = run({ block: { tiers: {}, include: { pubs: true } }, s3: {}, s4: {}, s4Include: [] });
-  check('the portal switched pubs ON and the source lacks them: landmark-owed row', keys(a).includes('landmark-owed-testtown'), keys(a).join(','));
-  check('…naming the switch in its detail and its title', a.items[0].detail.includes('+ pubs switched on') && a.items[0].title.includes('the category switch'), JSON.stringify(a.items[0]));
+  // Allotments, not pubs, since OA-500: pubs are on by default, so switching
+  // them ON owes nothing, and the default-off case needs a default-off category.
+  const a = run({ block: { tiers: {}, include: { allotments: true } }, s3: {}, s4: {}, s4Include: [] });
+  check('the portal switched allotments ON and the source lacks them: landmark-owed row', keys(a).includes('landmark-owed-testtown'), keys(a).join(','));
+  check('…naming the switch in its detail and its title', a.items[0].detail.includes('+ allotments switched on') && a.items[0].title.includes('the category switch'), JSON.stringify(a.items[0]));
   const b = run({ block: { tiers: {}, include: { pubs: true } }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
   check('the source already includes pubs: the row goes', keys(b).length === 0, keys(b).join(','));
   const c = run({ block: { tiers: {}, include: { pubs: false } }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
   check('switched OFF where the source has them is owed too', keys(c).includes('landmark-owed-testtown') && c.items[0].detail.includes('- pubs switched off'), keys(c).join(','));
+  const cc = run({ block: { tiers: {}, include: { pubs: true } }, s3: {}, s4: {}, s4Include: [] });
+  check('OA-500: switching pubs ON where they are on by default owes nothing', keys(cc).length === 0, keys(cc).join(','));
+  const cd = run({ block: { tiers: {}, include: { stations: false } }, s3: {}, s4: {}, s4Include: [] });
+  check('OA-500: switching a default-on category OFF is owed', keys(cd).includes('landmark-owed-testtown') && cd.items[0].detail.includes('- stations switched off'), keys(cd).join(','));
   const d = run({ block: { tiers: {}, include: {} }, s3: {}, s4: {}, s4Include: [] });
   check('an empty switch owes nothing', keys(d).length === 0, keys(d).join(','));
   const e = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
   check('a block with no `include` (an older portal) owes nothing on the switch', keys(e).length === 0, keys(e).join(','));
-  const f = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: [], poiCfg: { include: ['stations'] } });
-  check('S3 switched stations on and the S4 was built without: landmark-unbuilt row', keys(f).includes('landmark-unbuilt-testtown') && f.items[0].detail.includes('+ stations switched on'), keys(f).join(','));
-  const g = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: ['stations'], poiCfg: { include: ['stations'] } });
+  const f = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: [], poiCfg: { include: ['allotments'] } });
+  check('S3 switched allotments on and the S4 was built without: landmark-unbuilt row', keys(f).includes('landmark-unbuilt-testtown') && f.items[0].detail.includes('+ allotments switched on'), keys(f).join(','));
+  const g = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: ['allotments'], poiCfg: { include: ['allotments'] } });
   check('…and built with them: the row goes', keys(g).length === 0, keys(g).join(','));
-  const h = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: undefined, poiCfg: { include: ['stations'] } });
+  const h = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: undefined, poiCfg: { include: ['allotments'] } });
   check('an S4 whose include could not be read is no opinion, not a debt', keys(h).length === 0, keys(h).join(','));
-  // A pub the customer switched on AND tiered must not read as orphaned: the
-  // candidates are asked with the include the answer would leave the town with.
+  // An allotment the customer switched on AND tiered must not read as orphaned:
+  // the candidates are asked with the include the answer would leave the town with.
   const asked = [];
-  const withPubs = (inc) => (inc && inc.includes('pubs') ? [...CANDS, 'pub:The Swan'] : CANDS);
-  const i = run({ block: { tiers: { 'pub:The Swan': { tier: 'must' } }, include: { pubs: true } }, s3: {}, s4: {}, s4Include: [], candidates: withPubs, asked });
-  check('a tiered pub under a switch-on is OWED, not orphaned', i.orphaned.length === 0 && i.items[0].detail.includes('+ pub:The Swan'), JSON.stringify(i.orphaned));
-  check('…because the candidates were asked with the merged include', asked.some((x) => Array.isArray(x) && x.includes('pubs')), JSON.stringify(asked));
-  const j = landmarkAnswerItems({ maps, towns, compareTiers, readBlock: () => ({ tiers: {}, include: { pubs: true } }), readTown: () => ({ s3Tiers: {}, s4Tiers: {}, s4Include: [], poiCfg: {} }) });
+  const withAllot = (inc) => (inc && inc.includes('allotments') ? [...CANDS, 'allotments:Broad Leas'] : CANDS);
+  const i = run({ block: { tiers: { 'allotments:Broad Leas': { tier: 'must' } }, include: { allotments: true } }, s3: {}, s4: {}, s4Include: [], candidates: withAllot, asked });
+  check('a tiered allotment under a switch-on is OWED, not orphaned', i.orphaned.length === 0 && i.items[0].detail.includes('+ allotments:Broad Leas'), JSON.stringify(i.orphaned));
+  check('…because the candidates were asked with the merged include', asked.some((x) => Array.isArray(x) && x.includes('allotments')), JSON.stringify(asked));
+  const j = landmarkAnswerItems({ maps, towns, compareTiers, readBlock: () => ({ tiers: {}, include: { allotments: true } }), readTown: () => ({ s3Tiers: {}, s4Tiers: {}, s4Include: [], poiCfg: {} }) });
   check('without the engine’s compareInclude passed, the rows are exactly what they were', j.items.length === 0, JSON.stringify(j.items));
 }
 

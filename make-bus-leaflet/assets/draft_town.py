@@ -862,8 +862,8 @@ def pois_query(bbox):
     return f"""[out:json][timeout:90];
 (
   node["highway"="bus_stop"]({box});
-  node["amenity"~"^(pharmacy|doctors|hospital|library|school|museum|community_centre|theatre|townhall)$"]({box});
-  way["amenity"~"^(pharmacy|doctors|hospital|library|school|museum|community_centre|theatre|townhall)$"]({box});
+  node["amenity"~"^(pharmacy|doctors|hospital|library|school|museum|community_centre|theatre|arts_centre|cinema|college|university|post_office|townhall)$"]({box});
+  way["amenity"~"^(pharmacy|doctors|hospital|library|school|museum|community_centre|theatre|arts_centre|cinema|college|university|post_office|townhall)$"]({box});
   node["shop"="supermarket"]({box});
   way["shop"="supermarket"]({box});
   node["leisure"~"^(sports_centre|fitness_centre|park|recreation_ground)$"]({box});
@@ -874,6 +874,10 @@ def pois_query(bbox):
   way["amenity"="pub"]({box});
   node["landuse"="allotments"]({box});
   way["landuse"="allotments"]({box});
+  node["tourism"="museum"]({box});
+  way["tourism"="museum"]({box});
+  node["landuse"="industrial"]({box});
+  way["landuse"="industrial"]({box});
 )
 ;
 out center tags;"""

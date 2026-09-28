@@ -937,9 +937,9 @@ const landmarkAnswers = await (async () => {
     let routes; try { routes = rj(path.join(s3.dir, 'routes.json')); } catch { return null; }
     const poi = routes.poi || {};
     const s4 = lrd(m, dir, 'S4');
-    let s4Tiers, s4Include; // the S4's poi.include feeds the category-switch half of the unbuilt row (OA-439)
-    if (s4) { try { const p4 = rj(path.join(s4.dir, 'routes.json')).poi || {}; s4Tiers = p4.tiers || {}; s4Include = p4.include || []; } catch { s4Tiers = undefined; } }
-    return { s3Tiers: poi.tiers || {}, s4Tiers, s4Include, poiCfg: poi, s3Id: s3.rec.id, s4Version: s4 ? s4.rec.version : null };
+    let s4Tiers, s4Include, s4Exclude; // the S4's poi.include feeds the category-switch half of the unbuilt row (OA-439)
+    if (s4) { try { const p4 = rj(path.join(s4.dir, 'routes.json')).poi || {}; s4Tiers = p4.tiers || {}; s4Include = p4.include || []; s4Exclude = p4.exclude || []; } catch { s4Tiers = undefined; } }
+    return { s3Tiers: poi.tiers || {}, s4Tiers, s4Include, s4Exclude, poiCfg: poi, s3Id: s3.rec.id, s4Version: s4 ? s4.rec.version : null };
   };
   const blocks = new Map();
   if (REMOTE && TOKEN) {

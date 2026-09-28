@@ -23,21 +23,33 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { ENGINE_DIR, load } = require('./_engine.js');
-const { classify } = load('poi_select.js');
+const { classify, categoryOn } = load('poi_select.js');
 
 /* One OSM tag set per opt-in category, as OpenStreetMap writes it. */
 const SAMPLES = {
   allotments: [{ landuse: 'allotments', name: 'Broad Leas' }],
   pubs: [{ amenity: 'pub', name: 'The Chiltern' }],
   stations: [{ railway: 'station', name: 'St Neots' }, { railway: 'halt', name: 'Manea' }],
+  postoffices: [{ amenity: 'post_office', name: 'Ramsey Post Office' }],
+  industrial: [{ landuse: 'industrial', name: 'Compass Point' }],
 };
+
+/* The always-drawn categories whose tags the 28 September review (OA-500) found
+ * missing or mismatched: the pull asked for amenity=museum and the reader read
+ * tourism=museum, and cinema, college and university were not asked for at all. */
+const ALWAYS = [
+  { amenity: 'hospital', name: 'Doddington Hospital' }, { amenity: 'theatre', name: 'Wycombe Swan' },
+  { amenity: 'arts_centre', name: 'Priory Centre' }, { amenity: 'cinema', name: 'Cineworld' },
+  { amenity: 'college', name: 'Huntingdonshire Regional College' }, { amenity: 'university', name: 'Bucks New' },
+  { amenity: 'museum', name: 'Norris Museum' }, { tourism: 'museum', name: 'Norris Museum' },
+];
 
 /* Every `include`d name classify() tests for, read from its source. */
 function optInsFromSource() {
   const src = fs.readFileSync(path.join(ENGINE_DIR, 'poi_select.js'), 'utf8');
   const body = src.slice(src.indexOf('function classify('));
   const fn = body.slice(0, body.indexOf('\n}\n'));
-  return [...new Set([...fn.matchAll(/\.includes\('([a-z_]+)'\)/g)].map(m => m[1]))].sort();
+  return [...new Set([...fn.matchAll(/\bon\('([a-z_]+)'\)/g)].map(m => m[1]))].sort();
 }
 
 /* The query's selectors as [type, [[key, op, value]...]]. Only the two forms the
@@ -66,13 +78,18 @@ test('the opt-in categories named here are exactly the ones classify() tests for
     'classify() gained or lost a poi.include category: add its OSM tags to SAMPLES and to both POI pulls');
 });
 
-test('each sample is drawn only when its category is switched on', () => {
+test('each sample is drawn when its category is on, and not when it is switched off', () => {
   for (const [cat, samples] of Object.entries(SAMPLES)) {
     for (const tags of samples) {
-      assert.strictEqual(classify(tags, {}), null, `${cat} drawn without being switched on`);
+      assert.strictEqual(classify(tags, {}) !== null, categoryOn({}, cat), `${cat} does not follow its default`);
       assert.notStrictEqual(classify(tags, { include: [cat] }), null, `${cat} not drawn when switched on`);
+      assert.strictEqual(classify(tags, { exclude: [cat] }), null, `${cat} drawn when switched off`);
     }
   }
+});
+
+test('every always-drawn sample is drawn for a town that has said nothing', () => {
+  for (const tags of ALWAYS) assert.notStrictEqual(classify(tags, {}), null, JSON.stringify(tags));
 });
 
 test('the selector reader finds the always-on categories and refuses a tag nobody asked for', () => {
@@ -96,5 +113,11 @@ for (const [name, query] of [['overpass-pois.txt', TEMPLATE], ['draft_town.py po
         }
       }
     }
+  });
+
+  test(`${name} asks for every always-drawn category the review fixed, as a node and as a way`, () => {
+    const sels = selectors(query);
+    for (const tags of ALWAYS) for (const type of ['node', 'way'])
+      assert.ok(asksFor(sels, type, tags), `${name} does not ask for ${type} ${JSON.stringify(tags)}`);
   });
 }

@@ -33,7 +33,9 @@ const { ENGINE_DIR, load } = require('./_engine');
 const PLACE = 'High Wycombe Aldi';
 const FIXTURE = path.join(__dirname, 'fixtures', 'estate', 'Places', '_standalone', PLACE);
 const SHEET = path.join('ci-reference', 'internal-schematic.svg');
-const LABEL = 'Tannery Road Ind Est';
+// The store's own forced label, one of the two OA-165 moved. It was the other one,
+// Tannery Road Ind Est, until industrial estates went off by default (OA-500).
+const LABEL = 'Aldi';
 
 function estate() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oa463-'));

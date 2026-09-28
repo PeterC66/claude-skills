@@ -87,7 +87,9 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs } = require('./cli.js');
-const { selectPois, mergePoiOverlay, OPT_IN_CATS } = require('./poi_select.js');
+const { selectPois, mergePoiOverlay, OPT_IN_CATS, categoryOn } = require('./poi_select.js');
+// A switchable category's name, against the POI category its keys carry.
+const SWITCH_CAT = { allotments: 'allotments', pubs: 'pub', stations: 'station', postoffices: 'postoffice', industrial: 'industrial' };
 
 const STAGE_JS = path.join(__dirname, 'stage.js');
 
@@ -182,8 +184,10 @@ function townCandidateKeys(mapDir, include) {
  * The two reasons a stored key can reach no POI, split, in one place so that
  * every caller applies both.
  *
- *   culled    the selector drops it BEFORE applyTiers() runs — today one rule,
- *             `industrial:*` under industrialKeep "none". Add a rule here when
+ *   culled    the selector drops it BEFORE applyTiers() runs — `industrial:*`
+ *             under industrialKeep "none", and since OA-500 any key whose
+ *             switchable category this town has switched off (a `pub:*` under
+ *             poi.exclude ["pubs"], an `industrial:*` with estates off). Add a rule here when
  *             poi_select.js grows another pre-tier cull, and add its case to
  *             test/poi_tiers_sync.test.js in the same commit.
  *   orphaned  the town has no candidate of that identity any more, because the
@@ -198,7 +202,10 @@ function townCandidateKeys(mapDir, include) {
  */
 function unreachableReasons(tiers, poiCfg, candidates) {
   const keys = Object.keys(tiers || {});
-  const culled = (poiCfg && poiCfg.industrialKeep) === 'none' ? keys.filter((k) => k.startsWith('industrial:')) : [];
+  const P = poiCfg || {};
+  const off = new Set(OPT_IN_CATS.filter((c) => !categoryOn(P, c)).map((c) => SWITCH_CAT[c]));
+  if (P.industrialKeep === 'none') off.add('industrial');
+  const culled = keys.filter((k) => off.has(k.slice(0, k.indexOf(':'))));
   if (!candidates) return { culled, orphaned: [] };
   const have = new Set(candidates);
   const skip = new Set(culled);
@@ -281,26 +288,34 @@ function mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) {
  *
  *   from  the source's poi.include (an array, [] when it has none)
  *   to    what it would be with the switch laid over it
- *   on    categories the switch adds;  off  categories it removes
+ *   excludeFrom / excludeTo  the same for poi.exclude, which is where a
+ *         DEFAULT-ON category switched off is recorded (buses-data OA-500)
+ *   on    categories the switch turns on;  off  categories it turns off —
+ *         read through categoryOn(), so a pub switched on where pubs were
+ *         already on by default is owed nothing
  *   owed  on or off is non-empty
  */
-function compareInclude(sourceInclude, portalSwitch) {
+function compareInclude(sourceInclude, portalSwitch, sourceExclude) {
   const from = Array.isArray(sourceInclude) ? sourceInclude.slice() : [];
-  const merged = mergePoiOverlay({ include: from }, { poiInclude: portalSwitch });
+  const excludeFrom = Array.isArray(sourceExclude) ? sourceExclude.slice() : [];
+  const before = { include: from, exclude: excludeFrom };
+  const merged = mergePoiOverlay(before, { poiInclude: portalSwitch });
   const to = Array.isArray(merged.include) ? merged.include : from;
-  const on = to.filter((c) => !from.includes(c));
-  const off = from.filter((c) => !to.includes(c));
-  return { from, to, on, off, owed: on.length + off.length > 0 };
+  const excludeTo = Array.isArray(merged.exclude) ? merged.exclude : excludeFrom;
+  const after = { include: to, exclude: excludeTo };
+  const on = OPT_IN_CATS.filter((c) => !categoryOn(before, c) && categoryOn(after, c));
+  const off = OPT_IN_CATS.filter((c) => categoryOn(before, c) && !categoryOn(after, c));
+  return { from, to, excludeFrom, excludeTo, on, off, owed: on.length + off.length > 0 };
 }
 
 /**
- * A poi.include array as the switch that would reproduce it — every opt-in
+ * A poi block's switches as the switch that would reproduce them — every opt-in
  * category answered, true or false. For comparing two SOURCES (S3 against the
- * S4 that drew it), where one side is an array rather than a customer's switch.
+ * S4 that drew it), where one side is arrays rather than a customer's switch.
  */
-function switchOf(include) {
-  const inc = Array.isArray(include) ? include : [];
-  return Object.fromEntries(OPT_IN_CATS.map((c) => [c, inc.includes(c)]));
+function switchOf(include, exclude) {
+  const poi = { include: Array.isArray(include) ? include : [], exclude: Array.isArray(exclude) ? exclude : [] };
+  return Object.fromEntries(OPT_IN_CATS.map((c) => [c, categoryOn(poi, c)]));
 }
 
 /** The portal map that IS this town: one area map whose name equals the folder. */
@@ -448,17 +463,23 @@ async function main() {
 
   // The switch first: the candidates a tier key is checked against are the ones
   // the town would have AFTER it, or a pub answer reads as orphaned (OA-439).
-  const include = compareInclude(poiCfg.include, portalSwitch);
+  const include = compareInclude(poiCfg.include, portalSwitch, poiCfg.exclude);
   const candidates = townCandidateKeys(info.dir, include.owed ? include.to : undefined);
-  const cmp = { ...compareTiers(sourceTiers, portalTiers, poiCfg, candidates), include };
+  // Tiers are judged against the config AFTER the switch (OA-500), or a tier on a
+  // category the same answer switches on is culled as unreachable.
+  const cfgAfter = include.owed ? { ...poiCfg, include: include.to, exclude: include.excludeTo } : poiCfg;
+  const cmp = { ...compareTiers(sourceTiers, portalTiers, cfgAfter, candidates), include };
   cmp.owed = cmp.owed || include.owed;
   if (args.json) { console.log(JSON.stringify({ town, source: info.rec.id, where, ...cmp }, null, 2)); return; }
   printReport(town, cmp, where);
 
   if (!args.apply) { if (cmp.owed) console.log('\n  dry run — pass --apply to write a new S3 run carrying the merge'); return; }
   if (!cmp.owed) { console.log('\n  --apply: nothing to write'); return; }
-  const poi = { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) };
-  if (include.owed) poi.include = include.to;
+  const poi = { ...poiCfg, tiers: mergeTiers(sourceTiers, portalTiers, cfgAfter, candidates) };
+  if (include.owed) {
+    poi.include = include.to;
+    if (include.excludeTo.length || Array.isArray(poiCfg.exclude)) poi.exclude = include.excludeTo;
+  }
   const merged = { ...info.routes, poi };
   const switched = include.owed ? `; poi.include [${include.from.join(', ')}] -> [${include.to.join(', ')}] from the category switch (OA-439)` : '';
   const note = (args.note && args.note !== true) ? String(args.note)

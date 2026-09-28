@@ -90,6 +90,12 @@ const GRID_COL = {
   // and the pub's rose-brown sits next to it. The train-front SHAPE is what
   // tells it from `school`'s blue at 4.2 mm; the colour only has to not clash.
   station: '#2b3990',
+  // buses-data OA-500, the 28 September review's five new categories. The SHAPE
+  // carries each one; the colours only have to keep off the glyphs they sit
+  // nearest in the Key. Hospital is the NHS blue, which every reader already
+  // reads as a hospital, and not the GP's red, which the H would then fight.
+  hospital: '#005eb8', theatre: '#9c2f6f', cinema: '#3d3d3d', college: '#4b5a9b',
+  postoffice: '#b5121b',
 };
 /* `cw > 0` draws the same glyph as one white silhouette fattened by cw, to be
  * laid down before the real one. It is a separate PASS rather than
@@ -176,6 +182,31 @@ function gridGlyph(cat, col, cw = 0) {
       return f('M8,2.8 H16 C17.6,2.8 18.6,3.8 18.6,5.4 V17.4 H5.4 V5.4 C5.4,3.8 6.4,2.8 8,2.8 Z')
            + k('M7.6,5.2 H16.4 V10.2 H7.6 Z M7.8,12.8 h2.4 v2.2 h-2.4 Z M13.8,12.8 h2.4 v2.2 h-2.4 Z')
            + st('M8.6,18.4 L6.2,21.2 M15.4,18.4 L17.8,21.2');
+    /* The five categories of the 28 September review (buses-data OA-500). Drawn
+     * to the four rules above and proofed at 4.2 mm; a redraw is a decision for a
+     * person with a proof in front of them, as the pub's handle was. */
+    case 'hospital':    // H knocked out of the SQUARE keyline — the GP's family,
+                        // told apart by the letter rather than the colour alone
+      return `<rect x="${3 - cw}" y="${3 - cw}" width="${18 + cw * 2}" height="${18 + cw * 2}" rx="${GR + cw}" fill="${cw ? WHITE : col}"/>`
+           + k('M7.4,6.4 H10.2 V10.6 H13.8 V6.4 H16.6 V17.6 H13.8 V13.4 H10.2 V17.6 H7.4 Z');
+    case 'theatre':     // one mask: a shield face, two eyes and a smile knocked out
+      return f('M3.6,3.6 H20.4 V11 C20.4,17 16.6,21 12,21 C7.4,21 3.6,17 3.6,11 Z')
+           + k('M6.6,7.6 H10.4 V10.2 H6.6 Z M13.6,7.6 H17.4 V10.2 H13.6 Z')
+           + k('M7.4,13.2 H16.6 C15.8,17.4 8.2,17.4 7.4,13.2 Z');
+    case 'cinema':      // clapperboard: a hinged clapper over a solid slate
+      return f('M3,10 H21 V19.4 C21,20.3 20.3,21 19.4,21 H4.6 C3.7,21 3,20.3 3,19.4 Z')
+           + f('M3.2,5.8 L19.8,2.6 L20.6,6.6 L4,9.8 Z')
+           + k('M8.4,4.8 L10.4,4.4 L11.2,8.4 L9.2,8.8 Z M14.2,3.7 L16.2,3.3 L17,7.3 L15,7.7 Z');
+    case 'college':     // a stack of closed books, the top one tilted — the
+                        // library is the OPEN book, and the school's mortarboard
+                        // would say "school" at 4.2 mm. Two earlier cuts, a
+                        // diploma with round rolls and then tall rolls, proofed as
+                        // a medicine capsule and as an H beside the hospital.
+      return f('M3,16 H21 V20.6 H3 Z') + f('M4.6,9.6 H19.6 V13.6 H4.6 Z')
+           + f('M5.4,5.6 L18.6,2.4 L19.6,6.4 L6.4,9.6 Z');
+    case 'postoffice':  // an envelope: solid, its flap knocked out as a V
+      return f('M2.6,5.4 H21.4 V18.6 H2.6 Z')
+           + k('M4.6,7.2 H19.4 L12,12.8 Z');
     default:
       return dot(12, 12, 7);
   }
@@ -252,6 +283,21 @@ function icon(cat, x, y, s = 2.2, ink, set) {
       return T(`<rect x="-1.5" y="-2.3" width="3" height="3.6" rx="0.6" fill="#2b3990"/>
         <rect x="-1" y="-1.7" width="2" height="1.2" fill="#ffffff"/>
         <path d="M-0.8,1.5 L-1.4,2.4 M0.8,1.5 L1.4,2.4" stroke="#2b3990" stroke-width="0.45" fill="none"/>`);
+    case 'hospital': // H in a square
+      return T(`<rect x="-2.1" y="-2.1" width="4.2" height="4.2" rx="0.8" fill="#005eb8"/>
+        <path d="M-1.2,-1.3 H-0.5 V-0.35 H0.5 V-1.3 H1.2 V1.3 H0.5 V0.35 H-0.5 V1.3 H-1.2 Z" fill="#ffffff"/>`);
+    case 'theatre': // mask
+      return T(`<path d="M-2,-2 H2 V-0.2 C2,1.3 1.1,2.3 0,2.3 C-1.1,2.3 -2,1.3 -2,-0.2 Z" fill="#9c2f6f"/>
+        <path d="M-1.3,-1.2 H-0.4 V-0.6 H-1.3 Z M0.4,-1.2 H1.3 V-0.6 H0.4 Z M-1.1,0.3 H1.1 C0.9,1.3 -0.9,1.3 -1.1,0.3 Z" fill="#ffffff"/>`);
+    case 'cinema': // clapperboard
+      return T(`<rect x="-2.2" y="-0.4" width="4.4" height="2.6" rx="0.3" fill="#3d3d3d"/>
+        <path d="M-2.2,-1.4 L1.9,-2.2 L2.1,-1.2 L-2,-0.4 Z" fill="#3d3d3d"/>`);
+    case 'college': // a stack of closed books, the top one tilted
+      return T(`<g fill="#4b5a9b"><rect x="-2.3" y="1.2" width="4.6" height="1.1"/>
+        <rect x="-1.9" y="-0.4" width="3.8" height="1.0"/><path d="M-1.7,-1.4 L1.6,-2.2 L1.85,-1.2 L-1.45,-0.4 Z"/></g>`);
+    case 'postoffice': // envelope
+      return T(`<rect x="-2.3" y="-1.6" width="4.6" height="3.2" fill="#b5121b"/>
+        <path d="M-1.9,-1.2 H1.9 L0,0.3 Z" fill="#ffffff"/>`);
     default:
       return `<circle cx="${x}" cy="${y}" r="${s*0.7}" fill="#888"/>`;
   }

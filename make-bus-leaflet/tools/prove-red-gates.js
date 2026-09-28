@@ -146,7 +146,7 @@ const TARGETS = [
     /* THE PLACE SCHEMATIC IS A DIFFERENT PATH FROM THE TOWN ONE ABOVE, and until
      * 2026-08-29 status.js did not gate it at all (OA-170). It reaches the same
      * generator through PLACE_IGNORE and, crucially, through OVERRIDES_FILE — High
-     * Wycombe Aldi forces two POIs, and the schematiser's nested workspace drops
+     * Wycombe Aldi forces POI names, and the schematiser's nested workspace drops
      * overrides.json unless it is passed explicitly. The control step below is what
      * makes this target worth having: it fails if that stops being passed. */
     sheet: 'internal-schematic.svg (place)',
@@ -380,6 +380,13 @@ for (const t of TARGETS) {
 // row ever goes quiet, either the schematiser learned to carry overrides.json into
 // its own workspace — in which case delete this and the option together — or Aldi
 // stopped forcing a POI, and the gate has gone back to proving nothing.
+//
+// IT DID GO QUIET ONCE, on 2026-09-28 (buses-data OA-500). Aldi's only override
+// that changed the schematic was the forced Tannery Road estate name — the Aldi
+// label prints anyway and the schematic drops its offset (OA-165) — and estates
+// went off by default. The fixture's overrides.json now also forces the name of
+// Ryemead Pharmacy, a symbol-only place the schematic draws, so the option is
+// load-bearing again. It is a fixture edit: the real Aldi carries no such answer.
 {
   /* THE SAME MAP THE PLACE-SCHEMATIC TARGET CHOSE, asked for the same way rather
    * than typed a second time (OA-398). It read `Areas/High Wycombe/Places/High

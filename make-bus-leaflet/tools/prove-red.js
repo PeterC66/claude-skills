@@ -360,8 +360,71 @@ const MUTATIONS = [
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'allotments stop being opt-in and appear on every town that has any',
-    find: "  if((POI.include||[]).includes('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
+    find: "  if(on('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
     to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
+
+  /* OA-500, the 28 September review. Default-on has to be switchable OFF, the
+   * default-off categories have to stay off, and the four new always-drawn
+   * categories and the museum tag each need a test that objects to losing them. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'poi.exclude stops switching a category off, so a town cannot turn its pubs off',
+    find: "  if (Array.isArray(P.exclude) && P.exclude.includes(cat)) return false;",
+    to: "" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'pubs and stations go back to being off by default',
+    find: "const DEFAULT_ON_CATS = ['pubs', 'stations'];",
+    to: "const DEFAULT_ON_CATS = [];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'post offices come on by default, which the review put in B',
+    find: "const DEFAULT_ON_CATS = ['pubs', 'stations'];",
+    to: "const DEFAULT_ON_CATS = ['pubs', 'stations', 'postoffices'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'switching a default-on category off writes no exclude, so the default puts it straight back',
+    find: "        if (now(c)) exc.push(c);",
+    to: "" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'amenity=museum is read no longer, so a drafted town loses its museums again',
+    find: "  if(t.tourism==='museum'||t.amenity==='museum') return ['museum', t.name||'Museum'];",
+    to: "  if(t.tourism==='museum') return ['museum', t.name||'Museum'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'hospitals are fetched and dropped again',
+    find: "  if(t.amenity==='hospital')  return ['hospital', t.name||'Hospital'];",
+    to: "" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'an arts centre is not a theatre',
+    find: "  if(t.amenity==='theatre'||t.amenity==='arts_centre') return ['theatre', t.name||'Theatre'];",
+    to: "  if(t.amenity==='theatre') return ['theatre', t.name||'Theatre'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the new categories go ABOVE the old ones, so a college tagged as a sports centre changes category',
+    find: "  if(t.leisure==='sports_centre'||t.leisure==='fitness_centre') return ['leisure', t.name||'Leisure'];",
+    to: "  if(t.amenity==='college') return ['college', t.name||'College'];\n  if(t.leisure==='sports_centre'||t.leisure==='fitness_centre') return ['leisure', t.name||'Leisure'];" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a station prints its bare town name, which reads as a place label on that town\'s own sheet',
+    find: "  return /\\b(station|halt|parkway)\\b/i.test(name) ? name : name + ' Station';",
+    to: "  return name;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a pub name is seated with everything else, so it competes with the supermarket for the same space',
+    find: "  return p && p.cat === 'pub' ? -1 : 0;",
+    to: "  return 0;" },
+
+  { suite: 'poi_pull_query.test.js', file: 'draft_town.py',
+    what: 'the unattended drafter stops asking for tourism=museum',
+    find: '  way["tourism"="museum"]({box});\n',
+    to: '' },
+
+  { suite: 'poi_pull_query.test.js', file: 'overpass-pois.txt',
+    what: 'the town pull template stops asking for cinemas and colleges',
+    find: 'community_centre|theatre|arts_centre|cinema|college|university|post_office|townhall)$"](52.308,-0.100,52.345,-0.045);\n  way',
+    to: 'community_centre|theatre|arts_centre|post_office|townhall)$"](52.308,-0.100,52.345,-0.045);\n  way' },
 
   /* poi_select.js OA-340, 2026-09-14 — pubs, the second opt-in category. The
    * property the opt-in form was CHOSEN for is that a town which has not asked
@@ -371,14 +434,14 @@ const MUTATIONS = [
    * OA-238's nameless default, so a bare glyph nobody chose reaches the page
    * wearing a label to get past the rule that exists to stop it. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'pubs stop being opt-in, so every town with a pub gains every pub it has',
-    find: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
+    what: 'pubs stop being switchable, so a town that switched them off still gets every pub it has',
+    find: "  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
     to: "  if(t.amenity==='pub') return ['pub', t.name||''];" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless pub falls back to the word "Pub", which walks it past the nameless-miss default',
-    find: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
-    to: "  if((POI.include||[]).includes('pubs') && t.amenity==='pub') return ['pub', t.name||'Pub'];" },
+    find: "  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
+    to: "  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||'Pub'];" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a pub stops printing its name, so the category delivers a glass symbol and no Wetherspoon',
@@ -399,14 +462,14 @@ const MUTATIONS = [
    * the opt-in itself, the blank fallback, the miniature exclusion, the name,
    * the Key row and the glyph each have a mutation their own test must catch. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'stations stop being opt-in, so every town near a railway gains its station',
-    find: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];",
-    to: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];" },
+    what: 'stations stop being switchable, so a town that switched them off still gets its station',
+    find: "  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];",
+    to: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless station falls back to "Station", which walks it past the nameless-miss default',
-    find: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||''];",
-    to: "  if((POI.include||[]).includes('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', t.name||'Station'];" },
+    find: "  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];",
+    to: "  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)||'Station'];" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a miniature park railway is drawn as a station',
@@ -455,8 +518,8 @@ const MUTATIONS = [
 
   { suite: 'poi_pull_query.test.js', file: 'poi_select.js',
     what: 'classify() gains an opt-in category that no pull asks for',
-    find: "  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];",
-    to: "  if((POI.include||[]).includes('cafes') && t.amenity==='cafe') return ['cafe', t.name||''];\n  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];" },
+    find: "  if(on('industrial') && t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];",
+    to: "  if(on('cafes') && t.amenity==='cafe') return ['cafe', t.name||''];\n  if(on('industrial') && t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];" },
 
   /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
    * label rule behind them. Two of these guard a THRESHOLD and one guards the

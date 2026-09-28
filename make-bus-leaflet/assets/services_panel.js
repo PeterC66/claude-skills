@@ -656,9 +656,15 @@ function drawServicesPanel(deps) {
   // difference between the "Also serving..." note fitting and not, 2026-08-19).
   // Filtering can only ever REMOVE a row, never add one, so an already-shipped
   // town that happens to use all these categories renders byte-identical.
-  const KEY_ALL=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['library','Library'],['museum','Museum'],['leisure','Leisure centre'],['school','School'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
+  // The 28 September review's four always-drawn categories (buses-data OA-500)
+  // sit beside their nearest relatives: hospital after the two health rows,
+  // theatre and cinema after the museum, college after the school. A sheet that
+  // draws none of them keeps its Key exactly, because the filter drops the row.
+  const KEY_ALL=[['shop','Supermarket'],['gp','Doctors / GP'],['pharmacy','Pharmacy'],['hospital','Hospital'],['library','Library'],['museum','Museum'],['theatre','Theatre / arts centre'],['cinema','Cinema'],['leisure','Leisure centre'],['school','School'],['college','College'],['park','Park'],['industrial','Industrial estate'],['community','Community centre'],['townhall','Town Hall']];
   const key=KEY_ALL.filter(([cat])=>pois.some(p=>p.cat===cat));
   if(pois.some(p=>p.cat==='allotments')) key.push(['allotments','Allotments']);
+  // Post offices, switchable and off by default (OA-500), follow allotments.
+  if(pois.some(p=>p.cat==='postoffice')) key.push(['postoffice','Post office']);
   // `pub` is the second opt-in category (OA-340) and follows the first in the
   // same shape: appended after the always-on rows, so a town that has not
   // switched pubs on renders byte-identical — the property the opt-in form was

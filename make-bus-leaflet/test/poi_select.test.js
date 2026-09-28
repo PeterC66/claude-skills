@@ -19,7 +19,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { classify, selectPois, sameThing, unnamed, CATEGORY_LABELS, printsName,
+const { classify, selectPois, sameThing, unnamed, CATEGORY_LABELS, printsName, labelPriority,
         culledAfterTiers, culledAfterTiersNote } = require('./_engine.js').load('poi_select.js');
 
 const node = (lat, lon, tags) => ({ lat, lon, tags });
@@ -51,17 +51,27 @@ test('allotments are opt-in per town, and land in "industrial" for nobody', () =
  * gate over the 20 committed maps is what proves it on real data.
  * ------------------------------------------------------------------------- */
 
-test('OA-340: pubs are opt-in per town, and one opt-in does not buy the other', () => {
-  assert.strictEqual(classify({ amenity: 'pub', name: 'The Pig and Falcon' }, {}), null,
-    'a town that has asked for nothing draws no pub');
-  assert.strictEqual(classify({ amenity: 'pub', name: 'The Pig and Falcon' }, { include: ['allotments'] }), null,
-    'and a town that asked for ALLOTMENTS has not thereby asked for pubs');
-  assert.deepStrictEqual(classify({ amenity: 'pub', name: 'The Pig and Falcon' }, { include: ['pubs'] }),
-    ['pub', 'The Pig and Falcon']);
-  // Both opt-ins at once, because `include` is a list and the two clauses are
+test('OA-500: pubs are ON by default and a town can switch them OFF (OA-340 turned round)', () => {
+  const pub = { amenity: 'pub', name: 'The Pig and Falcon' };
+  assert.deepStrictEqual(classify(pub, {}), ['pub', 'The Pig and Falcon'],
+    'the 28 September review: a town that says nothing now draws its pubs');
+  assert.deepStrictEqual(classify(pub, { include: ['pubs'] }), ['pub', 'The Pig and Falcon'],
+    'a town that switched them on before the review still draws them');
+  assert.strictEqual(classify(pub, { exclude: ['pubs'] }), null, 'and one that switches them off does not');
+  assert.strictEqual(classify(pub, { include: ['pubs'], exclude: ['pubs'] }), null,
+    'OFF wins over ON, so a stale include cannot undo a switch-off');
+  assert.strictEqual(classify(pub, { exclude: ['stations'] })[0], 'pub',
+    'switching stations off has not thereby switched pubs off');
+  // Both switches at once, because `include` is a list and the clauses are
   // separate `if`s — the shape that would break if either were an `else if`.
   assert.deepStrictEqual(classify({ landuse: 'allotments', name: 'Broad Leas' }, { include: ['pubs', 'allotments'] }),
     ['allotments', 'Broad Leas']);
+});
+
+test('OA-500: a pub name is seated after every other name when labels compete', () => {
+  assert.strictEqual(labelPriority({ cat: 'pub', name: 'The Weeping Ash' }), -1);
+  for (const cat of ['shop', 'gp', 'pharmacy', 'school', 'station', 'hospital'])
+    assert.strictEqual(labelPriority({ cat, name: 'X' }), 0, `${cat} keeps the default rank`);
 });
 
 test('OA-340: a pub prints its name, and a NAMELESS pub is offered but not drawn', () => {
@@ -116,16 +126,68 @@ test('OA-340: two Red Lions is what OA-250 says it is — both drawn, one key, a
  * could draw one. The node below is the one in that map's own pull.
  * ------------------------------------------------------------------------- */
 
-test('OA-453: stations are opt-in per town, and neither other opt-in buys them', () => {
+test('OA-500: stations are ON by default and switchable, and a halt counts', () => {
   const stn = { railway: 'station', name: 'St Neots' };
-  assert.strictEqual(classify(stn, {}), null, 'a town that has asked for nothing draws no station');
-  assert.strictEqual(classify(stn, { include: ['pubs', 'allotments'] }), null,
-    'and asking for pubs and allotments has not thereby asked for stations');
-  assert.deepStrictEqual(classify(stn, { include: ['stations'] }), ['station', 'St Neots']);
-  assert.deepStrictEqual(classify({ railway: 'halt', name: 'Shippea Hill' }, { include: ['stations'] }),
-    ['station', 'Shippea Hill'], 'a halt is a small station, and a reader can catch a train there');
-  assert.strictEqual(classify({ railway: 'station', station: 'miniature', name: 'Park Railway' }, { include: ['stations'] }),
+  assert.deepStrictEqual(classify(stn, {}), ['station', 'St Neots Station'], 'the 28 September review: on unless switched off');
+  assert.strictEqual(classify(stn, { exclude: ['stations'] }), null, 'a town can switch them off');
+  assert.deepStrictEqual(classify(stn, { exclude: ['pubs', 'allotments'] }), ['station', 'St Neots Station'],
+    'and switching the others off has not switched stations off');
+  assert.deepStrictEqual(classify({ railway: 'halt', name: 'Shippea Hill' }, {}),
+    ['station', 'Shippea Hill Station'], 'a halt is a small station, and a reader can catch a train there');
+  assert.strictEqual(classify({ railway: 'station', station: 'miniature', name: 'Park Railway' }, {}),
     null, 'a miniature park railway is not a station a bus reader is looking for');
+});
+
+test('OA-500: a station named after its town prints as a station, not as the town', () => {
+  assert.strictEqual(classify({ railway: 'station', name: 'March' }, {})[1], 'March Station',
+    'on the March sheet a bare "March" reads as a place label');
+  for (const n of ['Huntingdon Station', 'Milton Keynes Central Station', 'Warwick Parkway', 'Shippea Hill Halt', 'the station'])
+    assert.strictEqual(classify({ railway: 'station', name: n }, {})[1], n, `${n} already says what it is`);
+});
+
+test('OA-500: hospital, theatre, cinema and college are always drawn, and symbol-only', () => {
+  const cases = [
+    [{ amenity: 'hospital', name: 'Hinchingbrooke Hospital' }, 'hospital'],
+    [{ amenity: 'theatre', name: 'The Wycombe Swan' }, 'theatre'],
+    [{ amenity: 'arts_centre', name: 'The Priory Centre' }, 'theatre'],
+    [{ amenity: 'cinema', name: 'Cineworld' }, 'cinema'],
+    [{ amenity: 'college', name: 'Huntingdonshire Regional College' }, 'college'],
+    [{ amenity: 'university', name: 'Bucks New University' }, 'college'],
+  ];
+  for (const [tags, cat] of cases) {
+    assert.deepStrictEqual(classify(tags, {}), [cat, tags.name], `${tags.amenity} is drawn for every town`);
+    assert.ok(!printsName({ cat, name: tags.name }), `${cat} is symbol-only, like the library`);
+  }
+  assert.strictEqual(classify({ amenity: 'hospital' }, {})[1], 'Hospital', 'an unnamed one keeps its symbol');
+});
+
+test('OA-500: a museum is read from amenity=museum as well as tourism=museum', () => {
+  assert.deepStrictEqual(classify({ amenity: 'museum', name: 'Norris Museum' }, {}), ['museum', 'Norris Museum'],
+    'the pull asks for amenity=museum, so the reader must read it or a drafted town loses its museum');
+  assert.deepStrictEqual(classify({ tourism: 'museum', name: 'Norris Museum' }, {}), ['museum', 'Norris Museum']);
+});
+
+test('OA-500: the new A categories come AFTER the old ones, so nothing already drawn changes category', () => {
+  assert.deepStrictEqual(classify({ amenity: 'college', leisure: 'sports_centre', name: 'Sports Hall' }, {}),
+    ['leisure', 'Sports Hall']);
+  assert.deepStrictEqual(classify({ shop: 'supermarket', amenity: 'post_office', name: 'Co-op' }, { include: ['postoffices'] }),
+    ['shop', 'Co-op'], 'a post office counter in a supermarket is the supermarket');
+});
+
+test('OA-500: post offices and industrial estates are switchable and OFF by default', () => {
+  const po = { amenity: 'post_office', name: 'Hemingford Road Post Office' };
+  assert.strictEqual(classify(po, {}), null);
+  assert.deepStrictEqual(classify(po, { include: ['postoffices'] }), ['postoffice', 'Hemingford Road Post Office']);
+  const ind = { landuse: 'industrial', name: 'Somersham Road Industrial Estate' };
+  assert.strictEqual(classify(ind, {}), null, 'estates are no longer drawn for a town that has not asked');
+  assert.deepStrictEqual(classify(ind, { include: ['industrial'] }), ['industrial', 'Somersham Road Industrial Estate']);
+  // industrialKeep chooses WHICH estates; it does not switch them on (Peter,
+  // 2026-09-28: the two packs that set it were our choices, not a customer's).
+  assert.strictEqual(classify(ind, { industrialKeep: ['Somersham Road Industrial Estate'] }), null);
+  assert.strictEqual(classify(ind, { industrialKeep: 'named' }), null);
+  const { mergePoiOverlay } = require('./_engine.js').load('poi_select.js');
+  const off = mergePoiOverlay({ include: ['industrial'] }, { poiInclude: { industrial: false } });
+  assert.deepStrictEqual([off.include, off.exclude], [[], undefined], 'a default-off category needs no exclude to go off');
 });
 
 test('OA-453: a station prints its name, and a NAMELESS station is offered but not drawn', () => {
@@ -137,8 +199,8 @@ test('OA-453: a station prints its name, and a NAMELESS station is offered but n
   const out = selectPois([[node(52.2265, -0.2505, { railway: 'station', name: 'St Neots' }),
                            node(52.2400, -0.2505, { railway: 'station' })]],
     { include: ['stations'] }, report);
-  assert.deepStrictEqual(out.map(p => p.name), ['St Neots'], 'OA-238: a bare glyph nobody chose stays off the sheet');
-  assert.deepStrictEqual(report.candidates.map(c => c.key), ['station:St Neots', 'station:'],
+  assert.deepStrictEqual(out.map(p => p.name), ['St Neots Station'], 'OA-238: a bare glyph nobody chose stays off the sheet');
+  assert.deepStrictEqual(report.candidates.map(c => c.key), ['station:St Neots Station', 'station:'],
     'and it is still OFFERED in the chooser');
 });
 
@@ -239,13 +301,16 @@ test('a tidy rule must consume its own leading space — nothing trims the name 
 });
 
 test('industrialKeep: default keeps named estates, "none" drops all, an array keeps that list', () => {
+  // Estates are switchable and off by default since OA-500; these arms are about
+  // WHICH estates a town that has switched them on keeps.
+  const IND = { include: ['industrial'] };
   const els = [[node(52.3, -0.07, { landuse: 'industrial', name: 'Compass Point' }),
                 node(52.9, -0.9, { landuse: 'industrial' })]];
-  assert.deepStrictEqual(selectPois(els, {}).map(p => p.name), ['Compass Point'],
+  assert.deepStrictEqual(selectPois(els, IND).map(p => p.name), ['Compass Point'],
     'an unnamed estate reads as "Industrial Estate", which names nothing');
-  assert.deepStrictEqual(selectPois(els, { industrialKeep: 'none' }), []);
-  assert.deepStrictEqual(selectPois(els, { industrialKeep: ['Somewhere Else'] }), []);
-  assert.deepStrictEqual(selectPois(els, { industrialKeep: ['Compass Point'] }).map(p => p.name), ['Compass Point']);
+  assert.deepStrictEqual(selectPois(els, { ...IND, industrialKeep: 'none' }), []);
+  assert.deepStrictEqual(selectPois(els, { ...IND, industrialKeep: ['Somewhere Else'] }), []);
+  assert.deepStrictEqual(selectPois(els, { ...IND, industrialKeep: ['Compass Point'] }).map(p => p.name), ['Compass Point']);
   // The default arm needs the same assertion as the unnamed-green test above, and
   // for the same reason: `Industrial Estate` is a category label since OA-338, so
   // an unnamed estate that got past this filter would be dropped by the tier
@@ -253,7 +318,7 @@ test('industrialKeep: default keeps named estates, "none" drops all, an array ke
   // filter does is keep it out of the chooser.
   const rep = {};
   selectPois([[node(52.3, -0.07, { landuse: 'industrial' }),
-               node(52.31, -0.07, { landuse: 'industrial', name: 'Meadow Lane Estate' })]], {}, rep);
+               node(52.31, -0.07, { landuse: 'industrial', name: 'Meadow Lane Estate' })]], IND, rep);
   assert.deepStrictEqual(rep.candidates.map(c => c.key), ['industrial:Meadow Lane Estate'],
     'an unnamed estate is not offered in the chooser — that is the filter, not the tier default');
 });
@@ -535,10 +600,13 @@ test('OA-338: the label set is DERIVED from classify(), not typed beside it', ()
     [{ leisure: 'sports_centre' }, 'Leisure'], [{ amenity: 'school' }, 'School'],
     [{ leisure: 'park' }, 'Park'], [{ landuse: 'allotments' }, 'Allotments'],
     [{ landuse: 'industrial' }, 'Industrial Estate'],
+    [{ amenity: 'hospital' }, 'Hospital'], [{ amenity: 'theatre' }, 'Theatre'],
+    [{ amenity: 'cinema' }, 'Cinema'], [{ amenity: 'college' }, 'College'],
+    [{ amenity: 'post_office' }, 'Post Office'],
   ];
   const produced = new Set();
   for (const [tags, label] of cases) {
-    const c = classify(tags, { include: ['allotments'] });
+    const c = classify(tags, { include: ['allotments', 'industrial', 'postoffices'] });
     assert.ok(c, JSON.stringify(tags) + ' should classify');
     assert.strictEqual(c[1], label, JSON.stringify(tags) + ' falls back to ' + label);
     produced.add(c[1]);
@@ -549,7 +617,7 @@ test('OA-338: the label set is DERIVED from classify(), not typed beside it', ()
   // nothing at all, which is what keeps them OUT of the set above.
   assert.strictEqual(classify({ amenity: 'pharmacy' }, {})[1], '');
   assert.strictEqual(classify({ amenity: 'doctors' }, {})[1], '');
-  assert.strictEqual(classify({ amenity: 'pub' }, { include: ['pubs'] })[1], '');
+  assert.strictEqual(classify({ amenity: 'pub' }, {})[1], '');
   assert.ok(!CATEGORY_LABELS.has('Pub'), 'a "Pub" label would defeat the nameless default');
   assert.ok(unnamed('') && unnamed('Library') && !unnamed('Ash Library'));
 });
@@ -885,7 +953,7 @@ test('OA-250: poiOverride reads osm: before cat:name, and {} when neither is the
 // OA-439 — the customer's overrides laid over a town's poi block. One rule for
 // the generator and the portal's chooser, so the chooser cannot offer a
 // category the sheet would not draw.
-const { mergePoiOverlay, OPT_IN_CATS } = require('./_engine.js').load('poi_select.js');
+const { mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, categoryOn } = require('./_engine.js').load('poi_select.js');
 
 test('OA-439: no overlay returns the base object itself, so a map with no answer is byte-identical', () => {
   const base = { include: ['pubs'], tiers: { 'pub:The Bell': { tier: 'must' } } };
@@ -905,20 +973,37 @@ test('OA-439: tiers merge per key with the overrides winning, as the inline bloc
 });
 
 test('OA-439: the category switch adds and removes an opt-in category, and nothing else', () => {
-  assert.deepStrictEqual(OPT_IN_CATS, ['allotments', 'pubs', 'stations']);
-  assert.deepStrictEqual(mergePoiOverlay({}, { poiInclude: { pubs: true } }).include, ['pubs']);
+  assert.deepStrictEqual(OPT_IN_CATS, ['allotments', 'pubs', 'stations', 'postoffices', 'industrial']);
+  assert.deepStrictEqual(mergePoiOverlay({}, { poiInclude: { allotments: true } }).include, ['allotments']);
   const base = { include: ['pubs', 'allotments'] };
-  const off = mergePoiOverlay(base, { poiInclude: { pubs: false, stations: true } });
-  assert.deepStrictEqual(off.include, ['allotments', 'stations']);
+  const off = mergePoiOverlay(base, { poiInclude: { allotments: false, industrial: true } });
+  assert.deepStrictEqual(off.include, ['pubs', 'industrial']);
+  assert.strictEqual(off.exclude, undefined, 'a default-OFF category switched off needs no exclude entry');
   assert.deepStrictEqual(base.include, ['pubs', 'allotments'], 'the base is not mutated');
-  assert.deepStrictEqual(mergePoiOverlay(base, { poiInclude: { pubs: true } }).include, ['pubs', 'allotments'],
+  assert.deepStrictEqual(mergePoiOverlay(base, { poiInclude: { allotments: true } }).include, ['pubs', 'allotments'],
     'switching on what is already on adds no second copy');
 });
 
+test('OA-500: switching a DEFAULT-ON category off writes poi.exclude, and switching it on takes it out', () => {
+  assert.deepStrictEqual(DEFAULT_ON_CATS, ['pubs', 'stations']);
+  const off = mergePoiOverlay({ include: ['pubs'] }, { poiInclude: { pubs: false } });
+  assert.deepStrictEqual(off.include, [], 'the old opt-in entry goes');
+  assert.deepStrictEqual(off.exclude, ['pubs'], 'and the switch-off is recorded, or the default would put pubs back');
+  assert.ok(!categoryOn(off, 'pubs'));
+  const back = mergePoiOverlay(off, { poiInclude: { pubs: true } });
+  assert.deepStrictEqual(back.exclude, [], 'switching it on again removes the exclude');
+  assert.ok(categoryOn(back, 'pubs'));
+  assert.deepStrictEqual(mergePoiOverlay({}, { poiInclude: { stations: true } }).include, [],
+    'switching on what is on by default writes nothing');
+  assert.ok(categoryOn({}, 'stations') && categoryOn({}, 'pubs'));
+  assert.ok(!categoryOn({}, 'allotments') && !categoryOn({}, 'postoffices') && !categoryOn({}, 'industrial'));
+});
+
 test('OA-439: a switched-on category reaches the selector, and a switched-off one leaves it', () => {
-  const els = [[node(52.3, -0.07, { amenity: 'pub', name: 'The Bell' })]];
-  assert.strictEqual(selectPois(els, mergePoiOverlay({}, {})).length, 0);
-  const on = selectPois(els, mergePoiOverlay({}, { poiInclude: { pubs: true } }));
-  assert.deepStrictEqual(on.map((p) => p.cat + ':' + p.name), ['pub:The Bell']);
-  assert.strictEqual(selectPois(els, mergePoiOverlay({ include: ['pubs'] }, { poiInclude: { pubs: false } })).length, 0);
+  const els = [[node(52.3, -0.07, { amenity: 'pub', name: 'The Bell' }),
+                node(52.31, -0.07, { landuse: 'allotments', name: 'Broad Leas' })]];
+  const cats = (poi) => selectPois(els, poi).map((p) => p.cat + ':' + p.name);
+  assert.deepStrictEqual(cats(mergePoiOverlay({}, {})), ['pub:The Bell'], 'pubs by default, allotments not');
+  assert.deepStrictEqual(cats(mergePoiOverlay({}, { poiInclude: { allotments: true } })), ['pub:The Bell', 'allotments:Broad Leas']);
+  assert.deepStrictEqual(cats(mergePoiOverlay({ include: ['pubs'] }, { poiInclude: { pubs: false } })), []);
 });

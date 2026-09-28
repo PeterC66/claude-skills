@@ -1517,6 +1517,13 @@ const MUTATIONS = [
     find: "      if(!STYLES.has(v.style)) throw new Error(",
     to: "      if(false) throw new Error(" },
 
+  // complexity_score.js writes complexity.json only under --apply (OA-493,
+  // 2026-09-28): the tracked S2 output was rewritten by runs made only to read it.
+  { suite: 'complexity_score_apply.test.js', file: 'complexity_score.js',
+    what: "the scorer writes complexity.json on every run again, so reading a score rewrites a committed S2 file",
+    find: "if (apply) fs.writeFileSync(path.join(dir, 'complexity.json'), JSON.stringify(out, null, 2));",
+    to: "fs.writeFileSync(path.join(dir, 'complexity.json'), JSON.stringify(out, null, 2));" },
+
   { suite: 'lane_normals.test.js', file: 'lane_normals.js',
     what: "every member's blocks land in the same place — the phase is lost, which is what a dropped stroke-dashoffset would do on the web",
     find: "  return phase > 0 ? `0 ${f(phase)} ${f(block)} ${f(P - block - phase)}` : `${f(block)} ${f(P - block)}`;",

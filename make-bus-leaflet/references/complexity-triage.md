@@ -4,10 +4,10 @@ Run at the **end of S2**, before anything is styled. Answers the question the pi
 
 ```
 cd <S2 run dir>
-node "%SK%\complexity_score.js"
+node "%SK%\complexity_score.js" --apply
 ```
 
-Writes `complexity.json` into the run dir and prints a verdict plus a remedy ladder. **Exit 0** = GREEN or AMBER, **exit 2** = RED (suppress with `--no-fail`), exit 1 = could not score.
+Prints a verdict plus a remedy ladder, and under `--apply` writes `complexity.json` into the run dir. Without `--apply` it only reports: `complexity.json` is a tracked S2 output, and a run made just to read a score used to rewrite it (buses-data OA-493). **Exit 0** = GREEN or AMBER, **exit 2** = RED (suppress with `--no-fail`), exit 1 = could not score.
 
 ## Why this exists
 
@@ -127,7 +127,7 @@ Rung 1 is not auto-applied because a family is a **claim about the real world**.
 
 **Once a rung is in `routes.json`, the gate stops proposing it** and scores the town with it applied (`complexity.json` `applied`), so the report always reads "what is still wrong", never "do the thing you already did".
 
-**Rung 0 changes the geometry, so re-run S2 after it:** `curate_services.js --apply` → `match_routes.js` → `complexity_score.js`.
+**Rung 0 changes the geometry, so re-run S2 after it:** `curate_services.js --apply` → `match_routes.js` → `complexity_score.js --apply`.
 
 ### Reading the ladder output
 

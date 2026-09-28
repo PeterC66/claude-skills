@@ -11,17 +11,24 @@
  * 6-19 services share the same tarmac. Nothing measured that until it was drawn.
  *
  * This script measures it from data S2 already owns, before a single line is
- * styled. It writes complexity.json and prints a verdict plus a remedy ladder
- * with PREDICTED post-remedy scores, so the decision is made on numbers rather
- * than on how the first draft happened to look.
+ * styled. It prints a verdict plus a remedy ladder with PREDICTED post-remedy
+ * scores, so the decision is made on numbers rather than on how the first draft
+ * happened to look, and under --apply it writes them to complexity.json.
  *
  * Zero dependencies (Node core only). Run it in an S2 run dir:
  *
- *   node "%SK%\complexity_score.js"                 # score the CWD
+ *   node "%SK%\complexity_score.js"                 # score the CWD, write nothing
+ *   node "%SK%\complexity_score.js" --apply         # ...and write complexity.json
  *   node "%SK%\complexity_score.js" --dir <S2dir>   # score elsewhere
- *   node "%SK%\complexity_score.js" --json          # machine output only
+ *   node "%SK%\complexity_score.js" --json          # machine output only (stdout)
  *   node "%SK%\complexity_score.js" --no-fail       # never exit non-zero
  *   node "%SK%\complexity_score.js" --core-radius 800   # rung-2 probe radius, m
+ *
+ * REPORT BY DEFAULT, WRITE ONLY UNDER --apply (buses-data OA-493, 2026-09-28).
+ * complexity.json is a TRACKED S2 output, and a run made only to read a score
+ * used to rewrite it: on 2026-09-27 reading Beaconsfield's and St Neots' candidate
+ * families rewrote both towns' committed files. The S2 procedure and
+ * draft_town.py pass --apply on the score they commit; everything else reads.
  *
  * Exit codes:  0 = GREEN or AMBER (build continues)
  *              2 = RED  (stop and choose a strategy; suppress with --no-fail)
@@ -459,6 +466,7 @@ const has = (name) => name in FLAGS;
 
 const dir = path.resolve(opt('dir', process.cwd()));
 const jsonOnly = has('json');
+const apply = has('apply');
 const noFail = has('no-fail');
 const coreRadiusKm = Number(opt('core-radius', 600)) / 1000;
 const overlapMin = Number(opt('overlap', 0.6));
@@ -892,7 +900,7 @@ const out = {
   perRouteBuried: metrics.buried
 };
 
-fs.writeFileSync(path.join(dir, 'complexity.json'), JSON.stringify(out, null, 2));
+if (apply) fs.writeFileSync(path.join(dir, 'complexity.json'), JSON.stringify(out, null, 2));
 
 // ---------------------------------------------------------------- report
 if (jsonOnly) {
@@ -966,7 +974,8 @@ if (jsonOnly) {
     }
   }
   console.log('');
-  console.log('  written: ' + path.join(dir, 'complexity.json'));
+  console.log(apply ? '  written: ' + path.join(dir, 'complexity.json')
+                    : '  report only: complexity.json not written (--apply writes it)');
   console.log('');
 }
 

@@ -36,9 +36,9 @@ Three route files come out of S2:
 
 7. **Complexity triage — the "can we draw this?" gate.** Run it **last**, after the road match (`pull_roads.js` + `match_routes.js`) so it scores the real drawn geometry rather than the straight-line fallback:
    ```
-   node "%SK%\complexity_score.js"
+   node "%SK%\complexity_score.js" --apply
    ```
-   It writes `complexity.json` and prints a band:
+   Under `--apply` it writes `complexity.json`, the S2 output step 8 commits; without it the scorer only reports, so a run made to read a score never rewrites a committed file. It prints a band:
    - **GREEN** — say so in one line and carry straight on to S3. Nothing changes.
    - **AMBER** — apply the remedies it lists, record them in the S2 commit note, **keep going**. Do not pause; an amber that interrupts an ordinary town will get ignored.
    - **RED** — **stop and put the options to the user.** Exits 2 so it can't be missed. Do not build the standard single sheet: pick a strategy from the ladder first.
@@ -50,7 +50,7 @@ Three route files come out of S2:
    node "%SK%\curate_services.js"            # what rungs 0 and 1 would do
    node "%SK%\curate_services.js" --apply    # writes match_cfg.json skipRoutes (rung 0)
    node "%SK%\match_routes.js"               # rung 0 changed the geometry — re-match
-   node "%SK%\complexity_score.js"           # re-score: did it do enough?
+   node "%SK%\complexity_score.js" --apply   # re-score: did it do enough?
    ```
    It also prints a paste-ready `routes.json` `internalCorridors` block (rung 1) for S3 — those are **candidates you must confirm**, so it never writes them. Note the ordering: `skipRoutes` lives in `match_cfg.json`, so rung 0 invalidates `routes_paths.json` until `match_routes.js` re-runs.
 

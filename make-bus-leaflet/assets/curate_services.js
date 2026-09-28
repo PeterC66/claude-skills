@@ -32,7 +32,7 @@
  * valid until S2 is re-run):
  *     node curate_services.js --apply
  *     node match_routes.js                # re-match without the dropped services
- *     node complexity_score.js            # re-score: did rung 0 do enough?
+ *     node complexity_score.js --apply    # re-score: did rung 0 do enough?
  *
  * The frequency cliff and the families come from complexity_score.js, which is
  * spawned here rather than reimplemented — the gate and the tooling that acts on
@@ -149,7 +149,7 @@ if (!r0 || !r0.data || !r0.data.below || !r0.data.below.length) {
       mcfg.skipRoutes = [...new Set(existingSkip.concat(below))];
       fs.writeFileSync(mcfgPath, JSON.stringify(mcfg, null, 2));
       console.log('  --apply: wrote skipRoutes (+' + add.join(', ') + ') to match_cfg.json');
-      console.log('           NOW RE-RUN  node match_routes.js  then  node complexity_score.js');
+      console.log('           NOW RE-RUN  node match_routes.js  then  node complexity_score.js --apply');
     }
     console.log('');
   }

@@ -73,3 +73,37 @@ test('an explicit --into that is not an S6 run folder is refused too', () => {
   assert.strictEqual(r.code, 2, `expected a refusal (exit 2), got ${r.code}\n${r.out}`);
   assert.deepStrictEqual(strays(build), [], 'it wrote into the build root:\n' + r.out);
 });
+
+/* OA-492: the "ALREADY DECIDED" read must be about THIS map. A record another
+ * map's call left in the folder was reported as this map's decision. */
+function recordIn(dir, map, build) {
+  fs.writeFileSync(path.join(dir, 'redteam-source.json'), JSON.stringify({
+    schema: 1, decision: 'REUSE', at: '2026-09-27', map, build, why: 'reused its own answer',
+  }));
+}
+
+test('CONTROL: a record naming this map is read as already decided', () => {
+  const { build, fresh } = estate();
+  recordIn(fresh, 'Testton Co-op', build);
+  const r = run(fresh, ['--build', build]);
+  assert.strictEqual(r.code, 0, `expected ALREADY DECIDED (exit 0), got ${r.code}\n${r.out}`);
+  assert.match(r.out, /ALREADY DECIDED — REUSE/);
+});
+
+test('a record naming another map is refused, not read as this map\'s decision', () => {
+  const { build, fresh } = estate();
+  recordIn(fresh, 'St Neots', path.join(path.dirname(build), 'St Neots'));
+  const before = fs.readFileSync(path.join(fresh, 'redteam-source.json'), 'utf8');
+  const r = run(fresh, ['--build', build]);
+  assert.strictEqual(r.code, 2, `expected a refusal (exit 2), got ${r.code}\n${r.out}`);
+  assert.doesNotMatch(r.out, /ALREADY DECIDED/);
+  assert.match(r.out, /decision about another map/);
+  assert.strictEqual(fs.readFileSync(path.join(fresh, 'redteam-source.json'), 'utf8'), before, 'it rewrote the stray record');
+});
+
+test('an older record with no map is judged by its build path', () => {
+  const { build, fresh } = estate();
+  recordIn(fresh, undefined, path.join(path.dirname(build), 'St Neots'));
+  const r = run(fresh, ['--build', build]);
+  assert.strictEqual(r.code, 2, `expected a refusal (exit 2), got ${r.code}\n${r.out}`);
+});

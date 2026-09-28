@@ -8,6 +8,9 @@
       "industrial:Tannery Road Ind Est": {
         "force": true,
         "label": { "offset": { "dx": -3.2, "dy": 3.4 }, "anchor": "end" }
+      },
+      "pharmacy:Ryemead Pharmacy": {
+        "force": true
       }
     }
   }

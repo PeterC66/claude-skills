@@ -107,7 +107,7 @@
  * not by twenty-one.
  */
 /*
- * THE 28 SEPTEMBER 2026 REVIEW (Peter's decisions, buses-data OA-497). Every
+ * THE 28 SEPTEMBER 2026 REVIEW (Peter's decisions, buses-data OA-500). Every
  * category below is one of three things, and this list is the whole answer:
  *   A  always drawn: supermarket, GP, pharmacy, library, museum, town hall,
  *      community centre, leisure, school, park, and the four the review added,
@@ -170,7 +170,7 @@ function classify(t, poiCfg) {
 }
 
 /*
- * A STATION'S PRINTED NAME (buses-data OA-497). OpenStreetMap names a station
+ * A STATION'S PRINTED NAME (buses-data OA-500). OpenStreetMap names a station
  * after its town — every station in the estate's pulls on 2026-09-28 was, High
  * Wycombe, March and St Neots — so on the town's own sheet the bare name reads
  * as a PLACE label, not a landmark. That was tolerable while a town had to switch
@@ -222,7 +222,7 @@ function printsName(p){
 }
 
 /*
- * THE PLACER'S RANK FOR A POI'S NAME (buses-data OA-497, the 28 September
+ * THE PLACER'S RANK FOR A POI'S NAME (buses-data OA-500, the 28 September
  * review). The labeller seats labels greedily in `priority` order, highest
  * first, then longest name first (labeller.js solve()), so a name queued lower is
  * seated only into the space every other name has left. Pubs went on by default

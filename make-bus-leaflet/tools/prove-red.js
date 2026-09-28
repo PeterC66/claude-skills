@@ -363,7 +363,7 @@ const MUTATIONS = [
     find: "  if(on('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
     to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
 
-  /* OA-497, the 28 September review. Default-on has to be switchable OFF, the
+  /* OA-500, the 28 September review. Default-on has to be switchable OFF, the
    * default-off categories have to stay off, and the four new always-drawn
    * categories and the museum tag each need a test that objects to losing them. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',

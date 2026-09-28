@@ -34,7 +34,7 @@ const PLACE = 'High Wycombe Aldi';
 const FIXTURE = path.join(__dirname, 'fixtures', 'estate', 'Places', '_standalone', PLACE);
 const SHEET = path.join('ci-reference', 'internal-schematic.svg');
 // The store's own forced label, one of the two OA-165 moved. It was the other one,
-// Tannery Road Ind Est, until industrial estates went off by default (OA-497).
+// Tannery Road Ind Est, until industrial estates went off by default (OA-500).
 const LABEL = 'Aldi';
 
 function estate() {

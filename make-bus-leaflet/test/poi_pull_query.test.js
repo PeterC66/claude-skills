@@ -34,7 +34,7 @@ const SAMPLES = {
   industrial: [{ landuse: 'industrial', name: 'Compass Point' }],
 };
 
-/* The always-drawn categories whose tags the 28 September review (OA-497) found
+/* The always-drawn categories whose tags the 28 September review (OA-500) found
  * missing or mismatched: the pull asked for amenity=museum and the reader read
  * tourism=museum, and cinema, college and university were not asked for at all. */
 const ALWAYS = [

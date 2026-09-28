@@ -116,7 +116,7 @@ console.log('\n3. source -> build');
 
 console.log('\n3b. the CATEGORY SWITCH — the second half of an answer (OA-439)');
 {
-  // Allotments, not pubs, since OA-497: pubs are on by default, so switching
+  // Allotments, not pubs, since OA-500: pubs are on by default, so switching
   // them ON owes nothing, and the default-off case needs a default-off category.
   const a = run({ block: { tiers: {}, include: { allotments: true } }, s3: {}, s4: {}, s4Include: [] });
   check('the portal switched allotments ON and the source lacks them: landmark-owed row', keys(a).includes('landmark-owed-testtown'), keys(a).join(','));
@@ -126,9 +126,9 @@ console.log('\n3b. the CATEGORY SWITCH — the second half of an answer (OA-439)
   const c = run({ block: { tiers: {}, include: { pubs: false } }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });
   check('switched OFF where the source has them is owed too', keys(c).includes('landmark-owed-testtown') && c.items[0].detail.includes('- pubs switched off'), keys(c).join(','));
   const cc = run({ block: { tiers: {}, include: { pubs: true } }, s3: {}, s4: {}, s4Include: [] });
-  check('OA-497: switching pubs ON where they are on by default owes nothing', keys(cc).length === 0, keys(cc).join(','));
+  check('OA-500: switching pubs ON where they are on by default owes nothing', keys(cc).length === 0, keys(cc).join(','));
   const cd = run({ block: { tiers: {}, include: { stations: false } }, s3: {}, s4: {}, s4Include: [] });
-  check('OA-497: switching a default-on category OFF is owed', keys(cd).includes('landmark-owed-testtown') && cd.items[0].detail.includes('- stations switched off'), keys(cd).join(','));
+  check('OA-500: switching a default-on category OFF is owed', keys(cd).includes('landmark-owed-testtown') && cd.items[0].detail.includes('- stations switched off'), keys(cd).join(','));
   const d = run({ block: { tiers: {}, include: {} }, s3: {}, s4: {}, s4Include: [] });
   check('an empty switch owes nothing', keys(d).length === 0, keys(d).join(','));
   const e = run({ block: { tiers: {} }, s3: {}, s4: {}, s4Include: ['pubs'], poiCfg: { include: ['pubs'] } });

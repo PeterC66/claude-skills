@@ -75,7 +75,7 @@ test('industrial keys are UNREACHABLE while estates are off, and reachable once 
   assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'named', include: ['industrial'] }), []);
   assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'named' }), ['industrial:Cressex'],
     'industrialKeep chooses which estates, and does not switch them on');
-  // OA-497: estates are off by default, so a town that says nothing cannot reach one.
+  // OA-500: estates are off by default, so a town that says nothing cannot reach one.
   assert.deepStrictEqual(S.unreachableKeys(portal, {}), ['industrial:Cressex']);
   assert.deepStrictEqual(S.unreachableKeys(portal, { include: ['industrial'] }), []);
   // And a default-ON category switched off is culled the same way.
@@ -176,7 +176,7 @@ test('the category switch (OA-439): on adds, off removes, anything else is no op
   const b = S.compareInclude(['pubs', 'allotments'], { allotments: false, industrial: true });
   assert.deepStrictEqual(b.to, ['pubs', 'industrial']);
   assert.deepStrictEqual([b.on, b.off], [['industrial'], ['allotments']]);
-  // OA-497: pubs and stations are on by default, so switching one off is owed
+  // OA-500: pubs and stations are on by default, so switching one off is owed
   // and lands in poi.exclude, and switching one on where nothing said off is not.
   const p = S.compareInclude(['pubs'], { pubs: false });
   assert.deepStrictEqual([p.to, p.excludeTo, p.on, p.off, p.owed], [[], ['pubs'], [], ['pubs'], true]);

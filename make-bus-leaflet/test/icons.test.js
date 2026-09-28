@@ -86,7 +86,7 @@ test('and every category draws its OWN glyph rather than the fallback dot (OA-34
     'the legacy icon set has no station either (OA-453), so it draws the grey default blob');
 });
 
-test('every category classify() can return has a glyph in BOTH sets (OA-497, the join)', () => {
+test('every category classify() can return has a glyph in BOTH sets (OA-500, the join)', () => {
   // Read from the classifier itself, so a category added there without a drawing
   // fails here rather than shipping as a dot: the 28 September review added five.
   const { classify, OPT_IN_CATS } = require('./_engine.js').load('poi_select.js');

@@ -90,7 +90,7 @@ const GRID_COL = {
   // and the pub's rose-brown sits next to it. The train-front SHAPE is what
   // tells it from `school`'s blue at 4.2 mm; the colour only has to not clash.
   station: '#2b3990',
-  // buses-data OA-497, the 28 September review's five new categories. The SHAPE
+  // buses-data OA-500, the 28 September review's five new categories. The SHAPE
   // carries each one; the colours only have to keep off the glyphs they sit
   // nearest in the Key. Hospital is the NHS blue, which every reader already
   // reads as a hospital, and not the GP's red, which the H would then fight.
@@ -182,7 +182,7 @@ function gridGlyph(cat, col, cw = 0) {
       return f('M8,2.8 H16 C17.6,2.8 18.6,3.8 18.6,5.4 V17.4 H5.4 V5.4 C5.4,3.8 6.4,2.8 8,2.8 Z')
            + k('M7.6,5.2 H16.4 V10.2 H7.6 Z M7.8,12.8 h2.4 v2.2 h-2.4 Z M13.8,12.8 h2.4 v2.2 h-2.4 Z')
            + st('M8.6,18.4 L6.2,21.2 M15.4,18.4 L17.8,21.2');
-    /* The five categories of the 28 September review (buses-data OA-497). Drawn
+    /* The five categories of the 28 September review (buses-data OA-500). Drawn
      * to the four rules above and proofed at 4.2 mm; a redraw is a decision for a
      * person with a proof in front of them, as the pub's handle was. */
     case 'hospital':    // H knocked out of the SQUARE keyline — the GP's family,

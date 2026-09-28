@@ -185,7 +185,7 @@ function townCandidateKeys(mapDir, include) {
  * every caller applies both.
  *
  *   culled    the selector drops it BEFORE applyTiers() runs — `industrial:*`
- *             under industrialKeep "none", and since OA-497 any key whose
+ *             under industrialKeep "none", and since OA-500 any key whose
  *             switchable category this town has switched off (a `pub:*` under
  *             poi.exclude ["pubs"], an `industrial:*` with estates off). Add a rule here when
  *             poi_select.js grows another pre-tier cull, and add its case to
@@ -289,7 +289,7 @@ function mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) {
  *   from  the source's poi.include (an array, [] when it has none)
  *   to    what it would be with the switch laid over it
  *   excludeFrom / excludeTo  the same for poi.exclude, which is where a
- *         DEFAULT-ON category switched off is recorded (buses-data OA-497)
+ *         DEFAULT-ON category switched off is recorded (buses-data OA-500)
  *   on    categories the switch turns on;  off  categories it turns off —
  *         read through categoryOn(), so a pub switched on where pubs were
  *         already on by default is owed nothing
@@ -465,7 +465,7 @@ async function main() {
   // the town would have AFTER it, or a pub answer reads as orphaned (OA-439).
   const include = compareInclude(poiCfg.include, portalSwitch, poiCfg.exclude);
   const candidates = townCandidateKeys(info.dir, include.owed ? include.to : undefined);
-  // Tiers are judged against the config AFTER the switch (OA-497), or a tier on a
+  // Tiers are judged against the config AFTER the switch (OA-500), or a tier on a
   // category the same answer switches on is culled as unreachable.
   const cfgAfter = include.owed ? { ...poiCfg, include: include.to, exclude: include.excludeTo } : poiCfg;
   const cmp = { ...compareTiers(sourceTiers, portalTiers, cfgAfter, candidates), include };

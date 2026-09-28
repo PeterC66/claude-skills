@@ -59,7 +59,7 @@
  * @param {(map) => object|null} p.readBlock      the portal's poi-tiers block, or null if unreadable
  * @param {(dir) => object|null} p.readTown       {s3Tiers, s4Tiers, poiCfg, s3Id, s4Version, s4Include?, s4Exclude?} or null
  * @param {(src, por, poiCfg, candidates) => object} p.compareTiers  the engine's rule
- * @param {(srcInclude, portalSwitch, srcExclude?) => object} [p.compareInclude]  the engine's switch rule (OA-439; exclude since OA-497)
+ * @param {(srcInclude, portalSwitch, srcExclude?) => object} [p.compareInclude]  the engine's switch rule (OA-439; exclude since OA-500)
  * @param {(include, exclude?) => object} [p.switchOf]  a poi block's switches as a switch, for S3 against S4
  * @param {(dir, include?) => string[]|null} [p.readCandidates]  the town's identities today, or null
  * @param {string} [p.syncCmd]                    how to run poi_tiers_sync.js, for the row
@@ -107,7 +107,7 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
     const block = readBlock(m);
     if (block && block.tiers) {
       const inc = switchDiff((town.poiCfg || {}).include, block.include, (town.poiCfg || {}).exclude);
-      // The config AFTER the switch (OA-497): a tier on a category the same answer
+      // The config AFTER the switch (OA-500): a tier on a category the same answer
       // switches on must not be culled as unreachable by the config before it.
       const cfg = inc.owed ? { ...(town.poiCfg || {}), include: inc.to, exclude: inc.excludeTo } : (town.poiCfg || {});
       const c = compare(town.s3Tiers || {}, block.tiers, cfg, dir, inc.owed ? inc.to : undefined);

@@ -199,6 +199,7 @@ const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { smoothCasingWidths } = require(_dep('casing_width.js'));
+const { findGapCuts, gapEvents } = require(_dep('frame_gaps.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
 // coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
@@ -1339,7 +1340,8 @@ if(IR){
       endCut={p:pts[pts.length-1], d:unit(pts[pts.length-2],pts[pts.length-1])};
     if(!startCut && cont.contStart && pts.length>=2 && inFrame(pts[0]))
       startCut={p:pts[0], d:unit(pts[1],pts[0])};
-    TRIM[r]={pts, startCut, endCut, sh, st, draw:{s0,e}};
+    const gapCuts=DESIGN.gapExits===true ? findGapCuts(sh,s0,e,inFrame,frameCut,unit) : [];   // OA-515, opt-in: frame_gaps.js says why
+    TRIM[r]={pts, startCut, endCut, gapCuts, sh, st, draw:{s0,e}};
     if(process.env.DBG_TRIM) console.error('TRIM '+r+': vtx '+sh.length+' lo '+lo.toFixed(1)+' hi '+hi.toFixed(1)
       +' s0 '+s0+' e '+e+' startCut '+(startCut?startCut.p.map(v=>v.toFixed(1)):'-')
       +' endCut '+(endCut?endCut.p.map(v=>v.toFixed(1)):'-')
@@ -2290,10 +2292,12 @@ if(IR && TRIM){
     }
     if(tr.endCut   && lt.end  !==false) events.push({r,cut:tr.endCut,  label:endLab});
     if(tr.startCut && lt.start!==false) events.push({r,cut:tr.startCut,label:startLab});
+    if(tr.gapCuts && tr.gapCuts.length) events.push(...gapEvents(r,tr.gapCuts,CLD));
   }
   const clusters=[];
   for(const e of events){
     const cl=clusters.find(c=>c.some(m=>Math.hypot(m.cut.p[0]-e.cut.p[0],m.cut.p[1]-e.cut.p[1])<CLD));
+    if(cl && e.gap && cl.some(m=>m.r===e.r)) continue;   // a gap device beside its own route's badge adds nothing
     if(cl) cl.push(e); else clusters.push([e]);
   }
   const BS=6.6, RH=7.0;                        // badge pitch (side-by-side) / row pitch (stacked) --

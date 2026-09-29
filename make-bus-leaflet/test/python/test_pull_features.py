@@ -1,12 +1,14 @@
-"""pull_features.py -- the place skill's P2 step that pulls a railway into
-features_geo.json (buses-data OA-453 item 1).
+"""pull_features.py -- the place skill's P2 step that pulls a railway, a river, a
+canal or a main road into features_geo.json (buses-data OA-453 item 1, OA-514).
 
 The module lives in `make-place-bus-leaflet/assets`, so it is loaded by path from
-there, as test_derive_stops.py loads its neighbour. Overpass is never asked: a stub
-`overpass_fetch` is put in sys.modules for the length of each call to `main`, so
-what is tested is the script's own three promises -- the clip keeps the line
-reaching the frame, a hand-kept key is never replaced without --force, and an
-unanswered question is never written down as an empty answer.
+there, as test_derive_stops.py loads its neighbour. Overpass is never asked: stub
+`overpass_fetch`, `draft_town` and `bootstrap_town` modules are put in sys.modules
+for the length of each call to `main`, so what is tested is the script's own
+promises -- the clip keeps the line reaching the frame, a hand-kept key is never
+replaced without --force, an unanswered question is never written down as an empty
+answer, and a named feature is named by the town's routes.json before the
+candidate list.
 """
 import contextlib
 import importlib.util
@@ -86,7 +88,9 @@ class Clip(unittest.TestCase):
         self.assertEqual(pf.label_of({"elements": [way(THROUGH)]}), "Railway")
 
 
-class Main(unittest.TestCase):
+class Run(unittest.TestCase):
+    """A temp P2 folder, and main() run against stubs of everything it imports."""
+
     def setUp(self):
         self.dir = tempfile.mkdtemp()
         self.walk = os.path.join(self.dir, "walkshed_cfg.json")
@@ -97,14 +101,23 @@ class Main(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.dir)
 
-    def run_main(self, overpass, *extra):
+    def run_main(self, overpass, *extra, candidates=(), reached=True):
         stub_town = types.SimpleNamespace(feature_query=lambda box, feat: "Q " + feat["type"])
+        self.asked = []
+
+        def overpass_features(box):
+            self.asked.append(box)
+            return list(candidates), reached
+        stub_boot = types.SimpleNamespace(overpass_features=overpass_features)
         err, out = io.StringIO(), io.StringIO()
-        with mock.patch.dict(sys.modules, {"overpass_fetch": overpass, "draft_town": stub_town}), \
+        with mock.patch.dict(sys.modules, {"overpass_fetch": overpass, "draft_town": stub_town,
+                                           "bootstrap_town": stub_boot}), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
             code = pf.main([self.walk, "--out", self.out, *extra])
         return code, out.getvalue(), err.getvalue()
 
+
+class Main(Run):
     def test_a_railway_is_written_under_its_key_with_a_features_entry(self):
         code, out, _ = self.run_main(fake_overpass({"elements": [way(THROUGH, "East Coast Main Line")]}))
         self.assertEqual(code, 0)
@@ -145,6 +158,92 @@ class Main(unittest.TestCase):
             json.dump({"radiusM": 900}, f)
         code, _, _ = self.run_main(fake_overpass({"elements": []}))
         self.assertEqual(code, 3)
+
+
+OUSE = {"key": "river", "type": "river", "label": "River Great Ouse", "n": 9}
+HIDDEN = {"key": "river", "type": "river", "label": "River Hidden", "n": 2}
+A1123 = {"key": "a1123", "type": "road", "label": "A1123", "n": 5}
+
+
+class NamedFeatures(Run):
+    """OA-514: a river, a canal or a main road, each named before it is pulled."""
+
+    def geo(self):
+        with open(self.out, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_the_commonest_river_candidate_is_pulled_and_the_others_are_named(self):
+        ov = fake_overpass({"elements": [way(THROUGH)]})
+        code, out, _ = self.run_main(ov, "--types", "river", candidates=[A1123, OUSE, HIDDEN])
+        self.assertEqual(code, 0)
+        self.assertEqual(list(self.geo()), ["river"])
+        self.assertIn('"label": "River Great Ouse"', out)
+        self.assertIn('"labelPos": "auto"', out)
+        self.assertIn("'River Hidden'", out, "the candidates passed over are printed")
+        self.assertEqual(ov.calls, ["Q river"])
+
+    def test_an_unnamed_river_is_never_chosen_even_when_commonest(self):
+        # Ely Co-op, 2026-09-29: unnamed fragments outnumbered the Great Ouse's ways.
+        unnamed = {"key": "river", "type": "river", "label": "River", "n": 20}
+        ov = fake_overpass({"elements": [way(THROUGH)]})
+        code, out, _ = self.run_main(ov, "--types", "river", candidates=[unnamed, OUSE])
+        self.assertEqual(code, 0)
+        self.assertIn('"label": "River Great Ouse"', out)
+        self.assertNotIn("'River'", out)
+
+    def test_the_default_asks_railway_river_and_canal_but_never_a_road(self):
+        ov = fake_overpass({"elements": [way(THROUGH)]})
+        code, _, _ = self.run_main(ov, candidates=[A1123, OUSE])
+        self.assertEqual(code, 0)
+        self.assertEqual(sorted(self.geo()), ["railway", "river"])
+        self.assertEqual(ov.calls, ["Q railway", "Q river"])
+        self.assertEqual(len(self.asked), 1, "the candidate question is asked once")
+
+    def test_the_towns_routes_json_names_the_river_and_the_candidates_are_not_asked(self):
+        town = os.path.join(self.dir, "routes.json")
+        with open(town, "w", encoding="utf-8") as f:
+            json.dump({"features": [{"key": "ouse", "type": "river", "label": "Great Ouse", "labelItalic": True}]}, f)
+        code, out, _ = self.run_main(fake_overpass({"elements": [way(THROUGH)]}),
+                                     "--types", "river", "--town-routes", town, candidates=[HIDDEN])
+        self.assertEqual(code, 0)
+        self.assertEqual(list(self.geo()), ["ouse"], "the town's key, so place and town agree")
+        self.assertIn('"label": "Great Ouse"', out)
+        self.assertEqual(self.asked, [])
+
+    def test_a_picked_road_takes_bootstrap_towns_key_rule(self):
+        code, out, _ = self.run_main(fake_overpass({"elements": [way(THROUGH)]}),
+                                     "--types", "road", "--pick", "road=A 14", candidates=[A1123])
+        self.assertEqual(code, 0)
+        self.assertEqual(list(self.geo()), ["a14"])
+        self.assertIn('"label": "A 14"', out)
+
+    def test_no_candidate_of_the_type_is_an_answer(self):
+        code, out, _ = self.run_main(fake_overpass({"elements": [way(THROUGH)]}),
+                                     "--types", "river,canal", candidates=[A1123])
+        self.assertEqual(code, 0)
+        self.assertFalse(os.path.exists(self.out))
+        self.assertIn("no named river", out)
+        self.assertIn("no named canal", out)
+
+    def test_an_unanswered_candidate_question_writes_nothing_and_exits_2(self):
+        code, _, err = self.run_main(fake_overpass({"elements": [way(THROUGH)]}), candidates=[OUSE], reached=False)
+        self.assertEqual(code, 2)
+        self.assertFalse(os.path.exists(self.out))
+        self.assertIn("NOT written", err)
+
+    def test_a_hand_kept_river_is_refused_before_anything_is_asked(self):
+        with open(self.out, "w", encoding="utf-8") as f:
+            json.dump({"river": [[[5, 6], [7, 8]]]}, f)
+        ov = fake_overpass({"elements": [way(THROUGH)]})
+        code, _, err = self.run_main(ov, "--types", "river", candidates=[OUSE])
+        self.assertEqual(code, 2)
+        self.assertEqual((ov.calls, self.asked), ([], []))
+        self.assertIn("--force", err)
+
+    def test_a_bad_pick_is_a_usage_error(self):
+        with self.assertRaises(SystemExit) as cm, contextlib.redirect_stderr(io.StringIO()):
+            pf.main([self.walk, "--pick", "railway=West Coast"])
+        self.assertEqual(cm.exception.code, 2)
 
 
 if __name__ == "__main__":

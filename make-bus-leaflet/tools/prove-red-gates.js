@@ -45,7 +45,7 @@ const path = require('node:path');
 
 const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
-const { gate, PLACE_IGNORE, portalFixtureEnv, findSheets } = require(path.join(ASSETS, 'gate_lib.js'));
+const { gate, runGenerator, PLACE_IGNORE, portalFixtureEnv, findSheets } = require(path.join(ASSETS, 'gate_lib.js'));
 const { scratchDir } = require('../assets/scratch');
 const { resolveBuses } = require('../assets/cli');
 
@@ -387,6 +387,31 @@ for (const t of TARGETS) {
 // went off by default. The fixture's overrides.json now also forces the name of
 // Ryemead Pharmacy, a symbol-only place the schematic draws, so the option is
 // load-bearing again. It is a fixture edit: the real Aldi carries no such answer.
+//
+// AND IT WENT QUIET AGAIN ON THE REAL ESTATE, on 2026-09-29 (buses-data OA-516).
+// The fixture edit fixed the engine's own CI and nothing else: buses-data runs this
+// harness against the real Aldi, and the day that map was rebuilt on an engine with
+// OA-165 and OA-500 in it, its overrides stopped touching the schematic and this
+// row read SURVIVED — reported as the engine ignoring overrides.json, which it was
+// not. Whether the OPTION carries a file is a property of the gate; whether a map's
+// own answers happen to move ink is a property of that map, and a customer may
+// withdraw every one of them. So the question is now asked with an override THIS
+// harness owns: a scratch copy of the map's data whose overrides.json also recolours
+// one route (top-level `routeColors`, which gen_internal.js reads on every sheet).
+// The sheet drawn from that copy WITH the file is the reference; the same generator
+// must reproduce it with the option and must NOT reproduce it without.
+const SYNTHETIC_COLOUR = '#123457';   // in no palette; any hue the map does not already use
+function syntheticOverrideCopy(dataDir, into) {
+  fs.cpSync(dataDir, into, { recursive: true });
+  const ovf = path.join(into, 'overrides.json');
+  const ov = fs.existsSync(ovf) ? JSON.parse(fs.readFileSync(ovf, 'utf8')) : {};
+  const rj = JSON.parse(fs.readFileSync(path.join(into, 'routes.json'), 'utf8'));
+  const route = Object.keys(rj.palette || {})[0];
+  if (!route) return null;
+  ov.routeColors = Object.assign({}, ov.routeColors, { [route]: SYNTHETIC_COLOUR });
+  fs.writeFileSync(ovf, JSON.stringify(ov, null, 2));
+  return route;
+}
 {
   /* THE SAME MAP THE PLACE-SCHEMATIC TARGET CHOSE, asked for the same way rather
    * than typed a second time (OA-398). It read `Areas/High Wycombe/Places/High
@@ -403,12 +428,28 @@ for (const t of TARGETS) {
       : `no place under ${BUSES} carries both an internal-schematic.svg and an overrides.json, so nothing here asks whether OVERRIDES_FILE is load-bearing`]);
     failures++;
   } else {
-    const without = gate(path.join(ASSETS, 'schematize_internal.js'), dataDir, 'internal-schematic.svg', committed, { ignoreLineRe: PLACE_IGNORE });
-    if (without.status === 'PASS') {
-      rows.push([label, 'SURVIVED', 'the gate reproduces the sheet with OVERRIDES_FILE unset, so passing it proves nothing']);
+    const gen = path.join(ASSETS, 'schematize_internal.js');
+    const copy = path.join(scratchDir('override-control-'), 'data');
+    const route = syntheticOverrideCopy(dataDir, copy);
+    const drawn = route && runGenerator(gen, copy, { overridesFromWorkspace: true });
+    const ref = drawn && path.join(drawn.tmpDir, 'internal-schematic.svg');
+    if (!route || !drawn.ok || !fs.existsSync(ref)) {
+      rows.push([label, 'NO REFERENCE', route
+        ? 'the schematic would not draw from a copy carrying the synthetic override: ' + (drawn.stderr || '').trim().split('\n').slice(0, 3).join(' / ')
+        : `${dataDir}/routes.json has no palette, so there is no route to recolour`]);
       failures++;
     } else {
-      rows.push([label, 'caught (' + without.status + ')', 'without OVERRIDES_FILE the forced POI is dropped and the sheet does not reproduce']);
+      const withIt = gate(gen, copy, 'internal-schematic.svg', ref, { ignoreLineRe: PLACE_IGNORE, overridesFromWorkspace: true });
+      const without = gate(gen, copy, 'internal-schematic.svg', ref, { ignoreLineRe: PLACE_IGNORE });
+      if (withIt.status !== 'PASS') {
+        rows.push([label, 'CONTROL ' + withIt.status, 'with the option the gate does not reproduce a sheet drawn the way the rollout draws it']);
+        failures++;
+      } else if (without.status === 'PASS') {
+        rows.push([label, 'SURVIVED', `route ${route} recoloured through overrides.json and the gate reproduces it with OVERRIDES_FILE unset, so the option proves nothing`]);
+        failures++;
+      } else {
+        rows.push([label, 'caught (' + without.status + ')', `without OVERRIDES_FILE route ${route} keeps its palette colour and the sheet does not reproduce`]);
+      }
     }
   }
 }

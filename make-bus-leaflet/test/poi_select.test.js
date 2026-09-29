@@ -1091,3 +1091,27 @@ test('OA-517: mergePoiOverlay keeps the customer\'s switch apart from our includ
   assert.ok(!categoryOn(out, 'pubs') && categoryOn(out, 'stations'));
   assert.strictEqual(mergePoiOverlay({ exclude: ['pubs'] }, {}).customerSwitch, undefined, 'our own exclude is not the customer\'s');
 });
+
+/* OA-522: an opt-in symbol gives way. Which categories do, and where one goes
+ * when its own spot is taken. The byte gate sees this only on the maps whose
+ * data happens to put a pub or a station on route ink today. */
+test('OA-522: every switchable category gives way, and no core category does', () => {
+  const { isOptInSymbol, SWITCH_CAT } = require('./_engine.js').load('poi_select.js');
+  for (const c of Object.values(SWITCH_CAT)) assert.ok(isOptInSymbol(c), c);
+  for (const c of ['shop', 'hospital', 'school', 'leisure', 'library', 'park', 'townhall']) assert.ok(!isOptInSymbol(c), c);
+  assert.ok(!isOptInSymbol('pubs'), 'the switch name is not a category');
+});
+
+test('OA-522: clearSpot keeps a free spot, moves to the NEAREST free one, and gives up past the reach', () => {
+  const { clearSpot, OPT_IN_REACH } = require('./_engine.js').load('poi_select.js');
+  assert.deepStrictEqual(clearSpot(10, 10, () => true), [10, 10], 'a clear spot is kept exactly');
+  // Everything within 2.5 mm is taken: the answer is on the 3 mm ring, due east first.
+  const at = clearSpot(10, 10, (x, y) => Math.hypot(x - 10, y - 10) > 2.5);
+  assert.ok(Math.abs(Math.hypot(at[0] - 10, at[1] - 10) - 3) < 1e-9, 'the nearest ring that is free');
+  assert.ok(Math.abs(at[0] - 13) < 1e-9 && Math.abs(at[1] - 10) < 1e-9, 'walked from due east');
+  // Only the west is free: found, not missed between candidates.
+  const west = clearSpot(10, 10, (x) => x < 8.5);
+  assert.ok(west && west[0] < 8.5);
+  assert.strictEqual(clearSpot(10, 10, (x, y) => Math.hypot(x - 10, y - 10) > OPT_IN_REACH + 0.5), null,
+    'nothing within the reach: left off, never carried further from its place');
+});

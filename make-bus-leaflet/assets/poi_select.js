@@ -802,6 +802,40 @@ const DEFAULT_ON_CATS = ['pubs', 'stations'];
 const SWITCH_CAT = { allotments: 'allotments', pubs: 'pub', stations: 'station', postoffices: 'postoffice', industrial: 'industrial' };
 const CAT_SWITCH = Object.fromEntries(Object.entries(SWITCH_CAT).map(([s, c]) => [c, s]));
 
+/*
+ * AN OPT-IN SYMBOL GIVES WAY (buses-data OA-522). A pub, a station, a post
+ * office, allotments or an industrial estate is on the sheet because a category
+ * is switched on, not because a reader navigates by it the way they do by the
+ * supermarket or the hospital. So where one lands on route ink, on another symbol
+ * or on a route badge, it moves to the nearest clear spot within OPT_IN_REACH mm
+ * of where it stands, and where there is none it is left off — as an unplaceable
+ * label already is. Found on March's first fresh pull (v2.67, withdrawn): ten pub
+ * glasses stacked on the route bundle at March Town, one of them over the 56 badge.
+ * Core categories keep exactly the placement they had.
+ */
+const OPT_IN_REACH = 4;
+const isOptInSymbol = (cat) => Object.prototype.hasOwnProperty.call(CAT_SWITCH, cat);
+
+/*
+ * The nearest point to (x, y), within `reach` mm, at which `free(x, y)` holds:
+ * the point itself first, then rings every 1 mm, each walked from due east
+ * anticlockwise in steps that keep neighbouring candidates about 0.8 mm apart.
+ * Deterministic — a fixed order and no tie left to the sort. Null when every
+ * candidate is taken.
+ */
+function clearSpot(x, y, free, reach = OPT_IN_REACH) {
+  if (free(x, y)) return [x, y];
+  for (let r = 1; r <= reach + 1e-9; r += 1) {
+    const n = Math.max(8, Math.ceil(2 * Math.PI * r / 0.8));
+    for (let i = 0; i < n; i++) {
+      const a = 2 * Math.PI * i / n;
+      const px = x + r * Math.cos(a), py = y - r * Math.sin(a);
+      if (free(px, py)) return [px, py];
+    }
+  }
+  return null;
+}
+
 /** The customer's category switch as mergePoiOverlay() recorded it, or {}. */
 function customerSwitchOf(P){
   const s = P && P.customerSwitch;
@@ -904,4 +938,4 @@ function mergePoiOverlay(base, ov) {
   return out;
 }
 
-module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

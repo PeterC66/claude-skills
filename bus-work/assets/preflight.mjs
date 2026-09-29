@@ -58,6 +58,9 @@ import { parseArgs, assetsDir, resolvePortal } from './engine.mjs';
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
 const EXIT_CANNOT_TELL = 2;
+// Not "no" and not "cannot tell" but "not yet": the push is sound as far as
+// anyone asked, and it waits for the interval (buses-data OA-525).
+export const EXIT_DEFERRED = 3;
 
 /** git, with no shell and no pipe, from a named directory. */
 function git(dir, args) {
@@ -173,6 +176,72 @@ export function triggered(check, scope, all) {
   return scope.paths.some((p) => check.when.some((w) => new RegExp(w).test(p)));
 }
 
+/*
+ * THE PUSH INTERVAL (buses-data OA-525). Measured 2026-09-24..29 with `gh run
+ * list`: about 65 pushes a day to buses-data `main`, each one a `gates.yml` run
+ * — 3 minutes documentation-only, 10.5 full, and 45 cancelled runs in six days
+ * billed all the same — about 9,500 minutes a month against an allowance of
+ * 2,000–3,000. buses-data is the one repository here whose CI is billed, and
+ * rule 10 of its *What CI costs* page had named this fallback on 17 September.
+ *
+ * So a manifest may declare `pushInterval`, and the preflight asks it FIRST: if
+ * the last push-triggered run of that workflow on that branch started less than
+ * `minutes` ago, it exits EXIT_DEFERRED having run no check at all — the checks
+ * will be asked of the whole batch when it does go, and asking them now buys
+ * nothing. The commits wait on local `main`, and the loop's hourly tick carries
+ * them, because its step 8 pushes whenever `main` is ahead of `origin/main`.
+ *
+ * 55 minutes rather than 60, because the carrier is itself hourly: a tick that
+ * pushed at :40 must not defer the next tick's push at :38, or the batch waits
+ * two hours for the sake of two minutes of dispatch jitter.
+ *
+ * WHEN THE LAST RUN STARTED is asked of two witnesses and the LATER wins. GitHub,
+ * through `gh run list`, knows about every pusher; this checkout's reflog of the
+ * upstream (`update by push`) knows about a push GitHub has not yet turned into a
+ * run, which is the few seconds in which two sessions racing would both see an
+ * old answer. Neither answering is NOT a deferral: a throttle that could not read
+ * its clock lets the push through and says so, because a cost control that
+ * blocked every push the day `gh` lost its token would stop the estate to save
+ * pennies.
+ */
+export const PUSH_INTERVAL_MINUTES = 55;
+
+/** The two witnesses to when the last push-triggered run started; `ghRun` is injected so the harness needs no network. */
+export function lastPushRun(repo, scope, spec, ghRun = defaultGhRun) {
+  const seen = [];
+  const r = ghRun(['-R', spec.slug, 'run', 'list', '--workflow', spec.workflow, '--branch', spec.branch, '--event', 'push', '--limit', '1', '--json', 'databaseId,createdAt,status,conclusion']);
+  let ghWhy = null;
+  if (r.status === 0) {
+    try {
+      const [run] = JSON.parse(r.stdout || '[]');
+      if (run && run.createdAt) seen.push({ at: new Date(run.createdAt), source: `gh: ${spec.workflow} run ${run.databaseId} (${run.status}${run.conclusion ? `, ${run.conclusion}` : ''})` });
+      else ghWhy = `gh lists no push run of ${spec.workflow} on ${spec.branch}`;
+    } catch (e) { ghWhy = `gh answered something that is not JSON: ${e.message}`; }
+  } else ghWhy = `gh run list failed: ${(r.stderr || r.error?.message || `exit ${r.status}`).trim().split('\n')[0]}`;
+  let reflogWhy = null;
+  if (scope.upstream) {
+    const log = git(repo, ['reflog', 'show', '--date=unix', '--format=%gd%x09%gs', `refs/remotes/${scope.upstream}`]);
+    const hit = log.ok && log.out.split('\n').find((l) => /\tupdate by push/.test(l));
+    const secs = hit && Number((hit.match(/@\{(\d+)\}/) || [])[1]);
+    if (secs) seen.push({ at: new Date(secs * 1000), source: `this checkout's reflog of ${scope.upstream} (update by push)` });
+    else reflogWhy = `no "update by push" entry in this checkout's reflog of ${scope.upstream}`;
+  }
+  if (!seen.length) return { at: null, why: [ghWhy, reflogWhy].filter(Boolean).join('; ') };
+  seen.sort((a, b) => b.at - a.at);
+  return { ...seen[0], also: [ghWhy, reflogWhy].filter(Boolean) };
+}
+
+function defaultGhRun(args) {
+  return spawnSync('gh', args, { encoding: 'utf8', timeout: 30000 });
+}
+
+/** Pure: defer or go, from the last run's start, the clock and the interval. */
+export function intervalVerdict(last, now, minutes) {
+  if (!last || !last.at) return { defer: false, known: false, minutes, why: last?.why || 'no witness to the last run' };
+  const ageMin = (now - last.at) / 60000;
+  return { defer: ageMin < minutes, known: true, minutes, ageMin, waitMin: Math.max(0, minutes - ageMin), at: last.at.toISOString(), source: last.source };
+}
+
 /** The built-in manifests, used only where a repository declares none of its own. */
 function builtIn(repo) {
   const has = (p) => existsSync(path.join(repo, p));
@@ -180,6 +249,7 @@ function builtIn(repo) {
   if (has('Development Docs/open-actions/assemble.mjs')) {
     return {
       name: 'buses-data',
+      pushInterval: { minutes: PUSH_INTERVAL_MINUTES, slug: 'PeterC66/buses-data', workflow: 'gates.yml', branch: 'main' },
       docsOnly: ['^Development Docs/', '^Documentation/', '^Correspondence/', '^BusMapsUK/', '^CLAUDE\\.md$', '^README\\.md$', '^loop/README\\.md$'],
       checks: [
         /* `check_committed_stamps.py <repo>`, the auditor gates.yml runs, and not
@@ -455,7 +525,7 @@ export function engineTransfers(engineRepo, pin = null) {
   return { known: true, transfers: dirtyFiles === 0 && level, dirtyFiles, against: pin ? `the pin ${pin.slice(0, 7)}` : 'origin/main (no pin was readable)', head: head.out.slice(0, 7), branch: branch.out };
 }
 
-function report(result, quiet) {
+export function report(result, quiet) {
   const L = [];
   L.push(`preflight — ${result.repoName} (${result.repo})`);
   if (!result.scope.known) {
@@ -466,6 +536,19 @@ function report(result, quiet) {
     if (result.scope.dirtyCount) L.push(`  NOTE ${result.scope.dirtyCount} file(s) are modified and are NOT in this push — this preflight measured the WORKING TREE, which is not what would be pushed`);
   }
   L.push(`  checks from ${result.source}`);
+  const iv = result.interval;
+  if (iv && iv.defer && !iv.urgent) {
+    L.push('');
+    L.push(`DEFERRED — the last push run started ${Math.round(iv.ageMin)} min ago (${iv.at}, per ${iv.source}), and pushes here wait ${iv.minutes} min between runs.`);
+    L.push(`  Do NOT push. The commits stay on local main and the loop's next hourly tick carries them; about ${Math.ceil(iv.waitMin)} min until a push would go.`);
+    L.push('  No check was run: they are asked of the whole batch when it goes. For a red main or a cross-repository pairing only, re-run with --urgent "<why>".');
+    L.push('');
+    L.push(`deferred · ${result.scope.paths.length} path(s) waiting · interval ${iv.minutes} min (buses-data OA-525)`);
+    return L.join('\n');
+  }
+  if (iv && iv.urgent && iv.defer) L.push(`  URGENT — pushing inside the ${iv.minutes}-min interval (last run ${Math.round(iv.ageMin)} min ago), because: ${iv.urgent}`);
+  else if (iv && iv.known) L.push(`  interval — the last push run started ${Math.round(iv.ageMin)} min ago, past the ${iv.minutes}-min interval (${iv.source})`);
+  else if (iv) L.push(`  interval — NOT ASKED, so not deferred: ${iv.why}`);
   for (const p of result.pruned || []) L.push(p.ok ? `  pruned ${p.refs.length} stale remote-tracking ref(s) in ${p.dir}${p.refs.length ? `: ${p.refs.join(', ')}` : ''}` : `  NOTE could not prune ${p.dir} (${p.why}); a branch deleted on origin may read as an unmerged re-vendor`);
   L.push('');
   for (const c of result.checks) {
@@ -516,7 +599,7 @@ function runAtPin(check, repo, pinEngine) {
   return runCheck({ ...check, cwd: path.join(pinEngine.root, check.atPin), unsetEnv: [...(check.unsetEnv || []), ...PIN_UNSET] }, repo);
 }
 
-export function preflight({ repo, all = false, skillsRoot }) {
+export function preflight({ repo, all = false, skillsRoot, urgent = null, now = new Date(), ghRun }) {
   const scope = pushScope(repo);
   const manifest = manifestFor(repo);
   if (!manifest) {
@@ -527,6 +610,17 @@ export function preflight({ repo, all = false, skillsRoot }) {
     };
   }
   const tier = scope.known ? tierFor(scope.paths, manifest.docsOnly || []) : { tier: 'full', beyond: [] };
+  // The interval is asked only of a push that has something in it: a branch level
+  // with its upstream has nothing to defer, and an unknown scope is reported as
+  // such by the checks below rather than hidden behind a deferral.
+  let interval = null;
+  const spec = manifest.pushInterval;
+  if (spec && scope.known && scope.paths.length) {
+    interval = { ...intervalVerdict(lastPushRun(repo, scope, spec, ghRun), now, spec.minutes ?? PUSH_INTERVAL_MINUTES), urgent };
+    if (interval.defer && !urgent) {
+      return { repo, repoName: manifest.name, scope, tier, source: manifest.source, checks: [], notTriggered: [], interval, unanswered: [], exit: EXIT_DEFERRED };
+    }
+  }
   const inTier = all || tier.tier === 'full' ? manifest.checks : manifest.checks.filter((c) => (c.tier || 'cheap') === 'cheap');
   const wanted = inTier.filter((c) => triggered(c, scope, all));
   // Named in the report, so a check that was not triggered reads as not asked and never as a pass.
@@ -557,7 +651,7 @@ export function preflight({ repo, all = false, skillsRoot }) {
   const unanswered = checks.filter((c) => c.verdict === 'UNANSWERED').length;
   const exit = failed ? EXIT_FAILED : (unanswered || !scope.known) ? EXIT_CANNOT_TELL : EXIT_OK;
   const pinReport = pinEngine ? (pinEngine.root ? { commit: pinEngine.commit, via: pinEngine.via } : { why: pinEngine.why }) : null;
-  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, pruned, unanswered: manifest.unanswered || [], exit };
+  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, pruned, interval, unanswered: manifest.unanswered || [], exit };
 }
 
 function main() {
@@ -569,7 +663,14 @@ function main() {
     process.exitCode = EXIT_CANNOT_TELL;
     return;
   }
-  const result = preflight({ repo, all: !!args.all });
+  // `--urgent` needs its reason, because the report prints it and a bare flag is
+  // how a habit starts: parseArgs turns a valueless flag into `true`.
+  if (args.urgent === true || (args.urgent !== undefined && !String(args.urgent).trim())) {
+    process.stderr.write('preflight: --urgent needs a reason, e.g. --urgent "main is red and this is the fix"\n');
+    process.exitCode = EXIT_CANNOT_TELL;
+    return;
+  }
+  const result = preflight({ repo, all: !!args.all, urgent: args.urgent ? String(args.urgent) : null });
   if (args.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   else process.stdout.write(`${report(result, !!args.quiet)}\n`);
   // `process.exitCode` rather than `process.exit()`: a write to a PIPE is

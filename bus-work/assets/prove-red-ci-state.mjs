@@ -37,7 +37,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { summarise, ciRows, gatherCiState, MARKER, GRACE_HOURS } from './ci_state.mjs';
+import { summarise, ciRows, gatherCiState, isNotStarted, refusalReason, MARKER, GRACE_HOURS, MAX_PROBES } from './ci_state.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 let bad = 0;
@@ -195,6 +195,81 @@ console.log('\n8. every edge fails SOFT — a worklist must still print');
   check('a green repository costs no second gh call', r4.states[0].steps.length === 0);
 }
 
+console.log('\n10. a run GitHub refused to START is not a red (2026-09-29)');
+{
+  // The words GitHub wrote on buses-data run 36587778478, verbatim.
+  const BILL = "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings";
+  const refused = (h, reason = { text: BILL, budget: true }) => ({ ...run('failure', h), notStarted: reason });
+
+  check('a job that failed with no steps was not started', isNotStarted([{ conclusion: 'failure', steps: [] }]));
+  check('…but a job with even one step ran, and its failure is real', !isNotStarted([{ conclusion: 'failure', steps: [{ name: 'Set up job', conclusion: 'success' }] }]));
+  check('…and a run with NO jobs is not a refusal (that is a startup failure)', !isNotStarted([]));
+  check('…and one real job beside a refused one makes the run real', !isNotStarted([{ conclusion: 'failure', steps: [] }, { conclusion: 'failure', steps: [{ name: 'x' }] }]));
+  check('GitHub\'s billing annotation is recognised as a budget refusal', refusalReason([{ message: 'ubuntu-latest will migrate' }, { message: BILL }]).budget === true);
+  check('…and quoted verbatim, not the unrelated annotation beside it', refusalReason([{ message: 'ubuntu-latest will migrate' }, { message: BILL }]).text === BILL);
+  const other = refusalReason([{ message: 'The job was not started because the runner group is disabled' }]);
+  check('a refusal for another reason is quoted but NOT called a budget', other.budget === false && other.text.includes('runner group'), JSON.stringify(other));
+  check('no annotation at all still gives a reason, and not a budget', refusalReason([]).budget === false && refusalReason([]).text.length > 0);
+
+  const overGreen = [refused(0.2), refused(0.5), run('success', 1)];
+  const s = summarise(overGreen, { now: NOW });
+  check('refused runs above a success leave the verdict GREEN', s.verdict === 'green', s.verdict);
+  check('…and are counted as a not-run block of 2', s.notRun && s.notRun.count === 2, JSON.stringify(s.notRun));
+  const rows = rowsFor(overGreen);
+  check('…which produces NO ci-red row', !rows.some((r) => r.key.startsWith('ci-red-')), rows.map((r) => r.key).join());
+  const [nr] = rows;
+  check('…and exactly one ci-not-run row, at rank 8, a chore', rows.length === 1 && nr.key === 'ci-not-run-o/testrepo' && nr.rank === 8, nr && `${nr.key} ${nr.rank}`);
+  check('…titled as a budget, so nobody opens the run', nr.title.includes('Actions budget exhausted'), nr.title);
+  check('…quoting GitHub', nr.why.includes(BILL), nr.why);
+  check('…and saying the commits are unchecked, not broken', nr.why.includes('UNCHECKED, not broken'), nr.why);
+
+  const overRed = [refused(0.2), run('failure', 1), run('success', 9)];
+  const r2 = rowsFor(overRed);
+  check('refused runs above a REAL red leave the red row standing at rank 0', r2.some((r) => r.key.startsWith('ci-red-') && r.rank === 0), r2.map((r) => `${r.key}:${r.rank}`).join());
+  check('…beside the not-run row', r2.some((r) => r.key.startsWith('ci-not-run-')));
+  check('…and the red streak does not count the refusal', summarise(overRed, { now: NOW }).streak === 1, String(summarise(overRed, { now: NOW }).streak));
+
+  const onlyRefused = summarise([refused(0.2), refused(3)], { now: NOW });
+  check('nothing but refusals is UNKNOWN, not red', onlyRefused.verdict === 'unknown', onlyRefused.verdict);
+  check('…and the block says "at least", because the window may be shorter than the outage', onlyRefused.notRun.atLeast === true);
+  const history = summarise([run('success', 0.2), refused(3), run('success', 9)], { now: NOW });
+  check('a refusal BELOW a run that ran is history: no not-run block', history.notRun === null, JSON.stringify(history.notRun));
+  check('a cancelled run above a refusal does not hide it', summarise([run('cancelled', 0.1), refused(0.2), run('success', 1)], { now: NOW }).notRun?.count === 1);
+
+  // The edge: jobs come from `gh run view --json jobs`, the reason from the job's
+  // check-run annotations, and the walk must stop at the first run that ran.
+  const calls = [];
+  const fakeGh = (list, jobsById) => (cmd, args) => {
+    calls.push(args.join(' '));
+    if (args.includes('remote')) return { status: 0, stdout: 'https://github.com/o/r\n' };
+    if (args.includes('symbolic-ref')) return { status: 0, stdout: 'origin/main\n' };
+    if (args.includes('list')) return { status: 0, stdout: JSON.stringify(list) };
+    if (args[0] === 'api') return { status: 0, stdout: JSON.stringify([{ message: BILL }]) };
+    const id = Number(args[args.indexOf('view') + 1]);
+    return { status: 0, stdout: JSON.stringify({ jobs: jobsById(id) }) };
+  };
+  const NONE = () => [{ databaseId: 7, name: 'status', conclusion: 'failure', steps: [] }];
+  const list = [run('failure', 0.2), run('failure', 0.5), run('success', 1)];
+  const g = gatherCiState({ dirs: [{ name: 'x', dir: '/fake' }], run: fakeGh(list, NONE), now: NOW });
+  check('the gatherer marks both refused runs and reads green under them', g.states[0].state.verdict === 'green' && g.states[0].state.notRun?.count === 2, JSON.stringify(g.states[0].state.notRun));
+  check('…with the budget reason from the annotation', g.states[0].state.notRun.budget === true);
+  check('…reading the annotations ONCE, not per run', calls.filter((c) => c.startsWith('api ')).length === 1, String(calls.filter((c) => c.startsWith('api ')).length));
+
+  calls.length = 0;
+  const REAL = () => [{ databaseId: 8, name: 'unit', conclusion: 'failure', steps: [{ name: 'Links', conclusion: 'failure' }] }];
+  const g2 = gatherCiState({ dirs: [{ name: 'x', dir: '/fake' }], run: fakeGh([run('failure', 0.2), run('failure', 0.5), run('success', 1)], REAL), now: NOW });
+  check('a REAL red is still red through the gatherer', g2.states[0].state.verdict === 'red' && !g2.states[0].state.notRun);
+  check('…its failing steps still reach the row', g2.states[0].steps.join() === 'unit / Links', g2.states[0].steps.join());
+  check('…at the cost of ONE jobs call, not one per run and not two for the same run', calls.filter((c) => c.includes('view')).length === 1, String(calls.filter((c) => c.includes('view')).length));
+
+  calls.length = 0;
+  const many = Array.from({ length: MAX_PROBES + 10 }, (_, i) => run('failure', 0.1 * (i + 1)));
+  const g3 = gatherCiState({ dirs: [{ name: 'x', dir: '/fake' }], run: fakeGh(many, NONE), now: NOW });
+  check(`the walk stops at MAX_PROBES (${MAX_PROBES}) jobs calls`, calls.filter((c) => c.includes('view')).length === MAX_PROBES, String(calls.filter((c) => c.includes('view')).length));
+  check('…and the unprobed older failures are dropped, not read as red', g3.states[0].state.verdict === 'unknown', g3.states[0].state.verdict);
+  check('…so the row says "at least"', ciRows(g3.states)[0].why.includes('at least'), ciRows(g3.states)[0].why);
+}
+
 console.log('\n9. the wire — asserted on its SOURCE');
 {
   const wl = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
@@ -207,7 +282,9 @@ console.log('\n9. the wire — asserted on its SOURCE');
   check('…and it is on by DEFAULT, opted out with --no-ci', wl.includes("const NO_CI = args['no-ci']"));
   check('the row key prefix is the one the module writes', mod.includes('key: `ci-red-${s.slug}`'));
   check('concurrency.mjs classifies ci-red- as contending with nothing', conc.includes("if (key.startsWith('ci-red-')) return [];"));
+  check('the not-run row key prefix is the one the module writes', mod.includes('key: `ci-not-run-${s.slug}`'));
+  check('concurrency.mjs classifies ci-not-run- as contending with nothing', conc.includes("if (key.startsWith('ci-not-run-')) return [];"));
 }
 
-console.log(bad ? `\n✗ ${bad} check(s) failed` : '\n✓ all CI-state checks passed — the row appears, is excused only while fresh, and goes away');
+console.log(bad ? `\n✗ ${bad} check(s) failed` : '\n✓ all CI-state checks passed — the row appears, is excused only while fresh, goes away, and a refused run is never a red');
 process.exit(bad ? 1 : 0);

@@ -1262,6 +1262,9 @@ export function needsOf(item) {
   // the one row that must never be hidden from a session looking for something
   // safe to do is the one saying the repository is broken.
   if (key.startsWith('ci-red-')) return [];
+  // 2026-09-29: GitHub refused to START the run (the Actions budget ran out).
+  // The row's action is to wait or raise a limit in a browser; no tree.
+  if (key.startsWith('ci-not-run-')) return [];
   // OA-283, renamed by OA-401: the row's own action is "read
   // loop/your-move/<ref>.md and decide". That
   // is a decision, like a drafted reply or an application — it touches no working

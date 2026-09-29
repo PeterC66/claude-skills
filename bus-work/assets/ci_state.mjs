@@ -73,6 +73,48 @@ export const GRACE_HOURS = 6;
 const CONCLUSIVE = new Set(['success', 'failure', 'timed_out', 'startup_failure']);
 const RED = new Set(['failure', 'timed_out', 'startup_failure']);
 
+/*
+ * A RUN GITHUB REFUSED TO START IS NOT A VERDICT EITHER (2026-09-29). When the
+ * account's Actions budget runs out, every push to a PRIVATE repository still
+ * makes a run, and GitHub reports it as conclusion `failure` -- but its job has
+ * no steps, no runner, and one annotation: "The job was not started because
+ * recent account payments have failed or your spending limit needs to be
+ * increased." Read as a failure, that is a red streak nobody can fix in code,
+ * ranked 0, sending every tick to diagnose a bill. Read as a success it would
+ * end a real red streak. So it is treated like a cancelled run -- dropped from
+ * the verdict -- and reported on its own row, as a chore: the commits are
+ * UNCHECKED, not broken, and the first run after the budget resets checks the
+ * whole tree. Measured on buses-data run 36587778478.
+ *
+ * Only `failure` runs are probed, and only while they sit at the top of the
+ * list, so a green or genuinely red repository costs no extra call beyond the
+ * one the failing-steps lookup already made. MAX_PROBES bounds the walk; past
+ * it the older runs are dropped rather than guessed at, and the row says
+ * "at least".
+ */
+export const MAX_PROBES = 15;
+
+// Every job failed without running a single step. A real failure always has at
+// least GitHub's own "Set up job" step, and a workflow that cannot be parsed is
+// `startup_failure` with no jobs at all -- neither matches.
+export function isNotStarted(jobs) {
+  return Array.isArray(jobs) && jobs.length > 0
+    && jobs.every((j) => j.conclusion === 'failure' && !(j.steps || []).length);
+}
+
+// GitHub's own words, and whether they are about money. Quoted rather than
+// paraphrased, so a different refusal (a disabled runner, an org policy) is
+// reported as what it is and not mislabelled a budget.
+const BUDGET_WORDS = /spending limit|payments? have failed|billing/i;
+export function refusalReason(annotations) {
+  const msgs = (annotations || []).map((a) => String(a.message || '')).filter(Boolean);
+  const text = msgs.find((m) => /not (been )?started/i.test(m) || BUDGET_WORDS.test(m)) || null;
+  return {
+    text: text || 'GitHub did not start the job: it failed with no steps run and no runner assigned.',
+    budget: !!text && BUDGET_WORDS.test(text),
+  };
+}
+
 const sh = (cmd, args, opts = {}) =>
   spawnSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts });
 
@@ -108,14 +150,16 @@ export function defaultBranch(dir, run = sh) {
  * fixture.
  */
 export function summarise(runs, { now = Date.now() } = {}) {
-  const conclusive = (runs || []).filter((r) => CONCLUSIVE.has(r.conclusion));
-  const inFlight = (runs || []).some((r) => r.status && r.status !== 'completed');
+  const all = runs || [];
+  const conclusive = all.filter((r) => CONCLUSIVE.has(r.conclusion) && !r.notStarted);
+  const inFlight = all.some((r) => r.status && r.status !== 'completed');
+  const notRun = notRunBlock(all, now);
 
-  if (!conclusive.length) return { verdict: 'unknown', inFlight, runs: 0 };
+  if (!conclusive.length) return { verdict: 'unknown', inFlight, runs: 0, notRun };
 
   const newest = conclusive[0];
   if (!RED.has(newest.conclusion)) {
-    return { verdict: 'green', inFlight, runs: conclusive.length, latest: newest };
+    return { verdict: 'green', inFlight, runs: conclusive.length, latest: newest, notRun };
   }
 
   // Walk the consecutive red streak. `redSince` is the OLDEST failure in it --
@@ -155,6 +199,37 @@ export function summarise(runs, { now = Date.now() } = {}) {
     // A predicted red is explained only while it is fresh. Past GRACE_HOURS the
     // marker stops mattering: see the header.
     excused: predicted && hoursRed !== null && hoursRed < GRACE_HOURS,
+    notRun,
+  };
+}
+
+/*
+ * The refused runs ABOVE the newest run that actually ran -- cancelled and
+ * in-flight runs are stepped over, as everywhere else. A refusal further down,
+ * with a real run on top of it, is history: the budget came back. Null when
+ * the newest run was not refused.
+ */
+function notRunBlock(runs, now) {
+  const block = [];
+  let reachedRealRun = false;
+  for (const r of runs) {
+    if (r.notStarted) { block.push(r); continue; }
+    if (CONCLUSIVE.has(r.conclusion)) { reachedRealRun = true; break; }
+  }
+  if (!block.length) return null;
+  const oldest = block[block.length - 1];
+  const since = Date.parse(oldest.createdAt);
+  const reason = block.find((r) => r.notStarted.text)?.notStarted || refusalReason([]);
+  return {
+    count: block.length,
+    // Every run in the window was refused, or the probe cap cut the walk:
+    // either way the block may be longer than we saw.
+    atLeast: !reachedRealRun,
+    since: oldest.createdAt,
+    hours: Number.isNaN(since) ? null : (now - since) / 3600000,
+    latest: block[0],
+    reason: reason.text,
+    budget: !!reason.budget,
   };
 }
 
@@ -170,6 +245,7 @@ export function ciRows(states) {
   const rows = [];
   for (const s of states) {
     const st = s.state;
+    if (st && st.notRun) rows.push(notRunRow(s, st));
     if (!st || st.verdict !== 'red') continue;
 
     const age = `${st.truncated ? 'at least ' : ''}${hrs(st.hoursRed)}`;
@@ -239,6 +315,45 @@ export function ciRows(states) {
 }
 
 /*
+ * A CHORE, NOT A FAULT: rank 8, like every other row whose answer is waiting
+ * rather than wrong. Nothing in the repository can make this row go away, so
+ * the one thing it must do is stop a reader opening the run to find out why.
+ */
+function notRunRow(s, st) {
+  const n = st.notRun;
+  const runs = `${n.atLeast ? 'at least ' : ''}${n.count} run${n.count === 1 && !n.atLeast ? '' : 's'}`;
+  const before = st.verdict === 'green'
+    ? ` The last run that DID run was green (${String(st.latest.createdAt).slice(0, 16).replace('T', ' ')}).`
+    : st.verdict === 'red'
+      ? ' The last run that DID run was red, and that red has its own row.'
+      : ' No run in the window actually ran, so the state of the code is unknown until one does.';
+  return {
+    key: `ci-not-run-${s.slug}`,
+    rank: 8,
+    type: 'ci',
+    title: `CI NOT RUN${n.budget ? ' (Actions budget exhausted)' : ''}: ${s.name} — ${s.branch}`,
+    why: `GitHub did not start the last ${runs}, for ${hrs(n.hours)}. In its words: "${n.reason}"`
+      + ' Nothing failed and there is nothing to diagnose — no step ran, so those commits are UNCHECKED, not broken.'
+      + (n.budget
+        ? ' It clears on the first push or scheduled run after the monthly allowance resets or the spending limit is raised (GitHub → Settings → Billing), and that run checks the whole tree, so nothing is lost.'
+          + ' Until then, run the push preflight and the local document checks before pushing.'
+        : ' Read the run in the browser for what GitHub wants changed.')
+      + before,
+    who: n.budget ? 'Peter' : '—',
+    runbook: 'engine',
+    ageDays: n.hours === null ? 0 : Math.floor(n.hours / 24),
+    do: [
+      {
+        kind: 'skill',
+        what: n.budget
+          ? 'Nothing to fix in code. Wait for the billing cycle, or raise the Actions spending limit; do not open the run looking for a failing step, because there is none.'
+          : `Open ${n.latest.url || 'the run in the browser'} and read GitHub's annotation.`,
+      },
+    ],
+  };
+}
+
+/*
  * ---- the injected edge ----------------------------------------------------
  *
  * Fails SOFT and says so. No gh, no auth, no network: a warning, never a row and
@@ -266,18 +381,52 @@ export function gatherCiState({ dirs, run = sh, now = Date.now(), limit = 40 } =
     let runs;
     try { runs = JSON.parse(r.stdout); } catch { warnings.push(`CI state: ${slug} returned unparseable JSON.`); continue; }
 
+    // Jobs per run id, fetched at most once: the refusal probe and the
+    // failing-steps lookup below ask for the same record.
+    const jobsCache = new Map();
+    const jobsOf = (id) => {
+      if (!jobsCache.has(id)) {
+        const v = run('gh', ['-R', slug, 'run', 'view', String(id), '--json', 'jobs']);
+        let jobs = null;
+        if (v.status === 0) { try { jobs = JSON.parse(v.stdout).jobs || []; } catch { /* unreadable: not probed */ } }
+        jobsCache.set(id, jobs);
+      }
+      return jobsCache.get(id);
+    };
+
+    // Walk the failures at the top of the list, newest first, marking each one
+    // GitHub refused to start; stop at the first run that actually ran.
+    let probes = 0;
+    let reasonRead = false;
+    for (let i = 0; i < runs.length; i++) {
+      const r = runs[i];
+      if (!CONCLUSIVE.has(r.conclusion)) continue;
+      if (r.conclusion !== 'failure' || !r.databaseId) break;
+      if (probes >= MAX_PROBES) { runs = runs.slice(0, i); break; }
+      probes += 1;
+      const jobs = jobsOf(r.databaseId);
+      if (!isNotStarted(jobs)) break;
+      r.notStarted = { text: null, budget: false };
+      if (!reasonRead) {
+        // GitHub's words live on the job's check run, not in the run record.
+        reasonRead = true;
+        const jobId = jobs[0].databaseId;
+        const a = jobId ? run('gh', ['api', `repos/${slug}/check-runs/${jobId}/annotations`]) : { status: 1 };
+        let annotations = [];
+        if (a.status === 0) { try { annotations = JSON.parse(a.stdout); } catch { /* generic reason below */ } }
+        r.notStarted = refusalReason(annotations);
+      }
+    }
+
     const state = summarise(runs, { now });
     let steps = [];
     // The failing STEP NAMES are what make the row actionable, and they cost a
     // second call -- so pay it only for a repository that is actually red.
     if (state.verdict === 'red' && state.latest && state.latest.databaseId) {
-      const v = run('gh', ['-R', slug, 'run', 'view', String(state.latest.databaseId), '--json', 'jobs']);
-      if (v.status === 0) {
-        try {
-          const jobs = JSON.parse(v.stdout).jobs || [];
-          steps = jobs.filter((j) => j.conclusion === 'failure')
-            .flatMap((j) => (j.steps || []).filter((x) => x.conclusion === 'failure').map((x) => `${j.name} / ${x.name}`));
-        } catch { /* best effort: the row is still worth printing without them */ }
+      const jobs = jobsOf(state.latest.databaseId);
+      if (jobs) {
+        steps = jobs.filter((j) => j.conclusion === 'failure')
+          .flatMap((j) => (j.steps || []).filter((x) => x.conclusion === 'failure').map((x) => `${j.name} / ${x.name}`));
       }
     }
     states.push({ name, dir, slug, branch, state, steps });
@@ -292,8 +441,8 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
   if (!dirs.length) { console.error('usage: node ci_state.mjs <repo dir> [<repo dir> ...]'); process.exit(2); }
   const { states, warnings } = gatherCiState({ dirs });
   for (const w of warnings) console.error('  ! ' + w);
-  for (const s of states) console.log(`  ${s.slug.padEnd(30)} ${s.branch.padEnd(8)} ${s.state.verdict}${s.state.verdict === 'red' ? ` for ${hrs(s.state.hoursRed)} (${s.state.streak} runs)${s.state.predicted ? ' [predicted]' : ''}` : ''}`);
+  for (const s of states) console.log(`  ${s.slug.padEnd(30)} ${s.branch.padEnd(8)} ${s.state.verdict}${s.state.verdict === 'red' ? ` for ${hrs(s.state.hoursRed)} (${s.state.streak} runs)${s.state.predicted ? ' [predicted]' : ''}` : ''}${s.state.notRun ? ` — ${s.state.notRun.atLeast ? 'at least ' : ''}${s.state.notRun.count} run(s) NOT STARTED${s.state.notRun.budget ? ' (budget)' : ''}` : ''}`);
   const rows = ciRows(states);
-  if (!rows.length) console.log('\n  No CI row: nothing is standing red.');
+  if (!rows.length) console.log('\n  No CI row: nothing is standing red or refused.');
   for (const r of rows) console.log(`\n  rank ${r.rank}  ${r.title}\n    ${r.why}`);
 }

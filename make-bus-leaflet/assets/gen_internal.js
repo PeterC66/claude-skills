@@ -94,7 +94,7 @@
 //                                      // `angle` deg since its coords are pre-rotated at
 //                                      // rotationDeg 0. Absent => no arrow (gate-safe).
 //     badgeEvery:70,                  // route badge spacing along lines (mm)
-//     termini:{ r:{start:"X",end:"Y"} } // arrow labels per cut end (falls back to terminiLabels)
+//     termini:{ r:{start:"X",end:"Y",gap:"Z"} } // arrow labels per cut end (falls back to terminiLabels); gap: design.gapExits devices (OA-519)
 //   }
 // The build-version stamp is READ here (LEAFLET_VERSION env, else routes.json
 // "version") and passed to footerBand, which ACCEPTS AND IGNORES it: printing the
@@ -199,7 +199,7 @@ const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { smoothCasingWidths } = require(_dep('casing_width.js'));
-const { findGapCuts, gapEvents } = require(_dep('frame_gaps.js'));
+const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
 // coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
@@ -1341,7 +1341,7 @@ if(IR){
     if(!startCut && cont.contStart && pts.length>=2 && inFrame(pts[0]))
       startCut={p:pts[0], d:unit(pts[1],pts[0])};
     const gapCuts=DESIGN.gapExits===true ? findGapCuts(sh,s0,e,inFrame,frameCut,unit) : [];   // OA-515, opt-in: frame_gaps.js says why
-    TRIM[r]={pts, startCut, endCut, gapCuts, sh, st, draw:{s0,e}};
+    TRIM[r]={pts, startCut, endCut, gapCuts, stopParams:params, sh, st, draw:{s0,e}};
     if(process.env.DBG_TRIM) console.error('TRIM '+r+': vtx '+sh.length+' lo '+lo.toFixed(1)+' hi '+hi.toFixed(1)
       +' s0 '+s0+' e '+e+' startCut '+(startCut?startCut.p.map(v=>v.toFixed(1)):'-')
       +' endCut '+(endCut?endCut.p.map(v=>v.toFixed(1)):'-')
@@ -2292,7 +2292,7 @@ if(IR && TRIM){
     }
     if(tr.endCut   && lt.end  !==false) events.push({r,cut:tr.endCut,  label:endLab});
     if(tr.startCut && lt.start!==false) events.push({r,cut:tr.startCut,label:startLab});
-    if(tr.gapCuts && tr.gapCuts.length) events.push(...gapEvents(r,tr.gapCuts,CLD));
+    if(tr.gapCuts && tr.gapCuts.length) events.push(...gapEvents(r,tr.gapCuts,CLD,{label:gapLabel(lt,tr,TL[r]),stops:tr.stopParams}));
   }
   const clusters=[];
   for(const e of events){

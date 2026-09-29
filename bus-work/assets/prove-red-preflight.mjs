@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -606,6 +606,80 @@ function runWith(fixture, opts = {}) {
   check('prune: a live branch survives', spawnSync('git', ['-C', portal, 'rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']).status === 0);
   rmSync(fx.root, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
+}
+
+// CASE 20 — buses-data OA-525, the push interval. A push inside the interval is
+// DEFERRED, exit 3, and runs NO check; past it, the checks run as before. Every
+// half is watched go the wrong way as well as the right way: the defer case is
+// the go case with only the witness's clock moved.
+{
+  const MIN = 55;
+  const spec = { minutes: MIN, slug: 'fixture/none', workflow: 'gates.yml', branch: 'main' };
+  const manifest = { name: 'fixture', docsOnly: ['^docs/'], pushInterval: spec, checks: [scripted('a', 0)] };
+  // `now` is three hours on, so the fixture's own push (seconds ago in real time)
+  // is three hours old to the reflog witness and gh's stub decides each case.
+  const later = new Date(Date.now() + 3 * 3600e3);
+  const ghSays = (minsBefore) => () => ({ status: 0, stdout: JSON.stringify([{ databaseId: 42, createdAt: new Date(later - minsBefore * 60e3).toISOString(), status: 'completed', conclusion: 'success' }]) });
+  const ghFails = () => ({ status: 1, stdout: '', stderr: 'gh: not logged in' });
+
+  // The pure boundary: 55 minutes on the dot goes, a breath under waits.
+  const at = new Date('2026-09-29T12:00:00Z');
+  check('interval: 54.9 min defers', intervalVerdict({ at, source: 's' }, new Date(+at + 54.9 * 60e3), MIN).defer === true);
+  check('interval: 55 min goes', intervalVerdict({ at, source: 's' }, new Date(+at + 55 * 60e3), MIN).defer === false);
+  check('interval: no witness is not a deferral', intervalVerdict({ at: null, why: 'x' }, at, MIN).defer === false);
+
+  // Go: the last run was two hours ago. The check runs, exit 0.
+  let fx = makeRepo({ manifest, pushed: ['docs/a.md'] });
+  let { result, ran } = runWith(fx, { now: later, ghRun: ghSays(120) });
+  check('interval go: exits 0', result.exit === 0, `exit ${result.exit}`);
+  check('interval go: the check ran', ran.includes('a'), ran.join(','));
+  check('interval go: says it asked, and was past the interval', result.interval?.known && !result.interval.defer, JSON.stringify(result.interval));
+
+  // Defer: the same fixture, the last run ten minutes ago. Exit 3, nothing ran.
+  ({ result, ran } = runWith(fx, { now: later, ghRun: ghSays(10) }));
+  const text = report(result, false);
+  check('interval defer: exits 3', result.exit === EXIT_DEFERRED, `exit ${result.exit}`);
+  check('interval defer: NO check ran', ran.length === 0, ran.join(','));
+  check('interval defer: the report says DEFERRED and do not push', /DEFERRED/.test(text) && /Do NOT push/.test(text), text);
+  check('interval defer: names gh as the witness', /gh: gates\.yml run 42/.test(result.interval?.source || ''), result.interval?.source);
+
+  // Urgent: the deferred push goes, the checks run, and the reason is printed.
+  ({ result, ran } = runWith(fx, { now: later, ghRun: ghSays(10), urgent: 'main is red and this is the fix' }));
+  check('interval urgent: exits 0 and runs the check', result.exit === 0 && ran.includes('a'), `exit ${result.exit}; ran ${ran.join(',')}`);
+  check('interval urgent: the report carries the reason', /URGENT.*main is red and this is the fix/.test(report(result, false)));
+
+  // The reflog witness: gh cannot answer, and this checkout pushed seconds ago
+  // in real time — a push GitHub may not have turned into a run yet. Defer.
+  ({ result, ran } = runWith(fx, { ghRun: ghFails }));
+  check('interval reflog: a push seconds ago defers with gh down', result.exit === EXIT_DEFERRED && ran.length === 0, `exit ${result.exit}; ${JSON.stringify(result.interval)}`);
+  check('interval reflog: names the reflog as the witness', /reflog/.test(result.interval?.source || ''), result.interval?.source);
+
+  // The later witness wins: gh says two hours, the reflog says seconds. Defer.
+  ({ result } = runWith(fx, { ghRun: () => ({ status: 0, stdout: JSON.stringify([{ databaseId: 7, createdAt: new Date(Date.now() - 120 * 60e3).toISOString(), status: 'completed' }]) }) }));
+  check('interval: the LATER witness wins', result.exit === EXIT_DEFERRED && /reflog/.test(result.interval?.source || ''), JSON.stringify(result.interval));
+
+  // Neither witness: gh down and the reflog emptied. Not deferred, and SAID.
+  git(fx.repo, 'reflog', 'expire', '--expire=now', '--all');
+  ({ result, ran } = runWith(fx, { ghRun: ghFails }));
+  check('interval blind: goes, and runs the check', result.exit === 0 && ran.includes('a'), `exit ${result.exit}; ran ${ran.join(',')}`);
+  check('interval blind: the report says the interval was NOT ASKED', /interval — NOT ASKED/.test(report(result, false)));
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // Nothing to push: a run a minute ago defers nothing, because nothing waits.
+  fx = makeRepo({ manifest });
+  ({ result } = runWith(fx, { now: later, ghRun: ghSays(1) }));
+  check('interval: an empty push is never deferred', result.exit === 0 && result.interval === null, `exit ${result.exit}`);
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // A manifest with no pushInterval never asks, whatever gh would say.
+  fx = makeRepo({ manifest: { ...manifest, pushInterval: undefined }, pushed: ['docs/a.md'] });
+  ({ result } = runWith(fx, { now: later, ghRun: ghSays(1) }));
+  check('interval: undeclared means not asked', result.exit === 0 && result.interval === null, `exit ${result.exit}`);
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // The CLI refuses a bare --urgent: the reason is the point.
+  const cli = spawnSync(NODE, [path.join(HERE, 'preflight.mjs'), '--urgent'], { encoding: 'utf8' });
+  check('interval: a bare --urgent exits 2', cli.status === 2 && /needs a reason/.test(cli.stderr), `exit ${cli.status}: ${cli.stderr}`);
 }
 
 const total = pass + fails.length;

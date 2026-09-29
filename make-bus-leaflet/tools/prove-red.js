@@ -354,6 +354,17 @@ const MUTATIONS = [
     find: "const givesWay = (p, o) => isOptInSymbol(p.cat) && p.tier !== 'must' && !(o && (o.pos || o.move));",
     to: "const givesWay = (p, o) => isOptInSymbol(p.cat) && !(o && (o.pos || o.move));" },
 
+  // buses-data OA-523: a symbol is pushed off the town-centre square and its name.
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: "a symbol is pushed off the town-centre square sideways only, so March's town hall sits on the name again",
+    find: "      if (i === 0) s.x -= m; else if (i === 1) s.x += m; else if (i === 2) s.y -= m; else s.y += m;",
+    to: "      if (i === 0) s.x -= m; else if (i === 1) s.x += m;" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a pinned, hand-placed symbol is pushed off the square like any other',
+    find: "    if (s.pinned) continue;\n    for (const [x0, y0, x1, y1] of boxes) {",
+    to: "    for (const [x0, y0, x1, y1] of boxes) {" },
+
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'the same shop under two spellings stops collapsing, so Tesco and Tesco Extra print twice 39 m apart',
     find: "  if(x.includes(y) || y.includes(x)) return d < 60;",

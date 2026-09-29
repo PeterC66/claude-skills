@@ -1133,3 +1133,17 @@ test('OA-522: a hand-placed symbol and a must keep their spot; the rest are plac
   assert.strictEqual(optInNote([]), '', 'nothing left off, nothing said');
   assert.match(optInNote(['Red Lion', 'The Acre']), /^poi: 2 opt-in symbols left off, .*: Red Lion, The Acre\.$/);
 });
+
+test('OA-523: a symbol on the town-centre square is pushed out across the nearest edge; a pinned one never moves', () => {
+  const { pushOffBoxes } = require('./_engine.js').load('poi_select.js');
+  const box = [10, 10, 30, 14];                      // the square and its name, x 10..30, y 10..14
+  const S = [{ x: 12, y: 11 }, { x: 25, y: 13.5 }, { x: 20, y: 30 }, { x: 15, y: 12, pinned: true }];
+  const worst = pushOffBoxes(S, [box], 2.3);
+  assert.ok(worst > 0, 'an overlap is reported, so the caller keeps iterating');
+  assert.deepStrictEqual([S[0].x, S[0].y], [12, 10 - 2.3], 'nearest edge is the top: out upwards, x kept');
+  assert.deepStrictEqual([S[1].x, S[1].y], [25, 14 + 2.3], 'nearest edge is the bottom: out downwards');
+  assert.ok(S[0].offBox && S[1].offBox && !S[2].offBox, 'only a pushed symbol earns the wider cap');
+  assert.deepStrictEqual([S[3].x, S[3].y], [15, 12], 'a hand-placed symbol is pinned');
+  assert.strictEqual(pushOffBoxes(S, [box], 2.3), 0, 'a second round finds nothing left to push');
+  assert.strictEqual(pushOffBoxes(S, [], 2.3), 0, 'no anchor, no push');
+});

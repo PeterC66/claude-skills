@@ -973,4 +973,30 @@ function mergePoiOverlay(base, ov) {
   return out;
 }
 
-module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, givesWay, placeOptInSymbols, optInNote, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+/**
+ * pushOffBoxes — one round of pushing symbols off boxes painted UNDER them (buses-data
+ * OA-523). A town sheet's central square and its name are drawn before the symbols
+ * and the symbols are painted last, so a supermarket on the central stop covered the
+ * square on March's fresh pull and a town hall covered half the town's name, on this
+ * and five other towns, with no check able to see it. spreadIcons() calls this in each
+ * round of its repulsion: every unpinned symbol whose `h`-inflated box overlaps a box
+ * in `boxes` moves out across the nearest edge, and is marked `offBox` so the caller
+ * lets it stray twice the usual cap (March's town hall needed 4.2 mm against 2.6).
+ * Returns the deepest overlap it found, which the caller's convergence test reads.
+ */
+function pushOffBoxes(S, boxes, h) {
+  let worst = 0;
+  for (const s of S) {
+    if (s.pinned) continue;
+    for (const [x0, y0, x1, y1] of boxes) {
+      const pen = [s.x - x0 + h, x1 + h - s.x, s.y - y0 + h, y1 + h - s.y], m = Math.min(...pen);
+      if (m <= 0) continue;
+      worst = Math.max(worst, m); s.offBox = true;
+      const i = pen.indexOf(m);
+      if (i === 0) s.x -= m; else if (i === 1) s.x += m; else if (i === 2) s.y -= m; else s.y += m;
+    }
+  }
+  return worst;
+}
+
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, givesWay, placeOptInSymbols, optInNote, pushOffBoxes, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

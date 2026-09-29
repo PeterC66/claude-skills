@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride, givesWay, placeOptInSymbols, optInNote } = require(_dep('poi_select.js'));
+const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride, givesWay, placeOptInSymbols, optInNote, pushOffBoxes } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -959,7 +959,7 @@ const poiCulled=new Map();                      // poi key -> 'hide' | 'frame' |
  * POIs (overrides pos/move) are pinned and never moved. The label follows its
  * symbol, because both read the same adjusted point.
  */
-function spreadIcons(){
+function spreadIcons(obs){
   const S=[]; const cap=(DESIGN.spreadMax!=null?DESIGN.spreadMax:2.6);
   const sep=(DESIGN.iconMinSep!=null?DESIGN.iconMinSep:3.2);
   for(const p of pois){ const s=poiSite(p); if(!s || givesWay(p,s.o)) continue;
@@ -978,11 +978,12 @@ function spreadIcons(){
       if(!a.pinned){ a.x-=ux*push; a.y-=uy*push; }
       if(!b.pinned){ b.x+=ux*push; b.y+=uy*push; }
     }
+    worst=Math.max(worst, pushOffBoxes(S, obs, POI_HALF+0.2));   // OA-523: the anchor's square and name
     if(worst<0.02) break;
   }
   for(const s of S){                             // never stray far from the truth
     let dx=s.x-s.x0, dy=s.y-s.y0; const d=Math.hypot(dx,dy);
-    if(d>cap){ dx=dx/d*cap; dy=dy/d*cap; }
+    const c=s.offBox?2*cap:cap; if(d>c){ dx=dx/d*c; dy=dy/d*c; }
     if(dx||dy) poiNudge.set(s.k,[dx,dy]);
   }
 }
@@ -1957,13 +1958,15 @@ for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label 
 // baseline counted 190 labels sitting on a foreign symbol across the 31 shipped sheets.
 // Claiming the boxes here, before the first label is placed, is what stops it. Absent
 // the key nothing is reserved and every placer behaves exactly as it did.
-if(SPREAD_ICONS) spreadIcons();
+const ANCHOR_SQ=(atco2ll[ANCHOR]||baseOv[ANCHOR]) && !CORE && !(ID && (ID.interchanges||[]).some(ic=>ic.atco===ANCHOR)) ? XYS(ANCHOR) : null;
+const ANCHOR_BOX=ANCHOR_SQ && [ANCHOR_SQ[0]-2, ANCHOR_SQ[1]-2, ANCHOR_SQ[0]+2.6+FONT.textWidth(ANCHOR_LABEL,3.0,true)+0.5, ANCHOR_SQ[1]+2];
+if(SPREAD_ICONS) spreadIcons(ANCHOR_BOX?[ANCHOR_BOX]:[]);
 if(DESIGN.reserveIcons) reserveIcons();
 // Central interchange / bus-station label (the ANCHOR) drawn + reserved first
 // (suppressed when internalDiagram draws a lozenge for the anchor instead)
 // (also suppressed by coreBox — the box IS the interchange, and its own label
 //  says so; drawing both puts two names on the same square centimetre)
-if((atco2ll[ANCHOR]||baseOv[ANCHOR]) && !CORE && !(ID && (ID.interchanges||[]).some(ic=>ic.atco===ANCHOR))){const[x,y]=XYS(ANCHOR);
+if(ANCHOR_SQ){const[x,y]=ANCHOR_SQ;
   const _a=[`<rect x="${x-1.7}" y="${y-1.7}" width="3.4" height="3.4" rx="0.5" fill="#111"/>`,
     `<rect x="${x-1.0}" y="${y-1.0}" width="2.0" height="2.0" rx="0.3" fill="#fff"/>`,
     `<text x="${x+2.6}" y="${y+1.0}" font-family="Arial" font-weight="bold" font-size="3.0" fill="#111" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(ANCHOR_LABEL)}</text>`].join('\n');
@@ -1974,8 +1977,7 @@ if((atco2ll[ANCHOR]||baseOv[ANCHOR]) && !CORE && !(ID && (ID.interchanges||[]).s
   // measures 34.33 mm at size 3 bold, so 12.93 mm of it was drawn in space nothing
   // had claimed, and Huntingdon's schematic duly printed a route badge inside it.
   // font_metrics.js has held real Arial advance widths since labeller.js was written.
-  reserve(x-2, y-2, x+2.6+FONT.textWidth(ANCHOR_LABEL,3.0,true)+0.5, y+2,
-          'an "'+ANCHOR_LABEL+'" interchange label');
+  reserve(...ANCHOR_BOX, 'an "'+ANCHOR_LABEL+'" interchange label');
 }
 
 /* ---- HAND-PLACED INK CLAIMS ITS SPACE HERE (2026-08-30, OA-148 / OA-124) -----

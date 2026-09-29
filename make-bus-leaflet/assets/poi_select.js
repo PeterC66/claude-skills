@@ -836,6 +836,41 @@ function clearSpot(x, y, free, reach = OPT_IN_REACH) {
   return null;
 }
 
+/*
+ * HOW gen_internal.js APPLIES IT. An opt-in symbol takes no part in
+ * spreadIcons() or reserveIcons(), so every core symbol keeps exactly the place
+ * it had. It is placed LAST, just before the symbols are drawn, when the routes,
+ * the badges, the road names, the notes and every core symbol have claimed their
+ * space: `free(x, y)` there says whether a symbol at that point would be clear of
+ * route ink (read off the SVG built so far, as the label placer reads it), of
+ * every route badge and of everything reserved, and `place` reserves it, so its
+ * name is placed round it like any other. The first cut placed them BEFORE the
+ * badges, clear of the ink but hard against it, and on March's schematic the 56
+ * badge then found its spot taken by a pub: a badge says which bus stops here,
+ * and the pub is the one that gives way. Exempt, and placed as before: a symbol
+ * put somewhere by hand (overrides `pos` or `move`), because somebody chose that
+ * spot, and a `must`, because a customer said it matters.
+ */
+const givesWay = (p, o) => isOptInSymbol(p.cat) && p.tier !== 'must' && !(o && (o.pos || o.move));
+
+/* Each site {p, t} in order: placed at its nearest free spot, or returned as left off. */
+function placeOptInSymbols(sites, { free, place, reach = OPT_IN_REACH }) {
+  const off = [];
+  for (const e of sites) {
+    const at = clearSpot(e.t.x, e.t.y, free, reach);
+    if (at) place(e, at); else off.push(e);
+  }
+  return off;
+}
+
+/* The build note naming what was left off, or '' when nothing was. Prefixed
+ * `poi:` so build_log.js reads it as its own WARN entry. */
+function optInNote(names, reach = OPT_IN_REACH) {
+  if (!names.length) return '';
+  return 'poi: ' + names.length + ' opt-in symbol' + (names.length > 1 ? 's' : '') + ' left off, because every spot within '
+    + reach + ' mm of each is on route ink, a route badge, another symbol or a name already placed (OA-522): ' + names.join(', ') + '.';
+}
+
 /** The customer's category switch as mergePoiOverlay() recorded it, or {}. */
 function customerSwitchOf(P){
   const s = P && P.customerSwitch;
@@ -938,4 +973,4 @@ function mergePoiOverlay(base, ov) {
   return out;
 }
 
-module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, givesWay, placeOptInSymbols, optInNote, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

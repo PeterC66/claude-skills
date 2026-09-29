@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride, isOptInSymbol, clearSpot, OPT_IN_REACH } = require(_dep('poi_select.js'));
+const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride, givesWay, placeOptInSymbols, optInNote } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -938,9 +938,7 @@ function poiSite(p){
 }
 const poiBox=new Map();                         // poi key -> its reserved icon box (design.reserveIcons)
 const poiNudge=new Map();                       // poi key -> [dx,dy] from spreadIcons
-const OPTIN_OFF=new Set();                      // placer ids of opt-in symbols left off (OA-522)
-const OPTIN_LEFT=[];                            // ...and what each was called, for the build note
-const BADGE_MARKS=[];                           // every route badge drawn, as noteBadge() records it
+const OPTIN_OFF=new Set(), BADGE_MARKS=[];      // OA-522: opt-in symbols left off; every badge noteBadge() drew
 /* WHY poiSite() REFUSED A POI, recorded above rather than re-derived (OA-250
  * item 2): a second function asking the same three questions would be free to
  * drift from them, which is why poiSite exists at all. Written on every call and
@@ -964,7 +962,7 @@ const poiCulled=new Map();                      // poi key -> 'hide' | 'frame' |
 function spreadIcons(){
   const S=[]; const cap=(DESIGN.spreadMax!=null?DESIGN.spreadMax:2.6);
   const sep=(DESIGN.iconMinSep!=null?DESIGN.iconMinSep:3.2);
-  for(const p of pois){ const s=poiSite(p); if(!s || givesWay(p,s)) continue;
+  for(const p of pois){ const s=poiSite(p); if(!s || givesWay(p,s.o)) continue;
     S.push({k:s.u, x0:s.x, y0:s.y, x:s.x, y:s.y, pinned:!!(s.o.pos||s.o.move)}); }
   for(let it=0; it<24; it++){
     let worst=0;
@@ -989,7 +987,7 @@ function spreadIcons(){
   }
 }
 function reserveIcons(){
-  for(const p of pois){ const s=poiSite(p); if(!s || givesWay(p,s)) continue; reserveIcon(s); }
+  for(const p of pois){ const s=poiSite(p); if(s && !givesWay(p,s.o)) reserveIcon(s); }
 }
 function reserveIcon(s){
   const b=[s.x-POI_HALF, s.y-POI_HALF, s.x+POI_HALF, s.y+POI_HALF];
@@ -1002,45 +1000,16 @@ function reserveIcon(s){
   // full ambiguity penalty to every candidate it has.
   if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.u); }
 }
-/* AN OPT-IN SYMBOL GIVES WAY (buses-data OA-522; the rule is poi_select.js's).
- * A pub, a station, a post office, allotments or an industrial estate takes no
- * part in spreadIcons() or reserveIcons(), so every core symbol keeps exactly the
- * place it had. It is placed LAST, by placeOptIns() just before the symbols are
- * drawn, when the routes, the badges, the road names, the notes and every core
- * symbol have claimed their space: it takes the nearest spot within OPT_IN_REACH
- * mm that is clear of route ink (read off the SVG built so far, as the label
- * placer reads it), of every route badge and of everything reserved, and is then
- * reserved itself, so its name is placed round it like any other. Where there is
- * no such spot it is left off, and the build says which. The first cut of this
- * placed them BEFORE the badges, clear of the ink but hard against it, and on
- * March's schematic the 56 badge then found its spot taken by a pub: a badge
- * says which bus stops here, and the pub is the one that gives way.
- * Exempt, and placed as before: a symbol put somewhere by hand (overrides pos or
- * move), because somebody chose that spot, and a `must`, because a customer said
- * it matters. A sheet with no opt-in symbol on it moves nothing. */
-const givesWay=(p,s)=>isOptInSymbol(p.cat) && p.tier!=='must' && !s.o.pos && !s.o.move;
-const BADGE_BOX=m=>[m.x-m.w, m.y-m.h, m.x+m.w, m.y+m.h];
+// OA-522: an opt-in symbol gives way, placed LAST and clear of route ink, badges and all reserved (poi_select.js).
 function placeOptIns(){
-  const mine=[];
-  for(const p of pois){ const t=poiSite(p); if(t && givesWay(p,t)) mine.push({p,t}); }
-  if(!mine.length) return;
-  const palette=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase()));
-  const INK=new Labeller({ page:[W,H] }).stampSvg(s, stroke=>palette.has(stroke)).ink;
-  for(const {p,t} of mine){
-    const free=(x,y)=>{
-      if(!inFrame([x,y]) || inCore([x,y])) return false;
-      const b=[x-POI_HALF, y-POI_HALF, x+POI_HALF, y+POI_HALF];
-      return !INK.any([b[0]+0.3, b[1]+0.3, b[2]-0.3, b[3]-0.3])
-        && !BADGE_MARKS.some(m=>hit(b,BADGE_BOX(m))) && !overlapsRound(b);
-    };
-    const at=clearSpot(t.x, t.y, free, OPT_IN_REACH);
-    if(!at){ OPTIN_OFF.add(t.u); OPTIN_LEFT.push(p.name||p.cat); continue; }
-    if(at[0]!==t.x || at[1]!==t.y){
-      const n=poiNudge.get(t.u)||[0,0];
-      poiNudge.set(t.u, [n[0]+at[0]-t.x, n[1]+at[1]-t.y]);
-    }
-    reserveIcon(poiSite(p));
-  }
+  const mine=pois.map(p=>({p,t:poiSite(p)})).filter(e=>e.t && givesWay(e.p,e.t.o)); if(!mine.length) return '';
+  const pal=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase())), INK=new Labeller({ page:[W,H] }).stampSvg(s, st=>pal.has(st)).ink;
+  const free=(x,y)=>{ const b=[x-POI_HALF, y-POI_HALF, x+POI_HALF, y+POI_HALF]; return inFrame([x,y]) && !inCore([x,y]) && !overlapsRound(b)
+    && !INK.any([b[0]+0.3, b[1]+0.3, b[2]-0.3, b[3]-0.3]) && !BADGE_MARKS.some(m=>hit(b,[m.x-m.w, m.y-m.h, m.x+m.w, m.y+m.h])); };
+  const off=placeOptInSymbols(mine, { free, place:({p,t},at)=>{ const n=poiNudge.get(t.u)||[0,0];
+    poiNudge.set(t.u,[n[0]+at[0]-t.x, n[1]+at[1]-t.y]); reserveIcon(poiSite(p)); } });
+  for(const e of off) OPTIN_OFF.add(e.t.u);
+  return optInNote(off.map(e=>e.p.name||e.p.cat));
 }
 /* The `must` tier (poi.tiers — OA-202, and the key OA-066 had been waiting for).
  * Three things follow from a customer saying a place matters, and they are one
@@ -2929,10 +2898,7 @@ for(const [road,as] of roads){
 }
 
 // POIs (on top of lines)
-placeOptIns();
-pois.forEach(poiMark);
-if(OPTIN_LEFT.length) process.stderr.write('poi: '+OPTIN_LEFT.length+' opt-in symbol'+(OPTIN_LEFT.length>1?'s':'')+' left off, because every spot within '
-  +OPT_IN_REACH+' mm of each is on route ink, a route badge, another symbol or a name already placed (OA-522): '+OPTIN_LEFT.join(', ')+'.'+GUARD_NL);
+{ const note=placeOptIns(); pois.forEach(poiMark); if(note) process.stderr.write(note+GUARD_NL); }
 
 // ---- map notes — drawn here, on top of the map; CLAIMED far above ----------
 // The layout, the wrap, the footer warning and the reservation all happened in the

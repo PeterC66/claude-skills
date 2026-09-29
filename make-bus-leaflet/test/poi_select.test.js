@@ -1115,3 +1115,21 @@ test('OA-522: clearSpot keeps a free spot, moves to the NEAREST free one, and gi
   assert.strictEqual(clearSpot(10, 10, (x, y) => Math.hypot(x - 10, y - 10) > OPT_IN_REACH + 0.5), null,
     'nothing within the reach: left off, never carried further from its place');
 });
+
+test('OA-522: a hand-placed symbol and a must keep their spot; the rest are placed in order or left off', () => {
+  const { givesWay, placeOptInSymbols, optInNote } = require('./_engine.js').load('poi_select.js');
+  assert.ok(givesWay({ cat: 'pub' }, {}));
+  assert.ok(!givesWay({ cat: 'pub', tier: 'must' }, {}), 'a must is not overruled');
+  assert.ok(!givesWay({ cat: 'pub' }, { pos: { x: 1, y: 1 } }) && !givesWay({ cat: 'pub' }, { move: { dx: 1, dy: 0 } }), 'nor a hand placement');
+  assert.ok(!givesWay({ cat: 'shop' }, {}), 'a core symbol never gives way');
+  // Two pubs on the same spot: the first takes it, the second the nearest spot clear of the first.
+  const taken = [];
+  const free = (x, y) => !taken.some(([a, b]) => Math.hypot(a - x, b - y) < 3.9);
+  const placed = [];
+  const off = placeOptInSymbols([{ p: { name: 'A' }, t: { x: 0, y: 0 } }, { p: { name: 'B' }, t: { x: 0, y: 0 } }, { p: { name: 'C' }, t: { x: 50, y: 50 } }],
+    { free: (x, y) => free(x, y) && !(x > 40), place: (e, at) => { taken.push(at); placed.push(e.p.name); } });
+  assert.deepStrictEqual(placed, ['A', 'B']);
+  assert.deepStrictEqual(off.map(e => e.p.name), ['C'], 'no clear spot within the reach: left off and returned');
+  assert.strictEqual(optInNote([]), '', 'nothing left off, nothing said');
+  assert.match(optInNote(['Red Lion', 'The Acre']), /^poi: 2 opt-in symbols left off, .*: Red Lion, The Acre\.$/);
+});

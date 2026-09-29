@@ -350,6 +350,11 @@ const MUTATIONS = [
     to: "for (let r = 1; r <= reach + 1 + 1e-9; r += 1) {" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: "a customer's must pub is moved or left off like any other",
+    find: "const givesWay = (p, o) => isOptInSymbol(p.cat) && p.tier !== 'must' && !(o && (o.pos || o.move));",
+    to: "const givesWay = (p, o) => isOptInSymbol(p.cat) && !(o && (o.pos || o.move));" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'the same shop under two spellings stops collapsing, so Tesco and Tesco Extra print twice 39 m apart',
     find: "  if(x.includes(y) || y.includes(x)) return d < 60;",
     to: "  if(x.includes(y) || y.includes(x)) return d < 6;" },

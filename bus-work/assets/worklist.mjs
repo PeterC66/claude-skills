@@ -919,9 +919,9 @@ if (upcoming) {
 // its overrides; the town's source is its latest S3; the sheet is its latest S4.
 // The byte gate reads the S4's OWN routes.json, so an answer that has reached S3
 // and not S4 is invisible to it — which is the row that would have raised High
-// Wycombe. The comparison is the engine's `compareTiers()`, not a copy of it, so
-// an `industrial:*` key under industrialKeep "none" is unreachable here exactly as
-// it is at build time, and this cannot raise a row nothing can clear.
+// Wycombe. The comparison is the engine's `compareTiers()`, not a copy of it, so a
+// key that can change nothing (OA-517: a `miss` while estates are off, any key the
+// customer switched off) is unreachable here as at build time, and raises no row.
 //
 // Remote: one GET per area map on `/api/maps/:id/poi-tiers`, admitted by the same
 // OPERATOR_TOKEN as the two lists. Local: the store's overrides.json and the pack's

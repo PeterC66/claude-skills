@@ -69,7 +69,7 @@ test('a portal answer with NO `as` keeps the source’s rename — an absent ren
   assert.deepStrictEqual(renamed['community:Bellfield'], { tier: 'may', as: 'Bellfield Hub' });
 });
 
-test('industrial keys are UNREACHABLE while estates are off, and reachable once they are on', () => {
+test('a MISS for an estate is UNREACHABLE while estates are off, and reachable once they are on', () => {
   const portal = { 'industrial:Cressex': { tier: 'miss' }, 'shop:Asda': { tier: 'must' } };
   assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'none' }), ['industrial:Cressex']);
   assert.deepStrictEqual(S.unreachableKeys(portal, { industrialKeep: 'named', include: ['industrial'] }), []);
@@ -78,9 +78,20 @@ test('industrial keys are UNREACHABLE while estates are off, and reachable once 
   // OA-500: estates are off by default, so a town that says nothing cannot reach one.
   assert.deepStrictEqual(S.unreachableKeys(portal, {}), ['industrial:Cressex']);
   assert.deepStrictEqual(S.unreachableKeys(portal, { include: ['industrial'] }), []);
-  // And a default-ON category switched off is culled the same way.
-  assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'must' }, { exclude: ['pubs'] }), ['pub:The Bell']);
+  // OA-517: a MUST or MAY is reachable where only OUR config has the category
+  // off, because a tier beats the map's switch — High Wycombe Aldi's estate.
+  assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'must' }, { exclude: ['pubs'] }), []);
+  assert.deepStrictEqual(S.unreachableKeys({ 'industrial:Tannery Road Ind Est': 'may' }, {}), []);
+  assert.deepStrictEqual(S.unreachableKeys({ 'industrial:Cressex': 'must' }, { industrialKeep: 'none' }), []);
+  assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'miss' }, { exclude: ['pubs'] }), ['pub:The Bell'],
+    'a miss where the town already leaves pubs out changes nothing');
+  // And where the CUSTOMER switched the category off, no tier reaches it.
+  assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'must' }, { customerSwitch: { pubs: false } }), ['pub:The Bell']);
   assert.deepStrictEqual(S.unreachableKeys({ 'pub:The Bell': 'must' }, {}), []);
+  const off = S.compareTiers({}, { 'pub:The Bell': { tier: 'must' } }, { customerSwitch: { pubs: false } });
+  assert.deepStrictEqual([off.added, off.unreachable, off.owed], [[], ['pub:The Bell'], false]);
+  assert.deepStrictEqual(S.compareInclude([], { pubs: false, museums: true }).customerSwitch, { pubs: false },
+    'compareInclude hands the switch on as given, for the caller to judge tiers with');
   const none = S.compareTiers({}, portal, { industrialKeep: 'none' });
   assert.deepStrictEqual(none.added, ['shop:Asda']);
   assert.deepStrictEqual(none.unreachable, ['industrial:Cressex']);

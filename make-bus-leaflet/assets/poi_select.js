@@ -19,8 +19,12 @@
  * flattening it somewhere else would move it out of sight. Nothing here sorts.
  *
  * THE FILTERS, IN THE ORDER THEY RUN, because each one sees what the last left:
- *   1. classify   — an element with no recognised tag is not a POI at all.
- *   2. industrial — a named list, "none", or (default) any estate with a name.
+ *   1. classify   — an element with no recognised tag is not a POI at all. It
+ *                   sorts by TAG ALONE: a switchable category that is off is
+ *                   still classified, so a tier can bring one place of it in
+ *                   (OA-517). Only the CUSTOMER's off switch drops it here.
+ *   2. industrial — an unnamed estate is dropped; a named one that
+ *                   industrialKeep does not keep is only DEFAULTED to miss.
  *   3. excludeName— one case-insensitive alternation over every category.
  *   4. unnamed greens — always dropped; a park called "Park" names nothing.
  *   5. tidy       — generic bracket/suffix strip, then per-town suffix rules,
@@ -32,7 +36,23 @@
  *      The first of a pair survives, unless it is unnamed and the second is
  *      not (OA-347): then the named one replaces it.
  *   7. tiers      — the customer's must / may / miss answer, plus rename, over a
- *      default that is `may` for a named POI and `miss` for a nameless one.
+ *      default that is `may` for a named POI and `miss` for a nameless one, or
+ *      for any place in a category this map has off.
+ *
+ * WHO DECIDES WHETHER A PLACE IS DRAWN (buses-data OA-517, Peter 2026-09-29),
+ * strongest first — the full statement is make-bus-leaflet's
+ * references/landmark-precedence.md:
+ *   1. the customer's category switch (overrides `internal.poiInclude`), both
+ *      ways: off leaves every place of the category out whatever any tier says
+ *      and takes it out of the chooser; on beats the map's poi.exclude and its
+ *      industrialKeep.
+ *   2. a per-place tier — the customer's poiTiers, then routes.json poi.tiers:
+ *      must or may brings the place in, miss leaves it out.
+ *   3. the map's poi.include / poi.exclude, and poi.industrialKeep.
+ *   4. the engine default: DEFAULT_ON_CATS, and named-may / nameless-miss.
+ * An `internal.pois` override's `force` is NOT on this list. It says "print
+ * this place's name" and is read by the generator after selection; it never
+ * brings a place in.
  * Tidying runs BEFORE de-duplication on purpose: two spellings of one name are
  * only duplicates once they have been tidied to the same string.
  *
@@ -122,9 +142,17 @@
  * category still matches it: a college that is also tagged a sports centre stays
  * a leisure centre, exactly as it was drawn before the review.
  */
+/*
+ * BY TAG ALONE SINCE OA-517 (Peter, 2026-09-29). Until then every switchable
+ * category below was read through categoryOn() and an off one returned null, so
+ * no tier could ever reach it: High Wycombe Aldi's hand-chosen Tannery Road
+ * estate went when OA-500 turned estates off by default. Whether a category is
+ * on is now answered AFTER classification — the customer's off switch in
+ * selectPois(), everything else as a default in applyTiers(), where a tier can
+ * overrule it. `poiCfg` is accepted for the callers that still pass it and is
+ * not read.
+ */
 function classify(t, poiCfg) {
-  const POI = poiCfg || {};
-  const on = (cat) => categoryOn(POI, cat);
   if(t.shop==='supermarket') return ['shop', t.name||'Supermarket'];
   if(t.amenity==='pharmacy')  return ['pharmacy', t.name||''];
   if(t.amenity==='doctors')   return ['gp', t.name||''];
@@ -143,10 +171,10 @@ function classify(t, poiCfg) {
   if(t.amenity==='theatre'||t.amenity==='arts_centre') return ['theatre', t.name||'Theatre'];
   if(t.amenity==='cinema')    return ['cinema', t.name||'Cinema'];
   if(t.amenity==='college'||t.amenity==='university') return ['college', t.name||'College'];
-  if(on('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
+  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];
   /* A post office counter inside a supermarket is tagged on the supermarket and is
    * drawn as one, by the first line above; this finds the ones that stand alone. */
-  if(on('postoffices') && t.amenity==='post_office') return ['postoffice', t.name||'Post Office'];
+  if(t.amenity==='post_office') return ['postoffice', t.name||'Post Office'];
   /* Below the named categories on purpose: a pub that OpenStreetMap ALSO tags as
    * a community centre or a restaurant-with-rooms is the thing that tag says
    * first, and a town that switched pubs on did not thereby ask for its village
@@ -154,7 +182,7 @@ function classify(t, poiCfg) {
    * 'Pub': a nameless pub is a bare glyph nobody chose, so OA-238's
    * nameless-`miss` default keeps it off the page while still offering it in the
    * chooser — see the `noName` rule below. */
-  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||''];
+  if(t.amenity==='pub') return ['pub', t.name||''];
   /* OA-453, the third opt-in: a railway station, which every reader knows and no
    * sheet could mark — St Neots East named its station with a hand-pinned note.
    * Switchable for the same reason as pubs, and on by default like them since the
@@ -162,10 +190,11 @@ function classify(t, poiCfg) {
    * `halt` is a small station and counts; `station=miniature` is a park railway
    * and does not. The fallback is BLANK, like the pub's, so an unnamed station is
    * offered in the chooser and kept off the page by OA-238's nameless default. */
-  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];
+  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];
   /* Industrial estates became switchable, off by default, in the 28 September
-   * review. `poi.industrialKeep` still decides WHICH estates, once they are on. */
-  if(on('industrial') && t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
+   * review. `poi.industrialKeep` still decides WHICH estates, once they are on —
+   * as a default a tier can overrule (OA-517). */
+  if(t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];
   return null;
 }
 
@@ -369,24 +398,40 @@ function poiOverride(ovPois, p){
 
 function selectPois(elementSets, poiCfg, report) {
   const POI = poiCfg || {};
+  /* LEVEL 1, THE CUSTOMER'S OFF SWITCH, IS THE ONLY SWITCH THAT DROPS HERE
+   * (OA-517). It beats every tier, theirs and ours, and a category they have
+   * switched off is not offered in the chooser place by place either — which is
+   * what the portal's Landmarks page has always shown. Every other reason a
+   * category is off is a DEFAULT, applied in applyTiers(). */
+  const SW = customerSwitchOf(POI);
   let pois=[];
   for(const elements of elementSets){
     for(const e of (elements||[])){
       const t=e.tags||{}; const c=classify(t, POI); if(!c) continue;
+      if(SW[CAT_SWITCH[c[0]]] === false) continue;
       const ll=e.lat!=null?[e.lat,e.lon]:(e.center?[e.center.lat,e.center.lon]:null); if(!ll) continue;
       const p={cat:c[0], name:c[1], ll};
       const id=osmId(e); if(id) p.osm=id;
       pois.push(p);
     }
   }
-  // industrial: keep a named list (array), drop all ("none"), or keep any named (default)
+  /* industrial: an estate with no name of its own names nothing and is dropped,
+   * always, like an unnamed green below. For a named one, poi.industrialKeep —
+   * a list (array), "none", or (default) any named — is LEVEL 3 of OA-517's
+   * order: the estates it does not keep are defaulted to `miss` in
+   * applyTiers(), where a tier can still bring one in. It is read HERE, on the
+   * name as OpenStreetMap spells it, because that is what every committed list
+   * was written against and tidying has not run yet. A customer who switched
+   * estates on has asked for them, and that beats our list (level 1). */
   const IND = POI.industrialKeep;
-  pois = pois.filter(p=>{
-    if(p.cat!=='industrial') return true;
-    if(IND==='none') return false;
-    if(Array.isArray(IND)) return IND.includes(p.name);
-    return !!(p.name && p.name!=='Industrial Estate');   // default: keep named estates
-  });
+  pois = pois.filter(p => p.cat!=='industrial' || !!(p.name && p.name!=='Industrial Estate'));
+  const notKept = new WeakSet();
+  if(SW.industrial !== true){
+    for(const p of pois){
+      if(p.cat!=='industrial') continue;
+      if(IND==='none' || (Array.isArray(IND) && !IND.includes(p.name))) notKept.add(p);
+    }
+  }
   // drop POIs whose name matches any excludeName pattern (case-insensitive, any cat)
   const EXN = POI.excludeName||[];
   if(EXN.length){ const exRe=new RegExp(EXN.join('|'),'i'); pois=pois.filter(p=>!exRe.test(p.name)); }
@@ -436,7 +481,7 @@ function selectPois(elementSets, poiCfg, report) {
     }
     dedup.push(p);
   }
-  return applyTiers(dedup, POI, report);
+  return applyTiers(dedup, POI, report, notKept);
 }
 
 /*
@@ -454,7 +499,7 @@ function selectPois(elementSets, poiCfg, report) {
  * outside this module has seen the list yet, so a POI dropped on this line never
  * reserves its box, never becomes an anchor and never reaches ci-reference.
  */
-function applyTiers(pois, POI, report){
+function applyTiers(pois, POI, report, notKept){
   const TIERS = POI.tiers || null;
   const rule = v => (typeof v === 'string' ? { tier: v, as: null }
                                            : { tier: (v && v.tier) || 'may', as: (v && v.as) || null });
@@ -515,7 +560,17 @@ function applyTiers(pois, POI, report){
    * the other half of OA-338 and is not affected: two unnamed town halls 5 km
    * apart are two town halls. */
   const noName = p => (AUTO_NAMED_CATS.includes(p.cat) ? unnamed(p.name) : !p.name);
-  const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });
+  /* A PLACE IN A CATEGORY THIS MAP HAS OFF DEFAULTS TO `miss` (OA-517) — off
+   * by the engine default, by the map's poi.exclude, or an estate its
+   * industrialKeep does not keep. It is a DEFAULT, so an explicit tier below
+   * beats it in both directions, and the place is offered in
+   * `report.candidates` as a miss so the chooser can bring it in. The
+   * customer's own off switch never reaches here: selectPois() dropped it. */
+  const offHere = p => {
+    const sw = CAT_SWITCH[p.cat];
+    return (!!sw && !categoryOn(POI, sw)) || (!!notKept && notKept.has(p));
+  };
+  const defaultRule = p => ({ tier: noName(p) || offHere(p) ? 'miss' : 'may', as: null });
   // `osm:<type>/<id>` before `<cat>:<name>` (OA-250) — see keyedAnswer().
   const answer = p => keyedAnswer(TIERS, p);
   const explicit = p => !!answer(p);
@@ -738,11 +793,31 @@ const OPT_IN_CATS = ['allotments', 'pubs', 'stations', 'postoffices', 'industria
  */
 const DEFAULT_ON_CATS = ['pubs', 'stations'];
 
+/**
+ * Each switch's POI category, and the reverse. The switch is named in the
+ * plural and the category in the singular (`pubs` draws `pub`), which is how
+ * a key `pub:The Bell` is found to belong to the `pubs` switch. One copy,
+ * here; poi_tiers_sync.js reads this rather than keep its own.
+ */
+const SWITCH_CAT = { allotments: 'allotments', pubs: 'pub', stations: 'station', postoffices: 'postoffice', industrial: 'industrial' };
+const CAT_SWITCH = Object.fromEntries(Object.entries(SWITCH_CAT).map(([s, c]) => [c, s]));
+
+/** The customer's category switch as mergePoiOverlay() recorded it, or {}. */
+function customerSwitchOf(P){
+  const s = P && P.customerSwitch;
+  return s && typeof s === 'object' && !Array.isArray(s) ? s : {};
+}
+
 /*
- * IS THIS SWITCHABLE CATEGORY DRAWN FOR THIS TOWN? The one answer, read by
- * classify() and exported so the portal's Landmarks page can ask the same
- * question rather than read `poi.include` as if it were the whole answer.
+ * IS THIS SWITCHABLE CATEGORY ON FOR THIS TOWN? The one answer, read by
+ * applyTiers() as the default for a place nobody has tiered, and exported so
+ * the portal's Landmarks page can ask the same question rather than read
+ * `poi.include` as if it were the whole answer. Since OA-517 it is a DEFAULT: a
+ * tier on one place beats it, except where the answer came from the customer's
+ * own switch, which beats the tier too (selectPois()).
  *
+ *   customerSwitch  the customer's portal switch, as mergePoiOverlay() kept it
+ *                apart. Wins over everything below (level 1 of OA-517's order).
  *   poi.exclude  switched OFF. Wins over everything, so a town can turn off a
  *                category that is on by default. Written by mergePoiOverlay()
  *                for a default-on category and never needed for the others.
@@ -757,6 +832,8 @@ const DEFAULT_ON_CATS = ['pubs', 'stations'];
  */
 function categoryOn(poiCfg, cat){
   const P = poiCfg || {};
+  const sw = customerSwitchOf(P)[cat];
+  if (typeof sw === 'boolean') return sw;
   if (Array.isArray(P.exclude) && P.exclude.includes(cat)) return false;
   if (Array.isArray(P.include) && P.include.includes(cat)) return true;
   return DEFAULT_ON_CATS.includes(cat);
@@ -779,7 +856,12 @@ function categoryOn(poiCfg, cat){
  *              them on as well as on where it did not. Where removing it from
  *              poi.include is not enough — a DEFAULT_ON_CATS category — `false`
  *              also adds it to poi.exclude, and `true` takes it back out. A
- *              category that is off without one never gets one. A key outside
+ *              category that is off without one never gets one.
+ *              THE ANSWER IS ALSO KEPT AS GIVEN, in `customerSwitch`
+ *              ({ "<category>": true | false }), because OA-517 ranks it above
+ *              every tier and our own include / exclude below them: folded into
+ *              poi.exclude alone, a customer's "off" could not be told from
+ *              ours, and a tier would bring the place back. A key outside
  *              OPT_IN_CATS, or a value that is not a boolean, is ignored here:
  *              the portal's safeSubset.js refuses it with a reason before it is
  *              ever saved, and a generator is the wrong place to explain one.
@@ -817,8 +899,9 @@ function mergePoiOverlay(base, ov) {
     out.include = inc;
     // Only written when there is something in it, or when the pack had one.
     if (exc.length || Array.isArray(b.exclude)) out.exclude = exc;
+    out.customerSwitch = Object.fromEntries(OPT_IN_CATS.filter((c) => typeof sw[c] === 'boolean').map((c) => [c, sw[c]]));
   }
   return out;
 }
 
-module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

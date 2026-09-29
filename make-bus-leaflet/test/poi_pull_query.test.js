@@ -14,8 +14,10 @@
  * opt-in category with nothing to classify is indistinguishable from a town
  * with no pubs.
  *
- * The opt-in set is read out of classify()'s own source rather than typed here,
- * so a fourth category added there fails this test until the pull asks for it.
+ * The opt-in set is the engine's own OPT_IN_CATS rather than typed here, so a
+ * sixth switch added there fails this test until the pull asks for it. It was
+ * read out of classify()'s `on('…')` calls until OA-517, when classify() began
+ * sorting by tag alone and the switch moved after it.
  */
 'use strict';
 const test = require('node:test');
@@ -23,7 +25,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { ENGINE_DIR, load } = require('./_engine.js');
-const { classify, categoryOn } = load('poi_select.js');
+const { classify, selectPois, categoryOn, OPT_IN_CATS, SWITCH_CAT } = load('poi_select.js');
 
 /* One OSM tag set per opt-in category, as OpenStreetMap writes it. */
 const SAMPLES = {
@@ -44,13 +46,6 @@ const ALWAYS = [
   { amenity: 'museum', name: 'Norris Museum' }, { tourism: 'museum', name: 'Norris Museum' },
 ];
 
-/* Every `include`d name classify() tests for, read from its source. */
-function optInsFromSource() {
-  const src = fs.readFileSync(path.join(ENGINE_DIR, 'poi_select.js'), 'utf8');
-  const body = src.slice(src.indexOf('function classify('));
-  const fn = body.slice(0, body.indexOf('\n}\n'));
-  return [...new Set([...fn.matchAll(/\bon\('([a-z_]+)'\)/g)].map(m => m[1]))].sort();
-}
 
 /* The query's selectors as [type, [[key, op, value]...]]. Only the two forms the
  * pull uses: ["k"="v"] and ["k"~"^(a|b)$"]. */
@@ -73,17 +68,20 @@ const TEMPLATE = fs.readFileSync(path.join(ENGINE_DIR, 'overpass-pois.txt'), 'ut
 const draftSrc = fs.readFileSync(path.join(ENGINE_DIR, 'draft_town.py'), 'utf8');
 const DRAFT = (draftSrc.match(/def pois_query\(bbox\):[\s\S]*?out center tags;"""/) || [''])[0];
 
-test('the opt-in categories named here are exactly the ones classify() tests for', () => {
-  assert.deepStrictEqual(Object.keys(SAMPLES).sort(), optInsFromSource(),
-    'classify() gained or lost a poi.include category: add its OSM tags to SAMPLES and to both POI pulls');
+test('the opt-in categories named here are exactly the engine\'s switches, and classify() sorts each', () => {
+  assert.deepStrictEqual(Object.keys(SAMPLES).sort(), [...OPT_IN_CATS].sort(),
+    'the engine gained or lost a poi.include category: add its OSM tags to SAMPLES and to both POI pulls');
+  for (const [cat, samples] of Object.entries(SAMPLES))
+    for (const tags of samples) assert.strictEqual((classify(tags, {}) || [])[0], SWITCH_CAT[cat], JSON.stringify(tags));
 });
 
 test('each sample is drawn when its category is on, and not when it is switched off', () => {
+  const drawn = (tags, poi) => selectPois([[{ lat: 52.3, lon: -0.07, tags }]], poi).length === 1;
   for (const [cat, samples] of Object.entries(SAMPLES)) {
     for (const tags of samples) {
-      assert.strictEqual(classify(tags, {}) !== null, categoryOn({}, cat), `${cat} does not follow its default`);
-      assert.notStrictEqual(classify(tags, { include: [cat] }), null, `${cat} not drawn when switched on`);
-      assert.strictEqual(classify(tags, { exclude: [cat] }), null, `${cat} drawn when switched off`);
+      assert.strictEqual(drawn(tags, {}), categoryOn({}, cat), `${cat} does not follow its default`);
+      assert.ok(drawn(tags, { include: [cat] }), `${cat} not drawn when switched on`);
+      assert.ok(!drawn(tags, { exclude: [cat] }), `${cat} drawn when switched off`);
     }
   }
 });

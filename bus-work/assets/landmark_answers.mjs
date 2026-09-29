@@ -17,8 +17,9 @@
  * routes.json when the portal is the local checkout), the town's latest S3
  * routes.json, and its latest S4 routes.json. The comparison is the engine's own
  * `compareTiers()` from make-bus-leaflet/assets/poi_tiers_sync.js — one rule,
- * shared, including the pre-tier cull that makes an `industrial:*` key under
- * industrialKeep "none" unreachable rather than owed. A second copy of that rule
+ * shared, including the cull that makes a key that can change nothing — a `miss`
+ * for an estate while estates are off, or any key in a category the customer
+ * switched off (OA-517) — unreachable rather than owed. A second copy of that rule
  * here would be the shape *The second reader of a shape the engine already knew*.
  *
  * AND INCLUDING THE SECOND REASON A KEY CAN REACH NOTHING (OA-354, 2026-09-19).
@@ -109,7 +110,9 @@ export function landmarkAnswerItems({ maps, towns, readBlock, readTown, compareT
       const inc = switchDiff((town.poiCfg || {}).include, block.include, (town.poiCfg || {}).exclude);
       // The config AFTER the switch (OA-500): a tier on a category the same answer
       // switches on must not be culled as unreachable by the config before it.
-      const cfg = inc.owed ? { ...(town.poiCfg || {}), include: inc.to, exclude: inc.excludeTo } : (town.poiCfg || {});
+      // The customer's switch travels as given, owed or not (OA-517): it beats
+      // every tier, so a tier in a category they switched off is owed nothing.
+      const cfg = { ...(town.poiCfg || {}), ...(inc.owed ? { include: inc.to, exclude: inc.excludeTo } : {}), ...(inc.customerSwitch ? { customerSwitch: inc.customerSwitch } : {}) };
       const c = compare(town.s3Tiers || {}, block.tiers, cfg, dir, inc.owed ? inc.to : undefined);
       if (c.orphaned && c.orphaned.length) orphaned.push({ town: m.name, keys: c.orphaned.map((o) => o.key) });
       if (c.owed || inc.owed) {

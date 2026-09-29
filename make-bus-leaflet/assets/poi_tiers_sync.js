@@ -45,16 +45,18 @@
  * /poi-tiers returns that as `include`; it is carried into poi.include by
  * compareInclude() below, printed as its own block, and owed like a key.
  *
- * EXCEPT THE KEYS THE SELECTOR DROPS BEFORE TIERS EVER RUN. applyTiers() runs
- * after selection, so a key for a POI that selection has already removed matches
- * nothing and lands in report.unknownTierKeys — the build-time signal that means
- * "the customer believes their answer was applied and no sheet changed". With
- * `poi.industrialKeep: "none"` every `industrial:*` key is in that position, and
- * High Wycombe's 26 `miss` estates are exactly why the 2026-09-03 paste wrote
- * 145 keys and not 171. Those are reported as UNREACHABLE, counted, and not
- * written; a worklist comparing the two sides must apply the same rule or it
- * will raise a row nothing can ever clear. `unreachableKeys()` is that rule, in
- * one place, so both callers share it.
+ * EXCEPT THE KEYS THAT CAN CHANGE NOTHING. Two kinds since OA-517 (Peter's
+ * landmark precedence, 2026-09-29, in references/landmark-precedence.md): a key
+ * in a category the CUSTOMER has switched off, which no tier can bring back; and
+ * a `miss` in a category this town has off anyway, or on an estate under
+ * `poi.industrialKeep: "none"`, which leaves out a place the default already
+ * leaves out. High Wycombe's 26 `miss` estates are the second kind, and exactly
+ * why the 2026-09-03 paste wrote 145 keys and not 171. Those are reported as
+ * UNREACHABLE, counted, and not written; a worklist comparing the two sides must
+ * apply the same rule or it will raise a row nothing can ever clear.
+ * `unreachableKeys()` is that rule, in one place, so both callers share it.
+ * Before OA-517 a `must` or `may` in an off category was unreachable too; it
+ * is not any more, because a tier now beats the map's own switch.
  *
  * AND EXCEPT THE KEYS WHOSE SUBJECT HAS BEEN RE-IDENTIFIED SINCE THE ANSWER WAS
  * GIVEN (OA-354, 2026-09-19). A key is `<category>:<name>`, so a later
@@ -87,9 +89,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs } = require('./cli.js');
-const { selectPois, mergePoiOverlay, OPT_IN_CATS, categoryOn } = require('./poi_select.js');
-// A switchable category's name, against the POI category its keys carry.
-const SWITCH_CAT = { allotments: 'allotments', pubs: 'pub', stations: 'station', postoffices: 'postoffice', industrial: 'industrial' };
+const { selectPois, mergePoiOverlay, OPT_IN_CATS, CAT_SWITCH, categoryOn } = require('./poi_select.js');
 
 const STAGE_JS = path.join(__dirname, 'stage.js');
 
@@ -184,11 +184,14 @@ function townCandidateKeys(mapDir, include) {
  * The two reasons a stored key can reach no POI, split, in one place so that
  * every caller applies both.
  *
- *   culled    the selector drops it BEFORE applyTiers() runs — `industrial:*`
- *             under industrialKeep "none", and since OA-500 any key whose
- *             switchable category this town has switched off (a `pub:*` under
- *             poi.exclude ["pubs"], an `industrial:*` with estates off). Add a rule here when
- *             poi_select.js grows another pre-tier cull, and add its case to
+ *   culled    the key can change nothing (OA-517): its category is one the
+ *             CUSTOMER switched off (`poiCfg.customerSwitch`, which beats every
+ *             tier), or it is a `miss` for a place this town leaves out anyway —
+ *             a switchable category off here by poi.exclude or the engine
+ *             default, or an `industrial:*` under industrialKeep "none". A
+ *             `must` or `may` in a category that is off only by OUR config is
+ *             reachable, because a tier beats it. Add a rule here when
+ *             poi_select.js grows another reason, and add its case to
  *             test/poi_tiers_sync.test.js in the same commit.
  *   orphaned  the town has no candidate of that identity any more, because the
  *             POI it named has since been named, renamed or lost (OA-354). Each
@@ -203,9 +206,13 @@ function townCandidateKeys(mapDir, include) {
 function unreachableReasons(tiers, poiCfg, candidates) {
   const keys = Object.keys(tiers || {});
   const P = poiCfg || {};
-  const off = new Set(OPT_IN_CATS.filter((c) => !categoryOn(P, c)).map((c) => SWITCH_CAT[c]));
-  if (P.industrialKeep === 'none') off.add('industrial');
-  const culled = keys.filter((k) => off.has(k.slice(0, k.indexOf(':'))));
+  const cs = P.customerSwitch && typeof P.customerSwitch === 'object' ? P.customerSwitch : {};
+  const culled = keys.filter((k) => {
+    const cat = catOf(k), sw = CAT_SWITCH[cat];
+    if (sw && cs[sw] === false) return true;               // level 1: nothing brings it back
+    if (normRule(tiers[k]).tier !== 'miss') return false;  // level 2 beats our switch
+    return (!!sw && !categoryOn(P, sw)) || (cat === 'industrial' && P.industrialKeep === 'none');
+  });
   if (!candidates) return { culled, orphaned: [] };
   const have = new Set(candidates);
   const skip = new Set(culled);
@@ -293,6 +300,10 @@ function mergeTiers(sourceTiers, portalTiers, poiCfg, candidates) {
  *   on    categories the switch turns on;  off  categories it turns off —
  *         read through categoryOn(), so a pub switched on where pubs were
  *         already on by default is owed nothing
+ *   customerSwitch  the switch as the customer gave it, owed or not — the
+ *         caller hands it to compareTiers() so a tier in a category the
+ *         customer switched off is culled (OA-517: their switch beats every
+ *         tier, and once it is folded into poi.exclude it no longer would)
  *   owed  on or off is non-empty
  */
 function compareInclude(sourceInclude, portalSwitch, sourceExclude) {
@@ -305,7 +316,8 @@ function compareInclude(sourceInclude, portalSwitch, sourceExclude) {
   const after = { include: to, exclude: excludeTo };
   const on = OPT_IN_CATS.filter((c) => !categoryOn(before, c) && categoryOn(after, c));
   const off = OPT_IN_CATS.filter((c) => categoryOn(before, c) && !categoryOn(after, c));
-  return { from, to, excludeFrom, excludeTo, on, off, owed: on.length + off.length > 0 };
+  const customerSwitch = merged.customerSwitch || {};
+  return { from, to, excludeFrom, excludeTo, on, off, customerSwitch, owed: on.length + off.length > 0 };
 }
 
 /**
@@ -465,9 +477,10 @@ async function main() {
   // the town would have AFTER it, or a pub answer reads as orphaned (OA-439).
   const include = compareInclude(poiCfg.include, portalSwitch, poiCfg.exclude);
   const candidates = townCandidateKeys(info.dir, include.owed ? include.to : undefined);
-  // Tiers are judged against the config AFTER the switch (OA-500), or a tier on a
-  // category the same answer switches on is culled as unreachable.
-  const cfgAfter = include.owed ? { ...poiCfg, include: include.to, exclude: include.excludeTo } : poiCfg;
+  // Tiers are judged against the config AFTER the switch (OA-500), carrying the
+  // switch itself as the customer gave it (OA-517), or a tier in a category they
+  // switched off would be written into S3 and would beat it there.
+  const cfgAfter = { ...poiCfg, ...(include.owed ? { include: include.to, exclude: include.excludeTo } : {}), customerSwitch: include.customerSwitch };
   const cmp = { ...compareTiers(sourceTiers, portalTiers, cfgAfter, candidates), include };
   cmp.owed = cmp.owed || include.owed;
   if (args.json) { console.log(JSON.stringify({ town, source: info.rec.id, where, ...cmp }, null, 2)); return; }

@@ -345,8 +345,8 @@ const MUTATIONS = [
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'an unnamed industrial estate is kept, and prints the words "Industrial Estate" at nothing',
-    find: "    return !!(p.name && p.name!=='Industrial Estate');   // default: keep named estates",
-    to: "    return !!p.name;   // default: keep named estates" },
+    find: "  pois = pois.filter(p => p.cat!=='industrial' || !!(p.name && p.name!=='Industrial Estate'));",
+    to: "  pois = pois.filter(p => p.cat!=='industrial' || !!p.name);" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a green named literally "Park" survives, naming nothing',
@@ -359,9 +359,32 @@ const MUTATIONS = [
     to: "    for(const [re,to] of TIDY) p.name = p.name;" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'allotments stop being opt-in and appear on every town that has any',
-    find: "  if(on('allotments') && t.landuse==='allotments') return ['allotments', t.name||'Allotments'];",
-    to: "  if(t.landuse==='allotments') return ['allotments', t.name||'Allotments'];" },
+    what: 'a category that is off stops defaulting to miss, so allotments and estates appear on every town that has any',
+    find: "    return (!!sw && !categoryOn(POI, sw)) || (!!notKept && notKept.has(p));",
+    to: "    return (!!notKept && notKept.has(p));" },
+
+  /* buses-data OA-517, Peter's landmark precedence of 2026-09-29: the customer's
+   * switch, then a per-place tier, then the map's own switch, then the default.
+   * One mutation per edge of that order, each caught by its own OA-517 test. */
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a tier stops beating the map\'s switch, so High Wycombe Aldi loses Tannery Road Ind Est again',
+    find: "  const ruleFor = p => { const a = answer(p); return a ? rule(a.v) : defaultRule(p); };",
+    to: "  const ruleFor = p => { const a = answer(p); return offHere(p) ? { tier: 'miss', as: null } : a ? rule(a.v) : defaultRule(p); };" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the customer\'s OFF switch stops beating a tier, so a pub they switched off comes back on our must',
+    find: "      if(SW[CAT_SWITCH[c[0]]] === false) continue;\n",
+    to: "" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the customer\'s ON switch stops beating industrialKeep, so estates they asked for stay off',
+    find: "  if(SW.industrial !== true){",
+    to: "  if(true){" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'the customer\'s switch is folded into our exclude and not kept apart, so no tier can tell theirs from ours',
+    find: "    out.customerSwitch = Object.fromEntries(OPT_IN_CATS.filter((c) => typeof sw[c] === 'boolean').map((c) => [c, sw[c]]));\n",
+    to: "" },
 
   /* OA-500, the 28 September review. Default-on has to be switchable OFF, the
    * default-off categories have to stay off, and the four new always-drawn
@@ -434,14 +457,9 @@ const MUTATIONS = [
    * OA-238's nameless default, so a bare glyph nobody chose reaches the page
    * wearing a label to get past the rule that exists to stop it. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'pubs stop being switchable, so a town that switched them off still gets every pub it has',
-    find: "  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
-    to: "  if(t.amenity==='pub') return ['pub', t.name||''];" },
-
-  { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless pub falls back to the word "Pub", which walks it past the nameless-miss default',
-    find: "  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||''];",
-    to: "  if(on('pubs') && t.amenity==='pub') return ['pub', t.name||'Pub'];" },
+    find: "  if(t.amenity==='pub') return ['pub', t.name||''];",
+    to: "  if(t.amenity==='pub') return ['pub', t.name||'Pub'];" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a pub stops printing its name, so the category delivers a glass symbol and no Wetherspoon',
@@ -462,14 +480,9 @@ const MUTATIONS = [
    * the opt-in itself, the blank fallback, the miniature exclusion, the name,
    * the Key row and the glyph each have a mutation their own test must catch. */
   { suite: 'poi_select.test.js', file: 'poi_select.js',
-    what: 'stations stop being switchable, so a town that switched them off still gets its station',
-    find: "  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];",
-    to: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];" },
-
-  { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless station falls back to "Station", which walks it past the nameless-miss default',
-    find: "  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];",
-    to: "  if(on('stations') && (t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)||'Station'];" },
+    find: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)];",
+    to: "  if((t.railway==='station'||t.railway==='halt') && t.station!=='miniature') return ['station', stationName(t.name)||'Station'];" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a miniature park railway is drawn as a station',
@@ -517,9 +530,9 @@ const MUTATIONS = [
     to: '' },
 
   { suite: 'poi_pull_query.test.js', file: 'poi_select.js',
-    what: 'classify() gains an opt-in category that no pull asks for',
-    find: "  if(on('industrial') && t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];",
-    to: "  if(on('cafes') && t.amenity==='cafe') return ['cafe', t.name||''];\n  if(on('industrial') && t.landuse==='industrial') return ['industrial', t.name||'Industrial Estate'];" },
+    what: 'the engine gains a switchable category that no pull asks for',
+    find: "const OPT_IN_CATS = ['allotments', 'pubs', 'stations', 'postoffices', 'industrial'];",
+    to: "const OPT_IN_CATS = ['allotments', 'pubs', 'stations', 'postoffices', 'industrial', 'cafes'];" },
 
   /* poi_select.js OA-338, 2026-09-13. The three arms of sameThing() and the
    * label rule behind them. Two of these guard a THRESHOLD and one guards the
@@ -632,8 +645,8 @@ const MUTATIONS = [
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a nameless POI defaults to drawn again, so a bare glyph nobody chose takes a full 4.2mm box on three towns (OA-238)',
-    find: "  const defaultRule = p => ({ tier: noName(p) ? 'miss' : 'may', as: null });",
-    to: "  const defaultRule = p => ({ tier: 'may', as: null });" },
+    find: "  const defaultRule = p => ({ tier: noName(p) || offHere(p) ? 'miss' : 'may', as: null });",
+    to: "  const defaultRule = p => ({ tier: offHere(p) ? 'miss' : 'may', as: null });" },
 
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'two candidates sharing one key are not reported, which is the collision OA-234 made reachable and nothing downstream can hold',

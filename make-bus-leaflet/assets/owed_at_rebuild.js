@@ -30,14 +30,28 @@ const path = require('path');
  * maps carry and no town did on 2026-09-24. */
 const CASING = Object.freeze({ stroke: 2, gap: 2.6, skeletonPad: 0.9 });
 
+/* OA-074 exemptions, by Peter's ruling, keyed by the town's folder under `Areas/`. A town
+ * here keeps its own casing and is never told it owes Ely's.
+ *   St Ives (Peter, 2026-09-29): its hand-tuned stroke 1.7 / gap 2.8 stays. The v6.89 vs
+ *   v6.90 crop showed no visible gain from Ely's values, and Westfield Junior moved onto
+ *   the A/B ink and lost its A badge, and Houghton Road moved onto ink. */
+const CASING_EXEMPT = Object.freeze(new Set(['St Ives']));
+
 /* A place map lives under a `Places` folder, as engine_version.js's isPlaceRun has it. */
 const isPlace = (dir) => path.resolve(dir).split(/[\\/]+/).includes('Places');
 
+/* The town a town map is, when `mapDir` is `Areas/<Town>`; null for anything else. */
+function areaTown(mapDir) {
+  const p = path.resolve(mapDir);
+  return path.basename(path.dirname(p)) === 'Areas' ? path.basename(p) : null;
+}
+
 /** OA-074: a TOWN whose routes.json draws road casing without Ely's three values. A
  *  place is not asked (eleven carry it already); nor is a town with no
- *  `internalRoads` block, which draws no casing to change. */
+ *  `internalRoads` block, which draws no casing to change; nor a town Peter exempted. */
 function casingOwed(mapDir, RJ) {
   if (isPlace(mapDir)) return null;
+  if (CASING_EXEMPT.has(areaTown(mapDir))) return null;
   const IR = RJ && RJ.internalRoads;
   if (!IR || typeof IR !== 'object') return null;
   const off = Object.keys(CASING).filter((k) => IR[k] !== CASING[k]);
@@ -75,4 +89,4 @@ function owedLines(mapDir, RJ) {
   return [casingOwed(mapDir, RJ), paletteOwed(mapDir, RJ)].filter(Boolean);
 }
 
-module.exports = { owedLines, casingOwed, paletteOwed, CASING };
+module.exports = { owedLines, casingOwed, paletteOwed, CASING, CASING_EXEMPT };

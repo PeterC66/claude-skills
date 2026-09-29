@@ -49,6 +49,24 @@ test('OA-074 CONTROL: a town that has adopted all three, a town with no casing, 
   assert.strictEqual(casingOwed(place, { internalRoads: {} }), null, 'the ruling is for towns');
 });
 
+test('OA-074 exemption: Areas/St Ives keeps its hand-tuned casing and owes nothing (Peter, 2026-09-29)', () => {
+  const root = scratchDir('owed-exempt-');
+  const stIves = path.join(root, 'Areas', 'St Ives');
+  fs.mkdirSync(stIves, { recursive: true });
+  assert.strictEqual(casingOwed(stIves, { internalRoads: { stroke: 1.7, gap: 2.8 } }), null);
+  assert.deepStrictEqual(owedLines(stIves, { internalRoads: { stroke: 1.7, gap: 2.8 } }), []);
+});
+
+test('OA-074 exemption CONTROL: the exemption is St Ives\'s town folder, not the name anywhere else', () => {
+  const root = scratchDir('owed-exempt-');
+  const other = path.join(root, 'Areas', 'St Neots');
+  const notArea = path.join(root, 'Elsewhere', 'St Ives');
+  fs.mkdirSync(other, { recursive: true });
+  fs.mkdirSync(notArea, { recursive: true });
+  assert.match(casingOwed(other, { internalRoads: { stroke: 1.7, gap: 2.8 } }), /OA-074/);
+  assert.match(casingOwed(notArea, { internalRoads: { stroke: 1.7, gap: 2.8 } }), /OA-074/);
+});
+
 test('OA-082: a place whose colours differ from its town\'s owes the change, route by route', () => {
   const { place } = estate({ '12': '#4477AA', '66': '#228833' });
   const l = paletteOwed(place, { palette: { '12': '#EE6677', '66': '#228833' }, routeOrder: ['12', '66'] });

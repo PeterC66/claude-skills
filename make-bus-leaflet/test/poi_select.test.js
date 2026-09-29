@@ -1091,3 +1091,45 @@ test('OA-517: mergePoiOverlay keeps the customer\'s switch apart from our includ
   assert.ok(!categoryOn(out, 'pubs') && categoryOn(out, 'stations'));
   assert.strictEqual(mergePoiOverlay({ exclude: ['pubs'] }, {}).customerSwitch, undefined, 'our own exclude is not the customer\'s');
 });
+
+/* OA-522: an opt-in symbol gives way. Which categories do, and where one goes
+ * when its own spot is taken. The byte gate sees this only on the maps whose
+ * data happens to put a pub or a station on route ink today. */
+test('OA-522: every switchable category gives way, and no core category does', () => {
+  const { isOptInSymbol, SWITCH_CAT } = require('./_engine.js').load('poi_select.js');
+  for (const c of Object.values(SWITCH_CAT)) assert.ok(isOptInSymbol(c), c);
+  for (const c of ['shop', 'hospital', 'school', 'leisure', 'library', 'park', 'townhall']) assert.ok(!isOptInSymbol(c), c);
+  assert.ok(!isOptInSymbol('pubs'), 'the switch name is not a category');
+});
+
+test('OA-522: clearSpot keeps a free spot, moves to the NEAREST free one, and gives up past the reach', () => {
+  const { clearSpot, OPT_IN_REACH } = require('./_engine.js').load('poi_select.js');
+  assert.deepStrictEqual(clearSpot(10, 10, () => true), [10, 10], 'a clear spot is kept exactly');
+  // Everything within 2.5 mm is taken: the answer is on the 3 mm ring, due east first.
+  const at = clearSpot(10, 10, (x, y) => Math.hypot(x - 10, y - 10) > 2.5);
+  assert.ok(Math.abs(Math.hypot(at[0] - 10, at[1] - 10) - 3) < 1e-9, 'the nearest ring that is free');
+  assert.ok(Math.abs(at[0] - 13) < 1e-9 && Math.abs(at[1] - 10) < 1e-9, 'walked from due east');
+  // Only the west is free: found, not missed between candidates.
+  const west = clearSpot(10, 10, (x) => x < 8.5);
+  assert.ok(west && west[0] < 8.5);
+  assert.strictEqual(clearSpot(10, 10, (x, y) => Math.hypot(x - 10, y - 10) > OPT_IN_REACH + 0.5), null,
+    'nothing within the reach: left off, never carried further from its place');
+});
+
+test('OA-522: a hand-placed symbol and a must keep their spot; the rest are placed in order or left off', () => {
+  const { givesWay, placeOptInSymbols, optInNote } = require('./_engine.js').load('poi_select.js');
+  assert.ok(givesWay({ cat: 'pub' }, {}));
+  assert.ok(!givesWay({ cat: 'pub', tier: 'must' }, {}), 'a must is not overruled');
+  assert.ok(!givesWay({ cat: 'pub' }, { pos: { x: 1, y: 1 } }) && !givesWay({ cat: 'pub' }, { move: { dx: 1, dy: 0 } }), 'nor a hand placement');
+  assert.ok(!givesWay({ cat: 'shop' }, {}), 'a core symbol never gives way');
+  // Two pubs on the same spot: the first takes it, the second the nearest spot clear of the first.
+  const taken = [];
+  const free = (x, y) => !taken.some(([a, b]) => Math.hypot(a - x, b - y) < 3.9);
+  const placed = [];
+  const off = placeOptInSymbols([{ p: { name: 'A' }, t: { x: 0, y: 0 } }, { p: { name: 'B' }, t: { x: 0, y: 0 } }, { p: { name: 'C' }, t: { x: 50, y: 50 } }],
+    { free: (x, y) => free(x, y) && !(x > 40), place: (e, at) => { taken.push(at); placed.push(e.p.name); } });
+  assert.deepStrictEqual(placed, ['A', 'B']);
+  assert.deepStrictEqual(off.map(e => e.p.name), ['C'], 'no clear spot within the reach: left off and returned');
+  assert.strictEqual(optInNote([]), '', 'nothing left off, nothing said');
+  assert.match(optInNote(['Red Lion', 'The Acre']), /^poi: 2 opt-in symbols left off, .*: Red Lion, The Acre\.$/);
+});

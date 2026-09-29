@@ -333,6 +333,27 @@ const MUTATIONS = [
     find: "  if(!label || notToScale !== 'schematic') return label || null;",
     to: "  return label || null;" },
 
+  // buses-data OA-522: an opt-in symbol gives way to route ink, badges and other symbols.
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'only a pub gives way, so a railway station sits on the bundle over a route badge again (High Wycombe 104)',
+    find: "const isOptInSymbol = (cat) => Object.prototype.hasOwnProperty.call(CAT_SWITCH, cat);",
+    to: "const isOptInSymbol = (cat) => cat === 'pub';" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'an opt-in symbol whose own spot is clear is moved anyway',
+    find: "  if (free(x, y)) return [x, y];",
+    to: "" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'an opt-in symbol with no clear spot is carried a millimetre past its reach instead of being left off',
+    find: "for (let r = 1; r <= reach + 1e-9; r += 1) {",
+    to: "for (let r = 1; r <= reach + 1 + 1e-9; r += 1) {" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: "a customer's must pub is moved or left off like any other",
+    find: "const givesWay = (p, o) => isOptInSymbol(p.cat) && p.tier !== 'must' && !(o && (o.pos || o.move));",
+    to: "const givesWay = (p, o) => isOptInSymbol(p.cat) && !(o && (o.pos || o.move));" },
+
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'the same shop under two spellings stops collapsing, so Tesco and Tesco Extra print twice 39 m apart',
     find: "  if(x.includes(y) || y.includes(x)) return d < 60;",

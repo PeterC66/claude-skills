@@ -188,7 +188,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);   // see engine_paths.js: the metrics table follows the labeller
 const FONT = require(_from('font_metrics.js'));
 const LN = require(_dep('lane_normals.js'));
-const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride } = require(_dep('poi_select.js'));
+const { selectPois, placerIds, mergePoiOverlay, printsName, labelPriority, poiLabelOverride, culledAfterTiers, culledAfterTiersNote, poiOverride, givesWay, placeOptInSymbols, optInNote } = require(_dep('poi_select.js'));
 const { fitSet } = require(_dep('fit_set.js'));
 const { projection } = require(_dep('projection.js'));
 const { internalRoadsConfig } = require(_dep('internal_roads_config.js'));
@@ -933,10 +933,12 @@ function poiSite(p){
   if(inCore([x,y])){ poiCulled.set(k,'core'); return null; }   // coreBox: the centre is deliberately blank
   poiCulled.delete(k);
   const u=poiUid.get(p)||k, n=poiNudge.get(u); if(n){ x+=n[0]; y+=n[1]; }   // u: placer id (OA-250); n: spreadIcons
+  if(OPTIN_OFF.has(u)) return null;           // an opt-in symbol with no clear spot (OA-522)
   return {k,u,o,x,y};
 }
 const poiBox=new Map();                         // poi key -> its reserved icon box (design.reserveIcons)
 const poiNudge=new Map();                       // poi key -> [dx,dy] from spreadIcons
+const OPTIN_OFF=new Set(), BADGE_MARKS=[];      // OA-522: opt-in symbols left off; every badge noteBadge() drew
 /* WHY poiSite() REFUSED A POI, recorded above rather than re-derived (OA-250
  * item 2): a second function asking the same three questions would be free to
  * drift from them, which is why poiSite exists at all. Written on every call and
@@ -960,7 +962,7 @@ const poiCulled=new Map();                      // poi key -> 'hide' | 'frame' |
 function spreadIcons(){
   const S=[]; const cap=(DESIGN.spreadMax!=null?DESIGN.spreadMax:2.6);
   const sep=(DESIGN.iconMinSep!=null?DESIGN.iconMinSep:3.2);
-  for(const p of pois){ const s=poiSite(p); if(!s) continue;
+  for(const p of pois){ const s=poiSite(p); if(!s || givesWay(p,s.o)) continue;
     S.push({k:s.u, x0:s.x, y0:s.y, x:s.x, y:s.y, pinned:!!(s.o.pos||s.o.move)}); }
   for(let it=0; it<24; it++){
     let worst=0;
@@ -985,17 +987,29 @@ function spreadIcons(){
   }
 }
 function reserveIcons(){
-  for(const p of pois){ const s=poiSite(p); if(!s) continue;
-    const b=[s.x-POI_HALF, s.y-POI_HALF, s.x+POI_HALF, s.y+POI_HALF];
-    placed.push(b); iconBoxes.add(b); poiBox.set(s.u, b);
-    // v2 also wants every symbol as an ANCHOR, labelled or not: the placer costs a
-    // position that sits nearer someone else's symbol than its own, which is what
-    // stops a name reading as if it belongs to the thing next door.
-    // The anchor id must be the SAME id the label is queued under, or the placer
-    // reads a POI's own symbol as a foreign one sitting 0 mm away and charges the
-    // full ambiguity penalty to every candidate it has.
-    if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.u); }
-  }
+  for(const p of pois){ const s=poiSite(p); if(s && !givesWay(p,s.o)) reserveIcon(s); }
+}
+function reserveIcon(s){
+  const b=[s.x-POI_HALF, s.y-POI_HALF, s.x+POI_HALF, s.y+POI_HALF];
+  placed.push(b); iconBoxes.add(b); poiBox.set(s.u, b);
+  // v2 also wants every symbol as an ANCHOR, labelled or not: the placer costs a
+  // position that sits nearer someone else's symbol than its own, which is what
+  // stops a name reading as if it belongs to the thing next door.
+  // The anchor id must be the SAME id the label is queued under, or the placer
+  // reads a POI's own symbol as a foreign one sitting 0 mm away and charges the
+  // full ambiguity penalty to every candidate it has.
+  if(LAB){ LAB.block(b, 'icon'); LAB.anchor(s.x, s.y, 'poi:'+s.u); }
+}
+// OA-522: an opt-in symbol gives way, placed LAST and clear of route ink, badges and all reserved (poi_select.js).
+function placeOptIns(){
+  const mine=pois.map(p=>({p,t:poiSite(p)})).filter(e=>e.t && givesWay(e.p,e.t.o)); if(!mine.length) return '';
+  const pal=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase())), INK=new Labeller({ page:[W,H] }).stampSvg(s, st=>pal.has(st)).ink;
+  const free=(x,y)=>{ const b=[x-POI_HALF, y-POI_HALF, x+POI_HALF, y+POI_HALF]; return inFrame([x,y]) && !inCore([x,y]) && !overlapsRound(b)
+    && !INK.any([b[0]+0.3, b[1]+0.3, b[2]-0.3, b[3]-0.3]) && !BADGE_MARKS.some(m=>hit(b,[m.x-m.w, m.y-m.h, m.x+m.w, m.y+m.h])); };
+  const off=placeOptInSymbols(mine, { free, place:({p,t},at)=>{ const n=poiNudge.get(t.u)||[0,0];
+    poiNudge.set(t.u,[n[0]+at[0]-t.x, n[1]+at[1]-t.y]); reserveIcon(poiSite(p)); } });
+  for(const e of off) OPTIN_OFF.add(e.t.u);
+  return optInNote(off.map(e=>e.p.name||e.p.cat));
 }
 /* The `must` tier (poi.tiers — OA-202, and the key OA-066 had been waiting for).
  * Three things follow from a customer saying a place matters, and they are one
@@ -2139,7 +2153,7 @@ if(IR && TRIM){
   // `r` is the badge RADIUS this mark was drawn at — 2.6 in-town, 2.4 sprinkled,
   // 3.0 frame-cut — and it is what makes the test below exact rather than merely
   // conservative.
-  const noteBadge=(x,y,w,h,r)=>bboxes.push({x,y,w,h,r});
+  const noteBadge=(x,y,w,h,r)=>{ const m={x,y,w,h,r}; bboxes.push(m); BADGE_MARKS.push(m); };
   /* THE EXACT GAP BETWEEN TWO BADGE MARKS, which is the same arithmetic
    * quality_metrics.js scores by since 2026-08-28 (OA-060).
    *
@@ -2884,7 +2898,7 @@ for(const [road,as] of roads){
 }
 
 // POIs (on top of lines)
-pois.forEach(poiMark);
+{ const note=placeOptIns(); pois.forEach(poiMark); if(note) process.stderr.write(note+GUARD_NL); }
 
 // ---- map notes — drawn here, on top of the map; CLAIMED far above ----------
 // The layout, the wrap, the footer warning and the reservation all happened in the

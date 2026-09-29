@@ -300,18 +300,63 @@ const ALL_MAPS = (() => {
   ];
 })();
 
-/** The first map of this level whose ci-reference holds everything `needs` names. */
+/* WHICH ENGINE DREW THE PICKED MAP (buses-data OA-523, 2026-09-29). Since OA-430
+ * every map is gated against the engine it was BUILT with, and an engine change
+ * that moves ink leaves most of the estate behind it by design — one rebuild row
+ * per map, never a red. This harness had not heard: pickMap() took the first map
+ * in name order and ran the CURRENT generator over it, so the day claude-skills
+ * 25d4fae (#235) moved the town-centre square, Beaconsfield (drawn at b4f50d9)
+ * and High Wycombe Aldi (160a199) read CONTROL DIFF and the pin bump could not be
+ * pushed — though March and St Ives, both rebuilt on 25d4fae, were sitting there.
+ *
+ * So a target now PREFERS a map whose recorded engine hash is the one this
+ * checkout computes, which keeps the strong form of the question — the engine
+ * being pinned reproduces a real sheet — wherever the estate can answer it. Where
+ * no map of that kind exists yet (Aldi was the only place schematic), the first
+ * map is gated under ITS OWN engine commit, checked out by the same
+ * engineDirForCommit() the board uses and verified against the recorded hash;
+ * that still proves the byte gate goes red for that sheet type, and the row says
+ * which engine it ran. A map with no usable engine of its own is a FAILURE, never
+ * a quiet fall-back to the current generator. */
+const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(ASSETS, 'engine_version.js'));
+const { engineDirForCommit, skillsRootFor } = require(path.join(ASSETS, 'engine_commit.js'));
+const ENGINE_NOW = { area: computeEngineVersion(ASSETS), place: computePlaceEngineVersion(ASSETS) };
+const stampOf = (m) => {
+  try { return JSON.parse(fs.readFileSync(path.join(m.dir, 'ci-reference', 'routes.json'), 'utf8')); } catch { return {}; }
+};
+
+/** The map of this level whose ci-reference holds everything `needs` names —
+ *  one drawn by this checkout's engine if there is one, else the first. */
 function pickMap(t) {
-  return ALL_MAPS.find((m) => m.level === t.level
-    && (t.needs || []).every((f) => fs.existsSync(path.join(m.dir, 'ci-reference', f)))) || null;
+  const fits = ALL_MAPS.filter((m) => m.level === t.level
+    && (t.needs || []).every((f) => fs.existsSync(path.join(m.dir, 'ci-reference', f))));
+  const atNow = fits.find((m) => stampOf(m).engine === ENGINE_NOW[m.level]);
+  return atNow ? { ...atNow, own: null } : (fits[0] ? { ...fits[0], own: stampOf(fits[0]) } : null);
+}
+
+/** The assets folder to gate the picked map with: this checkout's, or the map's own. */
+function engineFor(picked) {
+  if (!picked.own) return { dir: ASSETS };
+  const { engine, engineCommit } = picked.own;
+  if (!engineCommit) return { error: `${picked.name} was not drawn by engine ${ENGINE_NOW[picked.level]} and its routes.json records no \`engineCommit\` to gate it under instead` };
+  const r = engineDirForCommit({ skillsRoot: skillsRootFor(ASSETS), commit: engineCommit, expect: engine,
+    place: picked.level === 'place', scratchDir });
+  return r.error ? { error: `${picked.name}'s own engine ${engineCommit.slice(0, 7)}: ${r.error}` } : { dir: r.dir, commit: engineCommit };
 }
 
 for (const t of TARGETS) {
-  const genPath = path.join(ASSETS, t.gen);
   const picked = pickMap(t);
+  const eng = picked ? engineFor(picked) : { dir: ASSETS };
+  const genPath = path.join(eng.dir || ASSETS, t.gen);
   const data = picked && path.join(picked.dir, 'ci-reference');
   const committed = data && path.join(data, outName(t));
-  const label = `${t.sheet.padEnd(24)} ${picked ? picked.name : '(no map)'}`;
+  const label = `${t.sheet.padEnd(24)} ${picked ? picked.name : '(no map)'}`
+    + (eng.commit ? ` [own engine ${eng.commit.slice(0, 7)}]` : '');
+  if (picked && eng.error && !t.parked) {
+    rows.push([label, 'NO ENGINE', eng.error]);
+    failures++;
+    continue;
+  }
   /* NO MAP AT ALL is a different fact from a parked sheet, and only the target's
    * own `parked` line may excuse it — so the parked branch below gets first
    * refusal, and anything else is a failure naming what it looked for. */
@@ -341,7 +386,7 @@ for (const t of TARGETS) {
   }
 
   // Control: the real generator must reproduce the committed sheet.
-  const ctl = gate(genPath, data, outName(t), committed, t.opts || {});
+  const ctl = gate(genPath, data, outName(t), committed, { ...(t.opts || {}), engineDir: eng.dir || ASSETS });
   if (ctl.status !== 'PASS') {
     rows.push([label, 'CONTROL ' + ctl.status,
       'the unmutated generator does not reproduce this sheet, so a red from the '
@@ -357,7 +402,7 @@ for (const t of TARGETS) {
     failures++;
     continue;
   }
-  const mut = gate(m.dest, data, outName(t), committed, t.opts || {});
+  const mut = gate(m.dest, data, outName(t), committed, { ...(t.opts || {}), engineDir: eng.dir || ASSETS });
   if (mut.status === 'PASS') {
     rows.push([label, 'SURVIVED', `gate stayed green while ${t.what}`]);
     failures++;

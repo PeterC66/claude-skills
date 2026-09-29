@@ -4,12 +4,12 @@
   "files": {
     "../bus-work/assets/worklist.mjs": 1625,
     "../make-place-bus-leaflet/assets/gen_external_places.js": 1133,
-    "assets/diagram_internal.js": 991,
+    "assets/diagram_internal.js": 989,
     "assets/gen_boarding.js": 1499,
     "assets/gen_external_radial.js": 1101,
     "assets/gen_internal.js": 3404,
     "assets/quality_metrics.js": 1917,
-    "assets/schematize_internal.js": 818,
+    "assets/schematize_internal.js": 815,
     "assets/stage.js": 1156,
     "assets/status.js": 1755,
     "assets/verify_report.js": 1725

@@ -45,7 +45,7 @@ const _EP = (() => { const local = path.join(__dirname, 'engine_paths.js');
   const across = path.join(__dirname, '..', '..', 'make-bus-leaflet', 'assets', 'engine_paths.js');
   try { if (fs.existsSync(across)) return across; } catch (e) {}
   return 'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/engine_paths.js'; })();
-const { engineDep, spawnTarget } = require(_EP);
+const { engineDep, spawnTarget, copyWorkspaceInputs } = require(_EP);
 const _dep = engineDep(__dirname);
 // The projection, the internalRoads reading and esc are the ENGINE's, not copies
 // (OA-230, 2026-09-02); resolved the way every entry point resolves a sibling.
@@ -760,6 +760,7 @@ const keepStops = new Set(DG.stops.include);
 const WD = path.join(DIR, DG.workDir);
 fs.mkdirSync(WD, { recursive: true });
 const wjson = (f, o) => fs.writeFileSync(path.join(WD, f), JSON.stringify(o));
+copyWorkspaceInputs(DIR, WD);   // every input, FIRST, so the warped files below overwrite theirs (OA-491)
 
 {
   const out = { routes: {}, edgeWay: RP.edgeWay };
@@ -843,9 +844,6 @@ for (const f of ['osm.json', 'osm2.json']) {
     if (e.center) { const q = INV(poiPlace(XY([e.center.lat, e.center.lon]))); e.center.lat = rll(q[0]); e.center.lon = rll(q[1]); }
   }
   wjson(f, o);
-}
-for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'river_geo.json', 'journey_weights.json']) { // journey_weights: the panel's minority note (buses-data OA-452)
-  try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { }
 }
 // diagram-overrides.json (S3-owned, optional) -> the WORKSPACE overrides.json:
 // Tier-1 hand layout for the DIAGRAM only (POI nudges, label moves, hides) in

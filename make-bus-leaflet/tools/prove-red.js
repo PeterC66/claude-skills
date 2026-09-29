@@ -2424,6 +2424,36 @@ const MUTATIONS = [
     find: "  IR: Object.assign({}, IR, { lenses: undefined }),      // the copy had no lens support",
     to: "  IR: IR,      // the copy had no lens support" },
 
+  // The workspace copy (buses-data OA-491): every run-folder json arrives by default.
+  // The first three put a hand-kept list back, in the shared helper or in either
+  // caller — the shape that lost overrides.json, unplaced.json and journey_weights.json
+  // in turn; the last two let a stale OUTPUT of the previous build, or the geographic
+  // overrides, into the workspace, where they read as this run's.
+  { suite: 'workspace_inputs.test.js', file: 'engine_paths.js',
+    what: 'the shared workspace copy goes back to a named list, and a new input is dropped until someone notices',
+    find: "    if (!f.endsWith('.json') || NOT_INPUTS.has(f) || !fs.statSync(path.join(runDir, f)).isFile()) continue;",
+    to: "    if (!['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'river_geo.json', 'journey_weights.json'].includes(f) || NOT_INPUTS.has(f)) continue;" },
+
+  { suite: 'workspace_inputs.test.js', file: 'schematize_internal.js',
+    what: 'the schematic stops calling the shared copy and grows its own list back',
+    find: "copyWorkspaceInputs(DIR, WD);   // every input, FIRST, so the warped files below overwrite theirs (OA-491)",
+    to: "for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'journey_weights.json']) { try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { } }" },
+
+  { suite: 'workspace_inputs.test.js', file: 'diagram_internal.js',
+    what: 'the diagram stops calling the shared copy and grows its own list back',
+    find: "copyWorkspaceInputs(DIR, WD);   // every input, FIRST, so the warped files below overwrite theirs (OA-491)",
+    to: "for (const f of ['atco2name.json', 'routes_intown_atco.json', 'intown_cfg.json', 'river_geo.json', 'journey_weights.json']) { try { fs.copyFileSync(path.join(DIR, f), path.join(WD, f)); } catch (e) { } }" },
+
+  { suite: 'workspace_inputs.test.js', file: 'engine_paths.js',
+    what: 'the last build\'s unplaced.json is copied into the workspace and carried out as this run\'s drop report',
+    find: "const NOT_INPUTS = new Set(['overrides.json', 'unplaced.json', ",
+    to: "const NOT_INPUTS = new Set(['overrides.json', " },
+
+  { suite: 'workspace_inputs.test.js', file: 'engine_paths.js',
+    what: 'the geographic overrides.json reaches the workspaces, whose coordinates it does not share',
+    find: "const NOT_INPUTS = new Set(['overrides.json', 'unplaced.json', ",
+    to: "const NOT_INPUTS = new Set(['unplaced.json', " },
+
   { suite: 'pre_stages.test.js', file: 'projection.js',
     what: 'the fit margin default changes, and the pre-stages — which pass none — would lay every schematic out in a different frame',
     find: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:4) : 0;",

@@ -94,8 +94,8 @@
       "tokens": ["NE", "NW", "SE", "SW", "SSW", "NNE", "NNW", "SSE", "ENE", "ESE", "WNW", "WSW"]
     },
     {
-      "reason": "a filename, a proper noun, or a literal string an artefact prints -- caught by the letters rule only because we write it in capitals. PILOT is the banner text on an unpublished sheet (\"PILOT — SAMPLE MAP\"); README is a filename.",
-      "tokens": ["README", "CLAUDE", "PETER", "OK", "PILOT", "BST", "HW"]
+      "reason": "a filename, a proper noun, or a literal string an artefact prints -- caught by the letters rule only because we write it in capitals. PILOT is the banner text on an unpublished sheet (\"PILOT — SAMPLE MAP\"); README is a filename. ZIP is a route: Dews Coaches' Ely Zipper.",
+      "tokens": ["README", "CLAUDE", "PETER", "OK", "PILOT", "BST", "HW", "ZIP"]
     },
     {
       "reason": "ordinary English that our house style shouts, or a verdict token a tool prints in capitals -- REUSE and BUY are redteam_source.js's two answers, PARKED is a status. The checker's lower-case-count rule catches this class in a 301-document corpus and is weaker in a 45-document one, which is why they are declared here rather than left to it.",

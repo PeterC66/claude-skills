@@ -1166,23 +1166,23 @@
 <text x="70.00" y="166.40" font-family="Arial" font-size="2.4" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">RGS02A / B / C → Royal Grammar School, High Wycombe</text>
 <text x="70.00" y="170.40" font-family="Arial" font-size="2.4" font-style="italic" fill="#555" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">CCC1/2, DCG1, DCH1/2 → Chalfonts &amp; Dr Challoner's</text>
 <text x="9.00" y="35.00" font-family="Arial" font-style="italic" font-size="2.4" fill="#555">Simplified — not to scale</text>
-<path d="M144.40 151.91L145.81 151.91" stroke="#478ea6" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M144.00 151.91L145.81 151.91" stroke="#478ea6" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="146.26" y="153.82" font-family="Arial" font-size="2.7" fill="#478ea6" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Slough</text>
-<path d="M157.08 173.91L158.49 173.91" stroke="#478ea6" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M156.68 173.91L158.49 173.91" stroke="#478ea6" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="158.94" y="175.82" font-family="Arial" font-size="2.7" fill="#478ea6" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
-<path d="M149.88 180.91L148.47 180.91" stroke="#228833" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M150.28 180.91L148.47 180.91" stroke="#228833" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="148.02" y="182.82" font-family="Arial" font-size="2.7" fill="#228833" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Slough &amp; Windsor</text>
-<path d="M161.65 29.93L161.65 29.09" stroke="#ce672c" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M161.65 30.33L161.65 29.09" stroke="#ce672c" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="161.65" y="28.07" font-family="Arial" font-size="2.7" fill="#ce672c" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Holtspur &amp; Loudwater</text>
-<path d="M87.55 95.23L94.90 95.57" stroke="#4477AA" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M90.75 95.38L94.90 95.57" stroke="#4477AA" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="95.35" y="97.96" font-family="Arial" font-size="2.7" fill="#4477AA" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
-<path d="M84.01 43.35L79.00 39.73" stroke="#AA3377" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M80.81 41.03L79.00 39.73" stroke="#AA3377" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="78.55" y="38.70" font-family="Arial" font-size="2.7" fill="#AA3377" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Amersham</text>
-<path d="M39.94 153.72L34.93 158.43" stroke="#111" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M35.48 156.92L34.93 158.43" stroke="#111" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="34.48" y="160.81" font-family="Arial" font-size="2.7" fill="#111" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
-<path d="M145.82 37.13L147.00 38.25" stroke="#8e822f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M145.19 36.55L147.00 38.25" stroke="#8e822f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="147.45" y="40.63" font-family="Arial" font-size="2.7" fill="#8e822f" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Gerrards Cross &amp; Uxbridge</text>
-<path d="M180.65 91.36L175.64 87.74" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M177.45 89.05L175.64 87.74" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="175.19" y="86.72" font-family="Arial" font-size="2.7" fill="#dd5f6f" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Gerrards Cross &amp; Heathrow</text>
 <path d="M79.17 106.02L76.33 108.78" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="75.88" y="111.02" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">The Beaconsfield</text>

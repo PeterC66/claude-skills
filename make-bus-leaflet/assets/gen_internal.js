@@ -2439,10 +2439,10 @@ if(IR && TRIM){
     }
     aplaced.push([bx,by]);
     let bxMin=Infinity,bxMax=-Infinity,byMin=Infinity,byMax=-Infinity;
-    const pendingTermini=[];
+    const pendingTermini=[], clusterMarks=[];
     groups.forEach((g,gidx)=>{
       const ry=by+(gidx-(groups.length-1)/2)*RH;
-      let lastX=bx;
+      let lastX=bx; const rowMarks=[];
       g.ms.forEach((m,i)=>{ const bxi=bx+(i-(g.ms.length-1)/2)*BSx; badge(bxi,ry,m.r,3.0); lastX=bxi;
         // REGISTERED, as of 2026-08-28 (OA-147). Until now this pass drew badges and
         // told `bboxes` nothing, so the two passes that read that register — the
@@ -2451,7 +2451,7 @@ if(IR && TRIM){
         // Five of the seven badge overprints left on the internal sheets were one
         // 3.0mm frame-cut badge under one 2.6mm in-town one, including St Neots'
         // diagram where two of them share a centre EXACTLY.
-        noteBadge(bxi,ry,3.0+CXW,3.0,3.0);
+        noteBadge(bxi,ry,3.0+CXW,3.0,3.0); { const mk=[bxi-3.2-CXW,ry-3.2,bxi+3.2+CXW,ry+3.2]; clusterMarks.push(mk); rowMarks.push(mk); } // OA-302: ownMarks / leaderFrom, see labeller.js
         bxMin=Math.min(bxMin,bxi); bxMax=Math.max(bxMax,bxi); byMin=Math.min(byMin,ry); byMax=Math.max(byMax,ry); });
       if(!g.label) return;
       // A "to X" shared by 2+ differently-coloured routes (e.g. 18 + 905 both to
@@ -2506,7 +2506,7 @@ if(IR && TRIM){
            * the wrong place, not a way of getting it to the right one. */
           const only = DESIGN.exitDevice ? inboardKeys(-dx,-dy) : null;
           pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
-            at:[(rx0+rx1)/2, ry], text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
+            at:[(rx0+rx1)/2, ry], leaderFrom:rowMarks, text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
             ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:{}),
             ...(only?{only, leader:false}:{}) });
           return;
@@ -2531,7 +2531,7 @@ if(IR && TRIM){
     // ribbon (3 -> 5 defects); left alone, one of them keeps a clean spot (3 -> 4)
     // and neither is dropped, because both are mustPlace.
     if(LAB) for(const t of pendingTermini)
-      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6]}, t));
+      LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6], ownMarks:clusterMarks}, t));
   }
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;

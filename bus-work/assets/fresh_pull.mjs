@@ -138,6 +138,16 @@ export function freshPullItems({ towns, places = [], currentQuery, readRecorded,
   return { items, owed, warning: null };
 }
 
+/**
+ * The `s2` a worklist tree row carries, from gate_lib's latestRunDir() answer:
+ * {id, dir, hasPois} or null. hasPois, because an S2 with no osm.json has no pull
+ * to replace and repull_landmarks.py refuses it. Here rather than in worklist.mjs,
+ * which the line ratchet holds at its ceiling.
+ */
+export function s2Row(s2) {
+  return s2 ? { id: s2.rec.id, dir: s2.dir, hasPois: existsSync(path.join(s2.dir, 'osm.json')) } : null;
+}
+
 /** pois_query()'s source from the engine folder, or null. */
 export function readCurrentQuery(sk) {
   const f = sk ? path.join(sk, 'draft_town.py') : null;

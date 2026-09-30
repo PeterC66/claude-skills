@@ -80,7 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
-import { freshPullItems, readCurrentQuery, readRecordedQuery } from './fresh_pull.mjs';
+import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';
@@ -369,9 +369,7 @@ function fromMapTree() {
     row.s6 = s6 ? s6.rec.id : null;
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
-    // OA-499: the landmark query that run sent is read by fresh_pull.mjs.
-    const s2 = latestRunDir(m, t.dir, 'S2');
-    row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir } : null;
+    row.s2 = s2Row(latestRunDir(m, t.dir, 'S2')); // OA-499: its landmark query is read by fresh_pull.mjs
     return row;
   });
   /*
@@ -407,10 +405,7 @@ function fromMapTree() {
     // A standalone place has no parent town to borrow an answer from, so its S6
     // is the only blind answer it will ever have.
     row.standalone = !p.town;
-    // OA-499 item 2: a place's landmark pull is read by fresh_pull.mjs as a town's
-    // is; hasPois, because a place S2 with no osm.json has no pull to replace.
-    const s2 = latestRunDir(m, p.dir, 'S2');
-    row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir, hasPois: existsSync(path.join(s2.dir, 'osm.json')) } : null;
+    row.s2 = s2Row(latestRunDir(m, p.dir, 'S2')); // OA-499 item 2: a place's pull is read as a town's is
     // WHICH ENGINE DREW IT, asked of a place for the first time (OA-430). The
     // town branch has had these two lines since the hash existed; this one
     // stopped at "is it built", so eleven of the twelve places were behind for

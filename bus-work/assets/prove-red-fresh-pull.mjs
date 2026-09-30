@@ -17,9 +17,10 @@
  * literal string, for the reason *The harness that stopped at the module's edge*.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { freshPullItems, queryTokens, poisQuerySource, readCurrentQuery } from './fresh_pull.mjs';
+import { freshPullItems, queryTokens, poisQuerySource, readCurrentQuery, s2Row } from './fresh_pull.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -102,13 +103,20 @@ console.log('4. the real draft_town.py');
 console.log('5. the wire');
 {
   const wl = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  check('worklist imports fresh_pull.mjs', wl.includes("import { freshPullItems, readCurrentQuery, readRecordedQuery } from './fresh_pull.mjs';"));
+  check('worklist imports fresh_pull.mjs', wl.includes("import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';"));
   check('worklist calls freshPullItems with towns and places', wl.includes('const freshPull = freshPullItems({ towns: tree.towns, places: tree.places || [], currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery'));
-  check('the place row carries its latest S2 and whether it holds a pull', wl.includes("row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir, hasPois: existsSync(path.join(s2.dir, 'osm.json')) } : null;"));
+  check('the place row carries its latest S2', wl.includes("row.s2 = s2Row(latestRunDir(m, p.dir, 'S2'));"));
   check('a place rebuild row names its pull too', wl.includes('+ (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old'));
   check('worklist adds the rows', wl.includes('for (const it of freshPull.items) add(it);'));
   check('worklist reports a blind check', wl.includes('if (freshPull.warning) warnings.push(freshPull.warning);'));
-  check('the tree row carries its latest S2', wl.includes("row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir } : null;"));
+  check('the tree row carries its latest S2', wl.includes("row.s2 = s2Row(latestRunDir(m, t.dir, 'S2'));"));
+  {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'fresh-pull-'));
+    const bare = s2Row({ rec: { id: 'x' }, dir: d });
+    fs.writeFileSync(path.join(d, 'osm.json'), '{"elements":[]}');
+    check('s2Row says whether the S2 holds a pull', bare.hasPois === false && s2Row({ rec: { id: 'x' }, dir: d }).hasPois === true && s2Row(null) === null);
+    fs.rmSync(d, { recursive: true, force: true });
+  }
   check('the rebuild row names the pull', wl.includes('take fresh-pull-${mapRow.name} first'));
   const needs = needsOf({ key: 'fresh-pull-Alpha', type: 'housekeeping' });
   check('fresh-pull needs buses-tree, buses-maps and engine', ['buses-tree', 'buses-maps', 'engine'].every((n) => needs.includes(n)), JSON.stringify(needs));

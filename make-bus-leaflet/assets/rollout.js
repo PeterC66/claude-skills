@@ -19,7 +19,7 @@
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
  *                    [--note "..."] [--apply] [--force | --rebuild-stale]
- *                    [--buses "<dir>"] [--by <who>] [--warnings] [--json "<file>"] [--help]
+ *                    [--buses "<dir>"] [--by <who>] [--warnings] [--keep "<dir>"] [--json "<file>"] [--help]
  *
  * `--json <file>` also writes the result as JSON — one verdict per map, clean,
  * regressed or unmeasured — for the weekly shadow rebuild (buses-data OA-485); the
@@ -80,7 +80,7 @@ const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
-const { jsonTarget, writeReport, hardDefects } = require('./rollout_report');
+const { jsonTarget, writeReport, hardDefects, keptDirOf } = require('./rollout_report');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 const { fixtureDonor } = require('./fixture_donor');
 // One value for the whole run, computed once, exactly as status.js does — the
@@ -113,10 +113,10 @@ const S3_CARRY = ['routes.json', 'overrides.json'];
 
 const USAGE = 'Usage: node rollout.js [--town "<Town name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
   '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
-  '         [--json "<file>"]\n' +
+  '         [--keep "<dir>"] [--json "<file>"]\n' +
   '  Dry run unless --apply. No --town: consider EVERY town.';
 const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
-  'warnings', 'json', 'help']);
+  'warnings', 'keep', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
 {
@@ -141,6 +141,11 @@ const NOTE = args.note || 'rollout: adopt current engine template (auto)';
 // WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
 // stage.js is the one authority on what a name may be, so a bad one fails there.
 const BY = byArgs(args.by);
+// --keep <dir>: dry run only, as in rollout_places.js. Copy each town's built sheets
+// out before the scratch workspace is deleted, so they can be measured and LOOKED AT
+// rather than judged from the label-set diff alone — shadow_rebuild.mjs crops them
+// (buses-data OA-485 item 2). Ignored with --apply (the sheets go to S4 anyway).
+const KEEP = typeof args.keep === 'string' ? args.keep : null;
 
 const STAGE_JS = path.join(SK, 'stage.js');
 function stage(cwd, ...cmdArgs) {
@@ -408,8 +413,16 @@ function rolloutOne(t) {
   }
 
   if (!APPLY) {
+    if (KEEP) {
+      const dest = keptDirOf(KEEP, t.name);
+      fs.mkdirSync(dest, { recursive: true });
+      for (const name of fs.readdirSync(s4)) {
+        const fp = path.join(s4, name);
+        if (!fs.statSync(fp).isDirectory()) fs.copyFileSync(fp, path.join(dest, name));
+      }
+    }
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: t.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version };
+    return { name: t.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null, shipped: prevS4.dir };
   }
 
   // A lost label stops the rollout BEFORE anything is written -- see the same

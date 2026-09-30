@@ -120,3 +120,13 @@ for (const script of ['rollout.js', 'rollout_places.js']) {
     assert.doesNotMatch(r.stdout, /DRY RUN/);
   });
 }
+
+test('a kept dry run names where its built and shipped sheets are (OA-485 item 2)', () => {
+  const { keptDirOf } = load('rollout_report.js');
+  const r = { name: 'St Neots Co-op', status: 'DRY-RUN', diffs: { 'internal.svg': diff(), 'external.svg': diff() }, kept: 'k', shipped: '/s4' };
+  const m = summarise([r], { kind: 'place', engine: 'e', apply: false }).maps[0];
+  assert.deepStrictEqual(m.kept, { built: keptDirOf('k', 'St Neots Co-op'), shipped: '/s4', sheets: ['internal.svg', 'external.svg'] });
+  assert.strictEqual(path.basename(m.kept.built), 'St_Neots_Co_op');
+  const bare = summarise([{ ...r, kept: null }], { kind: 'place', engine: 'e', apply: false }).maps[0];
+  assert.strictEqual(bare.kept, undefined, 'no --keep, no kept field');
+});

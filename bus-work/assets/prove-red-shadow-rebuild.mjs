@@ -135,6 +135,92 @@ console.log('\nControls — an answer, including a regression, is stamped:\n');
     + (code === 0 && s ? '' : `  <-- exited ${code}\n${out}${err}`), 'GREEN');
 }
 
+/* THE VISUAL DIFF (OA-485 item 2). A regressed map's kept sheets are cropped with the
+ * build stamp neutralised on both sides; a sheet whose only change IS the stamp is
+ * `unchanged` and not cropped; a clean map is never cropped; last week's crops are
+ * emptied; and a missing crop tool is a note on the sheet, never a refusal. The crop
+ * tool is a stub that logs what it was handed, so the stamp test reads its INPUTS. */
+console.log('\nThe visual diff — a regressed map gets a picture, the stamp is set aside:\n');
+
+const cropStub = `
+const fs = require('fs'), path = require('path');
+const a = process.argv.slice(2);
+fs.appendFileSync(path.join(__dirname, 'crop.log'), JSON.stringify({ argv: a, old: fs.readFileSync(a[0], 'utf8'), neu: fs.readFileSync(a[1], 'utf8') }) + '\\n');
+const pair = a[2] + '_1_pair.png';
+fs.writeFileSync(pair, 'png');
+console.log(JSON.stringify({ spots: [{ x: 1, y: 1 }], pairs: [pair] }));
+`;
+function visualFixture({ withTool }) {
+  const regressedMap = (dir) => ({
+    name: 'Old Town', status: 'DRY-RUN', verdict: 'regressed', lost: 1,
+    kept: { built: path.join(dir, 'kept', 'Old_Town'), shipped: path.join(dir, 'shipped'), sheets: ['internal.svg', 'external.svg'] },
+  });
+  const f = fixture({ towns: stub({ json: {} }), places: stub({ json: CLEAN_P }) });
+  const sheet = (stampText, ink) => `<svg><text>build ${stampText}</text><path d="${ink}"/></svg>`;
+  fs.mkdirSync(path.join(f.dir, 'shipped'), { recursive: true });
+  fs.mkdirSync(path.join(f.dir, 'kept', 'Old_Town'), { recursive: true });
+  fs.writeFileSync(path.join(f.dir, 'shipped', 'internal.svg'), sheet('1.2 · 3 Sep 2026', 'M0 0'));
+  fs.writeFileSync(path.join(f.dir, 'kept', 'Old_Town', 'internal.svg'), sheet('1.3 · 30 Sep 2026', 'M9 9'));
+  fs.writeFileSync(path.join(f.dir, 'shipped', 'external.svg'), sheet('1.2 · 3 Sep 2026', 'M5 5'));
+  fs.writeFileSync(path.join(f.dir, 'kept', 'Old_Town', 'external.svg'), sheet('1.3 · 30 Sep 2026', 'M5 5'));
+  const towns = report('rollout.js', { clean: 1, regressed: 1, unmeasured: 0 }, {
+    maps: [regressedMap(f.dir), { name: 'Fine', status: 'DRY-RUN', verdict: 'clean', kept: { built: f.dir, shipped: f.dir, sheets: ['internal.svg'] } }],
+  });
+  fs.writeFileSync(path.join(f.engine, 'rollout.js'), stub({ json: towns, code: 1 }), 'utf8');
+  if (withTool) fs.writeFileSync(path.join(f.engine, 'crop_compare.js'), cropStub, 'utf8');
+  const crops = path.join(path.dirname(f.stamp), 'shadow-rebuild-crops');
+  fs.mkdirSync(crops, { recursive: true });
+  fs.writeFileSync(path.join(crops, 'last-week_pair.png'), 'old');
+  return { ...f, crops };
+}
+
+{
+  const f = visualFixture({ withTool: true });
+  const { code, out, err } = run(f);
+  const s = fs.existsSync(f.stamp) ? JSON.parse(fs.readFileSync(f.stamp, 'utf8')) : null;
+  const log = fs.existsSync(path.join(f.engine, 'crop.log'))
+    ? fs.readFileSync(path.join(f.engine, 'crop.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
+  const argv = fs.readFileSync(path.join(f.engine, 'argv.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const staleGone = !fs.existsSync(path.join(f.crops, 'last-week_pair.png'));
+  const pictured = fs.readdirSync(f.crops);
+  fs.rmSync(f.dir, { recursive: true, force: true });
+  const m = s && s.towns.maps.find((x) => x.name === 'Old Town');
+  const fine = s && s.towns.maps.find((x) => x.name === 'Fine');
+  say(argv.every((a) => a.includes('--keep')), 'each rollout was asked to --keep its built sheets', 'GREEN');
+  say(code === 0 && m && m.visual && m.visual['internal.svg'] && (m.visual['internal.svg'].pairs || []).length === 1 && pictured.length === 1,
+    'the regressed sheet whose ink moved is cropped, its pair named in the stamp'
+    + (m && m.visual ? '' : `  <-- exited ${code}\n${out}${err}`));
+  say(m && m.visual && m.visual['external.svg'] && m.visual['external.svg'].unchanged === true && log.length === 1,
+    'a sheet whose only difference is the build stamp is unchanged and not cropped'
+    + (log.length === 1 ? '' : `  <-- crop tool ran ${log.length} time(s)`));
+  say(log.length === 1 && !/build 1\.[23] ·/.test(log[0].old + log[0].neu) && log[0].argv.includes('--diff'),
+    'the crop tool is handed both sheets with the build stamp neutralised, and --diff');
+  say(fine && !fine.visual, 'a clean map is never cropped');
+  say(staleGone, "last week's crops are emptied before this week's are written");
+  say(/Old Town/.test(out) && /1 crop\(s\) where the ink moved/.test(out), 'the console names the pictured sheet', 'GREEN');
+}
+
+{
+  const f = visualFixture({ withTool: false });
+  const { code, out, err } = run(f);
+  const s = fs.existsSync(f.stamp) ? JSON.parse(fs.readFileSync(f.stamp, 'utf8')) : null;
+  fs.rmSync(f.dir, { recursive: true, force: true });
+  const m = s && s.towns.maps.find((x) => x.name === 'Old Town');
+  say(code === 0 && m && m.visual && /crop_compare\.js is not at/.test((m.visual['internal.svg'] || {}).note || ''),
+    'no crop tool — a note on the sheet, still exit 0 and stamped, never a refusal'
+    + (code === 0 && s ? '' : `  <-- exited ${code}\n${out}${err}`));
+}
+
+{
+  const f = visualFixture({ withTool: true });
+  fs.writeFileSync(path.join(f.engine, 'rollout_places.js'), stub({ code: 2 }), 'utf8');
+  const { code } = run(f);
+  const kept = fs.existsSync(path.join(f.crops, 'last-week_pair.png'));
+  fs.rmSync(f.dir, { recursive: true, force: true });
+  say(code === 2 && kept, "a refused run leaves last week's crops beside last week's stamp"
+    + (code === 2 && kept ? '' : `  <-- exited ${code}, last week's crops kept=${kept}`));
+}
+
 console.log(`\n${ran['RED  ']} refusal case(s) and ${ran.GREEN} control(s) ran.`);
 if (failed) { console.log(`${failed} case(s) MISSED — the shadow rebuild does not do what it says.`); process.exit(1); }
 console.log('Every case held: the shadow rebuild refuses rather than stamping half an estate.');

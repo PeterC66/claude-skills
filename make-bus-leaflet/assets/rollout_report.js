@@ -27,6 +27,12 @@
  * is null, and a null on either side leaves the map's comparison out rather than
  * charging it (or excusing it) for a number nobody measured.
  *
+ * Kept sheets (OA-485 item 2, the visual diff). With `--keep <dir>` a dry run copies each
+ * map's built sheets out of scratch before deleting it, into keptDirOf(dir, name) — one
+ * rule for both rollouts, so the report can say where they went. A built map's entry
+ * then carries `kept: { built, shipped, sheets }`: the two folders a picture of the
+ * change needs, and which sheets were built. shadow_rebuild.mjs crops from it.
+ *
  * The report carries no date: the file's own mtime says when, and nothing here may
  * read the clock (buses-data CLAUDE.md, "a generated file must not read the clock").
  */
@@ -59,7 +65,10 @@ function hardTotals(r) {
   return { before, after };
 }
 
-const CLEAN_WITHOUT_BUILD = new Set(['UP-TO-DATE', 'STAMP-STALE']);
+/* Where `--keep <dir>` puts one map's built sheets. */
+const keptDirOf = (keep, name) => path.join(path.resolve(keep), String(name).replace(/[^\w]/g, '_'));
+
+const CLEAN_WITHOUT_BUILD =new Set(['UP-TO-DATE', 'STAMP-STALE']);
 const BUILT = new Set(['DRY-RUN', 'DONE', 'REVIEW-NEEDED']);
 
 function lostLabels(r) {
@@ -102,6 +111,7 @@ function summarise(results, { kind, engine, apply }) {
       m.hardAfter = h ? h.after : null;
       const ll = lostLabels(r);
       if (Object.keys(ll).length) m.lostLabels = ll;
+      if (r.kept && r.shipped) m.kept = { built: keptDirOf(r.kept, r.name), shipped: r.shipped, sheets: Object.keys(r.diffs || {}) };
     }
     return m;
   });
@@ -125,4 +135,4 @@ function writeReport(file, results, opts) {
   return report;
 }
 
-module.exports = { verdictOf, summarise, jsonTarget, writeReport, hardDefects, hardTotals };
+module.exports = { verdictOf, summarise, jsonTarget, writeReport, hardDefects, hardTotals, keptDirOf };

@@ -707,7 +707,29 @@ function buildLegend(lx, ly) {
   let panelMaxX = lx, panelMaxY = ly - 4;
   out(`<text x="${lx}" y="${ly - 4}" font-family="Arial" font-weight="bold" font-size="4.4" fill="#222">Operators &amp; services</text>`);
   panelMaxX = Math.max(panelMaxX, lx + panelText('Operators & services', 4.4, true));
-  OPS.forEach((op, i) => {
+  // legendWrap:{perRow:N} (optional) — gen_external_radial.js's key, ported (buses-data
+  // OA-089). An operator's badge run wraps onto further rows of N at a 6.2mm pitch, and its
+  // name goes after the LAST row, where the grid ends. High Wycombe Town Centre's Carousel
+  // runs 17 routes, and one row of them made a legend 153mm wide that no layout could clear.
+  // Absent => one row per operator exactly as before, byte-identical.
+  const LW = (D.legendWrap && (D.legendWrap.perRow | 0) > 0) ? (D.legendWrap.perRow | 0) : 0;
+  let wrapExtra = 0;   // the height the wrapped rows add below the one-row-per-operator pitch
+  if (LW) OPS.forEach((op, i) => {
+    const rs = op.routes.filter(r => !HIDDEN_ROUTES.has(r));
+    const yy = ly + i * 6.6 + wrapExtra;
+    if (!rs.length) return;
+    const rows = Math.ceil(rs.length / LW);
+    // One column pitch for the whole grid, or the columns stop lining up.
+    const _oxw = badgeXWs(rs, 2.9), _col = 7.0 + 2 * _oxw;
+    rs.forEach((r, k) => badge(lx + 3 + _oxw + (k % LW) * _col, yy + Math.floor(k / LW) * 6.2, r, 2.9));
+    const _lastRow = rows - 1, _lastCount = rs.length - _lastRow * LW;
+    const _textX = lx + _lastCount * _col + 2, _textY = yy + _lastRow * 6.2;
+    out(`<text x="${_textX.toFixed(2)}" y="${(_textY + 0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
+    panelMaxX = Math.max(panelMaxX, lx + Math.min(rs.length, LW) * _col, _textX + panelText(op.name, 3.4));
+    panelMaxY = Math.max(panelMaxY, _textY + 3);
+    wrapExtra += _lastRow * 6.2;
+  });
+  else OPS.forEach((op, i) => {
     const yy = ly + i * 6.6; let bx = lx;
     // design.badgeFit: bx already walks left-to-right, so each badge takes the room it
     // actually needs and the next one starts after it (7.0 = 5.8mm disc + 1.2mm gap).
@@ -716,7 +738,7 @@ function buildLegend(lx, ly) {
     panelMaxX = Math.max(panelMaxX, bx + 2 + panelText(op.name, 3.4));
     panelMaxY = Math.max(panelMaxY, yy + 3);
   });
-  let ny = ly + OPS.length * 6.6 + 4;
+  let ny = ly + OPS.length * 6.6 + wrapExtra + 4;
   (D.localLoops || []).forEach(l => {
     const _lw = badgeXW(l.route, 2.9);
     badge(lx + 3 + _lw, ny, l.route, 2.9);

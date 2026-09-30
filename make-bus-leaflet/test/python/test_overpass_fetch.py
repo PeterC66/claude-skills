@@ -125,5 +125,48 @@ class ItRaisesRatherThanSubstitutes(_Harness):
         self.assertEqual(len(self.slept), 2)
 
 
+class ItJudgesAReplyCurrentNotOnlyComplete(_Harness):
+    # OA-528: on 2026-09-29 a mirror answered March from older data -- 159 elements
+    # and no Budgens, where the main host had 160. Complete, and not current.
+
+    def older(self, elements):
+        return dict(reply(elements), osm3s={"timestamp_osm_base": "2026-09-20T00:00:00Z"})
+
+    def test_a_reply_from_older_data_is_retried_on_the_next_host(self):
+        self.script(self.older([{"type": "node", "id": 1}]),
+                    reply([{"type": "node", "id": 1}, {"type": "node", "id": 2}]))
+        src = {}
+        d = self.fetch(not_before="2026-09-23T12:00:00Z", source=src)
+        self.assertEqual(len(d["elements"]), 2)
+        self.assertEqual(len(self.calls), 2)
+        self.assertNotEqual(self.calls[0], self.calls[1])
+        self.assertIn("stale reply", self.log.getvalue())
+        self.assertEqual(src, {"host": self.calls[1], "osmBase": "2026-09-23T12:00:00Z"})
+
+    def test_an_undated_reply_is_not_current_when_a_date_is_asked_for(self):
+        self.script({"elements": []}, reply([]))
+        self.fetch(not_before="2026-09-23T12:00:00Z")
+        self.assertEqual(len(self.calls), 2)
+
+    def test_with_no_floor_an_older_reply_is_still_an_answer(self):
+        self.script(self.older([]))
+        src = {}
+        self.fetch(source=src)
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(src["osmBase"], "2026-09-20T00:00:00Z")
+
+    def test_the_main_host_date_is_asked_of_the_main_host_alone(self):
+        self.script(IOError("504"), reply([]))
+        base = of.main_host_base(sleep=self.slept.append, log=self.log)
+        self.assertEqual(base, "2026-09-23T12:00:00Z")
+        self.assertEqual(set(self.calls), {of.HOSTS[0]})
+
+    def test_a_main_host_that_never_answers_raises(self):
+        self.script()
+        with self.assertRaises(of.OverpassUnreachable):
+            of.main_host_base(sleep=self.slept.append, log=self.log)
+        self.assertEqual(set(self.calls), {of.HOSTS[0]})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -627,6 +627,13 @@ function runWith(fixture, opts = {}) {
   check('interval: 54.9 min defers', intervalVerdict({ at, source: 's' }, new Date(+at + 54.9 * 60e3), MIN).defer === true);
   check('interval: 55 min goes', intervalVerdict({ at, source: 's' }, new Date(+at + 55 * 60e3), MIN).defer === false);
   check('interval: no witness is not a deferral', intervalVerdict({ at: null, why: 'x' }, at, MIN).defer === false);
+
+  // The carrier is the hourly tick, so the built-in interval is a whole number
+  // of hours less five minutes of dispatch jitter: 180 exactly would let a tick
+  // that ran two minutes early wait a fourth hour (raised 55 -> 175, 2026-09-30).
+  check('interval: the built-in is N hours less five minutes', PUSH_INTERVAL_MINUTES % 60 === 55, `${PUSH_INTERVAL_MINUTES}`);
+  check('interval: a tick 173 min after the last run waits', intervalVerdict({ at, source: 's' }, new Date(+at + 173 * 60e3), PUSH_INTERVAL_MINUTES).defer === true);
+  check('interval: the third tick on, at 178 min, goes', intervalVerdict({ at, source: 's' }, new Date(+at + 178 * 60e3), PUSH_INTERVAL_MINUTES).defer === false);
 
   // Go: the last run was two hours ago. The check runs, exit 0.
   let fx = makeRepo({ manifest, pushed: ['docs/a.md'] });

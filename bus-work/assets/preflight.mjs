@@ -191,9 +191,12 @@ export function triggered(check, scope, all) {
  * nothing. The commits wait on local `main`, and the loop's hourly tick carries
  * them, because its step 8 pushes whenever `main` is ahead of `origin/main`.
  *
- * 55 minutes rather than 60, because the carrier is itself hourly: a tick that
- * pushed at :40 must not defer the next tick's push at :38, or the batch waits
- * two hours for the sake of two minutes of dispatch jitter.
+ * 175 minutes, which is every third hourly tick: 55 on 2026-09-29 still allowed
+ * about 26 runs a day, and at the 7.8-minute mean of the last twenty green runs
+ * (read 2026-09-30) that is about 6,000 minutes a month, so the October
+ * allowance would have gone by the 10th. Five short of 180 because the carrier
+ * is itself hourly: a tick that pushed at :40 must not defer the third tick on
+ * at :38, or the batch waits four hours for two minutes of dispatch jitter.
  *
  * WHEN THE LAST RUN STARTED is asked of two witnesses and the LATER wins. GitHub,
  * through `gh run list`, knows about every pusher; this checkout's reflog of the
@@ -204,7 +207,7 @@ export function triggered(check, scope, all) {
  * blocked every push the day `gh` lost its token would stop the estate to save
  * pennies.
  */
-export const PUSH_INTERVAL_MINUTES = 55;
+export const PUSH_INTERVAL_MINUTES = 175;
 
 /** The two witnesses to when the last push-triggered run started; `ghRun` is injected so the harness needs no network. */
 export function lastPushRun(repo, scope, spec, ghRun = defaultGhRun) {

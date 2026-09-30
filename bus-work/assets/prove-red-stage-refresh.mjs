@@ -42,6 +42,10 @@ console.log('\n1. Only what the review let through');
   check('a town not in the review is refused', /not in the 2026-10-01 review/.test(plan(r, 'Wisbech') || ''));
   check('no review at all is refused', /no ink review/.test(plan(null, 'March') || ''));
   check('a slug that is not a slug is refused', /must be the portal map's slug/.test(plan(r, 'March', manifest(OLD, NEW), 'March Town') || ''));
+  /* OA-430 item 3: the review takes place maps; this tool stages areas only. */
+  const withPlace = review(map('St Neots East', 'no-ink', { kind: 'place', dir: 'Areas/St Neots/Places/St Neots East' }));
+  check('a place map in the review is refused by name, even deliverable', /is a place map/.test(plan(withPlace, 'St Neots East') || ''), plan(withPlace, 'St Neots East'));
+  check('  and without the rule it WOULD have been planned — the rule is load-bearing', deliverable(withPlace).deliver.join() === 'St Neots East');
 }
 
 console.log('\n2. The render staged is the build that was compared');

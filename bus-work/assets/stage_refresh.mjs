@@ -33,7 +33,7 @@
  * WHERE IT STOPS. At the version STAGED beside the live map, read back from the
  * portal's own worklist as waiting on its customer. Publication is the customer's
  * Accept, a third party's act, and nothing here reaches for it. A place map is
- * refused: the review reads `Areas/` only.
+ * refused: the review takes places (OA-430 item 3), but this tool stages an area.
  *
  * DRY RUN BY DEFAULT: it prints the one command it would run. `--apply --by <who>`
  * runs it, records the staging and reads it back. A non-zero exit from the
@@ -103,6 +103,10 @@ export function planStage({ review, town, slug, manifest }) {
   if (!slug || typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new Refused(`--map must be the portal map's slug, as the worklist's refresh row carries it, not ${JSON.stringify(slug)}.`);
   const m = review.maps.find((x) => x.map.toLowerCase() === String(town || '').toLowerCase());
   if (!m) throw new Refused(`${town} is not in the ${review.scan} review; it holds ${review.maps.map((x) => x.map).join(', ') || 'nothing'}.`);
+  /* The review takes place maps since buses-data OA-430 item 3; this tool stages an
+   * AREA from Areas/<Town> with --kind area, so a place is refused by name rather
+   * than falling through to a render it would look for in the wrong folder. */
+  if (m.kind === 'place') throw new Refused(`${m.map} is a place map, and this tool stages towns only — a person delivers a place, after the review has it under deliver.`);
   const d = deliverable(review);
   if (d.staged.includes(m.map)) throw new Refused(`${m.map} ${m.after} was already staged by ${m.staged.by} at ${m.staged.at}, and its customer was emailed then — staging it again would email them twice.`);
   if (!d.deliver.includes(m.map)) {

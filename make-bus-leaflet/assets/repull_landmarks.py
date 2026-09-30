@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""repull_landmarks.py -- re-run ONE town's landmark pull into a new S2 run, keeping its geometry (buses-data OA-499).
+"""repull_landmarks.py -- re-run ONE map's landmark pull into a new S2 run, keeping its geometry (buses-data OA-499).
 
 WHY THIS EXISTS. OA-500 (2026-09-28) widened what a map draws -- pubs, cinemas,
 colleges, post offices, stations and more -- and changed the landmark QUERY that
@@ -10,12 +10,15 @@ categories: the rebuild shows only what the old pull happened to hold. This file
 the missing step the rebuild row names first: ask Overpass the CURRENT question over
 the town's OWN box, and commit the answer as a new S2 run through `stage.js`.
 
-    Run it from anywhere. There are no placeholders except <Town> and <who>:
+    Run it from anywhere. There are no placeholders except <Town>, <Place> and <who>:
 
       python repull_landmarks.py --town "<Town>"
       python repull_landmarks.py --town "<Town>" --apply --by <who>
+      python repull_landmarks.py --place "<Place>" --apply --by <who>
 
     --town    the town's folder name under Areas/, e.g. "March"
+    --place   a place map's folder name, e.g. "Ely Co-op", found under Areas/<Town>/Places/,
+              Places/ or Places/<bucket>/; give exactly one of --town and --place
     --apply   actually write the new S2 run: without it this is a DRY RUN, which asks
               Overpass (a read) and prints what would change, and writes nothing
     --by      who is performing the stage -- `sched-HHMM` for a loop tick, the
@@ -44,7 +47,10 @@ change which landmarks are in reach and dress that up as a category change. The 
 comes from, in order:
   1. the latest S2 run's own `overpass-pois.txt`, when it recorded its query -- the
      exact box that run asked about;
-  2. otherwise the extent of the elements in its `osm.json`. That is at most the box
+  2. for a PLACE, otherwise its `walkshed_cfg.json` box (centre +/- radiusM) joined
+     with the extent of its `osm.json` -- the box its first bbox MCP pull was asked
+     over, and never smaller than what that pull held;
+  3. otherwise the extent of the elements in its `osm.json`. That is at most the box
      it was asked over, never larger, and bus stops are dense enough that it is close;
      the report says which source was used so a reader can judge.
 
@@ -58,15 +64,22 @@ cannot be asked its date, a mirror's answer is REFUSED rather than stored unchec
 Which host answered, and the data date of its answer, are written beside the query
 as `overpass-source.json`, so a later reader can see what data the map was drawn from.
 
-PLACES ARE NOT HANDLED YET. A place's landmark pull is its walkshed
-`search_overpass` with every category's tags, a different question from a town's box.
-Given a place folder this refuses and says so rather than asking the wrong question.
+A PLACE IS THE SAME QUESTION OVER ITS OWN BOX (OA-499 item 2, 2026-09-30). A place's
+first landmark pull is the bbox MCP `search_overpass` over its walkshed box, which
+records no query, and this tool used to refuse a place as a different question. It is
+not one: Ely Co-op's full rebuild of 2026-09-29 (OA-508) asked today's `pois_query()`
+over the extent of its old `osm.json` by hand (97 elements became 124) and recorded
+the query, and both Godmanchester places did the same. So `--place` finds the place's
+folder by name and then runs the town path: the box rule below (with one step of its
+own), the currency rule, osm2.json kept. A name found in two folders is refused rather than guessed,
+because the two places would have different boxes.
 
 Exit codes follow references/conventions.md: 0 done (or a dry run that ran), 1 a
 refusal with its remedy printed, 2 a usage error.
 """
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
@@ -83,6 +96,7 @@ SK = HERE
 POIS = "osm.json"
 QUERY = "overpass-pois.txt"
 SOURCE = "overpass-source.json"
+WALKSHED = "walkshed_cfg.json"
 BOX_RE = re.compile(r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)")
 
 
@@ -130,7 +144,29 @@ def box_from_elements(doc):
     return {"s": min(lats), "w": min(lons), "n": max(lats), "e": max(lons)}
 
 
-def town_box(s2_dir):
+def box_from_walkshed(s2_dir):
+    """The square of side 2*radiusM round a place's walkshed centre, or None."""
+    path = os.path.join(s2_dir, WALKSHED)
+    if not os.path.isfile(path):
+        return None
+    cfg = read_json(path)
+    try:
+        lat, lon = (float(v) for v in cfg["center"])
+        r = float(cfg["radiusM"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    dlat = r / 111320.0
+    dlon = r / (111320.0 * math.cos(math.radians(lat)))
+    return {"s": lat - dlat, "w": lon - dlon, "n": lat + dlat, "e": lon + dlon}
+
+
+def union(a, b):
+    if not (a and b):
+        return a or b
+    return {"s": min(a["s"], b["s"]), "w": min(a["w"], b["w"]), "n": max(a["n"], b["n"]), "e": max(a["e"], b["e"])}
+
+
+def town_box(s2_dir, is_place=False):
     """(box, source) for the latest S2 run -- see THE BOX IS THE TOWN'S OWN."""
     qpath = os.path.join(s2_dir, QUERY)
     if os.path.isfile(qpath):
@@ -138,6 +174,15 @@ def town_box(s2_dir):
             box = box_from_query(fh.read())
         if box:
             return box, "recorded query (%s)" % QUERY
+    if is_place:
+        # A place's first pull was the bbox MCP over its WALKSHED box and recorded no
+        # query; a sparse answer's extent is far smaller than that box (St Neots
+        # Co-op: 4 elements, about 300 m wide, against a 650 m walkshed). The union
+        # asks the documented question and cannot lose anything the old pull reached.
+        walk = box_from_walkshed(s2_dir)
+        if walk:
+            return (union(walk, box_from_elements(read_json(os.path.join(s2_dir, POIS)))),
+                    "walkshed box in %s joined with the extent of the stored %s" % (WALKSHED, POIS))
     box = box_from_elements(read_json(os.path.join(s2_dir, POIS)))
     if box:
         return box, "extent of the stored %s" % POIS
@@ -197,6 +242,24 @@ def current_answer(query, new, src, fetch, main_base):
                      staleAnswer={"host": src.get("host"), "osmBase": src.get("osmBase")})
 
 
+def place_dir(root, name):
+    """The one folder holding place map `name`, searched where gate_lib.findPlaces looks."""
+    cands = []
+    areas = os.path.join(root, "Areas")
+    if os.path.isdir(areas):
+        cands += [os.path.join(areas, t, "Places", name) for t in sorted(os.listdir(areas))]
+    places = os.path.join(root, "Places")
+    cands.append(os.path.join(places, name))
+    if os.path.isdir(places):
+        cands += [os.path.join(places, b, name) for b in sorted(os.listdir(places))]
+    hits = [d for d in cands if os.path.isfile(os.path.join(d, "manifest.json"))]
+    if len(hits) != 1:
+        raise Refused("%s place map is named %r under %s%s. Name a place by its folder, as "
+                      "status.js prints it." % ("no" if not hits else "more than one", name, root,
+                                                "" if not hits else ": " + "; ".join(hits)))
+    return hits[0]
+
+
 def s2_outputs(manifest, run_id):
     for r in (manifest.get("stages", {}).get("S2", {}).get("runs") or []):
         if r.get("id") == run_id:
@@ -206,7 +269,9 @@ def s2_outputs(manifest, run_id):
 
 def run(argv=None, fetch=None, stage_fn=None, main_base=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--town", required=True)
+    which = ap.add_mutually_exclusive_group(required=True)
+    which.add_argument("--town")
+    which.add_argument("--place")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--by")
     ap.add_argument("--root")
@@ -219,28 +284,28 @@ def run(argv=None, fetch=None, stage_fn=None, main_base=None):
     main_base = main_base or overpass_fetch.main_host_base
     stage_fn = stage_fn or stage
 
-    parts = re.split(r"[\\/]+", a.town.strip())
-    if "Places" in parts or ".." in parts:
-        # A place's manifest looks like a town's (it carries no marker), so the
-        # PATH is the only thing that says it is one.
-        raise Refused("%s names a PLACE map; this tool re-pulls a town's box only (see PLACES "
-                      "ARE NOT HANDLED YET)." % a.town)
+    is_place = a.place is not None
+    name = (a.place if is_place else a.town).strip()
+    if len(re.split(r"[\\/]+", name)) > 1 or name in ("", ".", ".."):
+        # A place's manifest looks like a town's (it carries no marker), so a PATH
+        # under --town could pass a place off as a town: both flags take a NAME only.
+        raise Refused("%r is not a folder name: name a town with --town and a place with "
+                      "--place, never a path." % name)
     root = cli.resolve_buses(a.root)
-    town_dir = os.path.join(root, "Areas", a.town)
+    town_dir = place_dir(root, name) if is_place else os.path.join(root, "Areas", name)
     mpath = os.path.join(town_dir, "manifest.json")
     if not os.path.isfile(mpath):
-        raise Refused("%s has no manifest.json. A place map's landmark pull is its walkshed "
-                      "search, which this tool does not ask yet (see PLACES ARE NOT HANDLED YET); "
-                      "a town is named as its folder under Areas/." % town_dir)
+        raise Refused("%s has no manifest.json. A town is named as its folder under Areas/, and "
+                      "a place map with --place." % town_dir)
     manifest = read_json(mpath)
     prev = (manifest.get("stages", {}).get("S2") or {}).get("latest")
     if not prev:
-        raise Refused("%s has no committed S2 run to carry the geometry from." % a.town)
+        raise Refused("%s has no committed S2 run to carry the geometry from." % name)
     prev_dir = os.path.join(town_dir, "S2-geometry", prev)
     if not os.path.isfile(os.path.join(prev_dir, POIS)):
         raise Refused("S2 %s has no %s, so there is no landmark pull to replace." % (prev, POIS))
 
-    box, source = town_box(prev_dir)
+    box, source = town_box(prev_dir, is_place)
     query = pois_query(box)
     old = read_json(os.path.join(prev_dir, POIS))
     if a.answer:
@@ -256,10 +321,10 @@ def run(argv=None, fetch=None, stage_fn=None, main_base=None):
                           "Re-run when Overpass is answering." % exc)
         new, src = current_answer(query, new, src, fetch, main_base)
     if not isinstance(new, dict) or not new.get("elements"):
-        raise Refused("Overpass answered with no elements over %s. A town box always holds bus "
-                      "stops, so this is a failed pull, not an empty town; nothing was written." % box)
+        raise Refused("Overpass answered with no elements over %s. A map's box always holds bus "
+                      "stops, so this is a failed pull, not an empty map; nothing was written." % box)
 
-    result = {"town": a.town, "from": prev, "box": box, "boxSource": source,
+    result = {"town": name, "kind": "place" if is_place else "town", "from": prev, "box": box, "boxSource": source,
               "before": len(old.get("elements", [])), "after": len(new["elements"]),
               "moved": compare(old, new), "source": src, "applied": False, "run": None}
     if not a.apply:

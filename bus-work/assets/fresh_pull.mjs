@@ -28,9 +28,13 @@
  * the result carries a warning and no rows: an empty list from a parser that broke
  * would read as "every town is fresh", the green that could never go red.
  *
- * TOWNS ONLY. `repull_landmarks.py` refuses a place folder, because a place's pull
- * is its walkshed search with every category's tags — a different question
- * (OA-499 item 2). A place row would hand a session a command that refuses.
+ * PLACES TOO, SINCE OA-499 ITEM 2 (2026-09-30). A place's first pull is a bbox MCP
+ * search that records no query, so it was thought a different question and the
+ * tool refused one. It is the same question over the place's own box — Ely Co-op's
+ * rebuild asked `pois_query()` over its old extent by hand — so `repull_landmarks.py
+ * --place` now asks it, and a place gets `fresh-pull-<place>` exactly as a town
+ * does. A place whose latest S2 holds no `osm.json` has no pull to replace, and the
+ * tool refuses it, so it gets no row rather than a command that refuses.
  *
  * PURE CORE. `freshPullItems()` takes the query texts as arguments, so
  * prove-red-fresh-pull.mjs drives every branch with strings; the two readers below
@@ -39,16 +43,29 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-// `node["amenity"~"^(pub|cafe)$"](52.1,0.1,52.2,0.2);` or the f-string's `({box})`.
-const SEL = /^\s*(node|way|relation)((?:\[[^\]]*\])+)\s*\(/;
+// `node["amenity"~"^(pub|cafe)$"](52.1,0.1,52.2,0.2);` or the f-string's `({box})`,
+// and the bbox MCP's shape a place records, `nwr["amenity"~"^(pub)$"];`, whose box is
+// the tool's argument rather than part of the line (Godmanchester, 2026-09-30).
+const SEL = /^\s*(node|way|relation|nwr)((?:\[[^\]]*\])+)\s*[(;]/;
 const COND = /\["([^"]+)"\s*(=|~)\s*"([^"]*)"\]/g;
+
+// No place generator draws an OpenStreetMap bus stop — a place's stops come from
+// GTFS and NaPTAN — so a place pull that left them out has not missed anything, and
+// both Godmanchester places left them out on purpose (OA-499 item 2).
+const PLACE_INERT = new Set(['node highway=bus_stop']);
 
 /** Every token a query asks for: `<type> <key>=<value>`, one per alternation value. */
 export function queryTokens(text) {
   const out = new Set();
   for (const line of String(text || '').split(/\r?\n/)) {
-    const m = SEL.exec(line);
-    if (!m) continue;
+    const hit = SEL.exec(line);
+    if (!hit) continue;
+    // nwr is node, way and relation in one line: expand it so it matches either.
+    if (hit[1] === 'nwr') {
+      for (const t of ['node', 'way', 'relation']) for (const k of queryTokens(`${t}${hit[2]};`)) out.add(k);
+      continue;
+    }
+    const m = hit;
     const conds = [...m[2].matchAll(COND)];
     // A selector with a shape this does not parse is kept whole rather than
     // dropped, so a new kind of line in pois_query() still has to be matched.
@@ -74,28 +91,32 @@ export function poisQuerySource(pyText) {
 /**
  * @param {object} p
  * @param {Array<{name, built, s2}>} p.towns  worklist tree rows; s2 = {id, dir} of the latest S2 run
+ * @param {Array<{name, town, built, s2}>} [p.places]  the same for place maps; s2 also carries hasPois
  * @param {string|null} p.currentQuery        pois_query()'s source, or null if unreadable
  * @param {(town) => string|null} p.readRecorded  the latest S2's overpass-pois.txt, or null
  * @param {string} [p.sk]                     the engine's assets folder, for the commands
  * @returns {{items: object[], owed: Set<string>, warning: string|null}}
  */
-export function freshPullItems({ towns, currentQuery, readRecorded, sk = '' }) {
+export function freshPullItems({ towns, places = [], currentQuery, readRecorded, sk = '' }) {
   const current = queryTokens(currentQuery);
   if (!current.size) {
     return { items: [], owed: new Set(), warning: 'fresh-pull rows skipped: no selector could be read from pois_query() in draft_town.py — the check is blind, not clean (OA-499).' };
   }
   const items = [];
   const owed = new Set();
-  for (const t of towns || []) {
+  const maps = (towns || []).map((t) => ({ t, place: false }))
+    .concat((places || []).filter((p) => p.s2 && p.s2.hasPois !== false).map((t) => ({ t, place: true })));
+  for (const { t, place } of maps) {
     if (!t.built || !t.s2) continue;
     const text = readRecorded(t);
     const have = queryTokens(text);
-    const missing = [...current].filter((k) => !have.has(k));
+    const missing = [...current].filter((k) => !have.has(k) && !(place && PLACE_INERT.has(k)));
     if (!missing.length) continue;
     owed.add(t.name);
     // Name what is missing by tag, once, whatever element types it was asked on.
     const tags = [...new Set(missing.map((k) => k.replace(/^\S+ /, '')))];
     const shown = tags.length > 8 ? `${tags.slice(0, 8).join(', ')} and ${tags.length - 8} more` : tags.join(', ');
+    const sel = `${place ? '--place' : '--town'} "${t.name}"`;
     items.push({
       key: `fresh-pull-${t.name}`, rank: 8, type: 'housekeeping',
       title: `${t.name}'s landmark pull does not ask today's landmark question`,
@@ -104,11 +125,13 @@ export function freshPullItems({ towns, currentQuery, readRecorded, sk = '' }) {
         : `Its latest S2 (${t.s2.id}) asked Overpass without ${shown}.`)
         + ' A rebuild reads the stored pull and fetches nothing, so it would draw only what that pull holds.'
         + ' Not for a map whose sheet is with a local reviewer: a pull there changes the sheet under their answer (OA-499).',
-      who: '—', runbook: 'S2', towns: [t.name],
+      who: '—', runbook: 'S2', towns: [place ? (t.town || t.name) : t.name],
       do: [
-        { kind: 'shell', cwd: sk, cmd: `python repull_landmarks.py --town "${t.name}"`, note: 'dry run — asks Overpass (a read), prints what would change, writes nothing' },
-        { kind: 'shell', cwd: sk, cmd: `python repull_landmarks.py --town "${t.name}" --apply --by <who>`, note: 'writes the new S2 run through stage.js; <who> is sched-HHMM for a tick, the session name otherwise' },
-        { kind: 'skill', what: `Then rebuild ${t.name} in stage order through make-bus-leaflet — pull S3, a new S4, and judge the crops. rollout.js refuses STALE-INPUTS after a pull, and a landmarks-only rollout gates only on no lost label, which March passed while worse.` },
+        { kind: 'shell', cwd: sk, cmd: `python repull_landmarks.py ${sel}`, note: 'dry run — asks Overpass (a read), prints what would change, writes nothing' },
+        { kind: 'shell', cwd: sk, cmd: `python repull_landmarks.py ${sel} --apply --by <who>`, note: 'writes the new S2 run through stage.js; <who> is sched-HHMM for a tick, the session name otherwise' },
+        { kind: 'skill', what: place
+          ? `Then rebuild ${t.name} in stage order through make-place-bus-leaflet — pull P3, a new P4, and judge the crops. rollout_places.js reads the stored S2 and fetches nothing, so it is not the way the new landmarks reach the sheet.`
+          : `Then rebuild ${t.name} in stage order through make-bus-leaflet — pull S3, a new S4, and judge the crops. rollout.js refuses STALE-INPUTS after a pull, and a landmarks-only rollout gates only on no lost label, which March passed while worse.` },
       ],
     });
   }

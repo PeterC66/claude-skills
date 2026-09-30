@@ -1741,6 +1741,18 @@ MUTATIONS = [
      "find": '            new = fetch(query, not_before=overpass_fetch.osm_base(old), source=src)',
      "to": '            new = fetch(query, not_before=None, source=src)'},
 
+    # OA-499 item 2: a place is found by its folder name, and a name in two folders
+    # has two boxes, so guessing one would re-pull the wrong place's landmarks.
+    {"suite": "test_repull_landmarks.py", "file": "repull_landmarks.py",
+     "what": "a place name found in two folders is guessed rather than refused",
+     "find": '    if len(hits) != 1:',
+     "to": '    if not hits:'},
+
+    {"suite": "test_repull_landmarks.py", "file": "repull_landmarks.py",
+     "what": "a place with no recorded query asks over its sparse stored extent, not its walkshed (St Neots Co-op's 300 m box)",
+     "find": '    if is_place:\n        # A place',
+     "to": '    if False:\n        # A place'},
+
     {"suite": "test_draft_town.py", "file": "draft_town.py",
      "what": "draft_town writes an empty osm.json when Overpass never answered, which is the OA-339 fault restored at its original call site",
      "find": '''        raise SystemExit(f"{exc}\\n{dest} was NOT written: an unanswered question is not "

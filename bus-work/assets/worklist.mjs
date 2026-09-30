@@ -407,6 +407,10 @@ function fromMapTree() {
     // A standalone place has no parent town to borrow an answer from, so its S6
     // is the only blind answer it will ever have.
     row.standalone = !p.town;
+    // OA-499 item 2: a place's landmark pull is read by fresh_pull.mjs as a town's
+    // is; hasPois, because a place S2 with no osm.json has no pull to replace.
+    const s2 = latestRunDir(m, p.dir, 'S2');
+    row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir, hasPois: existsSync(path.join(s2.dir, 'osm.json')) } : null;
     // WHICH ENGINE DREW IT, asked of a place for the first time (OA-430). The
     // town branch has had these two lines since the hash existed; this one
     // stopped at "is it built", so eleven of the twelve places were behind for
@@ -1097,9 +1101,9 @@ for (const t of tree.towns.filter((t) => !t.built)) {
     do: [{ kind: 'skill', what: `Run make-bus-leaflet for ${t.name} from whichever stage its manifest reached.` }],
   });
 }
-// OA-499 item 1: a town whose stored landmark pull does not ask today's
-// pois_query() question. Before the rebuild rows, because each of those names it.
-const freshPull = freshPullItems({ towns: tree.towns, currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery, sk: SK || '' });
+// OA-499 items 1 and 2: a town or place whose stored landmark pull does not ask
+// today's pois_query() question. Before the rebuild rows, because each of those names it.
+const freshPull = freshPullItems({ towns: tree.towns, places: tree.places || [], currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery, sk: SK || '' });
 if (freshPull.warning) warnings.push(freshPull.warning);
 for (const it of freshPull.items) add(it);
 /*
@@ -1129,7 +1133,7 @@ for (const { row: mapRow, place } of engineStale) {
     key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
     title: `${mapRow.name} was drawn by an older engine`,
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
-      + (!place && freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
+      + (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [ // the dry run's verdict picks the write; why --rebuild-stale is its own step: playbooks.md, Engine-stale
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — its verdict decides which of the next two to run' },

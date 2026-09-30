@@ -210,6 +210,75 @@ class RepullLandmarks(unittest.TestCase):
                    fetch=self.fetch(NEW), stage_fn=FakeStage(self.town))
         self.assertEqual(self.asked, [])
 
+    # -- OA-499 item 2: a place is the same question over its own box --------------
+
+    def make_place(self, *where):
+        """Move the fixture's S2 into a place folder at `where` under the root."""
+        d = os.path.join(self.root, *where)
+        os.makedirs(os.path.dirname(d), exist_ok=True)
+        shutil.copytree(self.town, d, ignore=shutil.ignore_patterns("Places"))
+        return d
+
+    def go_place(self, name, extra=()):
+        self.floors, self.main_asked = [], 0
+        st = FakeStage(None)
+        r = rl.run(["--place", name, "--root", self.root, *extra], fetch=self.fetch(NEW),
+                   stage_fn=st, main_base=self.main_base("2026-09-29T18:31:28Z"))
+        return r, st
+
+    def test_a_nested_place_is_found_by_name_and_committed_in_its_own_folder(self):
+        place = self.make_place("Areas", TOWN, "Places", "Test Co-op")
+        r, st = self.go_place("Test Co-op", ["--apply", "--by", "sched-1842"])
+        self.assertEqual((r["town"], r["kind"]), ("Test Co-op", "place"))
+        self.assertTrue(os.path.isfile(os.path.join(place, "S2-geometry", r["run"], "overpass-pois.txt")))
+        self.assertFalse(os.path.isdir(os.path.join(self.town, "S2-geometry", r["run"])),
+                         "the town's own S2 must not move when its place is re-pulled")
+        self.assertIn("(52.1,0.1,52.2,0.3)", self.asked[0])
+
+    def test_a_place_asks_over_its_walkshed_joined_with_its_extent(self):
+        # St Neots Co-op, 2026-09-30: 4 stored elements spanned about 300 m of a 650 m walkshed.
+        place = self.make_place("Areas", TOWN, "Places", "Wide Co-op")
+        write_json(os.path.join(place, "S2-geometry", PREV, "walkshed_cfg.json"),
+                   {"center": [52.15, 0.20], "radiusM": 11132})
+        r, _ = self.go_place("Wide Co-op")
+        self.assertIn("walkshed", r["boxSource"])
+        self.assertAlmostEqual(r["box"]["s"], 52.05, places=3)   # the walkshed reaches further south
+        self.assertAlmostEqual(r["box"]["n"], 52.25, places=3)
+        self.assertLessEqual(r["box"]["w"], 0.10)                # never inside the stored extent
+        self.assertGreaterEqual(r["box"]["e"], 0.30)
+
+    def test_a_town_never_reads_a_walkshed(self):
+        write_json(os.path.join(self.prev, "walkshed_cfg.json"), {"center": [52.15, 0.20], "radiusM": 50000})
+        r, _ = self.go()
+        self.assertEqual(r["box"], {"s": 52.10, "w": 0.10, "n": 52.20, "e": 0.30})
+
+    def test_a_standalone_place_in_a_bucket_is_found(self):
+        place = self.make_place("Places", "_standalone", "Lone Co-op")
+        r, _ = self.go_place("Lone Co-op", ["--apply"])
+        self.assertTrue(os.path.isfile(os.path.join(place, "S2-geometry", r["run"], "osm.json")))
+
+    def test_a_place_name_in_two_folders_is_refused_not_guessed(self):
+        self.make_place("Areas", TOWN, "Places", "Twin")
+        self.make_place("Places", "_standalone", "Twin")
+        with self.assertRaises(rl.Refused) as cm:
+            self.go_place("Twin")
+        self.assertIn("more than one", str(cm.exception))
+        self.assertEqual(self.asked, [])
+
+    def test_an_unknown_place_is_refused(self):
+        with self.assertRaises(rl.Refused):
+            self.go_place("Nowhere Co-op")
+        self.assertEqual(self.asked, [])
+
+    def test_a_town_is_never_read_as_a_place(self):
+        with self.assertRaises(rl.Refused):
+            self.go_place(TOWN)
+
+    def test_town_and_place_together_is_a_usage_error(self):
+        with self.assertRaises(SystemExit):
+            rl.run(["--town", TOWN, "--place", "X", "--root", self.root], fetch=self.fetch(NEW),
+                   stage_fn=FakeStage(self.town))
+
     def test_no_manifest_is_refused(self):
         with self.assertRaises(rl.Refused):
             rl.run(["--town", "Nowhere", "--root", self.root], fetch=self.fetch(NEW), stage_fn=FakeStage(self.town))

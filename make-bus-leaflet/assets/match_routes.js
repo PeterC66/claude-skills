@@ -325,7 +325,7 @@ for (const r in INTOWN) {
   if (RT && !closedLoop && VC !== 'intown') {
     // the chain the vias came from, before the box cut it: the same drops and prefixes
     let chainF = can.stops.filter(a => atco2ll[a]);
-    const jd = jwDrop(r, can.name); if (jd.size) chainF = chainF.filter(a => !jd.has(a));
+    const rtDrop = jwDrop(r, can.name); if (rtDrop.size) chainF = chainF.filter(a => !rtDrop.has(a));
     if (vp) chainF = chainF.filter(a => vp.some(p => a.startsWith(p)));
     if (vx) chainF = chainF.filter(a => !vx.includes(a));
     const aims = aimsFor(RT, chainF, atco2ll, inBbox);

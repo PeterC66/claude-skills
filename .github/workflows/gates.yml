@@ -558,6 +558,13 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-landmark-answers
 
+      # buses-data OA-499 (2026-09-30): the fresh-pull row. Parses the REAL
+      # pois_query() in draft_town.py, so a refactor the parser cannot read goes
+      # red here instead of reading as every town being fresh.
+      - name: Prove the fresh-pull row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-fresh-pull
+
       # buses-data OA-251 (2026-09-05): the CI-red worklist row. Nine sections over
       # run FIXTURES -- no gh, no network, no GitHub account -- because the verdict
       # is what can be wrong, not whether the GitHub CLI works.

@@ -14,7 +14,7 @@
 (
   // river   →  way["waterway"="river"]["name"~"{{NAME}}"]({{BBOX}});
   // canal   →  way["waterway"="canal"]["name"~"{{NAME}}"]({{BBOX}});
-  // railway →  way["railway"="rail"]({{BBOX}});          // add ["name"~"{{NAME}}"] to narrow
+  // railway →  way["railway"="rail"][!"service"]({{BBOX}});  // running lines only: no sidings/yards (OA-520)
   // road    →  way["ref"="{{REF}}"]({{BBOX}});           // or way["name"~"{{NAME}}"]({{BBOX}});
   // generic →  way["{{KEY}}"="{{VALUE}}"]({{BBOX}});
   way["waterway"="river"]["name"~"{{NAME}}"]({{BBOX}});

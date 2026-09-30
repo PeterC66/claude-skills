@@ -38,7 +38,9 @@ which, in this order:
      same square; the commonest NAMED candidate of the type wins and the others
      are printed. --pick TYPE=LABEL names a different one.
 
-A railway needs no name: draft_town asks for every `railway=rail` way.
+A railway needs no name: draft_town asks for every `railway=rail` way that is a
+running line -- a `service=*` way (siding, yard, spur, crossover) is skipped, and
+--keep-way names one to draw anyway (buses-data OA-520).
 
 It prints the `features[]` entries to paste into P3's routes.json. A railway is
 labelled with the most common `name` its ways carry (else "Railway") and takes
@@ -175,6 +177,9 @@ def main(argv=None):
                                           "features[] names the river, canal or road, key and label")
     ap.add_argument("--pick", action="append", default=[], metavar="TYPE=LABEL",
                     help="the river, canal or road (by ref) to pull instead of the commonest candidate")
+    ap.add_argument("--keep-way", action="append", type=int, default=[], metavar="OSM_WAY_ID",
+                    help="a railway siding/yard way to draw anyway because someone steers by it; "
+                         "the pull skips every service=* way otherwise (buses-data OA-520)")
     ap.add_argument("--out", default="features_geo.json")
     ap.add_argument("--force", action="store_true", help="replace a key the file already holds")
     a = ap.parse_args(argv)
@@ -223,7 +228,7 @@ def main(argv=None):
     feats, ranked = [], None
     for t in types:
         if t == "railway":
-            feats.append({"key": "railway", "type": "railway", "label": ""})
+            feats.append({"key": "railway", "type": "railway", "label": "", "keepWays": a.keep_way})
             continue
         if t in town and t not in picks:
             feats.append(town[t])

@@ -1747,6 +1747,16 @@ MUTATIONS = [
                          f"an empty answer. Re-run when Overpass is answering.")''',
      "to": '''        d = {"elements": []}'''},
 
+    # OA-520. Sidings drew as loose stubs beside the line (Ely Co-op v1.29).
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "the railway pull asks for sidings and yards again, so a siding draws as a loose stub beside the line",
+     "find": """        sel = f'way["railway"="rail"][!"service"]({box})'""",
+     "to": """        sel = f'way["railway"="rail"]({box})'"""},
+    {"suite": "test_draft_town.py", "file": "draft_town.py",
+     "what": "a map's keepWays is ignored, so a siding someone steers by can never be drawn",
+     "find": '        keep = [int(i) for i in feat.get("keepWays") or []]',
+     "to": '        keep = []'},
+
     # ---------------------------------------------------------------- refresh_town.py
     # OA-457. The one module a scheduled tick runs with nobody watching, and every
     # refusal in it is raised from `main()`, which `prove-red-refresh-town.py` does not

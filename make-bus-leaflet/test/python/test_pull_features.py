@@ -102,7 +102,9 @@ class Run(unittest.TestCase):
         shutil.rmtree(self.dir)
 
     def run_main(self, overpass, *extra, candidates=(), reached=True):
-        stub_town = types.SimpleNamespace(feature_query=lambda box, feat: "Q " + feat["type"])
+        self.feats = []
+        stub_town = types.SimpleNamespace(
+            feature_query=lambda box, feat: self.feats.append(feat) or "Q " + feat["type"])
         self.asked = []
 
         def overpass_features(box):
@@ -125,6 +127,14 @@ class Main(Run):
             geo = json.load(f)
         self.assertEqual(list(geo), ["railway"])
         self.assertIn('"label": "East Coast Main Line"', out)
+
+    def test_a_kept_way_reaches_the_railway_query(self):
+        """OA-520: the one opt-in past the no-sidings rule is --keep-way."""
+        code, _, _ = self.run_main(fake_overpass({"elements": [way(THROUGH, "East Coast Main Line")]}),
+                                   "--keep-way", "4242", "--keep-way", "77")
+        self.assertEqual(code, 0)
+        rail = [f for f in self.feats if f["type"] == "railway"]
+        self.assertEqual([f.get("keepWays") for f in rail], [[4242, 77]])
 
     def test_no_railway_is_an_answer_and_writes_nothing(self):
         code, out, _ = self.run_main(fake_overpass({"elements": [way(OUTSIDE)]}))

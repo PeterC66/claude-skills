@@ -19,7 +19,11 @@
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
  *                    [--note "..."] [--apply] [--force | --rebuild-stale]
- *                    [--buses "<dir>"] [--by <who>] [--warnings] [--help]
+ *                    [--buses "<dir>"] [--by <who>] [--warnings] [--json "<file>"] [--help]
+ *
+ * `--json <file>` also writes the result as JSON — one verdict per map, clean,
+ * regressed or unmeasured — for the weekly shadow rebuild (buses-data OA-485); the
+ * rules are in rollout_report.js. The console output does not change.
  *
  * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ, as in rollout_places.js and
  * sync_ci_reference.js (buses-data OA-451 item 3). With no --town this considers
@@ -71,6 +75,7 @@ const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
+const { jsonTarget, writeReport } = require('./rollout_report');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
@@ -102,9 +107,10 @@ const S3_CARRY = ['routes.json', 'overrides.json'];
 
 const USAGE = 'Usage: node rollout.js [--town "<Town name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
   '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
+  '         [--json "<file>"]\n' +
   '  Dry run unless --apply. No --town: consider EVERY town.';
 const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
-  'warnings', 'help']);
+  'warnings', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
 {
@@ -112,6 +118,7 @@ if (args.help === true) { console.log(USAGE); process.exit(0); }
   if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --town takes every town.\n${USAGE}`);
   if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a town with --town.\n${USAGE}`);
 }
+const JSON_OUT = jsonTarget(args, die);
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 const FORCE = !!args.force;
@@ -547,6 +554,10 @@ for (const t of selected) {
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
+if (JSON_OUT) {
+  const rep = writeReport(JSON_OUT, results, { kind: 'town', engine: CURRENT_ENGINE, apply: APPLY });
+  console.log(`JSON: ${rep.counts.clean} clean, ${rep.counts.regressed} regressed, ${rep.counts.unmeasured} unmeasured of ${rep.counts.total} -> ${JSON_OUT}`);
+}
 // OA-179. STAMP-STALE is easy to skim past in a per-town line, and it is the one
 // verdict that names a command the operator has to type. It repeats here.
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');

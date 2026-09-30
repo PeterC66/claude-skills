@@ -2619,13 +2619,13 @@ if(IR && TRIM){
           if(!inFrame(p)||inCore(p)) continue;
           const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
           if(avoid){
-            // Badges against badges, the same set drawTermBadges() uses and for the
-            // same measured reason — this comment claimed the wider set until
-            // 2026-08-30 and the call below never used it. The guarantee is the
-            // part that matters and is unchanged: the second pass still forces, so
-            // a line that needs identifying still gets a badge.
+            // Badges against badges, as drawTermBadges() does (this claimed the wider set until 2026-08-30 and
+            // never used it); the second pass still forces, so a line that needs identifying still gets a badge.
             const gxw=badgeXWs(grp,2.4), gh=(grp.length-1)/2*5.3+2.3;
             if(badgeClash(p[0],p[1],2.4+gxw,gh,2.4)) continue;
+            // Nor, by its drawn extent, on the anchor's own name (OA-531): High Wycombe Town Centre's 102/103/104/
+            // 105/M40/X74 stack printed over "Oxford Street" at five badgeEvery pitches of six. Forcing is unchanged.
+            if(ANCHOR_BOX && p[0]-2.4-gxw<ANCHOR_BOX[2] && p[0]+2.4+gxw>ANCHOR_BOX[0] && p[1]-gh-0.1<ANCHOR_BOX[3] && p[1]+gh+0.1>ANCHOR_BOX[1]) continue;
           }
           const bs=badgeStack(p[0],p[1],grp,2.4);
           noteBadge(p[0],p[1],2.4+bs.xw,bs.h,2.4);

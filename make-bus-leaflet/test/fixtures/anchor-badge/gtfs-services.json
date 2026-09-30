@@ -1,0 +1,1970 @@
+{
+ "town": "High Wycombe Town Centre",
+ "atcoPrefixes": null,
+ "near": [
+  51.6309395,
+  -0.7535997,
+  0.8
+ ],
+ "source": "BODS GTFS (buckinghamshire)",
+ "frequencyBasis": {
+  "weeksSampled": 12,
+  "from": "2026-09-28",
+  "to": "2026-12-20",
+  "note": "journeysPerWeek is the lower median of the sampled weeks; the range shows term-time/holiday variation. tripPatternsAtTown counts trips.txt rows and is NOT a rate -- never rank or draw from it. To tier a line weight, use coreHeadwayMinutes and longestDaytimeGap with a weeksActive floor, not journeysPerWeek: a weekly total is a volume, not availability.",
+  "dayProfile": "the busiest weekday of the sampled weeks; 07:00-19:00 is the working day and 09:00-15:00 the core day"
+ },
+ "services": [
+  {
+   "route": "1",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Hemel Hempstead, Marlowes"
+   ],
+   "termini": [
+    "Broadway",
+    "High Wycombe BusStn",
+    "Marlowes"
+   ],
+   "journeysPerWeek": 207,
+   "journeysPerWeekRange": [
+    207,
+    233
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 57,
+   "journeysOutBack": [
+    100,
+    107
+   ],
+   "firstDeparture": "05:00",
+   "lastDeparture": "21:37",
+   "typicalDayDuplicates": 26,
+   "typicalDayJourneys": 57,
+   "typicalDayWindow": [
+    "05:00",
+    "21:37"
+   ],
+   "coreHeadwayMinutes": 13,
+   "longestDaytimeGap": 36,
+   "tripPatternsAtTown": 88,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "1A",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Chesham, Townsend Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Townsend Road"
+   ],
+   "journeysPerWeek": 345,
+   "journeysPerWeekRange": [
+    345,
+    390
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 98,
+   "journeysOutBack": [
+    175,
+    170
+   ],
+   "firstDeparture": "05:15",
+   "lastDeparture": "24:07",
+   "typicalDayDuplicates": 35,
+   "typicalDayJourneys": 98,
+   "typicalDayWindow": [
+    "05:15",
+    "24:07"
+   ],
+   "coreHeadwayMinutes": 28,
+   "longestDaytimeGap": 28,
+   "tripPatternsAtTown": 141,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "1"
+  },
+  {
+   "route": "1B",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Hemel Hempstead, Marlowes",
+    "Chesham, Townsend Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Marlowes",
+    "Townsend Road"
+   ],
+   "journeysPerWeek": 149,
+   "journeysPerWeekRange": [
+    149,
+    160
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 36,
+   "journeysOutBack": [
+    72,
+    77
+   ],
+   "firstDeparture": "06:30",
+   "lastDeparture": "19:37",
+   "typicalDayDuplicates": 13,
+   "typicalDayJourneys": 36,
+   "typicalDayWindow": [
+    "06:30",
+    "19:37"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 49,
+   "tripPatternsAtTown": 54,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "1"
+  },
+  {
+   "route": "1S",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260903",
+   "validTo": "20270325",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Chesham, Townsend Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Townsend Road"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    0,
+    10
+   ],
+   "weeksActive": 11,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "08:55",
+   "lastDeparture": "14:45",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "08:55",
+    "14:45"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 350,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "1"
+  },
+  {
+   "route": "20",
+   "operator": "Thames Valley Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Maidenhead",
+    "High Wycombe, Bus Station"
+   ],
+   "termini": [
+    "Bus Station",
+    "Frascati Way"
+   ],
+   "journeysPerWeek": 164,
+   "journeysPerWeekRange": [
+    164,
+    171
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 35,
+   "journeysOutBack": [
+    82,
+    82
+   ],
+   "firstDeparture": "07:10",
+   "lastDeparture": "20:42",
+   "typicalDayDuplicates": 17,
+   "typicalDayJourneys": 35,
+   "typicalDayWindow": [
+    "07:10",
+    "20:42"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 60,
+   "tripPatternsAtTown": 52,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "27",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "High Wycombe, Orchard Road"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Orchard Road"
+   ],
+   "journeysPerWeek": 35,
+   "journeysPerWeekRange": [
+    35,
+    35
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 7,
+   "journeysOutBack": [
+    15,
+    20
+   ],
+   "firstDeparture": "09:23",
+   "lastDeparture": "14:55",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 7,
+   "typicalDayWindow": [
+    "09:23",
+    "14:55"
+   ],
+   "coreHeadwayMinutes": 120,
+   "longestDaytimeGap": 90,
+   "tripPatternsAtTown": 7,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "29",
+   "operator": "Red Eagle",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 20,
+   "journeysPerWeekRange": [
+    16,
+    20
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 4,
+   "journeysOutBack": [
+    20,
+    0
+   ],
+   "firstDeparture": "09:10",
+   "lastDeparture": "15:10",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 4,
+   "typicalDayWindow": [
+    "09:10",
+    "15:10"
+   ],
+   "coreHeadwayMinutes": 120,
+   "longestDaytimeGap": 120,
+   "tripPatternsAtTown": 4,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "30",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 273,
+   "journeysPerWeekRange": [
+    273,
+    296
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 67,
+   "journeysOutBack": [
+    273,
+    0
+   ],
+   "firstDeparture": "06:10",
+   "lastDeparture": "21:40",
+   "typicalDayDuplicates": 30,
+   "typicalDayJourneys": 67,
+   "typicalDayWindow": [
+    "06:10",
+    "21:40"
+   ],
+   "coreHeadwayMinutes": 10,
+   "longestDaytimeGap": 20,
+   "tripPatternsAtTown": 97,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "31",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Beaconsfield Old Town, Aylesbury End",
+    "Penn, The Pond",
+    "Beaconsfield, High School"
+   ],
+   "termini": [
+    "Aylesbury End",
+    "High Wycombe BusStn",
+    "The Pond",
+    "William Ramsay School"
+   ],
+   "journeysPerWeek": 343,
+   "journeysPerWeekRange": [
+    338,
+    383
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 94,
+   "journeysOutBack": [
+    172,
+    171
+   ],
+   "firstDeparture": "06:00",
+   "lastDeparture": "20:20",
+   "typicalDayDuplicates": 33,
+   "typicalDayJourneys": 94,
+   "typicalDayWindow": [
+    "06:00",
+    "20:20"
+   ],
+   "coreHeadwayMinutes": 21,
+   "longestDaytimeGap": 21,
+   "tripPatternsAtTown": 129,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "32",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Micklefield Estate, Woodside Road",
+    "Cressex, Empire Cinema",
+    "Booker, Asda"
+   ],
+   "termini": [
+    "Asda",
+    "Empire Cinema",
+    "Woodside Road"
+   ],
+   "journeysPerWeek": 567,
+   "journeysPerWeekRange": [
+    567,
+    600
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 128,
+   "journeysOutBack": [
+    275,
+    292
+   ],
+   "firstDeparture": "05:53",
+   "lastDeparture": "19:44",
+   "typicalDayDuplicates": 59,
+   "typicalDayJourneys": 128,
+   "typicalDayWindow": [
+    "05:53",
+    "19:44"
+   ],
+   "coreHeadwayMinutes": 15,
+   "longestDaytimeGap": 13,
+   "tripPatternsAtTown": 187,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "33",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Desborough Castle, Whitelands Road",
+    "Totteridge, Tyzack Road",
+    "Desborough Castle, Copyground Lane"
+   ],
+   "termini": [
+    "Copyground Lane",
+    "Tyzack Road",
+    "Whitelands Road"
+   ],
+   "journeysPerWeek": 652,
+   "journeysPerWeekRange": [
+    652,
+    744
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 196,
+   "journeysOutBack": [
+    321,
+    331
+   ],
+   "firstDeparture": "06:12",
+   "lastDeparture": "23:05",
+   "typicalDayDuplicates": 40,
+   "typicalDayJourneys": 196,
+   "typicalDayWindow": [
+    "06:12",
+    "23:05"
+   ],
+   "coreHeadwayMinutes": 9,
+   "longestDaytimeGap": 19,
+   "tripPatternsAtTown": 236,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "34",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Lane End, Simmons Way",
+    "High Wycombe, Olympic Way",
+    "High Wycombe, High Wycombe BusStn",
+    "Lane End, The Row",
+    "High Wycombe, Coachway"
+   ],
+   "termini": [
+    "Coachway",
+    "High Wycombe BusStn",
+    "Olympic Way",
+    "Simmons Way",
+    "The Row"
+   ],
+   "journeysPerWeek": 300,
+   "journeysPerWeekRange": [
+    300,
+    340
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 88,
+   "journeysOutBack": [
+    150,
+    150
+   ],
+   "firstDeparture": "06:43",
+   "lastDeparture": "19:25",
+   "typicalDayDuplicates": 20,
+   "typicalDayJourneys": 88,
+   "typicalDayWindow": [
+    "06:43",
+    "19:25"
+   ],
+   "coreHeadwayMinutes": 28,
+   "longestDaytimeGap": 34,
+   "tripPatternsAtTown": 108,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "36",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Bus Station",
+    "Bourne End, Railway Station"
+   ],
+   "termini": [
+    "Bourne End Academy",
+    "High Wycombe BusStn",
+    "Railway Station"
+   ],
+   "journeysPerWeek": 175,
+   "journeysPerWeekRange": [
+    175,
+    218
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 69,
+   "journeysOutBack": [
+    82,
+    93
+   ],
+   "firstDeparture": "06:50",
+   "lastDeparture": "19:49",
+   "typicalDayDuplicates": 2,
+   "typicalDayJourneys": 69,
+   "typicalDayWindow": [
+    "06:50",
+    "19:49"
+   ],
+   "coreHeadwayMinutes": 14,
+   "longestDaytimeGap": 48,
+   "tripPatternsAtTown": 75,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "37",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Bus Station",
+    "Windsor Town Centre, Parish Church",
+    "Maidenhead Town Centre, Frascati Way"
+   ],
+   "termini": [
+    "Frascati Way",
+    "High Wycombe BusStn",
+    "Parish Church",
+    "Windsor Castle"
+   ],
+   "journeysPerWeek": 310,
+   "journeysPerWeekRange": [
+    310,
+    332
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 73,
+   "journeysOutBack": [
+    146,
+    164
+   ],
+   "firstDeparture": "06:10",
+   "lastDeparture": "23:21",
+   "typicalDayDuplicates": 33,
+   "typicalDayJourneys": 73,
+   "typicalDayWindow": [
+    "06:10",
+    "23:21"
+   ],
+   "coreHeadwayMinutes": 20,
+   "longestDaytimeGap": 25,
+   "tripPatternsAtTown": 108,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "38",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 30,
+   "journeysPerWeekRange": [
+    25,
+    30
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 6,
+   "journeysOutBack": [
+    30,
+    0
+   ],
+   "firstDeparture": "09:30",
+   "lastDeparture": "17:30",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 6,
+   "typicalDayWindow": [
+    "09:30",
+    "17:30"
+   ],
+   "coreHeadwayMinutes": 75,
+   "longestDaytimeGap": 150,
+   "tripPatternsAtTown": 6,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "40",
+   "operator": "Red Rose Travel",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Town Hall",
+    "High Wycombe BusStn",
+    "Lord Williams Upper School"
+   ],
+   "termini": [
+    "Brook Street",
+    "High Wycombe BusStn",
+    "Lord Williams Upper School",
+    "The Red Lion",
+    "Town Hall"
+   ],
+   "journeysPerWeek": 178,
+   "journeysPerWeekRange": [
+    152,
+    178
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 34,
+   "journeysOutBack": [
+    89,
+    89
+   ],
+   "firstDeparture": "07:10",
+   "lastDeparture": "21:10",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 34,
+   "typicalDayWindow": [
+    "07:10",
+    "21:10"
+   ],
+   "coreHeadwayMinutes": 50,
+   "longestDaytimeGap": 62,
+   "tripPatternsAtTown": 66,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "41",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Amersham, Amersham Station",
+    "Great Missenden, Railway Station"
+   ],
+   "termini": [
+    "Amersham Station",
+    "High Wycombe BusStn",
+    "Railway Station"
+   ],
+   "journeysPerWeek": 173,
+   "journeysPerWeekRange": [
+    168,
+    203
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 56,
+   "journeysOutBack": [
+    86,
+    87
+   ],
+   "firstDeparture": "06:39",
+   "lastDeparture": "19:13",
+   "typicalDayDuplicates": 13,
+   "typicalDayJourneys": 56,
+   "typicalDayWindow": [
+    "06:39",
+    "19:13"
+   ],
+   "coreHeadwayMinutes": 4,
+   "longestDaytimeGap": 40,
+   "tripPatternsAtTown": 73,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "102",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Heathrow Airport, Heathrow Central Bus Station"
+   ],
+   "termini": [
+    "Heathrow Central Bus Station",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 476,
+   "journeysPerWeekRange": [
+    476,
+    548
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 140,
+   "journeysOutBack": [
+    238,
+    238
+   ],
+   "firstDeparture": "04:15",
+   "lastDeparture": "28:57",
+   "typicalDayDuplicates": 64,
+   "typicalDayJourneys": 140,
+   "typicalDayWindow": [
+    "04:15",
+    "28:57"
+   ],
+   "coreHeadwayMinutes": 25,
+   "longestDaytimeGap": 19,
+   "tripPatternsAtTown": 204,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "103",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Windsor Town Centre, Parish Church",
+    "Slough Town Centre, Wellington Street Stop B",
+    "Langley, Axis Park"
+   ],
+   "termini": [
+    "Axis Park",
+    "High Wycombe BusStn",
+    "Parish Church",
+    "Wellington Street Stop B",
+    "Wellington Street Stop G"
+   ],
+   "journeysPerWeek": 457,
+   "journeysPerWeekRange": [
+    457,
+    508
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 118,
+   "journeysOutBack": [
+    232,
+    225
+   ],
+   "firstDeparture": "04:40",
+   "lastDeparture": "24:42",
+   "typicalDayDuplicates": 71,
+   "typicalDayJourneys": 118,
+   "typicalDayWindow": [
+    "04:40",
+    "24:42"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 16,
+   "tripPatternsAtTown": 189,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "104",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Uxbridge, York Road (UB8)",
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Market Place",
+    "York Road (UB8)"
+   ],
+   "journeysPerWeek": 161,
+   "journeysPerWeekRange": [
+    161,
+    170
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 36,
+   "journeysOutBack": [
+    84,
+    77
+   ],
+   "firstDeparture": "05:55",
+   "lastDeparture": "20:05",
+   "typicalDayDuplicates": 17,
+   "typicalDayJourneys": 36,
+   "typicalDayWindow": [
+    "05:55",
+    "20:05"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 44,
+   "tripPatternsAtTown": 53,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "105",
+   "operator": "Carousel Buses",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Chartridge, Village Hall",
+    "Amersham, Amersham Station",
+    "Chesham, Broadway"
+   ],
+   "termini": [
+    "Amersham Station",
+    "Broadway",
+    "High Wycombe BusStn",
+    "Village Hall"
+   ],
+   "journeysPerWeek": 138,
+   "journeysPerWeekRange": [
+    138,
+    147
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 32,
+   "journeysOutBack": [
+    72,
+    66
+   ],
+   "firstDeparture": "06:25",
+   "lastDeparture": "18:25",
+   "typicalDayDuplicates": 14,
+   "typicalDayJourneys": 32,
+   "typicalDayWindow": [
+    "06:25",
+    "18:25"
+   ],
+   "coreHeadwayMinutes": 60,
+   "longestDaytimeGap": 44,
+   "tripPatternsAtTown": 46,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "130",
+   "operator": "Redline",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Aylesbury Bus Station (Bay 7)",
+    "High Wycombe Bus Stn (Bay 15)"
+   ],
+   "termini": [
+    "Aylesbury Bus Stn",
+    "High Wycombe BusStn",
+    "Princes Risborough School"
+   ],
+   "journeysPerWeek": 290,
+   "journeysPerWeekRange": [
+    232,
+    310
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 62,
+   "journeysOutBack": [
+    150,
+    140
+   ],
+   "firstDeparture": "00:00",
+   "lastDeparture": "23:00",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 62,
+   "typicalDayWindow": [
+    "00:00",
+    "23:00"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 28,
+   "tripPatternsAtTown": 86,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "158",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Marlow, Court Garden Leisure Centre",
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "Court Garden Leisure Centre",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    10,
+    10
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "10:55",
+   "lastDeparture": "13:45",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "10:55",
+    "13:45"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 170,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "275",
+   "operator": "Red Rose Travel",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Street",
+    "Riverside"
+   ],
+   "termini": [
+    "Brook Street",
+    "High Street",
+    "Riverside"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    8,
+    10
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "06:50",
+   "lastDeparture": "18:49",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "06:50",
+    "18:49"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "300",
+   "operator": "Redline",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe Bus Stn (Bay 15)",
+    "Aylesbury Bus Station (Bay 7)"
+   ],
+   "termini": [
+    "Aylesbury Bus Stn",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 350,
+   "journeysPerWeekRange": [
+    300,
+    370
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 54,
+   "journeysOutBack": [
+    182,
+    168
+   ],
+   "firstDeparture": "06:15",
+   "lastDeparture": "23:53",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 54,
+   "typicalDayWindow": [
+    "06:15",
+    "23:53"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 52,
+   "tripPatternsAtTown": 78,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "32A",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Micklefield Estate, Woodside Road",
+    "Cressex, Empire Cinema",
+    "Booker, Asda",
+    "High Wycombe, High Wycombe BusStn"
+   ],
+   "termini": [
+    "Asda",
+    "Empire Cinema",
+    "High Wycombe BusStn",
+    "Woodside Road"
+   ],
+   "journeysPerWeek": 131,
+   "journeysPerWeekRange": [
+    131,
+    178
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 61,
+   "journeysOutBack": [
+    71,
+    60
+   ],
+   "firstDeparture": "07:43",
+   "lastDeparture": "22:55",
+   "typicalDayDuplicates": 14,
+   "typicalDayJourneys": 61,
+   "typicalDayWindow": [
+    "07:43",
+    "22:55"
+   ],
+   "coreHeadwayMinutes": 30,
+   "longestDaytimeGap": 30,
+   "tripPatternsAtTown": 75,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "32"
+  },
+  {
+   "route": "331",
+   "operator": "Red Eagle",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Village Hall",
+    "The Red Lion",
+    "Marlow Hill Schools",
+    "Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Marlow Hill Schools",
+    "The Red Lion",
+    "Village Hall"
+   ],
+   "journeysPerWeek": 22,
+   "journeysPerWeekRange": [
+    20,
+    22
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 6,
+   "journeysOutBack": [
+    11,
+    11
+   ],
+   "firstDeparture": "08:07",
+   "lastDeparture": "16:10",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 6,
+   "typicalDayWindow": [
+    "08:07",
+    "16:10"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 190,
+   "tripPatternsAtTown": 6,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "333",
+   "operator": "Red Eagle",
+   "days": "Tue & Fri",
+   "daysFlags": [
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "The Harrow PH"
+   ],
+   "journeysPerWeek": 2,
+   "journeysPerWeekRange": [
+    1,
+    2
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 1,
+   "journeysOutBack": [
+    2,
+    0
+   ],
+   "firstDeparture": "09:28",
+   "lastDeparture": "09:28",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 1,
+   "typicalDayWindow": [
+    "09:28",
+    "09:28"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 1,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "334",
+   "operator": "Red Eagle",
+   "days": "Tue & Fri",
+   "daysFlags": [
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "The Harrow"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "The Harrow PH"
+   ],
+   "journeysPerWeek": 2,
+   "journeysPerWeekRange": [
+    1,
+    2
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 1,
+   "journeysOutBack": [
+    2,
+    0
+   ],
+   "firstDeparture": "12:20",
+   "lastDeparture": "12:20",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 1,
+   "typicalDayWindow": [
+    "12:20",
+    "12:20"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": null,
+   "tripPatternsAtTown": 1,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "36S",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260903",
+   "validTo": "20270325",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Bus Station",
+    "Bourne End, Railway Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Railway Station"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    0,
+    10
+   ],
+   "weeksActive": 11,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "08:35",
+   "lastDeparture": "15:35",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "08:35",
+    "15:35"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 420,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "36"
+  },
+  {
+   "route": "37M",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260902",
+   "validTo": "20270325",
+   "longName": "",
+   "headsigns": [
+    "Windsor Town Centre, Parish Church",
+    "High Wycombe, Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "Parish Church",
+    "Windsor Castle"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    0,
+    10
+   ],
+   "weeksActive": 11,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "09:26",
+   "lastDeparture": "14:15",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "09:26",
+    "14:15"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 289,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "37"
+  },
+  {
+   "route": "643",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260903",
+   "validTo": "20270325",
+   "longName": "",
+   "headsigns": [
+    "Ibstone, Infant School",
+    "High Wycombe, Chadwick Street"
+   ],
+   "termini": [
+    "Chadwick Street",
+    "Infant School"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    0,
+    10
+   ],
+   "weeksActive": 11,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    5,
+    5
+   ],
+   "firstDeparture": "08:18",
+   "lastDeparture": "16:04",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "08:18",
+    "16:04"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 466,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "644",
+   "operator": "Carousel Buses",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260903",
+   "validTo": "20270325",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, Marlow Hill Schools",
+    "Hughenden Valley, The Harrow PH"
+   ],
+   "termini": [
+    "Marlow Hill Schools",
+    "The Harrow PH"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    0,
+    10
+   ],
+   "weeksActive": 11,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    10,
+    0
+   ],
+   "firstDeparture": "08:06",
+   "lastDeparture": "16:11",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "08:06",
+    "16:11"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 485,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "654",
+   "operator": "Carousel Buses / Red Eagle",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Chinnor Hill, Red Lane",
+    "High Wycombe, Royal Grammar School",
+    "Chadwick Street"
+   ],
+   "termini": [
+    "Chadwick Street",
+    "Red Lane",
+    "Royal Grammar School"
+   ],
+   "journeysPerWeek": 15,
+   "journeysPerWeekRange": [
+    5,
+    15
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 3,
+   "journeysOutBack": [
+    5,
+    10
+   ],
+   "firstDeparture": "08:07",
+   "lastDeparture": "16:02",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 3,
+   "typicalDayWindow": [
+    "08:07",
+    "16:02"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 472,
+   "tripPatternsAtTown": 3,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "850",
+   "operator": "Carousel Buses",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe, High Wycombe BusStn",
+    "Reading Town Centre, Friar Street",
+    "Henley-on-Thames, Hart Street"
+   ],
+   "termini": [
+    "Bell Street",
+    "Friar Street",
+    "Hart Street",
+    "High Wycombe BusStn"
+   ],
+   "journeysPerWeek": 621,
+   "journeysPerWeekRange": [
+    611,
+    675
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 155,
+   "journeysOutBack": [
+    307,
+    314
+   ],
+   "firstDeparture": "04:35",
+   "lastDeparture": "23:59",
+   "typicalDayDuplicates": 62,
+   "typicalDayJourneys": 155,
+   "typicalDayWindow": [
+    "04:35",
+    "23:59"
+   ],
+   "coreHeadwayMinutes": 14,
+   "longestDaytimeGap": 17,
+   "tripPatternsAtTown": 217,
+   "hasGtfsShape": false,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "M40",
+   "operator": "First Berkshire & The Thames Valley",
+   "days": "Mon-Sat",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270606",
+   "longName": "",
+   "headsigns": [
+    "York Road (Stop V) Uxbridge Station",
+    "High Wycombe Bus Station"
+   ],
+   "termini": [
+    "High Wycombe BusStn",
+    "York Road (UB8)"
+   ],
+   "journeysPerWeek": 415,
+   "journeysPerWeekRange": [
+    337,
+    415
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 78,
+   "journeysOutBack": [
+    160,
+    255
+   ],
+   "firstDeparture": "05:15",
+   "lastDeparture": "20:09",
+   "typicalDayDuplicates": 28,
+   "typicalDayJourneys": 78,
+   "typicalDayWindow": [
+    "05:15",
+    "20:09"
+   ],
+   "coreHeadwayMinutes": 4,
+   "longestDaytimeGap": 22,
+   "tripPatternsAtTown": 312,
+   "hasGtfsShape": true,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "X74",
+   "operator": "First Berkshire & The Thames Valley",
+   "days": "Daily",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270606",
+   "longName": "",
+   "headsigns": [
+    "High Wycombe Bus Station",
+    "Belmont Road",
+    "Queensmere Car Park",
+    "Slough, Wellington Street"
+   ],
+   "termini": [
+    "Belmont Road",
+    "High Wycombe BusStn",
+    "Uxbridge Station",
+    "Wellington Street Stop B",
+    "Wellington Street Stop G",
+    "Wellington Street Stop H"
+   ],
+   "journeysPerWeek": 549,
+   "journeysPerWeekRange": [
+    459,
+    549
+   ],
+   "weeksActive": 12,
+   "busiestDayJourneys": 99,
+   "journeysOutBack": [
+    329,
+    220
+   ],
+   "firstDeparture": "05:02",
+   "lastDeparture": "24:08",
+   "typicalDayDuplicates": 41,
+   "typicalDayJourneys": 99,
+   "typicalDayWindow": [
+    "05:02",
+    "24:08"
+   ],
+   "coreHeadwayMinutes": 4,
+   "longestDaytimeGap": 22,
+   "tripPatternsAtTown": 474,
+   "hasGtfsShape": true,
+   "possibleVariantOf": null
+  },
+  {
+   "route": "130M",
+   "operator": "Redline",
+   "days": "Mon-Fri",
+   "daysFlags": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    0
+   ],
+   "daysBasis": "resolved from calendar + calendar_dates over the sampled window of 12 weeks; a weekday no calendar row declares counts when it runs in more than a quarter of them",
+   "validFrom": "20260901",
+   "validTo": "20270601",
+   "longName": "",
+   "headsigns": [
+    "Aylesbury Bus Station (Bay 7)",
+    "Marlow Hill Schools"
+   ],
+   "termini": [
+    "Aylesbury Bus Stn",
+    "Marlow Hill Schools"
+   ],
+   "journeysPerWeek": 10,
+   "journeysPerWeekRange": [
+    0,
+    14
+   ],
+   "weeksActive": 11,
+   "busiestDayJourneys": 2,
+   "journeysOutBack": [
+    7,
+    7
+   ],
+   "firstDeparture": "07:54",
+   "lastDeparture": "16:10",
+   "typicalDayDuplicates": 0,
+   "typicalDayJourneys": 2,
+   "typicalDayWindow": [
+    "07:54",
+    "16:10"
+   ],
+   "coreHeadwayMinutes": null,
+   "longestDaytimeGap": 496,
+   "tripPatternsAtTown": 2,
+   "hasGtfsShape": false,
+   "possibleVariantOf": "130"
+  }
+ ]
+}

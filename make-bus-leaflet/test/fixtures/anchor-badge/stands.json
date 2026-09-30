@@ -1,0 +1,1105 @@
+{
+ "place": "Oxford Street",
+ "center": [
+  51.6309395,
+  -0.7535997
+ ],
+ "radiusM": 250.0,
+ "register": "naptan.sqlite",
+ "generatedBy": "naptan_stands.py v1.2",
+ "verdict": "OK",
+ "counts": {
+  "stand": 18,
+  "named": 1,
+  "unidentifiable": 0
+ },
+ "stops": [
+  {
+   "atco": "040000002954",
+   "distM": 217,
+   "walkMin": 3,
+   "routes": [
+    "32",
+    "32A"
+   ],
+   "routeDirections": {
+    "32": [
+     "Empire Cinema - Woodside Road"
+    ],
+    "32A": [
+     "Empire Cinema - Woodside Road"
+    ]
+   },
+   "gtfsPos": [
+    51.631201,
+    -0.75672
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 4",
+    "stand": "4",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631201,
+    "lon": -0.75672
+   },
+   "class": "stand",
+   "label": "Bay 4",
+   "standCode": "4",
+   "why": "NaPTAN Indicator 'Bay 4'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002955",
+   "distM": 215,
+   "walkMin": 3,
+   "routes": [
+    "31",
+    "41"
+   ],
+   "routeDirections": {
+    "41": [
+     "High Wycombe BusStn - Amersham Station",
+     "Amersham Station - High Wycombe BusStn"
+    ],
+    "31": [
+     "High Wycombe BusStn - High School",
+     "Aylesbury End - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.631227,
+    -0.756676
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 5",
+    "stand": "5",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631227,
+    "lon": -0.756676
+   },
+   "class": "stand",
+   "label": "Bay 5",
+   "standCode": "5",
+   "why": "NaPTAN Indicator 'Bay 5'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002956",
+   "distM": 212,
+   "walkMin": 3,
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "1S"
+   ],
+   "routeDirections": {
+    "1": [
+     "High Wycombe BusStn - Marlowes",
+     "Marlowes - High Wycombe BusStn"
+    ],
+    "1A": [
+     "High Wycombe BusStn - Townsend Road",
+     "Townsend Road - High Wycombe BusStn"
+    ],
+    "1B": [
+     "High Wycombe BusStn - Marlowes",
+     "Marlowes - High Wycombe BusStn"
+    ],
+    "1S": [
+     "High Wycombe BusStn - Townsend Road",
+     "Townsend Road - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.631245,
+    -0.756632
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 6",
+    "stand": "6",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631245,
+    "lon": -0.756632
+   },
+   "class": "stand",
+   "label": "Bay 6",
+   "standCode": "6",
+   "why": "NaPTAN Indicator 'Bay 6'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002957",
+   "distM": 210,
+   "walkMin": 3,
+   "routes": [
+    "33"
+   ],
+   "routeDirections": {
+    "33": [
+     "Whitelands Road - Tyzack Road"
+    ]
+   },
+   "gtfsPos": [
+    51.631271,
+    -0.756588
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 7",
+    "stand": "7",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631271,
+    "lon": -0.756588
+   },
+   "class": "stand",
+   "label": "Bay 7",
+   "standCode": "7",
+   "why": "NaPTAN Indicator 'Bay 7'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002958",
+   "distM": 207,
+   "walkMin": 3,
+   "routes": [
+    "34"
+   ],
+   "routeDirections": {
+    "34": [
+     "Simmons Way - Olympic Way"
+    ]
+   },
+   "gtfsPos": [
+    51.631298,
+    -0.756544
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 8",
+    "stand": "8",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631298,
+    "lon": -0.756544
+   },
+   "class": "stand",
+   "label": "Bay 8",
+   "standCode": "8",
+   "why": "NaPTAN Indicator 'Bay 8'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002959",
+   "distM": 204,
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "routeDirections": {
+    "850": [
+     "High Wycombe BusStn - Friar Street",
+     "Friar Street - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.631315,
+    -0.7565
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 9",
+    "stand": "9",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631315,
+    "lon": -0.7565
+   },
+   "class": "stand",
+   "label": "Bay 9",
+   "standCode": "9",
+   "why": "NaPTAN Indicator 'Bay 9'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002960",
+   "distM": 201,
+   "walkMin": 3,
+   "routes": [
+    "34",
+    "36",
+    "36S"
+   ],
+   "routeDirections": {
+    "34": [
+     "Olympic Way - Simmons Way"
+    ],
+    "36": [
+     "High Wycombe BusStn - Railway Station"
+    ],
+    "36S": [
+     "High Wycombe BusStn - Railway Station"
+    ]
+   },
+   "gtfsPos": [
+    51.631342,
+    -0.756442
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 10",
+    "stand": "10",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631342,
+    "lon": -0.756442
+   },
+   "class": "stand",
+   "label": "Bay 10",
+   "standCode": "10",
+   "why": "NaPTAN Indicator 'Bay 10'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002961",
+   "distM": 199,
+   "walkMin": 2,
+   "routes": [
+    "36",
+    "36S",
+    "37",
+    "37M"
+   ],
+   "routeDirections": {
+    "36": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "36S": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "37": [
+     "High Wycombe BusStn - Parish Church",
+     "Windsor Castle - High Wycombe BusStn"
+    ],
+    "37M": [
+     "High Wycombe BusStn - Parish Church",
+     "Windsor Castle - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.631368,
+    -0.756398
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 11",
+    "stand": "11",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631368,
+    "lon": -0.756398
+   },
+   "class": "stand",
+   "label": "Bay 11",
+   "standCode": "11",
+   "why": "NaPTAN Indicator 'Bay 11'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002962",
+   "distM": 196,
+   "walkMin": 2,
+   "routes": [
+    "32",
+    "32A"
+   ],
+   "routeDirections": {
+    "32": [
+     "Woodside Road - Asda"
+    ],
+    "32A": [
+     "Woodside Road - Asda"
+    ]
+   },
+   "gtfsPos": [
+    51.631386,
+    -0.756354
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 12",
+    "stand": "12",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631386,
+    "lon": -0.756354
+   },
+   "class": "stand",
+   "label": "Bay 12",
+   "standCode": "12",
+   "why": "NaPTAN Indicator 'Bay 12'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002963",
+   "distM": 194,
+   "walkMin": 2,
+   "routes": [
+    "33"
+   ],
+   "routeDirections": {
+    "33": [
+     "Tyzack Road - Copyground Lane"
+    ]
+   },
+   "gtfsPos": [
+    51.631412,
+    -0.75631
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 13",
+    "stand": "13",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631412,
+    "lon": -0.75631
+   },
+   "class": "stand",
+   "label": "Bay 13",
+   "standCode": "13",
+   "why": "NaPTAN Indicator 'Bay 13'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002964",
+   "distM": 192,
+   "walkMin": 2,
+   "routes": [
+    "30"
+   ],
+   "routeDirections": {
+    "30": [
+     "High Wycombe, High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.63143,
+    -0.756266
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 14",
+    "stand": "14",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.63143,
+    "lon": -0.756266
+   },
+   "class": "stand",
+   "label": "Bay 14",
+   "standCode": "14",
+   "why": "NaPTAN Indicator 'Bay 14'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002965",
+   "distM": 190,
+   "walkMin": 2,
+   "routes": [
+    "130",
+    "130M",
+    "158",
+    "27",
+    "29",
+    "300",
+    "38",
+    "40",
+    "654"
+   ],
+   "routeDirections": {
+    "27": [
+     "High Wycombe BusStn - Orchard Road",
+     "Orchard Road - High Wycombe BusStn"
+    ],
+    "40": [
+     "High Wycombe BusStn - Lord Williams Upper School"
+    ],
+    "300": [
+     "Aylesbury Bus Stn - High Wycombe BusStn",
+     "High Wycombe BusStn - Aylesbury Bus Stn"
+    ],
+    "654": [
+     "Red Lane - Royal Grammar School",
+     "Chadwick Street - Red Lane"
+    ],
+    "130": [
+     "Aylesbury Bus Stn - High Wycombe BusStn",
+     "High Wycombe BusStn - Aylesbury Bus Stn"
+    ],
+    "158": [
+     "High Wycombe BusStn - Court Garden Leisure Centre",
+     "Court Garden Leisure Centre - High Wycombe BusStn"
+    ],
+    "38": [
+     "High Wycombe, High Wycombe BusStn"
+    ],
+    "29": [
+     "High Wycombe BusStn"
+    ],
+    "130M": [
+     "Aylesbury Bus Stn - Marlow Hill Schools",
+     "Marlow Hill Schools - Aylesbury Bus Stn"
+    ]
+   },
+   "gtfsPos": [
+    51.631456,
+    -0.756222
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 15",
+    "stand": "15",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631456,
+    "lon": -0.756222
+   },
+   "class": "stand",
+   "label": "Bay 15",
+   "standCode": "15",
+   "why": "NaPTAN Indicator 'Bay 15'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002967",
+   "distM": 186,
+   "walkMin": 2,
+   "routes": [
+    "333",
+    "334",
+    "M40",
+    "WW1"
+   ],
+   "routeDirections": {
+    "M40": [
+     "High Wycombe BusStn - York Road (UB8)"
+    ],
+    "WW1": [
+     "Station Interchange - Adams Park",
+     "Adams Park - Station Interchange"
+    ],
+    "334": [
+     "The Harrow"
+    ],
+    "333": [
+     "Bus Station"
+    ]
+   },
+   "gtfsPos": [
+    51.6315,
+    -0.756134
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 17",
+    "stand": "17",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.6315,
+    "lon": -0.756134
+   },
+   "class": "stand",
+   "label": "Bay 17",
+   "standCode": "17",
+   "why": "NaPTAN Indicator 'Bay 17'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000002968",
+   "distM": 184,
+   "walkMin": 2,
+   "routes": [
+    "331",
+    "40",
+    "M40",
+    "X74"
+   ],
+   "routeDirections": {
+    "40": [
+     "Lord Williams Upper School - High Wycombe BusStn"
+    ],
+    "M40": [
+     "York Road (UB8) - High Wycombe BusStn"
+    ],
+    "X74": [
+     "Uxbridge Station - High Wycombe BusStn",
+     "High Wycombe BusStn - Belmont Road"
+    ],
+    "331": [
+     "Marlow Hill Schools - The Red Lion",
+     "The Red Lion - Marlow Hill Schools"
+    ]
+   },
+   "gtfsPos": [
+    51.631527,
+    -0.75609
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Bay 18",
+    "stand": "18",
+    "stand_kind": "bay",
+    "Bearing": null,
+    "Street": "Bridge Street",
+    "Landmark": "Shopping Centre",
+    "StopType": "BCS",
+    "Status": "active",
+    "lat": 51.631527,
+    "lon": -0.75609
+   },
+   "class": "stand",
+   "label": "Bay 18",
+   "standCode": "18",
+   "why": "NaPTAN Indicator 'Bay 18'",
+   "facing": null,
+   "street": "Bridge Street",
+   "landmark": "Shopping Centre",
+   "stopType": "BCS",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000000441",
+   "distM": 220,
+   "walkMin": 3,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105"
+   ],
+   "routeDirections": {
+    "103": [
+     "High Wycombe BusStn - Axis Park",
+     "Axis Park - High Wycombe BusStn"
+    ],
+    "102": [
+     "High Wycombe BusStn - Heathrow Central Bus Station",
+     "Heathrow Central Bus Station - High Wycombe BusStn"
+    ],
+    "104": [
+     "High Wycombe BusStn - York Road (UB8)",
+     "York Road (UB8) - High Wycombe BusStn"
+    ],
+    "105": [
+     "High Wycombe BusStn - Village Hall",
+     "Village Hall - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.631147,
+    -0.756772
+   ],
+   "naptan": {
+    "CommonName": "High Wycombe BusStn",
+    "Indicator": "Gate A",
+    "stand": "A",
+    "stand_kind": "gate",
+    "Bearing": "SW",
+    "Street": "Bridge Street",
+    "Landmark": null,
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.631147,
+    "lon": -0.756772
+   },
+   "class": "stand",
+   "label": "Gate A",
+   "standCode": "A",
+   "why": "NaPTAN Indicator 'Gate A'",
+   "facing": "south-west",
+   "street": "Bridge Street",
+   "landmark": null,
+   "stopType": "BCT",
+   "name": "High Wycombe BusStn"
+  },
+  {
+   "atco": "040000003058",
+   "distM": 14,
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "102",
+    "103",
+    "104",
+    "105",
+    "1A",
+    "1B",
+    "1S",
+    "27",
+    "30",
+    "31",
+    "32",
+    "32A",
+    "33",
+    "334",
+    "34",
+    "36",
+    "36S",
+    "37",
+    "37M",
+    "41",
+    "654",
+    "M40",
+    "WW1",
+    "X74"
+   ],
+   "routeDirections": {
+    "103": [
+     "High Wycombe BusStn - Axis Park"
+    ],
+    "102": [
+     "High Wycombe BusStn - Heathrow Central Bus Station"
+    ],
+    "104": [
+     "High Wycombe BusStn - York Road (UB8)"
+    ],
+    "105": [
+     "High Wycombe BusStn - Village Hall"
+    ],
+    "32": [
+     "Empire Cinema - Woodside Road"
+    ],
+    "32A": [
+     "Empire Cinema - Woodside Road"
+    ],
+    "41": [
+     "High Wycombe BusStn - Amersham Station"
+    ],
+    "31": [
+     "High Wycombe BusStn - High School"
+    ],
+    "1": [
+     "High Wycombe BusStn - Marlowes"
+    ],
+    "1A": [
+     "High Wycombe BusStn - Townsend Road"
+    ],
+    "1B": [
+     "High Wycombe BusStn - Marlowes"
+    ],
+    "1S": [
+     "High Wycombe BusStn - Townsend Road"
+    ],
+    "33": [
+     "Whitelands Road - Tyzack Road"
+    ],
+    "34": [
+     "Simmons Way - Olympic Way"
+    ],
+    "36": [
+     "High Wycombe BusStn - Railway Station"
+    ],
+    "36S": [
+     "High Wycombe BusStn - Railway Station"
+    ],
+    "37": [
+     "High Wycombe BusStn - Parish Church"
+    ],
+    "37M": [
+     "High Wycombe BusStn - Parish Church"
+    ],
+    "30": [
+     "High Wycombe, High Wycombe BusStn"
+    ],
+    "27": [
+     "High Wycombe BusStn - Orchard Road"
+    ],
+    "654": [
+     "Red Lane - Royal Grammar School"
+    ],
+    "M40": [
+     "High Wycombe BusStn - York Road (UB8)"
+    ],
+    "WW1": [
+     "Adams Park - Station Interchange"
+    ],
+    "334": [
+     "The Harrow"
+    ],
+    "X74": [
+     "High Wycombe BusStn - Belmont Road"
+    ]
+   },
+   "gtfsPos": [
+    51.630941,
+    -0.753404
+   ],
+   "naptan": {
+    "CommonName": "Oxford Street",
+    "Indicator": "Stop J",
+    "stand": "J",
+    "stand_kind": "stop",
+    "Bearing": "E",
+    "Street": "Oxford Street",
+    "Landmark": "Frogmoor",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.630941,
+    "lon": -0.753404
+   },
+   "class": "stand",
+   "label": "Stop J",
+   "standCode": "J",
+   "why": "NaPTAN Indicator 'Stop J'",
+   "facing": "east",
+   "street": "Oxford Street",
+   "landmark": "Frogmoor",
+   "stopType": "BCT",
+   "name": "Oxford Street"
+  },
+  {
+   "atco": "040000003061",
+   "distM": 28,
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "102",
+    "103",
+    "104",
+    "105",
+    "1A",
+    "1B",
+    "1S",
+    "27",
+    "30",
+    "300",
+    "31",
+    "32",
+    "32A",
+    "33",
+    "333",
+    "34",
+    "36",
+    "36S",
+    "37",
+    "37M",
+    "41",
+    "644",
+    "654",
+    "M40",
+    "WW1",
+    "X74"
+   ],
+   "routeDirections": {
+    "103": [
+     "Axis Park - High Wycombe BusStn"
+    ],
+    "102": [
+     "Heathrow Central Bus Station - High Wycombe BusStn"
+    ],
+    "104": [
+     "York Road (UB8) - High Wycombe BusStn"
+    ],
+    "105": [
+     "Village Hall - High Wycombe BusStn"
+    ],
+    "32": [
+     "Woodside Road - Asda"
+    ],
+    "32A": [
+     "Woodside Road - Asda"
+    ],
+    "41": [
+     "Amersham Station - High Wycombe BusStn"
+    ],
+    "31": [
+     "Aylesbury End - High Wycombe BusStn"
+    ],
+    "1": [
+     "Marlowes - High Wycombe BusStn"
+    ],
+    "1A": [
+     "Townsend Road - High Wycombe BusStn"
+    ],
+    "1B": [
+     "Marlowes - High Wycombe BusStn"
+    ],
+    "1S": [
+     "Townsend Road - High Wycombe BusStn"
+    ],
+    "33": [
+     "Tyzack Road - Copyground Lane"
+    ],
+    "34": [
+     "Olympic Way - Simmons Way"
+    ],
+    "36": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "36S": [
+     "Railway Station - High Wycombe BusStn"
+    ],
+    "37": [
+     "Windsor Castle - High Wycombe BusStn"
+    ],
+    "37M": [
+     "Windsor Castle - High Wycombe BusStn"
+    ],
+    "30": [
+     "High Wycombe, High Wycombe BusStn"
+    ],
+    "27": [
+     "Orchard Road - High Wycombe BusStn"
+    ],
+    "300": [
+     "Aylesbury Bus Stn - High Wycombe BusStn"
+    ],
+    "654": [
+     "Chadwick Street - Red Lane"
+    ],
+    "644": [
+     "High Wycombe, Marlow Hill Schools"
+    ],
+    "M40": [
+     "York Road (UB8) - High Wycombe BusStn"
+    ],
+    "WW1": [
+     "Station Interchange - Adams Park"
+    ],
+    "333": [
+     "Bus Station"
+    ],
+    "X74": [
+     "Uxbridge Station - High Wycombe BusStn"
+    ]
+   },
+   "gtfsPos": [
+    51.63076,
+    -0.753308
+   ],
+   "naptan": {
+    "CommonName": "Oxford Street",
+    "Indicator": "Stop K",
+    "stand": "K",
+    "stand_kind": "stop",
+    "Bearing": "W",
+    "Street": "Oxford Street",
+    "Landmark": "Bull Lane",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.63076,
+    "lon": -0.753308
+   },
+   "class": "stand",
+   "label": "Stop K",
+   "standCode": "K",
+   "why": "NaPTAN Indicator 'Stop K'",
+   "facing": "west",
+   "street": "Oxford Street",
+   "landmark": "Bull Lane",
+   "stopType": "BCT",
+   "name": "Oxford Street"
+  },
+  {
+   "atco": "040000003056",
+   "distM": 110,
+   "walkMin": 1,
+   "routes": [
+    "30",
+    "300",
+    "333",
+    "644"
+   ],
+   "routeDirections": {
+    "30": [
+     "High Wycombe, High Wycombe BusStn"
+    ],
+    "300": [
+     "Aylesbury Bus Stn - High Wycombe BusStn"
+    ],
+    "644": [
+     "High Wycombe, Marlow Hill Schools"
+    ],
+    "333": [
+     "Bus Station"
+    ]
+   },
+   "gtfsPos": [
+    51.631775,
+    -0.752752
+   ],
+   "naptan": {
+    "CommonName": "Frogmoor",
+    "Indicator": "Stop M",
+    "stand": "M",
+    "stand_kind": "stop",
+    "Bearing": "S",
+    "Street": "Frogmoor",
+    "Landmark": "viaduct",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.631775,
+    "lon": -0.752752
+   },
+   "class": "stand",
+   "label": "Stop M",
+   "standCode": "M",
+   "why": "NaPTAN Indicator 'Stop M'",
+   "facing": "south",
+   "street": "Frogmoor",
+   "landmark": "viaduct",
+   "stopType": "BCT",
+   "name": "Frogmoor"
+  },
+  {
+   "atco": "040000002970",
+   "distM": 205,
+   "walkMin": 3,
+   "routes": [
+    "20"
+   ],
+   "routeDirections": {
+    "20": [
+     "Frascati Way - Bus Station",
+     "Bus Station - Frascati Way"
+    ]
+   },
+   "gtfsPos": [
+    51.631423,
+    -0.756468
+   ],
+   "naptan": {
+    "CommonName": "Bus Station",
+    "Indicator": "adj",
+    "stand": null,
+    "stand_kind": null,
+    "Bearing": "SW",
+    "Street": "Bridge Street",
+    "Landmark": "Bus Station",
+    "StopType": "BCT",
+    "Status": "active",
+    "lat": 51.631423,
+    "lon": -0.756468
+   },
+   "class": "named",
+   "label": "Bus Station",
+   "why": "no stand code; CommonName is unique inside the frame",
+   "facing": "south-west",
+   "street": "Bridge Street",
+   "landmark": "Bus Station",
+   "stopType": "BCT",
+   "name": "Bus Station"
+  }
+ ]
+}

@@ -1,0 +1,101 @@
+{
+ "center": [
+  51.6309395,
+  -0.7535997
+ ],
+ "radiusM": 500,
+ "datasets": [
+  "bedfordshire",
+  "buckinghamshire",
+  "cambridgeshire"
+ ],
+ "stops": 45,
+ "served": 33,
+ "unserved": [
+  {
+   "atco": "0400000T9001",
+   "name": "Oxford Road",
+   "indicator": "Stop OR",
+   "locality": "High Wycombe",
+   "distM": 147
+  },
+  {
+   "atco": "040000000446",
+   "name": "High Wycombe BusStn",
+   "indicator": "Gate F",
+   "locality": "High Wycombe",
+   "distM": 183
+  },
+  {
+   "atco": "040000002966",
+   "name": "High Wycombe BusStn",
+   "indicator": "Bay 16",
+   "locality": "High Wycombe",
+   "distM": 188
+  },
+  {
+   "atco": "040000000445",
+   "name": "High Wycombe BusStn",
+   "indicator": "Gate E",
+   "locality": "High Wycombe",
+   "distM": 189
+  },
+  {
+   "atco": "040000000444",
+   "name": "High Wycombe BusStn",
+   "indicator": "Gate D",
+   "locality": "High Wycombe",
+   "distM": 196
+  },
+  {
+   "atco": "040000000443",
+   "name": "High Wycombe BusStn",
+   "indicator": "Gate C",
+   "locality": "High Wycombe",
+   "distM": 203
+  },
+  {
+   "atco": "040000000442",
+   "name": "High Wycombe BusStn",
+   "indicator": "Gate B",
+   "locality": "High Wycombe",
+   "distM": 211
+  },
+  {
+   "atco": "040000002953",
+   "name": "High Wycombe BusStn",
+   "indicator": "Bay 3",
+   "locality": "High Wycombe",
+   "distM": 220
+  },
+  {
+   "atco": "040000002952",
+   "name": "High Wycombe BusStn",
+   "indicator": "Bay 2",
+   "locality": "High Wycombe",
+   "distM": 223
+  },
+  {
+   "atco": "040000002951",
+   "name": "High Wycombe BusStn",
+   "indicator": "Bay 1",
+   "locality": "High Wycombe",
+   "distM": 225
+  },
+  {
+   "atco": "0400000T9002",
+   "name": "Bridge Street",
+   "indicator": "Stop BS",
+   "locality": "High Wycombe",
+   "distM": 267
+  },
+  {
+   "atco": "040000002938",
+   "name": "University Main Campus",
+   "indicator": "adj",
+   "locality": "High Wycombe",
+   "distM": 392
+  }
+ ],
+ "notJudged": []
+}

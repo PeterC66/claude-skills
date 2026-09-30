@@ -19,7 +19,7 @@
  * record and the gate are.
  */
 import {
-  neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, Refused, SCHEMA,
+  neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, Refused, SCHEMA,
 } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -35,7 +35,8 @@ const S = (v, d) => `build ${v} \u00b7 ${d}`;
 function estate(maps, grades = { [SCAN]: { March: 'SAFE', Ely: 'ESCALATE' } }) {
   const files = new Map(), manifests = new Map();
   for (const [town, runs] of Object.entries(maps)) {
-    const dir = `${BUSES}/Areas/${town}`.replace(/\//g, '|');
+    /* A key with a slash is a map folder relative to the estate — a place map. */
+    const dir = (town.includes('/') ? `${BUSES}/${town}` : `${BUSES}/Areas/${town}`).replace(/\//g, '|');
     manifests.set(dir, { stages: { S4: { runs: runs.map((r) => ({ id: r.id, dir: `S4-generate/${r.id}`, outputs: Object.keys(r.files) })) } } });
     for (const r of runs) for (const [n, t] of Object.entries(r.files)) if (t != null) files.set(`${dir}|S4-generate|${r.id}|${n}`, t);
   }
@@ -89,6 +90,30 @@ console.log('\n3. The population, and the grading from another scan');
   check('a grading from another scan REFUSES rather than reviewing last month\'s towns', refuses(() => collect({ busesDir: BUSES, scan: SCAN, io: stale }), /newest grading is 2026-09-01/));
   check('  unless the towns are named, and then only those', collect({ busesDir: BUSES, scan: SCAN, towns: ['Ely'], io: stale }).maps.map((m) => m.map).join() === 'Ely');
   check('a scan that is not a date refuses', refuses(() => collect({ busesDir: BUSES, scan: 'October', io })));
+}
+
+console.log('\n3a. A place map joins by name, from its own folder (OA-430 item 3)');
+{
+  const SNE = 'Areas/St Neots/Places/St Neots East';
+  const io = estate({
+    March: [run(OLD, { 'internal.svg': sheet('a', 'x') }), run(NEW, { 'internal.svg': sheet('a', 'x') })],
+    [SNE]: [run(OLD, { 'internal.svg': sheet('a', 'x') }), run(NEW, { 'internal.svg': sheet('b', 'x') })],
+  });
+  const places = resolvePlaces(['st neots east'], [{ name: 'St Neots East', rel: SNE }, { name: 'Ely Co-op', rel: 'Places/_standalone/Ely Co-op' }]);
+  check('a place name resolves to its folder, spelled as the disk spells it', places[0].name === 'St Neots East' && places[0].dir === SNE, JSON.stringify(places));
+  check('an unknown place refuses and lists the place maps', refuses(() => resolvePlaces(['Ely Tesco'], [{ name: 'Ely Co-op', rel: 'x' }]), /are Ely Co-op/));
+  check('a name two place maps share refuses', refuses(() => resolvePlaces(['Co-op'], [{ name: 'Co-op', rel: 'a' }, { name: 'Co-op', rel: 'b' }]), /2 place maps/));
+  const r = collect({ busesDir: BUSES, scan: SCAN, places, io });
+  const p = r.maps.find((m) => m.map === 'St Neots East');
+  check('the place is reviewed beside the SAFE towns', r.maps.map((m) => m.map).join() === 'March,St Neots East', r.maps.map((m) => m.map).join());
+  check('  read from its own folder, not Areas/<name>', p && p.status === 'ink-moved' && p.dir === SNE, p && `${p.status} ${p.dir}`);
+  check('  and says it is a place, and a town says it is an area', p && p.kind === 'place' && r.maps[0].kind === 'area');
+  const guessed = collect({ busesDir: BUSES, scan: SCAN, towns: ['St Neots East'], io }).maps.find((m) => m.map === 'St Neots East');
+  check('  and without its folder it WOULD have been unreadable — the folder is load-bearing', guessed.status === 'unreadable', guessed.status);
+  check('a place can be answered like a town', deliverable(answer(r, 'St Neots East', 'accept', { by: 'a', at: 'T' })).deliver.includes('St Neots East'));
+  const stale = estate({ [SNE]: [run(OLD, { 'i.svg': 'a' }), run(NEW, { 'i.svg': 'a' })] }, { '2026-09-01': { March: 'SAFE' } });
+  check('a named place is a population when the grading is another scan\'s', collect({ busesDir: BUSES, scan: SCAN, places, io: stale }).maps.map((m) => m.map).join() === 'St Neots East');
+  check('a place sharing a town\'s name in one review refuses', refuses(() => collect({ busesDir: BUSES, scan: SCAN, places: [{ name: 'March', dir: 'Places/March' }], io }), /as well as a place map/));
 }
 
 console.log('\n4. A sheet missing from disk is never read as sameness');

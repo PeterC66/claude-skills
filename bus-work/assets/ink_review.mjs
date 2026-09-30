@@ -31,6 +31,16 @@
  * person rebuilt can join the same review. A grading from another scan is not
  * this review's population: it refuses, for the reason `refresh_grades.mjs` gives.
  *
+ * A PLACE MAP JOINS BY NAME, with `--place` (buses-data OA-430 item 3). The grading
+ * is of towns, so no place is ever in the population by itself; a place a tick
+ * rebuilt onto a newer engine is named, and the edge finds its folder the way the
+ * worklist does (`gate_lib.findPlaces`: `Areas/<Town>/Places/<Place>`, or under
+ * `Places/`). Each map carries `kind` (`area` or `place`) and its own `dir`, so
+ * nothing downstream has to guess `Areas/<map>`. A place whose name is also a
+ * town's in the same review refuses: an answer is recorded by name, and one name
+ * must mean one map. Staging a place is not `stage_refresh.mjs`'s to do — it
+ * refuses one, and a person delivers it.
+ *
  * AN ANSWER IS ABOUT ONE BUILD. It records the S4 run it was given against, and a
  * map rebuilt after Peter answered loses the answer — kept under `superseded`,
  * never discarded — because an accept of v3.12 says nothing about v3.13.
@@ -46,10 +56,12 @@
  * call `crop_compare.js` in the engine, which needs `sharp`.
  *
  * Run from anywhere. <scan> is a scan date such as 2026-10-01; <Town> is a folder
- * under Areas/; <who> is the answering session's name, e.g. buses-29 or sched-0015:
+ * under Areas/; <Place> is a place map's folder name, wherever it is filed; <who>
+ * is the answering session's name, e.g. buses-29 or sched-0015:
  *
  *   node ink_review.mjs --scan <scan>                       collect, write the record and the page
  *   node ink_review.mjs --scan <scan> --town "<Town>,<Town>" add towns a person rebuilt
+ *   node ink_review.mjs --scan <scan> --place "<Place>,<Place>" add place maps (with or without --town)
  *   node ink_review.mjs --scan <scan> --no-crops            the record only, no sharp needed
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a tick may deliver
@@ -59,6 +71,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, assetsDir } from './engine.mjs';
 import { readGradeState, defaultReadGradeFiles } from './refresh_grades.mjs';
@@ -110,25 +123,31 @@ export function pickRuns(manifest, scan) {
  *   readGradeFiles(dir)  as refresh_grades.mjs's
  *   readManifest(mapDir) → object | null
  *   readSheet(file)      → text | null
+ * `places` is `[{ name, dir }]`, `dir` relative to busesDir, already found by the
+ * edge (`resolvePlaces`), so this core walks no folder.
  * Returns `{ schema, scan, maps: [...] }` or throws Refused.
  */
-export function collect({ busesDir, scan, towns = [], io }) {
+export function collect({ busesDir, scan, towns = [], places = [], io }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(scan || ''))) throw new Refused(`--scan must be a date like 2026-10-01, not ${JSON.stringify(scan)}.`);
   const population = new Map();
   const grades = readGradeState({ busesDir, readGradeFiles: io.readGradeFiles });
   if (grades.status === 'ok' && grades.date === scan) {
     for (const g of Object.values(grades.towns)) if (g.grade === 'SAFE') population.set(g.town.toLowerCase(), { town: g.town, why: 'SAFE' });
-  } else if (!towns.length) {
+  } else if (!towns.length && !places.length) {
     const said = grades.status === 'ok' ? `the newest grading is ${grades.date}` : `the grading is ${grades.status}${grades.why ? ` (${grades.why})` : ''}`;
-    throw new Refused(`no grading for the ${scan} scan — ${said} — so there is no SAFE population to review. Name the towns with --town, or run the monthly job so the grading and the scan are one run.`);
+    throw new Refused(`no grading for the ${scan} scan — ${said} — so there is no SAFE population to review. Name the maps with --town or --place, or run the monthly job so the grading and the scan are one run.`);
   }
   for (const t of towns) if (!population.has(t.toLowerCase())) population.set(t.toLowerCase(), { town: t, why: 'named' });
+  for (const p of places) {
+    const had = population.get(String(p.name).toLowerCase());
+    if (had && had.kind !== 'place') throw new Refused(`${p.name} is a town in this review as well as a place map, and an answer is recorded by name — review the two in separate runs.`);
+    if (!had) population.set(String(p.name).toLowerCase(), { town: p.name, why: 'named', kind: 'place', rel: String(p.dir).replace(/\\/g, '/') });
+  }
 
   const maps = [];
-  for (const { town, why } of [...population.values()].sort((a, b) => a.town.localeCompare(b.town))) {
-    const rel = `Areas/${town}`;
-    const mapDir = path.join(busesDir, 'Areas', town);
-    const entry = { map: town, dir: rel, why, status: null, before: null, after: null, sheets: [], answer: null };
+  for (const { town, why, kind = 'area', rel = `Areas/${town}` } of [...population.values()].sort((a, b) => a.town.localeCompare(b.town))) {
+    const mapDir = path.join(busesDir, rel);
+    const entry = { map: town, kind, dir: rel, why, status: null, before: null, after: null, sheets: [], answer: null };
     const manifest = io.readManifest(mapDir);
     if (!manifest) { maps.push({ ...entry, status: 'unreadable', detail: 'no manifest.json' }); continue; }
     const picked = pickRuns(manifest, scan);
@@ -260,6 +279,28 @@ ${sec}
 /* ------------------------------------------------------------------ the edge */
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
+
+/**
+ * `--place` names to `[{ name, dir }]`, matched against `found` (`[{ name, rel }]`,
+ * what `diskPlaces` lists) so this tool and the board agree on what a place is.
+ * An unknown or ambiguous name refuses, and says what the place maps are.
+ */
+export function resolvePlaces(names, found) {
+  return names.map((n) => {
+    const hit = found.filter((p) => p.name.toLowerCase() === String(n).toLowerCase());
+    if (hit.length === 1) return { name: hit[0].name, dir: hit[0].rel };
+    if (hit.length > 1) throw new Refused(`${n} names ${hit.length} place maps (${hit.map((p) => p.rel).join(', ')}), and this review records answers by name.`);
+    throw new Refused(`no place map is named ${JSON.stringify(n)}; the place maps are ${found.map((p) => p.name).sort().join(', ') || 'none'}.`);
+  });
+}
+
+/* Every place map on disk, found by the engine's own `gate_lib.findPlaces`, as the worklist finds them. */
+function diskPlaces(busesDir) {
+  const engine = assetsDir();
+  if (!engine) throw new Refused('--place needs the engine assets folder, whose gate_lib.js finds the place maps, and it was not found.');
+  const { findTowns, findPlaces } = createRequire(import.meta.url)(path.join(engine, 'gate_lib.js'));
+  return findPlaces(findTowns(busesDir), busesDir).map((p) => ({ name: p.name, rel: path.relative(busesDir, p.dir).replace(/\\/g, '/') }));
+}
 export const diskIo = {
   readGradeFiles: defaultReadGradeFiles,
   readManifest: (dir) => readJson(path.join(dir, 'manifest.json')),
@@ -317,8 +358,9 @@ function main() {
     for (const k of ['deliver', 'staged', 'waiting', 'held', 'other']) console.log(`${k.padEnd(8)} ${d[k].join(', ') || '—'}`);
     return;
   }
-  const towns = typeof args.town === 'string' ? args.town.split(',').map((t) => t.trim()).filter(Boolean) : [];
-  const review = mergeAnswers(prev, collect({ busesDir, scan, towns, io: diskIo }));
+  const list = (v) => (typeof v === 'string' ? v.split(',').map((t) => t.trim()).filter(Boolean) : []);
+  const places = list(args.place).length ? resolvePlaces(list(args.place), diskPlaces(busesDir)) : [];
+  const review = mergeAnswers(prev, collect({ busesDir, scan, towns: list(args.town), places, io: diskIo }));
   writeFileSync(file, JSON.stringify(review, null, 2) + '\n');
   const counts = ['ink-moved', 'no-ink'].map((s) => `${review.maps.filter((m) => m.status === s).length} ${s}`);
   const other = review.maps.filter((m) => m.status !== 'ink-moved' && m.status !== 'no-ink');

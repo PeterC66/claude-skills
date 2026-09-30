@@ -32,7 +32,10 @@
  *                           [--bump minor|major] [--note "..."] [--apply]
  *                           [--force | --rebuild-stale] [--buses "<dir>"]
  *                           [--by <who>] [--keep "<dir>"] [--warnings]
- *                           [--refresh-index --asof YYYY-MM-DD] [--help]
+ *                           [--refresh-index --asof YYYY-MM-DD] [--json "<file>"] [--help]
+ *
+ * `--json <file>` also writes the result as JSON, as rollout.js does (buses-data
+ * OA-485; the verdict rules are in rollout_report.js). Each map carries its town.
  *
  * ANYTHING ELSE IS REFUSED BEFORE THE ESTATE IS READ, as in sync_ci_reference.js
  * (buses-data OA-451 item 3). With no --place this considers every place, and the
@@ -71,6 +74,7 @@ const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
+const { jsonTarget, writeReport } = require('./rollout_report');
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
 // (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
@@ -96,10 +100,10 @@ const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
 const USAGE = 'Usage: node rollout_places.js [--place "<Place name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
   '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
-  '         [--warnings] [--refresh-index --asof YYYY-MM-DD]\n' +
+  '         [--warnings] [--refresh-index --asof YYYY-MM-DD] [--json "<file>"]\n' +
   '  Dry run unless --apply. No --place: consider EVERY place.';
 const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
-  'keep', 'warnings', 'refresh-index', 'asof', 'help']);
+  'keep', 'warnings', 'refresh-index', 'asof', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
 {
@@ -107,6 +111,7 @@ if (args.help === true) { console.log(USAGE); process.exit(0); }
   if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --place takes every place.\n${USAGE}`);
   if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a place with --place.\n${USAGE}`);
 }
+const JSON_OUT = jsonTarget(args, die);
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
@@ -630,7 +635,7 @@ for (const p of selected) {
   process.stdout.write(`${p.town || "(standalone)"} / ${p.name}... `);
   let r;
   try { r = rolloutOnePlace(p); } catch (e) { r = { name: p.name, status: 'ERROR', detail: e.message }; }
-  results.push(r);
+  results.push({ ...r, town: p.town || null });
   console.log(r.status + (r.detail ? ' — ' + r.detail : ''));
   if (r.diffs) {
     for (const [file, d] of Object.entries(r.diffs)) {
@@ -660,6 +665,10 @@ for (const p of selected) {
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
+if (JSON_OUT) {
+  const rep = writeReport(JSON_OUT, results, { kind: 'place', engine: CURRENT_PLACE_ENGINE, apply: APPLY });
+  console.log(`JSON: ${rep.counts.clean} clean, ${rep.counts.regressed} regressed, ${rep.counts.unmeasured} unmeasured of ${rep.counts.total} -> ${JSON_OUT}`);
+}
 // OA-179 — see rollout.js's identical block.
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(

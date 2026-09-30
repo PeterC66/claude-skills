@@ -140,4 +140,50 @@ function assembleS4Inputs({ dest, prevS4Dir, s3Carry, stages, pull }) {
   return seedPrevS4(dest, prevS4Dir, s3Carry);
 }
 
-module.exports = { seedPrevS4, assembleS4Inputs };
+/* THE internalRoads KEYS A PLACE BUILD WRITES BACK INTO ITS RUN'S routes.json, and
+ * nowhere else. build_internal_place_roads.js injects `fitExtra` and `fitMargin`;
+ * derive_termini.js writes `termini`. A rollout builds through build_s4.js and runs
+ * neither, so a value in the previous S4 that the S3 lacks is lost on the rollout. */
+const PLACE_WRITE_BACK_IR = ['fitExtra', 'fitMargin', 'termini'];
+
+/**
+ * Sort every routes.json key the previous S4 holds and the latest S3 does not into
+ * STALE (refuse the rollout) or DROPPED (the S3 removed it on purpose; roll out).
+ *
+ * WHY THERE ARE TWO ANSWERS (buses-data adhoc rollout-issue, 2026-09-30). The guard
+ * refused EVERY internalRoads key missing from the S3, which is right for a key a
+ * build writes back and wrong for one the S3 took out deliberately: St Ives Bus
+ * Station's `skeletonMaxW` was removed on 2026-09-29 (OA-430) and the rollout could
+ * not carry the removal, so it had to be hand-built with build_s4.js and
+ * seed_prev_s4.js. The difference is visible in the S3 history. A write-back key
+ * never has to have been in an S3; a key the S3 dropped was in an EARLIER S3 run.
+ *
+ * - A write-back key (PLACE_WRITE_BACK_IR, `frequency`, `design.frequencyTiers`) is
+ *   STALE whatever the history says, because the rollout will not recompute it.
+ * - Any other internalRoads key is DROPPED if some earlier S3 run's routes.json
+ *   held it, and STALE if none did — a key no S3 ever held came from a hand edit
+ *   of an S4, and nobody has said it should go.
+ *
+ * @param {object}   o
+ * @param {object}   o.s3   the latest S3's routes.json
+ * @param {object}   o.s4   the previous S4's routes.json
+ * @param {object[]} o.earlierS3  routes.json of every OTHER S3 run, any order
+ * @returns {{stale: string[], dropped: string[]}} dotted key names
+ */
+function staleS3Keys({ s3, s4, earlierS3 }) {
+  const ir = rj => (rj && rj.internalRoads && typeof rj.internalRoads === 'object') ? rj.internalRoads : {};
+  const s3ir = ir(s3), s4ir = ir(s4);
+  const stale = [], dropped = [];
+  for (const k of Object.keys(s4ir)) {
+    if (k in s3ir) continue;
+    const name = 'internalRoads.' + k;
+    if (PLACE_WRITE_BACK_IR.includes(k)) { stale.push(name); continue; }
+    ((earlierS3 || []).some(rj => k in ir(rj)) ? dropped : stale).push(name);
+  }
+  if (s4 && s4.frequency && !(s3 && s3.frequency)) stale.push('frequency');
+  if (s4 && s4.design && s4.design.frequencyTiers && !(s3 && s3.design && s3.design.frequencyTiers))
+    stale.push('design.frequencyTiers');
+  return { stale, dropped };
+}
+
+module.exports = { seedPrevS4, assembleS4Inputs, staleS3Keys, PLACE_WRITE_BACK_IR };

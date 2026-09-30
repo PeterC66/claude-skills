@@ -90,6 +90,14 @@ From the triage ladder ([complexity-triage.md](complexity-triage.md)). All opt-i
 
 **Use `1`.** Measured over the estate (buses-data OA-064): it takes High Wycombe's centre disc (13% of its casing ink) and Huntingdon's, most of Wisbech's and March's knots, and nothing from a street; `2` starts cutting street width at junctions. On the three maps that carry `skeletonMaxW` it draws less casing than the ceiling does without the ceiling set, so each of those three drops the ceiling in the S3 of its own rebuild row, after a crop against `loop/your-move/oa064-crops/` in buses-data.
 
+#### `internalRoads.caseDrawnLanes` — case the drawn lines, not the matched path (2026-09-30)
+
+```json
+"internalRoads": { "caseDrawnLanes": true }
+```
+
+Absent or anything but `true` ⇒ byte-identical. The bundle casing is sized on each matched edge from the lanes whose centreline passes near it, so where a short loop (a lay-by, a turning circle) collapses under its lane shift, the grey still traces the whole loop at bundle width round ink that never reaches it — Ely Co-op's lobes round Tesco and the inner lobe of St Ives' knot (buses-data OA-518). With the key on, each route's drawn line gets its own casing, `stroke + skeletonPad` wide; lanes sit `gap` apart, so co-running lanes fuse into one band with the same outer edge, and there is no grey without ink. Road labels still read the matched edges, so no text moves. `casingSmooth` and `skeletonMaxW` size the bundle casing and do nothing while this is on. `drawnLaneCasings()` in `casing_width.js` holds the rule. Adopt it at a map's rebuild row and judge the sheet on a crop.
+
 #### `internalRoads.skeletonMaxW` — a ceiling on the grey road casing (2026-08-23)
 
 ```json

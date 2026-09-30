@@ -2544,6 +2544,13 @@ const MUTATIONS = [
     find: "            if(ANCHOR_BOX && p[0]-2.4-gxw<ANCHOR_BOX[2]",
     to: "            if(false && p[0]-2.4-gxw<ANCHOR_BOX[2]" },
 
+  // The drawn-line casing (buses-data OA-518): the key is read but the bundle loop's
+  // casing is still emitted, so the lobes round a collapsed loop come back.
+  { suite: 'case_drawn_lanes.test.js', file: 'gen_internal.js',
+    what: 'internalRoads.caseDrawnLanes stops replacing the bundle casing, and Ely Co-op\'s grey lobes at Tesco return',
+    find: "  if(IR.caseDrawnLanes===true) drawnLaneCasings(",
+    to: "  if(false) drawnLaneCasings(" },
+
   { suite: 'pre_stages.test.js', file: 'projection.js',
     what: 'the fit margin default changes, and the pre-stages — which pass none — would lay every schematic out in a different frame',
     find: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:4) : 0;",

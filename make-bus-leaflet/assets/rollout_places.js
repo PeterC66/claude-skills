@@ -74,7 +74,7 @@ const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
-const { jsonTarget, writeReport } = require('./rollout_report');
+const { jsonTarget, writeReport, hardDefects } = require('./rollout_report');
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
 // (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
@@ -478,6 +478,8 @@ function rolloutOnePlace(p) {
     diffs[name] = d;
     // OA-071 and OA-477: what the drawn sheet owes its S3, reported and never gating.
     Object.assign(d, owedOnSheet(path.join(s4, name)));
+    // OA-485 item 2: the hard-defect count on both sides, which the label SET cannot see.
+    if (JSON_OUT) Object.assign(d, hardDefects(path.join(prevS4.dir, name), path.join(s4, name)));
     if (d.lost.length) anyLost = true;
   }
 

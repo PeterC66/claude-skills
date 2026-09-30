@@ -14,7 +14,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { scratchDir } = require('../assets/scratch');
 const { ENGINE_DIR, load } = require('./_engine.js');
-const { verdictOf, summarise, writeReport } = load('rollout_report.js');
+const { verdictOf, summarise, writeReport, hardDefects } = load('rollout_report.js');
 
 const diff = (o = {}) => ({ lost: [], gained: [], moved: [], rewrapped: [], ...o });
 
@@ -68,6 +68,45 @@ test('the report carries no clock, so the same results write the same bytes', ()
   writeReport(a, results, { kind: 'town', engine: 'e', apply: false });
   writeReport(b, results, { kind: 'town', engine: 'e', apply: false });
   assert.strictEqual(fs.readFileSync(a, 'utf8'), fs.readFileSync(b, 'utf8'));
+});
+
+/* OA-485 item 2: the label diff is a set, so a label that survives but now prints over
+ * another is invisible to it. The hard-defect count on both sides is the second question. */
+const hd = (before, after) => diff({ hardBefore: before, hardAfter: after });
+
+test('a dry run whose hard-defect count RISES is a regression, even with no label lost', () => {
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(2, 3) } }), 'regressed');
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(2, 1), 'external.svg': hd(0, 2) } }), 'regressed',
+    'the map total rose, whichever sheet it rose on');
+});
+
+test('an equal or falling hard-defect count stays clean', () => {
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(4, 4) } }), 'clean');
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(4, 1) } }), 'clean');
+});
+
+test('a sheet the measure could not read is never charged, and never excuses the map either', () => {
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(null, 9) } }), 'clean');
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(null, 9), 'external.svg': hd(0, 1) } }), 'clean',
+    'a partial sum compares different sheet sets, so the map is left out of the comparison');
+  const rep = summarise([{ name: 'A', status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(null, 9) } },
+    { name: 'B', status: 'DRY-RUN', blockers: [], diffs: { 'internal.svg': hd(1, 3), 'external.svg': hd(2, 2) } }],
+  { kind: 'town', engine: 'e', apply: false });
+  assert.deepStrictEqual([rep.maps[0].hardBefore, rep.maps[0].hardAfter], [null, null]);
+  assert.deepStrictEqual([rep.maps[1].hardBefore, rep.maps[1].hardAfter, rep.maps[1].verdict], [3, 5, 'regressed']);
+});
+
+test('hardDefects measures both sheets with quality_metrics.js, and a missing sheet is null', () => {
+  const dir = scratchDir('rollout-hard-');
+  const sheet = (name, size) => {
+    const p = path.join(dir, name);
+    fs.writeFileSync(p, '<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">'
+      + '<text x="20" y="20" font-size="' + size + '">Somewhere</text></svg>');
+    return p;
+  };
+  // Text far below the print minimum is a hard defect; the same label at a legible size is not.
+  assert.deepStrictEqual(hardDefects(sheet('a.svg', 3), sheet('b.svg', 0.5)), { hardBefore: 0, hardAfter: 1 });
+  assert.deepStrictEqual(hardDefects(path.join(dir, 'gone.svg'), sheet('c.svg', 3)), { hardBefore: null, hardAfter: 0 });
 });
 
 for (const script of ['rollout.js', 'rollout_places.js']) {

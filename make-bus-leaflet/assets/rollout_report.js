@@ -19,13 +19,45 @@
  *                UNRENDERED, NOT-STAMP-STALE, anything new). NEVER counted as clean: a
  *                map this tool could not build is not a map today's engine draws well.
  *
- * Hard collisions (OA-485 item 3's other half) are not measured here; the quality
- * metrics are a later slice. The report carries no date: the file's own mtime says
- * when, and nothing here may read the clock (buses-data CLAUDE.md, "a generated file
- * must not read the clock").
+ * Hard defects (OA-485 item 2). The label diff is a SET, so it cannot see a label that
+ * survives but now prints over another, slides under the footer plate or doubles up.
+ * hardDefects() measures quality_metrics.js's `hard` count on the shipped sheet and on
+ * today's scratch build, with the same tool on both sides so the two numbers are like
+ * for like, and a map whose count RISES is regressed too. A sheet the tool cannot read
+ * is null, and a null on either side leaves the map's comparison out rather than
+ * charging it (or excusing it) for a number nobody measured.
+ *
+ * The report carries no date: the file's own mtime says when, and nothing here may
+ * read the clock (buses-data CLAUDE.md, "a generated file must not read the clock").
  */
 const fs = require('fs');
 const path = require('path');
+
+/* One sheet's hard-defect count, or null when the measure cannot read it. Required
+ * lazily: quality_metrics.js is large and a rollout that never reaches a build (a
+ * refused --json, a map with no S4) should not pay for loading it. */
+function hardOf(svgPath) {
+  try {
+    const { analyse } = require('./quality_metrics');
+    const h = analyse(svgPath).metrics.hard;
+    return Number.isFinite(h) ? h : null;
+  } catch { return null; }
+}
+function hardDefects(shippedSvg, builtSvg) {
+  return { hardBefore: fs.existsSync(shippedSvg) ? hardOf(shippedSvg) : null, hardAfter: hardOf(builtSvg) };
+}
+/* A map's totals across its sheets: null unless EVERY built sheet was measured on both
+ * sides, because a partial sum compares different sheet sets. */
+function hardTotals(r) {
+  const ds = Object.values(r.diffs || {});
+  if (!ds.length) return null;
+  let before = 0, after = 0;
+  for (const d of ds) {
+    if (!d || !Number.isFinite(d.hardBefore) || !Number.isFinite(d.hardAfter)) return null;
+    before += d.hardBefore; after += d.hardAfter;
+  }
+  return { before, after };
+}
 
 const CLEAN_WITHOUT_BUILD = new Set(['UP-TO-DATE', 'STAMP-STALE']);
 const BUILT = new Set(['DRY-RUN', 'DONE', 'REVIEW-NEEDED']);
@@ -46,7 +78,9 @@ function verdictOf(r) {
   if (r.status === 'FAIL') return 'regressed';
   if (BUILT.has(r.status)) {
     const lost = r.status === 'REVIEW-NEEDED' || r.anyLost || total(r, 'lost') > 0;
-    return lost || (r.blockers || []).length ? 'regressed' : 'clean';
+    const h = hardTotals(r);
+    const worse = !!h && h.after > h.before;
+    return lost || worse || (r.blockers || []).length ? 'regressed' : 'clean';
   }
   return 'unmeasured';
 }
@@ -63,6 +97,9 @@ function summarise(results, { kind, engine, apply }) {
       m.rewrapped = total(r, 'rewrapped');
       m.blockers = (r.blockers || []).length;
       m.warnings = (r.warnings || []).filter(w => w.severity === 'WARN').length;
+      const h = hardTotals(r);
+      m.hardBefore = h ? h.before : null;
+      m.hardAfter = h ? h.after : null;
       const ll = lostLabels(r);
       if (Object.keys(ll).length) m.lostLabels = ll;
     }
@@ -88,4 +125,4 @@ function writeReport(file, results, opts) {
   return report;
 }
 
-module.exports = { verdictOf, summarise, jsonTarget, writeReport };
+module.exports = { verdictOf, summarise, jsonTarget, writeReport, hardDefects, hardTotals };

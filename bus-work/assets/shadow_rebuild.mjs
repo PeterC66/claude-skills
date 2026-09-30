@@ -29,7 +29,8 @@
  * A REGRESSED MAP IS AN ANSWER, NOT A FAILURE. `rollout.js` exits 1 when any map
  * would lose a label or raise a blocking warning; that is exactly what this job
  * exists to count, so it exits 0 and says so. `regressed` means LOOK: the
- * lost-label rule cannot tell a deliberate change from damage.
+ * lost-label rule and the hard-defect count (OA-485 item 2) cannot tell a
+ * deliberate change from damage.
  *
  * A HALF IT CANNOT RUN IS EXIT 2, NEVER A CLEAN REPORT — a rollout missing from
  * disk, one that refused (exit 2) or died, one that wrote no JSON or JSON that is
@@ -164,14 +165,14 @@ function main() {
   console.log(line('towns ', towns.counts));
   console.log(line('places', places.counts));
   for (const m of [...towns.maps, ...places.maps].filter((x) => x.verdict === 'regressed')) {
-    console.log(`  regressed: ${m.name} (${m.status}${m.lost ? `, ${m.lost} label(s) lost` : ''}${m.blockers ? `, ${m.blockers} blocking warning(s)` : ''})`);
+    console.log(`  regressed: ${m.name} (${m.status}${m.lost ? `, ${m.lost} label(s) lost` : ''}${m.blockers ? `, ${m.blockers} blocking warning(s)` : ''}${Number.isFinite(m.hardBefore) && m.hardAfter > m.hardBefore ? `, hard defects ${m.hardBefore} -> ${m.hardAfter}` : ''})`);
   }
   if (!result.estateChecked) console.log('  the buses tree is not a git checkout here, so the dry runs\' promise to write nothing was not checked');
 
   fs.mkdirSync(path.dirname(stampFile), { recursive: true });
   fs.writeFileSync(stampFile, JSON.stringify(stamp, null, 2) + '\n', 'utf8');
   console.log(`\nstamped: ${stampFile}`);
-  console.log('A regressed map means look, not fix: the lost-label rule cannot tell a deliberate change from damage.');
+  console.log('A regressed map means look, not fix: neither the lost-label rule nor the hard-defect count can tell a deliberate change from damage.');
 }
 
 /* EXECUTED, not imported — the idiom the rest of this folder uses. */

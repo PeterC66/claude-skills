@@ -80,6 +80,7 @@ import * as conc from './concurrency.mjs';
 import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
+import { freshPullItems, readCurrentQuery, readRecordedQuery } from './fresh_pull.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';
@@ -368,6 +369,9 @@ function fromMapTree() {
     row.s6 = s6 ? s6.rec.id : null;
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
+    // OA-499: the landmark query that run sent is read by fresh_pull.mjs.
+    const s2 = latestRunDir(m, t.dir, 'S2');
+    row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir } : null;
     return row;
   });
   /*
@@ -1093,6 +1097,11 @@ for (const t of tree.towns.filter((t) => !t.built)) {
     do: [{ kind: 'skill', what: `Run make-bus-leaflet for ${t.name} from whichever stage its manifest reached.` }],
   });
 }
+// OA-499 item 1: a town whose stored landmark pull does not ask today's
+// pois_query() question. Before the rebuild rows, because each of those names it.
+const freshPull = freshPullItems({ towns: tree.towns, currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery, sk: SK || '' });
+if (freshPull.warning) warnings.push(freshPull.warning);
+for (const it of freshPull.items) add(it);
 /*
  * ONE REBUILD ROW PER MAP, NOT ONE ROW FOR THE ESTATE (buses-data OA-430, R9 item 6).
  * This was a single `engine-stale` row naming every behind town in its `why`, with
@@ -1119,7 +1128,8 @@ for (const { row: mapRow, place } of engineStale) {
     // `looksLikeRowKey()` refuses it. A gate caught that, not a reader.
     key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
     title: `${mapRow.name} was drawn by an older engine`,
-    why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`,
+    why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
+      + (!place && freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [ // the dry run's verdict picks the write; why --rebuild-stale is its own step: playbooks.md, Engine-stale
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — its verdict decides which of the next two to run' },

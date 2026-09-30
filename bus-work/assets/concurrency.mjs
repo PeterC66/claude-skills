@@ -1255,6 +1255,8 @@ export function needsOf(item) {
   // OA-233: pulling an answer writes a new S3 run; building it runs the engine over the tree.
   if (key.startsWith('landmark-owed-')) return ['buses-tree', 'buses-maps'];
   if (key.startsWith('landmark-unbuilt-')) return ['buses-tree', 'buses-maps', 'engine'];
+  // OA-499: a fresh pull writes a new S2 run, and the rebuild it names runs the engine.
+  if (key.startsWith('fresh-pull-')) return ['buses-tree', 'buses-maps', 'engine'];
   // OA-251: the row's own action is `gh run view --log-failed`, which reads a
   // GitHub run and touches no tree here. Whatever the FIX turns out to need is
   // the fix's business, and will be classified by whatever row that becomes.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Prove the fresh-pull row can appear AND can go away (buses-data OA-499 item 1).
+/* Prove the fresh-pull row can appear AND can go away (buses-data OA-499 items 1 and 2).
  *
  * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
  * placeholders:
@@ -17,9 +17,10 @@
  * literal string, for the reason *The harness that stopped at the module's edge*.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { freshPullItems, queryTokens, poisQuerySource, readCurrentQuery } from './fresh_pull.mjs';
+import { freshPullItems, queryTokens, poisQuerySource, readCurrentQuery, s2Row } from './fresh_pull.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +66,26 @@ console.log('2. the row — raised, then cleared');
   check('an unbuilt town raises nothing', unbuilt.items.length === 0);
 }
 
+console.log('2b. a place — raised, then cleared (OA-499 item 2)');
+{
+  const place = (name, hasPois = true) => ({ name, town: 'Alpha', built: true, s2: { id: '2026-09-29_1024', dir: '/p', hasPois } });
+  const runP = (recorded, places) => freshPullItems({ towns: [], places, currentQuery: poisQuerySource(PY('pharmacy|cinema')), readRecorded: () => recorded });
+  const r = runP(REC('pharmacy'), [place('Alpha Co-op')]);
+  check('a place lacking cinema raises fresh-pull-Alpha Co-op', r.items.length === 1 && r.items[0].key === 'fresh-pull-Alpha Co-op');
+  check('the place row asks with --place, not --town', r.items[0] && /repull_landmarks\.py --place "Alpha Co-op"$/.test(r.items[0].do[0].cmd));
+  check('the place row rebuilds through make-place-bus-leaflet', r.items[0] && r.items[0].do[2].what.includes('make-place-bus-leaflet'));
+  check('the place row is filed under its town', r.items[0] && r.items[0].towns[0] === 'Alpha');
+  check('owed carries the place for its rebuild row', r.owed.has('Alpha Co-op'));
+  check('a place asking today\'s question clears it', runP(REC('cinema|pharmacy'), [place('Alpha Co-op')]).items.length === 0);
+  check('a place S2 with no osm.json raises nothing — the tool would refuse it', runP(null, [place('Alpha Co-op', false)]).items.length === 0);
+  // Godmanchester's shape: the bbox MCP's nwr lines, no box on the line, no bus stops.
+  const NWR = (amen) => `// comment (52.3,-0.18,52.32,-0.14)\nnwr["amenity"~"^(${amen})$"];\n`;
+  check('an nwr line with no box is read', queryTokens(NWR('pub')).has('way amenity=pub') && queryTokens(NWR('pub')).has('node amenity=pub'));
+  check('a place asking by nwr, without bus stops, is clear', runP(NWR('cinema|pharmacy|pub'), [place('Alpha Co-op')]).items.length === 0);
+  const townNoStops = freshPullItems({ towns: [town('Alpha')], currentQuery: poisQuerySource(PY('pharmacy|cinema')), readRecorded: () => NWR('cinema|pharmacy|pub') });
+  check('a TOWN without bus stops is still owed them', townNoStops.items.length === 1 && townNoStops.items[0].why.includes('highway=bus_stop'));
+}
+
 console.log('3. blind is not clean');
 {
   const r = freshPullItems({ towns: [town('Alpha')], currentQuery: null, readRecorded: () => null });
@@ -82,11 +103,20 @@ console.log('4. the real draft_town.py');
 console.log('5. the wire');
 {
   const wl = fs.readFileSync(path.join(HERE, 'worklist.mjs'), 'utf8');
-  check('worklist imports fresh_pull.mjs', wl.includes("import { freshPullItems, readCurrentQuery, readRecordedQuery } from './fresh_pull.mjs';"));
-  check('worklist calls freshPullItems', wl.includes('const freshPull = freshPullItems({ towns: tree.towns, currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery'));
+  check('worklist imports fresh_pull.mjs', wl.includes("import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';"));
+  check('worklist calls freshPullItems with towns and places', wl.includes('const freshPull = freshPullItems({ towns: tree.towns, places: tree.places || [], currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery'));
+  check('the place row carries its latest S2', wl.includes("row.s2 = s2Row(latestRunDir(m, p.dir, 'S2'));"));
+  check('a place rebuild row names its pull too', wl.includes('+ (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old'));
   check('worklist adds the rows', wl.includes('for (const it of freshPull.items) add(it);'));
   check('worklist reports a blind check', wl.includes('if (freshPull.warning) warnings.push(freshPull.warning);'));
-  check('the tree row carries its latest S2', wl.includes("row.s2 = s2 ? { id: s2.rec.id, dir: s2.dir } : null;"));
+  check('the tree row carries its latest S2', wl.includes("row.s2 = s2Row(latestRunDir(m, t.dir, 'S2'));"));
+  {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'fresh-pull-'));
+    const bare = s2Row({ rec: { id: 'x' }, dir: d });
+    fs.writeFileSync(path.join(d, 'osm.json'), '{"elements":[]}');
+    check('s2Row says whether the S2 holds a pull', bare.hasPois === false && s2Row({ rec: { id: 'x' }, dir: d }).hasPois === true && s2Row(null) === null);
+    fs.rmSync(d, { recursive: true, force: true });
+  }
   check('the rebuild row names the pull', wl.includes('take fresh-pull-${mapRow.name} first'));
   const needs = needsOf({ key: 'fresh-pull-Alpha', type: 'housekeeping' });
   check('fresh-pull needs buses-tree, buses-maps and engine', ['buses-tree', 'buses-maps', 'engine'].every((n) => needs.includes(n)), JSON.stringify(needs));

@@ -42,6 +42,11 @@
  * other three. A map in any other state is refused as NOT-STAMP-STALE (exit 1) or
  * left UP-TO-DATE; the two flags together are a usage error.
  *
+ * The town `Areas/_portal-fixture/` copies is PINNED-DONOR while the live template
+ * differs from buses-data's engine.lock.json pin, in every mode and under --force:
+ * it moves only in the same change as a pin bump (buses-data OA-532). Naming it with
+ * --town and --apply exits 1; an estate sweep passes over it.
+ *
  * `--by <who>` records WHO performed each stage this run opens and commits —
  * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
  * forwarded to `stage.js` unchanged and validated there; leaving it off records
@@ -77,6 +82,7 @@ const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unr
 const { owedLines } = require('./owed_at_rebuild');
 const { jsonTarget, writeReport } = require('./rollout_report');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
+const { fixtureDonor } = require('./fixture_donor');
 // One value for the whole run, computed once, exactly as status.js does — the
 // two tools compare the same number against the same file (OA-179).
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
@@ -277,6 +283,23 @@ function rolloutOne(t) {
              detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
                    + `version that has no JPG on disk. Finish it with:  `
                    + `node rollout.js --town "${t.name}" --apply --force` };
+  }
+
+  /* THE AREA FIXTURE'S TOWN MOVES WITH THE PIN, NOT WITH THE LIVE TEMPLATE (OA-532).
+   * `Areas/_portal-fixture/<town>` copies this town's newest render, so rebuilding it
+   * onto an engine engine.lock.json has not adopted leaves the fixture BEHIND and the
+   * push preflight red — St Ives on 2026-09-30, rebuilt here by --rebuild-stale and
+   * reverted. So while the live template differs from the pin, this town is refused in
+   * every mode, --force included: the remedy is to move the pin in the same change
+   * (buses-data's engine-pin.mjs --bump), after which the live template IS the pin and
+   * this does not fire. See fixture_donor.js. */
+  const donor = fixtureDonor(BUSES, t.name);
+  if (donor.pin && donor.pin !== CURRENT_ENGINE) {
+    return { name: t.name, status: 'PINNED-DONOR',
+             detail: `${t.name} is the source of Areas/_portal-fixture/${t.name}, so it is judged against engine.lock.json's pin `
+                   + `${donor.pin}, not the live template ${CURRENT_ENGINE}; its stamp is ${rj.engine || '(none)'}. Rebuilding it `
+                   + `onto an engine the pin has not adopted puts the area fixture behind (buses-data OA-532). Rebuild it only in the `
+                   + `same change as a pin bump: engine-pin.mjs --bump in buses-data first, then this rollout.` };
   }
 
   const stampedEngine = rj.engine;
@@ -579,7 +602,10 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS', 'NOT-STAMP-STALE'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+// PINNED-DONOR (OA-532) is a refusal only when somebody NAMED the town to write it;
+// an estate sweep passes over it the way it passes over UP-TO-DATE.
+const namedDonorApply = APPLY && !args.all && args.town.length > 0 && results.some(r => r.status === 'PINNED-DONOR');
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS', 'NOT-STAMP-STALE'].includes(r.status)) || (!APPLY && totalBlockers > 0) || namedDonorApply;
 process.exit(bad ? 1 : 0);
 }
 

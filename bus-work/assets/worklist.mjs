@@ -349,7 +349,7 @@ function fromMapTree() {
   const { findTowns, findPlaces, readJson, latestRunDir } = require(path.join(SK, 'gate_lib.js'));
   const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(SK, 'engine_version.js'));
   const current = computeEngineVersion();
-  const currentPlace = computePlaceEngineVersion();
+  const currentPlace = computePlaceEngineVersion(), { fixtureDonor } = require(path.join(SK, 'fixture_donor.js')); // OA-532: see that file
 
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -359,7 +359,7 @@ function fromMapTree() {
       let routes = {};
       try { routes = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = routes.engine || null;
-      row.engineStale = routes.engine !== current;
+      row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; row.engineStale = routes.engine !== (row.pinnedDonor || current); // the area fixture's town moves with the pin (OA-532)
     }
     const s6 = latestRunDir(m, t.dir, 'S6');
     const dataRuns = ['S1', 'S2', 'S3']
@@ -1129,7 +1129,7 @@ for (const { row: mapRow, place } of engineStale) {
     key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
     title: `${mapRow.name} was drawn by an older engine`,
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
-      + (!place && freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : ''),
+      + (!place && freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [ // the dry run's verdict picks the write; why --rebuild-stale is its own step: playbooks.md, Engine-stale
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — its verdict decides which of the next two to run' },

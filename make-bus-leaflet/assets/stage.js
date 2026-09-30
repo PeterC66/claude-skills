@@ -111,6 +111,7 @@ const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
 const { computeEngineVersion, computePlaceEngineVersion, isPlaceRun, stampEngine } = require('./engine_version');
 const { die: cliDie, parseArgs } = require('./cli.js');
 const { DECISION_FILE: REDTEAM_DECISION_FILE } = require('./redteam_budget.js');
+const { freshRunId } = require('./run_id.js');
 
 /*
  * die — the refusal, through `cli.die` so there is one of them.
@@ -126,7 +127,7 @@ const { DECISION_FILE: REDTEAM_DECISION_FILE } = require('./redteam_budget.js');
 function die(msg, code = 1) { cliDie('stage.js: ' + msg, code); }
 
 /* An ISO instant as a LOCAL YYYY-MM-DD. Run-directory ids are built from local time
- * (see `ts()` below), so anything compared against one has to be on the same clock;
+ * (see `ts()` in run_id.js), so anything compared against one has to be on the same clock;
  * slicing the first ten characters of an ISO string gives the UTC day instead, which
  * is a different day for an hour of every BST night. Returns null on anything that is
  * not a parseable instant, so a malformed builtAt still reads as "no readable date"
@@ -138,11 +139,6 @@ function localDay(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function ts() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
-}
 function isoNow() { return new Date().toISOString().slice(0, 16); }
 
 /** The longest actor name this will record. A session name is `sched-1252` or
@@ -472,14 +468,17 @@ function main() {
     if (f['based-on'] !== undefined) {
       die('--based-on is not read by `new` and never has been — `commit` is what writes the run record, so it is the only command that can record what a run was built from. Pass it on `stage.js commit ' + (st || '<S1..S6>') + ' <runDir> …` instead (OA-352).', 2);
     }
-    let id, dir;
-    if (st === 'S4') { const v = computeVersion(m, f.bump === 'major' ? 'major' : 'minor'); id = `v${v}_${ts()}`; }
+    let prefix = '';
+    if (st === 'S4') { const v = computeVersion(m, f.bump === 'major' ? 'major' : 'minor'); prefix = `v${v}_`; }
     else if (st === 'S5') {
       const v = m.stages.S4.latest && m.stages.S4.runs.find(r => r.id === m.stages.S4.latest)?.version;
       if (!v) die('S5 needs a committed S4 build first (no version to inherit)');
-      id = `v${v}_${ts()}`;
-    } else { id = ts(); }
-    dir = path.join(townDir, `${st}-${STAGE_NAME[st]}`, id);
+      prefix = `v${v}_`;
+    }
+    // Never an existing folder: a same-minute id steps on to the next free minute (run_id.js).
+    const stageDir = path.join(townDir, `${st}-${STAGE_NAME[st]}`);
+    let id; try { id = freshRunId(stageDir, sx.runs, prefix); } catch (e) { die(e.message); }
+    const dir = path.join(stageDir, id);
     fs.mkdirSync(dir, { recursive: true });
     /* WHAT DID THIS STAGE COST? (OA-105.) Nothing recorded it, and after the fact
      * nothing CAN. The two obvious sources are both wrong: a run folder's mtime

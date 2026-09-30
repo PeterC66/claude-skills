@@ -199,7 +199,8 @@ function main() {
     process.exit(2);
   }
 
-  const stampFile = args.out ? path.resolve(args.out) : path.join(buses, 'loop', STAMP_NAME);
+  const loopDir = path.join(buses, 'loop');
+  const stampFile = args.out ? path.resolve(args.out) : path.join(loopDir, STAMP_NAME);
   const cropsDir = path.join(path.dirname(stampFile), CROPS_NAME);
   const result = shadowRebuild({ buses, engine, cropsDir });
 

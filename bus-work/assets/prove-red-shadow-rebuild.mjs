@@ -144,9 +144,9 @@ console.log('\nThe visual diff — a regressed map gets a picture, the stamp is 
 
 const cropStub = `
 const fs = require('fs'), path = require('path');
-const a = process.argv.slice(2);
-fs.appendFileSync(path.join(__dirname, 'crop.log'), JSON.stringify({ argv: a, old: fs.readFileSync(a[0], 'utf8'), neu: fs.readFileSync(a[1], 'utf8') }) + '\\n');
-const pair = a[2] + '_1_pair.png';
+const a = process.argv;
+fs.appendFileSync(path.join(__dirname, 'crop.log'), JSON.stringify({ argv: a, old: fs.readFileSync(a[2], 'utf8'), neu: fs.readFileSync(a[3], 'utf8') }) + '\\n');
+const pair = a[4] + '_1_pair.png';
 fs.writeFileSync(pair, 'png');
 console.log(JSON.stringify({ spots: [{ x: 1, y: 1 }], pairs: [pair] }));
 `;

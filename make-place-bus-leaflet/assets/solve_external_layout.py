@@ -191,11 +191,21 @@ def main():
     ap.add_argument("--min-gap", type=float, default=19.0)
     ap.add_argument("--write", action="store_true", help="write terminus{} back into routes.json")
     ap.add_argument("--check-only", action="store_true", help="just audit the stored termini")
+    ap.add_argument("--reserve", action="append", default=[], metavar="NAME=x0,y0,x1,y1",
+                    help="replace (or add) a no-go box, in mm; e.g. legend=6,32,95,86 for a "
+                         "legend that legendWrap has made taller than the default 20mm band")
     a = ap.parse_args()
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
+    for spec in a.reserve:
+        name, _, box = spec.partition("=")
+        try:
+            x0, y0, x1, y1 = (float(v) for v in box.split(","))
+        except ValueError:
+            raise SystemExit(f"--reserve {spec!r}: expected NAME=x0,y0,x1,y1")
+        RESERVED[:] = [r for r in RESERVED if r[0] != name] + [(name, x0, y0, x1, y1)]
 
     RJ = json.load(io.open(a.routes_json, encoding="utf-8"))
     dests = RJ.get("destinations") or []

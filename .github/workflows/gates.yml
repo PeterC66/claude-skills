@@ -1008,6 +1008,18 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-edge-snap
 
+      # buses-data OA-451 item 5. A route whose next stop is a long non-stop run away
+      # ends its matched line at its last in-box stop, so its "to X" arrow sits mid-map
+      # -- St Neots East's 905 stopped 24 mm short of the frame at Loves Way, with
+      # Cambridge 22 km on. `reachToward` carries the line along the roads toward that
+      # stop, bounded in km. This runs a straight synthetic road through match_routes.js
+      # and requires the default to reproduce the fault, the lever to extend either end
+      # along the road without moving a tick, and to be inert when absent -- then
+      # disables the lever and requires the fix case to fail.
+      - name: Prove the reach toward can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-reach-toward
+
       # buses-data OA-452. journey_weights.json took a route's minority stops off its
       # TICKS (derive_intown.js) but not its LINE (match_routes.js, built from the
       # canonical direction), so St Neots v5.0 drew the 18's line down the 7-of-25

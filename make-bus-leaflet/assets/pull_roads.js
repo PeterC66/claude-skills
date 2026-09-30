@@ -82,6 +82,36 @@ try {
   }
 } catch (e) { /* no match_cfg / reachExtend -> unchanged behaviour */ }
 
+// --- reach toward (buses-data OA-451 item 5) ---------------------------------
+// The bounded alternative for a NON-STOP continuation, whose next real stop is too
+// far away for reachExtend: union the point <km> toward that stop into the box, and
+// match_routes.js carries the line along the roads to it. reach_toward.js says why.
+// Config: match_cfg.json "reachToward":{ "<route>":{ "start":km, "end":km } }
+try {
+  const MCFG = JSON.parse(fs.readFileSync(DIR + '/match_cfg.json', 'utf8'));
+  const RT = MCFG.reachToward;
+  if (RT) {
+    const { aimsFor } = require('./reach_toward');
+    const FULL = JSON.parse(fs.readFileSync(DIR + '/routes_full_atco.json', 'utf8'));
+    const inDisp = ll => ll[0] >= dispBox[0] && ll[0] <= dispBox[2] && ll[1] >= dispBox[1] && ll[1] <= dispBox[3];
+    for (const r in RT) {
+      const f = FULL[r]; if (!f) continue;
+      const can = (f.canonical && f.canonical[0]) || (f.directions && f.directions[0]); if (!can) continue;
+      let chain = can.stops.filter(a => atco2ll[a]);
+      const jd = loadJourneyDrops(DIR)(r, can.name); if (jd.size) chain = chain.filter(a => !jd.has(a));
+      const vp = (MCFG.viaPrefixes || {})[r]; if (vp) chain = chain.filter(a => vp.some(p => a.startsWith(p)));
+      const vx = (MCFG.viaExclude || {})[r]; if (vx) chain = chain.filter(a => !vx.includes(a));
+      const aims = aimsFor(RT[r], chain, atco2ll, inDisp);
+      for (const side of ['start', 'end']) {
+        const ll = aims[side]; if (!ll) continue;
+        if (ll[0] < minLat) minLat = ll[0]; if (ll[0] > maxLat) maxLat = ll[0];
+        if (ll[1] < minLon) minLon = ll[1]; if (ll[1] > maxLon) maxLon = ll[1];
+        console.log('reachToward ' + r + ' ' + side + ': box takes in ' + ll.map(v => v.toFixed(5)).join(','));
+      }
+    }
+  }
+} catch (e) { /* no match_cfg / reachToward -> unchanged behaviour */ }
+
 const latM = marginKm / 111.32, lonM = marginKm / (111.32 * Math.cos(((minLat + maxLat) / 2) * Math.PI / 180));
 const bbox = [minLat - latM, minLon - lonM, maxLat + latM, maxLon + lonM];
 

@@ -32,6 +32,7 @@
 //   edgeWay: { "nodeA|nodeB": {way,name,highway} } }
 const fs = require('fs');
 const { loadJourneyDrops } = require('./journey_drop');
+const { aimsFor } = require('./reach_toward');
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.LEAFLET_DIR || process.cwd();
 const SNAP_M = 120, SERVICE_PEN = 1.6, LIVING_PEN = 1.3;
@@ -210,6 +211,14 @@ if (EDGE_SNAP) {
     + (edgeSnaps.length ? ' — ' + edgeSnaps.map(s => s.stop + ' ' + s.m + ' m on ' + (s.name || 'way ' + s.way)).join('; ') : ''));
 }
 const snapStop = a => vnodeOf.get(a) ?? snap(atco2ll[a]);
+// reachToward's target: the graph node nearest an aim point, with no 120 m limit —
+// the point is a bearing, not a stop, and any road near it will do as a place to aim.
+function nearestNode(ll) {
+  let best = null, bd = 1e18;
+  for (const [id, p] of nodeLL) { const d = kmLL(ll, p); if (d < bd) { bd = d; best = id; } }
+  return best;
+}
+const reachLog = [];
 // binary-heap Dijkstra with early exit
 function dijkstra(src, dst) {
   if (src === dst) return [src];
@@ -307,6 +316,38 @@ for (const r in INTOWN) {
       if (n >= 2) edges[n - 2] = null;
     }
   }
+  // REACH TOWARD, opt-in with match_cfg.json "reachToward" (buses-data OA-451 item 5):
+  // carry a non-stop continuation along the road graph toward its next stop, bounded
+  // in km, so the frame cut — not the last stop — decides where its arrow sits.
+  // reach_toward.js says why. Added after the legs and before the ticks are projected,
+  // so no stop moves; the ink past the last stop is what the frame then trims.
+  const RT = (MCFG.reachToward || {})[r];
+  if (RT && !closedLoop && VC !== 'intown') {
+    // the chain the vias came from, before the box cut it: the same drops and prefixes
+    let chainF = can.stops.filter(a => atco2ll[a]);
+    const jd = jwDrop(r, can.name); if (jd.size) chainF = chainF.filter(a => !jd.has(a));
+    if (vp) chainF = chainF.filter(a => vp.some(p => a.startsWith(p)));
+    if (vx) chainF = chainF.filter(a => !vx.includes(a));
+    const aims = aimsFor(RT, chainF, atco2ll, inBbox);
+    const reach = (side, aim) => {
+      const endNode = side === 'start' ? snapped[0].n : snapped[snapped.length - 1].n;
+      if (aim == null || endNode == null) return;
+      const tgt = nearestNode(aim);
+      const path = tgt == null ? null : (side === 'start' ? dijkstra(tgt, endNode) : dijkstra(endNode, tgt));
+      const crow = kmLL(nodeLL.get(endNode), aim);
+      let plen = 0; if (path) for (let j = 0; j < path.length - 1; j++) plen += kmLL(nodeLL.get(path[j]), nodeLL.get(path[j + 1]));
+      if (!path || path.length < 2 || plen > Math.max(2.5 * crow, crow + 0.6)) {
+        reachLog.push(r + ' ' + side + ': no road toward the next stop within bounds, line unchanged'); return;
+      }
+      const lls = path.map(n => nodeLL.get(n));
+      const toks = []; for (let j = 1; j < path.length; j++) { toks.push(path[j - 1] + '>' + path[j]); const ck = ekey(path[j - 1], path[j]); OUT.edgeWay[ck] = edgeWay[ck]; }
+      if (side === 'start') { pts.unshift(...lls.slice(0, -1)); edges.unshift(...toks); }
+      else { pts.push(...lls.slice(1)); edges.push(...toks); }
+      reachLog.push(r + ' ' + side + ': +' + (path.length - 1) + ' road segment(s), ' + plen.toFixed(2) + ' km toward the next stop');
+    };
+    if (vias[0] !== can.stops[0]) reach('start', aims.start);
+    if (vias[vias.length - 1] !== can.stops[can.stops.length - 1]) reach('end', aims.end);
+  }
   // project every DISPLAYED stop onto the polyline (ticks sit on the line)
   const stopT = {};
   for (const a of it) {
@@ -363,6 +404,7 @@ if (farReport.length) {
     + ' m from their own line — ' + farReport.map(f => f.r).join(', ') + '. Look at the sheet before shipping it.');
 }
 if (EDGE_SNAP) OUT.edgeSnaps = edgeSnaps;       // absent unless opted in, so no committed file moves
+if (reachLog.length) console.log('reachToward: ' + reachLog.join('; '));
 fs.writeFileSync(DIR + '/routes_paths.json', JSON.stringify(OUT));
 console.log('routes_paths.json written: ' + Object.keys(OUT.routes).length + ' routes, ' + Object.keys(OUT.edgeWay).length + ' road edges used');
 }

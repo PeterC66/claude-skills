@@ -89,4 +89,24 @@ function smoothCasingWidths(segs, k) {
   return out;
 }
 
-module.exports = { smoothCasingWidths };
+/* internalRoads.caseDrawnLanes (buses-data OA-518, opt-in): case the INK, not the
+ * matched path. gen_internal.js sizes a casing on each matched edge from the lanes
+ * whose centreline passes near it, but a short loop (a lay-by, a turning circle)
+ * collapses under its lane shift: the drawn lane is a 2 mm hook while the casing
+ * still traces the whole loop at bundle width (Ely Co-op's grey lobes at Tesco,
+ * the inner lobe of St Ives' knot). Here each drawn line -- TRIM.pts, the
+ * lane-shifted polyline between the cuts that the route pass strokes, split by the
+ * same coreBox clip -- gets its own casing of stroke + pad. Lanes sit gap apart and
+ * stroke + pad >= gap (the defaults, and Ely Co-op), so co-running lanes fuse into one
+ * band whose outer edge is where the bundle casing put it, and where there is no
+ * ink there is no grey. Returns the <path> elements, in route order. */
+function drawnLaneCasings(TRIM, order, IR, clipOutCore) {
+  const cw = (IR.stroke + IR.skeletonPad).toFixed(2), out = [];
+  for (const r of order) { const tr = TRIM[r]; if (!tr || !tr.pts || tr.pts.length < 2) continue;
+    for (const rn of clipOutCore(tr.pts)) { if (rn.length < 2) continue;
+      const d = rn.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' ');
+      out.push(`<path d="${d}" fill="none" stroke="${IR.skeleton}" stroke-width="${cw}" stroke-linecap="round" stroke-linejoin="round"/>`); } }
+  return out;
+}
+
+module.exports = { smoothCasingWidths, drawnLaneCasings };

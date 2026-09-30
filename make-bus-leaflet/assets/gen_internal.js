@@ -198,7 +198,7 @@ const { labelPlacer } = require(_dep('label_placer.js'));
 const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js'));
 const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
-const { smoothCasingWidths } = require(_dep('casing_width.js'));
+const { smoothCasingWidths, drawnLaneCasings } = require(_dep('casing_width.js'));
 const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
@@ -1458,6 +1458,8 @@ if(IR){
   // into a lobe; casing_width.js has the measurement. Default 1 since 2026-09-28; 0 opts out.
   const _ks = IR.casingSmooth===true ? 1 : +IR.casingSmooth;
   const casW = _ks>0 ? smoothCasingWidths(CAS, _ks) : CAS.map(g=>g.w);
+  // internalRoads.caseDrawnLanes (OA-518, opt-in): casing_width.js says why; SKEL above is unchanged
+  if(IR.caseDrawnLanes===true) drawnLaneCasings(TRIM, order, IR, clipOutCore).forEach(p=>out(p)); else
   CAS.forEach((g,j)=>out(`<path d="M${g.x0.toFixed(2)} ${g.y0.toFixed(2)}L${g.x1.toFixed(2)} ${g.y1.toFixed(2)}" fill="none" stroke="${IR.skeleton}" stroke-width="${casW[j].toFixed(2)}" stroke-linecap="round"/>`));
   if(process.env.DBG_CASE) console.error('CASE max casing width '+_wmax.toFixed(2)+' mm (uncapped)'
     + (IR.skeletonMaxW!=null ? '; skeletonMaxW '+IR.skeletonMaxW+' mm clamped '+_capped+' segment(s)' : ''));

@@ -66,6 +66,7 @@
     "test:prove-red-via-chain": "node tools/prove-red-via-chain.js",
     "test:prove-red-journey-line": "node tools/prove-red-journey-line.js",
     "test:prove-red-edge-snap": "node tools/prove-red-edge-snap.js",
+    "test:prove-red-reach-toward": "node tools/prove-red-reach-toward.js",
     "test:prove-lane-mirror": "node tools/prove-lane-mirror.js",
     "census:lanes": "node tools/lane-census.js",
     "measure:days-vocabulary": "python3 tools/days-vocabulary.py",

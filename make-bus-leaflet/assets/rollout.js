@@ -80,7 +80,7 @@ const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
-const { jsonTarget, writeReport } = require('./rollout_report');
+const { jsonTarget, writeReport, hardDefects } = require('./rollout_report');
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 const { fixtureDonor } = require('./fixture_donor');
 // One value for the whole run, computed once, exactly as status.js does — the
@@ -402,6 +402,8 @@ function rolloutOne(t) {
     diffs[name] = d;
     // OA-071 and OA-477: what the drawn sheet owes its S3, reported and never gating.
     Object.assign(d, owedOnSheet(path.join(s4, name)));
+    // OA-485 item 2: the hard-defect count on both sides, which the label SET cannot see.
+    if (JSON_OUT) Object.assign(d, hardDefects(path.join(prevS4.dir, name), path.join(s4, name)));
     if (d.lost.length) anyLost = true;
   }
 

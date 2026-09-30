@@ -88,6 +88,61 @@ test('a leader from a symbol-less point still starts at the point', () => {
   assert.deepStrictEqual(r.leader[0].map(v => +v.toFixed(4)), [50, 50]);
 });
 
+/* ---- OA-302: a terminus caption and the badge row it names ------------------
+ *
+ * gen_internal.js hands a "to X" caption its whole badge row as `own`, so the
+ * row may not BLOCK it — and until 2026-09-29 that also let it print over its own
+ * badge (Huntingdon's "401to Leighton Bromswold") and let its leader leave from
+ * the row centre, through a sibling (Ramsey's "to Huntingdon" through the 305).
+ * `ownMarks` are the badges the caption and its leader may still not cover;
+ * `leaderFrom` makes the leader leave the badge nearest its end, at the rim.
+ * Each test poses its premise too, so a fixture that stopped exercising the
+ * case would fail rather than pass.
+ */
+const inset = (m) => [m[0] + 0.3, m[1] + 0.3, m[2] - 0.3, m[3] - 0.3];
+const segHits = (s, m) => {
+  for (let i = 0; i <= 200; i++) {
+    const x = s[0][0] + (s[1][0] - s[0][0]) * i / 200, y = s[0][1] + (s[1][1] - s[0][1]) * i / 200;
+    if (x > m[0] && x < m[2] && y > m[1] && y < m[3]) return true;
+  }
+  return false;
+};
+const ROW = [[36.8, 46.8, 43.2, 53.2], [46.8, 46.8, 53.2, 53.2], [56.8, 46.8, 63.2, 53.2]];
+
+test('a terminus caption may not print over its own badge', () => {
+  const mark = [46.8, 46.8, 53.2, 53.2];
+  const place = (ownMarks) => {
+    const L = new Labeller({ page: [100, 100] });
+    L.add({ id: 't', at: [50, 50], text: 'to Leighton Bromswold', size: 3, own: [43.4, 43.4, 56.6, 56.6], ownMarks, mustPlace: true });
+    return L.solve()[0];
+  };
+  const bare = place(undefined);
+  assert.ok(bare.placed && overlap(bare.b, inset(mark)), 'test premise: with no ownMarks the cheapest spot is on the badge');
+  const r = place([mark]);
+  assert.ok(r.placed, 'the caption was dropped rather than moved');
+  assert.ok(!overlap(r.b, inset(mark)), `the caption still covers its own badge: ${r.b.map(v => v.toFixed(2))}`);
+});
+
+test('a terminus leader leaves the badge nearest its end, at the rim, and crosses no sibling', () => {
+  const place = (leaderFrom) => {
+    const L = new Labeller({ page: [100, 100] });
+    // Everything close is claimed, and so are the straight spots above and below
+    // the middle badge: only a diagonal spot off an END badge is left.
+    L.block([20, 44, 80, 56]); L.block([44, 36, 56, 44]); L.block([44, 56, 56, 64]);
+    L.add({ id: 't', at: [50, 50], text: 'to Bury', size: 3, own: [36.8, 46.8, 63.2, 53.2], ownMarks: ROW, leaderFrom });
+    return L.solve()[0];
+  };
+  assert.ok(!place(undefined).placed, 'test premise: from the row centre every leader crosses a badge, so nothing is clear');
+  const r = place(ROW);
+  assert.ok(r.placed && r.leader, 'the caption found no spot even with its leader free to leave an end badge');
+  const [s, e] = r.leader;
+  const near = ROW.reduce((a, m) => Math.hypot((m[0] + m[2]) / 2 - e[0], (m[1] + m[3]) / 2 - e[1]) < Math.hypot((a[0] + a[2]) / 2 - e[0], (a[1] + a[3]) / 2 - e[1]) ? m : a);
+  const onRim = s[0] >= near[0] - 1e-6 && s[0] <= near[2] + 1e-6 && s[1] >= near[1] - 1e-6 && s[1] <= near[3] + 1e-6
+    && (Math.abs(s[0] - near[0]) < 1e-6 || Math.abs(s[0] - near[2]) < 1e-6 || Math.abs(s[1] - near[1]) < 1e-6 || Math.abs(s[1] - near[3]) < 1e-6);
+  assert.ok(onRim, `the leader starts at ${s.map(v => v.toFixed(2))}, not on the rim of the badge nearest its end`);
+  for (const m of ROW) assert.ok(!segHits(r.leader, inset(m)), `the leader crosses the badge at ${m}`);
+});
+
 test('an unobstructed label takes the first cartographic preference', () => {
   const L = page().add({ id: 'a', at: [50, 50], text: 'Somersham', size: 3 });
   const [r] = L.solve();

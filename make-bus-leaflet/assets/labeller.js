@@ -233,6 +233,10 @@ class Labeller {
    *   size      mm
    *   priority  higher goes first and gets the better spots (default 0)
    *   own       [x0,y0,x1,y1] this label's OWN symbol, exempt from the hard grid
+   *   ownMarks  [[x0,y0,x1,y1], ...] the marks inside `own` the label may still not
+   *             cover — its badges, as against the space around them (OA-302)
+   *   leaderFrom [[x0,y0,x1,y1], ...] the marks a leader may start from; it leaves
+   *             the nearest one at its rim instead of leaving `at` (OA-302)
    *   fixed     {x, y, anchor} skip placement entirely (a hand-placed override)
    *   prefer    [dx, dy] the direction the caller would rather the label sat in.
  *             Costed at wPrefer, not enforced — see _preference().
@@ -326,6 +330,42 @@ class Labeller {
         hardPenalty = this.o.wHard;
       }
     }
+    /* `ownMarks` — THE EXEMPTION IS DIRECTIONAL (2026-09-26, buses-data OA-302).
+     * `own` says a label's own symbols may not BLOCK it, and for a terminus caption
+     * it is the whole badge row plus 3.6 mm, so until now sliding back over its own
+     * badge cost nothing: Huntingdon printed "401to Leighton Bromswold", the caption
+     * starting 0.4 mm inside the disc, because the E spot at the nominal 2.6 mm gap
+     * is inside a 3.0 mm badge and was the cheapest candidate on the list. The
+     * marks are the badges themselves, and covering one is treated exactly as a
+     * foreign symbol is: refused in the strict pass, `wHard` in the relaxed one, so
+     * a mustPlace destination is still never dropped for it. ADDED to any foreign
+     * penalty, never merged with it: on Huntingdon every candidate already pays
+     * `wHard` for something else, and with a max() the spot on the badge tied the
+     * spot beside it and won on distance.
+     * INSET 0.3 mm, like the leader test below (2026-09-29, OA-302). A mark is the
+     * disc plus a 0.2 mm reserve, and the caption's box carries its pad, so a
+     * caption printed straight above its row — High Wycombe's "to Hazlemere &
+     * Amersham", clear of the 1/1A/1B discs — touched the mark by under 0.1 mm, was
+     * refused, and moved down onto three Widmer Fields names, which the schematic
+     * then dropped. Huntingdon's caption, 0.4 mm INSIDE the disc, still hits. */
+    if (it.ownMarks) for (const m of it.ownMarks) {
+      if (!boxesHit(b, [m[0] + 0.3, m[1] + 0.3, m[2] - 0.3, m[3] - 0.3])) continue;
+      if (!relaxHard) return null;
+      hardPenalty += this.o.wHard;
+      break;
+    }
+    /* ...and a LEADER may not be drawn across one of them either (2026-09-27,
+     * OA-302). The leader now starts at the rim of the row's nearest badge (see
+     * _leader), so a leader that still crosses a mark is going through a SIBLING —
+     * Ramsey's "to Huntingdon" through the 305, The Shelfords' "to Cambridge"
+     * through the 7. Tested against the mark inset by 0.3 mm, so the segment's own
+     * start point, which sits on its badge's edge, is not a hit. */
+    if (it.ownMarks && cand.leaderSeg) for (const m of it.ownMarks) {
+      if (!segHitsBox(cand.leaderSeg, [m[0] + 0.3, m[1] + 0.3, m[2] - 0.3, m[3] - 0.3])) continue;
+      if (!relaxHard) return null;
+      hardPenalty += this.o.wHard;
+      break;
+    }
     for (const pb of this.placedBoxes) {
       if (skipBoxes && skipBoxes.has(pb)) continue;
       if (boxesHit(b, pb.b)) return null;
@@ -417,21 +457,67 @@ class Labeller {
    * reader's eye has to travel from the thing to its name, and that distance
    * does not change because we stopped drawing the first three millimetres of it.
    */
-  _leader(at, b, own) {
-    const ex = clamp(at[0], b[0], b[2]), ey = clamp(at[1], b[1], b[3]);
+  _leader(at, b, own, from) {
+    /* `from` — THE MARKS A LEADER MAY START AT (2026-09-27, OA-302). A terminus
+     * caption's point is the CENTRE of its badge row, so on a row of two or three
+     * badges the leader came out of the gap between them, or out of the middle
+     * badge, and was drawn across a sibling on its way to the text. Given the row's
+     * own badge boxes, the leader leaves from the one nearest the label, at its rim;
+     * the length is measured from that badge, which is the thing the reader's eye
+     * travels from. Absent, every other caller is unchanged.
+     *
+     * THE END STAYS WHERE IT WAS; ONLY THE START MOVES (2026-09-29, OA-302). The
+     * first version picked the badge nearest the label BOX and re-aimed the leader
+     * at that badge's own nearest point. On a long row several badges sit over the
+     * box at the same distance, the first (leftmost) won, and High Wycombe's "to
+     * Loudwater & Beaconsfield" got a vertical leader from the 102, 21 mm from its
+     * anchored end, straight through the space "High Wycombe Rugby Union Football
+     * Club" used — which then fell into the index and pushed "The Centre - Green
+     * Street" out of it. So the end is the row centre clamped onto the box, exactly
+     * as before, and the leader leaves from the badge nearest THAT point. */
+    let end = null;
+    if (from && from.length) {
+      end = [clamp(at[0], b[0], b[2]), clamp(at[1], b[1], b[3])];
+      let best = null, bd = Infinity;
+      for (const m of from) {
+        const d = Math.hypot((m[0] + m[2]) / 2 - end[0], (m[1] + m[3]) / 2 - end[1]);
+        if (d < bd) { bd = d; best = m; }
+      }
+      at = [(best[0] + best[2]) / 2, (best[1] + best[3]) / 2]; own = best;
+    }
+    const ex = end ? end[0] : clamp(at[0], b[0], b[2]), ey = end ? end[1] : clamp(at[1], b[1], b[3]);
     const len = Math.hypot(ex - at[0], ey - at[1]);
     if (len > this.o.leaderMax || len < 0.5) return null;
     let sx = at[0], sy = at[1];
     if (own && at[0] >= own[0] && at[0] <= own[2] && at[1] >= own[1] && at[1] <= own[3]) {
       // Walk from the point towards the box until we leave `own`; the smallest
-      // positive t at which the ray crosses one of its four sides.
+      // positive t at which the ray crosses one of its four sides. SMALLEST: until
+      // 2026-09-27 (OA-302) this took the LARGEST of the per-axis exits, which is
+      // past the box whenever the leader is not diagonal, clamped to 1, and fell
+      // back to the point below — so 50 terminus leaders across the estate were
+      // still drawn from the centre of their badge, over its number.
+      // ...FOR A TERMINUS LEADER ONLY (2026-09-29, OA-302). Every other leader —
+      // a POI's name, an index number — keeps the old walk: the smallest exit
+      // starts it up to 1 mm further back, a longer leader crosses more candidate
+      // spots, and on March's schematic West End Park's leader took the one spot
+      // "Lidl" had. Changing those is a separate question with its own sheets.
       const dx = ex - at[0], dy = ey - at[1];
-      let t = 0;
-      if (dx > 1e-9) t = Math.max(t, (own[2] - at[0]) / dx);
-      else if (dx < -1e-9) t = Math.max(t, (own[0] - at[0]) / dx);
-      if (dy > 1e-9) t = Math.max(t, (own[3] - at[1]) / dy);
-      else if (dy < -1e-9) t = Math.max(t, (own[1] - at[1]) / dy);
-      t = clamp(t, 0, 1);
+      let t;
+      if (end) {
+        t = Infinity;
+        if (dx > 1e-9) t = Math.min(t, (own[2] - at[0]) / dx);
+        else if (dx < -1e-9) t = Math.min(t, (own[0] - at[0]) / dx);
+        if (dy > 1e-9) t = Math.min(t, (own[3] - at[1]) / dy);
+        else if (dy < -1e-9) t = Math.min(t, (own[1] - at[1]) / dy);
+        t = clamp(isFinite(t) ? t : 0, 0, 1);
+      } else {
+        t = 0;
+        if (dx > 1e-9) t = Math.max(t, (own[2] - at[0]) / dx);
+        else if (dx < -1e-9) t = Math.max(t, (own[0] - at[0]) / dx);
+        if (dy > 1e-9) t = Math.max(t, (own[3] - at[1]) / dy);
+        else if (dy < -1e-9) t = Math.max(t, (own[1] - at[1]) / dy);
+        t = clamp(t, 0, 1);
+      }
       sx = at[0] + dx * t; sy = at[1] + dy * t;
       // A leader wholly inside its own symbol is not a leader; leave it at the
       // point rather than emitting a zero-length path.
@@ -504,7 +590,7 @@ class Labeller {
         // then could not use, and High Wycombe lost five more names than with two.
         for (const g of [G0 * 2.1, G0 * 3.0]) {
           const { b, lx, ly, lead } = this._box(it, form, list[pi], g);
-          const lead2 = this._leader(it.at, b, it.own);
+          const lead2 = this._leader(it.at, b, it.own, it.leaderFrom);
           if (!lead2) continue;
           out.push({ form, pos: list[pi], pi, gap: g, box: b, lx, ly, lead,
                      leader: true, leaderLen: lead2.len, leaderSeg: lead2.seg });

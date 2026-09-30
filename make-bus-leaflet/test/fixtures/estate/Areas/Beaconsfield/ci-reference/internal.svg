@@ -1785,19 +1785,19 @@
 <path d="M35.30 177.40v3.2" stroke="#666" stroke-width="0.5"/>
 <text x="22.15" y="176.40" font-family="Arial" font-size="2.8" fill="#666" text-anchor="middle">500 m</text>
 <text x="22.15" y="183.00" font-family="Arial" font-style="italic" font-size="2.4" fill="#999" text-anchor="middle">town centre scale</text>
-<path d="M151.51 155.33L152.92 155.33" stroke="#478ea6" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M151.11 155.33L152.92 155.33" stroke="#478ea6" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="153.37" y="157.25" font-family="Arial" font-size="2.7" fill="#478ea6" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Slough</text>
-<text x="167.56" y="171.96" font-family="Arial" font-size="2.7" fill="#478ea6" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
-<path d="M164.96 181.17L157.61 181.52" stroke="#228833" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="168.99" y="175.58" font-family="Arial" font-size="2.7" fill="#478ea6" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
+<path d="M161.76 181.32L157.61 181.52" stroke="#228833" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="157.16" y="183.90" font-family="Arial" font-size="2.7" fill="#228833" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Slough &amp; Windsor</text>
 <text x="91.55" y="101.42" font-family="Arial" font-size="2.7" fill="#4477AA" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
-<path d="M71.44 44.45L70.03 44.45" stroke="#AA3377" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M71.84 44.45L70.03 44.45" stroke="#AA3377" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="69.58" y="46.36" font-family="Arial" font-size="2.7" fill="#AA3377" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Amersham</text>
-<path d="M30.80 155.42L38.15 163.18" stroke="#111" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M39.65 158.62L38.15 163.18" stroke="#111" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="38.60" y="165.56" font-family="Arial" font-size="2.7" fill="#111" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to High Wycombe</text>
-<path d="M129.55 38.02L125.80 41.98" stroke="#8e822f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M130.11 37.42L125.80 41.98" stroke="#8e822f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="125.35" y="44.36" font-family="Arial" font-size="2.7" fill="#8e822f" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Gerrards Cross &amp; Uxbridge</text>
-<path d="M180.49 83.19L175.48 79.57" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M177.29 80.88L175.48 79.57" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="175.03" y="78.55" font-family="Arial" font-size="2.7" fill="#dd5f6f" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Gerrards Cross &amp; Heathrow</text>
 <text x="74.17" y="115.85" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">The Beaconsfield</text>
 <path d="M148.90 29.36L148.90 26.98" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>

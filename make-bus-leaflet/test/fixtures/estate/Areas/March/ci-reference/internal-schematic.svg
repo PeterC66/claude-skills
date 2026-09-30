@@ -949,18 +949,19 @@
 <g transform="translate(49.257253867185966 104.65438507368181) scale(0.21000000000000002) translate(-12 -12)"><path d="M8,2.8 H16 C17.6,2.8 18.6,3.8 18.6,5.4 V17.4 H5.4 V5.4 C5.4,3.8 6.4,2.8 8,2.8 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M8.6,18.4 L6.2,21.2 M15.4,18.4 L17.8,21.2" fill="none" stroke="#ffffff" stroke-width="5.800000000000001" stroke-linecap="round" stroke-linejoin="round"/><path d="M8,2.8 H16 C17.6,2.8 18.6,3.8 18.6,5.4 V17.4 H5.4 V5.4 C5.4,3.8 6.4,2.8 8,2.8 Z" fill="#33383d"/><path d="M7.6,5.2 H16.4 V10.2 H7.6 Z M7.8,12.8 h2.4 v2.2 h-2.4 Z M13.8,12.8 h2.4 v2.2 h-2.4 Z" fill="#ffffff"/><path d="M8.6,18.4 L6.2,21.2 M15.4,18.4 L17.8,21.2" fill="none" stroke="#33383d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
 <g transform="translate(128.66332391091004 115.00955196073376) scale(0.21000000000000002) translate(-12 -12)"><path d="M12,3 L22,9 H2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M3.2,10.6 h2.7 v7.6 h-2.7 Z M8.3,10.6 h2.7 v7.6 h-2.7 Z M13.1,10.6 h2.7 v7.6 h-2.7 Z M18.2,10.6 h2.7 v7.6 h-2.7 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M2,19.4 H22 V21.4 H2 Z" fill="#ffffff" stroke="#ffffff" stroke-width="3.2" stroke-linejoin="round"/><path d="M12,3 L22,9 H2 Z" fill="#33383d"/><path d="M3.2,10.6 h2.7 v7.6 h-2.7 Z M8.3,10.6 h2.7 v7.6 h-2.7 Z M13.1,10.6 h2.7 v7.6 h-2.7 Z M18.2,10.6 h2.7 v7.6 h-2.7 Z" fill="#33383d"/><path d="M2,19.4 H22 V21.4 H2 Z" fill="#33383d"/></g>
 <text x="9.00" y="35.00" font-family="Arial" font-style="italic" font-size="2.4" fill="#555">Simplified — not to scale</text>
-<path d="M191.00 122.43L183.65 130.19" stroke="#AA3377" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
-<text x="183.20" y="132.57" font-family="Arial" font-size="2.7" fill="#AA3377" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to St Ives</text>
-<text x="191.00" y="134.99" font-family="Arial" font-size="2.7" fill="#009988" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Ely</text>
-<path d="M191.00 136.43L183.65 136.78" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
-<text x="183.20" y="139.16" font-family="Arial" font-size="2.7" fill="#dd5f6f" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Manea</text>
-<path d="M26.32 163.37L24.91 163.37" stroke="#8e822f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M186.58 122.64L183.65 122.78" stroke="#AA3377" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="183.20" y="125.16" font-family="Arial" font-size="2.7" fill="#AA3377" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to St Ives</text>
+<path d="M187.60 132.63L185.99 134.14" stroke="#009988" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="185.54" y="136.53" font-family="Arial" font-size="2.7" fill="#009988" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Ely</text>
+<path d="M186.81 133.23L183.65 130.82" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="183.20" y="129.80" font-family="Arial" font-size="2.7" fill="#dd5f6f" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Manea</text>
+<path d="M26.72 163.37L24.91 163.37" stroke="#8e822f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="24.46" y="165.28" font-family="Arial" font-size="2.7" fill="#8e822f" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Wisbech</text>
-<path d="M17.06 93.24L22.07 89.62" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M20.26 90.93L22.07 89.62" stroke="#dd5f6f" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="22.52" y="88.60" font-family="Arial" font-size="2.7" fill="#dd5f6f" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Wisbech</text>
-<path d="M34.34 156.04L32.93 156.04" stroke="#ce672c" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M34.74 156.04L32.93 156.04" stroke="#ce672c" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="32.48" y="157.95" font-family="Arial" font-size="2.7" fill="#ce672c" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Ramsey</text>
-<path d="M37.94 166.64L37.94 168.19" stroke="#004488" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<path d="M37.94 166.24L37.94 168.19" stroke="#004488" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="37.94" y="170.57" font-family="Arial" font-size="2.7" fill="#004488" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">to Whittlesey</text>
 <path d="M59.65 162.46L59.65 168.88" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
 <text x="59.65" y="171.12" font-family="Arial" font-size="2.5" fill="#222" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">Snap Fitness</text>

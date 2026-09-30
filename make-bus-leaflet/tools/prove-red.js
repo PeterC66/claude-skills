@@ -1371,13 +1371,36 @@ const MUTATIONS = [
 
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'a leader goes back to starting at its own badge centre and is painted across the digit',
-    find: "          const lead2 = this._leader(it.at, b, it.own);",
-    to: "          const lead2 = this._leader(it.at, b);" },
+    find: "          const lead2 = this._leader(it.at, b, it.own, it.leaderFrom);",
+    to: "          const lead2 = this._leader(it.at, b, undefined, it.leaderFrom);" },
 
   { suite: 'labeller.test.js', file: 'labeller.js',
     what: 'a leader collapses to its far end, so the rim fix reads as done while no line is drawn',
     find: "    let sx = at[0], sy = at[1];",
     to: "    let sx = ex, sy = ey;" },
+
+  /* OA-302 — a terminus caption and its badge row. Four halves, one mutation each:
+   * the caption may not cover its own badge, its leader may not cross a sibling,
+   * the leader leaves the badge nearest its end, and it leaves at that badge's rim. */
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'a terminus caption may cover its own badge again, as Huntingdon\'s "401to Leighton Bromswold" did',
+    find: "      if (!boxesHit(b, [m[0] + 0.3, m[1] + 0.3, m[2] - 0.3, m[3] - 0.3])) continue;",
+    to: "      continue;" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'a terminus leader may be drawn across a sibling badge in its row again',
+    find: "      if (!segHitsBox(cand.leaderSeg, [m[0] + 0.3, m[1] + 0.3, m[2] - 0.3, m[3] - 0.3])) continue;",
+    to: "      continue;" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'the row\'s badges are ignored and the leader comes out of the row centre again',
+    find: "          const lead2 = this._leader(it.at, b, it.own, it.leaderFrom);",
+    to: "          const lead2 = this._leader(it.at, b, it.own);" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'a terminus leader takes the largest exit again and is drawn from its badge centre, over the number',
+    find: "      if (end) {",
+    to: "      if (false) {" },
 
   { suite: 'quality_metrics_ink.test.js', file: 'quality_metrics.js',
     what: 'a badge printed on a badge stops counting as a hard defect, so the ratchet stops seeing it',

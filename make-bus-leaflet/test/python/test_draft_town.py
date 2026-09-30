@@ -35,10 +35,13 @@ real feed and the Overpass API, so a test of it would be a test of those, and
 the deciding functions it calls between them are every one of them reachable from
 here. `overpass` is driven only for what it does with an answer or a refusal
 (OA-339), through a replaced `overpass_fetch.fetch`; the retrying itself is
-`test_overpass_fetch.py`'s. `pois_query` and `feature_query` build a query string for a
-remote service and are left with `test_module_load.py`, for the same reason
+`test_overpass_fetch.py`'s. `pois_query` builds a query string for a remote
+service and is left with `test_module_load.py`, for the same reason
 `test_gen_verification.py` leaves the created/modified stamps alone: an assertion
-on them would be an assertion on somebody else's server.
+on it would be an assertion on somebody else's server. `feature_query`'s railway
+selection is the exception, because WHICH ways it asks for is our decision and
+not the server's: Peter ruled on 2026-09-29 that sidings are never drawn unless a
+map names one (buses-data OA-520), and `RailwayIsRunningLinesOnly` holds that.
 """
 import io
 import json
@@ -964,6 +967,43 @@ class ANewMapIsDrawnNorthUp(unittest.TestCase):
             with self.subTest(chosen=chosen):
                 draft = dt.pin_north({"design": {"fixedOrientation": chosen}})
                 self.assertEqual(draft["design"]["fixedOrientation"], chosen)
+
+
+# --------------------------------------------------------------------------
+# Which railway ways a feature pull asks for (buses-data OA-520)
+# --------------------------------------------------------------------------
+class RailwayIsRunningLinesOnly(unittest.TestCase):
+    """A siding drew as a loose stub south of Ely station on Ely Co-op v1.29.
+
+    OSM tags a siding, yard, spur or crossover `service=*` on a `railway=rail`
+    way; a running line carries no `service` key. The pull asks for the second
+    only, and a map that steers by one of the first names it by way id.
+    """
+    BOX = {"s": 52.38, "w": 0.24, "n": 52.40, "e": 0.28}
+
+    def railway(self, **extra):
+        return dt.feature_query(self.BOX, dict({"key": "railway", "type": "railway", "label": ""}, **extra))
+
+    def test_a_way_tagged_service_is_not_asked_for(self):
+        self.assertIn('way["railway"="rail"][!"service"](52.38,0.24,52.4,0.28)', self.railway())
+
+    def test_nothing_else_is_asked_for_by_default(self):
+        self.assertNotIn("way(id:", self.railway())
+
+    def test_a_named_siding_is_asked_for_by_id_as_well(self):
+        q = self.railway(keepWays=[123456, "789"])
+        self.assertIn('[!"service"]', q)
+        self.assertIn("way(id:123456,789)", q)
+
+    def test_the_query_is_still_one_union_with_geometry(self):
+        q = self.railway(keepWays=[1])
+        self.assertTrue(q.startswith("[out:json][timeout:60];("))
+        self.assertTrue(q.endswith(";);out geom;"))
+
+    def test_a_river_is_asked_for_by_name_unchanged(self):
+        q = dt.feature_query(self.BOX, {"key": "river", "type": "river", "label": "River Great Ouse"})
+        self.assertIn('way["waterway"="river"]["name"="River Great Ouse"]', q)
+        self.assertNotIn("service", q)
 
 
 if __name__ == "__main__":

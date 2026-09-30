@@ -891,7 +891,15 @@ def feature_query(bbox, feat):
     elif t == "canal":
         sel = f'way["waterway"="canal"]["name"="{lab}"]({box})'
     elif t == "railway":
-        sel = f'way["railway"="rail"]({box})'
+        # Running lines only: a way tagged service=* is a siding, yard, spur or
+        # crossover, and each drew on its own as a loose stub beside the line
+        # (Ely Co-op v1.29, south of the station). Peter ruled 2026-09-29 to skip
+        # them everywhere; a map that needs one to steer by names it by OSM way
+        # id in the feature's `keepWays` (buses-data OA-520).
+        sel = f'way["railway"="rail"][!"service"]({box})'
+        keep = [int(i) for i in feat.get("keepWays") or []]
+        if keep:
+            sel += f';way(id:{",".join(str(i) for i in keep)})'
     else:
         sel = f'way["highway"~"^(trunk|primary)$"]["ref"="{lab}"]({box})'
     return f"[out:json][timeout:60];({sel};);out geom;"

@@ -342,7 +342,7 @@ def overpass_features(bbox):
     ql=f"""[out:json][timeout:40];(
       way["waterway"="river"]({box});
       way["waterway"="canal"]({box});
-      way["railway"="rail"]({box});
+      way["railway"="rail"][!"service"]({box});
       way["highway"~"^(trunk|primary)$"]["ref"]({box});
     );out tags 60;"""
     # OA-339: two tries lost seven towns in eight on a bad afternoon; the shared

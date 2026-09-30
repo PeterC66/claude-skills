@@ -2722,6 +2722,17 @@ const MUTATIONS = [
     find: "  return c.rows.some(r => r.state === 'OVERDUE' || r.state === 'UNDATED');",
     to: "  return c.rows.some(r => r.state === 'UNDATED');" },
 
+  // shadow_count.js - the board's "clean on today's engine" count (buses-data OA-485 item 3).
+  { suite: 'shadow_count.test.js', file: 'shadow_count.js',
+    what: 'every stamp counts as taken on today\'s engine, so a week-old count on a superseded engine reads as today\'s',
+    find: "    onTodaysEngine: !!currentEngine && s.engine === currentEngine,",
+    to: "    onTodaysEngine: true," },
+
+  { suite: 'shadow_count.test.js', file: 'shadow_count.js',
+    what: 'a stamp with no places half is read as whole, so half an estate is counted as the estate',
+    find: "  if (!whole || !s.towns || !s.places || !Array.isArray(s.towns.maps) || !Array.isArray(s.places.maps)) {",
+    to: "  if (!whole || !s.towns || !Array.isArray(s.towns.maps)) {" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

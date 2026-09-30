@@ -1473,9 +1473,9 @@ async function main() {
   const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
   const s6Limit = await require('./s6_stale_limit.js').measure({ towns: townRows, places: placeRows, liveUrl: LIVE_URL, noLive: NO_LIVE, today: args['owed-today'] });   // OA-484 item 2
   const commit = commitmentRows();
-  const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL });   // a chore, never in `bad` (OA-488)
+  const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL }), shadow = require('./shadow_count').read(BUSES, CURRENT_ENGINE);   // chores, never in `bad` (OA-488, OA-485)
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), s6Limit, processSize: procSize }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), s6Limit, processSize: procSize, shadowRebuild: shadow }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1679,7 +1679,7 @@ async function main() {
   // S6 claims (OA-273): printed whether or not anything is wrong — the queued
   // count is the queue Peter works. Section text and why: s6_claims.js.
   require('./s6_claims.js').printSection(s6Claims);
-  require('./process_size').printSection(procSize);   // OA-488: printed, never in `bad`
+  require('./process_size').printSection(procSize); require('./shadow_count').printSection(shadow, CURRENT_ENGINE);   // OA-488, OA-485: printed, never in `bad`
 
   // Exit non-zero if anything needs attention, so this can gate CI. `bad` is
   // computed once, above the JSON branch, so both output forms agree — see there.

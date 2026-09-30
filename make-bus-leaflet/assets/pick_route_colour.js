@@ -243,9 +243,23 @@ if (neighbours.size) {
   console.log('  no shared road edges with any other route on this sheet (or it has no geometry yet)');
 }
 
+/* A DASHED route is offered no very dark colour (Peter, 2026-09-29, buses-data OA-521):
+ * dark and dashed reads as the railway. The line is gen_internal.js's — L* below 35 —
+ * and a dashed route is one whose frequency tier carries `dash`, which is how the
+ * engine draws it. Say what was set aside, same as the neutral features above. */
+const tiers = RJ.design && RJ.design.frequencyTiers;
+const tier = tiers && RJ.frequency ? tiers[RJ.frequency[route]] : null;
+const dashed = !!(tier && tier.dash);
+const tooDark = (c) => dashed && lab(c)[0] < 35;
+if (dashed) {
+  const set = POOL.filter(tooDark);
+  console.log(`  route ${route} is drawn DASHED (${RJ.frequency[route]}), so ${set.length} very dark candidate(s) `
+    + `are not offered — dark and dashed reads as a railway: ${set.join(', ')}`);
+}
+
 const used = new Set(others.map((o) => o.colour.toUpperCase()));
 const now = isNew ? null : PALETTE[route].toUpperCase();
-const ranked = POOL.filter((c) => !used.has(c) && c !== now)
+const ranked = POOL.filter((c) => !used.has(c) && c !== now && !tooDark(c))
   .map((c) => ({ c, w: worstFor(c), n: worstNear ? worstNear(c) : null }))
   .sort((a, b) => b.w.d - a.w.d);
 

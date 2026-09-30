@@ -74,18 +74,84 @@ class RepullLandmarks(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def fetch(self, answer):
-        def f(q):
+    def fetch(self, answer, host=None, base="2026-09-29T18:31:28Z"):
+        """A stub Overpass. `answer` may be a list, one reply per call, each a
+        (reply, host, base) tuple; a lone reply answers from the main host."""
+        replies = list(answer) if isinstance(answer, list) else [(answer, host or rl.overpass_fetch.HOSTS[0], base)]
+
+        def f(q, not_before=None, source=None):
             self.asked.append(q)
-            if isinstance(answer, Exception):
-                raise answer
-            return answer
+            self.floors.append(not_before)
+            reply, h, b = replies.pop(0)
+            if isinstance(reply, Exception):
+                raise reply
+            if source is not None:
+                source.update(host=h, osmBase=b)
+            return reply
         return f
 
-    def go(self, extra=(), answer=NEW):
+    def main_base(self, base):
+        def m():
+            self.main_asked += 1
+            if isinstance(base, Exception):
+                raise base
+            return base
+        return m
+
+    def go(self, extra=(), answer=NEW, main="2026-09-29T18:31:28Z", **kw):
         st = FakeStage(self.town)
-        r = rl.run(["--town", TOWN, "--root", self.root, *extra], fetch=self.fetch(answer), stage_fn=st)
+        self.floors, self.main_asked = [], 0
+        r = rl.run(["--town", TOWN, "--root", self.root, *extra], fetch=self.fetch(answer, **kw),
+                   stage_fn=st, main_base=self.main_base(main))
         return r, st
+
+    # -- OA-528: an answer must be current, not only complete ---------------------
+
+    MIRROR = "https://overpass.kumi.systems/api/interpreter"
+
+    def test_a_stale_mirror_answer_is_asked_again_and_only_the_current_one_stored(self):
+        # March, 2026-09-29: the mirror had 159 and no Budgens; the main host had 160.
+        stale = {"elements": NEW["elements"][:-1]}
+        r, st = self.go(["--apply", "--by", "sched-0303"],
+                        answer=[(stale, self.MIRROR, "2026-09-20T00:00:00Z"),
+                                (NEW, rl.overpass_fetch.HOSTS[0], "2026-09-29T18:31:28Z")])
+        self.assertEqual(self.floors[1], "2026-09-29T18:31:28Z", "the second ask must refuse data older than the main host's")
+        new_dir = os.path.join(self.town, "S2-geometry", r["run"])
+        with open(os.path.join(new_dir, "osm.json"), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh), NEW)
+        with open(os.path.join(new_dir, "overpass-source.json"), encoding="utf-8") as fh:
+            src = json.load(fh)
+        self.assertEqual(src["host"], rl.overpass_fetch.HOSTS[0])
+        self.assertEqual(src["staleAnswer"], {"host": self.MIRROR, "osmBase": "2026-09-20T00:00:00Z"})
+        commit = st.calls[2]
+        self.assertIn("overpass-source.json", commit[commit.index("--outputs") + 1].split(","))
+
+    def test_a_stale_mirror_with_no_current_host_is_refused_and_nothing_is_written(self):
+        with self.assertRaises(rl.Refused):
+            self.go(["--apply"], answer=[({"elements": NEW["elements"][:-1]}, self.MIRROR, "2026-09-20T00:00:00Z"),
+                                         (rl.overpass_fetch.OverpassUnreachable("no host that new"), None, None)])
+        self.assertEqual(sorted(os.listdir(os.path.join(self.town, "S2-geometry"))), [PREV])
+
+    def test_a_mirror_answer_is_refused_when_the_main_host_cannot_be_asked_its_date(self):
+        with self.assertRaises(rl.Refused) as cm:
+            self.go(["--apply"], host=self.MIRROR, main=rl.overpass_fetch.OverpassUnreachable("504"))
+        self.assertIn("cannot be shown current", str(cm.exception))
+        self.assertEqual(sorted(os.listdir(os.path.join(self.town, "S2-geometry"))), [PREV])
+
+    def test_a_current_mirror_answer_is_kept_and_its_check_recorded(self):
+        r, _ = self.go(host=self.MIRROR, base="2026-09-29T18:31:28Z")
+        self.assertEqual(len(self.asked), 1)
+        self.assertEqual(r["source"]["mainOsmBase"], "2026-09-29T18:31:28Z")
+
+    def test_the_main_host_answer_needs_no_second_question(self):
+        r, _ = self.go()
+        self.assertEqual(self.main_asked, 0)
+        self.assertEqual(r["source"]["host"], rl.overpass_fetch.HOSTS[0])
+
+    def test_the_fetch_refuses_data_older_than_the_pull_it_replaces(self):
+        write_json(os.path.join(self.prev, "osm.json"), dict(OLD, osm3s={"timestamp_osm_base": "2026-07-01T09:00:00Z"}))
+        self.go()
+        self.assertEqual(self.floors[0], "2026-07-01T09:00:00Z")
 
     def test_box_is_the_element_extent_when_no_query_was_recorded(self):
         r, _ = self.go()
@@ -120,7 +186,7 @@ class RepullLandmarks(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(new_dir, "overpass-pois.txt")))
         commit = st.calls[2]
         outs = commit[commit.index("--outputs") + 1].split(",")
-        self.assertEqual(outs, ["routes_atco.json", "osm.json", "osm2.json", "overpass-pois.txt"])
+        self.assertEqual(outs, ["routes_atco.json", "osm.json", "osm2.json", "overpass-pois.txt", "overpass-source.json"])
         self.assertEqual(commit[commit.index("--based-on") + 1], "S2=" + PREV)
         self.assertEqual(commit[-2:], ("--by", "sched-0303"))
 

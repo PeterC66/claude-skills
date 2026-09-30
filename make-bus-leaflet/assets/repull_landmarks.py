@@ -48,6 +48,16 @@ comes from, in order:
      it was asked over, never larger, and bus stops are dense enough that it is close;
      the report says which source was used so a reader can judge.
 
+THE ANSWER MUST BE CURRENT, NOT ONLY COMPLETE (OA-528). On 2026-09-29 March's first
+`--apply` was answered by the overpass.kumi.systems mirror from older data: 159 elements
+and no Budgens, where overpass-api.de had 160. `overpass_fetch.fetch()` judged it
+complete, which it was. So now: the fetch refuses data older than the S2 it would
+replace; an answer from a mirror is compared with the MAIN host's data date, and an
+older one is asked again, accepting only data at least that new; when the main host
+cannot be asked its date, a mirror's answer is REFUSED rather than stored unchecked.
+Which host answered, and the data date of its answer, are written beside the query
+as `overpass-source.json`, so a later reader can see what data the map was drawn from.
+
 PLACES ARE NOT HANDLED YET. A place's landmark pull is its walkshed
 `search_overpass` with every category's tags, a different question from a town's box.
 Given a place folder this refuses and says so rather than asking the wrong question.
@@ -72,6 +82,7 @@ from draft_town import pois_query   # noqa: E402  ONE query, owned by draft_town
 SK = HERE
 POIS = "osm.json"
 QUERY = "overpass-pois.txt"
+SOURCE = "overpass-source.json"
 BOX_RE = re.compile(r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)")
 
 
@@ -158,6 +169,34 @@ def compare(old, new):
     return {k: [a.get(k, 0), b.get(k, 0)] for k in sorted(set(a) | set(b)) if a.get(k, 0) != b.get(k, 0)}
 
 
+def current_answer(query, new, src, fetch, main_base):
+    """(answer, source) once the answer is shown current -- see THE ANSWER MUST BE CURRENT.
+
+    `src` is the {host, osmBase} the fetch filled in. An answer from the main host is
+    current by definition; one from a mirror is checked against the main host's date."""
+    main = overpass_fetch.HOSTS[0]
+    if src.get("host") == main:
+        return new, src
+    try:
+        mb = main_base()
+    except overpass_fetch.OverpassUnreachable as exc:
+        raise Refused("%s was answered by %s from data of %s, and the main host %s could not be "
+                      "asked the date of its own data (%s), so the answer cannot be shown current. "
+                      "Nothing was written: re-run when %s is answering."
+                      % (POIS, src.get("host"), src.get("osmBase") or "no stated date", main, exc, main))
+    if src.get("osmBase") and src["osmBase"] >= mb:
+        return new, dict(src, mainOsmBase=mb)
+    again = {}
+    try:
+        new = fetch(query, not_before=mb, source=again)
+    except overpass_fetch.OverpassUnreachable as exc:
+        raise Refused("%s was answered by %s from data of %s, older than the main host's %s, and "
+                      "asking again found no host with data that new (%s). Nothing was written."
+                      % (POIS, src.get("host"), src.get("osmBase") or "no stated date", mb, exc))
+    return new, dict(again, mainOsmBase=mb,
+                     staleAnswer={"host": src.get("host"), "osmBase": src.get("osmBase")})
+
+
 def s2_outputs(manifest, run_id):
     for r in (manifest.get("stages", {}).get("S2", {}).get("runs") or []):
         if r.get("id") == run_id:
@@ -165,7 +204,7 @@ def s2_outputs(manifest, run_id):
     return []
 
 
-def run(argv=None, fetch=None, stage_fn=None):
+def run(argv=None, fetch=None, stage_fn=None, main_base=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--town", required=True)
     ap.add_argument("--apply", action="store_true")
@@ -175,7 +214,9 @@ def run(argv=None, fetch=None, stage_fn=None):
     ap.add_argument("--note", default="")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    fetch = fetch or (lambda q: overpass_fetch.fetch(q, timeout=90, label=POIS))
+    fetch = fetch or (lambda q, not_before=None, source=None: overpass_fetch.fetch(
+        q, timeout=90, label=POIS, not_before=not_before, source=source))
+    main_base = main_base or overpass_fetch.main_host_base
     stage_fn = stage_fn or stage
 
     parts = re.split(r"[\\/]+", a.town.strip())
@@ -204,19 +245,23 @@ def run(argv=None, fetch=None, stage_fn=None):
     old = read_json(os.path.join(prev_dir, POIS))
     if a.answer:
         new = read_json(a.answer)
+        src = {"host": "stored answer (--answer)", "osmBase": overpass_fetch.osm_base(new)}
     else:
+        src = {}
         try:
-            new = fetch(query)
+            # Never older than the pull it replaces: a re-pull that goes backwards is no re-pull.
+            new = fetch(query, not_before=overpass_fetch.osm_base(old), source=src)
         except overpass_fetch.OverpassUnreachable as exc:
             raise Refused("%s\nNothing was written: an unanswered question is not an empty answer. "
                           "Re-run when Overpass is answering." % exc)
+        new, src = current_answer(query, new, src, fetch, main_base)
     if not isinstance(new, dict) or not new.get("elements"):
         raise Refused("Overpass answered with no elements over %s. A town box always holds bus "
                       "stops, so this is a failed pull, not an empty town; nothing was written." % box)
 
     result = {"town": a.town, "from": prev, "box": box, "boxSource": source,
               "before": len(old.get("elements", [])), "after": len(new["elements"]),
-              "moved": compare(old, new), "applied": False, "run": None}
+              "moved": compare(old, new), "source": src, "applied": False, "run": None}
     if not a.apply:
         return result
 
@@ -227,13 +272,18 @@ def run(argv=None, fetch=None, stage_fn=None):
         json.dump(new, fh, ensure_ascii=False)
     with open(os.path.join(new_dir, QUERY), "w", encoding="utf-8") as fh:
         fh.write(query + "\n")
+    with open(os.path.join(new_dir, SOURCE), "w", encoding="utf-8") as fh:
+        json.dump(src, fh, indent=2, sort_keys=True)
+        fh.write("\n")
     outputs = s2_outputs(manifest, prev)
-    for f in (POIS, QUERY):
+    for f in (POIS, QUERY, SOURCE):
         if f not in outputs:
             outputs.append(f)
     note = ("fresh landmark pull (OA-499): %s re-asked with today's pois_query() over the box from "
-            "the %s, %d -> %d elements; geometry and osm2.json carried unchanged from S2 %s"
-            % (POIS, source, result["before"], result["after"], prev))
+            "the %s, %d -> %d elements, answered by %s from OSM data of %s; geometry and osm2.json "
+            "carried unchanged from S2 %s"
+            % (POIS, source, result["before"], result["after"], src.get("host"),
+               src.get("osmBase") or "no stated date", prev))
     if a.note:
         note += "; " + a.note
     stage_fn(town_dir, "commit", "S2", new_dir, "--outputs", ",".join(outputs),
@@ -247,7 +297,12 @@ def report(r):
     lines = ["%s: landmark pull %s S2 %s" % (r["town"], "COMMITTED as" if r["applied"] else "would replace",
                                               r["run"] if r["applied"] else r["from"]),
              "  box %.4f,%.4f,%.4f,%.4f from the %s" % (r["box"]["s"], r["box"]["w"], r["box"]["n"], r["box"]["e"], r["boxSource"]),
-             "  elements %d -> %d" % (r["before"], r["after"])]
+             "  elements %d -> %d" % (r["before"], r["after"]),
+             "  answered by %s from OSM data of %s" % (r["source"].get("host"),
+                                                       r["source"].get("osmBase") or "no stated date")]
+    if r["source"].get("staleAnswer"):
+        st = r["source"]["staleAnswer"]
+        lines.append("  (asked again: %s first answered from older data of %s)" % (st["host"], st["osmBase"]))
     if r["moved"]:
         for k, (o, n) in r["moved"].items():
             lines.append("    %-32s %3d -> %3d" % (k, o, n))

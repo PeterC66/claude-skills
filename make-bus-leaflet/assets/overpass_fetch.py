@@ -30,6 +30,17 @@ A REPLY IS NOT AN ANSWER UNTIL IT SAYS IT FINISHED. Overpass can answer 200 with
 collected by then -- often none. That is a failure wearing a success's status
 code, and it is retried like one.
 
+A REPLY IS NOT CURRENT UNTIL ITS DATA DATE SAYS SO (buses-data OA-528). Every
+Overpass reply carries `osm3s.timestamp_osm_base`, the date of the OSM data it was
+answered from, and the mirrors lag. On 2026-09-29 overpass.kumi.systems answered
+March's landmark pull with 159 elements and no Budgens while overpass-api.de had
+160; only an eye caught it. So `fetch()` can be told `not_before`, the oldest data
+date the caller will accept: a reply from older data -- or one that does not say --
+is retried like a failure, which moves the question on to the next host. Pass a
+`source` dict to learn which host answered and its data date, and
+`main_host_base()` asks the main host alone what date its data is, so a caller
+answered by a mirror can tell whether it was told the current answer.
+
 `urlopen` and `sleep` are looked up at call time, so a test that replaces
 `urllib.request.urlopen` or `time.sleep` for its duration reaches this module too.
 """
@@ -61,12 +72,22 @@ def _failed_remark(d):
     return None
 
 
-def fetch(query, timeout=90, tries=TRIES, hosts=HOSTS, sleep=None, label="overpass", log=None):
+def osm_base(d):
+    """The reply's `osm3s.timestamp_osm_base` -- the date of the data it answers from -- or None."""
+    base = ((d.get("osm3s") or {}) if isinstance(d, dict) else {}).get("timestamp_osm_base")
+    return base if isinstance(base, str) and base else None
+
+
+def fetch(query, timeout=90, tries=TRIES, hosts=HOSTS, sleep=None, label="overpass", log=None,
+          not_before=None, source=None):
     """POST `query` to Overpass and return the parsed reply, or raise OverpassUnreachable.
 
     `label` names the answer in the stderr line (a destination file's name reads
     best). `sleep` and `log` default to `time.sleep` and `sys.stderr`, resolved at
-    call time.
+    call time. `not_before` is the oldest `timestamp_osm_base` accepted (ISO, Z --
+    Overpass's own format, so the strings order as the dates do); an older or
+    undated reply is retried. `source`, if a dict, is filled with `host` and
+    `osmBase` of the reply returned.
     """
     sleep = sleep or time.sleep
     log = log or sys.stderr
@@ -82,12 +103,30 @@ def fetch(query, timeout=90, tries=TRIES, hosts=HOSTS, sleep=None, label="overpa
             remark = _failed_remark(d)
             if remark:
                 raise ValueError("incomplete reply: " + remark)
+            base = osm_base(d)
+            if not_before and (base is None or base < not_before):
+                raise ValueError("stale reply: data of %s, older than %s" % (base or "no stated date", not_before))
         except Exception as exc:                  # noqa: BLE001 -- any failure is a retry
             last = "%s: %s" % (type(exc).__name__, exc)
             log.write("%s: try %d/%d failed at %s (%s)\n" % (label, n, tries, host, last))
             if n < tries:
                 sleep(BACKOFF_S * n)
             continue
-        log.write("%s: %d elements (try %d/%d, %s)\n" % (label, len(d["elements"]), n, tries, host))
+        log.write("%s: %d elements (try %d/%d, %s, data of %s)\n"
+                  % (label, len(d["elements"]), n, tries, host, base or "no stated date"))
+        if isinstance(source, dict):
+            source.update(host=host, osmBase=base)
         return d
     raise OverpassUnreachable("%s: no Overpass host answered in %d tries; last: %s" % (label, tries, last))
+
+
+def main_host_base(tries=3, sleep=None, log=None):
+    """The data date of the MAIN host (HOSTS[0]) alone, asked with a query that returns
+    nothing, or raise OverpassUnreachable. Never falls to a mirror: the point is to
+    learn what the host the mirrors copy from has."""
+    d = fetch("[out:json][timeout:25];node(1);out ids;", timeout=30, tries=tries, hosts=HOSTS[:1],
+              sleep=sleep, label="main host data date", log=log)
+    base = osm_base(d)
+    if base is None:
+        raise OverpassUnreachable("main host data date: %s answered without a timestamp_osm_base" % HOSTS[0])
+    return base

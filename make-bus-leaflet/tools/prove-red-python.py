@@ -1706,6 +1706,41 @@ MUTATIONS = [
      "find": '            if remark:',
      "to": '            if False:'},
 
+    # OA-528. A complete reply from a lagging mirror -- March without its Budgens on
+    # 2026-09-29 -- is only caught by asking what date its data is.
+    {"suite": "test_overpass_fetch.py", "file": "overpass_fetch.py",
+     "what": "a reply from data older than `not_before` is taken as the answer, so a lagging mirror's complete-but-old pull is stored as current",
+     "find": '            if not_before and (base is None or base < not_before):',
+     "to": '            if False:'},
+
+    {"suite": "test_overpass_fetch.py", "file": "overpass_fetch.py",
+     "what": "the main host's data date is asked of every host, so a mirror can answer the question that exists to check the mirrors",
+     "find": '    d = fetch("[out:json][timeout:25];node(1);out ids;", timeout=30, tries=tries, hosts=HOSTS[:1],',
+     "to": '    d = fetch("[out:json][timeout:25];node(1);out ids;", timeout=30, tries=tries, hosts=HOSTS[1:],'},
+
+    {"suite": "test_repull_landmarks.py", "file": "repull_landmarks.py",
+     "what": "any mirror answer is kept unchecked, which is the March Budgens pull stored",
+     "find": '    if src.get("host") == main:',
+     "to": '    if True:'},
+
+    {"suite": "test_repull_landmarks.py", "file": "repull_landmarks.py",
+     "what": "a mirror answer is kept when the main host cannot be asked its date, so the check passes exactly when it could not run",
+     "find": '''    except overpass_fetch.OverpassUnreachable as exc:
+        raise Refused("%s was answered by %s from data of %s, and the main host %s could not be "''',
+     "to": '''    except overpass_fetch.OverpassUnreachable as exc:
+        return new, src
+        raise Refused("%s was answered by %s from data of %s, and the main host %s could not be "'''},
+
+    {"suite": "test_repull_landmarks.py", "file": "repull_landmarks.py",
+     "what": "the second ask accepts any data date, so a stale mirror asked again can answer stale again",
+     "find": '        new = fetch(query, not_before=mb, source=again)',
+     "to": '        new = fetch(query, not_before=None, source=again)'},
+
+    {"suite": "test_repull_landmarks.py", "file": "repull_landmarks.py",
+     "what": "the re-pull no longer refuses data older than the S2 it replaces, so a re-pull can go backwards",
+     "find": '            new = fetch(query, not_before=overpass_fetch.osm_base(old), source=src)',
+     "to": '            new = fetch(query, not_before=None, source=src)'},
+
     {"suite": "test_draft_town.py", "file": "draft_town.py",
      "what": "draft_town writes an empty osm.json when Overpass never answered, which is the OA-339 fault restored at its original call site",
      "find": '''        raise SystemExit(f"{exc}\\n{dest} was NOT written: an unanswered question is not "

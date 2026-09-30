@@ -45,7 +45,7 @@ const CLEAN_P = report('rollout_places.js', { clean: 2, regressed: 0, unmeasured
  * the JSON it is given to --json (or `raw` text, or nothing), exits with `code`. */
 const stub = ({ json, raw, code = 0, writeArea = false }) => `
 const fs = require('fs'), path = require('path');
-const a = process.argv.slice(2);
+const a = process.argv;
 const at = (k) => { const i = a.indexOf(k); return i < 0 ? null : a[i + 1]; };
 fs.appendFileSync(path.join(__dirname, 'argv.log'), JSON.stringify(a) + '\\n');
 ${writeArea ? "fs.writeFileSync(path.join(at('--buses'), 'Areas', 'Stray', 'new.svg'), 'x');" : ''}

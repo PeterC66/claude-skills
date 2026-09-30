@@ -299,9 +299,25 @@ node prove-red-directory-links.mjs
 node prove-red-unpushed-branches.mjs
 node prove-red-pr-sweep.mjs
 node prove-red-doc-triage.mjs
+node prove-red-shadow-rebuild.mjs
 ```
 
 Every case there is a pair: make the state and see the row, clear the state and see it gone. Appearing is only half of it — a row still nagging about a letter that went out last week is a row that gets ignored, and then so is every row beside it. **The third is the same argument turned round and is the more dangerous half**: a refresh row suppressed by a review that never lifts has been silently deleted, and nobody would find out — so its cases prove a NEWER scan brings the row back with the old review still sitting in the file, and that an unreadable review file fails safe rather than quiet.
 
 If a queue is missing from the list, fix the source that owns it — **a portal queue is fixed in `community-bus-maps/src/worklist/index.js`** (which fixes the admin console at the same time), a local-tree signal in `worklist.mjs`. Do not work around a gap by reading the admin console separately; that is the habit this skill exists to end.
 
+### The weekly shadow rebuild — `shadow_rebuild.mjs`
+
+**Every map is gated against the engine commit that drew it (buses-data OA-430), which proves it reproduces, not that today's engine still draws it acceptably** — so the first customer change to an old map inherits every engine change since, all at once, and nobody has looked at any of them. `rollout.js` and `rollout_places.js` have written a verdict per map with `--json` since claude-skills #242 (`clean`, `regressed` or `unmeasured`, the rules in `make-bus-leaflet/assets/rollout_report.js`). **`shadow_rebuild.mjs` is the job that asks every week** (buses-data OA-485 item 1): both rollouts `--all`, dry run, into a scratch folder, and both reports whole in `loop/shadow-rebuild.json`, the stamp a loop tick's `find -mmin` test is to read, as `doc-triage.json` is — the loop prompt does not run it yet; that is OA-485's next step. On the estate at `83a53865e1` it took under a minute.
+
+**It never applies, and it checks that rather than trusting it.** Neither rollout is ever passed `--apply`, `--force` or `--rebuild-stale`; a report that says it applied is refused; and `git status -- Areas Places` in the buses tree is read before and after, so a dry run that wrote into a map folder is refused however clean its report. It commits nothing and touches no tracked file — not `ci-reference/`, not a manifest.
+
+**A regressed map is an answer, not a failure.** `rollout.js` exits 1 when a map would lose a label or raise a blocking warning, which is exactly what this job counts, so it exits 0, names every regressed map and stamps. `regressed` means LOOK: the lost-label rule cannot tell a deliberate change (OA-437's three-bullet *How to use*) from damage.
+
+**A half it cannot run is exit 2 and NO stamp**, so the next tick asks again: a rollout missing from disk, one that refused or died, one that wrote no report, or JSON that is not a rollout report. A shadow rebuild that dropped the place maps and stamped the towns would call half an estate the estate. `prove-red-shadow-rebuild.mjs` holds each of those, and that each rollout was called `--all --json` and nothing else. The board count read from the stamp, the quality metrics and the hard-collision count are OA-485's later items; nothing here writes a board row.
+
+From `C:\u3a St Ives\.claude\skills\bus-work\assets`, with no placeholders:
+
+```bash
+node shadow_rebuild.mjs
+```

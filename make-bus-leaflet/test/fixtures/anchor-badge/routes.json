@@ -1,0 +1,1045 @@
+{
+  "engine": "a1dd8cdc1a",
+  "engineCommit": "1c5bd5ee4116a2875cbfc14ed59f5a63b1bb85ac",
+  "place": "High Wycombe town centre",
+  "placeShort": "Oxford Street",
+  "placeTitle": "Buses in High Wycombe town centre",
+  "town": "High Wycombe",
+  "validFrom": "August 2026",
+  "version": "v2.0",
+  "anchor": "040000003058",
+  "anchorLabel": "Oxford Street",
+  "titleColor": "#4477AA",
+  "palette": {
+    "1": "#AA3377",
+    "20": "#DDCC77",
+    "27": "#CCBB44",
+    "29": "#CC3311",
+    "30": "#EE3377",
+    "31": "#009988",
+    "32": "#CC3311",
+    "33": "#CCBB44",
+    "34": "#4477AA",
+    "36": "#EE6677",
+    "37": "#332288",
+    "38": "#999933",
+    "40": "#EE7733",
+    "41": "#AA3377",
+    "102": "#332288",
+    "103": "#332288",
+    "104": "#332288",
+    "105": "#332288",
+    "130": "#EE7733",
+    "158": "#EE6677",
+    "300": "#228833",
+    "331": "#117733",
+    "333": "#999933",
+    "334": "#999933",
+    "850": "#882255",
+    "1A": "#AA3377",
+    "1B": "#AA3377",
+    "32A": "#CC3311",
+    "M40": "#332288",
+    "X74": "#332288"
+  },
+  "textOn": {
+    "1": "#fff",
+    "20": "#111",
+    "27": "#111",
+    "29": "#fff",
+    "30": "#fff",
+    "31": "#fff",
+    "32": "#fff",
+    "33": "#111",
+    "34": "#fff",
+    "36": "#fff",
+    "37": "#fff",
+    "38": "#111",
+    "40": "#111",
+    "41": "#fff",
+    "102": "#fff",
+    "103": "#fff",
+    "104": "#fff",
+    "105": "#fff",
+    "130": "#111",
+    "158": "#fff",
+    "300": "#fff",
+    "331": "#fff",
+    "333": "#111",
+    "334": "#111",
+    "850": "#fff",
+    "1A": "#fff",
+    "1B": "#fff",
+    "32A": "#fff",
+    "M40": "#fff",
+    "X74": "#fff"
+  },
+  "operators": [
+    {
+      "name": "Carousel Buses",
+      "routes": [
+        "1",
+        "1A",
+        "1B",
+        "30",
+        "31",
+        "32",
+        "32A",
+        "33",
+        "34",
+        "36",
+        "37",
+        "41",
+        "102",
+        "103",
+        "104",
+        "105",
+        "850"
+      ]
+    },
+    {
+      "name": "Red Rose Travel",
+      "routes": [
+        "40"
+      ]
+    },
+    {
+      "name": "Redline",
+      "routes": [
+        "130",
+        "300"
+      ]
+    },
+    {
+      "name": "First Berkshire & The Thames Valley",
+      "routes": [
+        "M40",
+        "X74"
+      ]
+    },
+    {
+      "name": "Thames Valley Buses",
+      "routes": [
+        "20"
+      ]
+    }
+  ],
+  "boardingPlan": {
+    "title": "Where to catch your bus in High Wycombe town centre",
+    "subtitle": "Oxford Street and the bus station",
+    "indexHeading": "Where to board, by destination",
+    "frameRadiusM": 250,
+    "hideStandsWithNoDestinations": true,
+    "limitedBelowPerWeek": 6,
+    "excludeRoutes": [
+      "130",
+      "300",
+      "130M",
+      "643",
+      "644",
+      "654",
+      "1S",
+      "36S",
+      "37M",
+      "WW1"
+    ],
+    "note": [
+      "Bay numbers and stop letters are those printed on the stop itself (NaPTAN); services from the Bus Open Data Service.",
+      "Every bus shown here calls in the bus station before Oxford Street, so the stand named for each destination is the nearest one you can board it at.",
+      "For Aylesbury and Princes Risborough, take the 130 or the 300 from Bay 15 (Redline, Mon-Fri).",
+      "Not indexed: those two, school journeys, and the WW1 match-day shuttle."
+    ],
+    "indexCols": 3,
+    "mapRightMm": 96,
+    "locatorSignalNearM": 45,
+    "locatorLandmarks": 16
+  },
+  "design": {
+    "panelCorridors": true,
+    "sheetUrl": "busmaps.uk/m/high-wycombe-town-centre",
+    "sheetUrlLabel": "Latest version:",
+    "howToUse": {
+      "bullets": [
+        "Find where you want to go, around the edge of the diagram.",
+        "Follow its line in to the town centre in the middle.",
+        "The badges on that line are the buses that go there."
+      ]
+    },
+    "laneOrientation": true,
+    "frequencyTiers": {
+      "frequent": {
+        "mm": 2.2
+      },
+      "all-day": {
+        "mm": 1.7
+      },
+      "limited": {
+        "mm": 1.2
+      }
+    },
+    "sheetVersion": "build 2.0 · 30 Sep 2026"
+  },
+  "checkedAt": "August 2026",
+  "routeOrder": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "M40",
+    "X74",
+    "37",
+    "1",
+    "1A",
+    "1B",
+    "41",
+    "31",
+    "32",
+    "32A",
+    "33",
+    "34",
+    "30",
+    "36",
+    "20",
+    "40",
+    "130",
+    "300",
+    "850"
+  ],
+  "panelOrder": [
+    "1",
+    "1A",
+    "1B",
+    "20",
+    "30",
+    "31",
+    "32",
+    "32A",
+    "33",
+    "34",
+    "36",
+    "37",
+    "40",
+    "41",
+    "102",
+    "103",
+    "104",
+    "105",
+    "130",
+    "300",
+    "850",
+    "M40",
+    "X74"
+  ],
+  "panelCols": {
+    "cols": 2,
+    "width": 49,
+    "row": 4.9,
+    "keyAt": {
+      "x": 200,
+      "y": 107
+    }
+  },
+  "panelRow": 4.9,
+  "orientationRoute": "32A",
+  "internalCorridors": {
+    "1": [
+      "1A",
+      "1B"
+    ],
+    "32": [
+      "32A"
+    ],
+    "102": [
+      "103",
+      "104",
+      "105",
+      "M40",
+      "X74"
+    ]
+  },
+  "corridorPalette": {
+    "1": [
+      "41"
+    ],
+    "40": [
+      "130"
+    ],
+    "102": [
+      "37"
+    ]
+  },
+  "corridorDesc": {
+    "1": [
+      "Hazlemere & Amersham",
+      "then Chesham & Hemel Hempstead",
+      "Daily (1B Mon–Sat) · Carousel"
+    ],
+    "32": [
+      "Booker – Micklefield",
+      "32A via Cressex",
+      "Mon–Sat, 32A daily · Carousel"
+    ],
+    "102": [
+      "Loudwater & Beaconsfield",
+      "102 Heathrow · 103 Windsor",
+      "104 & M40 Uxbridge · X74 Slough",
+      "105 Amersham & Chesham",
+      "Daily; 104, 105, M40 Mon–Sat"
+    ]
+  },
+  "minorityNote": {
+    "103": false,
+    "105": false,
+    "130": false,
+    "1B": false,
+    "X74": false
+  },
+  "internalDesc": {
+    "1": [
+      "1  Hemel Hempstead",
+      "Daily · Carousel"
+    ],
+    "20": [
+      "20  Maidenhead",
+      "Mon–Sat · Thames Valley",
+      "via Flackwell Heath & Bourne End"
+    ],
+    "30": [
+      "30  Downley circular",
+      "Daily · Carousel"
+    ],
+    "31": [
+      "31  Beaconsfield",
+      "Daily · Carousel"
+    ],
+    "32": [
+      "32  Booker – Micklefield",
+      "Mon–Sat · Carousel"
+    ],
+    "33": [
+      "33  Totteridge–Desborough",
+      "Daily · Carousel"
+    ],
+    "34": [
+      "34  Lane End",
+      "Daily · Carousel"
+    ],
+    "36": [
+      "36  Bourne End",
+      "Daily · Carousel"
+    ],
+    "37": [
+      "37  Windsor",
+      "Daily · Carousel"
+    ],
+    "40": [
+      "40  Thame",
+      "Daily · Red Rose"
+    ],
+    "41": [
+      "41  Amersham",
+      "Daily · Carousel"
+    ],
+    "102": [
+      "102  Heathrow Airport",
+      "Daily · Carousel"
+    ],
+    "103": [
+      "103  Windsor",
+      "Daily · Carousel"
+    ],
+    "104": [
+      "104  Uxbridge",
+      "Mon–Sat · Carousel"
+    ],
+    "105": [
+      "105  Amersham & Chesham",
+      "Mon–Sat · Carousel"
+    ],
+    "130": [
+      "130  Aylesbury",
+      "Daily · Redline"
+    ],
+    "300": [
+      "300  Aylesbury",
+      "Daily · Redline"
+    ],
+    "850": [
+      "850  Reading",
+      "Daily · Carousel"
+    ],
+    "1A": [
+      "1A  Chesham",
+      "Daily · Carousel"
+    ],
+    "1B": [
+      "1B  Hemel Hempstead",
+      "Mon–Sat · Carousel"
+    ],
+    "32A": [
+      "32A  Micklefield/Cressex",
+      "Daily · Carousel"
+    ],
+    "M40": [
+      "M40  Uxbridge express",
+      "Mon–Sat · First"
+    ],
+    "X74": [
+      "X74  Slough",
+      "Daily · First"
+    ]
+  },
+  "poi": {
+    "industrialKeep": "none",
+    "excludeName": [],
+    "tidy": [
+      [
+        " Church of England Primary School$",
+        " C of E Primary"
+      ],
+      [
+        " Combined School$",
+        " School"
+      ],
+      [
+        " Primary School$",
+        " Primary"
+      ],
+      [
+        " Junior School$",
+        " Junior"
+      ],
+      [
+        " Infant School$",
+        " Infants"
+      ],
+      [
+        " Academy$",
+        ""
+      ],
+      [
+        " School$",
+        ""
+      ]
+    ],
+    "canon": [],
+    "tiers": {
+      "community:Al-Baqir Centre": "may",
+      "community:Bellfield House Communicty Centre": {
+        "tier": "may",
+        "as": "Bellfield House Community Centre"
+      },
+      "community:Booker Memorial Hall": "may",
+      "community:British Legion": "may",
+      "community:Castlefield Community Centre": "may",
+      "community:Cedar Barn": "may",
+      "community:Community Centre": "may",
+      "community:Cressex Community Centre": "may",
+      "community:Downley Memorial Hall": "may",
+      "community:Hazlemere Community Centre and Social Club": "may",
+      "community:Hilltop Community Centre": "may",
+      "community:Hughenden Valley Village Hall": "may",
+      "community:Micklefield Community Centre": "may",
+      "community:Sands Village Hall": "may",
+      "community:St Francis of Assisi Church Hall": "may",
+      "community:The Hive": "must",
+      "community:The Hub": "may",
+      "community:Totteridge Community Centre": "may",
+      "community:West Wycombe Village Hall": "may",
+      "community:Widmer End VIllage Hall": "may",
+      "community:Wycombe Arts Centre": "may",
+      "community:Youthspace": "may",
+      "gp:CV Health": "may",
+      "gp:Cherry Mead Surgery": "may",
+      "gp:Chiltern House": "may",
+      "gp:Cressex Health Centre": "may",
+      "gp:Desborough Surgery": "may",
+      "gp:Highfield Surgery": "may",
+      "gp:Hughenden Valley Surgery": "may",
+      "gp:Kingswood Surgery": "may",
+      "gp:Lynton House": "may",
+      "gp:Riverside Surgery": "may",
+      "gp:Total Foot Care": "may",
+      "gp:Tower House Surgery": "may",
+      "leisure:Anytime Fitness": "may",
+      "leisure:Bucks Indoor Tennis Centre": "may",
+      "leisure:Bucks New University Gym": "may",
+      "leisure:Buzz Gym": "may",
+      "leisure:Clip 'n Climb": "may",
+      "leisure:Cressex Synthetic Sports Pitch Centre": "may",
+      "leisure:Flackwell Heath Moto Park": "may",
+      "leisure:High Wycombe Judo Centre": "may",
+      "leisure:High Wycombe Lawn Tennis Club": "may",
+      "leisure:High Wycombe Rugby Union Football Club": "may",
+      "leisure:Kingsmead Netball Centre": "may",
+      "leisure:Magnolia Park": "may",
+      "leisure:Magnolia Park Sports & Social Club": "may",
+      "leisure:Rezen": "may",
+      "leisure:Snap Fitness": "may",
+      "leisure:Swim Street": "may",
+      "leisure:TeamSport High Wycombe": "may",
+      "leisure:The Gym": "may",
+      "leisure:Titans Gym": "may",
+      "leisure:Widmer End Lawn Tennis Club": "may",
+      "leisure:Wycombe Badminton Centre": "may",
+      "leisure:Wycombe Leisure Centre": "may",
+      "leisure:Wycombe Rye Lido": "may",
+      "library:High Wycombe Library": "must",
+      "museum:Wycombe Museum": "must",
+      "park:Badger Way Park": "may",
+      "park:Broad Walk": "may",
+      "park:Hughenden Park": "may",
+      "park:Kings Mead": "may",
+      "park:North Lawn": {
+        "tier": "must",
+        "as": "NorthLawn"
+      },
+      "park:Plomer Hill": "may",
+      "park:Round Wood": "may",
+      "park:Spinney": "may",
+      "park:Tom Burt's Hill": "may",
+      "park:Totteridge Recreation Ground": "may",
+      "park:Widmer Fields - Ash Field": "may",
+      "park:Widmer Fields - Oak Field": "may",
+      "park:Widmer Fields - The Orchard": "may",
+      "pharmacy:": "may",
+      "pharmacy:Aqsa Pharmacy": "may",
+      "pharmacy:Asda": "may",
+      "pharmacy:Boots": "miss",
+      "pharmacy:Centra Pharmacy": "miss",
+      "pharmacy:Cressex Pharmacy": "may",
+      "pharmacy:Downley Pharmacy": "may",
+      "pharmacy:Lansdales Pharmacy & Clinics": "may",
+      "pharmacy:Priory Pharmacy": "miss",
+      "pharmacy:Rowlands Pharmacy": "may",
+      "pharmacy:Ryemead Pharmacy": "may",
+      "pharmacy:Superdrug": "miss",
+      "pharmacy:The Pharmacy shop": "may",
+      "school:Abbey View Primary": "may",
+      "school:Ash Hill Primary": "may",
+      "school:Beechview": "may",
+      "school:Booker Hill Primary School & Nursery": "may",
+      "school:Carrington Infants": "may",
+      "school:Carrington Junior": "may",
+      "school:Castlefield": "may",
+      "school:Cedar Park": "may",
+      "school:Chepping View Primary / Shelbourne County First Schools": "may",
+      "school:Chiltern Wood": "may",
+      "school:Cressex Community": "may",
+      "school:Crown House": "may",
+      "school:Godstowe": "may",
+      "school:Hamilton Academy - Hampden Road site": "may",
+      "school:Hamilton Academy - Priory Road site": "may",
+      "school:Hannah Ball": "may",
+      "school:Hazlemere Church of England": "may",
+      "school:High Wycombe Church of England": "may",
+      "school:Highworth Combined School and Nursery": "may",
+      "school:John Hampden Grammar": "may",
+      "school:Kings Wood School and Nursery": "may",
+      "school:Loudwater": "may",
+      "school:Manor Farm Junior": "may",
+      "school:Marsh": "may",
+      "school:Millbrook": "may",
+      "school:Oakridge": "may",
+      "school:Park Crescent County": "may",
+      "school:Sir William Ramsay": "may",
+      "school:St Michael's Catholic": "may",
+      "school:The Chalfonts Independent Grammar": "may",
+      "school:The Disraeli": "may",
+      "school:The Downley": "may",
+      "school:The Highcrest": "may",
+      "school:The Royal Grammar School, High Wycombe": "may",
+      "school:Tylers Green Middle": "may",
+      "school:Unity College": "may",
+      "school:Uplyme Field": "may",
+      "school:Vinio House": "may",
+      "school:West Wycombe": "may",
+      "school:Widmer End Community": "may",
+      "school:Wycombe Abbey": "may",
+      "school:Wycombe High": "may",
+      "school:Wycombe Preparatory": "may",
+      "shop:Al Rizq Supermarket": "may",
+      "shop:Al-Medina Foods Market": "may",
+      "shop:Aldi": "may",
+      "shop:Asda": "must",
+      "shop:Co-op Food": "may",
+      "shop:Delikatesy Smaczek": "may",
+      "shop:Elane Asian Market": "may",
+      "shop:Grosik Supermarket": "may",
+      "shop:Istanbul": "may",
+      "shop:Lidl": "may",
+      "shop:M&S Food": "may",
+      "shop:Morrisons": "must",
+      "shop:Sainsbury's": "may",
+      "shop:Shop Jollof": "may",
+      "shop:Tesco Express": "may",
+      "shop:Thara Supermarket": "may",
+      "shop:Waitrose": "may"
+    }
+  },
+  "internalTitleColor": "#4477AA",
+  "panelGroups": true,
+  "internalRoads": {
+    "focus": {
+      "coreKm": 0.5,
+      "comp": 0.55
+    },
+    "roadLabelMax": 22,
+    "badgeEvery": 50,
+    "termini": {
+      "1": {
+        "start": false,
+        "end": "Amersham & Chesham"
+      },
+      "20": {
+        "start": "Bourne End",
+        "end": false
+      },
+      "30": {
+        "start": false,
+        "end": false
+      },
+      "31": {
+        "start": false,
+        "end": "Beaconsfield"
+      },
+      "32": {
+        "start": "Booker & Lane End",
+        "end": "Micklefield"
+      },
+      "33": {
+        "start": "Desborough",
+        "end": "Totteridge"
+      },
+      "34": {
+        "start": "Micklefield",
+        "end": "Booker & Lane End"
+      },
+      "36": {
+        "start": false,
+        "end": "Bourne End"
+      },
+      "37": {
+        "start": false,
+        "end": "Bourne End & Maidenhead"
+      },
+      "40": {
+        "start": false,
+        "end": "Thame"
+      },
+      "41": {
+        "start": false,
+        "end": "Amersham & Chesham"
+      },
+      "102": {
+        "start": false,
+        "end": "Loudwater & Beaconsfield"
+      },
+      "103": {
+        "start": false,
+        "end": false
+      },
+      "104": {
+        "start": false,
+        "end": false
+      },
+      "105": {
+        "start": false,
+        "end": false
+      },
+      "130": {
+        "start": "Aylesbury",
+        "end": false
+      },
+      "300": {
+        "start": "Aylesbury",
+        "end": false
+      },
+      "850": {
+        "start": false,
+        "end": "Reading"
+      },
+      "M40": {
+        "start": false,
+        "end": false
+      },
+      "X74": {
+        "start": false,
+        "end": false
+      },
+      "1A": {
+        "start": false,
+        "end": "Amersham & Chesham"
+      },
+      "1B": {
+        "start": false,
+        "end": "Amersham & Chesham"
+      },
+      "32A": {
+        "start": "Booker & Lane End",
+        "end": "Micklefield"
+      }
+    },
+    "fitExtra": [
+      "040000002956",
+      "040000003058",
+      "040000003052",
+      "040000003101",
+      "040000002972",
+      "040000003053",
+      "040000003061",
+      "040000003414",
+      "040000003336",
+      "040000002970",
+      "040000002969",
+      "040000003347",
+      "040000003429",
+      "040000002965",
+      "040000003054",
+      "040000003243",
+      "040000003244",
+      "040000003055",
+      "040000003325",
+      "040000003327",
+      "040000003316",
+      "040000002964",
+      "040000003025",
+      "040000003267",
+      "040000003254",
+      "040000003026",
+      "040000003056",
+      "040000002955",
+      "040000003165",
+      "040000003338",
+      "040000002954",
+      "040000002962",
+      "040000003349",
+      "040000002957",
+      "040000002963",
+      "040000002960",
+      "040000003418",
+      "040000003433",
+      "040000002958",
+      "040000003062",
+      "040000003095",
+      "040000002961",
+      "040000002946",
+      "040000002968",
+      "040000000441",
+      "040000002967",
+      "040000003063",
+      "040000002959"
+    ],
+    "fitMargin": 8
+  },
+  "features": [
+    {
+      "key": "river",
+      "type": "river",
+      "label": "River Wye",
+      "labelPos": "auto",
+      "labelColor": "#6ba3cc",
+      "labelSize": 3.2
+    },
+    {
+      "key": "railway",
+      "type": "railway",
+      "label": "Chiltern Main Line",
+      "labelPos": "auto",
+      "labelColor": "#777777",
+      "labelSize": 3.2,
+      "style": {
+        "rail": "chequer"
+      }
+    }
+  ],
+  "mapNotes": [
+    {
+      "text": "Also serving the town centre, not drawn here:",
+      "x": 200,
+      "y": 173.4,
+      "size": 2.9,
+      "color": "#333"
+    },
+    {
+      "text": "Limited (few journeys/wk): 27, 29, 38, 158, 275, 331, 333/334.",
+      "x": 200,
+      "y": 177.8,
+      "size": 2.5,
+      "color": "#555"
+    },
+    {
+      "text": "School services: term-time only — full list at busmaps.uk.",
+      "x": 200,
+      "y": 181.4,
+      "size": 2.5,
+      "color": "#555"
+    }
+  ],
+  "destinations": [
+    {
+      "name": "Desborough",
+      "routes": [
+        "33"
+      ],
+      "bearing": 258,
+      "distKm": 1.7,
+      "sub": "Copyground Lane",
+      "stops": [
+        "High Wycombe BusStn",
+        "The Half Moon PH",
+        "The Jolly Bodger PH",
+        "Copyground Lane"
+      ],
+      "stopLocalities": [
+        "High Wycombe",
+        "High Wycombe",
+        "Desborough Castle",
+        "Desborough Castle"
+      ],
+      "minutesToDestination": 6,
+      "terminus": {
+        "x": 25.3,
+        "y": 144.5
+      }
+    },
+    {
+      "name": "Totteridge",
+      "routes": [
+        "33",
+        "34"
+      ],
+      "bearing": 73,
+      "distKm": 2,
+      "minutesToDestination": 11,
+      "terminus": {
+        "x": 265.7,
+        "y": 63.3
+      }
+    },
+    {
+      "name": "Micklefield",
+      "routes": [
+        "32",
+        "32A",
+        "34"
+      ],
+      "bearing": 92,
+      "distKm": 2.7,
+      "sub": "Woodside Road",
+      "minutesToDestination": 16,
+      "terminus": {
+        "x": 270.6,
+        "y": 107.7
+      }
+    },
+    {
+      "name": "Booker & Lane End",
+      "routes": [
+        "32",
+        "32A",
+        "34"
+      ],
+      "bearing": 227,
+      "distKm": 2.6,
+      "sub": "Cressex & Asda",
+      "minutesToDestination": 16,
+      "terminus": {
+        "x": 63.4,
+        "y": 188.3
+      }
+    },
+    {
+      "name": "Amersham & Chesham",
+      "routes": [
+        "1",
+        "1A",
+        "1B",
+        "41",
+        "105"
+      ],
+      "bearing": 55,
+      "distKm": 12.4,
+      "sub": "Hemel Hempstead (1, 1B)",
+      "minutesToDestination": 49,
+      "terminus": {
+        "x": 225.2,
+        "y": 40.5
+      }
+    },
+    {
+      "name": "Beaconsfield",
+      "routes": [
+        "31",
+        "102",
+        "103",
+        "104",
+        "105",
+        "X74"
+      ],
+      "bearing": 110,
+      "distKm": 8.1,
+      "minutesToDestination": 35,
+      "terminus": {
+        "x": 271.4,
+        "y": 151.6
+      }
+    },
+    {
+      "name": "Uxbridge",
+      "routes": [
+        "102",
+        "104",
+        "M40",
+        "X74"
+      ],
+      "bearing": 117,
+      "distKm": 20.8,
+      "sub": "Heathrow Airport (102)",
+      "minutesToDestination": 34,
+      "terminus": {
+        "x": 250.6,
+        "y": 190.4
+      }
+    },
+    {
+      "name": "Slough",
+      "routes": [
+        "103",
+        "X74"
+      ],
+      "bearing": 139,
+      "distKm": 16.7,
+      "sub": "& Langley",
+      "minutesToDestination": 38,
+      "terminus": {
+        "x": 187.8,
+        "y": 175.1
+      }
+    },
+    {
+      "name": "Bourne End",
+      "routes": [
+        "20",
+        "36",
+        "37"
+      ],
+      "bearing": 153,
+      "distKm": 6.9,
+      "sub": "Maidenhead & Windsor",
+      "minutesToDestination": 27,
+      "terminus": {
+        "x": 166.2,
+        "y": 190.2
+      }
+    },
+    {
+      "name": "Reading",
+      "routes": [
+        "850"
+      ],
+      "bearing": 214,
+      "distKm": 23.7,
+      "sub": "via Marlow & Henley",
+      "stops": [
+        "Arts Centre",
+        "Millbank Wood",
+        "Loddon Hall Road",
+        "Friar Street"
+      ],
+      "stopLocalities": [
+        "High Wycombe",
+        "Medmenham",
+        "Twyford",
+        "Reading Town Centre"
+      ],
+      "minutesToDestination": 95,
+      "terminus": {
+        "x": 108.1,
+        "y": 190.3
+      }
+    },
+    {
+      "name": "Thame",
+      "routes": [
+        "40"
+      ],
+      "bearing": 310,
+      "distKm": 19.7,
+      "sub": "via Chinnor",
+      "stops": [
+        "Brook Street",
+        "St Francis Road",
+        "Chiltern Hill Garage",
+        "Lord Williams Upper School"
+      ],
+      "stopLocalities": [
+        "High Wycombe",
+        "Studley Green",
+        "Chinnor",
+        "Thame"
+      ],
+      "minutesToDestination": 52,
+      "terminus": {
+        "x": 112.5,
+        "y": 86.5
+      }
+    },
+    {
+      "name": "Aylesbury",
+      "routes": [
+        "130",
+        "300"
+      ],
+      "bearing": 349,
+      "distKm": 19.8,
+      "sub": "via Princes Risborough",
+      "minutesToDestination": 50,
+      "terminus": {
+        "x": 134.6,
+        "y": 39
+      }
+    }
+  ],
+  "frequency": {
+    "1": "frequent",
+    "20": "all-day",
+    "27": "limited",
+    "29": "limited",
+    "30": "frequent",
+    "31": "frequent",
+    "32": "frequent",
+    "33": "frequent",
+    "34": "frequent",
+    "36": "frequent",
+    "37": "frequent",
+    "38": "all-day",
+    "40": "all-day",
+    "41": "frequent",
+    "102": "frequent",
+    "103": "frequent",
+    "104": "all-day",
+    "105": "all-day",
+    "130": "frequent",
+    "158": "limited",
+    "300": "frequent",
+    "331": "limited",
+    "333": "limited",
+    "334": "limited",
+    "850": "frequent",
+    "1A": "frequent",
+    "1B": "all-day",
+    "32A": "frequent",
+    "M40": "frequent",
+    "X74": "frequent"
+  },
+  "legendWrap": {
+    "perRow": 9
+  },
+  "localLoops": [
+    {
+      "route": "30",
+      "label": "Downley circular"
+    }
+  ]
+}

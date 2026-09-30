@@ -1,0 +1,2824 @@
+{
+ "place": "Oxford Street",
+ "homeLocality": "High Wycombe",
+ "generatedBy": "boarding_index.py v1.4",
+ "asof": "2026-09-23",
+ "feed": "20260901_024734",
+ "region": "buckinghamshire.sqlite",
+ "stands": [
+  {
+   "atco": "040000002954",
+   "label": "Bay 4",
+   "class": "stand",
+   "distM": 217,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631201,
+    -0.75672
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002955",
+   "label": "Bay 5",
+   "class": "stand",
+   "distM": 215,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631227,
+    -0.756676
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002956",
+   "label": "Bay 6",
+   "class": "stand",
+   "distM": 212,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631245,
+    -0.756632
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002957",
+   "label": "Bay 7",
+   "class": "stand",
+   "distM": 210,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631271,
+    -0.756588
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002958",
+   "label": "Bay 8",
+   "class": "stand",
+   "distM": 207,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631298,
+    -0.756544
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002959",
+   "label": "Bay 9",
+   "class": "stand",
+   "distM": 204,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631315,
+    -0.7565
+   ],
+   "street": "Bridge Street",
+   "routes": [
+    "850"
+   ],
+   "destinations": [
+    "Charvil",
+    "Danesfield",
+    "Fawley",
+    "Hambleden",
+    "Henley-on-Thames",
+    "Marlow",
+    "Medmenham",
+    "Northfields",
+    "Reading",
+    "Remenham",
+    "Sonning",
+    "Twyford",
+    "Wargrave"
+   ]
+  },
+  {
+   "atco": "040000002960",
+   "label": "Bay 10",
+   "class": "stand",
+   "distM": 201,
+   "walkMin": 3,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631342,
+    -0.756442
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002961",
+   "label": "Bay 11",
+   "class": "stand",
+   "distM": 199,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631368,
+    -0.756398
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002962",
+   "label": "Bay 12",
+   "class": "stand",
+   "distM": 196,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631386,
+    -0.756354
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002963",
+   "label": "Bay 13",
+   "class": "stand",
+   "distM": 194,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631412,
+    -0.75631
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002964",
+   "label": "Bay 14",
+   "class": "stand",
+   "distM": 192,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.63143,
+    -0.756266
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002965",
+   "label": "Bay 15",
+   "class": "stand",
+   "distM": 190,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631456,
+    -0.756222
+   ],
+   "street": "Bridge Street",
+   "routes": [
+    "40"
+   ],
+   "destinations": [
+    "Aston Rowant",
+    "Chinnor",
+    "Crowell",
+    "Emmington",
+    "Kingston Blount",
+    "Lewknor",
+    "Piddington",
+    "Stokenchurch",
+    "Studley Green",
+    "Sydenham",
+    "Thame",
+    "West Wycombe"
+   ]
+  },
+  {
+   "atco": "040000002967",
+   "label": "Bay 17",
+   "class": "stand",
+   "distM": 186,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.6315,
+    -0.756134
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002968",
+   "label": "Bay 18",
+   "class": "stand",
+   "distM": 184,
+   "walkMin": 2,
+   "facing": null,
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631527,
+    -0.75609
+   ],
+   "street": "Bridge Street",
+   "routes": [
+    "331"
+   ],
+   "destinations": [
+    "Bledlow Ridge",
+    "Chinnor Hill"
+   ]
+  },
+  {
+   "atco": "040000000441",
+   "label": "Gate A",
+   "class": "stand",
+   "distM": 220,
+   "walkMin": 3,
+   "facing": "south-west",
+   "name": "High Wycombe BusStn",
+   "pos": [
+    51.631147,
+    -0.756772
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000003058",
+   "label": "Stop J",
+   "class": "stand",
+   "distM": 14,
+   "walkMin": 1,
+   "facing": "east",
+   "name": "Oxford Street",
+   "pos": [
+    51.630941,
+    -0.753404
+   ],
+   "street": "Oxford Street",
+   "routes": [
+    "1",
+    "102",
+    "103",
+    "104",
+    "105",
+    "1A",
+    "1B",
+    "31",
+    "334",
+    "36",
+    "37",
+    "41",
+    "M40",
+    "X74"
+   ],
+   "destinations": [
+    "Amersham",
+    "Beaconsfield",
+    "Beaconsfield Services",
+    "Beaconsfield Wilton Park",
+    "Beamond End",
+    "Bourne End",
+    "Bovingdon",
+    "Bryants Bottom",
+    "Bulstrode Park",
+    "Butlers Cross",
+    "Chalfont Common",
+    "Chalfont St Giles",
+    "Chalfont St Peter",
+    "Chartridge",
+    "Chesham",
+    "Coleshill",
+    "Cookham",
+    "Cores End",
+    "Denham",
+    "Farnham Common",
+    "Farnham Royal",
+    "Fifield",
+    "Flackwell Heath",
+    "George Green",
+    "Gerrards Cross",
+    "Great Hampden",
+    "Great Kingshill",
+    "Great Missenden",
+    "Hazlemere",
+    "Heath End",
+    "Hedgerley",
+    "Hemel Hempstead",
+    "Hillingdon Heath",
+    "Holmer Green",
+    "Hughenden Valley",
+    "Hyde Heath",
+    "Iver Heath",
+    "Langley",
+    "London",
+    "Loudwater",
+    "Lower North Dean",
+    "Maidenhead",
+    "Penn",
+    "Penn Street",
+    "Prestwood",
+    "Seer Green",
+    "Slough",
+    "Speen",
+    "Tatling End",
+    "Tylers Green",
+    "Upper North Dean",
+    "Uxbridge",
+    "Whelpley Hill",
+    "Widmer End",
+    "Winchmore Hill",
+    "Windsor",
+    "Wooburn",
+    "Wooburn Green",
+    "Wooburn Moor"
+   ]
+  },
+  {
+   "atco": "040000003061",
+   "label": "Stop K",
+   "class": "stand",
+   "distM": 28,
+   "walkMin": 1,
+   "facing": "west",
+   "name": "Oxford Street",
+   "pos": [
+    51.63076,
+    -0.753308
+   ],
+   "street": "Oxford Street",
+   "routes": [
+    "34"
+   ],
+   "destinations": [
+    "Lane End"
+   ]
+  },
+  {
+   "atco": "040000003056",
+   "label": "Stop M",
+   "class": "stand",
+   "distM": 110,
+   "walkMin": 1,
+   "facing": "south",
+   "name": "Frogmoor",
+   "pos": [
+    51.631775,
+    -0.752752
+   ],
+   "street": "Frogmoor",
+   "routes": [],
+   "destinations": []
+  },
+  {
+   "atco": "040000002970",
+   "label": "Bus Station",
+   "class": "named",
+   "distM": 205,
+   "walkMin": 3,
+   "facing": "south-west",
+   "name": "Bus Station",
+   "pos": [
+    51.631423,
+    -0.756468
+   ],
+   "street": "Bridge Street",
+   "routes": [],
+   "destinations": []
+  }
+ ],
+ "destinations": [
+  {
+   "destination": "Amersham",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "105",
+    "1A",
+    "1B",
+    "41"
+   ],
+   "trips": 490,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 328,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "105"
+     ],
+     "trips": 72,
+     "arrivalM": 328,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 66,
+     "arrivalM": 704,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Aston Rowant",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Beaconsfield",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "31",
+    "X74"
+   ],
+   "trips": 1083,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 3277,
+     "arrivalBand": 8
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "103",
+      "104",
+      "105"
+     ],
+     "trips": 626,
+     "arrivalM": 88,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "31"
+     ],
+     "trips": 148,
+     "arrivalM": 213,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Beaconsfield Services",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 541,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 112,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 232,
+     "arrivalM": 112,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Beaconsfield Wilton Park",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103"
+   ],
+   "trips": 232,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 232,
+     "arrivalM": 24,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Beamond End",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 62,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Bledlow Ridge",
+   "boardAt": "Bay 18",
+   "boardAtAtco": "040000002968",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "331"
+   ],
+   "trips": 11,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Bourne End",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "36",
+    "37"
+   ],
+   "trips": 238,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 63,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002960",
+     "label": "Bay 10",
+     "class": "stand",
+     "distM": 201,
+     "walkMin": 3,
+     "routes": [
+      "36"
+     ],
+     "trips": 87,
+     "arrivalM": 98,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002970",
+     "label": "Bus Station",
+     "class": "named",
+     "distM": 205,
+     "walkMin": 3,
+     "routes": [
+      "20"
+     ],
+     "trips": 82,
+     "arrivalM": 63,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Bovingdon",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1B"
+   ],
+   "trips": 166,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1B"
+     ],
+     "trips": 166,
+     "arrivalM": 91,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Bryants Bottom",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "334"
+   ],
+   "trips": 2,
+   "limited": true,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "334"
+     ],
+     "trips": 2,
+     "arrivalM": 129,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Bulstrode Park",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102"
+   ],
+   "trips": 238,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102"
+     ],
+     "trips": 238,
+     "arrivalM": 47,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Butlers Cross",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "104"
+     ],
+     "trips": 84,
+     "arrivalM": 9810,
+     "arrivalBand": 24
+    }
+   ]
+  },
+  {
+   "destination": "Chalfont Common",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "104"
+     ],
+     "trips": 84,
+     "arrivalM": 286,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Chalfont St Giles",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "104"
+     ],
+     "trips": 84,
+     "arrivalM": 347,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Chalfont St Peter",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "104"
+     ],
+     "trips": 84,
+     "arrivalM": 158,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Chartridge",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "105"
+   ],
+   "trips": 61,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "105"
+     ],
+     "trips": 61,
+     "arrivalM": 145,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Charvil",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Chesham",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "105",
+    "1A",
+    "1B"
+   ],
+   "trips": 418,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 258,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "105"
+     ],
+     "trips": 66,
+     "arrivalM": 686,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Chinnor",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "331"
+     ],
+     "trips": 11,
+     "arrivalM": 228,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Chinnor Hill",
+   "boardAt": "Bay 18",
+   "boardAtAtco": "040000002968",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "331"
+   ],
+   "trips": 11,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Coleshill",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "105"
+   ],
+   "trips": 72,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "105"
+     ],
+     "trips": 72,
+     "arrivalM": 533,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Cookham",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 283,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002970",
+     "label": "Bus Station",
+     "class": "named",
+     "distM": 205,
+     "walkMin": 3,
+     "routes": [
+      "20"
+     ],
+     "trips": 82,
+     "arrivalM": 283,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Cores End",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 13,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Crowell",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Danesfield",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 307,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Denham",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104"
+   ],
+   "trips": 322,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "104"
+     ],
+     "trips": 322,
+     "arrivalM": 702,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Emmington",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Farnham Common",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 541,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 187,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 232,
+     "arrivalM": 187,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Farnham Royal",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 541,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 61,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 232,
+     "arrivalM": 61,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Fawley",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 307,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Fifield",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 101,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 101,
+     "arrivalM": 410,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Flackwell Heath",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "36"
+   ],
+   "trips": 87,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002960",
+     "label": "Bay 10",
+     "class": "stand",
+     "distM": 201,
+     "walkMin": 3,
+     "routes": [
+      "36"
+     ],
+     "trips": 87,
+     "arrivalM": 153,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002970",
+     "label": "Bus Station",
+     "class": "named",
+     "distM": 205,
+     "walkMin": 3,
+     "routes": [
+      "20"
+     ],
+     "trips": 82,
+     "arrivalM": 153,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "George Green",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "X74"
+   ],
+   "trips": 243,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 243,
+     "arrivalM": 446,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Gerrards Cross",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104"
+   ],
+   "trips": 322,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "104"
+     ],
+     "trips": 322,
+     "arrivalM": 223,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Great Hampden",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "334"
+   ],
+   "trips": 2,
+   "limited": true,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "334"
+     ],
+     "trips": 2,
+     "arrivalM": 5,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Great Kingshill",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 81,
+     "arrivalM": 66,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Great Missenden",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 81,
+     "arrivalM": 284,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Hambleden",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 307,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hazlemere",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1A",
+    "1B",
+    "31",
+    "41"
+   ],
+   "trips": 605,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 100,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "31",
+      "41"
+     ],
+     "trips": 253,
+     "arrivalM": 61,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Heath End",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 81,
+     "arrivalM": 113,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Hedgerley",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 541,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 719,
+     "arrivalBand": 1
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 232,
+     "arrivalM": 719,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Hemel Hempstead",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1B"
+   ],
+   "trips": 166,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1B"
+     ],
+     "trips": 166,
+     "arrivalM": 95,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Henley-on-Thames",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 307,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Hillingdon Heath",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102"
+   ],
+   "trips": 238,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102"
+     ],
+     "trips": 238,
+     "arrivalM": 516,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Holmer Green",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 17,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Hughenden Valley",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "334"
+   ],
+   "trips": 2,
+   "limited": true,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "334"
+     ],
+     "trips": 2,
+     "arrivalM": 102,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Hyde Heath",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "41"
+   ],
+   "trips": 66,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 66,
+     "arrivalM": 361,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Iver Heath",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "X74"
+   ],
+   "trips": 243,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 243,
+     "arrivalM": 70,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Kingston Blount",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Lane End",
+   "boardAt": "Stop K",
+   "boardAtAtco": "040000003061",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "34"
+   ],
+   "trips": 101,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002960",
+     "label": "Bay 10",
+     "class": "stand",
+     "distM": 201,
+     "walkMin": 3,
+     "routes": [
+      "34"
+     ],
+     "trips": 145,
+     "arrivalM": 70,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Langley",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103"
+   ],
+   "trips": 77,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 77,
+     "arrivalM": 354,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Lewknor",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "London",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104",
+    "M40",
+    "X74"
+   ],
+   "trips": 806,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 243,
+     "arrivalM": null,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "M40"
+     ],
+     "trips": 241,
+     "arrivalM": null,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "104"
+     ],
+     "trips": 322,
+     "arrivalM": null,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Loudwater",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105",
+    "37",
+    "M40",
+    "X74"
+   ],
+   "trips": 1327,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 238,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "M40"
+     ],
+     "trips": 241,
+     "arrivalM": 238,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 191,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "103",
+      "104",
+      "105"
+     ],
+     "trips": 626,
+     "arrivalM": 238,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Lower North Dean",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "334"
+   ],
+   "trips": 2,
+   "limited": true,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "334"
+     ],
+     "trips": 2,
+     "arrivalM": 13,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Maidenhead",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 63,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000002970",
+     "label": "Bus Station",
+     "class": "named",
+     "distM": 205,
+     "walkMin": 3,
+     "routes": [
+      "20"
+     ],
+     "trips": 82,
+     "arrivalM": 63,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Marlow",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 307,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002965",
+     "label": "Bay 15",
+     "class": "stand",
+     "distM": 190,
+     "walkMin": 2,
+     "routes": [
+      "158"
+     ],
+     "trips": 5,
+     "arrivalM": 187,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Medmenham",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 307,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Northfields",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Penn",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "31"
+   ],
+   "trips": 172,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "31"
+     ],
+     "trips": 172,
+     "arrivalM": 78,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Penn Street",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 148,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Piddington",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Prestwood",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 81,
+     "arrivalM": 439,
+     "arrivalBand": 1
+    }
+   ]
+  },
+  {
+   "destination": "Reading",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Remenham",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Seer Green",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "104"
+   ],
+   "trips": 84,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "104"
+     ],
+     "trips": 84,
+     "arrivalM": 39,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Slough",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "X74"
+   ],
+   "trips": 541,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "X74"
+     ],
+     "trips": 309,
+     "arrivalM": 109,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 232,
+     "arrivalM": 109,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Sonning",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Speen",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "334"
+   ],
+   "trips": 2,
+   "limited": true,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "334"
+     ],
+     "trips": 2,
+     "arrivalM": 205,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Stokenchurch",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Studley Green",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Sydenham",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Tatling End",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104"
+   ],
+   "trips": 322,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "104"
+     ],
+     "trips": 322,
+     "arrivalM": 27,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Thame",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Twyford",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "Tylers Green",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "31"
+   ],
+   "trips": 172,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "31"
+     ],
+     "trips": 172,
+     "arrivalM": 85,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Upper North Dean",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "334"
+   ],
+   "trips": 2,
+   "limited": true,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "334"
+     ],
+     "trips": 2,
+     "arrivalM": 170,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Uxbridge",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "104",
+    "M40"
+   ],
+   "trips": 563,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002967",
+     "label": "Bay 17",
+     "class": "stand",
+     "distM": 186,
+     "walkMin": 2,
+     "routes": [
+      "M40"
+     ],
+     "trips": 241,
+     "arrivalM": null,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "104"
+     ],
+     "trips": 322,
+     "arrivalM": null,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Wargrave",
+   "boardAt": "Bay 9",
+   "boardAtAtco": "040000002959",
+   "boardClass": "stand",
+   "walkMin": 3,
+   "routes": [
+    "850"
+   ],
+   "trips": 219,
+   "limited": false,
+   "alsoFrom": []
+  },
+  {
+   "destination": "West Wycombe",
+   "boardAt": "Bay 15",
+   "boardAtAtco": "040000002965",
+   "boardClass": "stand",
+   "walkMin": 2,
+   "routes": [
+    "40"
+   ],
+   "trips": 69,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002968",
+     "label": "Bay 18",
+     "class": "stand",
+     "distM": 184,
+     "walkMin": 2,
+     "routes": [
+      "331"
+     ],
+     "trips": 11,
+     "arrivalM": 207,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Whelpley Hill",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1B"
+   ],
+   "trips": 66,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1B"
+     ],
+     "trips": 66,
+     "arrivalM": 138,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Widmer End",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "41"
+   ],
+   "trips": 81,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002955",
+     "label": "Bay 5",
+     "class": "stand",
+     "distM": 215,
+     "walkMin": 3,
+     "routes": [
+      "41"
+     ],
+     "trips": 81,
+     "arrivalM": 105,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Winchmore Hill",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "1",
+    "1A",
+    "1B"
+   ],
+   "trips": 352,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002956",
+     "label": "Bay 6",
+     "class": "stand",
+     "distM": 212,
+     "walkMin": 3,
+     "routes": [
+      "1",
+      "1A",
+      "1B"
+     ],
+     "trips": 352,
+     "arrivalM": 186,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Windsor",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "103",
+    "37"
+   ],
+   "trips": 191,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 101,
+     "arrivalM": 189,
+     "arrivalBand": 0
+    },
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "103"
+     ],
+     "trips": 90,
+     "arrivalM": 318,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Wooburn",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 174,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Wooburn Green",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "37"
+   ],
+   "trips": 151,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000002961",
+     "label": "Bay 11",
+     "class": "stand",
+     "distM": 199,
+     "walkMin": 2,
+     "routes": [
+      "37"
+     ],
+     "trips": 151,
+     "arrivalM": 109,
+     "arrivalBand": 0
+    }
+   ]
+  },
+  {
+   "destination": "Wooburn Moor",
+   "boardAt": "Stop J",
+   "boardAtAtco": "040000003058",
+   "boardClass": "stand",
+   "walkMin": 1,
+   "routes": [
+    "102",
+    "103",
+    "104",
+    "105"
+   ],
+   "trips": 626,
+   "limited": false,
+   "alsoFrom": [
+    {
+     "atco": "040000000441",
+     "label": "Gate A",
+     "class": "stand",
+     "distM": 220,
+     "walkMin": 3,
+     "routes": [
+      "102",
+      "103",
+      "104",
+      "105"
+     ],
+     "trips": 626,
+     "arrivalM": 156,
+     "arrivalBand": 0
+    }
+   ]
+  }
+ ]
+}

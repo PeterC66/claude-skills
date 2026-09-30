@@ -1,0 +1,16 @@
+{
+ "place": "Oxford Street",
+ "town": "High Wycombe",
+ "region": "Buckinghamshire",
+ "name": "Oxford Street",
+ "display": "Oxford Street, Daws Hill, High Wycombe Community Board, High Wycombe, Buckinghamshire, England, HP11 2XG, United Kingdom",
+ "lat": 51.6309395,
+ "lon": -0.7535997,
+ "osm_type": "way",
+ "osm_id": 26774447,
+ "class": "highway",
+ "type": "unclassified",
+ "walkshedM": 450.0,
+ "ambiguous": true,
+ "_anchorNote": "Frame radius for the boarding plan is routes.json boardingPlan.frameRadiusM (250 m), NOT this walkshed. Verified 2026-08-23 against buckinghamshire.sqlite + naptan.sqlite: 19 served stops inside 250 m, every one identifiable. The frame is stable for any radius from 221 m to 262 m (furthest member Gate A at 220 m; nearest non-member Temple End at 263 m). True maxOK is 484 m, where the second Arts Centre stop arrives and duplicates the first; frame-coverage_2026-08-23.md reports '>=600 m' because its neighbour search uses a 3x3 grid of 250 m cells and cannot see that far."
+}

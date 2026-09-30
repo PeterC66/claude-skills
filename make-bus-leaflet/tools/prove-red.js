@@ -2536,6 +2536,14 @@ const MUTATIONS = [
     find: "const NOT_INPUTS = new Set(['overrides.json', 'unplaced.json', ",
     to: "const NOT_INPUTS = new Set(['unplaced.json', " },
 
+  // The identifying badge and the anchor label (buses-data OA-531): the avoid pass
+  // goes back to asking only about other badges, and High Wycombe Town Centre's
+  // 102/103/104/105/M40/X74 stack lands on "Oxford Street" again.
+  { suite: 'anchor_badge.test.js', file: 'gen_internal.js',
+    what: 'the identifying badge stops avoiding the anchor label and prints over "Oxford Street"',
+    find: "            if(ANCHOR_BOX && p[0]-2.4-gxw<ANCHOR_BOX[2]",
+    to: "            if(false && p[0]-2.4-gxw<ANCHOR_BOX[2]" },
+
   { suite: 'pre_stages.test.js', file: 'projection.js',
     what: 'the fit margin default changes, and the pre-stages — which pass none — would lay every schematic out in a different frame',
     find: "  const FM = IR ? (IR.fitMargin!=null?IR.fitMargin:4) : 0;",

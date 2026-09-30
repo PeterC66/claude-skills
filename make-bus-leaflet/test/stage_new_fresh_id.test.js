@@ -13,7 +13,8 @@
  * shape because prune_runs.py, ink_review.mjs and stage_refresh.mjs all anchor on
  * it; the true start is still `pending.startedAt`, in UTC.
  *
- * Both cases run their two calls milliseconds apart, so they are inside one minute
+ * The first case drives run_id.js on a fixed clock, so it cannot straddle a minute.
+ * The two CLI cases run their two calls milliseconds apart, so they are inside one minute
  * on all but one run in thousands — and on that run they pass for the wrong reason
  * rather than fail, which cannot hide the defect for long.
  */
@@ -58,6 +59,17 @@ test('new straight after a commit does not reopen the committed run folder', () 
   assert.match(m.pending.id, /^\d{4}-\d{2}-\d{2}_\d{4}$/, 'the fresh id lost the YYYY-MM-DD_HHMM shape');
   assert.ok(m.pending.id > committedId, 'the fresh id ' + m.pending.id + ' does not sort after ' + committedId);
   assert.deepStrictEqual(fs.readdirSync(second), [], 'the fresh run folder is not empty');
+});
+
+test('freshRunId steps past a taken minute and a recorded run, and gives up after an hour', () => {
+  const { ts, freshRunId } = require('./_engine.js').load('run_id.js');
+  const dir = scratchDir('run-id-');
+  const now = new Date(2026, 8, 30, 23, 59, 30).getTime();   // local, and a day rolls over
+  assert.strictEqual(freshRunId(dir, [], 'v1.2_', now), 'v1.2_2026-09-30_2359');
+  fs.mkdirSync(path.join(dir, '2026-09-30_2359'));
+  assert.strictEqual(freshRunId(dir, [{ id: '2026-10-01_0000' }], '', now), '2026-10-01_0001');
+  for (let k = 0; k <= 60; k++) fs.mkdirSync(path.join(dir, ts(new Date(now + k * 60000))), { recursive: true });
+  assert.throws(() => freshRunId(dir, [], '', now), /already taken/);
 });
 
 test('two new calls in a row get two folders, so an abandoned start is not reused either', () => {

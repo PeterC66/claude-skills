@@ -111,6 +111,7 @@ const { missingStamps, stampSheetVersion } = require('./sheet_stamps');
 const { computeEngineVersion, computePlaceEngineVersion, isPlaceRun, stampEngine } = require('./engine_version');
 const { die: cliDie, parseArgs } = require('./cli.js');
 const { DECISION_FILE: REDTEAM_DECISION_FILE } = require('./redteam_budget.js');
+const { freshRunId } = require('./run_id.js');
 
 /*
  * die — the refusal, through `cli.die` so there is one of them.
@@ -126,7 +127,7 @@ const { DECISION_FILE: REDTEAM_DECISION_FILE } = require('./redteam_budget.js');
 function die(msg, code = 1) { cliDie('stage.js: ' + msg, code); }
 
 /* An ISO instant as a LOCAL YYYY-MM-DD. Run-directory ids are built from local time
- * (see `ts()` below), so anything compared against one has to be on the same clock;
+ * (see `ts()` in run_id.js), so anything compared against one has to be on the same clock;
  * slicing the first ten characters of an ISO string gives the UTC day instead, which
  * is a different day for an hour of every BST night. Returns null on anything that is
  * not a parseable instant, so a malformed builtAt still reads as "no readable date"
@@ -138,10 +139,6 @@ function localDay(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function ts(d = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
-}
 function isoNow() { return new Date().toISOString().slice(0, 16); }
 
 /** The longest actor name this will record. A session name is `sched-1252` or
@@ -478,22 +475,9 @@ function main() {
       if (!v) die('S5 needs a committed S4 build first (no version to inherit)');
       prefix = `v${v}_`;
     }
-    /* NEVER HAND BACK A FOLDER THAT IS ALREADY THERE. The id is the local minute, so a
-     * second `new` inside the minute used to compute the same id, and mkdir's
-     * `recursive` quietly accepted the existing folder — on 2026-09-30 that reopened
-     * the already-committed S3-config/2026-09-30_0032 of Godmanchester Co-op Ermine
-     * Street and set `pending` on it. So step on to the next free minute. The id keeps
-     * its YYYY-MM-DD_HHMM shape, which prune_runs.py, ink_review.mjs and
-     * stage_refresh.mjs all anchor on; the true start is `pending.startedAt`. A later
-     * minute always sorts after the run it avoided, so `latest` ordering holds. */
+    // Never an existing folder: a same-minute id steps on to the next free minute (run_id.js).
     const stageDir = path.join(townDir, `${st}-${STAGE_NAME[st]}`);
-    const taken = (x) => fs.existsSync(path.join(stageDir, x)) || (sx.runs || []).some(r => r.id === x);
-    const t0 = Date.now();
-    let id = prefix + ts(new Date(t0));
-    for (let k = 1; taken(id); k++) {
-      if (k > 60) die(`every run id for the next hour after ${prefix + ts(new Date(t0))} is already taken in ${stageDir} — something is calling \`new\` in a loop`);
-      id = prefix + ts(new Date(t0 + k * 60000));
-    }
+    let id; try { id = freshRunId(stageDir, sx.runs, prefix); } catch (e) { die(e.message); }
     const dir = path.join(stageDir, id);
     fs.mkdirSync(dir, { recursive: true });
     /* WHAT DID THIS STAGE COST? (OA-105.) Nothing recorded it, and after the fact

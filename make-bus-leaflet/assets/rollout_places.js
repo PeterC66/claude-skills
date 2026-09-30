@@ -74,7 +74,7 @@ const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
-const { jsonTarget, writeReport, hardDefects } = require('./rollout_report');
+const { jsonTarget, writeReport, hardDefects, keptDirOf } = require('./rollout_report');
 const BUILDLOG = require('./build_log');
 // ONE statement of how each sheet is drawn, for both rollouts and for the stage path
 // (buses-data OA-310). It carries the copy-run-capture sequence this file used to hold
@@ -500,7 +500,7 @@ function rolloutOnePlace(p) {
       }
     }
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: p.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null };
+    return { name: p.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null, shipped: prevS4.dir };
   }
 
   // A lost label stops the rollout BEFORE anything is written.

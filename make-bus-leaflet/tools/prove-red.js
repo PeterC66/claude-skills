@@ -2687,6 +2687,18 @@ const MUTATIONS = [
     find: "  for (const r of Object.keys(intown || {})) if (!drawnInternal.size || drawnInternal.has(norm(r))) displayed.add(norm(r));",
     to: "  for (const r of Object.keys(intown || {})) if (drawnInternal.has(norm(r))) displayed.add(norm(r));" },
 
+  // status.js - the human board and --json must agree on a commitment
+  // (buses-data adhoc board-status, 2026-09-30). CI runs --json.
+  { suite: 'status_commitment_forms.test.js', file: 'status.js',
+    what: 'the --json branch gets a verdict of its own that leaves commitments out, so CI is green for an overdue commitment the human board goes red for',
+    find: "      console.log(payload);\n      return bad || deployBad(deploy) || commitBad(commit) ||",
+    to: "      console.log(payload);\n      return bad || deployBad(deploy) ||" },
+
+  { suite: 'status_commitment_forms.test.js', file: 'status.js',
+    what: 'an OVERDUE commitment stops failing the board in either form',
+    find: "  return c.rows.some(r => r.state === 'OVERDUE' || r.state === 'UNDATED');",
+    to: "  return c.rows.some(r => r.state === 'UNDATED');" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

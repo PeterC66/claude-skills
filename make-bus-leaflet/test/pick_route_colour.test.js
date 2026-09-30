@@ -352,3 +352,29 @@ test('a missing routes.json fails loudly, and points at --stage when the default
   assert.match(r.stderr, /no routes\.json at/);
   assert.match(r.stderr, /add --stage/);
 });
+
+test('a DASHED route is offered no very dark colour, and says what it set aside (OA-521)', () => {
+  /* Dark and dashed reads as the railway (Peter, 2026-09-29). The control is the same
+   * route solid: #332288 is in its candidate list, so the dashed run's missing it is
+   * the rule and not an accident of the pool. */
+  const { root, s3 } = fixture();
+  const cfg = (tier) => JSON.stringify({
+    routeOrder: ['1', '2', '7'], palette: { 1: '#CE1111', 2: '#1111CE', 7: '#888888' },
+    frequency: { 7: tier },
+    design: { frequencyTiers: { 'all-day': { mm: 1.7 }, sparse: { mm: 1.2, dash: '2.4 2.2' } } },
+  });
+  const offered = (out) => [...out.matchAll(/^ {2}(#[0-9A-F]{6}) {2}worst dE/gm)].map((m) => m[1]);
+
+  fs.writeFileSync(path.join(s3, 'routes.json'), cfg('all-day'));
+  const solid = run(root, '--route', '7', '--stage', '--top', '99');
+  assert.strictEqual(solid.status, 0, solid.stderr);
+  assert.ok(offered(solid.stdout).includes('#332288'), 'control: a solid route is offered indigo');
+  assert.doesNotMatch(solid.stdout, /drawn DASHED/);
+
+  fs.writeFileSync(path.join(s3, 'routes.json'), cfg('sparse'));
+  const dashed = run(root, '--route', '7', '--stage', '--top', '99');
+  assert.strictEqual(dashed.status, 0, dashed.stderr);
+  assert.match(dashed.stdout, /drawn DASHED \(sparse\), so \d+ very dark candidate\(s\) are not offered/);
+  for (const c of ['#332288', '#004488', '#882255']) assert.ok(!offered(dashed.stdout).includes(c), `${c} offered to a dashed route`);
+  assert.ok(offered(dashed.stdout).includes('#AA3377'), 'L* 41.6 is not "very dark"');
+});

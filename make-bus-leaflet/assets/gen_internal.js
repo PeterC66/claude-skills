@@ -754,6 +754,18 @@ const { CORR, CPAL, laneKey, colourShared, CBOX, THIN } = complexityLadder({ RJ,
       +'sheet, so it reads as a railway rather than as a bus.' : '')+' Give it a hue from the '
       +'palette (node pick_route_colour.js --town "'+(RJ.town||'?')+'" --route '+r+').');
   }
+  /* DARK AND DASHED IS A RAILWAY (#333333, L* 21), whatever the hue (Peter 2026-09-29,
+   * buses-data OA-521: Ely Co-op v1.29's sparse 12 in #332288, L* 22.4). L* < 35 takes
+   * #332288 #004488 #882255 and leaves #994455 (40.5) up. Greys: the check above. */
+  for(const r of order){ const c=C[r], t=ftier(r);
+    if(!(t && t.dash) || !/^#[0-9a-f]{6}$/i.test(c||'')) continue;
+    const R=_lab(c);
+    if(Math.hypot(R[1],R[2])<8 || R[0]>=35) continue;
+    console.error('PALETTE WARNING route '+r+' is drawn DASHED in '+c+', which is very dark '
+      +'(L* '+R[0].toFixed(1)+', below 35) — dark and dashed reads as a railway rather than '
+      +'as a bus. Give it a lighter colour from the palette (node pick_route_colour.js --town "'
+      +(RJ.town||'?')+'" --route '+r+').');
+  }
 }
 
 // Internal Services-panel descriptions {route:[title,subtitle]}.

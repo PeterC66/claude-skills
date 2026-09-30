@@ -747,6 +747,16 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-doc-triage
 
+      # buses-data OA-485 item 1 (2026-09-30): the weekly shadow rebuild. Its
+      # subject -- every map in buses-data, built on today's engine -- is in no
+      # checkout here, so what is falsified is the RUNNER: that a rollout it
+      # cannot run, or a report that is not one, makes it exit 2 and stamp
+      # nothing, that a dry run which wrote into Areas/ is refused, and that it
+      # never passes --apply. Stub rollouts in a temp tree; builds no map.
+      - name: Prove the weekly shadow rebuild refuses rather than stamping half an estate
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-shadow-rebuild
+
       # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
       # would go red if I pushed now". Read case 2 first and read it as the
       # POINT of the tool rather than as one assertion among thirty: a preflight

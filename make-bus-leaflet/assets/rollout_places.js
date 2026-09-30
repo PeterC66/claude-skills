@@ -110,7 +110,7 @@ if (args.help === true) { console.log(USAGE); process.exit(0); }
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // ONE seeding rule for both halves of this file — see seed_prev_s4.js (OA-013).
-const { assembleS4Inputs } = require('./seed_prev_s4');
+const { assembleS4Inputs, staleS3Keys } = require('./seed_prev_s4');
 
 /* A PLACE PULLS S1 AS WELL AS S2 AND S3 — place.json is an S1 output. Named once
  * here because both halves take it and OA-239 is the action about them drifting. */
@@ -414,19 +414,22 @@ function rolloutOnePlace(p) {
   // whole-object diff.
   // The fix when this fires is to lift the value out of the built S4 into the S3
   // (`adopt_config.js --place ... --set-file`), never to let the rollout proceed.
-  const _s3ir = (routesJson.internalRoads && typeof routesJson.internalRoads === 'object') ? routesJson.internalRoads : {};
-  const _s4rj = _s4rjEarly;
-  const _s4ir = (_s4rj.internalRoads && typeof _s4rj.internalRoads === 'object') ? _s4rj.internalRoads : {};
-  const _onlyInS4 = Object.keys(_s4ir).filter(k => !(k in _s3ir)).map(k => 'internalRoads.' + k);
-  if (_s4rj.frequency && !routesJson.frequency) _onlyInS4.push('frequency');
-  if (_s4rj.design && _s4rj.design.frequencyTiers && !(routesJson.design && routesJson.design.frequencyTiers))
-    _onlyInS4.push('design.frequencyTiers');
-  if (_onlyInS4.length) {
+  // AN internalRoads KEY AN EARLIER S3 HELD AND THE LATEST DROPPED IS NOT STALE
+  // (2026-09-30): it is a deliberate removal, and the rollout carries it and says so.
+  // The rule and its incident are on staleS3Keys() in seed_prev_s4.js.
+  const _s3runs = (manifest.stages && manifest.stages.S3 && manifest.stages.S3.runs) || [];
+  const _earlierS3 = _s3runs.filter(r => r.id !== manifest.stages.S3.latest)
+    .map(r => { try { return readJson(path.join(p.dir, r.dir, 'routes.json')); } catch (e) { return null; } })
+    .filter(Boolean);
+  const _s3k = staleS3Keys({ s3: routesJson, s4: _s4rjEarly, earlierS3: _earlierS3 });
+  if (_s3k.stale.length) {
     fs.rmSync(scratch, { recursive: true, force: true });
     return { name: p.name, status: 'STALE-S3',
-      detail: 'the built S4 holds ' + _onlyInS4.join(', ')
+      detail: 'the built S4 holds ' + _s3k.stale.join(', ')
             + ' and the S3 this would seed from does not — copy it into the S3 first (adopt_config --set-file), do not roll out over it' };
   }
+  if (_s3k.dropped.length)
+    console.log(`  ${p.name}: the latest S3 dropped ${_s3k.dropped.join(', ')}, which an earlier S3 held — a deliberate removal, so this build goes without it.`);
 
   const engineHash = CURRENT_PLACE_ENGINE;
   // `{ place: true }` is NAMED rather than inferred (OA-430). stampEngine() reads

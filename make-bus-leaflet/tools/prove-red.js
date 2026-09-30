@@ -1154,6 +1154,20 @@ const MUTATIONS = [
     find: "    if (SIDECARS.has(name)) { sidecars.push(name); continue; }",
     to: "    if (name.startsWith('unplaced-')) { sidecars.push(name); continue; }" },
 
+  // The STALE-S3 guard, 2026-09-30. It refused every internalRoads key the S3
+  // lacked, so St Ives Bus Station's deliberate drop of skeletonMaxW (OA-430) could
+  // not go through the rollout. Two mutations, one per direction: the guard going
+  // back to refusing every drop, and the guard letting a write-back key through.
+  { suite: 'stale_s3_keys.test.js', file: 'seed_prev_s4.js',
+    what: 'a key the S3 dropped on purpose is STALE again, so the rollout refuses a deliberate removal',
+    find: "    ((earlierS3 || []).some(rj => k in ir(rj)) ? dropped : stale).push(name);",
+    to: "    stale.push(name);" },
+
+  { suite: 'stale_s3_keys.test.js', file: 'seed_prev_s4.js',
+    what: 'a write-back key an earlier S3 held counts as dropped, so the rollout loses fitExtra and re-fits the map',
+    find: "    if (PLACE_WRITE_BACK_IR.includes(k)) { stale.push(name); continue; }",
+    to: "" },
+
   /* build_s4.js — the one build path (buses-data OA-310, 2026-09-12). Its acceptance
    * test is byte-identity against three real S4 runs, which CI cannot hold because
    * those folders are gitignored; these are what stands under it in a fresh clone. */

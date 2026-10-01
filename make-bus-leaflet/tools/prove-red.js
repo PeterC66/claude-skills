@@ -2748,6 +2748,42 @@ const MUTATIONS = [
     find: "  if (!whole || !s.towns || !s.places || !Array.isArray(s.towns.maps) || !Array.isArray(s.places.maps)) {",
     to: "  if (!whole || !s.towns || !Array.isArray(s.towns.maps)) {" },
 
+  // place_pointer.js - the red arrow at a place map's marker (buses-data OA-509).
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'every town grows an arrow at its interchange, because absent the key means on everywhere',
+    find: "  if (v === undefined || v === null) return !!(rj && rj.place);",
+    to: "  if (v === undefined || v === null) return true;" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: "the head is never tested against the marker's own name, so the arrowhead can land on it",
+    find: "      if (nameBox && hit(b, nameBox)) score += 10;",
+    to: "      if (false) score += 10;" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'the shaft ignores reserved space, so it is drawn across a symbol, a note or the panel',
+    find: "      if (overlaps(b)) score += 10;",
+    to: "      if (false) score += 10;" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'the upper-right preference outweighs a collision, so the arrow keeps its bearing whatever is there',
+    find: "const TURN = 3;",
+    to: "const TURN = 30;" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'a nearby symbol costs nothing, so the arrow crowds a name that has not been placed yet',
+    find: "    for (const s of others) if (segDist(s, a.base, a.tail) < CROWD) score += 4;",
+    to: "    for (const s of others) if (segDist(s, a.base, a.tail) < CROWD) score += 0;" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'a tail off the map frame is accepted, so the arrow runs under the panel or off the page',
+    find: "    if (!inside(a.tail)) continue;",
+    to: "" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'the chosen arrow claims no space, so every later badge and label is placed on top of it',
+    find: "  for (const b of best.shaft) reserve(b[0], b[1], b[2], b[3], 'the place pointer');",
+    to: "" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

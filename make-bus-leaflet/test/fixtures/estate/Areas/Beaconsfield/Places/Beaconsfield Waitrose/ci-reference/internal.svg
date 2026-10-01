@@ -579,12 +579,16 @@
 <text x="120.62" y="121.28" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Sainsbury's</text>
 <text x="97.22" y="144.11" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">M&amp;S Simply Food</text>
 <text x="76.61" y="71.92" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">St Michael's Hall</text>
-<path d="M63.81 123.27L58.56 128.92" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
-<text x="58.11" y="131.16" font-family="Arial" font-size="2.5" fill="#222" text-anchor="end" stroke="#fff" stroke-width="0.7" paint-order="stroke">Beaconsfield Town Hall Green</text>
 <text x="85.77" y="49.93" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Beaconsfield Tennis Club</text>
 <text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fill="#4477AA">Buses serving Waitrose</text>
 <text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from July 2026)</text>
 <text x="150" y="20" font-family="Arial" font-style="italic" font-size="3.2" fill="#777777">Chiltern Main Line</text>
+<g id="place-pointer">
+<line x1="47.88" y1="138.61" x2="56.90" y2="129.60" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+<path d="M59.16,127.33 L55.56,128.25 L58.24,130.94 Z" fill="#fff" stroke="#fff" stroke-width="0.8" stroke-linejoin="round"/>
+<line x1="47.88" y1="138.61" x2="56.90" y2="129.60" stroke="#d62728" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M59.16,127.33 L55.56,128.25 L58.24,130.94 Z" fill="#d62728"/>
+</g>
 <text x="200" y="14" font-family="Arial" font-weight="bold" font-size="5" fill="#222">Services</text>
 <text x="200" y="20.338" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">CAROUSEL BUSES</text>
 <circle cx="204" cy="26.947000000000003" r="4" fill="#4477AA" stroke="#fff" stroke-width="0.7"/>

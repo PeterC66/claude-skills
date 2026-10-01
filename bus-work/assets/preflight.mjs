@@ -394,9 +394,20 @@ function builtIn(repo) {
         /* The board prints this join and keeps it out of its exit code, because a
          * behind fixture is a chore (OA-396) — so reading only the board's exit,
          * this called a push clean that gates.yml then failed (buses-data OA-445).
-         * Cheap tier, because gates.yml runs its twin on EVERY push. */
+         * Cheap tier, because gates.yml runs its twin on EVERY push. It compares
+         * this repository with the portal's origin/main and reads no generator,
+         * so which engine tree runs it does not change its answer. */
         ENGINE && { id: 'portal-fixtures', label: 'the portal\'s vendored fixtures are in step with this repository, on its origin/main', cmd: 'node', args: [`${ENGINE}/portal_fixtures.js`, '--buses', repo, '--portal', resolvePortal()], cannotTell: [2] },
-        ENGINE && { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift', tier: 'full', cmd: 'node', args: [`${ENGINE}/status.js`, '--buses', repo, '--portal', resolvePortal()], note: 'no --no-live: the deployment row is the one that flag hides' },
+        /* `atPin`, because gates.yml runs status.js from claude-skills checked out
+         * at engine.lock.json's commit (buses-data OA-540). Run from this checkout,
+         * a local main that lagged origin/main measured the portal's vendoring
+         * against an engine CI would never use, and called a re-vendor PENDING that
+         * a fast-forward would have cleared. The script path is RELATIVE so that
+         * `atPin` re-roots it; an absolute `${ENGINE}` path would still run this
+         * checkout's status.js from the pinned folder. `prunePortal`, because the
+         * board reads the portal's refs and its disk exactly as prove-red-status
+         * does, and that arm is asked only when the push moves an estate input. */
+        ENGINE && { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift — under the pinned engine', tier: 'full', atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), prunePortal: resolvePortal(), cmd: 'node', args: ['assets/status.js', '--buses', repo, '--portal', resolvePortal()], note: 'no --no-live: the deployment row is the one that flag hides' },
         ENGINE && { id: 'area-fixture', label: 'the committed area fixture reproduces', tier: 'full', cmd: 'node', args: [`${ENGINE}/refresh_area_fixture.js`, '--check'] },
         /* The two falsification steps a pin bump fails on (buses-data OA-462).
          * On 2026-09-24 a push moving engine.lock.json passed this preflight with
@@ -743,7 +754,7 @@ export function report(result, quiet) {
     L.push(`  (The arms marked at-pin ran from claude-skills ${result.pin.commit.slice(0, 7)}, by ${result.pin.via === 'worktree' ? 'a detached worktree, since removed' : 'this checkout, which is already there'}.)`);
   }
   if (result.engine && result.engine.known && !result.engine.transfers) {
-    L.push(`  Whether the OTHER engine-reading verdicts TRANSFER. CI gates this repository against claude-skills at ${result.engine.against}; the checkout here is at ${result.engine.head} (${result.engine.branch}), with ${result.engine.dirtyFiles} uncommitted file(s) under a hashed assets folder. The board and the fixture arms were measured against an engine CI will not use.`);
+    L.push(`  Whether the OTHER engine-reading verdicts TRANSFER. CI gates this repository against claude-skills at ${result.engine.against}; the checkout here is at ${result.engine.head} (${result.engine.branch}), with ${result.engine.dirtyFiles} uncommitted file(s) under a hashed assets folder. The area-fixture arm was measured against an engine CI will not use; the board and the at-pin arms were not.`);
   } else if (result.engine && result.engine.known) {
     L.push(`  The engine checkout is clean under assets/ and at ${result.engine.against}, so a byte-gate verdict here is about the same engine CI will check out.`);
   } else if (result.engine) {

@@ -527,12 +527,17 @@ function runWith(fixture, opts = {}) {
   const bd = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
   const m = manifestFor(bd.repo);
   rmSync(bd.root, { recursive: true, force: true });
-  for (const id of ['prove-red-gates', 'prove-red-status']) {
+  for (const id of ['prove-red-gates', 'prove-red-status', 'board']) {
     const a = m && m.checks.find((c) => c.id === id);
     check(`buses-data: ${id} runs at the pin, from make-bus-leaflet`, a?.atPin === 'make-bus-leaflet', a ? String(a.atPin) : 'no arm');
+    // atPin re-roots the cwd and nothing else, so an absolute script path would
+    // run the LOCAL checkout's copy from the pinned folder (buses-data OA-540).
+    check(`buses-data: ${id}'s script path is relative, so the pin re-roots it`, !!a && !path.isAbsolute(String(a.args?.[0] || '')), a ? String(a.args?.[0]) : 'no arm');
   }
-  const prs = m && m.checks.find((c) => c.id === 'prove-red-status');
-  check('buses-data: prove-red-status prunes the portal first (OA-479)', typeof prs?.prunePortal === 'string' && prs.prunePortal.length > 0, JSON.stringify(prs?.prunePortal));
+  for (const id of ['prove-red-status', 'board']) {
+    const a = m && m.checks.find((c) => c.id === id);
+    check(`buses-data: ${id} prunes and catches up the portal first (OA-479, OA-539)`, typeof a?.prunePortal === 'string' && a.prunePortal.length > 0, JSON.stringify(a?.prunePortal));
+  }
   rmSync(skills, { recursive: true, force: true });
 }
 

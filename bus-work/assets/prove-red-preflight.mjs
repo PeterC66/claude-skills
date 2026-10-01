@@ -19,12 +19,12 @@
 // testing the fake. The checks themselves are `node -e` one-liners, so nothing
 // here depends on the estate's real checkers being installed.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, reclaimStalePins, STALE_PIN_HOURS, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -851,6 +851,47 @@ function runWith(fixture, opts = {}) {
   check('portal lag: preflight() catches the named portal up before its arm reads it', ran.join().trim() === 'v3' && result.caughtUp?.[0]?.moved === true, `arm read ${JSON.stringify(ran)}; ${JSON.stringify(result.caughtUp)}`);
   rmSync(fx.root, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
+}
+
+// CASE 20 — a pin worktree a KILLED run left behind is reclaimed by the next run.
+// `worktree prune` clears a registration only when its folder is gone, and a
+// killed preflight leaves the folder, so on 2026-10-01 three had piled up under
+// %TEMP% since 27 Sep. The next engineAtPin releases an old one, junction first,
+// and leaves a young one — another session's preflight may be standing in it.
+{
+  const skills = mkdtempSync(path.join(tmpdir(), 'preflight-reclaim-'));
+  git(skills, 'init', '-b', 'main');
+  git(skills, 'config', 'user.email', 'preflight@test');
+  git(skills, 'config', 'user.name', 'preflight');
+  git(skills, 'config', 'commit.gpgsign', 'false');
+  mkdirSync(path.join(skills, 'make-bus-leaflet'), { recursive: true });
+  writeFileSync(path.join(skills, 'make-bus-leaflet', 'a.js'), '1\n');
+  writeFileSync(path.join(skills, '.gitignore'), 'node_modules/\n');
+  git(skills, 'add', '.');
+  git(skills, 'commit', '-m', 'pinned engine', '--no-verify');
+  const pinSha = git(skills, 'rev-parse', 'HEAD').trim();
+  writeFileSync(path.join(skills, 'make-bus-leaflet', 'a.js'), '2\n');
+  git(skills, 'commit', '-qam', 'main moved', '--no-verify');
+  const sentinel = path.join(skills, 'make-bus-leaflet', 'node_modules', 'sharp', 'package.json');
+  mkdirSync(path.dirname(sentinel), { recursive: true });
+  writeFileSync(sentinel, '{}\n');
+  const registered = (e) => git(skills, 'worktree', 'list', '--porcelain').split('\n').some((l) => l.startsWith('worktree ') && path.resolve(l.slice(9).trim()).toLowerCase() === path.resolve(e.root).toLowerCase());
+
+  const killed = engineAtPin(skills, pinSha);           // never released: the run was killed
+  const live = engineAtPin(skills, pinSha);             // another session's run, minutes old
+  const old = new Date(Date.now() - (STALE_PIN_HOURS + 1) * 3600e3);
+  utimesSync(killed.dir, old, old);                     // aged AFTER `live`, whose own engineAtPin would reclaim it
+  check('reclaim: the killed run\'s tree was there to reclaim', !!killed.dir && registered(killed), JSON.stringify(killed));
+  const next = engineAtPin(skills, pinSha);             // the next preflight
+  check('reclaim: the next run released the killed tree\'s registration', !registered(killed), git(skills, 'worktree', 'list'));
+  check('reclaim: and its folder', !existsSync(killed.dir), `${killed.dir} still exists`);
+  check('reclaim: a young tree is left to its own run', registered(live) && existsSync(live.root), git(skills, 'worktree', 'list'));
+  check('reclaim: the CHECKOUT\'s node_modules survives the reclaim', existsSync(sentinel), `${sentinel} is gone`);
+  check('reclaim: a tree of another shape is never touched', reclaimStalePins(skills, { now: Date.now() + 1e12, base: path.join(tmpdir(), 'elsewhere') }).length === 0);
+  releaseEngine(next);
+  releaseEngine(live);
+  if (existsSync(killed.dir)) releaseEngine(killed);    // a mutant that never reclaims must not leave it in %TEMP%
+  rmSync(skills, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

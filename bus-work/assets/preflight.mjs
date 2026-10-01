@@ -50,7 +50,7 @@
 // minutes — and it is not run per commit. It is run once per round, and the
 // thing it replaces is three CI round trips plus the analysis between them.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync, lstatSync, rmdirSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync, lstatSync, rmdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs, assetsDir, resolvePortal } from './engine.mjs';
@@ -580,9 +580,10 @@ export function pinnedCommit(repo) {
  * `node_modules` is not in git, so the worktree borrows the checkout's by a
  * junction; the engine's one dependency is sharp, which no generator's bytes
  * depend on. A commit the clone lacks is fetched once from its first remote.
- * The caller hands the result to `releaseEngine`, which removes the worktree;
- * a run killed before that leaves a registration `worktree prune` clears next
- * time, which is why prune runs BEFORE the add.
+ * The caller hands the result to `releaseEngine`, which removes the worktree.
+ * A run killed before that leaves the folder AND its registration, which
+ * `worktree prune` never clears because the folder still exists — on 2026-10-01
+ * three had piled up since 27 Sep — so `reclaimStalePins` runs before the add.
  */
 export function engineAtPin(skillsRoot, commit) {
   if (!skillsRoot || !existsSync(path.join(skillsRoot, '.git'))) return { why: `no claude-skills checkout found at ${skillsRoot || '(unresolved)'}` };
@@ -590,9 +591,10 @@ export function engineAtPin(skillsRoot, commit) {
   const head = git(skillsRoot, ['rev-parse', 'HEAD']);
   const dirty = git(skillsRoot, ['status', '--porcelain', '--untracked-files=no', '--', 'make-bus-leaflet', 'make-place-bus-leaflet']);
   if (want.ok && head.ok && want.out === head.out && dirty.ok && !dirty.out) return { root: skillsRoot, commit: head.out, via: 'checkout' };
+  git(skillsRoot, ['worktree', 'prune']);
+  reclaimStalePins(skillsRoot);
   const dir = mkdtempSync(path.join(tmpdir(), 'preflight-pin-'));
   const wt = path.join(dir, 'skills');
-  git(skillsRoot, ['worktree', 'prune']);
   const add = () => git(skillsRoot, ['worktree', 'add', '--quiet', '--detach', wt, commit]);
   let r = add();
   if (!r.ok) {
@@ -608,6 +610,39 @@ export function engineAtPin(skillsRoot, commit) {
     try { symlinkSync(mods, path.join(wt, 'make-bus-leaflet', 'node_modules'), 'junction'); } catch { /* a harness that needs it then fails loudly, by itself */ }
   }
   return { root: wt, commit: git(wt, ['rev-parse', 'HEAD']).out, via: 'worktree', dir, skillsRoot };
+}
+
+/** A pin worktree older than this belongs to a run that was killed: a whole full-tier preflight takes minutes. */
+export const STALE_PIN_HOURS = 6;
+
+/**
+ * Release every pin worktree a killed run left registered on `skillsRoot`.
+ *
+ * Only a registration of the exact shape `engineAtPin` makes is touched —
+ * `<base>/preflight-pin-XXXXXX/skills`, base being the temp directory — and only when its folder is
+ * older than STALE_PIN_HOURS, so a preflight running in another session at the
+ * same moment keeps its tree. Each goes through `releaseEngine`, which unlinks
+ * the borrowed node_modules junction before git deletes anything. The weekly
+ * worktree sweep cannot do this: it refuses any tree holding a junction, by
+ * design, and every one of these holds one. Returns the folders it released.
+ */
+export function reclaimStalePins(skillsRoot, { base = tmpdir(), now = Date.now(), hours = STALE_PIN_HOURS } = {}) {
+  const list = git(skillsRoot, ['worktree', 'list', '--porcelain']);
+  if (!list.ok) return [];
+  const norm = (p) => path.resolve(p).toLowerCase();
+  const released = [];
+  for (const line of list.out.split('\n')) {
+    if (!line.startsWith('worktree ')) continue;
+    const root = path.resolve(line.slice('worktree '.length).trim());
+    const dir = path.dirname(root);
+    if (path.basename(root) !== 'skills' || !/^preflight-pin-[A-Za-z0-9]{6}$/.test(path.basename(dir)) || norm(path.dirname(dir)) !== norm(base)) continue;
+    let age;
+    try { age = now - statSync(dir).mtimeMs; } catch { continue; }   // folder gone: prune's job, already done
+    if (age < hours * 3600e3) continue;
+    releaseEngine({ via: 'worktree', root, dir, skillsRoot });
+    released.push(dir);
+  }
+  return released;
 }
 
 /**

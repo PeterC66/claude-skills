@@ -49,6 +49,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);
 const FONT = require(_from('font_metrics.js'));
 const { separateRow, esc } = require(_from('svg_primitives.js'));
+const { keyLegend, droppedWarning, drawLoopRows } = require(_from('legend_key.js'));
 // external_primitives.js — line, tick, the badge family, stampNote, hubEdge and
 // rayToRect, shared with gen_external_radial.js, of which this file is a
 // reformatted clone (OA-224 Tier 3.5). Its header records the three places the
@@ -334,22 +335,10 @@ const rayToRect = rayToRectFor({ rect: RECT, hx: HX, hy: HY });
 const dests = HIDDEN_ROUTES.size
   ? (D.destinations || []).map(b => Object.assign({}, b, { routes: (b.routes || []).filter(r => !HIDDEN_ROUTES.has(r)) })).filter(b => b.routes.length)
   : (D.destinations || []);
-/* THE LEGEND IS A KEY TO THE DIAGRAM (buses-data OA-305, 2026-10-01) — the same rule as
- * gen_external_radial.js, which carries the full comment. A route is badged in the
- * Operators & services rows only when a destination spoke carries it or localLoops[]
- * declares it; an operator left with nothing loses its row; anything dropped is named on
- * stderr. A sheet with neither is byte-identical.
- */
-const _keyed = new Set((D.localLoops || []).map(l => (l && l.route) ? l.route : l));
-dests.forEach(b => (b.routes || []).forEach(r => _keyed.add(r)));
-const _unkeyed = [];
-const OPS = OPS_ALL.map(op => {
-  const rs = (op.routes || []).filter(r => _keyed.has(r) || HIDDEN_ROUTES.has(r));
-  (op.routes || []).forEach(r => { if (!rs.includes(r)) _unkeyed.push(r + ' (' + op.name + ')'); });
-  return rs.length === (op.routes || []).length ? op : (rs.some(r => !HIDDEN_ROUTES.has(r)) ? Object.assign({}, op, { routes: rs }) : null);
-}).filter(Boolean);
-if (_unkeyed.length) process.stderr.write('legend: ' + _unkeyed.join(', ') + ' — in operators[] but no spoke on this sheet carries '
-  + (_unkeyed.length > 1 ? 'them' : 'it') + ', so left out of the legend. Declare a local service in routes.json localLoops[] {route,label} to keep its badge with a caption.\n');
+// The legend is a key to the diagram (buses-data OA-305): see legend_key.js.
+const { ops: OPS, dropped: _drop } = keyLegend({ operators: OPS_ALL, spokeRoutes: dests.flatMap(b => b.routes || []),
+  localLoops: D.localLoops, hidden: HIDDEN_ROUTES });
+if (_drop.length) process.stderr.write(droppedWarning(_drop));
 // nodeBoxes — every destination node's + the hub's own footprint, gathered as the spokes
 // are laid out, so the legend panel (drawn later) can be placed somewhere that avoids all
 // of them instead of risking landing on top of one (see legend section below). spokeSegs —
@@ -755,15 +744,8 @@ function buildLegend(lx, ly) {
     panelMaxY = Math.max(panelMaxY, yy + 3);
   });
   let ny = ly + OPS.length * 6.6 + wrapExtra + 4;
-  (D.localLoops || []).forEach(l => {
-    const _lw = badgeXW(l.route, 2.9);
-    badge(lx + 3 + _lw, ny, l.route, 2.9);
-    const _loopLabel = l.label || 'local circular';
-    out(`<text x="${lx + 8 + 2 * _lw}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(_loopLabel)}</text>`);
-    panelMaxX = Math.max(panelMaxX, lx + 8 + 2 * _lw + panelText(_loopLabel, 3.0));
-    panelMaxY = Math.max(panelMaxY, ny + 3);
-    ny += 6.0;
-  });
+  const _lr = drawLoopRows({ loops: D.localLoops || [], x: lx, y: ny, badge, badgeXW, measure: panelText, esc, out });
+  panelMaxX = Math.max(panelMaxX, _lr.maxX); panelMaxY = Math.max(panelMaxY, _lr.maxY); ny = _lr.y;
   /*
    * The line-style key row — drawn only when a dashed spoke is actually on this sheet.
    *

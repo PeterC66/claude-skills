@@ -45,6 +45,7 @@ const { wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('ex
 // refusal and none becomes one here.
 const { refuse: guardRefuse, report: reportRefusals } = require(_from('strict_guards.js'));
 const { armItemsFrom, drawArmNote } = require(_from('arm_note.js'));
+const { keyLegend, droppedWarning, drawLoopRows } = require(_from('legend_key.js'));
 
 // ---- main() ---------------------------------------------------------------
 // OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
@@ -75,33 +76,10 @@ const HIDDEN_ROUTES = new Set();
 if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
 const EXT = HIDDEN_ROUTES.size ? D.external.filter(b=>!HIDDEN_ROUTES.has(b.route)) : D.external;
 const OPS_ALL = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
-/* THE LEGEND IS A KEY TO THE DIAGRAM (buses-data OA-305, Peter's choice 2026-10-01).
- *
- * It used to badge every route in operators[] and never ask whether the route had a
- * spoke, so 20 badges on 8 of the 17 external sheets had no line under them and five
- * operator rows carried nothing at all (Wisbech's FACT and 68 is the one it was found
- * by). Now a route is badged only when a spoke draws it (external[].route, or any of
- * that arm's routes[]) or when the town declares it in localLoops[] — {route,label},
- * the same key the place generator has always read — which keeps the badge and adds
- * a caption row saying why there is no line: "local circular" unless labelled. An
- * operator left with nothing badged loses its row. A sheet with no spokeless route
- * and no localLoops is byte-identical.
- *
- * Anything dropped is named on stderr: the twin of services_panel.js's "badged in the
- * Services panel but draws no line" guard. Nothing asked the external sheet that
- * question until this, and only a person looking at the JPG ever answered it.
- */
-const LOOPS = (D.localLoops||[]).map(l=>typeof l==='string' ? {route:l} : l).filter(l=>!HIDDEN_ROUTES.has(l.route));
-const _keyed = new Set(LOOPS.map(l=>l.route));
-EXT.forEach(b=>{ _keyed.add(b.route); (b.routes||[]).forEach(r=>_keyed.add(r)); });
-const _unkeyed = [];
-const OPS = OPS_ALL.map(op=>{
-  const rs = (op.routes||[]).filter(r=>_keyed.has(r) || HIDDEN_ROUTES.has(r));
-  (op.routes||[]).forEach(r=>{ if(!rs.includes(r)) _unkeyed.push(r+' ('+op.name+')'); });
-  return rs.length === (op.routes||[]).length ? op : (rs.some(r=>!HIDDEN_ROUTES.has(r)) ? { ...op, routes: rs } : null);
-}).filter(Boolean);
-if(_unkeyed.length) process.stderr.write('legend: '+_unkeyed.join(', ')+' — in operators[] but no spoke on this sheet draws '
-  +(_unkeyed.length>1?'them':'it')+', so left out of the legend. Declare a town circular in routes.json localLoops[] {route,label} to keep its badge with a caption.\n');
+// The legend is a key to the diagram (buses-data OA-305): see legend_key.js.
+const { ops: OPS, loops: LOOPS, dropped: _drop } = keyLegend({ operators: OPS_ALL,
+  spokeRoutes: EXT.flatMap(b=>[b.route, ...(b.routes||[])]), localLoops: D.localLoops, hidden: HIDDEN_ROUTES });
+if(_drop.length) process.stderr.write(droppedWarning(_drop));
 const EDK = process.env.EDITOR_KEYS==='1';
 /*
  * labels.engine:"v2" (design-quality plan, Phase 4). This generator had NO collision
@@ -712,15 +690,10 @@ function buildLegend(lx, ly, dx, dy){
    * reads as a pair of squares rather than as a dashed line, which is the one thing the row
    * has to communicate.
    */
-  // localLoops[]: a badge with a caption instead of a line, drawn as gen_external_places.js
-  // draws it, after the operator rows. LOOPX is 0 on a sheet that declares none.
+  // localLoops[] caption rows (OA-305), after the operators; LOOPX is 0 when none are declared.
+  const _lr = drawLoopRows({ loops: LOOPS, x: lx, y: ly + OPS.length*6.6 + 1.0, badge, badgeXW, measure: measureText, esc, out });
+  panelMaxX = Math.max(panelMaxX, _lr.maxX); panelMaxY = Math.max(panelMaxY, _lr.maxY);
   const LOOPX = LOOPS.length*6.0;
-  LOOPS.forEach((l,k)=>{ const yy = ly + OPS.length*6.6 + 1.0 + k*6.0, _lw = badgeXW(l.route,2.9);
-    badge(lx+3+_lw, yy, l.route, 2.9);
-    const _ll = l.label || 'local circular';
-    out(`<text x="${(lx+8+2*_lw).toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(_ll)}</text>`);
-    panelMaxX = Math.max(panelMaxX, lx+8+2*_lw + measureText(_ll,3.0));
-    panelMaxY = Math.max(panelMaxY, yy+3); });
   let lineKeyBottom = null;
   if(EXT.some(b=>b.limited && C[b.route] && !HIDDEN_ROUTES.has(b.route))){
     const _ky = ly + OPS.length*6.6 + LOOPX + 1.0;

@@ -74,7 +74,34 @@ const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
 const HIDDEN_ROUTES = new Set();
 if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
 const EXT = HIDDEN_ROUTES.size ? D.external.filter(b=>!HIDDEN_ROUTES.has(b.route)) : D.external;
-const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
+const OPS_ALL = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
+/* THE LEGEND IS A KEY TO THE DIAGRAM (buses-data OA-305, Peter's choice 2026-10-01).
+ *
+ * It used to badge every route in operators[] and never ask whether the route had a
+ * spoke, so 20 badges on 8 of the 17 external sheets had no line under them and five
+ * operator rows carried nothing at all (Wisbech's FACT and 68 is the one it was found
+ * by). Now a route is badged only when a spoke draws it (external[].route, or any of
+ * that arm's routes[]) or when the town declares it in localLoops[] — {route,label},
+ * the same key the place generator has always read — which keeps the badge and adds
+ * a caption row saying why there is no line: "local circular" unless labelled. An
+ * operator left with nothing badged loses its row. A sheet with no spokeless route
+ * and no localLoops is byte-identical.
+ *
+ * Anything dropped is named on stderr: the twin of services_panel.js's "badged in the
+ * Services panel but draws no line" guard. Nothing asked the external sheet that
+ * question until this, and only a person looking at the JPG ever answered it.
+ */
+const LOOPS = (D.localLoops||[]).map(l=>typeof l==='string' ? {route:l} : l).filter(l=>!HIDDEN_ROUTES.has(l.route));
+const _keyed = new Set(LOOPS.map(l=>l.route));
+EXT.forEach(b=>{ _keyed.add(b.route); (b.routes||[]).forEach(r=>_keyed.add(r)); });
+const _unkeyed = [];
+const OPS = OPS_ALL.map(op=>{
+  const rs = (op.routes||[]).filter(r=>_keyed.has(r) || HIDDEN_ROUTES.has(r));
+  (op.routes||[]).forEach(r=>{ if(!rs.includes(r)) _unkeyed.push(r+' ('+op.name+')'); });
+  return rs.length === (op.routes||[]).length ? op : (rs.some(r=>!HIDDEN_ROUTES.has(r)) ? { ...op, routes: rs } : null);
+}).filter(Boolean);
+if(_unkeyed.length) process.stderr.write('legend: '+_unkeyed.join(', ')+' — in operators[] but no spoke on this sheet draws '
+  +(_unkeyed.length>1?'them':'it')+', so left out of the legend. Declare a town circular in routes.json localLoops[] {route,label} to keep its badge with a caption.\n');
 const EDK = process.env.EDITOR_KEYS==='1';
 /*
  * labels.engine:"v2" (design-quality plan, Phase 4). This generator had NO collision
@@ -685,9 +712,18 @@ function buildLegend(lx, ly, dx, dy){
    * reads as a pair of squares rather than as a dashed line, which is the one thing the row
    * has to communicate.
    */
+  // localLoops[]: a badge with a caption instead of a line, drawn as gen_external_places.js
+  // draws it, after the operator rows. LOOPX is 0 on a sheet that declares none.
+  const LOOPX = LOOPS.length*6.0;
+  LOOPS.forEach((l,k)=>{ const yy = ly + OPS.length*6.6 + 1.0 + k*6.0, _lw = badgeXW(l.route,2.9);
+    badge(lx+3+_lw, yy, l.route, 2.9);
+    const _ll = l.label || 'local circular';
+    out(`<text x="${(lx+8+2*_lw).toFixed(2)}" y="${(yy+0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(_ll)}</text>`);
+    panelMaxX = Math.max(panelMaxX, lx+8+2*_lw + measureText(_ll,3.0));
+    panelMaxY = Math.max(panelMaxY, yy+3); });
   let lineKeyBottom = null;
   if(EXT.some(b=>b.limited && C[b.route] && !HIDDEN_ROUTES.has(b.route))){
-    const _ky = ly + OPS.length*6.6 + 1.0;
+    const _ky = ly + OPS.length*6.6 + LOOPX + 1.0;
     out(`<path d="M${lx.toFixed(2)} ${_ky.toFixed(2)}h12.00" fill="none" stroke="#888" stroke-width="3.4" stroke-dasharray="2.6 2.4" stroke-linecap="butt"/>`);
     out(`<text x="${(lx+14).toFixed(2)}" y="${(_ky+0.2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666" dominant-baseline="central">${esc(LIMITED_KEY)}</text>`);
     panelMaxX = Math.max(panelMaxX, lx+14 + measureText(LIMITED_KEY,2.9));
@@ -698,7 +734,7 @@ function buildLegend(lx, ly, dx, dy){
   // multi-arm routes, or long destination names) breaks onto further lines instead
   // of running off the page — it used to be one unbounded <text>.
   if(armNote){
-    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(lineKeyBottom!=null ? lineKeyBottom+4.4 : ly+OPS.length*6.6+3);
+    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(lineKeyBottom!=null ? lineKeyBottom+4.4 : ly+OPS.length*6.6+LOOPX+3);
     // Wrap width: an explicit legendAt.box caps it to the box's own interior (so the note can
     // never spill past a hand-tuned panel); otherwise prefer a wide-but-short wrap (110mm floor)
     // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby

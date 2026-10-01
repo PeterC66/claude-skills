@@ -93,7 +93,7 @@ for (const r in RCOL) C[r] = RCOL[r];
 const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
 const HIDDEN_ROUTES = new Set();
 if (HIDDEN_OPS.size) (D.operators || []).forEach(op => { if (HIDDEN_OPS.has(op.name)) (op.routes || []).forEach(r => HIDDEN_ROUTES.add(r)); });
-const OPS = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name)) : D.operators;
+const OPS_ALL = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name)) : D.operators;
 /* ---- design keys (label-and-design-quality plan, Phase 8 item 3b) -------------
  *
  * Until 2026-08-16 this generator referenced NO design key whatsoever, which is
@@ -334,6 +334,22 @@ const rayToRect = rayToRectFor({ rect: RECT, hx: HX, hy: HY });
 const dests = HIDDEN_ROUTES.size
   ? (D.destinations || []).map(b => Object.assign({}, b, { routes: (b.routes || []).filter(r => !HIDDEN_ROUTES.has(r)) })).filter(b => b.routes.length)
   : (D.destinations || []);
+/* THE LEGEND IS A KEY TO THE DIAGRAM (buses-data OA-305, 2026-10-01) — the same rule as
+ * gen_external_radial.js, which carries the full comment. A route is badged in the
+ * Operators & services rows only when a destination spoke carries it or localLoops[]
+ * declares it; an operator left with nothing loses its row; anything dropped is named on
+ * stderr. A sheet with neither is byte-identical.
+ */
+const _keyed = new Set((D.localLoops || []).map(l => (l && l.route) ? l.route : l));
+dests.forEach(b => (b.routes || []).forEach(r => _keyed.add(r)));
+const _unkeyed = [];
+const OPS = OPS_ALL.map(op => {
+  const rs = (op.routes || []).filter(r => _keyed.has(r) || HIDDEN_ROUTES.has(r));
+  (op.routes || []).forEach(r => { if (!rs.includes(r)) _unkeyed.push(r + ' (' + op.name + ')'); });
+  return rs.length === (op.routes || []).length ? op : (rs.some(r => !HIDDEN_ROUTES.has(r)) ? Object.assign({}, op, { routes: rs }) : null);
+}).filter(Boolean);
+if (_unkeyed.length) process.stderr.write('legend: ' + _unkeyed.join(', ') + ' — in operators[] but no spoke on this sheet carries '
+  + (_unkeyed.length > 1 ? 'them' : 'it') + ', so left out of the legend. Declare a local service in routes.json localLoops[] {route,label} to keep its badge with a caption.\n');
 // nodeBoxes — every destination node's + the hub's own footprint, gathered as the spokes
 // are laid out, so the legend panel (drawn later) can be placed somewhere that avoids all
 // of them instead of risking landing on top of one (see legend section below). spokeSegs —

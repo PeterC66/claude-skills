@@ -232,7 +232,11 @@ check("no [NOT-IN-BODS] is raised alongside it",
 print("\n9. THE JOIN — main's actionable filter reads the same constant this asserts on")
 check("[NOT-IN-BODS] is expected-and-explained", "NOT-IN-BODS" in rr.NON_ACTIONABLE)
 check("[COMMUNITY] still is too, unchanged", "COMMUNITY" in rr.NON_ACTIONABLE)
-check("and nothing else was quietly added", set(rr.NON_ACTIONABLE) == {"COMMUNITY", "NOT-IN-BODS"},
+# CONFIRMED was added on purpose on 2026-10-01 (buses-data OA-538): a recorded
+# "not drawn" decision over a feed whose fingerprint has not moved. Its own
+# mutations are in prove-red-python.py; this line is still the tripwire for the
+# next addition nobody meant.
+check("and nothing else was quietly added", set(rr.NON_ACTIONABLE) == {"COMMUNITY", "NOT-IN-BODS", "CONFIRMED"},
       str(rr.NON_ACTIONABLE))
 
 print("\n10. THE FIELD THAT SAYS WHICH FILE THE ANSWER IS ABOUT")

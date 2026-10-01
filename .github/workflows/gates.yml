@@ -444,6 +444,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-gtfs-uncommitted
 
+      # buses-data OA-542 (2026-10-01). A scheduled tick may commit an edit Peter
+      # finished in the main tree: one a live hold spells out as an exact diff, or
+      # a quiet, checker-green document. Every exclusion is a case, then a real
+      # throwaway repository, then one mutant per guard that must turn a case red.
+      # Temp folders only; no network.
+      - name: Prove the loop's adoption refuses what it must, and each refusal can fail
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-adopt
+
       # buses-data OA-426 (2026-09-22), R9 item 2. The refresh GRADE is the fact a
       # tick will rebuild a town on: SAFE means the scan found nothing needing a
       # judgement. A grade that never arrives costs a chore; a grade that arrives

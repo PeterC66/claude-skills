@@ -45,6 +45,7 @@ const { wrap, externalPrimitives, hubEdgeFor, rayToRectFor } = require(_from('ex
 // refusal and none becomes one here.
 const { refuse: guardRefuse, report: reportRefusals } = require(_from('strict_guards.js'));
 const { armItemsFrom, drawArmNote } = require(_from('arm_note.js'));
+const { keyLegend, droppedWarning, drawLoopRows } = require(_from('legend_key.js'));
 
 // ---- main() ---------------------------------------------------------------
 // OA-224 Tier 4.1: the body below runs only when this file is RUN, never when it
@@ -74,7 +75,11 @@ const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
 const HIDDEN_ROUTES = new Set();
 if (HIDDEN_OPS.size) (D.operators||[]).forEach(op=>{ if(HIDDEN_OPS.has(op.name)) (op.routes||[]).forEach(r=>HIDDEN_ROUTES.add(r)); });
 const EXT = HIDDEN_ROUTES.size ? D.external.filter(b=>!HIDDEN_ROUTES.has(b.route)) : D.external;
-const OPS = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
+const OPS_ALL = HIDDEN_OPS.size ? D.operators.filter(op=>!HIDDEN_OPS.has(op.name)) : D.operators;
+// The legend is a key to the diagram (buses-data OA-305): see legend_key.js.
+const { ops: OPS, loops: LOOPS, dropped: _drop } = keyLegend({ operators: OPS_ALL,
+  spokeRoutes: EXT.flatMap(b=>[b.route, ...(b.routes||[])]), localLoops: D.localLoops, hidden: HIDDEN_ROUTES });
+if(_drop.length) process.stderr.write(droppedWarning(_drop));
 const EDK = process.env.EDITOR_KEYS==='1';
 /*
  * labels.engine:"v2" (design-quality plan, Phase 4). This generator had NO collision
@@ -685,9 +690,13 @@ function buildLegend(lx, ly, dx, dy){
    * reads as a pair of squares rather than as a dashed line, which is the one thing the row
    * has to communicate.
    */
+  // localLoops[] caption rows (OA-305), after the operators; LOOPX is 0 when none are declared.
+  const _lr = drawLoopRows({ loops: LOOPS, x: lx, y: ly + OPS.length*6.6 + 1.0, badge, badgeXW, measure: measureText, esc, out });
+  panelMaxX = Math.max(panelMaxX, _lr.maxX); panelMaxY = Math.max(panelMaxY, _lr.maxY);
+  const LOOPX = LOOPS.length*6.0;
   let lineKeyBottom = null;
   if(EXT.some(b=>b.limited && C[b.route] && !HIDDEN_ROUTES.has(b.route))){
-    const _ky = ly + OPS.length*6.6 + 1.0;
+    const _ky = ly + OPS.length*6.6 + LOOPX + 1.0;
     out(`<path d="M${lx.toFixed(2)} ${_ky.toFixed(2)}h12.00" fill="none" stroke="#888" stroke-width="3.4" stroke-dasharray="2.6 2.4" stroke-linecap="butt"/>`);
     out(`<text x="${(lx+14).toFixed(2)}" y="${(_ky+0.2).toFixed(2)}" font-family="Arial" font-size="2.9" fill="#666" dominant-baseline="central">${esc(LIMITED_KEY)}</text>`);
     panelMaxX = Math.max(panelMaxX, lx+14 + measureText(LIMITED_KEY,2.9));
@@ -698,7 +707,7 @@ function buildLegend(lx, ly, dx, dy){
   // multi-arm routes, or long destination names) breaks onto further lines instead
   // of running off the page — it used to be one unbounded <text>.
   if(armNote){
-    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(lineKeyBottom!=null ? lineKeyBottom+4.4 : ly+OPS.length*6.6+3);
+    const _nx=(OV.note&&OV.note.x!=null)?OV.note.x+dx:lx, _ny=(OV.note&&OV.note.y!=null)?OV.note.y+dy:(lineKeyBottom!=null ? lineKeyBottom+4.4 : ly+OPS.length*6.6+LOOPX+3);
     // Wrap width: an explicit legendAt.box caps it to the box's own interior (so the note can
     // never spill past a hand-tuned panel); otherwise prefer a wide-but-short wrap (110mm floor)
     // over a narrow-but-tall one — the auto panel's HEIGHT is what risks colliding with a nearby

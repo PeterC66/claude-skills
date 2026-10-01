@@ -49,6 +49,7 @@ const { Labeller } = require(_LABELLER);
 const _from = siblingOf(_LABELLER);
 const FONT = require(_from('font_metrics.js'));
 const { separateRow, esc } = require(_from('svg_primitives.js'));
+const { keyLegend, droppedWarning, drawLoopRows } = require(_from('legend_key.js'));
 // external_primitives.js — line, tick, the badge family, stampNote, hubEdge and
 // rayToRect, shared with gen_external_radial.js, of which this file is a
 // reformatted clone (OA-224 Tier 3.5). Its header records the three places the
@@ -93,7 +94,7 @@ for (const r in RCOL) C[r] = RCOL[r];
 const HIDDEN_OPS = new Set(ALLOV.hiddenOperators || []);
 const HIDDEN_ROUTES = new Set();
 if (HIDDEN_OPS.size) (D.operators || []).forEach(op => { if (HIDDEN_OPS.has(op.name)) (op.routes || []).forEach(r => HIDDEN_ROUTES.add(r)); });
-const OPS = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name)) : D.operators;
+const OPS_ALL = HIDDEN_OPS.size ? D.operators.filter(op => !HIDDEN_OPS.has(op.name)) : D.operators;
 /* ---- design keys (label-and-design-quality plan, Phase 8 item 3b) -------------
  *
  * Until 2026-08-16 this generator referenced NO design key whatsoever, which is
@@ -334,6 +335,10 @@ const rayToRect = rayToRectFor({ rect: RECT, hx: HX, hy: HY });
 const dests = HIDDEN_ROUTES.size
   ? (D.destinations || []).map(b => Object.assign({}, b, { routes: (b.routes || []).filter(r => !HIDDEN_ROUTES.has(r)) })).filter(b => b.routes.length)
   : (D.destinations || []);
+// The legend is a key to the diagram (buses-data OA-305): see legend_key.js.
+const { ops: OPS, dropped: _drop } = keyLegend({ operators: OPS_ALL, spokeRoutes: dests.flatMap(b => b.routes || []),
+  localLoops: D.localLoops, hidden: HIDDEN_ROUTES });
+if (_drop.length) process.stderr.write(droppedWarning(_drop));
 // nodeBoxes — every destination node's + the hub's own footprint, gathered as the spokes
 // are laid out, so the legend panel (drawn later) can be placed somewhere that avoids all
 // of them instead of risking landing on top of one (see legend section below). spokeSegs —
@@ -739,15 +744,8 @@ function buildLegend(lx, ly) {
     panelMaxY = Math.max(panelMaxY, yy + 3);
   });
   let ny = ly + OPS.length * 6.6 + wrapExtra + 4;
-  (D.localLoops || []).forEach(l => {
-    const _lw = badgeXW(l.route, 2.9);
-    badge(lx + 3 + _lw, ny, l.route, 2.9);
-    const _loopLabel = l.label || 'local circular';
-    out(`<text x="${lx + 8 + 2 * _lw}" y="${(ny + 0.2).toFixed(2)}" font-family="Arial" font-size="3.0" fill="#666" dominant-baseline="central">${esc(_loopLabel)}</text>`);
-    panelMaxX = Math.max(panelMaxX, lx + 8 + 2 * _lw + panelText(_loopLabel, 3.0));
-    panelMaxY = Math.max(panelMaxY, ny + 3);
-    ny += 6.0;
-  });
+  const _lr = drawLoopRows({ loops: D.localLoops || [], x: lx, y: ny, badge, badgeXW, measure: panelText, esc, out });
+  panelMaxX = Math.max(panelMaxX, _lr.maxX); panelMaxY = Math.max(panelMaxY, _lr.maxY); ny = _lr.y;
   /*
    * The line-style key row — drawn only when a dashed spoke is actually on this sheet.
    *

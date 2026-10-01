@@ -58,8 +58,8 @@
  * this tool offered #CC3311 for route 112 at dE 53 from everything beside it, and
  * colourClashOnMap then reported 112 vs 65 at dE 24 running together — 65 shares no
  * road edge with 112 and passes within 6 mm of it on the page. So where the sheet
- * draws the route, "beside" is quality_metrics.js's runTogether() over the sheet's
- * internal.svg, the very function colourClashOnMap calls, and a candidate below the
+ * draws the route, "beside" is run_together.js over the sheet's internal.svg, the
+ * very function colourClashOnMap calls, and a candidate below the
  * clash line against one of them is marked as the clash it would be. Shared edges
  * remain the fallback for a route the sheet does not draw yet, and say so.
  *
@@ -215,17 +215,19 @@ if (RP && RP.routes && RP.routes[route] && Array.isArray(RP.routes[route].edges)
 }
 /* --- which of them it RUNS TOGETHER with on the sheet ----------------------
  * The test colourClashOnMap applies to the build, called rather than copied:
- * quality_metrics.js's runTogether() over the drawn internal.svg. It needs the
- * route's own ink on the page, so a NEW route, or a sheet that is not on disk,
- * falls back to shared edges above — and the report says which test it used. */
-const { parseSvg, runTogether, T: QT } = require('./quality_metrics.js');
+ * run_together.js over the drawn internal.svg, parsed by quality_metrics.js's own
+ * parseSvg() at its own colourNearMm. It needs the route's own ink on the page, so
+ * a NEW route, or a sheet that is not on disk, falls back to shared edges above —
+ * and the report says which test it used. */
+const { parseSvg, T: QT } = require('./quality_metrics.js');
+const { runTogether } = require('./run_together.js');
 let inkBeside = null, inkWhy = null;
 if (!SRC.svg.path || !fs.existsSync(SRC.svg.path)) inkWhy = `no internal.svg (${SRC.svg.from})`;
 else if (isNew) inkWhy = 'the route is not on the sheet yet';
 else {
   const P = parseSvg(fs.readFileSync(SRC.svg.path, 'utf8'));
   const routeInk = new Set(Object.values(PALETTE).map((c) => String(c).toLowerCase()));
-  const near = runTogether(P.strokes, P.vb[2], P.vb[3], (c) => routeInk.has(c));
+  const near = runTogether(P.strokes, P.vb[2], P.vb[3], (c) => routeInk.has(c), QT.colourNearMm);
   const mine = String(PALETTE[route]).toLowerCase();
   if (!near.has(mine)) inkWhy = `the sheet draws no route ink in ${mine}`;
   else inkBeside = new Set(drawn.filter((r) => near.together(mine, String(PALETTE[r]).toLowerCase())));

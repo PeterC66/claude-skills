@@ -196,7 +196,7 @@ const { svgPrimitives } = require(_dep('svg_primitives.js'));
 const { linearFeatures } = require(_dep('linear_features.js'));
 const { labelPlacer } = require(_dep('label_placer.js'));
 const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js'));
-const { complexityLadder, coreBoxGeometry, thinKeep } = require(_dep('complexity_ladder.js'));
+const { complexityLadder, coreBoxGeometry, partnerBoxGeometry, drawPartnerBox, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { smoothCasingWidths, drawnLaneCasings } = require(_dep('casing_width.js'));
 const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
@@ -1656,6 +1656,11 @@ if(CORE){
   if(CORE.sublabel) out(`<text x="${cx.toFixed(2)}" y="${(cy+ts*0.95).toFixed(2)}" font-family="Arial" font-size="${(ts*0.66).toFixed(2)}" fill="#555" text-anchor="middle">${esc(CORE.sublabel)}</text>`);
   reserve(CORE.x0-0.5,CORE.y0-0.5,CORE.x1+0.5,CORE.y1+0.5,'the core box');
 }
+// ---- design.partnerBox (OA-534): another sheet's coreBox, dashed, blanking nothing. complexity_ladder.js
+//      says why it is exact. The label asks POI sites (drawn, not all reserved yet) and route ink, as placeOptIns does.
+let PB_INK=null; const PB_INKF=()=>PB_INK||(PB_INK=new Labeller({ page:[W,H] }).stampSvg(s, st=>new Set(Object.values(C||{}).map(v=>String(v).toLowerCase())).has(st)).ink);
+drawPartnerBox({ PARTNER: partnerBoxGeometry({ PBOX: DESIGN.partnerBox, atco2ll, XY, refuse }), PB: DESIGN.partnerBox, out, gk, esc, reserve, textWidth: FONT.textWidth, say: m=>console.error(m),
+  blocked: b=>!inFrame([b[0],b[1]]) || !inFrame([b[2],b[3]]) || overlaps(b) || PB_INKF().any(b) || pois.some(p=>{ const t=poiSite(p); return t && hit(b,[t.x-POI_HALF,t.y-POI_HALF,t.x+POI_HALF,t.y+POI_HALF]); }) });
 out(`</g>`);
 
 // ---- reserve protected areas so labels avoid them ----

@@ -23,7 +23,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { complexityLadder, coreBoxGeometry, thinKeep, parseFamilies, aliasColours, runLen } =
+const { complexityLadder, coreBoxGeometry, partnerBoxGeometry, thinKeep, parseFamilies, aliasColours, runLen } =
   require('./_engine.js').load('complexity_ladder.js');
 
 const palette = () => ({ 1: '#4477AA', '1A': '#EE6677', '1B': '#228833', 9: '#CCBB44' });
@@ -321,4 +321,65 @@ test('a styled family still takes ONE lane', () => {
 test('a style on a corridorPalette group is refused', () => {
   assert.throws(() => complexityLadder({ RJ: { corridorPalette: { 31: { routes: ['41'], style: 'alternate' } } },
     C: palette(), TXT: null }), /corridorPalette 31/);
+});
+
+// ---------------------------------------------------------------- partnerBoxGeometry (OA-534)
+// The partner sheet's page is its planar frame rotated by its applied rotation;
+// this stand-in is that projection with no fisheye, which is the case the key is
+// exact for (the partner box inside the partner's true-scale core).
+const partnerXY = deg => { const p = deg * Math.PI / 180, c = Math.cos(p), s = Math.sin(p);
+  const k = Math.cos(52 * Math.PI / 180);
+  return ([lat, lon]) => { const x = lon * k * 1000, y = -lat * 1000; return [x * c - y * s, x * s + y * c]; }; };
+const onRect = (p, R, tol) => p[0] >= R.x0 - tol && p[0] <= R.x1 + tol && p[1] >= R.y0 - tol && p[1] <= R.y1 + tol
+  && Math.min(Math.abs(p[0] - R.x0), Math.abs(p[0] - R.x1), Math.abs(p[1] - R.y0), Math.abs(p[1] - R.y1)) <= tol;
+
+test('partnerBox absent: nothing at all, so the sheet is byte-identical', () => {
+  assert.strictEqual(partnerBoxGeometry({ PBOX: undefined, atco2ll, XY, refuse: () => { throw new Error('asked'); } }), null);
+});
+
+test('partnerBox with no coordinate refuses rather than drawing at the origin', () => {
+  const said = [];
+  assert.strictEqual(partnerBoxGeometry({ PBOX: { at: 'NOPE' }, atco2ll, XY, refuse: m => said.push(m) }), null);
+  assert.match(said[0], /^partnerBox: "NOPE" has no coordinate/);
+});
+
+for (const deg of [0, -1.7, 30]) {
+  test(`partnerBox drawn through the partner's own projection IS its coreBox (rotation ${deg})`, () => {
+    const pxy = partnerXY(deg);
+    const { CORE } = coreBoxGeometry({ CBOX: { radius: 600 }, ANCHOR: 'ANCH', atco2ll, XY: pxy, refuse: () => {} });
+    const g = partnerBoxGeometry({ PBOX: { at: 'ANCH', radius: 600, rotation: deg }, atco2ll, XY: pxy, refuse: () => {} });
+    const size = CORE.x1 - CORE.x0, tol = size * 0.005;     // planar is 0.7% anisotropic in km
+    assert.ok(g.pts.length > 8 && g.pts[0] === g.pts[g.pts.length - 1], 'a closed ring');
+    for (const p of g.pts) assert.ok(onRect(p, CORE, tol), `ring point ${p} is on the coreBox edge`);
+    for (const [x, y] of [[CORE.x0, CORE.y0], [CORE.x1, CORE.y0], [CORE.x1, CORE.y1], [CORE.x0, CORE.y1]])
+      assert.ok(g.pts.some(p => Math.hypot(p[0] - x, p[1] - y) <= tol), `a corner reaches ${x},${y}`);
+  });
+}
+
+test('partnerBox takes a [lat,lon] as well as an ATCO, and carries its label', () => {
+  const a = partnerBoxGeometry({ PBOX: { at: 'ANCH', label: 'x' }, atco2ll, XY, refuse: () => {} });
+  const b = partnerBoxGeometry({ PBOX: { at: [52.0, -0.1], label: 'x' }, atco2ll, XY, refuse: () => {} });
+  assert.deepStrictEqual(b, a);
+  assert.strictEqual(a.label, 'x');
+});
+
+test('drawPartnerBox: label at the first clear spot, before the edges are reserved; none clear => said, not drawn', () => {
+  const PARTNER = { pts: [[10, 10], [50, 10], [50, 40], [10, 40], [10, 10]], label: 'town box' };
+  const run = blocked => { const outs = [], res = [], said = [];
+    require('./_engine.js').load('complexity_ladder.js').drawPartnerBox({ PARTNER, PB: {}, out: x => outs.push(x), gk: (a, b, x) => x,
+      esc: x => x, reserve: (...a) => res.push(a), textWidth: () => 10, blocked, say: m => said.push(m) });
+    return { outs, res, said }; };
+  const free = run(() => false);
+  assert.match(free.outs[0], /stroke-dasharray/, 'the ring is drawn dashed');
+  assert.match(free.outs[1], /x="11\.60" y="13\.68"[^>]*>town box</, 'top-left corner first, inset 1.6 mm');
+  assert.strictEqual(free.res[0][4], 'the partner box label', 'the label is reserved before any edge');
+  assert.strictEqual(free.res.length, 1 + 4, 'then one reservation per edge segment');
+  const slid = run(b => b[0] < 15);
+  assert.match(slid.outs[1], /x="15\.60"/, 'a blocked corner slides along the edge in 2 mm steps');
+  const none = run(() => true);
+  assert.strictEqual(none.outs.length, 1, 'nowhere clear: the ring only');
+  assert.match(none.said[0], /^partnerBox: label "town box" not drawn/);
+  PARTNER.label = null;
+  const bare = run(() => { throw new Error('blocked() asked with no label'); });
+  assert.strictEqual(bare.outs.length, 1, 'no label: the ring only, and blocked() is never asked');
 });

@@ -419,7 +419,7 @@ function builtIn(repo) {
       ].filter(Boolean),
       unanswered: [
         'Whether the PORTAL suite is green — its `verify:area` gates a fixture that lives in this repository, and nothing on this side runs another repository\'s gates.',
-        'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers. The one exception is a `git remote prune origin` of the portal before prove-red-status (OA-479), which only deletes refs to branches origin no longer has.',
+        'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers. The one exception is a `git remote prune origin` of the portal before prove-red-status (OA-479), which only deletes refs to branches origin no longer has, and the fast-forward that follows it of a clean portal `main` that lags its already-fetched origin/main (OA-539) — no fetch is made.',
         'The estate harnesses gates.yml runs beyond prove-red-gates and prove-red-status — held-back, rollout-stamp, unrendered, sweep, prove-s6, attribution, the _latest mirrors. Only the two a pin bump has been seen to fail are asked, and only when the push moves engine.lock.json or a ci-reference/.',
         /* A missing engine tree is a REFUSAL and is said out loud. It used to be
          * a path literal that simply was not there, which reads as a check that
@@ -642,6 +642,49 @@ export function engineTransfers(engineRepo, pin = null) {
   return { known: true, transfers: dirtyFiles === 0 && level, dirtyFiles, against: pin ? `the pin ${pin.slice(0, 7)}` : 'origin/main (no pin was readable)', head: head.out.slice(0, 7), branch: branch.out };
 }
 
+/*
+ * buses-data OA-539. The portal arms read the portal checkout AS IT STANDS ON
+ * DISK, and the vendoring verdict calls a file PENDING when origin/main differs
+ * from the engine and the working tree agrees. A clean `main` that merely lags
+ * its own origin/main — a re-vendor merged on GitHub that nothing on this
+ * laptop pulled — satisfies that exactly, so the preflight refused three ticks'
+ * pushes on 2026-10-01 for a tree nobody had touched, and every one was cured by
+ * the same hand-run `merge --ff-only origin/main`.
+ *
+ * So the preflight runs that fast-forward itself, and ONLY that one: no fetch
+ * (origin/main is whatever the last fetch left, the same ref the board reads),
+ * only on `main`, only with no tracked file modified, only when the checkout is
+ * strictly behind and not ahead. Anything else is left exactly as it is and
+ * NAMED in the report, so a PENDING beside it reads as the lag it may be rather
+ * than as the push's fault. A genuinely un-vendored file is untouched by this:
+ * it differs from origin/main whatever the checkout holds.
+ */
+export function catchUpPortal(dir) {
+  const branch = git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (!branch.ok) return { dir, behind: null, moved: false, why: `git cannot read it (${branch.err || `exit ${branch.status}`})` };
+  if (!git(dir, ['rev-parse', '--verify', '--quiet', 'origin/main']).ok) return { dir, behind: null, moved: false, why: 'it has no origin/main' };
+  const behind = Number(git(dir, ['rev-list', '--count', 'HEAD..origin/main']).out) || 0;
+  if (!behind) return { dir, behind: 0, moved: false };
+  const ahead = Number(git(dir, ['rev-list', '--count', 'origin/main..HEAD']).out) || 0;
+  const dirty = git(dir, ['status', '--porcelain', '--untracked-files=no']).out;
+  let why = null;
+  if (branch.out !== 'main') why = `it is on ${branch.out}, not main`;
+  else if (ahead) why = `local main is also ${ahead} commit(s) AHEAD, so it has diverged`;
+  else if (dirty) why = `${dirty.split('\n').length} tracked file(s) are modified`;
+  if (why) return { dir, behind, moved: false, why };
+  const from = git(dir, ['rev-parse', '--short', 'HEAD']).out;
+  const ff = git(dir, ['merge', '--ff-only', '--quiet', 'origin/main']);
+  if (!ff.ok) return { dir, behind, moved: false, why: `merge --ff-only refused: ${ff.err || `exit ${ff.status}`}` };
+  return { dir, behind, moved: true, from, to: git(dir, ['rev-parse', '--short', 'HEAD']).out };
+}
+
+export function catchUpLine(u) {
+  if (u.moved) return `  fast-forwarded ${u.dir} main ${u.from}..${u.to} (${u.behind} commit(s)) to its origin/main, so the portal arms read the portal as merged (OA-539)`;
+  if (u.behind) return `  NOTE ${u.dir} is ${u.behind} commit(s) behind origin/main and was NOT fast-forwarded, because ${u.why}: a vendoring PENDING below may be that lag and not this push (OA-539)`;
+  if (u.behind === null) return `  NOTE could not tell whether ${u.dir} lags origin/main: ${u.why}`;
+  return null;
+}
+
 /** How the interval was chosen, for the report: paced, fixed, or the fallback and why. */
 export function paceLine(p) {
   if (p.paced) return `pace — ${p.minutes} min: ${p.why}`;
@@ -676,6 +719,7 @@ export function report(result, quiet) {
   else if (iv) L.push(`  interval — NOT ASKED, so not deferred: ${iv.why}`);
   if (iv && iv.pace) L.push(`  ${paceLine(iv.pace)}`);
   for (const p of result.pruned || []) L.push(p.ok ? `  pruned ${p.refs.length} stale remote-tracking ref(s) in ${p.dir}${p.refs.length ? `: ${p.refs.join(', ')}` : ''}` : `  NOTE could not prune ${p.dir} (${p.why}); a branch deleted on origin may read as an unmerged re-vendor`);
+  for (const line of (result.caughtUp || []).map(catchUpLine).filter(Boolean)) L.push(line);
   L.push('');
   for (const c of result.checks) {
     const mark = c.verdict === 'PASS' ? ' ok ' : c.verdict === 'FAIL' ? 'FAIL' : ' ?? ';
@@ -764,6 +808,7 @@ export function preflight({ repo, all = false, skillsRoot, urgent = null, now = 
     const r = spawnSync('git', ['-C', dir, 'remote', 'prune', 'origin'], { encoding: 'utf8', timeout: 60000 });
     return { dir, ok: r.status === 0, refs: ((r.stdout || '').match(/\[pruned\] (\S+)/g) || []).map((m) => m.slice(9)), why: (r.stderr || '').trim() || (r.error && r.error.message) || '' };
   });
+  const caughtUp = [...new Set(wanted.map((c) => c.prunePortal).filter(Boolean))].map(catchUpPortal);
   let checks;
   try {
     checks = wanted.map((c) => (c.atPin ? runAtPin(c, repo, pinEngine) : runCheck(c, repo)));
@@ -778,7 +823,7 @@ export function preflight({ repo, all = false, skillsRoot, urgent = null, now = 
   const unanswered = checks.filter((c) => c.verdict === 'UNANSWERED').length;
   const exit = failed ? EXIT_FAILED : (unanswered || !scope.known) ? EXIT_CANNOT_TELL : EXIT_OK;
   const pinReport = pinEngine ? (pinEngine.root ? { commit: pinEngine.commit, via: pinEngine.via } : { why: pinEngine.why }) : null;
-  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, pruned, interval, unanswered: manifest.unanswered || [], exit };
+  return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, pruned, caughtUp, interval, unanswered: manifest.unanswered || [], exit };
 }
 
 function main() {

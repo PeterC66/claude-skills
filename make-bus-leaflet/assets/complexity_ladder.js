@@ -265,4 +265,81 @@ function thinKeep({ THIN, order, routes, laneKey, ANCHOR }){
   return keep;
 }
 
-module.exports = { complexityLadder, coreBoxGeometry, thinKeep, parseFamilies, aliasColours, runLen };
+/** design.partnerBox (buses-data OA-534): ANOTHER sheet's coreBox, as an outline.
+ *
+ * routes.json "design": { "partnerBox": { "at": "<ATCO>" | [lat,lon],
+ *   "radius": 600, "rotation": -1.7, "label": "…" } }
+ *
+ * A place map that sits inside a town's coreBox can show where that box falls,
+ * so a reader sees how the two sheets join. The partner's box is a PAGE-space
+ * rectangle under the partner's own projection: the bounding box of a `radius`
+ * metre circle round its anchor, axis-aligned to a sheet rotated by `rotation`
+ * (the partner's APPLIED rotation, as its build log prints it). Inside the
+ * partner's true-scale core that rectangle is a ground square, so this rebuilds
+ * the square's four corners on the ground — the same 72-point circle the
+ * partner takes, measured in the partner's rotated frame — and returns its edges,
+ * sampled, through THIS sheet's projection. That is exact whatever this sheet's
+ * own rotation and fisheye; the one assumption is that the partner box lies
+ * inside the partner's focus.coreKm (true at High Wycombe: corners 0.85 km, core
+ * 1 km), which the caller can check and the docs say.
+ *
+ * Returns null without the key, or { pts:[[x,y]…] closed ring, label } — the
+ * ring is in page mm. It blanks nothing: no inside test is returned on purpose.
+ */
+function partnerBoxGeometry({ PBOX, atco2ll, XY, refuse }){
+  if(!PBOX) return null;
+  const c = Array.isArray(PBOX.at) ? PBOX.at : atco2ll[PBOX.at];
+  if(!c){ refuse('partnerBox: '+JSON.stringify(PBOX.at)+' has no coordinate — outline not drawn'); return null; }
+  const R = (PBOX.radius!=null?PBOX.radius:600)/1000;            // km, as coreBox
+  const latKm = 110.574, lonKm = 111.320*Math.cos(c[0]*Math.PI/180);
+  const phi = (PBOX.rotation||0)*Math.PI/180;                     // partner's page = planar rotated by phi
+  const cs = Math.cos(phi), sn = Math.sin(phi);
+  // ground offsets in km, east and SOUTH (page y runs down), rotated into the partner frame
+  let u0=Infinity,v0=Infinity,u1=-Infinity,v1=-Infinity;
+  for(let i=0;i<72;i++){ const a=i/72*2*Math.PI;
+    const e=R*Math.sin(a), s=-R*Math.cos(a);
+    const u=e*cs-s*sn, v=e*sn+s*cs;
+    if(u<u0)u0=u; if(u>u1)u1=u; if(v<v0)v0=v; if(v>v1)v1=v; }
+  const toLL = (u,v) => { const e=u*cs+v*sn, s=-u*sn+v*cs;        // un-rotate
+    return [c[0]-s/latKm, c[1]+e/lonKm]; };
+  const corners = [[u0,v0],[u1,v0],[u1,v1],[u0,v1]];
+  const N = 16, pts = [];
+  for(let k=0;k<4;k++){ const [a,b]=[corners[k],corners[(k+1)%4]];
+    for(let j=0;j<N;j++){ const t=j/N; pts.push(XY(toLL(a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t))); } }
+  pts.push(pts[0]);
+  return { pts, label: PBOX.label||null };
+}
+
+/** Draw the partnerBox ring (dashed), its optional label, and reserve both.
+ * `blocked(box)` is the caller's question "is this page box taken" — symbols,
+ * route ink, reserved boxes, off the frame — asked only when there is a label.
+ * The label goes just inside the box at the first spot from a corner (top-left,
+ * top-right, bottom-left, bottom-right), sliding along the top or bottom edge in
+ * 2 mm steps up to 40 mm, BEFORE the edges are reserved, which would otherwise
+ * claim every spot. Nowhere clear => not drawn, and stderr says so. */
+function drawPartnerBox({ PARTNER, PB, out, gk, esc, reserve, textWidth, blocked, say }){
+  if(!PARTNER) return;
+  const P = PARTNER.pts;
+  const d = P.map((p,i)=>(i?'L':'M')+p[0].toFixed(2)+' '+p[1].toFixed(2)).join('')+'Z';
+  out(gk('partnerbox','partner',
+    `<path d="${d}" fill="none" stroke="${PB.stroke||'#444444'}" stroke-width="0.6" stroke-dasharray="2 1.4" stroke-linejoin="round"/>`));
+  if(PARTNER.label){
+    const ts = PB.textSize||2.6, w = textWidth(PARTNER.label,ts,false), g = 1.6;
+    const pick = f => P.reduce((m,p)=>f(p)<f(m)?p:m);
+    const corners = [[pick(p=>p[0]+p[1]),1,1],[pick(p=>p[1]-p[0]),-1,1],[pick(p=>p[0]-p[1]),1,-1],[pick(p=>-p[0]-p[1]),-1,-1]];
+    let done = false;
+    for(const [c,sx,sy] of corners) for(let k=0;k<=20 && !done;k++){
+      const x0 = (sx>0 ? c[0]+g : c[0]-g-w) + sx*2*k, y0 = sy>0 ? c[1]+g : c[1]-g-ts;
+      const box = [x0-0.4, y0-0.4, x0+w+0.4, y0+ts+0.4];
+      if(blocked(box)) continue;
+      out(`<text x="${x0.toFixed(2)}" y="${(y0+ts*0.8).toFixed(2)}" font-family="Arial" font-size="${ts}" fill="#444" font-style="italic">${esc(PARTNER.label)}</text>`);
+      reserve(box[0],box[1],box[2],box[3],'the partner box label');
+      done = true;
+    }
+    if(!done) say('partnerBox: label "'+PARTNER.label+'" not drawn — no clear spot inside the box within 40 mm of a corner; shorten it');
+  }
+  for(let i=1;i<P.length;i++){ const a=P[i-1], b=P[i];
+    reserve(Math.min(a[0],b[0])-0.6,Math.min(a[1],b[1])-0.6,Math.max(a[0],b[0])+0.6,Math.max(a[1],b[1])+0.6,'the partner box'); }
+}
+
+module.exports = { complexityLadder, coreBoxGeometry, partnerBoxGeometry, drawPartnerBox, thinKeep, parseFamilies, aliasColours, runLen };

@@ -1628,6 +1628,24 @@ const MUTATIONS = [
   // are dark to the byte gate. Every hand override of the box (w, h, at,
   // minRun), the whole object form of stopThinning, both "true" shorthands and
   // the anchor refusal are certified by complexity_ladder.test.js alone.
+  // design.partnerBox (buses-data OA-534): no map adopts it yet, so only the
+  // suite stands under it. Un-rotating the wrong way leaves rotation 0 exact and
+  // tilts every other partner's box, which is the case a town at -1.7 lives in.
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the partner box is un-rotated the wrong way, so a rotated partner's box is drawn tilted on this sheet",
+    find: "  const toLL = (u,v) => { const e=u*cs+v*sn, s=-u*sn+v*cs;        // un-rotate",
+    to: "  const toLL = (u,v) => { const e=u*cs-v*sn, s=u*sn+v*cs;        // un-rotate" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "a blocked partner-box label corner stops sliding, so a long edge with one icon at its end takes no label",
+    find: "      const x0 = (sx>0 ? c[0]+g : c[0]-g-w) + sx*2*k, y0 = sy>0 ? c[1]+g : c[1]-g-ts;",
+    to: "      const x0 = (sx>0 ? c[0]+g : c[0]-g-w), y0 = sy>0 ? c[1]+g : c[1]-g-ts;" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the partner box ring is left open, so its last edge is never drawn",
+    find: "  pts.push(pts[0]);\n  return { pts, label: PBOX.label||null };",
+    to: "  return { pts, label: PBOX.label||null };" },
+
   { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
     what: "a family of one becomes a family, so a lone route is bundled with nothing and loses its own lane",
     find: "    if(list.length<2) continue;",

@@ -16,6 +16,9 @@ Required by `gen_internal.js` (hard-parsed): `routes.json`, `atco2ll.json`, `atc
 ## The title fix
 `gen_internal.js` hardcodes the title `Buses within <RJ.town>`. The wrapper runs the generator, then string-replaces that exact emitted token with `RJ.placeTitle` (or `Buses serving <RJ.placeShort|place>`). So set `RJ.town` to any short phrase (it only seeds the token to match) and `RJ.placeTitle` to the real title. The town generator is never edited.
 
+## The pointer at the place (since 2026-10-01)
+Every place internal sheet draws a red arrow aimed at the place's marker, the square that `anchor` and `anchorLabel` put on the map, so the place is the first thing a reader finds (buses-data OA-509). It is `design.placePointer`, read by `gen_internal.js` and built in `make-bus-leaflet/assets/place_pointer.js`, and it is **on because `routes.json` names a `place`** — a town draws none. So point `anchor` at what the reader is looking for: where it names the bus stops for a shop rather than the shop (High Wycombe Aldi's is "Ford Street stops"), the arrow points at the stops. `"design": {"placePointer": false}` declines it on one place. The arrow chooses its own bearing, preferring the upper right; the costs are in the module's header.
+
 ## Command
 ```bash
 TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets" \

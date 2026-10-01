@@ -201,6 +201,7 @@ const { northArrow } = require(_dep('north_arrow.js'));
 const { smoothCasingWidths, drawnLaneCasings } = require(_dep('casing_width.js'));
 const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
+const { placePointer, pointerOn, inkFromSvg } = require(_dep('place_pointer.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
 // coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
 // the two ink tests below, whose 0.62 threshold is calibrated against the RAW
@@ -2099,6 +2100,10 @@ if(ID && IR) for(const ic of (ID.interchanges||[])){
   reserve(box[0],box[1],box[2],box[3],'an "'+label+'" interchange lozenge');
   LOZENGES.push({ ic, x, y, w, h, label, sz, fill: ic.fill||'#1e7a46' });
 }
+// design.placePointer (buses-data OA-509): the red arrow at a place map's marker claims its bearing here; place_pointer.js.
+const POINTER=pointerOn(DESIGN,RJ) ? placePointer({ on:true, sq:ANCHOR_SQ, symbols:LAB?LAB.anchors:[], inkCover:inkFromSvg(s,C,rawLumHex,Labeller), overlaps, reserve,
+  nameBox:ANCHOR_SQ&&[ANCHOR_SQ[0]+2.6, ANCHOR_SQ[1]+1.0-3.0*FONT.CAP_HEIGHT, ANCHOR_SQ[0]+2.6+FONT.textWidth(ANCHOR_LABEL,3.0,true), ANCHOR_SQ[1]+1.0+3.0*FONT.DESCENDER],
+  frame:{x0:MX0,y0:MY0,x1:MX1,y1:MY1}, footerTop:FOOTER_PLATE_TOP, warn:m=>process.stderr.write(m+'\n') }) : null;
 
 // The eight compass keys labeller.js knows, 45° apart, anticlockwise from East in
 // PAGE coordinates (y points down, so North is -y). `inboardKeys` snaps a
@@ -3122,6 +3127,7 @@ out(`<text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fi
 // which sets validFrom; this only changes what a map that FORGETS it would say.
 if(RJ.validFrom) out(`<text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from ${esc(RJ.validFrom)})</text>`);
 for(const f of FEATURES) drawFeatureLabel(f);
+if(POINTER) out(POINTER.svg);                   // last on the map, so nothing paints over it
 
 // ---------- right service panel ----------
 // The whole right-hand column is in services_panel.js: the Services list in its

@@ -262,6 +262,35 @@ MUTATIONS = [
      "find": 'MECHANICAL=("OPERATOR","DAYS")',
      "to": 'MECHANICAL=("OPERATOR","DAYS","NOT-IN-BODS?")'},
 
+    # ------------------------------------------------- a decision's feed fingerprint
+    # buses-data OA-538. A recorded "not drawn" decision over an unchanged feed is
+    # CONFIRMED and no longer escalates. Each survivor here would be a fingerprint
+    # that silences an exclusion whatever the feed does.
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "a recorded fingerprint confirms the decision whatever the feed now says, so a route that went daily stays off the sheet unread",
+     "find": '    return ("moved",diffs) if diffs else ("same",fp)',
+     "to": '    return ("same",fp)'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "a fingerprint with no days -- an empty one -- is accepted, so recording {} mutes a decision for ever",
+     "find": '    if not isinstance(fp,dict) or not fp.get("days"): return ("none",None)',
+     "to": '    if not isinstance(fp,dict): return ("none",None)'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "the fingerprint stops comparing termini, so a route that now runs somewhere else is confirmed as unchanged",
+     "find": 'FINGERPRINT_FIELDS=("days","operators","journeysPerWeek","termini")',
+     "to": 'FINGERPRINT_FIELDS=("days","operators","journeysPerWeek")'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "CONFIRMED leaves the non-actionable set, so an unchanged decision escalates its town again and none can reach SAFE",
+     "find": 'NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS","CONFIRMED")',
+     "to": 'NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS")'},
+
+    {"suite": "test_gtfs_refresh_report.py", "file": "gtfs_refresh_report.py",
+     "what": "the servesTown-false branch stops quoting the town's recorded reason, so a dated ruling reads as a stale flag",
+     "find": '            why=known_off_reason(entry) if entry else ""',
+     "to": '            why=""'},
+
 
     # ---------------------------------------------------------------- the load test
     # The cheapest check there is, and the one that was missing for a year. This

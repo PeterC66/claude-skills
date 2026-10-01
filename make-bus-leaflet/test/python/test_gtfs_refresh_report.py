@@ -285,10 +285,15 @@ class StubFeed(object):
         return {"services": self.services}
 
 
-def bods(route, operator, week, variant_of=None):
+def bods(route, operator, week, variant_of=None, jpw=None, termini=None):
     flags = [1 if i in week else 0 for i in range(7)]
-    return {"route": route, "operator": operator, "daysFlags": flags,
-            "possibleVariantOf": variant_of, "hasGtfsShape": False}
+    rec = {"route": route, "operator": operator, "daysFlags": flags,
+           "possibleVariantOf": variant_of, "hasGtfsShape": False}
+    if jpw is not None:
+        rec["journeysPerWeek"] = jpw
+    if termini is not None:
+        rec["termini"] = termini
+    return rec
 
 
 class DiffTownReadsTheDaysItIsGiven(unittest.TestCase):
@@ -333,6 +338,104 @@ class DiffTownReadsTheDaysItIsGiven(unittest.TestCase):
         self.assertEqual(
             self.diff([bods("7", "Stagecoach East",
                             days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))]), [])
+
+
+MON_FRI = days("Mon", "Tue", "Wed", "Thu", "Fri")
+
+
+class ARecordedDecisionConfirmsOnlyWhileTheFeedHoldsStill(unittest.TestCase):
+    """buses-data OA-538: a "we do not draw this" decision over an unchanged feed.
+
+    Until 2026-10-01 every such decision came back as RE-EVAL, which escalates, so
+    no town holding one could ever be graded SAFE. The fix records, with the
+    decision, the feed it was made on. The CONTROL cases matter more than the
+    happy one: a fingerprint that confirmed whatever the feed did would be a mute
+    button over the exact exclusion this report exists to keep re-reading.
+    """
+
+    FP = {"asOf": "2026-10-01", "days": "Mon-Fri", "operators": ["Whippet Coaches"],
+          "journeysPerWeek": 10, "termini": ["Ely", "Newmarket"]}
+
+    def setUp(self):
+        self.dir = _stubs.scratch("refresh-decision-")
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.saved = rr.gq
+        self.addCleanup(setattr, rr, "gq", self.saved)
+
+    def run_town(self, entry, feed, field="notOnLeaflet", services=()):
+        vs = {"verifiedOn": "2026-09-24", "services": list(services)}
+        if entry is not None:
+            vs.setdefault(field, []).append(entry)
+        _stubs.write_json(
+            os.path.join(self.dir, "S1-services", "2026-09-24_1353", "verified-services.json"), vs)
+        rr.gq = StubFeed(feed)
+        return rr.diff_town("unused.sqlite", "Testbury", {"prefixes": ["0500"]},
+                            self.dir, today="2026-10-01")["changes"]
+
+    def feed(self, week=MON_FRI, jpw=10, termini=("Ely", "Newmarket"), op="Whippet Coaches"):
+        return [bods("12", op, week, jpw=jpw, termini=list(termini))]
+
+    def entry(self, fp=None, **extra):
+        e = {"route": "12", "note": "NOT DRAWN: one journey a day"}
+        e.update(extra)
+        if fp is not None:
+            e["feedFingerprint"] = fp
+        return e
+
+    def test_no_fingerprint_is_RE_EVAL_and_says_what_to_record(self):
+        rows = self.run_town(self.entry(), self.feed())
+        self.assertEqual([(t, r) for t, r, _ in rows], [("RE-EVAL", "12")])
+        self.assertIn("NOT new", rows[0][2])
+        self.assertIn('"journeysPerWeek": 10', rows[0][2])
+        self.assertEqual(rr.classify(rows)[0], "ESCALATE")
+
+    def test_an_unchanged_feed_confirms_and_the_town_grades_NOTHING(self):
+        rows = self.run_town(self.entry(dict(self.FP)), self.feed())
+        self.assertEqual([(t, r) for t, r, _ in rows], [("CONFIRMED", "12")])
+        self.assertIn("one journey a day", rows[0][2])
+        self.assertEqual(rr.classify(rows)[0], "NOTHING")
+
+    def test_a_confirmed_decision_leaves_a_mechanical_town_SAFE(self):
+        rows = self.run_town(
+            self.entry(dict(self.FP)), self.feed() + [bods("9", "Stagecoach East", ALL)],
+            services=[{"route": "9", "operator": "Stagecoach East", "days": "Mon-Sat"}])
+        self.assertEqual(sorted(t for t, _, _ in rows), ["CONFIRMED", "DAYS"])
+        self.assertEqual(rr.classify(rows)[0], "SAFE")
+
+    def test_moved_days_escalate(self):
+        rows = self.run_town(self.entry(dict(self.FP)), self.feed(week=ALL))
+        self.assertEqual([t for t, _, _ in rows], ["RE-EVAL"])
+        self.assertIn("MOVED", rows[0][2])
+
+    def test_moved_journeys_escalate(self):
+        rows = self.run_town(self.entry(dict(self.FP)), self.feed(jpw=30))
+        self.assertEqual([t for t, _, _ in rows], ["RE-EVAL"])
+
+    def test_moved_termini_escalate(self):
+        rows = self.run_town(self.entry(dict(self.FP)), self.feed(termini=("Ely", "Cambridge")))
+        self.assertEqual([t for t, _, _ in rows], ["RE-EVAL"])
+
+    def test_a_new_operator_escalates(self):
+        rows = self.run_town(self.entry(dict(self.FP)), self.feed(op="Stagecoach East"))
+        self.assertEqual([t for t, _, _ in rows], ["RE-EVAL"])
+
+    def test_a_fingerprint_without_days_is_not_a_mute_button(self):
+        fp = {"asOf": "2026-10-01"}
+        rows = self.run_town(self.entry(fp), self.feed(week=ALL, jpw=99))
+        self.assertEqual([t for t, _, _ in rows], ["RE-EVAL"])
+
+    def test_the_serves_town_false_convention_confirms_and_quotes_its_reason(self):
+        """Wisbech's X46 shape: an ordinary services entry with servesTown false. Its
+        message used to say "we'd marked it 'does not serve'" over a dated ruling."""
+        e = {"route": "12", "operator": "Whippet Coaches", "servesTown": False,
+             "note": "Peter 2026-08-29: does not stop in the town"}
+        rows = self.run_town(None, self.feed(), services=[e])
+        self.assertEqual([t for t, _, _ in rows], ["RE-EVAL"])
+        self.assertIn("Peter 2026-08-29", rows[0][2])
+        self.assertNotIn("we'd marked", rows[0][2])
+        e["feedFingerprint"] = dict(self.FP)
+        rows = self.run_town(None, self.feed(), services=[e])
+        self.assertEqual([t for t, _, _ in rows], ["CONFIRMED"])
 
 
 def change(tag, route="7", msg="a change"):
@@ -446,7 +549,9 @@ class TagsTheReportCanEmit(unittest.TestCase):
         path = os.path.join(_engine.ENGINE_DIR, "gtfs_refresh_report.py")
         with io.open(path, encoding="utf-8") as fh:
             src = fh.read()
-        found = set(re.findall(r'changes\.append\(\(\s*"([A-Z?\-]+)"', src))
+        # `return ("TAG", ...)` as well since OA-538: decision_change builds the
+        # RE-EVAL / CONFIRMED row and diff_town appends what it returns.
+        found = set(re.findall(r'(?:changes\.append\(\(|return \()\s*"([A-Z?\-]+)"', src))
         self.assertTrue(found, "no tags found -- the regex has stopped matching the report")
         return found
 
@@ -454,7 +559,7 @@ class TagsTheReportCanEmit(unittest.TestCase):
         """A control on the instrument above. If this ever shrinks to a handful,
         the regex has drifted and every verdict below is about nothing."""
         self.assertLessEqual({"OPERATOR", "DAYS", "ADD?", "WITHDRAWN?", "RE-EVAL",
-                              "COMMUNITY", "NOT-IN-BODS"}, self.tags())
+                              "COMMUNITY", "NOT-IN-BODS", "CONFIRMED"}, self.tags())
 
     def test_every_tag_is_either_non_actionable_mechanical_or_escalates(self):
         for tag in sorted(self.tags()):

@@ -15,6 +15,11 @@ The classifications:
 
   [ADD?]      a route now serves the town in BODS but isn't in our shipped set
   [RE-EVAL]   a route now serves the town in BODS that we'd previously marked 'does not serve'
+              or 'not drawn', and the decision carries no `feedFingerprint` or the feed has
+              moved since it was recorded -> a person re-confirms the decision
+  [CONFIRMED] that same recorded decision, over a feed whose fingerprint (days, operators,
+              journeys a week, termini) is unchanged since the decision -- see
+              decision_fingerprint (OA-538). Surfaced, and expected.
   [WITHDRAWN?] a shipped route is gone from BODS (and isn't a community/DRT service) -> verify
               A variant the town ships in its own right (High Wycombe's 1A, 1B, 32A) is NOT
               gone just because it folded into its base number -- see fold_gtfs, OA-223.
@@ -49,7 +54,15 @@ COMMUNITY_HINTS=["villager","fact","community","minibus","dial","demand","volunt
 # towns-to-review list. A module constant rather than a literal inside main() because
 # tools/prove-red-not-in-bods.py asserts against it: a harness that re-implements the
 # filter it is testing agrees with itself and proves nothing about the report.
-NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS")
+#
+# CONFIRMED joined it on 2026-10-01 (buses-data OA-538). Until then a recorded "we do
+# not draw this" decision came back as RE-EVAL every month, and RE-EVAL escalates, so
+# no town with a single such decision could ever be graded SAFE: on the 1 October scan
+# The Shelfords, Soham, Whittlesey, Huntingdon (for the 400) and Wisbech (for the X46)
+# were ESCALATE on nothing else. A decision is still SURFACED every month -- that is
+# what stops an exclusion going unread for ever -- but it escalates only when the feed
+# it was made on has moved.
+NON_ACTIONABLE=("COMMUNITY","NOT-IN-BODS","CONFIRMED")
 
 # The only two changes a machine may apply to a town without a person looking:
 # an operator NAME and a set of DAYS, both copied out of BODS into fields that
@@ -384,8 +397,14 @@ def fold_gtfs(services):
         key=s["possibleVariantOf"] or s["route"]
         b=base.setdefault(key,{"route":key,"operators":set(),"flags":[0]*7,"variants":set(),
                               "hasShape":False,"opFlags":{},"ownFlags":[0]*7,
-                              "variantFlags":{},"variantOps":{}})
+                              "variantFlags":{},"variantOps":{},
+                              "journeysPerWeek":0,"termini":set()})
         b["operators"].add(s["operator"])
+        # The fingerprint's other two fields (OA-538). `.get`, because a feed record
+        # without them -- a test stub, an older gtfs_query -- folds to 0 and no termini,
+        # which is a fingerprint too and compares as one.
+        b["journeysPerWeek"]+=int(s.get("journeysPerWeek") or 0)
+        b["termini"].update(str(t) for t in (s.get("termini") or []))
         of=b["opFlags"].setdefault(s["operator"],[0]*7)
         for i in range(7):
             b["flags"][i]|=s["daysFlags"][i]
@@ -417,6 +436,82 @@ def sub_services(svc):
             out.extend(entry.get("subServices") or [])
     return out
 
+
+# THE FEED A DECISION WAS MADE ON (buses-data OA-538, 2026-10-01). A "we do not draw
+# this" decision is a judgement about a route as the feed then showed it: its days, who
+# runs it, how often, and where it goes. While none of those has moved, re-reading the
+# decision is confirmation, not news, and grading it ESCALATE every month kept every
+# town with one such decision out of SAFE for ever. So a decision may record the feed it
+# was made on, as `feedFingerprint` beside its `note`, and the report compares.
+#
+# THE FIELDS ARE THE ONES A DECISION TURNS ON, and nothing finer. Trip-row counts move
+# when an operator re-registers the same timetable under more service_ids (the report's
+# own [TIMETABLE] rows say so), so they would escalate a decision about a bus that had
+# not changed. Journeys a week is the rate; termini are where it goes.
+FINGERPRINT_FIELDS=("days","operators","journeysPerWeek","termini")
+
+def feed_fingerprint(g, gdays):
+    """-> the fingerprint of one folded feed route, in the shape a town file records."""
+    return {"days":fmt(gdays),"operators":sorted(g["operators"]),
+            "journeysPerWeek":int(g.get("journeysPerWeek") or 0),
+            "termini":sorted(g.get("termini") or [])}
+
+def decision_entry(vs, route):
+    """The town-file entry that records the decision about `route`, or None.
+
+    The SAME precedence the two sets in diff_town are built with: a `servesTown:false`
+    entry in notOnLeaflet or services first, then the four known-off fields in
+    KNOWN_OFF_FIELDS order. A bare string entry records no fingerprint and returns None.
+    """
+    for x in vs.get("notOnLeaflet") or []:
+        if isinstance(x,dict) and x.get("servesTown") is False and str(x.get("route"))==route: return x
+    for s in vs.get("services") or []:
+        if isinstance(s,dict) and s.get("servesTown") is False and str(s.get("route"))==route: return s
+    for field in KNOWN_OFF_FIELDS:
+        entries=vs.get(field)
+        if not isinstance(entries,list): continue
+        for x in entries:
+            if isinstance(x,dict) and str(x.get("route"))==route: return x
+    return None
+
+def decision_fingerprint(entry, now):
+    """Compare a decision's recorded fingerprint with the feed now.
+
+    -> ("none", None)          the decision records no usable fingerprint
+       ("same", recorded)      every recorded field equals the feed's
+       ("moved", [diffs])      at least one recorded field differs; each diff a string
+
+    A recorded fingerprint must carry `days` at least: an empty or days-less one would
+    match every feed, which is a mute button and not a record. A field the decision
+    does not record is not compared, so a person may record only what they judged on --
+    but the report prints the whole fingerprint for them to copy.
+    """
+    fp=(entry or {}).get("feedFingerprint")
+    if not isinstance(fp,dict) or not fp.get("days"): return ("none",None)
+    diffs=[]
+    for k in FINGERPRINT_FIELDS:
+        if k not in fp: continue
+        was=fp[k]; cur=now[k]
+        if isinstance(was,list): was=sorted(str(v) for v in was)
+        if was!=cur: diffs.append(f"{k} {json.dumps(was,ensure_ascii=False)} -> {json.dumps(cur,ensure_ascii=False)}")
+    return ("moved",diffs) if diffs else ("same",fp)
+
+def decision_change(route, entry, now, head):
+    """The (tag, route, message) row for a recorded decision over a route the feed carries.
+
+    `head` is the sentence saying what the town's file decided. The tag is CONFIRMED only
+    when a recorded fingerprint matches; anything else is RE-EVAL, and the message says
+    which of the two RE-EVAL cases it is and what to record to stop it recurring.
+    """
+    state,detail=decision_fingerprint(entry, now)
+    asof=((entry or {}).get("feedFingerprint") or {}).get("asOf")
+    since=f" since {asof}" if asof else ""
+    if state=="same":
+        return ("CONFIRMED", route, f"{head}; the feed is unchanged{since} ({now['days']}, {now['journeysPerWeek']} a week), so the decision stands.")
+    if state=="moved":
+        return ("RE-EVAL", route, f"{head}; the feed has MOVED{since}: {'; '.join(detail)}. Re-confirm the decision, then re-record its feedFingerprint.")
+    rec=json.dumps(now,ensure_ascii=False)
+    return ("RE-EVAL", route, f"{head}. Confirm the decision still holds - it is NOT new. No feedFingerprint is recorded with it; recording {rec} lets an unchanged feed confirm it.")
 
 def diff_town(db, name, cfg, town_dir, today=None):
     # `today` is a parameter and not a call so that a harness can drive an expired
@@ -540,11 +635,20 @@ def diff_town(db, name, cfg, town_dir, today=None):
                 if sd is not None and sd!=gdays_e:
                     changes.append(("DAYS", label, f"shipped '{sh.get('days')}' vs BODS '{fmt(gdays_e)}'"))
         elif r in not_serving:
-            changes.append(("RE-EVAL", r, f"BODS now shows it serving the town ({fmt(gdays)}); we'd marked it 'does not serve'"))
+            # THE RECORDED REASON, QUOTED, as the known_off branch below has always done
+            # (OA-538). This said "we'd marked it 'does not serve'" even when the entry
+            # was Peter's dated adjudication (Huntingdon 400, 2026-09-03; Wisbech X46,
+            # 2026-08-29), which reads as a stale flag rather than a decision.
+            entry=decision_entry(vs, r)
+            why=known_off_reason(entry) if entry else ""
+            because=(" - recorded as: "+why.strip()) if why.strip() else ""
+            changes.append(decision_change(r, entry, feed_fingerprint(g, gdays),
+                f"BODS shows it serving the town ({fmt(gdays)}); this town's file says it does not serve the town{because}"))
         elif r in known_off:
             field,why,_dep=known_off[r]
             because=(" - recorded as: "+why.strip()) if why.strip() else ""
-            changes.append(("RE-EVAL", r, f"in BODS ({fmt(gdays)}); this town's {field} already says it is not drawn{because}. Confirm the decision still holds - it is NOT new."))
+            changes.append(decision_change(r, decision_entry(vs, r), feed_fingerprint(g, gdays),
+                f"in BODS ({fmt(gdays)}); this town's {field} already says it is not drawn{because}"))
         elif r in consolidated:
             # Drawn already, under the shipped entry that declares it a sub-service.
             pass

@@ -206,8 +206,114 @@ export function triggered(check, scope, all) {
  * its clock lets the push through and says so, because a cost control that
  * blocked every push the day `gh` lost its token would stop the estate to save
  * pennies.
+ *
+ * SINCE OA-533 THE INTERVAL IS PACED TO THE MONTH'S BUDGET, and 175 is only the
+ * fallback. A fixed interval leaves allowance unspent in a quiet month and
+ * overspends a busy one, so a manifest may give `budget` instead of `minutes`
+ * and the interval is derived each time from what is left — see `pacedInterval`.
  */
 export const PUSH_INTERVAL_MINUTES = 175;
+
+/*
+ * THE PACED INTERVAL (buses-data OA-533, agreed with Peter 2026-10-01).
+ *
+ *   runs a day = (allowance left × (1 − reserve)) ÷ days left ÷ mean run minutes
+ *   interval   = 1440 ÷ runs a day, rounded UP to the carrier's steps
+ *
+ * The reserve (10%) is what PR runs and `--urgent` pushes spend. The steps are
+ * whole hours less five minutes, for the same jitter reason as the 175 above:
+ * the hourly tick is the carrier, so an interval between steps would buy
+ * nothing a step does not. Rounding UP means pacing never spends faster than
+ * the budget allows. A month already spent, or one whose pace would need more
+ * than the last step, waits the last step — never longer, because a push held
+ * for a day is a red nobody sees. With 3,000 minutes and the 7.8-minute run
+ * read on 2026-09-30, a full month starts at 175 and falls to 115 once more
+ * than about 108 minutes a day are left.
+ *
+ * WHEN THE BUDGET CANNOT BE READ it is 175, the measured fixed interval, and the
+ * report says why. The usage endpoint needs the `user` scope on the `gh` token
+ * (`gh auth refresh -h github.com -s user`); without it GitHub answers 404.
+ */
+export const INTERVAL_STEPS = [55, 115, 175, 235];
+
+/** Pure: the paced interval from what is left, the clock and the cost of a run. */
+export function pacedInterval({ used, included, meanRunMin, now, reserve = 0.1, steps = INTERVAL_STEPS, fallback = PUSH_INTERVAL_MINUTES, why = null }) {
+  const last = steps[steps.length - 1];
+  const readable = [used, included, meanRunMin].every((n) => typeof n === 'number' && Number.isFinite(n)) && included > 0 && meanRunMin > 0;
+  if (!readable) return { minutes: fallback, paced: false, why: why || 'the month\'s Actions budget could not be read' };
+  const monthEnd = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  // At least one day left: the last evening of a month is not a reason to push every tick.
+  const daysLeft = Math.max(1, (monthEnd - now) / 86400000);
+  const left = included - used;
+  const base = { paced: true, used, included, left, daysLeft, meanRunMin, reserve };
+  if (left <= 0) return { ...base, minutes: last, runsPerDay: 0, raw: Infinity, why: `the month's ${included} minutes are spent (${Math.round(used)} used)` };
+  const runsPerDay = (left * (1 - reserve)) / daysLeft / meanRunMin;
+  const raw = 1440 / runsPerDay;
+  const minutes = steps.find((s) => s >= raw) ?? last;
+  return { ...base, minutes, runsPerDay, raw, why: `${Math.round(left)} of ${included} min left over ${daysLeft.toFixed(1)} day(s), ${meanRunMin.toFixed(1)} min a run, so ${runsPerDay.toFixed(1)} runs a day` };
+}
+
+/*
+ * The month's billed Actions minutes, asked of GitHub's enhanced billing usage
+ * report. Only an item with a PRICE counts: the allowance is spent by private
+ * repositories, and public ones run free, so a zero-priced line is not the
+ * budget's business. Every Linux minute is one allowance minute, and every
+ * runner here is Linux. The legacy `settings/billing/actions` shape is accepted
+ * too, because which one an account answers depends on GitHub, not on us.
+ */
+export function readBudget(spec, now, ghRun = defaultGhRun) {
+  const b = spec.budget;
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth() + 1;
+  const r = ghRun(['api', `users/${b.user}/settings/billing/usage?year=${y}&month=${m}`]);
+  if (r.status !== 0) {
+    const msg = (r.stderr || r.error?.message || `exit ${r.status}`).trim();
+    const scope = /user" scope|404/i.test(msg) ? ' — the gh token lacks the user scope: gh auth refresh -h github.com -s user' : '';
+    return { used: null, included: b.included, why: `the billing usage report did not answer (${msg.split('\n')[0]})${scope}` };
+  }
+  let body;
+  try { body = JSON.parse(r.stdout || ''); } catch (e) { return { used: null, included: b.included, why: `the billing usage report is not JSON: ${e.message}` }; }
+  if (typeof body?.total_minutes_used === 'number') {
+    return { used: body.total_minutes_used, included: body.included_minutes || b.included, source: 'settings/billing/actions' };
+  }
+  if (!Array.isArray(body?.usageItems)) return { used: null, included: b.included, why: 'the billing usage report has no usageItems' };
+  const items = body.usageItems.filter((i) => /^actions$/i.test(i.product || '') && /^minutes?$/i.test(i.unitType || '') && !(i.grossAmount === 0));
+  const used = items.reduce((t, i) => t + (Number(i.quantity) || 0), 0);
+  return { used, included: b.included, source: `settings/billing/usage, ${items.length} priced line(s) for ${y}-${String(m).padStart(2, '0')}` };
+}
+
+/*
+ * The mean BILLED length of the last twenty finished runs of the workflow.
+ * GitHub bills each job rounded up to a whole minute, and `gates.yml` is one
+ * job, so each run's wall time is rounded up before averaging: on 2026-10-01
+ * the plain wall-clock mean was 2.9 minutes, a fifth under what was billed.
+ * Cancelled runs are billed too, so they count. A workflow that grows a
+ * second, parallel job makes this an under-estimate, and the pace too quick.
+ */
+export function meanRunMinutes(spec, ghRun = defaultGhRun) {
+  const r = ghRun(['-R', spec.slug, 'run', 'list', '--workflow', spec.workflow, '--limit', '20', '--json', 'startedAt,updatedAt,status']);
+  if (r.status !== 0) return { mean: null, why: `gh run list failed: ${(r.stderr || r.error?.message || `exit ${r.status}`).trim().split('\n')[0]}` };
+  let runs;
+  try { runs = JSON.parse(r.stdout || '[]'); } catch (e) { return { mean: null, why: `gh run list answered something that is not JSON: ${e.message}` }; }
+  const mins = runs.filter((x) => x.status === 'completed' && x.startedAt && x.updatedAt)
+    .map((x) => (new Date(x.updatedAt) - new Date(x.startedAt)) / 60000)
+    .filter((n) => n > 0)
+    .map((n) => Math.ceil(n));
+  if (!mins.length) return { mean: null, why: `no finished ${spec.workflow} run to measure` };
+  return { mean: mins.reduce((a, n) => a + n, 0) / mins.length, n: mins.length };
+}
+
+/** The interval a manifest's `pushInterval` asks for: fixed `minutes`, or paced to `budget`. */
+export function intervalMinutes(spec, now, ghRun = defaultGhRun) {
+  if (!spec.budget) return { minutes: spec.minutes ?? PUSH_INTERVAL_MINUTES, paced: false };
+  const budget = readBudget(spec, now, ghRun);
+  const run = budget.used == null ? { mean: null } : meanRunMinutes(spec, ghRun);
+  return pacedInterval({
+    used: budget.used, included: budget.included, meanRunMin: run.mean, now,
+    reserve: spec.budget.reserve ?? 0.1, fallback: spec.minutes ?? PUSH_INTERVAL_MINUTES,
+    why: budget.why || run.why || null,
+  });
+}
 
 /** The two witnesses to when the last push-triggered run started; `ghRun` is injected so the harness needs no network. */
 export function lastPushRun(repo, scope, spec, ghRun = defaultGhRun) {
@@ -252,7 +358,8 @@ function builtIn(repo) {
   if (has('Development Docs/open-actions/assemble.mjs')) {
     return {
       name: 'buses-data',
-      pushInterval: { minutes: PUSH_INTERVAL_MINUTES, slug: 'PeterC66/buses-data', workflow: 'gates.yml', branch: 'main' },
+      // `minutes` is the fallback when the budget cannot be read (OA-533); 3,000 is the Pro allowance.
+      pushInterval: { minutes: PUSH_INTERVAL_MINUTES, budget: { user: 'PeterC66', included: 3000, reserve: 0.1 }, slug: 'PeterC66/buses-data', workflow: 'gates.yml', branch: 'main' },
       docsOnly: ['^Development Docs/', '^Documentation/', '^Correspondence/', '^BusMapsUK/', '^CLAUDE\\.md$', '^README\\.md$', '^loop/README\\.md$'],
       checks: [
         /* `check_committed_stamps.py <repo>`, the auditor gates.yml runs, and not
@@ -528,6 +635,13 @@ export function engineTransfers(engineRepo, pin = null) {
   return { known: true, transfers: dirtyFiles === 0 && level, dirtyFiles, against: pin ? `the pin ${pin.slice(0, 7)}` : 'origin/main (no pin was readable)', head: head.out.slice(0, 7), branch: branch.out };
 }
 
+/** How the interval was chosen, for the report: paced, fixed, or the fallback and why. */
+export function paceLine(p) {
+  if (p.paced) return `pace — ${p.minutes} min: ${p.why}`;
+  if (p.why) return `pace — NOT PACED, so the fallback ${p.minutes} min: ${p.why}`;
+  return `pace — a fixed ${p.minutes} min, as the manifest declares`;
+}
+
 export function report(result, quiet) {
   const L = [];
   L.push(`preflight — ${result.repoName} (${result.repo})`);
@@ -545,13 +659,15 @@ export function report(result, quiet) {
     L.push(`DEFERRED — the last push run started ${Math.round(iv.ageMin)} min ago (${iv.at}, per ${iv.source}), and pushes here wait ${iv.minutes} min between runs.`);
     L.push(`  Do NOT push. The commits stay on local main and the loop's next hourly tick carries them; about ${Math.ceil(iv.waitMin)} min until a push would go.`);
     L.push('  No check was run: they are asked of the whole batch when it goes. For a red main or a cross-repository pairing only, re-run with --urgent "<why>".');
+    if (iv.pace) L.push(`  ${paceLine(iv.pace)}`);
     L.push('');
-    L.push(`deferred · ${result.scope.paths.length} path(s) waiting · interval ${iv.minutes} min (buses-data OA-525)`);
+    L.push(`deferred · ${result.scope.paths.length} path(s) waiting · interval ${iv.minutes} min${iv.pace?.paced ? ' paced' : ''} (buses-data OA-525, OA-533)`);
     return L.join('\n');
   }
   if (iv && iv.urgent && iv.defer) L.push(`  URGENT — pushing inside the ${iv.minutes}-min interval (last run ${Math.round(iv.ageMin)} min ago), because: ${iv.urgent}`);
   else if (iv && iv.known) L.push(`  interval — the last push run started ${Math.round(iv.ageMin)} min ago, past the ${iv.minutes}-min interval (${iv.source})`);
   else if (iv) L.push(`  interval — NOT ASKED, so not deferred: ${iv.why}`);
+  if (iv && iv.pace) L.push(`  ${paceLine(iv.pace)}`);
   for (const p of result.pruned || []) L.push(p.ok ? `  pruned ${p.refs.length} stale remote-tracking ref(s) in ${p.dir}${p.refs.length ? `: ${p.refs.join(', ')}` : ''}` : `  NOTE could not prune ${p.dir} (${p.why}); a branch deleted on origin may read as an unmerged re-vendor`);
   L.push('');
   for (const c of result.checks) {
@@ -619,7 +735,8 @@ export function preflight({ repo, all = false, skillsRoot, urgent = null, now = 
   let interval = null;
   const spec = manifest.pushInterval;
   if (spec && scope.known && scope.paths.length) {
-    interval = { ...intervalVerdict(lastPushRun(repo, scope, spec, ghRun), now, spec.minutes ?? PUSH_INTERVAL_MINUTES), urgent };
+    const pace = intervalMinutes(spec, now, ghRun);
+    interval = { ...intervalVerdict(lastPushRun(repo, scope, spec, ghRun), now, pace.minutes), pace, urgent };
     if (interval.defer && !urgent) {
       return { repo, repoName: manifest.name, scope, tier, source: manifest.source, checks: [], notTriggered: [], interval, unanswered: [], exit: EXIT_DEFERRED };
     }

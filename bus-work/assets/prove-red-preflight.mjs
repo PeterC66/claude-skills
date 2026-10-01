@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -779,6 +779,73 @@ function runWith(fixture, opts = {}) {
   const bm = manifestFor(bd);
   check('buses-data: the built-in interval is paced to a budget', !!bm?.pushInterval?.budget && bm.pushInterval.minutes === PUSH_INTERVAL_MINUTES, JSON.stringify(bm?.pushInterval));
   rmSync(bd, { recursive: true, force: true });
+}
+
+// A portal checkout that only LAGS its origin/main is caught up before the
+// portal arms read it, and nothing else is touched (buses-data OA-539). On
+// 2026-10-01 three ticks were refused for a clean portal `main` one to three
+// commits behind: the board read the newly merged re-vendor as PENDING. Each
+// unsafe shape — modified, diverged, off main — must be LEFT ALONE and named,
+// because a fast-forward there would either fail or move somebody's work.
+{
+  const root = mkdtempSync(path.join(tmpdir(), 'preflight-lag-'));
+  const origin = path.join(root, 'origin.git');
+  execFileSync('git', ['init', '--bare', '-b', 'main', origin], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const clone = (name) => {
+    const d = path.join(root, name);
+    execFileSync('git', ['clone', '-q', origin, d], { stdio: ['ignore', 'pipe', 'ignore'] });
+    git(d, 'config', 'user.email', 'preflight@test');
+    git(d, 'config', 'user.name', 'preflight');
+    git(d, 'config', 'commit.gpgsign', 'false');
+    git(d, 'checkout', '-q', '-B', 'main');
+    return d;
+  };
+  const commit = (d, file, body) => { writeFileSync(path.join(d, file), body); git(d, 'add', file); git(d, 'commit', '-q', '-m', file, '--no-verify'); };
+  const up = clone('upstream');
+  commit(up, 'vendored.js', 'v1\n');
+  git(up, 'push', '-q', 'origin', 'main');
+  const portals = Object.fromEntries(['clean', 'dirty', 'ahead', 'branch', 'level'].map((n) => [n, clone(n)]));
+  commit(up, 'vendored.js', 'v2\n');
+  commit(up, 'other.js', 'x\n');
+  git(up, 'push', '-q', 'origin', 'main');
+  for (const n of ['clean', 'dirty', 'ahead', 'branch']) git(portals[n], 'fetch', '-q', 'origin');
+  writeFileSync(path.join(portals.dirty, 'vendored.js'), 'hand edit\n');
+  commit(portals.ahead, 'local.js', 'mine\n');
+  git(portals.branch, 'checkout', '-q', '-b', 'work/x');
+  const head = (d) => git(d, 'rev-parse', 'HEAD').trim();
+  // core.autocrlf on this machine checks the files out with CRLF.
+  const lf = (f) => readFileSync(f, 'utf8').replace(/\r/g, '');
+  const originMain = (d) => git(d, 'rev-parse', 'origin/main').trim();
+  const before = Object.fromEntries(Object.entries(portals).map(([n, d]) => [n, head(d)]));
+
+  let u = catchUpPortal(portals.clean);
+  check('portal lag: a clean main 2 behind is fast-forwarded', u.moved === true && u.behind === 2 && head(portals.clean) === originMain(portals.clean), JSON.stringify(u));
+  check('portal lag: the fast-forward is named in the report', /fast-forwarded .* \(2 commit\(s\)\)/.test(catchUpLine(u) || ''), catchUpLine(u));
+  check('portal lag: the caught-up tree holds origin\'s re-vendor', lf(path.join(portals.clean, 'vendored.js')) === 'v2\n');
+  u = catchUpPortal(portals.dirty);
+  check('portal lag: a modified tracked file is NOT fast-forwarded', !u.moved && head(portals.dirty) === before.dirty && /modified/.test(u.why || ''), JSON.stringify(u));
+  check('portal lag: the hand edit survives', lf(path.join(portals.dirty, 'vendored.js')) === 'hand edit\n');
+  check('portal lag: the lag it left is NAMED as a possible PENDING', /NOTE .* 2 commit\(s\) behind .* NOT fast-forwarded, .* PENDING/.test(catchUpLine(u) || ''), catchUpLine(u));
+  u = catchUpPortal(portals.ahead);
+  check('portal lag: a diverged main is NOT moved', !u.moved && head(portals.ahead) === before.ahead && /AHEAD/.test(u.why || ''), JSON.stringify(u));
+  u = catchUpPortal(portals.branch);
+  check('portal lag: a checkout off main is NOT moved', !u.moved && head(portals.branch) === before.branch && /work\/x/.test(u.why || ''), JSON.stringify(u));
+  u = catchUpPortal(portals.level);
+  check('portal lag: a level checkout is untouched and says nothing', !u.moved && u.behind === 0 && catchUpLine(u) === null, JSON.stringify(u));
+
+  // Wired, not just written: a manifest arm that names the portal gets it caught
+  // up BEFORE the arm runs, so the arm reads the merged file.
+  const again = clone('wired');
+  git(up, 'commit', '-q', '--allow-empty', '-m', 'later', '--no-verify');
+  commit(up, 'vendored.js', 'v3\n');
+  git(up, 'push', '-q', 'origin', 'main');
+  git(again, 'fetch', '-q', 'origin');
+  const arm = { ...scripted('reads-portal', 0), args: ['-e', `const fs=require('fs');fs.appendFileSync(process.env.PF_LOG, fs.readFileSync(${JSON.stringify(path.join(again, 'vendored.js'))},'utf8'));`], prunePortal: again };
+  const fx = makeRepo({ manifest: { name: 'lag-fixture', checks: [arm] }, pushed: ['x.txt'] });
+  const { result, ran } = runWith(fx);
+  check('portal lag: preflight() catches the named portal up before its arm reads it', ran.join().trim() === 'v3' && result.caughtUp?.[0]?.moved === true, `arm read ${JSON.stringify(ran)}; ${JSON.stringify(result.caughtUp)}`);
+  rmSync(fx.root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

@@ -31,6 +31,14 @@
  * person rebuilt can join the same review. A grading from another scan is not
  * this review's population: it refuses, for the reason `refresh_grades.mjs` gives.
  *
+ * A NAMED MAP STAYS NAMED (buses-data OA-430). Every collection rebuilds the record
+ * from the population, so until 2026-10-01 a map named by an earlier run fell out of
+ * the review — and its answer and staged record with it — the moment any later run
+ * collected the same scan without naming it again. Ticks enrol one rebuilt map each,
+ * so the second tick would have dropped the first. `carriedNames()` reads the maps
+ * the existing record holds as `named` and every collection names them again; a
+ * place keeps the folder it was found at.
+ *
  * A PLACE MAP JOINS BY NAME, with `--place` (buses-data OA-430 item 3). The grading
  * is of towns, so no place is ever in the population by itself; a place a tick
  * rebuilt onto a newer engine is named, and the edge finds its folder the way the
@@ -171,6 +179,30 @@ export function collect({ busesDir, scan, towns = [], places = [], io }) {
     maps.push(entry);
   }
   return { schema: SCHEMA, tool: 'ink_review.mjs', scan, maps };
+}
+
+/**
+ * The maps an earlier collection of this scan held because somebody NAMED them, as
+ * `{ towns, places }` ready to pass to `collect()` beside this run's own names, so a
+ * later collection cannot drop them. A SAFE town is not carried: the grading names it.
+ */
+export function carriedNames(prev) {
+  const maps = prev && Array.isArray(prev.maps) ? prev.maps.filter((m) => m && m.why === 'named') : [];
+  return {
+    towns: maps.filter((m) => m.kind !== 'place').map((m) => m.map),
+    places: maps.filter((m) => m.kind === 'place').map((m) => ({ name: m.map, dir: m.dir })),
+  };
+}
+
+/** This run's names added to the carried ones; one map per name, this run's spelling and folder winning. */
+export function withCarried(carried, towns, places) {
+  const lc = (s) => String(s).toLowerCase();
+  const placeNames = new Set(places.map((p) => lc(p.name)));
+  const townNames = new Set(towns.map(lc));
+  return {
+    towns: [...carried.towns.filter((t) => !townNames.has(lc(t)) && !placeNames.has(lc(t))), ...towns],
+    places: [...carried.places.filter((p) => !placeNames.has(lc(p.name)) && !townNames.has(lc(p.name))), ...places],
+  };
 }
 
 /**
@@ -359,8 +391,9 @@ function main() {
     return;
   }
   const list = (v) => (typeof v === 'string' ? v.split(',').map((t) => t.trim()).filter(Boolean) : []);
-  const places = list(args.place).length ? resolvePlaces(list(args.place), diskPlaces(busesDir)) : [];
-  const review = mergeAnswers(prev, collect({ busesDir, scan, towns: list(args.town), places, io: diskIo }));
+  const named = withCarried(carriedNames(prev), list(args.town),
+    list(args.place).length ? resolvePlaces(list(args.place), diskPlaces(busesDir)) : []);
+  const review = mergeAnswers(prev, collect({ busesDir, scan, towns: named.towns, places: named.places, io: diskIo }));
   writeFileSync(file, JSON.stringify(review, null, 2) + '\n');
   const counts = ['ink-moved', 'no-ink'].map((s) => `${review.maps.filter((m) => m.status === s).length} ${s}`);
   const other = review.maps.filter((m) => m.status !== 'ink-moved' && m.status !== 'no-ink');

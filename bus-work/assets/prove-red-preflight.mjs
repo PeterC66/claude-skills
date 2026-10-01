@@ -713,16 +713,21 @@ function runWith(fixture, opts = {}) {
   check('pace: an unreadable budget falls back to 175', blind.minutes === PUSH_INTERVAL_MINUTES && blind.paced === false && blind.why === 'no scope', JSON.stringify(blind));
   check('pace: an unreadable run length falls back too', pacedInterval({ used: 0, included: INC, meanRunMin: null, now: day1 }).paced === false);
 
-  // The usage report: only PRICED Actions minutes count, so a public repository's free run is not the budget's.
+  // The usage report: only a PRIVATE repository's Actions minutes count. A public
+  // repository's line is priced and then discounted in full, as GitHub answered on
+  // 2026-10-01, so a filter on price counts it — this fixture is that shape.
   const usage = { usageItems: [
-    { product: 'actions', unitType: 'Minutes', quantity: 400, grossAmount: 3.2, repositoryName: 'buses-data' },
-    { product: 'actions', unitType: 'Minutes', quantity: 900, grossAmount: 0, repositoryName: 'claude-skills' },
-    { product: 'git_lfs', unitType: 'GigabyteHours', quantity: 50, grossAmount: 1 },
+    { product: 'actions', unitType: 'Minutes', quantity: 400, grossAmount: 2.4, discountAmount: 2.4, repositoryName: 'buses-data' },
+    { product: 'actions', unitType: 'Minutes', quantity: 900, grossAmount: 5.4, discountAmount: 5.4, repositoryName: 'claude-skills' },
+    { product: 'actions', unitType: 'GigabyteHours', quantity: 50, grossAmount: 1, repositoryName: 'buses-data' },
   ] };
   const bspec = { minutes: 175, budget: { user: 'u', included: INC }, slug: 'fixture/none', workflow: 'gates.yml', branch: 'main' };
   const said = (stdout, status = 0, stderr = '') => () => ({ status, stdout, stderr });
-  const rb = readBudget(bspec, day1, said(JSON.stringify(usage)));
-  check('budget: counts the priced Actions minutes and nothing else', rb.used === 400, JSON.stringify(rb));
+  const privateList = (list, status = 0) => (args) => (args[0] === 'repo' ? { status, stdout: JSON.stringify(list), stderr: status ? 'gh: boom' : '' } : { status: 0, stdout: JSON.stringify(usage) });
+  const rb = readBudget(bspec, day1, privateList([{ name: 'buses-data' }]));
+  check('budget: counts the private repositories\' Actions minutes and nothing else', rb.used === 400, JSON.stringify(rb));
+  const unlisted = readBudget(bspec, day1, privateList([], 1));
+  check('budget: an unanswered private list is unread, never every line', unlisted.used === null && /private repository list/.test(unlisted.why), JSON.stringify(unlisted));
   check('budget: the legacy shape is read too', readBudget(bspec, day1, said(JSON.stringify({ total_minutes_used: 1234, included_minutes: 3000 }))).used === 1234);
   const no = readBudget(bspec, day1, said('', 1, 'gh: This API operation needs the "user" scope.'));
   check('budget: a missing scope is unread, and names the grant', no.used === null && /auth refresh -h github\.com -s user/.test(no.why), JSON.stringify(no));
@@ -734,7 +739,8 @@ function runWith(fixture, opts = {}) {
   const now = new Date('2099-10-20T12:00:00Z');
   const runs = JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ status: 'completed', startedAt: new Date(+now - (i + 1) * 3600e3).toISOString(), updatedAt: new Date(+now - (i + 1) * 3600e3 + 7.8 * 60e3).toISOString() })));
   const gh = (usedMinutes, lastRunMinsAgo, usageFails = false) => (args) => {
-    if (args[0] === 'api') return usageFails ? { status: 1, stdout: '', stderr: 'gh: Not Found (HTTP 404)\ngh: This API operation needs the "user" scope.' } : { status: 0, stdout: JSON.stringify({ usageItems: [{ product: 'actions', unitType: 'Minutes', quantity: usedMinutes, grossAmount: 1 }] }) };
+    if (args[0] === 'api') return usageFails ? { status: 1, stdout: '', stderr: 'gh: Not Found (HTTP 404)\ngh: This API operation needs the "user" scope.' } : { status: 0, stdout: JSON.stringify({ usageItems: [{ product: 'actions', unitType: 'Minutes', quantity: usedMinutes, grossAmount: 1, repositoryName: 'none' }] }) };
+    if (args[0] === 'repo') return { status: 0, stdout: JSON.stringify([{ name: 'none' }]) };
     if (args.includes('20')) return { status: 0, stdout: runs };
     return { status: 0, stdout: JSON.stringify([{ databaseId: 9, createdAt: new Date(+now - lastRunMinsAgo * 60e3).toISOString(), status: 'completed', conclusion: 'success' }]) };
   };

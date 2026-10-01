@@ -255,10 +255,13 @@ export function pacedInterval({ used, included, meanRunMin, now, reserve = 0.1, 
 
 /*
  * The month's billed Actions minutes, asked of GitHub's enhanced billing usage
- * report. Only an item with a PRICE counts: the allowance is spent by private
- * repositories, and public ones run free, so a zero-priced line is not the
- * budget's business. Every Linux minute is one allowance minute, and every
- * runner here is Linux. The legacy `settings/billing/actions` shape is accepted
+ * report. Only a PRIVATE repository's line counts: the allowance is spent by
+ * private repositories, and public ones run free. The price cannot tell them
+ * apart — read live on 2026-10-01, a public repository's minutes are priced
+ * like a private one's and then discounted in full, exactly as minutes inside
+ * the allowance are — so the private set is asked of `gh repo list`, and a
+ * list that does not answer leaves the budget unread rather than guessed.
+ * Every Linux minute is one allowance minute, and every runner here is Linux. The legacy `settings/billing/actions` shape is accepted
  * too, because which one an account answers depends on GitHub, not on us.
  */
 export function readBudget(spec, now, ghRun = defaultGhRun) {
@@ -277,9 +280,13 @@ export function readBudget(spec, now, ghRun = defaultGhRun) {
     return { used: body.total_minutes_used, included: body.included_minutes || b.included, source: 'settings/billing/actions' };
   }
   if (!Array.isArray(body?.usageItems)) return { used: null, included: b.included, why: 'the billing usage report has no usageItems' };
-  const items = body.usageItems.filter((i) => /^actions$/i.test(i.product || '') && /^minutes?$/i.test(i.unitType || '') && !(i.grossAmount === 0));
+  const pr = ghRun(['repo', 'list', b.user, '--visibility', 'private', '--json', 'name', '--limit', '1000']);
+  let priv;
+  try { priv = pr.status === 0 ? new Set(JSON.parse(pr.stdout || '').map((x) => x.name)) : null; } catch { priv = null; }
+  if (!priv) return { used: null, included: b.included, why: `the private repository list did not answer (${(pr.stderr || pr.error?.message || 'not JSON').trim().split('\n')[0]})` };
+  const items = body.usageItems.filter((i) => /^actions$/i.test(i.product || '') && /^minutes?$/i.test(i.unitType || '') && priv.has(i.repositoryName));
   const used = items.reduce((t, i) => t + (Number(i.quantity) || 0), 0);
-  return { used, included: b.included, source: `settings/billing/usage, ${items.length} priced line(s) for ${y}-${String(m).padStart(2, '0')}` };
+  return { used, included: b.included, source: `settings/billing/usage, ${items.length} private-repository line(s) for ${y}-${String(m).padStart(2, '0')}` };
 }
 
 /*

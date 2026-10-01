@@ -549,12 +549,18 @@
 <text x="14.89" y="142.17" font-family="Arial" font-size="2.5" fill="#222" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">Beechview</text>
 <text x="167.62" y="127.12" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">High Wycombe Rugby</text>
 <text x="167.62" y="130.32" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">Union Football Club</text>
-<path d="M62.91 113.60L68.16 119.25" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
-<text x="68.61" y="121.49" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">British Legion</text>
+<path d="M62.97 113.45L65.82 116.20" stroke="#222" stroke-width="0.3" fill="none" stroke-opacity="0.75"/>
+<text x="66.27" y="118.44" font-family="Arial" font-size="2.5" fill="#222" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">British Legion</text>
 <text x="6" y="16" font-family="Arial" font-weight="bold" font-size="11" fill="#332288">Buses serving Aldi, Tannery Road</text>
 <text x="6" y="23" font-family="Arial" font-size="5" fill="#444">(from July 2026)</text>
 <text x="153.95" y="104.50" font-family="Arial" font-style="italic" font-size="3.2" text-anchor="middle" fill="#6ba3cc">River Wye</text>
 <text x="150" y="78" font-family="Arial" font-style="italic" font-size="3.2" fill="#777777">Chiltern Main Line</text>
+<g id="place-pointer">
+<line x1="84.10" y1="116.67" x2="93.12" y2="125.68" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>
+<path d="M95.38,127.95 L94.46,124.34 L91.78,127.03 Z" fill="#fff" stroke="#fff" stroke-width="0.8" stroke-linejoin="round"/>
+<line x1="84.10" y1="116.67" x2="93.12" y2="125.68" stroke="#d62728" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M95.38,127.95 L94.46,124.34 L91.78,127.03 Z" fill="#d62728"/>
+</g>
 <text x="200" y="14" font-family="Arial" font-weight="bold" font-size="5" fill="#222">Services</text>
 <text x="200" y="20.338" font-family="Arial" font-weight="bold" font-size="2.9" fill="#777">CAROUSEL BUSES</text>
 <circle cx="205.2908" cy="26.947000000000003" r="4" fill="#332288" stroke="#fff" stroke-width="0.7"/>

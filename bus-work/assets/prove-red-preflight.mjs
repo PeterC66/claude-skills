@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES } from './preflight.mjs';
+import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -687,6 +687,92 @@ function runWith(fixture, opts = {}) {
   // The CLI refuses a bare --urgent: the reason is the point.
   const cli = spawnSync(NODE, [path.join(HERE, 'preflight.mjs'), '--urgent'], { encoding: 'utf8' });
   check('interval: a bare --urgent exits 2', cli.status === 2 && /needs a reason/.test(cli.stderr), `exit ${cli.status}: ${cli.stderr}`);
+}
+
+// CASE 21 — buses-data OA-533, the interval paced to the month's budget. Three
+// months: an underspent one paces DOWN to 55, an overspent one UP to 235, and
+// one whose budget cannot be read falls back to 175 and says why. A pacer that
+// returned the fixed 175 every time passes the third and fails the other two,
+// and one that never fell back fails the third: each is the others' wrong way.
+{
+  const INC = 3000;
+  const p = (used, now, mean = 7.8) => pacedInterval({ used, included: INC, meanRunMin: mean, now });
+  const day1 = new Date('2026-10-01T00:00:00Z');
+  check('pace: a fresh month starts at 175', p(0, day1).minutes === 175, JSON.stringify(p(0, day1)));
+  check('pace: an underspent month paces down to 55', p(0, new Date('2026-10-20T12:00:00Z')).minutes === 55, JSON.stringify(p(0, new Date('2026-10-20T12:00:00Z'))));
+  check('pace: an overspent month waits the last step, 235', p(3100, new Date('2026-10-10T00:00:00Z')).minutes === 235);
+  check('pace: a month nearly spent early waits 235, never longer', p(2990, new Date('2026-10-02T00:00:00Z')).minutes === 235);
+  // The 108-a-day threshold the action names: 109 left a day is 115, 107 is 175.
+  const tenDays = new Date('2026-10-22T00:00:00Z');
+  check('pace: 109 min a day left rounds to 115', p(INC - 1090, tenDays).minutes === 115, JSON.stringify(p(INC - 1090, tenDays)));
+  check('pace: 107 min a day left rounds UP to 175', p(INC - 1070, tenDays).minutes === 175, JSON.stringify(p(INC - 1070, tenDays)));
+  check('pace: every answer is a carrier step', [0, 500, 1500, 2500, 2999, 4000].every((u) => INTERVAL_STEPS.includes(p(u, tenDays).minutes)));
+  const lastEve = p(2900, new Date('2026-10-31T23:00:00Z'));
+  check('pace: the last evening counts as a whole day, not every tick', lastEve.daysLeft === 1 && lastEve.minutes > 55, JSON.stringify(lastEve));
+  const blind = pacedInterval({ used: null, included: INC, meanRunMin: 7.8, now: day1, why: 'no scope' });
+  check('pace: an unreadable budget falls back to 175', blind.minutes === PUSH_INTERVAL_MINUTES && blind.paced === false && blind.why === 'no scope', JSON.stringify(blind));
+  check('pace: an unreadable run length falls back too', pacedInterval({ used: 0, included: INC, meanRunMin: null, now: day1 }).paced === false);
+
+  // The usage report: only PRICED Actions minutes count, so a public repository's free run is not the budget's.
+  const usage = { usageItems: [
+    { product: 'actions', unitType: 'Minutes', quantity: 400, grossAmount: 3.2, repositoryName: 'buses-data' },
+    { product: 'actions', unitType: 'Minutes', quantity: 900, grossAmount: 0, repositoryName: 'claude-skills' },
+    { product: 'git_lfs', unitType: 'GigabyteHours', quantity: 50, grossAmount: 1 },
+  ] };
+  const bspec = { minutes: 175, budget: { user: 'u', included: INC }, slug: 'fixture/none', workflow: 'gates.yml', branch: 'main' };
+  const said = (stdout, status = 0, stderr = '') => () => ({ status, stdout, stderr });
+  const rb = readBudget(bspec, day1, said(JSON.stringify(usage)));
+  check('budget: counts the priced Actions minutes and nothing else', rb.used === 400, JSON.stringify(rb));
+  check('budget: the legacy shape is read too', readBudget(bspec, day1, said(JSON.stringify({ total_minutes_used: 1234, included_minutes: 3000 }))).used === 1234);
+  const no = readBudget(bspec, day1, said('', 1, 'gh: This API operation needs the "user" scope.'));
+  check('budget: a missing scope is unread, and names the grant', no.used === null && /auth refresh -h github\.com -s user/.test(no.why), JSON.stringify(no));
+  check('budget: non-JSON is unread, never zero', readBudget(bspec, day1, said('<html>')).used === null);
+
+  // End to end, through preflight(), with one gh stub that answers all three
+  // questions. `now` is far in the future so the fixture's own reflog push is
+  // always older than gh's stubbed run, whatever day this harness runs.
+  const now = new Date('2099-10-20T12:00:00Z');
+  const runs = JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ status: 'completed', startedAt: new Date(+now - (i + 1) * 3600e3).toISOString(), updatedAt: new Date(+now - (i + 1) * 3600e3 + 7.8 * 60e3).toISOString() })));
+  const gh = (usedMinutes, lastRunMinsAgo, usageFails = false) => (args) => {
+    if (args[0] === 'api') return usageFails ? { status: 1, stdout: '', stderr: 'gh: Not Found (HTTP 404)\ngh: This API operation needs the "user" scope.' } : { status: 0, stdout: JSON.stringify({ usageItems: [{ product: 'actions', unitType: 'Minutes', quantity: usedMinutes, grossAmount: 1 }] }) };
+    if (args.includes('20')) return { status: 0, stdout: runs };
+    return { status: 0, stdout: JSON.stringify([{ databaseId: 9, createdAt: new Date(+now - lastRunMinsAgo * 60e3).toISOString(), status: 'completed', conclusion: 'success' }]) };
+  };
+  const mr = meanRunMinutes(bspec, () => ({ status: 0, stdout: JSON.stringify([
+    { status: 'completed', startedAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:02:10Z' },
+    { status: 'completed', startedAt: '2026-10-01T01:00:00Z', updatedAt: '2026-10-01T01:07:50Z' },
+    { status: 'in_progress', startedAt: '2026-10-01T02:00:00Z', updatedAt: '2026-10-01T02:30:00Z' },
+  ]) }));
+  check('run length: each run is rounded UP to a billed minute, unfinished ones left out', mr.mean === 5.5 && mr.n === 2, JSON.stringify(mr));
+  const fx = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], pushInterval: bspec, checks: [scripted('a', 0)] }, pushed: ['docs/a.md'] });
+
+  // Underspent, last run 70 min ago: the fixed 175 would defer; paced to 55, it goes.
+  let { result, ran } = runWith(fx, { now, ghRun: gh(0, 70) });
+  check('paced underspent: goes at 70 min, which 175 would have deferred', result.exit === 0 && ran.includes('a') && result.interval?.minutes === 55, `exit ${result.exit}; ${JSON.stringify(result.interval)}`);
+  check('paced underspent: the report says how it was paced', /pace — 55 min: .*runs a day/.test(report(result, false)), report(result, false));
+
+  // Overspent, last run 200 min ago: the fixed 175 would go; paced to 235, it waits.
+  ({ result, ran } = runWith(fx, { now, ghRun: gh(3100, 200) }));
+  check('paced overspent: defers at 200 min, which 175 would have let through', result.exit === EXIT_DEFERRED && ran.length === 0 && result.interval?.minutes === 235, `exit ${result.exit}; ${JSON.stringify(result.interval)}`);
+  check('paced overspent: the deferral names the spent month', /spent/.test(report(result, false)), report(result, false));
+
+  // Unreadable, last run 200 min ago: 175, so it goes — and the report names the grant.
+  ({ result, ran } = runWith(fx, { now, ghRun: gh(0, 200, true) }));
+  const text = report(result, false);
+  check('paced blind: falls back to 175 and goes at 200 min', result.exit === 0 && ran.includes('a') && result.interval?.minutes === 175, `exit ${result.exit}; ${JSON.stringify(result.interval)}`);
+  check('paced blind: the report says NOT PACED and how to grant the scope', /NOT PACED/.test(text) && /auth refresh -h github\.com -s user/.test(text), text);
+  // And at 100 min the fallback still defers: unreadable is not "no interval".
+  ({ result, ran } = runWith(fx, { now, ghRun: gh(0, 100, true) }));
+  check('paced blind: still defers inside the fallback', result.exit === EXIT_DEFERRED && ran.length === 0, `exit ${result.exit}`);
+  rmSync(fx.root, { recursive: true, force: true });
+
+  // The built-in buses-data manifest is paced, with 175 as its fallback.
+  const bd = mkdtempSync(path.join(tmpdir(), 'preflight-bd-'));
+  mkdirSync(path.join(bd, 'Development Docs', 'open-actions'), { recursive: true });
+  writeFileSync(path.join(bd, 'Development Docs', 'open-actions', 'assemble.mjs'), '');
+  const bm = manifestFor(bd);
+  check('buses-data: the built-in interval is paced to a budget', !!bm?.pushInterval?.budget && bm.pushInterval.minutes === PUSH_INTERVAL_MINUTES, JSON.stringify(bm?.pushInterval));
+  rmSync(bd, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

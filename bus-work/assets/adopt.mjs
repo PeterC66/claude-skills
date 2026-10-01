@@ -57,7 +57,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveBuses } from './engine.mjs';
+import { parseArgs, resolveBuses } from './engine.mjs';
 import { readYourMoveDir, classify, parseHold } from './loop_your_move.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -333,23 +333,21 @@ function defaultCommit(root, p, message) {
   return r.status === 0 ? { ok: true } : { ok: false, why: (r.stderr || r.stdout || '').trim().split('\n').slice(-3).join(' / ') || `exit ${r.status}` };
 }
 
-function parseArgs(argv) {
-  const known = new Set(['--json', '--apply', '--by', '--buses']);
-  const a = { json: false, apply: false, by: null, buses: null };
-  for (let i = 0; i < argv.length; i++) {
-    const k = argv[i];
-    if (!known.has(k)) return { error: `unknown flag ${JSON.stringify(k)}; known: ${[...known].join(' ')}` };
-    if (k === '--json') a.json = true;
-    else if (k === '--apply') a.apply = true;
-    else if (k === '--by') a.by = argv[++i] || null;
-    else if (k === '--buses') a.buses = argv[++i] || null;
-  }
+/** The engine's shared parser, then a refusal by name for any flag this script does not know. */
+function readArgs(f) {
+  const known = ['json', 'apply', 'by', 'buses'];
+  // The engine's parser carries positional words under `_`; this script takes none.
+  if (Array.isArray(f._) && f._.length) return { error: `unexpected argument ${JSON.stringify(f._[0])}` };
+  const unknown = Object.keys(f).filter((k) => k !== '_' && !known.includes(k));
+  if (unknown.length) return { error: `unknown flag --${unknown[0]}; known: ${known.map((k) => '--' + k).join(' ')}` };
+  const a = { json: f.json === true, apply: f.apply === true, by: typeof f.by === 'string' ? f.by : null, buses: typeof f.buses === 'string' ? f.buses : null };
+  if (f.apply !== undefined && f.apply !== true) return { error: '--apply takes no value' };
   if (a.apply && !a.by) return { error: '--apply needs --by <run name>' };
   return a;
 }
 
 function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = readArgs(parseArgs(process.argv.slice(2)));
   if (args.error) { console.error(`adopt: ${args.error}`); process.exit(2); }
   const root = resolveBuses({ buses: args.buses });
   const refusal = treeRefusal(root);

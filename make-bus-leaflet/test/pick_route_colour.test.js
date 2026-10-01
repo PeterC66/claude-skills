@@ -378,3 +378,76 @@ test('a DASHED route is offered no very dark colour, and says what it set aside 
   for (const c of ['#332288', '#004488', '#882255']) assert.ok(!offered(dashed.stdout).includes(c), `${c} offered to a dashed route`);
   assert.ok(offered(dashed.stdout).includes('#AA3377'), 'L* 41.6 is not "very dark"');
 });
+
+/* ---------------------------------------------------------------------------
+ * "BESIDE" IS THE SHEET'S OWN RUN-TOGETHER TEST (buses-data adhoc, 2026-10-01).
+ *
+ * St Neots: the tool offered #CC3311 for route 112 at dE 53 from everything it was
+ * drawn beside, by shared road edge, and colourClashOnMap then reported 112 vs 65 at
+ * dE 24 running together. Route 65 shares no road edge with 112 and passes within
+ * 6 mm of it on the page. The fixture is that case reduced: route A and route B are
+ * drawn 3 mm apart and share no edge; route C shares an edge with A and is drawn
+ * far away. #CC3311 against B's #EE7733 is the incident's dE 24.0.
+ *
+ * The CONTROL is the same estate with the drawn sheet taken away: the tool falls
+ * back to shared edges and does NOT see the clash — the behaviour the incident had,
+ * kept as the fallback for a route no sheet draws yet. The JOIN is the last test:
+ * quality_metrics.js, given the sheet with A recoloured, reports the very pair the
+ * picker marked, so the two cannot drift apart unnoticed again.
+ */
+function inkFixture({ svg = true, colourA = '#CC79A7' } = {}) {
+  const root = scratchDir('pick-colour-ink-');
+  const ci = path.join(root, 'Areas', 'Testbury', 'ci-reference');
+  fs.mkdirSync(ci, { recursive: true });
+  fs.writeFileSync(path.join(ci, 'routes.json'), JSON.stringify({
+    routeOrder: ['A', 'B', 'C'], palette: { A: colourA, B: '#EE7733', C: '#4477AA' },
+  }));
+  fs.writeFileSync(path.join(ci, 'features_geo.json'), JSON.stringify({}));
+  fs.writeFileSync(path.join(ci, 'routes_paths.json'), JSON.stringify({
+    routes: { A: { edges: ['a>b', 'b>c'] }, B: { edges: ['x>y'] }, C: { edges: ['b>c'] } }, edgeWay: {},
+  }));
+  if (svg) fs.writeFileSync(path.join(ci, 'internal.svg'), [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 297 210">',
+    `<path d="M 20 100 L 200 100" stroke="${colourA}" stroke-width="1.7" fill="none"/>`,
+    '<path d="M 20 103 L 200 103" stroke="#EE7733" stroke-width="1.7" fill="none"/>',
+    '<path d="M 20 190 L 200 190" stroke="#4477AA" stroke-width="1.7" fill="none"/>',
+    '</svg>'].join('\n'));
+  return { root, ci };
+}
+const lineFor = (out, hex) => (out.split('\n').find((l) => l.startsWith('  ' + hex)) || '');
+
+test('CONTROL: with no drawn sheet, "beside" falls back to shared edge and misses the clash', () => {
+  const { root } = inkFixture({ svg: false });
+  const r = run(root, '--route', 'A', '--pool', '#CC3311,#999933');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /run-together test not asked: no internal\.svg/);
+  assert.match(r.stdout, /drawn BESIDE 1 of them, by shared road edge: C 50%/);
+  assert.match(lineFor(r.stdout, '#CC3311'), /worst dE 24\.0 {2}vs B #EE7733/);
+  assert.doesNotMatch(lineFor(r.stdout, '#CC3311'), /CLASH/);
+});
+
+test('with the sheet on disk, a route drawn within 6 mm IS beside, and the clash is marked', () => {
+  const { root } = inkFixture();
+  const r = run(root, '--route', 'A', '--pool', '#CC3311,#999933');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /sheet ci-reference/);
+  // B is beside by the sheet's test although it shares no edge; C shares an edge and
+  // is drawn 90 mm away, so by the sheet's test it is not.
+  assert.match(r.stdout, /RUNS TOGETHER with 1 of them on the sheet, within 6 mm[^\n]*: B$/m);
+  assert.match(lineFor(r.stdout, '#CC3311'), /beside it: dE 24\.0 vs B #EE7733 {3}CLASH: under dE 25 vs B #EE7733, colourClashOnMap would report it/);
+  assert.doesNotMatch(lineFor(r.stdout, '#999933'), /CLASH/);
+});
+
+test('a NEW route has no ink to test, and says it fell back rather than going quiet', () => {
+  const { root } = inkFixture();
+  const r = run(root, '--route', 'Z');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /run-together test not asked: the route is not on the sheet yet/);
+});
+
+test('JOIN: quality_metrics, given that sheet recoloured, reports the pair the picker marked', () => {
+  const { ci } = inkFixture({ colourA: '#CC3311' });
+  const { analyse } = require(path.join(ENGINE_DIR, 'quality_metrics.js'));
+  const res = analyse(path.join(ci, 'internal.svg'));
+  assert.deepStrictEqual(res.detail.clashMap.map((c) => [c.a, c.b, c.dE]), [['A', 'B', 24]]);
+});

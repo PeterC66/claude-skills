@@ -39,6 +39,7 @@ const { rawLumUnit, lab } = require('./wcag.js');
 // new family shape cannot be understood by the generator and not by the measure.
 const { parseFamilies } = require('./complexity_ladder.js');
 const { sidecarFor } = require('./sheet_registry.js');   // the one list of sheets, and of the sidecars they write
+const { runTogether } = require('./run_together.js');   // colourClashOnMap's map venue, shared with pick_route_colour.js
 
 // ---------------------------------------------------------------- thresholds
 // Deliberately in one object: G1 asks Peter whether these are the right numbers,
@@ -1165,39 +1166,13 @@ function analyse(svgPath) {
       if (d < T.colourClashDE)
         clashPanel.push({ a: byCol[panelCols[i]].join('/'), b: byCol[panelCols[j]].join('/'), dE: +d.toFixed(1) });
     }
-    // Map venue: coarse occupancy per hue, dilated by colourNearMm, intersected.
-    const CC = 2, cnx = Math.ceil(W / CC), cny = Math.ceil(H / CC);
-    const occ = {};
-    for (const s of P.strokes) {
-      if (!byCol[s.stroke] || s.w < 1.2) continue;
-      const g = (occ[s.stroke] ||= new Uint8Array(cnx * cny));
-      const [p, q] = s.seg;
-      const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / CC));
-      for (let i = 0; i <= n; i++) {
-        const gx = Math.floor((p[0] + (q[0] - p[0]) * i / n) / CC), gy = Math.floor((p[1] + (q[1] - p[1]) * i / n) / CC);
-        if (gx >= 0 && gy >= 0 && gx < cnx && gy < cny) g[gy * cnx + gx] = 1;
-      }
-    }
-    const cols = Object.keys(occ), rad = Math.ceil(T.colourNearMm / CC);
-    const dil = {};
-    for (const c of cols) {
-      const g = occ[c], d2 = new Uint8Array(cnx * cny);
-      for (let y = 0; y < cny; y++) for (let x = 0; x < cnx; x++) {
-        if (!g[y * cnx + x]) continue;
-        for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
-          const ix = x + dx, iy = y + dy;
-          if (ix >= 0 && iy >= 0 && ix < cnx && iy < cny) d2[iy * cnx + ix] = 1;
-        }
-      }
-      dil[c] = d2;
-    }
+    // Map venue: two hues that run together on the sheet — run_together.js.
+    const near = runTogether(P.strokes, W, H, c => !!byCol[c], T.colourNearMm);
+    const cols = near.colours;
     for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
       const d = deltaE(cols[i], cols[j]);
       if (d >= T.colourClashDE) continue;
-      const A = dil[cols[i]], B = occ[cols[j]];
-      let together = false;
-      for (let k = 0; k < B.length && !together; k++) if (B[k] && A[k]) together = true;
-      if (together) clashMap.push({ a: byCol[cols[i]].join('/'), b: byCol[cols[j]].join('/'), dE: +d.toFixed(1) });
+      if (near.together(cols[i], cols[j])) clashMap.push({ a: byCol[cols[i]].join('/'), b: byCol[cols[j]].join('/'), dE: +d.toFixed(1) });
     }
   }
 

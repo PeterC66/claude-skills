@@ -53,6 +53,16 @@
  * actually drawn next to, and where the two disagree the tool says so instead of
  * hiding it behind a flag nobody turns on.
  *
+ * AND "BESIDE" IS NOW THE SHEET'S OWN TEST. Shared road edge was the proxy, and the
+ * proxy disagreed with the check that judges the build: on St Neots (1 Oct 2026)
+ * this tool offered #CC3311 for route 112 at dE 53 from everything beside it, and
+ * colourClashOnMap then reported 112 vs 65 at dE 24 running together — 65 shares no
+ * road edge with 112 and passes within 6 mm of it on the page. So where the sheet
+ * draws the route, "beside" is run_together.js over the sheet's internal.svg, the
+ * very function colourClashOnMap calls, and a candidate below the
+ * clash line against one of them is marked as the clash it would be. Shared edges
+ * remain the fallback for a route the sheet does not draw yet, and say so.
+ *
  * Read-only: prints a table, writes nothing. Zero dependencies (Node core only).
  * The Lab maths is wcag.js's lab() — see OA-135.
  */
@@ -66,7 +76,8 @@ const args = parseArgs(process.argv.slice(2));
 const BUSES = resolveBuses(args);
 if (!args.town || !args.route) {
   console.error('usage: node pick_route_colour.js --town "<Town>" --route <key> [--pool "#hex,#hex,…"]');
-  console.error('       [--stage] [--routes-json <path>] [--features-geo <path>] [--routes-paths <path>] [--buses <dir>]');
+  console.error('       [--stage] [--routes-json <path>] [--features-geo <path>] [--routes-paths <path>]');
+  console.error('       [--internal-svg <path>] [--buses <dir>]');
   console.error('  default sources are Areas/<Town>/ci-reference/ — the latest COMMITTED sheet.');
   console.error('  --stage reads the manifest\'s current S3 (routes.json) and S2 (geometry) instead,');
   console.error('  which is what a build in progress has and ci-reference does not.');
@@ -103,6 +114,14 @@ const SRC = {
   paths: source(args['routes-paths'], S2, 'routes_paths.json'),
   river: source(null, S2, 'river_geo.json'),
 };
+/* The drawn sheet, for the run-together test. --stage takes the manifest's current
+ * S4 when there is one; S4 is gitignored, so on a clean checkout there may not be,
+ * and the tool then says it fell back rather than reading ci-reference unannounced. */
+const S4 = args.stage ? stageDir('S4') : null;
+SRC.svg = typeof args['internal-svg'] === 'string' ? { path: path.resolve(args['internal-svg']), from: 'given' }
+  : S4 ? { path: path.join(S4.dir, 'internal.svg'), from: `S4 ${S4.id}` }
+  : args.stage ? { path: null, from: 'none (no S4 run)' }
+  : { path: path.join(ciRef, 'internal.svg'), from: 'ci-reference' };
 
 if (!fs.existsSync(SRC.routes.path)) {
   console.error(`no routes.json at ${SRC.routes.path}`);
@@ -194,13 +213,33 @@ if (RP && RP.routes && RP.routes[route] && Array.isArray(RP.routes[route].edges)
     }
   }
 }
-/* The neighbour set for scoring: the routes it is drawn beside, PLUS every drawn
+/* --- which of them it RUNS TOGETHER with on the sheet ----------------------
+ * The test colourClashOnMap applies to the build, called rather than copied:
+ * run_together.js over the drawn internal.svg, parsed by quality_metrics.js's own
+ * parseSvg() at its own colourNearMm. It needs the route's own ink on the page, so
+ * a NEW route, or a sheet that is not on disk, falls back to shared edges above —
+ * and the report says which test it used. */
+const { parseSvg, T: QT } = require('./quality_metrics.js');
+const { runTogether } = require('./run_together.js');
+let inkBeside = null, inkWhy = null;
+if (!SRC.svg.path || !fs.existsSync(SRC.svg.path)) inkWhy = `no internal.svg (${SRC.svg.from})`;
+else if (isNew) inkWhy = 'the route is not on the sheet yet';
+else {
+  const P = parseSvg(fs.readFileSync(SRC.svg.path, 'utf8'));
+  const routeInk = new Set(Object.values(PALETTE).map((c) => String(c).toLowerCase()));
+  const near = runTogether(P.strokes, P.vb[2], P.vb[3], (c) => routeInk.has(c), QT.colourNearMm);
+  const mine = String(PALETTE[route]).toLowerCase();
+  if (!near.has(mine)) inkWhy = `the sheet draws no route ink in ${mine}`;
+  else inkBeside = new Set(drawn.filter((r) => near.together(mine, String(PALETTE[r]).toLowerCase())));
+}
+
+/* The neighbour set for scoring: the routes it runs together with — by the sheet's
+ * test where it can be asked, by shared edge where it cannot — PLUS every drawn
  * linear feature, which is adjacent to everything it runs along and is the clash
- * that started this tool. A route with no geometry on disk has no neighbour set and
- * gets no column. */
-const adjacent = neighbours.size
-  ? drawn.filter((r) => neighbours.has(r)).map((r) => ({ name: r, colour: PALETTE[r] })).concat(features)
-  : null;
+ * that started this tool. With neither, there is no neighbour set and no column. */
+const besideSet = inkBeside || (neighbours.size ? new Set(neighbours.keys()) : null);
+const besideRoutes = besideSet ? drawn.filter((r) => besideSet.has(r)).map((r) => ({ name: r, colour: PALETTE[r] })) : null;
+const adjacent = besideRoutes ? besideRoutes.concat(features) : null;
 
 const POOL = (typeof args.pool === 'string' ? args.pool.split(',') : [
   // the documented colour-blind-safe palettes (SKILL.md) plus the Tol-vibrant
@@ -216,10 +255,12 @@ const worstIn = (set) => (c) => set.reduce((acc, o) => {
 }, { d: Infinity, with: null });
 const worstFor = worstIn(others);
 const worstNear = adjacent && adjacent.length ? worstIn(adjacent) : null;
+const worstRouteNear = besideRoutes && besideRoutes.length ? worstIn(besideRoutes) : null;
 
 // --- report -------------------------------------------------------------------
 console.log(`sources: routes.json ${SRC.routes.from} · geometry ${SRC.geo.from}`
-  + (RP ? ` · adjacency ${SRC.paths.from}` : ' · adjacency none on disk'));
+  + (RP ? ` · adjacency ${SRC.paths.from}` : ' · adjacency none on disk')
+  + ` · sheet ${inkBeside ? SRC.svg.from : 'not used'}`);
 if (isNew) {
   console.log(`${TOWN} route ${route} has NO colour in this palette — scoring it as a NEW route.`);
   console.log(`  (if that is a surprise, check the key: this sheet draws ${drawn.join(', ')})`);
@@ -242,6 +283,12 @@ if (neighbours.size) {
 } else if (RP) {
   console.log('  no shared road edges with any other route on this sheet (or it has no geometry yet)');
 }
+if (inkBeside) {
+  console.log(`  RUNS TOGETHER with ${inkBeside.size} of them on the sheet, within ${QT.colourNearMm} mm `
+    + `(colourClashOnMap's own test — this is "beside" below): ${[...inkBeside].join(', ') || 'none'}`);
+} else {
+  console.log(`  run-together test not asked: ${inkWhy}; "beside" below is by shared road edge`);
+}
 
 /* A DASHED route is offered no very dark colour (Peter, 2026-09-29, buses-data OA-521):
  * dark and dashed reads as the railway. The line is gen_internal.js's — L* below 35 —
@@ -260,13 +307,18 @@ if (dashed) {
 const used = new Set(others.map((o) => o.colour.toUpperCase()));
 const now = isNew ? null : PALETTE[route].toUpperCase();
 const ranked = POOL.filter((c) => !used.has(c) && c !== now && !tooDark(c))
-  .map((c) => ({ c, w: worstFor(c), n: worstNear ? worstNear(c) : null }))
+  .map((c) => ({ c, w: worstFor(c), n: worstNear ? worstNear(c) : null, r: worstRouteNear ? worstRouteNear(c) : null }))
   .sort((a, b) => b.w.d - a.w.d);
 
+/* Below the clash line against a route it runs together with is exactly what
+ * colourClashOnMap will report on the build, so the candidate says so. */
+const clashes = (x) => x.r && x.r.d < QT.colourClashDE;
 console.log('\ncandidates, best worst-case first:');
 ranked.slice(0, +(args.top || 8)).forEach((x) => console.log(
   `  ${x.c}  worst dE ${x.w.d.toFixed(1)}  vs ${x.w.with}`
-  + (x.n ? `   | beside it: dE ${x.n.d.toFixed(1)} vs ${x.n.with}` : '')));
+  + (x.n ? `   | beside it: dE ${x.n.d.toFixed(1)} vs ${x.n.with}` : '')
+  + (clashes(x) ? `   CLASH: under dE ${QT.colourClashDE} vs ${x.r.with}`
+    + (inkBeside ? ', colourClashOnMap would report it' : '') : '')));
 
 /* Where the two orderings disagree, SAY SO. The whole point of the adjacency
  * column is that the flat worst-case treats a route on the far side of the town as
@@ -281,8 +333,8 @@ if (worstNear && ranked.length) {
     + `The list above is the conservative answer — far from everything on the sheet. Look at both.`);
 }
 console.log('\nTake the largest worst-case, set textOn to #fff on a dark fill and #111 on a light one,'
-  + '\nthen RENDER IT: adjacency by shared edge is a proxy, and two lines can crowd each other'
-  + '\nat a junction they do not share (Ramsey X31 vs the green 303, 2026-08-16).');
+  + '\nthen RENDER IT: the sheet\'s test reads the ink as it was last drawn, and a rebuild can move'
+  + '\nit (shared edge is only a proxy — Ramsey X31 vs the green 303, 2026-08-16; St Neots 112 vs 65, 2026-10-01).');
 }
 
 if (require.main === module) main();

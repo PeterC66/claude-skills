@@ -19,7 +19,7 @@
  * record and the gate are.
  */
 import {
-  neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, Refused, SCHEMA,
+  neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, Refused, SCHEMA,
 } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -114,6 +114,31 @@ console.log('\n3a. A place map joins by name, from its own folder (OA-430 item 3
   const stale = estate({ [SNE]: [run(OLD, { 'i.svg': 'a' }), run(NEW, { 'i.svg': 'a' })] }, { '2026-09-01': { March: 'SAFE' } });
   check('a named place is a population when the grading is another scan\'s', collect({ busesDir: BUSES, scan: SCAN, places, io: stale }).maps.map((m) => m.map).join() === 'St Neots East');
   check('a place sharing a town\'s name in one review refuses', refuses(() => collect({ busesDir: BUSES, scan: SCAN, places: [{ name: 'March', dir: 'Places/March' }], io }), /as well as a place map/));
+}
+
+console.log('\n3b. A map named by an earlier run stays in the review (OA-430)');
+{
+  const GCR = 'Places/_standalone/Godmanchester Co-op Cambridge Road';
+  const io = estate({
+    March: [run(OLD, { 'i.svg': 'a' }), run(NEW, { 'i.svg': 'a' })],
+    Chatteris: [run(OLD, { 'i.svg': 'a' }), run(NEW, { 'i.svg': 'b' })],
+    [GCR]: [run(OLD, { 'i.svg': 'a' }), run(NEW, { 'i.svg': 'b' })],
+  });
+  const first = answer(collect({ busesDir: BUSES, scan: SCAN, towns: ['Chatteris'], io }), 'Chatteris', 'hold', { by: 'buses-29', at: 'T1' });
+  const second = mergeAnswers(first, collect({ busesDir: BUSES, scan: SCAN,
+    ...withCarried(carriedNames(first), [], [{ name: 'Godmanchester Co-op Cambridge Road', dir: GCR }]), io }));
+  const names = second.maps.map((m) => m.map).join();
+  check('the second tick\'s place joins and the first tick\'s town stays', names === 'Chatteris,Godmanchester Co-op Cambridge Road,March', names);
+  check('  with its answer', deliverable(second).held.join() === 'Chatteris', JSON.stringify(deliverable(second)));
+  const bare = mergeAnswers(first, collect({ busesDir: BUSES, scan: SCAN, places: [{ name: 'Godmanchester Co-op Cambridge Road', dir: GCR }], io }));
+  check('  and without the carry it WOULD have been dropped — the carry is load-bearing', !bare.maps.some((m) => m.map === 'Chatteris'));
+  const plain = mergeAnswers(second, collect({ busesDir: BUSES, scan: SCAN, ...withCarried(carriedNames(second), [], []), io }));
+  check('a plain re-collection naming nobody keeps both named maps', plain.maps.map((m) => m.map).join() === names, plain.maps.map((m) => m.map).join());
+  const carried = carriedNames(second);
+  check('a place is carried with the folder it was found at', carried.places.length === 1 && carried.places[0].dir === GCR, JSON.stringify(carried));
+  check('a SAFE town is not carried — the grading names it', !carried.towns.includes('March'), carried.towns.join());
+  check('a name given again is one map, this run\'s spelling winning', withCarried({ towns: ['chatteris'], places: [] }, ['Chatteris'], []).towns.join() === 'Chatteris');
+  check('no record carries nothing', carriedNames(null).towns.length === 0 && carriedNames(null).places.length === 0);
 }
 
 console.log('\n4. A sheet missing from disk is never read as sameness');

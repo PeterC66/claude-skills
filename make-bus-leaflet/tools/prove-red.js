@@ -2802,6 +2802,20 @@ const MUTATIONS = [
     find: "  for (const b of best.shaft) reserve(b[0], b[1], b[2], b[3], 'the place pointer');",
     to: "" },
 
+  // engine_commit.js — the reclaim of a killed run's worktree (buses-data loop
+  // adhoc reclaim-worktrees.md, 2026-10-02). Five engine-commit trees from 27–30
+  // Sep were still registered on 2026-10-01, because the exit handler never runs
+  // for a killed process and `worktree prune` keeps a registration whose folder exists.
+  { suite: 'engine_commit_reclaim.test.js', file: 'engine_commit.js',
+    what: 'engineDirForCommit never reclaims, so every killed board run leaves a registered tree for ever',
+    find: "    reclaimStaleCommitTrees(skillsRoot, { base: path.dirname(path.dirname(dir)) });",
+    to: "" },
+
+  { suite: 'engine_commit_reclaim.test.js', file: 'engine_commit.js',
+    what: 'the age test is gone, so a board running in another session has its tree removed under it',
+    find: "    if (age < hours * 3600e3) continue;",
+    to: "" },
+
 ];
 
 const scratch = scratchDir('prove-red-');

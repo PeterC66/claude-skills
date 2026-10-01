@@ -154,6 +154,54 @@ process.on('exit', () => {
   }
 });
 
+/* A tree older than this belongs to a run that was killed: a whole board run takes minutes. */
+const STALE_COMMIT_TREE_HOURS = 6;
+
+/*
+ * reclaimStaleCommitTrees — release every engine-commit worktree a KILLED run
+ * left registered on `skillsRoot`.
+ *
+ * The exit handler above never runs for a killed process, and `worktree prune`
+ * clears a registration only when its folder has gone — which a killed run leaves
+ * behind — so on 2026-10-01 five `engine-commit-XXXXXX/wt` trees from 27–30 Sep
+ * were still listed (buses-data loop adhoc `reclaim-worktrees.md`). The same
+ * fault in bus-work's preflight was fixed by `reclaimStalePins` (claude-skills
+ * #272), and this is its rule for this file's shape: only `<base>/engine-commit-
+ * XXXXXX/wt`, base being the scratch root the caller hands out, only when the
+ * folder is older than STALE_COMMIT_TREE_HOURS so another session's board keeps
+ * its tree, and never one this process made. Not imported from preflight.mjs:
+ * that is an ES module in another skill, and this file must stay dependency-free
+ * and outside both engine hashes. A borrowed node_modules link is unlinked FIRST
+ * — this file borrows none today, but `worktree remove --force` follows a Windows
+ * junction, and that once emptied the checkout's own node_modules. Returns the
+ * folders it released.
+ */
+function reclaimStaleCommitTrees(skillsRoot, { base, now = Date.now(), hours = STALE_COMMIT_TREE_HOURS } = {}) {
+  if (!skillsRoot || !base) return [];
+  const list = git(skillsRoot, 'worktree', 'list', '--porcelain');
+  if (list.status !== 0) return [];
+  const norm = (p) => path.resolve(p).toLowerCase();
+  const mine = new Set(MADE.map(norm));
+  const released = [];
+  for (const line of (list.stdout || '').split('\n')) {
+    if (!line.startsWith('worktree ')) continue;
+    const root = path.resolve(line.slice('worktree '.length).trim());
+    const dir = path.dirname(root);
+    if (path.basename(root) !== 'wt' || !/^engine-commit-[A-Za-z0-9_-]{6}$/.test(path.basename(dir)) || norm(path.dirname(dir)) !== norm(base)) continue;
+    if (mine.has(norm(root))) continue;
+    let age;
+    try { age = now - fs.statSync(dir).mtimeMs; } catch (e) { continue; }   // folder gone: prune's job, already done
+    if (age < hours * 3600e3) continue;
+    const borrowed = path.join(root, 'make-bus-leaflet', 'node_modules');
+    try { if (fs.lstatSync(borrowed).isSymbolicLink()) fs.rmdirSync(borrowed); } catch (e) { /* absent, or not a link: nothing to unlink */ }
+    git(skillsRoot, 'worktree', 'remove', '--force', root);
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* the sweep takes it later */ }
+    released.push(dir);
+  }
+  if (released.length) git(skillsRoot, 'worktree', 'prune');
+  return released;
+}
+
 /* IT FETCHES THE COMMIT ITSELF RATHER THAN ASKING CI TO (OA-217, 2026-09-01).
  *
  * A clone made by `actions/checkout` is one commit deep, so a map naming anything
@@ -209,6 +257,7 @@ function engineDirForCommit({ skillsRoot, commit, expect, place = false, scratch
   try {
     const dir = path.join(scratchDir('engine-commit-'), 'wt');
     spawnSync('git', ['-C', skillsRoot, 'worktree', 'prune'], { stdio: 'ignore' });
+    reclaimStaleCommitTrees(skillsRoot, { base: path.dirname(path.dirname(dir)) });
     const add = () => git(skillsRoot, 'worktree', 'add', '--quiet', '--detach', dir, commit);
     let r = add();
     if (r.status !== 0) {
@@ -239,4 +288,4 @@ function engineDirForCommit({ skillsRoot, commit, expect, place = false, scratch
   return out;
 }
 
-module.exports = { skillsRootFor, engineCommitNow, engineDirForCommit, hashedFiles };
+module.exports = { skillsRootFor, engineCommitNow, engineDirForCommit, hashedFiles, reclaimStaleCommitTrees, STALE_COMMIT_TREE_HOURS };

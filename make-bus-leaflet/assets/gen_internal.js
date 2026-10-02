@@ -1978,14 +1978,14 @@ for(const f of FEATURES){ const ov=featOv(f);           // linear-feature label 
 // baseline counted 190 labels sitting on a foreign symbol across the 31 shipped sheets.
 // Claiming the boxes here, before the first label is placed, is what stops it. Absent
 // the key nothing is reserved and every placer behaves exactly as it did.
-const ANCHOR_SQ=(atco2ll[ANCHOR]||baseOv[ANCHOR]) && !CORE && !(ID && (ID.interchanges||[]).some(ic=>ic.atco===ANCHOR)) ? XYS(ANCHOR) : null;
+const ANCHOR_SQ=(atco2ll[ANCHOR]||baseOv[ANCHOR]) && !(CORE && inCore(XYS(ANCHOR))) && !(ID && (ID.interchanges||[]).some(ic=>ic.atco===ANCHOR)) ? XYS(ANCHOR) : null;
 const ANCHOR_BOX=ANCHOR_SQ && [ANCHOR_SQ[0]-2, ANCHOR_SQ[1]-2, ANCHOR_SQ[0]+2.6+FONT.textWidth(ANCHOR_LABEL,3.0,true)+0.5, ANCHOR_SQ[1]+2];
 if(SPREAD_ICONS) spreadIcons(ANCHOR_BOX?[ANCHOR_BOX]:[]);
 if(DESIGN.reserveIcons) reserveIcons();
 // Central interchange / bus-station label (the ANCHOR) drawn + reserved first
 // (suppressed when internalDiagram draws a lozenge for the anchor instead)
-// (also suppressed by coreBox — the box IS the interchange, and its own label
-//  says so; drawing both puts two names on the same square centimetre)
+// (also suppressed by a coreBox that CONTAINS the anchor — the box IS the interchange then;
+//  a box recentred with `at` leaves it drawn: test/corebox_anchor.test.js, buses-data OA-549)
 if(ANCHOR_SQ){const[x,y]=ANCHOR_SQ;
   const _a=[`<rect x="${x-1.7}" y="${y-1.7}" width="3.4" height="3.4" rx="0.5" fill="#111"/>`,
     `<rect x="${x-1.0}" y="${y-1.0}" width="2.0" height="2.0" rx="0.3" fill="#fff"/>`,

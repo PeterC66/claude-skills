@@ -152,3 +152,21 @@ test('sc is page mm per unit of the planar projection, i.e. per degree of latitu
   assert.ok(Math.hypot(a[0]-b[0], a[1]-b[1]) > 0, 'a thousandth of a degree is a visible distance on the page');
   assert.ok(p.sc > 0);
 });
+
+// design.partnerBox.fit (buses-data OA-089) hands projection the partner box's
+// ring as stopPts. A square ring under a matching fixed orientation must then
+// span nearly the frame's full height inside the fit margin — that IS "the box fills
+// the frame" — and sit centred across its width.
+test('fitted to a partner-box ring, the box spans the frame height', () => {
+  const { partnerBoxRing } = require('./_engine.js').load('complexity_ladder.js');
+  const ring = partnerBoxRing({ PBOX: { at: ANCHOR, radius: 600, rotation: -1.7 }, atco2ll, refuse: () => {} });
+  const p = run({ stopPts: ring, FIXED_ORIENTATION: -1.7, IR: { focus: { coreKm: 0.9, comp: 0.5 }, fitMargin: 4 } });
+  const xs = ring.map(ll => p.XY(ll)[0]), ys = ring.map(ll => p.XY(ll)[1]);
+  const top = Math.min(...ys), bottom = Math.max(...ys);
+  // The fit's fixed 0.0006-degree pad (about 67 m a side) is all that stands between
+  // the box and the margin: on a 1.2 km box that is 90% of the usable height.
+  const usable = p.MY1 - p.MY0 - 8;
+  assert.ok(bottom - top <= usable && bottom - top > 0.88 * usable, `height ${bottom - top} of ${usable}`);
+  assert.ok(top > p.MY0 && bottom < p.MY1, 'inside the frame');
+  assert.ok(Math.abs((Math.min(...xs) - p.MX0) - (p.MX1 - Math.max(...xs))) < 0.01, 'centred across the width');
+});

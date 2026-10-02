@@ -23,7 +23,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { complexityLadder, coreBoxGeometry, partnerBoxGeometry, thinKeep, parseFamilies, aliasColours, runLen } =
+const { complexityLadder, coreBoxGeometry, partnerBoxRing, partnerBoxFit, partnerBoxGeometry, thinKeep, parseFamilies, aliasColours, runLen } =
   require('./_engine.js').load('complexity_ladder.js');
 
 const palette = () => ({ 1: '#4477AA', '1A': '#EE6677', '1B': '#228833', 9: '#CCBB44' });
@@ -361,6 +361,26 @@ test('partnerBox takes a [lat,lon] as well as an ATCO, and carries its label', (
   const b = partnerBoxGeometry({ PBOX: { at: [52.0, -0.1], label: 'x' }, atco2ll, XY, refuse: () => {} });
   assert.deepStrictEqual(b, a);
   assert.strictEqual(a.label, 'x');
+});
+
+test('partnerBoxRing is the outline partnerBoxGeometry draws, as [lat,lon], closed (OA-089 fit)', () => {
+  const PBOX = { at: 'ANCH', radius: 600, rotation: -1.7 };
+  const ring = partnerBoxRing({ PBOX, atco2ll, refuse: () => {} });
+  assert.deepStrictEqual(ring[0], ring[ring.length - 1], 'closed');
+  const g = partnerBoxGeometry({ PBOX, atco2ll, XY, refuse: () => {} });
+  assert.deepStrictEqual(g.pts, ring.map(XY), 'the drawn ring is the fitted ring, point for point');
+  assert.strictEqual(partnerBoxRing({ PBOX: undefined, atco2ll, refuse: () => { throw new Error('asked'); } }), null);
+});
+
+test('partnerBoxFit: only fit:true replaces the stop fit, and it says so', () => {
+  const said = [], say = m => said.push(m), refuse = () => {};
+  assert.strictEqual(partnerBoxFit({ PBOX: undefined, atco2ll, refuse, say, core: 9 }), null);
+  assert.strictEqual(partnerBoxFit({ PBOX: { at: 'ANCH' }, atco2ll, refuse, say, core: 9 }), null, 'drawn, not fitted');
+  assert.strictEqual(partnerBoxFit({ PBOX: { at: 'ANCH', fit: 'yes' }, atco2ll, refuse, say, core: 9 }), null, 'true only');
+  assert.strictEqual(said.length, 0);
+  const ring = partnerBoxFit({ PBOX: { at: 'ANCH', fit: true }, atco2ll, refuse, say, core: 9 });
+  assert.deepStrictEqual(ring, partnerBoxRing({ PBOX: { at: 'ANCH' }, atco2ll, refuse }));
+  assert.match(said[0], /fitted to the partner box, not to the 9 core stops/);
 });
 
 test('drawPartnerBox: label at the first clear spot, before the edges are reserved; none clear => said, not drawn', () => {

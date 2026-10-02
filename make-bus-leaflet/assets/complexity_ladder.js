@@ -286,7 +286,11 @@ function thinKeep({ THIN, order, routes, laneKey, ANCHOR }){
  * Returns null without the key, or { pts:[[x,y]…] closed ring, label } — the
  * ring is in page mm. It blanks nothing: no inside test is returned on purpose.
  */
-function partnerBoxGeometry({ PBOX, atco2ll, XY, refuse }){
+/** The partner box's outline as a closed ring of [lat,lon] — four edges of N
+ * points each plus the first again — or null when absent or unplaceable. The
+ * drawing and design.partnerBox.fit (OA-089) both read this one ring, so the
+ * frame is fitted to exactly the outline that is drawn. */
+function partnerBoxRing({ PBOX, atco2ll, refuse }){
   if(!PBOX) return null;
   const c = Array.isArray(PBOX.at) ? PBOX.at : atco2ll[PBOX.at];
   if(!c){ refuse('partnerBox: '+JSON.stringify(PBOX.at)+' has no coordinate — outline not drawn'); return null; }
@@ -303,9 +307,31 @@ function partnerBoxGeometry({ PBOX, atco2ll, XY, refuse }){
   const toLL = (u,v) => { const e=u*cs+v*sn, s=-u*sn+v*cs;        // un-rotate
     return [c[0]-s/latKm, c[1]+e/lonKm]; };
   const corners = [[u0,v0],[u1,v0],[u1,v1],[u0,v1]];
-  const N = 16, pts = [];
+  const N = 16, ring = [];
   for(let k=0;k<4;k++){ const [a,b]=[corners[k],corners[(k+1)%4]];
-    for(let j=0;j<N;j++){ const t=j/N; pts.push(XY(toLL(a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t))); } }
+    for(let j=0;j<N;j++){ const t=j/N; ring.push(toLL(a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t)); } }
+  ring.push(ring[0]);
+  return ring;
+}
+
+/** design.partnerBox.fit (buses-data OA-089): the ring to fit the frame to, in
+ * place of the stops, or null to keep the stop fit. A centre sheet whose box is
+ * its subject then fills the frame with it, and every route runs off the edge to
+ * its exit device. The stop fit cannot do this on a sheet whose anchor ATCO is
+ * all digits: the in-town prefix is then empty, every drawn stop is core, and
+ * fitExtra only ever adds. It is the ring partnerBoxGeometry draws, so the box
+ * fits whatever the fisheye. `core` is how many stops the fit would have used. */
+function partnerBoxFit({ PBOX, atco2ll, refuse, say, core }){
+  if(!PBOX || PBOX.fit !== true) return null;
+  const ring = partnerBoxRing({ PBOX, atco2ll, refuse });
+  if(ring) say('fit: design.partnerBox.fit — the frame is fitted to the partner box, not to the '+core+' core stops');
+  return ring;
+}
+
+function partnerBoxGeometry({ PBOX, atco2ll, XY, refuse }){
+  const ring = partnerBoxRing({ PBOX, atco2ll, refuse });
+  if(!ring) return null;
+  const pts = ring.slice(0,-1).map(XY);
   pts.push(pts[0]);
   return { pts, label: PBOX.label||null };
 }
@@ -342,4 +368,4 @@ function drawPartnerBox({ PARTNER, PB, out, gk, esc, reserve, textWidth, blocked
     reserve(Math.min(a[0],b[0])-0.6,Math.min(a[1],b[1])-0.6,Math.max(a[0],b[0])+0.6,Math.max(a[1],b[1])+0.6,'the partner box'); }
 }
 
-module.exports = { complexityLadder, coreBoxGeometry, partnerBoxGeometry, drawPartnerBox, thinKeep, parseFamilies, aliasColours, runLen };
+module.exports = { complexityLadder, coreBoxGeometry, partnerBoxRing, partnerBoxFit, partnerBoxGeometry, drawPartnerBox, thinKeep, parseFamilies, aliasColours, runLen };

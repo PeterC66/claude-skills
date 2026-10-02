@@ -196,7 +196,7 @@ const { svgPrimitives } = require(_dep('svg_primitives.js'));
 const { linearFeatures } = require(_dep('linear_features.js'));
 const { labelPlacer } = require(_dep('label_placer.js'));
 const { drawServicesPanel, readMinorityNotes } = require(_dep('services_panel.js'));
-const { complexityLadder, coreBoxGeometry, partnerBoxGeometry, drawPartnerBox, thinKeep } = require(_dep('complexity_ladder.js'));
+const { complexityLadder, coreBoxGeometry, partnerBoxFit, partnerBoxGeometry, drawPartnerBox, thinKeep } = require(_dep('complexity_ladder.js'));
 const { northArrow } = require(_dep('north_arrow.js'));
 const { smoothCasingWidths, drawnLaneCasings } = require(_dep('casing_width.js'));
 const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
@@ -856,7 +856,7 @@ if((poiReport.namelessKeptByTier||[]).length) process.stderr.write('poi.tiers: '
 // measurement that produced the off-path rule. The warning stays here so it sits
 // with the other build messages, and so the module itself writes nothing.
 const _fit = fitSet({ routes, atco2ll, ir: IR, intownCfg: ICFG, routePaths: RP, prefix: PREFIX });
-const stopPts = _fit.stopPts;
+const stopPts = partnerBoxFit({ PBOX: DESIGN.partnerBox, atco2ll, refuse, say: m=>console.error(m), core: _fit.stopPts.length }) || _fit.stopPts;  // OA-089
 if (_fit.excluded) {
   process.stderr.write('fit: '+_fit.excluded+' core stop'+(_fit.excluded>1?'s':'')+' more than '
     +_fit.limit+' m from any drawn route line — excluded from the fit, which would otherwise '

@@ -1646,6 +1646,19 @@ const MUTATIONS = [
     find: "  pts.push(pts[0]);\n  return { pts, label: PBOX.label||null };",
     to: "  return { pts, label: PBOX.label||null };" },
 
+  // design.partnerBox.fit (buses-data OA-089) fits the frame to partnerBoxRing and
+  // draws partnerBoxGeometry; the two must be one outline, or the frame is fitted
+  // to a box the sheet does not draw.
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "the drawn partner box is shifted one point round its ring, so the frame is fitted to an outline the sheet does not draw",
+    find: "  const pts = ring.slice(0,-1).map(XY);",
+    to: "  const pts = ring.slice(1).map(XY);" },
+
+  { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
+    what: "every partner box refits the frame, so a sheet that only draws the box loses its stop fit",
+    find: "  if(!PBOX || PBOX.fit !== true) return null;",
+    to: "  if(!PBOX) return null;" },
+
   { suite: 'complexity_ladder.test.js', file: 'complexity_ladder.js',
     what: "a family of one becomes a family, so a lone route is bundled with nothing and loses its own lane",
     find: "    if(list.length<2) continue;",

@@ -129,6 +129,15 @@ function judge(now, was) {
   return { status: better.length ? 'BETTER' : 'ok', why: better.concat(softMoved) };
 }
 
+// The ledger's reasons a scratch-built sheet would REGRESS, or [] (buses-data OA-548).
+// `key` is the ledger's own key ("<map> · internal"); a sheet the ledger has never seen is NEW,
+// not a regression, so it returns []. Lets a dry run say what the push preflight's board
+// would say, before anything is applied.
+function regressionOn(ledger, key, file, measureFn = measure) {
+  const j = judge(measureFn(file), ((ledger && ledger.sheets) || {})[key]);
+  return j.status === 'REGRESSED' ? j.why : [];
+}
+
 // ---- distance to target ---------------------------------------------------
 // Pure, and `today` is a parameter rather than a call to Date.now(), for the
 // ordinary reason: a test that reads the clock passes today and fails in
@@ -372,7 +381,7 @@ function accept(busesDir, rows, ledgerPath, opts = {}) {
   fs.writeFileSync(ledgerPath, JSON.stringify(out, null, 1) + '\n');
 }
 
-module.exports = { run, accept, measure, judge, sheetKey, findSheets, targetProgress, targetLines, boardTotal,
+module.exports = { run, accept, measure, judge, regressionOn, sheetKey, findSheets, targetProgress, targetLines, boardTotal,
   partitionByCommitted, dirtyPaths, parseNoteArg, parseNoteFile, collectNotes, appendNote, noteFault,
   regressedKeys, noteFaultFor, LEDGER_NAME };
 

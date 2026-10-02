@@ -295,3 +295,12 @@ test('accept() does not write the note onto the caller\'s own row', () => {
   assert.strictEqual(row.now.note, undefined, 'ledger prose leaked into the measurement the caller is holding');
   fsn.rmSync(f.dir, { recursive: true, force: true });
 });
+
+test('regressionOn names the ledger reasons for a scratch sheet, and nothing for a sheet it has never seen (OA-548)', () => {
+  const ledger = { sheets: { 'Ely Co-op · internal': sheet({ labels: 53 }) } };
+  const fewer = () => sheet({ labels: 51 });
+  assert.deepStrictEqual(QG.regressionOn(ledger, 'Ely Co-op · internal', 'x.svg', fewer), ['2 fewer map labels (53 -> 51)']);
+  assert.deepStrictEqual(QG.regressionOn(ledger, 'Ely Co-op · internal', 'x.svg', () => sheet({ labels: 53 })), []);
+  assert.deepStrictEqual(QG.regressionOn(ledger, 'Somewhere · internal', 'x.svg', fewer), [], 'NEW is not a regression');
+  assert.deepStrictEqual(QG.regressionOn(null, 'Ely Co-op · internal', 'x.svg', fewer), [], 'no ledger, nothing to judge against');
+});

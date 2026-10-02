@@ -86,7 +86,7 @@ function verdictOf(r) {
   if (CLEAN_WITHOUT_BUILD.has(r.status)) return 'clean';
   if (r.status === 'FAIL') return 'regressed';
   if (BUILT.has(r.status)) {
-    const lost = r.status === 'REVIEW-NEEDED' || r.anyLost || total(r, 'lost') > 0;
+    const lost = r.status === 'REVIEW-NEEDED' || r.anyLost || r.anyRegressed || total(r, 'lost') > 0 || total(r, 'regressed') > 0;
     const h = hardTotals(r);
     const worse = !!h && h.after > h.before;
     return lost || worse || (r.blockers || []).length ? 'regressed' : 'clean';

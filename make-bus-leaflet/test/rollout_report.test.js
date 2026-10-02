@@ -33,6 +33,10 @@ test('a lost label, a blocking warning or a failed build is a regression', () =>
   assert.strictEqual(verdictOf({ status: 'DRY-RUN', diffs: { 'external.svg': diff({ lost: ['Ely'] }) } }), 'regressed',
     'the diffs alone must be enough, whatever anyLost says');
   assert.strictEqual(verdictOf({ status: 'DRY-RUN', blockers: [{ source: 'gen', text: 'x' }] }), 'regressed');
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', anyRegressed: true, diffs: { 'internal.svg': diff({ regressed: ['2 fewer map labels (53 -> 51)'] }) } }), 'regressed',
+    'a ratchet regression loses no label and is still a regression (OA-548)');
+  assert.strictEqual(verdictOf({ status: 'DRY-RUN', diffs: { 'internal.svg': diff({ regressed: ['x'] }) } }), 'regressed',
+    'the diffs alone must be enough here too');
   assert.strictEqual(verdictOf({ status: 'REVIEW-NEEDED' }), 'regressed');
   assert.strictEqual(verdictOf({ status: 'FAIL', detail: 'gen_internal.js: boom' }), 'regressed');
 });

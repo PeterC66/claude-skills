@@ -53,6 +53,8 @@ node assets/status.js --buses "C:/u3a St Ives/Using AI/Buses" --portal "C:/Claud
 
 It re-runs every byte gate, so it takes about a minute; start it alongside the worklist rather than after it.
 
+**Never pipe either command through `head` or `tail`; redirect each to a file in the scratchpad and read the file** (2 Oct 2026: `status.js | tail -80` dropped the towns and places tables and the exit code, and `worklist.mjs | head -200` showed 10 of 91 items without saying so). A pipe also loses the board's exit code, so append `echo "exit $?"` to its file. The worklist is about 900 lines: `Grep` its `^\s*(\d+\. |──)` headings for the ranked list, then `Read` the rows you will quote. If any part was not read, say so in the answer.
+
 Let `BW=C:\u3a St Ives\.claude\skills\bus-work\assets` (this skill lives in the bus skills repo alongside `make-bus-leaflet`, and is junctioned into `~\.claude\skills\` like the others).
 
 ```powershell

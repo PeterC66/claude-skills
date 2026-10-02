@@ -52,6 +52,7 @@ const { knownOff } = require('./known_off');
 const { checkDrawnWindow } = require('./window_contiguity');
 const { displayedRoutes } = require('./displayed_routes');
 const { continuationBearing } = require('./direction_continuation');
+const { trunkFindings } = require('./trunk_segments');
 
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
@@ -1084,6 +1085,9 @@ const win = checkDrawnWindow({ displayed, intownCfg, CIRCULAR, intownByNorm, ful
         `${corr.colours.drawnLines} lines are drawn in ${corr.colours.distinctColours} distinct colours (ambiguity ${corr.colours.ambiguity}x). The colour-blind-safe palettes hold about 12 usable hues, so colour no longer identifies a line.`,
         corr.colours, null, 'corridors_report');
     }
+    // OA-549: a trunk's grey ribbon hides its lanes, so a stack that leaves one out says that bus is not there. HARD; the rule is trunkFindings().
+    for (const f of trunkFindings(corr.trunks)) add('hard', 'trunk-stack-incomplete', `Trunk ${f.id} draws its lanes as one grey ribbon, and ${f.problem}${f.lanes && f.lanes.length ? ` (lane${f.lanes.length > 1 ? 's' : ''} ${f.lanes.join(', ')})` : ''}. Its stacks are the only place a reader can see which buses run along it.`,
+      f, f.missing && f.missing.length === 1 ? f.missing[0] : null, 'corridors_report');
   }
 }
 

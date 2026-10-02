@@ -200,6 +200,7 @@ const { complexityLadder, coreBoxGeometry, partnerBoxFit, partnerBoxGeometry, dr
 const { northArrow } = require(_dep('north_arrow.js'));
 const { smoothCasingWidths, drawnLaneCasings } = require(_dep('casing_width.js'));
 const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
+const TS = require(_dep('trunk_segments.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 const { placePointer, pointerOn, inkFromSvg } = require(_dep('place_pointer.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
@@ -1068,6 +1069,8 @@ for(const f of FEATURES) drawFeature(f);
 let rseq={};                      // classic model's filtered sequences (old termini block)
 let TRIM=null, SKEL=null;         // internalRoads artefacts used later (arrows/badges/labels)
 let CORUN=null;                   // MEMR: r -> {segIdx:[routes physically co-running there]}
+const TRUNKCFG=TS.trunkConfig(IR&&IR.trunkSegments); let TRUNKS=null;   // OA-549, opt-in: trunk_segments.js says why
+const trunkOf=(r,si)=>(TRUNKS&&TRUNKS.hidden[r]&&TRUNKS.hidden[r][si])||null, inTrunk=(r,tr,i)=>trunkOf(r,segIdxOf(tr,i));
 const inFrame=p=>p[0]>=MX0&&p[0]<=MX1&&p[1]>=MY0&&p[1]<=MY1;
 
 // ---- the ladder in page space: the coreBox rectangle and the stop-tick set --
@@ -1181,6 +1184,7 @@ if(IR){
     (MEMR[s.r]=MEMR[s.r]||{})[s.i]=here;
     (MEM[s.r]=MEM[s.r]||{})[s.i]=laneList(here); }
   CORUN=MEMR;                    // published for the badge logic further below
+  if(TRUNKCFG) TRUNKS=TS.findTrunks({order,RPP,MEM,MEMR,cfg:TRUNKCFG,CD,gap:IR.gap});
   const segIdxByRoute={};                          // r -> its own SEG indices
   for(let si=0;si<SEG.length;si++){ (segIdxByRoute[SEG[si].r]=segIdxByRoute[SEG[si].r]||[]).push(si); }
   // design.laneOrientation — opt in to the corridor orientation field.
@@ -1440,7 +1444,7 @@ if(IR){
       // lobe. Set it to about what the widest real road in the frame measures on the
       // page; below the ceiling nothing changes at all.
       const wRaw=span + IR.stroke + IR.skeletonPad;
-      let w=wRaw;
+      let w=wRaw; if(trunkOf(r,i)) w=Math.min(w,TRUNKCFG.width+IR.skeletonPad);   // OA-549: the casing under a trunk is the ribbon's
       if(IR.skeletonMaxW!=null && w>IR.skeletonMaxW){ w=+IR.skeletonMaxW; _capped++; }
       const [rdx,rdy]=refDir(bundle[0],M[0],M[1],Pp[i+1][0]-Pp[i][0],Pp[i+1][1]-Pp[i][1]);
       const Ln=Math.hypot(rdx,rdy)||1, nX=-rdy/Ln*mid, nY=rdx/Ln*mid;
@@ -1528,7 +1532,8 @@ if(IR){
   for(const r of order){ const tr=TRIM[r]; if(!tr||tr.pts.length<2)continue;
     // coreBox: draw the runs OUTSIDE the box as subpaths of one path element, so
     // each end stops flush on the boundary. No box => one run, byte-identical.
-    const runs=clipOutCore(tr.pts); if(!runs.length)continue;
+    const runs=TRUNKS ? [].concat(...TS.laneRuns(tr.pts,i=>inTrunk(r,tr,i),TRUNKCFG,fw(r)).map(clipOutCore)) : clipOutCore(tr.pts); if(!runs.length)continue;
+    if(TRUNKS) TS.markExits(TRUNKS.trunks,r,runs,TRUNKCFG);   // a route seen leaving a trunk in its colour needs no stack there
     if(CORERUNS) CORERUNS[r]=[].concat(...runs.map(rn=>[rn[0],rn[rn.length-1]]));
     const d=runs.map(rn=>pathD(rn)).join(' ');
     RLINES.push({r,d}); }
@@ -1566,7 +1571,7 @@ if(IR){
   // (frequencyTiers.dash) is not carried onto the shared stretch.
   if(CORR && CORR.style) for(const r of order){ const tr=TRIM[r]; if(!tr||tr.pts.length<2)continue;
     const st=CORR.lead[r] && CORR.style[CORR.lead[r]]; if(!st)continue;
-    const runs=LN.sharedRuns(tr.pts.length-1, i=>{ const g=famAt(r,segIdxOf(tr,i)); return (g[0]===r && g.length>1) ? g : null; });
+    const runs=LN.sharedRuns(tr.pts.length-1, i=>{ const g=famAt(r,segIdxOf(tr,i)); return (g[0]===r && g.length>1 && !inTrunk(r,tr,i)) ? g : null; });
     for(const run of runs){ const g=run.group;
       for(const rn of clipOutCore(tr.pts.slice(run.i0, run.i1+2))){ if(rn.length<2)continue;
         if(st.kind==='alternate'){ const W=Math.max(...g.map(fw)), d=pathD(rn);
@@ -1575,6 +1580,9 @@ if(IR){
           for(const m of g){ const o=at+fw(m)/2; at+=fw(m);
             out(gk('shared',g[0]+'/'+m,`<path d="${pathD(LN.offsetPolyline(rn,o))}" fill="none" stroke="${C[m]}" stroke-width="${fw(m)}" stroke-linecap="round" stroke-linejoin="round"/>`)); } }
       } } }
+  // OA-549: each trunk once, over the lanes it hides, as one neutral ribbon (trunk_segments.js)
+  if(TRUNKS) for(const t of TRUNKS.trunks){ t.w=TRUNKCFG.width; t.runs=[].concat(...t.polys.map(clipOutCore)).filter(rn=>rn.length>1); if(!t.runs.length)continue; const d=t.runs.map(pathD).join(' ');
+    for(const [c,w] of [['#fff',t.w+2*TRUNKCFG.casing],[TRUNKCFG.color,t.w]]) out(`<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"/>`); }
   // -- stop ticks ON the route lines (one per physical stop, first route wins;
   //    stops[ATCO].pos override moves the tick)
   const tickSeen=new Set();
@@ -1588,6 +1596,7 @@ if(IR){
   for(const r of order){ const tr=TRIM[r]; if(!tr||!tr.sh)continue;
     for(const a in tr.st){ if(tickSeen.has(a))continue; const o=tr.st[a]; if(o.i>=tr.sh.length-1)continue;
       let p=baseOv[a] || [tr.sh[o.i][0]+(tr.sh[o.i+1][0]-tr.sh[o.i][0])*o.t, tr.sh[o.i][1]+(tr.sh[o.i+1][1]-tr.sh[o.i][1])*o.t];
+      if(!baseOv[a] && trunkOf(r,o.i)) p=TS.squeeze(p,trunkOf(r,o.i),TRUNKCFG,fw(r));   // OA-549: a stop on a trunk is on its ribbon
       if(!inFrame(p))continue; if(inCore(p))continue; if(!keepStop(a))continue; tickSeen.add(a);
       if(IDKEEP && !IDKEEP.has(a) && !IDPOI.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<=IDPD)) continue;
       out(gk('stop',a,`<circle cx="${p[0].toFixed(2)}" cy="${p[1].toFixed(2)}" r="0.8" fill="#fff" stroke="#555" stroke-width="0.4"/>`)); } }
@@ -2545,6 +2554,10 @@ if(IR && TRIM){
     if(LAB) for(const t of pendingTermini)
       LAB.add(Object.assign({own:[bxMin-3.6,byMin-3.6,bxMax+3.6,byMax+3.6], ownMarks:clusterMarks}, t));
   }
+  // OA-549: a badge grid at each end of every trunk, naming every route in it (trunk_segments.js)
+  if(TRUNKS) TS.placeStacks(TRUNKS.trunks, TRUNKCFG, { inFrame, inCore, badgeClash, overlaps, hit, badge, badgeXWs, noteBadge, reserve, out,
+    symbols:pois.map(poiSite).filter(Boolean).map(q=>[q.x-POI_HALF,q.y-POI_HALF,q.x+POI_HALF,q.y+POI_HALF]),
+    ink:new Labeller({ page:[W,H] }).stampSvg(s, (st,w)=>new Set(Object.values(C).concat(TRUNKCFG.color).map(v=>String(v).toLowerCase())).has(String(st).toLowerCase())||(w>=0.5&&rawLumHex(st)<0.62)).ink });
   for(const r of order){ const tr=TRIM[r]; if(!tr)continue;
     const closed = tr.pts.length>2 && Math.hypot(tr.pts[0][0]-tr.pts[tr.pts.length-1][0], tr.pts[0][1]-tr.pts[tr.pts.length-1][1])<2;
     if(!closed){
@@ -2571,6 +2584,7 @@ if(IR && TRIM){
         next+=IR.badgeEvery;
         if(!inFrame(p))continue;
         if(inCore(p))continue;                       // coreBox: nothing inside the box
+        if(inTrunk(r,tr,i))continue;                 // OA-549: a trunk's stacks name it
         // On a bundled corridor only the group leader badges, and it badges the
         // WHOLE stack; a sibling that has left the bundle badges its own branch.
         const grp=badgeGroup(r,segIdxOf(tr,i));
@@ -2628,7 +2642,7 @@ if(IR && TRIM){
         if(done) break;
         for(const s of segs){
           const p=[(tr.pts[s.i][0]+tr.pts[s.i+1][0])/2, (tr.pts[s.i][1]+tr.pts[s.i+1][1])/2];
-          if(!inFrame(p)||inCore(p)) continue;
+          if(!inFrame(p)||inCore(p)||inTrunk(r,tr,s.i)) continue;
           const grp=badgeGroup(r,segIdxOf(tr,s.i)) || [r];
           if(avoid){
             // Badges against badges, as drawTermBadges() does (this claimed the wider set until 2026-08-30 and
@@ -2670,7 +2684,7 @@ if(IR && TRIM){
 // (b) Page-space coincidence of the DRAWN lines is circular: bundling is exactly
 // what removes the lane offset between members, so measuring after it inflates
 // every family towards 1.0 (two unrelated High Wycombe routes read 0.70).
-if((CORR || CPAL) && RP && RP.routes){
+if((CORR || CPAL || TRUNKS) && RP && RP.routes){
   const CELL=0.001;                                   // ~111 m of latitude
   let laMin=90, laMax=-90;
   for(const k of Object.keys(RP.routes)) for(const p of (RP.routes[k].pts||[])){
@@ -2758,6 +2772,7 @@ if((CORR || CPAL) && RP && RP.routes){
       +'unrelated groups ('+cl.groups.join(', ')+') — a reader will read them as one corridor. '
       +'Give each corridor its own hue, or group them in corridorPalette.');
   }
+  if(TRUNKS) rep.trunks=TS.trunkReport(TRUNKS.trunks, r=>laneKey(r));   // OA-549: S6 checks each stack against its trunk
   fs.writeFileSync(DIR+'/corridors_report.json', JSON.stringify(rep,null,2));
   console.log('corridors: '+rep.families.length+' bundled famil'+(rep.families.length===1?'y':'ies')
     +(CPAL?', '+Object.keys(CPAL.fam).length+' colour group(s)':'')

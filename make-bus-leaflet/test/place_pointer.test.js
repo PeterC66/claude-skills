@@ -42,6 +42,8 @@ test('absent the key, a place map draws the pointer and a town does not', () => 
 
 test('false declines it on a place; true asks for it on a town', () => {
   assert.strictEqual(pointerOn({ placePointer: false }, { place: 'x' }), false);
+  assert.strictEqual(pointerOn({ partnerBox: { radius: 600 } }, { place: 'x' }), false);   // a centre: the box identifies it
+  assert.strictEqual(pointerOn({ partnerBox: { radius: 600 }, placePointer: true }, { place: 'x' }), true);
   assert.strictEqual(pointerOn({ placePointer: true }, { town: 'Ely' }), true);
 });
 

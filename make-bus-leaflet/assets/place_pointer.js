@@ -70,10 +70,12 @@ const TURN = 3;                // the most a bearing pays for facing away from t
 const f2 = (v) => v.toFixed(2);
 const hit = (b, o) => !(b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3]);
 
-// Is the pointer on for this sheet? Absent the key, a place map says yes and a town no.
+// Is the pointer on for this sheet? Absent the key, a place map says yes and a town no —
+// and so does a place framed by a partner box, a town centre, which the box identifies
+// as an area rather than a point (Peter, buses-data OA-549, 2026-10-02).
 function pointerOn(design, rj) {
   const v = design ? design.placePointer : undefined;
-  if (v === undefined || v === null) return !!(rj && rj.place);
+  if (v === undefined || v === null) return !!(rj && rj.place) && !(design && design.partnerBox);
   return v !== false;
 }
 

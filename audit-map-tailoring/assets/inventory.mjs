@@ -32,7 +32,7 @@ function knobs(c) {
   for (const key of ['legendAt', 'legendWrap', 'externalNoteAt', 'badgeOffset', 'panelCols', 'panelRow', 'externalHubLabel', 'externalNote', 'riverLabel', 'coreBox', 'stopThinning', 'corridorPalette', 'localLoops', 'notShown', 'boardingPlan'])
     if (c[key] !== undefined) k.push(key === 'boardingPlan' ? `boardingPlan ${n(c.boardingPlan)} keys` : key);
   const ir = c.internalRoads || {};
-  for (const key of ['rotationDeg', 'roadLabelExclude', 'roadLabelInclude', 'roadRename', 'keyRoads', 'lenses', 'northArrow', 'skeletonMaxW'])
+  for (const key of ['rotationDeg', 'roadLabelExclude', 'roadLabelInclude', 'roadLabelPin', 'roadRename', 'keyRoads', 'lenses', 'northArrow', 'skeletonMaxW'])
     if (ir[key] !== undefined) k.push(key === 'rotationDeg' ? `rotationDeg ${ir[key]}` : key);
   const off = Object.values(ir.termini || {}).filter(t => t && (t.end === false || t.start === false)).length;
   if (off) k.push(`${off} termin${off > 1 ? 'i' : 'us'} suppressed`);

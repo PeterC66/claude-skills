@@ -86,6 +86,10 @@
 //                                      // centroid, which can land spuriously inside the town
 //                                      // where no such road exists. Drops the label only, not
 //                                      // any drawn road line.
+//     roadLabelPin:["OSM name"...],    // place these names BEFORE the badges along the lines,
+//                                      // so a badge gives way to them rather than the reverse
+//                                      // (OA-176, Ramsey's Great Whyte under laneTrim). Also
+//                                      // label-eligible. Absent => byte-identical (road_labels.js)
 //     northArrow:false|{x,y,len?,angle?}, // compass for the rotated map — DRAWN BY DEFAULT on
 //                                      // every internalRoads map; set false to suppress, or pass
 //                                      // {x,y,len,angle} to position. Direction is the
@@ -203,6 +207,7 @@ const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
 const TS = require(_dep('trunk_segments.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 const { placePointer, pointerOn, inkFromSvg } = require(_dep('place_pointer.js'));
+const { roadLabels } = require(_dep('road_labels.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
 // coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
 // the two ink tests below, whose 0.62 threshold is calibrated against the RAW
@@ -2161,6 +2166,22 @@ function inboardKeys(ox,oy){
   // 21 defects across the eight towns, nearly all of them "label over route ink".
   return [2,6,3,5,4].map(k=>COMPASS8[(i+k)%8]);
 }
+// ---- road-name labels: placement lives in road_labels.js ------------------
+// The road-label block further down calls it at its own place in the draw order;
+// internalRoads.roadLabelPin calls it HERE, before any badge along a line is placed
+// (OA-176). A pinned name is placed and RESERVED now and painted later with the
+// others, so the paint order does not change. Absent key => byte-identical.
+const { roadNameAgg, placeRoadName } = (IR && SKEL) ? roadLabels({ IR, SKEL, RG, XY, FONT, iconBoxes, overlaps, overlapsNoIcons, inFrame, inCore, reserve, esc }) : {};
+const ROAD_PINNED=new Map();
+if(IR && SKEL && (IR.roadLabelPin||[]).length){
+  const {agg,ren}=roadNameAgg();
+  for(const n of IR.roadLabelPin){
+    if(!agg[n]){ process.stderr.write(`roadLabelPin: no road named "${n}" is drawn or in roads_geo, so nothing is pinned`+GUARD_NL); continue; }
+    const r=placeRoadName(n,agg[n],ren); ROAD_PINNED.set(n,r);
+    if(process.env.DBG_LABELS) console.error('  '+(r.ok?'pinned  ':'PIN-SKIP('+(r.anyInFrame?'overlap':'off-frame')+')')+' '+n);
+  }
+}
+
 // ---- internalRoads: terminus arrows at the frame cuts + badges along lines --
 if(IR && TRIM){
   const TL=RJ.terminiLabels||{};
@@ -2817,98 +2838,20 @@ if(IR && SKEL){
   // labels along the USED road geometry (length-weighted centroid + axial mean
   // angle per road name); roadLabelInclude forces a road in (from roads_geo if
   // no bus uses it), roadRename maps OSM names to display names.
-  const agg={};
-  for(const e of SKEL){ if(!e.name)continue;
-    const L=Math.hypot(e.q[0]-e.p[0], e.q[1]-e.p[1]); if(!L)continue;
-    (agg[e.name]=agg[e.name]||{len:0,segs:[]}).len+=L; agg[e.name].segs.push([e.p,e.q]); }
-  const rn=IR.roadRename||[];
-  const ren=n=>{ for(const [a,b] of rn) if(n===a) return b; return n; };
-  // keyRoads are implicitly label-eligible too (one name, not two config arrays).
-  const incl=(IR.roadLabelInclude||[]).concat(IR.keyRoads||[]);
-  for(const n of incl){ if(agg[n])continue;            // not bus-used: pull from roads_geo
-    for(const w of RG.ways){ if(w.tags.name!==n)continue;
-      for(let i=0;i<w.geometry.length-1;i++){ const p=XY(w.geometry[i]), q=XY(w.geometry[i+1]);
-        const L=Math.hypot(q[0]-p[0],q[1]-p[1]); if(!L)continue;
-        (agg[n]=agg[n]||{len:0,segs:[]}).len+=L; agg[n].segs.push([p,q]); } } }
-  // roadLabelExclude: never label these names. A road name shared by several
-  // out-of-frame localities (e.g. every village's "High Street") aggregates to
-  // ONE label at their combined centroid, which can fall spuriously inside the
-  // town where no such road exists — this drops it. Removes only the LABEL, not
-  // any drawn road line.
-  for(const n of (IR.roadLabelExclude||[])) delete agg[n];
+  const {agg,incl,ren}=roadNameAgg();
   const names=Object.entries(agg).sort((a,b)=>b[1].len-a[1].len);
   const chosen=[];
   for(const e of names){ if(incl.includes(e[0])) chosen.push(e); }
   for(const e of names){ if(chosen.length>=IR.roadLabelMax)break; if(!chosen.includes(e)) chosen.push(e); }
   if(process.env.DBG_LABELS) console.error('chosen ('+chosen.length+'/'+IR.roadLabelMax+'): '+chosen.map(e=>e[0]).join(', '));
   for(const [n,a] of chosen){
-    let sw=0,cx0=0,cy0=0,vx=0,vy=0;
-    for(const [p,q] of a.segs){ const L=Math.hypot(q[0]-p[0],q[1]-p[1]);
-      sw+=L; cx0+=(p[0]+q[0])/2*L; cy0+=(p[1]+q[1])/2*L;
-      const an=Math.atan2(q[1]-p[1],q[0]-p[0]); vx+=Math.cos(2*an)*L; vy+=Math.sin(2*an)*L; }
-    cx0/=sw; cy0/=sw;
-    let ang=Math.atan2(vy,vx)/2*180/Math.PI; if(ang>90)ang-=180; if(ang<-90)ang+=180;
-    const label=ren(n);
-    // Measured, for the same reason as the anchor label above: a character-count
-    // guess put "Ramsey Road" at 13.75 mm when it draws 15.84, and the badge sitting
-    // in the 2.09 mm nobody claimed was one of OA-148's thirteen.
-    const w=FONT.textWidth(label,2.5,false);
-    // multi-candidate search (same fallback pattern as placeLabel()): try the
-    // whole-road weighted centroid first, then points spread along the road's
-    // used length (projected onto its own mean bearing), so ONE local collision
-    // (a badge, another label) no longer drops the entire label.
-    const ux=Math.cos(ang*Math.PI/180), uy=Math.sin(ang*Math.PI/180);
-    const mids=a.segs.map(([p,q])=>({x:(p[0]+q[0])/2, y:(p[1]+q[1])/2, L:Math.hypot(q[0]-p[0],q[1]-p[1])}))
-      .sort((m1,m2)=>(m1.x*ux+m1.y*uy)-(m2.x*ux+m2.y*uy));
-    let acc=0; for(const m of mids){ m.t=acc+m.L/2; acc+=m.L; }
-    const along=frac=>{ const target=frac*sw; let best=mids[0];
-      for(const m of mids) if(Math.abs(m.t-target)<Math.abs(best.t-target)) best=m;
-      return [best.x,best.y]; };
-    /* THE SEVEN, THEN EVERY OTHER MIDPOINT (2026-08-30, OA-148 / OA-176).
-     *
-     * Measuring the box properly (above) makes it 2 mm wider than the guess, and
-     * on the first dry run that cost St Ives its "Ramsey Road" and "Somersham
-     * Road" outright — the pass drops a name when all its candidates are blocked,
-     * and a wider box blocks more easily. A truthful measurement that loses a
-     * named road is not an improvement, and the drop count is a number this
-     * project has already been blind to once.
-     *
-     * So the pass gets more places to look rather than a smaller box. The seven
-     * it always had come FIRST and in the same order, so any road name that
-     * placed at one of them still does; the rest of the road's own segment
-     * midpoints follow, in the along-bearing order `mids` is already sorted into,
-     * which is deterministic and costs nothing on a road that placed at its
-     * centroid. */
-    const seen7=new Set();
-    const cands=[[cx0,cy0]].concat([0.3,0.7,0.15,0.85,0.42,0.58].map(along))
-      .concat(mids.map(m=>[m.x,m.y]))
-      .filter(([px2,py2])=>{ const k=px2.toFixed(3)+','+py2.toFixed(3);
-        if(seen7.has(k)) return false; seen7.add(k); return true; });
-    let ok=false, anyInFrame=false;
-    // Two sweeps when design.reserveIcons is on: honour the symbols first, and only if
-    // every candidate is blocked, repeat ignoring them — the same "gain, never lose"
-    // fallback placeLabel() uses, so no road name that printed before disappears now.
-    for(const pass of (iconBoxes.size?[0,1]:[0])){
-    if(ok) break;
-    const blocked = pass ? overlapsNoIcons : (b=>overlaps(b));
-    for(const [cx,cy] of cands){
-      if(!inFrame([cx,cy]))continue; if(inCore([cx,cy]))continue; anyInFrame=true;
-      // reserve the ROTATED footprint (rect rotated by `ang`, then its axis-
-      // aligned bounding box) -- the old axis-aligned-only box ignored rotation
-      // entirely, so a steeply-angled road name (e.g. -35 deg) could visually
-      // swing well outside its own reservation and cover something the collision
-      // check thought was clear (caught: it hid a terminus badge once a nearby
-      // reservation moved). Reduces to the exact old box when ang=0.
-      const rad=ang*Math.PI/180, ca=Math.cos(rad), sa=Math.sin(rad), hw=w/2+1, hh=2;
-      const corners=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([lx,ly])=>[cx+lx*ca-ly*sa, cy+lx*sa+ly*ca]);
-      const b=[Math.min(...corners.map(c=>c[0])), Math.min(...corners.map(c=>c[1])),
-                Math.max(...corners.map(c=>c[0])), Math.max(...corners.map(c=>c[1]))];
-      if(blocked(b))continue; reserve(...b);
-      out(`<text x="${cx.toFixed(2)}" y="${cy.toFixed(2)}" font-family="Arial" font-size="2.5" fill="#666" text-anchor="middle" transform="rotate(${ang.toFixed(1)} ${cx.toFixed(2)} ${cy.toFixed(2)})" stroke="#fff" stroke-width="0.8" paint-order="stroke">${esc(label)}</text>`);
-      ok=true; break;
-    }
-    }
-    if(process.env.DBG_LABELS) console.error('  '+(ok?'placed  ':'SKIP('+(anyInFrame?'overlap':'off-frame')+')')+' '+n);
+    // A name pinned before the badges prints where it was reserved; one that found
+    // no room then gets the ordinary pass, so a pin never loses a name that would
+    // otherwise have printed.
+    let r=ROAD_PINNED.get(n); const pinned=!!(r&&r.ok);
+    if(!pinned) r=placeRoadName(n,a,ren);
+    if(r.ok) out(r.svg);
+    if(process.env.DBG_LABELS) console.error('  '+(pinned?'pinned  ':r.ok?'placed  ':'SKIP('+(r.anyInFrame?'overlap':'off-frame')+')')+' '+n);
   }
 } else {
 // classic: group stops by road (from stop names), label along route direction

@@ -523,10 +523,17 @@ function rolloutOnePlace(p) {
   // read healthy while no JPG existed for the version it was naming. Hit on all
   // four boarding places on 2026-08-25. `anyLost` comes from the scratch build
   // above, which is the same build, so nothing is gained by getting here first.
-  if ((anyLost || anyRegressed) && !FORCE) {
+  if (anyLost && !FORCE) {
     fs.rmSync(scratch, { recursive: true, force: true });
     return { name: p.name, status: 'REVIEW-NEEDED', diffs, owed, warnings, blockers,
-      detail: (anyLost ? 'a label was lost vs the previous build' : 'the quality ratchet REGRESSED vs the ledger') + ', and NOTHING was written. Re-run with --keep <dir> to inspect the sheets, then --force to publish anyway (or fix the cause and re-run).' };
+      detail: 'a label was lost vs the previous build, and NOTHING was written. Re-run with --keep <dir> to inspect the sheets, then --force to publish anyway (or fix the cause and re-run).' };
+  }
+  // OA-547: the quality ratchet refuses on the same terms, as its own statement so the
+  // lost-label refusal above stays readable by the prove-red that greps for it.
+  if (anyRegressed && !FORCE) {
+    fs.rmSync(scratch, { recursive: true, force: true });
+    return { name: p.name, status: 'REVIEW-NEEDED', diffs, owed, warnings, blockers,
+      detail: 'the quality ratchet REGRESSED vs the ledger, and NOTHING was written. Re-run with --keep <dir> to inspect the sheets, then --force to publish anyway (or fix the cause and re-run).' };
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----

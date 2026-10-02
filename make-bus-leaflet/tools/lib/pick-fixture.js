@@ -28,11 +28,24 @@
  * In NAME ORDER, so the answer is stable across runs and across machines: a
  * harness that borrowed a different map on Tuesday would be a harness whose red
  * nobody could reproduce.
+ *
+ * BUT A MAP DRAWN BY THE RUNNING ENGINE COMES FIRST (buses-data OA-536). Since
+ * OA-430 each map is gated against the engine that drew it, so most of the estate
+ * trails the engine by design — and a harness whose control rebuilds its borrowed
+ * map under TODAY's engine needs a map today's engine reproduces. Name order handed
+ * `prove-red-rollout-stamp` Beaconsfield, whose ci-reference the pinned engine no
+ * longer draws byte for byte, so control A reached a rebuild and errored (OA-535),
+ * and gates.yml was patched with `--town "St Ives"` — right only while the pin draws
+ * St Ives. So the first usable map whose `ci-reference/routes.json` `engine` stamp
+ * equals this checkout's hash wins, as prove-red-gates.js's pickMap() has chosen
+ * since claude-skills #236; with none, name order as before. Still stable: the
+ * answer moves only when the engine or the estate does.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const gl = require('../../assets/gate_lib');
 const { loadManifest } = require('../../assets/stage');
+const { computeEngineVersion, computePlaceEngineVersion } = require('../../assets/engine_version');
 
 function hasLatestS3(dir) {
   try {
@@ -49,6 +62,16 @@ function usable(dir) {
     && hasLatestS3(dir);
 }
 
+function stampOf(dir) {
+  try { return JSON.parse(fs.readFileSync(path.join(dir, 'ci-reference', 'routes.json'), 'utf8')).engine || null; } catch { return null; }
+}
+
+/** The first usable map drawn by `engine`, else the first usable one. `sorted` is in name order. */
+function preferStamped(sorted, engine) {
+  const ok = sorted.filter((x) => usable(x.dir));
+  return ok.find((x) => engine && stampOf(x.dir) === engine) || ok[0];
+}
+
 /* `who` is the harness's own name, so a refusal says which run stopped and why. */
 function refuse(who, kind, named, tried, buses) {
   if (named) {
@@ -63,8 +86,9 @@ function refuse(who, kind, named, tried, buses) {
   process.exit(1);
 }
 
-/** The town to borrow: the one named, or the first in name order that is usable. */
-function pickTown(buses, named, who) {
+/** The town to borrow: the one named, or the first usable one drawn by the running
+ *  engine, or the first usable one in name order. `engine` overrides the hash (tests). */
+function pickTown(buses, named, who, { engine } = {}) {
   const towns = gl.findTowns(buses);
   const sorted = towns.slice().sort((a, b) => a.name.localeCompare(b.name));
   if (named) {
@@ -72,7 +96,7 @@ function pickTown(buses, named, who) {
     if (!t || !usable(t.dir)) refuse(who, 'town', named, [], buses);
     return t;
   }
-  const t = sorted.find((x) => usable(x.dir));
+  const t = preferStamped(sorted, engine === undefined ? computeEngineVersion() : engine);
   if (!t) refuse(who, 'town', null, sorted.map((x) => x.name), buses);
   return t;
 }
@@ -85,7 +109,7 @@ function pickTown(buses, named, who) {
  * and a standalone place has none. Asked for by the caller rather than assumed,
  * because the other harness is happy with any layout and narrowing both would
  * shrink what can be borrowed for no reason. */
-function pickPlace(buses, named, who, { requireTown = false } = {}) {
+function pickPlace(buses, named, who, { requireTown = false, engine } = {}) {
   const places = gl.findPlaces(gl.findTowns(buses), buses)
     .filter((p) => !requireTown || p.town);
   const sorted = places.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -95,7 +119,7 @@ function pickPlace(buses, named, who, { requireTown = false } = {}) {
     if (!p || !usable(p.dir)) refuse(who, kind, named, [], buses);
     return p;
   }
-  const p = sorted.find((x) => usable(x.dir));
+  const p = preferStamped(sorted, engine === undefined ? computePlaceEngineVersion() : engine);
   if (!p) refuse(who, kind, null, sorted.map((x) => x.name), buses);
   return p;
 }

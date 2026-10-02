@@ -2782,8 +2782,8 @@ const MUTATIONS = [
   // place_pointer.js - the red arrow at a place map's marker (buses-data OA-509).
   { suite: 'place_pointer.test.js', file: 'place_pointer.js',
     what: 'every town grows an arrow at its interchange, because absent the key means on everywhere',
-    find: "  if (v === undefined || v === null) return !!(rj && rj.place);",
-    to: "  if (v === undefined || v === null) return true;" },
+    find: "  if (v === undefined || v === null) return !!(rj && rj.place) && !(design && design.partnerBox);",
+    to: "  if (v === undefined || v === null) return !(design && design.partnerBox);" },
 
   { suite: 'place_pointer.test.js', file: 'place_pointer.js',
     what: "the head is never tested against the marker's own name, so the arrowhead can land on it",
@@ -2828,6 +2828,69 @@ const MUTATIONS = [
     what: 'the age test is gone, so a board running in another session has its tree removed under it',
     find: "    if (age < hours * 3600e3) continue;",
     to: "" },
+
+  { suite: 'place_pointer.test.js', file: 'place_pointer.js',
+    what: 'a town-centre place framed by a partner box gets the red arrow again, pointing at one spot in an area',
+    find: "  if (v === undefined || v === null) return !!(rj && rj.place) && !(design && design.partnerBox);",
+    to: "  if (v === undefined || v === null) return !!(rj && rj.place);" },
+
+  // trunk_segments.js — internalRoads.trunkSegments (buses-data OA-549, 2026-10-02).
+  // Opt-in and set by no fixture map, so the byte gate runs only the OFF path and
+  // every clause of the ON path is held by trunk_segments.test.js alone.
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'a trunk starts AT minLanes rather than above it, so a street of exactly that many lanes turns grey',
+    find: "      if (a && a.length > cfg.minLanes && !keys.has(keyOf(a))) keys.set(keyOf(a), a); } }",
+    to: "      if (a && a.length >= cfg.minLanes && !keys.has(keyOf(a))) keys.set(keyOf(a), a); } }" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'minLength is ignored, so a junction stub a few millimetres long becomes a trunk with two stacks',
+    find: "      if (polyLen(pts) < cfg.minLength) continue;",
+    to: "" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'touching bundles stay separate trunks, so the two sides of one street each get two grids of badges',
+    find: "    const hit = groups.filter(g => g.some(m => touch(m, c)));",
+    to: "    const hit = [];" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'a lane is hidden wherever its lane set matches, so a flicker at a far junction cuts a hole in its line',
+    find: "      const t = trunks.find(t2 => t2.keys.has(k) && nearest(M, t2.polys).d <= CD + t2.span / 2);",
+    to: "      const t = trunks.find(t2 => t2.keys.has(k));" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'a lane meeting a trunk keeps its offset to the end, so the lanes stop in mid-air beside a narrow ribbon',
+    find: "  const n = nearest(p, t.polys), k = t.span > 0 ? Math.max(0, cfg.width - stroke) / t.span : 0;",
+    to: "  const n = nearest(p, t.polys), k = 1;" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'a lane that meets no trunk is rebuilt instead of returned, which is the absent-key promise broken',
+    find: "  if (runs.length === 1 && !runs[0].head && !runs[0].tail) return [pts];",
+    to: "  if (runs.length === 1 && !runs[0].head && !runs[0].tail) return [pts.slice()];" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'a stack drops its first route, so the reader at that end never learns the bus runs along the trunk',
+    find: "      t.drawnEnds.push({ at: c, names: names.slice() });",
+    to: "      t.drawnEnds.push({ at: c, names: names.slice(1) });" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'S6 stops looking for a missing name, so a stack that leaves a lane out passes',
+    find: "      const missing = routes.filter(r => !(e.names || []).includes(r));",
+    to: "      const missing = [];" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'every route counts as unseen, so a trunk of through routes draws two grids of every number on it again',
+    find: "const unseen = t => t.routes.filter(r => !(t.exits && t.exits.has(r)));",
+    to: "const unseen = t => t.routes.slice();" },
+
+  { suite: 'trunk_segments.test.js', file: 'trunk_segments.js',
+    what: 'S6 treats a route seen leaving as one that must be named, so the stackless High Wycombe trunk blocks',
+    find: "    const ends = t.ends || [], exits = t.exits || [], routes = (t.routes || []).filter(r => !exits.includes(r));",
+    to: "    const ends = t.ends || [], exits = t.exits || [], routes = (t.routes || []);" },
+
+  { suite: 'trunk_segments.test.js', file: 'verify_report.js',
+    what: 'an incomplete trunk stack is SOFT, so it no longer blocks a delivery',
+    find: "    for (const f of trunkFindings(corr.trunks)) add('hard', 'trunk-stack-incomplete',",
+    to: "    for (const f of trunkFindings(corr.trunks)) add('soft', 'trunk-stack-incomplete'," },
 
 ];
 

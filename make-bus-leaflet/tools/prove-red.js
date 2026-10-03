@@ -159,8 +159,8 @@ const MUTATIONS = [
 
   { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
     what: 'gk stops escaping the key, so a feature named with an ampersand writes invalid SVG in editor mode',
-    find: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${esc(key)}\">${inner}</g>` : inner;",
-    to: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${key}\">${inner}</g>` : inner;" },
+    find: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${esc(key)}\">${inner}</g>`",
+    to: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${key}\">${inner}</g>`" },
 
   // NOT here, and deliberately: a mutation that deletes badgeStack's one-element
   // fast path SURVIVES, because it is an optimisation and not a branch — with one

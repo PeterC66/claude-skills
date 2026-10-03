@@ -18,8 +18,12 @@
  * arguments. The crops need sharp and the engine, and are NOT here; the review
  * record and the gate are.
  */
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import {
-  neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, Refused, SCHEMA,
+  commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, Refused, SCHEMA,
 } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -189,6 +193,55 @@ console.log('\n6. The page shows only what moved');
   check('the moved map has a section and its crop', /<h2>March<\/h2>/.test(html) && /March_i_0_pair\.png/.test(html));
   check('the quiet map has no section, only a line saying it goes ahead', !/<h2>Soham/.test(html) && /Soham/.test(html));
   check('the page tells Peter how to answer in words, not a command', /tell Claude/.test(html) && !/node /.test(html));
+}
+
+console.log('\n7. The record commits itself — by pathspec, read back, never pushed');
+{
+  const g = (cwd, ...a) => spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8' });
+  const root = mkdtempSync(path.join(os.tmpdir(), 'ink-commit-'));
+  g(root, 'init', '-q', '-b', 'main');
+  g(root, 'config', 'user.email', 't@example.com'); g(root, 'config', 'user.name', 't'); g(root, 'config', 'commit.gpgsign', 'false');
+  mkdirSync(path.join(root, '_gtfs'));
+  const rec = path.join(root, '_gtfs', 'ink-review_2026-10-01.json');
+  const other = path.join(root, 'other.txt');
+  writeFileSync(rec, '{"v":1}\n'); writeFileSync(other, 'a\n');
+  g(root, 'add', '-A'); g(root, 'commit', '-q', '-m', 'seed');
+  const head = () => g(root, 'log', '-1', '--format=%s').stdout.trim();
+  const count = () => Number(g(root, 'rev-list', '--count', 'HEAD').stdout.trim());
+
+  check('an unchanged record commits nothing', commitRecord({ root, file: rec, subject: 'x' }).status === 'clean' && count() === 1);
+
+  writeFileSync(rec, '{"v":2}\n'); writeFileSync(other, 'b\n');
+  const r = commitRecord({ root, file: rec, subject: 'ink-review: re-point' });
+  check('a modified record is committed under its subject', r.status === 'committed' && head() === 'ink-review: re-point', JSON.stringify(r));
+  check('  and the path is clean afterwards', g(root, 'status', '--porcelain', '--', '_gtfs').stdout === '');
+  check('  and ONLY that path went in: a neighbour\'s dirty file is left alone', g(root, 'status', '--porcelain', '--', 'other.txt').stdout.startsWith(' M'));
+
+  const fresh = path.join(root, '_gtfs', 'ink-review_2026-11-01.json');
+  writeFileSync(fresh, '{"v":1}\n');
+  check('a NEW record is added and committed', commitRecord({ root, file: fresh, subject: 'ink-review: new' }).status === 'committed' && g(root, 'ls-files', '_gtfs').stdout.includes('2026-11-01'));
+
+  writeFileSync(rec, '{"v":3}\n'); g(root, 'add', '--', '_gtfs');
+  check('a record somebody has STAGED is refused, not swept', commitRecord({ root, file: rec, subject: 'x' }).status === 'skipped' && head() === 'ink-review: new');
+  g(root, 'reset', '-q', '--', '_gtfs');
+
+  check('a file outside the checkout is refused', commitRecord({ root, file: path.join(os.tmpdir(), 'elsewhere.json'), subject: 'x' }).status === 'skipped');
+  g(root, 'checkout', '-q', '-b', 'work/x');
+  check('a checkout not on main is refused', /not main/.test(commitRecord({ root, file: rec, subject: 'x' }).why || ''));
+  g(root, 'checkout', '-q', 'main');
+
+  /* The gate must be seen to fail: a hook that refuses, then a commit that lies. */
+  mkdirSync(path.join(root, 'hooks'));
+  writeFileSync(path.join(root, 'hooks', 'pre-commit'), '#!/bin/sh\nexit 1\n');
+  g(root, 'config', 'core.hooksPath', 'hooks');
+  const refusedBy = commitRecord({ root, file: rec, subject: 'ink-review: nope' });
+  check('a refusing pre-commit hook is reported as FAILED, not swallowed', refusedBy.status === 'failed' && head() === 'ink-review: new', JSON.stringify(refusedBy));
+  check('  and the record is still written', readFileSync(rec, 'utf8') === '{"v":3}\n');
+  const liar = (cwd, argv) => (argv[0] === 'commit' ? { status: 0, out: '', err: '' } : spawnSync2(cwd, argv));
+  const spawnSync2 = (cwd, argv) => { const x = g(cwd, ...argv); return { status: x.status, out: x.stdout, err: x.stderr }; };
+  check('a commit that exits 0 but landed nothing fails the read-back', commitRecord({ root, file: rec, subject: 'ink-review: lie', git: liar }).status === 'failed');
+  check('reportCommit is false for a failure and true for clean', reportCommit({ status: 'clean' }) === true && (console.error = () => {}, reportCommit({ status: 'failed', why: 'x' })) === false);
+  rmSync(root, { recursive: true, force: true });
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

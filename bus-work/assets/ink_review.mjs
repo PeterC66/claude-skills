@@ -58,6 +58,17 @@
  * rebuilt from the sheets on demand and go under `loop/ink-review/<scan>/`, which
  * is gitignored — a crop is evidence to look at, not a record.
  *
+ * THE RECORD COMMITS ITSELF. A tool that rewrites a tracked file and has no git call
+ * leaves the buses-data checkout dirty, and a dirty main checkout stops every tick
+ * that needs the tree — which is how an enrolment's re-pointed `after` build stalled
+ * the loop on 2026-10-03 until a person committed it by hand. `commitRecord()` is
+ * the one commit: the record and nothing else, by pathspec, subject `ink-review: …`,
+ * read back afterwards (the path clean, HEAD's subject the one written). It never
+ * pushes — the push preflight paces that. A commit that cannot be made is named on
+ * stderr and leaves the record written; `--no-commit` opts out. `adopt.mjs` is
+ * deliberately NOT how this file is committed: it is for Peter's finished edits,
+ * and this one is machine output with no author to wait for.
+ *
  * PURE CORE, INJECTED EDGE, like `refresh_grades.mjs`: `collect()` takes its disk
  * reads as arguments and reads no clock, so `prove-red-ink-review.mjs` can falsify
  * every rule with no Areas folder at all. Node core only, except that the crops
@@ -71,6 +82,7 @@
  *   node ink_review.mjs --scan <scan> --town "<Town>,<Town>" add towns a person rebuilt
  *   node ink_review.mjs --scan <scan> --place "<Place>,<Place>" add place maps (with or without --town)
  *   node ink_review.mjs --scan <scan> --no-crops            the record only, no sharp needed
+ *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a tick may deliver
  *
@@ -88,6 +100,51 @@ export const SCHEMA = 1;
 export const VERDICTS = ['accept', 'hold'];
 
 export class Refused extends Error {}
+
+const defaultGit = (root, argv, input) => {
+  const r = spawnSync('git', ['-C', root, ...argv], { encoding: 'utf8', input });
+  return { status: r.status, out: String(r.stdout || ''), err: String(r.stderr || '') };
+};
+
+/**
+ * Commit ONE record file in the buses-data checkout, and read the commit back.
+ * Returns `{ status: 'clean' | 'committed' | 'skipped' | 'failed', why?, sha? }`
+ * and never throws: the record is already written, and a caller that has done
+ * something outward (staged a map) must not be turned into a retry by a git fault.
+ * `git` is injected so a stub can falsify each branch.
+ */
+export function commitRecord({ root, file, subject, git = defaultGit }) {
+  const rel = path.relative(root, file).split(path.sep).join('/');
+  if (!rel || rel.startsWith('..')) return { status: 'skipped', why: `${file} is not inside ${root}` };
+  const branch = git(root, ['branch', '--show-current']);
+  if (branch.status !== 0) return { status: 'skipped', why: `${root} is not a git checkout (${branch.err.trim()})` };
+  if (branch.out.trim() !== 'main') return { status: 'skipped', why: `the checkout is on ${JSON.stringify(branch.out.trim())}, not main` };
+  const st = git(root, ['status', '--porcelain=v1', '--', rel]);
+  if (st.status !== 0) return { status: 'failed', why: `git status failed: ${st.err.trim()}` };
+  const line = st.out.split('\n')[0].replace(/\r$/, '');
+  if (!line) return { status: 'clean' };
+  const code = line.slice(0, 2);
+  if (code !== ' M' && code !== '??') return { status: 'skipped', why: `${rel} is in state ${JSON.stringify(code)}; only a modified or new, unstaged record is committed` };
+  if (code === '??') {
+    const add = git(root, ['add', '--', rel]);
+    if (add.status !== 0) return { status: 'failed', why: `git add failed: ${add.err.trim()}` };
+  }
+  const body = `${subject}\n\nWritten by ink_review.mjs and committed by it, so the checkout is not left dirty for the loop's tick gate.\n`;
+  const c = git(root, ['commit', '-q', '-F', '-', '--', rel], body);
+  if (c.status !== 0) return { status: 'failed', why: `git commit exited ${c.status}: ${(c.err || c.out).trim().split('\n').pop()}` };
+  const head = git(root, ['log', '-1', '--format=%H%x00%s']).out.trim().split('\0');
+  const after = git(root, ['status', '--porcelain=v1', '--', rel]).out.trim();
+  if (head[1] !== subject || after !== '') return { status: 'failed', why: `the commit did not read back (HEAD ${JSON.stringify(head[1])}, record ${after ? 'still dirty' : 'clean'})` };
+  return { status: 'committed', sha: head[0].slice(0, 8), subject };
+}
+
+/** Print what `commitRecord` did; true when the record is safely in git or needed no commit. */
+export function reportCommit(r, tag = 'ink_review') {
+  if (r.status === 'committed') { console.log(`${tag}: committed ${r.sha} "${r.subject}" (not pushed)`); return true; }
+  if (r.status === 'clean') return true;
+  console.error(`${tag}: the record is written and NOT committed — ${r.why}. The checkout is dirty until it is; commit the _gtfs/ink-review_<scan>.json record by pathspec.`);
+  return false;
+}
 
 /* The stamp `sheet_stamps.js` prints: `build 3.12 · 21 Sep 2026`. The middle dot
  * is matched in every spelling an SVG could carry it, because a stamp that was
@@ -381,6 +438,7 @@ function main() {
     writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
     const m = next.maps.find((x) => x.map.toLowerCase() === args.answer.toLowerCase());
     console.log(`ink_review: ${m.map} ${m.answer.verdict} for ${m.after}, recorded in ${file}`);
+    if (!args['no-commit'] && !reportCommit(commitRecord({ root: busesDir, file, subject: `ink-review: ${m.map} ${m.answer.verdict} for ${m.after}` }))) process.exitCode = 2;
     return;
   }
   if (args.deliverable) {
@@ -399,6 +457,7 @@ function main() {
   const other = review.maps.filter((m) => m.status !== 'ink-moved' && m.status !== 'no-ink');
   console.log(`ink_review: ${scan} — ${counts.join(', ')}${other.length ? `, ${other.length} not reviewable (${other.map((m) => `${m.map}: ${m.status}`).join('; ')})` : ''}`);
   console.log(`  record: ${file}`);
+  if (!args['no-commit'] && !reportCommit(commitRecord({ root: busesDir, file, subject: `ink-review: ${scan} record collected (${counts.join(', ')})` }))) process.exitCode = 2;
   if (args['no-crops']) return;
   const outDir = path.join(busesDir, 'loop', 'ink-review', scan);
   mkdirSync(outDir, { recursive: true });

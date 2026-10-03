@@ -229,7 +229,7 @@ export function assessCapacity(f, ctx) {
       if (b.lockOnly) continue;
       if (b.name === 'buses-tree') treeBarred = true;
       if ((b.name === 'buses-tree' || b.name === 'estate-sweep') && findings.some((x) => x.key === 'tree-dirty')) continue;
-      add(b.verdict === 'check' && !b.unpushed ? 'AT RISK' : 'NOTE', `resource-${b.name}`, `\`${b.name}\` is ${b.verdict.toUpperCase()}, which bars ${b.bars}: ${b.why}`, b.unpushed ? null : 'Read `node worklist.mjs --conditions` in `C:\\u3a St Ives\\.claude\\skills\\bus-work\\assets` and clear what it names.');
+      add(b.verdict === 'check' && !b.unpushed ? 'AT RISK' : 'NOTE', `resource-${b.name}`, `\`${b.name}\` is ${b.verdict.toUpperCase()}, which bars ${b.bars}: ${b.why}`, b.unpushed ? null : 'Read `node worklist.mjs --conditions` from the bus-work assets folder and clear what it names.');
     }
   }
 

@@ -119,6 +119,7 @@ export function bucketActions(actions, today) {
  * @param {object} f
  * @param {number} f.now
  * @param {Array}  f.runs            readRuns() of loop/runs
+ * @param {Array}  [f.idleNaming]  idleNaming() of loop/runs: the newest idle run files since the P2-and-P3 rule, each with the refs it passed over
  * @param {string|null} f.lastRun    {name, headline} of the newest run file, or null
  * @param {boolean} f.stopFile
  * @param {object} f.lock            readLoopLock()
@@ -197,7 +198,11 @@ export function analyse(f) {
     if (blocked) add('NOTE', 'idle-explained', `${health.idle} consecutive ticks reached no work, which the BLOCKING finding${findings.filter((x) => x.level === 'BLOCKING').length === 1 ? '' : 's'} above explain.${why}`);
     else if (free === 0) add('NOTE', 'idle-supply', `${health.idle} consecutive ticks reached no work, and no row is free to take: everything is Parked, Peter's, held by a date or claimed today. The loop is idle for want of work, not blocked.${why}`);
     else if (urgent.length) add('AT RISK', 'idle-with-free', `${health.idle} consecutive ticks reached no work although ${urgent.length} free row${urgent.length === 1 ? ' is' : 's are'} P0 or P1 (${urgent.slice(0, 4).map((a) => a.ref).join(', ')}). Free is not finishable (an engine change owes a re-vendor and rebuild rows), but an urgent row no tick opens is worth reading.${why}`, 'Read the newest file in `loop/runs/` and the P1 re-weigh, and ask whether those rows are really beyond one tick or the feed is being skipped.');
-    else add('NOTE', 'idle-free-lower', `${health.idle} consecutive ticks reached no work. ${free} row${free === 1 ? ' is' : 's are'} free to take, none P0 or P1, so this is the loop declining lower-priority work it judged unfinishable, not a fault.${why}`);
+    else if (f.idleNaming && f.idleNaming.length >= IDLE_NAMING_RUNS && f.idleNaming.every((n) => !n.refs.length)) add('AT RISK', 'idle-unnamed', `${health.idle} consecutive ticks reached no work with ${free} row${free === 1 ? '' : 's'} free to take (none P0 or P1), and none of the last ${IDLE_NAMING_RUNS} idle run files names a row it passed over in the form \`OA-nnn\` (passed over: <gate>) that the loop prompt's P2-and-P3 rule requires. A tick that opens no P2 or P3 row is declining it by habit, which nothing else can see.${why}`, 'Read the newest idle run file, open the top free P2 row yourself, and say whether a tick could have taken a slice of it.');
+    else {
+      const named = f.idleNaming && f.idleNaming[0] ? f.idleNaming[0].refs : [];
+      add('NOTE', 'idle-free-lower', `${health.idle} consecutive ticks reached no work. ${free} row${free === 1 ? ' is' : 's are'} free to take, none P0 or P1. ${named.length ? `The last idle tick named ${named.join(', ')} as passed over, each with a gate: read one and judge whether the gate is real.` : `Too few run files since the P2-and-P3 rule yet to say whether the ticks are opening these rows.`}${why}`);
+    }
   }
   if (health.ran && health.missed > 0) {
     add('AT RISK', 'missed', `${health.missed} of the recent idle runs were fired by the scheduler and never reached a prompt (written up as \`-missed\`). No tree state explains that.`, "Open the scheduled task bus-loop in the desktop app and read its recent runs' messages.");
@@ -283,6 +288,22 @@ function git(dir, args) {
 }
 
 /** Newest run file's first bold line, for display only. */
+/** The loop prompt's P2-and-P3 rule (buses-data OA-557) took effect with runs started after this stamp; older run files cannot be blamed for not following it. */
+export const RULE_FROM = '2026-10-03_1300';
+export const IDLE_NAMING_RUNS = 3;
+
+/** The newest idle (-none) run files since RULE_FROM, newest first, each with the OA refs it names as `OA-nnn` (passed over: ...). */
+export function idleNaming(runsDir, n = IDLE_NAMING_RUNS) {
+  try {
+    const files = readdirSync(runsDir).filter((x) => /^\d{4}-\d{2}-\d{2}_\d{4}-none\.md$/.test(x) && x.slice(0, 15) >= RULE_FROM).sort().reverse().slice(0, n);
+    return files.map((name) => {
+      const text = readFileSync(path.join(runsDir, name), 'utf8');
+      const refs = [...new Set([...text.matchAll(/(OA-\d+)`?\s*\(passed over:/g)].map((m) => m[1]))];
+      return { name, refs };
+    });
+  } catch { return []; }
+}
+
 export function newestRun(runsDir) {
   try {
     const files = readdirSync(runsDir).filter((n) => /^\d{4}-\d{2}-\d{2}_\d{4}-.+\.md$/.test(n)).sort();
@@ -331,6 +352,7 @@ export function gather(busesDir, { now = Date.now() } = {}) {
     now,
     runs: readRuns(path.join(loopDir, 'runs')),
     lastRun: newestRun(path.join(loopDir, 'runs')),
+    idleNaming: idleNaming(path.join(loopDir, 'runs')),
     stopFile: existsSync(path.join(loopDir, 'STOP')),
     lock: readLoopLock(busesDir, { now }),
     dirty, holdPaths: heldPaths(files), holds: parsedHolds, drafts: drafts.length,

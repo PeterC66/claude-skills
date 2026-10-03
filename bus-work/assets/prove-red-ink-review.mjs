@@ -232,7 +232,7 @@ console.log('\n7. The record commits itself — by pathspec, read back, never pu
 
   /* The gate must be seen to fail: a hook that refuses, then a commit that lies. */
   mkdirSync(path.join(root, 'hooks'));
-  writeFileSync(path.join(root, 'hooks', 'pre-commit'), '#!/bin/sh\nexit 1\n');
+  writeFileSync(path.join(root, 'hooks', 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 }); // git skips a hook that is not executable, as it does on Linux CI
   g(root, 'config', 'core.hooksPath', 'hooks');
   const refusedBy = commitRecord({ root, file: rec, subject: 'ink-review: nope' });
   check('a refusing pre-commit hook is reported as FAILED, not swallowed', refusedBy.status === 'failed' && head() === 'ink-review: new', JSON.stringify(refusedBy));

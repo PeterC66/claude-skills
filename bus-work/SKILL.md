@@ -167,6 +167,8 @@ The worklist raises a `loop-idle` row when ticks fire and reach no work, but it 
 node loop_health.mjs --buses "C:/u3a St Ives/Using AI/Buses"
 ```
 
+**It also answers "could a tick take any work, by its own prompt?"** (buses-data OA-560), in a section headed `CAN A TICK DO WORK?` with one word: CAN WORK, WAITING (everything is held by a date, the push or a claim, and clears by itself), CANNOT (every free row has a gate only a person moves) or BARRED (a BLOCKING finding). It checks the prompt's prerequisites (the stored task against `loop/README.md`; every script the block names exists), the resources a unit needs (a tick's own live lock is a run in progress, not a bar), and the three feeds: ad-hoc files not named *not due*, bus-work rows by step 4D's rules (`--deep`, which reads the live portal and takes about a minute), and each free P0 to P3 OA row against the gate the newest tick that passed it over wrote in the mandated `OA-nnn (passed over: <gate>)` form. It ends with **What you can do, most rows first**: each lever says how many rows it releases and the move. **A row no tick has named a gate for is open, not proved finishable**: a tick opens it to find out. Add `--deep` for the bus-work feed and `--no-probes` to skip the spawned commands.
+
 Its falsification harness is `npm run test:prove-red-loop-health` in `bus-work`, which breaks the module one line at a time and requires the same assertions to go red.
 
 ## Before you push — `preflight.mjs` answers *what would go red if I pushed now*

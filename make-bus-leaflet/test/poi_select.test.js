@@ -1134,6 +1134,44 @@ test('OA-522: a hand-placed symbol and a must keep their spot; the rest are plac
   assert.match(optInNote(['Red Lion', 'The Acre']), /^poi: 2 opt-in symbols left off, .*: Red Lion, The Acre\.$/);
 });
 
+/* OA-559: a NAMED opt-in symbol with no clear spot was left off together with its name,
+ * so Beaconsfield's The Chiltern and Ely Co-op's The High Flyer vanished whole. The
+ * second look seats it where the first refused, but only where `safe` says it costs
+ * no label (March's pubs, seated without that, cost it Aldi and Heron Foods). */
+test('OA-559: a named symbol left off is seated at its nearest spot that is safe; an unnamed one is not', () => {
+  const { seatStrandedSymbols, strandedNameRequest, OPT_IN_REACH } = require('./_engine.js').load('poi_select.js');
+  const seated = [], asked = [];
+  // A fake placer: `cost(box, req)` is what the labeller's unseats() would answer for a box and the request that goes with it.
+  const ctxOf = (cost) => ({ half: 2.1, poiBox: new Map(), notToScale: null,
+    labelRequest: (x, y, text, sz, col, it, lov, own, opt) => ({ id: opt.id, text, at: [x, y], priority: opt.priority }),
+    LAB: { unseats: (box, req) => { asked.push(req); return cost(box, req); } } });
+  const site = (name, x = 5, y = 5, o = {}) => ({ p: { name, cat: 'pub' }, t: { x, y, u: 'u:' + name, o } });
+  const run = (sites, cost, free = () => true) => seatStrandedSymbols(sites, { free, ctx: ctxOf(cost), seat: (e, at) => seated.push([e.p.name, at]), reach: OPT_IN_REACH });
+
+  const left = run([site('The Chiltern'), site(''), { p: {}, t: { x: 9, y: 9, u: 'u', o: {} } }], () => []);
+  assert.deepStrictEqual(seated, [['The Chiltern', [5, 5]]], 'the named one is seated, on its own spot when that is clear');
+  assert.strictEqual(left.length, 2, 'a symbol with no name has nothing to lose and stays off');
+
+  seated.length = 0;
+  const unsafe = run([site('The High Flyer')], () => ['aldi']);
+  assert.deepStrictEqual(seated, [], 'a spot that costs a label is refused everywhere in the reach');
+  assert.strictEqual(unsafe.length, 1, '...and the symbol is returned as still off');
+
+  asked.length = 0; seated.length = 0;
+  run([site('B')], (box) => (box[0] + box[2]) / 2 > 7 ? [] : ['x'], (x, y) => !(Math.hypot(x - 5, y - 5) < 2));
+  assert.ok(seated.length === 1 && seated[0][1][0] > 7 && Math.hypot(seated[0][1][0] - 5, seated[0][1][1] - 5) >= 2, 'free and safe both have to hold');
+  assert.ok(asked.every((r) => r && r.id === 'poi:u:B' && r.text === 'B' && r.priority === -1), 'the trial carries the name as it would be queued: a pub seats last');
+
+  // What name is asked about: the one poiMark would print, and none where none is printed.
+  const ctx = ctxOf(() => []);
+  const req = (p, o) => strandedNameRequest({ p, t: { u: 'k', o } }, 1, 2, ctx.labelRequest, ctx.poiBox, null, 2.1);
+  assert.strictEqual(req({ cat: 'pub', name: 'The Chiltern' }, {}).text, 'The Chiltern', 'a pub prints its name');
+  assert.strictEqual(req({ cat: 'pub', name: 'The Chiltern' }, { force: false }), null, 'unless the customer said not to');
+  assert.strictEqual(req({ cat: 'station', name: 'Seer Green' }, {}) === null, !require('./_engine.js').load('poi_select.js').printsName({ cat: 'station', name: 'Seer Green' }),
+    'and a category the engine does not auto-name asks only about the symbol, by the same rule as poiMark()');
+  assert.ok(req({ cat: 'station', name: 'Seer Green' }, { force: true }), 'force draws it whatever the category');
+});
+
 test('OA-523: a symbol on the town-centre square is pushed out across the nearest edge; a pinned one never moves', () => {
   const { pushOffBoxes } = require('./_engine.js').load('poi_select.js');
   const box = [10, 10, 30, 14];                      // the square and its name, x 10..30, y 10..14

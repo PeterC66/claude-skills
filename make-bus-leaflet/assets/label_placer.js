@@ -164,12 +164,17 @@ function labelPlacer(deps) {
   // return — is certified by test/label_placer.js and by nothing else. It is a live
   // feature `labels.engine:"v1"` selects, not dead code: do not delete it, and do
   // not assume a change here is covered because the byte gate stayed green.
+  // The v2 request a label is queued as — one place for it, so a trial that asks the placer
+  // "would this seat?" (Labeller.unseats, buses-data OA-559) cannot drift from the real thing.
+  function labelRequest(x,y,text,sz=2.6,col='#222',italic=false,lov=null,self=null,opt=null){
+    return Object.assign({ id:(opt&&opt.id)||('L'+text+'@'+x.toFixed(1)+','+y.toFixed(1)),
+      at:[x,y], text, size:sz, fill:col, italic, own:self||null,
+      fixed: (lov&&lov.offset) ? {x:x+lov.offset.dx, y:y+lov.offset.dy, anchor:lov.anchor||'start'} : null,
+    }, opt||{});
+  }
   function placeLabel(x,y,text,sz=2.6,col='#222',italic=false,lov=null,self=null,opt=null){
     if(LAB){                                     // v2: queue it, solve them all together
-      LAB.add(Object.assign({ id:(opt&&opt.id)||('L'+text+'@'+x.toFixed(1)+','+y.toFixed(1)),
-        at:[x,y], text, size:sz, fill:col, italic, own:self||null,
-        fixed: (lov&&lov.offset) ? {x:x+lov.offset.dx, y:y+lov.offset.dy, anchor:lov.anchor||'start'} : null,
-      }, opt||{}));
+      LAB.add(labelRequest(x,y,text,sz,col,italic,lov,self,opt));
       return true;                               // the caller only uses this to decide whether
     }                                            // to draw a fallback; v2 never silently drops
     const w=text.length*sz*0.52, h=sz;
@@ -215,7 +220,7 @@ function labelPlacer(deps) {
     out(`<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Arial" font-size="${sz}" ${italic?'font-style="italic" ':''}fill="${col}" text-anchor="${anc}" stroke="#fff" stroke-width="0.7" paint-order="stroke">${esc(text)}</text>`);
     return true;
   }
-  return { placed, iconBoxes, hit, overlaps, overlapsNoIcons, overlapsRound, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, inkOnWhite };
+  return { placed, iconBoxes, hit, overlaps, overlapsNoIcons, overlapsRound, LAB, reserve, whatBlocks, whatBlocksInk, placeLabel, labelRequest, inkOnWhite };
 }
 
 module.exports = { labelPlacer };

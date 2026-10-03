@@ -863,6 +863,53 @@ function placeOptInSymbols(sites, { free, place, reach = OPT_IN_REACH }) {
   return off;
 }
 
+/*
+ * A NAMED symbol IS NOT LEFT OFF WHERE IT CAN BE SEATED WITHOUT COST (buses-data OA-559).
+ * Leaving a symbol off took its name with it, and the place index numbers a name
+ * beside its symbol, so a named pub with no clear spot vanished whole where an
+ * unplaceable label is at least numbered: Beaconsfield's The Chiltern, and Ely
+ * Co-op's The High Flyer. After every label is queued, a named symbol that was left
+ * off gets a second look: the nearest spot within the reach that is clear of
+ * everything reserved and of every badge (`free`, which may sit on route ink, the
+ * lesser harm where the first look refused it) AND at which `safe` says it unseats no
+ * label the sheet already has. March's pubs, seated here without that test, cost it
+ * Aldi and Heron Foods, and a pub is not worth a core name. Unnamed symbols have
+ * nothing else to lose and stay off. Returns the sites still left off.
+ */
+function seatStrandedSymbols(sites, { free, ctx, seat, reach = OPT_IN_REACH }) {
+  const left = [];
+  for (const e of sites) {
+    const named = !!(e.p && typeof e.p.name === 'string' && e.p.name.trim());
+    const at = named ? clearSpot(e.t.x, e.t.y, (x, y) => free(x, y) && safe(ctx, e, x, y), reach) : null;
+    if (at) seat(e, at); else left.push(e);
+  }
+  return left;
+}
+
+/* A symbol that costs a label, or whose own name would go unseated, is not worth it: the ledger counts an
+ * unseated name as a defect. `ctx` is {LAB, labelRequest, poiBox, notToScale, half}; no LAB (labels engine v1)
+ * places labels as it goes and has nothing to ask. */
+function safe(ctx, e, x, y) {
+  if (!ctx || !ctx.LAB) return true;
+  const h = ctx.half;
+  return !ctx.LAB.unseats([x - h, y - h, x + h, y + h], strandedNameRequest(e, x, y, ctx.labelRequest, ctx.poiBox, ctx.notToScale, h)).length;
+}
+
+/* Move a site's nudge so its symbol stands at `at` (the opt-in symbols are placed after spreadIcons). */
+function optInNudge(poiNudge, { t }, at) {
+  const n = poiNudge.get(t.u) || [0, 0];
+  poiNudge.set(t.u, [n[0] + at[0] - t.x, n[1] + at[1] - t.y]);
+}
+
+/* The v2 request a stranded symbol's name would be queued as at (x, y), or null where no name is printed. Built
+ * through the same labelRequest and the same rule as poiMark(), so the trial cannot disagree with the drawing. */
+function strandedNameRequest(e, x, y, labelRequest, poiBox, notToScale, half) {
+  const o = e.t.o;
+  if (!(o.force === true || (printsName(e.p) && o.force !== false))) return null;
+  return labelRequest(x, y, e.p.name, 2.5, '#222', false, poiLabelOverride(o.label, notToScale),
+    poiBox.get(e.t.u) || [x - half, y - half, x + half, y + half], { id: 'poi:' + e.t.u, priority: labelPriority(e.p) });
+}
+
 /* The build note naming what was left off, or '' when nothing was. Prefixed
  * `poi:` so build_log.js reads it as its own WARN entry. */
 function optInNote(names, reach = OPT_IN_REACH) {
@@ -999,4 +1046,4 @@ function pushOffBoxes(S, boxes, h) {
   return worst;
 }
 
-module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, givesWay, placeOptInSymbols, optInNote, pushOffBoxes, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };
+module.exports = { classify, selectPois, placerIds, keyedAnswer, poiOverride, mergePoiOverlay, OPT_IN_CATS, DEFAULT_ON_CATS, SWITCH_CAT, CAT_SWITCH, OPT_IN_REACH, isOptInSymbol, clearSpot, givesWay, placeOptInSymbols, seatStrandedSymbols, strandedNameRequest, optInNudge, optInNote, pushOffBoxes, categoryOn, labelPriority, applyTiers, culledAfterTiers, culledAfterTiersNote, sameThing, unnamed, CATEGORY_LABELS, AUTO_NAMED_CATS, printsName, poiLabelOverride };

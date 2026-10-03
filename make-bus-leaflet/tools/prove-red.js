@@ -349,6 +349,27 @@ const MUTATIONS = [
     find: "for (let r = 1; r <= reach + 1e-9; r += 1) {",
     to: "for (let r = 1; r <= reach + 1 + 1e-9; r += 1) {" },
 
+  // buses-data OA-559: a named opt-in symbol with no clear spot is not left off with its name.
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a named opt-in symbol with no clear spot is left off with its name again (Beaconsfield The Chiltern, Ely The High Flyer)',
+    find: "const at = named ? clearSpot(",
+    to: "const at = false ? clearSpot(" },
+
+  { suite: 'poi_select.test.js', file: 'poi_select.js',
+    what: 'a stranded symbol is seated wherever it fits, whatever label it costs (March lost Aldi and Heron Foods)',
+    find: "(x, y) => free(x, y) && safe(ctx, e, x, y), reach)",
+    to: "(x, y) => free(x, y), reach)" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'unseats() forgets the labels a box costs, so every stranded symbol passes its trial',
+    find: "const lost = [...before].filter(id => !after.has(id));",
+    to: "const lost = [];" },
+
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'unseats() ignores whether its own name seats, so a pub with a symbol and no name passes',
+    find: "if (req && !after.has(String(req.id))) lost.push(String(req.id));",
+    to: "" },
+
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: "a customer's must pub is moved or left off like any other",
     find: "const givesWay = (p, o) => isOptInSymbol(p.cat) && p.tier !== 'must' && !(o && (o.pos || o.move));",

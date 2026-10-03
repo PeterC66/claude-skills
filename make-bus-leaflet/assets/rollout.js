@@ -81,6 +81,9 @@ const { spawnSync } = require('child_process');
 const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
 const { jsonTarget, writeReport, hardDefects, keptDirOf } = require('./rollout_report');
+const { regressionOn, LEDGER_NAME } = require('./quality_gate');
+// The ledger lives in buses-data; absent or unreadable means no ratchet to judge against.
+const readLedger = (buses) => { try { return JSON.parse(fs.readFileSync(path.join(buses, LEDGER_NAME), 'utf8')); } catch { return null; } };
 const { computeEngineVersion, stampEngine } = require('./engine_version');
 const { fixtureDonor } = require('./fixture_donor');
 // One value for the whole run, computed once, exactly as status.js does — the
@@ -402,6 +405,8 @@ function rolloutOne(t) {
 
   const diffs = {};
   let anyLost = false;
+  let anyRegressed = false;
+  const ledger = readLedger(BUSES);
   for (const name of outputs) {
     const d = labelDiff(path.join(prevS4.dir, name), path.join(s4, name));
     diffs[name] = d;
@@ -410,6 +415,13 @@ function rolloutOne(t) {
     // OA-485 item 2: the hard-defect count on both sides, which the label SET cannot see.
     if (JSON_OUT) Object.assign(d, hardDefects(path.join(prevS4.dir, name), path.join(s4, name)));
     if (d.lost.length) anyLost = true;
+    // OA-547: the quality ratchet's verdict on the scratch sheet, as rollout_places.js
+    // gives it (OA-548): a label that MOVED onto route ink loses nothing in the set above
+    // and still costs a label the ledger counts. Judged on the two sheets the ledger records.
+    if (/^(internal|external)\.svg$/.test(name)) {
+      d.regressed = regressionOn(ledger, t.name + ' · ' + name.replace(/\.svg$/, ''), path.join(s4, name));
+      if (d.regressed.length) anyRegressed = true;
+    }
   }
 
   if (!APPLY) {
@@ -422,7 +434,7 @@ function rolloutOne(t) {
       }
     }
     fs.rmSync(scratch, { recursive: true, force: true });
-    return { name: t.name, status: 'DRY-RUN', diffs, owed, anyLost, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null, shipped: prevS4.dir };
+    return { name: t.name, status: 'DRY-RUN', diffs, owed, anyLost, anyRegressed, warnings, blockers, version: prevS4.rec.version, kept: KEEP || null, shipped: prevS4.dir };
   }
 
   // A lost label stops the rollout BEFORE anything is written -- see the same
@@ -434,6 +446,12 @@ function rolloutOne(t) {
   if (anyLost && !FORCE) {
     return { name: t.name, status: 'REVIEW-NEEDED', diffs, owed, warnings, blockers,
       detail: 'a label was lost vs the previous build, and NOTHING was written. Inspect the dry run, then re-run with --force (or fix the cause and re-run).' };
+  }
+  // OA-547: the quality ratchet refuses on the same terms, as its own statement so the
+  // lost-label refusal above stays readable by the prove-red that greps for it.
+  if (anyRegressed && !FORCE) {
+    return { name: t.name, status: 'REVIEW-NEEDED', diffs, owed, warnings, blockers,
+      detail: 'the quality ratchet REGRESSED vs the ledger, and NOTHING was written. Inspect the dry run, then re-run with --force (or fix the cause and re-run).' };
   }
 
   // ---- apply for real, via stage.js so the manifest/version-stamp rules are authoritative ----
@@ -565,6 +583,7 @@ for (const t of selected) {
   if (r.diffs) {
     for (const [file, d] of Object.entries(r.diffs)) {
       if (d.lost.length) console.log(`    LOST in ${file}: ${d.lost.join(' | ')}`);
+      if (d.regressed && d.regressed.length) console.log(`    REGRESSED in ${file}: ${d.regressed.join('; ')} — the push preflight's board would go red; treated like a LOST line`);
       // Re-wraps are NOT lost labels and do not stop the rollout, but they are
       // printed: a check that silently forgives is the next --force habit starting.
       if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));

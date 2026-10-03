@@ -100,6 +100,20 @@ const MUTATIONS = [
   // so the SHAPE change is well covered by the byte gate. Two things are not.
   // design.badgeFit is false on ZERO maps, so the opt-out is a dark branch; and
   // gk() emits nothing unless EDITOR_KEYS=1, which no byte gate sets.
+  // design.routeTags (buses-data OA-551): opt-in, so no byte gate sees it.
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'routeTags stops being opt-in, so every map ships tagged route ink and an estate rebuild is owed',
+    find: "(RT===true && (kind==='route'||kind==='shared'))",
+    to: "((kind==='route'||kind==='shared'))" },
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'a shared section loses its member, so dimming one route would dim the whole corridor',
+    find: "String(key).split('/').pop()",
+    to: "String(key)" },
+  { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
+    what: 'the badge is never wrapped, so clicking a Services row cannot dim the other badges',
+    find: "const tagOpen=r=>{ if(RT===true)",
+    to: "const tagOpen=r=>{ if(false)" },
+
   { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
     what: 'the badgeFit opt-out stops working, so a town that asked for plain discs gets stadiums anyway',
     find: "    if(!BFIT) return rad;",
@@ -145,8 +159,8 @@ const MUTATIONS = [
 
   { suite: 'svg_primitives.test.js', file: 'svg_primitives.js',
     what: 'gk stops escaping the key, so a feature named with an ampersand writes invalid SVG in editor mode',
-    find: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${esc(key)}\">${inner}</g>` : inner;",
-    to: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${key}\">${inner}</g>` : inner;" },
+    find: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${esc(key)}\">${inner}</g>`",
+    to: "  const gk=(kind,key,inner)=> EDK ? `<g data-kind=\"${kind}\" data-key=\"${key}\">${inner}</g>`" },
 
   // NOT here, and deliberately: a mutation that deletes badgeStack's one-element
   // fast path SURVIVES, because it is an optimisation and not a branch — with one

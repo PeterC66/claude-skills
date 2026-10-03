@@ -49,7 +49,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveBuses } from './engine.mjs';
+import { parseArgs, resolveBuses } from './engine.mjs';
 import { readRuns, loopHealth } from './loop_runs.mjs';
 import { readLoopLock } from './loop_lock.mjs';
 import { readYourMoveDir, classify, parseHold, heldPaths } from './loop_your_move.mjs';
@@ -339,9 +339,8 @@ export function gather(busesDir, { now = Date.now() } = {}) {
 }
 
 function main() {
-  const argv = process.argv.slice(2);
-  const val = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
-  const buses = resolveBuses({ buses: val('--buses') });
+  const args = parseArgs(process.argv.slice(2));
+  const buses = resolveBuses(args);
   if (!existsSync(path.join(buses, 'Development Docs', 'open-actions'))) {
     process.stderr.write(`loop_health: ${buses} is not a buses-data checkout (no Development Docs/open-actions). Pass --buses DIR.\n`);
     process.exitCode = 2;
@@ -349,9 +348,9 @@ function main() {
   }
   const now = Date.now();
   const facts = gather(buses, { now });
-  const days = Number(val('--days')); const low = Number(val('--low'));
-  const r = analyse({ ...facts, ...(Number.isFinite(days) && days > 0 ? { days } : {}), ...(Number.isFinite(low) && low >= 0 && val('--low') !== undefined ? { low } : {}) });
-  process.stdout.write((argv.includes('--json') ? JSON.stringify(r, null, 2) : render(r, now)) + '\n');
+  const days = Number(args.days); const low = Number(args.low);
+  const r = analyse({ ...facts, ...(Number.isFinite(days) && days > 0 ? { days } : {}), ...(Number.isFinite(low) && low >= 0 && args.low !== undefined ? { low } : {}) });
+  process.stdout.write((args.json ? JSON.stringify(r, null, 2) : render(r, now)) + '\n');
   // `process.exitCode`, not `process.exit()`: a pipe write is asynchronous on Windows.
   process.exitCode = r.findings.some((x) => x.level === 'BLOCKING') ? 1 : 0;
 }

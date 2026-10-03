@@ -70,6 +70,31 @@ test('gk is completely inert unless editorKeys is set', () => {
     '<g data-kind="stop" data-key="K1"><circle/></g>');
 });
 
+test('design.routeTags tags route ink and badges, and is inert unless it is exactly true (OA-551)', () => {
+  const off = make();
+  assert.strictEqual(off.api.gk('route', '9', '<path/>'), '<path/>');
+  off.api.badge(1, 2, '9', 4.6);
+  assert.ok(!off.lines.some(l => /data-route/.test(l)), 'absent: no tag anywhere');
+  for (const v of [false, 1, 'true']) {
+    const odd = make({ routeTags: v });
+    assert.strictEqual(odd.api.gk('route', '9', '<path/>'), '<path/>', `routeTags ${JSON.stringify(v)} is not an ask`);
+  }
+  const on = make({ routeTags: true });
+  assert.strictEqual(on.api.gk('route', '9', '<path/>'),
+    '<g data-kind="route" data-key="9" data-route="9"><path/></g>');
+  assert.strictEqual(on.api.gk('shared', '9/301S', '<path/>'),
+    '<g data-kind="shared" data-key="9/301S" data-route="301S"><path/></g>', 'a shared section names its member');
+  assert.strictEqual(on.api.gk('stop', 'K1', '<circle/>'), '<circle/>', 'stops and POIs stay untagged');
+  on.api.badge(1, 2, '9', 4.6);
+  assert.strictEqual(on.lines[0], '<g data-route="9">');
+  assert.strictEqual(on.lines[on.lines.length - 1], '</g>');
+  assert.strictEqual(on.lines.filter(l => l === '</g>').length, 1, 'one wrapper per badge');
+  const plain = make(); plain.api.badge(1, 2, '9', 4.6);
+  assert.deepStrictEqual(on.lines.slice(1, -1), plain.lines, 'tagging adds the wrapper and nothing else');
+  const eds = make({ editorKeys: true, routeTags: true }).api;
+  assert.strictEqual(eds.gk('route', '9', 'x'), '<g data-kind="route" data-key="9">x</g>', 'editor output is unchanged');
+});
+
 test('gk escapes the key it puts in the attribute', () => {
   const on = make({ editorKeys: true }).api;
   assert.strictEqual(on.gk('feature', 'Ouse & Nene', 'x'),

@@ -159,6 +159,16 @@ Every time, without being asked:
 3. If anything about the *procedure* proved wrong or fiddly, fix it here (this file, the playbooks, or `worklist.mjs`) in the same session rather than leaving it for the next one.
 4. **End the message with the cost tag**, on a line of its own, so buses-data's `BusMapsUK/ai-cost/measure-ai-tokens.mjs` charges the tokens to the right bucket: `cost-tag: [update:<map>]` for a refresh, rebuild or fix of existing maps (several comma-separated, each by its folder name under `Areas/` or `Places/`), `cost-tag: [setup:<map>]` for a map's first build, `cost-tag: [dev]` for engine, portal or tool code, `cost-tag: [overhead]` for a review, an application, correspondence or anything else.
 
+## Asked whether the LOOP is blocked? Use `loop_health.mjs`, not the worklist
+
+The worklist raises a `loop-idle` row when ticks fire and reach no work, but it does not say what the supply of free rows is, what dated thing will stop the loop next week, or whether commits are waiting for a push. `node loop_health.mjs` answers all of it in one read-only pass (buses-data OA-554): a verdict (BLOCKED, AT RISK or CLEAR), each finding as BLOCKING, AT RISK or NOTE with the one move that clears it, and a look-ahead over the dates already written into the action files and `commitments.json`. It exits 1 on a BLOCKING finding and 2 if the directory is not buses-data, so a tick can gate on it. **Free is not finishable**: its supply count is rows nobody has parked, held or claimed, not rows one tick can finish. Run from `C:\u3a St Ives\.claude\skills\bus-work\assets`, no placeholders:
+
+```powershell
+node loop_health.mjs --buses "C:/u3a St Ives/Using AI/Buses"
+```
+
+Its falsification harness is `npm run test:prove-red-loop-health` in `bus-work`, which breaks the module one line at a time and requires the same assertions to go red.
+
 ## Before you push — `preflight.mjs` answers *what would go red if I pushed now*
 
 **Run it once per ROUND, before the first push of a change that reaches map data, the engine or a workflow** (buses-data OA-343, from Peter on 2026-09-14: *I want us to avoid the system being in a BROKEN state*). Landing OA-338 left `buses-data` `main` red for about seven hours and met four independent blockers one at a time — byte-gate control diff, portal vendoring drift, the deployment row BEHIND, the portal's own `verify:area` on a stale committed fixture. Every one of them was true before the first push and answerable on this laptop in under two minutes, and three CI round trips were spent discovering them in sequence. From anywhere, with the repository written into the command rather than stated beside it, and with no placeholders:

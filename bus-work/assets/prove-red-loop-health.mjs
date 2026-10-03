@@ -27,7 +27,9 @@ const NOW = new Date(2026, 9, 3, 8, 0).getTime();   // Sat 3 Oct 2026, 08:00 loc
 const run = (feed, hhmm, day = 3) => ({ name: `2026-10-${String(day).padStart(2, '0')}_${hhmm}-${feed}.md`, feed, at: new Date(2026, 9, day, +hhmm.slice(0, 2), +hhmm.slice(2)).getTime() });
 const idleRuns = ['0215', '0315', '0415', '0515', '0615', '0715'].map((t) => run('none', t));
 const act = (ref, o = {}) => ({ ref, priority: 'P2', decisionPeter: false, waitingDate: null, waitingWhy: null, selectedDate: null, ...o });
+const named = (refs) => ({ name: 'x-none.md', refs });
 const base = (o = {}) => ({
+  idleNaming: [named(['OA-001']), named(['OA-001']), named(['OA-001'])],
   now: NOW, runs: idleRuns, lastRun: { name: '2026-10-03_0715-none.md', headline: 'Chose nothing.' },
   stopFile: false, lock: { present: false }, dirty: [], holdPaths: [], holds: [], drafts: 0,
   ahead: { count: 0, oldestMs: null }, actions: [act('OA-001'), act('OA-002'), act('OA-003'), act('OA-004')], commitments: [], ...o,
@@ -79,6 +81,11 @@ async function suite(m, label, verbose) {
   check('idle with nothing free is idle-for-want-of-work', has(analyse(base({ actions: [act('A', { priority: 'Parked' })] })), 'idle-supply', 'NOTE'));
   check('idle while a P1 is free is at risk', has(analyse(base({ actions: [act('A', { priority: 'P1' }), ...base().actions] })), 'idle-with-free', 'AT RISK'));
   check('idle while only P2 is free is a note, not a fault', has(analyse(base()), 'idle-free-lower', 'NOTE') && !has(analyse(base()), 'idle-with-free'));
+  const unnamed = analyse(base({ idleNaming: [named([]), named([]), named([])] }));
+  check('three idle runs that name no passed-over row, with P2 free, are at risk', has(unnamed, 'idle-unnamed', 'AT RISK') && !has(unnamed, 'idle-free-lower'));
+  check('naming the rows in the last idle run is only a note, and quotes them', analyse(base({ idleNaming: [named(['OA-250', 'OA-550']), named([]), named([])] })).findings.find((f) => f.key === 'idle-free-lower').text.includes('OA-250, OA-550'));
+  check('fewer than three runs since the rule cannot be blamed', has(analyse(base({ idleNaming: [named([]), named([])] })), 'idle-free-lower', 'NOTE'));
+  check('a P1 free still reads as idle-with-free, not idle-unnamed', has(analyse(base({ actions: [act('A', { priority: 'P1' })], idleNaming: [named([]), named([]), named([])] })), 'idle-with-free', 'AT RISK'));
   check('one idle tick is not idle', !analyse(base({ runs: [run('none', '0715')] })).findings.some((f) => /^idle/.test(f.key)));
   check('a missed run is at risk', has(analyse(base({ runs: [...idleRuns.slice(0, 5), run('missed', '0715')] })), 'missed', 'AT RISK'));
   check('the last tick\'s own words are quoted', analyse(base({ actions: [act('A', { priority: 'P1' })] })).findings.find((f) => f.key === 'idle-with-free').text.includes('Chose nothing.'));
@@ -163,6 +170,8 @@ const MUTANTS = [
   ['a claim dated yesterday stays live', 'a.selectedDate === today', 'a.selectedDate <= today'],
   ['Parked rows count as free', "if (/^parked$/i.test(a.priority || '')) b.parked.push(a);\n    else if", 'if (false) b.parked.push(a);\n    else if'],
   ['idle with a free P1 is no longer at risk', "else if (urgent.length) add('AT RISK'", "else if (false) add('AT RISK'"],
+  ['the unnamed-idle fault needs no three runs', 'f.idleNaming.length >= IDLE_NAMING_RUNS', 'f.idleNaming.length >= 0'],
+  ['the unnamed-idle fault fires when any run names a row', 'f.idleNaming.every((n) => !n.refs.length)', 'f.idleNaming.some((n) => !n.refs.length)'],
   ['the free-P2 idle note becomes a fault', "add('NOTE', 'idle-free-lower'", "add('AT RISK', 'idle-free-lower'"],
   ['a stale push is no longer at risk', 'if (ageMs != null && ageMs > pushStaleMs) {', 'if (false) {'],
   ['low supply never warns', 'if (free < low) {', 'if (false) {'],

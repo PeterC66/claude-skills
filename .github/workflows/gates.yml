@@ -766,6 +766,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-shadow-rebuild
 
+      # buses-data OA-554 (2026-10-03): the loop-health analysis, which says what
+      # is holding the scheduled loop and what will hold it within a week. Its
+      # subject (loop/, the lock, the working tree) is in no checkout here, so
+      # the harness builds a throwaway git repository and breaks the module one
+      # line at a time, requiring the same assertions to go red for each.
+      - name: Prove the loop-health analysis can go red for each thing it claims to see
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-loop-health
+
       # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
       # would go red if I pushed now". Read case 2 first and read it as the
       # POINT of the tool rather than as one assertion among thirty: a preflight

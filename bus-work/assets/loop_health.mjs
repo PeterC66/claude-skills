@@ -566,7 +566,7 @@ export function promptScripts(readme) {
   const m = /```\r?\n([\s\S]*?)\r?\n```/.exec(readme.slice(i).replace(/```bash\r?\n[\s\S]*?```/g, ''));
   if (!m) return null;
   const out = new Set();
-  for (const x of m[1].matchAll(/"([A-Za-z]:[\\/][^"<>]+?\.(?:mjs|js|py|env))"/g)) out.add(x[1]);
+  for (const x of m[1].matchAll(/"((?:[A-Za-z]:[\\/]|\/)[^"<>]+?\.(?:mjs|js|py|env))"/g)) out.add(x[1]);
   for (const x of m[1].matchAll(/"(Development Docs\/[^"<>]+?\.mjs)"/g)) out.add(x[1]);
   return [...out];
 }

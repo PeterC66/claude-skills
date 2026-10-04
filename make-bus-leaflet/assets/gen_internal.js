@@ -1022,12 +1022,7 @@ function reserveIcon(s){
 }
 // OA-522: an opt-in symbol gives way, placed LAST and clear of route ink, badges and all reserved (poi_select.js).
 const optInFree=(x,y)=>{ const b=[x-POI_HALF, y-POI_HALF, x+POI_HALF, y+POI_HALF]; return inFrame([x,y]) && !inCore([x,y]) && !overlapsRound(b) && !BADGE_MARKS.some(m=>hit(b,[m.x-m.w, m.y-m.h, m.x+m.w, m.y+m.h])); };
-// Route ink as the SVG stands when the symbols are placed; the routes are drawn by then and nothing later adds any. Built once, read by BOTH looks below.
-let OPTIN_INK=null;
-const optInInkFree=(x,y)=>{
-  if(!OPTIN_INK){ const pal=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase())); OPTIN_INK=new Labeller({ page:[W,H] }).stampSvg(s, st=>pal.has(st)).ink; }
-  return optInFree(x,y) && !OPTIN_INK.any([x-POI_HALF+0.3, y-POI_HALF+0.3, x+POI_HALF-0.3, y+POI_HALF-0.3]);
-};
+const optInInkFree=(()=>{ let INK=null; return (x,y)=>{ if(!INK){ const pal=new Set(Object.values(C||{}).map(v=>String(v).toLowerCase())); INK=new Labeller({ page:[W,H] }).stampSvg(s, st=>pal.has(st)).ink; } return optInFree(x,y) && !INK.any([x-POI_HALF+0.3, y-POI_HALF+0.3, x+POI_HALF-0.3, y+POI_HALF-0.3]); }; })();   // route ink read once, shared by both looks
 function placeOptIns(){
   const mine=pois.map(p=>({p,t:poiSite(p)})).filter(e=>e.t && givesWay(e.p,e.t.o)); if(!mine.length) return;
   const off=placeOptInSymbols(mine, { free:optInInkFree, place:(e,at)=>{ optInNudge(poiNudge,e,at); reserveIcon(poiSite(e.p)); } });

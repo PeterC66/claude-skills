@@ -1181,7 +1181,7 @@ test('OA-522/559: design.strandedOnInk:false gives the second look the ink test 
   assert.ok(/placeOptInSymbols\(mine, \{ free:optInInkFree,/.test(src), 'the first look asks optInInkFree');
   assert.ok(/seatStrandedSymbols\(STRANDED, \{ free:DESIGN\.strandedOnInk===false \? optInInkFree : optInFree,/.test(src),
     'the second look asks optInInkFree only when the map says false, and optInFree (OA-559) otherwise');
-  assert.ok(/const optInInkFree=[\s\S]*?OPTIN_INK\.any\(/.test(src), 'and that predicate reads route ink');
+  assert.ok(/const optInInkFree=[\s\S]*?INK\.any\(/.test(src), 'and that predicate reads route ink');
 });
 
 test('OA-523: a symbol on the town-centre square is pushed out across the nearest edge; a pinned one never moves', () => {

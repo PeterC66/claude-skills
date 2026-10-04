@@ -2918,6 +2918,17 @@ const MUTATIONS = [
     find: "w >= 1.2 && stroke !== 'none' && !pale.has(stroke)",
     to: "w >= 1.2 && stroke === '#route' && !pale.has(stroke)" },
 
+  // `then` — a heading and its lines are one block (buses-data OA-437, C4).
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'the `then` paragraphs are dropped, so a fact line never reaches the sheet and the heading prints alone',
+    find: "    .concat((d.then || []).map(p =>",
+    to: "    .concat([].map(p =>" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'a new paragraph opens no gap, so the fact lines run on from the heading as one undivided block',
+    find: "const PARA_GAP = 1.6;",
+    to: "const PARA_GAP = 0;" },
+
   // engine_commit.js — the reclaim of a killed run's worktree (buses-data loop
   // adhoc reclaim-worktrees.md, 2026-10-02). Five engine-commit trees from 27–30
   // Sep were still registered on 2026-10-01, because the exit handler never runs

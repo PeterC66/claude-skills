@@ -1681,8 +1681,6 @@ out(`</g>`);
 // design.exitCaptionsInPanel (OA-416): the labeller learns the panel's real height just
 // before the solve, so a "to X" caption (only) may use the empty column below it.
 const EXIT_IN_PANEL = !!(LAB && DESIGN.exitCaptionsInPanel);
-// design.exitInFrame (buses-data OA-561): an exit caption may not sit above or beside the map frame, where the quality gate stops counting it. Absent => byte-identical.
-const EXIT_IN_FRAME = !!(LAB && DESIGN.exitInFrame && !DESIGN.exitCaptionsInPanel);
 function panelDeps(sink){ return {
   out: sink, esc, badge, badgeXWs, icon,
   OV, RJ, DESIGN, INTDESC, FONT,
@@ -2551,8 +2549,7 @@ if(IR && TRIM){
           const only = DESIGN.exitDevice ? inboardKeys(-dx,-dy) : null;
           pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
             at:[(rx0+rx1)/2, ry], leaderFrom:rowMarks, text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
-            ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:{}),
-            ...(EXIT_IN_FRAME?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}),
+            ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:LAB&&DESIGN.exitInFrame?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}), // exitInFrame (OA-561)
             ...(only?{only, leader:false}:{}) });
           return;
         }

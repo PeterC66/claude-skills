@@ -20,20 +20,26 @@ const path = require('node:path');
 
 const SRC = fs.readFileSync(path.join(require('./_engine.js').ENGINE_DIR, 'gen_internal.js'), 'utf8');
 
-test('the flag is off unless design.exitInFrame is set, and yields to exitCaptionsInPanel', () => {
-  const m = SRC.match(/^const EXIT_IN_FRAME = (.*);$/m);
-  assert.ok(m, 'gen_internal.js no longer defines EXIT_IN_FRAME on one line — rewrite this test, do not delete it');
-  const f = (LAB, DESIGN) => eval('(' + m[1] + ')'); // eslint-disable-line no-eval
-  assert.strictEqual(f({}, {}), false, 'absent key must leave every sheet byte-identical');
-  assert.strictEqual(f({}, { exitInFrame: true }), true);
-  assert.strictEqual(f({}, { exitInFrame: true, exitCaptionsInPanel: true }), false);
-  assert.strictEqual(f(null, { exitInFrame: true }), false, 'the pre-v2 placer has no labeller to bound');
+// The one line that hands a terminus caption its bound, evaluated rather than re-implemented.
+function loadBounds() {
+  const m = SRC.match(/^\s*\.\.\.\((EXIT_IN_PANEL\?.*)\), \/\/ exitInFrame \(OA-561\)$/m);
+  assert.ok(m, 'the pendingTermini push no longer carries the exitInFrame bound on one line — rewrite this test, do not delete it');
+  const f = new Function('EXIT_IN_PANEL', 'LAB', 'DESIGN', 'PRINT_SAFE', 'FOOTER_PLATE_TOP', 'MX0', 'MY0', 'MX1', 'MY1', 'return ({...(' + m[1] + ')})');
+  return (panel, lab, design) => f(panel, lab, design, 1, 200, 5, 30, 190, 200);
+}
+
+test('no bound unless design.exitInFrame is set: an absent key leaves every sheet byte-identical', () => {
+  const b = loadBounds();
+  assert.deepStrictEqual(b(false, {}, {}), {});
+  assert.deepStrictEqual(b(false, {}, { exitInFrame: false }), {});
 });
 
-test('a terminus caption is handed the map frame as its bound, and only when the flag is on', () => {
-  const m = SRC.match(/^\s*\.\.\.\(EXIT_IN_FRAME\?\{bounds:\{x0:MX0, y0:MY0, x1:MX1, y1:MY1\}\}:\{\}\),$/m);
-  assert.ok(m, 'the pendingTermini push no longer spreads the frame bounds when EXIT_IN_FRAME is set');
-  const push = SRC.indexOf('pendingTermini.push(');
-  assert.ok(push > 0 && SRC.indexOf(m[0].trim(), push) > push && SRC.indexOf(m[0].trim(), push) - push < 900,
-    'the frame bound must sit inside the pendingTermini.push call');
+test('design.exitInFrame bounds the caption by the map frame', () => {
+  assert.deepStrictEqual(loadBounds()(false, {}, { exitInFrame: true }), { bounds: { x0: 5, y0: 30, x1: 190, y1: 200 } });
+});
+
+test('exitCaptionsInPanel keeps its own bound, and the pre-v2 placer (no labeller) gets none', () => {
+  const b = loadBounds();
+  assert.strictEqual(b(true, {}, { exitInFrame: true, exitCaptionsInPanel: true }).bounds.y0, 1);
+  assert.deepStrictEqual(b(false, null, { exitInFrame: true }), {});
 });

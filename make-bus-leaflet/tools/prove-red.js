@@ -2615,8 +2615,8 @@ const MUTATIONS = [
   // design.exitInFrame (buses-data OA-561): the key is read but the frame is never handed to the caption, and Ely Co-op's "to Little Downham" sits above the frame again.
   { suite: 'exit_in_frame.test.js', file: 'gen_internal.js',
     what: 'design.exitInFrame stops bounding the exit caption by the map frame, and a caption can again sit where the gate stops counting it',
-    find: "            ...(EXIT_IN_FRAME?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}),",
-    to: "            ...(false?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{})," },
+    find: ":LAB&&DESIGN.exitInFrame?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}),",
+    to: ":LAB&&false?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{})," },
 
   { suite: 'case_drawn_lanes.test.js', file: 'gen_internal.js',
     what: 'internalRoads.caseDrawnLanes stops replacing the bundle casing, and Ely Co-op\'s grey lobes at Tesco return',

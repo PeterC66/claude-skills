@@ -922,7 +922,7 @@ let s=''; const out=x=>{s+=x+'\n';};
 // through `out` and return measurements, so the document stays here.
 const { esc, gk, badgeHalfW, badgeXW, badgeXWs, badge, badgeStack } = svgPrimitives({
   out, palette: C, textOn: TXT, badgeLabel: blab, font: FONT,
-  badgeFit: BADGE_FIT, editorKeys: EDK,
+  badgeFit: BADGE_FIT, editorKeys: EDK, routeTags: DESIGN.routeTags === true,  // OA-551
 });
 
 // ---- linear features: paths + labels (honour overrides.features[key]) ----

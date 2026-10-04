@@ -863,6 +863,13 @@ const cannotCount = world({ buses: { unpushed: null, unpushedWhy: 'the branch ha
 want(conc.assess(['portal-write'], cannotCount), conc.CHECK, 'a buses-data whose unpushed count could not be taken: CHECK FIRST, not SAFE');
 says(conc.assess(['portal-write'], cannotCount), /no upstream/, 'and it repeats the reason git gave rather than reporting an absence');
 want(conc.assess(['portal-write'], world({ buses: { unpushed: 0 } })), conc.SAFE, 'and a genuine zero is still SAFE NOW');
+// OA-558. A portal branch-and-PR slice is not a deliver: deferred buses-data commits
+// must not close it, while the same state still closes a deliver (the pair above).
+want(conc.assess(['portal-branch'], world({ buses: { unpushed: 3 } })), conc.SAFE, 'unpushed commits here: a portal BRANCH is still SAFE NOW');
+want(conc.assess(['portal-branch'], world({ buses: { unpushed: null, unpushedWhy: 'no upstream' } })), conc.SAFE, 'an uncountable buses-data does not close a portal branch either');
+want(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), conc.CHECK, 'and the same state still holds a DELIVER at CHECK FIRST');
+want(conc.assess(['portal-branch'], world({ portal: { readable: false, name: 'community-bus-maps', dir: 'C:/x' } })), conc.CHECK, 'a portal it cannot read is not SAFE for a branch');
+
 says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: 'default-branch', unpushedBasis: 'origin/main' } })), /origin\/main/, 'a count taken against the default branch says so on the row');
 
 /* OA-387, the judgement half. The observation block above proves what git

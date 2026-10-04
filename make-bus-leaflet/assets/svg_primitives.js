@@ -64,11 +64,19 @@ function svgPrimitives(deps) {
     font: FONT,       // font_metrics.js, for textWidth()
     badgeFit: BADGE_FIT,
     editorKeys: EDK,  // emit data-key attrs (EDITOR_KEYS=1) or not
+    routeTags: RT,    // design.routeTags (OA-551): tag route ink and badges for the portal, in shipped output
   } = deps;
   // esc is the module-level one above; the factory re-exports it so its callers
   // (gen_internal.js destructures it) need no second require.
   // editor-only element keys (no-op unless EDITOR_KEYS=1, so normal output is unchanged)
-  const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>` : inner;
+  const gk=(kind,key,inner)=> EDK ? `<g data-kind="${kind}" data-key="${esc(key)}">${inner}</g>`
+    : (RT===true && (kind==='route'||kind==='shared')) ? `<g data-kind="${kind}" data-key="${esc(key)}" data-route="${esc(String(key).split('/').pop())}">${inner}</g>` : inner;
+  // design.routeTags (OA-551): the portal dims every route but the one a reader clicked,
+  // so ink and badges name their route in the SHIPPED svg. Route ink is tagged by gk()
+  // above (a shared section names its member after the slash); a badge is wrapped here.
+  // Opt-in, so a map that does not ask is byte-identical.
+  const tagOpen=r=>{ if(RT===true) out(`<g data-route="${esc(r)}">`); };
+  const tagShut=()=>{ if(RT===true) out('</g>'); };
   /* ---- design.badgeFit: a 4-character route key does not fit a disc ------------
    * badge() has always drawn its text at font-size = the badge RADIUS. That is
    * right for one to three characters and wrong for four: "301S" is 5.6mm of Arial
@@ -109,9 +117,11 @@ function svgPrimitives(deps) {
   const badgeXWs = (list,rad)=> BFIT ? Math.max(0,...list.map(r=>badgeXW(r,rad))) : 0;
   function badge(x,y,r,rad=4.6){
     const hw=badgeHalfW(r,rad);
+    tagOpen(r);
     if(hw>rad) out(`<rect x="${(x-hw).toFixed(2)}" y="${(y-rad).toFixed(2)}" width="${(2*hw).toFixed(2)}" height="${(2*rad).toFixed(2)}" rx="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
     else out(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${C[r]||'#888'}" stroke="#fff" stroke-width="0.7"/>`);
     out(`<text x="${x}" y="${y}" font-family="Arial" font-weight="bold" font-size="${(rad).toFixed(2)}" fill="${TXT[r]||'#fff'}" text-anchor="middle" dominant-baseline="central">${esc(blab(r))}</text>`);
+    tagShut();
     return hw-rad;}
   // A bundled corridor's badge is a vertical STACK of its members' badges (the
   // convention every operator's own big-town map uses: one line, many identities).

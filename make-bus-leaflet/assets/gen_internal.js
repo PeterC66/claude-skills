@@ -2549,7 +2549,7 @@ if(IR && TRIM){
           const only = DESIGN.exitDevice ? inboardKeys(-dx,-dy) : null;
           pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
             at:[(rx0+rx1)/2, ry], leaderFrom:rowMarks, text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
-            ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:{}),
+            ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:LAB&&DESIGN.exitInFrame?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}), // exitInFrame (OA-561)
             ...(only?{only, leader:false}:{}) });
           return;
         }

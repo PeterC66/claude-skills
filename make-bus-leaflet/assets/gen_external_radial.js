@@ -615,7 +615,7 @@ const ART = HARD.slice();
  * dx,dy shift an explicit overrides.note position by however far the legend moved,
  * so a hand-placed note travels with the box instead of being left behind.
  */
-function buildLegend(lx, ly, dx, dy){
+function buildLegend(lx, ly, dx, dy, wrapOverride){
   // legendWrap reassigns `ly` below (to keep the note's default offset sane) — the backing
   // panel's TOP must stay pinned to where the header was actually drawn, or the panel drifts
   // away from its own content (Wisbech/High Wycombe, 2026-08-06: box outline landed well below
@@ -636,7 +636,8 @@ function buildLegend(lx, ly, dx, dy){
   // lines instead of letting it run off the page. Needed once a town has an
   // operator with many routes (High Wycombe: Carousel runs 17 of them). Absent =>
   // one line per operator exactly as before, so gated towns stay byte-identical.
-  const LW = (D.legendWrap && (D.legendWrap.perRow|0) > 0) ? (D.legendWrap.perRow|0) : 0;
+  const LW = wrapOverride != null ? wrapOverride
+    : (D.legendWrap && (D.legendWrap.perRow|0) > 0) ? (D.legendWrap.perRow|0) : 0;
   if(LW){
     let yy = ly;
     OPS.forEach(op=>{
@@ -660,7 +661,7 @@ function buildLegend(lx, ly, dx, dy){
       const _lastRow = rows - 1, _lastCount = rs.length - _lastRow*LW;
       const _textX = lx + _lastCount*_col + 2, _textY = yy + _lastRow*6.2;
       out(`<text x="${_textX.toFixed(2)}" y="${(_textY+0.2).toFixed(2)}" font-family="Arial" font-size="3.4" fill="#333" dominant-baseline="central">${esc(op.name)}</text>`);
-      panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4));
+      panelMaxX = Math.max(panelMaxX, _textX + measureText(op.name,3.4), lx + Math.min(rs.length,LW)*_col);
       panelMaxY = Math.max(panelMaxY, yy + (rows-1)*6.2 + 3);
       yy += rows*6.2 + 1.4;
     });
@@ -791,6 +792,7 @@ function buildLegend(lx, ly, dx, dy){
  * honoured when it is clear, so a town that has hand-placed its legend keeps it.
  */
 const LEGPLACE = DESIGN.legendPlace !== false;
+const LEGFIT = DESIGN.legendFit !== false;
 const legendSpot = (w, h, wantX, wantY) => {
   /*
    * TWO occupancies, not one, because the two things the legend can cover are not
@@ -896,10 +898,30 @@ if(LEGPLACE){
       +got.dx.toFixed(0)+','+got.dy.toFixed(0)+' mm to '+LEG.x.toFixed(0)+','+LEG.y.toFixed(0)
       +' ('+(got.sym*100).toFixed(1)+'% / '+(got.cov*100).toFixed(0)+'%).'+residue(got)+'\n');
   } else if(got.nowhere){
-    process.stderr.write('legend: no position on this sheet leaves a '+LEG.w.toFixed(0)+'x'+LEG.h.toFixed(0)
-      +' mm legend clear of every symbol'+(got.wantSym>0 ? ', and where it sits covers '
-      +(got.wantSym*100).toFixed(1)+'% of them' : '')+'. Left where it is — shrink it with legendWrap '
-      +'or legendAt.box, or make room.\n');
+    // design.legendFit (buses-data OA-437): no clear ground and no stored legendWrap, so wrap the longest
+    // operator run narrower, widest wrap first and no wider than 120mm. A stored legendWrap wins.
+    let _fit = null, _tried = false;
+    if(LEGFIT && !(D.legendWrap && (D.legendWrap.perRow|0) > 0)){
+      const _longest = Math.max(0, ...OPS.map(op=>op.routes.filter(r=>C[r] && !HIDDEN_ROUTES.has(r)).length));
+      for(let n=_longest-1; n>=2 && !_fit; n--){
+        HARD.length = hardMark;
+        const T = buildLegend(LX0, LY0, 0, 0, n), g = legendSpot(T.w, T.h, T.x, T.y);
+        if(T.w <= 120 && !g.nowhere) _fit = { n, g };
+      }
+      HARD.length = hardMark; _tried = true;
+    }
+    if(_fit){
+      const m = _fit.g.moved;
+      LEG = buildLegend(LX0+(m?_fit.g.dx:0), LY0+(m?_fit.g.dy:0), m?_fit.g.dx:0, m?_fit.g.dy:0, _fit.n);
+      process.stderr.write('legend: no clear ground as drawn, so its longest operator run was wrapped at '+_fit.n
+        +' per row (design.legendFit); it now sits at '+LEG.x.toFixed(0)+','+LEG.y.toFixed(0)+'. Set legendWrap to choose.\n');
+    } else {
+      if(_tried) LEG = buildLegend(LX0, LY0, 0, 0);   // the trials dropped its boxes from HARD
+      process.stderr.write('legend: no position on this sheet leaves a '+LEG.w.toFixed(0)+'x'+LEG.h.toFixed(0)
+        +' mm legend clear of every symbol'+(got.wantSym>0 ? ', and where it sits covers '
+        +(got.wantSym*100).toFixed(1)+'% of them' : '')+'. Left where it is — shrink it with legendWrap '
+        +'or legendAt.box, or make room.\n');
+    }
   }
 }
 if(V2) HARD.push([LEG.x-0.6, LEG.y-0.6, LEG.x+LEG.w+0.6, LEG.y+LEG.h+0.6, 'legend']);

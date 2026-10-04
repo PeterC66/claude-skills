@@ -70,7 +70,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, resolveBuses } from './engine.mjs';
+import { parseArgs, resolveBuses, assetsDir } from './engine.mjs';
 import { readRuns, loopHealth } from './loop_runs.mjs';
 import { readLoopLock } from './loop_lock.mjs';
 import { readYourMoveDir, classify, parseHold, heldPaths } from './loop_your_move.mjs';
@@ -396,6 +396,11 @@ export function analyse(f) {
       add('NOTE', 'idle-free-lower', `${health.idle} consecutive ticks reached no work. ${free} row${free === 1 ? ' is' : 's are'} free to take, none P0 or P1. ${named.length ? `The last idle tick named ${named.join(', ')} as passed over, each with a gate: read one and judge whether the gate is real.` : `Too few run files since the P2-and-P3 rule yet to say whether the ticks are opening these rows.`}${why}`);
     }
   }
+  if (f.engineLag && !f.engineLag.error) {
+    const el = f.engineLag;
+    if (el.over.length) add('NOTE', 'engine-lag', `${el.over.length} map${el.over.length === 1 ? ' is' : 's are'} past the ${el.ceiling}-day engine-lag ceiling: ${el.over.slice(0, 5).map((m) => `${m.name} ${m.days}d`).join(', ')}${el.over.length > 5 ? ` and ${el.over.length - 5} more` : ''}. Each is one rebuild row (OA-430), not a stop.`, 'The worklist carries a rebuild row per map; take them as the loop reaches them, or ask for them first.');
+    if (el.unknown) add('NOTE', 'engine-lag-unknown', `Engine lag could not be read for ${el.unknown} map${el.unknown === 1 ? '' : 's'} (no recorded engine commit, or one this clone lacks), so ${el.unknown === 1 ? 'it is' : 'they are'} not counted inside the ${el.ceiling}-day ceiling.`);
+  }
   if (health.ran && health.missed > 0) {
     add('AT RISK', 'missed', `${health.missed} of the recent idle runs were fired by the scheduler and never reached a prompt (written up as \`-missed\`). No tree state explains that.`, "Open the scheduled task bus-loop in the desktop app and read its recent runs' messages.");
   }
@@ -665,9 +670,22 @@ function probePrereq(busesDir) {
   return { drift: drifted, scripts: scripts || [], unreadable: scripts === null };
 }
 
+/** Which maps are past the engine-lag ceiling (OA-485 item 3). The ceiling lives in `engine_lag.js` and is read back from its output, never restated here. */
+function probeEngineLag(busesDir) {
+  try {
+    const script = path.join(assetsDir(), 'engine_lag.js');
+    if (!existsSync(script)) return null;
+    const r = probe([script, '--buses', busesDir, '--json'], { cwd: busesDir });
+    if (!r || r.status !== 0) return null;
+    const j = JSON.parse(r.out);
+    return { ceiling: j.ceiling, over: (j.over || []).map((m) => ({ name: m.name, days: m.days })), unknown: (j.unknown || []).length, measured: j.measured, error: j.error || null };
+  } catch { return null; }
+}
+
 function probeFacts(busesDir, deep, which) {
   const facts = {};
   if (which.prereq) facts.prereq = probePrereq(busesDir);
+  if (which.engineLag) facts.engineLag = probeEngineLag(busesDir);
   if (which.conditions) {
     const cond = probe([path.join(HERE, 'worklist.mjs'), '--conditions', '--json', '--buses', busesDir], { cwd: HERE });
     facts.resources = cond ? parseResources(cond.out) : null;
@@ -727,7 +745,7 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
     ahead, actions, commitments,
     passedOver: passedOver(path.join(loopDir, 'runs')),
     adhoc: readAdhoc(loopDir, path.join(loopDir, 'runs')),
-    ...(probes ? probeFacts(busesDir, deep, probes === true ? { prereq: true, conditions: true } : probes) : {}),
+    ...(probes ? probeFacts(busesDir, deep, probes === true ? { prereq: true, conditions: true, engineLag: true } : probes) : {}),
   };
 }
 

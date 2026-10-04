@@ -94,6 +94,12 @@ async function suite(m, label, verbose) {
   const hoursAgo = (h) => NOW - h * 3600000;
   check('a push waiting 6 h is at risk', has(analyse(base({ ahead: { count: 3, oldestMs: hoursAgo(6) } })), 'push-stale', 'AT RISK'));
   check('a push waiting 1 h is a note', has(analyse(base({ ahead: { count: 3, oldestMs: hoursAgo(1) } })), 'push-waiting', 'NOTE'));
+  // engine lag (OA-485 item 3): information only, and the ceiling is read from the probe, never restated
+  const lagOver = analyse(base({ engineLag: { ceiling: 45, over: [{ name: 'March', days: 80 }], unknown: 0, measured: 25, error: null } }));
+  check('a map past the ceiling is a NOTE naming it and the ceiling the probe reported', has(lagOver, 'engine-lag', 'NOTE') && /March 80d/.test(lagOver.findings.find((f) => f.key === 'engine-lag').text) && /45-day/.test(lagOver.findings.find((f) => f.key === 'engine-lag').text));
+  check('engine lag is never BLOCKING or AT RISK', lagOver.findings.filter((f) => /^engine-lag/.test(f.key)).every((f) => f.level === 'NOTE'));
+  check('no map over the ceiling raises nothing', !has(analyse(base({ engineLag: { ceiling: 60, over: [], unknown: 0, measured: 25, error: null } })), 'engine-lag'));
+  check('a map whose lag could not be read is named as unknown, not passed', has(analyse(base({ engineLag: { ceiling: 60, over: [], unknown: 2, measured: 23, error: null } })), 'engine-lag-unknown', 'NOTE'));
   check('nothing ahead raises nothing', !analyse(base()).findings.some((f) => /^push/.test(f.key)));
 
   // 6. holds
@@ -303,6 +309,10 @@ const MUTANTS = [
   ['low supply never warns', 'if (free < low) {', 'if (false) {'],
   ['the look-ahead window is ignored', 'if (d <= days) coming.push', 'if (true) coming.push'],
   ['commitments outside the window are listed', 'if (d <= days) dated.push', 'if (true) dated.push'],
+  ['engine lag is never raised', "if (el.over.length) add('NOTE', 'engine-lag'", "if (false) add('NOTE', 'engine-lag'"],
+  ['unknown lag is passed in silence', 'if (el.unknown) add(', 'if (false) add('],
+  ['the ceiling is restated, not read', 'past the ${el.ceiling}-day engine-lag ceiling', 'past the 60-day engine-lag ceiling'],
+  ['engine lag becomes a stop', "add('NOTE', 'engine-lag', ", "add('BLOCKING', 'engine-lag', "],
   ['a missed run is no longer raised', 'if (health.ran && health.missed > 0) {', 'if (false) {'],
   ['an old hold is no longer at risk', "add(oldest >= 7 ? 'AT RISK' : 'NOTE'", "add('NOTE'"],
   ['the exit code ignores BLOCKING', "process.exitCode = r.findings.some((x) => x.level === 'BLOCKING') ? 1 : 0;", 'process.exitCode = 0;'],

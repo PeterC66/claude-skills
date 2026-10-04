@@ -180,6 +180,32 @@ class Labeller {
     this._solved = null;
   }
 
+  /*
+   * Which labels would a hard box at `b`, and the label `req` that goes with it, cost
+   * the sheet (buses-data OA-559)? Solves a copy of the sheet as it stands, with and
+   * without them, and names every label the first seats that the second cannot — plus
+   * `req`'s own id when it would go unseated, because a symbol whose name cannot be
+   * drawn is a defect the ledger counts. The copy shares the ink and rebuilds the hard
+   * grid from `blocks`, so nothing here is committed and solve() on this labeller
+   * still runs once, later, on whatever has been added since.
+   */
+  unseats(b, req) {
+    const seated = (extra) => {
+      const f = Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+      f.hard = new Grid(this.page[0], this.page[1], this.o.cell); f.blocks = [];
+      for (const k of this.blocks) f.block(k.b, k.tag);
+      f.anchors = this.anchors.slice(); f.items = this.items.slice(); f.placedBoxes = []; f._solved = null;
+      if (extra) { f.block(extra, 'trial'); if (req) f.add(req); }
+      return new Set(f.solve().filter(r => r.placed).map(r => r.id));
+    };
+    const key = this.blocks.length + ':' + this.items.length + ':' + this.anchors.length;   // the baseline holds until something is added
+    if (!this._base || this._base.key !== key) this._base = { key, ids: seated(null) };
+    const before = this._base.ids, after = seated(b);
+    const lost = [...before].filter(id => !after.has(id));
+    if (req && !after.has(String(req.id))) lost.push(String(req.id));
+    return lost;
+  }
+
   // ---- feeding the grids ------------------------------------------------
   stampSeg(p0, p1, width) { this.ink.seg(p0, p1, width); return this; }
   stampBox(b) { this.ink.set(b[0], b[1], b[2], b[3]); return this; }

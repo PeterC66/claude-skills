@@ -572,3 +572,25 @@ test('`gap` is read, and an absent one is the default distance', () => {
   const dflt = page().add({ id: 'a', at, text: 'X', size: 3, gap: DEFAULTS.gap }).solve()[0];
   assert.strictEqual(dflt.x, far.x, 'stating the default gap changed the answer');
 });
+
+/* ---- OA-559: what would a symbol and its name cost the sheet? ----
+ * gen_internal.js seats a named pub that found no clear spot only where this says it
+ * unseats nothing and its own name seats. March's pubs, seated without asking, cost
+ * it Aldi and Heron Foods. */
+test('unseats() names the labels a hard box would cost, and the request itself when it cannot seat', () => {
+  const lone = () => page().add({ id: 'aldi', at: [50, 50], text: 'Aldi', size: 3, wrap: false, leader: false });
+  assert.deepStrictEqual(lone().unseats([0, 0, 5, 5]), [], 'a box nowhere near anything costs nothing');
+  assert.deepStrictEqual(lone().unseats([30, 30, 70, 70]), ['aldi'], 'a box on top of the label costs it');
+  const before = lone(); before.solve();
+  assert.ok(before.solve()[0].placed, 'premise: the label seats on a clear page');
+  const l = lone(); l.unseats([30, 30, 70, 70]);
+  assert.strictEqual(l._solved, null, 'nothing is committed: this labeller has not been solved by the trial');
+  assert.strictEqual(l.blocks.length, 0, '...and no box has been added to it');
+
+  const own = [88, 88, 92, 92], req = { id: 'poi:pub', at: [90, 90], text: 'The Chiltern', size: 2.5, wrap: false, leader: false, own };
+  assert.deepStrictEqual(page().unseats(own, req), [], 'on a clear page the name seats beside its symbol');
+  const walled = page();
+  for (const w of [[0, 0, 100, 86], [0, 94, 100, 100], [0, 86, 86, 94], [94, 86, 100, 94]]) walled.block(w, 'x');
+  assert.deepStrictEqual(walled.unseats(own, req), ['poi:pub'], 'a symbol whose own name cannot seat is reported, the ledger counts it as a defect');
+  assert.deepStrictEqual(walled.unseats(own, null), [], 'with no name to print the symbol alone costs nothing');
+});

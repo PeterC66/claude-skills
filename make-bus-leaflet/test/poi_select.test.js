@@ -1172,6 +1172,18 @@ test('OA-559: a named symbol left off is seated at its nearest spot that is safe
   assert.ok(req({ cat: 'station', name: 'Seer Green' }, { force: true }), 'force draws it whatever the category');
 });
 
+/* 2026-10-04: OA-559's second look drops route ink from the first look's test, and Godmanchester Co-op
+ * Cambridge Road v1.30 drew two pubs across the X3 ribbon, which OA-522 says a pub never does. Beaconsfield and
+ * Ely need that second look to sit on ink, so a map chooses with design.strandedOnInk. The looks live in
+ * closures a test cannot call, so this pins the choice at the call and the default beside it. */
+test('OA-522/559: design.strandedOnInk:false gives the second look the ink test of the first, and absent keeps OA-559', () => {
+  const src = require('fs').readFileSync(require('path').join(require('./_engine.js').ENGINE_DIR, 'gen_internal.js'), 'utf8');
+  assert.ok(/placeOptInSymbols\(mine, \{ free:optInInkFree,/.test(src), 'the first look asks optInInkFree');
+  assert.ok(/seatStrandedSymbols\(STRANDED, \{ free:DESIGN\.strandedOnInk===false \? optInInkFree : optInFree,/.test(src),
+    'the second look asks optInInkFree only when the map says false, and optInFree (OA-559) otherwise');
+  assert.ok(/const optInInkFree=[\s\S]*?INK\.any\(/.test(src), 'and that predicate reads route ink');
+});
+
 test('OA-523: a symbol on the town-centre square is pushed out across the nearest edge; a pinned one never moves', () => {
   const { pushOffBoxes } = require('./_engine.js').load('poi_select.js');
   const box = [10, 10, 30, 14];                      // the square and its name, x 10..30, y 10..14

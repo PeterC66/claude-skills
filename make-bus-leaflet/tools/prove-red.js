@@ -2624,6 +2624,20 @@ const MUTATIONS = [
     find: ":LAB&&DESIGN.exitInFrame?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}),",
     to: ":LAB&&false?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{})," },
 
+  // design.exitAvoidsInk (buses-data OA-561): the key is read but the ceiling is never handed to the caption, and Ely Co-op's "to Chatteris" prints across the ribbon again.
+  { suite: 'exit_avoids_ink.test.js', file: 'gen_internal.js',
+    what: 'design.exitAvoidsInk stops giving the exit caption a ceiling on route ink, and a caption can again print across a ribbon',
+    find: "...(DESIGN.exitAvoidsInk?{maxInk:0.02}:{})",
+    to: "...(false?{maxInk:0.02}:{})" },
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'maxInk stops refusing an inked spot in the strict pass, and the caption takes the near spot on the ribbon',
+    find: "if (it.maxInk != null && ink > it.maxInk && !relaxHard) return null;",
+    to: "if (false && ink > it.maxInk && !relaxHard) return null;" },
+  { suite: 'labeller.test.js', file: 'labeller.js',
+    what: 'maxInk loses its two further rings, and a caption beside a wide badge can no longer clear its own badge',
+    find: "const gaps = it.maxInk != null ? [G0, G0 * 1.55, G0 * 2.2, G0 * 3.0] : [G0, G0 * 1.55];",
+    to: "const gaps = [G0, G0 * 1.55];" },
+
   { suite: 'case_drawn_lanes.test.js', file: 'gen_internal.js',
     what: 'internalRoads.caseDrawnLanes stops replacing the bundle casing, and Ely Co-op\'s grey lobes at Tesco return',
     find: "  if(IR.caseDrawnLanes===true) drawnLaneCasings(",

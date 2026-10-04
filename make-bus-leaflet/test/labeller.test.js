@@ -304,6 +304,65 @@ test('a label may carry its own hard bounds, and only that label gets them', () 
   assert.ok(!b.placed || b.b[2] <= 55 + 1e-9, `a label without its own bounds ran to x=${b.placed ? b.b[2] : '-'}, past the sheet's limit at 55`);
 });
 
+// `maxInk` (buses-data OA-561, design.exitAvoidsInk): a label's own ceiling on route ink.
+// The fixture leaves East as the only open side, with a ribbon-width block of ink hugging
+// the point, so the label can only be clear of ink by reaching past it.
+function inkedPoint(extra) {
+  const L = new Labeller({ page: [100, 100], bounds: { x0: 0, y0: 0, x1: 100, y1: 100 } });
+  L.block([30, 44, 48, 56], 'west');
+  L.block([40, 30, 60, 43], 'above');
+  L.block([40, 57, 60, 70], 'below');
+  L.stampBox([52, 44, 55.4, 56]);               // ink right beside the point: eats the first two East rings
+  L.add(Object.assign({ id: 'x', at: [50, 50], text: 'to Chatteris', size: 2.7, mustPlace: true }, extra));
+  return L.solve()[0];
+}
+
+test('without maxInk a label takes the near spot even though it prints on ink (unchanged)', () => {
+  const r = inkedPoint({});
+  assert.ok(r.placed && r.b[0] < 54, `expected the nearest East ring, got x0=${r.placed ? r.b[0] : 'unplaced'}`);
+});
+
+test('maxInk reaches past the ink to a clear spot rather than printing across it', () => {
+  const r = inkedPoint({ maxInk: 0.02 });
+  assert.ok(r.placed, 'the caption must still be placed');
+  assert.ok(r.b[0] >= 55.4, `the box should start past the ink at 55.4, got x0=${r.b[0]}`);
+});
+
+test('maxInk is a CEILING, not only a weight: a lightly inked shortlist spot loses to a clear off-shortlist one', () => {
+  // Cost alone would keep East: a thin ribbon strip costs about 19 with the ceiling's
+  // weight, and leaving the shortlist costs wOffDevice 40. The ceiling refuses East in the
+  // strict pass, so the clear West (off the shortlist) wins. Without it, East is chosen.
+  const run = extra => {
+    const L = new Labeller({ page: [100, 100], bounds: { x0: 0, y0: 0, x1: 100, y1: 100 } });
+    L.stampBox([52, 51, 95, 51.4]);
+    L.add(Object.assign({ id: 'x', at: [50, 50], text: 'to Chatteris', size: 2.7, mustPlace: true, only: ['E'], leader: false }, extra));
+    return L.solve()[0];
+  };
+  const kept = run({ maxInk: 0.5 });
+  assert.ok(kept.placed && kept.b[0] > 50, `a ceiling the strip does not breach keeps East, got x0=${kept.b[0]}`);
+  const r = run({ maxInk: 0.02 });
+  assert.ok(r.placed && r.b[2] <= 50, `the ceiling should send the caption West, clear of the strip, got x0..x2=${r.b[0]}..${r.b[2]}`);
+});
+
+test('maxInk adds rings far enough out to clear its own wide badge', () => {
+  // A 12 mm pill centred on the point: the default 2.6 and 4.0 mm rings put the box on it.
+  const L = new Labeller({ page: [100, 100], bounds: { x0: 0, y0: 0, x1: 100, y1: 100 } });
+  L.block([30, 44, 48, 56], 'west');
+  L.block([40, 30, 60, 43], 'above');
+  L.block([40, 57, 60, 70], 'below');
+  const mark = [44, 46, 56, 54];
+  L.add({ id: 'x', at: [50, 50], text: 'to Chatteris', size: 2.7, mustPlace: true, maxInk: 0.02, ownMarks: [mark], leader: false });
+  const r = L.solve()[0];
+  assert.ok(r.placed && r.b[0] >= mark[2] - 0.3, `the caption should stand clear of its own badge, got x0=${r.placed ? r.b[0] : 'unplaced'}`);
+});
+
+test('maxInk never drops a mustPlace label: with no clear spot at all it is placed on the least ink', () => {
+  const L = new Labeller({ page: [60, 60], bounds: { x0: 0, y0: 0, x1: 60, y1: 60 } });
+  L.stampBox([0, 0, 60, 60]);                   // ink everywhere
+  L.add({ id: 'x', at: [30, 30], text: 'to Chatteris', size: 2.7, mustPlace: true, maxInk: 0.02 });
+  assert.ok(L.solve()[0].placed, 'a destination is never dropped for ink');
+});
+
 test('Grid.cover reports the fraction of a box that is inked, not merely whether any of it is', () => {
   const g = new Grid(100, 100, 0.5);
   const box = [10, 10, 20, 20];

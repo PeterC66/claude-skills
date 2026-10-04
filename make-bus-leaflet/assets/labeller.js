@@ -55,6 +55,11 @@ const DEFAULTS = {
   pad: 0.45,               // mm, halo padding added around every label box
   gap: 2.6,                // mm, nominal distance from the anchor to the label
   wInk: 34,                // cost per unit of ink-coverage fraction
+  wInkCeil: 4,             // multiplier on wInk for a label that names `maxInk`, so
+                           // when no spot is clear the LEAST-inked one wins instead of
+                           // the first on the shortlist (0.3 of a box = 41, which
+                           // outweighs wOffDevice 40: leaving the shortlist is better
+                           // than printing across a third of a ribbon bundle).
   wPos: 1.0,               // cost per step down the compass preference order
   wDist: 0.55,             // cost per mm beyond the nominal gap
   wAmbig: 9,               // cost for sitting nearer a foreign anchor than its own
@@ -406,7 +411,19 @@ class Labeller {
     // Same reasoning as the hard grid above: a "to <destination>" label with a white
     // halo over a ribbon is legible; a missing one is not recoverable by the reader.
     if (ink > this.o.inkFatal && !relaxHard) return null;
-    let c = ink * this.o.wInk
+    /* `maxInk` — A LABEL'S OWN CEILING ON ROUTE INK (2026-10-04, buses-data OA-561).
+     * `inkFatal` is the sheet's ceiling and sits at 0.55 because a mustPlace caption
+     * on a ribbon is better than none. For an exit caption that is the wrong trade
+     * whenever a clear spot exists, and on Ely Co-op one does: "to Chatteris",
+     * "to Newmarket" and "to Impington" took 0.1-0.3 of a box of ribbon because
+     * `wInk` (34 per whole box) costs that less than leaving the inboard shortlist
+     * (`wOffDevice` 40). A label that names `maxInk` is refused above it in the
+     * strict pass, so a clear spot anywhere on its candidate list, off the shortlist
+     * included, beats every inked one; the relaxed pass still places it (on the least ink, wInkCeil), so a caption
+     * with no clear spot at all is still placed on ink rather than dropped. Absent,
+     * nothing changes. */
+    if (it.maxInk != null && ink > it.maxInk && !relaxHard) return null;
+    let c = ink * (it.maxInk != null ? this.o.wInk * this.o.wInkCeil : this.o.wInk)   // a label with a ceiling pays more for what it cannot avoid
           + cand.pi * this.o.wPos
           + Math.max(0, cand.gap - this.o.gap) * this.o.wDist
           + (cand.form.n === 2 ? this.o.wWrap : 0)
@@ -571,7 +588,12 @@ class Labeller {
      * saturated sheet is the difference between placing it and dropping it. Absent
      * on every other caller, so every other label's candidate list is unchanged. */
     const G0 = it.gap != null ? it.gap : this.o.gap;
-    const gaps = [G0, G0 * 1.55];                      // and a little further out
+    /* A label that names `maxInk` gets two rings further out, 2.2x and 3.0x: the
+     * gap is measured from its POINT, and a terminus caption's point is the middle of
+     * its badge row, so on a wide pill (Ely Co-op's ZIP3) both default gaps land the
+     * box on its own badge and every position fails `ownMarks` before ink is asked.
+     * Without the reach the ceiling above can never be met. Absent, unchanged. */
+    const gaps = it.maxInk != null ? [G0, G0 * 1.55, G0 * 2.2, G0 * 3.0] : [G0, G0 * 1.55];   // and a little further out
     /* `only`: an ORDERED shortlist of compass keys, for a label that belongs to a
      * repeated DEVICE rather than to a point on its own. The free placer is right
      * for a POI name — wherever it fits best is where it should go — and wrong for

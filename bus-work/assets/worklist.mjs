@@ -1466,6 +1466,8 @@ for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
 }
 for (const it of items) it.safety = conc.classify(it, conditions);
+// OA-552: a row naming a town another session holds the lock on is BETTER TO DELAY; `heldTowns` is the engine's town_lock.js.
+conc.applyTownLocks(items, require(path.join(SK, 'town_lock.js')).heldTowns(BUSES), SELF_SESSION);
 
 const demoAll = items.filter((i) => i.demo);
 let shown = SHOW_DEMO ? items : items.filter((i) => !i.demo);

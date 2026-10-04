@@ -46,8 +46,10 @@
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
  *   status                             print a manifest summary
- *   attach | detach                    in a WORKTREE, junction S4-S6 and _latest onto the main checkout's
- *                                      and remove them again (buses-data OA-552; see attach_links.js)
+ *   attach --as <session> | detach     in a WORKTREE, take the town's lock and junction S4-S6 and _latest onto the
+ *                                      main checkout's; detach removes the links (buses-data OA-552; attach_links.js)
+ *   lock --as <session> | unlock       the per-town build lock on its own, from the main checkout or a worktree
+ *   who                                 who holds this town's lock (town_lock.js)
  *   nextver [--bump major|minor]       print the version `new S4` would assign (no side effects)
  *   stampver [runDir]                  force routes.json "version" to match the run dir's v<N.N>
  *
@@ -447,7 +449,7 @@ function main() {
   if (backfillStages(m)) saveManifest(townDir, m); // one-time migration for pre-S6 manifests
   const stage = (s) => { if (!STAGE_NAME[s]) die('unknown stage ' + s + ' (use S1..S6)', 2); return m.stages[s]; };
 
-  if (cmd === 'attach' || cmd === 'detach') return require('./attach_links').run(cmd, townDir, die);
+  if (['attach', 'detach', 'lock', 'unlock', 'who'].includes(cmd)) return require('./attach_links').run(cmd, townDir, die);
 
   if (cmd === 'nextver') { console.log(computeVersion(m, f.bump === 'major' ? 'major' : 'minor')); return; }
 

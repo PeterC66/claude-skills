@@ -1125,6 +1125,29 @@ console.log('\n== the backlog decision marker, and the board rows it owns ==');
 }
 
 // ---------------------------------------------------------------------------
+// 3b. THE PER-TOWN LOCK (buses-data OA-552) — one town held, every other row free
+// ---------------------------------------------------------------------------
+console.log('\n== the per-town build lock ==');
+{
+  const row = (towns) => ({ key: 'engine-rebuild-' + towns[0], type: 'housekeeping', towns, safety: conc.classify({ key: 'x', type: 'gate' }, CLEAN) });
+  const held = [{ name: 'Ely Co-op', holder: 'sess-a', expired: false, remainMin: 90 }];
+  const a = row(['Ely Co-op']), b = row(['Ramsey']);
+  ok(conc.applyTownLocks([a, b], held, 'sess-z') === 1, 'one held town delays exactly one row');
+  want(a.safety, conc.DELAY, 'a row naming the held town is BETTER TO DELAY');
+  says(a.safety, /being built by sess-a/, 'and it names the holder');
+  want(b.safety, conc.SAFE, 'a row for ANOTHER town is untouched — two sessions build two towns');
+  const c = row(['ely co-op']);
+  conc.applyTownLocks([c], held, 'sess-a');
+  want(c.safety, conc.SAFE, 'CONTROL — the holder itself is not delayed by its own lock');
+  const d = row(['Ely Co-op']);
+  conc.applyTownLocks([d], [{ ...held[0], expired: true, remainMin: 0 }], 'sess-z');
+  want(d.safety, conc.SAFE, 'CONTROL — an EXPIRED lease does not delay: the next attach takes it over');
+  const e = row(['Ely Co-op']);
+  conc.applyTownLocks([e], [], 'sess-z');
+  want(e.safety, conc.SAFE, 'CONTROL — released, the row is SAFE NOW again');
+}
+
+// ---------------------------------------------------------------------------
 // 4. THE CONTROL — a quiet machine must say go
 // ---------------------------------------------------------------------------
 console.log('\n== the control: nothing else running ==');

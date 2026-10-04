@@ -1213,6 +1213,7 @@ export const NEED_LABEL = {
   'portal-branch': 'a portal branch and pull request',
   'portal-deploy': 'a portal deploy',
   'loop-lock': "the scheduled loop's lock",
+  'town-lock': "a town another session is building",
 };
 
 /*
@@ -1390,6 +1391,28 @@ export function resourceVerdicts(conditions) {
 
 export function classify(item, conditions) {
   return assess(needsOf(item), conditions);
+}
+
+/*
+ * THE PER-TOWN BUILD LOCK (buses-data OA-552). `<town>/.lock.d` fences ONE town where
+ * `loop/LOCK.d` fences the tree, so a row that names a held town is BETTER TO DELAY
+ * for everyone but the holder, and every other row is untouched — which is the whole
+ * point: two sessions build two towns at once. `held` is `heldTowns()` from the
+ * engine's town_lock.js; `self` is this session's name, whose own lock never delays it.
+ * An EXPIRED lease does not delay: the next `stage.js attach` takes it over, so the row
+ * is workable. This is the loop's skip too, because a tick reads these verdicts.
+ */
+export function applyTownLocks(items, held, self = '') {
+  const live = new Map();
+  for (const h of held || []) if (!h.expired && h.holder !== self) live.set(String(h.name).toLowerCase(), h);
+  let n = 0;
+  for (const it of items) {
+    const hit = (it.towns || []).map((t) => live.get(String(t).toLowerCase())).find(Boolean);
+    if (!hit || !it.safety) continue;
+    it.safety = { verdict: DELAY, reasons: [...it.safety.reasons, { need: 'town-lock', verdict: DELAY, why: `${hit.name} is being built by ${hit.holder || 'an unreadable holder'}; its town lock has ${hit.remainMin === null ? 'an unknown time' : hit.remainMin + ' min'} left (\`stage.js who\`, run in that town)` }] };
+    n++;
+  }
+  return n;
 }
 
 /*

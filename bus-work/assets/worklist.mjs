@@ -1465,7 +1465,7 @@ const DEMO_RE = /\(demo\)/i;
 for (const it of items) {
   if (DEMO_RE.test(`${it.title || ''} ${it.why || ''} ${it.who || ''}`)) it.demo = true;
 }
-for (const it of items) it.safety = conc.classify(it, conditions);
+for (const it of items) it.safety = conc.classify(it, conditions); conc.applyTownLocks(items, require(path.join(SK, 'town_lock.js')).heldTowns(BUSES), SELF_SESSION); // OA-552: a held town's rows are BETTER TO DELAY
 
 const demoAll = items.filter((i) => i.demo);
 let shown = SHOW_DEMO ? items : items.filter((i) => !i.demo);

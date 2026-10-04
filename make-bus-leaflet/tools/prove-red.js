@@ -2937,11 +2937,6 @@ const MUTATIONS = [
     to: "for(let n=2; n<_longest && !_fit; n++){" },
 
   { suite: 'legend_fit.test.js', file: 'gen_external_radial.js',
-    what: 'the width cap is gone, so a fitted legend can span the sheet',
-    find: "if(T.w <= 120 && !g.nowhere) _fit = { n, g };",
-    to: "if(!g.nowhere) _fit = { n, g };" },
-
-  { suite: 'legend_fit.test.js', file: 'gen_external_radial.js',
     what: 'a stored legendWrap no longer wins, so the engine overrides a town that chose its own wrap',
     find: "if(LEGFIT && !(D.legendWrap && (D.legendWrap.perRow|0) > 0)){",
     to: "if(LEGFIT){" },

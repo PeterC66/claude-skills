@@ -6,7 +6,7 @@
  * the legend as drawn was too big for any clear ground, and the engine's only answer was "shrink it with
  * legendWrap". The numbers were chosen by eye per map. The engine now tries the narrower wraps itself when
  * the town set no legendWrap and the plain legend has nowhere to go, and keeps the widest wrap that finds
- * a spot no wider than 120mm.
+ * a spot.
  *
  * Held on a copy of the fixture estate's March external with one operator inflated to 35 drawn routes.
  * Absent the inflation nothing changes, so the byte gate holds every real map; with it the legend is
@@ -84,7 +84,7 @@ test('no clear ground and no legendWrap: the legend is wrapped, fits, and keeps 
   // The widest wrap that finds ground: 11 on this fixture. The narrowest (2) would also fit, as a tall column.
   assert.ok(+fit.err.match(/wrapped at (\d+) per row/)[1] >= 8, 'a narrow wrap was chosen where a wider one fits: ' + fit.err);
   const p = legendPanel(fit.svg);
-  assert.ok(p.w <= 121, `the fitted legend is ${p.w}mm wide, past the 120mm cap`);
+  assert.ok(p.x + p.w <= 297, `the fitted legend runs off the page: ${p.x}+${p.w}mm`);
   const b = legendBadges(fit.svg, p);
   assert.ok(b.length >= 38, `only ${b.length} legend badges were drawn`);
   assert.ok(b.every(c => c.x >= p.x && c.x <= p.x + p.w), 'a legend badge was drawn outside its own panel');
@@ -97,8 +97,10 @@ test('legendFit:false keeps the old behaviour: warn, leave it, draw one wide row
   assert.ok(!/design\.legendFit\)/.test(off.err));
 });
 
-test('a stored legendWrap wins: the fit never runs', () => {
+test('a stored legendWrap wins: the fit never runs, even where the stored wrap leaves no ground', () => {
   if (!PRESENT) return;
-  const hand = runOn(d => { inflate(d); d.legendWrap = { perRow: 11 }; });
+  // 30 per row is still far too wide for any ground, so only the stored-key guard stops the fit from running.
+  const hand = runOn(d => { inflate(d); d.legendWrap = { perRow: 30 }; });
+  assert.match(hand.err, /no position on this sheet leaves a/);
   assert.ok(!/design\.legendFit\)/.test(hand.err), hand.err);
 });

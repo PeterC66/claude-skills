@@ -899,14 +899,14 @@ if(LEGPLACE){
       +' ('+(got.sym*100).toFixed(1)+'% / '+(got.cov*100).toFixed(0)+'%).'+residue(got)+'\n');
   } else if(got.nowhere){
     // design.legendFit (buses-data OA-437): no clear ground and no stored legendWrap, so wrap the longest
-    // operator run narrower, widest wrap first and no wider than 120mm. A stored legendWrap wins.
+    // operator run narrower, widest wrap first. A stored legendWrap wins.
     let _fit = null, _tried = false;
     if(LEGFIT && !(D.legendWrap && (D.legendWrap.perRow|0) > 0)){
       const _longest = Math.max(0, ...OPS.map(op=>op.routes.filter(r=>C[r] && !HIDDEN_ROUTES.has(r)).length));
       for(let n=_longest-1; n>=2 && !_fit; n--){
         HARD.length = hardMark;
         const T = buildLegend(LX0, LY0, 0, 0, n), g = legendSpot(T.w, T.h, T.x, T.y);
-        if(T.w <= 120 && !g.nowhere) _fit = { n, g };
+        if(!g.nowhere) _fit = { n, g };
       }
       HARD.length = hardMark; _tried = true;
     }

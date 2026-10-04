@@ -2880,13 +2880,13 @@ const MUTATIONS = [
   // No stored map has such a note, so the byte gate never runs the search; note_place.test.js alone holds it.
   { suite: 'note_place.test.js', file: 'note_place.js',
     what: 'route ink is ignored, so a searched note is parked on a bus route',
-    find: "if (boxes.some(b => d.overlaps(b) || d.inkCover(b) > 0)) continue;",
-    to: "if (boxes.some(b => d.overlaps(b))) continue;" },
+    find: "return d.overlaps(t) || d.inkCover(t) > 0; })) continue;",
+    to: "return d.overlaps(t); })) continue;" },
 
   { suite: 'note_place.test.js', file: 'note_place.js',
     what: 'reserved space is ignored, so a searched note lands on the panel, a symbol or another note',
-    find: "if (boxes.some(b => d.overlaps(b) || d.inkCover(b) > 0)) continue;",
-    to: "if (boxes.some(b => d.inkCover(b) > 0)) continue;" },
+    find: "return d.overlaps(t) || d.inkCover(t) > 0; })) continue;",
+    to: "return d.inkCover(t) > 0; })) continue;" },
 
   { suite: 'note_place.test.js', file: 'note_place.js',
     what: 'the search tries the narrowest wrap first, so every note is a tall column',

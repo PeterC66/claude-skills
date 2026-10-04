@@ -68,6 +68,11 @@ test('a wide note that cannot fit narrows until it does, and reports the width t
   assert.strictEqual(got.width, 40);
 });
 
+test('the footer plate is a floor: the last line ends at least 2 mm above it, even inside the frame', () => {
+  const got = run({ footerTop: 100 });
+  assert.ok(got.boxes[got.boxes.length - 1][3] <= 98, 'ends above the plate');
+});
+
 test('w caps the widest wrap tried', () => {
   assert.strictEqual(run({ w: 20 }).width, 20);
 });

@@ -149,3 +149,39 @@ test('nowhere clear: the note is still drawn, at the hint, and the build says so
   assert.match(out[0], /x="50.00" y="60.00"/);
   assert.match(warnings[0], /no clear ground/);
 });
+
+// ------------------------------------------------- `then`: a heading and its lines are ONE block (OA-437 C4)
+test('a note with no `then` keeps the offsets i * lineGap it has always had', () => {
+  const got = run({ w: 20 });
+  got.rows.forEach((r, i) => assert.strictEqual(r.dy, i * 3.24));
+});
+
+test('`then` paragraphs are placed with the heading as one block, each wrapped at its own size', () => {
+  const got = placeNote({
+    text: 'Also serving X:', size: 2.6, lineGap: 3.51, color: '#333',
+    then: [{ text: 'aaaa bbbb cccc dddd', size: 2.4 }, { text: 'eeee ffff' }],
+    w: 8, frame: FRAME, footerTop: 195, measure, overlaps: () => false, inkCover: () => 0,
+  });
+  assert.deepStrictEqual(got.lines, ['Also', 'serving', 'X:', 'aaaa', 'bbbb', 'cccc', 'dddd', 'eeee', 'ffff']);
+  assert.deepStrictEqual(got.rows.map((r) => r.size), [2.6, 2.6, 2.6, 2.4, 2.4, 2.4, 2.4, 2.6, 2.6]);
+  const paraStart = got.rows[3].dy - got.rows[2].dy;
+  assert.ok(Math.abs(paraStart - (2.4 * 1.35 + 1.6)) < 1e-9, 'a new paragraph opens PARA_GAP below the last line');
+  assert.strictEqual(got.boxes.length, got.rows.length, 'one claim per drawn line');
+  assert.strictEqual(got.rows[3].color, '#333', 'a paragraph with no colour takes the heading colour');
+});
+
+test('a block is refused where ANY of its lines would sit on something, not just the heading', () => {
+  const base = { text: 'Heading', size: 2.4, lineGap: 3.24, then: [{ text: 'body' }], frame: FRAME, footerTop: 195, measure, near: { x: 100, y: 100 }, inkCover: () => 0 };
+  const free = placeNote({ ...base, overlaps: () => false });
+  const body = free.boxes[1];
+  const blocked = placeNote({ ...base, overlaps: (b) => hit(b, [free.x - 5, body[1], free.x + 20, body[3]]) });
+  assert.ok(blocked.x !== free.x || blocked.y !== free.y, 'it moved to clear the body line');
+});
+
+test('placeSearchedNotes draws every row of a block in its own size and colour, and reserves each', () => {
+  const { out, reserved } = searched({ notes: [{ text: 'Head', size: 2.6, color: '#333', then: [{ text: 'line one', color: '#555' }] }] });
+  assert.strictEqual(out.length, 2);
+  assert.match(out[0], /font-size="2.6" font-style="italic" fill="#333"/);
+  assert.match(out[1], /font-size="2.6" font-style="italic" fill="#555"/);
+  assert.strictEqual(reserved.length, 2);
+});

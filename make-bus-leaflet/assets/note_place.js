@@ -35,6 +35,7 @@
 
 const WIDTHS_FROM = 120, WIDTHS_TO = 40, WIDTHS_STEP = 20;
 const NL = String.fromCharCode(10);
+const PARA_GAP = 1.6;   // extra space before a `then` paragraph, mm: the hand-set blocks leave 5.4 against a 3.8 line pitch
 const PAD = 1.2;     // clearance kept round every line, mm: a note touching a badge reads as part of it
 
 /*
@@ -75,7 +76,7 @@ function wrapMeasured(text, width, measure) {
  * `boxes` is one claim per line, the shape mapNotes reserves.
  */
 function placeNote(d) {
-  const sz = d.size, gap = d.lineGap, step = d.step || 1;
+  const sz = d.size, step = d.step || 1;
   const top = d.frame.y0 + 1, bottomLimit = Math.min(d.frame.y1 - 1, d.footerTop - 2);
   const left = d.frame.x0 + 1, right = d.frame.x1 - 1;
   const near = d.near || { x: left, y: bottomLimit };
@@ -85,29 +86,50 @@ function placeNote(d) {
   if (!widths.length) widths.push(widest);
   const seen = new Set();
   for (const width of widths) {
-    const lines = wrapMeasured(d.text, width, ln => d.measure(ln, sz));
-    const key = lines.join('\n');
+    const rows = layoutRows(d, width);
+    const key = rows.map(r => r.ln).join(NL);
     if (seen.has(key)) continue;          // a narrower width that wraps the same way finds the same spots
     seen.add(key);
-    const ws = lines.map(ln => d.measure(ln, sz));
+    const ws = rows.map(r => d.measure(r.ln, r.size));
     const maxW = Math.max(...ws);
-    const height = (lines.length - 1) * gap;
+    const height = rows[rows.length - 1].dy;
     let best = null;
     for (let y = top + sz; y + height + 1 <= bottomLimit; y += step) {
       for (let x = left; x + maxW <= right; x += step) {
         const dist = Math.hypot(x - near.x, y - near.y);
         if (best && dist >= best.dist) continue;
-        const boxes = lines.map((ln, i) => {
-          const ly = y + i * gap;
-          return [x - 0.4, ly - sz, x + ws[i] + 0.4, ly + 1];
+        const boxes = rows.map((r, i) => {
+          const ly = y + r.dy;
+          return [x - 0.4, ly - r.size, x + ws[i] + 0.4, ly + 1];
         });
         if (boxes.some(b => { const t = [b[0] - PAD, b[1] - PAD, b[2] + PAD, b[3] + PAD]; return d.overlaps(t) || d.inkCover(t) > 0; })) continue;
         best = { x, y, dist, boxes };
       }
     }
-    if (best) return { x: best.x, y: best.y, lines, width, boxes: best.boxes };
+    if (best) return { x: best.x, y: best.y, lines: rows.map(r => r.ln), rows, width, boxes: best.boxes };
   }
   return null;
+}
+
+/*
+ * layoutRows(d, width) -> [{ ln, size, color, dy }], one per drawn line.
+ * A note is a paragraph; `then` (OA-437 C4) adds paragraphs that are placed with it as ONE
+ * block, because a heading and the lines under it that land in different corners say nothing.
+ * Each paragraph wraps by measured width at its own size; `dy` is the line's offset from the
+ * block's first baseline, and a new paragraph opens a further PARA_GAP below the last line.
+ * With no `then` the offsets are i * lineGap, exactly what a single note has always drawn.
+ */
+function layoutRows(d, width) {
+  const paras = [{ text: d.text, size: d.size, lineGap: d.lineGap, color: d.color }]
+    .concat((d.then || []).map(p => ({ text: p.text, size: p.size || d.size, lineGap: p.lineGap || (p.size || d.size) * 1.35, color: p.color || d.color })));
+  const rows = [];
+  paras.forEach(p => {
+    const base = rows.length ? rows[rows.length - 1].dy + p.lineGap + PARA_GAP : 0;   // i * lineGap for the first, as ever
+    wrapMeasured(p.text, width, ln => d.measure(ln, p.size)).forEach((ln, i) => {
+      rows.push({ ln, size: p.size, color: p.color, dy: base + i * p.lineGap });
+    });
+  });
+  return rows;
 }
 
 /*
@@ -125,24 +147,24 @@ function placeSearchedNotes(d) {
     const sz = n.size || 2.4, lineGap = n.lineGap || sz * 1.35;
     const nm = 'mapNotes: "' + String(n.text).slice(0, 40) + (n.text.length > 40 ? '…' : '') + '" ';
     const got = placeNote({
-      text: n.text, size: sz, lineGap, w: n.w, near: n.near, frame: d.frame, footerTop: d.footerTop, measure: d.measure,
+      text: n.text, size: sz, lineGap, color: n.color || '#333', then: n.then, w: n.w, near: n.near, frame: d.frame, footerTop: d.footerTop, measure: d.measure,
       overlaps: b => d.overlaps(b) || d.labelBoxes.some(o => hit(b, o)),
       inkCover: b => (ink = ink || noteInk(d.svg, d.IR, d.Labeller))(b),
     });
-    let x, y, lines, boxes;
+    let x, y, rows, boxes;
     if (got) {
-      ({ x, y, lines, boxes } = got);
-      d.warn(nm + 'placed by search at ' + x.toFixed(1) + ',' + y.toFixed(1) + ' (' + lines.length + ' line' + (lines.length > 1 ? 's' : '') + ', ' + got.width + ' mm wrap).' + NL);
+      ({ x, y, rows, boxes } = got);
+      d.warn(nm + 'placed by search at ' + x.toFixed(1) + ',' + y.toFixed(1) + ' (' + rows.length + ' line' + (rows.length > 1 ? 's' : '') + ', ' + got.width + ' mm wrap).' + NL);
     } else {
       // Drawn at the hint rather than dropped: the reader loses a fact otherwise, with nothing to say so.
       x = n.near ? n.near.x : d.frame.x0 + 1; y = n.near ? n.near.y : d.footerTop - 2;
-      lines = wrapMeasured(n.text, n.w != null ? n.w : WIDTHS_FROM, ln => d.measure(ln, sz));
-      boxes = lines.map((ln, i) => [x - 0.4, y + i * lineGap - sz, x + d.measure(ln, sz) + 0.4, y + i * lineGap + 1]);
+      rows = layoutRows({ text: n.text, size: sz, lineGap, color: n.color || '#333', then: n.then, measure: d.measure }, n.w != null ? n.w : WIDTHS_FROM);
+      boxes = rows.map(r => [x - 0.4, y + r.dy - r.size, x + d.measure(r.ln, r.size) + 0.4, y + r.dy + 1]);
       d.warn(nm + 'has no clear ground on this sheet, so it is drawn at ' + x.toFixed(1) + ',' + y.toFixed(1) + ' over whatever is there. Shorten it, or give it x and y.' + NL);
     }
-    lines.forEach((ln, i) => {
+    rows.forEach((r, i) => {
       d.reserve(boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], 'a map note');
-      out.push(`<text x="${x.toFixed(2)}" y="${(y + i * lineGap).toFixed(2)}" font-family="Arial" font-size="${sz}" font-style="italic" fill="${n.color || '#333'}" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">${d.esc(ln)}</text>`);
+      out.push(`<text x="${x.toFixed(2)}" y="${(y + r.dy).toFixed(2)}" font-family="Arial" font-size="${r.size}" font-style="italic" fill="${r.color}" text-anchor="start" stroke="#fff" stroke-width="0.7" paint-order="stroke">${d.esc(r.ln)}</text>`);
     });
   }
   return out;

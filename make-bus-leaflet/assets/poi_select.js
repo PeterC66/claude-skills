@@ -871,7 +871,8 @@ function placeOptInSymbols(sites, { free, place, reach = OPT_IN_REACH }) {
  * Co-op's The High Flyer. After every label is queued, a named symbol that was left
  * off gets a second look: the nearest spot within the reach that is clear of
  * everything reserved and of every badge (`free`, which may sit on route ink, the
- * lesser harm where the first look refused it) AND at which `safe` says it unseats no
+ * lesser harm where the first look refused it, unless the map sets design.strandedOnInk:false
+ * and then it is the first look's own test, ink included) AND at which `safe` says it unseats no
  * label the sheet already has. March's pubs, seated here without that test, cost it
  * Aldi and Heron Foods, and a pub is not worth a core name. Unnamed symbols have
  * nothing else to lose and stay off. Returns the sites still left off.

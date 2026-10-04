@@ -369,6 +369,12 @@ const MUTATIONS = [
     find: "const at = named ? clearSpot(",
     to: "const at = false ? clearSpot(" },
 
+  // 2026-10-04: the second look seated two pubs on the X3 ribbon at Godmanchester Co-op Cambridge Road v1.30.
+  { suite: 'poi_select.test.js', file: 'gen_internal.js',
+    what: 'design.strandedOnInk:false is ignored, so a pub is seated across the ribbon on a map that refused it (Godmanchester v1.30)',
+    find: "free:DESIGN.strandedOnInk===false ? optInInkFree : optInFree,",
+    to: "free:optInFree," },
+
   { suite: 'poi_select.test.js', file: 'poi_select.js',
     what: 'a stranded symbol is seated wherever it fits, whatever label it costs (March lost Aldi and Heron Foods)',
     find: "(x, y) => free(x, y) && safe(ctx, e, x, y), reach)",

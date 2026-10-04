@@ -15,7 +15,7 @@ const path = require('path');
  * `status.js` and the gates already look; `detach` removes only the junctions.
  *
  * A junction, not a symlink: it needs no privilege on Windows. `detach` removes a
- * link with `fs.rmdirSync`, which never follows it — a recursive delete through
+ * link with `unlink` (or `rmdir`), which never follows it — a recursive delete through
  * one would empty the main checkout's runs. A real folder is replaced only when
  * every file in it matches the main checkout's, bar line endings (the tracked
  * redteam.json under S6-verify is exactly that), because then nothing is lost.
@@ -81,11 +81,16 @@ function attachLinks(townDir, mainDir) {
   return res;
 }
 
+// A Windows junction takes rmdir; a POSIX symlink to a directory takes unlink. Neither follows the link.
+function removeLink(link) {
+  try { fs.unlinkSync(link); } catch (e) { fs.rmdirSync(link); }
+}
+
 function detachLinks(townDir) {
   const detached = [];
   for (const d of ATTACH_DIRS) {
     const link = path.join(townDir, d);
-    if (isLink(link)) { fs.rmdirSync(link); detached.push(d); }
+    if (isLink(link)) { removeLink(link); detached.push(d); }
   }
   return detached;
 }

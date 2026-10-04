@@ -2550,7 +2550,7 @@ if(IR && TRIM){
           pendingTermini.push({ id:'term:'+gidx+':'+g.ms.map(m=>m.r).join('-')+'@'+bx.toFixed(1)+','+ry.toFixed(1),
             at:[(rx0+rx1)/2, ry], leaderFrom:rowMarks, text, size:sz, fill:col, priority:20, wrap:false, mustPlace:true,
             ...(EXIT_IN_PANEL?{bounds:{x0:1, y0:1, x1:297-(PRINT_SAFE!=null?PRINT_SAFE:1), y1:FOOTER_PLATE_TOP-0.4}}:LAB&&DESIGN.exitInFrame?{bounds:{x0:MX0, y0:MY0, x1:MX1, y1:MY1}}:{}), // exitInFrame (OA-561)
-            ...(only?{only, leader:false}:{}) });
+            ...(only?{only, leader:false}:{}), ...(DESIGN.exitAvoidsInk?{maxInk:0.02}:{}) }); // exitAvoidsInk (OA-561)
           return;
         }
         const rcands=[[rx1+3.7+CXW,ry+0.9,'start'],[rx0-3.7-CXW,ry+0.9,'end'],[bx,ry-4.4,'middle'],[bx,ry+5.4,'middle']];

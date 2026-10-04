@@ -1009,6 +1009,23 @@ const RULES = {
     return [SAFE, null];
   },
 
+  /*
+   * OA-558. A branch and a pull request in the portal repository read nothing
+   * from buses-data's unpushed commits and write nothing to the shared
+   * checkout (the work is done in a worktree and the tick fetches before it
+   * returns the checkout to main), so the unpushed-commit test in
+   * `portal-write` below is not guarding it. That test guards a DELIVER, which
+   * scp's renders from buses-data while the portal's verify.yml reads that
+   * repo's pushed main. The push preflight defers most ticks by design, so the
+   * test was closing the portal to every tick for the hours a push waited.
+   * Only what a branch really needs is asked: that the checkout can be read.
+   */
+  'portal-branch': (c) => {
+    const p = c.repos.portal;
+    if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
+    return [SAFE, null];
+  },
+
   'portal-write': (c) => {
     const p = c.repos.portal, b = c.repos.buses;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
@@ -1193,6 +1210,7 @@ export const NEED_LABEL = {
   engine: 'the engine repo',
   'estate-sweep': 'an estate-wide sweep',
   'portal-write': 'delivery to the live portal',
+  'portal-branch': 'a portal branch and pull request',
   'portal-deploy': 'a portal deploy',
   'loop-lock': "the scheduled loop's lock",
 };
@@ -1390,6 +1408,7 @@ export const STANDING_TOOLS = [
   { what: 'Re-record the quality ledger', cmd: 'node quality_gate.js --accept', needs: ['estate-sweep'] },
   { what: 'Work an open action or ad-hoc prompt that writes into no map or letter folder', cmd: "(the loop's oa and adhoc feeds)", needs: ['buses-tree'], note: 'OA-434: a stray file fenced to one town or letter does not stop this' },
   { what: 'Deliver a map to the live portal', cmd: 'npm run deliver -- --map <slug>', needs: ['portal-write'] },
+  { what: 'Portal code on a branch and a pull request', cmd: '(an open action\'s portal slice)', needs: ['portal-branch'], note: 'OA-558: reads nothing from unpushed buses-data commits; a deliver still needs portal-write' },
   { what: 'Deploy the portal', cmd: 'npm run deploy', needs: ['portal-deploy'] },
 ];
 

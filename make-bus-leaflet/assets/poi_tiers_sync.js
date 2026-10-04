@@ -177,7 +177,12 @@ function townCandidateKeys(mapDir, include) {
   const poi = Array.isArray(include) ? { ...(cfg.poi || {}), include } : (cfg.poi || {});
   const report = {};
   try { selectPois(sets, poi, report); } catch { return null; }
-  return Array.isArray(report.candidates) ? report.candidates.map((c) => c.key) : null;
+  if (!Array.isArray(report.candidates)) return null;
+  // A candidate that carries an element id can also be answered by `osm:<type>/<id>`
+  // (OA-250: the chooser writes it where `<cat>:<name>` is shared), so that key
+  // is one the town holds too; without it the portal's answer for one of a
+  // same-name pair read as ORPHANED and was never written to the source.
+  return report.candidates.flatMap((c) => (c.osm ? [c.key, 'osm:' + c.osm] : [c.key]));
 }
 
 /**

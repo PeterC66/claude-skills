@@ -226,6 +226,25 @@ test('the town -> map rule: one AREA map by name, case-insensitively; none or tw
   assert.strictEqual(two.hits.length, 2);
 });
 
+test('OA-250: a same-name pair is answerable by its osm: key, and that key is NOT an orphan', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cbm-sync-osm-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'ci-reference'));
+    const pub = (id, lat) => ({ type: 'node', id, lat, lon: -0.07, tags: { amenity: 'pub', name: 'Red Lion' } });
+    fs.writeFileSync(path.join(dir, 'ci-reference', 'osm.json'), JSON.stringify({ elements: [pub(11, 52.30), pub(22, 52.32)] }));
+    fs.writeFileSync(path.join(dir, 'ci-reference', 'routes.json'), JSON.stringify({ poi: { include: ['pubs'] } }));
+    const cands = S.townCandidateKeys(dir);
+    assert.ok(cands.includes('osm:node/11') && cands.includes('osm:node/22'), JSON.stringify(cands));
+    assert.ok(cands.includes('pub:Red Lion'), 'the cat:name key every old answer uses is still held');
+    const portal = { 'osm:node/22': { tier: 'miss' } };
+    const c = S.compareTiers({}, portal, { include: ['pubs'] }, cands);
+    assert.deepStrictEqual(c.orphaned, [], 'an osm: answer reaches a place the town holds');
+    assert.deepStrictEqual(c.added, ['osm:node/22'], 'and is owed to the source, which is what --apply writes');
+    assert.deepStrictEqual(Object.keys(S.mergeTiers({}, portal, { include: ['pubs'] }, cands)), ['osm:node/22']);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('requiring the module draws nothing and fetches nothing — the dark-file rule', () => {
   // The CLI sits behind require.main === module; the require above is the test.
   assert.strictEqual(typeof S.fetchPortalBlock, 'function');

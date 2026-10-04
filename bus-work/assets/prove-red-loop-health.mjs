@@ -139,6 +139,13 @@ async function suite(m, label, verbose) {
   check('a rebuild of an ESCALATE town is a person\'s and names the town', bw.escalate.join() === 'engine-rebuild-Beaconsfield' && bw.towns.join() === 'Beaconsfield');
   check('a rebuild of an un-escalated town is finishable', bw.finishable.includes('engine-rebuild-March'));
   check('a rebuild of a fixture map is never a tick\'s', bw.fixture.join() === 'engine-rebuild-St Ives' && !bw.finishable.includes('engine-rebuild-St Ives'));
+  // OA-563: a no-rebuild review for the grades' scan answers the grade for that town only
+  const bwRev = classifyBusWork({
+    grades: { Soham: 'ESCALATE', Huntingdon: 'ESCALATE' }, fixtures: [], reviewed: ['Soham'],
+    rows: [{ key: 'engine-rebuild-Soham', kind: 'rebuild', towns: ['Soham'] }, { key: 'engine-rebuild-Huntingdon', kind: 'rebuild', towns: ['Huntingdon'] }],
+  });
+  check('a rebuild of an ESCALATE town with a no-rebuild review is finishable', bwRev.finishable.join() === 'engine-rebuild-Soham');
+  check('a rebuild of an ESCALATE town with no review stays a person\'s', bwRev.escalate.join() === 'engine-rebuild-Huntingdon' && bwRev.towns.join() === 'Huntingdon');
   const parsedBw = parseBusWork(JSON.stringify({ items: [{ key: 'refresh-x', unattended: { cmd: 'x' } }, { key: 'refresh-y' }, { key: 'engine-rebuild-Z', towns: ['Z'] }, { key: 'corr-unsent-1' }] }), { grades: { Z: 'ESCALATE' }, fixtures: [] });
   check('parseBusWork keeps refresh and rebuild rows only, with the unattended flag', parsedBw.rows.length === 3 && parsedBw.rows[0].unattended === true && parsedBw.rows[1].unattended === false && parsedBw.rows[2].towns[0] === 'Z');
   check('parseBusWork on garbage is null, never a pass', parseBusWork('not json') === null);

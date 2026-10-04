@@ -2929,6 +2929,28 @@ const MUTATIONS = [
     find: "const PARA_GAP = 1.6;",
     to: "const PARA_GAP = 0;" },
 
+  // gen_external_radial.js — design.legendFit wraps a legend that has no clear ground (buses-data OA-437, A1 slice 2).
+  // No stored map reaches the branch (each has ground or a stored legendWrap), so legend_fit.test.js alone holds it.
+  { suite: 'legend_fit.test.js', file: 'gen_external_radial.js',
+    what: 'the fit tries the narrowest wrap first, so every fitted legend is a tall thin column',
+    find: "for(let n=_longest-1; n>=2 && !_fit; n--){",
+    to: "for(let n=2; n<_longest && !_fit; n++){" },
+
+  { suite: 'legend_fit.test.js', file: 'gen_external_radial.js',
+    what: 'a stored legendWrap no longer wins, so the engine overrides a town that chose its own wrap',
+    find: "if(LEGFIT && !(D.legendWrap && (D.legendWrap.perRow|0) > 0)){",
+    to: "if(LEGFIT){" },
+
+  { suite: 'legend_fit.test.js', file: 'gen_external_radial.js',
+    what: 'design.legendFit:false is ignored, so a town cannot refuse the fit',
+    find: "if(LEGFIT && !(D.legendWrap && (D.legendWrap.perRow|0) > 0)){",
+    to: "if(!(D.legendWrap && (D.legendWrap.perRow|0) > 0)){" },
+
+  { suite: 'legend_fit.test.js', file: 'gen_external_radial.js',
+    what: 'a wrapped legend counts only its operator name, so the panel ends inside its own badge grid',
+    find: ", lx + Math.min(rs.length,LW)*_col);",
+    to: ");" },
+
   // engine_commit.js — the reclaim of a killed run's worktree (buses-data loop
   // adhoc reclaim-worktrees.md, 2026-10-02). Five engine-commit trees from 27–30
   // Sep were still registered on 2026-10-01, because the exit handler never runs

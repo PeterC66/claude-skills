@@ -2876,6 +2876,48 @@ const MUTATIONS = [
     find: "  for (const b of best.shaft) reserve(b[0], b[1], b[2], b[3], 'the place pointer');",
     to: "" },
 
+  // note_place.js — a mapNotes entry with no coordinate finds its own ground (buses-data OA-437, A1).
+  // No stored map has such a note, so the byte gate never runs the search; note_place.test.js alone holds it.
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'route ink is ignored, so a searched note is parked on a bus route',
+    find: "return d.overlaps(t) || d.inkCover(t) > 0; })) continue;",
+    to: "return d.overlaps(t); })) continue;" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'reserved space is ignored, so a searched note lands on the panel, a symbol or another note',
+    find: "return d.overlaps(t) || d.inkCover(t) > 0; })) continue;",
+    to: "return d.inkCover(t) > 0; })) continue;" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'the search tries the narrowest wrap first, so every note is a tall column',
+    find: "  for (let w = widest; w >= Math.min(WIDTHS_TO, widest); w -= WIDTHS_STEP) widths.push(w);",
+    to: "  for (let w = Math.min(WIDTHS_TO, widest); w <= widest; w += WIDTHS_STEP) widths.push(w);" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'the hint is ignored, so a town that says where the note belongs gets the bottom-left anyway',
+    find: "  const near = d.near || { x: left, y: bottomLimit };",
+    to: "  const near = { x: left, y: bottomLimit };" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'the footer plate is not respected, so a searched note can sit under the backing plate',
+    find: "bottomLimit = Math.min(d.frame.y1 - 1, d.footerTop - 2);",
+    to: "bottomLimit = d.frame.y1 - 1;" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'the searched notes ignore the placed labels, so a note lands on an exit caption exactly as the first probe did',
+    find: "      overlaps: b => d.overlaps(b) || d.labelBoxes.some(o => hit(b, o)),",
+    to: "      overlaps: b => d.overlaps(b)," },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'a searched note claims no space, so the next note and the place index land on it',
+    find: "      d.reserve(boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], 'a map note');",
+    to: "" },
+
+  { suite: 'note_place.test.js', file: 'note_place.js',
+    what: 'the ink probe counts only routes again, so a note is parked on the river',
+    find: "w >= 1.2 && stroke !== 'none' && !pale.has(stroke)",
+    to: "w >= 1.2 && stroke === '#route' && !pale.has(stroke)" },
+
   // engine_commit.js — the reclaim of a killed run's worktree (buses-data loop
   // adhoc reclaim-worktrees.md, 2026-10-02). Five engine-commit trees from 27–30
   // Sep were still registered on 2026-10-01, because the exit handler never runs

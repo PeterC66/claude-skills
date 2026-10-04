@@ -207,6 +207,7 @@ const { findGapCuts, gapEvents, gapLabel } = require(_dep('frame_gaps.js'));
 const TS = require(_dep('trunk_segments.js'));
 const { featureLabels } = require(_dep('feature_labels.js'));
 const { placePointer, pointerOn, inkFromSvg } = require(_dep('place_pointer.js'));
+const { placeSearchedNotes } = require(_dep('note_place.js'));
 const { roadLabels } = require(_dep('road_labels.js'));
 // wcag.js — the three DIFFERENT questions asked with the 0.2126/0.7152/0.0722
 // coefficients, named apart (OA-135). This file asks two of them: rawLumHex for
@@ -2038,8 +2039,10 @@ if(ANCHOR_SQ){const[x,y]=ANCHOR_SQ;
  * panel, the footer plate, the core box — it says so, by name, on stderr. A note
  * that lands on the services panel cannot be fixed by anything in this file.
  */
-const MAPNOTES=[];                              // resolved layout; drawn with the map, below
+const SEARCHED_NOTES=[];                        // OA-437 A1: notes with no x, y or `at`, placed after the labels (note_place.js)
+const MAPNOTES=[];                            // resolved layout; drawn with the map, below
 for(const n of (RJ.mapNotes||[])){
+  if(n.x==null && n.y==null && !n.at){ SEARCHED_NOTES.push(n); continue; }
   let x,y;
   if(n.at && (atco2ll[n.at]||baseOv[n.at])){ const p=XYS(n.at); x=p[0]; y=p[1]; } else { x=n.x||0; y=n.y||0; }
   x+=(n.dx||0); y+=(n.dy||0);
@@ -3050,6 +3053,10 @@ if(LAB){
     NORTH.resite((boxOf,wx,wy,tol)=>spotSearch(boxOf,wx,wy,tol,hitsLabel),
                  hitsLabel, m=>process.stderr.write(m));
   }
+  // OA-437 A1: the searched notes, now that the river, the labels and the exit captions are all down.
+  { const LB = LAB.solve().filter(r=>r.placed && r.b).map(r=>r.b);
+    placeSearchedNotes({ notes:SEARCHED_NOTES, frame:{x0:MX0,y0:MY0,x1:MX1,y1:MY1}, footerTop:FOOTER_PLATE_TOP, svg:s, IR, Labeller, esc, reserve, overlaps,
+      measure:(ln,z)=>FONT.textWidth(ln,z,false), labelBoxes:LB, warn:m=>process.stderr.write(m) }).forEach(out); }
   // design.exitDevice: a continuation that could not take any of its five inboard
   // positions took a foreign one instead, and that is the sheet quietly going back
   // to seven designs. Nothing measures it — the text IS placed and it is not over

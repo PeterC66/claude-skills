@@ -358,7 +358,12 @@ export function analyse(f) {
     add('AT RISK', 'tree-unreadable', 'The shared working tree could not be read with git, so whether it is dirty is unknown.');
   } else {
     const accounted = new Set((f.holdPaths || []).map((h) => h.path.replace(/\\/g, '/')));
-    const stray = f.dirty.filter((p) => !accounted.has(p.replace(/\\/g, '/')));
+    const dirtyAll = f.dirty.filter((p) => !accounted.has(p.replace(/\\/g, '/')));
+    // A tick holding a live lock edits the backlog itself (its claim, its filing, the index the hook rebuilds): that is its run in progress, not a stray file.
+    const tickOwn = !!(lock.present && lock.isTick && !lock.expired);
+    const own = tickOwn ? dirtyAll.filter((p) => /^Development Docs\/open-actions(\.md$|\/)/.test(p.replace(/\\/g, '/'))) : [];
+    if (own.length) add('NOTE', 'tree-tick-own', `${own.length} backlog file${own.length === 1 ? ' is' : 's are'} modified while a tick (\`${lock.name}\`) holds a live lock: that tick's own claim or filing, committed at the end of its unit.`);
+    const stray = dirtyAll.filter((p) => !own.includes(p));
     if (stray.length) {
       const shown = stray.slice(0, 4).map((p) => `\`${p}\``).join(', ') + (stray.length > 4 ? ` and ${stray.length - 4} more` : '');
       add('BLOCKING', 'tree-dirty', `${stray.length} tracked file${stray.length === 1 ? ' is' : 's are'} modified and not named by a live hold: ${shown}. An unattended tick reads that as stop, so one stray file halts every tick.`, 'Commit or revert what `git status` names in the buses-data checkout, or ask whoever owns it.');
@@ -465,7 +470,7 @@ export function renderCapacity(c) {
   if (c.adhoc) L.push(`  Ad-hoc      ${c.adhoc.ready} file${c.adhoc.ready === 1 ? '' : 's'} in ready/, ${c.adhoc.notDue} named not due by a recent tick: ${c.adhoc.takeable} to take.`);
   if (c.busWork) {
     const b = c.busWork;
-    L.push(`  Bus-work    ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules; ${b.escalate.length} stopped by an ESCALATE grade, ${b.fixture.length} under _portal-fixture, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
+    L.push(`  Bus-work    at most ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules (an upper bound: rollout.js is not run, and can still answer STALE-INPUTS for a rebuild); ${b.escalate.length} stopped by an ESCALATE grade, ${b.fixture.length} under _portal-fixture, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
   } else L.push('  Bus-work    not measured (add --deep: it reads the live portal and takes about a minute).');
   if (c.oa) {
     const o = c.oa;

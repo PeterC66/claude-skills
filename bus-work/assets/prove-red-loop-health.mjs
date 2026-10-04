@@ -73,6 +73,11 @@ async function suite(m, label, verbose) {
   check('a suspect lock stamp is at risk', has(analyse(base({ lock: lock({ stampSuspect: true, stampWhy: 'in the future' }) })), 'lock-stamp', 'AT RISK'));
   check('a stray modified file blocks', has(analyse(base({ dirty: ['Development Docs/x.md'] })), 'tree-dirty', 'BLOCKING'));
   check('a path a live hold names is accounted for', !has(analyse(base({ dirty: ['Correspondence/CORR-001/008.md'], holdPaths: [{ path: 'Correspondence/CORR-001/008.md', ref: 'h' }] })), 'tree-dirty'));
+  const tickLock = { present: true, isTick: true, expired: false, name: 'sched-2014', remainMin: 80 };
+  const own560 = analyse(base({ lock: tickLock, dirty: ['Development Docs/open-actions.md', 'Development Docs/open-actions/OA-560.md'] }));
+  check('a live tick\'s own backlog edits are a note, not a block', !has(own560, 'tree-dirty') && has(own560, 'tree-tick-own', 'NOTE') && own560.level !== 'BLOCKED');
+  check('a live tick does not excuse any other modified file', has(analyse(base({ lock: tickLock, dirty: ['Development Docs/open-actions/OA-560.md', 'Development Docs/x.md'] })), 'tree-dirty', 'BLOCKING'));
+  check('backlog edits are still a block when no tick holds a live lock', has(analyse(base({ dirty: ['Development Docs/open-actions/OA-560.md'] })), 'tree-dirty', 'BLOCKING') && has(analyse(base({ lock: { ...tickLock, expired: true, overdueMin: 5 }, dirty: ['Development Docs/open-actions/OA-560.md'] })), 'tree-dirty', 'BLOCKING'));
   check('an unreadable tree is at risk, not clean', has(analyse(base({ dirty: null })), 'tree-unreadable', 'AT RISK'));
 
   // 4. why the loop is idle
@@ -297,7 +302,9 @@ const source = fs.readFileSync(SRC, 'utf8');
 const MUTANTS = [
   ['STOP no longer blocks', "if (f.stopFile) {\n    add('BLOCKING'", "if (false) {\n    add('BLOCKING'"],
   ['a person\'s expired lock stops blocking', "} else if (lock.expired) {\n      add('BLOCKING'", "} else if (false) {\n      add('BLOCKING'"],
-  ['a hold-named path no longer accounts for a dirty file', "const stray = f.dirty.filter((p) => !accounted.has(p.replace(/\\\\/g, '/')));", 'const stray = f.dirty;'],
+  ['a hold-named path no longer accounts for a dirty file', "const dirtyAll = f.dirty.filter((p) => !accounted.has(p.replace(/\\\\/g, '/')));", 'const dirtyAll = f.dirty;'],
+  ['a live tick\'s own backlog edit blocks again', "const tickOwn = !!(lock.present && lock.isTick && !lock.expired);", 'const tickOwn = false;'],
+  ['any file a tick lock is held reads as the tick\'s own', "const own = tickOwn ? dirtyAll.filter((p) => /^Development Docs\\/open-actions(\\.md$|\\/)/.test(p.replace(/\\\\/g, '/'))) : [];", 'const own = tickOwn ? dirtyAll : [];'],
   ['a waiting date TODAY stays held', 'daysBetween(today, a.waitingDate) > 0', 'daysBetween(today, a.waitingDate) >= 0'],
   ['a claim dated yesterday stays live', 'a.selectedDate === today', 'a.selectedDate <= today'],
   ['Parked rows count as free', "if (/^parked$/i.test(a.priority || '')) b.parked.push(a);\n    else if", 'if (false) b.parked.push(a);\n    else if'],

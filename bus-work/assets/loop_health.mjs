@@ -73,6 +73,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, assetsDir } from './engine.mjs';
 import { readRuns, loopHealth } from './loop_runs.mjs';
 import { readLoopLock } from './loop_lock.mjs';
+import { fenceOf } from './concurrency.mjs';
 import { readYourMoveDir, classify, parseHold, heldPaths } from './loop_your_move.mjs';
 
 const DAY = 86400000;
@@ -233,6 +234,8 @@ export function assessCapacity(f, ctx) {
       if (b.lockOnly) continue;
       if (b.name === 'buses-tree') treeBarred = true;
       if ((b.name === 'buses-tree' || b.name === 'estate-sweep') && findings.some((x) => x.key === 'tree-dirty')) continue;
+      const fencedOnly = findings.some((x) => x.key === 'tree-fenced') && !findings.some((x) => x.key === 'tree-dirty');
+      if (fencedOnly && (b.name === 'buses-maps' || b.name === 'estate-sweep')) continue;
       add(b.verdict === 'check' && !b.unpushed ? 'AT RISK' : 'NOTE', `resource-${b.name}`, `\`${b.name}\` is ${b.verdict.toUpperCase()}, which bars ${b.bars}: ${b.why}`, b.unpushed ? null : 'Read `node worklist.mjs --conditions` from the bus-work assets folder and clear what it names.');
     }
   }
@@ -363,7 +366,14 @@ export function analyse(f) {
     const tickOwn = !!(lock.present && lock.isTick && !lock.expired);
     const own = tickOwn ? dirtyAll.filter((p) => /^Development Docs\/open-actions(\.md$|\/)/.test(p.replace(/\\/g, '/'))) : [];
     if (own.length) add('NOTE', 'tree-tick-own', `${own.length} backlog file${own.length === 1 ? ' is' : 's are'} modified while a tick (\`${lock.name}\`) holds a live lock: that tick's own claim or filing, committed at the end of its unit.`);
-    const stray = dirtyAll.filter((p) => !own.includes(p));
+    const staged = new Set((f.staged || []).map((p) => p.replace(/\\/g, '/')));
+    // OA-434: unstaged dirt inside ONE map or letter folder is fenced. Ticks carry on with any unit that stays out of that folder, so it is a note, not a stop; a staged path, ci-reference/ and a bare file under a root are never fenced (`fenceOf` is the loop's own test).
+    const fenced = dirtyAll.filter((p) => !own.includes(p) && !staged.has(p.replace(/\\/g, '/')) && fenceOf(p.replace(/\\/g, '/')));
+    if (fenced.length) {
+      const shown = fenced.slice(0, 4).map((p) => `\`${p}\``).join(', ') + (fenced.length > 4 ? ` and ${fenced.length - 4} more` : '');
+      add('NOTE', 'tree-fenced', `${fenced.length} modified file${fenced.length === 1 ? ' is' : 's are'} fenced inside one map or letter folder and not named by a hold: ${shown}. Ticks carry on with any unit that stays out of that folder; it only bars work that writes under Areas/, Places/ or Correspondence/.`, 'Commit or revert it when you are done with it, or a hold naming it under **File:** takes it out of the counts.');
+    }
+    const stray = dirtyAll.filter((p) => !own.includes(p) && !fenced.includes(p));
     if (stray.length) {
       const shown = stray.slice(0, 4).map((p) => `\`${p}\``).join(', ') + (stray.length > 4 ? ` and ${stray.length - 4} more` : '');
       add('BLOCKING', 'tree-dirty', `${stray.length} tracked file${stray.length === 1 ? ' is' : 's are'} modified and not named by a live hold: ${shown}. An unattended tick reads that as stop, so one stray file halts every tick.`, 'Commit or revert what `git status` names in the buses-data checkout, or ask whoever owns it.');
@@ -718,6 +728,9 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
   const st = git(busesDir, ['status', '--porcelain', '--untracked-files=no']);
   const dirty = st.ok ? st.out.split('\n').filter(Boolean).map((l) => l.slice(3).split(' -> ').pop().replace(/^"|"$/g, '')) : null;
 
+  const sg = git(busesDir, ['diff', '--cached', '--name-only']);
+  const staged = sg.ok ? sg.out.split('\n').filter(Boolean) : [];
+
   let ahead = null;
   const cnt = git(busesDir, ['rev-list', '--count', 'origin/main..main']);
   if (cnt.ok) {
@@ -746,7 +759,7 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
     idleNaming: idleNaming(path.join(loopDir, 'runs')),
     stopFile: existsSync(path.join(loopDir, 'STOP')),
     lock: readLoopLock(busesDir, { now }),
-    dirty, holdPaths: heldPaths(files), holds: parsedHolds, drafts: drafts.length,
+    dirty, staged, holdPaths: heldPaths(files), holds: parsedHolds, drafts: drafts.length,
     ahead, actions, commitments,
     passedOver: passedOver(path.join(loopDir, 'runs')),
     adhoc: readAdhoc(loopDir, path.join(loopDir, 'runs')),

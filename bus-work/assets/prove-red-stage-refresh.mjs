@@ -14,7 +14,7 @@
  * answer would flip if the rule were gone, shown beside it, so each rule is
  * load-bearing rather than merely present. No disk, no portal, no clock.
  */
-import { planStage, readBack, newestRender, planFlush, flushArgs, DELIVER_SCRIPT } from './stage_refresh.mjs';
+import { planStage, mapLocation, readBack, newestRender, planFlush, flushArgs, DELIVER_SCRIPT } from './stage_refresh.mjs';
 import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -42,10 +42,32 @@ console.log('\n1. Only what the review let through');
   check('a town not in the review is refused', /not in the 2026-10-01 review/.test(plan(r, 'Wisbech') || ''));
   check('no review at all is refused', /no ink review/.test(plan(null, 'March') || ''));
   check('a slug that is not a slug is refused', /must be the portal map's slug/.test(plan(r, 'March', manifest(OLD, NEW), 'March Town') || ''));
-  /* OA-430 item 3: the review takes place maps; this tool stages areas only. */
-  const withPlace = review(map('St Neots East', 'no-ink', { kind: 'place', dir: 'Areas/St Neots/Places/St Neots East' }));
-  check('a place map in the review is refused by name, even deliverable', /is a place map/.test(plan(withPlace, 'St Neots East') || ''), plan(withPlace, 'St Neots East'));
-  check('  and without the rule it WOULD have been planned — the rule is load-bearing', deliverable(withPlace).deliver.join() === 'St Neots East');
+  /* A place map is staged as a town is: its kind and folder come from the review's entry. */
+  const PLACE_DIR = 'Areas/St Neots/Places/St Neots East';
+  const place = (status, extra = {}) => map('St Neots East', status, { kind: 'place', dir: PLACE_DIR, ...extra });
+  const withPlace = review(place('no-ink'));
+  const placePlan = (rv, mf = manifest(OLD, NEW)) => refusal(() => planStage({ review: rv, town: 'St Neots East', slug: 'st-neots-east', manifest: mf }));
+  const pp = planStage({ review: withPlace, town: 'st neots east', slug: 'st-neots-east', manifest: manifest(OLD, NEW) });
+  check('a deliverable place map is planned, with its own kind and folder', pp.kind === 'place' && pp.dir === PLACE_DIR && pp.srcRel === `S5-render/${NEW}`, JSON.stringify(pp));
+  const tp = planStage({ review: r, town: 'March', slug: 'march', manifest: manifest(OLD, NEW) });
+  check('  and a town is still planned as an area under Areas/', tp.kind === 'area' && tp.dir === 'Areas/March', JSON.stringify(tp));
+  const oldReview = review({ map: 'March', status: 'no-ink', before: OLD, after: NEW, sheets: [], answer: null });
+  const op = planStage({ review: oldReview, town: 'March', slug: 'march', manifest: manifest(OLD, NEW) });
+  check('a review written before places (no kind, no dir) is an area under Areas/<map>', op.kind === 'area' && op.dir === 'Areas/March', JSON.stringify(op));
+  const placeMoved = review(place('ink-moved'));
+  check('a place whose ink moved is refused until Peter accepts it, exactly as a town is', /not accepted this build/.test(placePlan(placeMoved) || ''), placePlan(placeMoved));
+  check('  and once he accepts it, it is planned', placePlan(answer(placeMoved, 'St Neots East', 'accept', { by: 'buses-29', at: 'T1' })) === null);
+  check('a place with a render newer than the one reviewed is refused', /newest render is v2\.61/.test(placePlan(withPlace, manifest(OLD, NEW, NEWER)) || ''));
+  const placeOnce = markStaged(withPlace, 'St Neots East', { slug: 'st-neots-east', by: 'sched-1', at: 'T1' });
+  check('a place staged once is refused a second time', /already staged by sched-1/.test(placePlan(placeOnce) || ''));
+  /* The folder becomes a path the deliver command reads from, so it is held to Areas/ and Places/. */
+  const loc = (extra) => refusal(() => mapLocation({ map: 'X', kind: 'place', dir: 'Places/X', ...extra }));
+  check('a folder that climbs out with .. is refused', /not a folder under Areas\/ or Places\//.test(loc({ dir: 'Areas/../../Windows' }) || ''), loc({ dir: 'Areas/../../Windows' }));
+  check('a folder outside Areas/ and Places/ is refused', /not a folder under/.test(loc({ dir: 'Development Docs/x' }) || ''));
+  check('an absolute folder is refused', /not a folder under/.test(loc({ dir: 'C:/Windows' }) || '') && /not a folder under/.test(loc({ dir: '/etc' }) || ''));
+  check('  and a plain folder is accepted — the refusals above turn on the folder, not on the call', loc({ dir: 'Places/X' }) === null);
+  check('a kind that is neither area nor place is refused', /"area" or a "place" only/.test(loc({ kind: 'depot' }) || ''));
+  check('a Windows-spelled folder is normalised, not refused', mapLocation({ map: 'X', kind: 'place', dir: 'Places' + String.fromCharCode(92) + 'X' }).dir === 'Places/X');
 }
 
 console.log('\n2. The render staged is the build that was compared');

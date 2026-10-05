@@ -80,7 +80,7 @@ for (const [script, sub, env, optIn] of [
     }
     workspace(script, dir, env);
     const wd = path.join(dir, sub);
-    for (const f of ['unplaced.json', 'indexed.json', 'build-meta.json'])
+    for (const f of ['unplaced.json', 'indexed.json', 'build-meta.json', 'minority.json'])
       assert.ok(!fs.existsSync(path.join(wd, f)), f + ' was copied into the workspace, where it reads as this run\'s');
     // The diagram puts its OWN diagram-overrides.json there when it has one; March has none.
     assert.ok(!fs.existsSync(path.join(wd, 'overrides.json')), 'the geographic overrides.json reached the ' + sub + ' workspace');

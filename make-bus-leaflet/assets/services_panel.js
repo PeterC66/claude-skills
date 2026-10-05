@@ -97,10 +97,26 @@ function minorityNotes(JW, { atco2name = {}, override = {} } = {}) {
  * words about it. No file => null => every sheet byte-identical. */
 function readMinorityNotes(dir, { atco2name, override } = {}) {
   let jw, ic = {};
-  try { jw = JSON.parse(fs.readFileSync(path.join(dir, 'journey_weights.json'), 'utf8')); } catch (e) { return null; }
+  try { jw = JSON.parse(fs.readFileSync(path.join(dir, 'journey_weights.json'), 'utf8')); } catch (e) { return writeMinoritySidecar(dir, null); }
   try { ic = JSON.parse(fs.readFileSync(path.join(dir, 'intown_cfg.json'), 'utf8')); } catch (e) { /* optional */ }
-  if (ic.journeyWeights === false) return null;
-  return minorityNotes(jw, { atco2name, override: override || {} });
+  if (ic.journeyWeights === false) return writeMinoritySidecar(dir, null);
+  return writeMinoritySidecar(dir, minorityNotes(jw, { atco2name, override: override || {} }));
+}
+/* writeMinoritySidecar — `minority.json`, the panel's resolved "some via" words per
+ * route ({route: {long, short}}), for the portal's services text to COPY rather than
+ * re-derive from journey_weights.json (buses-data OA-529 fix 1). An OUTPUT, like
+ * `indexed.json`: written when there is something to say, unlinked when there is not,
+ * so a rebuild never leaves a stale one behind (engine_paths.js NOT_INPUTS). The
+ * sheet itself is unchanged. Returns `notes` untouched. */
+function writeMinoritySidecar(dir, notes) {
+  const file = path.join(dir, 'minority.json');
+  try {
+    if (!notes) { fs.unlinkSync(file); return notes; }
+    const out = {};
+    for (const r of Object.keys(notes).sort()) out[r] = { long: notes[r].long, short: notes[r].short };
+    fs.writeFileSync(file, JSON.stringify(out, null, 2));
+  } catch (e) { /* absent or read-only folder: nothing to unlink, nothing to say */ }
+  return notes;
 }
 
 function drawServicesPanel(deps) {

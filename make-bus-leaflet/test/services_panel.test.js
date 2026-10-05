@@ -418,9 +418,16 @@ test('readMinorityNotes reads the build folder, and intown_cfg journeyWeights:fa
   try {
     assert.strictEqual(readMinorityNotes(d, {}), null, 'no journey_weights.json, nothing to say');
     fs.writeFileSync(path.join(d, 'journey_weights.json'), JSON.stringify(JW18));
+    assert.ok(!fs.existsSync(path.join(d, 'minority.json')), 'nothing to say, no sidecar');
     assert.match(readMinorityNotes(d, { atco2name: { RS: 'Railway Station' } })[18].long, /Caxton, Eynesbury & Railway Station$/);
+    const side = JSON.parse(fs.readFileSync(path.join(d, 'minority.json'), 'utf8'));
+    assert.deepStrictEqual(Object.keys(side), ['18'], 'the sidecar names the route');
+    assert.match(side[18].long, /^some journeys via .*Eynesbury/);
+    assert.strictEqual(side[18].short, 'some journeys vary');
+    assert.strictEqual(side[18].runs, undefined, 'only the words travel, not the workings');
     fs.writeFileSync(path.join(d, 'intown_cfg.json'), JSON.stringify({ journeyWeights: false }));
     assert.strictEqual(readMinorityNotes(d, {}), null, 'the S2 drop is off, so are the words');
+    assert.ok(!fs.existsSync(path.join(d, 'minority.json')), 'a stale sidecar is unlinked when the words go');
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 

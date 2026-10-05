@@ -181,7 +181,7 @@ function spawnTarget(runDir, callerDir) {
  * geographic coordinates neither workspace has ever read — build_s4.js hands a place
  * schematic its overrides as OVERRIDES_FILE, a town schematic draws without them,
  * and the diagram copies its own diagram-overrides.json in under that name. */
-const NOT_INPUTS = new Set(['overrides.json', 'unplaced.json', 'indexed.json', 'corridors_report.json', 'build-meta.json']);
+const NOT_INPUTS = new Set(['overrides.json', 'unplaced.json', 'indexed.json', 'corridors_report.json', 'build-meta.json', 'minority.json']);
 function copyWorkspaceInputs(runDir, workDir) {
   for (const f of fs.readdirSync(runDir)) {
     if (!f.endsWith('.json') || NOT_INPUTS.has(f) || !fs.statSync(path.join(runDir, f)).isFile()) continue;

@@ -1546,6 +1546,16 @@ const MUTATIONS = [
   // panelCorridors (1, High Wycombe), the not-shown note (6), a subtitle fitted
   // down (2) and the compressed Key pitch (1, Ely Co-op).
   { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'minority.json is never unlinked, so a rebuild whose words went leaves the previous build one behind (OA-529)',
+    find: "    if (!notes) { fs.unlinkSync(file); return notes; }",
+    to: "    if (!notes) { return notes; }" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
+    what: 'minority.json carries the workings as well as the words, so the portal would copy journey counts it never prints (OA-529)',
+    find: "out[r] = { long: notes[r].long, short: notes[r].short };",
+    to: "out[r] = notes[r];" },
+
+  { suite: 'services_panel.test.js', file: 'services_panel.js',
     what: 'the type scale can no longer be turned off, so the hand-tuned sizes it replaced are unreachable',
     find: "  const PS = PANEL_SCALE_ON ? { head:5.0, title:3.5, sub:2.9, dense:2.45 } : null;",
     to: "  const PS = { head:5.0, title:3.5, sub:2.9, dense:2.45 };" },

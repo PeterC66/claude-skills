@@ -134,4 +134,4 @@ function main() {   // OA-344: the body is guarded, not re-indented — see test
 }
 
 if (require.main === module) main();
-module.exports = { main, rank, markdown, AUTO_NAMED_CATS };
+module.exports = { main, rank, markdown, load, AUTO_NAMED_CATS };

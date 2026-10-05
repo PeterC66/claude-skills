@@ -72,12 +72,19 @@ async function suite(m, label, verbose) {
   check('a tick\'s expired lock is only a note (the next tick steals it)', has(analyse(base({ lock: lock({ name: 'sched-0615', isTick: true, expired: true, overdueMin: 5 }) })), 'lock-tick-expired', 'NOTE'));
   check('a suspect lock stamp is at risk', has(analyse(base({ lock: lock({ stampSuspect: true, stampWhy: 'in the future' }) })), 'lock-stamp', 'AT RISK'));
   check('a stray modified file blocks', has(analyse(base({ dirty: ['Development Docs/x.md'] })), 'tree-dirty', 'BLOCKING'));
-  check('a path a live hold names is accounted for', !has(analyse(base({ dirty: ['Correspondence/CORR-001/008.md'], holdPaths: [{ path: 'Correspondence/CORR-001/008.md', ref: 'h' }] })), 'tree-dirty'));
+  check('a path a live hold names is accounted for', !has(analyse(base({ dirty: ['Development Docs/x.md'], holdPaths: [{ path: 'Development Docs/x.md', ref: 'h' }] })), 'tree-dirty'));
   const tickLock = { present: true, isTick: true, expired: false, name: 'sched-2014', remainMin: 80 };
   const own560 = analyse(base({ lock: tickLock, dirty: ['Development Docs/open-actions.md', 'Development Docs/open-actions/OA-560.md'] }));
   check('a live tick\'s own backlog edits are a note, not a block', !has(own560, 'tree-dirty') && has(own560, 'tree-tick-own', 'NOTE') && own560.level !== 'BLOCKED');
   check('a live tick does not excuse any other modified file', has(analyse(base({ lock: tickLock, dirty: ['Development Docs/open-actions/OA-560.md', 'Development Docs/x.md'] })), 'tree-dirty', 'BLOCKING'));
   check('backlog edits are still a block when no tick holds a live lock', has(analyse(base({ dirty: ['Development Docs/open-actions/OA-560.md'] })), 'tree-dirty', 'BLOCKING') && has(analyse(base({ lock: { ...tickLock, expired: true, overdueMin: 5 }, dirty: ['Development Docs/open-actions/OA-560.md'] })), 'tree-dirty', 'BLOCKING'));
+  const fz = analyse(base({ dirty: ['Correspondence/CORR-003/013-x.md'] }));
+  check('dirt fenced inside one letter folder is a note, not a block', !has(fz, 'tree-dirty') && has(fz, 'tree-fenced', 'NOTE') && fz.level !== 'BLOCKED');
+  check('fenced dirt inside a map folder is a note too', has(analyse(base({ dirty: ['Areas/Wisbech/config.json'] })), 'tree-fenced', 'NOTE'));
+  check('a STAGED path in a fenced folder still blocks', has(analyse(base({ dirty: ['Correspondence/CORR-003/013-x.md'], staged: ['Correspondence/CORR-003/013-x.md'] })), 'tree-dirty', 'BLOCKING'));
+  check('ci-reference dirt is never fenced', has(analyse(base({ dirty: ['Areas/Wisbech/ci-reference/a.svg'] })), 'tree-dirty', 'BLOCKING'));
+  check('a bare file under a root is never fenced', has(analyse(base({ dirty: ['Correspondence/README.md'] })), 'tree-dirty', 'BLOCKING'));
+  check('fenced dirt does not excuse an unfenced file beside it', has(analyse(base({ dirty: ['Correspondence/CORR-003/013-x.md', 'Development Docs/x.md'] })), 'tree-dirty', 'BLOCKING'));
   check('an unreadable tree is at risk, not clean', has(analyse(base({ dirty: null })), 'tree-unreadable', 'AT RISK'));
 
   // 4. why the loop is idle
@@ -305,6 +312,8 @@ const MUTANTS = [
   ['a hold-named path no longer accounts for a dirty file', "const dirtyAll = f.dirty.filter((p) => !accounted.has(p.replace(/\\\\/g, '/')));", 'const dirtyAll = f.dirty;'],
   ['a live tick\'s own backlog edit blocks again', "const tickOwn = !!(lock.present && lock.isTick && !lock.expired);", 'const tickOwn = false;'],
   ['any file a tick lock is held reads as the tick\'s own', "const own = tickOwn ? dirtyAll.filter((p) => /^Development Docs\\/open-actions(\\.md$|\\/)/.test(p.replace(/\\\\/g, '/'))) : [];", 'const own = tickOwn ? dirtyAll : [];'],
+  ['fenced dirt blocks again', "fenceOf(p.replace(/\\\\/g, '/')));", "false);"],
+  ['a staged path in a fenced folder is fenced', "!staged.has(p.replace(/\\\\/g, '/')) && fenceOf", "fenceOf"],
   ['a waiting date TODAY stays held', 'daysBetween(today, a.waitingDate) > 0', 'daysBetween(today, a.waitingDate) >= 0'],
   ['a claim dated yesterday stays live', 'a.selectedDate === today', 'a.selectedDate <= today'],
   ['Parked rows count as free', "if (/^parked$/i.test(a.priority || '')) b.parked.push(a);\n    else if", 'if (false) b.parked.push(a);\n    else if'],

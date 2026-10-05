@@ -32,8 +32,12 @@
  *
  * WHERE IT STOPS. At the version STAGED beside the live map, read back from the
  * portal's own worklist as waiting on its customer. Publication is the customer's
- * Accept, a third party's act, and nothing here reaches for it. A place map is
- * refused: the review takes places (OA-430 item 3), but this tool stages an area.
+ * Accept, a third party's act, and nothing here reaches for it. A PLACE map is
+ * staged the same way as a town: the review gives every map its `kind` and its own
+ * `dir` (a folder under Areas/ or Places/), and both are passed through, so the
+ * deliver command runs with `--kind place` and the render is looked for in the
+ * place's own folder. The digest is the same too: it groups by customer, is silent
+ * for a managed one, and does not care which kind of map it announces.
  *
  * DRY RUN BY DEFAULT: it prints the one command it would run. `--apply --by <who>`
  * runs it, records the staging and reads it back. A non-zero exit from the
@@ -46,7 +50,8 @@
  * `prove-red-stage-refresh.mjs` can falsify every refusal.
  *
  * Run from anywhere. <scan> is a scan date such as 2026-10-01; <Town> is a folder
- * under Areas/; <slug> is the portal map's slug, which the worklist's refresh row
+ * under Areas/, or the name of a place map as the review lists it (`--place` is the
+ * same flag, for a reader who wants it said); <slug> is the portal map's slug, which the worklist's refresh row
  * carries; <who> is the running session's name, e.g. buses-29 or sched-0015:
  *
  *   node stage_refresh.mjs --scan <scan> --town "<Town>" --map <slug>                  dry run
@@ -95,18 +100,33 @@ export function isRenderOf(render, s4Id) {
 }
 
 /**
- * Decide whether one town may be staged, and with what. Throws Refused.
- * Returns `{ town, slug, after, srcRel, note }`; `srcRel` is relative to the map folder.
+ * The folder a review entry says the map lives in, relative to the buses repository,
+ * and its kind. A review written before places carries neither: that is an area under
+ * Areas/<map>. The folder is refused unless it is a plain relative path under Areas/
+ * or Places/, because it becomes a path the deliver command reads from.
+ */
+export function mapLocation(m) {
+  const kind = m.kind === undefined ? 'area' : m.kind;
+  if (kind !== 'area' && kind !== 'place') throw new Refused(`${m.map} has kind ${JSON.stringify(m.kind)} in the review, and this tool stages an "area" or a "place" only.`);
+  const dir = m.dir === undefined ? `Areas/${m.map}` : String(m.dir).replace(/\\/g, '/');
+  if (!/^(Areas|Places)\//.test(dir) || dir.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')) throw new Refused(`${m.map}'s folder in the review is ${JSON.stringify(m.dir)}, which is not a folder under Areas/ or Places/.`);
+  return { kind, dir };
+}
+
+/** The review's entry for a map, by name as the review spells it, ignoring case. */
+export const findMap = (review, town) => (review && Array.isArray(review.maps) ? review.maps.find((x) => x.map.toLowerCase() === String(town || '').toLowerCase()) : undefined);
+
+/**
+ * Decide whether one map, a town or a place, may be staged, and with what. Throws Refused.
+ * Returns `{ town, slug, after, kind, dir, srcRel, note }`; `dir` is the map's folder
+ * relative to the buses repository and `srcRel` is relative to that folder.
  */
 export function planStage({ review, town, slug, manifest }) {
   if (!review || !Array.isArray(review.maps)) throw new Refused('there is no ink review for this scan, so nothing is deliverable — run ink_review.mjs --scan first.');
   if (!slug || typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new Refused(`--map must be the portal map's slug, as the worklist's refresh row carries it, not ${JSON.stringify(slug)}.`);
-  const m = review.maps.find((x) => x.map.toLowerCase() === String(town || '').toLowerCase());
+  const m = findMap(review, town);
   if (!m) throw new Refused(`${town} is not in the ${review.scan} review; it holds ${review.maps.map((x) => x.map).join(', ') || 'nothing'}.`);
-  /* The review takes place maps since buses-data OA-430 item 3; this tool stages an
-   * AREA from Areas/<Town> with --kind area, so a place is refused by name rather
-   * than falling through to a render it would look for in the wrong folder. */
-  if (m.kind === 'place') throw new Refused(`${m.map} is a place map, and this tool stages towns only — a person delivers a place, after the review has it under deliver.`);
+  const { kind, dir } = mapLocation(m);
   const d = deliverable(review);
   if (d.staged.includes(m.map)) throw new Refused(`${m.map} ${m.after} was already staged by ${m.staged.by} at ${m.staged.at}, and its customer was emailed then — staging it again would email them twice.`);
   if (!d.deliver.includes(m.map)) {
@@ -118,7 +138,7 @@ export function planStage({ review, town, slug, manifest }) {
   const render = newestRender(manifest);
   if (!render) throw new Refused(`${m.map} has no S5 render in its manifest, so there is nothing to stage.`);
   if (!isRenderOf(render, m.after)) throw new Refused(`${m.map}'s newest render is ${render.id} and the review looked at ${m.after}, so the sheet that would be staged is not the one that was compared — re-run ink_review.mjs --scan ${review.scan}.`);
-  return { town: m.map, slug, after: m.after, srcRel: render.dir, note: `BODS ${review.scan} refresh` };
+  return { town: m.map, slug, after: m.after, kind, dir, srcRel: render.dir, note: `BODS ${review.scan} refresh` };
 }
 
 /**
@@ -213,7 +233,7 @@ async function main() {
   loadPortalEnv(portal);
   const busesDir = resolveBuses(args);
   const scan = typeof args.scan === 'string' ? args.scan : null;
-  const town = typeof args.town === 'string' ? args.town : null;
+  const town = typeof args.town === 'string' ? args.town : typeof args.place === 'string' ? args.place : null;
   const by = typeof args.by === 'string' && args.by.trim() ? args.by.trim() : null;
   if (args.flush) {
     if (!scan) throw new Refused('--flush needs --scan <date>.');
@@ -221,16 +241,19 @@ async function main() {
     const file = path.join(busesDir, '_gtfs', `ink-review_${scan}.json`);
     return flush({ file, review: readJson(file), portal, by: args.apply ? by : null, force: true, busesDir });
   }
-  if (!scan || !town) throw new Refused('--scan <date> and --town "<Town>" are both required.');
+  if (!scan || !town) throw new Refused('--scan <date> and --town "<Town>" (or --place "<Place>") are both required.');
   const file = path.join(busesDir, '_gtfs', `ink-review_${scan}.json`);
   const review = readJson(file);
-  const mapDir = path.join(busesDir, 'Areas', town);
+  /* The folder comes from the review's own entry, so it is read before the plan; an
+   * unknown town or a bad folder falls through to planStage, which refuses it by name. */
+  const entry = findMap(review, town);
+  const mapDir = path.join(busesDir, entry ? mapLocation(entry).dir : path.join('Areas', town));
   const plan = planStage({ review, town, slug: args.map, manifest: readJson(path.join(mapDir, 'manifest.json')) });
   const src = path.join(mapDir, plan.srcRel).replace(/\\/g, '/');
   if (!existsSync(src)) throw new Refused(`${plan.town}'s render folder ${src} is in its manifest and not on disk.`);
   const pkg = readJson(path.join(portal, 'package.json'));
   if (!pkg || !pkg.scripts || pkg.scripts.deliver !== DELIVER_SCRIPT) throw new Refused(`the portal's deliver script is no longer \`${DELIVER_SCRIPT}\` (${portal}), so this tool would not be running what npm runs — update DELIVER_SCRIPT.`);
-  const deliverArgs = ['--map', plan.slug, '--kind', 'area', '--src', src, '--note', plan.note, '--no-notify'];
+  const deliverArgs = ['--map', plan.slug, '--kind', plan.kind, '--src', src, '--note', plan.note, '--no-notify'];
   console.log(`stage_refresh: ${plan.town} ${plan.after} is deliverable. The command, in ${portal}:`);
   console.log(`  npm run deliver -- ${deliverArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`);
   if (!args.apply) {

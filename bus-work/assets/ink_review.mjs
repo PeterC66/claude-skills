@@ -46,8 +46,8 @@
  * `Places/`). Each map carries `kind` (`area` or `place`) and its own `dir`, so
  * nothing downstream has to guess `Areas/<map>`. A place whose name is also a
  * town's in the same review refuses: an answer is recorded by name, and one name
- * must mean one map. Staging a place is not `stage_refresh.mjs`'s to do — it
- * refuses one, and a person delivers it.
+ * must mean one map. `stage_refresh.mjs` stages a place as it stages a town,
+ * from the `kind` and `dir` carried here.
  *
  * AN ANSWER IS ABOUT ONE BUILD. It records the S4 run it was given against, and a
  * map rebuilt after Peter answered loses the answer — kept under `superseded`,

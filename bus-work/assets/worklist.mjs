@@ -350,6 +350,8 @@ function fromMapTree() {
   const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(SK, 'engine_version.js'));
   const current = computeEngineVersion();
   const currentPlace = computePlaceEngineVersion(), { fixtureDonor } = require(path.join(SK, 'fixture_donor.js')); // OA-532: see that file
+  // OA-574 (A1): the PIN is the clock, not the live template; pin_clock.js says why and what the five answers are.
+  const pinClock = require(path.join(SK, 'pin_clock.js')), PIN = pinClock.readPin(BUSES), SHADOW = pinClock.readShadow(BUSES);
 
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -359,7 +361,9 @@ function fromMapTree() {
       let routes = {};
       try { routes = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = routes.engine || null;
-      row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; row.engineStale = routes.engine !== (row.pinnedDonor || current); // the area fixture's town moves with the pin (OA-532)
+      row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; // the area fixture's town must EQUAL the pin (OA-532), so it is asked strictly
+      row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routes.engine, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW, strict: !!row.pinnedDonor });
+      row.engineStale = row.engineStanding === 'behind' || row.engineStanding === 'unstamped'; // an unstamped build was always a row
     }
     const s6 = latestRunDir(m, t.dir, 'S6');
     const dataRuns = ['S1', 'S2', 'S3']
@@ -415,11 +419,12 @@ function fromMapTree() {
       let pr = {};
       try { pr = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = pr.engine || null;
-      row.engineStale = pr.engine !== currentPlace;
+      row.engineStanding = pinClock.standing({ kind: 'place', name: p.name, mapEngine: pr.engine, builtAt: s4.rec.at, live: currentPlace, pin: PIN && PIN.placeEngine, shadow: SHADOW });
+      row.engineStale = row.engineStanding === 'behind' || row.engineStanding === 'unstamped';
     }
     return row;
   });
-  return { towns, places, currentEngine: current, currentPlaceEngine: currentPlace };
+  return { towns, places, currentEngine: current, currentPlaceEngine: currentPlace, pinEngine: PIN && PIN.engine, pinPlaceEngine: PIN && PIN.placeEngine };
 }
 
 // ---- local map tree: upcoming BODS changes ---------------------------------
@@ -1119,6 +1124,7 @@ const engineStale = tree.towns.filter((t) => t.built && t.engineStale).map((t) =
   .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
 for (const { row: mapRow, place } of engineStale) {
   const live = place ? tree.currentPlaceEngine : tree.currentEngine;
+  const clock = (place ? tree.pinPlaceEngine : tree.pinEngine) || live; // OA-574: the engine the estate has ADOPTED
   const tool = place ? 'rollout_places.js' : 'rollout.js';
   const sel = `${place ? '--place' : '--town'} "${mapRow.name}"`;
   add({
@@ -1127,7 +1133,7 @@ for (const { row: mapRow, place } of engineStale) {
     // `looksLikeRowKey()` refuses it. A gate caught that, not a reader.
     key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
     title: `${mapRow.name} was drawn by an older engine`,
-    why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the live ${place ? 'PLACE ' : ''}template is ${live}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
+    why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the estate's pinned ${place ? 'PLACE ' : ''}engine is ${clock}${clock !== live ? ` (the live template, ${live}, is ahead of the pin and is not the clock)` : ''}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
       + (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [ // the dry run's verdict picks the write; why --rebuild-stale is its own step: playbooks.md, Engine-stale

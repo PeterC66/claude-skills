@@ -154,7 +154,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null, staleS6 = false, mutateInternal = false }) {
+function scratchTree({ town = DONOR, engine = null, lock = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null, staleS6 = false, mutateInternal = false }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(BUSES, 'Areas', DONOR);
@@ -289,6 +289,10 @@ function scratchTree({ town = DONOR, engine = null, withPlace = null, stripKeys 
     if (!txt.includes('</svg>')) throw new Error('prove-red-status: ' + sv + ' carries no closing </svg> to mutate before');
     fs.writeFileSync(sv, txt.replace('</svg>', '<!-- one byte the generator will not draw: prove-red-status.js --></svg>'));
   }
+  /* OA-574: an estate that has ADOPTED an engine says so in engine.lock.json, and the board judges every map against that
+   * rather than against the template on disk. `lock` writes the file with both hashes the same, which is all the town
+   * column reads; the place hash is not asked of a town case. */
+  if (lock) fs.writeFileSync(path.join(root, 'engine.lock.json'), JSON.stringify({ engine: lock, placeEngine: lock }, null, 2));
   if (engine) {
     const rjPath = path.join(dst, 'ci-reference', 'routes.json');
     const rj = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
@@ -429,6 +433,13 @@ function statusWithOldRule(kind) {
   if (hits !== 1) {
     throw new Error('prove-red-status: expected exactly one `' + anchor.trim() + '` line in status.js, found ' + hits
       + '. The old-rule arms append their term there; re-point them at whatever replaced it.');
+  }
+  if (kind === 'livecompare') {
+    /* OA-574's mutant: the clock put back on the live template, by dropping the pin from the one call that reads it. */
+    const pinned = 'pin: PIN && PIN.engine, shadow: SHADOW });';
+    if (src.split(pinned).length - 1 !== 1) throw new Error('prove-red-status: expected exactly one `' + pinned + '` in status.js; re-point the livecompare arm at whatever replaced it.');
+    fs.writeFileSync(f, src.replace(pinned, 'pin: null, shadow: SHADOW });'));
+    return { statusPath: f, root };
   }
   const term = kind === 'engine' ? '\n  || engineStaleRows.length > 0'
     : kind === 's6' ? '\n  || townRows.some(r => r.s6Stale) || placeRows.some(r => r.s6Stale)'
@@ -597,6 +608,41 @@ const CASES = [
     expect: 1,
     staleNamed: true,
     what: 'exit 1 here and 0 above is the whole of OA-396 on this column: the fixture discriminates, the term is what changed',
+  },
+  {
+    /* OA-574 (A1): THE PIN IS THE CLOCK. The live template ran ahead of the estate's adopted engine for most of a month,
+     * and every map it overtook was raised as a rebuild. A town drawn by the PINNED engine is current whatever the live
+     * template says; the mutant below puts the live comparison back and must name it. */
+    label: 'a town drawn by the PINNED engine is current while the live template is ahead, and nothing is named',
+    make: { engine: 'a1a1a1a1a1', lock: 'a1a1a1a1a1' },
+    expect: 0,
+    also: (json) => {
+      const t = (json.towns || []).find(r => r.name === DONOR);
+      if (!t) return 'the board never saw the town at all';
+      if (t.engineStanding !== 'current') return 'the board did not judge the stamp current against the pin: engineStanding=' + t.engineStanding;
+      return null;
+    },
+    what: 'a map at the adopted engine owes nothing, however many engine commits have landed since',
+  },
+  {
+    label: 'mutation: the clock put back on the live template names the same town stale',
+    make: { engine: 'a1a1a1a1a1', lock: 'a1a1a1a1a1' },
+    oldRule: 'livecompare',
+    expect: 0,
+    staleNamed: true,
+    what: 'named here and silent above is the whole of A1 on this column: the fixture discriminates, the pin read is what changed',
+  },
+  {
+    label: "a town drawn by today's engine while the pin lags is ahead, not behind",
+    make: { engine: computeEngineVersion(), lock: 'a1a1a1a1a1' },
+    expect: 0,
+    also: (json) => {
+      const t = (json.towns || []).find(r => r.name === DONOR);
+      if (!t) return 'the board never saw the town at all';
+      if (t.engineStanding !== 'ahead') return 'expected ahead, got engineStanding=' + t.engineStanding;
+      return null;
+    },
+    what: 'a rollout that drew a customer change on the live engine is not made stale by the pin that has not caught up',
   },
   {
     label: 'a stale S6 report is REPORTED, and the board stays green',

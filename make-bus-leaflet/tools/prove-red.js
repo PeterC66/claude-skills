@@ -2872,6 +2872,27 @@ const MUTATIONS = [
     find: "  if (!whole || !s.towns || !s.places || !Array.isArray(s.towns.maps) || !Array.isArray(s.places.maps)) {",
     to: "  if (!whole || !s.towns || !Array.isArray(s.towns.maps)) {" },
 
+  // pin_clock.js - the pin, not the live template, is the engine clock (buses-data OA-574, A1).
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'the live template is the clock again, so every engine commit makes every map behind',
+    find: "  const clock = pin || live;",
+    to: "  const clock = live;" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'a shadow verdict is accepted whenever it names the map, so a report from before the build or on another engine excuses it',
+    find: "  if (half && half.engine && half.engine === clock && Number.isFinite(builtMs) && builtMs <= shadow.ranAtMs\n    && half.status.get(name) === 'STAMP-STALE') return 'stamp-only';",
+    to: "  if (half && half.status.get(name) === 'STAMP-STALE') return 'stamp-only';" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'any verdict at all excuses a map, so a rebuild whose ink moves is never owed',
+    find: "&& half.status.get(name) === 'STAMP-STALE') return 'stamp-only';",
+    to: "&& half.status.has(name)) return 'stamp-only';" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'the area-fixture town is judged like any other map, so a fixture donor drifts off the pin unnoticed',
+    find: "  if (strict) return 'behind';\n",
+    to: "" },
+
   // place_pointer.js - the red arrow at a place map's marker (buses-data OA-509).
   { suite: 'place_pointer.test.js', file: 'place_pointer.js',
     what: 'every town grows an arrow at its interchange, because absent the key means on everywhere',

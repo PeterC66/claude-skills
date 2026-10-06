@@ -46,6 +46,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readLoopLock, fmtMin } from './loop_lock.mjs';
+import { parseArgs } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -269,15 +270,17 @@ export function realDocstamp(script = path.resolve(HERE, '..', '..', 'stamp-docs
   };
 }
 
-function main(argv) {
-  const known = new Set(['--repo', '--apply']);
-  let repo = null; let apply = false;
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!known.has(a)) { process.stderr.write(`push_main: unknown argument ${a}\nusage: node push_main.mjs [--repo DIR] [--apply]\n`); return EXIT_CANNOT_TELL; }
-    if (a === '--apply') apply = true;
-    else { repo = argv[++i]; if (!repo) { process.stderr.write('push_main: --repo needs a folder\n'); return EXIT_CANNOT_TELL; } }
+function main(flags) {
+  const usage = 'usage: node push_main.mjs --repo "<buses-data checkout>" [--apply]\n';
+  const unknown = Object.keys(flags).filter((k) => k !== '_' && k !== 'repo' && k !== 'apply');
+  if (unknown.length || (Array.isArray(flags._) && flags._.length)) {
+    process.stderr.write(`push_main: unknown argument ${unknown.length ? '--' + unknown[0] : flags._[0]}\n${usage}`);
+    return EXIT_CANNOT_TELL;
   }
+  if (flags.apply !== undefined && flags.apply !== true) { process.stderr.write(`push_main: --apply takes no value\n${usage}`); return EXIT_CANNOT_TELL; }
+  if (flags.repo === true) { process.stderr.write('push_main: --repo needs a folder\n'); return EXIT_CANNOT_TELL; }
+  const apply = flags.apply === true;
+  const repo = typeof flags.repo === 'string' ? flags.repo : null;
   if (!repo) {
     process.stderr.write('push_main: --repo "<buses-data checkout>" is required\n');
     return EXIT_CANNOT_TELL;
@@ -287,5 +290,5 @@ function main(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   // process.exitCode, not process.exit(): a write to a pipe is asynchronous on Windows.
-  process.exitCode = main(process.argv.slice(2));
+  process.exitCode = main(parseArgs(process.argv.slice(2)));
 }

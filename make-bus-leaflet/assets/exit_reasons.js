@@ -31,7 +31,7 @@ function sheetFaults(rows, section, { boarding = false, places = false } = {}) {
     if (boarding && [...SHEET_BAD, 'INDEX-STALE'].includes(r.boarding)) add(r, 'boarding sheet ' + r.boarding);
     if (boarding && r.indexDrift && r.indexDrift.length) add(r, 'boarding index drift');
     if (places && r.keys && r.keys.state === 'short') add(r, 'is missing a key');
-    if (r.ownEngineUncheckable) add(r, 'cannot be gated against its own engine: ' + r.ownEngineUncheckable);
+    if (r.ownEngineUncheckable) add(r, 'could not be gated at all: ' + r.ownEngineUncheckable);
   }
   return out;
 }

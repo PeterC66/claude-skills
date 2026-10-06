@@ -968,6 +968,10 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-stage-s6-mirror
 
+      - name: Prove the S6 untracked-docx note can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-stage-s6-untracked-docx
+
       # OA-427. `stage.js commit S6` refuses a red-team answer with no decision
       # record beside it, and `redteam_source.js` decides a run dir once, so the
       # month's budget cannot be evaded by not running the tool. One arm per half.

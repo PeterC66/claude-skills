@@ -1101,7 +1101,7 @@ function main() {
     console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)${cost ? '  [' + cost + ']' : ''}`);
     // OA-329 fault A — see refreshLatestMirror() above for why this is here, why
     // it is S6 alone, and why it warns rather than refuses.
-    if (st === 'S6') refreshLatestMirror(townDir);
+    if (st === 'S6') { refreshLatestMirror(townDir); require('./untracked_docx').note(townDir, runDir); }
     printOwed(st, townDir, runDir, outputs);
     return;
   }

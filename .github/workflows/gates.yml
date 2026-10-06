@@ -775,6 +775,16 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-health
 
+      # The push job (buses-data, the 6 October simplification review, B1/B2): the
+      # hourly, model-free carrier of local main to origin that replaces step 8's
+      # push in the scheduled tick. It drives the REAL git against throwaway bare
+      # repositories with a scripted preflight, so a push on DEFERRED, a stolen
+      # person's lock, a rebase left half-done and a push never read back are each
+      # a case that must go red when that one line is broken.
+      - name: Prove the push job can go red for each way it could push wrongly
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-push-main
+
       # buses-data OA-343 (2026-09-14): the push preflight, which answers "what
       # would go red if I pushed now". Read case 2 first and read it as the
       # POINT of the tool rather than as one assertion among thirty: a preflight

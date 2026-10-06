@@ -23,18 +23,18 @@ const SRC = path.join(ROOT, 'assets', 'stage.js');
 const TEST = path.join(ROOT, 'test', 'stage_s6_untracked_docx.test.js');
 
 const src = fs.readFileSync(SRC, 'utf8');
-const CALL = "    if (st === 'S6') noteUntrackedDocx(townDir, runDir);";
+const CALL = " require('./untracked_docx').note(townDir, runDir);";
 if (!src.includes(CALL)) {
   console.error('prove-red-stage-s6-untracked-docx: could not find the S6 untracked-docx call in assets/stage.js.');
   console.error('  If it was deliberately removed, delete this harness with it.');
   process.exit(1);
 }
-const broken = src.replace(CALL, '    // (cut by prove-red-stage-s6-untracked-docx.js)');
-// The FUNCTION stays; only its one call site goes. Cutting the definition too
+const broken = src.replace(CALL, ''); // the call is cut INSIDE its braces, so the line stays valid JavaScript
+// The module stays; only its one call goes. Cutting the module too
 // would be a bigger edit than the one being falsified, and a ReferenceError in
 // the module would redden the controls for the wrong reason.
-if (!broken.includes('function noteUntrackedDocx(')) {
-  console.error('prove-red-stage-s6-untracked-docx: the cut also removed the function — narrow the anchor.');
+if (!broken.includes('refreshLatestMirror(townDir);')) {
+  console.error('prove-red-stage-s6-untracked-docx: the cut also removed the mirror refresh — narrow the anchor.');
   process.exit(1);
 }
 if (broken.includes(CALL)) {

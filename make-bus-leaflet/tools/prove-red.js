@@ -2839,6 +2839,28 @@ const MUTATIONS = [
     find: "  return c.rows.some(r => r.state === 'OVERDUE' || r.state === 'UNDATED');",
     to: "  return c.rows.some(r => r.state === 'UNDATED');" },
 
+  // exit_reasons.js - the board's last line says WHY it exited (2026-10-06): a truncated
+  // board that exited 1 was unreadable, and the fault was one overdue commitment row.
+  { suite: 'status_exit_line.test.js', file: 'exit_reasons.js',
+    what: 'an OVERDUE commitment stops being named in the exit line, so a red board is explained by nothing',
+    find: "    if (r.state === 'OVERDUE' || r.state === 'UNDATED') {",
+    to: "    if (r.state === 'UNDATED') {" },
+
+  { suite: 'status_exit_line.test.js', file: 'exit_reasons.js',
+    what: 'a chore (a portal file AHEAD of the pin) is listed as a fault, so the line names work that is merely due',
+    find: "if (r.same !== true && !r.inFlight && !r.pinBehind)",
+    to: "if (r.same !== true && !r.inFlight)" },
+
+  { suite: 'status_exit_line.test.js', file: 'exit_reasons.js',
+    what: 'report() computes the lines and never prints them, so the board ends where it always did',
+    find: "for (const l of exitLines(failed, failed ? faultsOf(ctx) : [])) log(l);",
+    to: "for (const l of exitLines(failed, failed ? faultsOf(ctx) : [])) void l;" },
+
+  { suite: 'status_exit_line.test.js', file: 'exit_reasons.js',
+    what: 'a green board prints nothing it can be grepped for, so an empty tail is read as a truncation',
+    find: "if (!failed) return ['EXIT 0: nothing red'];",
+    to: "if (!failed) return [];" },
+
   // shadow_count.js - the board's "clean on today's engine" count (buses-data OA-485 item 3).
   { suite: 'shadow_count.test.js', file: 'shadow_count.js',
     what: 'every stamp counts as taken on today\'s engine, so a week-old count on a superseded engine reads as today\'s',

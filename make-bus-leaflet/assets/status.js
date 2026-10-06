@@ -1714,7 +1714,7 @@ async function main() {
 
   printDeployment(deploy, LIVE_URL);
 
-  return bad || deployBad(deploy) || commitBad(commit) || require('./s6_stale_limit.js').isRed(s6Limit);
+  return require('./exit_reasons').report(bad || deployBad(deploy) || commitBad(commit) || require('./s6_stale_limit.js').isRed(s6Limit), { townRows, placeRows, portalFixtureRows, driftRows, freshnessRows, qualityRows, qualityError, s6Claims, deploy, commit, s6Limit });   // the last line says WHY
 }
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is

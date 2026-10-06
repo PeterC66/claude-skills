@@ -88,4 +88,9 @@ function standing({ kind, name, mapEngine, builtAt, live, pin, shadow, strict = 
   return 'behind';
 }
 
-module.exports = { readPin, readShadow, standing };
+/* The Engine column's suffix for a map that is not behind but is not simply current either. */
+const note = (r) => r.engineStanding === 'ahead' ? ' (ahead of the pin)' : r.engineStanding === 'stamp-only' ? ' (stamp-only: the shadow rebuild reproduces every sheet)' : '';
+/* A rebuild is owed: behind, or never stamped at all (an unstamped build was always a row). */
+const owes = (s) => s === 'behind' || s === 'unstamped';
+
+module.exports = { readPin, readShadow, standing, note, owes };

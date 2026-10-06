@@ -349,9 +349,7 @@ function fromMapTree() {
   const { findTowns, findPlaces, readJson, latestRunDir } = require(path.join(SK, 'gate_lib.js'));
   const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(SK, 'engine_version.js'));
   const current = computeEngineVersion();
-  const currentPlace = computePlaceEngineVersion(), { fixtureDonor } = require(path.join(SK, 'fixture_donor.js')); // OA-532: see that file
-  // OA-574 (A1): the PIN is the clock, not the live template; pin_clock.js says why and what the five answers are.
-  const pinClock = require(path.join(SK, 'pin_clock.js')), PIN = pinClock.readPin(BUSES), SHADOW = pinClock.readShadow(BUSES);
+  const currentPlace = computePlaceEngineVersion(), { fixtureDonor } = require(path.join(SK, 'fixture_donor.js')); const pinClock = require(path.join(SK, 'pin_clock.js')), PIN = pinClock.readPin(BUSES), SHADOW = pinClock.readShadow(BUSES); // OA-532 (fixture_donor.js); OA-574: the PIN is the clock (pin_clock.js)
 
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -361,9 +359,7 @@ function fromMapTree() {
       let routes = {};
       try { routes = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = routes.engine || null;
-      row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; // the area fixture's town must EQUAL the pin (OA-532), so it is asked strictly
-      row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routes.engine, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW, strict: !!row.pinnedDonor });
-      row.engineStale = row.engineStanding === 'behind' || row.engineStanding === 'unstamped'; // an unstamped build was always a row
+      row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; row.engineStale = pinClock.owes(row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routes.engine, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW, strict: !!row.pinnedDonor })); // the area fixture's town is asked strictly (OA-532)
     }
     const s6 = latestRunDir(m, t.dir, 'S6');
     const dataRuns = ['S1', 'S2', 'S3']
@@ -419,8 +415,7 @@ function fromMapTree() {
       let pr = {};
       try { pr = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = pr.engine || null;
-      row.engineStanding = pinClock.standing({ kind: 'place', name: p.name, mapEngine: pr.engine, builtAt: s4.rec.at, live: currentPlace, pin: PIN && PIN.placeEngine, shadow: SHADOW });
-      row.engineStale = row.engineStanding === 'behind' || row.engineStanding === 'unstamped';
+      row.engineStale = pinClock.owes(row.engineStanding = pinClock.standing({ kind: 'place', name: p.name, mapEngine: pr.engine, builtAt: s4.rec.at, live: currentPlace, pin: PIN && PIN.placeEngine, shadow: SHADOW }));
     }
     return row;
   });
@@ -1123,8 +1118,7 @@ for (const it of freshPull.items) add(it);
 const engineStale = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
   .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
 for (const { row: mapRow, place } of engineStale) {
-  const live = place ? tree.currentPlaceEngine : tree.currentEngine;
-  const clock = (place ? tree.pinPlaceEngine : tree.pinEngine) || live; // OA-574: the engine the estate has ADOPTED
+  const live = place ? tree.currentPlaceEngine : tree.currentEngine, clock = (place ? tree.pinPlaceEngine : tree.pinEngine) || live; // OA-574: clock = the ADOPTED engine
   const tool = place ? 'rollout_places.js' : 'rollout.js';
   const sel = `${place ? '--place' : '--town'} "${mapRow.name}"`;
   add({

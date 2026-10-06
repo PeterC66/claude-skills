@@ -436,9 +436,9 @@ function statusWithOldRule(kind) {
   }
   if (kind === 'livecompare') {
     /* OA-574's mutant: the clock put back on the live template, by dropping the pin from the one call that reads it. */
-    const pinned = 'pin: PIN && PIN.engine, shadow: SHADOW });';
+    const pinned = 'pin: PIN && PIN.engine, shadow: SHADOW }';
     if (src.split(pinned).length - 1 !== 1) throw new Error('prove-red-status: expected exactly one `' + pinned + '` in status.js; re-point the livecompare arm at whatever replaced it.');
-    fs.writeFileSync(f, src.replace(pinned, 'pin: null, shadow: SHADOW });'));
+    fs.writeFileSync(f, src.replace(pinned, 'pin: null, shadow: SHADOW }'));
     return { statusPath: f, root };
   }
   const term = kind === 'engine' ? '\n  || engineStaleRows.length > 0'

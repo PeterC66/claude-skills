@@ -32,13 +32,13 @@ const SRC = path.join(ROOT, 'assets', 'stage.js');
 const TEST = path.join(ROOT, 'test', 'stage_s6_mirror.test.js');
 
 const src = fs.readFileSync(SRC, 'utf8');
-const CALL = "    if (st === 'S6') refreshLatestMirror(townDir);";
+const CALL = 'refreshLatestMirror(townDir);';
 if (!src.includes(CALL)) {
   console.error('prove-red-stage-s6-mirror: could not find the S6 mirror call in assets/stage.js.');
   console.error('  If it was deliberately removed, delete this harness with it.');
   process.exit(1);
 }
-const broken = src.replace(CALL, '    // (cut by prove-red-stage-s6-mirror.js)');
+const broken = src.replace(CALL, ''); // cut INSIDE its braces (OA-424 put a second call on the same line), so the line stays valid JavaScript
 // The FUNCTION stays; only its one call site goes. Cutting the definition too
 // would be a bigger edit than the one being falsified, and a ReferenceError in
 // the module would redden the controls for the wrong reason.

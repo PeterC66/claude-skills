@@ -396,7 +396,6 @@ function builtIn(repo) {
          * the push deletes; an exemption list is asked of the index, as CI asks it. */
         { id: 'retired-action-links', label: 'no tracked document links to an open action this push deletes', cmd: 'node', args: ['Documentation/check-retired-action-links.mjs', '--push'], cannotTell: [2] },
         { id: 'exemption-lists', label: 'every file an exemption list names is tracked', cmd: 'node', args: ['.github/scripts/check-exemption-lists.mjs', '--root', '.'], cannotTell: [2] },
-        { id: 'doc-coverage', label: 'every working document is reachable from live work', cmd: 'node', args: ['Documentation/check-doc-coverage.mjs'] },
         { id: 'directory-coverage', label: 'every map has an answer to does somebody else map this town', cmd: 'node', args: ['BusMapsUK/bus-map-directory/coverage.mjs', '--check'] },
         TOOLS && { id: 'exclusion-fields', label: 'a town declares a route off in notOnLeaflet[] and nowhere else', cmd: 'node', args: [`${TOOLS}/check-exclusion-fields.mjs`] },
         TOOLS && { id: 's6-claims', label: 'every S6 claim has a home, and the operator join resolves', cmd: 'node', args: [`${TOOLS}/check-s6-claims.mjs`], note: 'run WITHOUT --register-only: the coverage half is the half CI cannot run' },

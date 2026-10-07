@@ -151,3 +151,43 @@ test('the whole estate as at 2026-09-03 is clean — the guard refuses nothing t
   assert.deepStrictEqual(dirty, []);
   assert.ok(seen >= 11, 'expected at least the 11 maps that existed on 2026-09-03, saw ' + seen);
 });
+
+/* ---- inputsMoved — what a moved input MEANS to a rollout (buses-data OA-586, A4) ------------------
+ * Only S2 is geometry. A moved S2 is refused with no override; a moved S3 over an unmoved S2 is a
+ * config rollout and is built, not refused. */
+const { inputsMoved } = load('gate_lib.js');
+const based = (s2, s3) => M(
+  { latest: 'v1.0', runs: [run('v1.0', '2026-09-02T10:10', { startedAt: '2026-09-02T10:00', basedOn: { S2: s2, S3: s3 } })] },
+  { latest: 's2x', runs: [run('s2x', '2026-09-02T10:04')] },
+  { latest: 's3x', runs: [run('s3x', '2026-09-02T10:05')] });
+
+test('inputsMoved: nothing moved is neither geometry nor config', () => {
+  const r = inputsMoved(based('s2x', 's3x'));
+  assert.deepStrictEqual([r.geometryMoved, r.configMoved, r.moved.length], [false, false, 0]);
+});
+
+test('inputsMoved: S3 moved over an unmoved S2 is a CONFIG rollout, not a refusal', () => {
+  const r = inputsMoved(based('s2x', 's3-older'));
+  assert.deepStrictEqual([r.geometryMoved, r.configMoved], [false, true]);
+  assert.deepStrictEqual(r.moved.map((x) => x.stage), ['S3']);
+});
+
+test('inputsMoved: S2 moved is geometry, and is never also a config rollout', () => {
+  const r = inputsMoved(based('s2-older', 's3x'));
+  assert.deepStrictEqual([r.geometryMoved, r.configMoved], [true, false]);
+});
+
+test('inputsMoved: S2 and S3 both moved is the refusal — S3 beside a moved S2 is not a build', () => {
+  const r = inputsMoved(based('s2-older', 's3-older'));
+  assert.deepStrictEqual([r.geometryMoved, r.configMoved], [true, false]);
+  assert.strictEqual(r.moved.length, 2);
+});
+
+test('inputsMoved: the timestamp fallback reads an S3 committed after the S4 started as config', () => {
+  const m = M(
+    { latest: 'v1.0', runs: [run('v1.0', '2026-09-02T10:10', { startedAt: '2026-09-02T10:00' })] },
+    { latest: 's2a', runs: [run('s2a', '2026-09-01T09:00')] },
+    { latest: 's3b', runs: [run('s3b', '2026-09-02T11:00')] });
+  const r = inputsMoved(m);
+  assert.deepStrictEqual([r.geometryMoved, r.configMoved], [false, true]);
+});

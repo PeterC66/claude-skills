@@ -143,6 +143,33 @@ console.log('\n3. A caller the matcher cannot see is a caller nothing holds to t
     has(failed, CALL_SITE), `failed: ${failed.join(' | ') || 'nothing'}`);
 }
 
+/* ---- arm 3b: resolveBy stops refusing, or stops reading the lock (OA-586) --- */
+console.log('\n3b. A resolveBy that stops refusing a write, or stops reading the lock holder, reddens its own cases');
+{
+  const REFUSES = 'a write is refused';
+  const READS = 'takes the first word of the holder line';
+  const FROM_REFUSE = "  if (required) d('--by is required when writing";
+  const TO_REFUSE = "  if (false) d('--by is required when writing";
+  const FROM_READ = "  const held = holderName(buses);";
+  const TO_READ = "  const held = null;";
+  for (const [label, FROM, TO, redCase, greenCase] of [
+    ['refusing', FROM_REFUSE, TO_REFUSE, REFUSES, READS],
+    ['reading the lock', FROM_READ, TO_READ, READS, REFUSES],
+  ]) {
+    const dir = copySubjects();
+    const p = path.join(dir, 'cli.js');
+    const src = fs.readFileSync(p, 'utf8');
+    if (!src.includes(FROM)) {
+      console.error(`prove-red-stage-actor-callers: could not find resolveBy's ${label} line in cli.js.`);
+      process.exit(1);
+    }
+    fs.writeFileSync(p, src.replace(FROM, TO));
+    const { passed, failed } = runSuite(dir);
+    check(`stopping ${label} reddens the case that names it`, has(failed, redCase), `failed: ${failed.join(' | ') || 'nothing'}`);
+    check('and the other resolveBy case stays green — one mutation, one red', has(passed, greenCase));
+  }
+}
+
 /* ---- the originals are untouched ----------------------------------------- */
 console.log('\n4. The estate is as it was — every subject byte-identical to the file this harness read');
 {

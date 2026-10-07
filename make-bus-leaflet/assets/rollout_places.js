@@ -29,8 +29,8 @@
  *
  * Usage:
  *   node rollout_places.js [--place "High Wycombe Aldi"]... [--all]
- *                           [--bump minor|major] [--note "..."] [--apply]
- *                           [--force] [--buses "<dir>"]
+ *                           [--bump minor|major] [--note "..."] [--apply] [--commit]
+ *                           [--finish] [--force] [--buses "<dir>"]
  *                           [--by <who>] [--keep "<dir>"] [--warnings]
  *                           [--refresh-index --asof YYYY-MM-DD] [--json "<file>"] [--help]
  *
@@ -50,8 +50,14 @@
  *
  * `--by <who>` records WHO performed each stage this run opens and commits —
  * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
- * forwarded to `stage.js` unchanged and validated there; leaving it off records
- * nobody, which is honest and is what every run before 2026-09-22 did.
+ * forwarded to `stage.js` unchanged and validated there. Leaving it off reads the
+ * name from `loop/LOCK.d/holder`, and with no lock and no flag --apply is refused
+ * (buses-data OA-586, A8) — rollout.js's header has the reasoning.
+ *
+ * `--force` publishes past a lost label, a blocking warning or a ratchet regression and does
+ * nothing else; `--finish` finishes an UNRENDERED S4; a config rollout (S3 moved over an unmoved
+ * S2) needs no flag; `--commit` commits what --apply wrote, by name, and reads it back
+ * (buses-data OA-586, A3/A4; the reasoning is in rollout.js and rollout_commit.js).
  *
  * Default is DRY RUN, identical semantics to rollout.js: builds each place in
  * a scratch temp dir, reports the label-set diff (gained/lost text vs the
@@ -69,9 +75,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
+const { parseArgs, resolveBuses, resolveBy, die } = require('./cli');
+const { commitMap, reportCommit } = require('./rollout_commit');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, owedOnSheet, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, staleInputs } = require('./gate_lib');
+const { SK, gate, labelDiff, owedOnSheet, PLACE_IGNORE, findTowns, findPlaces, readJson, latestRunDir, unrenderedS4, inputsMoved } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
 const { jsonTarget, writeReport, hardDefects, keptDirOf } = require('./rollout_report');
 const BUILDLOG = require('./build_log');
@@ -101,10 +108,10 @@ const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
 const USAGE = 'Usage: node rollout_places.js [--place "<Place name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
-  '         [--apply] [--force] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
+  '         [--apply] [--commit] [--finish] [--force] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
   '         [--warnings] [--refresh-index --asof YYYY-MM-DD] [--json "<file>"]\n' +
   '  Dry run unless --apply. No --place: consider EVERY place.';
-const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'force', 'buses', 'by',
+const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'commit', 'finish', 'force', 'buses', 'by',
   'keep', 'warnings', 'refresh-index', 'asof', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
@@ -113,6 +120,8 @@ if (args.help === true) { console.log(USAGE); process.exit(0); }
   if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --place takes every place.\n${USAGE}`);
   if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a place with --place.\n${USAGE}`);
 }
+// --commit commits what --apply wrote; with no --apply there is nothing to commit (see rollout.js).
+if (args.commit && !args.apply) die('--commit needs --apply: a dry run writes nothing to commit.\n' + USAGE);
 const JSON_OUT = jsonTarget(args, die);
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
@@ -123,12 +132,17 @@ const { assembleS4Inputs, staleS3Keys } = require('./seed_prev_s4');
  * here because both halves take it and OA-239 is the action about them drifting. */
 const PULL_STAGES = ['S1', 'S2', 'S3'];
 const { scratchDir } = require('./scratch');
+// --force: publish past a lost label, a blocking warning or a ratchet regression, and nothing else (OA-586).
 const FORCE = !!args.force;
+// --finish: finish an UNRENDERED S4, and nothing else. --commit: commit what --apply wrote (rollout_commit.js).
+const FINISH = !!args.finish;
+const COMMIT = !!args.commit;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
-// WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
-// stage.js is the one authority on what a name may be, so a bad one fails there.
-const BY = byArgs(args.by);
+// WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted — stage.js is the
+// one authority on what a name may be. OA-586: absent, it is the loop lock holder's name, and an
+// --apply that can find no name at all is refused rather than recording nobody.
+const BY = resolveBy(args, BUSES, { required: APPLY });
 // --keep <dir>: dry run only. Copy each place's built sheets out before the scratch
 // workspace is deleted, so they can be measured and rendered rather than judged from
 // the label-set diff alone. Ignored with --apply (the sheets go to S4 anyway).
@@ -324,15 +338,19 @@ function rolloutOnePlace(p) {
    * Fixing one and not the other is how a guard covers a class once rather than
    * completely, which is the lesson the block directly beneath this one already carries.
    * See staleInputs() in gate_lib.js, and the paragraph in rollout.js. */
-  const moved = staleInputs(manifest);
-  if (moved.length && !FORCE) {
+  /* NO FLAG ROLLS THE OLD GEOMETRY FORWARD, AND A MOVED S3 ALONE IS NOT A REFUSAL (buses-data OA-586,
+   * A4) — exactly as in rollout.js, whose paragraph says why. For a place the geometry is S1 and S2
+   * (place.json is an S1 output), but staleInputs() has only ever asked about S2 and S3, and the
+   * question this answers is unchanged: S2 moved is a data change; S3 moved over the same S2 is a
+   * config rollout, an ordinary rebuild that skips the two fast paths below. */
+  const { moved, geometryMoved, configMoved } = inputsMoved(manifest);
+  if (geometryMoved) {
     return { name: p.name, status: 'STALE-INPUTS',
              detail: moved.map(x => `${x.stage} has moved to ${x.now}`
                         + (x.was ? ` (this S4 was built on ${x.was})` : ' since this S4 was built')).join('; ')
                    + ` — so this is a DATA change, not an engine-only re-render, and the geometry `
                    + `this would roll forward is the previous build's. Rebuild it through the documented `
-                   + `stage order (pull S2, then pull S3). To roll the OLD geometry forward anyway:  `
-                   + `node rollout_places.js --place "${p.name}" --apply --force` };
+                   + `stage order (pull S2, then pull S3).` };
   }
 
   /* AN UNRENDERED S4 IS NOT UP TO DATE, WHATEVER THE GATES SAY (OA-198). This sits
@@ -341,29 +359,33 @@ function rolloutOnePlace(p) {
    * construction, so both of those verdicts are reachable and both of them are
    * wrong. See unrenderedS4() in gate_lib.js for how the state is produced -- it is
    * this tool's own blocking-warning stop, twenty lines below the S4 commit. */
-  /* AND IT HAS TO YIELD TO --force, OR ITS OWN REMEDY IS A NO-OP (2026-09-01) —
+  /* AND IT HAS TO YIELD TO ITS OWN REMEDY, OR THAT REMEDY IS A NO-OP (2026-09-01) —
    * the same fault, fixed in the same change as rollout.js's, because this guard
    * and that one are one guard written twice and fixing either alone is how a
    * remedy covers a class once rather than completely. The town side is where it
-   * was hit; see the paragraph there. */
+   * was hit; see the paragraph there, which also says why the remedy is `--finish`
+   * and no longer `--force` (buses-data OA-586, A4). */
   const unrendered = unrenderedS4(manifest);
-  if (unrendered && !FORCE) {
+  if (unrendered && !FINISH) {
     return { name: p.name, status: 'UNRENDERED',
              detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
                    + `version that has no JPG on disk. Finish it with:  `
-                   + `node rollout_places.js --place "${p.name}" --apply --force` };
+                   + `node rollout_places.js --place "${p.name}" --apply --finish` };
   }
 
   const stampedEngine = _s4rjEarly.engine;
   const allPass = ok(internalGate) && ok(externalGate) && ok(boardingGate) && ok(schematicGate) && ok(diagramGate);
   const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE;
-  if (isStampStale && !FORCE) {
+  // A build is owed when the config moved or an UNRENDERED S4 is being finished, and for no other
+  // reason: `--force` no longer rebuilds a place that is up to date (see rollout.js, OA-586).
+  const buildOwed = configMoved || (FINISH && !!unrendered);
+  if (isStampStale && !buildOwed) {
     return { name: p.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current PLACE template `
                    + `is ${CURRENT_PLACE_ENGINE}. NOTHING IS OWED: a stamp-only place is not work (buses-data OA-574). The weekly `
                    + `shadow rebuild records this verdict, and the next rebuild that really moves ink re-stamps the place.` };
   }
-  if (allPass && !FORCE && !isStampStale) {
+  if (allPass && !buildOwed && !isStampStale) {
     return { name: p.name, status: 'UP-TO-DATE',
              detail: shipped.join('+') + ' already gate PASS against the current template, and the engine stamp is current' };
   }
@@ -636,6 +658,7 @@ if (!selected.length) { console.error('No matching places. --place names: ' + al
 console.log(`${APPLY ? 'APPLYING' : 'DRY RUN'} rollout over ${selected.length} place(s)${APPLY ? '' : ' (pass --apply to write anything)'}\n`);
 
 const results = [];
+let commitFailed = false;
 for (const p of selected) {
   process.stdout.write(`${p.town || "(standalone)"} / ${p.name}... `);
   let r;
@@ -668,6 +691,11 @@ for (const p of selected) {
   const soft = (r.warnings || []).filter(w => w.severity === 'WARN');
   if (soft.length && args.warnings) for (const w of soft) console.log(`    warn [${w.source}] ${w.text}`);
   else if (soft.length) console.log(`    ${soft.length} non-blocking warning${soft.length > 1 ? 's' : ''} (pass --warnings to see them)`);
+  // --commit (OA-586, A3): the map's tracked files, by name, read back. Only a DONE map: a REVIEW-NEEDED one
+  // stopped after S4 and its half-state is for a person to look at before it goes into git.
+  if (COMMIT && APPLY && r.status === 'DONE') {
+    if (!reportCommit(commitMap({ root: BUSES, dir: p.dir, subject: `rollout: ${p.name} ${path.basename(r.s4Dir)} on engine ${CURRENT_PLACE_ENGINE}`, body: NOTE + '\nBy: ' + (BY[1] || '(nobody named)') }))) commitFailed = true;
+  } else if (COMMIT && APPLY && r.s4Dir) console.log('    rollout: --commit left this map uncommitted: its S4 is written and the run did not finish (' + r.status + ')');
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
@@ -694,7 +722,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0) || commitFailed;
 process.exit(bad ? 1 : 0);
 }
 

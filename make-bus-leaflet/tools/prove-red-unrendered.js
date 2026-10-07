@@ -14,9 +14,9 @@
  * S4, the current generator redraws its stored sheets byte-for-byte, every gate
  * PASSES — and there is no JPG anywhere for the version being named. The next
  * ordinary run then hits the fast path, sees all sheets PASS, returns UP-TO-DATE
- * and skips the map, for ever. `--force` is the only thing that gets past it,
- * because the fast path is the only guard `!FORCE` disables — so the recovery is
- * a flag nobody has a reason to reach for, on a map nothing has reported.
+ * and skips the map, for ever. `--finish` is the only thing that gets past it (it was `--force`
+ * until buses-data OA-586, when that flag stopped meaning four things) — so the recovery
+ * is a flag nobody has a reason to reach for, on a map nothing has reported.
  *
  * IT CANNOT BE SEEN WORKING ON THE REAL ESTATE. All twelve places and all eight
  * towns are rendered today, which is the state the verdict must stay silent in.
@@ -234,9 +234,9 @@ console.log(`\nB  ${TOWN}, the S5 run rendering the head S4 removed — the find
   // Name the phrase, not just the colour: a harness that accepts any red accepts a crash.
   if (!out.includes(`S4 v${v} is committed`)) fail(`the message does not name the unrendered version v${v}`);
   else pass(`names the unrendered version v${v}`);
-  if (!new RegExp(`node rollout\\.js --town "${TOWN}" --apply --force`).test(out))
+  if (!new RegExp(`node rollout\\.js --town "${TOWN}" --apply --finish`).test(out))
     fail('the message does not name the command that finishes it — the whole point of the verdict');
-  else pass('names the --force command');
+  else pass('names the --finish command');
   if (code === 0) fail('exit 0. The state was invisible because nothing failed; a verdict that only prints is the same silence with a longer summary line.');
   else pass(`exit ${code}`);
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -266,9 +266,9 @@ console.log(`\nD  ${PLACE}, the S5 run rendering the head S4 removed — the fin
   else pass('UNRENDERED');
   if (!out.includes(`S4 v${v} is committed`)) fail(`the message does not name the unrendered version v${v}`);
   else pass(`names the unrendered version v${v}`);
-  if (!new RegExp(`node rollout_places\\.js --place "${PLACE}" --apply --force`).test(out))
+  if (!new RegExp(`node rollout_places\\.js --place "${PLACE}" --apply --finish`).test(out))
     fail('the message does not name the command that finishes it');
-  else pass('names the --force command');
+  else pass('names the --finish command');
   if (code === 0) fail('exit 0 — the verdict does not move the exit code');
   else pass(`exit ${code}`);
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -319,7 +319,7 @@ console.log(`\nF  ${TOWN}, an older S4's render removed — the head is what mat
 /* ---- G and H: the verdict must YIELD to the command it prints ----------
  *
  * ADDED 2026-09-01, AFTER IT BIT. Cases B and D prove the verdict FIRES and that
- * it names `--apply --force` as the way to finish the map. Neither asked whether
+ * it names `--apply --finish` (it named `--force` until OA-586) as the way to finish the map. Neither asked whether
  * that command works — and it did not: the guard returned before the `!FORCE`
  * test, so its own printed remedy reached the same line and got the same refusal,
  * for ever. Hit for real during the OA-187/OA-213 rollout, when a transient
@@ -330,7 +330,7 @@ console.log(`\nF  ${TOWN}, an older S4's render removed — the head is what mat
  * The shape is worth the two extra cases: a guard is not proved by watching it
  * refuse. It is proved by watching it refuse AND watching the stated escape work,
  * because a refusal nobody can satisfy is worse than no refusal — it stops the one
- * tool that could repair the state. `--force` without `--apply` is a dry run, so
+ * tool that could repair the state. `--finish` without `--apply` is a dry run, so
  * these assert only that the verdict gets out of the way; what happens after is
  * cases A to F's business.
  */
@@ -338,19 +338,53 @@ for (const [label, tool, src, rel, flag, name] of [
   ['G', ROLLOUT, srcTown, path.join('Areas', TOWN), '--town', TOWN],
   ['H', ROLLOUT_PLACES, srcPlace, path.join('Places', '_standalone', PLACE), '--place', PLACE],
 ]) {
-  console.log(`\n${label}  ${name}, unrendered AND --force — the verdict must yield to its own remedy`);
+  console.log(`\n${label}  ${name}, unrendered AND --finish — the verdict must yield to its own remedy`);
   const { tmp, manifestPath } = buildFixture(src, rel);
   const v = unrender(manifestPath);
   const plain = runTool(tool, tmp, flag, name);
   if (verdict(plain.out, name) !== 'UNRENDERED') {
-    fail(`premise: without --force this fixture must report UNRENDERED, got ${verdict(plain.out, name)}. Nothing below means anything otherwise.`);
+    fail(`premise: without --finish this fixture must report UNRENDERED, got ${verdict(plain.out, name)}. Nothing below means anything otherwise.`);
   } else {
-    pass(`premise: UNRENDERED without --force (v${v})`);
-    const forced = runTool(tool, tmp, flag, name, ['--force']);
+    pass(`premise: UNRENDERED without --finish (v${v})`);
+    const forced = runTool(tool, tmp, flag, name, ['--finish']);
     const got = verdict(forced.out, name);
-    if (got === 'UNRENDERED') fail(`--force still returns UNRENDERED, so the command this verdict PRINTS cannot clear it. A guard whose stated remedy is a no-op stops the only tool that could fix the state.\n${forced.out}`);
-    else pass(`${got} — --force gets past the verdict`);
+    if (got === 'UNRENDERED') fail(`--finish still returns UNRENDERED, so the command this verdict PRINTS cannot clear it. A guard whose stated remedy is a no-op stops the only tool that could fix the state.\n${forced.out}`);
+    else pass(`${got} — --finish gets past the verdict`);
   }
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+/* ---- I and J: the split of --force (buses-data OA-586, A4) -------------------
+ *
+ * G and H prove `--finish` gets past the verdict. These two prove the other half of the split, which is
+ * the half that stops a lost label being published by somebody who typed the flag for another reason:
+ *   I  `--force` ALONE no longer clears UNRENDERED. It used to be the remedy; if it still is, the flag
+ *      again means more than one thing.
+ *   J  `--finish` on a map that is NOT unrendered changes nothing: the control still answers UP-TO-DATE,
+ *      so the flag cannot be used to rebuild a healthy map.
+ */
+for (const [label, tool, src, rel, flag, name] of [
+  ['I', ROLLOUT, srcTown, path.join('Areas', TOWN), '--town', TOWN],
+  ['I', ROLLOUT_PLACES, srcPlace, path.join('Places', '_standalone', PLACE), '--place', PLACE],
+]) {
+  console.log(`\n${label}  ${name}, unrendered AND --force alone — it must NOT clear the verdict`);
+  const { tmp, manifestPath } = buildFixture(src, rel);
+  unrender(manifestPath);
+  const forced = runTool(tool, tmp, flag, name, ['--force']);
+  const got = verdict(forced.out, name);
+  if (got !== 'UNRENDERED') fail(`--force alone gave ${got}: it is again a way to finish an unrendered map, so it means two things.\n${forced.out}`);
+  else pass('UNRENDERED — --force does not finish it');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+for (const [tool, src, rel, flag, name] of [
+  [ROLLOUT, srcTown, path.join('Areas', TOWN), '--town', TOWN],
+  [ROLLOUT_PLACES, srcPlace, path.join('Places', '_standalone', PLACE), '--place', PLACE],
+]) {
+  console.log(`\nJ  ${name}, rendered AND --finish — nothing to finish, so nothing changes`);
+  const { tmp } = buildFixture(src, rel);
+  const got = verdict(runTool(tool, tmp, flag, name, ['--finish']).out, name);
+  if (got !== 'UP-TO-DATE') fail(`--finish gave ${got} on a map that is not unrendered: it rebuilds a healthy map.`);
+  else pass('UP-TO-DATE — --finish is inert on a rendered map');
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 

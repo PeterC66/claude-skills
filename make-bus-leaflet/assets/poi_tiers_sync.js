@@ -88,7 +88,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs } = require('./cli.js');
+const { parseArgs, die, readJson, resolveBuses, resolvePortal, resolveBy } = require('./cli.js');
 const { selectPois, mergePoiOverlay, OPT_IN_CATS, CAT_SWITCH, categoryOn } = require('./poi_select.js');
 
 const STAGE_JS = path.join(__dirname, 'stage.js');
@@ -400,8 +400,8 @@ function loadTown(buses, town) {
 /**
  * A new S3 run, cloned from the latest, with the merged routes.json. Returns its dir.
  *
- * `by` is the `--by <who>` pass-through (OA-427), already shaped by byArgs(): an
- * empty array when nobody was named, which spreads to nothing. Forwarded, never
+ * `by` is the `--by <who>` pass-through (OA-427), already shaped by resolveBy(): the flag, else
+ * the lock holder's name, and this write is refused when neither exists (OA-586). Forwarded, never
  * interpreted — stage.js is the one authority on what a name may be.
  */
 function writeNewS3(townInfo, mergedRoutes, note, by = []) {
@@ -502,12 +502,11 @@ async function main() {
   const switched = include.owed ? `; poi.include [${include.from.join(', ')}] -> [${include.to.join(', ')}] from the category switch (OA-439)` : '';
   const note = (args.note && args.note !== true) ? String(args.note)
     : `poi.tiers merged from the portal's landmark answer (${mapLabel || where}, OA-233): ${cmp.added.length} added, ${cmp.changed.length} changed, ${cmp.sourceOnly.length} source-only kept, ${cmp.unreachable.length} unreachable and ${cmp.orphaned.length} orphaned not written${switched}. Cloned from S3 ${info.rec.id}; nothing else in routes.json changed.`;
-  const newDir = writeNewS3(info, merged, note, byArgs(args.by));
+  const newDir = writeNewS3(info, merged, note, resolveBy(args, buses, { required: true }));
   console.log(`\n  wrote and committed a new S3 run: ${newDir}`);
-  console.log('  Next: a rollout dry run reads the latest S3 — and it WILL refuse with STALE-INPUTS, because this run');
-  console.log('  is S3 moving. When S2 has not moved since the latest S4 (manifest.json: stages.S2.latest), --force is');
-  console.log('  the intended answer: the geometry it rolls forward is the same geometry. Check S2, then:');
-  console.log(`    node rollout.js --town "${town}" --force --buses "${buses}"`);
+  console.log('  Next: a rollout dry run reads the latest S3. This run is S3 moving over an unmoved S2, which rollout.js');
+  console.log('  builds as an ordinary config rollout with no flag (an S2 that HAD moved is STALE-INPUTS, with no override):');
+  console.log(`    node rollout.js --town "${town}" --buses "${buses}"`);
 }
 
 module.exports = { normRule, normTiers, denormRule, unreachableKeys, unreachableReasons, poiInputs, townCandidateKeys, compareTiers, mergeTiers, compareInclude, switchOf, findPortalMap, portalCredentials, fetchPortalBlock };

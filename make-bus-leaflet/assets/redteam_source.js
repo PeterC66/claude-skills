@@ -605,7 +605,7 @@ const ageDays = d => Math.round((Date.parse(today) - Date.parse(d)) / 86400000);
  *
  * `tokens` is ABSENT here and always will be. This tool decides whether to buy;
  * it does not perform the buy and cannot know what the agent went on to spend. A
- * session that knows may add the field afterwards, on `stage.js --tokens` terms,
+ * session that knows may add the field afterwards, on the terms the deleted `stage.js --tokens` was written on (what the session states),
  * and `redteam_budget.js` prices a buy that carries no measured cost at the
  * budget file's own nominal figure and says which it used. A number invented here
  * would be indistinguishable from a measured one the moment it was in the file.

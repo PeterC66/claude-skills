@@ -137,4 +137,34 @@ function byArgs(v) {
   return v === true ? ['--by'] : ['--by', String(v)];
 }
 
-module.exports = { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs, LAPTOP_BUSES, LAPTOP_PORTAL };
+/*
+ * holderName / resolveBy — WHO is doing this, when nobody said (buses-data OA-586, A8 of the
+ * 2026-10-06 simplification review). `--by` was optional and so was left off: the rate it feeds,
+ * human touches per map-month, was a rate over the half of builds somebody happened to
+ * attribute. The name is already written down for every run that may write a map: `loop/LOCK.d/
+ * holder` in buses-data, whose first line is "<name> <time> ..." — `sched-HHMM` for a loop tick,
+ * the session's own name otherwise — because a map build holds that lock. So a missing `--by`
+ * is read from there, and a write that can find no name at all is REFUSED instead of recording
+ * nobody. byArgs() above is untouched: it still invents nothing, and the name here is one a
+ * person or tick wrote down, never a guess. A first word that starts with a digit is a time
+ * and not a name, and is not used.
+ */
+function holderName(buses) {
+  let raw;
+  try { raw = fs.readFileSync(path.join(buses, 'loop', 'LOCK.d', 'holder'), 'utf8'); } catch { return null; }
+  const m = /^\s*(\S+)/.exec(raw.split('\n')[0] || '');
+  return m && !/^\d/.test(m[1]) ? m[1] : null;
+}
+
+/** The `--by` argv for a tool that is about to write: the flag if given (bare `--by` is forwarded
+ * bare, for stage.js to refuse), else the lock holder's name; with `required` and neither, exit 2. */
+function resolveBy(args, buses, { required = false, d = die } = {}) {
+  const given = byArgs(args.by);
+  if (given.length) return given;
+  const held = holderName(buses);
+  if (held) return ['--by', held];
+  if (required) d('--by is required when writing: pass --by <who> (sched-HHMM for a loop tick, your session name otherwise), or take the loop lock so loop/LOCK.d/holder names you (buses-data OA-586). An unattributed build is how the touches-per-map-month rate went wrong.', 2);
+  return [];
+}
+
+module.exports = { parseArgs, die, readJson, resolveBuses, resolvePortal, byArgs, holderName, resolveBy, LAPTOP_BUSES, LAPTOP_PORTAL };

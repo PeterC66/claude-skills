@@ -766,6 +766,26 @@ function staleInputs(manifest) {
   return out;
 }
 
+/*
+ * inputsMoved — what a moved input MEANS to a rollout (buses-data OA-586, A4 of the 2026-10-06
+ * simplification review). ONE function, because both rollouts ask it and a rule written twice drifts.
+ *
+ * Only S2 is GEOMETRY. A moved S2 is a data change: the rollout would lay the new config over the old
+ * geometry (staleInputs above), so it is REFUSED, and no flag overrides it — the remedy is the stage
+ * order. A moved S3 over an S2 that has not moved is a CONFIG rollout (adopt_config, poi_tiers_sync, a
+ * landmark answer), which is the ordinary way a map changes: the geometry the new config lands on is still
+ * current, and the previous S4 — which still holds the OLD routes.json — is not a build to call up to date.
+ * It is neither refused nor skipped. S3 is not geometry-bearing, so a moved S3 beside a moved S2 is the
+ * refusal, not the build.
+ *
+ * Returns { moved, geometryMoved, configMoved }; `moved` is staleInputs()'s own list, for the message.
+ */
+function inputsMoved(manifest) {
+  const moved = staleInputs(manifest);
+  const geometryMoved = moved.some((x) => x.stage === 'S2');
+  return { moved, geometryMoved, configMoved: moved.length > 0 && !geometryMoved };
+}
+
 // EXTERNAL_GENERATOR — there is exactly one external template, and this constant
 // is what replaced the function that used to CHOOSE between two (2026-09-02).
 //
@@ -854,6 +874,6 @@ function portalFixtureEnv(portalDir, dataDir) {
 
 module.exports = {
   SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, huesAlikeOnMap, owedOnSheet, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
-  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, staleInputs, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
+  gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, staleInputs, inputsMoved, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

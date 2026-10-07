@@ -56,3 +56,32 @@ test('the guard is not a wall: a correct call reaches the estate', () => {
   assert.match(r.stderr, /No matching places/);
   assert.doesNotMatch(r.stderr, /Usage:/);
 });
+
+/* ---- buses-data OA-586: --commit and --by, refused before the estate is read ------------------- */
+test('--commit without --apply is refused: a dry run writes nothing to commit', () => {
+  const r = run(['--commit']);
+  assert.strictEqual(r.status, 2, `exit ${r.status}; stdout: ${r.stdout}`);
+  assert.match(r.stderr, /--commit needs --apply/);
+  assert.doesNotMatch(r.stderr, /No matching places/);
+  assert.doesNotMatch(r.stdout, /DRY RUN/);
+});
+
+test('--apply with no --by and no lock holder is refused before the estate is read', () => {
+  const r = run(['--place', 'Nowhere', '--apply']);
+  assert.strictEqual(r.status, 2, `exit ${r.status}; stdout: ${r.stdout}`);
+  assert.match(r.stderr, /--by is required when writing/);
+  assert.doesNotMatch(r.stderr, /No matching places/);
+});
+
+test('CONTROL: the same --apply with --by gets past the refusal and reaches the estate', () => {
+  const r = run(['--place', 'Nowhere', '--apply', '--by', 'buses-test']);
+  assert.strictEqual(r.status, 2);
+  assert.match(r.stderr, /No matching places/);
+  assert.doesNotMatch(r.stderr, /--by is required/);
+});
+
+test('--finish and --commit are known flags: they are not refused as unknown', () => {
+  const r = run(['--place', 'Nowhere', '--finish']);
+  assert.match(r.stderr, /No matching places/);
+  assert.doesNotMatch(r.stderr, /unknown flag/);
+});

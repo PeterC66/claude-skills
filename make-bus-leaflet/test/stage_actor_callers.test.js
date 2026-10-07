@@ -35,7 +35,8 @@ const path = require('node:path');
  * the same STAGE_JS idiom the other stage suites use. `byArgs` is loaded from the
  * SAME directory, so a mutation of either half is visible to the cases below. */
 const ASSETS = process.env.STAGE_CALLERS_ASSETS || path.join(__dirname, '..', 'assets');
-const { byArgs } = require(path.join(ASSETS, 'cli.js'));
+const { byArgs, resolveBy, holderName } = require(path.join(ASSETS, 'cli.js'));
+const { scratchDir } = require(path.join(__dirname, '..', 'assets', 'scratch'));
 
 /* Every tool that names stage.js as something to SPAWN. The two spellings are the
  * two this estate actually uses — `path.join(SK, 'stage.js')` and the __dirname
@@ -75,10 +76,10 @@ test('the set of stage.js callers is the four this action knows about', () => {
     'a tool that spawns stage.js was added or removed — give it --by, then update this list');
 });
 
-test('every caller requires byArgs rather than shaping the flag itself', () => {
+test('every caller reaches the flag through cli.js (resolveBy, which wraps byArgs) rather than shaping it itself', () => {
   for (const { file, src } of CALLERS) {
     assert.ok(/require\('\.\/cli(\.js)?'\)/.test(src), `${file}: does not require cli.js`);
-    assert.ok(/\bbyArgs\b/.test(src), `${file}: does not use byArgs() — a local ternary is the copy this function exists to prevent`);
+    assert.ok(/\b(byArgs|resolveBy)\b/.test(src), `${file}: uses neither resolveBy() nor byArgs() — a local ternary is the copy these functions exist to prevent`);
   }
 });
 
@@ -119,4 +120,45 @@ test('a bare --by is forwarded bare, so stage.js gives its own refusal', () => {
    * owner, and turning it into `[]` would silently record nobody for an operator
    * who plainly meant to say somebody. */
   assert.deepStrictEqual(byArgs(true), ['--by']);
+});
+
+/* ---- OA-586, A8: --by cannot be omitted --------------------------------------------------------
+ * The name comes from the flag, else from loop/LOCK.d/holder, else a write is refused. byArgs() above
+ * is untouched and still invents nothing; resolveBy() only ever returns a name somebody wrote down. */
+function estateWithHolder(text) {
+  const root = scratchDir('by-');
+  if (text !== null) {
+    fs.mkdirSync(path.join(root, 'loop', 'LOCK.d'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'loop', 'LOCK.d', 'holder'), text);
+  }
+  return root;
+}
+const refuse = () => { throw new Error('REFUSED'); };
+
+test('resolveBy: the flag wins over the lock holder', () => {
+  const root = estateWithHolder('sched-1121 2026-10-07T11:21 reweigh\nexpires: later\n');
+  assert.deepStrictEqual(resolveBy({ by: 'buses-29' }, root, { required: true, d: refuse }), ['--by', 'buses-29']);
+});
+
+test('resolveBy: with no flag it takes the first word of the holder line', () => {
+  const root = estateWithHolder('sched-1121 2026-10-07T11:21 reweigh\nexpires: later\n');
+  assert.deepStrictEqual(resolveBy({}, root, { required: true, d: refuse }), ['--by', 'sched-1121']);
+  assert.strictEqual(holderName(root), 'sched-1121');
+});
+
+test('resolveBy: a holder line that starts with a time names nobody, and a write is refused', () => {
+  const root = estateWithHolder('2026-10-07T11:21 someone\n');
+  assert.strictEqual(holderName(root), null);
+  assert.throws(() => resolveBy({}, root, { required: true, d: refuse }), /REFUSED/);
+});
+
+test('resolveBy: no flag and no lock — a dry run gets nothing, a write is refused', () => {
+  const root = estateWithHolder(null);
+  assert.deepStrictEqual(resolveBy({}, root, { d: refuse }), []);
+  assert.throws(() => resolveBy({}, root, { required: true, d: refuse }), /REFUSED/);
+});
+
+test('resolveBy: a bare --by is forwarded bare even when a lock names somebody, for stage.js to refuse', () => {
+  const root = estateWithHolder('sched-1121 2026-10-07T11:21\n');
+  assert.deepStrictEqual(resolveBy({ by: true }, root, { required: true, d: refuse }), ['--by']);
 });

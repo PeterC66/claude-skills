@@ -54,7 +54,7 @@ const latestRun = town => {
   return s.runs.find(r => r.id === s.latest);
 };
 
-test('a committed stage records how long it took, and what the caller says it spent', () => {
+test('a committed stage records how long it took', () => {
   const town = newTown();
   const dir = started(town);
   // Reach into the pending record and put the start 92 minutes back. Nothing else
@@ -64,13 +64,13 @@ test('a committed stage records how long it took, and what the caller says it sp
   m.stages.S1.pending.startedAt = '2026-09-01T03:35';
   fs.writeFileSync(path.join(town, 'manifest.json'), JSON.stringify(m, null, 2) + '\n');
 
-  const r = commit(town, dir, ['--tokens', '137_000']);
+  const r = commit(town, dir);
   assert.strictEqual(r.status, 0, 'commit failed:\n' + r.stdout + r.stderr);
   const rec = latestRun(town);
   assert.strictEqual(rec.startedAt, '2026-09-01T03:35');
   assert.ok(rec.elapsedMin >= 90, 'elapsedMin was ' + rec.elapsedMin + ', expected about 92');
-  assert.strictEqual(rec.tokens, 137000, 'underscores in --tokens were not stripped');
-  assert.match(r.stdout, /137,000 tokens/, 'the cost is not in the commit line:\n' + r.stdout);
+  assert.strictEqual(rec.tokens, undefined, 'a run record carries a tokens field again');
+  assert.match(r.stdout, /\d+ min/, 'the duration is not in the commit line:\n' + r.stdout);
 });
 
 test('the pending record is cleared, so it cannot lend its clock to the next run', () => {
@@ -108,16 +108,16 @@ test('a pending record naming a DIFFERENT run is not used', () => {
     'an abandoned stage lent its clock to a run that is not its own');
 });
 
-test('--tokens with no number is refused rather than recorded as true', () => {
-  const town = newTown();
-  const dir = started(town);
-  const r = commit(town, dir, ['--tokens']);
-  // EXIT 2, not 1. `references/conventions.md` says 2 is "the SCRIPT was used
-  // wrongly" and 1 is "the thing being checked FAILED"; a valueless --tokens is
-  // the first. This asserted 1 until 2026-09-03, when stage.js's `die` moved onto
-  // `cli.die` and its five usage sites were separated from its fifteen refusals
-  // (OA-232 Tier 2.4). A caller that treats every non-zero as a build failure
-  // would otherwise report a typo as a broken map.
-  assert.strictEqual(r.status, 2, 'a valueless --tokens was not refused as a usage error:\n' + r.stdout + r.stderr);
-  assert.match(r.stdout + r.stderr, /--tokens must be a non-negative number/);
+test('--tokens is deleted and refused, with a number or without one (buses-data OA-586)', () => {
+  /* A flag that is silently ignored is a caller that believes it recorded a cost. EXIT 2, not 1:
+   * `references/conventions.md` says 2 is "the SCRIPT was used wrongly" and 1 is "the thing being
+   * checked FAILED". Nothing reaches the manifest. */
+  for (const argv of [['--tokens', '137_000'], ['--tokens']]) {
+    const town = newTown();
+    const dir = started(town);
+    const r = commit(town, dir, argv);
+    assert.strictEqual(r.status, 2, `${argv.join(' ')} was not refused as a usage error:\n` + r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /--tokens was deleted/);
+    assert.ok(!manifest(town).stages.S1.latest, 'a refused commit still recorded a run');
+  }
 });

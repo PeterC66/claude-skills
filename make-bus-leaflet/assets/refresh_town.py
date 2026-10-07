@@ -18,8 +18,9 @@ person has to drive.
     --town   the town's name as `Areas/<Town>` and `_gtfs/town_prefixes.json` spell it
     --apply  actually write: without it this is a DRY RUN that touches nothing
     --by     who is performing the stages -- `sched-HHMM` for a loop tick, the
-             session's own name otherwise (OA-427). Left off, nobody is recorded,
-             which is honest and is what every run before 2026-09-22 did
+             session's own name otherwise (OA-427). Left off, the first word of
+             loop/LOCK.d/holder in the Buses directory is used, and --apply with neither
+             is refused (OA-586, OA-603): a refresh no longer records nobody
     --root   the Buses directory, if not this laptop's (see cli.resolve_buses)
     --db     a single-region sqlite, for testing against a fixture feed
     --scan   the scan date this refresh is FOR, e.g. 2026-10-01; the grades sidecar
@@ -137,6 +138,39 @@ def by_args(who):
     indistinguishable from a statement the moment it reached the manifest.
     """
     return ["--by", str(who)] if who else []
+
+
+def holder_name(root):
+    """Who holds the loop lock, as `cli.holderName` reads it (buses-data OA-586, OA-603).
+
+    `loop/LOCK.d/holder` in the Buses root: its first line is "<name> <time> ...", the name
+    being `sched-HHMM` for a loop tick and the session's own name otherwise, because a map
+    build holds that lock. A first word that starts with a digit is a time and not a name.
+    None when there is no file or no usable name; this invents nothing.
+    """
+    try:
+        with open(os.path.join(root, "loop", "LOCK.d", "holder"), encoding="utf-8") as fh:
+            first = (fh.read().split("\n") or [""])[0].split()
+    except OSError:
+        return None
+    return first[0] if first and not first[0][0].isdigit() else None
+
+
+def resolve_by(who, root, required=False):
+    """The `--by` to record: the flag if given, else the lock holder's name, else -- when the
+    run is going to write -- a refusal, as `cli.resolveBy` does for the JS writers. An
+    unattributed refresh is how the touches-per-map-month rate went wrong (OA-586), and this
+    was the one writer of stage runs still outside that rule."""
+    if who:
+        return who
+    held = holder_name(root)
+    if held:
+        return held
+    if required:
+        raise Refused("--by is required when writing: pass --by <who> (sched-HHMM for a loop tick, "
+                      "your session name otherwise), or take the loop lock so loop/LOCK.d/holder "
+                      "names you (buses-data OA-586, OA-603).")
+    return None
 
 
 def stage(town_dir, *args):
@@ -541,13 +575,15 @@ def main(argv=None):
     ap.add_argument("--root", default=None, help="the Buses directory")
     ap.add_argument("--db", default=None, help="a single-region sqlite (testing)")
     ap.add_argument("--scan", default=None, help="the scan date this refresh is for, YYYY-MM-DD")
-    ap.add_argument("--by", default=None, help="who is performing the stages (OA-427)")
+    ap.add_argument("--by", default=None, help="who is performing the stages (OA-427); absent, the first word of "
+                                               "loop/LOCK.d/holder, and --apply with neither is refused (OA-603)")
     ap.add_argument("--note", default=None)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
 
     root = cli.resolve_buses(a.root)
+    a.by = resolve_by(a.by, root, required=a.apply)   # before the estate is read, so a refusal touches nothing
     town_dir = os.path.join(root, "Areas", a.town)
     result = {"town": a.town, "root": root, "applied": False, "status": None}
 

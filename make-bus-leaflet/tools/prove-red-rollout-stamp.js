@@ -404,11 +404,13 @@ const ROLLOUT_PLACES = path.join(ROOT, 'assets', 'rollout_places.js');
  * with `--place`: name one and not the other and the harness paired a real place
  * with some other town's folder, which is the fixture bug OA-219 is about, wired
  * in as an argument. The place's town is a property of the place, so it is read
- * off it. `requireTown` because the fixture below builds the nested layout — a
- * standalone place has no town folder to put a manifest in. */
-const placePick = pickPlace(BUSES, argOf('place', null), 'prove-red-rollout-stamp', { requireTown: true });
+ * off it. NOT `requireTown` any more (buses-data OA-603): the fixture below builds whichever
+ * layout the pick has, because the control must borrow a place the CURRENT engine reproduces, and
+ * today no nested place is one — every place under a town trails the engine by design (OA-430), so
+ * the control reached a rebuild and answered DRY-RUN where it must say UP-TO-DATE. */
+const placePick = pickPlace(BUSES, argOf('place', null), 'prove-red-rollout-stamp');
 const PLACE = placePick.name;
-const PLACE_TOWN = placePick.town;
+const PLACE_TOWN = placePick.town;   // null for a standalone place
 const srcPlace = placePick.dir;
 
 if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
@@ -416,24 +418,36 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
 } else {
   function buildPlaceFixture() {
     const tmp = scratchDir('prove-rollout-stamp-p-');
-    const townDst = path.join(tmp, 'Areas', PLACE_TOWN);
-    fs.mkdirSync(townDst, { recursive: true });
-    // findTowns() keys on the TOWN's manifest, and findPlaces() only walks
-    // Places/ under a town it already found. Without this the place is invisible
-    // and the run would exit 2 — a pass for the wrong reason.
-    fs.copyFileSync(path.join(BUSES, 'Areas', PLACE_TOWN, 'manifest.json'), path.join(townDst, 'manifest.json'));
-    const dst = path.join(townDst, 'Places', PLACE);
+    let dst;
+    if (PLACE_TOWN) {
+      const townDst = path.join(tmp, 'Areas', PLACE_TOWN);
+      fs.mkdirSync(townDst, { recursive: true });
+      // findTowns() keys on the TOWN's manifest, and findPlaces() only walks
+      // Places/ under a town it already found. Without this the place is invisible
+      // and the run would exit 2 — a pass for the wrong reason.
+      fs.copyFileSync(path.join(BUSES, 'Areas', PLACE_TOWN, 'manifest.json'), path.join(townDst, 'manifest.json'));
+      dst = path.join(townDst, 'Places', PLACE);
+    } else {
+      // A standalone place has no town: findPlaces() reads Places/<bucket>/<Place>/ from the root.
+      dst = path.join(tmp, 'Places', '_standalone', PLACE);
+    }
     fs.mkdirSync(dst, { recursive: true });
     fs.copyFileSync(path.join(srcPlace, 'manifest.json'), path.join(dst, 'manifest.json'));
     fs.cpSync(path.join(srcPlace, 'ci-reference'), path.join(dst, 'ci-reference'), { recursive: true });
+    // The latest run of EVERY stage the rollout pulls (S1, S2, S3: rollout_places.js PULL_STAGES —
+    // place.json is an S1 output). The fixture held the S3 run only, so the control's S1 pull died with
+    // ENOENT and answered ERROR where it should say UP-TO-DATE (buses-data OA-603). A stage with no
+    // latest run is skipped here and left for the rollout to say, as before.
     const man = loadManifest(dst);
-    const s3 = man.stages && man.stages.S3;
-    const rec = s3 && s3.runs && s3.runs.find((x) => x.id === s3.latest);
-    if (rec) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });
+    for (const stage of ['S1', 'S2', 'S3']) {
+      const st = man.stages && man.stages[stage];
+      const rec = st && st.runs && st.runs.find((x) => x.id === st.latest);
+      if (rec) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });
+    }
     stampCurrent(path.join(dst, 'ci-reference', 'routes.json'), computePlaceEngineVersion());
     return tmp;
   }
-  const placeRoutes = (tmp) => path.join(tmp, 'Areas', PLACE_TOWN, 'Places', PLACE, 'ci-reference', 'routes.json');
+  const placeRoutes = (tmp) => path.join(tmp, ...(PLACE_TOWN ? ['Areas', PLACE_TOWN, 'Places'] : ['Places', '_standalone']), PLACE, 'ci-reference', 'routes.json');
   function runPlaces(tmp, extra = []) {
     const r = spawnSync(process.execPath, [ROLLOUT_PLACES, '--buses', tmp, '--place', PLACE, ...extra],
       { encoding: 'utf8', cwd: path.join(ROOT, 'assets') });

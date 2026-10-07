@@ -23,7 +23,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import {
-  commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, Refused, SCHEMA,
+  commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, sameInkAsAnswered, Refused, SCHEMA,
 } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -182,6 +182,60 @@ console.log('\n5. Answers: one per build, and the gate');
   check('  and the gate itself checks the build too, not only the merge', deliverable({ maps: [{ ...merged.maps[0], answer: acc.maps[0].answer }] }).waiting.join() === 'March');
   const same = mergeAnswers(acc, collect({ busesDir: BUSES, scan: SCAN, io }));
   check('re-collecting the SAME build keeps the answer', deliverable(same).deliver.join() === 'March');
+}
+
+console.log('\n5a. A stamp-only rebuild keeps the answer (OA-584)');
+{
+  const NEW2 = 'v2.61_2026-10-03_0300', NEW3 = 'v2.62_2026-10-04_0300';
+  const body = (v, d, ink) => ({ 'internal.svg': sheet(ink, S(v, d)) });
+  const mk = (runs) => estate({ March: runs });
+  const ctxOf = (io) => ({ busesDir: BUSES, io });
+  const base = mk([run(OLD, body('2.59', '5 Sep 2026', 'a')), run(NEW, body('2.60', '2 Oct 2026', 'b'))]);
+  const acc = answer(collect({ busesDir: BUSES, scan: SCAN, io: base }), 'March', 'accept', { by: 'buses-29', at: 'T1' });
+  const run3 = (ink3) => mk([run(OLD, body('2.59', '5 Sep 2026', 'a')), run(NEW, body('2.60', '2 Oct 2026', 'b')), run(NEW2, body('2.61', '3 Oct 2026', ink3))]);
+
+  /* The case this action exists for: only the stamp differs. */
+  const stampIo = run3('b');
+  const stampNext = collect({ busesDir: BUSES, scan: SCAN, io: stampIo });
+  const carried = mergeAnswers(acc, stampNext, ctxOf(stampIo));
+  const cm = carried.maps[0];
+  check('a stamp-only rebuild leaves the accept standing, so the map is deliverable', deliverable(carried).deliver.join() === 'March', JSON.stringify(deliverable(carried)));
+  check('  with the answer re-pointed at the current build', cm.answer && cm.answer.after === NEW2, cm.answer && cm.answer.after);
+  check('  and a carried note naming the build it was given against', cm.answer && cm.answer.carried && cm.answer.carried.from === NEW && /byte-identical/.test(cm.answer.carried.why), JSON.stringify(cm.answer));
+  check('  and nothing is superseded, because nothing was lost', !(cm.superseded || []).length);
+  check('  and without the rule the map WOULD be asked again — the rule is load-bearing', deliverable(mergeAnswers(acc, stampNext)).waiting.join() === 'March');
+
+  /* A third build, still the same picture: the note keeps the ORIGINAL build. */
+  const chainIo = mk([run(OLD, body('2.59', '5 Sep 2026', 'a')), run(NEW, body('2.60', '2 Oct 2026', 'b')), run(NEW2, body('2.61', '3 Oct 2026', 'b')), run(NEW3, body('2.62', '4 Oct 2026', 'b'))]);
+  const chained = mergeAnswers(carried, collect({ busesDir: BUSES, scan: SCAN, io: chainIo }), ctxOf(chainIo));
+  check('a second stamp-only rebuild carries it again, still naming the first answered build', deliverable(chained).deliver.join() === 'March' && chained.maps[0].answer.carried.from === NEW && chained.maps[0].answer.after === NEW3, JSON.stringify(chained.maps[0].answer));
+
+  /* Ink moved: must supersede. */
+  const movedIo = run3('c');
+  const moved = mergeAnswers(acc, collect({ busesDir: BUSES, scan: SCAN, io: movedIo }), ctxOf(movedIo));
+  check('a rebuild whose ink moved is WAITING again, the old accept kept with its reason', deliverable(moved).waiting.join() === 'March' && /rebuilt as v2\.61/.test(moved.maps[0].superseded[0].why), JSON.stringify(moved.maps[0]));
+  check('  and no answer is left standing', moved.maps[0].answer == null);
+  const wordIo = run3('b build 1.0');
+  check('  the stamp is the ONLY thing neutralised: a "build 1.0" in the body still moves the ink',
+    mergeAnswers(acc, collect({ busesDir: BUSES, scan: SCAN, io: wordIo }), ctxOf(wordIo)).maps[0].answer == null);
+
+  /* The answered build is gone from disk: nothing can be compared. */
+  const prunedIo = mk([run(OLD, body('2.59', '5 Sep 2026', 'a')), run(NEW, { 'internal.svg': null }), run(NEW2, body('2.61', '3 Oct 2026', 'b'))]);
+  const pruned = mergeAnswers(acc, collect({ busesDir: BUSES, scan: SCAN, io: prunedIo }), ctxOf(prunedIo));
+  check('an answered build pruned from disk is WAITING again, because nothing can be compared', deliverable(pruned).waiting.join() === 'March' && pruned.maps[0].answer == null, JSON.stringify(deliverable(pruned)));
+  const goneIo = mk([run(OLD, body('2.59', '5 Sep 2026', 'a')), run(NEW2, body('2.61', '3 Oct 2026', 'b'))]);
+  const gone = mergeAnswers(acc, collect({ busesDir: BUSES, scan: SCAN, io: goneIo }), ctxOf(goneIo));
+  check('  and so is one the manifest no longer lists', deliverable(gone).waiting.join() === 'March');
+
+  /* A sheet added is a change even if the shared sheet matches. */
+  const addIo = mk([run(OLD, body('2.59', '5 Sep 2026', 'a')), run(NEW, body('2.60', '2 Oct 2026', 'b')), run(NEW2, { ...body('2.61', '3 Oct 2026', 'b'), 'external.svg': sheet('x', S('2.61', '3 Oct 2026')) })]);
+  const added = mergeAnswers(acc, collect({ busesDir: BUSES, scan: SCAN, io: addIo }), ctxOf(addIo));
+  check('a sheet that appears in the new build is WAITING again, though the shared sheet matches', deliverable(added).waiting.join() === 'March');
+
+  /* A hold is about the same picture too. */
+  const hold = answer(collect({ busesDir: BUSES, scan: SCAN, io: base }), 'March', 'hold', { by: 'buses-29', note: 'icon doubled', at: 'T1' });
+  check('a HOLD on an unchanged picture stays a hold — it is not quietly dropped', deliverable(mergeAnswers(hold, stampNext, ctxOf(stampIo))).held.join() === 'March');
+  check('sameInkAsAnswered reads false with no answered id', sameInkAsAnswered({ busesDir: BUSES, entry: stampNext.maps[0], answeredId: null, io: stampIo }) === false);
 }
 
 console.log('\n6. The page shows only what moved');

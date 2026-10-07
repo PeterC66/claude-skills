@@ -53,6 +53,15 @@
  * map rebuilt after Peter answered loses the answer — kept under `superseded`,
  * never discarded — because an accept of v3.12 says nothing about v3.13.
  *
+ * EXCEPT WHEN THE REBUILD IS THE SAME PICTURE (buses-data OA-584). Three of five
+ * rollouts of Godmanchester Co-op Cambridge Road on 4–6 October changed nothing but
+ * the footer stamp, and Peter was asked about one picture three times. So when the
+ * answered build and the current one are BOTH on disk and every sheet is byte-identical
+ * after `neutralise()`, the answer is carried forward: `after` re-pointed to the
+ * current build, `carried: { from, why }` naming the build it was first given against.
+ * Anything else — ink moved, a sheet added or dropped, the answered build pruned from
+ * disk — supersedes as before, because nothing can then be compared.
+ *
  * WHERE THINGS GO. The review and its answers are `_gtfs/ink-review_<scan>.json`,
  * tracked, beside the grading it was drawn from. The page and its crops are
  * rebuilt from the sheets on demand and go under `loop/ink-review/<scan>/`, which
@@ -263,11 +272,40 @@ export function withCarried(carried, towns, places) {
 }
 
 /**
- * Carry the answers of an earlier collection forward. An answer survives only if
- * it was given against the SAME build and the map still needs one; otherwise it
- * moves to `superseded` with the reason, and the map is unanswered again.
+ * True when the build an answer was given against and the map's current build are
+ * both on disk and every sheet is byte-identical after the stamp is neutralised —
+ * the same picture, so the answer still describes it. False for everything else,
+ * including a build or sheet the disk no longer holds: S4 folders are gitignored
+ * and pruned, and a sheet nobody can read is not a sheet nobody changed.
+ * `io` is `collect()`'s (`readManifest`, `readSheet`); it reads no clock.
  */
-export function mergeAnswers(prev, next) {
+export function sameInkAsAnswered({ busesDir, entry, answeredId, io }) {
+  if (!answeredId || !entry.after || !entry.dir) return false;
+  if (answeredId === entry.after) return true;
+  const mapDir = path.join(busesDir, entry.dir);
+  const manifest = io.readManifest(mapDir);
+  const runs = (manifest && manifest.stages && manifest.stages.S4 && manifest.stages.S4.runs) || [];
+  const was = runs.find((r) => r.id === answeredId), now = runs.find((r) => r.id === entry.after);
+  if (!was || !now) return false;
+  const svgs = (r) => (r.outputs || []).filter((o) => o.endsWith('.svg')).sort();
+  const names = svgs(now);
+  if (!names.length || names.join('|') !== svgs(was).join('|')) return false;
+  for (const sheet of names) {
+    const a = io.readSheet(path.join(mapDir, was.dir, sheet)), b = io.readSheet(path.join(mapDir, now.dir, sheet));
+    if (a == null || b == null || neutralise(a) !== neutralise(b)) return false;
+  }
+  return true;
+}
+
+/**
+ * Carry the answers of an earlier collection forward. An answer survives when it
+ * was given against the SAME build, or against an earlier build whose every sheet is
+ * byte-identical to the current one after the stamp is neutralised (`carried` says
+ * from which), and the map still needs one; otherwise it moves to `superseded` with
+ * the reason, and the map is unanswered again. `ctx` is `{ busesDir, io }`; without
+ * it only the same-build rule applies, which is what a caller with no disk gets.
+ */
+export function mergeAnswers(prev, next, ctx = null) {
   if (!prev || !Array.isArray(prev.maps)) return next;
   const old = new Map(prev.maps.map((m) => [m.map.toLowerCase(), m]));
   return { ...next, maps: next.maps.map((m) => {
@@ -278,7 +316,13 @@ export function mergeAnswers(prev, next) {
     m = { ...m, ...(p.staged ? { staged: p.staged } : {}), ...(p.stagedBefore ? { stagedBefore: p.stagedBefore } : {}) };
     const superseded = [...(p.superseded || [])];
     if (p.answer) {
-      if (p.answer.after === m.after && m.status === 'ink-moved') return { ...m, answer: p.answer, superseded };
+      if (m.status === 'ink-moved') {
+        if (p.answer.after === m.after) return { ...m, answer: p.answer, superseded };
+        if (ctx && sameInkAsAnswered({ busesDir: ctx.busesDir, entry: m, answeredId: p.answer.after, io: ctx.io })) {
+          const from = (p.answer.carried && p.answer.carried.from) || p.answer.after;
+          return { ...m, answer: { ...p.answer, after: m.after, carried: { from, why: `${m.after} is byte-identical to ${p.answer.after} on every sheet once the build stamp is neutralised` } }, superseded };
+        }
+      }
       superseded.push({ ...p.answer, why: p.answer.after !== m.after ? `rebuilt as ${m.after} after this answer` : `now ${m.status}` });
     }
     return superseded.length ? { ...m, superseded } : m;
@@ -451,7 +495,7 @@ function main() {
   const list = (v) => (typeof v === 'string' ? v.split(',').map((t) => t.trim()).filter(Boolean) : []);
   const named = withCarried(carriedNames(prev), list(args.town),
     list(args.place).length ? resolvePlaces(list(args.place), diskPlaces(busesDir)) : []);
-  const review = mergeAnswers(prev, collect({ busesDir, scan, towns: named.towns, places: named.places, io: diskIo }));
+  const review = mergeAnswers(prev, collect({ busesDir, scan, towns: named.towns, places: named.places, io: diskIo }), { busesDir, io: diskIo });
   writeFileSync(file, JSON.stringify(review, null, 2) + '\n');
   const counts = ['ink-moved', 'no-ink'].map((s) => `${review.maps.filter((m) => m.status === s).length} ${s}`);
   const other = review.maps.filter((m) => m.status !== 'ink-moved' && m.status !== 'no-ink');

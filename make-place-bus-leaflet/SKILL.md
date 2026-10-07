@@ -284,6 +284,8 @@ Run it from anywhere inside the Buses tree. `%TSK%` is the town skill's assets f
 ## Review (end of every session)
 Fold lessons into this SKILL / `references/gotchas.md`; record durable state in the project memory (`project_bus_leaflets.md` / the place-skill memory). Flag out-of-scope items rather than silently fixing. This step is itself a standing rule.
 
+In an interactive session, finish by running `/close-out` in buses-data: it is the one place the close-out (open actions, leftovers, glossary, lessons, tidy up) is written, and this section carries only what is specific to this skill. An unattended run does not run it.
+
 **End your final message with the cost tag**, on a line of its own, so buses-data's `BusMapsUK/ai-cost/measure-ai-tokens.mjs` charges the session's tokens to this place: `cost-tag: [setup:<place>]` for its first build, `cost-tag: [update:<place>]` for any later work, where `<place>` is its folder name under `Areas/<Town>/Places/` or `Places/_standalone/`. Several places are comma-separated inside one bracket; engine work that was most of the session is `cost-tag: [dev]`.
 
 ## Reference files (load on demand)

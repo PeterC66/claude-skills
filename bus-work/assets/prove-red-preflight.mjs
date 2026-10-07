@@ -277,6 +277,27 @@ function runWith(fixture, opts = {}) {
   rmSync(fx.root, { recursive: true, force: true });
 }
 
+// CASE 12b — the two checks the pre-commit hook gave up (buses-data OA-581) are
+// asked here instead, and a refusal to look is never a pass. The checkers live in
+// buses-data and this harness cannot reach them, so what it pins is the wiring:
+// each arm exists, the dead-link one asks about the PUSH, and both declare exit 2
+// as cannot tell. Dropped from the manifest, the hook no longer asks and nothing
+// else does until CI — the move from "every commit" to "never".
+{
+  const fx = makeRepo({ manifest: null, pushed: ['Development Docs/open-actions/assemble.mjs'] });
+  const m = manifestFor(fx.repo);
+  const arm = (id) => m && m.checks.find((c) => c.id === id);
+  check('moved checks: the dead-link arm asks about the push', !!arm('retired-action-links') && arm('retired-action-links').args.includes('--push'), JSON.stringify(arm('retired-action-links')));
+  check('moved checks: the exemption arm is in the manifest', !!arm('exemption-lists') && arm('exemption-lists').args.some((a) => /check-exemption-lists\.mjs$/.test(a)), JSON.stringify(arm('exemption-lists')));
+  for (const id of ['retired-action-links', 'exemption-lists']) {
+    check(`moved checks: ${id} declares exit 2 as cannot tell`, !!arm(id) && (arm(id).cannotTell || []).includes(2));
+    check(`moved checks: ${id} is in the cheap tier, asked on every push`, !!arm(id) && !arm(id).tier && !arm(id).when);
+    const refused = arm(id) && runCheck({ ...arm(id), cmd: NODE, args: ['-e', 'process.exit(2)'] }, fx.repo);
+    check(`moved checks: ${id} exiting 2 is UNANSWERED, never a pass`, !!refused && refused.verdict === 'UNANSWERED', refused ? refused.verdict : 'no arm');
+  }
+  rmSync(fx.root, { recursive: true, force: true });
+}
+
 // CASE 13 — the portal's vendored fixtures are asked on their own, against the
 // portal's origin/main (buses-data OA-445). The board prints this join and keeps
 // it out of its exit code, so a preflight reading only that exit called a push

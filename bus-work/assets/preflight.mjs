@@ -387,6 +387,15 @@ function builtIn(repo) {
          * committed tree plus whatever the caller has staged, and a claim is
          * never staged by the tool that writes it. */
         { id: 'backlog-index', label: 'the backlog index matches every committed action file', cmd: 'node', args: ['Development Docs/open-actions/assemble.mjs', '--check', '--from-index'] },
+        /* The two checks the pre-commit hook ran until buses-data OA-581, moved here
+         * because a fault in either costs a billed red only if it reaches a push, and
+         * this is the one place asked before every push: push_main.mjs, the loop's
+         * hourly job, pushes on exit 0 only, and a hand push is told to run this first.
+         * Both declare exit 2 as cannot tell, so a refusal to look is UNANSWERED and
+         * never a pass. `--push` judges the tree HEAD makes against every action file
+         * the push deletes; an exemption list is asked of the index, as CI asks it. */
+        { id: 'retired-action-links', label: 'no tracked document links to an open action this push deletes', cmd: 'node', args: ['Documentation/check-retired-action-links.mjs', '--push'], cannotTell: [2] },
+        { id: 'exemption-lists', label: 'every file an exemption list names is tracked', cmd: 'node', args: ['.github/scripts/check-exemption-lists.mjs', '--root', '.'], cannotTell: [2] },
         { id: 'doc-coverage', label: 'every working document is reachable from live work', cmd: 'node', args: ['Documentation/check-doc-coverage.mjs'] },
         { id: 'directory-coverage', label: 'every map has an answer to does somebody else map this town', cmd: 'node', args: ['BusMapsUK/bus-map-directory/coverage.mjs', '--check'] },
         TOOLS && { id: 'exclusion-fields', label: 'a town declares a route off in notOnLeaflet[] and nowhere else', cmd: 'node', args: [`${TOOLS}/check-exclusion-fields.mjs`] },

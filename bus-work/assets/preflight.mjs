@@ -753,7 +753,7 @@ export function report(result, quiet) {
   if (iv && iv.defer && !iv.urgent) {
     L.push('');
     L.push(`DEFERRED — the last push run started ${Math.round(iv.ageMin)} min ago (${iv.at}, per ${iv.source}), and pushes here wait ${iv.minutes} min between runs.`);
-    L.push(`  Do NOT push. The commits stay on local main and the loop's next hourly tick carries them; about ${Math.ceil(iv.waitMin)} min until a push would go.`);
+    L.push(`  Do NOT push. The commits stay on local main and the hourly push_main.mjs job carries them; about ${Math.ceil(iv.waitMin)} min until a push would go.`);
     L.push('  No check was run: they are asked of the whole batch when it goes. For a red main or a cross-repository pairing only, re-run with --urgent "<why>".');
     if (iv.pace) L.push(`  ${paceLine(iv.pace)}`);
     L.push('');

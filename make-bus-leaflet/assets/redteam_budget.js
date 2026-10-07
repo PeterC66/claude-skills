@@ -19,7 +19,7 @@
  * engine ships no default: a missing file means NO BUDGET IS STATED, and this
  * says so rather than inventing one. An invented budget would be indistinguishable
  * from a decided one the moment it was in a run record, which is the argument
- * `stage.js` makes about `--tokens` and this file makes again.
+ * `stage.js` once made about `--tokens` (deleted, buses-data OA-586) and this file makes again.
  *
  * WHAT RUNNING OUT MEANS, AND IT IS THE POINT OF THE ROW. A BUY with no budget
  * left is not a failure and must never be a red. It is a CHORE: the map waits,

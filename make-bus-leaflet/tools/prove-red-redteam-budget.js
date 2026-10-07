@@ -18,7 +18,7 @@
  *      red, nothing is asserting that August's spend is not September's, and a
  *      budget that accumulates for ever refuses every buy by the third month.
  *   2. THE NOMINAL PRICE. Price an unmeasured buy at zero. This is the dangerous
- *      one: it is invisible until the month a buy carries no `--tokens`, and it
+ *      one: it is invisible until the month a buy carries no measured `tokens`, and it
  *      turns a budget into decoration. The estate's records carry NO measured
  *      cost at all today, so this mutation would be free in production.
  *   3. THE COVERAGE COUNT. Report every S6 run as recorded. That is the

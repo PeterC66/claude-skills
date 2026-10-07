@@ -121,7 +121,7 @@ function seedPrevS4(destDir, prevS4Dir, s3Carry) {
  * one: `rollout.js`'s own STALE-INPUTS refusal tells the operator that `--force`
  * will *"roll the OLD geometry forward anyway"*, and `--force` is the only window
  * in which the two halves can differ at all — OA-225's guard refuses every other
- * one. The dry run was the half keeping that promise. So the APPLY is corrected to
+ * one. (OA-586 deleted that meaning of `--force`: a moved S2 is now refused with no override.) The dry run was the half keeping that promise. So the APPLY is corrected to
  * the rollout rule seedPrevS4 already states — same data, new engine, the previous
  * S4's copy wins — and both halves now call this function with the same arguments.
  * Divergence stops being something two lists have to agree about and becomes

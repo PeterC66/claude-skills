@@ -266,7 +266,7 @@ console.log(`\nG  ${TOWN}, stale stamp, --apply — a stamp-only map is left alo
   const tmp = buildFixture();
   editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
   const before = snapshot(tmp);
-  const { out, code } = runRollout(tmp, ['--apply']);
+  const { out, code } = runRollout(tmp, ['--apply', '--by', 'prove-red']);
   const v = verdict(out);
   if (v !== 'STAMP-STALE') fail(`expected STAMP-STALE, got ${v}. --apply has taken a stamp-only map into a rebuild.\n${out}`);
   else pass('STAMP-STALE under --apply');
@@ -293,7 +293,7 @@ console.log(`\nK  ${TOWN}, stale stamp AND S2 moved since the S4 — STALE-INPUT
   const tmp = buildFixture();
   editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
   editManifest(tmp, (j) => { const r = latestS4(j); r.basedOn = Object.assign({}, r.basedOn, { S2: 'prove-red-not-the-latest' }); });
-  const { out, code } = runRollout(tmp, ['--apply']);
+  const { out, code } = runRollout(tmp, ['--apply', '--by', 'prove-red']);
   const v = verdict(out);
   if (v !== 'STALE-INPUTS') fail(`expected STALE-INPUTS, got ${v}. The stamp test has bypassed the data-moved guard.\n${out}`);
   else pass('STALE-INPUTS');
@@ -309,11 +309,67 @@ console.log(`\nL  ${TOWN}, stale stamp AND an S4 no S5 rendered — UNRENDERED m
     const ver = String(latestS4(j).version);
     j.stages.S5.runs = j.stages.S5.runs.filter((r) => String(r.version) !== ver);
   });
-  const { out, code } = runRollout(tmp, ['--apply']);
+  const { out, code } = runRollout(tmp, ['--apply', '--by', 'prove-red']);
   const v = verdict(out);
   if (v !== 'UNRENDERED') fail(`expected UNRENDERED, got ${v}. The stamp test has bypassed the unrendered-S4 guard.\n${out}`);
   else pass('UNRENDERED');
   if (code !== 1) fail(`exit ${code}, expected 1`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+/* ---- P to S: the flags OA-586 split, each seen to go the other way -------------------------------
+ * A fast path that skips a build is a claim, so each case here is a dry run that asks WHICH verdict a
+ * state gets: past the fast paths (anything but the four below) or stopped by one.
+ *   P  S3 moved over an unmoved S2 (a config rollout), stamp current -> NOT UP-TO-DATE, NOT STALE-INPUTS,
+ *      with no flag. If it answers UP-TO-DATE the new S3 is invisible, which is why --force used to be needed.
+ *   Q  the control, healthy map + --force alone -> still UP-TO-DATE: --force no longer rebuilds a map.
+ *   R  S2 moved + --force -> still STALE-INPUTS: there is no flag that rolls the old geometry forward.
+ *   S  --apply with no --by and no lock -> exit 2 before the estate is read, tree untouched.
+ */
+const PAST_THE_FAST_PATHS = (v) => !['UP-TO-DATE', 'STAMP-STALE', 'STALE-INPUTS', 'UNRENDERED', '(no verdict line)'].includes(v);
+
+console.log(`\nP  ${TOWN}, S3 moved over an unmoved S2 — a config rollout builds with no flag`);
+{
+  const tmp = buildFixture();
+  editManifest(tmp, (j) => { const r = latestS4(j); r.basedOn = Object.assign({}, r.basedOn, { S3: 'prove-red-older-s3' }); });
+  const { out } = runRollout(tmp);
+  const v = verdict(out);
+  if (!PAST_THE_FAST_PATHS(v)) fail(`got ${v}. A moved S3 must get past UP-TO-DATE and STAMP-STALE and must not be STALE-INPUTS.\n${out}`);
+  else pass(`${v} — got past the fast paths with no flag`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nQ  ${TOWN}, healthy map AND --force alone — it does not rebuild an up-to-date map`);
+{
+  const tmp = buildFixture();
+  const v = verdict(runRollout(tmp, ['--force']).out);
+  if (v !== 'UP-TO-DATE') fail(`--force gave ${v}: it rebuilds a map nothing has moved on, so it means another thing again.`);
+  else pass('UP-TO-DATE — --force is not a rebuild');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nR  ${TOWN}, S2 moved AND --force — STALE-INPUTS stands, there is no override`);
+{
+  const tmp = buildFixture();
+  editManifest(tmp, (j) => { const r = latestS4(j); r.basedOn = Object.assign({}, r.basedOn, { S2: 'prove-red-not-the-latest' }); });
+  const v = verdict(runRollout(tmp, ['--force', '--finish']).out);
+  if (v !== 'STALE-INPUTS') fail(`--force --finish gave ${v}: a flag rolls the old geometry forward again.`);
+  else pass('STALE-INPUTS — neither flag overrides it');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+console.log(`\nS  ${TOWN}, --apply with no --by and no lock — refused before the estate is read`);
+{
+  const tmp = buildFixture();
+  editRoutes(tmp, (j) => { j.engine = '30fbffe221'; });
+  const before = snapshot(tmp);
+  const { out, code } = runRollout(tmp, ['--apply']);
+  if (code !== 2) fail(`exit ${code}, expected 2: an unattributed --apply was allowed.\n${out}`);
+  else pass('exit 2');
+  if (!/--by is required when writing/.test(out)) fail(`the refusal does not say why.\n${out}`);
+  else pass('says --by is required');
+  if (!sameTree(before, snapshot(tmp))) fail('a refused --apply wrote to the tree');
+  else pass('the tree is byte-identical');
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
@@ -439,7 +495,7 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     j.engine = 'a0a0a0a0a0';
     fs.writeFileSync(p, JSON.stringify(j, null, 2));
     const before = snapshot(tmp);
-    const { out, code } = runPlaces(tmp, ['--apply']);
+    const { out, code } = runPlaces(tmp, ['--apply', '--by', 'prove-red']);
     const v = placeVerdict(out);
     if (v !== 'STAMP-STALE') fail(`expected STAMP-STALE, got ${v}.\n${out}`);
     else pass('STAMP-STALE under --apply');

@@ -58,17 +58,18 @@
  * THE STEP AFTER THIS ONE NEEDS --force. rollout.js starts by gating the town's
  * previous S4 against the current template and reports UP-TO-DATE if it passes —
  * and it does pass, because that S4 folder still holds the OLD routes.json. The
- * new S3 is invisible to that check. So a config rollout is always:
+ * new S3 is invisible to that check. Since buses-data OA-586 the rollout asks the manifest first: an
+ * S3 newer than the S4 over an unmoved S2 IS a config rollout and builds with no flag, so it is always:
  *
  *   node adopt_config.js --all --set '{...}' --apply
- *   node rollout.js --all --apply --force --bump minor --note "..."
+ *   node rollout.js --all --apply --bump minor --note "..."
  *
  * Zero dependencies (Node core only). See references/changing-the-engine.md §2b.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs } = require('./cli');
+const { parseArgs, resolveBuses, resolveBy } = require('./cli');
 const { spawnSync } = require('child_process');
 const { SK, findTowns, findPlaces, readJson, latestRunDir, parseSetPath, applySetPath } = require(path.join(__dirname, 'gate_lib'));
 
@@ -78,7 +79,7 @@ const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 // WHO PERFORMED THE S3 RUN THIS OPENS (OA-427). Forwarded, never interpreted:
 // stage.js is the one authority on what a name may be, so a bad one fails there.
-const BY = byArgs(args.by);
+const BY = resolveBy(args, BUSES, { required: APPLY });   // OA-586: the flag, else the lock holder, else refused
 /* --set-file <path> — the same JSON, read from a UTF-8 FILE.
  *
  * Use this, not --set, for anything containing an en-dash or a middot — which is
@@ -184,8 +185,8 @@ for (const t of targets) {
   console.log('   committed ' + path.basename(dir));
 }
 
-if (APPLY) console.log('\nNow render them:\n  node "%SK%\\rollout.js" --all --apply --force --bump minor --note "..."'
-  + '\n(--force is required: rollout.js gates the PREVIOUS S4, which still holds the old routes.json, and would otherwise report UP-TO-DATE.)');
+if (APPLY) console.log('\nNow render them:\n  node "%SK%\\rollout.js" --all --apply --bump minor --note "..."'
+  + '\n(No --force: the new S3 is newer than the S4, which rollout.js reads as a config rollout. --force is only for publishing past a lost label you have read.)');
 }
 
 if (require.main === module) main();

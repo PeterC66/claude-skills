@@ -18,7 +18,7 @@
  *
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
- *                    [--note "..."] [--apply] [--force]
+ *                    [--note "..."] [--apply] [--commit] [--finish] [--force]
  *                    [--buses "<dir>"] [--by <who>] [--warnings] [--keep "<dir>"] [--json "<file>"] [--help]
  *
  * `--json <file>` also writes the result as JSON — one verdict per map, clean,
@@ -39,9 +39,21 @@
  * (pin_clock.js) that row is not raised, so the flag is gone and so is its NOT-STAMP-STALE refusal:
  * a map whose sheets all gate PASS but whose stamp is old answers STAMP-STALE, which is a clean
  * verdict in the shadow report, and `--apply` leaves it alone — nothing is owed, and the next
- * rebuild that really moves ink re-stamps it. `--force` is what remains, and still means four
- * things (rebuild such a map, finish an UNRENDERED S4, roll past STALE-INPUTS, publish past a lost
- * label or a blocking warning); splitting it is A4 of the same review.
+ * rebuild that really moves ink re-stamps it.
+ *
+ * THREE FLAGS, EACH ONE MEANING (buses-data OA-586, A3/A4/A8 of the same review). `--force` meant four
+ * things after OA-574 — rebuild an up-to-date map, finish an UNRENDERED S4, roll past STALE-INPUTS,
+ * publish past a lost label — which is how a lost label gets published by somebody who typed it for
+ * another reason. Now:
+ *   `--force`   publish past a LOST LABEL, a BLOCKING warning or a ratchet REGRESSION, once a person
+ *               has read it. Nothing else; it does not rebuild a map that is up to date.
+ *   `--finish`  finish a map whose S4 is committed with no S5 (UNRENDERED). Given to any other map it
+ *               changes nothing.
+ *   (no flag)   a CONFIG rollout — S3 moved over an unmoved S2 — is an ordinary rebuild. A moved S2 is
+ *               STALE-INPUTS and there is no override: it goes through the stage order.
+ * `--commit` (with --apply) commits what each map's rollout wrote in buses-data, by name and by
+ * pathspec, and reads the commit back (rollout_commit.js); without it the files are left for the
+ * caller, as before.
  *
  * The town `Areas/_portal-fixture/` copies is PINNED-DONOR while the live template
  * differs from buses-data's engine.lock.json pin, in every mode and under --force:
@@ -50,8 +62,10 @@
  *
  * `--by <who>` records WHO performed each stage this run opens and commits —
  * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
- * forwarded to `stage.js` unchanged and validated there; leaving it off records
- * nobody, which is honest and is what every run before 2026-09-22 did.
+ * forwarded to `stage.js` unchanged and validated there. Leaving it off reads the
+ * name from `loop/LOCK.d/holder` in buses-data, which every map build holds; with
+ * no lock and no flag, --apply is refused (exit 2) rather than recording nobody
+ * (buses-data OA-586, A8).
  *
  * Default is DRY RUN: builds each town in a scratch temp dir, reports the
  * label-set diff (gained/lost text vs the currently-shipped SVG) and whether
@@ -77,9 +91,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { parseArgs, resolveBuses, byArgs, die } = require('./cli');
+const { parseArgs, resolveBuses, resolveBy, die } = require('./cli');
+const { commitMap, reportCommit } = require('./rollout_commit');
 const { spawnSync } = require('child_process');
-const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, staleInputs, EXTERNAL_GENERATOR } = require('./gate_lib');
+const { SK, gate, labelDiff, owedOnSheet, findTowns, readJson, latestRunDir, unrenderedS4, inputsMoved, EXTERNAL_GENERATOR } = require('./gate_lib');
 const { owedLines } = require('./owed_at_rebuild');
 const { jsonTarget, writeReport, hardDefects, keptDirOf } = require('./rollout_report');
 const { regressionOn, LEDGER_NAME } = require('./quality_gate');
@@ -116,10 +131,10 @@ const PULL_STAGES = ['S2', 'S3'];
 const S3_CARRY = ['routes.json', 'overrides.json'];
 
 const USAGE = 'Usage: node rollout.js [--town "<Town name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
-  '         [--apply] [--force] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
+  '         [--apply] [--commit] [--finish] [--force] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
   '         [--keep "<dir>"] [--json "<file>"]\n' +
   '  Dry run unless --apply. No --town: consider EVERY town.';
-const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'buses', 'by',
+const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'commit', 'finish', 'force', 'buses', 'by',
   'warnings', 'keep', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
@@ -128,15 +143,23 @@ if (args.help === true) { console.log(USAGE); process.exit(0); }
   if (unknown.length) die(`unknown flag ${unknown.map(k => '--' + k).join(', ')} — refusing, because a rollout with no --town takes every town.\n${USAGE}`);
   if (args._.length) die(`unexpected argument ${args._.map(a => JSON.stringify(a)).join(', ')} — name a town with --town.\n${USAGE}`);
 }
+// --commit commits what --apply wrote; with no --apply there is nothing to commit, and a flag that
+// quietly did nothing is a caller who thinks the checkout is clean. Refused before the estate is read.
+if (args.commit && !args.apply) die('--commit needs --apply: a dry run writes nothing to commit.\n' + USAGE);
 const JSON_OUT = jsonTarget(args, die);
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
+// --force: publish past a lost label, a blocking warning or a ratchet regression, and nothing else (OA-586).
 const FORCE = !!args.force;
+// --finish: finish an UNRENDERED S4, and nothing else. --commit: commit what --apply wrote (rollout_commit.js).
+const FINISH = !!args.finish;
+const COMMIT = !!args.commit;
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
-// WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
-// stage.js is the one authority on what a name may be, so a bad one fails there.
-const BY = byArgs(args.by);
+// WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted — stage.js is the
+// one authority on what a name may be. OA-586: absent, it is the loop lock holder's name, and an
+// --apply that can find no name at all is refused rather than recording nobody.
+const BY = resolveBy(args, BUSES, { required: APPLY });
 // --keep <dir>: dry run only, as in rollout_places.js. Copy each town's built sheets
 // out before the scratch workspace is deleted, so they can be measured and LOOKED AT
 // rather than judged from the label-set diff alone — shadow_rebuild.mjs crops them
@@ -246,20 +269,25 @@ function rolloutOne(t) {
    * whose documented meaning here is "I have reviewed the lost labels", not "use stale
    * geometry". Asking first is what turns a silent wrong sheet into a refusal.
    *
-   * --force still clears it, in the ordinary shape, because a guard whose stated remedy
-   * cannot satisfy it is worse than no guard (the OA-198 lesson two blocks down). What
-   * --force means HERE is named in the message: you are choosing to roll the old
-   * geometry forward. The remedy for everybody else is the documented build order. */
-  const moved = staleInputs(manifest);
-  if (moved.length && !FORCE) {
+   * THERE IS NO FLAG THAT ROLLS THE OLD GEOMETRY FORWARD (buses-data OA-586, A4 of the
+   * 2026-10-06 simplification review). It was `--force`, and the refresh applier's own header
+   * argues the other way: a moved input goes through the stage order, which is the remedy named
+   * below. And ONLY S2 IS GEOMETRY. A moved S3 over an unmoved S2 is a CONFIG rollout — adopt_config,
+   * poi_tiers_sync, a landmark answer — which is the normal way a map changes; the apply pulls the
+   * latest S3 and the geometry it lays it over is still current. That case used to be refused here and
+   * then passed with `--force`, so every config rollout carried a flag whose documented meaning was
+   * something else; it is now an ordinary rebuild, and it skips the UP-TO-DATE and STAMP-STALE fast
+   * paths below, because the previous S4 reproduces under the current template and still holds the
+   * OLD config. */
+  const { moved, geometryMoved, configMoved } = inputsMoved(manifest);
+  if (geometryMoved) {
     return { name: t.name, status: 'STALE-INPUTS',
              detail: moved.map(x => `${x.stage} has moved to ${x.now}`
                         + (x.was ? ` (this S4 was built on ${x.was})` : ' since this S4 was built')).join('; ')
                    + ` — so this is a DATA change, not an engine-only re-render, and the geometry `
                    + `this would roll forward is the previous build's. Go through `
                    + `make-bus-leaflet/references/s4-s5-build-and-render.md (pull S2, then pull S3) in the `
-                   + `claude-skills repository. To roll the OLD geometry forward anyway:  `
-                   + `node rollout.js --town "${t.name}" --apply --force` };
+                   + `claude-skills repository.` };
   }
 
   /* AN UNRENDERED S4 IS NOT UP TO DATE, WHATEVER THE GATES SAY (OA-198). The row
@@ -267,22 +295,25 @@ function rolloutOne(t) {
    * S4 commit, so it produces the same state and its fast path buries it the same
    * way. Fixing one and not the other is how a guard covers a class once rather
    * than completely. See unrenderedS4() in gate_lib.js. */
-  /* AND IT HAS TO YIELD TO --force, OR ITS OWN REMEDY IS A NO-OP (2026-09-01).
+  /* AND IT HAS TO YIELD TO ITS OWN REMEDY, OR THAT REMEDY IS A NO-OP (2026-09-01).
    * This returned unconditionally, and the sentence it printed told you to re-run
    * with `--apply --force` — which reached this same line and returned the same
    * refusal, for ever. Hit for real on High Wycombe during the OA-187/OA-213
    * rollout: a transient file-open error killed the run between the S4 commit and
    * the S5 render, leaving exactly the state this guard is for, and the guard's
    * advice could not clear it. A guard whose stated remedy cannot satisfy it is
-   * worse than no guard: it stops the one tool that could fix the state. --force
-   * is the whole vocabulary this file already has for "a human has read this", and
-   * every other stop here honours it. */
+   * worse than no guard: it stops the one tool that could fix the state.
+   *
+   * THE REMEDY IS `--finish` SINCE buses-data OA-586 (A4), NOT `--force`. It was `--force` while
+   * that flag meant four things; now `--force` only clears a lost label, a blocking warning or a
+   * ratchet regression, and finishing a map whose S4 has no render has a name of its own. It
+   * applies to an UNRENDERED map and to nothing else: given to any other map it changes nothing. */
   const unrendered = unrenderedS4(manifest);
-  if (unrendered && !FORCE) {
+  if (unrendered && !FINISH) {
     return { name: t.name, status: 'UNRENDERED',
              detail: `S4 v${unrendered} is committed and NO S5 run has rendered it, so every byte gate passes against a `
                    + `version that has no JPG on disk. Finish it with:  `
-                   + `node rollout.js --town "${t.name}" --apply --force` };
+                   + `node rollout.js --town "${t.name}" --apply --finish` };
   }
 
   /* THE AREA FIXTURE'S TOWN MOVES WITH THE PIN, NOT WITH THE LIVE TEMPLATE (OA-532).
@@ -305,13 +336,17 @@ function rolloutOne(t) {
   const stampedEngine = rj.engine;
   const allPass = sheetGates.every(([, g]) => g.status === 'PASS');
   const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE;
-  if (isStampStale && !FORCE) {
+  /* A BUILD IS OWED WHEN THE CONFIG MOVED, OR WHEN AN UNRENDERED S4 IS BEING FINISHED (OA-586): both
+   * are states in which the previous S4's sheets gate PASS and are nonetheless not the answer. Nothing
+   * else skips the two fast paths below — `--force` no longer rebuilds a map that is up to date. */
+  const buildOwed = configMoved || (FINISH && !!unrendered);
+  if (isStampStale && !buildOwed) {
     return { name: t.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current template is `
                    + `${CURRENT_ENGINE}. NOTHING IS OWED: a stamp-only map is not work (buses-data OA-574). The weekly shadow `
                    + `rebuild records this verdict, and the next rebuild that really moves ink re-stamps the map.` };
   }
-  if (allPass && !FORCE && !isStampStale) {
+  if (allPass && !buildOwed && !isStampStale) {
     return { name: t.name, status: 'UP-TO-DATE',
              detail: sheetGates.map(([n]) => n).join('+')
                    + ' already gate PASS against the current template, and the engine stamp is current' };
@@ -336,8 +371,9 @@ function rolloutOne(t) {
    * geometry, the apply had the latest S2's, and the label diff a human reads
    * described a build that would never be made. See assembleS4Inputs in
    * seed_prev_s4.js for why the APPLY was the half corrected — this tool's own
-   * STALE-INPUTS refusal promises the operator that `--force` rolls the OLD
-   * geometry forward, and `--force` is the only window in which the two can differ.
+   * STALE-INPUTS refusal once promised the operator that `--force` rolls the OLD
+   * geometry forward, the only window in which the two could differ (that flag meaning is
+   * deleted, buses-data OA-586, and a moved S3 over an unmoved S2 now builds with no flag).
    * s3Carry is the town list; rollout_places.js passes its own. */
   const scratch = scratchDir('rollout-');
   fs.mkdirSync(path.join(scratch, 'S4'));
@@ -555,6 +591,7 @@ if (!selected.length) { console.error('No matching towns. --town names: ' + allT
 console.log(`${APPLY ? 'APPLYING' : 'DRY RUN'} rollout over ${selected.length} town(s)${APPLY ? '' : ' (pass --apply to write anything)'}\n`);
 
 const results = [];
+let commitFailed = false;
 for (const t of selected) {
   process.stdout.write(`${t.name}... `);
   let r;
@@ -589,6 +626,11 @@ for (const t of selected) {
   const soft = (r.warnings || []).filter(w => w.severity === 'WARN');
   if (soft.length && args.warnings) for (const w of soft) console.log(`    warn [${w.source}] ${w.text}`);
   else if (soft.length) console.log(`    ${soft.length} non-blocking warning${soft.length > 1 ? 's' : ''} (pass --warnings to see them)`);
+  // --commit (OA-586, A3): the map's tracked files, by name, read back. Only a DONE map: a REVIEW-NEEDED one
+  // stopped after S4 and its half-state is for a person to look at before it goes into git.
+  if (COMMIT && APPLY && r.status === 'DONE') {
+    if (!reportCommit(commitMap({ root: BUSES, dir: t.dir, subject: `rollout: ${t.name} ${path.basename(r.s4Dir)} on engine ${CURRENT_ENGINE}`, body: NOTE + '\nBy: ' + (BY[1] || '(nobody named)') }))) commitFailed = true;
+  } else if (COMMIT && APPLY && r.s4Dir) console.log('    rollout: --commit left this map uncommitted: its S4 is written and the run did not finish (' + r.status + ')');
 }
 
 console.log('\nSummary: ' + results.map(r => `${r.name}=${r.status}`).join(', '));
@@ -619,7 +661,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // PINNED-DONOR (OA-532) is a refusal only when somebody NAMED the town to write it;
 // an estate sweep passes over it the way it passes over UP-TO-DATE.
 const namedDonorApply = APPLY && !args.all && args.town.length > 0 && results.some(r => r.status === 'PINNED-DONOR');
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0) || namedDonorApply;
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0) || namedDonorApply || commitFailed;
 process.exit(bad ? 1 : 0);
 }
 

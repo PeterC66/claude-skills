@@ -27,7 +27,6 @@
  *   pull  <S1..S6> [destDir]           copy latest outputs of a stage into destDir (def cwd)
  *   latest <S1..S6>                    print latest run dir (abs) of a stage
  *   commit <S1..S6> <runDir> --outputs a,b,c [--based-on "S2=<id>;S3=<id>"] [--note "..."]
- *         [--tokens <n>]                 record what this stage cost the session
  *         [--by <who>]                   record WHO performed it — `sched-HHMM` for a
  *                                        loop tick, any other name for a person's session
  *         refuses when a declared output is not in <runDir> (--force-missing overrides)
@@ -59,14 +58,12 @@
  * saying so — which `status` prints as OPEN, and which is true rather than
  * noise; and **a run committed before this landed, or a folder assembled by
  * hand, carries no timing at all**, which reads as "not recorded" and never as
- * zero. `--tokens <n>` records what the CALLER states and nothing estimates a
- * value when it is absent: only the session knows what it spent, and a guessed
- * cost would be indistinguishable from a measured one the moment it was in the
- * file. Both rollouts get the timing for free — they drive `new` and `commit`.
+ * zero. Both rollouts get the timing for free — they drive `new` and `commit`. There is no
+ * `--tokens`: it recorded what a caller stated, nothing ever stated it, and no manifest held
+ * one when it was deleted (buses-data OA-586, A8 of the 2026-10-06 simplification review).
  *
  * WHO PERFORMED THE STAGE (OA-427, item 3 of R9). `--by <who>` writes `by` onto
- * the run record, on exactly the terms `--tokens` is written on: what the caller
- * states, never a guess, and simply absent when nobody said. It is here because
+ * the run record: what the caller states, never a guess, and simply absent when nobody said. It is here because
  * the one number the process review is judged on — *human touches per map-month*
  * — could not be measured at all: `routine_numbers.mjs` prints a refusal saying
  * so in as many words, because git says "Peter Cooper" for a commit Peter made
@@ -157,7 +154,7 @@ const ACTOR_MAX = 64;
  * are both a caller INTENDING to say who performed the stage and failing to; if
  * that were quietly treated as "nobody said", the record would be indistinguishable
  * from a run nobody ever tried to attribute, and the count built on it would be
- * silently low. `--tokens` refuses a value it cannot use for the same reason.
+ * silently low.
  *
  * A NEWLINE OR A TAB IS REFUSED rather than stripped, because the actor is printed
  * on one line by `status` and read by a join in `routine_numbers.mjs`, and a name
@@ -788,14 +785,7 @@ function main() {
      * from `isoNow()`, so this subtracts like from like. Recorded only when the
      * pending record names THIS run; otherwise the fields are simply absent, which
      * is the honest answer for every run committed before 2026-09-01 and for any
-     * run whose folder was made by hand.
-     *
-     * TOKENS CANNOT BE MEASURED FROM IN HERE and are not estimated. A stage is
-     * driven by a session, and only the session knows what it spent, so `--tokens`
-     * records what the caller states and nothing invents a value when it is
-     * absent. A number written nowhere is better than a number written wrongly:
-     * an estimated cost would be indistinguishable from a measured one the moment
-     * it was in the file. */
+     * run whose folder was made by hand. */
     const utc = (s) => Date.parse(String(s) + ':00Z');   // isoNow() is 'YYYY-MM-DDTHH:MM', UTC
     const pend = sx.pending;
     if (pend && pend.id === id && pend.startedAt) {
@@ -805,11 +795,7 @@ function main() {
         rec.elapsedMin = Math.round((to - from) / 60000);
       }
     }
-    if (f.tokens != null) {
-      const t = Number(String(f.tokens).replace(/[_,]/g, ''));
-      if (!Number.isFinite(t) || t < 0) die('--tokens must be a non-negative number; got ' + JSON.stringify(f.tokens), 2);
-      rec.tokens = Math.round(t);
-    }
+    if (f.tokens !== undefined) die('--tokens was deleted (buses-data OA-586): nothing ever wrote it and no manifest holds one. Drop it from the call.', 2);
     /* WHO PERFORMED IT (OA-427). An explicit `--by` on the commit wins; otherwise
      * the actor `new` recorded is inherited, and only when the pending record names
      * THIS run — the same condition the clock above is trusted under, and for the
@@ -1096,7 +1082,6 @@ function main() {
     if (sx.pending && sx.pending.id === id) delete sx.pending;
     saveManifest(townDir, m);
     const cost = [rec.elapsedMin != null ? rec.elapsedMin + ' min' : null,
-      rec.tokens != null ? rec.tokens.toLocaleString('en-GB') + ' tokens' : null,
       rec.by ? 'by ' + rec.by : null].filter(Boolean).join(', ');
     console.log(`committed ${st} ${id}${rec.version ? ' (v' + rec.version + ')' : ''} — ${outputs.length} output(s)${cost ? '  [' + cost + ']' : ''}`);
     // OA-329 fault A — see refreshLatestMirror() above for why this is here, why
@@ -1119,7 +1104,6 @@ function main() {
        * the one moment the number is actually useful while you wait for it. */
       const r = s.runs.find(x => x.id === s.latest);
       const cost = !r ? [] : [r.elapsedMin != null ? r.elapsedMin + ' min' : null,
-        r.tokens != null ? r.tokens.toLocaleString('en-GB') + ' tokens' : null,
         r.by ? 'by ' + r.by : null].filter(Boolean);
       console.log(`  ${k} ${s.name.padEnd(9)} latest=${latest}${n ? `  [${n} run(s)]` : '  [no runs]'}`
         + (cost.length ? `  cost ${cost.join(', ')}` : '')

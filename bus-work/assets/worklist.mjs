@@ -1132,7 +1132,7 @@ for (const { row: mapRow, place } of engineStale) {
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     do: [ // OA-574: no third step. A STAMP-STALE verdict is nothing owed, and the --rebuild-stale flag that wrote it is gone
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — if it says STAMP-STALE or UP-TO-DATE nothing is owed (a stamp-only map is not work, OA-574) and there is no write to run' },
-      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes, when the dry run showed the ink moving; stops on a lost label, which is to be reviewed, never forced' },
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply --commit`, note: 'writes and commits the map by pathspec (OA-586), when the dry run showed the ink moving; stops on a lost label, which is to be reviewed, never forced. It never pushes' },
     ],
   });
 }

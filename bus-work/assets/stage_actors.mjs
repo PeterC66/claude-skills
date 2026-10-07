@@ -14,7 +14,7 @@
  * assuming. A commit is not: one commit can carry six stages or none, and the
  * bulk of a map's cost never reaches git at all, because S4, S5, S6 and `_latest/`
  * are gitignored. A stage is exactly one span of work with one performer, which is
- * why `stage.js` already records its clock and its tokens there.
+ * why `stage.js` already records its clock there.
  *
  * THE VOCABULARY IS THE LOOP'S AND NOTHING HERE INVENTS ONE. A tick is
  * `sched-HHMM` — in the scheduled task and in `loop/LOCK.d/holder`, whose steal
@@ -110,7 +110,7 @@ export const defaultReadManifests = ({ busesDir, skillsAssets }) => {
 
 /**
  * Flatten one manifest into its committed run records, as
- * `[{ stage, id, at, by, kind, elapsedMin, tokens }]`.
+ * `[{ stage, id, at, by, kind, elapsedMin }]`.
  *
  * `at` IS THE COMMIT INSTANT AND THE RUN ID IS NOT USED FOR IT. `stage.js` writes
  * the id from LOCAL time and `at` from UTC, and it says at length in its own
@@ -131,7 +131,6 @@ export function runsOf(manifest) {
         by: r.by == null ? null : String(r.by),
         kind: actorKind(r.by),
         elapsedMin: r.elapsedMin == null ? null : r.elapsedMin,
-        tokens: r.tokens == null ? null : r.tokens,
       });
     }
   }

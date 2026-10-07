@@ -1562,7 +1562,7 @@ async function main() {
       console.log('  INDEX STALE (gating): ' + r.name + ' -- ' + d.file + ' was written by ' + d.script + ' v' + d.saidBy
         + ' and the script on disk is v' + d.current + '. The byte gate cannot see this: it redraws the sheet from THAT file.');
     }
-    console.log('    re-derive it with:  node rollout_places.js --place "' + r.name + '" --apply --force --refresh-index --asof <YYYY-MM-DD>');
+    console.log('    re-derive it with:  node rollout_places.js --place "' + r.name + '" --apply --refresh-index --asof <YYYY-MM-DD>');
   }
   /* OA-210 — the feed half, named in full for the same reason as the script half:
    * the cell can hold one word and a sheet can have both problems. Printed for the
@@ -1575,7 +1575,7 @@ async function main() {
         + ' and _gtfs/feed_info_' + d.region + '.json is now ' + d.current
         + '. Its trip counts are of a feed that is no longer on disk; nothing else in the estate can see this.');
     }
-    console.log('    re-count it with:  node rollout_places.js --place "' + r.name + '" --apply --force --refresh-index --asof <YYYY-MM-DD>');
+    console.log('    re-count it with:  node rollout_places.js --place "' + r.name + '" --apply --refresh-index --asof <YYYY-MM-DD>');
   }
 
   console.log('\n=== Places (' + places.length + ') === engine: live PLACE template = ' + CURRENT_PLACE_ENGINE + (PIN && PIN.placeEngine ? ', PINNED = ' + PIN.placeEngine + ' (the clock)' : ', no pin, so the live template is the clock'));

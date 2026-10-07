@@ -438,6 +438,81 @@ class ARecordedDecisionConfirmsOnlyWhileTheFeedHoldsStill(unittest.TestCase):
         self.assertEqual([t for t, _, _ in rows], ["CONFIRMED"])
 
 
+class ADeclaredClassOfRoutesIsNotAdjudicatedEveryMonth(unittest.TestCase):
+    """buses-data OA-587: Beaconsfield's school fleet, declared as one `group` entry.
+
+    On the 1 October scan eleven routes that entry names came back as [ADD?] and graded
+    the town ESCALATE, as they had the two months before. The CONTROLS carry the weight:
+    a suppression that also hid a school route nobody had listed, or matched on a name
+    that merely looks like a school service, would be a mute button over the exact
+    question this report exists to ask.
+    """
+
+    GROUP = {"group": "Dedicated school services", "servesTown": True,
+             "routes": ["222 (Windsor - Beaconsfield High School)",
+                        "BHS1 / BHS2 / BHS01 (Beaconsfield High School)"],
+             "reason": "term-time home-to-school contracts"}
+
+    def setUp(self):
+        self.dir = _stubs.scratch("refresh-group-")
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.saved = rr.gq
+        self.addCleanup(setattr, rr, "gq", self.saved)
+
+    def run_town(self, feed, entries, field="notOnLeaflet"):
+        _stubs.write_json(
+            os.path.join(self.dir, "S1-services", "2026-09-06_0644", "verified-services.json"),
+            {"verifiedOn": "2026-09-06", "services": [], field: entries})
+        rr.gq = StubFeed(feed)
+        return rr.diff_town("unused.sqlite", "Testbury", {"prefixes": ["0500"]},
+                            self.dir, today="2026-10-01")["changes"]
+
+    def school_feed(self):
+        return [bods(r, "Imperial Coaches", MON_FRI) for r in ("222", "BHS1", "BHS2", "BHS01")]
+
+    def test_the_declared_members_become_one_CONFIRMED_row_and_the_town_grades_NOTHING(self):
+        rows = self.run_town(self.school_feed(), [dict(self.GROUP)])
+        self.assertEqual([(t, r) for t, r, _ in rows], [("CONFIRMED", "Dedicated school services")])
+        for route in ("222", "BHS1", "BHS2", "BHS01"):
+            self.assertIn(route, rows[0][2])
+        self.assertEqual(rr.classify(rows)[0], "NOTHING")
+
+    def test_a_route_in_no_list_still_raises_beside_the_declared_ones(self):
+        rows = self.run_town(self.school_feed() + [bods("623", "Carousel Buses", MON_FRI)],
+                             [dict(self.GROUP)])
+        self.assertEqual(sorted((t, r) for t, r, _ in rows),
+                         [("ADD?", "623"), ("CONFIRMED", "Dedicated school services")])
+        self.assertEqual(rr.classify(rows)[0], "ESCALATE")
+
+    def test_a_school_looking_name_the_list_does_not_hold_is_not_matched_by_pattern(self):
+        rows = self.run_town(self.school_feed() + [bods("BHS3", "Imperial Coaches", MON_FRI)],
+                             [dict(self.GROUP)])
+        self.assertIn(("ADD?", "BHS3"), [(t, r) for t, r, _ in rows])
+        self.assertEqual(rr.classify(rows)[0], "ESCALATE")
+
+    def test_a_group_the_town_says_does_serve_the_town_is_not_a_declaration(self):
+        g = dict(self.GROUP, servesTown=False)
+        rows = self.run_town(self.school_feed(), [g])
+        self.assertEqual(sorted(t for t, _, _ in rows), ["ADD?"] * 4)
+
+    def test_an_explicit_route_entry_for_a_member_wins_over_the_group(self):
+        e = {"route": "222", "note": "NOT DRAWN: one journey a day"}
+        rows = self.run_town(self.school_feed(), [dict(self.GROUP), e])
+        self.assertEqual(sorted((t, r) for t, r, _ in rows),
+                         [("CONFIRMED", "Dedicated school services"), ("RE-EVAL", "222")])
+
+    def test_the_four_declaring_fields_are_all_read(self):
+        for field in rr.KNOWN_OFF_FIELDS:
+            rows = self.run_town(self.school_feed(), [dict(self.GROUP)], field=field)
+            self.assertEqual([t for t, _, _ in rows], ["CONFIRMED"], field)
+
+    def test_the_list_strings_parse_to_their_route_tokens(self):
+        self.assertEqual(rr.group_members(self.GROUP), {"222", "BHS1", "BHS2", "BHS01"})
+        self.assertEqual(rr.group_members({"routes": ["no clean token here"]}),
+                         {"no clean token here"})
+        self.assertEqual(rr.group_members({}), set())
+
+
 def change(tag, route="7", msg="a change"):
     """One row of `diff_town`'s `changes` list, in the shape it really returns."""
     return (tag, route, msg)

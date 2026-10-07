@@ -369,6 +369,45 @@ def known_off_routes(vs):
             found.setdefault(str(r),(field,known_off_reason(entry),field!=KNOWN_OFF_CANONICAL))
     return found,skipped
 
+# A DECLARED CLASS OF ROUTES (buses-data OA-587). Beaconsfield declares its school fleet as
+# ONE entry -- {"group": "Dedicated school services", "routes": ["222 (Windsor - ...)",
+# "BHS1 / BHS2 / BHS01 (Beaconsfield High School)", ...]} -- which known_off_routes() above
+# must keep skipping (it is held to known_off.js by the parity harness, and a class is not
+# a route). Nothing else read it, so on the 1 October scan eleven of those routes came back
+# as [ADD?] and graded the town ESCALATE for the third month running, over a decision the
+# town's own file had already made.
+#
+# THE MEMBERSHIP TEST IS THE DECLARATION'S OWN LIST, never a pattern on a headsign or an
+# operator: a route is covered only if the list names it, so a school route nobody has
+# listed still raises [ADD?]. A list string is `A / B / C (what they are)`; everything from
+# the first " (" on is description. A string that does not parse to a clean token simply
+# matches no route, which fails toward raising and not toward silence.
+def group_members(entry):
+    """-> the route names an entry's `routes` list declares, as a set of strings."""
+    out=set()
+    for item in entry.get("routes") or []:
+        if not isinstance(item,(str,int)): continue
+        head=str(item).split(" (",1)[0]
+        out.update(t.strip() for t in head.split("/") if t.strip())
+    return out
+
+def known_off_groups(vs):
+    """-> {route: (group name, field)} for every route a `group` entry declares.
+
+    The first declaration wins, in KNOWN_OFF_FIELDS order, as in known_off_routes. An entry
+    with `servesTown: false` is left out for the same reason that function leaves it out.
+    """
+    found={}
+    for field in KNOWN_OFF_FIELDS:
+        entries=vs.get(field)
+        if not isinstance(entries,list): continue
+        for entry in entries:
+            if not isinstance(entry,dict) or entry.get("servesTown") is False: continue
+            name=entry.get("group")
+            if not name or entry.get("route") not in (None,""): continue
+            for r in group_members(entry): found.setdefault(r,(str(name),field))
+    return found
+
 def latest_verified(town_dir):
     cands=sorted(glob.glob(os.path.join(town_dir,"S1-services","*","verified-services.json")))
     return cands[-1] if cands else None
@@ -539,7 +578,7 @@ def diff_town(db, name, cfg, town_dir, today=None):
     # "the monthly scan will keep flagging it as [NEW]". A recurring alarm that is factually
     # wrong is the kind that teaches you to skim the section which will one day carry a real
     # withdrawal, so both conventions now land on RE-EVAL, which is at least true.
-    not_serving={x["route"] for x in vs.get("notOnLeaflet",[]) if x.get("servesTown") is False}
+    not_serving={x["route"] for x in vs.get("notOnLeaflet",[]) if x.get("servesTown") is False and "route" in x}
     not_serving|={str(s["route"]) for s in vs.get("services",[]) if s.get("servesTown") is False}
     # AND THE OTHER TWO CONVENTIONS, added 2026-09-03 after the first pair. There are FOUR
     # ways a town records "we know about this route and deliberately do not draw it", and
@@ -563,6 +602,8 @@ def diff_town(db, name, cfg, town_dir, today=None):
     # `notOnLeaflet` with servesTown NOT false is the shape a town uses to say "it does
     # serve us and we still do not draw it". See known_off() and OA-259.
     known_off,_ko_skipped=known_off_routes(vs)
+    group_off=known_off_groups(vs)
+    in_group={}   # group name -> [(route, days)] the feed carries now; ONE row each, below
     # A SHIPPED CONSOLIDATION: one drawn route standing for several GTFS route names.
     # Wisbech draws First's `excel` and records `variants.subServices: [A, B, C, D]`,
     # because bustimes presents them as the single service "A, B, C, D - excel" and the
@@ -649,6 +690,8 @@ def diff_town(db, name, cfg, town_dir, today=None):
             because=(" - recorded as: "+why.strip()) if why.strip() else ""
             changes.append(decision_change(r, decision_entry(vs, r), feed_fingerprint(g, gdays),
                 f"in BODS ({fmt(gdays)}); this town's {field} already says it is not drawn{because}"))
+        elif r in group_off:
+            in_group.setdefault(group_off[r][0],[]).append((r,fmt(gdays)))
         elif r in consolidated:
             # Drawn already, under the shipped entry that declares it a sub-service.
             pass
@@ -659,6 +702,16 @@ def diff_town(db, name, cfg, town_dir, today=None):
         else:
             extra=f" [+ road geometry]" if g["hasShape"] else ""
             changes.append(("ADD?", r, f"new in BODS: {' / '.join(sorted(g['operators']))}, {fmt(gdays)}{extra}"))
+    # A declared class is SURFACED, once, and not adjudicated: the same argument as
+    # CONFIRMED above (an exclusion nobody re-reads is how a school service that has become
+    # public stays off a sheet), but one row per class and not one per member, because
+    # twelve identical rows are what made a person skim this section. CONFIRMED, so the
+    # town grades on whatever ELSE the feed shows.
+    for name,members in in_group.items():
+        listed=", ".join(f"{r} ({d})" for r,d in sorted(members))
+        changes.append(("CONFIRMED", name,
+            f"{len(members)} route(s) in BODS are declared by this town's file as '{name}', which it does not draw: {listed}. "
+            f"A route in the feed that is not in that list still raises [ADD?]."))
     # shipped routes missing from GTFS
     for r,rows in shipped.items():
         if r not in gtfs:

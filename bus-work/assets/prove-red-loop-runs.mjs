@@ -182,6 +182,19 @@ console.log('\n3d. adhoc tick-counts — a `-busy` stand-down is TRANSPARENT: ne
   check('and raises the row', loopRunItems({ health: across }).length === 1);
 }
 
+console.log('\n3e. OA-576 — an `-idle` tick (dispatched, nothing to do) is TRANSPARENT too');
+{
+  // Map upkeep only: three ticks a day that find nothing are the normal day.
+  const h = health(mkRuns('idle', ['0415-bus-work', '1315-idle', '1915-idle', '2215-idle']));
+  check('idle ticks do not count', h.idle === 0, String(h.idle));
+  check('and raise no row', loopRunItems({ health: h }).length === 0);
+  check('an idle tick is NOT working — lastWorkingAt stays at the bus-work tick',
+    h.lastWorkingAt === new Date(2026, 8, 9, 4, 15).getTime(), new Date(h.lastWorkingAt).toString());
+  const across = health(mkRuns('idle-across', ['0415-bus-work', '1315-none', '1915-idle', '2015-none']));
+  check('none, idle, none still counts TWO — idle does not break a gate-stop run', across.idle === 2, String(across.idle));
+  check('and raises the row', loopRunItems({ health: across }).length === 1);
+}
+
 console.log('\n4. one idle tick is below the threshold');
 {
   const h = health(mkRuns('one', ['0915-bus-work', '1015-none']));

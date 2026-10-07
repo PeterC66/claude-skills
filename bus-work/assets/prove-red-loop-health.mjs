@@ -27,9 +27,7 @@ const NOW = new Date(2026, 9, 3, 8, 0).getTime();   // Sat 3 Oct 2026, 08:00 loc
 const run = (feed, hhmm, day = 3) => ({ name: `2026-10-${String(day).padStart(2, '0')}_${hhmm}-${feed}.md`, feed, at: new Date(2026, 9, day, +hhmm.slice(0, 2), +hhmm.slice(2)).getTime() });
 const idleRuns = ['0215', '0315', '0415', '0515', '0615', '0715'].map((t) => run('none', t));
 const act = (ref, o = {}) => ({ ref, priority: 'P2', decisionPeter: false, waitingDate: null, waitingWhy: null, selectedDate: null, ...o });
-const named = (refs) => ({ name: 'x-none.md', refs });
 const base = (o = {}) => ({
-  idleNaming: [named(['OA-001']), named(['OA-001']), named(['OA-001'])],
   now: NOW, runs: idleRuns, lastRun: { name: '2026-10-03_0715-none.md', headline: 'Chose nothing.' },
   stopFile: false, lock: { present: false }, dirty: [], holdPaths: [], holds: [], drafts: 0,
   ahead: { count: 0, oldestMs: null }, actions: [act('OA-001'), act('OA-002'), act('OA-003'), act('OA-004')], commitments: [], ...o,
@@ -41,7 +39,7 @@ const has = (r, key, level) => r.findings.some((f) => f.key === key && (!level |
 async function suite(m, label, verbose) {
   let bad = 0;
   const check = (name, cond) => { if (cond) { if (verbose) console.log(`  ok  ${name}`); } else { bad++; if (verbose) console.error(`  ✗   ${name}`); } };
-  const { analyse, bucketActions, parseAction, frontMatter, localDate, gather, classifyGate, classifyBusWork, promptScripts, parseResources, parseBusWork, passedOver, render } = m;
+  const { analyse, bucketActions, parseAction, frontMatter, localDate, gather, classifyBusWork, promptScripts, parseResources, parseBusWork, passedOver, render } = m;
 
   // 1. the buckets, and the date edge that decides whether a row is free
   const b = bucketActions([
@@ -90,17 +88,14 @@ async function suite(m, label, verbose) {
   // 4. why the loop is idle
   const blocked = analyse(base({ stopFile: true }));
   check('idle with a blocker is explained by it', has(blocked, 'idle-explained', 'NOTE'));
-  check('idle with nothing free is idle-for-want-of-work', has(analyse(base({ actions: [act('A', { priority: 'Parked' })] })), 'idle-supply', 'NOTE'));
-  check('idle while a P1 is free is at risk', has(analyse(base({ actions: [act('A', { priority: 'P1' }), ...base().actions] })), 'idle-with-free', 'AT RISK'));
-  check('idle while only P2 is free is a note, not a fault', has(analyse(base()), 'idle-free-lower', 'NOTE') && !has(analyse(base()), 'idle-with-free'));
-  const unnamed = analyse(base({ idleNaming: [named([]), named([]), named([])] }));
-  check('three idle runs that name no passed-over row, with P2 free, are at risk', has(unnamed, 'idle-unnamed', 'AT RISK') && !has(unnamed, 'idle-free-lower'));
-  check('naming the rows in the last idle run is only a note, and quotes them', analyse(base({ idleNaming: [named(['OA-250', 'OA-550']), named([]), named([])] })).findings.find((f) => f.key === 'idle-free-lower').text.includes('OA-250, OA-550'));
-  check('fewer than three runs since the rule cannot be blamed', has(analyse(base({ idleNaming: [named([]), named([])] })), 'idle-free-lower', 'NOTE'));
-  check('a P1 free still reads as idle-with-free, not idle-unnamed', has(analyse(base({ actions: [act('A', { priority: 'P1' })], idleNaming: [named([]), named([]), named([])] })), 'idle-with-free', 'AT RISK'));
+  check('stopped ticks with a person\'s live lock are explained by it', has(analyse(base({ lock: lock() })), 'idle-explained', 'NOTE') && !has(analyse(base({ lock: lock() })), 'idle-stopped'));
+  check('stopped ticks with nothing to explain them are at risk', has(analyse(base()), 'idle-stopped', 'AT RISK'));
+  check('the backlog plays no part: no free rows changes nothing', has(analyse(base({ actions: [] })), 'idle-stopped', 'AT RISK'));
+  const dispatchedIdle = analyse(base({ runs: ['0215', '0315', '0415', '0515', '0615', '0715'].map((t) => run('idle', t)) }));
+  check('ticks that dispatched and found nothing (-idle) raise no idle finding', !dispatchedIdle.findings.some((f) => /^idle/.test(f.key)));
   check('one idle tick is not idle', !analyse(base({ runs: [run('none', '0715')] })).findings.some((f) => /^idle/.test(f.key)));
   check('a missed run is at risk', has(analyse(base({ runs: [...idleRuns.slice(0, 5), run('missed', '0715')] })), 'missed', 'AT RISK'));
-  check('the last tick\'s own words are quoted', analyse(base({ actions: [act('A', { priority: 'P1' })] })).findings.find((f) => f.key === 'idle-with-free').text.includes('Chose nothing.'));
+  check('the last tick\'s own words are quoted', analyse(base()).findings.find((f) => f.key === 'idle-stopped').text.includes('Chose nothing.'));
 
   // 5. pushes
   const hoursAgo = (h) => NOW - h * 3600000;
@@ -121,28 +116,14 @@ async function suite(m, label, verbose) {
   // 7. supply and the look-ahead
   const lowFacts = base({ runs: [run('bus-work', '0715')], actions: [act('A'), act('B', { waitingDate: '2026-10-06' }), act('C', { waitingDate: '2026-10-07' }), act('D', { waitingDate: '2026-10-30' })] });
   const low = analyse(lowFacts);
-  check('low supply warns', has(low, 'supply-low', 'AT RISK') && low.supply.free === 1);
+  check('a small backlog is not a loop fault (OA-576)', !low.findings.some((f) => /^supply/.test(f.key)) && low.supply.free === 1);
   check('the look-ahead counts rows coming back inside the window only', low.lookahead.coming.map((c) => c.ref).join() === 'B,C');
   check('the supply path steps up on the right dates', low.lookahead.supplyPath.map((p) => p.free).join() === '1,2,3');
-  check('the warning names the date supply recovers', low.findings.find((f) => f.key === 'supply-low').text.includes('2026-10-07'));
-  check('supply at the threshold does not warn', !has(analyse(base({ runs: [run('bus-work', '0715')], actions: [act('A'), act('B'), act('C')] })), 'supply-low'));
   check('a held row 8 days out is outside a 7-day window', analyse(base({ actions: [act('H', { waitingDate: '2026-10-11' })] })).lookahead.coming.length === 0);
   check('--days widens the window', analyse(base({ days: 14, actions: [act('H', { waitingDate: '2026-10-11' })] })).lookahead.coming.length === 1);
-  check('claims made today are reported as expiring at midnight', has(analyse(base({ actions: [act('A', { selectedDate: '2026-10-03' })] })), 'claims-midnight', 'NOTE'));
+  check('claims made today are counted, not reported', analyse(base({ actions: [act('A', { selectedDate: '2026-10-03' })] })).supply.claimedToday === 1 && !has(analyse(base({ actions: [act('A', { selectedDate: '2026-10-03' })] })), 'claims-midnight'));
   const dated = analyse(base({ commitments: [{ id: 'c1', what: 'x', by: '2026-10-05' }, { id: 'c2', what: 'y', by: '2026-12-01' }, { id: 'c3', what: 'z', by: 'garbage' }] }));
   check('commitments inside the window are listed, others are not', dated.lookahead.dated.map((c) => c.id).join() === 'c1');
-
-  // 7b. can a tick DO work: the gate a tick names, as a kind
-  const kind = (t) => classifyGate(t);
-  check('a portal-write bar is the push, and clears by itself', kind('portal-write CHECK until buses-data pushes its 6 commits').kind === 'push' && kind('needs a portal write, CHECK FIRST').clears === true);
-  check('a claim naming a portal write is still the push', kind('its claim from sched-0815 is live today, and the re-vendor is a portal write').kind === 'push');
-  check('a waiting date is a date and clears by itself', kind('waiting to 2026-10-08').kind === 'date' && kind('WAITING to 2026-10-16 per `--waiting`').clears === true);
-  check('a live claim clears by itself', kind('selected today under a live claim').kind === 'claim');
-  check('editing the loop prompt is its own kind, and does not clear', kind("item 2 edits the scheduled task's own prompt").kind === 'own-prompt' && !kind("item 2 edits the scheduled task's own prompt").clears);
-  check('an ESCALATE grade is a grade', kind('Beaconsfield graded ESCALATE, due 2026-10-13').kind === 'grade');
-  check('a customer trigger is a trigger and does not clear', kind("gated on OA-086's named-customer trigger").kind === 'trigger' && !kind('a named customer asking').clears);
-  check('a person at a keyboard is a person', kind('wants a signed-in editor').kind === 'person' && kind('decision: peter').kind === 'person');
-  check('a gate nobody recognises is other and does not clear', kind('something odd').kind === 'other' && !kind('something odd').clears);
 
   // 7c. the bus-work feed by the prompt's own rules
   const bw = classifyBusWork({
@@ -193,27 +174,22 @@ async function suite(m, label, verbose) {
   check('passedOver: no folder is no rows, never a throw', passedOver(path.join(tmp, 'nowhere')).rows.length === 0);
 
   // 7e. can a tick work: the verdict, from facts the caller gathered
-  const gated = (kinds) => ({ runs: 5, notDue: [], rows: ['OA-001', 'OA-002', 'OA-003', 'OA-004'].map((ref, i) => ({ ref, gate: kinds[i % kinds.length], run: '2026-10-03_0715-none' })) });
-  const person = 'decision: peter';
-  const cannot = analyse(base({ passedOver: gated([person]) }));
-  check('every free row gated by a person, with nothing else to take, is CANNOT and at risk', cannot.capacity.work === 'CANNOT' && has(cannot, 'no-work-available', 'AT RISK'));
-  const waiting = analyse(base({ passedOver: gated([person, person, person, 'portal-write CHECK']) }));
-  check('a row that clears by itself makes it WAITING, a note and not a fault', waiting.capacity.work === 'WAITING' && has(waiting, 'work-waiting', 'NOTE') && !has(waiting, 'no-work-available'));
-  const open = analyse(base({ passedOver: { runs: 5, notDue: [], rows: [{ ref: 'OA-001', gate: person, run: 'x' }] } }));
-  check('rows no tick has gated mean the loop CAN WORK, and are named as open, not finishable', open.capacity.work === 'CAN WORK' && has(open, 'oa-open', 'NOTE') && open.findings.find((x) => x.key === 'oa-open').text.includes('not the same as finishable'));
-  const adhocOnly = analyse(base({ passedOver: gated([person]), adhoc: { ready: ['a.md', 'b.md'], notDue: ['a.md'] } }));
-  check('an ad-hoc file that is not named not due is work', adhocOnly.capacity.work === 'CAN WORK' && adhocOnly.capacity.adhoc.takeable === 1);
-  check('ad-hoc files all named not due are not work', analyse(base({ passedOver: gated([person]), adhoc: { ready: ['a.md'], notDue: ['a.md'] } })).capacity.work === 'CANNOT');
-  const deepWork = analyse(base({ passedOver: gated([person]), busWork: { grades: {}, fixtures: [], rows: [{ key: 'engine-rebuild-March', kind: 'rebuild', towns: ['March'] }] } }));
-  check('a finishable bus-work row is work even when every OA row is gated', deepWork.capacity.work === 'CAN WORK');
-  const barred = analyse(base({ stopFile: true, passedOver: gated([person]) }));
-  check('a BLOCKING finding makes work BARRED, and no "nothing to take" fault is added on top', barred.capacity.work === 'BARRED' && !has(barred, 'no-work-available'));
+  const nothing = analyse(base({ adhoc: { ready: ['a.md'], notDue: ['a.md'] } }));
+  check('nothing to take is NOTHING TO DO, a note and never a fault', nothing.capacity.work === 'NOTHING TO DO' && has(nothing, 'no-work', 'NOTE') && !nothing.findings.some((x) => x.key === 'no-work' && x.level !== 'NOTE'));
+  check('the OA feed is not measured at all', !('oa' in nothing.capacity));
+  const adhocOnly = analyse(base({ adhoc: { ready: ['a.md', 'b.md'], notDue: ['a.md'] } }));
+  check('an ad-hoc file that is not named not due is work', adhocOnly.capacity.work === 'CAN WORK' && adhocOnly.capacity.adhoc.takeable === 1 && !has(adhocOnly, 'no-work'));
+  const deepWork = analyse(base({ busWork: { grades: {}, fixtures: [], rows: [{ key: 'engine-rebuild-March', kind: 'rebuild', towns: ['March'] }] } }));
+  check('a finishable bus-work row is work', deepWork.capacity.work === 'CAN WORK');
+  check('a bus-work feed with nothing finishable is nothing to do', analyse(base({ busWork: { grades: {}, fixtures: [], rows: [] } })).capacity.work === 'NOTHING TO DO');
+  const barred = analyse(base({ stopFile: true, adhoc: { ready: [], notDue: [] } }));
+  check('a BLOCKING finding makes work BARRED, and no "nothing to take" note is added on top', barred.capacity.work === 'BARRED' && !has(barred, 'no-work'));
   check('nothing measured says nothing: no capacity verdict, no capacity findings', analyse(base()).capacity.work === null && analyse(base()).capacity.levers.length === 0);
 
   const lockReason = { need: 'loop-lock', verdict: 'delay', why: 'sched-2315 holds loop/LOCK.d, taken 2m ago' };
-  const lockOnly = analyse(base({ resources: { 'buses-tree': { verdict: 'delay', reasons: [lockReason] }, engine: { verdict: 'delay', reasons: [lockReason] } }, passedOver: gated([person]) }));
+  const lockOnly = analyse(base({ resources: { 'buses-tree': { verdict: 'delay', reasons: [lockReason] }, engine: { verdict: 'delay', reasons: [lockReason] } } }));
   check('a resource barred only by a tick\'s own lock is a run in progress, not a finding, and not BARRED', !lockOnly.findings.some((x) => /^resource-/.test(x.key)) && lockOnly.capacity.work !== 'BARRED' && lockOnly.capacity.resources.barred.every((b) => b.lockOnly));
-  const treeReal = analyse(base({ resources: { 'buses-tree': { verdict: 'check', reasons: [lockReason, { need: 'buses-tree', verdict: 'check', why: '2 uncommitted file(s) here' }] } }, passedOver: gated([person]) }));
+  const treeReal = analyse(base({ resources: { 'buses-tree': { verdict: 'check', reasons: [lockReason, { need: 'buses-tree', verdict: 'check', why: '2 uncommitted file(s) here' }] } }, adhoc: { ready: [], notDue: [] } }));
   check('a resource barred for a real reason is at risk, and the tree makes work BARRED', has(treeReal, 'resource-buses-tree', 'AT RISK') && treeReal.capacity.work === 'BARRED');
   const pushBar = analyse(base({ ahead: { count: 4, oldestMs: NOW - 3600000 }, resources: { 'portal-write': { verdict: 'check', reasons: [{ need: 'portal-write', verdict: 'check', why: 'buses-data has 4 unpushed commit(s)' }] } } }));
   check('portal-write barred by unpushed commits is a note, with the push as a lever', has(pushBar, 'resource-portal-write', 'NOTE') && pushBar.capacity.levers.some((v) => /portal-write/.test(v.text)));
@@ -225,20 +201,15 @@ async function suite(m, label, verbose) {
 
   // 7f. what you can do: the levers, most rows first
   const lev = analyse(base({
-    actions: [act('OA-001'), act('OA-002'), act('OA-003'), act('OA-004'), act('OA-010', { decisionPeter: true, priority: 'P2' }), act('OA-011', { decisionPeter: true, priority: 'P1' }), act('OA-012', { waitingDate: '2026-10-08' })],
-    passedOver: { runs: 5, notDue: [], rows: [{ ref: 'OA-001', gate: 'waiting to 2026-10-08', run: 'x' }, { ref: 'OA-002', gate: "gated on OA-086's named-customer trigger", run: 'x' }, { ref: 'OA-003', gate: 'needs a person', run: 'x' }, { ref: 'OA-004', gate: 'a live claim', run: 'x' }] },
+    holds: [{ ref: 'h1', ageDays: 1 }, { ref: 'h2', ageDays: 2 }], adhoc: { ready: [], notDue: [] },
+    busWork: { grades: { Beaconsfield: 'ESCALATE' }, fixtures: [], rows: [{ key: 'engine-rebuild-Beaconsfield', kind: 'rebuild', towns: ['Beaconsfield'] }] },
   })).capacity.levers;
-  check('the biggest lever is first: two decision: peter rows outrank a lone trigger row', lev[0].rows === 2 && /decision: peter/.test(lev[0].text) && lev[0].refs.join() === 'OA-011,OA-010');
-  check('rows that come back by themselves are last and say there is nothing to do', lev[lev.length - 1].nothing === true && lev[lev.length - 1].move === null && lev[lev.length - 1].refs.length === 2);
-  const lev2 = analyse(base({
-    actions: [act('OA-001'), act('OA-002'), act('OA-003'), act('OA-004'), act('OA-005'), act('OA-010', { decisionPeter: true })],
-    passedOver: { runs: 5, notDue: [], rows: [{ ref: 'OA-001', gate: 'needs a person', run: 'x' }, { ref: 'OA-002', gate: 'needs a person', run: 'x' }, { ref: 'OA-003', gate: 'waiting to 2026-10-08', run: 'x' }, { ref: 'OA-004', gate: 'waiting to 2026-10-08', run: 'x' }, { ref: 'OA-005', gate: 'waiting to 2026-10-08', run: 'x' }] },
-  })).capacity.levers;
-  check('levers run by rows, and a bigger "nothing to do" lever still comes last', lev2.map((v) => v.rows).join() === '2,1,3' && lev2[2].nothing === true);
-  check('a trigger row is told to be Parked', lev.some((v) => /Parked/.test(v.move) && v.refs.join() === 'OA-002'));
-  check('an empty ad-hoc feed with nothing open is a lever', analyse(base({ passedOver: gated([person]), adhoc: { ready: [], notDue: [] } })).capacity.levers.some((v) => /ad-hoc feed is empty/.test(v.text)));
-  const text = render(cannot, NOW);
-  check('the report carries the work verdict and the levers', /CAN A TICK DO WORK\? CANNOT/.test(text) && /What you can do, most rows first:/.test(text));
+  check('the biggest lever is first: two holds outrank one ESCALATE row', lev[0].rows === 2 && /hold/.test(lev[0].text) && /ESCALATE/.test(lev[1].text));
+  check('the empty ad-hoc feed is a lever, says it is the way backlog work reaches the loop, and comes last', /ad-hoc feed is empty/.test(lev[lev.length - 1].text) && /backlog/.test(lev[lev.length - 1].text) && lev[lev.length - 1].nothing === true);
+  check('no lever is about open actions', !lev.some((v) => /decision: peter|Parked|\/oa /.test(`${v.text} ${v.move}`)));
+  const text = render(nothing, NOW);
+  check('the report carries the work verdict and the levers', /CAN A TICK DO WORK\? NOTHING TO DO/.test(text) && /What you can do, most rows first:/.test(text));
+  check('the report calls the backlog what it is, not the loop\'s supply', /Backlog \(not the loop's feed/.test(text) && !/free to take/.test(text));
 
   // 8. real directories: gather() and the CLI
   const root = fs.mkdtempSync(path.join(tmp, 'buses-'));
@@ -317,12 +288,9 @@ const MUTANTS = [
   ['a waiting date TODAY stays held', 'daysBetween(today, a.waitingDate) > 0', 'daysBetween(today, a.waitingDate) >= 0'],
   ['a claim dated yesterday stays live', 'a.selectedDate === today', 'a.selectedDate <= today'],
   ['Parked rows count as free', "if (/^parked$/i.test(a.priority || '')) b.parked.push(a);\n    else if", 'if (false) b.parked.push(a);\n    else if'],
-  ['idle with a free P1 is no longer at risk', "else if (urgent.length) add('AT RISK'", "else if (false) add('AT RISK'"],
-  ['the unnamed-idle fault needs no three runs', 'f.idleNaming.length >= IDLE_NAMING_RUNS', 'f.idleNaming.length >= 0'],
-  ['the unnamed-idle fault fires when any run names a row', 'f.idleNaming.every((n) => !n.refs.length)', 'f.idleNaming.some((n) => !n.refs.length)'],
-  ['the free-P2 idle note becomes a fault', "add('NOTE', 'idle-free-lower'", "add('AT RISK', 'idle-free-lower'"],
+  ['unexplained stopped ticks are no longer at risk', "else add('AT RISK', 'idle-stopped'", "else add('NOTE', 'idle-stopped'"],
+  ['a person\'s lock no longer explains stopped ticks', "else if (lock.present && !lock.isTick) add('NOTE', 'idle-explained'", "else if (false) add('NOTE', 'idle-explained'"],
   ['a stale push is no longer at risk', 'if (ageMs != null && ageMs > pushStaleMs) {', 'if (false) {'],
-  ['low supply never warns', 'if (free < low) {', 'if (false) {'],
   ['the look-ahead window is ignored', 'if (d <= days) coming.push', 'if (true) coming.push'],
   ['commitments outside the window are listed', 'if (d <= days) dated.push', 'if (true) dated.push'],
   ['engine lag is never raised', "if (el.over.length) add('NOTE', 'engine-lag'", "if (false) add('NOTE', 'engine-lag'"],
@@ -335,9 +303,6 @@ const MUTANTS = [
   ['a non-buses directory passes', 'process.exitCode = 2;\n    return;', 'process.exitCode = 0;\n    return;'],
   ['an untracked file counts as a dirty tree', "'--porcelain', '--untracked-files=no'", "'--porcelain'"],
   // can a tick do work
-  ['the push gate stops clearing by itself', "{ kind: 'push', clears: true,", "{ kind: 'push', clears: false,"],
-  ['a waiting date stops clearing by itself', "{ kind: 'date', clears: true,", "{ kind: 'date', clears: false,"],
-  ['editing the prompt reads as a claim', "{ kind: 'own-prompt', clears: false, re: /own prompt|scheduled task/i }", "{ kind: 'own-prompt', clears: true, re: /own prompt|scheduled task/i }"],
   ['an unattended refresh row is no longer finishable', '(r.unattended ? out.finishable : out.person).push(r.key)', '(r.unattended ? out.person : out.finishable).push(r.key)'],
   ['an ESCALATE rebuild is finishable', 'else if (esc.length) {', 'else if (false) {'],
   ['a fixture rebuild is finishable', 'if (fixtures.has(name)) out.fixture.push(r.key);', 'if (false) out.fixture.push(r.key);'],
@@ -347,15 +312,16 @@ const MUTANTS = [
   ['a line naming several rows gates only the last', 'for (const num of m[1].match(/\\d+/g)) {', 'for (const num of [m[1].match(/\\d+/g).pop()]) {'],
   ['runs before the rule are read', 'x.slice(0, 15) >= RULE_FROM).sort().reverse().slice(0, n);\n    const seen', 'true).sort().reverse().slice(0, n);\n    const seen'],
   ['stood-down runs are read', '(?!busy|missed)', ''],
-  ['no work is never raised', "if (cap.work === 'CANNOT') {", 'if (false) {'],
-  ['time-gated rows read as CANNOT, not WAITING', "(cap.oa && cap.oa.clearing) ? 'WAITING'", "false ? 'WAITING'"],
+  ['nothing to do is never said', "if (cap.work === 'NOTHING TO DO') {", 'if (false) {'],
+  ['nothing to do becomes a fault', "add('NOTE', 'no-work',", "add('AT RISK', 'no-work',"],
+  ['ad-hoc work is not work', '(bw || ad) ? \'CAN WORK\'', '(bw) ? \'CAN WORK\''],
+  ['the empty ad-hoc lever is dropped', 'if (cap.adhoc && cap.adhoc.takeable === 0) lever(', 'if (false) lever('],
   ['a BLOCKING finding no longer bars work', "const blocking = treeBarred || findings.some((x) => x.level === 'BLOCKING');", 'const blocking = false;'],
   ['ad-hoc files named not due count as work', 'takeable: ready.length - notDue.length', 'takeable: ready.length'],
   ['prompt drift is not raised', "if (p.drift === true) add(", "if (false) add("],
   ['a missing worklist no longer blocks', "add(critical ? 'BLOCKING' : 'AT RISK', 'script-missing'", "add('AT RISK', 'script-missing'"],
   ['a lock-only resource is reported as a finding', 'if (b.lockOnly) continue;', ''],
   ['a real tree bar no longer bars work', "if (b.name === 'buses-tree') treeBarred = true;", ''],
-  ['the decision: peter lever is dropped', 'if (peter.length) lever(', 'if (false) lever('],
   ['levers are not ranked by rows', '(a.nothing - b.nothing) || (b.rows - a.rows)', '0'],
   ['a checker exit of 1 is no longer drift', 'drift.status === 1 ? true :', 'drift.status === 99 ? true :'],
 ];

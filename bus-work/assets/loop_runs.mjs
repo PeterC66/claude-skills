@@ -64,6 +64,16 @@
  * working. A stand-down to a PERSON's session stays `-none`: that is loop time
  * the queue really lost, and the row names that holder as its cause.
  *
+ * `idle` IS THE FIFTH, AND TRANSPARENT FOR THE SAME REASON (buses-data OA-576,
+ * Peter, 2026-10-07). Since the loop does map upkeep only, a tick that
+ * dispatched and found no bus-work row it could finish and no ad-hoc file is the
+ * normal day, not a fault: there is no backlog feed left to fall back on. Named
+ * `-none`, three of those a day would keep the `loop-idle` row on the board for
+ * ever and hide the gate-stop it exists to catch. So a tick that got past step 2
+ * and chose nothing names itself `-idle`; like `busy` it neither continues nor
+ * breaks the idle run and is not working. `-none` keeps its meaning: stopped
+ * before dispatch.
+ *
  * THE CADENCE IS DERIVED FROM THE FILENAMES, NOT CONFIGURED. OA-288 asked for a
  * threshold taken from the schedule rather than from taste. The schedule is not
  * readable from here — the cron lives in the desktop app's scheduled-task store,
@@ -164,13 +174,14 @@ export function cadenceMin(runs, fallback = 60) {
 export const UNREACHED = new Set(['none', 'around', 'missed']);
 
 /**
- * A tick that stood down because another tick held a live lock — see the header.
- * Skipped by the idle walk and absent from `working`. Exported for
+ * A tick that stood down because another tick held a live lock, or (`idle`)
+ * dispatched and found nothing to do — see the header. Skipped by the idle walk
+ * and absent from `working`. Exported for
  * `routine_numbers.mjs`, which takes it out of the idle ratio's denominator too.
  */
-export const DEFERRED = new Set(['busy']);
+export const DEFERRED = new Set(['busy', 'idle']);
 
-/** Feeds that did no work at all — every UNREACHED feed except `around`, and `busy`. */
+/** Feeds that did no work at all — every UNREACHED feed except `around`, and `busy` and `idle`. */
 const DID_NOTHING = new Set(['none', 'missed', ...DEFERRED]);
 
 /**

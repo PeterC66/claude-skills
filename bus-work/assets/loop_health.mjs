@@ -21,10 +21,10 @@
  *             a session that is not a tick and whose lease has run out (a tick
  *             never steals from a person's name, so it stalls until removed).
  *   AT RISK   ticks can run, and something will stop them or is already failing
- *             them: the supply of free rows is low, a push has waited too long,
- *             the loop is idling while free rows exist, a lock stamp is suspect.
+ *             them: a push has waited too long, ticks keep stopping before
+ *             dispatch with nothing visible to explain it, a lock stamp is suspect.
  *   NOTE      true and worth knowing, needs nothing: a live lock, holds waiting
- *             on Peter, claims that expire at midnight, dates coming back.
+ *             on Peter, dates coming back.
  *
  * "FREE" IS NOT "FINISHABLE", AND THE COUNT SAYS SO. A row is free when it is not
  * Parked, not `decision: peter`, not held by a `waiting:` date and not claimed
@@ -42,10 +42,16 @@
  * a tick's own live lock being a run in progress and not a bar), and what is there
  * to take in each feed — ad-hoc files not named "not due", bus-work rows (--deep)
  * judged by step 4D's rules (an `unattended` recipe; no unreviewed ESCALATE grade; not under
- * `_portal-fixture/`), and every free P0-P3 OA row against the gate the newest tick
- * that passed it over gave. The result is one word (CAN WORK, WAITING, CANNOT,
- * BARRED) and a list of the things a person can do, most rows released first.
- * "Open" is not "finishable": a row no tick has named a gate for is only untested.
+ * `_portal-fixture/`). The result is one word (CAN WORK, NOTHING TO DO, BARRED) and
+ * a list of the things a person can do, most rows released first.
+ *
+ * THE BACKLOG IS NOT A FEED (buses-data OA-576, Peter, 2026-10-07). The loop does
+ * map upkeep only: ad-hoc files Peter promotes and the bus-work rows with an
+ * unattended recipe. So NOTHING TO DO is the normal day and a NOTE, never a fault,
+ * and the open-actions backlog is reported as information (its counts, the dates
+ * coming back) and no longer as the loop's supply. A tick that dispatched and found
+ * nothing names itself `-idle`, which `loop_runs.mjs` does not count as idle; the
+ * idle finding here is therefore about ticks that STOPPED before dispatch.
  *
  * IT IS READ-ONLY. It claims, writes and commits nothing, so a tick may run it every
  * hour at no cost and a person may run it at any time. By default it opens no
@@ -53,14 +59,14 @@
  * local trees, and the stored-prompt checker) are local. `--deep` also runs
  * `worklist.mjs --json`, which reads the live portal and takes about a minute.
  * The prose it reads is the newest run file's headline, quoted for display only,
- * and the `OA-nnn (passed over: <gate>)` and `<file> (not due: ...)` lines the loop
- * prompt makes every tick write in exactly that form (the worklist reads them too).
+ * and the `<file> (not due: ...)` lines the loop prompt makes every tick write in
+ * exactly that form (the worklist reads them too).
  * Anything else a run file says is never parsed for meaning: run files are written
  * by a fresh session each hour and a reader that depended on their wording would
  * break the first time one phrased it differently.
  *
  * Usage:
- *   node loop_health.mjs [--buses DIR] [--days 7] [--low 3] [--json] [--deep] [--no-probes]
+ *   node loop_health.mjs [--buses DIR] [--days 7] [--json] [--deep] [--no-probes]
  * Exit: 0 = nothing blocking, 1 = at least one BLOCKING finding, 2 = the buses
  * directory could not be read at all (never a pass). `--no-probes` skips the
  * spawned commands (the prompt prerequisites and resources then read "not
@@ -139,28 +145,6 @@ export function bucketActions(actions, today) {
 // ---- can a tick DO work? what the prompt lets it take, against what is there to take ----
 
 /**
- * What a tick says stopped it, as a kind. The first match wins, so the kinds that
- * clear by themselves come before the generic ones. The text classified is the
- * `<gate>` of the `OA-nnn (passed over: <gate>)` line the loop prompt's P2-and-P3
- * rule makes every idle tick write in exactly that form, so reading it is reading a
- * mandated field and not guessing at prose; a gate nothing here recognises is `other`.
- */
-export const GATE_KINDS = [
-  { kind: 'push', clears: true, re: /portal[- ]write|push (?:is |was )?deferred|held push|unpushed/i },
-  { kind: 'date', clears: true, re: /\bwaiting\b|\bHELD\b|not due|\b(?:until|to) 20\d\d-\d\d-\d\d/i },
-  { kind: 'claim', clears: true, re: /\bclaim/i },
-  { kind: 'own-prompt', clears: false, re: /own prompt|scheduled task/i },
-  { kind: 'grade', clears: false, re: /ESCALATE/ },
-  { kind: 'trigger', clears: false, re: /trigger|named customer|customer asking/i },
-  { kind: 'person', clears: false, re: /decision: ?peter|needs a person|signed-in|a person|peter/i },
-];
-
-export function classifyGate(text) {
-  for (const g of GATE_KINDS) if (g.re.test(String(text || ''))) return { kind: g.kind, clears: g.clears };
-  return { kind: 'other', clears: false };
-}
-
-/**
  * The prompt's own rules for the bus-work feed (step 4D), applied to the rows the
  * worklist printed: a `refresh` row is finishable only with an `unattended` block; an
  * `engine-rebuild` row is finishable unless a town in it is graded ESCALATE with no
@@ -192,18 +176,17 @@ const UNIT = {
   'buses-tree': 'every unit that commits in buses-data', 'buses-maps': 'map builds, S6, rollouts and letters',
   engine: 'engine changes', 'portal-write': 'anything that writes to the portal', 'portal-deploy': 'a portal deploy', 'estate-sweep': 'an estate-wide sweep',
 };
-const PRIO = (p) => Number(/^P(\d)/i.exec(p || '')?.[1] ?? 9);
 
 /**
  * Whether a tick CAN work, by the loop prompt's own rules, and what a person can do
  * about it. Every part reads a fact the caller may leave out (a `null` is "not
  * measured here", never a pass): the prompt prerequisites, the resource verdicts, the
- * adhoc, bus-work and OA feeds, and a ranked list of levers. Pushes findings through
+ * adhoc and bus-work feeds, and a ranked list of levers. Pushes findings through
  * `ctx.add` so the verdict sees them.
  */
 export function assessCapacity(f, ctx) {
-  const { add, findings, buckets } = ctx;
-  const cap = { work: null, prereq: null, resources: null, oa: null, busWork: null, adhoc: null, levers: [] };
+  const { add, findings } = ctx;
+  const cap = { work: null, prereq: null, resources: null, busWork: null, adhoc: null, levers: [] };
   const lever = (rows, refs, text, move, nothing = false) => cap.levers.push({ rows, refs, text, move, nothing });
 
   // 1. can the tick execute its own prompt at all
@@ -215,7 +198,7 @@ export function assessCapacity(f, ctx) {
     if (p.drift === true) add('AT RISK', 'prompt-drift', 'The stored `bus-loop` task differs from the prompt block in `loop/README.md`, so ticks execute text nobody has reviewed.', 'From the buses-data root, `node Documentation/check-task-prompt.mjs` shows the difference and `--apply` deploys the README block.');
     if (missing.length) {
       const critical = missing.some((m) => /(?:worklist|assemble)\.mjs$/.test(m));
-      add(critical ? 'BLOCKING' : 'AT RISK', 'script-missing', `The loop prompt tells ticks to run ${missing.length} file${missing.length === 1 ? '' : 's'} that ${missing.length === 1 ? 'is' : 'are'} not on this machine: ${missing.slice(0, 3).map((m) => `\`${m}\``).join(', ')}${missing.length > 3 ? ` and ${missing.length - 3} more` : ''}.${critical ? ' Step 2 or the OA feed cannot run without it.' : ''}`, 'Restore the file (it is in the claude-skills or portal checkout) or edit the prompt block in `loop/README.md` and deploy it.');
+      add(critical ? 'BLOCKING' : 'AT RISK', 'script-missing', `The loop prompt tells ticks to run ${missing.length} file${missing.length === 1 ? '' : 's'} that ${missing.length === 1 ? 'is' : 'are'} not on this machine: ${missing.slice(0, 3).map((m) => `\`${m}\``).join(', ')}${missing.length > 3 ? ` and ${missing.length - 3} more` : ''}.${critical ? ' Step 2 cannot run without it.' : ''}`, 'Restore the file (it is in the claude-skills or portal checkout) or edit the prompt block in `loop/README.md` and deploy it.');
     }
   }
 
@@ -250,55 +233,30 @@ export function assessCapacity(f, ctx) {
   // 4. the bus-work feed (only with --deep: the worklist reads the live portal)
   if (f.busWork) cap.busWork = classifyBusWork(f.busWork);
 
-  // 5. the OA feed: every free P0-P3 row, against the gate the newest tick that named it gave
-  if (f.passedOver) {
-    const named = new Map((f.passedOver.rows || []).map((r) => [r.ref, r]));
-    const rows = buckets.free.filter((a) => /^P[0-3]$/i.test(a.priority || '')).map((a) => {
-      const n = named.get(a.ref); const g = n ? classifyGate(n.gate) : null;
-      return { ref: a.ref, priority: a.priority, headline: a.headline || null, gate: n ? n.gate : null, kind: g ? g.kind : null, clears: g ? g.clears : false, by: n ? n.run : null };
-    }).sort((a, b) => PRIO(a.priority) - PRIO(b.priority) || a.ref.localeCompare(b.ref));
-    const byKind = {};
-    for (const r of rows) if (r.kind) (byKind[r.kind] = byKind[r.kind] || []).push(r.ref);
-    cap.oa = { band: rows.length, open: rows.filter((r) => !r.kind), clearing: rows.filter((r) => r.kind && r.clears).length, persistent: rows.filter((r) => r.kind && !r.clears).length, byKind, ticksRead: f.passedOver.runs || 0, rows };
-  }
-
-  // 6. the verdict on work
-  const measured = cap.oa || cap.busWork || cap.adhoc;
+  // 5. the verdict on work. Nothing to take is the normal day for a loop that does
+  // map upkeep only (OA-576), so it is a NOTE; the backlog is not a feed.
+  const measured = cap.busWork || cap.adhoc;
   if (measured) {
-    const open = cap.oa ? cap.oa.open.length : 0;
     const bw = cap.busWork ? cap.busWork.finishable.length : 0;
     const ad = cap.adhoc ? cap.adhoc.takeable : 0;
     const blocking = treeBarred || findings.some((x) => x.level === 'BLOCKING');
-    cap.work = blocking ? 'BARRED' : (open || bw || ad) ? 'CAN WORK' : (cap.oa && cap.oa.clearing) ? 'WAITING' : 'CANNOT';
-    if (cap.work === 'CANNOT') {
-      add('AT RISK', 'no-work-available', `By the loop prompt's own rules a tick has nothing it can take: ${cap.oa ? `all ${cap.oa.band} free P0 to P3 rows were passed over with a gate that a person, not time, must move` : 'no OA row is free'}${cap.adhoc ? `, ${cap.adhoc.ready} ad-hoc file${cap.adhoc.ready === 1 ? ' is' : 's are'} ready and ${cap.adhoc.notDue} named not due` : ''}${cap.busWork ? `, ${cap.busWork.finishable.length} bus-work rows are finishable` : ', bus-work not measured (add --deep)'}. Ticks will idle until a gate moves.`, 'See "What you can do" below, most rows first.');
-    } else if (cap.work === 'WAITING') {
-      add('NOTE', 'work-waiting', `No tick can take work right now, but ${cap.oa.clearing} of the ${cap.oa.band} free P0 to P3 rows are held by something that clears by itself (a date, the push, a claim).`);
-    } else if (cap.work === 'CAN WORK' && open) {
-      add('NOTE', 'oa-open', `${open} free P0 to P3 row${open === 1 ? ' has' : 's have'} no gate named by any of the last ${cap.oa.ticksRead} ticks, so nothing known stops a tick taking ${open === 1 ? 'it' : 'one'} (open is not the same as finishable: a tick opens a row to find out): ${cap.oa.open.slice(0, 5).map((r) => r.ref).join(', ')}${open > 5 ? ` and ${open - 5} more` : ''}.`);
+    cap.work = blocking ? 'BARRED' : (bw || ad) ? 'CAN WORK' : 'NOTHING TO DO';
+    if (cap.work === 'NOTHING TO DO') {
+      add('NOTE', 'no-work', `Nothing for a tick to take${cap.adhoc ? `: ${cap.adhoc.ready} ad-hoc file${cap.adhoc.ready === 1 ? ' is' : 's are'} ready and ${cap.adhoc.notDue} named not due` : ''}${cap.busWork ? `, and no bus-work row is finishable unattended` : ', and bus-work was not measured (add --deep)'}. Normal for a loop that does map upkeep only: ticks write \`-idle\` and stop.`);
     }
   }
 
-  // 7. what a person can do, most rows first
-  const kinds = cap.oa ? cap.oa.byKind : {};
-  const peter = buckets.peter.slice().sort((a, b) => PRIO(a.priority) - PRIO(b.priority) || a.ref.localeCompare(b.ref));
-  if (peter.length) lever(peter.length, peter.map((a) => a.ref), `${peter.length} row${peter.length === 1 ? ' is' : 's are'} marked \`decision: peter\`, so no tick will open ${peter.length === 1 ? 'it' : 'them'}.`, 'Decide each, then delete its `decision: peter` line, or set `priority: Parked` if you will not get to it.');
-  if (kinds.trigger) lever(kinds.trigger.length, kinds.trigger, `${kinds.trigger.length} free row${kinds.trigger.length === 1 ? ' waits' : 's wait'} on a customer asking, which no tick can bring about, yet each counts as free supply and is re-read every hour.`, 'Set `priority: Parked` on each: the free count then means rows a tick could take.');
-  if (kinds.person) lever(kinds.person.length, kinds.person, `${kinds.person.length} free row${kinds.person.length === 1 ? ' needs' : 's need'} a person at a keyboard (a signed-in editor, a judgement).`, 'Do one in a session: `/oa-look <ref>` sizes it and `/oa <ref>` does it.');
-  if (kinds['own-prompt']) lever(kinds['own-prompt'].length, kinds['own-prompt'], `${kinds['own-prompt'].length} free row${kinds['own-prompt'].length === 1 ? ' edits' : 's edit'} the loop's own prompt, which a tick must not do.`, 'Do it in an interactive session with `/oa <ref>`.');
-  if (kinds.push || (f.ahead && f.ahead.count > 0 && cap.resources && cap.resources.barred.some((b) => b.unpushed))) {
-    const n = (kinds.push || []).length;
-    lever(n, kinds.push || [], `${f.ahead ? f.ahead.count : 'Some'} commit${f.ahead && f.ahead.count === 1 ? '' : 's'} on local \`main\` hold \`portal-write\`, which bars every row that writes to the portal${n ? ` (${n} free row${n === 1 ? '' : 's'} named it)` : ''}.`, 'The next tick pushes once the preflight allows it (exit 3 means deferred, nothing for you to do). To go sooner, push from a session after the preflight exits 0.');
+  // 6. what a person can do, most rows first
+  if (f.ahead && f.ahead.count > 0 && cap.resources && cap.resources.barred.some((b) => b.unpushed)) {
+    lever(0, [], `${f.ahead.count} commit${f.ahead.count === 1 ? '' : 's'} on local \`main\` hold \`portal-write\`, which bars every row that writes to the portal.`, 'push_main.mjs pushes once the preflight allows it (exit 3 means deferred, nothing for you to do). To go sooner, push from a session after the preflight exits 0.');
   }
-  if (cap.busWork && (cap.busWork.escalate.length || kinds.grade)) {
-    const n = cap.busWork.escalate.length + (kinds.grade || []).length;
-    lever(n, [...(kinds.grade || []), ...cap.busWork.escalate], `${n} row${n === 1 ? ' is' : 's are'} stopped by an ESCALATE grade${cap.busWork.towns.length ? ` (${cap.busWork.towns.join(', ')})` : ''}, which only a person reviews.`, 'Read the newest `_gtfs/refresh-grades_<date>.json` for those towns and settle the grade; the rebuild then goes back to the loop.');
-  } else if (kinds.grade) lever(kinds.grade.length, kinds.grade, `${kinds.grade.length} free row${kinds.grade.length === 1 ? ' is' : 's are'} stopped by an ESCALATE grade, which only a person reviews.`, 'Read the newest `_gtfs/refresh-grades_<date>.json` and settle the grade.');
+  if (cap.busWork && cap.busWork.escalate.length) {
+    const n = cap.busWork.escalate.length;
+    lever(n, cap.busWork.escalate, `${n} row${n === 1 ? ' is' : 's are'} stopped by an ESCALATE grade${cap.busWork.towns.length ? ` (${cap.busWork.towns.join(', ')})` : ''}, which only a person reviews.`, 'Read the newest `_gtfs/refresh-grades_<date>.json` for those towns and settle the grade; the rebuild then goes back to the loop.');
+  }
   if (cap.busWork && cap.busWork.fixture.length) lever(cap.busWork.fixture.length, cap.busWork.fixture, `${cap.busWork.fixture.length} map${cap.busWork.fixture.length === 1 ? ' sits' : 's sit'} under \`_portal-fixture/\`, which moves only with a pin bump and so never in a tick.`, 'Rebuild it in a session with the pin bump, or accept that it stays behind.');
   if (f.holds && f.holds.length) lever(f.holds.length, f.holds.map((h) => h.ref), `${f.holds.length} hold${f.holds.length === 1 ? '' : 's'} in \`loop/your-move/\` wait on you.`, 'Answer or retire each; `/triage` checks them against real state.');
-  if (cap.adhoc && cap.adhoc.takeable === 0 && !(cap.oa && cap.oa.open.length)) lever(1, [], 'The ad-hoc feed is empty: it is the one feed whose contents you choose directly.', 'Move a prompt into `loop/adhoc/ready/`; a file there is always taken, a big one a slice at a time.');
-  const soon = [...(kinds.date || []), ...(kinds.claim || [])];
-  if (soon.length) lever(soon.length, soon, `${soon.length} free row${soon.length === 1 ? ' is' : 's are'} held by a date or a claim and come${soon.length === 1 ? 's' : ''} back by themselves.`, null, true);
+  if (cap.adhoc && cap.adhoc.takeable === 0) lever(0, [], 'The ad-hoc feed is empty: it is the one feed whose contents you choose directly, and the only way backlog work reaches the loop.', 'Move a prompt into `loop/adhoc/ready/`; a file there is always taken, a big one a slice at a time.', true);
   cap.levers.sort((a, b) => (a.nothing - b.nothing) || (b.rows - a.rows));
   return cap;
 }
@@ -309,7 +267,6 @@ export function assessCapacity(f, ctx) {
  * @param {object} f
  * @param {number} f.now
  * @param {Array}  f.runs            readRuns() of loop/runs
- * @param {Array}  [f.idleNaming]  idleNaming() of loop/runs: the newest idle run files since the P2-and-P3 rule, each with the refs it passed over
  * @param {string|null} f.lastRun    {name, headline} of the newest run file, or null
  * @param {boolean} f.stopFile
  * @param {object} f.lock            readLoopLock()
@@ -321,15 +278,13 @@ export function assessCapacity(f, ctx) {
  * @param {Array} f.actions          parseAction() results
  * @param {object|null} [f.prereq]   {drift, scripts:[{path,exists}]}: the stored prompt against loop/README.md, and the files the prompt names
  * @param {object|null} [f.resources] the conditions check's per-resource verdicts
- * @param {{runs:number, rows:Array}|null} [f.passedOver] the `OA-nnn (passed over: <gate>)` lines of the newest ticks
  * @param {{ready:string[], notDue:string[]}|null} [f.adhoc]
  * @param {{rows:Array, grades:object, fixtures:string[]}|null} [f.busWork] only with --deep
  * @param {Array<{id:string, what:string, by:string}>} f.commitments
- * @param {number} [f.days=7] [f.low=3] [f.pushStaleHours=5]
+ * @param {number} [f.days=7] [f.pushStaleHours=5]
  */
 export function analyse(f) {
   const days = f.days ?? 7;
-  const low = f.low ?? 3;
   const pushStaleMs = (f.pushStaleHours ?? 5) * 3600000;
   const today = localDate(f.now);
   const findings = [];
@@ -397,19 +352,14 @@ export function analyse(f) {
     add(oldest >= 7 ? 'AT RISK' : 'NOTE', 'holds', `${f.holds.length} hold${f.holds.length === 1 ? '' : 's'} in \`loop/your-move/\` wait on Peter (${f.holds.map((h) => h.ref).join(', ')}), the oldest ${oldest} day${oldest === 1 ? '' : 's'}${f.drafts ? `; plus ${f.drafts} draft${f.drafts === 1 ? '' : 's'} to triage` : ''}. Only a person moves them.`, oldest >= 7 ? 'Triage the oldest hold: answer it, retire it, or change the question.' : null);
   }
 
-  const free = buckets.free.length;
-  const urgent = buckets.free.filter((a) => /^P[01]$/i.test(a.priority || ''));
+  // Consecutive ticks that STOPPED before dispatch. A tick that dispatched and found
+  // nothing is `-idle`, which loopHealth() does not count (OA-576).
   if (health.ran && health.idle >= 2) {
-    const blocked = findings.some((x) => x.level === 'BLOCKING');
+    const blockers = findings.filter((x) => x.level === 'BLOCKING');
     const why = f.lastRun ? ` Last tick (${f.lastRun.name.replace(/\.md$/, '')}) said: "${f.lastRun.headline}"` : '';
-    if (blocked) add('NOTE', 'idle-explained', `${health.idle} consecutive ticks reached no work, which the BLOCKING finding${findings.filter((x) => x.level === 'BLOCKING').length === 1 ? '' : 's'} above explain.${why}`);
-    else if (free === 0) add('NOTE', 'idle-supply', `${health.idle} consecutive ticks reached no work, and no row is free to take: everything is Parked, Peter's, held by a date or claimed today. The loop is idle for want of work, not blocked.${why}`);
-    else if (urgent.length) add('AT RISK', 'idle-with-free', `${health.idle} consecutive ticks reached no work although ${urgent.length} free row${urgent.length === 1 ? ' is' : 's are'} P0 or P1 (${urgent.slice(0, 4).map((a) => a.ref).join(', ')}). Free is not finishable (an engine change owes a re-vendor and rebuild rows), but an urgent row no tick opens is worth reading.${why}`, 'Read the newest file in `loop/runs/` and the P1 re-weigh, and ask whether those rows are really beyond one tick or the feed is being skipped.');
-    else if (f.idleNaming && f.idleNaming.length >= IDLE_NAMING_RUNS && f.idleNaming.every((n) => !n.refs.length)) add('AT RISK', 'idle-unnamed', `${health.idle} consecutive ticks reached no work with ${free} row${free === 1 ? '' : 's'} free to take (none P0 or P1), and none of the last ${IDLE_NAMING_RUNS} idle run files names a row it passed over in the form \`OA-nnn\` (passed over: <gate>) that the loop prompt's P2-and-P3 rule requires. A tick that opens no P2 or P3 row is declining it by habit, which nothing else can see.${why}`, 'Read the newest idle run file, open the top free P2 row yourself, and say whether a tick could have taken a slice of it.');
-    else {
-      const named = f.idleNaming && f.idleNaming[0] ? f.idleNaming[0].refs : [];
-      add('NOTE', 'idle-free-lower', `${health.idle} consecutive ticks reached no work. ${free} row${free === 1 ? ' is' : 's are'} free to take, none P0 or P1. ${named.length ? `The last idle tick named ${named.join(', ')} as passed over, each with a gate: read one and judge whether the gate is real.` : `Too few run files since the P2-and-P3 rule yet to say whether the ticks are opening these rows.`}${why}`);
-    }
+    if (blockers.length) add('NOTE', 'idle-explained', `${health.idle} consecutive ticks stopped before reaching work, which the BLOCKING finding${blockers.length === 1 ? '' : 's'} above explain.${why}`);
+    else if (lock.present && !lock.isTick) add('NOTE', 'idle-explained', `${health.idle} consecutive ticks stopped before reaching work, deferring to the session holding \`loop/LOCK.d\`.${why}`);
+    else add('AT RISK', 'idle-stopped', `${health.idle} consecutive ticks stopped before reaching work and nothing visible from here explains it.${why}`, 'Read the newest `-none` file in `loop/runs/`, which says why that tick stopped.');
   }
   if (f.engineLag && !f.engineLag.error) {
     const el = f.engineLag;
@@ -433,17 +383,10 @@ export function analyse(f) {
   coming.sort((x, y) => x.date.localeCompare(y.date) || x.ref.localeCompare(y.ref));
   const byDate = new Map();
   for (const c of coming) byDate.set(c.date, [...(byDate.get(c.date) || []), c]);
+  const free = buckets.free.length;
   let running = free;
   const supplyPath = [{ date: today, free }];
   for (const [date, rows] of byDate) { running += rows.length; supplyPath.push({ date, free: running, adds: rows.map((r) => r.ref) }); }
-
-  const claimsToday = buckets.claimed.length;
-  if (claimsToday) add('NOTE', 'claims-midnight', `${claimsToday} claim${claimsToday === 1 ? '' : 's'} made today ${claimsToday === 1 ? 'expires' : 'expire'} at local midnight and the row${claimsToday === 1 ? ' becomes' : 's become'} free again.`);
-
-  if (free < low) {
-    const when = supplyPath.find((s) => s.free >= low);
-    add('AT RISK', 'supply-low', `Only ${free} row${free === 1 ? ' is' : 's are'} free to take (warning below ${low}).${when && when.date !== today ? ` Held rows bring it back to ${when.free} on ${when.date}.` : ` Nothing held comes back within ${days} days, so the loop will sit idle unless a row is filed or a decision released.`}`, 'Release a `decision: peter` row, file work, or accept that the loop idles.');
-  }
 
   const dated = [];
   for (const c of f.commitments || []) {
@@ -458,7 +401,7 @@ export function analyse(f) {
   const level = findings.some((x) => x.level === 'BLOCKING') ? 'BLOCKED' : findings.some((x) => x.level === 'AT RISK') ? 'AT RISK' : 'CLEAR';
   return {
     verdict: level, today, health, findings, capacity,
-    supply: { free, held: buckets.held.length, claimedToday: claimsToday, peter: buckets.peter.length, parked: buckets.parked.length, total: (f.actions || []).length },
+    supply: { free, held: buckets.held.length, claimedToday: buckets.claimed.length, peter: buckets.peter.length, parked: buckets.parked.length, total: (f.actions || []).length },
     lookahead: { days, coming, supplyPath, dated },
   };
 }
@@ -482,13 +425,6 @@ export function renderCapacity(c) {
     const b = c.busWork;
     L.push(`  Bus-work    at most ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules (an upper bound: rollout.js is not run, and can still answer STALE-INPUTS for a rebuild); ${b.escalate.length} stopped by an ESCALATE grade, ${b.fixture.length} under _portal-fixture, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
   } else L.push('  Bus-work    not measured (add --deep: it reads the live portal and takes about a minute).');
-  if (c.oa) {
-    const o = c.oa;
-    const kinds = Object.entries(o.byKind).map(([k, v]) => `${v.length} ${k}`).join(', ');
-    L.push(`  OA          ${o.band} free P0 to P3 row${o.band === 1 ? '' : 's'}: ${o.open.length} no tick has named a gate for in the last ${o.ticksRead} (open, not proved finishable), ${o.clearing} gated by time, push or a claim, ${o.persistent} gated by something a person must move${kinds ? ` (${kinds})` : ''}.`);
-    for (const r of o.open.slice(0, 6)) L.push(`                ${r.ref} ${r.priority}  ${r.headline ? (r.headline.length > 90 ? r.headline.slice(0, 87) + '...' : r.headline) : ''}`);
-    if (o.open.length > 6) L.push(`                and ${o.open.length - 6} more`);
-  }
   if (c.levers.length) {
     L.push('');
     L.push('What you can do, most rows first:');
@@ -511,7 +447,7 @@ export function render(r, now) {
     ? `Ticks: last ${new Date(h.lastAt).toTimeString().slice(0, 5)} (${h.ageMin < 180 ? h.ageMin + ' min' : (h.ageMin / 60).toFixed(1) + ' h'} ago), cadence ${h.cadence} min, ${h.idle} consecutive without reaching work${h.lastWorkingAt ? `, last worked ${new Date(h.lastWorkingAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}.`
     : 'Ticks: no run files here.');
   const s = r.supply;
-  L.push(`Supply: ${s.total} actions: ${s.free} free to take, ${s.held} held by a date, ${s.claimedToday} claimed today, ${s.peter} Peter's decision, ${s.parked} Parked. Free is not finishable.`);
+  L.push(`Backlog (not the loop's feed since OA-576; worked in /oa sessions): ${s.total} actions: ${s.free} unclaimed, ${s.held} held by a date, ${s.claimedToday} claimed today, ${s.peter} Peter's decision, ${s.parked} Parked.`);
   L.push('');
   const sorted = r.findings.slice().sort((a, b) => ORDER[a.level] - ORDER[b.level]);
   if (!sorted.length) L.push('Nothing to report.');
@@ -524,7 +460,7 @@ export function render(r, now) {
   const la = r.lookahead;
   L.push(`Next ${la.days} days:`);
   if (la.coming.length) {
-    for (const p of la.supplyPath.slice(1)) L.push(`  ${p.date}: ${p.adds.join(', ')} come${p.adds.length === 1 ? 's' : ''} back (free rows ${p.free})`);
+    for (const p of la.supplyPath.slice(1)) L.push(`  ${p.date}: ${p.adds.join(', ')} come${p.adds.length === 1 ? 's' : ''} back to the backlog`);
   } else L.push('  no held row comes back.');
   for (const c of la.dated) L.push(`  commitment ${c.id}: ${c.what.length > 100 ? c.what.slice(0, 97) + '...' : c.what} (${c.by}${c.inDays < 0 ? `, ${-c.inDays} d overdue` : c.inDays === 0 ? ', today' : `, in ${c.inDays} d`})`);
   return L.join('\n');
@@ -540,21 +476,7 @@ function git(dir, args) {
 /** Newest run file's first bold line, for display only. */
 /** The loop prompt's P2-and-P3 rule (buses-data OA-557) took effect with runs started after this stamp; older run files cannot be blamed for not following it. */
 export const RULE_FROM = '2026-10-03_1300';
-export const IDLE_NAMING_RUNS = 3;
-
-/** The newest idle (-none) run files since RULE_FROM, newest first, each with the OA refs it names as `OA-nnn` (passed over: ...). */
-export function idleNaming(runsDir, n = IDLE_NAMING_RUNS) {
-  try {
-    const files = readdirSync(runsDir).filter((x) => /^\d{4}-\d{2}-\d{2}_\d{4}-none\.md$/.test(x) && x.slice(0, 15) >= RULE_FROM).sort().reverse().slice(0, n);
-    return files.map((name) => {
-      const text = readFileSync(path.join(runsDir, name), 'utf8');
-      const refs = [...new Set([...text.matchAll(/(OA-\d+)`?\s*\(passed over:/g)].map((m) => m[1]))];
-      return { name, refs };
-    });
-  } catch { return []; }
-}
-
-/** The number of newest ticks whose passed-over lines are read for the OA feed's gates. */
+/** The number of newest ticks whose `(not due: ...)` lines are read. */
 export const PASSED_RUNS = 12;
 
 /**
@@ -756,7 +678,6 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
     now,
     runs: readRuns(path.join(loopDir, 'runs')),
     lastRun: newestRun(path.join(loopDir, 'runs')),
-    idleNaming: idleNaming(path.join(loopDir, 'runs')),
     stopFile: existsSync(path.join(loopDir, 'STOP')),
     lock: readLoopLock(busesDir, { now }),
     dirty, staged, holdPaths: heldPaths(files), holds: parsedHolds, drafts: drafts.length,
@@ -777,8 +698,8 @@ function main() {
   }
   const now = Date.now();
   const facts = gather(buses, { now, probes: !args['no-probes'], deep: !!args.deep });
-  const days = Number(args.days); const low = Number(args.low);
-  const r = analyse({ ...facts, ...(Number.isFinite(days) && days > 0 ? { days } : {}), ...(Number.isFinite(low) && low >= 0 && args.low !== undefined ? { low } : {}) });
+  const days = Number(args.days);
+  const r = analyse({ ...facts, ...(Number.isFinite(days) && days > 0 ? { days } : {}) });
   process.stdout.write((args.json ? JSON.stringify(r, null, 2) : render(r, now)) + '\n');
   // `process.exitCode`, not `process.exit()`: a pipe write is asynchronous on Windows.
   process.exitCode = r.findings.some((x) => x.level === 'BLOCKING') ? 1 : 0;

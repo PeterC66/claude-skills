@@ -111,9 +111,19 @@ const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-b
  * all refuses loudly, because in that state every control here is red for the
  * room's reason and reporting the cases would be worse than not running.
  */
+/* AND IT NOW COMES FROM THE ENGINE REPOSITORY'S OWN FIXTURE ESTATE, NOT FROM THE ESTATE UNDER TEST
+ * (buses-data OA-574, A1 of the 2026-10-06 simplification review). The pin is the estate's clock now
+ * and moves weekly, so on the day it moves no live town carries the new stamp: the maps are rebuilt
+ * afterwards, one worklist row each. A donor taken from `--buses` therefore turned every pin bump
+ * into a red push preflight until a town had been rebuilt, which is the 2026-10-03 failure
+ * (da6c6c71) with the order reversed. The fixture estate under test/fixtures/estate is re-stamped
+ * and redrawn by every engine pull request by construction (estate-fixture.js, gated), so it
+ * carries the engine in front of us always. `--buses` still names the estate the OTHER cases read
+ * (places, the portal fixture, the lock); only the one town they borrow moves. */
+const DONOR_ROOT = path.join(__dirname, '..', 'test', 'fixtures', 'estate');
 const { computeEngineVersion } = require('../assets/engine_version');
 function pickDonor() {
-  const areas = path.join(BUSES, 'Areas');
+  const areas = path.join(DONOR_ROOT, 'Areas');
   const current = computeEngineVersion();
   const tried = [];
   for (const name of fs.readdirSync(areas).sort()) {
@@ -129,10 +139,10 @@ function pickDonor() {
     tried.push(`${name} @ ${rj.engine || '(none)'}${hasS5 ? '' : ' (no S5)'}`);
     if (rj.engine === current && hasS5) return name;
   }
-  throw new Error('prove-red-status: no town carries the current engine stamp ' + current
+  throw new Error('prove-red-status: no town in the engine repository\'s fixture estate (' + areas + ') carries the current engine stamp ' + current
     + ' AND a committed S5 run, so every control here would be red for the room\'s reason'
     + ' rather than for the gate\'s.\n  Towns seen: ' + tried.join(', ')
-    + '\n  Rebuild a town onto the current engine, or run this after the next rollout.');
+    + '\n  That estate is re-stamped by the same change that moves the ink: from make-bus-leaflet, npm run fixture:estate -- --apply.');
 }
 const DONOR = pickDonor();
 
@@ -157,7 +167,7 @@ function copyDir(from, to) {
 function scratchTree({ town = DONOR, engine = null, lock = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null, staleS6 = false, mutateInternal = false }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
-  const src = path.join(BUSES, 'Areas', DONOR);
+  const src = path.join(DONOR_ROOT, 'Areas', DONOR);
   fs.mkdirSync(dst, { recursive: true });
   fs.copyFileSync(path.join(src, 'manifest.json'), path.join(dst, 'manifest.json'));
   copyDir(path.join(src, 'ci-reference'), path.join(dst, 'ci-reference'));

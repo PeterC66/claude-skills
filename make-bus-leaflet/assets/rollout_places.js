@@ -30,7 +30,7 @@
  * Usage:
  *   node rollout_places.js [--place "High Wycombe Aldi"]... [--all]
  *                           [--bump minor|major] [--note "..."] [--apply]
- *                           [--force | --rebuild-stale] [--buses "<dir>"]
+ *                           [--force] [--buses "<dir>"]
  *                           [--by <who>] [--keep "<dir>"] [--warnings]
  *                           [--refresh-index --asof YYYY-MM-DD] [--json "<file>"] [--help]
  *
@@ -45,9 +45,8 @@
  * beside it is a whole-estate rebuild. An unknown flag or a positional argument
  * now exits 2 before anything is read; --help prints the usage and exits 0.
  *
- * `--rebuild-stale` rebuilds a place ONLY when its verdict is STAMP-STALE and
- * bypasses nothing — identical to rollout.js's flag; see the paragraph there
- * (buses-data OA-473).
+ * THERE IS NO `--rebuild-stale` (buses-data OA-574): a stamp-only place is not work, `--apply`
+ * leaves it alone, and rollout.js's header says why.
  *
  * `--by <who>` records WHO performed each stage this run opens and commits —
  * `sched-HHMM` for a loop tick, the session's own name otherwise (OA-427). It is
@@ -102,10 +101,10 @@ const CURRENT_PLACE_ENGINE = computePlaceEngineVersion();
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
 const USAGE = 'Usage: node rollout_places.js [--place "<Place name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
-  '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
+  '         [--apply] [--force] [--buses "<Buses dir>"] [--by <who>] [--keep "<dir>"]\n' +
   '         [--warnings] [--refresh-index --asof YYYY-MM-DD] [--json "<file>"]\n' +
   '  Dry run unless --apply. No --place: consider EVERY place.';
-const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
+const FLAGS = new Set(['place', 'all', 'bump', 'note', 'apply', 'force', 'buses', 'by',
   'keep', 'warnings', 'refresh-index', 'asof', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['place'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
@@ -125,14 +124,6 @@ const { assembleS4Inputs, staleS3Keys } = require('./seed_prev_s4');
 const PULL_STAGES = ['S1', 'S2', 'S3'];
 const { scratchDir } = require('./scratch');
 const FORCE = !!args.force;
-// OA-473: rebuild a STAMP-STALE place and nothing else. It never sets FORCE, so every
-// refusal below that reads `!FORCE` still refuses with it set.
-const REBUILD_STALE = !!args['rebuild-stale'];
-if (REBUILD_STALE && FORCE) {
-  console.error('rollout_places: --rebuild-stale and --force together are a contradiction. --rebuild-stale exists so');
-  console.error('  that a stamp-only rebuild does not need --force; pass one or the other.');
-  process.exit(2);
-}
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
 // WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
@@ -366,23 +357,16 @@ function rolloutOnePlace(p) {
   const stampedEngine = _s4rjEarly.engine;
   const allPass = ok(internalGate) && ok(externalGate) && ok(boardingGate) && ok(schematicGate) && ok(diagramGate);
   const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_PLACE_ENGINE;
-  if (isStampStale && !FORCE && !REBUILD_STALE) {
+  if (isStampStale && !FORCE) {
     return { name: p.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current PLACE template `
-                   + `is ${CURRENT_PLACE_ENGINE} — status.js reports that as ENGINE STALE -- a chore the worklist carries as one engine-rebuild row, never a red (OA-396, OA-430). Rebuild and re-stamp with:  `
-                   + `node rollout_places.js --place "${p.name}" --apply --rebuild-stale` };
+                   + `is ${CURRENT_PLACE_ENGINE}. NOTHING IS OWED: a stamp-only place is not work (buses-data OA-574). The weekly `
+                   + `shadow rebuild records this verdict, and the next rebuild that really moves ink re-stamps the place.` };
   }
   if (allPass && !FORCE && !isStampStale) {
     return { name: p.name, status: 'UP-TO-DATE',
              detail: shipped.join('+') + ' already gate PASS against the current template, and the engine stamp is current' };
   }
-  // --rebuild-stale goes no further than the state it names (OA-473) — see rollout.js.
-  if (REBUILD_STALE && !isStampStale) {
-    return { name: p.name, status: 'NOT-STAMP-STALE',
-             detail: `--rebuild-stale rebuilds only a STAMP-STALE place, and a sheet would change under the live template. `
-                   + `Read the dry run without the flag, then:  node rollout_places.js --place "${p.name}" --apply` };
-  }
-
   // ---- build in a scratch workspace first (this is also the entire dry-run) ----
   // Mirrors rollout.js: no new S1/S2/S3 needed, only a new S4. Copy routes.json
   // + overrides.json (+ diagram-overrides.json, if this place ever configures
@@ -691,12 +675,11 @@ if (JSON_OUT) {
   const rep = writeReport(JSON_OUT, results, { kind: 'place', engine: CURRENT_PLACE_ENGINE, apply: APPLY });
   console.log(`JSON: ${rep.counts.clean} clean, ${rep.counts.regressed} regressed, ${rep.counts.unmeasured} unmeasured of ${rep.counts.total} -> ${JSON_OUT}`);
 }
-// OA-179 — see rollout.js's identical block.
+// OA-179, reworded by OA-574 — see rollout.js's identical block.
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(
-  `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp — status.js REPORTS these as ENGINE STALE and the worklist carries one engine-rebuild row each, `
-  + `and this tool rebuilds them only when asked, with the flag that permits that state and no other:\n  `
-  + stampStale.map(r => `node rollout_places.js --place "${r.name}" --apply --rebuild-stale`).join('\n  '));
+  `${stampStale.length} place(s) draw the CURRENT sheets from an OLD engine stamp (${stampStale.map(r => r.name).join(', ')}) — nothing is owed: `
+  + `a stamp-only place is not work (buses-data OA-574), and --apply leaves it alone.`);
 // STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict
 // that names work the operator has to go and do somewhere else, and a per-map line
 // scrolls past. It is the one refusal here whose remedy is NOT this tool (OA-225).
@@ -711,7 +694,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // UNRENDERED moves the exit code. The state it names was invisible precisely
 // because nothing failed, so a verdict that only printed would be the same
 // silence with a longer summary line.
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS', 'NOT-STAMP-STALE'].includes(r.status)) || (!APPLY && totalBlockers > 0);
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0);
 process.exit(bad ? 1 : 0);
 }
 

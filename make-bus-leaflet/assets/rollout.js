@@ -18,7 +18,7 @@
  *
  * Usage:
  *   node rollout.js [--town "St Ives"]... [--all] [--bump minor|major]
- *                    [--note "..."] [--apply] [--force | --rebuild-stale]
+ *                    [--note "..."] [--apply] [--force]
  *                    [--buses "<dir>"] [--by <who>] [--warnings] [--keep "<dir>"] [--json "<file>"] [--help]
  *
  * `--json <file>` also writes the result as JSON — one verdict per map, clean,
@@ -33,14 +33,15 @@
  * it is a whole-estate rebuild. An unknown flag or a positional argument now exits 2
  * before anything is read; --help prints the usage and exits 0.
  *
- * `--rebuild-stale` rebuilds a map ONLY when its verdict is STAMP-STALE — every
- * sheet already gates PASS and only the engine stamp is old — and bypasses nothing
- * (buses-data OA-473). `--force` means four things here: rebuild a stamp-stale map,
- * finish an UNRENDERED S4, roll old geometry past STALE-INPUTS, publish past a lost
- * label or a blocking warning. This flag is the first of those and none of the
- * others, so a loop tick can clear an engine-rebuild row without being handed the
- * other three. A map in any other state is refused as NOT-STAMP-STALE (exit 1) or
- * left UP-TO-DATE; the two flags together are a usage error.
+ * A STAMP-ONLY MAP IS NOT WORK, AND THERE IS NO FLAG TO REBUILD ONE (buses-data OA-574, A1 of the
+ * 2026-10-06 simplification review). `--rebuild-stale` (OA-473) existed so a loop tick could clear
+ * an engine-rebuild row whose only fault was an old engine stamp. Under the pin as the clock
+ * (pin_clock.js) that row is not raised, so the flag is gone and so is its NOT-STAMP-STALE refusal:
+ * a map whose sheets all gate PASS but whose stamp is old answers STAMP-STALE, which is a clean
+ * verdict in the shadow report, and `--apply` leaves it alone — nothing is owed, and the next
+ * rebuild that really moves ink re-stamps it. `--force` is what remains, and still means four
+ * things (rebuild such a map, finish an UNRENDERED S4, roll past STALE-INPUTS, publish past a lost
+ * label or a blocking warning); splitting it is A4 of the same review.
  *
  * The town `Areas/_portal-fixture/` copies is PINNED-DONOR while the live template
  * differs from buses-data's engine.lock.json pin, in every mode and under --force:
@@ -115,10 +116,10 @@ const PULL_STAGES = ['S2', 'S3'];
 const S3_CARRY = ['routes.json', 'overrides.json'];
 
 const USAGE = 'Usage: node rollout.js [--town "<Town name>"]... [--all] [--bump minor|major] [--note "..."]\n' +
-  '         [--apply] [--force | --rebuild-stale] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
+  '         [--apply] [--force] [--buses "<Buses dir>"] [--by <who>] [--warnings]\n' +
   '         [--keep "<dir>"] [--json "<file>"]\n' +
   '  Dry run unless --apply. No --town: consider EVERY town.';
-const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'rebuild-stale', 'buses', 'by',
+const FLAGS = new Set(['town', 'all', 'bump', 'note', 'apply', 'force', 'buses', 'by',
   'warnings', 'keep', 'json', 'help']);
 const args = parseArgs(process.argv.slice(2), { repeat: ['town'] });
 if (args.help === true) { console.log(USAGE); process.exit(0); }
@@ -131,14 +132,6 @@ const JSON_OUT = jsonTarget(args, die);
 const BUSES = resolveBuses(args);
 const APPLY = !!args.apply;
 const FORCE = !!args.force;
-// OA-473: rebuild a STAMP-STALE map and nothing else. It never sets FORCE, so every
-// refusal below that reads `!FORCE` still refuses with it set.
-const REBUILD_STALE = !!args['rebuild-stale'];
-if (REBUILD_STALE && FORCE) {
-  console.error('rollout: --rebuild-stale and --force together are a contradiction. --rebuild-stale exists so that');
-  console.error('  a stamp-only rebuild does not need --force; pass one or the other.');
-  process.exit(2);
-}
 const BUMP = args.bump === 'major' ? 'major' : 'minor';
 const NOTE = args.note || 'rollout: adopt current engine template (auto)';
 // WHO PERFORMED THE STAGES THIS RUN OPENS (OA-427). Forwarded, never interpreted:
@@ -224,9 +217,8 @@ function rolloutOne(t) {
    * gate already answers the second; this field is the only record of the
    * first, and it is what `track:engine` and the whole OA-130 tracking decision
    * rest on. So the rebuild is real work; the bug was only ever that nobody was
-   * told. It was asked for with --force until 2026-09-26, and is now asked for with
-   * --rebuild-stale, because --force also meant three things a loop tick must never
-   * be handed and auto mode rightly refused it (OA-473).
+   * told. It was asked for with --force until 2026-09-26, then with --rebuild-stale
+   * (OA-473), and since OA-574 it is not asked for at all: a stamp-only map is not work.
    *
    * IT READS THE SAME FILE STATUS.JS READS — the latest S4 run's routes.json,
    * not ci-reference — so the two tools cannot disagree about the input. And it
@@ -313,28 +305,17 @@ function rolloutOne(t) {
   const stampedEngine = rj.engine;
   const allPass = sheetGates.every(([, g]) => g.status === 'PASS');
   const isStampStale = allPass && !!stampedEngine && stampedEngine !== '(none)' && stampedEngine !== CURRENT_ENGINE;
-  if (isStampStale && !FORCE && !REBUILD_STALE) {
+  if (isStampStale && !FORCE) {
     return { name: t.name, status: 'STAMP-STALE',
              detail: `every sheet gates PASS, but routes.json says engine ${stampedEngine} and the current template is `
-                   + `${CURRENT_ENGINE} — status.js reports that as ENGINE STALE -- a chore the worklist carries as one engine-rebuild row, never a red (OA-396, OA-430). Rebuild and re-stamp with:  `
-                   + `node rollout.js --town "${t.name}" --apply --rebuild-stale` };
+                   + `${CURRENT_ENGINE}. NOTHING IS OWED: a stamp-only map is not work (buses-data OA-574). The weekly shadow `
+                   + `rebuild records this verdict, and the next rebuild that really moves ink re-stamps the map.` };
   }
   if (allPass && !FORCE && !isStampStale) {
     return { name: t.name, status: 'UP-TO-DATE',
              detail: sheetGates.map(([n]) => n).join('+')
                    + ' already gate PASS against the current template, and the engine stamp is current' };
   }
-  /* --rebuild-stale GOES NO FURTHER THAN THE STATE IT NAMES (OA-473). Reaching here
-   * with it set and the map not STAMP-STALE means a sheet would change under the live
-   * template: an ink-moving rebuild, whose label diff a person reads. That is plain
-   * --apply's job, not this flag's, so it is refused rather than quietly widened. */
-  if (REBUILD_STALE && !isStampStale) {
-    const moving = sheetGates.filter(([, g]) => g.status !== 'PASS').map(([n]) => n);
-    return { name: t.name, status: 'NOT-STAMP-STALE',
-             detail: `--rebuild-stale rebuilds only a STAMP-STALE map, and ${moving.join('+')} would change under the live template. `
-                   + `Read the dry run without the flag, then:  node rollout.js --town "${t.name}" --apply` };
-  }
-
   let routesJson = {};
   try { routesJson = readJson(path.join(prevS3.dir, 'routes.json')); } catch (e) {}
   // OA-074/OA-082: what this map's S3 owes by Peter's rulings, which a rollout carries
@@ -615,13 +596,12 @@ if (JSON_OUT) {
   const rep = writeReport(JSON_OUT, results, { kind: 'town', engine: CURRENT_ENGINE, apply: APPLY });
   console.log(`JSON: ${rep.counts.clean} clean, ${rep.counts.regressed} regressed, ${rep.counts.unmeasured} unmeasured of ${rep.counts.total} -> ${JSON_OUT}`);
 }
-// OA-179. STAMP-STALE is easy to skim past in a per-town line, and it is the one
-// verdict that names a command the operator has to type. It repeats here.
+// OA-179, reworded by OA-574. STAMP-STALE used to name a command to type; it now names nothing,
+// and says so, because a verdict that used to ask for work and no longer does is easy to misread.
 const stampStale = results.filter(r => r.status === 'STAMP-STALE');
 if (stampStale.length) console.log(
-  `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp — status.js REPORTS these as ENGINE STALE and the worklist carries one engine-rebuild row each, `
-  + `and this tool rebuilds them only when asked, with the flag that permits that state and no other:\n  `
-  + stampStale.map(r => `node rollout.js --town "${r.name}" --apply --rebuild-stale`).join('\n  '));
+  `${stampStale.length} town(s) draw the CURRENT sheets from an OLD engine stamp (${stampStale.map(r => r.name).join(', ')}) — nothing is owed: `
+  + `a stamp-only map is not work (buses-data OA-574), and --apply leaves it alone.`);
 // STALE-INPUTS repeats here for the same reason STAMP-STALE does: it is a verdict
 // that names work the operator has to go and do somewhere else, and a per-map line
 // scrolls past. It is the one refusal here whose remedy is NOT this tool (OA-225).
@@ -639,7 +619,7 @@ if (totalBlockers) console.log(`${totalBlockers} BLOCKING build warning(s) acros
 // PINNED-DONOR (OA-532) is a refusal only when somebody NAMED the town to write it;
 // an estate sweep passes over it the way it passes over UP-TO-DATE.
 const namedDonorApply = APPLY && !args.all && args.town.length > 0 && results.some(r => r.status === 'PINNED-DONOR');
-const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS', 'NOT-STAMP-STALE'].includes(r.status)) || (!APPLY && totalBlockers > 0) || namedDonorApply;
+const bad = results.some(r => ['FAIL', 'ERROR', 'REVIEW-NEEDED', 'UNRENDERED', 'STALE-INPUTS'].includes(r.status)) || (!APPLY && totalBlockers > 0) || namedDonorApply;
 process.exit(bad ? 1 : 0);
 }
 

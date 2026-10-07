@@ -1130,10 +1130,9 @@ for (const { row: mapRow, place } of engineStale) {
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the estate's pinned ${place ? 'PLACE ' : ''}engine is ${clock}${clock !== live ? ` (the live template, ${live}, is ahead of the pin and is not the clock)` : ''}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
       + (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
-    do: [ // the dry run's verdict picks the write; why --rebuild-stale is its own step: playbooks.md, Engine-stale
-      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — its verdict decides which of the next two to run' },
+    do: [ // OA-574: no third step. A STAMP-STALE verdict is nothing owed, and the --rebuild-stale flag that wrote it is gone
+      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — if it says STAMP-STALE or UP-TO-DATE nothing is owed (a stamp-only map is not work, OA-574) and there is no write to run' },
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply`, note: 'writes, when the dry run showed the ink moving; stops on a lost label, which is to be reviewed, never forced' },
-      { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply --rebuild-stale`, note: 'when the dry run said STAMP-STALE (sheets already PASS, only the engine stamp is old); the flag refuses every other state and bypasses no guard, so it is not --force (OA-473)' },
     ],
   });
 }

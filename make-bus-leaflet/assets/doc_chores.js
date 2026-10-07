@@ -57,7 +57,23 @@ function lines(rows) {
 }
 function printSection(rows) { for (const l of lines(rows)) console.log(l); }
 
-module.exports = { CHECKS, ask, chores, lines, printSection };
+/* The one worklist row that carries the chores, or null when there are none. bus-work's worklist.mjs
+ * adds it; the module owns the wording so the worklist stays a one-line call. */
+function worklistRow(opts) {
+  const owed = chores(ask(opts));
+  if (!owed.length) return null;
+  const detail = (r) => r.lines.filter((l) => /NOT NAMED|orphan|held|unreachable/i.test(l)).slice(0, 4).join('; ') || r.lines.slice(0, 2).join('; ');
+  return {
+    key: 'doc-chores', rank: 8, type: 'housekeeping',
+    title: `${owed.length} documentation chore${owed.length === 1 ? '' : 's'}: ${owed.map((r) => r.id).join(', ')}`,
+    why: owed.map((r) => `${r.id} — ${r.label}: ${detail(r)}`).join(' | ') + '. A chore, not a red: it stops nothing.',
+    who: '—', runbook: 'housekeeping',
+    do: owed.map((r) => ({ kind: 'shell', cwd: opts.buses, cmd: 'node "Documentation/check-' + (r.id === 'doc-coverage' ? 'doc-coverage' : 'scripts-indexed') + '.mjs"', note: 'names each one; the remedy is a link from live work, or a name on the scripts page' })),
+  };
+}
+
+
+module.exports = { CHECKS, ask, chores, lines, printSection, worklistRow };
 
 if (require.main === module) {
   const a = process.argv.slice(2);

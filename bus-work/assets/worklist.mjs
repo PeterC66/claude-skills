@@ -1176,28 +1176,7 @@ if (s6Stale.length) {
   });
 }
 
-/*
- * 8 — housekeeping: DOCUMENT CHORES (buses-data OA-597, D9 of the 2026-10-06 review).
- * A working document nothing links to, and a script the scripts page does not name,
- * each reddened `main` within a day of a routine act. They are chores: the board
- * prints them (doc_chores.js) and this is the one row that carries them, so they are
- * seen without stopping a push. Delegated to the same module, never re-implemented.
- */
-{
-  const chores = require(path.join(SK, 'doc_chores.js'));
-  const rows = chores.ask({ buses: BUSES, skills: path.resolve(SK, '..', '..') });
-  const owed = chores.chores(rows);
-  if (owed.length) {
-    add({
-      key: 'doc-chores', rank: 8, type: 'housekeeping',
-      title: `${owed.length} documentation chore${owed.length === 1 ? '' : 's'}: ${owed.map((r) => r.id).join(', ')}`,
-      why: owed.map((r) => `${r.id} — ${r.label}: ${r.lines.filter((l) => /NOT NAMED|orphan|held|unreachable/i.test(l)).slice(0, 4).join('; ') || r.lines.slice(0, 2).join('; ')}`).join(' | ') + '. A chore, not a red: it stops nothing.',
-      who: '—', runbook: 'housekeeping',
-      do: owed.map((r) => ({ kind: 'shell', cwd: BUSES, cmd: r.id === 'doc-coverage' ? 'node "Documentation/check-doc-coverage.mjs"' : 'node "Documentation/check-scripts-indexed.mjs"', note: 'names each one; the remedy is a link from live work, or a name on the scripts page' })),
-    });
-  }
-}
-
+{ const row = require(path.join(SK, 'doc_chores.js')).worklistRow({ buses: BUSES, skills: path.resolve(SK, '..', '..') }); if (row) add(row); }   // housekeeping: document chores, one row (buses-data OA-597); built in doc_chores.js
 /*
  * 8 — housekeeping: S6 CLAIMS (buses-data OA-273, 2026-09-08). The rows above ask
  * whether a red team has been RUN; this asks what became of what it SAID. A claim —

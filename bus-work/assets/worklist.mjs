@@ -1176,6 +1176,7 @@ if (s6Stale.length) {
   });
 }
 
+{ const row = require(path.join(SK, 'doc_chores.js')).worklistRow({ buses: BUSES, skills: path.resolve(SK, '..', '..') }); if (row) add(row); }   // housekeeping: document chores, one row (buses-data OA-597); built in doc_chores.js
 /*
  * 8 — housekeeping: S6 CLAIMS (buses-data OA-273, 2026-09-08). The rows above ask
  * whether a red team has been RUN; this asks what became of what it SAID. A claim —

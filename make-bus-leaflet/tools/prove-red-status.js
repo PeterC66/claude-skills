@@ -164,7 +164,7 @@ function copyDir(from, to) {
  * gate that does not work, when what had actually happened is that the estate got
  * better underneath it. A fixture built out of whatever the estate happens to look
  * like today tests the estate, not the code. This one now MAKES the place short. */
-function scratchTree({ town = DONOR, engine = null, lock = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null, staleS6 = false, mutateInternal = false }) {
+function scratchTree({ town = DONOR, engine = null, lock = null, withPlace = null, stripKeys = false, withTownPlace = null, mutateSchematic = false, ageIndex = null, areaFixture = null, portalFixture = null, feedInfo = null, badFamily = null, staleS6 = false, mutateInternal = false, brokenDocChore = false }) {
   const root = scratchDir('prove-red-status-');
   const dst = path.join(root, 'Areas', town);
   const src = path.join(DONOR_ROOT, 'Areas', DONOR);
@@ -288,6 +288,12 @@ function scratchTree({ town = DONOR, engine = null, lock = null, withPlace = nul
     if (!rec) throw new Error('prove-red-status: the donor ' + town + ' has no latest S6 run to age -- pick a donor that has been verified');
     rec.at = '2000-01-01T00:00';
     fs.writeFileSync(mp, JSON.stringify(m, null, 2));
+  }
+  /* A DOCUMENTATION CHORE (OA-597). The scratch tree carries a coverage checker that exits 1, which is
+   * what the real one does for a working document nothing links to. The board must PRINT it and stay green. */
+  if (brokenDocChore) {
+    fs.mkdirSync(path.join(root, 'Documentation'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'Documentation', 'check-doc-coverage.mjs'), "console.log('ORPHAN  Development Docs/orphan.md'); process.exit(1);\n");
   }
   /* A TOWN SHEET THAT NO LONGER REPRODUCES (OA-396). One comment appended inside
    * the committed internal.svg: the generator will not draw it, so the byte gate
@@ -453,6 +459,7 @@ function statusWithOldRule(kind) {
   }
   const term = kind === 'engine' ? '\n  || engineStaleRows.length > 0'
     : kind === 's6' ? '\n  || townRows.some(r => r.s6Stale) || placeRows.some(r => r.s6Stale)'
+    : kind === 'docchore' ? "\n  || require('./doc_chores').chores(require('./doc_chores').ask({ buses: BUSES, skills: SKILLS_ROOT })).length > 0"
     : null;
   if (!term) throw new Error('prove-red-status: unknown old rule ' + kind);
   fs.writeFileSync(f, src.replace(anchor, anchor.replace(/;$/, '') + term + ';'));
@@ -653,6 +660,28 @@ const CASES = [
       return null;
     },
     what: 'a rollout that drew a customer change on the live engine is not made stale by the pin that has not caught up',
+  },
+  {
+    /* OA-597 (D9). check-doc-coverage and check-scripts-indexed reddened `main` within a day of a retirement and of
+     * three new scripts. They are chores now: printed and carried by the worklist, never in `bad`. */
+    label: 'a documentation chore is REPORTED, and the board stays green',
+    make: { brokenDocChore: true },
+    expect: 0,
+    also: (json) => {
+      const r = (json.docChores || []).find(x => x.id === 'doc-coverage');
+      if (!r) return 'the board never asked the coverage check at all';
+      if (r.state !== 'chore') return 'the board did not read the broken checker as a chore: state=' + r.state;
+      return null;
+    },
+    what: 'a page not naming a thing is housekeeping, and the board says so without stopping a push',
+  },
+  {
+    label: 'mutation: the same chore against a board that gates on it goes RED',
+    make: { brokenDocChore: true },
+    oldRule: 'docchore',
+    cause: 'docchore',
+    expect: 1,
+    what: 'exit 1 here and 0 above is the whole of OA-597: the fixture discriminates, the term is what changed',
   },
   {
     label: 'a stale S6 report is REPORTED, and the board stays green',

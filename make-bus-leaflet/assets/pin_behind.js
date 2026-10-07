@@ -97,7 +97,7 @@ function pinBehindItem({ buses, portal, skillsRoot }) {
       + 'status.js at the pin reads them PIN-BEHIND, a chore and not red; adopting the engine clears it (buses-data OA-480).',
     who: '—', runbook: 'engine',
     do: [{ kind: 'shell', cwd: buses, cmd: `node ".github/scripts/engine-pin.mjs" --bump --skills "${String(skillsRoot).replace(/\\/g, '/')}"`,
-      note: 'after rebuilding the donor town engine.lock.json\'s _comment names; run it with no --bump first to see what it would say' }],
+      note: 'after the weekly shadow rebuild has named the engine to adopt (it refuses otherwise); run it with no --bump first to see what it would say' }],
   };
 }
 

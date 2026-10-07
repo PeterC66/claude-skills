@@ -384,12 +384,14 @@ npm run test:prove-red-rollout-stamp
 
 It does not cut a guard out of a copy. It builds a scratch `buses-data` tree from **tracked files only** — one town's `manifest.json`, its latest `S3-config` run and its `ci-reference/` — and runs the real `rollout.js` against it with `--buses`. `latestRunDir()` falls back to `ci-reference` when a run folder holds no `routes.json`, which is exactly what a fresh CI clone gets, so this harness runs in a checkout that has never built anything.
 
+Since buses-data OA-574 there is no `--rebuild-stale` (a stamp-only map is not work), and the harness carries the cases that prove it: **G**/**N** — `--apply` on a stamp-only town/place writes nothing (the whole scratch tree is byte-identical) and exits 0; **H**/**O** — `--rebuild-stale` is an unknown flag, exit 2; **K**/**L** — a stale stamp does not mask STALE-INPUTS or UNRENDERED; **M** — `FORCE` is still `args.force` alone and the lost-label and blocking-warning refusals still read it. G was watched go red by letting `--apply` through the STAMP-STALE return.
+
 Six cases, and **four of them are controls**:
 
 | Case | Fixture | Must report |
 |---|---|---|
 | A | town, stamp current | `UP-TO-DATE` — and the detail line must say the stamp was checked |
-| B | town, stamp is an old hash | `STAMP-STALE`, naming both hashes and the `--force` command |
+| B | town, stamp is an old hash | `STAMP-STALE`, naming the stale hash, saying nothing is owed, and naming no command (OA-574) |
 | C | town, no `engine` field at all | `UP-TO-DATE` — `(none)` is a map stamped before the hash existed, which `status.js` reports and never gates |
 | D | town, stale stamp **and** a sheet that really differs | anything but `STAMP-STALE` |
 | E | place, stamp current | `UP-TO-DATE` |

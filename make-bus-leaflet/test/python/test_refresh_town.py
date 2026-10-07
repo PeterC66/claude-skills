@@ -75,6 +75,8 @@ class FakeStage(object):
         self.calls.append(tuple(args))
         verb = args[0]
         if verb == "latest":
+            if args[1] not in self.latest:      # as stage.js does: a stage with no runs exits non-zero
+                raise rt.Refused("stage.js latest %s: no runs" % args[1])
             return self.latest[args[1]]
         if verb == "new":
             self.n += 1
@@ -324,6 +326,20 @@ class TheCommits(Town):
         s4_new = next(i for i, c in enumerate(self.stage.calls) if c[:2] == ("new", "S4"))
         self.assertLess(s4_new, first_commit, "S4 must be built before anything is committed")
         self.assertIn("build_s4.js", self.ran)
+
+    def test_an_S6_the_answer_will_not_cover_is_OWED_and_the_refresh_still_stands(self):
+        # OA-575. redteam_source.js says BUY (exit 10): S6 is not opened, nothing more is
+        # committed, and the refresh is APPLIED -- a refusal here would hide the commits
+        # already made and skip the _latest and ci-reference steps after it.
+        real = self.fake_run
+        self.fake_run = lambda cmd, *a, **k: (subprocess.CompletedProcess(cmd, 10, stdout="BUY", stderr="")
+                                              if os.path.basename(cmd[1]) == "redteam_source.js" else real(cmd, *a, **k))
+        res = self.run_main("--apply")
+        self.assertEqual(res["status"], "APPLIED")
+        self.assertEqual(res["verify"]["status"], "OWED")
+        self.assertEqual(res["verify"]["redteam"], "BUY")
+        self.assertNotIn(("new", "S6"), [c[:2] for c in self.stage.calls])
+        self.assertIn("sync_ci_reference.js", self.ran)
 
     def test_the_patched_values_land_in_the_new_runs_and_not_in_the_shipped_ones(self):
         res = self.run_main("--apply")

@@ -76,7 +76,7 @@ fs.writeFileSync(copy, broken);
 // started asking it whether the month has budget left. Same lesson, second
 // helping — and the reason the list is a literal rather than a scan is that a
 // scan would have quietly kept this harness green with the wrong file set.
-for (const sibling of ['cli.js', 'redteam_budget.js', 'gate_lib.js', 'line_endings.js', 'scratch.js']) {
+for (const sibling of ['cli.js', 'redteam_budget.js', 'redteam_agree.js', 'gate_lib.js', 'line_endings.js', 'scratch.js']) {
   fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
 }
 

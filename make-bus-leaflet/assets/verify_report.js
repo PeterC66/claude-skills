@@ -159,7 +159,7 @@ function add(severity, category, message, evidence, route, source) {
 const hard = () => findings.filter(f => f.severity === 'hard');
 const soft = () => findings.filter(f => f.severity === 'soft');
 
-const normRoute = (r) => String(r == null ? '' : r).toUpperCase().replace(/\s+/g, '');
+const { normRoute } = require('./redteam_agree');
 /*
  * A route NUMBER is not a unique key, and two different things were indexed on it
  * as if it were.
@@ -320,35 +320,9 @@ function nameMatchesLocality(name, code) {
   if (REGISTER_NAMES(code).some(n => placeToken(n) === pt)) return true;
   return (LOCALITY_NAMES[code] || []).some(n => placeToken(n) === pt);
 }
-function tokenize(s) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
-}
-const OP_STOP = new Set(['coaches', 'coach', 'buses', 'bus', 'ltd', 'limited', 'the', 'of', 'and', 'company', 'co', 'travel', 'group', 'services', 'service', 'minibus', 'minibuses']);
-function opTokens(s) { return tokenize(s).filter(t => !OP_STOP.has(t)); }
-function overlaps(a, b) { const sb = new Set(b); return a.some(x => sb.has(x)); }
-/*
- * Two things changed here on 2026-08-29 (OA-156, source three), both measured on
- * the estate's 102 `days` findings before the edit and after it.
- *
- * PLURALS. "Thursdays only" normalised to "thus", because the day-name rewrite
- * had no optional s. Ours "Thu" then read as a PREFIX of theirs rather than as
- * the same value, which is the difference between "the red team adds something"
- * and "these are identical".
- *
- * "ONLY" IS NOT A DAY. Eighteen findings across the estate said nothing but
- * that the red team writes "Sat only" where we write "Sat", "Mon-Fri only"
- * where we write "Mon-Fri". The word restates the closed-world assumption a
- * days field already carries; dropping it makes those eighteen comparisons
- * equal and they stop being reported at all. It cannot hide a real difference,
- * because the days either side of it are still compared in full.
- */
-function normDays(s) {
-  let d = String(s || '').toLowerCase().replace(/[–—]/g, '-');
-  d = d.replace(/mondays?/g, 'mon').replace(/tuesdays?/g, 'tue').replace(/wednesdays?/g, 'wed')
-       .replace(/thursdays?/g, 'thu').replace(/fridays?/g, 'fri').replace(/saturdays?/g, 'sat').replace(/sundays?/g, 'sun')
-       .replace(/\bto\b/g, '-').replace(/\bevery ?day\b/g, 'daily').replace(/\bonly\b/g, '');
-  return d.replace(/[^a-z0-9&-]/g, '');
-}
+// The operator and day normalisers, and their OA-156 history, live in redteam_agree.js,
+// which redteam_source.js shares so the reuse rule and S6 read one rule (OA-575).
+const { tokenize, opTokens, overlaps, normDays } = require('./redteam_agree');
 
 function haversineKm(a, b) {
   const R = 6371, toR = Math.PI / 180;

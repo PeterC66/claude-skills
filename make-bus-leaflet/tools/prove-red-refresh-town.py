@@ -264,6 +264,91 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+# ----------------------------------- 11. S6 runs only on an answer it cannot have staled
+print("\n11. verify_s6 commits an S6 only on a REUSE, a pass and no new claim (OA-575)")
+
+
+class Proc:
+    def __init__(self, code, out=""):
+        self.returncode, self.stdout, self.stderr = code, out, ""
+
+
+def s6_world(dry=0, real=0, verify=0, claims_now=(), claims_before=(), prev=True):
+    """Stub stage.js and the node scripts, and record every stage call. The S6 run dir is
+    a real temp folder so the function reads real files out of it, as it does live."""
+    tmp = tempfile.mkdtemp(prefix="oa575-")
+    TMPS.append(tmp)
+    calls, s6 = [], os.path.join(tmp, "S6-verify", "now")
+    before = os.path.join(tmp, "S6-verify", "before")
+    os.makedirs(before)
+    if prev:
+        rt.write_json(os.path.join(before, "verification.json"),
+                      {"findings": [{"category": c, "route": r} for c, r in claims_before]})
+
+    def stage(_town, *args):
+        calls.append(args)
+        if args[:2] == ("latest", "S6"):
+            if not prev:
+                raise rt.Refused("no S6")
+            return before
+        if args[:2] == ("new", "S6"):
+            os.makedirs(s6)
+            return s6
+        return ""
+
+    def node(script, *args, cwd=None):
+        if script == "redteam_source.js" and "--dry-run" in args:
+            return Proc(dry)
+        if script == "redteam_source.js":
+            rt.write_json(os.path.join(cwd, "redteam-source.json"), {"decision": "REUSE", "from": "2026-09-01_1000", "why": "toward"})
+            return Proc(real)
+        if script == "verify_report.js":
+            rt.write_json(os.path.join(cwd, "verification.json"),
+                          {"summary": {"verdict": "pass", "hard": 0, "soft": 2},
+                           "findings": [{"category": c, "route": r} for c, r in claims_now]})
+            return Proc(verify)
+        raise AssertionError(script)
+
+    rt.stage, rt.node = stage, node
+    rt.subprocess.run = lambda *a, **k: Proc(0)          # gen_verification.py
+    return tmp, calls
+
+
+REAL, TMPS = (rt.stage, rt.node, rt.subprocess.run), []
+BASED = {"S1": "a", "S2": "b", "S3": "c", "S4": "d", "S4dir": tempfile.gettempdir()}
+commits = lambda calls: [c for c in calls if c[:2] == ("commit", "S6")]
+news = lambda calls: [c for c in calls if c[:2] == ("new", "S6")]
+try:
+    tmp, calls = s6_world(dry=10)
+    got = rt.verify_s6(tmp, "n", "t", BASED)
+    check("a BUY creates no S6 run and commits nothing", not news(calls) and not commits(calls), repr(calls))
+    check("  and is reported as S6 OWED, naming BUY", got["status"] == "OWED" and got["redteam"] == "BUY", repr(got))
+
+    tmp, calls = s6_world(claims_now=[("missing-service", "X1")], claims_before=[("missing-service", "X1")])
+    got = rt.verify_s6(tmp, "n", "t", BASED)
+    check("a REUSE that passes with only the claims it already had is committed",
+          got["status"] == "VERIFIED" and len(commits(calls)) == 1, repr(got))
+    check("  with the decision record among its outputs",
+          "redteam-source.json" in commits(calls)[0][commits(calls)[0].index("--outputs") + 1])
+
+    for name, kw in (("a HARD finding", {"verify": 1}),
+                     ("a claim the previous S6 did not have", {"claims_now": [("missing-service", "99")]}),
+                     ("no previous S6 to compare claims with", {"prev": False})):
+        tmp, calls = s6_world(**kw)
+        try:
+            rt.verify_s6(tmp, "n", "t", BASED)
+            refused = False
+        except rt.Refused:
+            refused = True
+        check("%s refuses and leaves S6 uncommitted" % name, refused and not commits(calls), repr(calls))
+        if not kw.get("prev", True):
+            check("  and opens no S6 run at all", not news(calls), repr(calls))
+finally:
+    rt.stage, rt.node, rt.subprocess.run = REAL
+    for t in TMPS:
+        shutil.rmtree(t, ignore_errors=True)
+
+
 print()
 if FAILURES:
     print("%d FAILURE(S): %s" % (len(FAILURES), ", ".join(FAILURES)))

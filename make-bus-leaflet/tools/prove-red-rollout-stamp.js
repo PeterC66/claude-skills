@@ -442,7 +442,7 @@ if (!fs.existsSync(path.join(srcPlace, 'ci-reference', 'routes.json'))) {
     for (const stage of ['S1', 'S2', 'S3']) {
       const st = man.stages && man.stages[stage];
       const rec = st && st.runs && st.runs.find((x) => x.id === st.latest);
-      if (rec) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });
+      if (rec && fs.existsSync(path.join(srcPlace, rec.dir))) fs.cpSync(path.join(srcPlace, rec.dir), path.join(dst, rec.dir), { recursive: true });
     }
     stampCurrent(path.join(dst, 'ci-reference', 'routes.json'), computePlaceEngineVersion());
     return tmp;

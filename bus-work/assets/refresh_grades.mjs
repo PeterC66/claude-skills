@@ -181,7 +181,7 @@ export function gradeSentence(state, town, scanDate) {
  * honest answer rather than a silent omission.
  *
  * `--by` CARRIES A NAME THIS CANNOT KNOW. The run's own name is `sched-HHMM`, chosen when
- * the tick starts, and it is the same substitution the loop already makes for `--claim`.
+ * the tick starts, and only the tick can substitute it.
  * It is left as an angle-bracket placeholder for that reason and for no other: recording
  * a guessed actor would be worse than recording none (OA-427).
  *

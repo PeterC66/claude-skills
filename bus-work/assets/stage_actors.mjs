@@ -17,12 +17,11 @@
  * why `stage.js` already records its clock and its tokens there.
  *
  * THE VOCABULARY IS THE LOOP'S AND NOTHING HERE INVENTS ONE. A tick is
- * `sched-HHMM` — in the scheduled task, in the claim it writes into an action's
- * front matter, and in `loop/LOCK.d/holder`, whose steal rule is exactly "does the
- * first line start with `sched-`". So `actorKind()` asks the same question the lock
- * asks, and any other name is a session a person started. `stage.js` records the
- * string and refuses to interpret it; the interpretation lives here, in one place,
- * where changing it changes no manifest.
+ * `sched-HHMM` — in the scheduled task and in `loop/LOCK.d/holder`, whose steal
+ * rule is exactly "does the first line start with `sched-`". So `actorKind()`
+ * asks the same question the lock asks, and any other name is a session a person
+ * started. `stage.js` records the string and refuses to interpret it; the
+ * interpretation lives here, in one place, where changing it changes no manifest.
  *
  * WHAT A PERSON-STARTED SESSION COSTS, AND WHY IT COUNTS AS A TOUCH. R9's target
  * is that Peter's part falls to "the sign-off on printed changes and the answers

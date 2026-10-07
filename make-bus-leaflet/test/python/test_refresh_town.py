@@ -134,6 +134,12 @@ class Town(unittest.TestCase):
         self.engine_now = "eng-1"
         self.ran = []
         self.no_shipped_list = False
+        # A map build holds the loop lock, so a refresh run without --by is attributed to whoever
+        # holds it (OA-603). Cases that need no holder remove the file.
+        self.holder = os.path.join(self.root, "loop", "LOCK.d", "holder")
+        os.makedirs(os.path.dirname(self.holder))
+        with open(self.holder, "w", encoding="utf-8") as fh:
+            fh.write("sched-0905 2026-10-07T09:05:00Z pid 1\n")
 
     # ------------------------------------------------------------------ the stubs
     def fake_run(self, cmd, *a, **k):
@@ -308,6 +314,38 @@ class TheBuild(Town):
         self.engine_now = "eng-2"
         self.assertRefused("--apply", says=("eng-1 -> eng-2", "rollout.js"))
         self.assertNothingCommitted()
+
+
+class WhoIsDoingIt(Town):
+    """`--by` falls back to the loop lock's holder, and a write with neither is refused (OA-603)."""
+
+    def recorded(self):
+        return {c[c.index("--by") + 1] for c in self.stage.verbs("new") + self.stage.verbs("commit")}
+
+    def test_a_missing_by_is_the_first_word_of_the_lock_holder(self):
+        self.run_main("--apply")
+        self.assertEqual(self.recorded(), {"sched-0905"})
+
+    def test_a_given_by_beats_the_lock_holder(self):
+        self.run_main("--apply", "--by", "peter-session")
+        self.assertEqual(self.recorded(), {"peter-session"})
+
+    def test_a_write_with_no_by_and_no_holder_is_refused_before_anything_is_read(self):
+        os.remove(self.holder)
+        msg = self.assertRefused("--apply", says=("--by is required when writing",), locate=False)
+        self.assertIn("LOCK.d/holder", msg)
+        self.assertEqual(self.stage.calls, [])
+
+    def test_a_holder_whose_first_word_is_a_time_names_nobody(self):
+        with open(self.holder, "w", encoding="utf-8") as fh:
+            fh.write("2026-10-07T09:05:00Z sched-0905\n")
+        self.assertRefused("--apply", says=("--by is required when writing",), locate=False)
+
+    def test_a_dry_run_needs_no_name(self):
+        os.remove(self.holder)
+        res = self.run_main()
+        self.assertFalse(res["applied"])
+        self.assertEqual(self.stage.verbs("commit"), [])
 
 
 class TheCommits(Town):

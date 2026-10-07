@@ -27,11 +27,11 @@
  *             on Peter, dates coming back.
  *
  * "FREE" IS NOT "FINISHABLE", AND THE COUNT SAYS SO. A row is free when it is not
- * Parked, not `decision: peter`, not held by a `waiting:` date and not claimed
- * today. The P1 re-weigh found none of fourteen free P1 rows finishable by one
- * tick, because an engine change owes a re-vendor and rebuild rows. So a free
- * count of 37 with an idle loop is reported as a question to read the last tick's
- * stated reason, never as "the loop is wrong to idle".
+ * Parked, not `decision: peter` and not held by a `waiting:` date. The P1 re-weigh
+ * found none of fourteen free P1 rows finishable by one tick, because an engine
+ * change owes a re-vendor and rebuild rows. So a free count of 37 with an idle loop
+ * is reported as a question to read the last tick's stated reason, never as "the
+ * loop is wrong to idle".
  *
  * CAN A TICK DO WORK, BY ITS OWN PROMPT? (buses-data OA-560, Peter, 2026-10-03.)
  * Blocked or not is half the question: a loop can be clear of every blocker and
@@ -53,7 +53,7 @@
  * nothing names itself `-idle`, which `loop_runs.mjs` does not count as idle; the
  * idle finding here is therefore about ticks that STOPPED before dispatch.
  *
- * IT IS READ-ONLY. It claims, writes and commits nothing, so a tick may run it every
+ * IT IS READ-ONLY. It writes and commits nothing, so a tick may run it every
  * hour at no cost and a person may run it at any time. By default it opens no
  * socket: the two probes it spawns (`worklist.mjs --conditions`, which reads the
  * local trees, and the stored-prompt checker) are local. `--deep` also runs
@@ -84,7 +84,7 @@ import { readYourMoveDir, classify, parseHold, heldPaths } from './loop_your_mov
 
 const DAY = 86400000;
 
-/** Local YYYY-MM-DD — the action files' dates are local, and a claim expires at local midnight. */
+/** Local YYYY-MM-DD — the action files' dates are local. */
 export function localDate(ms) {
   const d = new Date(ms);
   const p = (n) => String(n).padStart(2, '0');
@@ -118,7 +118,6 @@ export function parseAction(text) {
     priority: fm.priority || null,
     decisionPeter: /^peter$/i.test(fm.decision || ''),
     waitingDate: iso(fm.waiting), waitingWhy: fm.waiting ? fm.waiting.replace(/^\d{4}-\d{2}-\d{2}\s*/, '') : null,
-    selectedDate: iso(fm.selected),
     headline: fm.headline ? fm.headline.replace(/^"|"$/g, '') : null,
   };
 }
@@ -127,16 +126,15 @@ export function parseAction(text) {
  * Sort every action into exactly one bucket, in the order that decides whose move
  * it is. Parked is never taken; `decision: peter` is never a tick's; a waiting
  * date holds a row until the date, and ON the date it is free (assemble.mjs
- * `--waiting`: "on the date, or after, it is EXPIRED"); a claim dated today is
- * live, and one dated earlier is EXPIRED and so free.
+ * `--waiting`: "on the date, or after, it is EXPIRED"). Claims were retired by
+ * buses-data OA-578, so no `selected:` line holds a row.
  */
 export function bucketActions(actions, today) {
-  const b = { parked: [], peter: [], held: [], claimed: [], free: [] };
+  const b = { parked: [], peter: [], held: [], free: [] };
   for (const a of actions) {
     if (/^parked$/i.test(a.priority || '')) b.parked.push(a);
     else if (a.decisionPeter) b.peter.push(a);
     else if (a.waitingDate && daysBetween(today, a.waitingDate) > 0) b.held.push(a);
-    else if (a.selectedDate === today) b.claimed.push(a);
     else b.free.push(a);
   }
   return b;
@@ -317,10 +315,10 @@ export function analyse(f) {
   } else {
     const accounted = new Set((f.holdPaths || []).map((h) => h.path.replace(/\\/g, '/')));
     const dirtyAll = f.dirty.filter((p) => !accounted.has(p.replace(/\\/g, '/')));
-    // A tick holding a live lock edits the backlog itself (its claim, its filing, the index the hook rebuilds): that is its run in progress, not a stray file.
+    // A tick holding a live lock edits the backlog itself (its filing, the index the hook rebuilds): that is its run in progress, not a stray file.
     const tickOwn = !!(lock.present && lock.isTick && !lock.expired);
     const own = tickOwn ? dirtyAll.filter((p) => /^Development Docs\/open-actions(\.md$|\/)/.test(p.replace(/\\/g, '/'))) : [];
-    if (own.length) add('NOTE', 'tree-tick-own', `${own.length} backlog file${own.length === 1 ? ' is' : 's are'} modified while a tick (\`${lock.name}\`) holds a live lock: that tick's own claim or filing, committed at the end of its unit.`);
+    if (own.length) add('NOTE', 'tree-tick-own', `${own.length} backlog file${own.length === 1 ? ' is' : 's are'} modified while a tick (\`${lock.name}\`) holds a live lock: that tick's own filing, committed at the end of its unit.`);
     const staged = new Set((f.staged || []).map((p) => p.replace(/\\/g, '/')));
     // OA-434: unstaged dirt inside ONE map or letter folder is fenced. Ticks carry on with any unit that stays out of that folder, so it is a note, not a stop; a staged path, ci-reference/ and a bare file under a root are never fenced (`fenceOf` is the loop's own test).
     const fenced = dirtyAll.filter((p) => !own.includes(p) && !staged.has(p.replace(/\\/g, '/')) && fenceOf(p.replace(/\\/g, '/')));
@@ -401,7 +399,7 @@ export function analyse(f) {
   const level = findings.some((x) => x.level === 'BLOCKING') ? 'BLOCKED' : findings.some((x) => x.level === 'AT RISK') ? 'AT RISK' : 'CLEAR';
   return {
     verdict: level, today, health, findings, capacity,
-    supply: { free, held: buckets.held.length, claimedToday: buckets.claimed.length, peter: buckets.peter.length, parked: buckets.parked.length, total: (f.actions || []).length },
+    supply: { free, held: buckets.held.length, peter: buckets.peter.length, parked: buckets.parked.length, total: (f.actions || []).length },
     lookahead: { days, coming, supplyPath, dated },
   };
 }
@@ -447,7 +445,7 @@ export function render(r, now) {
     ? `Ticks: last ${new Date(h.lastAt).toTimeString().slice(0, 5)} (${h.ageMin < 180 ? h.ageMin + ' min' : (h.ageMin / 60).toFixed(1) + ' h'} ago), cadence ${h.cadence} min, ${h.idle} consecutive without reaching work${h.lastWorkingAt ? `, last worked ${new Date(h.lastWorkingAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}.`
     : 'Ticks: no run files here.');
   const s = r.supply;
-  L.push(`Backlog (not the loop's feed since OA-576; worked in /oa sessions): ${s.total} actions: ${s.free} unclaimed, ${s.held} held by a date, ${s.claimedToday} claimed today, ${s.peter} Peter's decision, ${s.parked} Parked.`);
+  L.push(`Backlog (not the loop's feed since OA-576; worked in /oa sessions): ${s.total} actions: ${s.free} free, ${s.held} held by a date, ${s.peter} Peter's decision, ${s.parked} Parked.`);
   L.push('');
   const sorted = r.findings.slice().sort((a, b) => ORDER[a.level] - ORDER[b.level]);
   if (!sorted.length) L.push('Nothing to report.');

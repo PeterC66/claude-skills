@@ -9,7 +9,7 @@ description: Run the recurring style, standards, consistency, structure and main
 
 **Cadence, decided by Peter on 2026-09-02:** once after each tier of OA-224 lands, and then fortnightly once Tier 5 is done. The chase is a dated entry `codebase-review` in `Development Docs/commitments.json` in buses-data, which the board prints and bus-work ranks; the last step of every run is to re-date it.
 
-**This skill changes no code.** Its output is two documents, a backlog row and a commitment date. If a run finds something that needs fixing now, it files it, claims nothing, and says so in the plan.
+**This skill changes no code.** Its output is two documents, a backlog row and a commitment date. If a run finds something that needs fixing now, it files it and says so in the plan.
 
 ## The three codebases
 
@@ -21,11 +21,7 @@ description: Run the recurring style, standards, consistency, structure and main
 
 ## Procedure
 
-**1. Start from the last run.** Find the newest `Development Docs/codebase-review-findings_<date>.md` and `codebase-review_<date>.md` in buses-data and read the plan's *Where this stands* table and the backlog row it names (OA-224 as at 2026-09-02). Claim that row with `--claim` before anything else, from the buses-data root, `C:\u3a St Ives\Using AI\Buses`; `OA-224` and the quoted text are the placeholders:
-
-```bash
-node "Development Docs/open-actions/assemble.mjs" --claim OA-224 --as "<your session name>, codebase review"
-```
+**1. Start from the last run.** Find the newest `Development Docs/codebase-review-findings_<date>.md` and `codebase-review_<date>.md` in buses-data and read the plan's *Where this stands* table and the backlog row it names (OA-224 as at 2026-09-02). Before anything else, look for another session already on it with `git log --oneline --since=midnight`, run from the buses-data root, `C:\u3a St Ives\Using AI\Buses`, with no placeholders — backlog claims were retired by buses-data OA-578 because this shows the same collision.
 
 **2. Measure before anyone reads a line.** Run the measurer from this skill's folder (`C:\u3a St Ives\.claude\skills\review-bus-codebases`); it takes no placeholders and writes nothing. Save its JSON beside the documents so the next run can diff against it:
 
@@ -84,7 +80,7 @@ node "Development Docs/open-actions/assemble.mjs" --check
 python3 "C:/Users/Peter/.claude/skills/stamp-docs/scripts/docstamp.py" --all
 ```
 
-Then write the round into the project memory store (a `project_codebase_review_<date>` entry and a pointer in `MEMORY.md`), and release the claim.
+Then write the round into the project memory store (a `project_codebase_review_<date>` entry and a pointer in `MEMORY.md`).
 
 ## What happens to the plan afterwards — decided 2026-09-14, after the fourth run
 

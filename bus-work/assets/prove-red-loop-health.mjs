@@ -26,7 +26,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'prove-loop-health-'));
 const NOW = new Date(2026, 9, 3, 8, 0).getTime();   // Sat 3 Oct 2026, 08:00 local
 const run = (feed, hhmm, day = 3) => ({ name: `2026-10-${String(day).padStart(2, '0')}_${hhmm}-${feed}.md`, feed, at: new Date(2026, 9, day, +hhmm.slice(0, 2), +hhmm.slice(2)).getTime() });
 const idleRuns = ['0215', '0315', '0415', '0515', '0615', '0715'].map((t) => run('none', t));
-const act = (ref, o = {}) => ({ ref, priority: 'P2', decisionPeter: false, waitingDate: null, waitingWhy: null, selectedDate: null, ...o });
+const act = (ref, o = {}) => ({ ref, priority: 'P2', decisionPeter: false, waitingDate: null, waitingWhy: null, ...o });
 const base = (o = {}) => ({
   now: NOW, runs: idleRuns, lastRun: { name: '2026-10-03_0715-none.md', headline: 'Chose nothing.' },
   stopFile: false, lock: { present: false }, dirty: [], holdPaths: [], holds: [], drafts: 0,
@@ -45,19 +45,20 @@ async function suite(m, label, verbose) {
   const b = bucketActions([
     act('P', { priority: 'Parked' }), act('D', { decisionPeter: true }),
     act('H1', { waitingDate: '2026-10-04' }), act('H0', { waitingDate: '2026-10-03' }), act('HX', { waitingDate: '2026-10-01' }),
-    act('C1', { selectedDate: '2026-10-03' }), act('C0', { selectedDate: '2026-10-02' }), act('F'),
+    act('F'),
   ], '2026-10-03');
   check('Parked is parked', b.parked.map((a) => a.ref).join() === 'P');
   check('decision: peter is Peter\'s', b.peter.map((a) => a.ref).join() === 'D');
   check('a waiting date tomorrow is still held', b.held.map((a) => a.ref).join() === 'H1');
   check('a waiting date TODAY or past is free (expired)', ['H0', 'HX'].every((r) => b.free.some((a) => a.ref === r)));
-  check('a claim dated today is live', b.claimed.map((a) => a.ref).join() === 'C1');
-  check('a claim dated yesterday is expired and free', ['C0', 'F'].every((r) => b.free.some((a) => a.ref === r)));
+  check('a row with no marker is free', b.free.some((a) => a.ref === 'F'));
   check('Parked beats decision: peter', bucketActions([act('X', { priority: 'Parked', decisionPeter: true })], '2026-10-03').parked.length === 1);
 
   // 2. front matter
   const fm = parseAction('---\nref: OA-9\npriority: P1\ndecision: peter\nwaiting: 2026-10-16 Huntingdon rebuild\nselected: 2026-09-27, sched-0809, x\n---\nbody');
-  check('front matter parsed', fm.ref === 'OA-9' && fm.priority === 'P1' && fm.decisionPeter && fm.waitingDate === '2026-10-16' && fm.waitingWhy === 'Huntingdon rebuild' && fm.selectedDate === '2026-09-27');
+  check('front matter parsed', fm.ref === 'OA-9' && fm.priority === 'P1' && fm.decisionPeter && fm.waitingDate === '2026-10-16' && fm.waitingWhy === 'Huntingdon rebuild');
+  // OA-578: claims are retired, so a leftover `selected:` line is read as nothing and holds no row.
+  check('a selected: line holds no row (claims retired, OA-578)', !('selectedDate' in fm) && bucketActions([parseAction('---\nref: OA-8\nselected: 2026-10-03, s, x\n---\n')], '2026-10-03').free.length === 1);
   check('a file with no front matter has no ref', parseAction('no front matter').ref === null && Object.keys(frontMatter('x')).length === 0);
   check('localDate is local', localDate(NOW) === '2026-10-03');
 
@@ -121,7 +122,6 @@ async function suite(m, label, verbose) {
   check('the supply path steps up on the right dates', low.lookahead.supplyPath.map((p) => p.free).join() === '1,2,3');
   check('a held row 8 days out is outside a 7-day window', analyse(base({ actions: [act('H', { waitingDate: '2026-10-11' })] })).lookahead.coming.length === 0);
   check('--days widens the window', analyse(base({ days: 14, actions: [act('H', { waitingDate: '2026-10-11' })] })).lookahead.coming.length === 1);
-  check('claims made today are counted, not reported', analyse(base({ actions: [act('A', { selectedDate: '2026-10-03' })] })).supply.claimedToday === 1 && !has(analyse(base({ actions: [act('A', { selectedDate: '2026-10-03' })] })), 'claims-midnight'));
   const dated = analyse(base({ commitments: [{ id: 'c1', what: 'x', by: '2026-10-05' }, { id: 'c2', what: 'y', by: '2026-12-01' }, { id: 'c3', what: 'z', by: 'garbage' }] }));
   check('commitments inside the window are listed, others are not', dated.lookahead.dated.map((c) => c.id).join() === 'c1');
 
@@ -286,7 +286,6 @@ const MUTANTS = [
   ['fenced dirt blocks again', "fenceOf(p.replace(/\\\\/g, '/')));", "false);"],
   ['a staged path in a fenced folder is fenced', "!staged.has(p.replace(/\\\\/g, '/')) && fenceOf", "fenceOf"],
   ['a waiting date TODAY stays held', 'daysBetween(today, a.waitingDate) > 0', 'daysBetween(today, a.waitingDate) >= 0'],
-  ['a claim dated yesterday stays live', 'a.selectedDate === today', 'a.selectedDate <= today'],
   ['Parked rows count as free', "if (/^parked$/i.test(a.priority || '')) b.parked.push(a);\n    else if", 'if (false) b.parked.push(a);\n    else if'],
   ['unexplained stopped ticks are no longer at risk', "else add('AT RISK', 'idle-stopped'", "else add('NOTE', 'idle-stopped'"],
   ['a person\'s lock no longer explains stopped ticks', "else if (lock.present && !lock.isTick) add('NOTE', 'idle-explained'", "else if (false) add('NOTE', 'idle-explained'"],

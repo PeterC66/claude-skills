@@ -209,7 +209,7 @@ const repo = (over = {}) => ({
   dirty: false, offMain: false, ...over,
 });
 const world = (loopLock) => ({
-  at: '', selfSession: null, claims: [], peers: { ok: false },
+  at: '', selfSession: null, peers: { ok: false },
   repos: { buses: repo(), engine: repo(), portal: repo() },
   ...(loopLock === undefined ? {} : { loopLock }),
 });
@@ -268,7 +268,7 @@ want(conc.assess(conc.needsOf({ key: 'corr-unsent-001', type: 'correspondence' }
 // the prompt requires it, and was told by five rows that `sched-2115 holds
 // loop/LOCK.d ... a run in progress on the shared trees` — its own name, as a
 // reason to wait. Nothing in the reason said the flag existed. The claims block
-// in formatConditions has carried exactly that hint since it was written; this
+// in formatConditions (retired by buses-data OA-578) carried exactly that hint; this
 // rule did not, and the asymmetry is what these cases pin.
 //
 // THE HINT MUST ALSO BE ABLE TO STAY QUIET, which is the harder half: a reader

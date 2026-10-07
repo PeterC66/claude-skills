@@ -919,6 +919,15 @@ jobs:
         working-directory: skills/make-bus-leaflet
         run: npm run test:prove-red-redteam-fingerprint
 
+      # OA-575: a move TOWARD the stored blind answer is reused and one AGAINST it buys,
+      # so an unattended SAFE refresh can verify itself. Two mutations: the rule
+      # reverted (every move buys, our own file unasked -- under which a refresh moving
+      # a day string against the answer REUSED, the hole this found) and agreement
+      # made always true, under which every against case must turn into a reuse.
+      - name: Prove the toward-the-answer reuse can go red
+        working-directory: skills/make-bus-leaflet
+        run: npm run test:prove-red-redteam-toward
+
       # OA-427: the red team is the most expensive thing in the skill, and until now
       # nothing capped a month of it -- a person started every S6, and the budget was
       # their attention. R9 removes the person. This breaks the ration four ways and

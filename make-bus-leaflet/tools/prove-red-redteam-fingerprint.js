@@ -100,7 +100,8 @@ fs.writeFileSync(copy, src);
 // the same lesson: the list is a literal in three harnesses, and adding one
 // dependency reddened two of them with MODULE_NOT_FOUND. That is the design
 // working -- a scan would have kept them green with the wrong file set.
-for (const sibling of ['cli.js', 'redteam_budget.js', 'gate_lib.js', 'line_endings.js', 'scratch.js']) {
+// `redteam_agree.js` joined it on 2026-10-07 (OA-575), and reddened this the same way.
+for (const sibling of ['cli.js', 'redteam_budget.js', 'redteam_agree.js', 'gate_lib.js', 'line_endings.js', 'scratch.js']) {
   fs.copyFileSync(path.join(ROOT, 'assets', sibling), path.join(dir, sibling));
 }
 

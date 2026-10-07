@@ -5,7 +5,7 @@ R9 of the 2026-09-17 process review asks for a monthly refresh nobody starts by 
 `gtfs_refresh_report.py` grades each town SAFE, ESCALATE or NOTHING and, since OA-426's
 first half, writes that grade into `_gtfs/refresh-grades_<date>.json` so a machine can
 read it. `refresh_grades.mjs` puts it on the worklist's refresh row. What was missing is
-the half this file is: something that takes a SAFE town through S1 to S5 in one command,
+the half this file is: something that takes a SAFE town through S1 to S6 in one command,
 so that "work this row" is a thing a scheduled tick can finish rather than a skill a
 person has to drive.
 
@@ -78,6 +78,14 @@ AND IT WILL TELL YOU WHEN THE ENGINE IS THE REASON. If the previous S4 was drawn
 different engine build, a rebuild picks up every engine change too, and those labels are
 not the patch's. Rather than let that read as a mysterious refusal, the report names the
 two engine hashes and says to roll the engine out first.
+
+AND IT ENDS WITH S6 WHEN THE ANSWER ALLOWS (buses-data OA-575). The new S1 and S3 make the
+last S6 stale, and the portal will not deliver a map whose S6 verified a different one. So
+after S5 this asks `redteam_source.js` whether the stored blind answer still stands: it
+does when every operator or day string that moved now AGREES with that answer, and then
+S6 runs, gates and commits here. A move against the answer is a BUY, and buying is not
+this tool's to do -- the refresh stands, S6 is reported OWED, and the board carries it.
+See `verify_s6` below.
 
 FORMATTING: THE JSON FILES ARE RE-EMITTED, NOT TEXT-PATCHED. `verified-services.json`
 carries some hand-written compact arrays which `json.dumps(indent=2)` expands, so a
@@ -413,10 +421,122 @@ def describe(touched):
     return ["%s %s: %r -> %r" % (r, f, o, n) for r, f, o, n in touched]
 
 
+# --------------------------------------------------------------------------------- S6
+
+# The service-claim categories, as tools/check-s6-claims.mjs names them: a finding of
+# one of these kinds is a CLAIM and must have a home before an S6 is committed.
+CLAIM_CATEGORIES = ("missing-service", "serves-town", "serves-town-conflict")
+
+
+def node(script, *args, cwd=None):
+    return subprocess.run(["node", os.path.join(SK, script), *args], cwd=cwd,
+                          capture_output=True, text=True, encoding="utf-8")
+
+
+def claim_keys(verification):
+    return {(f.get("category"), str(f.get("route")))
+            for f in (verification or {}).get("findings", [])
+            if f.get("category") in CLAIM_CATEGORIES}
+
+
+def verify_s6(town_dir, note, by, based_on):
+    """Run S6 on the refreshed map -- but only on a red-team answer it cannot have staled.
+
+    WHY THIS IS HERE (buses-data OA-575, item A2 of the 2026-10-06 simplification review).
+    A SAFE refresh commits a new S1 and S3, so the map's last S6 pre-dates its data and the
+    portal's delivery gate refuses it as `stale` -- correctly, because it verified a
+    different map. Until this ran, no SAFE refresh could be delivered without a person
+    running S6 by hand, and OA-402's unattended monthly refresh could not finish.
+
+    THE GATE IS NOT RELAXED; THE S6 IS RUN. The alternative the review named -- teach the
+    delivery gate to accept an S6 whose S1 differs only in operator and days -- would ship
+    a map whose S3 nobody verified, and S3 moves on every refresh that re-files a route.
+
+    WHAT LETS IT RUN UNATTENDED is `redteam_source.js`, asked FIRST and as a dry run. It
+    says REUSE only when every operator or day string that moved now agrees with the
+    stored blind answer for that route -- agreement with the answer, never "the grade was
+    SAFE". A move against the answer says BUY, and buying is ~100k tokens a person or a
+    tick with a budget decides on, so this then creates NO S6 run and records nothing:
+    the map stays S6-stale, which is a chore the board already carries, and the refresh
+    itself stands. A dry run, because a real run writes a decision record the month's
+    red-team budget counts, and a BUY nobody acted on would be counted as spend.
+
+    Every later failure -- a HARD finding, a claim the run before did not have, a stage
+    refusal -- raises Refused with the S6 left OPEN and uncommitted, which `stage.js`
+    treats as inert. Returns what happened, for the caller's report.
+    """
+    probe = os.path.join(town_dir, "S6-verify", "_ask")
+    ask = node("redteam_source.js", "--dry-run", "--into", probe, "--build", town_dir)
+    if ask.returncode != 0:
+        verdict = {10: "BUY", 11: "WAIT"}.get(ask.returncode, "CANNOT TELL")
+        return {"status": "OWED", "redteam": verdict,
+                "detail": ("S6 is owed and was not run: the red-team answer says %s for this "
+                           "refresh, so it is not one a machine may verify alone. The refresh "
+                           "itself is committed; the map is S6-stale until a person or a "
+                           "budgeted tick runs S6.\n%s" % (verdict, (ask.stdout + ask.stderr).strip()))}
+
+    # A claim is not finished until it has a home (s6-verify.md step 7). This cannot place
+    # one, so it may only commit an S6 whose claims are ones the run before already had --
+    # and with no earlier report on disk that cannot be told, so ask before opening a run.
+    try:
+        prev = stage(town_dir, "latest", "S6")
+    except Refused:
+        prev = ""
+    before = os.path.join(prev, "verification.json") if prev else ""
+    if not before or not os.path.exists(before):
+        raise Refused("the previous S6's verification.json is not on disk (%s), so whether a "
+                      "new S6 would raise a NEW service claim cannot be told. No S6 was opened."
+                      % (before or "this map has no S6"))
+    s6 = stage(town_dir, "new", "S6", *by_args(by))
+    for st in ("S1", "S2", "S3"):
+        stage(town_dir, "pull", st, s6)
+    corr = os.path.join(based_on["S4dir"], "corridors_report.json")
+    if os.path.exists(corr):                    # an S4 output no pull brings (s6-verify.md step 2)
+        shutil.copy(corr, os.path.join(s6, "corridors_report.json"))
+
+    got = node("redteam_source.js", cwd=s6)
+    if got.returncode != 0:
+        raise Refused("redteam_source.js said REUSE as a dry run and exit %d for real in %s, "
+                      "so S6 is open and uncommitted:\n%s"
+                      % (got.returncode, s6, (got.stdout + got.stderr).strip()))
+
+    ver = node("verify_report.js", cwd=s6)
+    if ver.returncode != 0:
+        raise Refused("verify_report.js exited %d in %s (1 = a HARD finding, 3 = an uncurated "
+                      "S1, 2 = a missing input), so S6 is open and uncommitted and the map is "
+                      "not delivered. Read the findings and fix the upstream stage:\n%s"
+                      % (ver.returncode, s6, (ver.stdout + ver.stderr).strip()[-2000:]))
+    verification = read_json(os.path.join(s6, "verification.json"))
+
+    new_claims = sorted(claim_keys(verification) - claim_keys(read_json(before)))
+    if new_claims:
+        raise Refused("S6 raised %d service claim(s) the previous run did not have, and a claim "
+                      "needs a home a person gives it before the run is committed: %s. S6 %s is "
+                      "open and uncommitted." % (len(new_claims), ", ".join("%s %s" % c for c in new_claims),
+                                                 os.path.basename(s6)))
+
+    doc = subprocess.run([sys.executable, os.path.join(SK, "gen_verification.py"), "verification.json"],
+                         cwd=s6, capture_output=True, text=True, encoding="utf-8")
+    if doc.returncode != 0:
+        raise Refused("gen_verification.py failed in %s, so S6 is open and uncommitted:\n%s"
+                      % (s6, (doc.stderr or doc.stdout).strip()))
+
+    s = verification.get("summary") or {}
+    rec = read_json(os.path.join(s6, "redteam-source.json"))
+    stage(town_dir, "commit", "S6", s6,
+          "--outputs", "redteam.json,redteam-source.json,verification.json,verification.docx",
+          "--based-on", "S1=%s;S2=%s;S3=%s;S4=%s" % (based_on["S1"], based_on["S2"], based_on["S3"], based_on["S4"]),
+          "--note", "%s -- S6 %s, %s hard / %s soft; red team reused from %s (%s)"
+          % (note, s.get("verdict"), s.get("hard"), s.get("soft"), rec.get("from"), rec.get("why")),
+          *by_args(by))
+    return {"status": "VERIFIED", "s6": s6, "verdict": s.get("verdict"),
+            "hard": s.get("hard"), "soft": s.get("soft"), "reusedFrom": rec.get("from")}
+
+
 # ------------------------------------------------------------------------------- main
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="One town's SAFE monthly refresh, S1 to S5 (OA-426).")
+    ap = argparse.ArgumentParser(description="One town's SAFE monthly refresh, S1 to S6 (OA-426, OA-575).")
     ap.add_argument("--town", required=True)
     ap.add_argument("--root", default=None, help="the Buses directory")
     ap.add_argument("--db", default=None, help="a single-region sqlite (testing)")
@@ -672,6 +792,17 @@ def main(argv=None):
     result["s5"] = s5
     result["rendered"] = jpgs
 
+    # ---- S6, on an answer this refresh cannot have staled (OA-575) ------------------
+    # The refresh is COMMITTED by now, so a refusal here must not read as the refresh
+    # failing -- nor skip the _latest and ci-reference steps below. It is reported as an
+    # S6 still owed, with the S6 run left open, and the delivery gate keeps refusing.
+    try:
+        result["verify"] = verify_s6(town_dir, note, a.by, {
+            "S1": os.path.basename(s1), "S2": s2_latest, "S3": os.path.basename(s3),
+            "S4": os.path.basename(s4), "S4dir": s4})
+    except Refused as e:
+        result["verify"] = {"status": "OWED", "detail": str(e)}
+
     subprocess.run(["node", os.path.join(SK, "refresh_latest.js"), town_dir],
                    capture_output=True, text=True, encoding="utf-8")
     # ci-reference is the tracked golden master and only sync_ci_reference.js writes it;
@@ -705,10 +836,17 @@ def report(result):
     out.append("  status: %s%s" % (result.get("status"),
                ("  -- " + result["detail"]) if result.get("detail") else ""))
     if result.get("status") == "WOULD-APPLY":
-        out.append("  DRY RUN -- nothing written. Re-run with --apply to commit S1, S3, S4 and S5.")
+        out.append("  DRY RUN -- nothing written. Re-run with --apply to commit S1, S3, S4 and S5, and S6 "
+                   "when the red-team answer can be reused.")
     if result.get("applied"):
         out.append("  committed: S1 %s, S3 %s, S4 %s, S5 %s"
                    % tuple(os.path.basename(result[k]) for k in ("s1", "s3", "s4", "s5")))
+    v = result.get("verify") or {}
+    if v.get("status") == "VERIFIED":
+        out.append("  S6 %s: %s, %s hard / %s soft, red team reused from %s -- deliverable"
+                   % (os.path.basename(v["s6"]), v.get("verdict"), v.get("hard"), v.get("soft"), v.get("reusedFrom")))
+    elif v:
+        out.append("  S6 OWED -- %s" % v.get("detail"))
     return "\n".join(out)
 
 

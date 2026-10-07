@@ -46,6 +46,14 @@
  *      not name a run on both sides -- it says so and FALLS BACK to the old
  *      timestamp rule over S1 and S2. An absent fingerprint reads as "cannot
  *      tell", never as "unchanged"; the expensive answer is the safe one here.
+ *      A MOVE TOWARD THE ANSWER CANNOT HAVE STALED IT (buses-data OA-575). When
+ *      the only facts that moved are operator or days strings and each new value
+ *      agrees with the answer's own entry for that route, it reuses — the rule
+ *      is agreement with the answer, never "the refresh grade was SAFE". It also
+ *      asks our own verified-services.json about operator and days, because a
+ *      SAFE refresh's S1 carries no feed derivation of its own. See
+ *      `disagreements()` below and redteam_agree.js.
+ *
  *   2. THE WORLD moved without our data moving. A withdrawal, a re-tender, an
  *      operator change. Nothing in this repository can detect that, so it is
  *      bounded by an age window instead of measured.
@@ -165,6 +173,7 @@ const crypto = require('node:crypto');
 // notice if the shared parser's value rule ever changed under this file.
 const { parseArgs, readJson } = require('./cli.js');
 const BUDGET = require('./redteam_budget.js');
+const { agreesWithAnswer } = require('./redteam_agree.js');
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const FLAGS = parseArgs(process.argv.slice(2));
 const flag = (n, d) => (typeof FLAGS[n] === 'string' ? FLAGS[n] : d);
@@ -332,7 +341,11 @@ function fieldDiff(x, y) {
   return out;
 }
 
-function whatMoved(a, b) {
+/* WHICH ROWS MOVED, AND INTO WHAT (OA-270; as data since OA-575, so the agreement
+ * rule below and the prose in whatMoved() read one pairing). `steps` keeps the
+ * order the rows were read in: each removed row, paired with the added row it
+ * became or alone; `came` is what was added and paired with nothing. */
+function movedPairs(a, b) {
   const key = r => JSON.stringify(r);
   const A = a.rows.map(key), B = b.rows.map(key);
   // Multiset difference, not a set one: a route can legitimately appear twice
@@ -342,7 +355,7 @@ function whatMoved(a, b) {
   const removed = []; for (const s of A) { if (inB.get(s)) inB.set(s, inB.get(s) - 1); else removed.push(JSON.parse(s)); }
   const inA = new Map(); for (const s of A) inA.set(s, (inA.get(s) || 0) + 1);
   const added = []; for (const s of B) { if (inA.get(s)) inA.set(s, inA.get(s) - 1); else added.push(JSON.parse(s)); }
-  const lines = [], pool = added.slice();
+  const steps = [], pool = added.slice();
   for (const r of removed) {
     // Pair on the route, then on fewest differing fields, and CHOOSE rather than
     // assume: two entries under one route is the case that broke verify_report.
@@ -352,11 +365,57 @@ function whatMoved(a, b) {
       const n = fieldDiff(r, pool[i]).length;
       if (n < bestN) { bestN = n; best = i; }
     }
-    if (best < 0) { lines.push(`${svcLabel(r)} — no longer in the newer file`); continue; }
-    lines.push(`${svcLabel(r)} — ${fieldDiff(r, pool.splice(best, 1)[0]).join('; ')}`);
+    if (best < 0) { steps.push({ from: r, to: null }); continue; }
+    const to = pool.splice(best, 1)[0];
+    steps.push({ from: r, to, fields: FIELDS.filter((f, i) => JSON.stringify(r[i]) !== JSON.stringify(to[i])) });
   }
-  for (const r of pool) lines.push(`${svcLabel(r)} — only in the newer file`);
-  return lines;
+  return { pairs: steps.filter(x => x.to), gone: steps.filter(x => !x.to).map(x => x.from), came: pool, steps };
+}
+
+/* MOVED TOWARD THE ANSWER (buses-data OA-575, item A2 of the 2026-10-06
+ * simplification review). A move can only stale a blind answer if the answer
+ * might now say something different about it. When the only thing that moved
+ * on a service is its operator or its days, and the NEW value agrees with what
+ * the answer already says for that route, the answer has in effect already
+ * checked the new value: re-buying it would pay ~100k tokens to be told what
+ * the file in hand says. Five `_reuseOverride` stamps on the estate argued
+ * exactly that by hand, and the unattended SAFE refresh — whose whole job is to
+ * move operator and day strings — could never be verified without a person.
+ *
+ * THE RULE IS AGREEMENT WITH THE ANSWER, NEVER "THE GRADE WAS SAFE". A SAFE
+ * grade says what KIND of field moved; it says nothing about which way, and a
+ * day string moving AGAINST the answer is precisely the case where the answer
+ * may now be wrong or we may be. So:
+ *   - only operator and days count; a route, terminus or headsign move buys;
+ *   - a service that appeared or vanished buys;
+ *   - every moved value must agree with ONE answer entry for that route, by
+ *     redteam_agree.js — the rule S6 itself reads, and stricter than it;
+ *   - anything else, or an answer with no entry for the route, buys.
+ * It returns null when the move qualifies, else the reasons it does not. */
+const AGREEABLE = new Set(['operator', 'days']);
+function disagreements(moved, answer, { pairsOnly = false } = {}) {
+  const out = [];
+  if (!pairsOnly) {
+    for (const r of moved.gone) out.push(`${svcLabel(r)} is no longer in the newer file`);
+    for (const r of moved.came) out.push(`${svcLabel(r)} is only in the newer file`);
+  }
+  for (const p of moved.pairs) {
+    const other = p.fields.filter(f => !AGREEABLE.has(f));
+    if (other.length && !pairsOnly) { out.push(`${svcLabel(p.to)} moved ${other.join(' and ')}, which agreement cannot license`); continue; }
+    const fields = p.fields.filter(f => AGREEABLE.has(f));
+    if (!fields.length) continue;
+    const want = {};
+    for (const f of fields) want[f] = p.to[FIELDS.indexOf(f)];
+    const a = agreesWithAnswer(answer, p.to[0], want);
+    if (!a.ok) out.push(a.why);
+  }
+  return out;
+}
+
+function whatMoved(a, b) {
+  const m = movedPairs(a, b);
+  return m.steps.map(x => (x.to ? `${svcLabel(x.from)} — ${fieldDiff(x.from, x.to).join('; ')}` : `${svcLabel(x.from)} — no longer in the newer file`))
+    .concat(m.came.map(r => `${svcLabel(r)} — only in the newer file`));
 }
 
 const s1Runs = () => {
@@ -489,16 +548,16 @@ function eraFileInForce(era, file) {
   return null;
 }
 
-function fingerprintPair(answerDate) {
+function fingerprintPair(answerDate, files = ['gtfs-services.json', 'verified-services.json']) {
   const now = s1Latest(), then = s1AsOf(answerDate);
   if (!now || !then) return { ok: false, why: 'the manifest names no S1 run on both sides of the answer' };
-  for (const f of ['gtfs-services.json', 'verified-services.json']) {
+  for (const f of files) {
     const fa = eraFileInForce(then, f), fb = eraFileInForce(now, f);
     if (!fa || !fb) continue;
     const a = serviceFacts(fa.path), b = serviceFacts(fb.path);
     if (a && b) return { ok: true, file: f, then, now, thenFrom: fa, nowFrom: fb, a, b, same: a.hash === b.hash };
   }
-  return { ok: false, why: 'neither gtfs-services.json nor verified-services.json is declared and readable in BOTH eras (S1 ' + then.id + ' and S1 ' + now.id + ')' };
+  return { ok: false, why: 'neither ' + files.join(' nor ') + ' is declared and readable in BOTH eras (S1 ' + then.id + ' and S1 ' + now.id + ')' };
 }
 
 // The FALLBACK input, used only when no fingerprint can be taken: when were the
@@ -529,7 +588,7 @@ if (fs.existsSync(s6root)) {
     // the run happened, the field says when the research was done, and only the
     // second is a statement about how current the answer is.
     const at = j.derivedAt || d.slice(0, 10);
-    candidates.push({ dir: d, file: f, at: String(at).slice(0, 10), services: (j.services || []).length });
+    candidates.push({ dir: d, file: f, at: String(at).slice(0, 10), services: (j.services || []).length, answer: j });
   }
 }
 candidates.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : (a.dir < b.dir ? 1 : -1)));
@@ -690,6 +749,7 @@ if (!candidates.length) {
 const best = candidates[0];
 const age = ageDays(best.at);
 const reasons = [];
+let agreed = null;   // set when every move is toward the answer (OA-575)
 
 /* DID THE FACTS MOVE? (OA-166.) The fingerprint answers it exactly; the
  * timestamp only ever guessed. Both branches print, always -- a decision this
@@ -712,7 +772,33 @@ if (fp.ok) {
     const head = moved.slice(0, 6);
     head.forEach((line, i) => console.log(`${i === 0 ? '  what moved         : ' : '                       '}${line}`));
     if (moved.length > head.length) console.log(`                       … and ${moved.length - head.length} more`);
-    reasons.push(`the service facts moved between S1 ${fp.then.id} and S1 ${fp.now.id} — route, operator, days, termini or headsigns differ, and that is exactly what the answer is about`);
+    const against = disagreements(movedPairs(fp.a, fp.b), best.answer);
+    if (against.length) {
+      reasons.push(`the service facts moved between S1 ${fp.then.id} and S1 ${fp.now.id} — route, operator, days, termini or headsigns differ, and that is exactly what the answer is about`);
+      for (const w of against.slice(0, 6)) console.log(`  not toward it      : ${w}`);
+    } else {
+      agreed = `the only service facts that moved between S1 ${fp.then.id} and S1 ${fp.now.id} are operator or day strings, and each new value agrees with this answer`;
+      console.log(`  toward the answer  : every move is an operator or days string that now AGREES with the answer (OA-575)`);
+    }
+  }
+  /* OUR OWN FILE'S OPERATOR AND DAYS, TOO (OA-575). The fingerprint prefers the
+   * feed derivation, and OA-332 lets an era that derived none inherit the one
+   * before it. That is right for a declaration run, and it was a hole for the
+   * SAFE refresh: refresh_town.py writes an S1 holding only the patched
+   * verified-services.json, so the inherited feed file compared equal to itself
+   * and a day string moved AGAINST the answer read as UNCHANGED. So when the
+   * feed file decided, ask our file as well — but only about operator and days
+   * on rows present on both sides. A row we added or removed is our reply (the
+   * OA-332 decided include) and is left alone, as is any other field we edited. */
+  if (fp.file === 'gtfs-services.json') {
+    const ours = fingerprintPair(best.at, ['verified-services.json']);
+    if (ours.ok && !ours.same) {
+      const against = disagreements(movedPairs(ours.a, ours.b), best.answer, { pairsOnly: true });
+      if (against.length) {
+        reasons.push(`our verified-services.json moved an operator or days string between S1 ${ours.then.id} and S1 ${ours.now.id} to a value the answer does not give`);
+        for (const w of against.slice(0, 6)) console.log(`  ours, not toward it: ${w}`);
+      }
+    }
   }
 } else {
   console.log(`  service facts      : CANNOT TELL — ${fp.why}`);
@@ -755,6 +841,7 @@ if (reasons.length) {
 
 console.log(`\n  REUSE — ${best.file}`);
 const why = override ? 'overridden as above'
+  : agreed ? agreed
   : fp.ok ? 'no service fact it is about has moved since'
   : 'our S1/S2 inputs have not moved since';
 console.log(`          derived ${best.at} (${age}d ago), ${best.services} services, and ${why}.`);
@@ -791,7 +878,7 @@ if (DRY) {
 }
 console.log(`\n          Record it: pass --note "...redteam reused from ${best.dir}..." to stage.js commit S6,`);
 console.log(`          so the run says whose research it rests on.`);
-const rw = writeDecision('REUSE', why, { from: best.dir, derivedAt: best.at, ageDays: age, borrowed: !!FOREIGN, overridden: !!override });
+const rw = writeDecision('REUSE', why, { from: best.dir, derivedAt: best.at, ageDays: age, borrowed: !!FOREIGN, overridden: !!override, towardAnswer: !!agreed });
 if (rw) console.log(`          Decision recorded in ${rw}`);
 process.exit(0);
 }

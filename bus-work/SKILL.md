@@ -199,6 +199,10 @@ node "C:/u3a St Ives/.claude/skills/bus-work/assets/push_main.mjs" --repo "C:/u3
 
 `npm run test:prove-red-push-main --prefix "C:/u3a St Ives/.claude/skills/bus-work"` is the harness: real git against throwaway bare repositories, and each guard has been seen to fail when its one line is broken.
 
+## Closing a session
+
+In an interactive session, finish by running `/close-out` in buses-data: it is the one place the close-out (open actions, leftovers, glossary, lessons, tidy up) is written. An unattended run, such as a loop tick, does not run it and files its leftovers to its own queue.
+
 ## Rules that override convenience
 
 - **Never decide an approval gate.** Organisation approval, map-request approval, and publish review are Peter's judgement and the system's integrity. Prepare the evidence, summarise it, open the URL — then stop.

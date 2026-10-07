@@ -103,7 +103,7 @@ const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
 
 const args = parseArgs(process.argv.slice(2));
 const BUSES = resolveBuses(args);
-const PORTAL = resolvePortal(args);
+const PORTAL = resolvePortal(args); const pinClock = require('./pin_clock'), PIN = pinClock.readPin(BUSES), SHADOW = pinClock.readShadow(BUSES);   // OA-574: the pin is the clock
 const AS_MD = !!args.md;
 const AS_JSON = !!args.json;
 // TWO OUTPUTS, ONE PASS (2026-09-03). Both CI workflows that run this board were
@@ -357,7 +357,7 @@ function gateTown(t) {
   try { routesJsonEarly = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
   row.engine = routesJsonEarly.engine || '(none)';
   row.engineCommit = routesJsonEarly.engineCommit || null;
-  row.engineCurrent = routesJsonEarly.engine === CURRENT_ENGINE;
+  row.engineCurrent = (row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routesJsonEarly.engine, builtAt: s4.rec.at, live: CURRENT_ENGINE, pin: PIN && PIN.engine, shadow: SHADOW })) !== 'behind';
 
   /* A BEHIND MAP GETS A SECOND QUESTION, NOT A DIFFERENT ONE (OA-214, OA-430).
    *
@@ -380,7 +380,7 @@ function gateTown(t) {
    * required exactly when the artwork actually moved, which is the only occasion
    * it can help. What changed in OA-430 is only WHO may answer: a town at the
    * current engine has nothing to ask a second time, and every other map does. */
-  const behind = row.engine !== '(none)' && !row.engineCurrent;
+  const behind = row.engine !== '(none)' && row.engine !== CURRENT_ENGINE;   // LIVE, not the pin: this is what the gate below regenerates with
   const gateSheet = (gen, out, opts = {}) => {
     const live = gate(path.join(SK, gen), s4.dir, out, path.join(s4.dir, out), opts).status;
     if (live !== 'DIFF' || !behind) return live;
@@ -528,7 +528,7 @@ function gatePlace(p) {
   try { placeRoutes = readJson(path.join(s4.dir, 'routes.json')); } catch (e) {}
   row.engine = placeRoutes.engine || '(none)';
   row.engineCommit = placeRoutes.engineCommit || null;
-  row.engineCurrent = placeRoutes.engine === CURRENT_PLACE_ENGINE;
+  row.engineCurrent = (row.engineStanding = pinClock.standing({ kind: 'place', name: p.name, mapEngine: placeRoutes.engine, builtAt: s4.rec.at, live: CURRENT_PLACE_ENGINE, pin: PIN && PIN.placeEngine, shadow: SHADOW })) !== 'behind';
 
   /* AND A PLACE GETS THE SECOND QUESTION TOO, WHICH IT NEVER HAD (OA-430).
    *
@@ -547,7 +547,7 @@ function gatePlace(p) {
    * engine on both halves, and not by a hybrid of one and today's other. */
   const pGateSheet = (gen, out, opts = {}, psk = false) => {
     const live = gate(path.join(psk ? PSK : SK, gen), s4.dir, out, path.join(s4.dir, out), opts).status;
-    if (live !== 'DIFF' || row.engine === '(none)' || row.engineCurrent) return live;
+    if (live !== 'DIFF' || row.engine === '(none)' || row.engine === CURRENT_PLACE_ENGINE) return live;   // LIVE, as the town's `behind`
     const own = ownEngineFor(p.name, row.engine, row.engineCommit, true);
     if (!own || own.error) { row.ownEngineUncheckable = (own && own.error) || 'no engine to check out'; return live; }
     const again = gate(path.join(psk ? own.placeDir : own.dir, gen), s4.dir, out, path.join(s4.dir, out),
@@ -1492,7 +1492,7 @@ async function main() {
   function pad(s, n) { s = String(s); return s + ' '.repeat(Math.max(0, n - s.length)); }
   function line(cells, widths) { return cells.map((c, i) => pad(c, widths[i])).join(AS_MD ? ' | ' : '  '); }
 
-  console.log('=== Towns (' + towns.length + ') === engine: current template = ' + CURRENT_ENGINE);
+  console.log('=== Towns (' + towns.length + ') === engine: live template = ' + CURRENT_ENGINE + (PIN && PIN.engine ? ', PINNED = ' + PIN.engine + ' (the clock)' : ', no pin, so the live template is the clock'));
   if (AS_MD) console.log('| Town | Ver | Engine | Internal | External | Schematic | Diagram | Quality | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|');
   // Engine is 26 wide, not 12: 'd8eb6961c7 STALE (allowed)' is exactly 26 characters
   // and anything narrower pushes the Internal column out of line on the one row the
@@ -1508,7 +1508,7 @@ async function main() {
     // 'STALE (allowed)' rather than plain STALE, so the board says out loud which
     // staleness gates and which is the dated exception above — an exception nobody
     // can see on the board is one nobody will ever come back to.
-    const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : (engineStaleAllowed(r) ? ' STALE (allowed)' : ' STALE'))) : '-';
+    const eng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? pinClock.note(r) : (engineStaleAllowed(r) ? ' STALE (allowed)' : ' STALE'))) : '-';
     // A PASS ON A HELD-BACK TOWN IS A DIFFERENT CLAIM, so it is a different word
     // (OA-214). The cell used to read 'DIFF (allowed)', which said "we are not
     // checking this"; it now reads 'PASS (own engine)', which says the sheet
@@ -1578,7 +1578,7 @@ async function main() {
     console.log('    re-count it with:  node rollout_places.js --place "' + r.name + '" --apply --force --refresh-index --asof <YYYY-MM-DD>');
   }
 
-  console.log('\n=== Places (' + places.length + ') === engine: current PLACE template = ' + CURRENT_PLACE_ENGINE);
+  console.log('\n=== Places (' + places.length + ') === engine: live PLACE template = ' + CURRENT_PLACE_ENGINE + (PIN && PIN.placeEngine ? ', PINNED = ' + PIN.placeEngine + ' (the clock)' : ', no pin, so the live template is the clock'));
   const pw = [34, 18, 6, 26, 9, 9, 9, 9, 9, 11, 26, 20, 8];
   if (AS_MD) console.log('| Place | Town | Ver | Engine | Internal | External | Schematic | Diagram | Boarding | Quality | Keys | S6 | S6 age |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   if (!AS_MD) console.log(line(['Place', 'Town', 'Ver', 'Engine', 'Internal', 'External', 'Schematic', 'Diagram', 'Boarding', 'Quality', 'Keys', 'S6 latest', 'S6 age'], pw));
@@ -1593,7 +1593,7 @@ async function main() {
     // Same wording as the town row, minus the 'STALE (allowed)' arm — there is no
     // exception list for places and there should not be one until a measured
     // reason for it exists.
-    const peng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? '' : ' STALE')) : '-';
+    const peng = r.engine ? (r.engine === '(none)' ? '(none)' : r.engine + (r.engineCurrent ? pinClock.note(r) : ' STALE')) : '-';
     /* AND A PLACE SAYS WHICH ENGINE ITS PASS CAME FROM, WHICH IT NEVER DID (OA-430).
      * Found by a harness case going red for the wrong reason: the gate had worked
      * perfectly and the board simply did not say so, and an unannotated PASS beside

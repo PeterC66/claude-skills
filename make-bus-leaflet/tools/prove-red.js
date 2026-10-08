@@ -3081,6 +3081,28 @@ const MUTATIONS = [
     find: "    for (const f of trunkFindings(corr.trunks)) add('hard', 'trunk-stack-incomplete',",
     to: "    for (const f of trunkFindings(corr.trunks)) add('soft', 'trunk-stack-incomplete'," },
 
+
+  // portal_listing.js and engine_lag.js — buses-data OA-607. "Off the portal" may
+  // drop a map from the ceiling only on a list somebody read, and only by its name.
+  { suite: 'portal_listing.test.js', file: 'portal_listing.js',
+    what: 'a list nobody read answers "not listed" instead of "cannot tell"',
+    find: "  if (!listing || !Array.isArray(listing.listed)) return null;",
+    to: "  if (!listing || !Array.isArray(listing.listed)) return false;" },
+
+  { suite: 'portal_listing.test.js', file: 'portal_listing.js',
+    what: 'a map is matched by name only, so one whose public name differs reads as off the portal',
+    find: "  return listing.listed.some((p) => p.name === name || p.slug === slug);",
+    to: "  return listing.listed.some((p) => p.name === name);" },
+
+  { suite: 'engine_lag_off_portal.test.js', file: 'engine_lag.js',
+    what: 'a map off the portal is held to the ceiling again',
+    find: "r.days > ceiling && r.onPortal !== false)",
+    to: "r.days > ceiling)" },
+
+  { suite: 'engine_lag_off_portal.test.js', file: 'engine_lag.js',
+    what: 'a list nobody read drops every map from the ceiling',
+    find: "r.days > ceiling && r.onPortal !== false)",
+    to: "r.days > ceiling && r.onPortal === true)" },
 ];
 
 const scratch = scratchDir('prove-red-');

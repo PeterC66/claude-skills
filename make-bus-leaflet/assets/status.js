@@ -1471,9 +1471,9 @@ function commitBad(c) {
 
 async function main() {
   const deploy = await deploymentRow({ portal: PORTAL, liveUrl: LIVE_URL, noLive: NO_LIVE, noFetch: NO_FETCH, graceHours: DEPLOY_GRACE_HOURS });
-  const s6Limit = await require('./s6_stale_limit.js').measure({ towns: townRows, places: placeRows, liveUrl: LIVE_URL, noLive: NO_LIVE, today: args['owed-today'] });   // OA-484 item 2
+  const listing = await require('./portal_listing.js').read({ liveUrl: LIVE_URL, noLive: NO_LIVE }), s6Limit = await require('./s6_stale_limit.js').measure({ towns: townRows, places: placeRows, given: listing, today: args['owed-today'] });   // OA-484 item 2; OA-607: one listing, asked once
   const commit = commitmentRows();
-  const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL }), shadow = require('./shadow_count').read(BUSES, CURRENT_ENGINE), docChores = require('./doc_chores').ask({ buses: BUSES, skills: SKILLS_ROOT }), engineLag = (() => { try { return require('./engine_lag').measureTree(BUSES, { skillsRoot: SKILLS_ROOT }); } catch (e) { return { error: e.message }; } })();   // chores, never in `bad` (OA-488, OA-485, OA-597)
+  const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL }), shadow = require('./shadow_count').read(BUSES, CURRENT_ENGINE), docChores = require('./doc_chores').ask({ buses: BUSES, skills: SKILLS_ROOT }), engineLag = (() => { try { return require('./engine_lag').measureTree(BUSES, { skillsRoot: SKILLS_ROOT, listing }); } catch (e) { return { error: e.message }; } })();   // chores, never in `bad` (OA-488, OA-485, OA-597)
   if (AS_JSON || JSON_OUT) {
     const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), s6Limit, processSize: procSize, shadowRebuild: shadow, docChores: docChores }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
@@ -1538,14 +1538,12 @@ async function main() {
     }
     else console.log('  engine-staleness exception for ' + a.town + ' at ' + a.engine + ' NO LONGER APPLIES -- delete it from ENGINE_STALE_ALLOWED');
   }
-  // ENGINE STALE is a CHORE and reads as one (OA-396), and since OA-430 it is one
-  // chore PER MAP rather than one for the estate: the worklist turns each name
-  // below into its own `engine-rebuild-<map>` row, which is the unit a loop tick
-  // can claim, build and commit on its own. Places are named here for the first
-  // time; they were behind for weeks with nothing counting them.
-  if (engineStaleRows.length || placeEngineStaleRows.length) console.log('  ENGINE STALE (information, not red): '
-    + engineStaleRows.concat(placeEngineStaleRows).map(r => r.name + ' @ ' + r.engine).join(', ')
+  // ENGINE STALE is a CHORE (OA-396), one PER MAP (OA-430): the worklist turns each name into its own `engine-rebuild-<map>`
+  // row — but only for a map the live site lists (OA-607); one off the portal is rebuilt when it is next activated.
+  const es = require('./portal_listing.js').split(engineStaleRows.concat(placeEngineStaleRows), listing), esName = r => r.name + ' @ ' + r.engine;
+  if (es.on.length) console.log('  ENGINE STALE (information, not red): ' + es.on.map(esName).join(', ') + (es.measured ? '' : ' [portal listing not read: ' + es.why + ', so every map is counted as on it]')
     + '  -- drawn by an older engine; the byte gate is what says whether the artwork is wrong, and the worklist carries one engine-rebuild row per map');
+  if (es.off.length) console.log('  ENGINE STALE, OFF THE PORTAL (no rebuild row until it is next activated, OA-607): ' + es.off.map(esName).join(', '));
   // ...and being UNABLE TO ASK is the red, printed apart from the chore above so
   // the two are never read as the same thing.
   for (const r of uncheckableRows) console.log('  CANNOT GATE ' + r.name + ' @ ' + r.engine + ' AGAINST ITS OWN ENGINE: ' + r.ownEngineUncheckable

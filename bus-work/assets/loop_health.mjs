@@ -63,6 +63,16 @@
  * a guess. Whether the ad-hoc loop is passing a file over is the worklist's
  * `adhoc-not-taken/<file>` row (`loop_ready.mjs`), not this report.
  *
+ * CAN THE TICKS CLEAR THE REFRESHES IN TIME? (buses-data, 2026-10-08.) Three ticks a
+ * day (OA-577) is plenty in a quiet month and not in a month whose scan lands many
+ * finishable refreshes with changes days away, and nothing projected the one against
+ * the other. With `--deep`, each finishable refresh row's earliest effective date
+ * (the worklist's `effectiveDate`, from the scan) and the units it still owes (a
+ * rebuild and a staging, less what the scan's ink review shows done) are run
+ * earliest-deadline-first against the cadence read from `loop/README.md`. A shortfall
+ * is AT RISK with the lever `/ticks N`, N being the extra ticks that put every row in
+ * time; the arithmetic and its reasons are in `refresh_deadline.mjs`.
+ *
  * IT IS READ-ONLY. It writes and commits nothing, so a tick may run it every
  * hour at no cost and a person may run it at any time. By default it opens no
  * socket: the two probes it spawns (`worklist.mjs --conditions`, which reads the
@@ -91,8 +101,12 @@ import { readRuns, loopHealth } from './loop_runs.mjs';
 import { readLoopLock } from './loop_lock.mjs';
 import { fenceOf } from './concurrency.mjs';
 import { readYourMoveDir, classify, parseHold, heldPaths } from './loop_your_move.mjs';
+import { ticksPerDay, unitsOwed, deadlineShortfall } from './refresh_deadline.mjs';
 
 const DAY = 86400000;
+
+/** The bus-loop's cadence since OA-577 (04:00, 13:00, 19:00), used only when `loop/README.md` cannot be read for it. */
+export const DEFAULT_TICKS_PER_DAY = 3;
 
 /** Local YYYY-MM-DD — the action files' dates are local. */
 export function localDate(ms) {
@@ -163,12 +177,16 @@ export function bucketActions(actions, today) {
  * only, so a row listed as finishable may still stop at its own dry run (LOST or REGRESSED).
  */
 export function classifyBusWork(bw) {
-  const out = { finishable: [], escalate: [], fixture: [], person: [], towns: [] };
+  const out = { finishable: [], escalate: [], fixture: [], person: [], towns: [], refresh: [] };
   const grades = bw.grades || {};
   const fixtures = new Set(bw.fixtures || []);
   const reviewed = new Set(bw.reviewed || []);
   for (const r of bw.rows || []) {
-    if (r.kind === 'refresh') (r.unattended ? out.finishable : out.person).push(r.key);
+    if (r.kind === 'refresh') {
+      (r.unattended ? out.finishable : out.person).push(r.key);
+      // What each finishable refresh still owes a tick, for the deadline check (refresh_deadline.mjs).
+      if (r.unattended) out.refresh.push({ key: r.key, effectiveDate: r.effectiveDate || null, units: unitsOwed(bw.review || null, r.map, { local: !!r.local }) });
+    }
     else {
       const name = r.key.replace(/^engine-rebuild-/, '');
       const esc = (r.towns || []).filter((t) => grades[t] === 'ESCALATE' && !reviewed.has(t));
@@ -193,8 +211,8 @@ const UNIT = {
  * `ctx.add` so the verdict sees them.
  */
 export function assessCapacity(f, ctx) {
-  const { add, findings } = ctx;
-  const cap = { work: null, prereq: null, resources: null, busWork: null, levers: [] };
+  const { add, findings, today } = ctx;
+  const cap = { work: null, prereq: null, resources: null, busWork: null, deadline: null, levers: [] };
   const lever = (rows, refs, text, move, nothing = false) => cap.levers.push({ rows, refs, text, move, nothing });
 
   // 1. can the tick execute its own prompt at all
@@ -234,6 +252,25 @@ export function assessCapacity(f, ctx) {
   // 3. the bus-work feed (only with --deep: the worklist reads the live portal).
   // It is the only feed: the ad-hoc queue has its own loop since OA-610.
   if (f.busWork) cap.busWork = classifyBusWork(f.busWork);
+
+  // 3b. can the ticks clear the finishable refresh rows before their changes take
+  // effect? Earliest-deadline-first against the scheduled cadence; the shortfall is
+  // the number of extra ticks that, run now, put every row in time (refresh_deadline.mjs).
+  if (cap.busWork && cap.busWork.refresh.length && today) {
+    const perDay = f.perDay || DEFAULT_TICKS_PER_DAY;
+    const d = deadlineShortfall(cap.busWork.refresh, { today, perDay });
+    cap.deadline = { ...d, perDay, perDaySource: f.perDay ? 'loop/README.md' : 'assumed' };
+    if (d.shortfall > 0) {
+      const w = d.worst;
+      const pl = (n, one, many) => (n === 1 ? one : many);
+      const nl = d.late.length;
+      const when = d.daysLeft < 0 ? `${-d.daysLeft} ${pl(-d.daysLeft, 'day', 'days')} ago` : d.daysLeft === 0 ? 'today' : `in ${d.daysLeft} ${pl(d.daysLeft, 'day', 'days')}`;
+      const fires = w.have ? `only ${w.have} ${pl(w.have, 'tick fires', 'ticks fire')} before then` : 'no tick fires before then';
+      const late = nl ? ` ${nl} of them ${pl(nl, 'takes', 'take')} effect today or already ${pl(nl, 'has', 'have')}, so no scheduled tick reaches ${pl(nl, 'it', 'them')} first.` : '';
+      add('AT RISK', 'refresh-deadline', `${d.counted} finishable refresh ${pl(d.counted, 'row owes', 'rows owe')} ${d.units} tick ${pl(d.units, 'unit', 'units')} (a rebuild and a staging each, less what the ink review shows done), and the earliest change takes effect ${d.earliest} (${when}). At ${perDay} ticks a day${cap.deadline.perDaySource === 'assumed' ? ' (assumed: the cadence could not be read from loop/README.md)' : ''}, ${w.need} ${pl(w.need, 'unit is', 'units are')} due before ${w.date} and ${fires}.${late}`, `Run \`/ticks ${d.shortfall}\` now: ${d.shortfall} extra ${pl(d.shortfall, 'tick', 'ticks')}, earliest date first, ${nl ? 'catch up the rows already in effect and put the rest in time' : 'put every row in time'}.`);
+      lever(d.counted, cap.busWork.refresh.filter((r) => r.units > 0 && r.effectiveDate).map((r) => r.key), `${d.counted} refresh row${d.counted === 1 ? '' : 's'} cannot clear before ${d.counted === 1 ? 'its' : 'their'} changes take effect at ${perDay} ticks a day: ${d.shortfall} tick${d.shortfall === 1 ? '' : 's'} short.`, `\`/ticks ${d.shortfall}\``);
+    }
+  }
 
   // 4. the verdict on work. Nothing to take is the normal day for a loop that does
   // map upkeep only (OA-576), so it is a NOTE; the backlog is not a feed. A bar is
@@ -280,7 +317,8 @@ export function assessCapacity(f, ctx) {
  * @param {Array} f.actions          parseAction() results
  * @param {object|null} [f.prereq]   {drift, scripts:[{path,exists}]}: the stored prompt against loop/README.md, and the files the prompt names
  * @param {object|null} [f.resources] the conditions check's per-resource verdicts
- * @param {{rows:Array, grades:object, fixtures:string[]}|null} [f.busWork] only with --deep
+ * @param {{rows:Array, grades:object, fixtures:string[], review?:object|null}|null} [f.busWork] only with --deep; `review` is the scan's ink review
+ * @param {number|null} [f.perDay]   ticks a day read from loop/README.md; null falls back to DEFAULT_TICKS_PER_DAY
  * @param {Array<{id:string, what:string, by:string}>} f.commitments
  * @param {number} [f.days=7] [f.pushStaleHours=5]
  */
@@ -397,7 +435,7 @@ export function analyse(f) {
   }
   dated.sort((a, b) => a.by.localeCompare(b.by));
 
-  const capacity = assessCapacity(f, { add, findings, buckets });
+  const capacity = assessCapacity(f, { add, findings, buckets, today });
 
   const level = findings.some((x) => x.level === 'BLOCKING') ? 'BLOCKED' : findings.some((x) => x.level === 'AT RISK') ? 'AT RISK' : 'CLEAR';
   return {
@@ -425,6 +463,10 @@ export function renderCapacity(c) {
     const b = c.busWork;
     L.push(`  Bus-work    at most ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules (an upper bound: rollout.js is not run, and can still answer STALE-INPUTS for a rebuild); ${b.escalate.length} stopped by an ESCALATE grade, ${b.fixture.length} under _portal-fixture, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
   } else L.push('  Bus-work    not measured (add --deep: it reads the live portal and takes about a minute).');
+  if (c.deadline) {
+    const d = c.deadline;
+    L.push(`  Deadlines   ${d.counted ? `${d.units} tick unit${d.units === 1 ? '' : 's'} owed by ${d.counted} dated refresh row${d.counted === 1 ? '' : 's'}, the earliest taking effect ${d.earliest}; at ${d.perDay} a day (${d.perDaySource}) ${d.shortfall ? `${d.shortfall} tick${d.shortfall === 1 ? '' : 's'} short` : 'in time'}` : 'no finishable refresh row carries a date'}${d.undated ? `; ${d.undated} undated row${d.undated === 1 ? '' : 's'} not projected` : ''}.`);
+  }
   if (c.levers.length) {
     L.push('');
     L.push('What you can do, most rows first:');
@@ -525,16 +567,18 @@ export function parseResources(text) {
 /**
  * The bus-work rows the prompt could take, from `worklist.mjs --json` (--deep only: it reads
  * the live portal, so a plain run opens no socket). `null` when the worklist cannot be read.
+ * `scan` is the upcoming report the refresh rows join to, which names the ink review to read.
  */
 export function parseBusWork(text, { grades = {}, fixtures = [], reviewed = [] } = {}) {
   try {
-    const items = JSON.parse(text).items || [];
+    const j = JSON.parse(text);
+    const items = j.items || [];
     const rows = [];
     for (const r of items) {
-      if (/^refresh-/.test(r.key)) rows.push({ key: r.key, kind: 'refresh', towns: [], unattended: !!r.unattended });
+      if (/^refresh-/.test(r.key)) rows.push({ key: r.key, kind: 'refresh', towns: [], unattended: !!r.unattended, effectiveDate: r.effectiveDate || null, map: r.map || null, local: /^refresh-local-/.test(r.key) });
       else if (/^engine-rebuild-/.test(r.key)) rows.push({ key: r.key, kind: 'rebuild', towns: r.towns || [] });
     }
-    return { rows, grades, fixtures, reviewed };
+    return { rows, grades, fixtures, reviewed, scan: (j.meta && j.meta.upcomingReport && j.meta.upcomingReport.date) || null };
   } catch { return null; }
 }
 
@@ -574,6 +618,12 @@ function gradesAndFixtures(busesDir) {
     try { for (const e of readdirSync(path.join(busesDir, root, '_portal-fixture'), { withFileTypes: true })) if (e.isDirectory()) fixtures.push(e.name); } catch { /* none */ }
   }
   return { grades, fixtures, reviewed };
+}
+
+/** The ink review for one scan (`_gtfs/ink-review_<scan>.json`), or null when there is none: then every finishable refresh row owes its full rebuild and staging. */
+export function readInkReview(busesDir, scan) {
+  if (!scan) return null;
+  try { return JSON.parse(readFileSync(path.join(busesDir, '_gtfs', `ink-review_${scan}.json`), 'utf8')); } catch { return null; }
 }
 
 /** Run a read-only command and return its stdout, or null if it could not run or timed out. */
@@ -623,6 +673,7 @@ function probeFacts(busesDir, deep, which) {
   if (deep) {
     const wl = probe([path.join(HERE, 'worklist.mjs'), '--json', '--buses', busesDir], { cwd: HERE, timeout: 300000 });
     facts.busWork = wl ? parseBusWork(wl.out, gradesAndFixtures(busesDir)) : null;
+    if (facts.busWork) facts.busWork.review = readInkReview(busesDir, facts.busWork.scan);
   }
   return facts;
 }
@@ -676,6 +727,7 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
     dirty, staged, holdPaths: heldPaths(files), holds: parsedHolds, drafts: drafts.length,
     ahead, actions, commitments,
     passedOver: passedOver(path.join(loopDir, 'runs')),
+    perDay: (() => { try { return ticksPerDay(readFileSync(path.join(loopDir, 'README.md'), 'utf8')); } catch { return null; } })(),
     ...(probes ? probeFacts(busesDir, deep, probes === true ? { prereq: true, conditions: true, engineLag: true } : probes) : {}),
   };
 }

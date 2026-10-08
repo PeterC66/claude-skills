@@ -104,6 +104,16 @@ ok(tick.isTick === true, 'a sched- name is recognised as a tick');
 ok(tick.takenSource === 'holder' && tick.ageMin === 20, 'the taken time is read off the holder, and the age is right');
 ok(tick.expiresSource === 'holder' && tick.expired === false, 'a live lease read off the holder is not expired');
 
+// OA-610: the separate ad-hoc loop holds this same lock as sched-adhoc-HHMM. It
+// is a tick in every respect: recognised by name, its HHMM read whole, and its
+// lock stealable once past expires, exactly like a sched-HHMM tick's.
+const adhocTick = readLoopLock(tree({ lock: true, holder: held('sched-adhoc-0101', NOW - 20 * 60000, NOW + 70 * 60000) }), { now: NOW });
+ok(adhocTick.name === 'sched-adhoc-0101', 'an ad-hoc run\'s name is read whole, HHMM included');
+ok(adhocTick.isTick === true, 'a sched-adhoc- name is recognised as a tick');
+ok(adhocTick.expired === false, 'and its live lease is live');
+const adhocStale = readLoopLock(tree({ lock: true, holder: held('sched-adhoc-0101', NOW - 105 * 60000, NOW - 15 * 60000) }), { now: NOW });
+ok(adhocStale.isTick === true && adhocStale.expired === true && adhocStale.overdueMin === 15, 'an ad-hoc run\'s lock past its expires is a stale TICK lock, 15m over');
+
 const noExp = readLoopLock(tree({ lock: true, holder: held('sched-1900', NOW - 100 * 60000, null) }), { now: NOW });
 ok(noExp.expiresSource === 'fallback', 'a holder with no expires: falls back rather than becoming immortal');
 ok(noExp.expires === noExp.takenAt + DEFAULT_LEASE_MIN * 60000, `and the fallback is taken + ${DEFAULT_LEASE_MIN} minutes`);
@@ -235,6 +245,13 @@ want(conc.assess(['estate-sweep'], live), conc.DELAY, 'and so is an estate sweep
 // --- green 2: a crashed tick must NOT stop the next tick at step 2 ---
 const staleTick = world(lockState({ expired: true, overdueMin: 15, expires: NOW - 15 * 60000, takenAt: NOW - 105 * 60000, ageMin: 105 }));
 want(conc.assess(['buses-tree'], staleTick), conc.SAFE, "a tick's lock past its lease: SAFE NOW, because step 3's steal rule owns that decision");
+
+// OA-610: the ad-hoc loop's lock is a tick's, live and stale, in the verdict too.
+const adhocLive = world(lockState({ name: 'sched-adhoc-0101' }));
+want(conc.assess(['buses-tree'], adhocLive), conc.DELAY, 'a live ad-hoc run holds the lock: BETTER TO DELAY');
+says(conc.assess(['buses-tree'], adhocLive), /sched-adhoc-0101/, 'and it names the ad-hoc holder');
+const adhocStaleW = world(lockState({ name: 'sched-adhoc-0101', expired: true, overdueMin: 15, expires: NOW - 15 * 60000, takenAt: NOW - 105 * 60000, ageMin: 105 }));
+want(conc.assess(['buses-tree'], adhocStaleW), conc.SAFE, "an ad-hoc run's lock past its lease: SAFE NOW, stealable like any tick's");
 
 // --- red: a person's lock, live and stale, and the two differ ---
 const person = world(lockState({ name: 'buses-04', isTick: false }));

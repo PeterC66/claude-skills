@@ -150,6 +150,9 @@ console.log('\n4. Relayed commands — and this is the OTHER regression this har
   check('the two populations are different sizes over the same files, so one is not the other renamed', n.value !== n.decisions);
   check('it is flagged as a floor, so no round record can quote it as a total', n.floor === true);
   check('and the file count is carried, so the reader has a denominator', n.files === 4, String(n.files));
+  // OA-610: the ad-hoc loop's run records are in adhoc/runs/, and a relay there counts.
+  const na = routineNumbers(facts({ runTexts: ['a quiet tick'], adhocRunTexts: [relay] }), { now: NOW }).numbers.relayedCommands;
+  check('a relay in an ad-hoc run record (adhoc/runs/) counts too', na.value === 1 && na.files === 2, JSON.stringify(na));
 
   check('no pattern in either set matches the other set\'s example — they are disjoint on the real phrasings',
     !DECISION_PATTERNS.some((re) => re.test(relay)) && !RELAY_PATTERNS.some((re) => re.test(decide)));
@@ -181,6 +184,7 @@ console.log('\n6. readFacts asks the disk once and never throws on a tree that i
     ghRuns: () => null,
   });
   check('every read is guarded by an exists() check', asked.length > 0, String(asked.length));
+  check('every adhoc/runs/ read is guarded too: an absent folder is no texts', asked.some((p) => /adhoc[\\/]runs$/.test(p)) && Array.isArray(f.adhocRunTexts) && f.adhocRunTexts.length === 0, JSON.stringify(f.adhocRunTexts));
   check('and an absent tree gives runNames null, prompt null, no pages', f.runNames === null && f.prompt === null && Object.values(f.pages).every((v) => v === null), JSON.stringify({ r: f.runNames, p: f.prompt }));
   const out = routineNumbers(f, { now: NOW });
   check('which the core turns into NOT MEASURED across the board and no exception', out.numbers.idleTicks.measured === false && out.numbers.ciRedRate.measured === false);

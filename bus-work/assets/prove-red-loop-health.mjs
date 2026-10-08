@@ -170,26 +170,32 @@ async function suite(m, label, verbose) {
   check('passedOver: a row the newest tick named wins over the older line', gateOf('OA-302') === 'a live claim');
   check('passedOver: a run before the rule\'s stamp is not read', gateOf('OA-900') === undefined);
   check('passedOver: a stood-down (busy) run is not read', gateOf('OA-777') === undefined);
-  check('passedOver: the files named not due are collected, and the ticks read counted', po.notDue.join() === 'zz-a.md' && po.runs === 3);
+  // OA-610: a bus tick takes no ad-hoc file, so its `(not due: ...)` lines are no longer collected here.
+  check('passedOver: the ticks read are counted, and no ad-hoc not-due list is returned', po.runs === 3 && !('notDue' in po));
   check('passedOver: no folder is no rows, never a throw', passedOver(path.join(tmp, 'nowhere')).rows.length === 0);
 
   // 7e. can a tick work: the verdict, from facts the caller gathered
-  const nothing = analyse(base({ adhoc: { ready: ['a.md'], notDue: ['a.md'] } }));
+  const noRows = { grades: {}, fixtures: [], rows: [] };
+  const nothing = analyse(base({ busWork: noRows }));
   check('nothing to take is NOTHING TO DO, a note and never a fault', nothing.capacity.work === 'NOTHING TO DO' && has(nothing, 'no-work', 'NOTE') && !nothing.findings.some((x) => x.key === 'no-work' && x.level !== 'NOTE'));
   check('the OA feed is not measured at all', !('oa' in nothing.capacity));
-  const adhocOnly = analyse(base({ adhoc: { ready: ['a.md', 'b.md'], notDue: ['a.md'] } }));
-  check('an ad-hoc file that is not named not due is work', adhocOnly.capacity.work === 'CAN WORK' && adhocOnly.capacity.adhoc.takeable === 1 && !has(adhocOnly, 'no-work'));
+  // OA-610: the ad-hoc queue has its own loop, so a ready/ file is no tick's work, even if a caller passes one in.
+  const adhocOnly = analyse(base({ busWork: noRows, adhoc: { ready: ['a.md', 'b.md'], notDue: [] } }));
+  check('an ad-hoc file is not a tick\'s work: the bus loop has no ad-hoc feed', adhocOnly.capacity.work === 'NOTHING TO DO' && !('adhoc' in adhocOnly.capacity));
+  check('the nothing-to-do note says where ad-hoc work went', nothing.findings.some((x) => x.key === 'no-work' && /adhoc\/ready\//.test(x.text) && !/loop\/adhoc/.test(x.text)));
   const deepWork = analyse(base({ busWork: { grades: {}, fixtures: [], rows: [{ key: 'engine-rebuild-March', kind: 'rebuild', towns: ['March'] }] } }));
   check('a finishable bus-work row is work', deepWork.capacity.work === 'CAN WORK');
   check('a bus-work feed with nothing finishable is nothing to do', analyse(base({ busWork: { grades: {}, fixtures: [], rows: [] } })).capacity.work === 'NOTHING TO DO');
-  const barred = analyse(base({ stopFile: true, adhoc: { ready: [], notDue: [] } }));
-  check('a BLOCKING finding makes work BARRED, and no "nothing to take" note is added on top', barred.capacity.work === 'BARRED' && !has(barred, 'no-work'));
+  const barred = analyse(base({ stopFile: true }));
+  check('a BLOCKING finding makes work BARRED even without --deep', barred.capacity.work === 'BARRED');
+  const barredDeep = analyse(base({ stopFile: true, busWork: noRows }));
+  check('a BLOCKING finding makes work BARRED, and no "nothing to take" note is added on top', barredDeep.capacity.work === 'BARRED' && !has(barredDeep, 'no-work'));
   check('nothing measured says nothing: no capacity verdict, no capacity findings', analyse(base()).capacity.work === null && analyse(base()).capacity.levers.length === 0);
 
   const lockReason = { need: 'loop-lock', verdict: 'delay', why: 'sched-2315 holds loop/LOCK.d, taken 2m ago' };
   const lockOnly = analyse(base({ resources: { 'buses-tree': { verdict: 'delay', reasons: [lockReason] }, engine: { verdict: 'delay', reasons: [lockReason] } } }));
   check('a resource barred only by a tick\'s own lock is a run in progress, not a finding, and not BARRED', !lockOnly.findings.some((x) => /^resource-/.test(x.key)) && lockOnly.capacity.work !== 'BARRED' && lockOnly.capacity.resources.barred.every((b) => b.lockOnly));
-  const treeReal = analyse(base({ resources: { 'buses-tree': { verdict: 'check', reasons: [lockReason, { need: 'buses-tree', verdict: 'check', why: '2 uncommitted file(s) here' }] } }, adhoc: { ready: [], notDue: [] } }));
+  const treeReal = analyse(base({ resources: { 'buses-tree': { verdict: 'check', reasons: [lockReason, { need: 'buses-tree', verdict: 'check', why: '2 uncommitted file(s) here' }] } } }));
   check('a resource barred for a real reason is at risk, and the tree makes work BARRED', has(treeReal, 'resource-buses-tree', 'AT RISK') && treeReal.capacity.work === 'BARRED');
   const pushBar = analyse(base({ ahead: { count: 4, oldestMs: NOW - 3600000 }, resources: { 'portal-write': { verdict: 'check', reasons: [{ need: 'portal-write', verdict: 'check', why: 'buses-data has 4 unpushed commit(s)' }] } } }));
   check('portal-write barred by unpushed commits is a note, with the push as a lever', has(pushBar, 'resource-portal-write', 'NOTE') && pushBar.capacity.levers.some((v) => /portal-write/.test(v.text)));
@@ -201,13 +207,14 @@ async function suite(m, label, verbose) {
 
   // 7f. what you can do: the levers, most rows first
   const lev = analyse(base({
-    holds: [{ ref: 'h1', ageDays: 1 }, { ref: 'h2', ageDays: 2 }], adhoc: { ready: [], notDue: [] },
+    holds: [{ ref: 'h1', ageDays: 1 }, { ref: 'h2', ageDays: 2 }],
     busWork: { grades: { Beaconsfield: 'ESCALATE' }, fixtures: [], rows: [{ key: 'engine-rebuild-Beaconsfield', kind: 'rebuild', towns: ['Beaconsfield'] }] },
   })).capacity.levers;
   check('the biggest lever is first: two holds outrank one ESCALATE row', lev[0].rows === 2 && /hold/.test(lev[0].text) && /ESCALATE/.test(lev[1].text));
-  check('the empty ad-hoc feed is a lever, says it is the way backlog work reaches the loop, and comes last', /ad-hoc feed is empty/.test(lev[lev.length - 1].text) && /backlog/.test(lev[lev.length - 1].text) && lev[lev.length - 1].nothing === true);
+  check('no lever is about the ad-hoc queue, which is another loop\'s since OA-610', !lev.some((v) => /ad-hoc|adhoc/i.test(`${v.text} ${v.move}`)));
   check('no lever is about open actions', !lev.some((v) => /decision: peter|Parked|\/oa /.test(`${v.text} ${v.move}`)));
-  const text = render(nothing, NOW);
+  // OA-610: with the ad-hoc lever gone, a lever has to come from somewhere, so this case carries a hold.
+  const text = render(analyse(base({ busWork: noRows, holds: [{ ref: 'h1', ageDays: 1 }] })), NOW);
   check('the report carries the work verdict and the levers', /CAN A TICK DO WORK\? NOTHING TO DO/.test(text) && /What you can do, most rows first:/.test(text));
   check('the report calls the backlog what it is, not the loop\'s supply', /Backlog \(not the loop's feed/.test(text) && !/free to take/.test(text));
 
@@ -233,11 +240,11 @@ async function suite(m, label, verbose) {
   const f2 = gather(root, { now: NOW });
   check('gather: STOP and the newest run headline are read', f2.stopFile && f2.runs.length === 1 && f2.lastRun.headline === 'Chose nothing: nothing was due.');
 
-  fs.mkdirSync(path.join(root, 'loop', 'adhoc', 'ready'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'loop', 'adhoc', 'ready', 'zz-a.md'), 'x');
+  // OA-610: a file in either ad-hoc ready/ folder, the old or the new, is not gathered as bus-loop work.
+  for (const d of [['loop', 'adhoc', 'ready'], ['adhoc', 'ready']]) { fs.mkdirSync(path.join(root, ...d), { recursive: true }); fs.writeFileSync(path.join(root, ...d, 'zz-a.md'), 'x'); }
   fs.writeFileSync(path.join(root, 'loop', 'runs', '2026-10-03_1415-none.md'), '`zz-a.md` (not due: later)\nOA-001 (passed over: waiting to 2026-10-08)\n');
   const f3 = gather(root, { now: NOW });
-  check('gather: the ready/ files and the passed-over lines are read', f3.adhoc.ready.join() === 'zz-a.md' && f3.adhoc.notDue.join() === 'zz-a.md' && f3.passedOver.rows[0].ref === 'OA-001');
+  check('gather: the passed-over lines are read, and no ad-hoc feed is gathered', !('adhoc' in f3) && f3.passedOver.rows[0].ref === 'OA-001');
   check('gather: no probes means no prereq and no resources, never a made-up pass', f3.prereq === undefined && f3.resources === undefined);
   const checker = path.join(root, 'Documentation', 'check-task-prompt.mjs');
   fs.mkdirSync(path.dirname(checker), { recursive: true });
@@ -313,10 +320,9 @@ const MUTANTS = [
   ['stood-down runs are read', '(?!busy|missed)', ''],
   ['nothing to do is never said', "if (cap.work === 'NOTHING TO DO') {", 'if (false) {'],
   ['nothing to do becomes a fault', "add('NOTE', 'no-work',", "add('AT RISK', 'no-work',"],
-  ['ad-hoc work is not work', '(bw || ad) ? \'CAN WORK\'', '(bw) ? \'CAN WORK\''],
-  ['the empty ad-hoc lever is dropped', 'if (cap.adhoc && cap.adhoc.takeable === 0) lever(', 'if (false) lever('],
+  ['finishable bus-work is not work', "cap.busWork.finishable.length ? 'CAN WORK'", "false ? 'CAN WORK'"],
+  ['a bar needs --deep to be reported', "if (blocking) cap.work = 'BARRED';", "if (blocking && cap.busWork) cap.work = 'BARRED';"],
   ['a BLOCKING finding no longer bars work', "const blocking = treeBarred || findings.some((x) => x.level === 'BLOCKING');", 'const blocking = false;'],
-  ['ad-hoc files named not due count as work', 'takeable: ready.length - notDue.length', 'takeable: ready.length'],
   ['prompt drift is not raised', "if (p.drift === true) add(", "if (false) add("],
   ['a missing worklist no longer blocks', "add(critical ? 'BLOCKING' : 'AT RISK', 'script-missing'", "add('AT RISK', 'script-missing'"],
   ['a lock-only resource is reported as a finding', 'if (b.lockOnly) continue;', ''],

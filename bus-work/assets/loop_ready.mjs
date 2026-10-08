@@ -1,6 +1,6 @@
 /*
- * loop_ready.mjs — a file in `loop/adhoc/ready/` that the ticks keep naming and
- * never take (buses-data OA-503, 2026-09-28).
+ * loop_ready.mjs — a file in `adhoc/ready/` that the ad-hoc runs keep naming and
+ * never take (buses-data OA-503, 2026-09-28; the folder moved by OA-610).
  *
  * THE FOURTH FACT ABOUT THE LOOP, AND THE ONE THAT LOOKED LIKE HEALTH. The loop
  * rows in this skill already say that a tick is running (`loop_lock.mjs`), that
@@ -40,10 +40,23 @@
  * the last `windowHours`. A run can only name a file in `ready/` once it is
  * there, so the count stays honest even when the age is not.
  *
- * SILENCE IS A REQUIREMENT, for the reason `loop_runs.mjs` gives: `loop/` is
- * gitignored, so in CI, a clone or a worktree the folders are absent. Absent,
- * empty and unreadable each yield no row. `prove-red-loop-ready.mjs` proves that
- * against real directories.
+ * THE QUEUE HAS ITS OWN LOOP NOW (buses-data OA-610, Peter, 2026-10-08). The
+ * ad-hoc queue left the hourly bus loop for a scheduled task of its own,
+ * `adhoc-loop`, three runs a day. The queue moved from `loop/adhoc/ready/` to a
+ * top-level `adhoc/ready/`, and the ad-hoc runs write their run files to
+ * `adhoc/runs/` in the same `YYYY-MM-DD_HHMM-<outcome>.md` form, a run that took
+ * a file being `-adhoc` with the same bold Feed line, and a pass-over the same
+ * `(not due: …)` form. So the verdict below is unchanged and only the paths
+ * moved. Runs are read from BOTH `adhoc/runs/` and `loop/runs/` inside the
+ * 48-hour window, so the row is not blind for the two days after the move,
+ * while the only record of a pass-over is a bus tick's. Each run carries the
+ * folder it came from, so the row's action names the file to open. Bus-loop
+ * run files never carry `-adhoc` from now on; old ones that do still parse.
+ *
+ * SILENCE IS A REQUIREMENT, for the reason `loop_runs.mjs` gives: `loop/` and
+ * `adhoc/` are gitignored apart from their READMEs, so in CI, a clone or a
+ * worktree the folders are absent. Absent, empty and unreadable each yield no
+ * row. `prove-red-loop-ready.mjs` proves that against real directories.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -64,16 +77,17 @@ export function readReady(dir) {
 /**
  * The run files stamped at or after `since`, with their text. Only these are
  * opened, so a board read costs the last day or two of runs and not the folder's
- * whole history.
+ * whole history. `where` is the folder as the row should name it (OA-610: runs
+ * come from two folders), e.g. `adhoc/runs`; it defaults to `loop/runs`.
  */
-export function readRunsSince(dir, since) {
+export function readRunsSince(dir, since, where = 'loop/runs') {
   const out = [];
   try {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       if (!e.isFile()) continue;
       const r = parseRunName(e.name);
       if (!r || r.at < since) continue;
-      try { out.push({ ...r, text: readFileSync(path.join(dir, e.name), 'utf8') }); } catch { /* skip it */ }
+      try { out.push({ ...r, where, text: readFileSync(path.join(dir, e.name), 'utf8') }); } catch { /* skip it */ }
     }
   } catch { return []; }
   return out.sort((a, b) => a.at - b.at);
@@ -108,12 +122,18 @@ export function verdict(run, file, others = []) {
 /**
  * The board's one call, against a buses-data root: `worklist.mjs` carries only
  * the import and this line, because its size is ratcheted (OA-001). `ready/` is
- * the one place in `loop/adhoc/` it reads, and only for a file the loop is NOT
- * TAKING. A ready/ file is already promoted, so this is not a triage row.
+ * the one place in `adhoc/` it reads, and only for a file the ad-hoc loop is NOT
+ * TAKING. A ready/ file is already promoted, so this is not a triage row. The
+ * runs are the ad-hoc loop's own and, for the transition, the bus loop's
+ * (OA-610; see the header).
  */
 export function adhocNotTakenFor(busesDir, now = Date.now()) {
-  const loop = path.join(busesDir, 'loop');
-  return adhocNotTakenItems({ ready: readReady(path.join(loop, 'adhoc', 'ready')), runs: readRunsSince(path.join(loop, 'runs'), now - 48 * 3600000), now });
+  const since = now - 48 * 3600000;
+  const runs = [
+    ...readRunsSince(path.join(busesDir, 'adhoc', 'runs'), since, 'adhoc/runs'),
+    ...readRunsSince(path.join(busesDir, 'loop', 'runs'), since, 'loop/runs'),
+  ].sort((a, b) => a.at - b.at);
+  return adhocNotTakenItems({ ready: readReady(path.join(busesDir, 'adhoc', 'ready')), runs, now });
 }
 
 const hhmm = (ms) => new Date(ms).toTimeString().slice(0, 5);
@@ -137,7 +157,7 @@ export function adhocNotTakenItems({ ready, runs, now = Date.now(), minAgeMin = 
     const ageMin = Math.round((now - f.mtimeMs) / 60000);
     if (ageMin < minAgeMin) continue;
     const seen = (runs || []).filter((r) => r.at >= Math.max(f.mtimeMs - 60000, floor))
-      .map((r) => ({ at: r.at, name: r.name, v: verdict(r, f.name, names) }))
+      .map((r) => ({ at: r.at, name: r.name, where: r.where || 'adhoc/runs', v: verdict(r, f.name, names) }))
       .filter((x) => x.v);
     if (!seen.length) continue;
     // The newest tick decides. If it took the file, or passed it over as not due,
@@ -150,13 +170,13 @@ export function adhocNotTakenItems({ ready, runs, now = Date.now(), minAgeMin = 
     items.push({
       key: `adhoc-not-taken/${f.name.replace(/\.md$/i, '')}`,
       rank: 3, type: 'loop-health',
-      title: `The loop is not taking this: \`loop/adhoc/ready/${f.name}\` has been named by ${passes.length} tick${passes.length === 1 ? '' : 's'} since ${hhmm(first.at)}, and none took it`,
-      why: `A file in \`loop/adhoc/ready/\` is a request you promoted. Since OA-503, step 4 of the task prompt says a tick takes every ready/ file unless it is not due. A tick that cannot finish a file does its first slice and files the rest as OAs. A tick that meets a gate does the ungated half and records the gate. A file that needs a person becomes a hold. A tick passes over a file only as \`\` \`<file>\` (not due: <why>) \`\`. ${passes.length} run file${passes.length === 1 ? '' : 's'} named this one in some other way, the newest being \`${last.name}\`, which should say why. So the prompt is not being followed for this file, or the file asks for something the prompt has no way to handle.`,
+      title: `The ad-hoc loop is not taking this: \`adhoc/ready/${f.name}\` has been named by ${passes.length} run${passes.length === 1 ? '' : 's'} since ${hhmm(first.at)}, and none took it`,
+      why: `A file in \`adhoc/ready/\` is a request you promoted. Since OA-503 the prompt says a run takes every ready/ file unless it is not due, and since OA-610 that prompt is the ad-hoc loop's own, in \`adhoc/README.md\`. A run that cannot finish a file does its first slice and files the rest as OAs. A run that meets a gate does the ungated half and records the gate. A file that needs a person becomes a hold. A run passes over a file only as \`\` \`<file>\` (not due: <why>) \`\`. ${passes.length} run file${passes.length === 1 ? '' : 's'} named this one in some other way, the newest being \`${last.where}/${last.name}\`, which should say why. So the prompt is not being followed for this file, or the file asks for something the prompt has no way to handle.`,
       who: 'Peter', runbook: 'loop',
       ageDays: Math.floor(ageMin / 1440),
       passes: passes.length, file: f.name,
       do: [
-        { kind: 'chat', what: `Read loop/runs/${last.name} for the tick's reason, then either split loop/adhoc/ready/${f.name} into pieces a tick can take, or move it back to loop/your-move/ and file it as an OA.` },
+        { kind: 'chat', what: `Read ${last.where}/${last.name} for the run's reason, then either split adhoc/ready/${f.name} into pieces the ad-hoc loop can take, or move it back to loop/your-move/ and file it as an OA.` },
       ],
     });
   }

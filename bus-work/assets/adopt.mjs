@@ -273,7 +273,7 @@ export const subjectFor = (p) => `adopt: Peter's edit to ${p}`;
 function messageFor(v, by) {
   const lines = [subjectFor(v.path), ''];
   if (v.rule === 'a') {
-    lines.push(`Adopted by ${by} under rule (a) of loop/README.md's adoption section (buses-data OA-542): the live hold ${v.hold} named this file in its File: field and the working tree held exactly the change its diff block spells out. The hold is retired to loop/adhoc/done/.`);
+    lines.push(`Adopted by ${by} under rule (a) of loop/README.md's adoption section (buses-data OA-542): the live hold ${v.hold} named this file in its File: field and the working tree held exactly the change its diff block spells out. The hold is retired to loop/retired/.`);
   } else {
     lines.push(`Adopted by ${by} under rule (b) of loop/README.md's adoption section (buses-data OA-542): a document untouched for ${v.ageMin} minutes, with check-tables, check-doc-links and check-file-hygiene green.`);
   }
@@ -281,10 +281,15 @@ function messageFor(v, by) {
   return lines.join('\n');
 }
 
-/** Move a satisfied hold to loop/adhoc/done/ with a RESOLVED section. */
+/**
+ * Move a satisfied hold to loop/retired/ with a RESOLVED section. Until buses-data
+ * OA-610 (2026-10-08) a retired hold went to loop/adhoc/done/; that queue became
+ * the separate ad-hoc loop's `adhoc/`, and a retired hold is nobody's work, so it
+ * goes to loop/retired/, which nothing reads and which keeps the reason.
+ */
 export function retireHold(root, holdFile, { by, sha, subject, date }) {
   const from = path.join(root, 'loop', 'your-move', holdFile);
-  const doneDir = path.join(root, 'loop', 'adhoc', 'done');
+  const doneDir = path.join(root, 'loop', 'retired');
   mkdirSync(doneDir, { recursive: true });
   let to = path.join(doneDir, holdFile);
   if (existsSync(to)) to = path.join(doneDir, `${date}_${holdFile}`);

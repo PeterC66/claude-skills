@@ -205,8 +205,9 @@ function runRepo(m, log) {
     const status = g('status', '--porcelain', '-uall');
     check('what was refused is still dirty, untouched', /Fresh\.md/.test(status) && /Untracked\.md/.test(status) && /CORR-001/.test(status) && !/settings\.json/.test(status) && !/Example\.md/.test(status), status);
     check('the committed settings file has no S4 svg line', !/S4-generate\/\*\*\/\*\.svg/.test(g('show', 'HEAD~1:.claude/settings.json') + g('show', 'HEAD:.claude/settings.json')));
-    const retired = path.join(tmp, 'loop', 'adhoc', 'done', 's4-svg-read-deny.md');
-    check('the hold is retired to adhoc/done with a RESOLVED section', existsSync(retired) && !existsSync(path.join(tmp, 'loop', 'your-move', 's4-svg-read-deny.md')) && /## RESOLVED[\s\S]*adopt: Peter's edit to \.claude\/settings\.json/.test(readFileSync(retired, 'utf8')));
+    // OA-610: a retired hold goes to loop/retired/, no longer loop/adhoc/done/.
+    const retired = path.join(tmp, 'loop', 'retired', 's4-svg-read-deny.md');
+    check('the hold is retired to loop/retired with a RESOLVED section, and nothing is written under adhoc/', !existsSync(path.join(tmp, 'loop', 'adhoc')) && !existsSync(path.join(tmp, 'adhoc')) && existsSync(retired) && !existsSync(path.join(tmp, 'loop', 'your-move', 's4-svg-read-deny.md')) && /## RESOLVED[\s\S]*adopt: Peter's edit to \.claude\/settings\.json/.test(readFileSync(retired, 'utf8')));
 
     g('checkout', '-q', '-b', 'work/x');
     check('a checkout off main is refused', /not main/.test(m.treeRefusal(tmp) || ''), m.treeRefusal(tmp));

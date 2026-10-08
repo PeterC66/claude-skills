@@ -48,8 +48,9 @@
  * unanswered finding would bury the thing somebody is actually waiting on. So
  * there is a single file, rewritten while the findings stand. **A run that finds
  * nothing does not delete an existing draft** — a draft is never deleted, the
- * reason is the record, and Peter moving it to `loop/adhoc/done/` is what closes
- * it.
+ * reason is the record, and Peter moving it to `loop/retired/` is what closes
+ * it (`loop/adhoc/done/` until buses-data OA-610, 2026-10-08, when the ad-hoc
+ * queue became a loop of its own under `adhoc/`).
  *
  * IT CARRIES NO `## What is needed from you` AND NO `**Blocks:**`, which is what
  * makes it a DRAFT rather than a hold. Nothing here blocks anybody: an archive
@@ -160,7 +161,7 @@ export function draftBody(result, today) {
 
   lines.push('## What to do with this');
   lines.push('');
-  lines.push('It is a draft, so the three dispositions are the usual ones: **promote** it into `loop/adhoc/ready/`, **file** what deserves a row and move this to `loop/adhoc/done/`, or **decline** it with a `## DECLINED` section saying why. A draft is never deleted — the reason is the record.');
+  lines.push('It is a draft, so the three dispositions are the usual ones: **promote** it into `adhoc/ready/`, where the ad-hoc loop takes it, **file** what deserves a row and move this to `loop/retired/`, or **decline** it with a `## DECLINED` section saying why and move it to `loop/retired/`. A draft is never deleted — the reason is the record.');
   lines.push('');
   return lines.join('\n');
 }

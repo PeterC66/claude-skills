@@ -607,7 +607,8 @@ jobs:
       # draft rather than the folder it sits in -- so the two harnesses became one,
       # and its new cases include the control that the partition is total and
       # disjoint. `loop/adhoc/ready/`, `doing/` and `done/` are still a separate
-      # channel and still asserted NOT to be counted.
+      # channel and still asserted NOT to be counted. (buses-data OA-610, 2026-10-08:
+      # they are now the top-level `adhoc/`, the separate ad-hoc loop's in-tray.)
       - name: Prove the loop/your-move/ holds and drafts can go red
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-your-move
@@ -643,7 +644,8 @@ jobs:
         run: npm run test:prove-red-loop-runs
 
       # buses-data OA-503 (2026-09-28): a file in loop/adhoc/ready/ that the ticks
-      # keep naming and never take. The loop looked healthy all day while it passed
+      # keep naming and never take. Since OA-610 (2026-10-08) the queue is the
+      # separate ad-hoc loop's `adhoc/ready/`, its runs in `adhoc/runs/`. The loop looked healthy all day while it passed
       # over two of Peter's promoted files 34 times. Same checkout caveat as the
       # step above: both folders are gitignored, so the harness builds real ones
       # under the temp dir. Its controls matter as much as its row: the standing

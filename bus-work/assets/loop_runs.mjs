@@ -62,12 +62,18 @@
  * tick holding the lock. So a stand-down to a live TICK is `-busy`, and it is
  * TRANSPARENT: it neither continues nor breaks the idle run, and it is not
  * working. A stand-down to a PERSON's session stays `-none`: that is loop time
- * the queue really lost, and the row names that holder as its cause.
+ * the queue really lost, and the row names that holder as its cause. Since
+ * buses-data OA-610 (2026-10-08) the separate ad-hoc loop holds the same lock as
+ * `sched-adhoc-HHMM`; the `sched-` test below makes it a tick, so a bus tick that
+ * meets it is `-busy` too.
  *
  * `idle` IS THE FIFTH, AND TRANSPARENT FOR THE SAME REASON (buses-data OA-576,
  * Peter, 2026-10-07). Since the loop does map upkeep only, a tick that
  * dispatched and found no bus-work row it could finish and no ad-hoc file is the
- * normal day, not a fault: there is no backlog feed left to fall back on. Named
+ * normal day, not a fault (and since OA-610 a bus tick takes no ad-hoc file at
+ * all: the ad-hoc queue has its own loop, whose run files are in `adhoc/runs/`
+ * and are not read here; a bus tick's file no longer carries `-adhoc`, and an old
+ * one that does still parses as a working tick): there is no backlog feed left to fall back on. Named
  * `-none`, three of those a day would keep the `loop-idle` row on the board for
  * ever and hide the gate-stop it exists to catch. So a tick that got past step 2
  * and chose nothing names itself `-idle`; like `busy` it neither continues nor

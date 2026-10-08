@@ -65,6 +65,11 @@
  *     greps them, which is exactly what the review's sweep 5 did, and section 10
  *     says of that method *"counts from greps of run records are lower bounds"*. It
  *     is reported with `floor: true` so no round record can quote it as a total.
+ *     Since buses-data OA-610 (2026-10-08) the ad-hoc queue is a loop of its own
+ *     whose run records are in `adhoc/runs/`, and they are grepped too: leaving
+ *     them out would lower the floor by exactly the runs most likely to relay a
+ *     command. Idle ticks (3) stay `loop/runs/` alone, because they measure the
+ *     bus loop.
  *
  *  5. WORDS BEFORE ACTING — measured, as `wc -w` over the things a session or tick
  *     is told to read before working: the stored task prompt (the text a tick
@@ -170,6 +175,7 @@ export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads 
     manifests: readManifests({ busesDir, skillsAssets: path.join(skillsRoot, 'make-bus-leaflet', 'assets') }),
     runNames,
     runTexts: (runNames || []).map((f) => readText(at('loop', 'runs', f)) || ''),
+    adhocRunTexts: (listDir(at('adhoc', 'runs')) || []).filter((f) => f.endsWith('.md')).map((f) => readText(at('adhoc', 'runs', f)) || ''),
     yourMoveTexts: (listDir(at('loop', 'your-move')) || []).filter((f) => f.endsWith('.md')).map((f) => readText(at('loop', 'your-move', f)) || ''),
     prompt: promptBlock(readmeMd),
     pages: {
@@ -272,7 +278,7 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
   };
 
   // 4 — relayed commands, as a floor.
-  const texts = [...(facts.runTexts || []), ...(facts.yourMoveTexts || [])];
+  const texts = [...(facts.runTexts || []), ...(facts.adhocRunTexts || []), ...(facts.yourMoveTexts || [])];
   const anyOf = (pats, t) => pats.some((re) => re.test(t));
   const hits = texts.filter((t) => anyOf(RELAY_PATTERNS, t)).length;
   const decisions = texts.filter((t) => anyOf(DECISION_PATTERNS, t)).length;
@@ -280,7 +286,7 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
     label: 'Relayed commands', measured: texts.length > 0, floor: true, value: hits,
     files: texts.length, decisions,
     target: 'falls to the settings changes only Peter can make',
-    note: 'A LOWER BOUND over every run record and your-move file on disk regardless of date — one hit per FILE, not per command. The only durable trace of a relay is prose, and section 10 of the review says counts from greps of run records are lower bounds. Never quote this as a total.',
+    note: 'A LOWER BOUND over every run record (loop/runs/ and adhoc/runs/) and your-move file on disk regardless of date — one hit per FILE, not per command. The only durable trace of a relay is prose, and section 10 of the review says counts from greps of run records are lower bounds. Never quote this as a total.',
     control: 'The decision count beside it is the control and is NOT a relay: a drafted letter only Peter can send, or a publication only he can approve, is R9 working rather than R9 leaking. A relay count that moved with the decision count would be measuring how often Peter is mentioned.',
   };
 

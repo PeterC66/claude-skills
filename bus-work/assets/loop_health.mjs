@@ -40,7 +40,7 @@
  * prompt at all (the stored task against the README block; every file the block
  * names exists), does each resource a unit needs read safe (the conditions check,
  * a tick's own live lock being a run in progress and not a bar), and what is there
- * to take in each feed — ad-hoc files not named "not due", bus-work rows (--deep)
+ * to take — bus-work rows (--deep)
  * judged by step 4D's rules (an `unattended` recipe; no unreviewed ESCALATE grade; not under
  * `_portal-fixture/`). The result is one word (CAN WORK, NOTHING TO DO, BARRED) and
  * a list of the things a person can do, most rows released first.
@@ -53,14 +53,24 @@
  * nothing names itself `-idle`, which `loop_runs.mjs` does not count as idle; the
  * idle finding here is therefore about ticks that STOPPED before dispatch.
  *
+ * THE AD-HOC QUEUE IS NOT A FEED EITHER (buses-data OA-610, Peter, 2026-10-08).
+ * It moved to its own scheduled loop, `adhoc-loop`, with its own folder
+ * (`adhoc/ready/`, `adhoc/runs/`) and its own run files. A bus tick no longer
+ * takes an ad-hoc file, so counting `ready/` here would report CAN WORK for work
+ * no tick may do. The ad-hoc readers, the ad-hoc capacity line and the "the ad-hoc
+ * feed is empty" lever are gone; the only feed left is bus-work. Without `--deep`
+ * that feed is not measured, so the verdict is then BARRED or not measured, never
+ * a guess. Whether the ad-hoc loop is passing a file over is the worklist's
+ * `adhoc-not-taken/<file>` row (`loop_ready.mjs`), not this report.
+ *
  * IT IS READ-ONLY. It writes and commits nothing, so a tick may run it every
  * hour at no cost and a person may run it at any time. By default it opens no
  * socket: the two probes it spawns (`worklist.mjs --conditions`, which reads the
  * local trees, and the stored-prompt checker) are local. `--deep` also runs
  * `worklist.mjs --json`, which reads the live portal and takes about a minute.
  * The prose it reads is the newest run file's headline, quoted for display only,
- * and the `<file> (not due: ...)` lines the loop prompt makes every tick write in
- * exactly that form (the worklist reads them too).
+ * and the `OA-nnn (passed over: ...)` lines the loop prompt makes every tick write in
+ * exactly that form.
  * Anything else a run file says is never parsed for meaning: run files are written
  * by a fresh session each hour and a reader that depended on their wording would
  * break the first time one phrased it differently.
@@ -179,12 +189,12 @@ const UNIT = {
  * Whether a tick CAN work, by the loop prompt's own rules, and what a person can do
  * about it. Every part reads a fact the caller may leave out (a `null` is "not
  * measured here", never a pass): the prompt prerequisites, the resource verdicts, the
- * adhoc and bus-work feeds, and a ranked list of levers. Pushes findings through
+ * bus-work feed, and a ranked list of levers. Pushes findings through
  * `ctx.add` so the verdict sees them.
  */
 export function assessCapacity(f, ctx) {
   const { add, findings } = ctx;
-  const cap = { work: null, prereq: null, resources: null, busWork: null, adhoc: null, levers: [] };
+  const cap = { work: null, prereq: null, resources: null, busWork: null, levers: [] };
   const lever = (rows, refs, text, move, nothing = false) => cap.levers.push({ rows, refs, text, move, nothing });
 
   // 1. can the tick execute its own prompt at all
@@ -221,30 +231,25 @@ export function assessCapacity(f, ctx) {
     }
   }
 
-  // 3. the ad-hoc feed
-  if (f.adhoc) {
-    const ready = f.adhoc.ready || [];
-    const notDue = ready.filter((n) => (f.adhoc.notDue || []).includes(n));
-    cap.adhoc = { ready: ready.length, notDue: notDue.length, takeable: ready.length - notDue.length };
-  }
-
-  // 4. the bus-work feed (only with --deep: the worklist reads the live portal)
+  // 3. the bus-work feed (only with --deep: the worklist reads the live portal).
+  // It is the only feed: the ad-hoc queue has its own loop since OA-610.
   if (f.busWork) cap.busWork = classifyBusWork(f.busWork);
 
-  // 5. the verdict on work. Nothing to take is the normal day for a loop that does
-  // map upkeep only (OA-576), so it is a NOTE; the backlog is not a feed.
-  const measured = cap.busWork || cap.adhoc;
-  if (measured) {
-    const bw = cap.busWork ? cap.busWork.finishable.length : 0;
-    const ad = cap.adhoc ? cap.adhoc.takeable : 0;
-    const blocking = treeBarred || findings.some((x) => x.level === 'BLOCKING');
-    cap.work = blocking ? 'BARRED' : (bw || ad) ? 'CAN WORK' : 'NOTHING TO DO';
+  // 4. the verdict on work. Nothing to take is the normal day for a loop that does
+  // map upkeep only (OA-576), so it is a NOTE; the backlog is not a feed. A bar is
+  // a bar whether or not the feed was measured (OA-610: before, the ad-hoc count
+  // was always present and carried the verdict on a plain run); with no bar and
+  // no --deep, the verdict is "not measured", never a guess.
+  const blocking = treeBarred || findings.some((x) => x.level === 'BLOCKING');
+  if (blocking) cap.work = 'BARRED';
+  else if (cap.busWork) {
+    cap.work = cap.busWork.finishable.length ? 'CAN WORK' : 'NOTHING TO DO';
     if (cap.work === 'NOTHING TO DO') {
-      add('NOTE', 'no-work', `Nothing for a tick to take${cap.adhoc ? `: ${cap.adhoc.ready} ad-hoc file${cap.adhoc.ready === 1 ? ' is' : 's are'} ready and ${cap.adhoc.notDue} named not due` : ''}${cap.busWork ? `, and no bus-work row is finishable unattended` : ', and bus-work was not measured (add --deep)'}. Normal for a loop that does map upkeep only: ticks write \`-idle\` and stop.`);
+      add('NOTE', 'no-work', 'Nothing for a tick to take: no bus-work row is finishable unattended. Normal for a loop that does map upkeep only: ticks write `-idle` and stop. Ad-hoc files are not a tick\'s work; the separate ad-hoc loop takes them from `adhoc/ready/` (OA-610).');
     }
   }
 
-  // 6. what a person can do, most rows first
+  // 5. what a person can do, most rows first
   if (f.ahead && f.ahead.count > 0 && cap.resources && cap.resources.barred.some((b) => b.unpushed)) {
     lever(0, [], `${f.ahead.count} commit${f.ahead.count === 1 ? '' : 's'} on local \`main\` hold \`portal-write\`, which bars every row that writes to the portal.`, 'push_main.mjs pushes once the preflight allows it (exit 3 means deferred, nothing for you to do). To go sooner, push from a session after the preflight exits 0.');
   }
@@ -254,7 +259,6 @@ export function assessCapacity(f, ctx) {
   }
   if (cap.busWork && cap.busWork.fixture.length) lever(cap.busWork.fixture.length, cap.busWork.fixture, `${cap.busWork.fixture.length} map${cap.busWork.fixture.length === 1 ? ' sits' : 's sit'} under \`_portal-fixture/\`, which moves only with a pin bump and so never in a tick.`, 'Rebuild it in a session with the pin bump, or accept that it stays behind.');
   if (f.holds && f.holds.length) lever(f.holds.length, f.holds.map((h) => h.ref), `${f.holds.length} hold${f.holds.length === 1 ? '' : 's'} in \`loop/your-move/\` wait on you.`, 'Answer or retire each; `/triage` checks them against real state.');
-  if (cap.adhoc && cap.adhoc.takeable === 0) lever(0, [], 'The ad-hoc feed is empty: it is the one feed whose contents you choose directly, and the only way backlog work reaches the loop.', 'Move a prompt into `loop/adhoc/ready/`; a file there is always taken, a big one a slice at a time.', true);
   cap.levers.sort((a, b) => (a.nothing - b.nothing) || (b.rows - a.rows));
   return cap;
 }
@@ -276,7 +280,6 @@ export function assessCapacity(f, ctx) {
  * @param {Array} f.actions          parseAction() results
  * @param {object|null} [f.prereq]   {drift, scripts:[{path,exists}]}: the stored prompt against loop/README.md, and the files the prompt names
  * @param {object|null} [f.resources] the conditions check's per-resource verdicts
- * @param {{ready:string[], notDue:string[]}|null} [f.adhoc]
  * @param {{rows:Array, grades:object, fixtures:string[]}|null} [f.busWork] only with --deep
  * @param {Array<{id:string, what:string, by:string}>} f.commitments
  * @param {number} [f.days=7] [f.pushStaleHours=5]
@@ -418,7 +421,6 @@ export function renderCapacity(c) {
     const r = c.resources;
     L.push(`  Resources   ${r.safe.join(', ') || 'none'} safe${r.barred.map((b) => `; ${b.name} ${b.verdict.toUpperCase()} (bars ${b.bars}${b.lockOnly ? ': a run in progress' : ''})`).join('')}.`);
   }
-  if (c.adhoc) L.push(`  Ad-hoc      ${c.adhoc.ready} file${c.adhoc.ready === 1 ? '' : 's'} in ready/, ${c.adhoc.notDue} named not due by a recent tick: ${c.adhoc.takeable} to take.`);
   if (c.busWork) {
     const b = c.busWork;
     L.push(`  Bus-work    at most ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules (an upper bound: rollout.js is not run, and can still answer STALE-INPUTS for a rebuild); ${b.escalate.length} stopped by an ESCALATE grade, ${b.fixture.length} under _portal-fixture, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
@@ -479,23 +481,23 @@ export const PASSED_RUNS = 12;
 
 /**
  * The `OA-nnn (passed over: <gate>)` lines of the newest ticks, newest tick first, each ref
- * once with the newest gate; and the ad-hoc files a tick named `<file>.md` (not due: ...).
- * Both are forms the loop prompt mandates, because the worklist reads them too. A line
+ * once with the newest gate. It is a form the loop prompt mandates. (Until OA-610 this
+ * also collected the ad-hoc files a tick named `<file>.md` (not due: ...); a bus tick
+ * no longer takes ad-hoc work, and `loop_ready.mjs` reads those lines for the worklist.) A line
  * naming several refs ("OA-237, 302, 311 (passed over: ...)") gives each of them the gate.
  */
 export function passedOver(runsDir, n = PASSED_RUNS) {
   try {
     const files = readdirSync(runsDir).filter((x) => /^\d{4}-\d{2}-\d{2}_\d{4}-(?!busy|missed)[a-z-]+\.md$/i.test(x) && x.slice(0, 15) >= RULE_FROM).sort().reverse().slice(0, n);
-    const seen = new Map(); const notDue = new Set();
+    const seen = new Map();
     for (const name of files) {
       const text = readFileSync(path.join(runsDir, name), 'utf8');
       for (const m of text.matchAll(/(OA-\d+(?:`?(?:,\s*|\s+and\s+)`?(?:OA-)?\d+)*)`?\s*\(passed over:\s*([^)]*)\)/g)) {
         for (const num of m[1].match(/\d+/g)) { const ref = `OA-${num}`; if (!seen.has(ref)) seen.set(ref, { ref, gate: m[2].trim(), run: name.replace(/\.md$/, '') }); }
       }
-      for (const m of text.matchAll(/`?([\w.-]+\.md)`?\s*\(not due:/g)) notDue.add(m[1]);
     }
-    return { runs: files.length, rows: [...seen.values()], notDue: [...notDue] };
-  } catch { return { runs: 0, rows: [], notDue: [] }; }
+    return { runs: files.length, rows: [...seen.values()] };
+  } catch { return { runs: 0, rows: [] }; }
 }
 
 /**
@@ -572,13 +574,6 @@ function gradesAndFixtures(busesDir) {
     try { for (const e of readdirSync(path.join(busesDir, root, '_portal-fixture'), { withFileTypes: true })) if (e.isDirectory()) fixtures.push(e.name); } catch { /* none */ }
   }
   return { grades, fixtures, reviewed };
-}
-
-/** The files in loop/adhoc/ready/, and which of them a recent tick named not due. */
-function readAdhoc(loopDir, runsDir) {
-  let ready = [];
-  try { ready = readdirSync(path.join(loopDir, 'adhoc', 'ready')).filter((n) => /\.md$/i.test(n)); } catch { /* no folder: no ad-hoc work */ }
-  return { ready, notDue: passedOver(runsDir).notDue };
 }
 
 /** Run a read-only command and return its stdout, or null if it could not run or timed out. */
@@ -681,7 +676,6 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
     dirty, staged, holdPaths: heldPaths(files), holds: parsedHolds, drafts: drafts.length,
     ahead, actions, commitments,
     passedOver: passedOver(path.join(loopDir, 'runs')),
-    adhoc: readAdhoc(loopDir, path.join(loopDir, 'runs')),
     ...(probes ? probeFacts(busesDir, deep, probes === true ? { prereq: true, conditions: true, engineLag: true } : probes) : {}),
   };
 }

@@ -633,8 +633,9 @@ console.log('\n21. the three provenance shapes all yield a date and a tick');
 console.log('\n22. THE CONTROL — the in-tray is a DIFFERENT channel and is not counted');
 {
   // `ready/`, `doing/` and `done/` are Peter's channel INTO the loop and the
-  // dispatcher's own bookkeeping. They now live under loop/adhoc/ rather than
-  // beside these files, but the reader must still count only its own top level:
+  // dispatcher's own bookkeeping. They now live under the top-level adhoc/ (OA-610;
+  // loop/adhoc/ before that) rather than beside these files, but the reader must
+  // still count only its own top level:
   // a reader that walked a tree would report as "awaiting your triage" a prompt
   // he has already promoted, a file a tick is working on this minute, and every
   // prompt ever finished.
@@ -747,6 +748,29 @@ console.log('\n24. a spent Blocks field on a LIVE hold is not advice to delete t
   check('an empty What-is-needed section still counts as asking', emptyAsk.asks === true, JSON.stringify(emptyAsk));
   check('plural keys keep the plural wording on a live ask',
     /names worklist rows `a-1`, `b-2`, which are not on the board today/.test(staleBlocksWarning({ file: 'p.md', keys: ['a-1', 'b-2'], asks: true })));
+}
+
+console.log('\nOA-610. the ad-hoc queue is its own loop: where things go, and whose name it signs');
+{
+  // The draft and hold rows tell Peter where to move a file. Since OA-610 a
+  // promotion or an answer goes to adhoc/ready/, and a filed or declined draft to
+  // loop/retired/. A row still naming loop/adhoc/ would send him to a folder
+  // nothing reads.
+  const dir = path.join(tmp, 'oa610', 'loop', 'your-move');
+  mk(dir, 'a draft.md', DRAFTED_BY);
+  mk(dir, 'a hold.md', '# H\n\n**Raised by:** `sched-adhoc-1101`, 2026-10-08\n\n## What is needed from you\n\nAnswer it.\n');
+  const files = readYourMoveDir(dir);
+  const draftDo = loopDraftItems({ files, now: DNOW })[0].do.map((x) => x.what).join(' | ');
+  const holdDo = loopHoldItems({ files }).items[0].do.map((x) => x.what).join(' | ');
+  check('the draft row promotes into adhoc/ready/', /Promote:[^|]*move it into adhoc\/ready\//.test(draftDo), draftDo);
+  check('the draft row files and declines into loop/retired/', /File:[^|]*loop\/retired\//.test(draftDo) && /Decline:[^|]*loop\/retired\//.test(draftDo), draftDo);
+  check('an answered hold moves into adhoc/ready/', /move it into adhoc\/ready\//.test(holdDo), holdDo);
+  check('neither row names the old loop/adhoc/ folder', !/loop\/adhoc/.test(`${draftDo} ${holdDo}`));
+  // An ad-hoc run signs itself sched-adhoc-HHMM; the provenance is read whole,
+  // and a plain tick's name still reads as before.
+  const pa = parseDraft({ name: 'x.md', text: '# X\n\nDrafted by `sched-adhoc-1101` on 2026-10-08.\n', mtimeMs: 0 });
+  check('a draft by an ad-hoc run is attributed to sched-adhoc-HHMM', pa.by === 'sched-adhoc-1101' && pa.draftedOn === '2026-10-08', JSON.stringify(pa));
+  check('CONTROL — a tick\'s sched-HHMM still reads the same', parseDraft({ name: 'y.md', text: 'Noticed by `sched-1522` on 2026-09-08\n', mtimeMs: 0 }).by === 'sched-1522');
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

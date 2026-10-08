@@ -1275,7 +1275,8 @@ export function needsOf(item) {
   // when it is right.
   if (key === 'loop-drafts') return [];
   // OA-503: the row's action is "read the run file, then split the ready/ file
-  // or move it back to loop/your-move/", which moves gitignored files only.
+  // or move it back to loop/your-move/", which moves gitignored files only (the
+  // ready/ file is under the top-level adhoc/ since OA-610, gitignored the same way).
   // Empty for loop-drafts' reason.
   if (key.startsWith('adhoc-not-taken/')) return [];
   // OA-326 (2026-09-12): the row's action is `git push` plus opening a pull
@@ -1391,7 +1392,7 @@ export const STANDING_TOOLS = [
   { what: 'Run a map build (S1–S6)', cmd: '/make-bus-leaflet', needs: ['buses-tree', 'buses-maps', 'engine'] },
   { what: 'Engine rollout across the estate', cmd: 'node rollout.js --all --apply', needs: ['buses-tree', 'buses-maps', 'engine', 'estate-sweep'] },
   { what: 'Re-record the quality ledger', cmd: 'node quality_gate.js --accept', needs: ['estate-sweep'] },
-  { what: 'Work an open action or ad-hoc prompt that writes into no map or letter folder', cmd: "(the loop's oa and adhoc feeds)", needs: ['buses-tree'], note: 'OA-434: a stray file fenced to one town or letter does not stop this' },
+  { what: 'Work an open action or ad-hoc prompt that writes into no map or letter folder', cmd: '(the ad-hoc loop)', needs: ['buses-tree'], note: 'OA-434: a stray file fenced to one town or letter does not stop this. OA-610: ad-hoc prompts have their own scheduled loop, adhoc-loop, which holds loop/LOCK.d as sched-adhoc-HHMM' },
   { what: 'Deliver a map to the live portal', cmd: 'npm run deliver -- --map <slug>', needs: ['portal-write'] },
   { what: 'Portal code on a branch and a pull request', cmd: '(an open action\'s portal slice)', needs: ['portal-branch'], note: 'OA-558: reads nothing from unpushed buses-data commits; a deliver still needs portal-write' },
   { what: 'Deploy the portal', cmd: 'npm run deploy', needs: ['portal-deploy'] },

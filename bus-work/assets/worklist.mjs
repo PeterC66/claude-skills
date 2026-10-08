@@ -1049,7 +1049,7 @@ for (const it of loopSilentItems({ health: loopState, readTurns: conc.readSessio
 // unenumerated was not: five drafts sat for up to two days each ending "promote
 // it, or file it, if you agree", addressed to a reader this board had never
 // shown the folder to. One row for all of them at the bottom of YOUR MOVE.
-// `loop/adhoc/ready|doing|done` is a DIFFERENT channel and is not counted.
+// `adhoc/ready|doing|done` (loop/adhoc/ before OA-610) is a DIFFERENT channel and is not counted.
 const loopDrafts = loopDraftItems({ files: yourMove });
 for (const it of loopDrafts) add(it);
 for (const it of adhocNotTakenFor(BUSES)) add(it);   // OA-503: a ready/ file the loop is not taking; see loop_ready.mjs

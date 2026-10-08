@@ -1,15 +1,21 @@
 #!/usr/bin/env node
-/* Prove the "loop is not taking this" row appears, and stays away when it should
- * (buses-data OA-503).
+/* Prove the "ad-hoc loop is not taking this" row appears, and stays away when it
+ * should (buses-data OA-503; paths moved by OA-610).
  *
  * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
  *
  *   node prove-red-loop-ready.mjs
  *
- * WHAT IS BEING FALSIFIED. A row saying that a file in `loop/adhoc/ready/` keeps
- * being named by the ticks and is never taken. Both folders it reads are
+ * WHAT IS BEING FALSIFIED. A row saying that a file in `adhoc/ready/` keeps
+ * being named by the runs and is never taken. Every folder it reads is
  * gitignored, so, as in prove-red-loop-runs.mjs, every case builds real
  * directories under the temp dir. A fake reader cannot be absent.
+ *
+ * OA-610 (2026-10-08) moved the queue from `loop/adhoc/ready/` to a top-level
+ * `adhoc/ready/`, and gave the ad-hoc loop its own run folder, `adhoc/runs/`.
+ * The helper reads both `adhoc/runs/` and, for the 48 hours after the move,
+ * `loop/runs/`; section 9 proves each folder is read, and that a file left in
+ * the old `loop/adhoc/ready/` is not.
  *
  * THE CONTROLS MATTER AS MUCH AS THE ROW. The standing weekly triage sits in
  * ready/ all week and is correctly passed over as not due every hour. A row for
@@ -36,13 +42,14 @@ const at = (h, m = 0, d = 28) => new Date(2026, 8, d, h, m).getTime();
 const pad = (n) => String(n).padStart(2, '0');
 
 /**
- * A real loop/ tree. `ready` is { name: mtimeMs }. `runs` is a list of
- * [ms, feed, text], written as `2026-09-DD_HHMM-<feed>.md`.
+ * A real buses root. `ready` is { name: mtimeMs }, written to `adhoc/ready/`.
+ * `runs` is a list of [ms, feed, text], written as `2026-09-DD_HHMM-<feed>.md`
+ * to `where` (`adhoc/runs` by default; `loop/runs` for a bus tick's file).
  */
-const mkLoop = (label, ready, runs) => {
-  const root = path.join(tmp, label, 'loop');
+const mkLoop = (label, ready, runs, where = 'adhoc/runs') => {
+  const root = path.join(tmp, label);
   const rd = path.join(root, 'adhoc', 'ready');
-  const rn = path.join(root, 'runs');
+  const rn = path.join(root, ...where.split('/'));
   fs.mkdirSync(rd, { recursive: true });
   fs.mkdirSync(rn, { recursive: true });
   for (const [name, ms] of Object.entries(ready)) {
@@ -54,9 +61,9 @@ const mkLoop = (label, ready, runs) => {
     const d = new Date(ms);
     fs.writeFileSync(path.join(rn, `2026-09-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}-${feed}.md`), text, 'utf8');
   }
-  return { rd, rn };
+  return { root, rd, rn, where };
 };
-const rows = ({ rd, rn }, now) => adhocNotTakenItems({ ready: readReady(rd), runs: readRunsSince(rn, now - 48 * 3600000), now });
+const rows = ({ rd, rn, where }, now) => adhocNotTakenItems({ ready: readReady(rd), runs: readRunsSince(rn, now - 48 * 3600000, where), now });
 const keys = (rs) => rs.map((r) => r.key).sort().join(',');
 
 // The line every tick on 28 September wrote, in substance.
@@ -73,12 +80,14 @@ console.log('\n1. the real 28 September, replayed');
   check('both stuck files raise a row', keys(rs) === 'adhoc-not-taken/places-issues,adhoc-not-taken/wisbech-capacity', keys(rs));
   check('the standing triage, passed over as not due, raises none', !rs.some((r) => /zz-weekly/.test(r.key)));
   const r = rs.find((x) => x.file === 'places-issues.md') || { title: '', why: '', rank: null, passes: null };
-  check('the title says the loop is not taking it', /^The loop is not taking this: `loop\/adhoc\/ready\/places-issues\.md`/.test(r.title), r.title);
+  check('the title says the ad-hoc loop is not taking it, at its new path', /^The ad-hoc loop is not taking this: `adhoc\/ready\/places-issues\.md`/.test(r.title), r.title);
+  check('and never names the old loop/adhoc/ folder', !/loop\/adhoc/.test(`${r.title} ${r.why} ${(r.do || []).map((x) => x.what).join(' ')}`));
   check('and never calls it triage', !/triage/i.test(r.title), r.title);
-  check('it counts the ticks that named it', r.passes === 4 && /named by 4 ticks since 10:15/.test(r.title), r.title);
+  check('it counts the runs that named it', r.passes === 4 && /named by 4 runs since 10:15/.test(r.title), r.title);
   check('rank 3: a request of Peter\'s is blocked', r.rank === 3, String(r.rank));
-  check('the why names the newest run file to read', /2026-09-28_1315-OA\.md/.test(r.why), r.why.slice(0, 120));
-  check('and says the only excuse a tick has', /not due: <why>/.test(r.why));
+  check('the why names the newest run file to read, in its folder', /adhoc\/runs\/2026-09-28_1315-OA\.md/.test(r.why), r.why.slice(0, 120));
+  check('and the action names it too', /^Read adhoc\/runs\/2026-09-28_1315-OA\.md /.test(r.do[0].what), r.do[0].what);
+  check('and says the only excuse a run has', /not due: <why>/.test(r.why));
 }
 
 console.log('\n2. CONTROL — a tick that TAKES the file clears the row');
@@ -158,16 +167,40 @@ console.log('\n8. the wire in worklist.mjs — literal strings, and it must RUN'
   ]) check(`worklist.mjs RUNS: ${lit.slice(0, 58)}`, liveLine(lit), 'absent, or commented out');
 }
 
-console.log('\n9. the helper the wire calls reads the right two folders');
+console.log('\n9. the helper the wire calls reads the right folders (OA-610)');
 {
   // The wire is one line, so the paths live in adhocNotTakenFor. Build a buses
-  // root and prove the helper finds both folders under it.
+  // root and prove the helper finds each folder under it.
   const now = at(14, 0);
-  const t = mkLoop('helper', READY, [at(10, 15), at(11, 15), at(12, 15), at(13, 15)].map(oaRun));
-  const root = path.dirname(path.dirname(t.rn));
-  const rs = adhocNotTakenFor(root, now);
-  check('adhocNotTakenFor(<buses root>) raises the same two rows', keys(rs) === 'adhoc-not-taken/places-issues,adhoc-not-taken/wisbech-capacity', keys(rs));
+  const four = [at(10, 15), at(11, 15), at(12, 15), at(13, 15)].map(oaRun);
+  const t = mkLoop('helper', READY, four);
+  const rs = adhocNotTakenFor(t.root, now);
+  check('adhocNotTakenFor(<buses root>) reads adhoc/ready/ and adhoc/runs/: the same two rows', keys(rs) === 'adhoc-not-taken/places-issues,adhoc-not-taken/wisbech-capacity', keys(rs));
   check('and an absent root raises none', adhocNotTakenFor(path.join(tmp, 'no-buses'), now).length === 0);
+  // The transition: the passes are a bus tick's, in loop/runs/, and still count.
+  const old = mkLoop('helper-transition', READY, four, 'loop/runs');
+  const ro = adhocNotTakenFor(old.root, now);
+  check('the transition: passes in loop/runs/ inside 48 h still raise the rows', keys(ro) === keys(rs), keys(ro));
+  const ri = ro.find((x) => x.file === 'places-issues.md') || { do: [{ what: '' }] };
+  check('and the action names loop/runs/, where that run file is', /^Read loop\/runs\/2026-09-28_1315-OA\.md /.test(ri.do[0].what), ri.do[0].what);
+  // One pass in each folder is two passes: the folders are one history.
+  const split = mkLoop('helper-split', { 'places-issues.md': at(7, 36) }, [plainRun(at(10, 15))], 'loop/runs');
+  fs.mkdirSync(path.join(split.root, 'adhoc', 'runs'), { recursive: true });
+  fs.writeFileSync(path.join(split.root, 'adhoc', 'runs', '2026-09-28_1101-idle.md'), '# sched-adhoc-1101\n\n- `ready/` still has `places-issues.md`.\n', 'utf8');
+  const rsp = adhocNotTakenFor(split.root, now);
+  check('one pass in each folder is two passes, and the newest names adhoc/runs/', rsp.length === 1 && rsp[0].passes === 2 && /adhoc\/runs\/2026-09-28_1101-idle\.md/.test(rsp[0].why), rsp.map((x) => x.title).join(' | '));
+  // An ad-hoc run that took the file, after a bus tick passed it, clears it.
+  fs.writeFileSync(path.join(split.root, 'adhoc', 'runs', '2026-09-28_1301-adhoc.md'), '# sched-adhoc-1301\n\n**Feed: adhoc — places-issues.md: the first slice**\n', 'utf8');
+  check('an ad-hoc run that took it, newest, clears the row', adhocNotTakenFor(split.root, now).length === 0);
+  // The old queue folder is not read: a file left there is nobody's request now.
+  const stale = path.join(tmp, 'helper-old-queue');
+  fs.mkdirSync(path.join(stale, 'loop', 'adhoc', 'ready'), { recursive: true });
+  fs.mkdirSync(path.join(stale, 'loop', 'runs'), { recursive: true });
+  const p = path.join(stale, 'loop', 'adhoc', 'ready', 'places-issues.md');
+  fs.writeFileSync(p, '# a request\n', 'utf8');
+  fs.utimesSync(p, new Date(at(7, 36)), new Date(at(7, 36)));
+  for (const ms of [at(10, 15), at(11, 15), at(12, 15)]) { const [, feed, text] = plainRun(ms); const d = new Date(ms); fs.writeFileSync(path.join(stale, 'loop', 'runs', `2026-09-28_${pad(d.getHours())}${pad(d.getMinutes())}-${feed}.md`), text, 'utf8'); }
+  check('a file in the OLD loop/adhoc/ready/ raises nothing', adhocNotTakenFor(stale, now).length === 0);
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

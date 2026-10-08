@@ -51,7 +51,12 @@ const STAMP_SKEW_TOLERANCE_MS = 2 * 60000;
 
 /* A tick's name is the only self-terminating one on this disk. A person's
  * session sitting idle looks exactly like an abandoned one, and idle is the
- * normal case — so the name decides what may be assumed, and nothing else. */
+ * normal case — so the name decides what may be assumed, and nothing else.
+ * The prefix, not `sched-HHMM`, is the test on purpose: two other unattended
+ * holders take this lock and must be recovered exactly like a tick when they die,
+ * `push_main.mjs` as `sched-push-HHMM` and, since buses-data OA-610 (2026-10-08),
+ * the separate ad-hoc loop as `sched-adhoc-HHMM`. `prove-red-loop-lock.mjs` holds
+ * that line with a `sched-adhoc-0101` holder. */
 const TICK_NAME_RE = /^sched-/;
 
 /* Lenient on purpose. The holder's first line is "<name> <time> <prose>" and the

@@ -233,6 +233,10 @@ console.log('\n7. who holds the lock changes the cause but not the fact');
   check('…and is NOT rank 3, because it clears itself', person.rank === 8, String(person.rank));
   const tick = loopRunItems({ health: h, heldBy: 'sched-1015' })[0];
   check('a sched- holder is not offered as a cause', !/deferring to a session/.test(tick.why));
+  // OA-610: the separate ad-hoc loop holds the same lock as sched-adhoc-HHMM; it is
+  // a tick, not a person's session at the keyboard.
+  const adhocTick = loopRunItems({ health: h, heldBy: 'sched-adhoc-0101' })[0];
+  check('a sched-adhoc- holder is a tick too, not offered as a session', !/deferring to a session/.test(adhocTick.why));
 }
 
 // ---- the silence, against a real disk ---------------------------------------

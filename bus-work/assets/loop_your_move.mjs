@@ -64,11 +64,20 @@
  * can drive the absent/empty/unreadable paths against a real directory instead of
  * asserting them against a fake.
  *
- * THE IN-TRAY IS NOT HERE. `loop/adhoc/ready/`, `doing/` and `done/` are Peter's
- * channel INTO the loop and the dispatcher's own bookkeeping, and they are read
- * by the dispatcher, the crash rule and nobody respectively. Counting any of them
+ * THE IN-TRAY IS NOT HERE. `adhoc/ready/`, `doing/` and `done/` are Peter's
+ * channel INTO the ad-hoc loop and that loop's own bookkeeping, and they are read
+ * by its chooser, its crash rule and nobody respectively. Counting any of them
  * here would report as *awaiting your triage* a prompt Peter has already triaged,
  * and the harness holds that line with a file in each.
+ *
+ * WHERE THINGS GO FROM HERE (buses-data OA-610, Peter, 2026-10-08). The ad-hoc
+ * queue left the bus loop for a scheduled loop of its own, and its folder moved
+ * from `loop/adhoc/` to a top-level `adhoc/`. Both loops still hand things back
+ * to this one folder. A draft Peter PROMOTES, and a hold he ANSWERS, moves into
+ * `adhoc/ready/`, where the ad-hoc loop takes it. A draft he files or declines,
+ * and a hold a tick or `adopt.mjs` retires, goes to `loop/retired/`, which nothing
+ * reads and which keeps the reason. An ad-hoc run signs itself `sched-adhoc-HHMM`,
+ * so the provenance parser below accepts that name as well as `sched-HHMM`.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -278,7 +287,8 @@ export function parseHold(f) {
  * on 2026-09-08", "Noticed by `sched-1522` on 2026-09-08", "**Drafted:**
  * 2026-09-10 by `sched-1015`" — so the parser asks for the FIRST ISO date and
  * the FIRST `sched-HHMM` anywhere in the head of the file rather than for a
- * field, and falls back to the mtime when there is no date. mtime is a sound
+ * field, and falls back to the mtime when there is no date. An ad-hoc run's
+ * name, `sched-adhoc-HHMM` (OA-610), is read whole. mtime is a sound
  * floor and a poor answer: a draft gets touched by anyone who reads it.
  *
  * @param {{name: string, text: string, mtimeMs: number}} f
@@ -290,7 +300,7 @@ export function parseDraft(f) {
   const text = String(f.text || '').slice(0, 1200);
   const h1 = /^#\s+(.+?)\s*$/m.exec(text);
   const iso = /(\d{4}-\d{2}-\d{2})/.exec(text);
-  const by = /(sched-\d{4})/.exec(text);
+  const by = /(sched-(?:adhoc-)?\d{4})/.exec(text);
   return {
     file: f.name,
     title: h1 ? plain(h1[1], 160) : String(f.name || '').replace(/\.md$/i, ''),
@@ -417,7 +427,7 @@ export function loopHoldItems({ files, now = Date.now() }) {
       ageDays,
       do: [
         { kind: 'chat', what: `Read loop/your-move/${b.file} — it states what is needed and the evidence behind it.` },
-        { kind: 'chat', what: 'When you have the answer, append it to that file and move it into loop/adhoc/ready/ — that is how an answer re-enters the loop, as part of the work rather than as a message.' },
+        { kind: 'chat', what: 'When you have the answer, append it to that file and move it into adhoc/ready/ — that is how an answer re-enters the work, taken by the ad-hoc loop as part of the work rather than as a message.' },
       ],
     });
   }
@@ -459,9 +469,9 @@ export function loopDraftItems({ files, now = Date.now() }) {
     drafts: drafts.map(({ file, title, draftedOn, by, ageDays }) => ({ file, title, draftedOn, by, ageDays })),
     do: [
       { kind: 'chat', what: 'Read each draft in loop/your-move/ — the ones without a "What is needed from you" section, which are rows of their own above.' },
-      { kind: 'chat', what: 'Promote: add a "**Promoted:** <date> by <you> — <what a tick should do>" line under its H1 and move it into loop/adhoc/ready/; the next tick takes it.' },
-      { kind: 'chat', what: 'File: if it needs a decision or a person, write it as an OA-nnn.md and move the draft to loop/adhoc/done/ with a line saying where it went.' },
-      { kind: 'chat', what: 'Decline: append a "## DECLINED — <date>" section with the reason and move it to loop/adhoc/done/. Never delete one — the reason is the record.' },
+      { kind: 'chat', what: 'Promote: add a "**Promoted:** <date> by <you> — <what a run should do>" line under its H1 and move it into adhoc/ready/; the next ad-hoc run takes it.' },
+      { kind: 'chat', what: 'File: if it needs a decision or a person, write it as an OA-nnn.md and move the draft to loop/retired/ with a line saying where it went.' },
+      { kind: 'chat', what: 'Decline: append a "## DECLINED — <date>" section with the reason and move it to loop/retired/. Never delete one — the reason is the record.' },
     ],
   }];
 }

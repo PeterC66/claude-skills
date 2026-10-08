@@ -654,6 +654,12 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-ready
 
+      # buses-data 2026-10-08: adhoc_pretest.mjs decides whether a ready/ file is still
+      # needed and still needs nothing from Peter, before a run claims it.
+      - name: Prove the ad-hoc pre-test can say superseded and blocked
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-adhoc-pretest
+
       # buses-data OA-153 (2026-09-10): town_status.mjs answers "what is the status
       # of <map>?" and three of its four answers are NEGATIVES -- not on the public
       # site, no thread names it, nothing outstanding -- which look identical whether
